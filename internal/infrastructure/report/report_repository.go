@@ -68,6 +68,32 @@ func (r *Repository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*
 	return reports, nil
 }
 
+func (r *Repository) GetByUserID(ctx context.Context, userID uuid.UUID) ([]*report.Report, error) {
+	filter := bson.M{"user_id": userID}
+	opts := options.Find().SetSort(bson.M{"generated_at": -1})
+
+	cursor, err := r.collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get reports by user id: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var reports []*report.Report
+	for cursor.Next(ctx) {
+		var rep report.Report
+		if err := cursor.Decode(&rep); err != nil {
+			return nil, fmt.Errorf("failed to decode report: %w", err)
+		}
+		reports = append(reports, &rep)
+	}
+
+	if err := cursor.Err(); err != nil {
+		return nil, fmt.Errorf("cursor error: %w", err)
+	}
+
+	return reports, nil
+}
+
 func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
 	result, err := r.collection.DeleteOne(ctx, bson.M{"_id": id})
 	if err != nil {

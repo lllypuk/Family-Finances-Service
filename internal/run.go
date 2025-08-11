@@ -11,12 +11,13 @@ import (
 	"time"
 
 	"family-budget-service/internal/application"
+	"family-budget-service/internal/handlers"
 	"family-budget-service/internal/infrastructure"
 )
 
 type Application struct {
 	config       *Config
-	repositories *application.Repositories
+	repositories *handlers.Repositories
 	httpServer   *application.HTTPServer
 	mongodb      *infrastructure.MongoDB
 	logger       *slog.Logger
