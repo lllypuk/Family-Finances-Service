@@ -17,8 +17,8 @@ type ServerConfig struct {
 }
 
 type DatabaseConfig struct {
-	URI      string
-	Database string
+	URI  string
+	Name string
 }
 
 func LoadConfig() *Config {
@@ -28,8 +28,8 @@ func LoadConfig() *Config {
 			Host: getEnv("SERVER_HOST", "localhost"),
 		},
 		Database: DatabaseConfig{
-			URI:      getEnv("MONGODB_URI", "mongodb://localhost:27017"),
-			Database: getEnv("MONGODB_DATABASE", "family_budget"),
+			URI:  getEnv("MONGODB_URI", "mongodb://localhost:27017"),
+			Name: getEnv("MONGODB_DATABASE", "family_budget"),
 		},
 	}
 }
