@@ -61,7 +61,7 @@ const (
     // Transaction types
     TransactionTypeIncome  = "income"
     TransactionTypeExpense = "expense"
-    
+
     // Transaction statuses
     TransactionStatusPending   = "pending"
     TransactionStatusCompleted = "completed"
@@ -132,17 +132,17 @@ func (f *Family) AddMember(member FamilyMember) error {
     if f.Members == nil {
         f.Members = make([]FamilyMember, 0)
     }
-    
+
     // Проверяем, что член семьи еще не добавлен
     for _, existingMember := range f.Members {
         if existingMember.UserID == member.UserID {
             return errors.BusinessError("MEMBER_ALREADY_EXISTS", "Member already exists in family")
         }
     }
-    
+
     f.Members = append(f.Members, member)
     f.UpdatedAt = time.Now().UTC()
-    
+
     return nil
 }
 
@@ -170,7 +170,7 @@ func CreateFamily(ctx context.Context, name string, ownerID string) (*Family, er
     if strings.TrimSpace(name) == "" {
         return nil, errors.ValidationError("Family name is required", "name")
     }
-    
+
     family := &Family{
         ID:        generateID(),
         Name:      strings.TrimSpace(name),
@@ -185,7 +185,7 @@ func CreateFamily(ctx context.Context, name string, ownerID string) (*Family, er
             },
         },
     }
-    
+
     return family, nil
 }
 
@@ -202,7 +202,7 @@ func createFamily(name string, ownerId string) *Family { // Нет контек�
 // ✅ Хорошо
 func (r *familyRepository) GetByID(ctx context.Context, id string) (*Family, error) {
     var family Family
-    
+
     err := r.db.GetContext(ctx, &family, "SELECT * FROM families WHERE id = $1", id)
     if err != nil {
         if err == sql.ErrNoRows {
@@ -210,7 +210,7 @@ func (r *familyRepository) GetByID(ctx context.Context, id string) (*Family, err
         }
         return nil, errors.InternalError("Failed to get family from database", err)
     }
-    
+
     return &family, nil
 }
 
@@ -230,10 +230,10 @@ func (r *familyRepository) GetByID(ctx context.Context, id string) (*Family, err
 
 // CreateTransaction создает новую финансовую транзакцию для указанной семьи.
 // Функция валидирует входные данные и проверяет права доступа пользователя.
-// 
+//
 // Возвращает ошибку если:
 // - семья не найдена
-// - пользователь не является членом семьи  
+// - пользователь не является членом семьи
 // - данные транзакции невалидны
 func CreateTransaction(ctx context.Context, familyID string, userID string, req CreateTransactionRequest) (*Transaction, error) {
     // Реализация...
@@ -260,19 +260,19 @@ func (s *TransactionService) CategorizeTransaction(transaction *Transaction) err
     if transaction.CategoryID != "" {
         return nil
     }
-    
+
     // Пытаемся определить категорию по описанию и сумме
     suggestedCategory, confidence := s.categorizer.SuggestCategory(
-        transaction.Description, 
+        transaction.Description,
         transaction.Amount,
     )
-    
+
     // Устанавливаем категорию только если уверенность > 80%
     if confidence > 0.8 {
         transaction.CategoryID = suggestedCategory.ID
         transaction.AutoCategorized = true
     }
-    
+
     return nil
 }
 
@@ -282,16 +282,16 @@ func (s *TransactionService) CategorizeTransaction(transaction *Transaction) err
     if transaction.CategoryID != "" {
         return nil
     }
-    
+
     // получаем категорию
     cat, conf := s.categorizer.SuggestCategory(transaction.Description, transaction.Amount)
-    
+
     // устанавливаем если хорошая
     if conf > 0.8 {
         transaction.CategoryID = cat.ID
         transaction.AutoCategorized = true
     }
-    
+
     return nil
 }
 ```
@@ -330,15 +330,15 @@ func (uc *FamilyUseCase) CreateFamily(ctx context.Context, req CreateFamilyReque
     if err := uc.validator.Validate(req); err != nil {
         return nil, err
     }
-    
+
     // Бизнес-логика
     family := domain.NewFamily(req.Name, req.OwnerID)
-    
+
     // Сохранение
     if err := uc.familyRepo.Save(ctx, family); err != nil {
         return nil, err
     }
-    
+
     return family, nil
 }
 ```
@@ -391,7 +391,7 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, req CreateTr
         }
         return nil, errors.InternalError("Failed to get family", err)
     }
-    
+
     // Остальная логика...
 }
 
@@ -401,7 +401,7 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, req CreateTr
     if err != nil {
         return nil, err // Не обрабатываем специфичные ошибки
     }
-    
+
     // Остальная логика...
 }
 ```
@@ -419,19 +419,19 @@ type FamilyRepository struct {
 
 func (r *FamilyRepository) GetByID(ctx context.Context, id string) (*Family, error) {
     var family Family
-    
+
     err := r.db.WithContext(ctx).
         Preload("Members").
         Preload("Settings").
         First(&family, "id = ?", id).Error
-        
+
     if err != nil {
         if errors.Is(err, gorm.ErrRecordNotFound) {
             return nil, errors.NotFoundError("family", id)
         }
         return nil, errors.InternalError("Failed to get family", err)
     }
-    
+
     return &family, nil
 }
 
@@ -452,29 +452,29 @@ func (r *FamilyRepository) GetByID(ctx context.Context, id string) (*Family, err
 // ✅ Хорошо - используем параметризованные запросы
 func (r *TransactionRepository) GetByDateRange(ctx context.Context, familyID string, from, to time.Time) ([]Transaction, error) {
     var transactions []Transaction
-    
+
     query := `
-        SELECT t.*, c.name as category_name 
+        SELECT t.*, c.name as category_name
         FROM transactions t
         LEFT JOIN categories c ON t.category_id = c.id
-        WHERE t.family_id = $1 
+        WHERE t.family_id = $1
         AND t.created_at BETWEEN $2 AND $3
         ORDER BY t.created_at DESC
     `
-    
+
     err := r.db.WithContext(ctx).Raw(query, familyID, from, to).Scan(&transactions).Error
     if err != nil {
         return nil, errors.InternalError("Failed to get transactions", err)
     }
-    
+
     return transactions, nil
 }
 
 // ❌ Плохо - SQL инъекции
 func (r *TransactionRepository) GetByDateRange(familyID string, from, to string) ([]Transaction, error) {
-    query := fmt.Sprintf("SELECT * FROM transactions WHERE family_id = '%s' AND created_at BETWEEN '%s' AND '%s'", 
+    query := fmt.Sprintf("SELECT * FROM transactions WHERE family_id = '%s' AND created_at BETWEEN '%s' AND '%s'",
         familyID, from, to) // Уязвимость к SQL инъекциям!
-    
+
     // ...
 }
 ```
@@ -516,18 +516,18 @@ func TestFamilyService_CreateFamily(t *testing.T) {
             expectedError: "VALIDATION_ERROR",
         },
     }
-    
+
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
             // Arrange
             mockRepo := &MockFamilyRepository{}
             tt.mockSetup(mockRepo)
-            
+
             service := NewFamilyService(mockRepo, NewValidator(), NewLogger())
-            
+
             // Act
             family, err := service.CreateFamily(context.Background(), tt.request)
-            
+
             // Assert
             if tt.expectedError != "" {
                 assert.Error(t, err)
@@ -538,7 +538,7 @@ func TestFamilyService_CreateFamily(t *testing.T) {
                 assert.NotNil(t, family)
                 assert.Equal(t, tt.expectedName, family.Name)
             }
-            
+
             mockRepo.AssertExpectations(t)
         })
     }
@@ -550,11 +550,11 @@ func TestCreateFamily(t *testing.T) {
     family, err := service.CreateFamily(context.Background(), CreateFamilyRequest{
         Name: "Test",
     })
-    
+
     if err != nil {
         t.Error(err) // Не проверяем конкретные ошибки
     }
-    
+
     if family.Name != "Test" {
         t.Error("Wrong name") // Нет детального сообщения
     }
@@ -600,19 +600,19 @@ linters-settings:
   errcheck:
     check-type-assertions: true
     check-blank: true
-  
+
   govet:
     check-shadowing: true
-  
+
   golint:
     min-confidence: 0.8
-  
+
   gocyclo:
     min-complexity: 10
-  
+
   dupl:
     threshold: 100
-  
+
   goconst:
     min-len: 3
     min-occurrences: 3
@@ -656,7 +656,7 @@ type FamilyUseCase struct {
 }
 
 // CreateFamily создает новую семью с указанным владельцем.
-// 
+//
 // Функция выполняет следующие операции:
 //   - Валидирует входные данные
 //   - Создает новую семью с владельцем
@@ -680,12 +680,12 @@ func (uc *FamilyUseCase) CreateFamily(ctx context.Context, req CreateFamilyReque
 func (s *TransactionService) ProcessTransactions(transactions []Transaction) []ProcessedTransaction {
     // Предварительно выделяем память
     result := make([]ProcessedTransaction, 0, len(transactions))
-    
+
     for _, tx := range transactions {
         processed := s.processTransaction(tx)
         result = append(result, processed)
     }
-    
+
     return result
 }
 
@@ -699,7 +699,7 @@ var transactionPool = sync.Pool{
 func (s *TransactionService) CreateTransaction(req CreateTransactionRequest) *Transaction {
     tx := transactionPool.Get().(*Transaction)
     defer transactionPool.Put(tx)
-    
+
     // Инициализация...
     return tx
 }
@@ -707,11 +707,11 @@ func (s *TransactionService) CreateTransaction(req CreateTransactionRequest) *Tr
 // ❌ Плохо - неэффективная работа с памятью
 func (s *TransactionService) ProcessTransactions(transactions []Transaction) []ProcessedTransaction {
     var result []ProcessedTransaction // Не предварительное выделение памяти
-    
+
     for _, tx := range transactions {
         result = append(result, s.processTransaction(tx)) // Множественные аллокации
     }
-    
+
     return result
 }
 ```
@@ -721,28 +721,28 @@ func (s *TransactionService) ProcessTransactions(transactions []Transaction) []P
 // ✅ Хорошо - контролируемый параллелизм
 func (s *ReportService) GenerateMonthlyReports(ctx context.Context, familyIDs []string) error {
     const maxWorkers = 10
-    
+
     jobs := make(chan string, len(familyIDs))
     results := make(chan error, len(familyIDs))
-    
+
     // Запускаем воркеров
     for i := 0; i < maxWorkers; i++ {
         go s.reportWorker(ctx, jobs, results)
     }
-    
+
     // Отправляем задачи
     for _, familyID := range familyIDs {
         jobs <- familyID
     }
     close(jobs)
-    
+
     // Собираем результаты
     for i := 0; i < len(familyIDs); i++ {
         if err := <-results; err != nil {
             return err
         }
     }
-    
+
     return nil
 }
 
@@ -774,6 +774,6 @@ func (s *ReportService) reportWorker(ctx context.Context, jobs <-chan string, re
 
 ---
 
-*Документ создан: 2024*  
-*Владелец: Development Team*  
+*Документ создан: 2025*
+*Владелец: Development Team*
 *Регулярность обновлений: при изменении стандартов*

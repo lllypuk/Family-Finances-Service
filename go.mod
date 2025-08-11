@@ -2,6 +2,8 @@ module family-budget-service
 
 go 1.24
 
+// MIT License - see LICENSE file for details
+
 require (
 	github.com/google/uuid v1.4.0
 	github.com/labstack/echo/v4 v4.11.3

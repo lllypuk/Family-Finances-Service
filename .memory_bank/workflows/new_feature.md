@@ -12,7 +12,7 @@
 
 ### Этапы и временные рамки
 - **📋 Планирование**: 1-2 недели
-- **🏗️ Разработка**: 2-4 недели  
+- **🏗️ Разработка**: 2-4 недели
 - **🧪 Тестирование**: 1 неделя
 - **🚀 Релиз**: 1-3 дня
 - **📊 Мониторинг**: Непрерывно
@@ -65,7 +65,7 @@ cp .memory_bank/specs/feature_xyz.md .memory_bank/specs/feature_[name].md
 Fibonacci sequence: 1, 2, 3, 5, 8, 13, 21
 
 1 point  = ~2-4 часа работы
-2 points = ~1 день работы  
+2 points = ~1 день работы
 3 points = ~1.5 дня работы
 5 points = ~2-3 дня работы
 8 points = ~1 неделя работы
@@ -107,10 +107,10 @@ func TestCreateBudget_Success(t *testing.T) {
         Amount:   1000.00,
         Period:   "monthly",
     }
-    
+
     // Act
     budget, err := service.CreateBudget(context.Background(), request)
-    
+
     // Assert
     assert.NoError(t, err)
     assert.NotNil(t, budget)
@@ -215,7 +215,7 @@ make validate-api
 #### Testing Pyramid
 ```
         🔺 E2E Tests (5%)
-       🔺🔺 Integration Tests (15%)  
+       🔺🔺 Integration Tests (15%)
     🔺🔺🔺🔺 Unit Tests (80%)
 ```
 
@@ -247,11 +247,11 @@ func TestBudgetCreation_E2E(t *testing.T) {
     // Setup test environment
     server := setupE2EServer(t)
     client := NewAPIClient(server.URL)
-    
+
     // Create test user and family
     user := createTestUser(t, client)
     family := createTestFamily(t, client, user.ID)
-    
+
     // Test budget creation
     budget := CreateBudgetRequest{
         FamilyID: family.ID,
@@ -259,11 +259,11 @@ func TestBudgetCreation_E2E(t *testing.T) {
         Period:   "monthly",
         Category: "groceries",
     }
-    
+
     createdBudget, err := client.CreateBudget(budget)
     assert.NoError(t, err)
     assert.Equal(t, budget.Amount, createdBudget.Amount)
-    
+
     // Verify budget in database
     storedBudget, err := client.GetBudget(createdBudget.ID)
     assert.NoError(t, err)
@@ -288,13 +288,13 @@ jobs:
         run: |
           make test
           make test-coverage
-      
-      - name: Lint check  
+
+      - name: Lint check
         run: make lint
-      
+
       - name: Security scan
         run: make security-scan
-      
+
       - name: Performance check
         run: make benchmark
 ```
@@ -319,7 +319,7 @@ Brief description of the changes and the problem they solve.
 
 ## Type of Change
 - [ ] 🚀 New feature
-- [ ] 🐛 Bug fix  
+- [ ] 🐛 Bug fix
 - [ ] 📚 Documentation update
 - [ ] 🔧 Refactoring
 - [ ] ⚡ Performance improvement
@@ -336,7 +336,7 @@ Brief description of the changes and the problem they solve.
 
 ## Testing
 - [ ] Unit tests added/updated
-- [ ] Integration tests added/updated  
+- [ ] Integration tests added/updated
 - [ ] Manual testing completed
 - [ ] API documentation updated
 
@@ -370,7 +370,7 @@ Brief description of the changes and the problem they solve.
 - [ ] Dependency injection используется правильно
 - [ ] Интерфейсы определены корректно
 
-##### Code Quality  
+##### Code Quality
 - [ ] Код читаемый и понятный
 - [ ] Именование переменных и функций meaningful
 - [ ] Нет дублирования кода
@@ -400,7 +400,7 @@ Brief description of the changes and the problem they solve.
 #### Comment Types
 ```markdown
 **💡 Suggestion**: Предложение по улучшению
-**❓ Question**: Вопрос для понимания  
+**❓ Question**: Вопрос для понимания
 **🐛 Issue**: Проблема, которую нужно исправить
 **💭 Nitpick**: Мелкие замечания (не блокирующие)
 **🚨 Blocker**: Критичная проблема (блокирует merge)
@@ -458,7 +458,7 @@ func (h *BudgetHandler) CreateBudget(c *gin.Context) {
         c.JSON(http.StatusNotFound, gin.H{"error": "Feature not available"})
         return
     }
-    
+
     // Feature implementation
 }
 ```
@@ -468,7 +468,7 @@ func (h *BudgetHandler) CreateBudget(c *gin.Context) {
 #### Staged Rollout
 ```
 1. 🧪 Development → Deploy to dev environment
-2. 🔬 Staging → Deploy to staging, run E2E tests  
+2. 🔬 Staging → Deploy to staging, run E2E tests
 3. 🎭 Canary → Deploy to 5% of production traffic
 4. 📈 Production → Full rollout if metrics are good
 ```
@@ -508,10 +508,10 @@ make rollback-production
 # Grafana dashboard queries
 - Response Time:
     query: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
-    
+
 - Error Rate:
     query: rate(http_requests_total{status=~"4..|5.."}[5m]) / rate(http_requests_total[5m])
-    
+
 - Feature Usage:
     query: rate(budget_creation_total[5m])
 ```
@@ -527,7 +527,7 @@ make rollback-production
         severity: critical
       annotations:
         summary: "High error rate detected for budget feature"
-        
+
     - alert: SlowResponse
       expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
       for: 5m
@@ -673,7 +673,7 @@ curl -X POST http://localhost:8080/api/v1/families/123/budgets \
 
 ---
 
-*Документ создан: 2024*  
-*Владелец: Engineering Team*  
-*Регулярность обновлений: после каждого крупного релиза*  
+*Документ создан: 2025*
+*Владелец: Engineering Team*
+*Регулярность обновлений: после каждого крупного релиза*
 *Следующий ревью: После завершения текущего спринта*

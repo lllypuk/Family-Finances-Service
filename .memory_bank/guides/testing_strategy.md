@@ -48,28 +48,28 @@ func TestFamilyService_CreateFamily_Success(t *testing.T) {
     mockRepo := &MockFamilyRepository{}
     mockValidator := &MockValidator{}
     mockLogger := &MockLogger{}
-    
+
     service := NewFamilyService(mockRepo, mockValidator, mockLogger)
-    
+
     request := CreateFamilyRequest{
         Name:    "Test Family",
         OwnerID: "user-123",
     }
-    
+
     expectedFamily := &Family{
         ID:       "family-456",
         Name:     "Test Family",
         OwnerID:  "user-123",
         IsActive: true,
     }
-    
+
     mockValidator.On("Validate", request).Return(nil)
     mockRepo.On("Save", mock.Anything, mock.AnythingOfType("*Family")).Return(nil)
     mockLogger.On("Info", mock.Anything).Return()
-    
+
     // Act
     family, err := service.CreateFamily(context.Background(), request)
-    
+
     // Assert
     assert.NoError(t, err)
     assert.NotNil(t, family)
@@ -77,7 +77,7 @@ func TestFamilyService_CreateFamily_Success(t *testing.T) {
     assert.Equal(t, expectedFamily.OwnerID, family.OwnerID)
     assert.True(t, family.IsActive)
     assert.NotEmpty(t, family.ID)
-    
+
     mockRepo.AssertExpectations(t)
     mockValidator.AssertExpectations(t)
 }
@@ -90,26 +90,26 @@ func TestFamilyService_CreateFamily_ValidationError(t *testing.T) {
     mockRepo := &MockFamilyRepository{}
     mockValidator := &MockValidator{}
     service := NewFamilyService(mockRepo, mockValidator, nil)
-    
+
     request := CreateFamilyRequest{
         Name:    "", // Невалидное имя
         OwnerID: "user-123",
     }
-    
+
     validationErr := errors.ValidationError("Name is required", "name")
     mockValidator.On("Validate", request).Return(validationErr)
-    
+
     // Act
     family, err := service.CreateFamily(context.Background(), request)
-    
+
     // Assert
     assert.Error(t, err)
     assert.Nil(t, family)
-    
+
     var appErr *errors.AppError
     assert.True(t, errors.As(err, &appErr))
     assert.Equal(t, "VALIDATION_ERROR", appErr.Code())
-    
+
     mockValidator.AssertExpectations(t)
     mockRepo.AssertNotCalled(t, "Save")
 }
@@ -145,13 +145,13 @@ func TestTransactionService_CalculateMonthlyTotal(t *testing.T) {
             expected: decimal.NewFromFloat(500), // 1000 - 200 - 300
         },
     }
-    
+
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
             service := NewTransactionService()
-            
+
             result := service.CalculateMonthlyTotal(tt.transactions)
-            
+
             assert.True(t, tt.expected.Equal(result))
         })
     }
@@ -166,9 +166,9 @@ func TestFamilyRepository_Integration(t *testing.T) {
     // Подключение к тестовой БД
     db := setupTestDB(t)
     defer cleanupTestDB(t, db)
-    
+
     repo := NewFamilyRepository(db)
-    
+
     t.Run("CreateAndGet", func(t *testing.T) {
         // Arrange
         family := &Family{
@@ -177,14 +177,14 @@ func TestFamilyRepository_Integration(t *testing.T) {
             OwnerID:  "user-123",
             IsActive: true,
         }
-        
+
         // Act - Save
         err := repo.Save(context.Background(), family)
         assert.NoError(t, err)
-        
+
         // Act - Get
         retrieved, err := repo.GetByID(context.Background(), family.ID)
-        
+
         // Assert
         assert.NoError(t, err)
         assert.NotNil(t, retrieved)
@@ -192,15 +192,15 @@ func TestFamilyRepository_Integration(t *testing.T) {
         assert.Equal(t, family.Name, retrieved.Name)
         assert.Equal(t, family.OwnerID, retrieved.OwnerID)
     })
-    
+
     t.Run("GetNonExistent", func(t *testing.T) {
         // Act
         family, err := repo.GetByID(context.Background(), "non-existent-id")
-        
+
         // Assert
         assert.Error(t, err)
         assert.Nil(t, family)
-        
+
         var appErr *errors.AppError
         assert.True(t, errors.As(err, &appErr))
         assert.Equal(t, "RESOURCE_NOT_FOUND", appErr.Code())
@@ -212,11 +212,11 @@ func setupTestDB(t *testing.T) *mongo.Client {
     ctx := context.Background()
     client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
     require.NoError(t, err)
-    
+
     // Проверяем подключение
     err = client.Ping(ctx, nil)
     require.NoError(t, err)
-    
+
     return client
 }
 
@@ -233,7 +233,7 @@ func TestFamilyRepository_WithMongoDB(t *testing.T) {
     if testing.Short() {
         t.Skip("Skipping integration test in short mode")
     }
-    
+
     // Запуск MongoDB в контейнере
     ctx := context.Background()
     container, err := mongodb.RunContainer(ctx,
@@ -246,26 +246,26 @@ func TestFamilyRepository_WithMongoDB(t *testing.T) {
     )
     require.NoError(t, err)
     defer container.Terminate(ctx)
-    
+
     // Получение connection string
     connStr, err := container.ConnectionString(ctx)
     require.NoError(t, err)
-    
+
     // Подключение к БД
     client, err := mongo.Connect(ctx, options.Client().ApplyURI(connStr))
     require.NoError(t, err)
     defer client.Disconnect(ctx)
-    
+
     // Проверка подключения
     err = client.Ping(ctx, nil)
     require.NoError(t, err)
-    
+
     // Получение базы данных
     database := client.Database("testdb")
-    
+
     // Тесты
     repo := NewFamilyRepository(database)
-    
+
     t.Run("ComplexAggregation", func(t *testing.T) {
         // Тестирование сложных MongoDB aggregation pipeline
     })
@@ -280,42 +280,42 @@ func TestFamilyHandler_CreateFamily(t *testing.T) {
     // Arrange
     mockService := &MockFamilyService{}
     handler := NewFamilyHandler(mockService)
-    
+
     router := echo.New()
     router.POST("/families", handler.CreateFamily)
-    
+
     requestBody := CreateFamilyRequest{
         Name: "Test Family",
     }
-    
+
     expectedFamily := &Family{
         ID:   "family-123",
         Name: "Test Family",
     }
-    
+
     mockService.On("CreateFamily", mock.Anything, mock.AnythingOfType("CreateFamilyRequest")).
         Return(expectedFamily, nil)
-    
+
     // Act
     w := httptest.NewRecorder()
     body, _ := json.Marshal(requestBody)
     req, _ := http.NewRequest("POST", "/families", bytes.NewBuffer(body))
     req.Header.Set("Content-Type", "application/json")
     req.Header.Set("Authorization", "Bearer valid-token")
-    
+
     router.ServeHTTP(w, req)
-    
+
     // Assert
     assert.Equal(t, http.StatusCreated, w.Code)
-    
+
     var response map[string]interface{}
     err := json.Unmarshal(w.Body.Bytes(), &response)
     assert.NoError(t, err)
-    
+
     data := response["data"].(map[string]interface{})
     assert.Equal(t, expectedFamily.ID, data["id"])
     assert.Equal(t, expectedFamily.Name, data["name"])
-    
+
     mockService.AssertExpectations(t)
 }
 ```
@@ -326,20 +326,20 @@ func TestAPI_ContractCompliance(t *testing.T) {
     // Загружаем OpenAPI спецификацию
     swagger, err := loads.Spec("../../api/openapi.yaml")
     require.NoError(t, err)
-    
+
     // Создаем тестовый сервер
     server := setupTestServer()
     defer server.Close()
-    
+
     t.Run("CreateFamily_MatchesSchema", func(t *testing.T) {
         // Prepare request
         reqBody := map[string]interface{}{
             "name": "Test Family",
         }
-        
+
         // Make request
         resp := makeAPIRequest(t, server.URL, "POST", "/api/v1/families", reqBody)
-        
+
         // Validate response against schema
         err := validateResponseSchema(swagger, "/families", "post", resp)
         assert.NoError(t, err)
@@ -436,52 +436,52 @@ func TestFamilyManagement_E2E(t *testing.T) {
     if testing.Short() {
         t.Skip("Skipping E2E test in short mode")
     }
-    
+
     // Setup
     server := setupE2EServer(t)
     defer server.Close()
-    
+
     client := NewAPIClient(server.URL)
-    
+
     t.Run("CompleteUserJourney", func(t *testing.T) {
         // 1. Create user account
         user := createTestUser(t, client)
-        
+
         // 2. Authenticate
         token := authenticateUser(t, client, user)
         client.SetAuth(token)
-        
+
         // 3. Create family
         family := createFamily(t, client, "My Family")
-        
+
         // 4. Add family member
         member := addFamilyMember(t, client, family.ID, "member@example.com")
-        
+
         // 5. Create transactions
         tx1 := createTransaction(t, client, family.ID, TransactionRequest{
             Amount:      1000.00,
             Type:        "income",
             Description: "Salary",
         })
-        
+
         tx2 := createTransaction(t, client, family.ID, TransactionRequest{
             Amount:      200.00,
             Type:        "expense",
             Description: "Groceries",
         })
-        
+
         // 6. Get family report
         report := getFamilyReport(t, client, family.ID, "2024-12")
-        
+
         // 7. Verify report data
         assert.Equal(t, 1000.00, report.TotalIncome)
         assert.Equal(t, 200.00, report.TotalExpenses)
         assert.Equal(t, 800.00, report.Balance)
         assert.Len(t, report.Transactions, 2)
-        
+
         // 8. Delete family
         deleteFamily(t, client, family.ID)
-        
+
         // 9. Verify family is deleted
         _, err := client.GetFamily(family.ID)
         assert.Error(t, err)
@@ -492,14 +492,14 @@ func TestFamilyManagement_E2E(t *testing.T) {
 func setupE2EServer(t *testing.T) *httptest.Server {
     // Setup database
     db := setupTestDatabase(t)
-    
+
     // Setup services
     familyRepo := NewFamilyRepository(db)
     familyService := NewFamilyService(familyRepo, NewValidator(), NewLogger())
-    
+
     // Setup router
     router := setupRouter(familyService)
-    
+
     return httptest.NewServer(router)
 }
 ```
@@ -539,9 +539,9 @@ go tool cover -func=coverage.out
 func BenchmarkTransactionService_CalculateBalance(b *testing.B) {
     service := NewTransactionService()
     transactions := generateTestTransactions(1000) // 1000 транзакций
-    
+
     b.ResetTimer()
-    
+
     for i := 0; i < b.N; i++ {
         _ = service.CalculateBalance(transactions)
     }
@@ -550,13 +550,13 @@ func BenchmarkTransactionService_CalculateBalance(b *testing.B) {
 func BenchmarkFamilyRepository_GetByID(b *testing.B) {
     db := setupBenchmarkDB(b)
     repo := NewFamilyRepository(db)
-    
+
     // Подготовка данных
     family := createTestFamily()
     repo.Save(context.Background(), family)
-    
+
     b.ResetTimer()
-    
+
     for i := 0; i < b.N; i++ {
         _, _ = repo.GetByID(context.Background(), family.ID)
     }
@@ -569,25 +569,25 @@ func TestAPI_LoadTest(t *testing.T) {
     if testing.Short() {
         t.Skip("Skipping load test")
     }
-    
+
     server := setupLoadTestServer(t)
     defer server.Close()
-    
+
     const (
         concurrency = 50
         requests    = 1000
     )
-    
+
     var wg sync.WaitGroup
     requestChan := make(chan struct{}, requests)
     results := make(chan time.Duration, requests)
-    
+
     // Заполняем канал запросами
     for i := 0; i < requests; i++ {
         requestChan <- struct{}{}
     }
     close(requestChan)
-    
+
     // Запускаем воркеров
     for i := 0; i < concurrency; i++ {
         wg.Add(1)
@@ -600,19 +600,19 @@ func TestAPI_LoadTest(t *testing.T) {
             }
         }()
     }
-    
+
     wg.Wait()
     close(results)
-    
+
     // Анализ результатов
     var durations []time.Duration
     for duration := range results {
         durations = append(durations, duration)
     }
-    
+
     avg := calculateAverage(durations)
     p95 := calculatePercentile(durations, 95)
-    
+
     assert.Less(t, avg, 100*time.Millisecond, "Average response time too high")
     assert.Less(t, p95, 200*time.Millisecond, "95th percentile too high")
 }
@@ -665,7 +665,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     services:
       mongodb:
         image: mongo:7.0
@@ -678,36 +678,36 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    
+
     steps:
     - uses: actions/checkout@v3
-    
+
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
         go-version: 1.24
-    
+
     - name: Cache Go modules
       uses: actions/cache@v3
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-    
+
     - name: Install dependencies
       run: go mod download
-    
+
     - name: Run unit tests
       run: make test-unit
-    
+
     - name: Run integration tests
       run: make test-integration
       env:
         MONGODB_URI: mongodb://admin:password123@localhost:27017/testdb?authSource=admin
         MONGODB_DATABASE: testdb
-    
+
     - name: Generate coverage
       run: make test-coverage
-    
+
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
       with:
@@ -757,6 +757,6 @@ jobs:
 
 ---
 
-*Документ создан: 2024*  
-*Владелец: QA Team*  
+*Документ создан: 2025*
+*Владелец: QA Team*
 *Регулярность обновлений: ежемесячно*

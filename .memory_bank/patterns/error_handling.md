@@ -230,7 +230,7 @@ package middleware
 import (
     "log"
     "net/http"
-    
+
     "github.com/gin-gonic/gin"
     "your-project/internal/errors"
 )
@@ -241,7 +241,7 @@ func ErrorHandler() echo.MiddlewareFunc {
 
 func CustomErrorHandler(err error, c echo.Context) {
     var appErr *errors.AppError
-    
+
     switch e := err.(type) {
     case *errors.AppError:
         appErr = e
@@ -254,14 +254,14 @@ func CustomErrorHandler(err error, c echo.Context) {
     default:
         appErr = errors.InternalError("Unexpected error", err)
     }
-    
+
     response := buildErrorResponse(appErr, c)
     c.JSON(appErr.StatusCode(), response)
 }
 
 func HandleError(c echo.Context, err error) error {
     var appErr *errors.AppError
-    
+
     switch e := err.(type) {
     case *errors.AppError:
         appErr = e
@@ -271,7 +271,7 @@ func HandleError(c echo.Context, err error) error {
         // Логируем внутренние ошибки
         log.Printf("Internal error: %v", err)
     }
-    
+
     response := buildErrorResponse(appErr, c)
     return c.JSON(appErr.StatusCode(), response)
 }
@@ -281,18 +281,18 @@ func buildErrorResponse(err *errors.AppError, c echo.Context) map[string]interfa
         "code":    err.Code(),
         "message": err.Message(),
     }
-    
+
     if details := err.Details(); details != nil {
         errorResponse["details"] = details
     }
-    
+
     // В debug режиме добавляем stack trace
     if c.Echo().Debug && err.Cause() != nil {
         errorResponse["debug"] = map[string]interface{}{
             "cause": err.Cause().Error(),
         }
     }
-    
+
     return map[string]interface{}{
         "error": errorResponse,
         "meta":  buildMeta(c),
@@ -390,7 +390,7 @@ func (v *Validator) ValidateStruct(s interface{}) error {
 
 func (v *Validator) convertValidationError(err error) *errors.AppError {
     var fieldErrors []map[string]interface{}
-    
+
     for _, err := range err.(validator.ValidationErrors) {
         fieldError := map[string]interface{}{
             "field":   err.Field(),
@@ -400,7 +400,7 @@ func (v *Validator) convertValidationError(err error) *errors.AppError {
         }
         fieldErrors = append(fieldErrors, fieldError)
     }
-    
+
     return &errors.AppError{
         Code:       "VALIDATION_ERROR",
         Message:    "Validation failed",
@@ -452,22 +452,22 @@ func (l *Logger) LogError(err *errors.AppError, context map[string]interface{}) 
         "status_code":   err.StatusCode(),
         "error_message": err.Message(),
     })
-    
+
     // Добавляем контекст
     for key, value := range context {
         entry = entry.WithField(key, value)
     }
-    
+
     // Добавляем детали ошибки
     if details := err.Details(); details != nil {
         entry = entry.WithField("error_details", details)
     }
-    
+
     // Добавляем причину ошибки
     if cause := err.Cause(); cause != nil {
         entry = entry.WithField("error_cause", cause.Error())
     }
-    
+
     // Определяем уровень логирования
     switch {
     case err.StatusCode() >= 500:
@@ -531,17 +531,17 @@ func TestFamilyService_GetFamily_NotFound(t *testing.T) {
     // Arrange
     mockRepo := &MockFamilyRepository{}
     service := NewFamilyService(mockRepo)
-    
+
     mockRepo.On("GetByID", mock.Anything, "invalid-id").
         Return(nil, mongo.ErrNoDocuments)
-    
+
     // Act
     family, err := service.GetFamily(context.Background(), "invalid-id")
-    
+
     // Assert
     assert.Nil(t, family)
     assert.NotNil(t, err)
-    
+
     var appErr *errors.AppError
     assert.True(t, errors.As(err, &appErr))
     assert.Equal(t, "RESOURCE_NOT_FOUND", appErr.Code())
@@ -565,6 +565,6 @@ func TestFamilyService_GetFamily_NotFound(t *testing.T) {
 
 ---
 
-*Документ создан: 2024*  
-*Владелец: Backend Team*  
+*Документ создан: 2025*
+*Владелец: Backend Team*
 *Регулярность обновлений: при изменении архитектуры*
