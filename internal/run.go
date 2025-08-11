@@ -10,17 +10,15 @@ import (
 	"syscall"
 	"time"
 
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
-
 	"family-budget-service/internal/application"
+	"family-budget-service/internal/infrastructure"
 )
 
 type Application struct {
 	config       *Config
 	repositories *application.Repositories
 	httpServer   *application.HTTPServer
-	mongoClient  *mongo.Client
+	mongodb      *infrastructure.MongoDB
 	logger       *slog.Logger
 }
 
@@ -39,12 +37,14 @@ func NewApplication() (*Application, error) {
 	}
 
 	// Подключение к MongoDB
-	if err := app.connectToMongoDB(); err != nil {
+	mongodb, err := infrastructure.NewMongoDB(config.Database.URI, config.Database.Name)
+	if err != nil {
 		return nil, fmt.Errorf("failed to connect to MongoDB: %w", err)
 	}
+	app.mongodb = mongodb
 
 	// Инициализация репозиториев
-	app.initRepositories()
+	app.repositories = infrastructure.NewRepositories(mongodb)
 
 	// Создание HTTP сервера
 	serverConfig := &application.Config{
@@ -56,38 +56,6 @@ func NewApplication() (*Application, error) {
 	return app, nil
 }
 
-func (a *Application) connectToMongoDB() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	clientOptions := options.Client().ApplyURI(a.config.Database.URI)
-	client, err := mongo.Connect(ctx, clientOptions)
-	if err != nil {
-		return fmt.Errorf("failed to connect to MongoDB: %w", err)
-	}
-
-	// Проверка подключения
-	if err := client.Ping(ctx, nil); err != nil {
-		return fmt.Errorf("failed to ping MongoDB: %w", err)
-	}
-
-	a.mongoClient = client
-	a.logger.Info("Successfully connected to MongoDB")
-	return nil
-}
-
-func (a *Application) initRepositories() {
-	// TODO: Здесь будут инициализированы реальные MongoDB репозитории
-	// Пока создаем пустую структуру
-	a.repositories = &application.Repositories{
-		// User:        userRepo,
-		// Family:      familyRepo,
-		// Category:    categoryRepo,
-		// Transaction: transactionRepo,
-		// Budget:      budgetRepo,
-		// Report:      reportRepo,
-	}
-}
 
 func (a *Application) Run() error {
 	// Создание контекста для graceful shutdown
@@ -133,8 +101,8 @@ func (a *Application) shutdown() error {
 	}
 
 	// Закрытие подключения к MongoDB
-	if a.mongoClient != nil {
-		if err := a.mongoClient.Disconnect(ctx); err != nil {
+	if a.mongodb != nil {
+		if err := a.mongodb.Close(ctx); err != nil {
 			a.logger.Error("MongoDB disconnect error", "error", err)
 		} else {
 			a.logger.Info("MongoDB disconnected")
