@@ -66,3 +66,6 @@ All data access is abstracted through repository interfaces defined in `internal
 
 ### Multi-tenancy
 The system supports family-based multi-tenancy where users belong to families and data is isolated by family ID.
+
+### Documentation
+Current documentation is available in the `.memory_bank/` directory
