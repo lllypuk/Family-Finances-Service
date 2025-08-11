@@ -207,63 +207,67 @@ func TestFamilyRepository_Integration(t *testing.T) {
     })
 }
 
-func setupTestDB(t *testing.T) *gorm.DB {
-    // Используем in-memory SQLite для тестов
-    db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+func setupTestDB(t *testing.T) *mongo.Client {
+    // Используем testcontainers для MongoDB или in-memory решение
+    ctx := context.Background()
+    client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
     require.NoError(t, err)
     
-    // Автомиграция схемы
-    err = db.AutoMigrate(&Family{}, &FamilyMember{}, &Transaction{})
+    // Проверяем подключение
+    err = client.Ping(ctx, nil)
     require.NoError(t, err)
     
-    return db
+    return client
 }
 
-func cleanupTestDB(t *testing.T, db *gorm.DB) {
-    sqlDB, err := db.DB()
+func cleanupTestDB(t *testing.T, client *mongo.Client) {
+    ctx := context.Background()
+    err := client.Disconnect(ctx)
     require.NoError(t, err)
-    sqlDB.Close()
 }
 ```
 
 ### Testcontainers для реальной БД
 ```go
-func TestFamilyRepository_WithPostgres(t *testing.T) {
+func TestFamilyRepository_WithMongoDB(t *testing.T) {
     if testing.Short() {
         t.Skip("Skipping integration test in short mode")
     }
     
-    // Запуск PostgreSQL в контейнере
+    // Запуск MongoDB в контейнере
     ctx := context.Background()
-    container, err := postgres.RunContainer(ctx,
-        testcontainers.WithImage("postgres:15"),
-        postgres.WithDatabase("testdb"),
-        postgres.WithUsername("testuser"),
-        postgres.WithPassword("testpass"),
+    container, err := mongodb.RunContainer(ctx,
+        testcontainers.WithImage("mongo:7.0"),
+        mongodb.WithUsername("testuser"),
+        mongodb.WithPassword("testpass"),
         testcontainers.WithWaitStrategy(
-            wait.ForLog("database system is ready to accept connections").
-                WithOccurrence(2).WithStartupTimeout(5*time.Second)),
+            wait.ForLog("Waiting for connections").
+                WithStartupTimeout(60*time.Second)),
     )
     require.NoError(t, err)
     defer container.Terminate(ctx)
     
     // Получение connection string
-    connStr, err := container.ConnectionString(ctx, "sslmode=disable")
+    connStr, err := container.ConnectionString(ctx)
     require.NoError(t, err)
     
     // Подключение к БД
-    db, err := gorm.Open(postgres.Open(connStr), &gorm.Config{})
+    client, err := mongo.Connect(ctx, options.Client().ApplyURI(connStr))
+    require.NoError(t, err)
+    defer client.Disconnect(ctx)
+    
+    // Проверка подключения
+    err = client.Ping(ctx, nil)
     require.NoError(t, err)
     
-    // Миграции
-    err = db.AutoMigrate(&Family{}, &FamilyMember{}, &Transaction{})
-    require.NoError(t, err)
+    // Получение базы данных
+    database := client.Database("testdb")
     
     // Тесты
-    repo := NewFamilyRepository(db)
+    repo := NewFamilyRepository(database)
     
-    t.Run("ComplexQueries", func(t *testing.T) {
-        // Тестирование сложных запросов на реальной БД
+    t.Run("ComplexAggregation", func(t *testing.T) {
+        // Тестирование сложных MongoDB aggregation pipeline
     })
 }
 ```
@@ -277,7 +281,7 @@ func TestFamilyHandler_CreateFamily(t *testing.T) {
     mockService := &MockFamilyService{}
     handler := NewFamilyHandler(mockService)
     
-    router := gin.New()
+    router := echo.New()
     router.POST("/families", handler.CreateFamily)
     
     requestBody := CreateFamilyRequest{
@@ -663,13 +667,14 @@ jobs:
     runs-on: ubuntu-latest
     
     services:
-      postgres:
-        image: postgres:15
+      mongodb:
+        image: mongo:7.0
         env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: testdb
+          MONGO_INITDB_ROOT_USERNAME: admin
+          MONGO_INITDB_ROOT_PASSWORD: password123
+          MONGO_INITDB_DATABASE: testdb
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "echo 'db.runCommand(\"ping\").ok' | mongosh localhost:27017/test --quiet"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -680,7 +685,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.21
+        go-version: 1.24
     
     - name: Cache Go modules
       uses: actions/cache@v3
@@ -697,11 +702,8 @@ jobs:
     - name: Run integration tests
       run: make test-integration
       env:
-        DB_HOST: localhost
-        DB_PORT: 5432
-        DB_NAME: testdb
-        DB_USER: postgres
-        DB_PASSWORD: postgres
+        MONGODB_URI: mongodb://admin:password123@localhost:27017/testdb?authSource=admin
+        MONGODB_DATABASE: testdb
     
     - name: Generate coverage
       run: make test-coverage

@@ -235,25 +235,31 @@ import (
     "your-project/internal/errors"
 )
 
-func ErrorHandler() gin.HandlerFunc {
-    return gin.CustomRecovery(func(c *gin.Context, recovered interface{}) {
-        if err, ok := recovered.(string); ok {
-            c.JSON(http.StatusInternalServerError, gin.H{
-                "error": map[string]interface{}{
-                    "code":    "SYSTEM_PANIC",
-                    "message": "Internal server error",
-                    "details": map[string]interface{}{
-                        "panic": err,
-                    },
-                },
-                "meta": buildMeta(c),
-            })
-        }
-        c.Abort()
-    })
+func ErrorHandler() echo.MiddlewareFunc {
+    return echo.Recover()
 }
 
-func HandleError(c *gin.Context, err error) {
+func CustomErrorHandler(err error, c echo.Context) {
+    var appErr *errors.AppError
+    
+    switch e := err.(type) {
+    case *errors.AppError:
+        appErr = e
+    case *echo.HTTPError:
+        appErr = &errors.AppError{
+            Code:       "HTTP_ERROR",
+            Message:    e.Message.(string),
+            StatusCode: e.Code,
+        }
+    default:
+        appErr = errors.InternalError("Unexpected error", err)
+    }
+    
+    response := buildErrorResponse(appErr, c)
+    c.JSON(appErr.StatusCode(), response)
+}
+
+func HandleError(c echo.Context, err error) error {
     var appErr *errors.AppError
     
     switch e := err.(type) {
@@ -267,10 +273,10 @@ func HandleError(c *gin.Context, err error) {
     }
     
     response := buildErrorResponse(appErr, c)
-    c.JSON(appErr.StatusCode(), response)
+    return c.JSON(appErr.StatusCode(), response)
 }
 
-func buildErrorResponse(err *errors.AppError, c *gin.Context) map[string]interface{} {
+func buildErrorResponse(err *errors.AppError, c echo.Context) map[string]interface{} {
     errorResponse := map[string]interface{}{
         "code":    err.Code(),
         "message": err.Message(),
@@ -281,7 +287,7 @@ func buildErrorResponse(err *errors.AppError, c *gin.Context) map[string]interfa
     }
     
     // В debug режиме добавляем stack trace
-    if gin.Mode() == gin.DebugMode && err.Cause() != nil {
+    if c.Echo().Debug && err.Cause() != nil {
         errorResponse["debug"] = map[string]interface{}{
             "cause": err.Cause().Error(),
         }
@@ -293,12 +299,12 @@ func buildErrorResponse(err *errors.AppError, c *gin.Context) map[string]interfa
     }
 }
 
-func buildMeta(c *gin.Context) map[string]interface{} {
+func buildMeta(c echo.Context) map[string]interface{} {
     return map[string]interface{}{
         "timestamp":  time.Now().UTC().Format(time.RFC3339),
-        "request_id": c.GetString("request_id"),
-        "path":       c.Request.URL.Path,
-        "method":     c.Request.Method,
+        "request_id": c.Response().Header().Get(echo.HeaderXRequestID),
+        "path":       c.Request().URL.Path,
+        "method":     c.Request().Method,
     }
 }
 ```
@@ -499,7 +505,7 @@ func (l *Logger) LogError(err *errors.AppError, context map[string]interface{}) 
 func (s *FamilyService) GetFamily(ctx context.Context, id string) (*Family, error) {
     family, err := s.repo.GetByID(ctx, id)
     if err != nil {
-        if errors.Is(err, sql.ErrNoRows) {
+        if errors.Is(err, mongo.ErrNoDocuments) {
             return nil, errors.NotFoundError("family", id)
         }
         return nil, errors.InternalError("Failed to get family", err)
@@ -527,7 +533,7 @@ func TestFamilyService_GetFamily_NotFound(t *testing.T) {
     service := NewFamilyService(mockRepo)
     
     mockRepo.On("GetByID", mock.Anything, "invalid-id").
-        Return(nil, sql.ErrNoRows)
+        Return(nil, mongo.ErrNoDocuments)
     
     // Act
     family, err := service.GetFamily(context.Background(), "invalid-id")

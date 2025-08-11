@@ -17,12 +17,12 @@
 ## 💻 Основной технологический стек
 
 ### Backend
-- **Язык**: Go 1.21+
-- **Framework**: Gin Web Framework
-- **База данных**: PostgreSQL 15+
-- **ORM**: GORM v2
-- **Миграции**: golang-migrate
-- **Валидация**: go-playground/validator
+- **Язык**: Go 1.24+
+- **Framework**: Echo Web Framework v4
+- **База данных**: MongoDB 7.0+
+- **Driver**: Official MongoDB Go Driver
+- **Валидация**: Built-in validation with struct tags
+- **UUID**: google/uuid для идентификаторов
 
 ### Инфраструктура
 - **Контейнеризация**: Docker & Docker Compose
@@ -31,10 +31,10 @@
 - **CI/CD**: GitHub Actions (планируется)
 
 ### Документация API
-- **Спецификация**: OpenAPI 3.0
-- **Генерация**: swaggo/swag
-- **UI**: Swagger UI
-- **Тестирование**: Postman Collections
+- **Спецификация**: OpenAPI 3.0 (планируется)
+- **Генерация**: go generate (в development)
+- **UI**: Swagger UI (планируется)
+- **Тестирование**: HTTP тесты
 
 ## 🗂️ Структура проекта
 
@@ -43,13 +43,14 @@ Family-Finances-Service/
 ├── cmd/                    # Точки входа приложения
 │   └── server/            # HTTP сервер
 ├── internal/              # Приватный код приложения
-│   ├── domain/           # Бизнес-логика и сущности
-│   ├── usecases/         # Прикладная логика
-│   ├── interfaces/       # Интерфейсы (HTTP handlers, repos)
-│   └── infrastructure/   # Внешние зависимости (DB, APIs)
-├── api/                   # API спецификации
-├── generated/             # Автогенерированный код
+│   ├── domain/           # Domain entities и бизнес-логика
+│   ├── application/      # Application layer с интерфейсами
+│   ├── infrastructure/   # Реализация репозиториев (MongoDB)
+│   ├── config.go         # Конфигурация приложения
+│   └── run.go           # Bootstrap приложения
+├── generated/             # Автогенерированный код (OpenAPI)
 ├── .memory_bank/         # Документация проекта
+├── docker-compose.yml    # Docker окружение
 └── Makefile              # Автоматизация задач
 ```
 
@@ -68,34 +69,40 @@ Family-Finances-Service/
 - **Coverage**: go test -cover
 
 ### Отладка и мониторинг
-- **Логирование**: logrus/zap
+- **Логирование**: slog (встроенный в Go 1.21+)
 - **Метрики**: Prometheus (планируется)
 - **Трейсинг**: OpenTelemetry (планируется)
 - **Health checks**: Встроенные эндпоинты
 
 ## 🗄️ База данных
 
-### PostgreSQL конфигурация
-- **Версия**: 15+
-- **Пулл соединений**: pgxpool
-- **Миграции**: golang-migrate/migrate
-- **Backup**: pg_dump (автоматизировано)
+### MongoDB конфигурация
+- **Версия**: 7.0+
+- **Driver**: Official MongoDB Go Driver v1.13+
+- **Connection Pool**: Встроенное управление соединениями
+- **Миграции**: Программные миграции или скрипты
 
 ### Дизайн БД
-- **Подход**: Database First
-- **Нормализация**: 3NF
-- **Индексы**: Оптимизированы под запросы
-- **Constraints**: Foreign keys, checks, unique
+- **Подход**: Document-oriented
+- **Schema**: Flexible schema с validation
+- **Индексы**: Составные индексы для оптимизации запросов
+- **Aggregation Pipeline**: Для сложной аналитики
 
-### Основные таблицы
-```sql
-families          # Семейные профили
-family_members    # Члены семьи
-transactions      # Финансовые транзакции
-categories        # Категории транзакций
-budgets          # Бюджеты и планы
-financial_goals  # Финансовые цели
+### Основные коллекции
+```javascript
+families       // Семейные профили
+users          // Пользователи (члены семей)  
+transactions   // Финансовые транзакции
+categories     // Категории доходов/расходов
+budgets        // Бюджеты и планы
+reports        // Сгенерированные отчеты
 ```
+
+### Особенности MongoDB
+- **BSON типы**: ObjectId, UUID для идентификаторов
+- **Embedded documents**: Для связанных данных
+- **Array fields**: Для списков и коллекций
+- **Multi-tenancy**: Фильтрация по family_id
 
 ## 🌐 API Design
 
@@ -121,13 +128,16 @@ financial_goals  # Финансовые цели
 ### Локальная разработка
 ```bash
 # Запуск всех сервисов
-make dev
+make docker-up
 
-# Только база данных
-make db-up
+# Запуск приложения локально
+make run-local
 
-# Миграции
-make migrate-up
+# Форматирование и линтинг
+make fmt && make lint
+
+# Тестирование
+make test
 ```
 
 ### Среды
@@ -145,19 +155,16 @@ make migrate-up
 
 ### Основные Go модули
 ```go
-github.com/gin-gonic/gin           # Web framework
-github.com/lib/pq                  # PostgreSQL driver
-gorm.io/gorm                       # ORM
-github.com/golang-jwt/jwt/v5       # JWT tokens
-github.com/go-playground/validator # Validation
-github.com/joho/godotenv          # Environment variables
+github.com/labstack/echo/v4        # Web framework
+go.mongodb.org/mongo-driver        # MongoDB driver
+github.com/google/uuid             # UUID generation
+github.com/golang-jwt/jwt          # JWT tokens (indirect)
 ```
 
 ### Dev зависимости
 ```go
-github.com/stretchr/testify       # Testing utilities
-github.com/golang/mock            # Mocking
-github.com/swaggo/swag           # Swagger generation
+github.com/stretchr/testify       # Testing utilities (планируется)
+github.com/golang/mock            # Mocking (планируется)
 ```
 
 ## 🔒 Безопасность
@@ -169,10 +176,10 @@ github.com/swaggo/swag           # Swagger generation
 - **Input Validation**: Валидация всех входных данных
 
 ### Реализация
-- **SQL Injection**: Параметризованные запросы
+- **NoSQL Injection**: Валидация и санитизация входных данных
 - **XSS**: Content Security Policy
-- **CORS**: Настроенные CORS политики
-- **Rate Limiting**: Ограничение запросов
+- **CORS**: Настроенные CORS политики Echo
+- **Rate Limiting**: Middleware для ограничения запросов
 
 ## 📈 Производительность
 
@@ -183,9 +190,9 @@ github.com/swaggo/swag           # Swagger generation
 - **Recovery Time**: < 1 минута
 
 ### Оптимизации
-- **Database**: Индексы, connection pooling
-- **Caching**: Redis (планируется)
-- **Compression**: gzip для HTTP
+- **MongoDB**: Индексы, connection pooling, aggregation pipeline
+- **Caching**: Redis (в docker-compose.yml)
+- **Compression**: gzip middleware Echo
 - **Profiling**: pprof интеграция
 
 ## 🔄 Планы развития
@@ -212,9 +219,9 @@ github.com/swaggo/swag           # Swagger generation
 
 ### Документация
 - [Go Documentation](https://golang.org/doc/)
-- [Gin Framework](https://gin-gonic.com/docs/)
-- [GORM Guide](https://gorm.io/docs/)
-- [PostgreSQL Docs](https://www.postgresql.org/docs/)
+- [Echo Framework](https://echo.labstack.com/guide/)
+- [MongoDB Go Driver](https://www.mongodb.com/docs/drivers/go/current/)
+- [MongoDB Docs](https://www.mongodb.com/docs/)
 
 ### Лучшие практики
 - [Effective Go](https://golang.org/doc/effective_go.html)
