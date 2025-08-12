@@ -1,0 +1,191 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Family Budget Service - Business Metrics",
+    "tags": ["family-budget-service", "business", "metrics"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "1m",
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Total Families",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "families_total",
+            "legendFormat": "Families",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Total Users",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(users_total)",
+            "legendFormat": "Users",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Active Budgets",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(budgets_active)",
+            "legendFormat": "Active Budgets",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0}
+      },
+      {
+        "id": 4,
+        "title": "Transaction Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(rate(transactions_total[5m]))",
+            "legendFormat": "Transactions/sec",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0}
+      },
+      {
+        "id": 5,
+        "title": "Users by Role",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "users_total",
+            "legendFormat": "{{role}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 4}
+      },
+      {
+        "id": 6,
+        "title": "New Families Over Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "increase(families_total[1h])",
+            "legendFormat": "New Families/hour",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "New Families", "min": 0},
+          {"show": false}
+        ],
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 4}
+      },
+      {
+        "id": 7,
+        "title": "Transaction Types",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(transactions_total[5m])) by (type)",
+            "legendFormat": "{{type}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Transactions/sec", "min": 0},
+          {"show": false}
+        ],
+        "gridPos": {"h": 8, "w": 16, "x": 0, "y": 12}
+      },
+      {
+        "id": 8,
+        "title": "Transaction Amounts Distribution",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(transaction_amount_bucket[5m])) by (le, type))",
+            "legendFormat": "{{type}} - 50th percentile",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(transaction_amount_bucket[5m])) by (le, type))",
+            "legendFormat": "{{type}} - 95th percentile",
+            "refId": "B"
+          }
+        ],
+        "yAxes": [
+          {"label": "Amount", "min": 0},
+          {"show": false}
+        ],
+        "gridPos": {"h": 8, "w": 16, "x": 0, "y": 20}
+      },
+      {
+        "id": 9,
+        "title": "Top Families by Transaction Volume",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "topk(10, sum(rate(transactions_total[1h])) by (family_id))",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 28}
+      },
+      {
+        "id": 10,
+        "title": "Database Operation Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(database_operations_total[5m])) by (operation)",
+            "legendFormat": "{{operation}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Operations/sec", "min": 0},
+          {"show": false}
+        ],
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 28}
+      }
+    ]
+  }
+}
