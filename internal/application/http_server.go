@@ -63,6 +63,11 @@ func NewHTTPServer(repositories *handlers.Repositories, config *Config) *HTTPSer
 	return server
 }
 
+// Echo returns the echo instance for testing purposes
+func (s *HTTPServer) Echo() *echo.Echo {
+	return s.echo
+}
+
 func (s *HTTPServer) setupRoutes() {
 	// Health check
 	s.echo.GET("/health", s.healthCheck)

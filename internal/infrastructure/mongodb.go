@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -19,7 +20,7 @@ func NewMongoDB(uri, databaseName string) (*MongoDB, error) {
 	defer cancel()
 
 	clientOptions := options.Client().ApplyURI(uri)
-	
+
 	// Настройки connection pool
 	clientOptions.SetMaxPoolSize(100)
 	clientOptions.SetMinPoolSize(10)
@@ -36,6 +37,16 @@ func NewMongoDB(uri, databaseName string) (*MongoDB, error) {
 	}
 
 	database := client.Database(databaseName)
+
+	// Ensure unique index on users.email
+	usersColl := database.Collection("users")
+	indexModel := mongo.IndexModel{
+		Keys:    bson.D{{Key: "email", Value: 1}},
+		Options: options.Index().SetUnique(true).SetName("uniq_users_email"),
+	}
+	if _, err := usersColl.Indexes().CreateOne(ctx, indexModel); err != nil {
+		return nil, fmt.Errorf("failed to create unique index on users.email: %w", err)
+	}
 
 	return &MongoDB{
 		Client:   client,

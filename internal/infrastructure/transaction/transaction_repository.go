@@ -44,10 +44,10 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*transaction.Tr
 
 func (r *Repository) GetByFilter(ctx context.Context, filter transaction.TransactionFilter) ([]*transaction.Transaction, error) {
 	mongoFilter := r.buildFilterQuery(filter)
-	
+
 	opts := options.Find()
-	opts.SetSort(bson.M{"date": -1, "created_at": -1})
-	
+	opts.SetSort(bson.D{{Key: "date", Value: -1}, {Key: "created_at", Value: -1}})
+
 	if filter.Limit > 0 {
 		opts.SetLimit(int64(filter.Limit))
 	}
@@ -79,10 +79,10 @@ func (r *Repository) GetByFilter(ctx context.Context, filter transaction.Transac
 
 func (r *Repository) GetByFamilyID(ctx context.Context, familyID uuid.UUID, limit, offset int) ([]*transaction.Transaction, error) {
 	filter := bson.M{"family_id": familyID}
-	
+
 	opts := options.Find()
-	opts.SetSort(bson.M{"date": -1, "created_at": -1})
-	
+	opts.SetSort(bson.D{{Key: "date", Value: -1}, {Key: "created_at", Value: -1}})
+
 	if limit > 0 {
 		opts.SetLimit(int64(limit))
 	}
@@ -115,16 +115,16 @@ func (r *Repository) GetByFamilyID(ctx context.Context, familyID uuid.UUID, limi
 func (r *Repository) Update(ctx context.Context, t *transaction.Transaction) error {
 	filter := bson.M{"_id": t.ID}
 	update := bson.M{"$set": t}
-	
+
 	result, err := r.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return fmt.Errorf("failed to update transaction: %w", err)
 	}
-	
+
 	if result.MatchedCount == 0 {
 		return fmt.Errorf("transaction with id %s not found", t.ID)
 	}
-	
+
 	return nil
 }
 
@@ -133,11 +133,11 @@ func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete transaction: %w", err)
 	}
-	
+
 	if result.DeletedCount == 0 {
 		return fmt.Errorf("transaction with id %s not found", id)
 	}
-	
+
 	return nil
 }
 
