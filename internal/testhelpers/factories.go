@@ -52,7 +52,10 @@ func CreateTestCategory(familyID uuid.UUID, categoryType category.CategoryType) 
 }
 
 // CreateTestTransaction creates a test transaction
-func CreateTestTransaction(familyID, userID, categoryID uuid.UUID, transactionType transaction.TransactionType) *transaction.Transaction {
+func CreateTestTransaction(
+	familyID, userID, categoryID uuid.UUID,
+	transactionType transaction.TransactionType,
+) *transaction.Transaction {
 	return &transaction.Transaction{
 		ID:          uuid.New(),
 		FamilyID:    familyID,

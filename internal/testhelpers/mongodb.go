@@ -41,7 +41,7 @@ func SetupMongoDB(t *testing.T) *MongoDBContainer {
 	// Test the connection
 	ctxTimeout, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	
+
 	err = client.Ping(ctxTimeout, nil)
 	require.NoError(t, err)
 

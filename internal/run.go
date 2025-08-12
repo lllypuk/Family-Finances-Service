@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -57,7 +58,6 @@ func NewApplication() (*Application, error) {
 	return app, nil
 }
 
-
 func (a *Application) Run() error {
 	// Создание контекста для graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -70,7 +70,7 @@ func (a *Application) Run() error {
 	// Запуск HTTP сервера в горутине
 	go func() {
 		a.logger.Info("Starting HTTP server", "host", a.config.Server.Host, "port", a.config.Server.Port)
-		if err := a.httpServer.Start(ctx); err != nil && err != http.ErrServerClosed {
+		if err := a.httpServer.Start(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			a.logger.Error("HTTP server error", "error", err)
 			cancel()
 		}

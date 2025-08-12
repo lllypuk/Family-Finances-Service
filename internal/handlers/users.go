@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -42,7 +43,11 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 
 	if err := h.validator.Struct(req); err != nil {
 		var validationErrors []ValidationError
-		for _, err := range err.(validator.ValidationErrors) {
+		for _, err := range func() validator.ValidationErrors {
+			var target validator.ValidationErrors
+			_ = errors.As(err, &target)
+			return target
+		}() {
 			validationErrors = append(validationErrors, ValidationError{
 				Field:   err.Field(),
 				Message: err.Tag(),
@@ -197,7 +202,11 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 
 	if err := h.validator.Struct(req); err != nil {
 		var validationErrors []ValidationError
-		for _, err := range err.(validator.ValidationErrors) {
+		for _, err := range func() validator.ValidationErrors {
+			var target validator.ValidationErrors
+			_ = errors.As(err, &target)
+			return target
+		}() {
 			validationErrors = append(validationErrors, ValidationError{
 				Field:   err.Field(),
 				Message: err.Tag(),

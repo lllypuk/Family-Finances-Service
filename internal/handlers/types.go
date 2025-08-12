@@ -8,9 +8,9 @@ import (
 
 // Общие типы для HTTP ответов
 type APIResponse[T any] struct {
-	Data   T                      `json:"data"`
-	Meta   ResponseMeta           `json:"meta"`
-	Errors []ValidationError     `json:"errors,omitempty"`
+	Data   T                 `json:"data"`
+	Meta   ResponseMeta      `json:"meta"`
+	Errors []ValidationError `json:"errors,omitempty"`
 }
 
 type ResponseMeta struct {
@@ -38,18 +38,18 @@ type ErrorDetail struct {
 
 // User related types
 type CreateUserRequest struct {
-	Email     string    `json:"email" validate:"required,email"`
-	Password  string    `json:"password" validate:"required,min=6"`
+	Email     string    `json:"email"      validate:"required,email"`
+	Password  string    `json:"password"   validate:"required,min=6"`
 	FirstName string    `json:"first_name" validate:"required"`
-	LastName  string    `json:"last_name" validate:"required"`
-	FamilyID  uuid.UUID `json:"family_id" validate:"required"`
-	Role      string    `json:"role" validate:"required,oneof=admin member child"`
+	LastName  string    `json:"last_name"  validate:"required"`
+	FamilyID  uuid.UUID `json:"family_id"  validate:"required"`
+	Role      string    `json:"role"       validate:"required,oneof=admin member child"`
 }
 
 type UpdateUserRequest struct {
 	FirstName *string `json:"first_name,omitempty"`
 	LastName  *string `json:"last_name,omitempty"`
-	Email     *string `json:"email,omitempty" validate:"omitempty,email"`
+	Email     *string `json:"email,omitempty"      validate:"omitempty,email"`
 }
 
 type UserResponse struct {
@@ -65,12 +65,12 @@ type UserResponse struct {
 
 // Family related types
 type CreateFamilyRequest struct {
-	Name     string `json:"name" validate:"required,min=2,max=100"`
+	Name     string `json:"name"     validate:"required,min=2,max=100"`
 	Currency string `json:"currency" validate:"required,len=3"`
 }
 
 type UpdateFamilyRequest struct {
-	Name     *string `json:"name,omitempty" validate:"omitempty,min=2,max=100"`
+	Name     *string `json:"name,omitempty"     validate:"omitempty,min=2,max=100"`
 	Currency *string `json:"currency,omitempty" validate:"omitempty,len=3"`
 }
 
@@ -84,16 +84,16 @@ type FamilyResponse struct {
 
 // Category related types
 type CreateCategoryRequest struct {
-	Name     string    `json:"name" validate:"required,min=2,max=50"`
-	Type     string    `json:"type" validate:"required,oneof=income expense"`
-	Color    string    `json:"color" validate:"required,hexcolor"`
-	Icon     string    `json:"icon" validate:"required"`
+	Name     string     `json:"name"                validate:"required,min=2,max=50"`
+	Type     string     `json:"type"                validate:"required,oneof=income expense"`
+	Color    string     `json:"color"               validate:"required,hexcolor"`
+	Icon     string     `json:"icon"                validate:"required"`
 	ParentID *uuid.UUID `json:"parent_id,omitempty"`
-	FamilyID uuid.UUID `json:"family_id" validate:"required"`
+	FamilyID uuid.UUID  `json:"family_id"           validate:"required"`
 }
 
 type UpdateCategoryRequest struct {
-	Name  *string `json:"name,omitempty" validate:"omitempty,min=2,max=50"`
+	Name  *string `json:"name,omitempty"  validate:"omitempty,min=2,max=50"`
 	Color *string `json:"color,omitempty" validate:"omitempty,hexcolor"`
 	Icon  *string `json:"icon,omitempty"`
 }
@@ -113,19 +113,19 @@ type CategoryResponse struct {
 
 // Transaction related types
 type CreateTransactionRequest struct {
-	Amount      float64   `json:"amount" validate:"required,gt=0"`
-	Type        string    `json:"type" validate:"required,oneof=income expense"`
-	Description string    `json:"description" validate:"required,min=2,max=200"`
-	CategoryID  uuid.UUID `json:"category_id" validate:"required"`
-	UserID      uuid.UUID `json:"user_id" validate:"required"`
-	FamilyID    uuid.UUID `json:"family_id" validate:"required"`
-	Date        time.Time `json:"date" validate:"required"`
+	Amount      float64   `json:"amount"         validate:"required,gt=0"`
+	Type        string    `json:"type"           validate:"required,oneof=income expense"`
+	Description string    `json:"description"    validate:"required,min=2,max=200"`
+	CategoryID  uuid.UUID `json:"category_id"    validate:"required"`
+	UserID      uuid.UUID `json:"user_id"        validate:"required"`
+	FamilyID    uuid.UUID `json:"family_id"      validate:"required"`
+	Date        time.Time `json:"date"           validate:"required"`
 	Tags        []string  `json:"tags,omitempty"`
 }
 
 type UpdateTransactionRequest struct {
-	Amount      *float64   `json:"amount,omitempty" validate:"omitempty,gt=0"`
-	Type        *string    `json:"type,omitempty" validate:"omitempty,oneof=income expense"`
+	Amount      *float64   `json:"amount,omitempty"      validate:"omitempty,gt=0"`
+	Type        *string    `json:"type,omitempty"        validate:"omitempty,oneof=income expense"`
 	Description *string    `json:"description,omitempty" validate:"omitempty,min=2,max=200"`
 	CategoryID  *uuid.UUID `json:"category_id,omitempty"`
 	Date        *time.Time `json:"date,omitempty"`
@@ -156,24 +156,24 @@ type TransactionFilterParams struct {
 	AmountFrom  *float64   `query:"amount_from"`
 	AmountTo    *float64   `query:"amount_to"`
 	Description *string    `query:"description"`
-	Limit       int        `query:"limit" validate:"min=1,max=100"`
-	Offset      int        `query:"offset" validate:"min=0"`
+	Limit       int        `query:"limit"       validate:"min=1,max=100"`
+	Offset      int        `query:"offset"      validate:"min=0"`
 }
 
 // Budget related types
 type CreateBudgetRequest struct {
-	Name       string     `json:"name" validate:"required,min=2,max=100"`
-	Amount     float64    `json:"amount" validate:"required,gt=0"`
-	Period     string     `json:"period" validate:"required,oneof=weekly monthly yearly custom"`
+	Name       string     `json:"name"                  validate:"required,min=2,max=100"`
+	Amount     float64    `json:"amount"                validate:"required,gt=0"`
+	Period     string     `json:"period"                validate:"required,oneof=weekly monthly yearly custom"`
 	CategoryID *uuid.UUID `json:"category_id,omitempty"`
-	FamilyID   uuid.UUID  `json:"family_id" validate:"required"`
-	StartDate  time.Time  `json:"start_date" validate:"required"`
-	EndDate    time.Time  `json:"end_date" validate:"required"`
+	FamilyID   uuid.UUID  `json:"family_id"             validate:"required"`
+	StartDate  time.Time  `json:"start_date"            validate:"required"`
+	EndDate    time.Time  `json:"end_date"              validate:"required"`
 }
 
 type UpdateBudgetRequest struct {
-	Name      *string    `json:"name,omitempty" validate:"omitempty,min=2,max=100"`
-	Amount    *float64   `json:"amount,omitempty" validate:"omitempty,gt=0"`
+	Name      *string    `json:"name,omitempty"       validate:"omitempty,min=2,max=100"`
+	Amount    *float64   `json:"amount,omitempty"     validate:"omitempty,gt=0"`
 	StartDate *time.Time `json:"start_date,omitempty"`
 	EndDate   *time.Time `json:"end_date,omitempty"`
 	IsActive  *bool      `json:"is_active,omitempty"`
@@ -196,13 +196,13 @@ type BudgetResponse struct {
 
 // Report related types
 type CreateReportRequest struct {
-	Name      string    `json:"name" validate:"required,min=2,max=100"`
-	Type      string    `json:"type" validate:"required,oneof=expenses income budget cash_flow category_break"`
-	Period    string    `json:"period" validate:"required,oneof=daily weekly monthly yearly custom"`
-	FamilyID  uuid.UUID `json:"family_id" validate:"required"`
-	UserID    uuid.UUID `json:"user_id" validate:"required"`
+	Name      string    `json:"name"       validate:"required,min=2,max=100"`
+	Type      string    `json:"type"       validate:"required,oneof=expenses income budget cash_flow category_break"`
+	Period    string    `json:"period"     validate:"required,oneof=daily weekly monthly yearly custom"`
+	FamilyID  uuid.UUID `json:"family_id"  validate:"required"`
+	UserID    uuid.UUID `json:"user_id"    validate:"required"`
 	StartDate time.Time `json:"start_date" validate:"required"`
-	EndDate   time.Time `json:"end_date" validate:"required"`
+	EndDate   time.Time `json:"end_date"   validate:"required"`
 }
 
 type ReportResponse struct {

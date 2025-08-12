@@ -84,7 +84,7 @@ func TestReportRepository_Integration(t *testing.T) {
 		nonExistentFamilyID := uuid.New()
 		reports, err := repo.GetByFamilyID(context.Background(), nonExistentFamilyID)
 		require.NoError(t, err)
-		assert.Len(t, reports, 0)
+		assert.Empty(t, reports)
 	})
 
 	t.Run("GetByUserID_Success", func(t *testing.T) {
@@ -135,7 +135,7 @@ func TestReportRepository_Integration(t *testing.T) {
 		nonExistentUserID := uuid.New()
 		reports, err := repo.GetByUserID(context.Background(), nonExistentUserID)
 		require.NoError(t, err)
-		assert.Len(t, reports, 0)
+		assert.Empty(t, reports)
 	})
 
 	t.Run("Delete_Success", func(t *testing.T) {

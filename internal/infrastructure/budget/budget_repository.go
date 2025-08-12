@@ -2,6 +2,7 @@ package budget
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -35,7 +36,7 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*budget.Budget,
 	var b budget.Budget
 	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&b)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
+		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, fmt.Errorf("budget with id %s not found", id)
 		}
 		return nil, fmt.Errorf("failed to get budget by id: %w", err)
@@ -72,8 +73,8 @@ func (r *Repository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*
 func (r *Repository) GetActiveBudgets(ctx context.Context, familyID uuid.UUID) ([]*budget.Budget, error) {
 	now := time.Now()
 	filter := bson.M{
-		"family_id": familyID,
-		"is_active": true,
+		"family_id":  familyID,
+		"is_active":  true,
 		"start_date": bson.M{"$lte": now},
 		"end_date":   bson.M{"$gte": now},
 	}
@@ -104,16 +105,16 @@ func (r *Repository) GetActiveBudgets(ctx context.Context, familyID uuid.UUID) (
 func (r *Repository) Update(ctx context.Context, b *budget.Budget) error {
 	filter := bson.M{"_id": b.ID}
 	update := bson.M{"$set": b}
-	
+
 	result, err := r.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return fmt.Errorf("failed to update budget: %w", err)
 	}
-	
+
 	if result.MatchedCount == 0 {
 		return fmt.Errorf("budget with id %s not found", b.ID)
 	}
-	
+
 	return nil
 }
 
@@ -122,10 +123,10 @@ func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete budget: %w", err)
 	}
-	
+
 	if result.DeletedCount == 0 {
 		return fmt.Errorf("budget with id %s not found", id)
 	}
-	
+
 	return nil
 }

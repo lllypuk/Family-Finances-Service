@@ -107,7 +107,7 @@ func TestUserRepository_Integration(t *testing.T) {
 		nonExistentFamilyID := uuid.New()
 		users, err := repo.GetByFamilyID(context.Background(), nonExistentFamilyID)
 		require.NoError(t, err)
-		assert.Len(t, users, 0)
+		assert.Empty(t, users)
 	})
 
 	t.Run("Update_Success", func(t *testing.T) {

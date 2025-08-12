@@ -2,6 +2,7 @@ package report
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -34,7 +35,7 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*report.Report,
 	var rep report.Report
 	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&rep)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
+		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, fmt.Errorf("report with id %s not found", id)
 		}
 		return nil, fmt.Errorf("failed to get report by id: %w", err)
@@ -99,10 +100,10 @@ func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete report: %w", err)
 	}
-	
+
 	if result.DeletedCount == 0 {
 		return fmt.Errorf("report with id %s not found", id)
 	}
-	
+
 	return nil
 }
