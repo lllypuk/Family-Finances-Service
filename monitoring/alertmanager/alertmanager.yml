@@ -1,0 +1,201 @@
+# AlertManager Configuration for Family Budget Service
+
+global:
+  # The smarthost and SMTP sender used for mail notifications.
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'alerts@family-budget-service.local'
+  smtp_auth_username: 'alerts@family-budget-service.local'
+  smtp_auth_password: 'smtp-password'
+
+  # Default values for notification templates
+  resolve_timeout: 5m
+
+# Templates for notification formatting
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# The root route on which each incoming alert enters.
+route:
+  # The labels by which incoming alerts are grouped together
+  group_by: ['alertname', 'service']
+  
+  # When a new group of alerts is created by an incoming alert, wait at
+  # least 'group_wait' to send the initial notification.
+  group_wait: 10s
+  
+  # When the first notification was sent, wait 'group_interval' to send a batch
+  # of new alerts that started firing for that group.
+  group_interval: 10s
+  
+  # If an alert has successfully been sent, wait 'repeat_interval' to
+  # resend them.
+  repeat_interval: 1h
+  
+  # A default receiver
+  receiver: 'default'
+  
+  # Routes for specific services
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 5m
+      
+    # Warning alerts - less frequent notifications
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 30m
+      
+    # Service-specific routing
+    - match:
+        service: family-budget-service
+      receiver: 'app-team'
+      
+    - match:
+        service: mongodb
+      receiver: 'db-team'
+      
+    - match:
+        service: system
+      receiver: 'ops-team'
+
+# Inhibition rules allow to mute a set of alerts given that another alert is firing
+inhibit_rules:
+  # Mute warning alerts if critical alerts are firing for the same service
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['service', 'instance']
+
+# Notification receivers
+receivers:
+  # Default receiver (for unmatched alerts)
+  - name: 'default'
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#alerts'
+        title: 'Family Budget Service Alert'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Severity:* {{ .Labels.severity }}
+          *Service:* {{ .Labels.service }}
+          {{ end }}
+
+  # Critical alerts - multiple channels
+  - name: 'critical-alerts'
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#critical-alerts'
+        title: '🚨 CRITICAL: Family Budget Service'
+        color: 'danger'
+        text: |
+          {{ range .Alerts }}
+          *CRITICAL ALERT*
+          *Service:* {{ .Labels.service }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Started:* {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+    email_configs:
+      - to: 'oncall@family-budget-service.local'
+        subject: 'CRITICAL: {{ .GroupLabels.service }} - {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Service: {{ .Labels.service }}
+          Severity: {{ .Labels.severity }}
+          Started: {{ .StartsAt }}
+          {{ if .EndsAt }}Ended: {{ .EndsAt }}{{ end }}
+          
+          {{ end }}
+    # webhook_configs:
+    #   - url: 'http://pagerduty-integration:8080/webhook'
+    #     send_resolved: true
+
+  # Warning alerts
+  - name: 'warning-alerts'
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#alerts'
+        title: '⚠️ WARNING: Family Budget Service'
+        color: 'warning'
+        text: |
+          {{ range .Alerts }}
+          *WARNING ALERT*
+          *Service:* {{ .Labels.service }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+
+  # Application team notifications
+  - name: 'app-team'
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#app-team'
+        title: 'Application Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Service:* {{ .Labels.service }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Severity:* {{ .Labels.severity }}
+          {{ end }}
+
+  # Database team notifications
+  - name: 'db-team'
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#db-team'
+        title: 'Database Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Database:* {{ .Labels.service }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Severity:* {{ .Labels.severity }}
+          {{ end }}
+
+  # Operations team notifications
+  - name: 'ops-team'
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#ops-team'
+        title: 'Infrastructure Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *System:* {{ .Labels.instance }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Severity:* {{ .Labels.severity }}
+          {{ end }}
+
+# Time intervals for notification timing
+time_intervals:
+  # Business hours (9 AM to 6 PM, Monday to Friday)
+  - name: business_hours
+    time_intervals:
+      - times:
+          - start_time: '09:00'
+            end_time: '18:00'
+        weekdays: ['monday:friday']
+
+  # Off hours (outside business hours)
+  - name: off_hours
+    time_intervals:
+      - times:
+          - start_time: '18:00'
+            end_time: '09:00'
+      - times:
+          - start_time: '00:00'
+            end_time: '23:59'
+        weekdays: ['saturday', 'sunday']

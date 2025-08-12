@@ -14,28 +14,36 @@ import (
 	"family-budget-service/internal/application"
 	"family-budget-service/internal/handlers"
 	"family-budget-service/internal/infrastructure"
+	"family-budget-service/internal/observability"
 )
 
 type Application struct {
-	config       *Config
-	repositories *handlers.Repositories
-	httpServer   *application.HTTPServer
-	mongodb      *infrastructure.MongoDB
-	logger       *slog.Logger
+	config            *Config
+	repositories      *handlers.Repositories
+	httpServer        *application.HTTPServer
+	mongodb           *infrastructure.MongoDB
+	observabilityService *observability.Service
 }
 
 func NewApplication() (*Application, error) {
 	// Загрузка конфигурации
 	config := LoadConfig()
 
-	// Настройка логгера
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
+	// Настройка observability
+	obsConfig := observability.DefaultConfig()
+	// Настраиваем уровень логирования из переменной окружения
+	if level := os.Getenv("LOG_LEVEL"); level != "" {
+		obsConfig.Logging.Level = level
+	}
+	
+	observabilityService, err := observability.NewService(obsConfig, "1.0.0")
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize observability: %w", err)
+	}
 
 	app := &Application{
-		config: config,
-		logger: logger,
+		config:               config,
+		observabilityService: observabilityService,
 	}
 
 	// Подключение к MongoDB
@@ -45,15 +53,18 @@ func NewApplication() (*Application, error) {
 	}
 	app.mongodb = mongodb
 
+	// Добавляем health check для MongoDB
+	app.observabilityService.AddMongoHealthCheck(mongodb.Client)
+
 	// Инициализация репозиториев
 	app.repositories = infrastructure.NewRepositories(mongodb)
 
-	// Создание HTTP сервера
+	// Создание HTTP сервера с observability
 	serverConfig := &application.Config{
 		Port: config.Server.Port,
 		Host: config.Server.Host,
 	}
-	app.httpServer = application.NewHTTPServer(app.repositories, serverConfig)
+	app.httpServer = application.NewHTTPServerWithObservability(app.repositories, serverConfig, app.observabilityService)
 
 	return app, nil
 }
@@ -69,9 +80,11 @@ func (a *Application) Run() error {
 
 	// Запуск HTTP сервера в горутине
 	go func() {
-		a.logger.Info("Starting HTTP server", "host", a.config.Server.Host, "port", a.config.Server.Port)
+		a.observabilityService.Logger.Info("Starting HTTP server", 
+			slog.String("host", a.config.Server.Host), 
+			slog.String("port", a.config.Server.Port))
 		if err := a.httpServer.Start(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			a.logger.Error("HTTP server error", "error", err)
+			a.observabilityService.Logger.Error("HTTP server error", slog.String("error", err.Error()))
 			cancel()
 		}
 	}()
@@ -79,16 +92,16 @@ func (a *Application) Run() error {
 	// Ожидание сигнала завершения
 	select {
 	case sig := <-sigChan:
-		a.logger.Info("Received shutdown signal", "signal", sig)
+		a.observabilityService.Logger.Info("Received shutdown signal", slog.String("signal", sig.String()))
 	case <-ctx.Done():
-		a.logger.Info("Context cancelled")
+		a.observabilityService.Logger.Info("Context cancelled")
 	}
 
 	return a.shutdown()
 }
 
 func (a *Application) shutdown() error {
-	a.logger.Info("Shutting down application...")
+	a.observabilityService.Logger.Info("Shutting down application...")
 
 	// Контекст с таймаутом для graceful shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -96,20 +109,26 @@ func (a *Application) shutdown() error {
 
 	// Остановка HTTP сервера
 	if err := a.httpServer.Shutdown(ctx); err != nil {
-		a.logger.Error("HTTP server shutdown error", "error", err)
+		a.observabilityService.Logger.Error("HTTP server shutdown error", slog.String("error", err.Error()))
 	} else {
-		a.logger.Info("HTTP server stopped")
+		a.observabilityService.Logger.Info("HTTP server stopped")
 	}
 
 	// Закрытие подключения к MongoDB
 	if a.mongodb != nil {
 		if err := a.mongodb.Close(ctx); err != nil {
-			a.logger.Error("MongoDB disconnect error", "error", err)
+			a.observabilityService.Logger.Error("MongoDB disconnect error", slog.String("error", err.Error()))
 		} else {
-			a.logger.Info("MongoDB disconnected")
+			a.observabilityService.Logger.Info("MongoDB disconnected")
 		}
 	}
 
-	a.logger.Info("Application shutdown complete")
+	// Остановка observability сервиса
+	if err := a.observabilityService.Shutdown(ctx); err != nil {
+		// Используем стандартный logger для последнего сообщения
+		slog.Error("Observability service shutdown error", slog.String("error", err.Error()))
+	}
+
+	a.observabilityService.Logger.Info("Application shutdown complete")
 	return nil
 }

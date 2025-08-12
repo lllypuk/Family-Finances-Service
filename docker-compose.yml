@@ -77,6 +77,7 @@ services:
       MONGODB_DATABASE: ${MONGODB_DATABASE:-family_budget}
       REDIS_URL: ${REDIS_URL:-redis://:redis123@redis:6379}
       ENVIRONMENT: ${ENVIRONMENT:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     depends_on:
       mongodb:
         condition: service_healthy
@@ -87,10 +88,154 @@ services:
     profiles:
       - production
 
+  # Prometheus для сбора метрик
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: family-budget-prometheus
+    restart: unless-stopped
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - ./monitoring/prometheus/recording_rules.yml:/etc/prometheus/recording_rules.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - family-budget-network
+    profiles:
+      - observability
+
+  # AlertManager для управления алертами
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: family-budget-alertmanager
+    restart: unless-stopped
+    ports:
+      - "${ALERTMANAGER_PORT:-9093}:9093"
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+    networks:
+      - family-budget-network
+    profiles:
+      - observability
+
+  # Grafana для визуализации метрик
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: family-budget-grafana
+    restart: unless-stopped
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USERNAME:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - family-budget-network
+    profiles:
+      - observability
+
+  # Jaeger для distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:1.48
+    container_name: family-budget-jaeger
+    restart: unless-stopped
+    ports:
+      - "${JAEGER_UI_PORT:-16686}:16686"
+      - "${JAEGER_COLLECTOR_PORT:-14268}:14268"
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+      SPAN_STORAGE_TYPE: "memory"
+    networks:
+      - family-budget-network
+    profiles:
+      - observability
+
+  # Node Exporter для системных метрик
+  node-exporter:
+    image: prom/node-exporter:v1.6.1
+    container_name: family-budget-node-exporter
+    restart: unless-stopped
+    ports:
+      - "${NODE_EXPORTER_PORT:-9100}:9100"
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    networks:
+      - family-budget-network
+    profiles:
+      - observability
+
+  # MongoDB Exporter для метрик базы данных
+  mongodb-exporter:
+    image: percona/mongodb_exporter:0.40
+    container_name: family-budget-mongodb-exporter
+    restart: unless-stopped
+    ports:
+      - "${MONGODB_EXPORTER_PORT:-9216}:9216"
+    environment:
+      MONGODB_URI: ${MONGODB_URI:-mongodb://admin:password123@mongodb:27017/family_budget?authSource=admin}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - family-budget-network
+    profiles:
+      - observability
+
+  # Redis Exporter для метрик кэша
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.53.0
+    container_name: family-budget-redis-exporter
+    restart: unless-stopped
+    ports:
+      - "${REDIS_EXPORTER_PORT:-9121}:9121"
+    environment:
+      REDIS_ADDR: redis://redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - family-budget-network
+    profiles:
+      - observability
+
 volumes:
   mongodb_data:
     driver: local
   redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  alertmanager_data:
     driver: local
 
 networks:
