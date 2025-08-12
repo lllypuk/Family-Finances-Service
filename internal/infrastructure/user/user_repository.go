@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -36,7 +37,7 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*user.User, err
 	var u user.User
 	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&u)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
+		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, fmt.Errorf("user with id %s not found", id)
 		}
 		return nil, fmt.Errorf("failed to get user by id: %w", err)
@@ -48,7 +49,7 @@ func (r *Repository) GetByEmail(ctx context.Context, email string) (*user.User, 
 	var u user.User
 	err := r.collection.FindOne(ctx, bson.M{"email": email}).Decode(&u)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
+		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, fmt.Errorf("user with email %s not found", email)
 		}
 		return nil, fmt.Errorf("failed to get user by email: %w", err)
@@ -82,16 +83,16 @@ func (r *Repository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*
 func (r *Repository) Update(ctx context.Context, u *user.User) error {
 	filter := bson.M{"_id": u.ID}
 	update := bson.M{"$set": u}
-	
+
 	result, err := r.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return fmt.Errorf("failed to update user: %w", err)
 	}
-	
+
 	if result.MatchedCount == 0 {
 		return fmt.Errorf("user with id %s not found", u.ID)
 	}
-	
+
 	return nil
 }
 
@@ -100,10 +101,10 @@ func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
-	
+
 	if result.DeletedCount == 0 {
 		return fmt.Errorf("user with id %s not found", id)
 	}
-	
+
 	return nil
 }

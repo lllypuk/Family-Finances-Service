@@ -1,4 +1,4 @@
-.PHONY: build run test clean docker-up docker-down deps
+.PHONY: build run test clean docker-up docker-down deps lint fmt lint-fix
 
 # Переменные
 APP_NAME=family-budget-service
@@ -46,6 +46,11 @@ deps:
 lint:
 	@echo "Running linter..."
 	@golangci-lint run
+
+# Автоматическое исправление ошибок линтера
+lint-fix:
+	@echo "Running linter with auto-fix..."
+	@golangci-lint run --fix
 
 # Форматирование кода
 fmt:
@@ -95,6 +100,7 @@ help:
 	@echo "  test-coverage- Run tests with coverage report"
 	@echo "  deps         - Install dependencies"
 	@echo "  lint         - Run linter"
+	@echo "  lint-fix     - Run linter with auto-fix"
 	@echo "  fmt          - Format code"
 	@echo "  clean        - Clean build artifacts"
 	@echo "  docker-up    - Start Docker containers"

@@ -12,8 +12,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Testing and Code Quality
 - `make test` - Run all tests
 - `make test-coverage` - Run tests with coverage report (generates coverage.html)
-- `make lint` - Run golangci-lint for code quality checks
+- `make lint` - Run golangci-lint for comprehensive code quality checks
+- `make lint-fix` - Run golangci-lint with automatic fixing of issues
 - `make fmt` - Format code with go fmt
+
+#### Code Quality Tools
+The project uses **golangci-lint** with a comprehensive configuration (`.golangci.yml`) that includes:
+- **Static analysis**: errcheck, govet, staticcheck, ineffassign
+- **Code style**: gofmt, revive, whitespace alignment  
+- **Complexity checks**: gocognit, funlen, cyclop
+- **Security**: gosec for security vulnerabilities
+- **Best practices**: gocritic, unconvert, unused
+- **Testing**: testifylint for proper test assertions
+
+Run `make lint` before committing to ensure code quality standards.
 
 ### Dependencies and Maintenance
 - `make deps` - Download and tidy Go modules

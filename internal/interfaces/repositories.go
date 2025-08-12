@@ -3,12 +3,13 @@ package interfaces
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
+
+	"github.com/google/uuid"
 )
 
 // UserRepository определяет операции с пользователями
@@ -47,7 +48,11 @@ type TransactionRepository interface {
 	GetByFamilyID(ctx context.Context, familyID uuid.UUID, limit, offset int) ([]*transaction.Transaction, error)
 	Update(ctx context.Context, transaction *transaction.Transaction) error
 	Delete(ctx context.Context, id uuid.UUID) error
-	GetTotalByCategory(ctx context.Context, categoryID uuid.UUID, transactionType transaction.TransactionType) (float64, error)
+	GetTotalByCategory(
+		ctx context.Context,
+		categoryID uuid.UUID,
+		transactionType transaction.TransactionType,
+	) (float64, error)
 }
 
 // BudgetRepository определяет операции с бюджетами

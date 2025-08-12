@@ -155,7 +155,7 @@ func TestCategoryRepository_Integration(t *testing.T) {
 		// Should not appear in family categories list
 		categories, err := repo.GetByFamilyID(context.Background(), family.ID)
 		require.NoError(t, err)
-		assert.Len(t, categories, 0)
+		assert.Empty(t, categories)
 	})
 
 	t.Run("Delete_NotFound", func(t *testing.T) {

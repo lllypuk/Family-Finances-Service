@@ -2,6 +2,7 @@ package category
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -34,7 +35,7 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*category.Categ
 	var c category.Category
 	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&c)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
+		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, fmt.Errorf("category with id %s not found", id)
 		}
 		return nil, fmt.Errorf("failed to get category by id: %w", err)
@@ -47,7 +48,7 @@ func (r *Repository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*
 		"family_id": familyID,
 		"is_active": true,
 	}
-	
+
 	opts := options.Find().SetSort(bson.M{"name": 1})
 	cursor, err := r.collection.Find(ctx, filter, opts)
 	if err != nil {
@@ -71,13 +72,17 @@ func (r *Repository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*
 	return categories, nil
 }
 
-func (r *Repository) GetByType(ctx context.Context, familyID uuid.UUID, categoryType category.CategoryType) ([]*category.Category, error) {
+func (r *Repository) GetByType(
+	ctx context.Context,
+	familyID uuid.UUID,
+	categoryType category.CategoryType,
+) ([]*category.Category, error) {
 	filter := bson.M{
 		"family_id": familyID,
 		"type":      categoryType,
 		"is_active": true,
 	}
-	
+
 	opts := options.Find().SetSort(bson.M{"name": 1})
 	cursor, err := r.collection.Find(ctx, filter, opts)
 	if err != nil {
@@ -104,16 +109,16 @@ func (r *Repository) GetByType(ctx context.Context, familyID uuid.UUID, category
 func (r *Repository) Update(ctx context.Context, c *category.Category) error {
 	filter := bson.M{"_id": c.ID}
 	update := bson.M{"$set": c}
-	
+
 	result, err := r.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return fmt.Errorf("failed to update category: %w", err)
 	}
-	
+
 	if result.MatchedCount == 0 {
 		return fmt.Errorf("category with id %s not found", c.ID)
 	}
-	
+
 	return nil
 }
 
@@ -121,15 +126,15 @@ func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
 	// Soft delete - устанавливаем is_active в false
 	filter := bson.M{"_id": id}
 	update := bson.M{"$set": bson.M{"is_active": false}}
-	
+
 	result, err := r.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return fmt.Errorf("failed to delete category: %w", err)
 	}
-	
+
 	if result.MatchedCount == 0 {
 		return fmt.Errorf("category with id %s not found", id)
 	}
-	
+
 	return nil
 }

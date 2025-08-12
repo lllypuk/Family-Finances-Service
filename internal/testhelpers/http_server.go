@@ -14,9 +14,9 @@ import (
 
 // TestHTTPServer wraps HTTP server setup for testing
 type TestHTTPServer struct {
-	Server    *application.HTTPServer
-	MongoDB   *MongoDBContainer
-	Repos     *handlers.Repositories
+	Server  *application.HTTPServer
+	MongoDB *MongoDBContainer
+	Repos   *handlers.Repositories
 }
 
 // SetupHTTPServer creates a test HTTP server with MongoDB testcontainers

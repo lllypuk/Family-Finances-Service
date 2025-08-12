@@ -12,9 +12,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/handlers"
 	"family-budget-service/internal/testhelpers"
-	"family-budget-service/internal/domain/category"
 )
 
 func TestCategoryHandler_Integration(t *testing.T) {
@@ -142,7 +142,11 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		requestBody, err := json.Marshal(request)
 		require.NoError(t, err)
 
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/categories/"+category.ID.String(), bytes.NewBuffer(requestBody))
+		req := httptest.NewRequest(
+			http.MethodPut,
+			"/api/v1/categories/"+category.ID.String(),
+			bytes.NewBuffer(requestBody),
+		)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -191,6 +195,6 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Should be empty since the category is soft deleted
-		assert.Len(t, response.Data, 0)
+		assert.Empty(t, response.Data)
 	})
 }

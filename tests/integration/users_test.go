@@ -84,7 +84,7 @@ func TestUserHandler_Integration(t *testing.T) {
 
 		// Should have multiple validation errors
 		assert.NotEmpty(t, response.Errors)
-		assert.True(t, len(response.Errors) >= 3) // At least 3 validation errors
+		assert.GreaterOrEqual(t, len(response.Errors), 3) // At least 3 validation errors
 
 		// Check for specific validation error codes
 		errorCodes := make([]string, len(response.Errors))

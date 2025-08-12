@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
@@ -43,7 +44,11 @@ func (h *ReportHandler) CreateReport(c echo.Context) error {
 
 	if err := h.validator.Struct(req); err != nil {
 		var validationErrors []ValidationError
-		for _, err := range err.(validator.ValidationErrors) {
+		for _, err := range func() validator.ValidationErrors {
+			var target validator.ValidationErrors
+			_ = errors.As(err, &target)
+			return target
+		}() {
 			validationErrors = append(validationErrors, ValidationError{
 				Field:   err.Field(),
 				Message: err.Tag(),
@@ -78,7 +83,13 @@ func (h *ReportHandler) CreateReport(c echo.Context) error {
 
 	// TODO: Здесь должна быть логика генерации данных отчета
 	// в зависимости от типа отчета (expenses, income, budget, cash_flow, category_break)
-	newReport.Data = h.generateReportData(c.Request().Context(), report.ReportType(req.Type), req.FamilyID, req.StartDate, req.EndDate)
+	newReport.Data = h.generateReportData(
+		c.Request().Context(),
+		report.ReportType(req.Type),
+		req.FamilyID,
+		req.StartDate,
+		req.EndDate,
+	)
 
 	if err := h.repositories.Report.Create(c.Request().Context(), newReport); err != nil {
 		return c.JSON(http.StatusInternalServerError, ErrorResponse{
@@ -312,7 +323,12 @@ func (h *ReportHandler) DeleteReport(c echo.Context) error {
 }
 
 // generateReportData генерирует данные отчета в зависимости от типа
-func (h *ReportHandler) generateReportData(ctx context.Context, reportType report.ReportType, familyID uuid.UUID, startDate, endDate time.Time) report.ReportData {
+func (h *ReportHandler) generateReportData(
+	ctx context.Context,
+	reportType report.ReportType,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+) report.ReportData {
 	// TODO: Реализовать генерацию данных для каждого типа отчета
 	// Пока возвращаем заглушку со значениями по умолчанию
 	data := report.ReportData{}

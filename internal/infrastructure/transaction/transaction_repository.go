@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -34,7 +35,7 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*transaction.Tr
 	var t transaction.Transaction
 	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&t)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
+		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, fmt.Errorf("transaction with id %s not found", id)
 		}
 		return nil, fmt.Errorf("failed to get transaction by id: %w", err)
@@ -42,7 +43,10 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*transaction.Tr
 	return &t, nil
 }
 
-func (r *Repository) GetByFilter(ctx context.Context, filter transaction.TransactionFilter) ([]*transaction.Transaction, error) {
+func (r *Repository) GetByFilter(
+	ctx context.Context,
+	filter transaction.TransactionFilter,
+) ([]*transaction.Transaction, error) {
 	mongoFilter := r.buildFilterQuery(filter)
 
 	opts := options.Find()
@@ -77,7 +81,11 @@ func (r *Repository) GetByFilter(ctx context.Context, filter transaction.Transac
 	return transactions, nil
 }
 
-func (r *Repository) GetByFamilyID(ctx context.Context, familyID uuid.UUID, limit, offset int) ([]*transaction.Transaction, error) {
+func (r *Repository) GetByFamilyID(
+	ctx context.Context,
+	familyID uuid.UUID,
+	limit, offset int,
+) ([]*transaction.Transaction, error) {
 	filter := bson.M{"family_id": familyID}
 
 	opts := options.Find()
@@ -141,7 +149,11 @@ func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *Repository) GetTotalByCategory(ctx context.Context, categoryID uuid.UUID, transactionType transaction.TransactionType) (float64, error) {
+func (r *Repository) GetTotalByCategory(
+	ctx context.Context,
+	categoryID uuid.UUID,
+	transactionType transaction.TransactionType,
+) (float64, error) {
 	pipeline := []bson.M{
 		{
 			"$match": bson.M{

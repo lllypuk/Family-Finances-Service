@@ -1,9 +1,7 @@
 package internal
 
 import (
-	"log"
 	"os"
-	"strconv"
 )
 
 type Config struct {
@@ -37,16 +35,6 @@ func LoadConfig() *Config {
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
-	}
-	return defaultValue
-}
-
-func getEnvAsInt(key string, defaultValue int) int {
-	if value := os.Getenv(key); value != "" {
-		if intValue, err := strconv.Atoi(value); err == nil {
-			return intValue
-		}
-		log.Printf("Invalid integer value for %s: %s, using default: %d", key, value, defaultValue)
 	}
 	return defaultValue
 }

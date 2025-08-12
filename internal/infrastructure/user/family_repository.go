@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -33,7 +34,7 @@ func (r *FamilyRepository) GetByID(ctx context.Context, id uuid.UUID) (*user.Fam
 	var family user.Family
 	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&family)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
+		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, fmt.Errorf("family with id %s not found", id)
 		}
 		return nil, fmt.Errorf("failed to get family by id: %w", err)
@@ -44,16 +45,16 @@ func (r *FamilyRepository) GetByID(ctx context.Context, id uuid.UUID) (*user.Fam
 func (r *FamilyRepository) Update(ctx context.Context, family *user.Family) error {
 	filter := bson.M{"_id": family.ID}
 	update := bson.M{"$set": family}
-	
+
 	result, err := r.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return fmt.Errorf("failed to update family: %w", err)
 	}
-	
+
 	if result.MatchedCount == 0 {
 		return fmt.Errorf("family with id %s not found", family.ID)
 	}
-	
+
 	return nil
 }
 
@@ -62,10 +63,10 @@ func (r *FamilyRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete family: %w", err)
 	}
-	
+
 	if result.DeletedCount == 0 {
 		return fmt.Errorf("family with id %s not found", id)
 	}
-	
+
 	return nil
 }

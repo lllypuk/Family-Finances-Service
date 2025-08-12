@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -43,7 +44,11 @@ func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
 
 	if err := h.validator.Struct(req); err != nil {
 		var validationErrors []ValidationError
-		for _, err := range err.(validator.ValidationErrors) {
+		for _, err := range func() validator.ValidationErrors {
+			var target validator.ValidationErrors
+			_ = errors.As(err, &target)
+			return target
+		}() {
 			validationErrors = append(validationErrors, ValidationError{
 				Field:   err.Field(),
 				Message: err.Tag(),
@@ -214,7 +219,11 @@ func (h *TransactionHandler) GetTransactions(c echo.Context) error {
 	// Валидация фильтров
 	if err := h.validator.Struct(filters); err != nil {
 		var validationErrors []ValidationError
-		for _, err := range err.(validator.ValidationErrors) {
+		for _, err := range func() validator.ValidationErrors {
+			var target validator.ValidationErrors
+			_ = errors.As(err, &target)
+			return target
+		}() {
 			validationErrors = append(validationErrors, ValidationError{
 				Field:   err.Field(),
 				Message: err.Tag(),
@@ -391,7 +400,11 @@ func (h *TransactionHandler) UpdateTransaction(c echo.Context) error {
 
 	if err := h.validator.Struct(req); err != nil {
 		var validationErrors []ValidationError
-		for _, err := range err.(validator.ValidationErrors) {
+		for _, err := range func() validator.ValidationErrors {
+			var target validator.ValidationErrors
+			_ = errors.As(err, &target)
+			return target
+		}() {
 			validationErrors = append(validationErrors, ValidationError{
 				Field:   err.Field(),
 				Message: err.Tag(),

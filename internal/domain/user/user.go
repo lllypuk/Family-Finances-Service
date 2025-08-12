@@ -7,13 +7,13 @@ import (
 )
 
 type User struct {
-	ID        uuid.UUID `json:"id" bson:"_id"`
-	Email     string    `json:"email" bson:"email"`
-	Password  string    `json:"-" bson:"password"` // Скрыт из JSON
+	ID        uuid.UUID `json:"id"         bson:"_id"`
+	Email     string    `json:"email"      bson:"email"`
+	Password  string    `json:"-"          bson:"password"` // Скрыт из JSON
 	FirstName string    `json:"first_name" bson:"first_name"`
-	LastName  string    `json:"last_name" bson:"last_name"`
-	Role      Role      `json:"role" bson:"role"`
-	FamilyID  uuid.UUID `json:"family_id" bson:"family_id"`
+	LastName  string    `json:"last_name"  bson:"last_name"`
+	Role      Role      `json:"role"       bson:"role"`
+	FamilyID  uuid.UUID `json:"family_id"  bson:"family_id"`
 	CreatedAt time.Time `json:"created_at" bson:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" bson:"updated_at"`
 }
@@ -27,9 +27,9 @@ const (
 )
 
 type Family struct {
-	ID        uuid.UUID `json:"id" bson:"_id"`
-	Name      string    `json:"name" bson:"name"`
-	Currency  string    `json:"currency" bson:"currency"` // USD, RUB, EUR и т.д.
+	ID        uuid.UUID `json:"id"         bson:"_id"`
+	Name      string    `json:"name"       bson:"name"`
+	Currency  string    `json:"currency"   bson:"currency"` // USD, RUB, EUR и т.д.
 	CreatedAt time.Time `json:"created_at" bson:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" bson:"updated_at"`
 }

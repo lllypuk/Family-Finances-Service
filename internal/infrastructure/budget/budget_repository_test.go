@@ -82,7 +82,7 @@ func TestBudgetRepository_Integration(t *testing.T) {
 		nonExistentFamilyID := uuid.New()
 		budgets, err := repo.GetByFamilyID(context.Background(), nonExistentFamilyID)
 		require.NoError(t, err)
-		assert.Len(t, budgets, 0)
+		assert.Empty(t, budgets)
 	})
 
 	t.Run("GetActiveBudgets_Success", func(t *testing.T) {
@@ -134,7 +134,7 @@ func TestBudgetRepository_Integration(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
 		activeBudgets, err := repo.GetActiveBudgets(context.Background(), family.ID)
 		require.NoError(t, err)
-		assert.Len(t, activeBudgets, 0)
+		assert.Empty(t, activeBudgets)
 	})
 
 	t.Run("Update_Success", func(t *testing.T) {
