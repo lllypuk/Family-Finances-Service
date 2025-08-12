@@ -108,6 +108,8 @@ services:
       - ./monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
       - ./monitoring/prometheus/recording_rules.yml:/etc/prometheus/recording_rules.yml:ro
       - prometheus_data:/prometheus
+    security_opt:
+      - no-new-privileges:true
     networks:
       - family-budget-network
     profiles:
@@ -127,6 +129,8 @@ services:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
       - '--web.external-url=http://localhost:9093'
+    security_opt:
+      - no-new-privileges:true
     networks:
       - family-budget-network
     profiles:
@@ -147,6 +151,8 @@ services:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
       - grafana_data:/var/lib/grafana
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       - prometheus
     networks:
@@ -165,6 +171,8 @@ services:
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
       SPAN_STORAGE_TYPE: "memory"
+    security_opt:
+      - no-new-privileges:true
     networks:
       - family-budget-network
     profiles:
@@ -186,6 +194,8 @@ services:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /:/rootfs:ro
+    security_opt:
+      - no-new-privileges:true
     networks:
       - family-budget-network
     profiles:
@@ -200,6 +210,8 @@ services:
       - "${MONGODB_EXPORTER_PORT:-9216}:9216"
     environment:
       MONGODB_URI: ${MONGODB_URI:-mongodb://admin:password123@mongodb:27017/family_budget?authSource=admin}
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       mongodb:
         condition: service_healthy
@@ -218,6 +230,8 @@ services:
     environment:
       REDIS_ADDR: redis://redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       redis:
         condition: service_healthy

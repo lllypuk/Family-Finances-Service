@@ -2,15 +2,15 @@ name: Security
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
   schedule:
     # Run weekly security scans on Sundays at 2 AM UTC
-    - cron: '0 2 * * 0'
+    - cron: "0 2 * * 0"
 
 env:
-  GO_VERSION: '1.24'
+  GO_VERSION: "1.24"
 
 jobs:
   codeql:
@@ -24,147 +24,148 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'go' ]
+        language: ["go"]
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
-      with:
-        languages: ${{ matrix.language }}
-        queries: +security-and-quality
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: +security-and-quality
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        cache: true
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
 
-    - name: Build application
-      run: |
-        make deps
-        make build
+      - name: Build application
+        run: |
+          make deps
+          make build
 
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
-      with:
-        category: "/language:${{matrix.language}}"
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{matrix.language}}"
 
   govulncheck:
     name: Go Vulnerability Check
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        cache: true
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
 
-    - name: Download dependencies
-      run: make deps
+      - name: Download dependencies
+        run: make deps
 
-    - name: Run govulncheck
-      run: |
-        go install golang.org/x/vuln/cmd/govulncheck@latest
-        govulncheck ./...
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
 
-    - name: Run govulncheck with JSON output
-      run: |
-        govulncheck -json ./... > govulncheck-report.json
-      continue-on-error: true
+      - name: Run govulncheck with JSON output
+        run: |
+          govulncheck -json ./... > govulncheck-report.json
+        continue-on-error: true
 
-    - name: Upload govulncheck report
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: govulncheck-report
-        path: govulncheck-report.json
-        retention-days: 30
+      - name: Upload govulncheck report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: govulncheck-report
+          path: govulncheck-report.json
+          retention-days: 30
 
   dependency-review:
     name: Dependency Review
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
-    
-    steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
 
-    - name: Dependency Review
-      uses: actions/dependency-review-action@v4
-      with:
-        fail-on-severity: high
-        allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC
-        deny-licenses: GPL-2.0, GPL-3.0, AGPL-1.0, AGPL-3.0
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MPL-2.0
 
   secrets-scan:
     name: Secrets Scan
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Run TruffleHog OSS
-      uses: trufflesecurity/trufflehog@main
-      with:
-        path: ./
-        base: main
-        head: HEAD
-        extra_args: --debug --only-verified
+      - name: Run TruffleHog OSS
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --debug --only-verified
 
   semgrep:
     name: Semgrep SAST
     runs-on: ubuntu-latest
-    
+
     container:
       image: semgrep/semgrep
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Run Semgrep
-      run: |
-        semgrep \
-          --config=auto \
-          --sarif \
-          --output=semgrep-report.sarif \
-          --severity=ERROR \
-          --severity=WARNING \
-          .
+      - name: Run Semgrep
+        run: |
+          semgrep \
+            --config=auto \
+            --sarif \
+            --output=semgrep-report.sarif \
+            --severity=ERROR \
+            --severity=WARNING \
+            .
 
-    - name: Upload SARIF file
-      uses: github/codeql-action/upload-sarif@v3
-      if: always()
-      with:
-        sarif_file: semgrep-report.sarif
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep-report.sarif
 
   osv-scanner:
     name: OSV Scanner
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Run OSV Scanner
-      uses: google/osv-scanner-action@v1.7.4
-      with:
-        scan-args: |-
-          -r
-          --skip-git
-          ./
+      - name: Install OSV Scanner
+        run: |
+          curl -sSfL https://github.com/google/osv-scanner/releases/latest/download/osv-scanner-linux-amd64 -o osv-scanner
+          chmod +x osv-scanner
+          sudo mv osv-scanner /usr/local/bin/osv-scanner
+
+      - name: Run OSV Scanner
+        run: |
+          osv-scanner -r --skip-git ./
 
   security-scorecard:
     name: OSSF Scorecard
@@ -174,19 +175,19 @@ jobs:
       id-token: write
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        persist-credentials: false
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-    - name: Run analysis
-      uses: ossf/scorecard-action@v2.3.1
-      with:
-        results_file: results.sarif
-        results_format: sarif
-        publish_results: true
+      - name: Run analysis
+        uses: ossf/scorecard-action@v2.3.1
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
 
-    - name: Upload to code-scanning
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: results.sarif
+      - name: Upload to code-scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
