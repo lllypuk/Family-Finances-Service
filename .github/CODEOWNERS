@@ -1,0 +1,51 @@
+# CODEOWNERS file for Family Finances Service
+# This file defines who has ownership and review responsibilities for different parts of the codebase
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global rule - default reviewers for all files
+* @lllypuk
+
+# Infrastructure and DevOps
+/.github/ @lllypuk
+/Dockerfile @lllypuk
+/docker-compose.yml @lllypuk
+/.dockerignore @lllypuk
+/Makefile @lllypuk
+/.golangci.yml @lllypuk
+
+# Configuration and environment
+/internal/config.go @lllypuk
+/.env.example @lllypuk
+/go.mod @lllypuk
+/go.sum @lllypuk
+
+# Core application architecture
+/cmd/ @lllypuk
+/internal/run.go @lllypuk
+/internal/application/ @lllypuk
+
+# Domain layer - critical business logic
+/internal/domain/ @lllypuk
+
+# Infrastructure layer (when implemented)
+/internal/infrastructure/ @lllypuk
+
+# HTTP handlers and API
+/internal/handlers/ @lllypuk
+
+# Testing infrastructure
+/tests/ @lllypuk
+/internal/testhelpers/ @lllypuk
+
+# Documentation
+/README.md @lllypuk
+/CLAUDE.md @lllypuk
+/.memory_bank/ @lllypuk
+
+# Security-sensitive files
+/.github/workflows/ @lllypuk
+/.github/dependabot.yml @lllypuk
+
+# Database and migrations (future)
+/migrations/ @lllypuk
+/scripts/ @lllypuk

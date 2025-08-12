@@ -19,13 +19,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 #### Code Quality Tools
 The project uses **golangci-lint** with a comprehensive configuration (`.golangci.yml`) that includes:
 - **Static analysis**: errcheck, govet, staticcheck, ineffassign
-- **Code style**: gofmt, revive, whitespace alignment  
+- **Code style**: gofmt, revive, whitespace alignment
 - **Complexity checks**: gocognit, funlen, cyclop
 - **Security**: gosec for security vulnerabilities
 - **Best practices**: gocritic, unconvert, unused
 - **Testing**: testifylint for proper test assertions
 
-Run `make lint` before committing to ensure code quality standards.
+Run `make test` and `make lint` before committing to ensure code quality standards.
 
 ### Dependencies and Maintenance
 - `make deps` - Download and tidy Go modules
@@ -81,3 +81,59 @@ The system supports family-based multi-tenancy where users belong to families an
 
 ### Documentation
 Current documentation is available in the `.memory_bank/` directory
+
+## CI/CD Pipeline
+
+The project uses GitHub Actions for continuous integration and deployment with the following workflows:
+
+### CI Pipeline (`.github/workflows/ci.yml`)
+Runs on every push and pull request to main/develop branches:
+- **Environment Setup**: Go 1.24, MongoDB service for integration tests
+- **Quality Checks**: 
+  - Code formatting verification with `make fmt`
+  - Comprehensive linting with golangci-lint (50+ rules)
+  - Security scanning with `govulncheck`
+- **Testing**: Full test suite with coverage reporting to Codecov
+- **Build Verification**: Compile application and Docker image test
+
+### Docker Build Pipeline (`.github/workflows/docker.yml`)
+Triggered on version tags and releases:
+- **Multi-platform**: Builds for linux/amd64 and linux/arm64
+- **Container Registry**: Publishes to GitHub Container Registry
+- **Security**: Trivy vulnerability scanning of images
+- **Size Optimization**: Enforces 50MB image size limit
+- **Versioning**: Semantic versioning with appropriate tags
+
+### Security Pipeline (`.github/workflows/security.yml`)
+Comprehensive security scanning (runs on schedule and PR):
+- **CodeQL**: GitHub's semantic code analysis for Go
+- **Dependency Review**: License and vulnerability checking
+- **Secret Scanning**: TruffleHog for credential detection
+- **SAST**: Semgrep static analysis security testing
+- **OSV Scanner**: Open source vulnerability scanning
+- **OSSF Scorecard**: Security posture scoring
+
+### Release Pipeline (`.github/workflows/release.yml`)
+Automated releases on version tags:
+- **Multi-platform Binaries**: Linux, macOS, Windows (amd64/arm64)
+- **Docker Images**: Automated publishing with semantic versioning
+- **Release Notes**: Auto-generated from commit history
+- **Checksums**: SHA256 validation for all binaries
+- **Notifications**: Success/failure reporting
+
+### Dependency Management
+- **Dependabot**: Automated dependency updates (Go modules, GitHub Actions, Docker)
+- **Security**: Automatic vulnerability detection and patching
+- **Schedule**: Weekly updates on different days to manage load
+
+### Code Review Process
+- **CODEOWNERS**: Automatic reviewer assignment for critical files
+- **Branch Protection**: Required status checks and reviews
+- **Quality Gates**: All CI checks must pass before merge
+
+### Monitoring and Observability
+- **Coverage Reports**: Integrated with Codecov for test coverage tracking
+- **Security Dashboard**: Centralized vulnerability and compliance reporting
+- **Build Metrics**: Automated tracking of build times and success rates
+
+Use `make lint` and `make test` locally to ensure CI pipeline success before pushing changes.
