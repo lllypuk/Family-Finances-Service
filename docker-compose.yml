@@ -3,20 +3,26 @@ version: '3.8'
 services:
   # MongoDB база данных
   mongodb:
-    image: mongo:7.0
+    image: mongodb/mongodb-community-server:latest
     container_name: family-budget-mongodb
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "${MONGODB_PORT:-27017}:27017"
     environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password123
-      MONGO_INITDB_DATABASE: family_budget
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-password123}
+      MONGO_INITDB_DATABASE: ${MONGODB_DATABASE:-family_budget}
     volumes:
       - mongodb_data:/data/db
       - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
     networks:
       - family-budget-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # Mongo Express для администрирования БД
   mongo-express:
@@ -24,15 +30,16 @@ services:
     container_name: family-budget-mongo-express
     restart: unless-stopped
     ports:
-      - "8081:8081"
+      - "${MONGO_EXPRESS_PORT:-8081}:8081"
     environment:
-      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
-      ME_CONFIG_MONGODB_ADMINPASSWORD: password123
-      ME_CONFIG_MONGODB_URL: mongodb://admin:password123@mongodb:27017/
-      ME_CONFIG_BASICAUTH_USERNAME: admin
-      ME_CONFIG_BASICAUTH_PASSWORD: admin
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_ROOT_PASSWORD:-password123}
+      ME_CONFIG_MONGODB_URL: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-password123}@mongodb:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: ${MONGO_EXPRESS_USERNAME:-admin}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGO_EXPRESS_PASSWORD:-admin}
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
     networks:
       - family-budget-network
 
@@ -42,12 +49,17 @@ services:
     container_name: family-budget-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes --requirepass "redis123"
+      - "${REDIS_PORT:-6379}:6379"
+    command: redis-server --appendonly yes --requirepass "${REDIS_PASSWORD:-redis123}"
     volumes:
       - redis_data:/data
     networks:
       - family-budget-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
 
   # Приложение (для продакшн сборки)
   app:
@@ -57,16 +69,19 @@ services:
     container_name: family-budget-app
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "${SERVER_PORT:-8080}:8080"
     environment:
-      SERVER_PORT: 8080
-      SERVER_HOST: 0.0.0.0
-      MONGODB_URI: mongodb://admin:password123@mongodb:27017/family_budget?authSource=admin
-      MONGODB_DATABASE: family_budget
-      REDIS_URL: redis://:redis123@redis:6379
+      SERVER_PORT: ${SERVER_PORT:-8080}
+      SERVER_HOST: ${SERVER_HOST:-0.0.0.0}
+      MONGODB_URI: ${MONGODB_URI:-mongodb://admin:password123@mongodb:27017/family_budget?authSource=admin}
+      MONGODB_DATABASE: ${MONGODB_DATABASE:-family_budget}
+      REDIS_URL: ${REDIS_URL:-redis://:redis123@redis:6379}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
     depends_on:
-      - mongodb
-      - redis
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - family-budget-network
     profiles:
