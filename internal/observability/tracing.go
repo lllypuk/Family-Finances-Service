@@ -17,11 +17,11 @@ import (
 
 // TracingConfig конфигурация для tracing
 type TracingConfig struct {
-	ServiceName    string `json:"service_name" default:"family-budget-service"`
+	ServiceName    string `json:"service_name"    default:"family-budget-service"`
 	ServiceVersion string `json:"service_version" default:"1.0.0"`
-	JaegerURL      string `json:"jaeger_url" default:"http://localhost:14268/api/traces"`
-	Environment    string `json:"environment" default:"development"`
-	Enabled        bool   `json:"enabled" default:"true"`
+	JaegerURL      string `json:"jaeger_url"      default:"http://localhost:14268/api/traces"`
+	Environment    string `json:"environment"     default:"development"`
+	Enabled        bool   `json:"enabled"         default:"true"`
 }
 
 // InitTracing инициализирует OpenTelemetry tracing
@@ -30,14 +30,14 @@ func InitTracing(config TracingConfig, logger *slog.Logger) (func(context.Contex
 		logger.Info("Tracing disabled")
 		return func(context.Context) error { return nil }, nil
 	}
-	
+
 	// Создаем Jaeger exporter
 	exp, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(config.JaegerURL)))
 	if err != nil {
 		logger.Error("Failed to create Jaeger exporter", slog.String("error", err.Error()))
 		return nil, err
 	}
-	
+
 	// Создаем resource
 	res := resource.NewWithAttributes(
 		semconv.SchemaURL,
@@ -45,29 +45,29 @@ func InitTracing(config TracingConfig, logger *slog.Logger) (func(context.Contex
 		semconv.ServiceVersionKey.String(config.ServiceVersion),
 		semconv.DeploymentEnvironmentKey.String(config.Environment),
 	)
-	
+
 	// Создаем trace provider
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exp),
 		sdktrace.WithResource(res),
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
 	)
-	
+
 	// Устанавливаем глобальный trace provider
 	otel.SetTracerProvider(tp)
-	
+
 	// Устанавливаем глобальный propagator
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
 		propagation.Baggage{},
 	))
-	
+
 	logger.Info("Tracing initialized successfully",
 		slog.String("service", config.ServiceName),
 		slog.String("version", config.ServiceVersion),
 		slog.String("jaeger_url", config.JaegerURL),
 	)
-	
+
 	// Возвращаем функцию для graceful shutdown
 	return tp.Shutdown, nil
 }
@@ -89,7 +89,7 @@ func TraceRepository(ctx context.Context, operation, collection string) (context
 			attribute.String("db.system", "mongodb"),
 		),
 	)
-	
+
 	return ctx, span
 }
 
@@ -101,26 +101,30 @@ func TraceHTTPRequest(ctx context.Context, method, path string) (context.Context
 			attribute.String("http.route", path),
 		),
 	)
-	
+
 	return ctx, span
 }
 
 // TraceBusiness добавляет трейсинг к бизнес-операциям
-func TraceBusiness(ctx context.Context, domain, operation string, metadata map[string]string) (context.Context, trace.Span) {
+func TraceBusiness(
+	ctx context.Context,
+	domain, operation string,
+	metadata map[string]string,
+) (context.Context, trace.Span) {
 	attrs := []attribute.KeyValue{
 		attribute.String("business.domain", domain),
 		attribute.String("business.operation", operation),
 	}
-	
+
 	// Добавляем метаданные как атрибуты
 	for key, value := range metadata {
 		attrs = append(attrs, attribute.String("business."+key, value))
 	}
-	
+
 	ctx, span := StartSpan(ctx, "business."+domain+"."+operation,
 		trace.WithAttributes(attrs...),
 	)
-	
+
 	return ctx, span
 }
 

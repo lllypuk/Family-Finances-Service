@@ -109,7 +109,7 @@ func TestTransactionRepository_Integration(t *testing.T) {
 		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
 
 		// Create 5 transactions
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			tr := testhelpers.CreateTestTransaction(
 				family.ID,
 				user.ID,

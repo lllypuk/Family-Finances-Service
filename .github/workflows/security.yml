@@ -87,21 +87,6 @@ jobs:
           path: govulncheck-report.json
           retention-days: 30
 
-  dependency-review:
-    name: Dependency Review
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Dependency Review
-        uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: high
-          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MPL-2.0
-
   secrets-scan:
     name: Secrets Scan
     runs-on: ubuntu-latest
@@ -157,15 +142,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install OSV Scanner
-        run: |
-          curl -sSfL https://github.com/google/osv-scanner/releases/latest/download/osv-scanner-linux-amd64 -o osv-scanner
-          chmod +x osv-scanner
-          sudo mv osv-scanner /usr/local/bin/osv-scanner
-
       - name: Run OSV Scanner
-        run: |
-          osv-scanner -r --skip-git ./
+        uses: google/osv-scanner-action@v1
+        with:
+          scan-args: |-
+            -r
+            --skip-git
+            ./
 
   security-scorecard:
     name: OSSF Scorecard

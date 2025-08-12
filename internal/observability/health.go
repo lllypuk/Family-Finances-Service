@@ -51,15 +51,15 @@ func (m *MongoHealthChecker) Name() string {
 // CheckHealth проверяет состояние MongoDB
 func (m *MongoHealthChecker) CheckHealth(ctx context.Context) CheckResult {
 	start := time.Now()
-	
+
 	// Создаем контекст с таймаутом для проверки
 	checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	
+
 	// Пингуем MongoDB
 	err := m.client.Ping(checkCtx, readpref.Primary())
 	duration := time.Since(start)
-	
+
 	if err != nil {
 		return CheckResult{
 			Status:    "unhealthy",
@@ -68,7 +68,7 @@ func (m *MongoHealthChecker) CheckHealth(ctx context.Context) CheckResult {
 			Timestamp: time.Now(),
 		}
 	}
-	
+
 	return CheckResult{
 		Status:    "healthy",
 		Duration:  duration,
@@ -99,17 +99,17 @@ func (hs *HealthService) AddChecker(checker HealthChecker) {
 func (hs *HealthService) CheckHealth(ctx context.Context) HealthStatus {
 	checks := make(map[string]CheckResult)
 	overallStatus := "healthy"
-	
+
 	// Выполняем все проверки
 	for _, checker := range hs.checkers {
 		result := checker.CheckHealth(ctx)
 		checks[checker.Name()] = result
-		
+
 		if result.Status != "healthy" {
 			overallStatus = "unhealthy"
 		}
 	}
-	
+
 	return HealthStatus{
 		Status:    overallStatus,
 		Timestamp: time.Now(),
@@ -123,12 +123,12 @@ func (hs *HealthService) CheckHealth(ctx context.Context) HealthStatus {
 func (hs *HealthService) HealthHandler() echo.HandlerFunc {
 	return func(c echo.Context) error {
 		health := hs.CheckHealth(c.Request().Context())
-		
+
 		statusCode := http.StatusOK
 		if health.Status != "healthy" {
 			statusCode = http.StatusServiceUnavailable
 		}
-		
+
 		return c.JSON(statusCode, health)
 	}
 }
@@ -139,9 +139,9 @@ func (hs *HealthService) ReadinessHandler() echo.HandlerFunc {
 		// Быстрая проверка готовности - только критичные зависимости
 		ctx, cancel := context.WithTimeout(c.Request().Context(), 3*time.Second)
 		defer cancel()
-		
+
 		health := hs.CheckHealth(ctx)
-		
+
 		// Для readiness проверяем только критичные компоненты
 		ready := true
 		for name, check := range health.Checks {
@@ -151,17 +151,17 @@ func (hs *HealthService) ReadinessHandler() echo.HandlerFunc {
 				break
 			}
 		}
-		
+
 		response := map[string]interface{}{
 			"ready":     ready,
 			"timestamp": time.Now(),
 		}
-		
+
 		statusCode := http.StatusOK
 		if !ready {
 			statusCode = http.StatusServiceUnavailable
 		}
-		
+
 		return c.JSON(statusCode, response)
 	}
 }
@@ -175,7 +175,7 @@ func (hs *HealthService) LivenessHandler() echo.HandlerFunc {
 			"timestamp": time.Now(),
 			"uptime":    time.Since(startTime).Seconds(),
 		}
-		
+
 		return c.JSON(http.StatusOK, response)
 	}
 }
@@ -202,10 +202,10 @@ func (c *CustomHealthChecker) Name() string {
 // CheckHealth выполняет пользовательскую проверку
 func (c *CustomHealthChecker) CheckHealth(ctx context.Context) CheckResult {
 	start := time.Now()
-	
+
 	err := c.checkFunc(ctx)
 	duration := time.Since(start)
-	
+
 	if err != nil {
 		return CheckResult{
 			Status:    "unhealthy",
@@ -214,7 +214,7 @@ func (c *CustomHealthChecker) CheckHealth(ctx context.Context) CheckResult {
 			Timestamp: time.Now(),
 		}
 	}
-	
+
 	return CheckResult{
 		Status:    "healthy",
 		Duration:  duration,

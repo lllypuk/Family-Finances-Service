@@ -40,7 +40,11 @@ func NewHTTPServer(repositories *handlers.Repositories, config *Config) *HTTPSer
 }
 
 // NewHTTPServerWithObservability создает HTTP сервер с observability
-func NewHTTPServerWithObservability(repositories *handlers.Repositories, config *Config, obsService *observability.Service) *HTTPServer {
+func NewHTTPServerWithObservability(
+	repositories *handlers.Repositories,
+	config *Config,
+	obsService *observability.Service,
+) *HTTPServer {
 	e := echo.New()
 
 	// Базовые middleware
@@ -57,13 +61,13 @@ func NewHTTPServerWithObservability(repositories *handlers.Repositories, config 
 	if obsService != nil {
 		// OpenTelemetry tracing
 		e.Use(otelecho.Middleware("family-budget-service"))
-		
+
 		// Prometheus metrics
 		e.Use(observability.PrometheusMiddleware())
-		
+
 		// Structured logging
 		e.Use(observability.LoggingMiddleware(obsService.Logger))
-		
+
 		// Health check middleware (исключает health endpoints из метрик)
 		e.Use(observability.HealthCheckMiddleware())
 	} else {

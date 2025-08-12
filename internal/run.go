@@ -18,10 +18,10 @@ import (
 )
 
 type Application struct {
-	config            *Config
-	repositories      *handlers.Repositories
-	httpServer        *application.HTTPServer
-	mongodb           *infrastructure.MongoDB
+	config               *Config
+	repositories         *handlers.Repositories
+	httpServer           *application.HTTPServer
+	mongodb              *infrastructure.MongoDB
 	observabilityService *observability.Service
 }
 
@@ -35,7 +35,7 @@ func NewApplication() (*Application, error) {
 	if level := os.Getenv("LOG_LEVEL"); level != "" {
 		obsConfig.Logging.Level = level
 	}
-	
+
 	observabilityService, err := observability.NewService(obsConfig, "1.0.0")
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize observability: %w", err)
@@ -64,7 +64,11 @@ func NewApplication() (*Application, error) {
 		Port: config.Server.Port,
 		Host: config.Server.Host,
 	}
-	app.httpServer = application.NewHTTPServerWithObservability(app.repositories, serverConfig, app.observabilityService)
+	app.httpServer = application.NewHTTPServerWithObservability(
+		app.repositories,
+		serverConfig,
+		app.observabilityService,
+	)
 
 	return app, nil
 }
@@ -80,8 +84,8 @@ func (a *Application) Run() error {
 
 	// Запуск HTTP сервера в горутине
 	go func() {
-		a.observabilityService.Logger.Info("Starting HTTP server", 
-			slog.String("host", a.config.Server.Host), 
+		a.observabilityService.Logger.Info("Starting HTTP server",
+			slog.String("host", a.config.Server.Host),
 			slog.String("port", a.config.Server.Port))
 		if err := a.httpServer.Start(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			a.observabilityService.Logger.Error("HTTP server error", slog.String("error", err.Error()))
