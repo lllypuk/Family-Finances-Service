@@ -107,7 +107,7 @@ func TestDefaultIncomeCategories(t *testing.T) {
 
 func TestNewCategory_DifferentTypes(t *testing.T) {
 	familyID := uuid.New()
-	
+
 	tests := []struct {
 		name         string
 		categoryType CategoryType
@@ -128,7 +128,7 @@ func TestCategory_StructFields(t *testing.T) {
 	// Test that Category struct has all required fields
 	familyID := uuid.New()
 	parentID := uuid.New()
-	
+
 	category := &Category{
 		ID:        uuid.New(),
 		Name:      "Test Category",
@@ -157,13 +157,13 @@ func TestCategory_StructFields(t *testing.T) {
 
 func TestCategory_TimestampGeneration(t *testing.T) {
 	familyID := uuid.New()
-	
+
 	// Record time before creating category
 	beforeTime := time.Now()
-	
+
 	// Create category
 	category := NewCategory("Test Category", CategoryTypeExpense, familyID)
-	
+
 	// Record time after creating category
 	afterTime := time.Now()
 
@@ -176,8 +176,8 @@ func TestCategory_TimestampGeneration(t *testing.T) {
 
 func TestDefaultCategories_NonEmpty(t *testing.T) {
 	// Test that we have default categories defined
-	assert.Greater(t, len(DefaultExpenseCategories), 0, "Should have default expense categories")
-	assert.Greater(t, len(DefaultIncomeCategories), 0, "Should have default income categories")
+	assert.NotEmpty(t, DefaultExpenseCategories, "Should have default expense categories")
+	assert.NotEmpty(t, DefaultIncomeCategories, "Should have default income categories")
 }
 
 func TestDefaultCategories_UniqueValues(t *testing.T) {

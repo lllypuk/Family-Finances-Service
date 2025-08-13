@@ -48,7 +48,7 @@ func TestTransaction_AddTag(t *testing.T) {
 	// Setup
 	transaction := NewTransaction(100.0, TransactionTypeExpense, "Test", uuid.New(), uuid.New(), uuid.New(), time.Now())
 	originalUpdateTime := transaction.UpdatedAt
-	
+
 	// Wait a bit to ensure UpdatedAt changes
 	time.Sleep(time.Millisecond)
 
@@ -66,7 +66,7 @@ func TestTransaction_AddTag_Duplicate(t *testing.T) {
 	transaction := NewTransaction(100.0, TransactionTypeExpense, "Test", uuid.New(), uuid.New(), uuid.New(), time.Now())
 	transaction.AddTag("food")
 	originalUpdateTime := transaction.UpdatedAt
-	
+
 	// Wait a bit
 	time.Sleep(time.Millisecond)
 
@@ -85,7 +85,7 @@ func TestTransaction_RemoveTag(t *testing.T) {
 	transaction.AddTag("food")
 	transaction.AddTag("grocery")
 	originalUpdateTime := transaction.UpdatedAt
-	
+
 	// Wait a bit to ensure UpdatedAt changes
 	time.Sleep(time.Millisecond)
 
@@ -104,7 +104,7 @@ func TestTransaction_RemoveTag_NonExistent(t *testing.T) {
 	transaction := NewTransaction(100.0, TransactionTypeExpense, "Test", uuid.New(), uuid.New(), uuid.New(), time.Now())
 	transaction.AddTag("food")
 	originalUpdateTime := transaction.UpdatedAt
-	
+
 	// Wait a bit
 	time.Sleep(time.Millisecond)
 
@@ -123,7 +123,7 @@ func TestTransaction_StructFields(t *testing.T) {
 	userID := uuid.New()
 	familyID := uuid.New()
 	date := time.Now()
-	
+
 	transaction := &Transaction{
 		ID:          uuid.New(),
 		Amount:      150.75,
@@ -198,7 +198,7 @@ func TestNewTransaction_DifferentTypes(t *testing.T) {
 	userID := uuid.New()
 	familyID := uuid.New()
 	date := time.Now()
-	
+
 	tests := []struct {
 		name            string
 		transactionType TransactionType
@@ -223,7 +223,7 @@ func TestTransaction_TagOperations_Sequence(t *testing.T) {
 	transaction.AddTag("food")
 	transaction.AddTag("grocery")
 	transaction.AddTag("essential")
-	
+
 	assert.Len(t, transaction.Tags, 3)
 	assert.Contains(t, transaction.Tags, "food")
 	assert.Contains(t, transaction.Tags, "grocery")
@@ -231,7 +231,7 @@ func TestTransaction_TagOperations_Sequence(t *testing.T) {
 
 	// Test removing middle tag
 	transaction.RemoveTag("grocery")
-	
+
 	assert.Len(t, transaction.Tags, 2)
 	assert.Contains(t, transaction.Tags, "food")
 	assert.NotContains(t, transaction.Tags, "grocery")
@@ -239,24 +239,24 @@ func TestTransaction_TagOperations_Sequence(t *testing.T) {
 
 	// Test removing first tag
 	transaction.RemoveTag("food")
-	
+
 	assert.Len(t, transaction.Tags, 1)
 	assert.NotContains(t, transaction.Tags, "food")
 	assert.Contains(t, transaction.Tags, "essential")
 
 	// Test removing last tag
 	transaction.RemoveTag("essential")
-	
+
 	assert.Empty(t, transaction.Tags)
 }
 
 func TestTransaction_TimestampGeneration(t *testing.T) {
 	// Record time before creating transaction
 	beforeTime := time.Now()
-	
+
 	// Create transaction
 	transaction := NewTransaction(100.0, TransactionTypeExpense, "Test", uuid.New(), uuid.New(), uuid.New(), time.Now())
-	
+
 	// Record time after creating transaction
 	afterTime := time.Now()
 

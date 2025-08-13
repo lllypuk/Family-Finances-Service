@@ -194,7 +194,7 @@ func TestHTTPServer_MiddlewareSetup(t *testing.T) {
 func TestHTTPServer_WithObservabilityRoutes(t *testing.T) {
 	// Setup mock observability service
 	obsService := &observability.Service{}
-	
+
 	repos := NewMockRepositories()
 	config := &Config{Port: "8080", Host: "localhost"}
 	server := NewHTTPServerWithObservability(&repos.Repositories, config, obsService)
@@ -224,22 +224,22 @@ func TestConfig_Fields(t *testing.T) {
 func TestHTTPServer_StartShutdownInterface(t *testing.T) {
 	// This test verifies that the server implements the expected interface
 	// but doesn't actually start/stop the server to avoid port conflicts in tests
-	
+
 	repos := NewMockRepositories()
 	config := &Config{Port: "8080", Host: "localhost"}
 	server := NewHTTPServer(&repos.Repositories, config)
-	
+
 	// Verify methods exist and have correct signatures
 	ctx := context.Background()
-	
+
 	// Test that Start method exists and returns error interface
 	// We won't actually call it to avoid starting a real server
 	assert.NotNil(t, server.Start)
-	
+
 	// Test that Shutdown method exists and returns error interface
 	// We won't actually call it since server isn't running
 	assert.NotNil(t, server.Shutdown)
-	
+
 	// Just verify the methods can be called with proper context
 	_ = ctx
 }

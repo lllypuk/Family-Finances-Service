@@ -104,7 +104,7 @@ func TestFamily_StructFields(t *testing.T) {
 
 func TestNewUser_DifferentRoles(t *testing.T) {
 	familyID := uuid.New()
-	
+
 	tests := []struct {
 		name string
 		role Role
@@ -136,10 +136,10 @@ func TestNewFamily_DifferentCurrencies(t *testing.T) {
 func TestUser_TimestampGeneration(t *testing.T) {
 	// Record time before creating user
 	beforeTime := time.Now()
-	
+
 	// Create user
 	user := NewUser("test@example.com", "John", "Doe", uuid.New(), RoleMember)
-	
+
 	// Record time after creating user
 	afterTime := time.Now()
 
@@ -153,10 +153,10 @@ func TestUser_TimestampGeneration(t *testing.T) {
 func TestFamily_TimestampGeneration(t *testing.T) {
 	// Record time before creating family
 	beforeTime := time.Now()
-	
+
 	// Create family
 	family := NewFamily("Test Family", "USD")
-	
+
 	// Record time after creating family
 	afterTime := time.Now()
 

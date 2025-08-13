@@ -66,10 +66,10 @@ func TestLoadConfig_PartialEnvironmentValues(t *testing.T) {
 	config := LoadConfig()
 
 	// Assert mix of environment and default values
-	assert.Equal(t, "9000", config.Server.Port)      // From environment
-	assert.Equal(t, "localhost", config.Server.Host)  // Default value
+	assert.Equal(t, "9000", config.Server.Port)                         // From environment
+	assert.Equal(t, "localhost", config.Server.Host)                    // Default value
 	assert.Equal(t, "mongodb://custom-host:27017", config.Database.URI) // From environment
-	assert.Equal(t, "family_budget", config.Database.Name) // Default value
+	assert.Equal(t, "family_budget", config.Database.Name)              // Default value
 }
 
 func TestGetEnv_WithValue(t *testing.T) {
@@ -230,9 +230,9 @@ func TestLoadConfig_RealWorldScenarios(t *testing.T) {
 		description string
 	}{
 		{
-			name:        "Development environment",
-			envVars:     map[string]string{},
-			expected:    Config{
+			name:    "Development environment",
+			envVars: map[string]string{},
+			expected: Config{
 				Server:   ServerConfig{Port: "8080", Host: "localhost"},
 				Database: DatabaseConfig{URI: "mongodb://localhost:27017", Name: "family_budget"},
 			},

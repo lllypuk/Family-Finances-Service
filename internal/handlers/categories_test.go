@@ -44,7 +44,11 @@ func (m *MockCategoryRepository) GetByFamilyID(ctx context.Context, familyID uui
 	return args.Get(0).([]*category.Category), args.Error(1)
 }
 
-func (m *MockCategoryRepository) GetByType(ctx context.Context, familyID uuid.UUID, categoryType category.CategoryType) ([]*category.Category, error) {
+func (m *MockCategoryRepository) GetByType(
+	ctx context.Context,
+	familyID uuid.UUID,
+	categoryType category.CategoryType,
+) ([]*category.Category, error) {
 	args := m.Called(ctx, familyID, categoryType)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -144,7 +148,8 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 				FamilyID: familyID,
 			},
 			mockSetup: func(repo *MockCategoryRepository) {
-				repo.On("Create", mock.Anything, mock.AnythingOfType("*category.Category")).Return(errors.New("database error"))
+				repo.On("Create", mock.Anything, mock.AnythingOfType("*category.Category")).
+					Return(errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody: func(t *testing.T, body string) {
