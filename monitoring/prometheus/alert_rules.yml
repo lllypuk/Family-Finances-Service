@@ -1,0 +1,191 @@
+# Alert Rules for Family Budget Service
+
+groups:
+  - name: family-budget-service.rules
+    interval: 30s
+    rules:
+      # High Error Rate
+      - alert: HighErrorRate
+        expr: |
+          (
+            rate(http_requests_errors_total[5m]) /
+            rate(http_requests_total[5m])
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          service: family-budget-service
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} for the last 5 minutes"
+
+      # Critical Error Rate
+      - alert: CriticalErrorRate
+        expr: |
+          (
+            rate(http_requests_errors_total[5m]) /
+            rate(http_requests_total[5m])
+          ) > 0.20
+        for: 1m
+        labels:
+          severity: critical
+          service: family-budget-service
+        annotations:
+          summary: "Critical error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} for the last 5 minutes"
+
+      # High Response Time
+      - alert: HighResponseTime
+        expr: |
+          histogram_quantile(0.95, 
+            rate(http_request_duration_seconds_bucket[5m])
+          ) > 1.0
+        for: 3m
+        labels:
+          severity: warning
+          service: family-budget-service
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is {{ $value }}s for the last 5 minutes"
+
+      # Service Down
+      - alert: ServiceDown
+        expr: up{job="family-budget-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: family-budget-service
+        annotations:
+          summary: "Family Budget Service is down"
+          description: "Service has been down for more than 1 minute"
+
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            go_memstats_alloc_bytes{job="family-budget-service"} /
+            go_memstats_sys_bytes{job="family-budget-service"}
+          ) > 0.80
+        for: 5m
+        labels:
+          severity: warning
+          service: family-budget-service
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanizePercentage }} for the last 5 minutes"
+
+      # Too Many Goroutines
+      - alert: TooManyGoroutines
+        expr: go_goroutines{job="family-budget-service"} > 1000
+        for: 5m
+        labels:
+          severity: warning
+          service: family-budget-service
+        annotations:
+          summary: "Too many goroutines"
+          description: "Number of goroutines is {{ $value }}"
+
+      # Database Connection Issues
+      - alert: DatabaseConnectionIssues
+        expr: |
+          rate(database_operations_total{status="error"}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          service: family-budget-service
+        annotations:
+          summary: "Database connection issues"
+          description: "High rate of database errors: {{ $value }} errors/sec"
+
+      # Slow Database Operations
+      - alert: SlowDatabaseOperations
+        expr: |
+          histogram_quantile(0.95,
+            rate(database_operation_duration_seconds_bucket[5m])
+          ) > 0.5
+        for: 3m
+        labels:
+          severity: warning
+          service: family-budget-service
+        annotations:
+          summary: "Slow database operations"
+          description: "95th percentile database operation time is {{ $value }}s"
+
+  - name: mongodb.rules
+    interval: 30s
+    rules:
+      # MongoDB Down
+      - alert: MongoDBDown
+        expr: up{job="mongodb-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: mongodb
+        annotations:
+          summary: "MongoDB is down"
+          description: "MongoDB has been down for more than 1 minute"
+
+      # High MongoDB Connection Usage
+      - alert: HighMongoDBConnections
+        expr: |
+          (
+            mongodb_connections{state="current"} /
+            mongodb_connections{state="available"}
+          ) > 0.80
+        for: 5m
+        labels:
+          severity: warning
+          service: mongodb
+        annotations:
+          summary: "High MongoDB connection usage"
+          description: "MongoDB connection usage is {{ $value | humanizePercentage }}"
+
+  - name: system.rules
+    interval: 30s
+    rules:
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: |
+          (
+            100 - (
+              avg by (instance) (
+                rate(node_cpu_seconds_total{mode="idle"}[5m])
+              ) * 100
+            )
+          ) > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% on {{ $labels.instance }}"
+
+      # High Disk Usage
+      - alert: HighDiskUsage
+        expr: |
+          (
+            100 - (
+              node_filesystem_free_bytes{fstype!="tmpfs"} /
+              node_filesystem_size_bytes{fstype!="tmpfs"} * 100
+            )
+          ) > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High disk usage"
+          description: "Disk usage is {{ $value }}% on {{ $labels.instance }} ({{ $labels.device }})"
+
+      # Low Disk Space
+      - alert: LowDiskSpace
+        expr: |
+          node_filesystem_free_bytes{fstype!="tmpfs"} / (1024*1024*1024) < 1
+        for: 5m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "Low disk space"
+          description: "Less than 1GB free space on {{ $labels.instance }} ({{ $labels.device }})"

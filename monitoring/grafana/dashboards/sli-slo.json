@@ -1,0 +1,275 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Family Budget Service - SLI/SLO Dashboard",
+    "tags": ["family-budget-service", "sli", "slo", "reliability"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-4h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Service Health Score",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "family_budget:service_health_score",
+            "legendFormat": "Health Score",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 70},
+                {"color": "green", "value": 90}
+              ]
+            },
+            "unit": "percent",
+            "min": 0,
+            "max": 100
+          }
+        },
+        "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "SLO Compliance Summary",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "family_budget:slo_availability_compliance",
+            "legendFormat": "Availability (≥99.9%)",
+            "refId": "A"
+          },
+          {
+            "expr": "family_budget:slo_error_rate_compliance",
+            "legendFormat": "Error Rate (≤0.1%)",
+            "refId": "B"
+          },
+          {
+            "expr": "family_budget:slo_latency_compliance",
+            "legendFormat": "Latency (≤500ms)",
+            "refId": "C"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "seriesToColumns",
+            "options": {}
+          }
+        ],
+        "fieldConfig": {
+          "overrides": [
+            {
+              "matcher": {"id": "byRegexp", "options": ".*"},
+              "properties": [
+                {
+                  "id": "mappings",
+                  "value": [
+                    {"options": {"0": {"text": "❌ BREACH"}}, "type": "value"},
+                    {"options": {"1": {"text": "✅ COMPLIANT"}}, "type": "value"}
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {"h": 6, "w": 10, "x": 6, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Availability SLI (Target: 99.9%)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "family_budget:sli_availability_5m * 100",
+            "legendFormat": "Current Availability",
+            "refId": "A"
+          },
+          {
+            "expr": "99.9",
+            "legendFormat": "SLO Target (99.9%)",
+            "refId": "B"
+          }
+        ],
+        "yAxes": [
+          {"label": "Availability %", "min": 98, "max": 100, "unit": "percent"},
+          {"show": false}
+        ],
+        "thresholds": [
+          {"value": 99.9, "colorMode": "critical", "op": "lt"}
+        ],
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 6}
+      },
+      {
+        "id": 4,
+        "title": "Error Rate SLI (Target: ≤0.1%)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "family_budget:sli_error_rate_5m * 100",
+            "legendFormat": "Current Error Rate",
+            "refId": "A"
+          },
+          {
+            "expr": "0.1",
+            "legendFormat": "SLO Target (0.1%)",
+            "refId": "B"
+          }
+        ],
+        "yAxes": [
+          {"label": "Error Rate %", "min": 0, "max": 1, "unit": "percent"},
+          {"show": false}
+        ],
+        "thresholds": [
+          {"value": 0.1, "colorMode": "critical", "op": "gt"}
+        ],
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 6}
+      },
+      {
+        "id": 5,
+        "title": "Latency SLI (Target: ≤500ms)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "family_budget:sli_latency_95p_5m * 1000",
+            "legendFormat": "95th Percentile Latency",
+            "refId": "A"
+          },
+          {
+            "expr": "500",
+            "legendFormat": "SLO Target (500ms)",
+            "refId": "B"
+          }
+        ],
+        "yAxes": [
+          {"label": "Latency (ms)", "min": 0, "max": 1000, "unit": "ms"},
+          {"show": false}
+        ],
+        "thresholds": [
+          {"value": 500, "colorMode": "critical", "op": "gt"}
+        ],
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 14}
+      },
+      {
+        "id": 6,
+        "title": "Error Budget Consumption",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "(1 - family_budget:sli_availability_5m) * 100 / 0.1",
+            "legendFormat": "Availability Error Budget Used",
+            "refId": "A"
+          },
+          {
+            "expr": "family_budget:sli_error_rate_5m * 100 / 0.1",
+            "legendFormat": "Error Rate Budget Used",
+            "refId": "B"
+          },
+          {
+            "expr": "100",
+            "legendFormat": "Budget Limit (100%)",
+            "refId": "C"
+          }
+        ],
+        "yAxes": [
+          {"label": "Budget Used %", "min": 0, "max": 150, "unit": "percent"},
+          {"show": false}
+        ],
+        "thresholds": [
+          {"value": 100, "colorMode": "critical", "op": "gt"}
+        ],
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 14}
+      },
+      {
+        "id": 7,
+        "title": "Monthly SLO Compliance",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "avg_over_time(family_budget:slo_availability_compliance[30d])",
+            "legendFormat": "Availability Compliance",
+            "refId": "A"
+          },
+          {
+            "expr": "avg_over_time(family_budget:slo_error_rate_compliance[30d])",
+            "legendFormat": "Error Rate Compliance",
+            "refId": "B"
+          },
+          {
+            "expr": "avg_over_time(family_budget:slo_latency_compliance[30d])",
+            "legendFormat": "Latency Compliance",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 0.95},
+                {"color": "green", "value": 0.99}
+              ]
+            },
+            "unit": "percentunit",
+            "min": 0,
+            "max": 1
+          }
+        },
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 6}
+      },
+      {
+        "id": 8,
+        "title": "Request Success Rate by Endpoint",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{status!~\"5..\"}[5m])) by (endpoint) / sum(rate(http_requests_total[5m])) by (endpoint)",
+            "legendFormat": "{{endpoint}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Success Rate", "min": 0.9, "max": 1, "unit": "percentunit"},
+          {"show": false}
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22}
+      },
+      {
+        "id": 9,
+        "title": "Database SLI",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "family_budget:db_error_rate * 100",
+            "legendFormat": "DB Error Rate %",
+            "refId": "A"
+          },
+          {
+            "expr": "family_budget:db_operation_duration_95p * 1000",
+            "legendFormat": "DB 95th Percentile Latency (ms)",
+            "refId": "B"
+          }
+        ],
+        "yAxes": [
+          {"label": "Error Rate % / Latency ms", "min": 0},
+          {"show": false}
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22}
+      }
+    ]
+  }
+}
