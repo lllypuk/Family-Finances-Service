@@ -253,34 +253,37 @@ func (r *MetricsRegistry) Get() *Metrics {
 	return r.instance
 }
 
-// Package-level функции для backward compatibility используют созданный при необходимости registry
-// Избегаем global переменных используя функциональный подход
+// Package-level переменные для глобального доступа к метрикам
+var (
+	globalMetrics *Metrics
+	metricsOnce   sync.Once
+)
 
-// InitMetrics инициализирует глобальный экземпляр метрик (для обратной совместимости)
+// InitMetrics инициализирует глобальный экземпляр метрик
 func InitMetrics() {
-	// В новом подходе инициализация происходит лениво при первом вызове
-	// Это функция остается для API совместимости
+	metricsOnce.Do(func() {
+		globalMetrics = NewMetrics()
+		globalMetrics.Initialize()
+	})
+}
+
+// getGlobalMetrics возвращает глобальный экземпляр метрик, инициализируя его при необходимости
+func getGlobalMetrics() *Metrics {
+	metricsOnce.Do(func() {
+		globalMetrics = NewMetrics()
+		globalMetrics.Initialize()
+	})
+	return globalMetrics
 }
 
 // RecordHTTPRequest глобальная функция для обратной совместимости
 func RecordHTTPRequest(method, endpoint, status string, duration float64) {
-	metrics := createMetricsOnce()
+	metrics := getGlobalMetrics()
 	metrics.RecordHTTPRequest(method, endpoint, status, duration)
 }
 
 // RecordHTTPError глобальная функция для обратной совместимости
 func RecordHTTPError(method, endpoint, errorType string) {
-	metrics := createMetricsOnce()
+	metrics := getGlobalMetrics()
 	metrics.RecordHTTPError(method, endpoint, errorType)
-}
-
-// createMetricsOnce создает единственный экземпляр метрик через sync.OnceValue
-func createMetricsOnce() *Metrics {
-	// Используем замыкание для создания статической переменной без global scope
-	create := sync.OnceValue(func() *Metrics {
-		m := NewMetrics()
-		m.Initialize()
-		return m
-	})
-	return create()
 }

@@ -61,5 +61,6 @@ func healthCheck() {
 	}
 
 	log.Println("Health check passed")
+	cancel()
 	os.Exit(0)
 }
