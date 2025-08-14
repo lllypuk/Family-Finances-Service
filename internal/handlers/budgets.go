@@ -72,7 +72,7 @@ func (h *BudgetHandler) CreateBudget(c echo.Context) error {
 		Name:       req.Name,
 		Amount:     req.Amount,
 		Spent:      0.0, // Начальная потраченная сумма
-		Period:     budget.BudgetPeriod(req.Period),
+		Period:     budget.Period(req.Period),
 		CategoryID: req.CategoryID,
 		FamilyID:   req.FamilyID,
 		StartDate:  req.StartDate,

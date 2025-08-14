@@ -7,23 +7,23 @@ import (
 )
 
 type Category struct {
-	ID        uuid.UUID    `json:"id"         bson:"_id"`
-	Name      string       `json:"name"       bson:"name"`
-	Type      CategoryType `json:"type"       bson:"type"`
-	Color     string       `json:"color"      bson:"color"`               // Цвет для UI (#FF5733)
-	Icon      string       `json:"icon"       bson:"icon"`                // Иконка для UI
-	ParentID  *uuid.UUID   `json:"parent_id"  bson:"parent_id,omitempty"` // Для подкатегорий
-	FamilyID  uuid.UUID    `json:"family_id"  bson:"family_id"`
-	IsActive  bool         `json:"is_active"  bson:"is_active"`
-	CreatedAt time.Time    `json:"created_at" bson:"created_at"`
-	UpdatedAt time.Time    `json:"updated_at" bson:"updated_at"`
+	ID        uuid.UUID  `json:"id"         bson:"_id"`
+	Name      string     `json:"name"       bson:"name"`
+	Type      Type       `json:"type"       bson:"type"`
+	Color     string     `json:"color"      bson:"color"`               // Цвет для UI (#FF5733)
+	Icon      string     `json:"icon"       bson:"icon"`                // Иконка для UI
+	ParentID  *uuid.UUID `json:"parent_id"  bson:"parent_id,omitempty"` // Для подкатегорий
+	FamilyID  uuid.UUID  `json:"family_id"  bson:"family_id"`
+	IsActive  bool       `json:"is_active"  bson:"is_active"`
+	CreatedAt time.Time  `json:"created_at" bson:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at" bson:"updated_at"`
 }
 
-type CategoryType string
+type Type string
 
 const (
-	CategoryTypeIncome  CategoryType = "income"  // Доходы
-	CategoryTypeExpense CategoryType = "expense" // Расходы
+	TypeIncome  Type = "income"  // Доходы
+	TypeExpense Type = "expense" // Расходы
 )
 
 // GetDefaultExpenseCategories возвращает предустановленные категории расходов
@@ -55,7 +55,7 @@ func GetDefaultIncomeCategories() []string {
 	}
 }
 
-func NewCategory(name string, categoryType CategoryType, familyID uuid.UUID) *Category {
+func NewCategory(name string, categoryType Type, familyID uuid.UUID) *Category {
 	return &Category{
 		ID:        uuid.New(),
 		Name:      name,

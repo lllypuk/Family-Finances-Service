@@ -71,13 +71,13 @@ func (h *ReportHandler) CreateReport(c echo.Context) error {
 	newReport := &report.Report{
 		ID:          uuid.New(),
 		Name:        req.Name,
-		Type:        report.ReportType(req.Type),
-		Period:      report.ReportPeriod(req.Period),
+		Type:        report.Type(req.Type),
+		Period:      report.Period(req.Period),
 		FamilyID:    req.FamilyID,
 		UserID:      req.UserID,
 		StartDate:   req.StartDate,
 		EndDate:     req.EndDate,
-		Data:        report.ReportData{}, // Пока пустые данные
+		Data:        report.Data{}, // Пока пустые данные
 		GeneratedAt: time.Now(),
 	}
 
@@ -85,7 +85,7 @@ func (h *ReportHandler) CreateReport(c echo.Context) error {
 	// в зависимости от типа отчета (expenses, income, budget, cash_flow, category_break)
 	newReport.Data = h.generateReportData(
 		c.Request().Context(),
-		report.ReportType(req.Type),
+		report.Type(req.Type),
 		req.FamilyID,
 		req.StartDate,
 		req.EndDate,
@@ -290,25 +290,25 @@ func (h *ReportHandler) DeleteReport(c echo.Context) error {
 // generateReportData генерирует данные отчета в зависимости от типа
 func (h *ReportHandler) generateReportData(
 	ctx context.Context,
-	reportType report.ReportType,
+	reportType report.Type,
 	familyID uuid.UUID,
 	startDate, endDate time.Time,
-) report.ReportData {
-	data := report.ReportData{}
+) report.Data {
+	data := report.Data{}
 
 	// Получаем базовые данные для всех типов отчетов
 	h.populateBasicReportData(ctx, &data, familyID, startDate, endDate)
 
 	switch reportType {
-	case report.ReportTypeExpenses:
+	case report.TypeExpenses:
 		h.generateExpensesReportData(ctx, &data, familyID, startDate, endDate)
-	case report.ReportTypeIncome:
+	case report.TypeIncome:
 		h.generateIncomeReportData(ctx, &data, familyID, startDate, endDate)
-	case report.ReportTypeBudget:
+	case report.TypeBudget:
 		h.generateBudgetReportData(ctx, &data, familyID, startDate, endDate)
-	case report.ReportTypeCashFlow:
+	case report.TypeCashFlow:
 		h.generateCashFlowReportData(ctx, &data, familyID, startDate, endDate)
-	case report.ReportTypeCategoryBreak:
+	case report.TypeCategoryBreak:
 		h.generateCategoryBreakdownReportData(ctx, &data, familyID, startDate, endDate)
 	}
 
@@ -318,7 +318,7 @@ func (h *ReportHandler) generateReportData(
 // populateBasicReportData заполняет базовые данные для всех типов отчетов
 func (h *ReportHandler) populateBasicReportData(
 	_ context.Context,
-	data *report.ReportData,
+	data *report.Data,
 	_ uuid.UUID,
 	_, _ time.Time,
 ) {
@@ -335,7 +335,7 @@ func (h *ReportHandler) populateBasicReportData(
 // generateExpensesReportData генерирует данные для отчета по расходам
 func (h *ReportHandler) generateExpensesReportData(
 	_ context.Context,
-	data *report.ReportData,
+	data *report.Data,
 	_ uuid.UUID,
 	_, _ time.Time,
 ) {
@@ -347,7 +347,7 @@ func (h *ReportHandler) generateExpensesReportData(
 // generateIncomeReportData генерирует данные для отчета по доходам
 func (h *ReportHandler) generateIncomeReportData(
 	_ context.Context,
-	data *report.ReportData,
+	data *report.Data,
 	_ uuid.UUID,
 	_ time.Time,
 	_ time.Time,
@@ -359,7 +359,7 @@ func (h *ReportHandler) generateIncomeReportData(
 // generateBudgetReportData генерирует данные для отчета по бюджету
 func (h *ReportHandler) generateBudgetReportData(
 	_ context.Context,
-	_ *report.ReportData,
+	_ *report.Data,
 	_ uuid.UUID,
 	_, _ time.Time,
 ) {
@@ -370,7 +370,7 @@ func (h *ReportHandler) generateBudgetReportData(
 // generateCashFlowReportData генерирует данные для отчета по денежному потоку
 func (h *ReportHandler) generateCashFlowReportData(
 	_ context.Context,
-	_ *report.ReportData,
+	_ *report.Data,
 	_ uuid.UUID,
 	_ time.Time,
 	_ time.Time,
@@ -382,7 +382,7 @@ func (h *ReportHandler) generateCashFlowReportData(
 // generateCategoryBreakdownReportData генерирует данные для разбивки по категориям
 func (h *ReportHandler) generateCategoryBreakdownReportData(
 	_ context.Context,
-	_ *report.ReportData,
+	_ *report.Data,
 	_ uuid.UUID,
 	_ time.Time,
 	_ time.Time,

@@ -45,7 +45,7 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*transaction.Tr
 
 func (r *Repository) GetByFilter(
 	ctx context.Context,
-	filter transaction.TransactionFilter,
+	filter transaction.Filter,
 ) ([]*transaction.Transaction, error) {
 	mongoFilter := r.buildFilterQuery(filter)
 
@@ -156,7 +156,7 @@ func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
 func (r *Repository) GetTotalByCategory(
 	ctx context.Context,
 	categoryID uuid.UUID,
-	transactionType transaction.TransactionType,
+	transactionType transaction.Type,
 ) (float64, error) {
 	pipeline := []bson.M{
 		{
@@ -193,7 +193,7 @@ func (r *Repository) GetTotalByCategory(
 	return result.Total, nil
 }
 
-func (r *Repository) buildFilterQuery(filter transaction.TransactionFilter) bson.M {
+func (r *Repository) buildFilterQuery(filter transaction.Filter) bson.M {
 	query := bson.M{"family_id": filter.FamilyID}
 
 	if filter.UserID != nil {

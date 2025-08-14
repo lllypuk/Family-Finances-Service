@@ -77,7 +77,7 @@ func (r *Repository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*
 func (r *Repository) GetByType(
 	ctx context.Context,
 	familyID uuid.UUID,
-	categoryType category.CategoryType,
+	categoryType category.Type,
 ) ([]*category.Category, error) {
 	filter := bson.M{
 		"family_id": familyID,

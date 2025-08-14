@@ -53,7 +53,7 @@ func (m *MockCategoryRepository) GetByFamilyID(ctx context.Context, familyID uui
 func (m *MockCategoryRepository) GetByType(
 	ctx context.Context,
 	familyID uuid.UUID,
-	categoryType category.CategoryType,
+	categoryType category.Type,
 ) ([]*category.Category, error) {
 	args := m.Called(ctx, familyID, categoryType)
 	if args.Get(0) == nil {
@@ -218,7 +218,7 @@ func TestCategoryHandler_GetCategories(t *testing.T) {
 					{
 						ID:       uuid.New(),
 						Name:     "Food",
-						Type:     category.CategoryTypeExpense,
+						Type:     category.TypeExpense,
 						Color:    "#FF5733",
 						Icon:     "food",
 						FamilyID: familyID,
@@ -227,7 +227,7 @@ func TestCategoryHandler_GetCategories(t *testing.T) {
 					{
 						ID:       uuid.New(),
 						Name:     "Salary",
-						Type:     category.CategoryTypeIncome,
+						Type:     category.TypeIncome,
 						Color:    "#28A745",
 						Icon:     "money",
 						FamilyID: familyID,
@@ -335,7 +335,7 @@ func TestCategoryHandler_GetCategoryByID(t *testing.T) {
 				cat := &category.Category{
 					ID:       categoryID,
 					Name:     "Food",
-					Type:     category.CategoryTypeExpense,
+					Type:     category.TypeExpense,
 					Color:    "#FF5733",
 					Icon:     "food",
 					FamilyID: familyID,
@@ -439,7 +439,7 @@ func TestCategoryHandler_UpdateCategory(t *testing.T) {
 				existingCategory := &category.Category{
 					ID:       categoryID,
 					Name:     "Food",
-					Type:     category.CategoryTypeExpense,
+					Type:     category.TypeExpense,
 					Color:    "#FF5733",
 					Icon:     "food",
 					FamilyID: familyID,

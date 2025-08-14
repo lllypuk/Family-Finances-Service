@@ -70,7 +70,7 @@ func (h *CategoryHandler) CreateCategory(c echo.Context) error {
 	newCategory := &category.Category{
 		ID:        uuid.New(),
 		Name:      req.Name,
-		Type:      category.CategoryType(req.Type),
+		Type:      category.Type(req.Type),
 		Color:     req.Color,
 		Icon:      req.Icon,
 		ParentID:  req.ParentID,
@@ -157,7 +157,7 @@ func (h *CategoryHandler) GetCategories(c echo.Context) error {
 		categories, err = h.repositories.Category.GetByType(
 			c.Request().Context(),
 			familyID,
-			category.CategoryType(typeParam),
+			category.Type(typeParam),
 		)
 	} else {
 		categories, err = h.repositories.Category.GetByFamilyID(c.Request().Context(), familyID)

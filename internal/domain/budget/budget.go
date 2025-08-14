@@ -12,30 +12,30 @@ const (
 )
 
 type Budget struct {
-	ID         uuid.UUID    `json:"id"          bson:"_id"`
-	Name       string       `json:"name"        bson:"name"`
-	Amount     float64      `json:"amount"      bson:"amount"` // Лимит бюджета
-	Spent      float64      `json:"spent"       bson:"spent"`  // Потрачено
-	Period     BudgetPeriod `json:"period"      bson:"period"`
-	CategoryID *uuid.UUID   `json:"category_id" bson:"category_id,omitempty"` // Для конкретной категории
-	FamilyID   uuid.UUID    `json:"family_id"   bson:"family_id"`
-	StartDate  time.Time    `json:"start_date"  bson:"start_date"`
-	EndDate    time.Time    `json:"end_date"    bson:"end_date"`
-	IsActive   bool         `json:"is_active"   bson:"is_active"`
-	CreatedAt  time.Time    `json:"created_at"  bson:"created_at"`
-	UpdatedAt  time.Time    `json:"updated_at"  bson:"updated_at"`
+	ID         uuid.UUID  `json:"id"          bson:"_id"`
+	Name       string     `json:"name"        bson:"name"`
+	Amount     float64    `json:"amount"      bson:"amount"` // Лимит бюджета
+	Spent      float64    `json:"spent"       bson:"spent"`  // Потрачено
+	Period     Period     `json:"period"      bson:"period"`
+	CategoryID *uuid.UUID `json:"category_id" bson:"category_id,omitempty"` // Для конкретной категории
+	FamilyID   uuid.UUID  `json:"family_id"   bson:"family_id"`
+	StartDate  time.Time  `json:"start_date"  bson:"start_date"`
+	EndDate    time.Time  `json:"end_date"    bson:"end_date"`
+	IsActive   bool       `json:"is_active"   bson:"is_active"`
+	CreatedAt  time.Time  `json:"created_at"  bson:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"  bson:"updated_at"`
 }
 
-type BudgetPeriod string
+type Period string
 
 const (
-	BudgetPeriodWeekly  BudgetPeriod = "weekly"
-	BudgetPeriodMonthly BudgetPeriod = "monthly"
-	BudgetPeriodYearly  BudgetPeriod = "yearly"
-	BudgetPeriodCustom  BudgetPeriod = "custom"
+	PeriodWeekly  Period = "weekly"
+	PeriodMonthly Period = "monthly"
+	PeriodYearly  Period = "yearly"
+	PeriodCustom  Period = "custom"
 )
 
-type BudgetAlert struct {
+type Alert struct {
 	ID          uuid.UUID  `json:"id"           bson:"_id"`
 	BudgetID    uuid.UUID  `json:"budget_id"    bson:"budget_id"`
 	Threshold   float64    `json:"threshold"    bson:"threshold"` // Процент (50, 80, 100)
@@ -47,7 +47,7 @@ type BudgetAlert struct {
 func NewBudget(
 	name string,
 	amount float64,
-	period BudgetPeriod,
+	period Period,
 	familyID uuid.UUID,
 	startDate, endDate time.Time,
 ) *Budget {

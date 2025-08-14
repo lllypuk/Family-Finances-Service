@@ -13,7 +13,7 @@ import (
 func TestNewTransaction(t *testing.T) {
 	// Test data
 	amount := 100.50
-	transactionType := transaction.TransactionTypeExpense
+	transactionType := transaction.TypeExpense
 	description := "Grocery shopping"
 	categoryID := uuid.New()
 	userID := uuid.New()
@@ -42,15 +42,15 @@ func TestNewTransaction(t *testing.T) {
 
 func TestTransactionType_Constants(t *testing.T) {
 	// Test that transaction type constants have expected values
-	assert.Equal(t, "income", string(transaction.TransactionTypeIncome))
-	assert.Equal(t, "expense", string(transaction.TransactionTypeExpense))
+	assert.Equal(t, "income", string(transaction.TypeIncome))
+	assert.Equal(t, "expense", string(transaction.TypeExpense))
 }
 
 func TestTransaction_AddTag(t *testing.T) {
 	// Setup
 	txn := transaction.NewTransaction(
 		100.0,
-		transaction.TransactionTypeExpense,
+		transaction.TypeExpense,
 		"Test",
 		uuid.New(),
 		uuid.New(),
@@ -75,7 +75,7 @@ func TestTransaction_AddTag_Duplicate(t *testing.T) {
 	// Setup
 	txn := transaction.NewTransaction(
 		100.0,
-		transaction.TransactionTypeExpense,
+		transaction.TypeExpense,
 		"Test",
 		uuid.New(),
 		uuid.New(),
@@ -101,7 +101,7 @@ func TestTransaction_RemoveTag(t *testing.T) {
 	// Setup
 	txn := transaction.NewTransaction(
 		100.0,
-		transaction.TransactionTypeExpense,
+		transaction.TypeExpense,
 		"Test",
 		uuid.New(),
 		uuid.New(),
@@ -129,7 +129,7 @@ func TestTransaction_RemoveTag_NonExistent(t *testing.T) {
 	// Setup
 	txn := transaction.NewTransaction(
 		100.0,
-		transaction.TransactionTypeExpense,
+		transaction.TypeExpense,
 		"Test",
 		uuid.New(),
 		uuid.New(),
@@ -161,7 +161,7 @@ func TestTransaction_StructFields(t *testing.T) {
 	txn := &transaction.Transaction{
 		ID:          uuid.New(),
 		Amount:      150.75,
-		Type:        transaction.TransactionTypeExpense,
+		Type:        transaction.TypeExpense,
 		Description: "Salary",
 		CategoryID:  categoryID,
 		UserID:      userID,
@@ -175,7 +175,7 @@ func TestTransaction_StructFields(t *testing.T) {
 	// Assert all fields are accessible
 	assert.NotEqual(t, uuid.Nil, txn.ID)
 	assert.InEpsilon(t, 150.75, txn.Amount, 0.001)
-	assert.Equal(t, transaction.TransactionTypeExpense, txn.Type)
+	assert.Equal(t, transaction.TypeExpense, txn.Type)
 	assert.Equal(t, "Salary", txn.Description)
 	assert.Equal(t, categoryID, txn.CategoryID)
 	assert.Equal(t, userID, txn.UserID)
@@ -186,18 +186,18 @@ func TestTransaction_StructFields(t *testing.T) {
 	assert.False(t, txn.UpdatedAt.IsZero())
 }
 
-func TestTransactionFilter_StructFields(t *testing.T) {
-	// Test that TransactionFilter struct has all expected fields
+func TestFilter_StructFields(t *testing.T) {
+	// Test that Filter struct has all expected fields
 	familyID := uuid.New()
 	userID := uuid.New()
 	categoryID := uuid.New()
-	transactionType := transaction.TransactionTypeExpense
+	transactionType := transaction.TypeExpense
 	dateFrom := time.Now().AddDate(0, -1, 0)
 	dateTo := time.Now()
 	amountFrom := 10.0
 	amountTo := 1000.0
 
-	filter := &transaction.TransactionFilter{
+	filter := &transaction.Filter{
 		FamilyID:    familyID,
 		UserID:      &userID,
 		CategoryID:  &categoryID,
@@ -235,10 +235,10 @@ func TestNewTransaction_DifferentTypes(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		transactionType transaction.TransactionType
+		transactionType transaction.Type
 	}{
-		{"Income Transaction", transaction.TransactionTypeIncome},
-		{"Expense Transaction", transaction.TransactionTypeExpense},
+		{"Income Transaction", transaction.TypeIncome},
+		{"Expense Transaction", transaction.TypeExpense},
 	}
 
 	for _, tt := range tests {
@@ -253,7 +253,7 @@ func TestTransaction_TagOperations_Sequence(t *testing.T) {
 	// Setup
 	txn := transaction.NewTransaction(
 		100.0,
-		transaction.TransactionTypeExpense,
+		transaction.TypeExpense,
 		"Test",
 		uuid.New(),
 		uuid.New(),
@@ -299,7 +299,7 @@ func TestTransaction_TimestampGeneration(t *testing.T) {
 	// Create transaction
 	txn := transaction.NewTransaction(
 		100.0,
-		transaction.TransactionTypeExpense,
+		transaction.TypeExpense,
 		"Test",
 		uuid.New(),
 		uuid.New(),

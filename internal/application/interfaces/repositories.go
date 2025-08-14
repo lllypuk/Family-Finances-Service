@@ -35,7 +35,7 @@ type CategoryRepository interface {
 	Create(ctx context.Context, category *category.Category) error
 	GetByID(ctx context.Context, id uuid.UUID) (*category.Category, error)
 	GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*category.Category, error)
-	GetByType(ctx context.Context, familyID uuid.UUID, categoryType category.CategoryType) ([]*category.Category, error)
+	GetByType(ctx context.Context, familyID uuid.UUID, categoryType category.Type) ([]*category.Category, error)
 	Update(ctx context.Context, category *category.Category) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }
@@ -44,14 +44,14 @@ type CategoryRepository interface {
 type TransactionRepository interface {
 	Create(ctx context.Context, transaction *transaction.Transaction) error
 	GetByID(ctx context.Context, id uuid.UUID) (*transaction.Transaction, error)
-	GetByFilter(ctx context.Context, filter transaction.TransactionFilter) ([]*transaction.Transaction, error)
+	GetByFilter(ctx context.Context, filter transaction.Filter) ([]*transaction.Transaction, error)
 	GetByFamilyID(ctx context.Context, familyID uuid.UUID, limit, offset int) ([]*transaction.Transaction, error)
 	Update(ctx context.Context, transaction *transaction.Transaction) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetTotalByCategory(
 		ctx context.Context,
 		categoryID uuid.UUID,
-		transactionType transaction.TransactionType,
+		transactionType transaction.Type,
 	) (float64, error)
 }
 

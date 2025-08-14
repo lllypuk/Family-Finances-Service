@@ -64,9 +64,9 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		err := testServer.Repos.Family.Create(context.Background(), family)
 		require.NoError(t, err)
 
-		category1 := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		category1 := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 		category1.Name = "Food"
-		category2 := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeIncome)
+		category2 := testhelpers.CreateTestCategory(family.ID, category.TypeIncome)
 		category2.Name = "Salary"
 
 		err = testServer.Repos.Category.Create(context.Background(), category1)
@@ -99,7 +99,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		err := testServer.Repos.Family.Create(context.Background(), family)
 		require.NoError(t, err)
 
-		category := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		category := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 		err = testServer.Repos.Category.Create(context.Background(), category)
 		require.NoError(t, err)
 
@@ -127,7 +127,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		err := testServer.Repos.Family.Create(context.Background(), family)
 		require.NoError(t, err)
 
-		category := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		category := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 		err = testServer.Repos.Category.Create(context.Background(), category)
 		require.NoError(t, err)
 
@@ -169,7 +169,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		err := testServer.Repos.Family.Create(context.Background(), family)
 		require.NoError(t, err)
 
-		category := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		category := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 		err = testServer.Repos.Category.Create(context.Background(), category)
 		require.NoError(t, err)
 

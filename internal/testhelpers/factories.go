@@ -48,7 +48,7 @@ func CreateTestUser(familyID uuid.UUID) *user.User {
 }
 
 // CreateTestCategory creates a test category
-func CreateTestCategory(familyID uuid.UUID, categoryType category.CategoryType) *category.Category {
+func CreateTestCategory(familyID uuid.UUID, categoryType category.Type) *category.Category {
 	return &category.Category{
 		ID:        uuid.New(),
 		FamilyID:  familyID,
@@ -63,7 +63,7 @@ func CreateTestCategory(familyID uuid.UUID, categoryType category.CategoryType) 
 // CreateTestTransaction creates a test transaction
 func CreateTestTransaction(
 	familyID, userID, categoryID uuid.UUID,
-	transactionType transaction.TransactionType,
+	transactionType transaction.Type,
 ) *transaction.Transaction {
 	return &transaction.Transaction{
 		ID:          uuid.New(),
@@ -89,7 +89,7 @@ func CreateTestBudget(familyID, categoryID uuid.UUID) *budget.Budget {
 		Name:       "Test Budget",
 		Amount:     TestBudgetAmount,
 		Spent:      0.0,
-		Period:     budget.BudgetPeriodMonthly,
+		Period:     budget.PeriodMonthly,
 		StartDate:  time.Now(),
 		EndDate:    time.Now().AddDate(0, 1, 0),
 		IsActive:   true,
@@ -105,11 +105,11 @@ func CreateTestReport(familyID, userID uuid.UUID) *report.Report {
 		FamilyID:    familyID,
 		UserID:      userID,
 		Name:        "Test Report",
-		Type:        report.ReportTypeExpenses,
-		Period:      report.ReportPeriodMonthly,
+		Type:        report.TypeExpenses,
+		Period:      report.PeriodMonthly,
 		StartDate:   time.Now().AddDate(0, -1, 0),
 		EndDate:     time.Now(),
-		Data:        report.ReportData{TotalExpenses: TestReportExpenses},
+		Data:        report.Data{TotalExpenses: TestReportExpenses},
 		GeneratedAt: time.Now(),
 	}
 }

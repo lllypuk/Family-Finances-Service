@@ -71,7 +71,7 @@ func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
 	newTransaction := &transaction.Transaction{
 		ID:          uuid.New(),
 		Amount:      req.Amount,
-		Type:        transaction.TransactionType(req.Type),
+		Type:        transaction.Type(req.Type),
 		Description: req.Description,
 		CategoryID:  req.CategoryID,
 		UserID:      req.UserID,
@@ -292,14 +292,14 @@ func (h *TransactionHandler) validateTransactionFilters(c echo.Context, filters 
 	return nil
 }
 
-func (h *TransactionHandler) buildRepositoryFilter(filters TransactionFilterParams) transaction.TransactionFilter {
-	var typeFilter *transaction.TransactionType
+func (h *TransactionHandler) buildRepositoryFilter(filters TransactionFilterParams) transaction.Filter {
+	var typeFilter *transaction.Type
 	if filters.Type != nil {
-		t := transaction.TransactionType(*filters.Type)
+		t := transaction.Type(*filters.Type)
 		typeFilter = &t
 	}
 
-	return transaction.TransactionFilter{
+	return transaction.Filter{
 		FamilyID:   filters.FamilyID,
 		UserID:     filters.UserID,
 		CategoryID: filters.CategoryID,
@@ -477,7 +477,7 @@ func (h *TransactionHandler) updateTransactionFields(tx *transaction.Transaction
 		tx.Amount = *req.Amount
 	}
 	if req.Type != nil {
-		tx.Type = transaction.TransactionType(*req.Type)
+		tx.Type = transaction.Type(*req.Type)
 	}
 	if req.Description != nil {
 		tx.Description = *req.Description

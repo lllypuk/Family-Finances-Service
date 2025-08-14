@@ -13,7 +13,7 @@ import (
 func TestNewCategory(t *testing.T) {
 	// Test data
 	name := "Groceries"
-	categoryType := category.CategoryTypeExpense
+	categoryType := category.TypeExpense
 	familyID := uuid.New()
 
 	// Execute
@@ -36,8 +36,8 @@ func TestNewCategory(t *testing.T) {
 
 func TestCategoryType_Constants(t *testing.T) {
 	// Test that category type constants have expected values
-	assert.Equal(t, "income", string(category.CategoryTypeIncome))
-	assert.Equal(t, "expense", string(category.CategoryTypeExpense))
+	assert.Equal(t, "income", string(category.TypeIncome))
+	assert.Equal(t, "expense", string(category.TypeExpense))
 }
 
 func TestCategory_IsSubcategory(t *testing.T) {
@@ -66,7 +66,7 @@ func TestCategory_IsSubcategory(t *testing.T) {
 			cat := &category.Category{
 				ID:        uuid.New(),
 				Name:      "Test Category",
-				Type:      category.CategoryTypeExpense,
+				Type:      category.TypeExpense,
 				FamilyID:  familyID,
 				ParentID:  tt.parentID,
 				IsActive:  true,
@@ -114,10 +114,10 @@ func TestNewCategory_DifferentTypes(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		categoryType category.CategoryType
+		categoryType category.Type
 	}{
-		{"Income Category", category.CategoryTypeIncome},
-		{"Expense Category", category.CategoryTypeExpense},
+		{"Income Category", category.TypeIncome},
+		{"Expense Category", category.TypeExpense},
 	}
 
 	for _, tt := range tests {
@@ -136,7 +136,7 @@ func TestCategory_StructFields(t *testing.T) {
 	cat := &category.Category{
 		ID:        uuid.New(),
 		Name:      "Test Category",
-		Type:      category.CategoryTypeExpense,
+		Type:      category.TypeExpense,
 		Color:     "#FF5733",
 		Icon:      "food",
 		ParentID:  &parentID,
@@ -164,7 +164,7 @@ func TestCategory_TimestampGeneration(t *testing.T) {
 	beforeTime := time.Now()
 
 	// Create category
-	cat := category.NewCategory("Test Category", category.CategoryTypeExpense, uuid.New())
+	cat := category.NewCategory("Test Category", category.TypeExpense, uuid.New())
 
 	// Record time after creating category
 	afterTime := time.Now()
