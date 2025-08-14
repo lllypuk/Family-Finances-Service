@@ -169,78 +169,21 @@ func (h *UserHandler) GetUserByID(c echo.Context) error {
 }
 
 func (h *UserHandler) UpdateUser(c echo.Context) error {
-	idParam := c.Param("id")
-	id, err := uuid.Parse(idParam)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_ID",
-				Message: "Invalid user ID format",
+	helper := NewUpdateEntityHelper(
+		UpdateEntityParams[UpdateUserRequest, *user.User, UserResponse]{
+			Validator: h.validator,
+			GetByID: func(c echo.Context, id uuid.UUID) (*user.User, error) {
+				return h.repositories.User.GetByID(c.Request().Context(), id)
 			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
+			Update: func(c echo.Context, entity *user.User) error {
+				return h.repositories.User.Update(c.Request().Context(), entity)
 			},
+			UpdateFields:  h.updateUserFields,
+			BuildResponse: h.buildUserResponse,
+			EntityType:    "user",
 		})
-	}
 
-	var req UpdateUserRequest
-	err = c.Bind(&req)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_REQUEST",
-				Message: "Invalid request body",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
-	err = h.validator.Struct(req)
-	if err != nil {
-		var validationErrors []ValidationError
-		for _, err := range func() validator.ValidationErrors {
-			var target validator.ValidationErrors
-			_ = errors.As(err, &target)
-			return target
-		}() {
-			validationErrors = append(validationErrors, ValidationError{
-				Field:   err.Field(),
-				Message: err.Tag(),
-				Code:    "VALIDATION_ERROR",
-			})
-		}
-
-		return c.JSON(http.StatusBadRequest, APIResponse[interface{}]{
-			Data: nil,
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-			Errors: validationErrors,
-		})
-	}
-
-	existingUser, err := h.repositories.User.GetByID(c.Request().Context(), id)
-	if err != nil {
-		return HandleNotFoundError(c, "user")
-	}
-
-	h.updateUserFields(existingUser, &req)
-
-	err = h.repositories.User.Update(c.Request().Context(), existingUser)
-	if err != nil {
-		return HandleUpdateError(c, "user")
-	}
-
-	response := h.buildUserResponse(existingUser)
-	return ReturnSuccessResponse(c, response)
+	return helper.Execute(c)
 }
 
 func (h *UserHandler) updateUserFields(user *user.User, req *UpdateUserRequest) {

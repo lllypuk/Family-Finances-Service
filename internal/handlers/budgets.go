@@ -264,78 +264,21 @@ func (h *BudgetHandler) GetBudgetByID(c echo.Context) error {
 }
 
 func (h *BudgetHandler) UpdateBudget(c echo.Context) error {
-	idParam := c.Param("id")
-	id, err := uuid.Parse(idParam)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_ID",
-				Message: "Invalid budget ID format",
+	helper := NewUpdateEntityHelper(
+		UpdateEntityParams[UpdateBudgetRequest, *budget.Budget, BudgetResponse]{
+			Validator: h.validator,
+			GetByID: func(c echo.Context, id uuid.UUID) (*budget.Budget, error) {
+				return h.repositories.Budget.GetByID(c.Request().Context(), id)
 			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
+			Update: func(c echo.Context, entity *budget.Budget) error {
+				return h.repositories.Budget.Update(c.Request().Context(), entity)
 			},
+			UpdateFields:  h.updateBudgetFields,
+			BuildResponse: h.buildBudgetResponse,
+			EntityType:    "budget",
 		})
-	}
 
-	var req UpdateBudgetRequest
-	err = c.Bind(&req)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_REQUEST",
-				Message: "Invalid request body",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
-	err = h.validator.Struct(req)
-	if err != nil {
-		var validationErrors []ValidationError
-		for _, err := range func() validator.ValidationErrors {
-			var target validator.ValidationErrors
-			_ = errors.As(err, &target)
-			return target
-		}() {
-			validationErrors = append(validationErrors, ValidationError{
-				Field:   err.Field(),
-				Message: err.Tag(),
-				Code:    "VALIDATION_ERROR",
-			})
-		}
-
-		return c.JSON(http.StatusBadRequest, APIResponse[interface{}]{
-			Data: nil,
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-			Errors: validationErrors,
-		})
-	}
-
-	existingBudget, err := h.repositories.Budget.GetByID(c.Request().Context(), id)
-	if err != nil {
-		return HandleNotFoundError(c, "budget")
-	}
-
-	h.updateBudgetFields(existingBudget, &req)
-
-	err = h.repositories.Budget.Update(c.Request().Context(), existingBudget)
-	if err != nil {
-		return HandleUpdateError(c, "budget")
-	}
-
-	response := h.buildBudgetResponse(existingBudget)
-	return ReturnSuccessResponse(c, response)
+	return helper.Execute(c)
 }
 
 func (h *BudgetHandler) updateBudgetFields(budget *budget.Budget, req *UpdateBudgetRequest) {
