@@ -18,7 +18,7 @@ const (
 	TestTransactionAmount = 100.50
 	// TestBudgetAmount test budget amount
 	TestBudgetAmount = 1000.0
-	// TestReportExpenses test report expenses amount
+	// TestReportExpenses represents the test report expenses amount
 	TestReportExpenses = 500.0
 )
 
