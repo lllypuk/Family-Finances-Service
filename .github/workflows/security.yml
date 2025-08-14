@@ -182,17 +182,17 @@ jobs:
 
       - name: Create OSV Scanner ignore config
         run: |
-          cat <<EOF > .osv-scanner-ignore.yml
-          ignores:
-            - id: GO-2025-3829
-              notes: "Test-only vulnerability in a transitive dependency (docker/docker) with no available fix. Not relevant to production."
+          cat <<EOF > .osv-scanner.toml
+          [[ignores]]
+          id = "GO-2025-3829"
+          notes = "Test-only vulnerability in a transitive dependency (docker/docker) with no available fix. Not relevant to production."
           EOF
 
       - name: Run OSV Scanner
         run: |
           # Add the Go bin directory to the PATH to ensure osv-scanner is found
           export PATH=$(go env GOPATH)/bin:$PATH
-          osv-scanner --config=.osv-scanner-ignore.yml --format=sarif --output=osv-results.sarif ./
+          osv-scanner --config=.osv-scanner.toml --format=sarif --output=osv-results.sarif ./
 
       - name: Upload SARIF results
         uses: github/codeql-action/upload-sarif@v3
