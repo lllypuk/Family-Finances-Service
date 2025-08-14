@@ -158,7 +158,7 @@ func (s *HTTPServer) setupRoutes() {
 	reports.DELETE("/:id", s.reportHandler.DeleteReport)
 }
 
-func (s *HTTPServer) Start(ctx context.Context) error {
+func (s *HTTPServer) Start(_ context.Context) error {
 	address := fmt.Sprintf("%s:%s", s.config.Host, s.config.Port)
 	return s.echo.Start(address)
 }

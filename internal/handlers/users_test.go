@@ -100,7 +100,7 @@ func TestUserHandler_CreateUser(t *testing.T) {
 		{
 			name:        "Error - Invalid request body",
 			requestBody: `{"invalid": json}`, // Invalid JSON syntax to trigger bind error
-			mockSetup: func(repo *MockUserRepository) {
+			mockSetup: func(_ *MockUserRepository) {
 				// No mock setup needed for validation error
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -117,7 +117,7 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				Email: "test@example.com",
 				// Missing password, name, etc.
 			},
-			mockSetup: func(repo *MockUserRepository) {
+			mockSetup: func(_ *MockUserRepository) {
 				// No mock setup needed for validation error
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -138,7 +138,7 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				FamilyID:  uuid.New(),
 				Role:      "member",
 			},
-			mockSetup: func(repo *MockUserRepository) {
+			mockSetup: func(_ *MockUserRepository) {
 				// No mock setup needed for validation error
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -245,7 +245,7 @@ func TestUserHandler_GetUserByID(t *testing.T) {
 		{
 			name:   "Error - Invalid UUID format",
 			userID: "invalid-uuid",
-			mockSetup: func(repo *MockUserRepository) {
+			mockSetup: func(_ *MockUserRepository) {
 				// No mock setup needed for UUID validation error
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -353,7 +353,7 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 			requestBody: handlers.UpdateUserRequest{
 				FirstName: stringPtr("UpdatedName"),
 			},
-			mockSetup: func(repo *MockUserRepository) {
+			mockSetup: func(_ *MockUserRepository) {
 				// No mock needed for UUID validation error
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -441,7 +441,7 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 		{
 			name:   "Error - Invalid UUID",
 			userID: "invalid-uuid",
-			mockSetup: func(repo *MockUserRepository) {
+			mockSetup: func(_ *MockUserRepository) {
 				// No mock needed for UUID validation error
 			},
 			expectedStatus: http.StatusBadRequest,

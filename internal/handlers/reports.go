@@ -317,10 +317,10 @@ func (h *ReportHandler) generateReportData(
 
 // populateBasicReportData заполняет базовые данные для всех типов отчетов
 func (h *ReportHandler) populateBasicReportData(
-	ctx context.Context,
+	_ context.Context,
 	data *report.ReportData,
-	familyID uuid.UUID,
-	startDate, endDate time.Time,
+	_ uuid.UUID,
+	_, _ time.Time,
 ) {
 	// Базовые расчеты для всех отчетов
 	data.TotalIncome = 0
@@ -334,10 +334,10 @@ func (h *ReportHandler) populateBasicReportData(
 
 // generateExpensesReportData генерирует данные для отчета по расходам
 func (h *ReportHandler) generateExpensesReportData(
-	ctx context.Context,
+	_ context.Context,
 	data *report.ReportData,
-	familyID uuid.UUID,
-	startDate, endDate time.Time,
+	_ uuid.UUID,
+	_, _ time.Time,
 ) {
 	// TODO: Реализовать получение расходов из транзакций
 	// Пример структуры данных для расходов
@@ -346,10 +346,10 @@ func (h *ReportHandler) generateExpensesReportData(
 
 // generateIncomeReportData генерирует данные для отчета по доходам
 func (h *ReportHandler) generateIncomeReportData(
-	ctx context.Context,
+	_ context.Context,
 	data *report.ReportData,
-	familyID uuid.UUID,
-	startDate, endDate time.Time,
+	_ uuid.UUID,
+	_, _ time.Time,
 ) {
 	// TODO: Реализовать получение доходов из транзакций
 	data.TotalIncome = 0 // Будет рассчитано из транзакций
@@ -357,10 +357,10 @@ func (h *ReportHandler) generateIncomeReportData(
 
 // generateBudgetReportData генерирует данные для отчета по бюджету
 func (h *ReportHandler) generateBudgetReportData(
-	ctx context.Context,
-	data *report.ReportData,
-	familyID uuid.UUID,
-	startDate, endDate time.Time,
+	_ context.Context,
+	_ *report.ReportData,
+	_ uuid.UUID,
+	_, _ time.Time,
 ) {
 	// TODO: Реализовать сравнение бюджета с фактическими тратами
 	// Получение активных бюджетов и сравнение с транзакциями
@@ -368,10 +368,10 @@ func (h *ReportHandler) generateBudgetReportData(
 
 // generateCashFlowReportData генерирует данные для отчета по денежному потоку
 func (h *ReportHandler) generateCashFlowReportData(
-	ctx context.Context,
+	_ context.Context,
 	data *report.ReportData,
-	familyID uuid.UUID,
-	startDate, endDate time.Time,
+	_ uuid.UUID,
+	_, _ time.Time,
 ) {
 	// TODO: Реализовать расчет денежного потока по дням
 	// Заполнение DailyBreakdown с доходами и расходами по дням
@@ -379,10 +379,10 @@ func (h *ReportHandler) generateCashFlowReportData(
 
 // generateCategoryBreakdownReportData генерирует данные для разбивки по категориям
 func (h *ReportHandler) generateCategoryBreakdownReportData(
-	ctx context.Context,
+	_ context.Context,
 	data *report.ReportData,
-	familyID uuid.UUID,
-	startDate, endDate time.Time,
+	_ uuid.UUID,
+	_, _ time.Time,
 ) {
 	// TODO: Реализовать группировку транзакций по категориям
 	// Заполнение CategoryBreakdown с суммами по категориям

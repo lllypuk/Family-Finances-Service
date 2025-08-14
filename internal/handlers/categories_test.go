@@ -108,7 +108,7 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 		{
 			name:        "Error - Invalid JSON",
 			requestBody: `{"name": "Food", "type": "expense", "family_id": "invalid-uuid"}`,
-			mockSetup: func(repo *MockCategoryRepository) {
+			mockSetup: func(_ *MockCategoryRepository) {
 				// No mock calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -126,7 +126,7 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 				Type:     "expense",
 				FamilyID: familyID,
 			},
-			mockSetup: func(repo *MockCategoryRepository) {
+			mockSetup: func(_ *MockCategoryRepository) {
 				// No mock calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -249,7 +249,7 @@ func TestCategoryHandler_GetCategories(t *testing.T) {
 		{
 			name:        "Error - Missing family_id",
 			queryParams: map[string]string{},
-			mockSetup: func(repo *MockCategoryRepository) {
+			mockSetup: func(_ *MockCategoryRepository) {
 				// No mock calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -265,7 +265,7 @@ func TestCategoryHandler_GetCategories(t *testing.T) {
 			queryParams: map[string]string{
 				"family_id": "invalid-uuid",
 			},
-			mockSetup: func(repo *MockCategoryRepository) {
+			mockSetup: func(_ *MockCategoryRepository) {
 				// No mock calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -355,7 +355,7 @@ func TestCategoryHandler_GetCategoryByID(t *testing.T) {
 		{
 			name:       "Error - Invalid category ID",
 			categoryID: "invalid-uuid",
-			mockSetup: func(repo *MockCategoryRepository) {
+			mockSetup: func(_ *MockCategoryRepository) {
 				// No mock calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -464,7 +464,7 @@ func TestCategoryHandler_UpdateCategory(t *testing.T) {
 			requestBody: handlers.UpdateCategoryRequest{
 				Name: stringPtr("Updated Food"),
 			},
-			mockSetup: func(repo *MockCategoryRepository) {
+			mockSetup: func(_ *MockCategoryRepository) {
 				// No mock calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -556,7 +556,7 @@ func TestCategoryHandler_DeleteCategory(t *testing.T) {
 		{
 			name:       "Error - Invalid category ID",
 			categoryID: "invalid-uuid",
-			mockSetup: func(repo *MockCategoryRepository) {
+			mockSetup: func(_ *MockCategoryRepository) {
 				// No mock calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
