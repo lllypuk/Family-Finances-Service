@@ -282,44 +282,9 @@ func (h *ReportHandler) GetReportByID(c echo.Context) error {
 }
 
 func (h *ReportHandler) DeleteReport(c echo.Context) error {
-	idParam := c.Param("id")
-	id, err := uuid.Parse(idParam)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_ID",
-				Message: "Invalid report ID format",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
-	if err := h.repositories.Report.Delete(c.Request().Context(), id); err != nil {
-		return c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "REPORT_NOT_FOUND",
-				Message: "Report not found",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
-	return c.JSON(http.StatusOK, APIResponse[interface{}]{
-		Data: map[string]string{"message": "Report deleted successfully"},
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+	return DeleteEntityHelper(c, func(id uuid.UUID) error {
+		return h.repositories.Report.Delete(c.Request().Context(), id)
+	}, "Report")
 }
 
 // generateReportData генерирует данные отчета в зависимости от типа

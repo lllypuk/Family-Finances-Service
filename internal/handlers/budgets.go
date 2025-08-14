@@ -394,42 +394,7 @@ func (h *BudgetHandler) UpdateBudget(c echo.Context) error {
 }
 
 func (h *BudgetHandler) DeleteBudget(c echo.Context) error {
-	idParam := c.Param("id")
-	id, err := uuid.Parse(idParam)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_ID",
-				Message: "Invalid budget ID format",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
-	if err := h.repositories.Budget.Delete(c.Request().Context(), id); err != nil {
-		return c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "BUDGET_NOT_FOUND",
-				Message: "Budget not found",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
-	return c.JSON(http.StatusOK, APIResponse[interface{}]{
-		Data: map[string]string{"message": "Budget deleted successfully"},
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+	return DeleteEntityHelper(c, func(id uuid.UUID) error {
+		return h.repositories.Budget.Delete(c.Request().Context(), id)
+	}, "Budget")
 }
