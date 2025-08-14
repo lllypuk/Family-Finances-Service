@@ -67,13 +67,15 @@ func (r *Repository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*
 	var users []*user.User
 	for cursor.Next(ctx) {
 		var u user.User
-		if err := cursor.Decode(&u); err != nil {
+		err = cursor.Decode(&u)
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode user: %w", err)
 		}
 		users = append(users, &u)
 	}
 
-	if err := cursor.Err(); err != nil {
+	err = cursor.Err()
+	if err != nil {
 		return nil, fmt.Errorf("cursor error: %w", err)
 	}
 

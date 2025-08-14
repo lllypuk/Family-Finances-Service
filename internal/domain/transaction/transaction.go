@@ -7,31 +7,31 @@ import (
 )
 
 type Transaction struct {
-	ID          uuid.UUID       `json:"id"          bson:"_id"`
-	Amount      float64         `json:"amount"      bson:"amount"`
-	Type        TransactionType `json:"type"        bson:"type"`
-	Description string          `json:"description" bson:"description"`
-	CategoryID  uuid.UUID       `json:"category_id" bson:"category_id"`
-	UserID      uuid.UUID       `json:"user_id"     bson:"user_id"` // Кто создал транзакцию
-	FamilyID    uuid.UUID       `json:"family_id"   bson:"family_id"`
-	Date        time.Time       `json:"date"        bson:"date"` // Дата транзакции
-	Tags        []string        `json:"tags"        bson:"tags"` // Теги для поиска
-	CreatedAt   time.Time       `json:"created_at"  bson:"created_at"`
-	UpdatedAt   time.Time       `json:"updated_at"  bson:"updated_at"`
+	ID          uuid.UUID `json:"id"          bson:"_id"`
+	Amount      float64   `json:"amount"      bson:"amount"`
+	Type        Type      `json:"type"        bson:"type"`
+	Description string    `json:"description" bson:"description"`
+	CategoryID  uuid.UUID `json:"category_id" bson:"category_id"`
+	UserID      uuid.UUID `json:"user_id"     bson:"user_id"` // Кто создал транзакцию
+	FamilyID    uuid.UUID `json:"family_id"   bson:"family_id"`
+	Date        time.Time `json:"date"        bson:"date"` // Дата транзакции
+	Tags        []string  `json:"tags"        bson:"tags"` // Теги для поиска
+	CreatedAt   time.Time `json:"created_at"  bson:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"  bson:"updated_at"`
 }
 
-type TransactionType string
+type Type string
 
 const (
-	TransactionTypeIncome  TransactionType = "income"  // Доход
-	TransactionTypeExpense TransactionType = "expense" // Расход
+	TypeIncome  Type = "income"  // Доход
+	TypeExpense Type = "expense" // Расход
 )
 
-type TransactionFilter struct {
+type Filter struct {
 	FamilyID    uuid.UUID
 	UserID      *uuid.UUID
 	CategoryID  *uuid.UUID
-	Type        *TransactionType
+	Type        *Type
 	DateFrom    *time.Time
 	DateTo      *time.Time
 	AmountFrom  *float64
@@ -44,7 +44,7 @@ type TransactionFilter struct {
 
 func NewTransaction(
 	amount float64,
-	transactionType TransactionType,
+	transactionType Type,
 	description string,
 	categoryID, userID, familyID uuid.UUID,
 	date time.Time,

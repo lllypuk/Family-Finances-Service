@@ -11,6 +11,11 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+const (
+	// TestMongoTimeout timeout for test MongoDB operations
+	TestMongoTimeout = 10 * time.Second
+)
+
 // MongoDBContainer wraps the testcontainers MongoDB instance
 type MongoDBContainer struct {
 	Container *mongodb.MongoDBContainer
@@ -39,7 +44,7 @@ func SetupMongoDB(t *testing.T) *MongoDBContainer {
 	require.NoError(t, err)
 
 	// Test the connection
-	ctxTimeout, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctxTimeout, cancel := context.WithTimeout(ctx, TestMongoTimeout)
 	defer cancel()
 
 	err = client.Ping(ctxTimeout, nil)
@@ -50,10 +55,14 @@ func SetupMongoDB(t *testing.T) *MongoDBContainer {
 	// Cleanup function to be called in test teardown
 	t.Cleanup(func() {
 		if client != nil {
-			client.Disconnect(context.Background())
+			if disconnectErr := client.Disconnect(context.Background()); disconnectErr != nil {
+				t.Logf("Failed to disconnect MongoDB client: %v", disconnectErr)
+			}
 		}
 		if mongoContainer != nil {
-			mongoContainer.Terminate(context.Background())
+			if terminateErr := mongoContainer.Terminate(context.Background()); terminateErr != nil {
+				t.Logf("Failed to terminate MongoDB container: %v", terminateErr)
+			}
 		}
 	})
 
@@ -74,7 +83,7 @@ func (m *MongoDBContainer) CleanupCollections(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, collectionName := range collections {
-		err := m.Database.Collection(collectionName).Drop(ctx)
+		err = m.Database.Collection(collectionName).Drop(ctx)
 		if err != nil {
 			// Just log the error, don't fail the test
 			t.Logf("Failed to drop collection %s: %v", collectionName, err)

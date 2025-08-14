@@ -7,39 +7,39 @@ import (
 )
 
 type Report struct {
-	ID          uuid.UUID    `json:"id"           bson:"_id"`
-	Name        string       `json:"name"         bson:"name"`
-	Type        ReportType   `json:"type"         bson:"type"`
-	Period      ReportPeriod `json:"period"       bson:"period"`
-	FamilyID    uuid.UUID    `json:"family_id"    bson:"family_id"`
-	UserID      uuid.UUID    `json:"user_id"      bson:"user_id"` // Кто создал отчет
-	StartDate   time.Time    `json:"start_date"   bson:"start_date"`
-	EndDate     time.Time    `json:"end_date"     bson:"end_date"`
-	Data        ReportData   `json:"data"         bson:"data"`
-	GeneratedAt time.Time    `json:"generated_at" bson:"generated_at"`
+	ID          uuid.UUID `json:"id"           bson:"_id"`
+	Name        string    `json:"name"         bson:"name"`
+	Type        Type      `json:"type"         bson:"type"`
+	Period      Period    `json:"period"       bson:"period"`
+	FamilyID    uuid.UUID `json:"family_id"    bson:"family_id"`
+	UserID      uuid.UUID `json:"user_id"      bson:"user_id"` // Кто создал отчет
+	StartDate   time.Time `json:"start_date"   bson:"start_date"`
+	EndDate     time.Time `json:"end_date"     bson:"end_date"`
+	Data        Data      `json:"data"         bson:"data"`
+	GeneratedAt time.Time `json:"generated_at" bson:"generated_at"`
 }
 
-type ReportType string
+type Type string
 
 const (
-	ReportTypeExpenses      ReportType = "expenses"       // Отчет по расходам
-	ReportTypeIncome        ReportType = "income"         // Отчет по доходам
-	ReportTypeBudget        ReportType = "budget"         // Отчет по бюджету
-	ReportTypeCashFlow      ReportType = "cash_flow"      // Отчет по денежному потоку
-	ReportTypeCategoryBreak ReportType = "category_break" // Разбивка по категориям
+	TypeExpenses      Type = "expenses"       // Отчет по расходам
+	TypeIncome        Type = "income"         // Отчет по доходам
+	TypeBudget        Type = "budget"         // Отчет по бюджету
+	TypeCashFlow      Type = "cash_flow"      // Отчет по денежному потоку
+	TypeCategoryBreak Type = "category_break" // Разбивка по категориям
 )
 
-type ReportPeriod string
+type Period string
 
 const (
-	ReportPeriodDaily   ReportPeriod = "daily"
-	ReportPeriodWeekly  ReportPeriod = "weekly"
-	ReportPeriodMonthly ReportPeriod = "monthly"
-	ReportPeriodYearly  ReportPeriod = "yearly"
-	ReportPeriodCustom  ReportPeriod = "custom"
+	PeriodDaily   Period = "daily"
+	PeriodWeekly  Period = "weekly"
+	PeriodMonthly Period = "monthly"
+	PeriodYearly  Period = "yearly"
+	PeriodCustom  Period = "custom"
 )
 
-type ReportData struct {
+type Data struct {
 	TotalIncome       float64                 `json:"total_income"       bson:"total_income"`
 	TotalExpenses     float64                 `json:"total_expenses"     bson:"total_expenses"`
 	NetIncome         float64                 `json:"net_income"         bson:"net_income"`
@@ -83,8 +83,8 @@ type BudgetComparisonItem struct {
 
 func NewReport(
 	name string,
-	reportType ReportType,
-	period ReportPeriod,
+	reportType Type,
+	period Period,
 	familyID, userID uuid.UUID,
 	startDate, endDate time.Time,
 ) *Report {
@@ -97,7 +97,7 @@ func NewReport(
 		UserID:      userID,
 		StartDate:   startDate,
 		EndDate:     endDate,
-		Data:        ReportData{},
+		Data:        Data{},
 		GeneratedAt: time.Now(),
 	}
 }

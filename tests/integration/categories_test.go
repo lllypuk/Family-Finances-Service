@@ -1,4 +1,4 @@
-package integration
+package integration_test
 
 import (
 	"bytes"
@@ -34,10 +34,10 @@ func TestCategoryHandler_Integration(t *testing.T) {
 			FamilyID: family.ID,
 		}
 
-		requestBody, err := json.Marshal(request)
+		requestBodyBytes, err := json.Marshal(request)
 		require.NoError(t, err)
 
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/categories", bytes.NewBuffer(requestBody))
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/categories", bytes.NewBuffer(requestBodyBytes))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -64,9 +64,9 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		err := testServer.Repos.Family.Create(context.Background(), family)
 		require.NoError(t, err)
 
-		category1 := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		category1 := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 		category1.Name = "Food"
-		category2 := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeIncome)
+		category2 := testhelpers.CreateTestCategory(family.ID, category.TypeIncome)
 		category2.Name = "Salary"
 
 		err = testServer.Repos.Category.Create(context.Background(), category1)
@@ -99,7 +99,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		err := testServer.Repos.Family.Create(context.Background(), family)
 		require.NoError(t, err)
 
-		category := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		category := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 		err = testServer.Repos.Category.Create(context.Background(), category)
 		require.NoError(t, err)
 
@@ -127,7 +127,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		err := testServer.Repos.Family.Create(context.Background(), family)
 		require.NoError(t, err)
 
-		category := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		category := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 		err = testServer.Repos.Category.Create(context.Background(), category)
 		require.NoError(t, err)
 
@@ -139,13 +139,13 @@ func TestCategoryHandler_Integration(t *testing.T) {
 			Color: &newColor,
 		}
 
-		requestBody, err := json.Marshal(request)
+		requestBodyBytes, err := json.Marshal(request)
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(
 			http.MethodPut,
 			"/api/v1/categories/"+category.ID.String(),
-			bytes.NewBuffer(requestBody),
+			bytes.NewBuffer(requestBodyBytes),
 		)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
@@ -169,7 +169,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		err := testServer.Repos.Family.Create(context.Background(), family)
 		require.NoError(t, err)
 
-		category := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		category := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 		err = testServer.Repos.Category.Create(context.Background(), category)
 		require.NoError(t, err)
 

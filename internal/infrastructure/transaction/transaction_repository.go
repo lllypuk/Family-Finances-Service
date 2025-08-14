@@ -45,7 +45,7 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*transaction.Tr
 
 func (r *Repository) GetByFilter(
 	ctx context.Context,
-	filter transaction.TransactionFilter,
+	filter transaction.Filter,
 ) ([]*transaction.Transaction, error) {
 	mongoFilter := r.buildFilterQuery(filter)
 
@@ -68,13 +68,15 @@ func (r *Repository) GetByFilter(
 	var transactions []*transaction.Transaction
 	for cursor.Next(ctx) {
 		var t transaction.Transaction
-		if err := cursor.Decode(&t); err != nil {
+		err = cursor.Decode(&t)
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode transaction: %w", err)
 		}
 		transactions = append(transactions, &t)
 	}
 
-	if err := cursor.Err(); err != nil {
+	err = cursor.Err()
+	if err != nil {
 		return nil, fmt.Errorf("cursor error: %w", err)
 	}
 
@@ -107,13 +109,15 @@ func (r *Repository) GetByFamilyID(
 	var transactions []*transaction.Transaction
 	for cursor.Next(ctx) {
 		var t transaction.Transaction
-		if err := cursor.Decode(&t); err != nil {
+		err = cursor.Decode(&t)
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode transaction: %w", err)
 		}
 		transactions = append(transactions, &t)
 	}
 
-	if err := cursor.Err(); err != nil {
+	err = cursor.Err()
+	if err != nil {
 		return nil, fmt.Errorf("cursor error: %w", err)
 	}
 
@@ -152,7 +156,7 @@ func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
 func (r *Repository) GetTotalByCategory(
 	ctx context.Context,
 	categoryID uuid.UUID,
-	transactionType transaction.TransactionType,
+	transactionType transaction.Type,
 ) (float64, error) {
 	pipeline := []bson.M{
 		{
@@ -180,7 +184,8 @@ func (r *Repository) GetTotalByCategory(
 	}
 
 	if cursor.Next(ctx) {
-		if err := cursor.Decode(&result); err != nil {
+		err = cursor.Decode(&result)
+		if err != nil {
 			return 0, fmt.Errorf("failed to decode aggregation result: %w", err)
 		}
 	}
@@ -188,7 +193,7 @@ func (r *Repository) GetTotalByCategory(
 	return result.Total, nil
 }
 
-func (r *Repository) buildFilterQuery(filter transaction.TransactionFilter) bson.M {
+func (r *Repository) buildFilterQuery(filter transaction.Filter) bson.M {
 	query := bson.M{"family_id": filter.FamilyID}
 
 	if filter.UserID != nil {

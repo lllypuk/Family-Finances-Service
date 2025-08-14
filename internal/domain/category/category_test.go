@@ -1,4 +1,4 @@
-package category
+package category_test
 
 import (
 	"testing"
@@ -6,36 +6,38 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+
+	"family-budget-service/internal/domain/category"
 )
 
 func TestNewCategory(t *testing.T) {
 	// Test data
-	name := "Food"
-	categoryType := CategoryTypeExpense
+	name := "Groceries"
+	categoryType := category.TypeExpense
 	familyID := uuid.New()
 
 	// Execute
-	category := NewCategory(name, categoryType, familyID)
+	cat := category.NewCategory(name, categoryType, familyID)
 
 	// Assert
-	assert.NotEqual(t, uuid.Nil, category.ID)
-	assert.Equal(t, name, category.Name)
-	assert.Equal(t, categoryType, category.Type)
-	assert.Equal(t, familyID, category.FamilyID)
-	assert.Equal(t, "#007BFF", category.Color)
-	assert.Equal(t, "default", category.Icon)
-	assert.True(t, category.IsActive)
-	assert.Nil(t, category.ParentID)
-	assert.False(t, category.CreatedAt.IsZero())
-	assert.False(t, category.UpdatedAt.IsZero())
-	assert.WithinDuration(t, time.Now(), category.CreatedAt, time.Second)
-	assert.WithinDuration(t, time.Now(), category.UpdatedAt, time.Second)
+	assert.NotEqual(t, uuid.Nil, cat.ID)
+	assert.Equal(t, name, cat.Name)
+	assert.Equal(t, categoryType, cat.Type)
+	assert.Equal(t, familyID, cat.FamilyID)
+	assert.Equal(t, "#007BFF", cat.Color)
+	assert.Equal(t, "default", cat.Icon)
+	assert.True(t, cat.IsActive)
+	assert.Nil(t, cat.ParentID)
+	assert.False(t, cat.CreatedAt.IsZero())
+	assert.False(t, cat.UpdatedAt.IsZero())
+	assert.WithinDuration(t, time.Now(), cat.CreatedAt, time.Second)
+	assert.WithinDuration(t, time.Now(), cat.UpdatedAt, time.Second)
 }
 
 func TestCategoryType_Constants(t *testing.T) {
 	// Test that category type constants have expected values
-	assert.Equal(t, "income", string(CategoryTypeIncome))
-	assert.Equal(t, "expense", string(CategoryTypeExpense))
+	assert.Equal(t, "income", string(category.TypeIncome))
+	assert.Equal(t, "expense", string(category.TypeExpense))
 }
 
 func TestCategory_IsSubcategory(t *testing.T) {
@@ -61,10 +63,10 @@ func TestCategory_IsSubcategory(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			category := &Category{
+			cat := &category.Category{
 				ID:        uuid.New(),
 				Name:      "Test Category",
-				Type:      CategoryTypeExpense,
+				Type:      category.TypeExpense,
 				FamilyID:  familyID,
 				ParentID:  tt.parentID,
 				IsActive:  true,
@@ -72,7 +74,7 @@ func TestCategory_IsSubcategory(t *testing.T) {
 				UpdatedAt: time.Now(),
 			}
 
-			result := category.IsSubcategory()
+			result := cat.IsSubcategory()
 			assert.Equal(t, tt.expectedResult, result)
 		})
 	}
@@ -80,29 +82,31 @@ func TestCategory_IsSubcategory(t *testing.T) {
 
 func TestDefaultExpenseCategories(t *testing.T) {
 	// Test that default expense categories are defined
-	assert.NotEmpty(t, DefaultExpenseCategories)
-	assert.Contains(t, DefaultExpenseCategories, "Продукты")
-	assert.Contains(t, DefaultExpenseCategories, "Транспорт")
-	assert.Contains(t, DefaultExpenseCategories, "Жилье и ЖКХ")
-	assert.Contains(t, DefaultExpenseCategories, "Здоровье")
-	assert.Contains(t, DefaultExpenseCategories, "Образование")
-	assert.Contains(t, DefaultExpenseCategories, "Развлечения")
-	assert.Contains(t, DefaultExpenseCategories, "Одежда")
-	assert.Contains(t, DefaultExpenseCategories, "Ресторан и кафе")
-	assert.Contains(t, DefaultExpenseCategories, "Спорт")
-	assert.Contains(t, DefaultExpenseCategories, "Подарки")
-	assert.Contains(t, DefaultExpenseCategories, "Разное")
+	defaultCategories := category.GetDefaultExpenseCategories()
+	assert.NotEmpty(t, defaultCategories)
+	assert.Contains(t, defaultCategories, "Продукты")
+	assert.Contains(t, defaultCategories, "Транспорт")
+	assert.Contains(t, defaultCategories, "Жилье и ЖКХ")
+	assert.Contains(t, defaultCategories, "Здоровье")
+	assert.Contains(t, defaultCategories, "Образование")
+	assert.Contains(t, defaultCategories, "Развлечения")
+	assert.Contains(t, defaultCategories, "Одежда")
+	assert.Contains(t, defaultCategories, "Ресторан и кафе")
+	assert.Contains(t, defaultCategories, "Спорт")
+	assert.Contains(t, defaultCategories, "Подарки")
+	assert.Contains(t, defaultCategories, "Разное")
 }
 
 func TestDefaultIncomeCategories(t *testing.T) {
 	// Test that default income categories are defined
-	assert.NotEmpty(t, DefaultIncomeCategories)
-	assert.Contains(t, DefaultIncomeCategories, "Зарплата")
-	assert.Contains(t, DefaultIncomeCategories, "Фриланс")
-	assert.Contains(t, DefaultIncomeCategories, "Инвестиции")
-	assert.Contains(t, DefaultIncomeCategories, "Подарки")
-	assert.Contains(t, DefaultIncomeCategories, "Продажи")
-	assert.Contains(t, DefaultIncomeCategories, "Разное")
+	defaultCategories := category.GetDefaultIncomeCategories()
+	assert.NotEmpty(t, defaultCategories)
+	assert.Contains(t, defaultCategories, "Зарплата")
+	assert.Contains(t, defaultCategories, "Фриланс")
+	assert.Contains(t, defaultCategories, "Инвестиции")
+	assert.Contains(t, defaultCategories, "Подарки")
+	assert.Contains(t, defaultCategories, "Продажи")
+	assert.Contains(t, defaultCategories, "Разное")
 }
 
 func TestNewCategory_DifferentTypes(t *testing.T) {
@@ -110,16 +114,16 @@ func TestNewCategory_DifferentTypes(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		categoryType CategoryType
+		categoryType category.Type
 	}{
-		{"Income Category", CategoryTypeIncome},
-		{"Expense Category", CategoryTypeExpense},
+		{"Income Category", category.TypeIncome},
+		{"Expense Category", category.TypeExpense},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			category := NewCategory("Test Category", tt.categoryType, familyID)
-			assert.Equal(t, tt.categoryType, category.Type)
+			cat := category.NewCategory("Test", tt.categoryType, familyID)
+			assert.Equal(t, tt.categoryType, cat.Type)
 		})
 	}
 }
@@ -129,10 +133,10 @@ func TestCategory_StructFields(t *testing.T) {
 	familyID := uuid.New()
 	parentID := uuid.New()
 
-	category := &Category{
+	cat := &category.Category{
 		ID:        uuid.New(),
 		Name:      "Test Category",
-		Type:      CategoryTypeExpense,
+		Type:      category.TypeExpense,
 		Color:     "#FF5733",
 		Icon:      "food",
 		ParentID:  &parentID,
@@ -143,54 +147,52 @@ func TestCategory_StructFields(t *testing.T) {
 	}
 
 	// Assert all fields are accessible
-	assert.NotEqual(t, uuid.Nil, category.ID)
-	assert.NotEmpty(t, category.Name)
-	assert.NotEmpty(t, category.Type)
-	assert.NotEmpty(t, category.Color)
-	assert.NotEmpty(t, category.Icon)
-	assert.NotNil(t, category.ParentID)
-	assert.Equal(t, familyID, category.FamilyID)
-	assert.True(t, category.IsActive)
-	assert.False(t, category.CreatedAt.IsZero())
-	assert.False(t, category.UpdatedAt.IsZero())
+	assert.NotEqual(t, uuid.Nil, cat.ID)
+	assert.NotEmpty(t, cat.Name)
+	assert.NotEmpty(t, cat.Type)
+	assert.NotEmpty(t, cat.Color)
+	assert.NotEmpty(t, cat.Icon)
+	assert.NotNil(t, cat.ParentID)
+	assert.Equal(t, familyID, cat.FamilyID)
+	assert.True(t, cat.IsActive)
+	assert.False(t, cat.CreatedAt.IsZero())
+	assert.False(t, cat.UpdatedAt.IsZero())
 }
 
 func TestCategory_TimestampGeneration(t *testing.T) {
-	familyID := uuid.New()
-
 	// Record time before creating category
 	beforeTime := time.Now()
 
 	// Create category
-	category := NewCategory("Test Category", CategoryTypeExpense, familyID)
+	cat := category.NewCategory("Test Category", category.TypeExpense, uuid.New())
 
 	// Record time after creating category
 	afterTime := time.Now()
 
 	// Assert timestamps are within expected range
-	assert.True(t, category.CreatedAt.After(beforeTime) || category.CreatedAt.Equal(beforeTime))
-	assert.True(t, category.CreatedAt.Before(afterTime) || category.CreatedAt.Equal(afterTime))
-	assert.True(t, category.UpdatedAt.After(beforeTime) || category.UpdatedAt.Equal(beforeTime))
-	assert.True(t, category.UpdatedAt.Before(afterTime) || category.UpdatedAt.Equal(afterTime))
+	assert.True(t, cat.CreatedAt.After(beforeTime) || cat.CreatedAt.Equal(beforeTime))
+	assert.True(t, cat.CreatedAt.Before(afterTime) || cat.CreatedAt.Equal(afterTime))
+	assert.True(t, cat.UpdatedAt.After(beforeTime) || cat.UpdatedAt.Equal(beforeTime))
+	assert.True(t, cat.UpdatedAt.Before(afterTime) || cat.UpdatedAt.Equal(afterTime))
 }
 
 func TestDefaultCategories_NonEmpty(t *testing.T) {
 	// Test that we have default categories defined
-	assert.NotEmpty(t, DefaultExpenseCategories, "Should have default expense categories")
-	assert.NotEmpty(t, DefaultIncomeCategories, "Should have default income categories")
+	assert.NotEmpty(t, category.GetDefaultExpenseCategories(), "Should have default expense categories")
+	assert.NotEmpty(t, category.GetDefaultIncomeCategories(), "Should have default income categories")
 }
 
 func TestDefaultCategories_UniqueValues(t *testing.T) {
 	// Test that default expense categories don't have duplicates
 	expenseSet := make(map[string]bool)
-	for _, cat := range DefaultExpenseCategories {
+	for _, cat := range category.GetDefaultExpenseCategories() {
 		assert.False(t, expenseSet[cat], "Duplicate expense category found: %s", cat)
 		expenseSet[cat] = true
 	}
 
 	// Test that default income categories don't have duplicates
 	incomeSet := make(map[string]bool)
-	for _, cat := range DefaultIncomeCategories {
+	for _, cat := range category.GetDefaultIncomeCategories() {
 		assert.False(t, incomeSet[cat], "Duplicate income category found: %s", cat)
 		incomeSet[cat] = true
 	}

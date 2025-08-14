@@ -32,7 +32,7 @@ func NewLogger(config LogConfig) *slog.Logger {
 	opts := &slog.HandlerOptions{
 		Level:     level,
 		AddSource: true,
-		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
 			// Форматируем время в ISO 8601
 			if a.Key == slog.TimeKey {
 				a.Value = slog.StringValue(a.Value.Time().Format(time.RFC3339))

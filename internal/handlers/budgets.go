@@ -72,7 +72,7 @@ func (h *BudgetHandler) CreateBudget(c echo.Context) error {
 		Name:       req.Name,
 		Amount:     req.Amount,
 		Spent:      0.0, // Начальная потраченная сумма
-		Period:     budget.BudgetPeriod(req.Period),
+		Period:     budget.Period(req.Period),
 		CategoryID: req.CategoryID,
 		FamilyID:   req.FamilyID,
 		StartDate:  req.StartDate,
@@ -264,172 +264,61 @@ func (h *BudgetHandler) GetBudgetByID(c echo.Context) error {
 }
 
 func (h *BudgetHandler) UpdateBudget(c echo.Context) error {
-	idParam := c.Param("id")
-	id, err := uuid.Parse(idParam)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_ID",
-				Message: "Invalid budget ID format",
+	helper := NewUpdateEntityHelper(
+		UpdateEntityParams[UpdateBudgetRequest, *budget.Budget, BudgetResponse]{
+			Validator: h.validator,
+			GetByID: func(c echo.Context, id uuid.UUID) (*budget.Budget, error) {
+				return h.repositories.Budget.GetByID(c.Request().Context(), id)
 			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
+			Update: func(c echo.Context, entity *budget.Budget) error {
+				return h.repositories.Budget.Update(c.Request().Context(), entity)
 			},
+			UpdateFields:  h.updateBudgetFields,
+			BuildResponse: h.buildBudgetResponse,
+			EntityType:    "budget",
 		})
-	}
 
-	var req UpdateBudgetRequest
-	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_REQUEST",
-				Message: "Invalid request body",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
+	return helper.Execute(c)
+}
 
-	if err := h.validator.Struct(req); err != nil {
-		var validationErrors []ValidationError
-		for _, err := range func() validator.ValidationErrors {
-			var target validator.ValidationErrors
-			_ = errors.As(err, &target)
-			return target
-		}() {
-			validationErrors = append(validationErrors, ValidationError{
-				Field:   err.Field(),
-				Message: err.Tag(),
-				Code:    "VALIDATION_ERROR",
-			})
-		}
-
-		return c.JSON(http.StatusBadRequest, APIResponse[interface{}]{
-			Data: nil,
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-			Errors: validationErrors,
-		})
-	}
-
-	// Получаем существующий бюджет
-	existingBudget, err := h.repositories.Budget.GetByID(c.Request().Context(), id)
-	if err != nil {
-		return c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "BUDGET_NOT_FOUND",
-				Message: "Budget not found",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
-	// Обновляем поля
+func (h *BudgetHandler) updateBudgetFields(budget *budget.Budget, req *UpdateBudgetRequest) {
 	if req.Name != nil {
-		existingBudget.Name = *req.Name
+		budget.Name = *req.Name
 	}
 	if req.Amount != nil {
-		existingBudget.Amount = *req.Amount
+		budget.Amount = *req.Amount
 	}
 	if req.StartDate != nil {
-		existingBudget.StartDate = *req.StartDate
+		budget.StartDate = *req.StartDate
 	}
 	if req.EndDate != nil {
-		existingBudget.EndDate = *req.EndDate
+		budget.EndDate = *req.EndDate
 	}
 	if req.IsActive != nil {
-		existingBudget.IsActive = *req.IsActive
+		budget.IsActive = *req.IsActive
 	}
-	existingBudget.UpdatedAt = time.Now()
+	budget.UpdatedAt = time.Now()
+}
 
-	if err := h.repositories.Budget.Update(c.Request().Context(), existingBudget); err != nil {
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "UPDATE_FAILED",
-				Message: "Failed to update budget",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+func (h *BudgetHandler) buildBudgetResponse(b *budget.Budget) BudgetResponse {
+	return BudgetResponse{
+		ID:         b.ID,
+		Name:       b.Name,
+		Amount:     b.Amount,
+		Spent:      b.Spent,
+		Period:     string(b.Period),
+		CategoryID: b.CategoryID,
+		FamilyID:   b.FamilyID,
+		StartDate:  b.StartDate,
+		EndDate:    b.EndDate,
+		IsActive:   b.IsActive,
+		CreatedAt:  b.CreatedAt,
+		UpdatedAt:  b.UpdatedAt,
 	}
-
-	response := BudgetResponse{
-		ID:         existingBudget.ID,
-		Name:       existingBudget.Name,
-		Amount:     existingBudget.Amount,
-		Spent:      existingBudget.Spent,
-		Period:     string(existingBudget.Period),
-		CategoryID: existingBudget.CategoryID,
-		FamilyID:   existingBudget.FamilyID,
-		StartDate:  existingBudget.StartDate,
-		EndDate:    existingBudget.EndDate,
-		IsActive:   existingBudget.IsActive,
-		CreatedAt:  existingBudget.CreatedAt,
-		UpdatedAt:  existingBudget.UpdatedAt,
-	}
-
-	return c.JSON(http.StatusOK, APIResponse[BudgetResponse]{
-		Data: response,
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
 }
 
 func (h *BudgetHandler) DeleteBudget(c echo.Context) error {
-	idParam := c.Param("id")
-	id, err := uuid.Parse(idParam)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_ID",
-				Message: "Invalid budget ID format",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
-	if err := h.repositories.Budget.Delete(c.Request().Context(), id); err != nil {
-		return c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "BUDGET_NOT_FOUND",
-				Message: "Budget not found",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
-	return c.JSON(http.StatusOK, APIResponse[interface{}]{
-		Data: map[string]string{"message": "Budget deleted successfully"},
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+	return DeleteEntityHelper(c, func(id uuid.UUID) error {
+		return h.repositories.Budget.Delete(c.Request().Context(), id)
+	}, "Budget")
 }

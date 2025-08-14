@@ -19,7 +19,7 @@ func TestCategoryRepository_Integration(t *testing.T) {
 
 	t.Run("Create_Success", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 
 		err := repo.Create(context.Background(), testCategory)
 		require.NoError(t, err)
@@ -27,7 +27,7 @@ func TestCategoryRepository_Integration(t *testing.T) {
 
 	t.Run("GetByID_Success", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 
 		err := repo.Create(context.Background(), testCategory)
 		require.NoError(t, err)
@@ -43,15 +43,15 @@ func TestCategoryRepository_Integration(t *testing.T) {
 	t.Run("GetByID_NotFound", func(t *testing.T) {
 		nonExistentID := uuid.New()
 		_, err := repo.GetByID(context.Background(), nonExistentID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
 	t.Run("GetByFamilyID_Success", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
-		testCategory1 := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory1 := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 		testCategory1.Name = "Food"
-		testCategory2 := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeIncome)
+		testCategory2 := testhelpers.CreateTestCategory(family.ID, category.TypeIncome)
 		testCategory2.Name = "Salary"
 
 		err := repo.Create(context.Background(), testCategory1)
@@ -73,9 +73,9 @@ func TestCategoryRepository_Integration(t *testing.T) {
 
 	t.Run("GetByFamilyID_OnlyActiveCategories", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
-		testCategory1 := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory1 := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 		testCategory1.IsActive = true
-		testCategory2 := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory2 := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 		testCategory2.IsActive = false
 
 		err := repo.Create(context.Background(), testCategory1)
@@ -91,20 +91,20 @@ func TestCategoryRepository_Integration(t *testing.T) {
 
 	t.Run("GetByType_Success", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
-		expenseCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
-		incomeCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeIncome)
+		expenseCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
+		incomeCategory := testhelpers.CreateTestCategory(family.ID, category.TypeIncome)
 
 		err := repo.Create(context.Background(), expenseCategory)
 		require.NoError(t, err)
 		err = repo.Create(context.Background(), incomeCategory)
 		require.NoError(t, err)
 
-		expenseCategories, err := repo.GetByType(context.Background(), family.ID, category.CategoryTypeExpense)
+		expenseCategories, err := repo.GetByType(context.Background(), family.ID, category.TypeExpense)
 		require.NoError(t, err)
 		assert.Len(t, expenseCategories, 1)
 		assert.Equal(t, expenseCategory.ID, expenseCategories[0].ID)
 
-		incomeCategories, err := repo.GetByType(context.Background(), family.ID, category.CategoryTypeIncome)
+		incomeCategories, err := repo.GetByType(context.Background(), family.ID, category.TypeIncome)
 		require.NoError(t, err)
 		assert.Len(t, incomeCategories, 1)
 		assert.Equal(t, incomeCategory.ID, incomeCategories[0].ID)
@@ -112,7 +112,7 @@ func TestCategoryRepository_Integration(t *testing.T) {
 
 	t.Run("Update_Success", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 
 		err := repo.Create(context.Background(), testCategory)
 		require.NoError(t, err)
@@ -130,16 +130,16 @@ func TestCategoryRepository_Integration(t *testing.T) {
 
 	t.Run("Update_NotFound", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
-		nonExistentCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		nonExistentCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 
 		err := repo.Update(context.Background(), nonExistentCategory)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
 	t.Run("Delete_SoftDelete", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 
 		err := repo.Create(context.Background(), testCategory)
 		require.NoError(t, err)
@@ -161,7 +161,7 @@ func TestCategoryRepository_Integration(t *testing.T) {
 	t.Run("Delete_NotFound", func(t *testing.T) {
 		nonExistentID := uuid.New()
 		err := repo.Delete(context.Background(), nonExistentID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 }

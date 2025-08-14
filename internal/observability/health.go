@@ -10,6 +10,17 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
+const (
+	// HealthCheckTimeout timeout for individual health checks
+	HealthCheckTimeout = 5 * time.Second
+	// HTTPHealthCheckTimeout timeout for HTTP health check endpoint
+	HTTPHealthCheckTimeout = 3 * time.Second
+	// HealthStatusHealthy represents healthy status
+	HealthStatusHealthy = "healthy"
+	// HealthStatusUnhealthy represents unhealthy status
+	HealthStatusUnhealthy = "unhealthy"
+)
+
 // HealthStatus представляет статус health check
 type HealthStatus struct {
 	Status    string                 `json:"status"`
@@ -53,7 +64,7 @@ func (m *MongoHealthChecker) CheckHealth(ctx context.Context) CheckResult {
 	start := time.Now()
 
 	// Создаем контекст с таймаутом для проверки
-	checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	checkCtx, cancel := context.WithTimeout(ctx, HealthCheckTimeout)
 	defer cancel()
 
 	// Пингуем MongoDB
@@ -70,7 +81,7 @@ func (m *MongoHealthChecker) CheckHealth(ctx context.Context) CheckResult {
 	}
 
 	return CheckResult{
-		Status:    "healthy",
+		Status:    HealthStatusHealthy,
 		Duration:  duration,
 		Timestamp: time.Now(),
 	}
@@ -78,15 +89,17 @@ func (m *MongoHealthChecker) CheckHealth(ctx context.Context) CheckResult {
 
 // HealthService управляет health checks
 type HealthService struct {
-	checkers []HealthChecker
-	version  string
+	checkers  []HealthChecker
+	version   string
+	startTime time.Time
 }
 
 // NewHealthService создает новый HealthService
 func NewHealthService(version string) *HealthService {
 	return &HealthService{
-		checkers: make([]HealthChecker, 0),
-		version:  version,
+		checkers:  make([]HealthChecker, 0),
+		version:   version,
+		startTime: time.Now(),
 	}
 }
 
@@ -98,15 +111,15 @@ func (hs *HealthService) AddChecker(checker HealthChecker) {
 // CheckHealth выполняет все проверки
 func (hs *HealthService) CheckHealth(ctx context.Context) HealthStatus {
 	checks := make(map[string]CheckResult)
-	overallStatus := "healthy"
+	overallStatus := HealthStatusHealthy
 
 	// Выполняем все проверки
 	for _, checker := range hs.checkers {
 		result := checker.CheckHealth(ctx)
 		checks[checker.Name()] = result
 
-		if result.Status != "healthy" {
-			overallStatus = "unhealthy"
+		if result.Status != HealthStatusHealthy {
+			overallStatus = HealthStatusUnhealthy
 		}
 	}
 
@@ -115,7 +128,7 @@ func (hs *HealthService) CheckHealth(ctx context.Context) HealthStatus {
 		Timestamp: time.Now(),
 		Version:   hs.version,
 		Checks:    checks,
-		Uptime:    time.Since(startTime),
+		Uptime:    time.Since(hs.startTime),
 	}
 }
 
@@ -125,7 +138,7 @@ func (hs *HealthService) HealthHandler() echo.HandlerFunc {
 		health := hs.CheckHealth(c.Request().Context())
 
 		statusCode := http.StatusOK
-		if health.Status != "healthy" {
+		if health.Status != HealthStatusHealthy {
 			statusCode = http.StatusServiceUnavailable
 		}
 
@@ -137,7 +150,7 @@ func (hs *HealthService) HealthHandler() echo.HandlerFunc {
 func (hs *HealthService) ReadinessHandler() echo.HandlerFunc {
 	return func(c echo.Context) error {
 		// Быстрая проверка готовности - только критичные зависимости
-		ctx, cancel := context.WithTimeout(c.Request().Context(), 3*time.Second)
+		ctx, cancel := context.WithTimeout(c.Request().Context(), HTTPHealthCheckTimeout)
 		defer cancel()
 
 		health := hs.CheckHealth(ctx)
@@ -146,7 +159,7 @@ func (hs *HealthService) ReadinessHandler() echo.HandlerFunc {
 		ready := true
 		for name, check := range health.Checks {
 			// MongoDB критичен для готовности
-			if name == "mongodb" && check.Status != "healthy" {
+			if name == "mongodb" && check.Status != HealthStatusHealthy {
 				ready = false
 				break
 			}
@@ -173,7 +186,7 @@ func (hs *HealthService) LivenessHandler() echo.HandlerFunc {
 		response := map[string]interface{}{
 			"alive":     true,
 			"timestamp": time.Now(),
-			"uptime":    time.Since(startTime).Seconds(),
+			"uptime":    time.Since(hs.startTime).Seconds(),
 		}
 
 		return c.JSON(http.StatusOK, response)
@@ -216,7 +229,7 @@ func (c *CustomHealthChecker) CheckHealth(ctx context.Context) CheckResult {
 	}
 
 	return CheckResult{
-		Status:    "healthy",
+		Status:    HealthStatusHealthy,
 		Duration:  duration,
 		Timestamp: time.Now(),
 	}

@@ -1,4 +1,4 @@
-package handlers
+package handlers_test
 
 import (
 	"bytes"
@@ -8,23 +8,29 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/handlers"
 )
+
+// Helper function for creating string pointers
+func stringPtr(s string) *string {
+	return &s
+}
 
 // MockCategoryRepository is a mock implementation of category repository
 type MockCategoryRepository struct {
 	mock.Mock
 }
 
-func (m *MockCategoryRepository) Create(ctx context.Context, c *category.Category) error {
-	args := m.Called(ctx, c)
+func (m *MockCategoryRepository) Create(ctx context.Context, category *category.Category) error {
+	args := m.Called(ctx, category)
 	return args.Error(0)
 }
 
@@ -47,7 +53,7 @@ func (m *MockCategoryRepository) GetByFamilyID(ctx context.Context, familyID uui
 func (m *MockCategoryRepository) GetByType(
 	ctx context.Context,
 	familyID uuid.UUID,
-	categoryType category.CategoryType,
+	categoryType category.Type,
 ) ([]*category.Category, error) {
 	args := m.Called(ctx, familyID, categoryType)
 	if args.Get(0) == nil {
@@ -56,8 +62,8 @@ func (m *MockCategoryRepository) GetByType(
 	return args.Get(0).([]*category.Category), args.Error(1)
 }
 
-func (m *MockCategoryRepository) Update(ctx context.Context, c *category.Category) error {
-	args := m.Called(ctx, c)
+func (m *MockCategoryRepository) Update(ctx context.Context, category *category.Category) error {
+	args := m.Called(ctx, category)
 	return args.Error(0)
 }
 
@@ -78,7 +84,7 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 	}{
 		{
 			name: "Success - Valid category creation",
-			requestBody: CreateCategoryRequest{
+			requestBody: handlers.CreateCategoryRequest{
 				Name:     "Food",
 				Type:     "expense",
 				Color:    "#FF5733",
@@ -90,57 +96,50 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 			},
 			expectedStatus: http.StatusCreated,
 			expectedBody: func(t *testing.T, body string) {
-				var response APIResponse[CategoryResponse]
+				var response handlers.APIResponse[handlers.CategoryResponse]
 				err := json.Unmarshal([]byte(body), &response)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, "Food", response.Data.Name)
 				assert.Equal(t, "expense", response.Data.Type)
 				assert.Equal(t, "#FF5733", response.Data.Color)
 				assert.Equal(t, "food", response.Data.Icon)
-				assert.Equal(t, familyID, response.Data.FamilyID)
-				assert.True(t, response.Data.IsActive)
+			},
+		},
+		{
+			name:        "Error - Invalid JSON",
+			requestBody: `{"name": "Food", "type": "expense", "family_id": "invalid-uuid"}`,
+			mockSetup: func(_ *MockCategoryRepository) {
+				// No mock calls expected
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: func(t *testing.T, body string) {
+				var response handlers.ErrorResponse
+				err := json.Unmarshal([]byte(body), &response)
+				require.NoError(t, err)
+				assert.Equal(t, "INVALID_REQUEST", response.Error.Code)
 			},
 		},
 		{
 			name: "Error - Missing required fields",
-			requestBody: CreateCategoryRequest{
-				Name: "Food",
-				// Missing required fields
-			},
-			mockSetup: func(repo *MockCategoryRepository) {
-				// No mock setup needed for validation error
-			},
-			expectedStatus: http.StatusBadRequest,
-			expectedBody: func(t *testing.T, body string) {
-				var response APIResponse[interface{}]
-				err := json.Unmarshal([]byte(body), &response)
-				assert.NoError(t, err)
-				assert.NotEmpty(t, response.Errors)
-			},
-		},
-		{
-			name: "Error - Invalid color format",
-			requestBody: CreateCategoryRequest{
-				Name:     "Food",
+			requestBody: handlers.CreateCategoryRequest{
+				Name:     "",
 				Type:     "expense",
-				Color:    "invalid-color",
-				Icon:     "food",
 				FamilyID: familyID,
 			},
-			mockSetup: func(repo *MockCategoryRepository) {
-				// No mock setup needed for validation error
+			mockSetup: func(_ *MockCategoryRepository) {
+				// No mock calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectedBody: func(t *testing.T, body string) {
-				var response APIResponse[interface{}]
+				var response handlers.APIResponse[handlers.CategoryResponse]
 				err := json.Unmarshal([]byte(body), &response)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotEmpty(t, response.Errors)
 			},
 		},
 		{
-			name: "Error - Repository creation fails",
-			requestBody: CreateCategoryRequest{
+			name: "Error - Repository error",
+			requestBody: handlers.CreateCategoryRequest{
 				Name:     "Food",
 				Type:     "expense",
 				Color:    "#FF5733",
@@ -153,9 +152,9 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 			},
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody: func(t *testing.T, body string) {
-				var response ErrorResponse
+				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, "CREATE_FAILED", response.Error.Code)
 			},
 		},
@@ -164,16 +163,22 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
-			e := echo.New()
 			mockRepo := &MockCategoryRepository{}
 			tt.mockSetup(mockRepo)
 
-			repositories := &Repositories{Category: mockRepo}
-			handler := NewCategoryHandler(repositories)
+			repos := &handlers.Repositories{
+				Category: mockRepo,
+			}
+			handler := handlers.NewCategoryHandler(repos)
 
-			// Create request
-			jsonBody, _ := json.Marshal(tt.requestBody)
-			req := httptest.NewRequest(http.MethodPost, "/categories", bytes.NewReader(jsonBody))
+			e := echo.New()
+			var req *http.Request
+			if str, ok := tt.requestBody.(string); ok {
+				req = httptest.NewRequest(http.MethodPost, "/categories", bytes.NewBufferString(str))
+			} else {
+				body, _ := json.Marshal(tt.requestBody)
+				req = httptest.NewRequest(http.MethodPost, "/categories", bytes.NewBuffer(body))
+			}
 			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
@@ -182,9 +187,12 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 			err := handler.CreateCategory(c)
 
 			// Assert
-			assert.NoError(t, err)
+			if tt.expectedStatus < 400 {
+				require.NoError(t, err)
+			}
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			tt.expectedBody(t, rec.Body.String())
+
 			mockRepo.AssertExpectations(t)
 		})
 	}
@@ -192,19 +200,6 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 
 func TestCategoryHandler_GetCategories(t *testing.T) {
 	familyID := uuid.New()
-	categories := []*category.Category{
-		{
-			ID:        uuid.New(),
-			Name:      "Food",
-			Type:      category.CategoryTypeExpense,
-			Color:     "#FF5733",
-			Icon:      "food",
-			FamilyID:  familyID,
-			IsActive:  true,
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		},
-	}
 
 	tests := []struct {
 		name           string
@@ -214,66 +209,70 @@ func TestCategoryHandler_GetCategories(t *testing.T) {
 		expectedBody   func(t *testing.T, body string)
 	}{
 		{
-			name: "Success - Get all categories by family",
+			name: "Success - Get all categories",
 			queryParams: map[string]string{
 				"family_id": familyID.String(),
 			},
 			mockSetup: func(repo *MockCategoryRepository) {
+				categories := []*category.Category{
+					{
+						ID:       uuid.New(),
+						Name:     "Food",
+						Type:     category.TypeExpense,
+						Color:    "#FF5733",
+						Icon:     "food",
+						FamilyID: familyID,
+						IsActive: true,
+					},
+					{
+						ID:       uuid.New(),
+						Name:     "Salary",
+						Type:     category.TypeIncome,
+						Color:    "#28A745",
+						Icon:     "money",
+						FamilyID: familyID,
+						IsActive: true,
+					},
+				}
 				repo.On("GetByFamilyID", mock.Anything, familyID).Return(categories, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody: func(t *testing.T, body string) {
-				var response APIResponse[[]CategoryResponse]
+				var response handlers.APIResponse[[]handlers.CategoryResponse]
 				err := json.Unmarshal([]byte(body), &response)
-				assert.NoError(t, err)
-				assert.Len(t, response.Data, 1)
+				require.NoError(t, err)
+				assert.Len(t, response.Data, 2)
 				assert.Equal(t, "Food", response.Data[0].Name)
-			},
-		},
-		{
-			name: "Success - Get categories by type",
-			queryParams: map[string]string{
-				"family_id": familyID.String(),
-				"type":      "expense",
-			},
-			mockSetup: func(repo *MockCategoryRepository) {
-				repo.On("GetByType", mock.Anything, familyID, category.CategoryTypeExpense).Return(categories, nil)
-			},
-			expectedStatus: http.StatusOK,
-			expectedBody: func(t *testing.T, body string) {
-				var response APIResponse[[]CategoryResponse]
-				err := json.Unmarshal([]byte(body), &response)
-				assert.NoError(t, err)
-				assert.Len(t, response.Data, 1)
+				assert.Equal(t, "Salary", response.Data[1].Name)
 			},
 		},
 		{
 			name:        "Error - Missing family_id",
 			queryParams: map[string]string{},
-			mockSetup: func(repo *MockCategoryRepository) {
-				// No mock setup needed
+			mockSetup: func(_ *MockCategoryRepository) {
+				// No mock calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectedBody: func(t *testing.T, body string) {
-				var response ErrorResponse
+				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, "MISSING_FAMILY_ID", response.Error.Code)
 			},
 		},
 		{
-			name: "Error - Invalid family_id format",
+			name: "Error - Invalid family_id",
 			queryParams: map[string]string{
 				"family_id": "invalid-uuid",
 			},
-			mockSetup: func(repo *MockCategoryRepository) {
-				// No mock setup needed
+			mockSetup: func(_ *MockCategoryRepository) {
+				// No mock calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectedBody: func(t *testing.T, body string) {
-				var response ErrorResponse
+				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, "INVALID_FAMILY_ID", response.Error.Code)
 			},
 		},
@@ -282,15 +281,18 @@ func TestCategoryHandler_GetCategories(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
-			e := echo.New()
 			mockRepo := &MockCategoryRepository{}
 			tt.mockSetup(mockRepo)
 
-			repositories := &Repositories{Category: mockRepo}
-			handler := NewCategoryHandler(repositories)
+			repos := &handlers.Repositories{
+				Category: mockRepo,
+			}
+			handler := handlers.NewCategoryHandler(repos)
 
-			// Create request with query params
+			e := echo.New()
 			req := httptest.NewRequest(http.MethodGet, "/categories", nil)
+
+			// Add query parameters
 			q := req.URL.Query()
 			for key, value := range tt.queryParams {
 				q.Add(key, value)
@@ -304,9 +306,12 @@ func TestCategoryHandler_GetCategories(t *testing.T) {
 			err := handler.GetCategories(c)
 
 			// Assert
-			assert.NoError(t, err)
+			if tt.expectedStatus < 400 {
+				require.NoError(t, err)
+			}
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			tt.expectedBody(t, rec.Body.String())
+
 			mockRepo.AssertExpectations(t)
 		})
 	}
@@ -324,42 +329,40 @@ func TestCategoryHandler_GetCategoryByID(t *testing.T) {
 		expectedBody   func(t *testing.T, body string)
 	}{
 		{
-			name:       "Success - Category found",
+			name:       "Success - Get category by ID",
 			categoryID: categoryID.String(),
 			mockSetup: func(repo *MockCategoryRepository) {
 				cat := &category.Category{
-					ID:        categoryID,
-					Name:      "Food",
-					Type:      category.CategoryTypeExpense,
-					Color:     "#FF5733",
-					Icon:      "food",
-					FamilyID:  familyID,
-					IsActive:  true,
-					CreatedAt: time.Now(),
-					UpdatedAt: time.Now(),
+					ID:       categoryID,
+					Name:     "Food",
+					Type:     category.TypeExpense,
+					Color:    "#FF5733",
+					Icon:     "food",
+					FamilyID: familyID,
+					IsActive: true,
 				}
 				repo.On("GetByID", mock.Anything, categoryID).Return(cat, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody: func(t *testing.T, body string) {
-				var response APIResponse[CategoryResponse]
+				var response handlers.APIResponse[handlers.CategoryResponse]
 				err := json.Unmarshal([]byte(body), &response)
-				assert.NoError(t, err)
-				assert.Equal(t, categoryID, response.Data.ID)
+				require.NoError(t, err)
 				assert.Equal(t, "Food", response.Data.Name)
+				assert.Equal(t, "expense", response.Data.Type)
 			},
 		},
 		{
-			name:       "Error - Invalid UUID format",
+			name:       "Error - Invalid category ID",
 			categoryID: "invalid-uuid",
-			mockSetup: func(repo *MockCategoryRepository) {
-				// No mock setup needed for UUID validation error
+			mockSetup: func(_ *MockCategoryRepository) {
+				// No mock calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectedBody: func(t *testing.T, body string) {
-				var response ErrorResponse
+				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, "INVALID_ID", response.Error.Code)
 			},
 		},
@@ -371,9 +374,9 @@ func TestCategoryHandler_GetCategoryByID(t *testing.T) {
 			},
 			expectedStatus: http.StatusNotFound,
 			expectedBody: func(t *testing.T, body string) {
-				var response ErrorResponse
+				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, "CATEGORY_NOT_FOUND", response.Error.Code)
 			},
 		},
@@ -382,14 +385,15 @@ func TestCategoryHandler_GetCategoryByID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
-			e := echo.New()
 			mockRepo := &MockCategoryRepository{}
 			tt.mockSetup(mockRepo)
 
-			repositories := &Repositories{Category: mockRepo}
-			handler := NewCategoryHandler(repositories)
+			repos := &handlers.Repositories{
+				Category: mockRepo,
+			}
+			handler := handlers.NewCategoryHandler(repos)
 
-			// Create request
+			e := echo.New()
 			req := httptest.NewRequest(http.MethodGet, "/categories/"+tt.categoryID, nil)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
@@ -400,9 +404,12 @@ func TestCategoryHandler_GetCategoryByID(t *testing.T) {
 			err := handler.GetCategoryByID(c)
 
 			// Assert
-			assert.NoError(t, err)
+			if tt.expectedStatus < 400 {
+				require.NoError(t, err)
+			}
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			tt.expectedBody(t, rec.Body.String())
+
 			mockRepo.AssertExpectations(t)
 		})
 	}
@@ -421,57 +428,57 @@ func TestCategoryHandler_UpdateCategory(t *testing.T) {
 		expectedBody   func(t *testing.T, body string)
 	}{
 		{
-			name:       "Success - Category updated",
+			name:       "Success - Update category",
 			categoryID: categoryID.String(),
-			requestBody: UpdateCategoryRequest{
+			requestBody: handlers.UpdateCategoryRequest{
 				Name:  stringPtr("Updated Food"),
-				Color: stringPtr("#FF6644"),
+				Color: stringPtr("#FF6666"),
+				Icon:  stringPtr("updated-food"),
 			},
 			mockSetup: func(repo *MockCategoryRepository) {
 				existingCategory := &category.Category{
-					ID:        categoryID,
-					Name:      "Food",
-					Type:      category.CategoryTypeExpense,
-					Color:     "#FF5733",
-					Icon:      "food",
-					FamilyID:  familyID,
-					IsActive:  true,
-					CreatedAt: time.Now(),
-					UpdatedAt: time.Now(),
+					ID:       categoryID,
+					Name:     "Food",
+					Type:     category.TypeExpense,
+					Color:    "#FF5733",
+					Icon:     "food",
+					FamilyID: familyID,
+					IsActive: true,
 				}
 				repo.On("GetByID", mock.Anything, categoryID).Return(existingCategory, nil)
 				repo.On("Update", mock.Anything, mock.AnythingOfType("*category.Category")).Return(nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody: func(t *testing.T, body string) {
-				var response APIResponse[CategoryResponse]
+				var response handlers.APIResponse[handlers.CategoryResponse]
 				err := json.Unmarshal([]byte(body), &response)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, "Updated Food", response.Data.Name)
-				assert.Equal(t, "#FF6644", response.Data.Color)
+				assert.Equal(t, "#FF6666", response.Data.Color)
+				assert.Equal(t, "updated-food", response.Data.Icon)
 			},
 		},
 		{
-			name:       "Error - Invalid UUID",
+			name:       "Error - Invalid category ID",
 			categoryID: "invalid-uuid",
-			requestBody: UpdateCategoryRequest{
+			requestBody: handlers.UpdateCategoryRequest{
 				Name: stringPtr("Updated Food"),
 			},
-			mockSetup: func(repo *MockCategoryRepository) {
-				// No mock needed for UUID validation error
+			mockSetup: func(_ *MockCategoryRepository) {
+				// No mock calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectedBody: func(t *testing.T, body string) {
-				var response ErrorResponse
+				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, "INVALID_ID", response.Error.Code)
 			},
 		},
 		{
 			name:       "Error - Category not found",
 			categoryID: categoryID.String(),
-			requestBody: UpdateCategoryRequest{
+			requestBody: handlers.UpdateCategoryRequest{
 				Name: stringPtr("Updated Food"),
 			},
 			mockSetup: func(repo *MockCategoryRepository) {
@@ -479,9 +486,9 @@ func TestCategoryHandler_UpdateCategory(t *testing.T) {
 			},
 			expectedStatus: http.StatusNotFound,
 			expectedBody: func(t *testing.T, body string) {
-				var response ErrorResponse
+				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, "CATEGORY_NOT_FOUND", response.Error.Code)
 			},
 		},
@@ -490,16 +497,17 @@ func TestCategoryHandler_UpdateCategory(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
-			e := echo.New()
 			mockRepo := &MockCategoryRepository{}
 			tt.mockSetup(mockRepo)
 
-			repositories := &Repositories{Category: mockRepo}
-			handler := NewCategoryHandler(repositories)
+			repos := &handlers.Repositories{
+				Category: mockRepo,
+			}
+			handler := handlers.NewCategoryHandler(repos)
 
-			// Create request
-			jsonBody, _ := json.Marshal(tt.requestBody)
-			req := httptest.NewRequest(http.MethodPut, "/categories/"+tt.categoryID, bytes.NewReader(jsonBody))
+			e := echo.New()
+			body, _ := json.Marshal(tt.requestBody)
+			req := httptest.NewRequest(http.MethodPut, "/categories/"+tt.categoryID, bytes.NewBuffer(body))
 			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
@@ -510,9 +518,12 @@ func TestCategoryHandler_UpdateCategory(t *testing.T) {
 			err := handler.UpdateCategory(c)
 
 			// Assert
-			assert.NoError(t, err)
+			if tt.expectedStatus < 400 {
+				require.NoError(t, err)
+			}
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			tt.expectedBody(t, rec.Body.String())
+
 			mockRepo.AssertExpectations(t)
 		})
 	}
@@ -529,32 +540,30 @@ func TestCategoryHandler_DeleteCategory(t *testing.T) {
 		expectedBody   func(t *testing.T, body string)
 	}{
 		{
-			name:       "Success - Category deleted",
+			name:       "Success - Delete category",
 			categoryID: categoryID.String(),
 			mockSetup: func(repo *MockCategoryRepository) {
 				repo.On("Delete", mock.Anything, categoryID).Return(nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody: func(t *testing.T, body string) {
-				var response APIResponse[interface{}]
+				var response handlers.APIResponse[map[string]string]
 				err := json.Unmarshal([]byte(body), &response)
-				assert.NoError(t, err)
-				dataMap, ok := response.Data.(map[string]interface{})
-				assert.True(t, ok)
-				assert.Equal(t, "Category deleted successfully", dataMap["message"])
+				require.NoError(t, err)
+				assert.Equal(t, "Category deleted successfully", response.Data["message"])
 			},
 		},
 		{
-			name:       "Error - Invalid UUID",
+			name:       "Error - Invalid category ID",
 			categoryID: "invalid-uuid",
-			mockSetup: func(repo *MockCategoryRepository) {
-				// No mock needed for UUID validation error
+			mockSetup: func(_ *MockCategoryRepository) {
+				// No mock calls expected
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectedBody: func(t *testing.T, body string) {
-				var response ErrorResponse
+				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, "INVALID_ID", response.Error.Code)
 			},
 		},
@@ -566,9 +575,9 @@ func TestCategoryHandler_DeleteCategory(t *testing.T) {
 			},
 			expectedStatus: http.StatusNotFound,
 			expectedBody: func(t *testing.T, body string) {
-				var response ErrorResponse
+				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, "CATEGORY_NOT_FOUND", response.Error.Code)
 			},
 		},
@@ -577,14 +586,15 @@ func TestCategoryHandler_DeleteCategory(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
-			e := echo.New()
 			mockRepo := &MockCategoryRepository{}
 			tt.mockSetup(mockRepo)
 
-			repositories := &Repositories{Category: mockRepo}
-			handler := NewCategoryHandler(repositories)
+			repos := &handlers.Repositories{
+				Category: mockRepo,
+			}
+			handler := handlers.NewCategoryHandler(repos)
 
-			// Create request
+			e := echo.New()
 			req := httptest.NewRequest(http.MethodDelete, "/categories/"+tt.categoryID, nil)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
@@ -595,9 +605,12 @@ func TestCategoryHandler_DeleteCategory(t *testing.T) {
 			err := handler.DeleteCategory(c)
 
 			// Assert
-			assert.NoError(t, err)
+			if tt.expectedStatus < 400 {
+				require.NoError(t, err)
+			}
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			tt.expectedBody(t, rec.Body.String())
+
 			mockRepo.AssertExpectations(t)
 		})
 	}

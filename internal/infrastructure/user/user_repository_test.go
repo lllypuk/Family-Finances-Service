@@ -56,7 +56,7 @@ func TestUserRepository_Integration(t *testing.T) {
 	t.Run("GetByID_NotFound", func(t *testing.T) {
 		nonExistentID := uuid.New()
 		_, err := repo.GetByID(context.Background(), nonExistentID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
@@ -75,7 +75,7 @@ func TestUserRepository_Integration(t *testing.T) {
 
 	t.Run("GetByEmail_NotFound", func(t *testing.T) {
 		_, err := repo.GetByEmail(context.Background(), "nonexistent@example.com")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
@@ -133,7 +133,7 @@ func TestUserRepository_Integration(t *testing.T) {
 		nonExistentUser := testhelpers.CreateTestUser(family.ID)
 
 		err := repo.Update(context.Background(), nonExistentUser)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
@@ -148,14 +148,14 @@ func TestUserRepository_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = repo.GetByID(context.Background(), testUser.ID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
 	t.Run("Delete_NotFound", func(t *testing.T) {
 		nonExistentID := uuid.New()
 		err := repo.Delete(context.Background(), nonExistentID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 }

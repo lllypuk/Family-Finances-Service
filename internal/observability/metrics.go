@@ -1,16 +1,42 @@
 package observability
 
 import (
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-// HTTP метрики
-var (
-	// HTTPRequestsTotal - общее количество HTTP запросов
-	HTTPRequestsTotal = promauto.NewCounterVec(
+// Metrics структура для инкапсуляции всех метрик приложения
+type Metrics struct {
+	// HTTP метрики
+	HTTPRequestsTotal   *prometheus.CounterVec
+	HTTPRequestDuration *prometheus.HistogramVec
+	HTTPRequestsErrors  *prometheus.CounterVec
+
+	// Business метрики
+	FamiliesTotal     prometheus.Gauge
+	UsersTotal        prometheus.Gauge
+	TransactionsTotal prometheus.Gauge
+	BudgetsActive     prometheus.Gauge
+	TransactionAmount *prometheus.HistogramVec
+
+	// Database метрики
+	DatabaseConnections       prometheus.Gauge
+	DatabaseOperationDuration *prometheus.HistogramVec
+	DatabaseOperationsTotal   *prometheus.CounterVec
+
+	// Application метрики
+	ApplicationStartTime prometheus.Gauge
+	ApplicationUptime    prometheus.Gauge
+
+	startTime time.Time
+}
+
+// createHTTPMetrics создает HTTP метрики
+func createHTTPMetrics() (*prometheus.CounterVec, *prometheus.HistogramVec, *prometheus.CounterVec) {
+	httpRequestsTotal := promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "http_requests_total",
 			Help: "Total number of HTTP requests",
@@ -18,8 +44,7 @@ var (
 		[]string{"method", "endpoint", "status"},
 	)
 
-	// HTTPRequestDuration - длительность HTTP запросов
-	HTTPRequestDuration = promauto.NewHistogramVec(
+	httpRequestDuration := promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "http_request_duration_seconds",
 			Help:    "Duration of HTTP requests in seconds",
@@ -28,164 +53,231 @@ var (
 		[]string{"method", "endpoint"},
 	)
 
-	// HTTPRequestsErrors - количество ошибок HTTP запросов
-	HTTPRequestsErrors = promauto.NewCounterVec(
+	httpRequestsErrors := promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "http_requests_errors_total",
 			Help: "Total number of HTTP request errors",
 		},
 		[]string{"method", "endpoint", "type"},
 	)
-)
 
-// Business метрики
-var (
-	// FamiliesTotal - общее количество семей
-	FamiliesTotal = promauto.NewGauge(
+	return httpRequestsTotal, httpRequestDuration, httpRequestsErrors
+}
+
+// createBusinessMetrics создает бизнес метрики
+func createBusinessMetrics() (prometheus.Gauge, prometheus.Gauge, prometheus.Gauge, prometheus.Gauge, *prometheus.HistogramVec) {
+	familiesTotal := promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "families_total",
+			Name: "families",
 			Help: "Total number of families in the system",
 		},
 	)
 
-	// UsersTotal - количество пользователей по ролям
-	UsersTotal = promauto.NewGaugeVec(
+	usersTotal := promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "users_total",
-			Help: "Total number of users by role",
+			Name: "users",
+			Help: "Total number of users in the system",
 		},
-		[]string{"role"},
 	)
 
-	// TransactionsTotal - количество транзакций
-	TransactionsTotal = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "transactions_total",
-			Help: "Total number of transactions",
+	transactionsTotal := promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "transactions",
+			Help: "Total number of transactions in the system",
 		},
-		[]string{"type", "family_id"},
 	)
 
-	// BudgetsActive - количество активных бюджетов
-	BudgetsActive = promauto.NewGaugeVec(
+	budgetsActive := promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "budgets_active",
-			Help: "Number of active budgets",
+			Help: "Number of active budgets in the system",
 		},
-		[]string{"family_id"},
 	)
 
-	// TransactionAmount - сумма транзакций
-	TransactionAmount = promauto.NewHistogramVec(
+	transactionAmount := promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "transaction_amount",
-			Help:    "Amount of transactions",
-			Buckets: []float64{1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000},
+			Help:    "Distribution of transaction amounts",
+			Buckets: []float64{1, 10, 50, 100, 500, 1000, 5000, 10000, 50000, 100000},
 		},
-		[]string{"type", "currency"},
+		[]string{"type", "category"},
 	)
-)
 
-// Database метрики
-var (
-	// DatabaseConnections - количество подключений к базе данных
-	DatabaseConnections = promauto.NewGaugeVec(
+	return familiesTotal, usersTotal, transactionsTotal, budgetsActive, transactionAmount
+}
+
+// createDatabaseMetrics создает метрики базы данных
+func createDatabaseMetrics() (prometheus.Gauge, *prometheus.HistogramVec, *prometheus.CounterVec) {
+	databaseConnections := promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "database_connections",
-			Help: "Number of database connections",
+			Help: "Number of active database connections",
 		},
-		[]string{"database", "state"},
 	)
 
-	// DatabaseOperationDuration - длительность операций с БД
-	DatabaseOperationDuration = promauto.NewHistogramVec(
+	databaseOperationDuration := promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "database_operation_duration_seconds",
-			Help:    "Duration of database operations in seconds",
-			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5},
+			Help:    "Duration of database operations",
+			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
 		},
-		[]string{"operation", "collection", "status"},
+		[]string{"operation", "collection"},
 	)
 
-	// DatabaseOperationsTotal - общее количество операций с БД
-	DatabaseOperationsTotal = promauto.NewCounterVec(
+	databaseOperationsTotal := promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "database_operations_total",
 			Help: "Total number of database operations",
 		},
 		[]string{"operation", "collection", "status"},
 	)
-)
 
-// Application метрики
-var (
-	// ApplicationStartTime - время запуска приложения
-	ApplicationStartTime = promauto.NewGauge(
+	return databaseConnections, databaseOperationDuration, databaseOperationsTotal
+}
+
+// createApplicationMetrics создает метрики приложения
+func createApplicationMetrics() (prometheus.Gauge, prometheus.Gauge) {
+	applicationStartTime := promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "application_start_time_seconds",
-			Help: "Application start time in unix timestamp",
+			Help: "Start time of the application since unix epoch in seconds",
 		},
 	)
 
-	// ApplicationUptime - время работы приложения
-	ApplicationUptime = promauto.NewGaugeFunc(
+	applicationUptime := promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "application_uptime_seconds",
-			Help: "Application uptime in seconds",
-		},
-		func() float64 {
-			return time.Since(startTime).Seconds()
+			Help: "Uptime of the application in seconds",
 		},
 	)
-)
 
-var startTime time.Time
+	return applicationStartTime, applicationUptime
+}
 
-// InitMetrics инициализирует метрики
+// NewMetrics создает новый экземпляр метрик
+func NewMetrics() *Metrics {
+	startTime := time.Now()
+
+	// Создаем группы метрик
+	httpRequestsTotal, httpRequestDuration, httpRequestsErrors := createHTTPMetrics()
+	familiesTotal, usersTotal, transactionsTotal, budgetsActive, transactionAmount := createBusinessMetrics()
+	databaseConnections, databaseOperationDuration, databaseOperationsTotal := createDatabaseMetrics()
+	applicationStartTime, applicationUptime := createApplicationMetrics()
+
+	return &Metrics{
+		// HTTP метрики
+		HTTPRequestsTotal:   httpRequestsTotal,
+		HTTPRequestDuration: httpRequestDuration,
+		HTTPRequestsErrors:  httpRequestsErrors,
+
+		// Business метрики
+		FamiliesTotal:     familiesTotal,
+		UsersTotal:        usersTotal,
+		TransactionsTotal: transactionsTotal,
+		BudgetsActive:     budgetsActive,
+		TransactionAmount: transactionAmount,
+
+		// Database метрики
+		DatabaseConnections:       databaseConnections,
+		DatabaseOperationDuration: databaseOperationDuration,
+		DatabaseOperationsTotal:   databaseOperationsTotal,
+
+		// Application метрики
+		ApplicationStartTime: applicationStartTime,
+		ApplicationUptime:    applicationUptime,
+
+		startTime: startTime,
+	}
+}
+
+// Initialize инициализирует начальные значения метрик
+func (m *Metrics) Initialize() {
+	m.ApplicationStartTime.Set(float64(m.startTime.Unix()))
+}
+
+// UpdateUptime обновляет метрику времени работы приложения
+func (m *Metrics) UpdateUptime() {
+	uptime := time.Since(m.startTime)
+	m.ApplicationUptime.Set(uptime.Seconds())
+}
+
+// GetHTTPRequestsTotal возвращает метрику HTTP запросов
+func (m *Metrics) GetHTTPRequestsTotal() *prometheus.CounterVec {
+	return m.HTTPRequestsTotal
+}
+
+// GetHTTPRequestDuration возвращает метрику длительности HTTP запросов
+func (m *Metrics) GetHTTPRequestDuration() *prometheus.HistogramVec {
+	return m.HTTPRequestDuration
+}
+
+// GetHTTPRequestsErrors возвращает метрику ошибок HTTP запросов
+func (m *Metrics) GetHTTPRequestsErrors() *prometheus.CounterVec {
+	return m.HTTPRequestsErrors
+}
+
+// RecordHTTPRequest записывает HTTP запрос
+func (m *Metrics) RecordHTTPRequest(method, endpoint, status string, duration float64) {
+	m.HTTPRequestsTotal.WithLabelValues(method, endpoint, status).Inc()
+	m.HTTPRequestDuration.WithLabelValues(method, endpoint).Observe(duration)
+}
+
+// RecordHTTPError записывает HTTP ошибку
+func (m *Metrics) RecordHTTPError(method, endpoint, errorType string) {
+	m.HTTPRequestsErrors.WithLabelValues(method, endpoint, errorType).Inc()
+}
+
+// RecordDatabaseOperation записывает операцию базы данных
+func (m *Metrics) RecordDatabaseOperation(operation, collection, status string, duration float64) {
+	m.DatabaseOperationsTotal.WithLabelValues(operation, collection, status).Inc()
+	m.DatabaseOperationDuration.WithLabelValues(operation, collection).Observe(duration)
+}
+
+// MetricsRegistry инкапсулирует singleton pattern для метрик
+type MetricsRegistry struct {
+	once     sync.Once
+	instance *Metrics
+}
+
+// NewMetricsRegistry создает новый registry
+func NewMetricsRegistry() *MetricsRegistry {
+	return &MetricsRegistry{}
+}
+
+// Get возвращает экземпляр метрик (thread-safe singleton)
+func (r *MetricsRegistry) Get() *Metrics {
+	r.once.Do(func() {
+		r.instance = NewMetrics()
+		r.instance.Initialize()
+	})
+	return r.instance
+}
+
+// getDefaultMetrics возвращает единственный экземпляр метрик, используя sync.OnceValue
+func getDefaultMetrics() *Metrics {
+	// Используем sync.OnceValue для ленивой инициализации без глобальных переменных
+	return sync.OnceValue(func() *Metrics {
+		m := NewMetrics()
+		m.Initialize()
+		return m
+	})()
+}
+
+// InitMetrics инициализирует экземпляр метрик (для обратной совместимости)
+// В текущей реализации инициализация происходит лениво при первом обращении
 func InitMetrics() {
-	startTime = time.Now()
-	ApplicationStartTime.Set(float64(startTime.Unix()))
+	// Вызываем getDefaultMetrics для принудительной инициализации
+	_ = getDefaultMetrics()
 }
 
-// RecordHTTPRequest записывает метрики HTTP запроса
-func RecordHTTPRequest(method, endpoint, status string, duration time.Duration) {
-	HTTPRequestsTotal.WithLabelValues(method, endpoint, status).Inc()
-	HTTPRequestDuration.WithLabelValues(method, endpoint).Observe(duration.Seconds())
+// RecordHTTPRequest глобальная функция для обратной совместимости
+func RecordHTTPRequest(method, endpoint, status string, duration float64) {
+	metrics := getDefaultMetrics()
+	metrics.RecordHTTPRequest(method, endpoint, status, duration)
 }
 
-// RecordHTTPError записывает ошибку HTTP запроса
+// RecordHTTPError глобальная функция для обратной совместимости
 func RecordHTTPError(method, endpoint, errorType string) {
-	HTTPRequestsErrors.WithLabelValues(method, endpoint, errorType).Inc()
-}
-
-// RecordDatabaseOperation записывает метрики операции с БД
-func RecordDatabaseOperation(operation, collection, status string, duration time.Duration) {
-	DatabaseOperationsTotal.WithLabelValues(operation, collection, status).Inc()
-	DatabaseOperationDuration.WithLabelValues(operation, collection, status).Observe(duration.Seconds())
-}
-
-// UpdateFamiliesCount обновляет количество семей
-func UpdateFamiliesCount(count float64) {
-	FamiliesTotal.Set(count)
-}
-
-// UpdateUsersCount обновляет количество пользователей по ролям
-func UpdateUsersCount(role string, count float64) {
-	UsersTotal.WithLabelValues(role).Set(count)
-}
-
-// RecordTransaction записывает метрики транзакции
-func RecordTransaction(transactionType, familyID string, amount float64, currency string) {
-	TransactionsTotal.WithLabelValues(transactionType, familyID).Inc()
-	TransactionAmount.WithLabelValues(transactionType, currency).Observe(amount)
-}
-
-// UpdateActiveBudgets обновляет количество активных бюджетов
-func UpdateActiveBudgets(familyID string, count float64) {
-	BudgetsActive.WithLabelValues(familyID).Set(count)
-}
-
-// UpdateDatabaseConnections обновляет метрики подключений к БД
-func UpdateDatabaseConnections(database, state string, count float64) {
-	DatabaseConnections.WithLabelValues(database, state).Set(count)
+	metrics := getDefaultMetrics()
+	metrics.RecordHTTPError(method, endpoint, errorType)
 }

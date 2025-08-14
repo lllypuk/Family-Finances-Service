@@ -39,7 +39,7 @@ func TestFamilyRepository_Integration(t *testing.T) {
 	t.Run("GetByID_NotFound", func(t *testing.T) {
 		nonExistentID := uuid.New()
 		_, err := repo.GetByID(context.Background(), nonExistentID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
@@ -62,7 +62,7 @@ func TestFamilyRepository_Integration(t *testing.T) {
 		nonExistentFamily := testhelpers.CreateTestFamily()
 
 		err := repo.Update(context.Background(), nonExistentFamily)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
@@ -76,14 +76,14 @@ func TestFamilyRepository_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = repo.GetByID(context.Background(), testFamily.ID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
 	t.Run("Delete_NotFound", func(t *testing.T) {
 		nonExistentID := uuid.New()
 		err := repo.Delete(context.Background(), nonExistentID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 }

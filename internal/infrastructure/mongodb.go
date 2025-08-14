@@ -10,21 +10,32 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+const (
+	// MongoConnectTimeout timeout for MongoDB connection establishment
+	MongoConnectTimeout = 10 * time.Second
+	// MaxConnectionPoolSize maximum number of connections in the pool
+	MaxConnectionPoolSize = 100
+	// MinConnectionPoolSize minimum number of connections in the pool
+	MinConnectionPoolSize = 10
+	// MaxConnectionIdleTime maximum time a connection can remain idle
+	MaxConnectionIdleTime = 30 * time.Second
+)
+
 type MongoDB struct {
 	Client   *mongo.Client
 	Database *mongo.Database
 }
 
 func NewMongoDB(uri, databaseName string) (*MongoDB, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), MongoConnectTimeout)
 	defer cancel()
 
 	clientOptions := options.Client().ApplyURI(uri)
 
 	// Настройки connection pool
-	clientOptions.SetMaxPoolSize(100)
-	clientOptions.SetMinPoolSize(10)
-	clientOptions.SetMaxConnIdleTime(30 * time.Second)
+	clientOptions.SetMaxPoolSize(MaxConnectionPoolSize)
+	clientOptions.SetMinPoolSize(MinConnectionPoolSize)
+	clientOptions.SetMaxConnIdleTime(MaxConnectionIdleTime)
 
 	client, err := mongo.Connect(ctx, clientOptions)
 	if err != nil {
@@ -32,7 +43,8 @@ func NewMongoDB(uri, databaseName string) (*MongoDB, error) {
 	}
 
 	// Проверка подключения
-	if err := client.Ping(ctx, nil); err != nil {
+	err = client.Ping(ctx, nil)
+	if err != nil {
 		return nil, fmt.Errorf("failed to ping MongoDB: %w", err)
 	}
 
@@ -44,7 +56,8 @@ func NewMongoDB(uri, databaseName string) (*MongoDB, error) {
 		Keys:    bson.D{{Key: "email", Value: 1}},
 		Options: options.Index().SetUnique(true).SetName("uniq_users_email"),
 	}
-	if _, err := usersColl.Indexes().CreateOne(ctx, indexModel); err != nil {
+	_, err = usersColl.Indexes().CreateOne(ctx, indexModel)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create unique index on users.email: %w", err)
 	}
 

@@ -59,13 +59,15 @@ func (r *Repository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*
 	var categories []*category.Category
 	for cursor.Next(ctx) {
 		var c category.Category
-		if err := cursor.Decode(&c); err != nil {
+		err = cursor.Decode(&c)
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode category: %w", err)
 		}
 		categories = append(categories, &c)
 	}
 
-	if err := cursor.Err(); err != nil {
+	err = cursor.Err()
+	if err != nil {
 		return nil, fmt.Errorf("cursor error: %w", err)
 	}
 
@@ -75,7 +77,7 @@ func (r *Repository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*
 func (r *Repository) GetByType(
 	ctx context.Context,
 	familyID uuid.UUID,
-	categoryType category.CategoryType,
+	categoryType category.Type,
 ) ([]*category.Category, error) {
 	filter := bson.M{
 		"family_id": familyID,
@@ -93,13 +95,15 @@ func (r *Repository) GetByType(
 	var categories []*category.Category
 	for cursor.Next(ctx) {
 		var c category.Category
-		if err := cursor.Decode(&c); err != nil {
+		err = cursor.Decode(&c)
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode category: %w", err)
 		}
 		categories = append(categories, &c)
 	}
 
-	if err := cursor.Err(); err != nil {
+	err = cursor.Err()
+	if err != nil {
 		return nil, fmt.Errorf("cursor error: %w", err)
 	}
 

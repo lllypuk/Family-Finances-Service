@@ -31,7 +31,7 @@ func PrometheusMiddleware() echo.MiddlewareFunc {
 			}
 
 			// Записываем основные HTTP метрики
-			RecordHTTPRequest(method, path, status, duration)
+			RecordHTTPRequest(method, path, status, duration.Seconds())
 
 			// Записываем ошибки если есть
 			if err != nil {

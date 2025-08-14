@@ -43,56 +43,42 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*report.Report,
 	return &rep, nil
 }
 
-func (r *Repository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*report.Report, error) {
-	filter := bson.M{"family_id": familyID}
+// getReportsByFilter is a helper function to get reports by filter with sorting
+func (r *Repository) getReportsByFilter(ctx context.Context, filter bson.M, errorMsg string) ([]*report.Report, error) {
 	opts := options.Find().SetSort(bson.M{"generated_at": -1})
 
 	cursor, err := r.collection.Find(ctx, filter, opts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get reports by family id: %w", err)
+		return nil, fmt.Errorf("%s: %w", errorMsg, err)
 	}
 	defer cursor.Close(ctx)
 
 	var reports []*report.Report
 	for cursor.Next(ctx) {
 		var rep report.Report
-		if err := cursor.Decode(&rep); err != nil {
+		err = cursor.Decode(&rep)
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode report: %w", err)
 		}
 		reports = append(reports, &rep)
 	}
 
-	if err := cursor.Err(); err != nil {
+	err = cursor.Err()
+	if err != nil {
 		return nil, fmt.Errorf("cursor error: %w", err)
 	}
 
 	return reports, nil
 }
 
+func (r *Repository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*report.Report, error) {
+	filter := bson.M{"family_id": familyID}
+	return r.getReportsByFilter(ctx, filter, "failed to get reports by family id")
+}
+
 func (r *Repository) GetByUserID(ctx context.Context, userID uuid.UUID) ([]*report.Report, error) {
 	filter := bson.M{"user_id": userID}
-	opts := options.Find().SetSort(bson.M{"generated_at": -1})
-
-	cursor, err := r.collection.Find(ctx, filter, opts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get reports by user id: %w", err)
-	}
-	defer cursor.Close(ctx)
-
-	var reports []*report.Report
-	for cursor.Next(ctx) {
-		var rep report.Report
-		if err := cursor.Decode(&rep); err != nil {
-			return nil, fmt.Errorf("failed to decode report: %w", err)
-		}
-		reports = append(reports, &rep)
-	}
-
-	if err := cursor.Err(); err != nil {
-		return nil, fmt.Errorf("cursor error: %w", err)
-	}
-
-	return reports, nil
+	return r.getReportsByFilter(ctx, filter, "failed to get reports by user id")
 }
 
 func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {

@@ -13,6 +13,15 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	// TestTransactionAmount test transaction amount
+	TestTransactionAmount = 100.50
+	// TestBudgetAmount test budget amount
+	TestBudgetAmount = 1000.0
+	// TestReportExpenses represents the test report expenses amount
+	TestReportExpenses = 500.0
+)
+
 // CreateTestFamily creates a test family
 func CreateTestFamily() *user.Family {
 	return &user.Family{
@@ -39,7 +48,7 @@ func CreateTestUser(familyID uuid.UUID) *user.User {
 }
 
 // CreateTestCategory creates a test category
-func CreateTestCategory(familyID uuid.UUID, categoryType category.CategoryType) *category.Category {
+func CreateTestCategory(familyID uuid.UUID, categoryType category.Type) *category.Category {
 	return &category.Category{
 		ID:        uuid.New(),
 		FamilyID:  familyID,
@@ -54,14 +63,14 @@ func CreateTestCategory(familyID uuid.UUID, categoryType category.CategoryType) 
 // CreateTestTransaction creates a test transaction
 func CreateTestTransaction(
 	familyID, userID, categoryID uuid.UUID,
-	transactionType transaction.TransactionType,
+	transactionType transaction.Type,
 ) *transaction.Transaction {
 	return &transaction.Transaction{
 		ID:          uuid.New(),
 		FamilyID:    familyID,
 		UserID:      userID,
 		CategoryID:  categoryID,
-		Amount:      100.50,
+		Amount:      TestTransactionAmount,
 		Type:        transactionType,
 		Description: "Test transaction",
 		Date:        time.Now(),
@@ -78,9 +87,9 @@ func CreateTestBudget(familyID, categoryID uuid.UUID) *budget.Budget {
 		FamilyID:   familyID,
 		CategoryID: &categoryID,
 		Name:       "Test Budget",
-		Amount:     1000.0,
+		Amount:     TestBudgetAmount,
 		Spent:      0.0,
-		Period:     budget.BudgetPeriodMonthly,
+		Period:     budget.PeriodMonthly,
 		StartDate:  time.Now(),
 		EndDate:    time.Now().AddDate(0, 1, 0),
 		IsActive:   true,
@@ -96,11 +105,11 @@ func CreateTestReport(familyID, userID uuid.UUID) *report.Report {
 		FamilyID:    familyID,
 		UserID:      userID,
 		Name:        "Test Report",
-		Type:        report.ReportTypeExpenses,
-		Period:      report.ReportPeriodMonthly,
+		Type:        report.TypeExpenses,
+		Period:      report.PeriodMonthly,
 		StartDate:   time.Now().AddDate(0, -1, 0),
 		EndDate:     time.Now(),
-		Data:        report.ReportData{TotalExpenses: 500.0},
+		Data:        report.Data{TotalExpenses: TestReportExpenses},
 		GeneratedAt: time.Now(),
 	}
 }

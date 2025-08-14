@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Общие типы для HTTP ответов
+// APIResponse represents a generic API response structure for HTTP responses
 type APIResponse[T any] struct {
 	Data   T                 `json:"data"`
 	Meta   ResponseMeta      `json:"meta"`
@@ -36,7 +36,7 @@ type ErrorDetail struct {
 	Details interface{} `json:"details,omitempty"`
 }
 
-// User related types
+// CreateUserRequest represents the request payload for creating a new user
 type CreateUserRequest struct {
 	Email     string    `json:"email"      validate:"required,email"`
 	Password  string    `json:"password"   validate:"required,min=6"`
@@ -63,7 +63,7 @@ type UserResponse struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// Family related types
+// CreateFamilyRequest represents the request payload for creating a new family
 type CreateFamilyRequest struct {
 	Name     string `json:"name"     validate:"required,min=2,max=100"`
 	Currency string `json:"currency" validate:"required,len=3"`
@@ -82,7 +82,7 @@ type FamilyResponse struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// Category related types
+// CreateCategoryRequest represents the request payload for creating a new category
 type CreateCategoryRequest struct {
 	Name     string     `json:"name"                validate:"required,min=2,max=50"`
 	Type     string     `json:"type"                validate:"required,oneof=income expense"`
@@ -111,7 +111,7 @@ type CategoryResponse struct {
 	UpdatedAt time.Time  `json:"updated_at"`
 }
 
-// Transaction related types
+// CreateTransactionRequest represents the request payload for creating a new transaction
 type CreateTransactionRequest struct {
 	Amount      float64   `json:"amount"         validate:"required,gt=0"`
 	Type        string    `json:"type"           validate:"required,oneof=income expense"`
@@ -160,7 +160,7 @@ type TransactionFilterParams struct {
 	Offset      int        `query:"offset"      validate:"min=0"`
 }
 
-// Budget related types
+// CreateBudgetRequest represents the request payload for creating a new budget
 type CreateBudgetRequest struct {
 	Name       string     `json:"name"                  validate:"required,min=2,max=100"`
 	Amount     float64    `json:"amount"                validate:"required,gt=0"`
@@ -194,7 +194,7 @@ type BudgetResponse struct {
 	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
-// Report related types
+// CreateReportRequest represents the request payload for creating a new report
 type CreateReportRequest struct {
 	Name      string    `json:"name"       validate:"required,min=2,max=100"`
 	Type      string    `json:"type"       validate:"required,oneof=expenses income budget cash_flow category_break"`

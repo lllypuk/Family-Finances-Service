@@ -1,4 +1,4 @@
-package user
+package user_test
 
 import (
 	"testing"
@@ -6,6 +6,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+
+	"family-budget-service/internal/domain/user"
 )
 
 func TestNewUser(t *testing.T) {
@@ -14,22 +16,22 @@ func TestNewUser(t *testing.T) {
 	firstName := "John"
 	lastName := "Doe"
 	familyID := uuid.New()
-	role := RoleMember
+	role := user.RoleMember
 
 	// Execute
-	user := NewUser(email, firstName, lastName, familyID, role)
+	u := user.NewUser(email, firstName, lastName, familyID, role)
 
 	// Assert
-	assert.NotEqual(t, uuid.Nil, user.ID)
-	assert.Equal(t, email, user.Email)
-	assert.Equal(t, firstName, user.FirstName)
-	assert.Equal(t, lastName, user.LastName)
-	assert.Equal(t, familyID, user.FamilyID)
-	assert.Equal(t, role, user.Role)
-	assert.False(t, user.CreatedAt.IsZero())
-	assert.False(t, user.UpdatedAt.IsZero())
-	assert.WithinDuration(t, time.Now(), user.CreatedAt, time.Second)
-	assert.WithinDuration(t, time.Now(), user.UpdatedAt, time.Second)
+	assert.NotEqual(t, uuid.Nil, u.ID)
+	assert.Equal(t, email, u.Email)
+	assert.Equal(t, firstName, u.FirstName)
+	assert.Equal(t, lastName, u.LastName)
+	assert.Equal(t, familyID, u.FamilyID)
+	assert.Equal(t, role, u.Role)
+	assert.False(t, u.CreatedAt.IsZero())
+	assert.False(t, u.UpdatedAt.IsZero())
+	assert.WithinDuration(t, time.Now(), u.CreatedAt, time.Second)
+	assert.WithinDuration(t, time.Now(), u.UpdatedAt, time.Second)
 }
 
 func TestNewFamily(t *testing.T) {
@@ -38,7 +40,7 @@ func TestNewFamily(t *testing.T) {
 	currency := "USD"
 
 	// Execute
-	family := NewFamily(name, currency)
+	family := user.NewFamily(name, currency)
 
 	// Assert
 	assert.NotEqual(t, uuid.Nil, family.ID)
@@ -52,54 +54,54 @@ func TestNewFamily(t *testing.T) {
 
 func TestRole_Constants(t *testing.T) {
 	// Test that role constants have expected values
-	assert.Equal(t, "admin", string(RoleAdmin))
-	assert.Equal(t, "member", string(RoleMember))
-	assert.Equal(t, "child", string(RoleChild))
+	assert.Equal(t, "admin", string(user.RoleAdmin))
+	assert.Equal(t, "member", string(user.RoleMember))
+	assert.Equal(t, "child", string(user.RoleChild))
 }
 
 func TestUser_StructFields(t *testing.T) {
 	// Test that User struct has all required fields
 	familyID := uuid.New()
-	user := &User{
+	u := &user.User{
 		ID:        uuid.New(),
 		Email:     "test@example.com",
 		Password:  "hashed_password",
 		FirstName: "John",
 		LastName:  "Doe",
-		Role:      RoleAdmin,
+		Role:      user.RoleAdmin,
 		FamilyID:  familyID,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
 
 	// Assert all fields are accessible
-	assert.NotEqual(t, uuid.Nil, user.ID)
-	assert.NotEmpty(t, user.Email)
-	assert.NotEmpty(t, user.Password)
-	assert.NotEmpty(t, user.FirstName)
-	assert.NotEmpty(t, user.LastName)
-	assert.NotEmpty(t, user.Role)
-	assert.Equal(t, familyID, user.FamilyID)
-	assert.False(t, user.CreatedAt.IsZero())
-	assert.False(t, user.UpdatedAt.IsZero())
+	assert.NotEqual(t, uuid.Nil, u.ID)
+	assert.NotEmpty(t, u.Email)
+	assert.NotEmpty(t, u.Password)
+	assert.NotEmpty(t, u.FirstName)
+	assert.NotEmpty(t, u.LastName)
+	assert.NotEmpty(t, u.Role)
+	assert.Equal(t, familyID, u.FamilyID)
+	assert.False(t, u.CreatedAt.IsZero())
+	assert.False(t, u.UpdatedAt.IsZero())
 }
 
 func TestFamily_StructFields(t *testing.T) {
 	// Test that Family struct has all required fields
-	family := &Family{
+	testFamily := &user.Family{
 		ID:        uuid.New(),
 		Name:      "Test Family",
-		Currency:  "EUR",
+		Currency:  "USD",
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
 
 	// Assert all fields are accessible
-	assert.NotEqual(t, uuid.Nil, family.ID)
-	assert.NotEmpty(t, family.Name)
-	assert.NotEmpty(t, family.Currency)
-	assert.False(t, family.CreatedAt.IsZero())
-	assert.False(t, family.UpdatedAt.IsZero())
+	assert.NotEqual(t, uuid.Nil, testFamily.ID)
+	assert.NotEmpty(t, testFamily.Name)
+	assert.NotEmpty(t, testFamily.Currency)
+	assert.False(t, testFamily.CreatedAt.IsZero())
+	assert.False(t, testFamily.UpdatedAt.IsZero())
 }
 
 func TestNewUser_DifferentRoles(t *testing.T) {
@@ -107,17 +109,17 @@ func TestNewUser_DifferentRoles(t *testing.T) {
 
 	tests := []struct {
 		name string
-		role Role
+		role user.Role
 	}{
-		{"Admin Role", RoleAdmin},
-		{"Member Role", RoleMember},
-		{"Child Role", RoleChild},
+		{"Admin Role", user.RoleAdmin},
+		{"Member Role", user.RoleMember},
+		{"Child Role", user.RoleChild},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			user := NewUser("test@example.com", "John", "Doe", familyID, tt.role)
-			assert.Equal(t, tt.role, user.Role)
+			u := user.NewUser("test@example.com", "John", "Doe", familyID, tt.role)
+			assert.Equal(t, tt.role, u.Role)
 		})
 	}
 }
@@ -127,7 +129,7 @@ func TestNewFamily_DifferentCurrencies(t *testing.T) {
 
 	for _, currency := range currencies {
 		t.Run("Currency_"+currency, func(t *testing.T) {
-			family := NewFamily("Test Family", currency)
+			family := user.NewFamily("Test Family", currency)
 			assert.Equal(t, currency, family.Currency)
 		})
 	}
@@ -138,16 +140,16 @@ func TestUser_TimestampGeneration(t *testing.T) {
 	beforeTime := time.Now()
 
 	// Create user
-	user := NewUser("test@example.com", "John", "Doe", uuid.New(), RoleMember)
+	u := user.NewUser("test@example.com", "John", "Doe", uuid.New(), user.RoleMember)
 
 	// Record time after creating user
 	afterTime := time.Now()
 
 	// Assert timestamps are within expected range
-	assert.True(t, user.CreatedAt.After(beforeTime) || user.CreatedAt.Equal(beforeTime))
-	assert.True(t, user.CreatedAt.Before(afterTime) || user.CreatedAt.Equal(afterTime))
-	assert.True(t, user.UpdatedAt.After(beforeTime) || user.UpdatedAt.Equal(beforeTime))
-	assert.True(t, user.UpdatedAt.Before(afterTime) || user.UpdatedAt.Equal(afterTime))
+	assert.True(t, u.CreatedAt.After(beforeTime) || u.CreatedAt.Equal(beforeTime))
+	assert.True(t, u.CreatedAt.Before(afterTime) || u.CreatedAt.Equal(afterTime))
+	assert.True(t, u.UpdatedAt.After(beforeTime) || u.UpdatedAt.Equal(beforeTime))
+	assert.True(t, u.UpdatedAt.Before(afterTime) || u.UpdatedAt.Equal(afterTime))
 }
 
 func TestFamily_TimestampGeneration(t *testing.T) {
@@ -155,7 +157,7 @@ func TestFamily_TimestampGeneration(t *testing.T) {
 	beforeTime := time.Now()
 
 	// Create family
-	family := NewFamily("Test Family", "USD")
+	family := user.NewFamily("Test Family", "USD")
 
 	// Record time after creating family
 	afterTime := time.Now()

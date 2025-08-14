@@ -57,13 +57,15 @@ func (r *Repository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*
 	var budgets []*budget.Budget
 	for cursor.Next(ctx) {
 		var b budget.Budget
-		if err := cursor.Decode(&b); err != nil {
+		err = cursor.Decode(&b)
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode budget: %w", err)
 		}
 		budgets = append(budgets, &b)
 	}
 
-	if err := cursor.Err(); err != nil {
+	err = cursor.Err()
+	if err != nil {
 		return nil, fmt.Errorf("cursor error: %w", err)
 	}
 
@@ -89,13 +91,15 @@ func (r *Repository) GetActiveBudgets(ctx context.Context, familyID uuid.UUID) (
 	var budgets []*budget.Budget
 	for cursor.Next(ctx) {
 		var b budget.Budget
-		if err := cursor.Decode(&b); err != nil {
+		err = cursor.Decode(&b)
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode budget: %w", err)
 		}
 		budgets = append(budgets, &b)
 	}
 
-	if err := cursor.Err(); err != nil {
+	err = cursor.Err()
+	if err != nil {
 		return nil, fmt.Errorf("cursor error: %w", err)
 	}
 

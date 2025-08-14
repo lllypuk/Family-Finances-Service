@@ -71,13 +71,13 @@ func (h *ReportHandler) CreateReport(c echo.Context) error {
 	newReport := &report.Report{
 		ID:          uuid.New(),
 		Name:        req.Name,
-		Type:        report.ReportType(req.Type),
-		Period:      report.ReportPeriod(req.Period),
+		Type:        report.Type(req.Type),
+		Period:      report.Period(req.Period),
 		FamilyID:    req.FamilyID,
 		UserID:      req.UserID,
 		StartDate:   req.StartDate,
 		EndDate:     req.EndDate,
-		Data:        report.ReportData{}, // Пока пустые данные
+		Data:        report.Data{}, // Пока пустые данные
 		GeneratedAt: time.Now(),
 	}
 
@@ -85,7 +85,7 @@ func (h *ReportHandler) CreateReport(c echo.Context) error {
 	// в зависимости от типа отчета (expenses, income, budget, cash_flow, category_break)
 	newReport.Data = h.generateReportData(
 		c.Request().Context(),
-		report.ReportType(req.Type),
+		report.Type(req.Type),
 		req.FamilyID,
 		req.StartDate,
 		req.EndDate,
@@ -166,8 +166,8 @@ func (h *ReportHandler) GetReports(c echo.Context) error {
 
 	// Если указан пользователь, получаем отчеты для конкретного пользователя
 	if userIDParam != "" {
-		userID, err := uuid.Parse(userIDParam)
-		if err != nil {
+		userID, parseErr := uuid.Parse(userIDParam)
+		if parseErr != nil {
 			return c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
 					Code:    "INVALID_USER_ID",
@@ -282,65 +282,111 @@ func (h *ReportHandler) GetReportByID(c echo.Context) error {
 }
 
 func (h *ReportHandler) DeleteReport(c echo.Context) error {
-	idParam := c.Param("id")
-	id, err := uuid.Parse(idParam)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_ID",
-				Message: "Invalid report ID format",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
-	if err := h.repositories.Report.Delete(c.Request().Context(), id); err != nil {
-		return c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "REPORT_NOT_FOUND",
-				Message: "Report not found",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
-	return c.JSON(http.StatusOK, APIResponse[interface{}]{
-		Data: map[string]string{"message": "Report deleted successfully"},
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+	return DeleteEntityHelper(c, func(id uuid.UUID) error {
+		return h.repositories.Report.Delete(c.Request().Context(), id)
+	}, "Report")
 }
 
 // generateReportData генерирует данные отчета в зависимости от типа
 func (h *ReportHandler) generateReportData(
 	ctx context.Context,
-	reportType report.ReportType,
+	reportType report.Type,
 	familyID uuid.UUID,
 	startDate, endDate time.Time,
-) report.ReportData {
-	// TODO: Реализовать генерацию данных для каждого типа отчета
-	// Пока возвращаем заглушку со значениями по умолчанию
-	data := report.ReportData{}
+) report.Data {
+	data := report.Data{}
+
+	// Получаем базовые данные для всех типов отчетов
+	h.populateBasicReportData(ctx, &data, familyID, startDate, endDate)
 
 	switch reportType {
-	case report.ReportTypeExpenses:
-		// заполните поля, когда будет реализована логика
-	case report.ReportTypeIncome:
-	case report.ReportTypeBudget:
-	case report.ReportTypeCashFlow:
-	case report.ReportTypeCategoryBreak:
+	case report.TypeExpenses:
+		h.generateExpensesReportData(ctx, &data, familyID, startDate, endDate)
+	case report.TypeIncome:
+		h.generateIncomeReportData(ctx, &data, familyID, startDate, endDate)
+	case report.TypeBudget:
+		h.generateBudgetReportData(ctx, &data, familyID, startDate, endDate)
+	case report.TypeCashFlow:
+		h.generateCashFlowReportData(ctx, &data, familyID, startDate, endDate)
+	case report.TypeCategoryBreak:
+		h.generateCategoryBreakdownReportData(ctx, &data, familyID, startDate, endDate)
 	}
 
 	return data
+}
+
+// populateBasicReportData заполняет базовые данные для всех типов отчетов
+func (h *ReportHandler) populateBasicReportData(
+	_ context.Context,
+	data *report.Data,
+	_ uuid.UUID,
+	_, _ time.Time,
+) {
+	// Базовые расчеты для всех отчетов
+	data.TotalIncome = 0
+	data.TotalExpenses = 0
+	data.NetIncome = 0
+	data.CategoryBreakdown = []report.CategoryReportItem{}
+	data.DailyBreakdown = []report.DailyReportItem{}
+	data.TopExpenses = []report.TransactionReportItem{}
+	data.BudgetComparison = []report.BudgetComparisonItem{}
+}
+
+// generateExpensesReportData генерирует данные для отчета по расходам
+func (h *ReportHandler) generateExpensesReportData(
+	_ context.Context,
+	data *report.Data,
+	_ uuid.UUID,
+	_, _ time.Time,
+) {
+	// TODO: Реализовать получение расходов из транзакций
+	// Пример структуры данных для расходов
+	data.TotalExpenses = 0 // Будет рассчитано из транзакций
+}
+
+// generateIncomeReportData генерирует данные для отчета по доходам
+func (h *ReportHandler) generateIncomeReportData(
+	_ context.Context,
+	data *report.Data,
+	_ uuid.UUID,
+	_ time.Time,
+	_ time.Time,
+) {
+	// TODO: Реализовать получение доходов из транзакций
+	data.TotalIncome = 0 // Будет рассчитано из транзакций
+}
+
+// generateBudgetReportData генерирует данные для отчета по бюджету
+func (h *ReportHandler) generateBudgetReportData(
+	_ context.Context,
+	_ *report.Data,
+	_ uuid.UUID,
+	_, _ time.Time,
+) {
+	// TODO: Реализовать сравнение бюджета с фактическими тратами
+	// Получение активных бюджетов и сравнение с транзакциями
+}
+
+// generateCashFlowReportData генерирует данные для отчета по денежному потоку
+func (h *ReportHandler) generateCashFlowReportData(
+	_ context.Context,
+	_ *report.Data,
+	_ uuid.UUID,
+	_ time.Time,
+	_ time.Time,
+) {
+	// TODO: Реализовать расчет денежного потока по дням
+	// Заполнение DailyBreakdown с доходами и расходами по дням
+}
+
+// generateCategoryBreakdownReportData генерирует данные для разбивки по категориям
+func (h *ReportHandler) generateCategoryBreakdownReportData(
+	_ context.Context,
+	_ *report.Data,
+	_ uuid.UUID,
+	_ time.Time,
+	_ time.Time,
+) {
+	// TODO: Реализовать группировку транзакций по категориям
+	// Заполнение CategoryBreakdown с суммами по категориям
 }

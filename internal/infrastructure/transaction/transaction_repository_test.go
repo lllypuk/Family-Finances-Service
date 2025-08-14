@@ -22,12 +22,12 @@ func TestTransactionRepository_Integration(t *testing.T) {
 	t.Run("Create_Success", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
 		user := testhelpers.CreateTestUser(family.ID)
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 		testTransaction := testhelpers.CreateTestTransaction(
 			family.ID,
 			user.ID,
 			testCategory.ID,
-			transaction.TransactionTypeExpense,
+			transaction.TypeExpense,
 		)
 
 		err := repo.Create(context.Background(), testTransaction)
@@ -37,12 +37,12 @@ func TestTransactionRepository_Integration(t *testing.T) {
 	t.Run("GetByID_Success", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
 		user := testhelpers.CreateTestUser(family.ID)
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 		testTransaction := testhelpers.CreateTestTransaction(
 			family.ID,
 			user.ID,
 			testCategory.ID,
-			transaction.TransactionTypeExpense,
+			transaction.TypeExpense,
 		)
 
 		err := repo.Create(context.Background(), testTransaction)
@@ -51,7 +51,7 @@ func TestTransactionRepository_Integration(t *testing.T) {
 		retrievedTransaction, err := repo.GetByID(context.Background(), testTransaction.ID)
 		require.NoError(t, err)
 		assert.Equal(t, testTransaction.ID, retrievedTransaction.ID)
-		assert.Equal(t, testTransaction.Amount, retrievedTransaction.Amount)
+		assert.InEpsilon(t, testTransaction.Amount, retrievedTransaction.Amount, 0.001)
 		assert.Equal(t, testTransaction.Type, retrievedTransaction.Type)
 		assert.Equal(t, testTransaction.Description, retrievedTransaction.Description)
 		assert.Equal(t, testTransaction.FamilyID, retrievedTransaction.FamilyID)
@@ -62,27 +62,27 @@ func TestTransactionRepository_Integration(t *testing.T) {
 	t.Run("GetByID_NotFound", func(t *testing.T) {
 		nonExistentID := uuid.New()
 		_, err := repo.GetByID(context.Background(), nonExistentID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
 	t.Run("GetByFamilyID_Success", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
 		user := testhelpers.CreateTestUser(family.ID)
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 
 		transaction1 := testhelpers.CreateTestTransaction(
 			family.ID,
 			user.ID,
 			testCategory.ID,
-			transaction.TransactionTypeExpense,
+			transaction.TypeExpense,
 		)
 		transaction1.Amount = 50.0
 		transaction2 := testhelpers.CreateTestTransaction(
 			family.ID,
 			user.ID,
 			testCategory.ID,
-			transaction.TransactionTypeIncome,
+			transaction.TypeIncome,
 		)
 		transaction2.Amount = 100.0
 
@@ -106,7 +106,7 @@ func TestTransactionRepository_Integration(t *testing.T) {
 	t.Run("GetByFamilyID_WithPagination", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
 		user := testhelpers.CreateTestUser(family.ID)
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 
 		// Create 5 transactions
 		for i := range 5 {
@@ -114,7 +114,7 @@ func TestTransactionRepository_Integration(t *testing.T) {
 				family.ID,
 				user.ID,
 				testCategory.ID,
-				transaction.TransactionTypeExpense,
+				transaction.TypeExpense,
 			)
 			tr.Amount = float64(10 * (i + 1))
 			err := repo.Create(context.Background(), tr)
@@ -135,19 +135,19 @@ func TestTransactionRepository_Integration(t *testing.T) {
 	t.Run("GetByFilter_ByType", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
 		user := testhelpers.CreateTestUser(family.ID)
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 
 		expenseTransaction := testhelpers.CreateTestTransaction(
 			family.ID,
 			user.ID,
 			testCategory.ID,
-			transaction.TransactionTypeExpense,
+			transaction.TypeExpense,
 		)
 		incomeTransaction := testhelpers.CreateTestTransaction(
 			family.ID,
 			user.ID,
 			testCategory.ID,
-			transaction.TransactionTypeIncome,
+			transaction.TypeIncome,
 		)
 
 		err := repo.Create(context.Background(), expenseTransaction)
@@ -155,8 +155,8 @@ func TestTransactionRepository_Integration(t *testing.T) {
 		err = repo.Create(context.Background(), incomeTransaction)
 		require.NoError(t, err)
 
-		expenseType := transaction.TransactionTypeExpense
-		filter := transaction.TransactionFilter{
+		expenseType := transaction.TypeExpense
+		filter := transaction.Filter{
 			FamilyID: family.ID,
 			Type:     &expenseType,
 		}
@@ -170,14 +170,14 @@ func TestTransactionRepository_Integration(t *testing.T) {
 	t.Run("GetByFilter_ByDateRange", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
 		user := testhelpers.CreateTestUser(family.ID)
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 
 		// Create transaction with older date
 		oldTransaction := testhelpers.CreateTestTransaction(
 			family.ID,
 			user.ID,
 			testCategory.ID,
-			transaction.TransactionTypeExpense,
+			transaction.TypeExpense,
 		)
 		oldTransaction.Date = time.Now().AddDate(0, -2, 0) // 2 months ago
 
@@ -186,7 +186,7 @@ func TestTransactionRepository_Integration(t *testing.T) {
 			family.ID,
 			user.ID,
 			testCategory.ID,
-			transaction.TransactionTypeExpense,
+			transaction.TypeExpense,
 		)
 		newTransaction.Date = time.Now().AddDate(0, 0, -1) // 1 day ago
 
@@ -198,7 +198,7 @@ func TestTransactionRepository_Integration(t *testing.T) {
 		// Filter for last month
 		dateFrom := time.Now().AddDate(0, -1, 0)
 		dateTo := time.Now()
-		filter := transaction.TransactionFilter{
+		filter := transaction.Filter{
 			FamilyID: family.ID,
 			DateFrom: &dateFrom,
 			DateTo:   &dateTo,
@@ -213,12 +213,12 @@ func TestTransactionRepository_Integration(t *testing.T) {
 	t.Run("Update_Success", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
 		user := testhelpers.CreateTestUser(family.ID)
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 		testTransaction := testhelpers.CreateTestTransaction(
 			family.ID,
 			user.ID,
 			testCategory.ID,
-			transaction.TransactionTypeExpense,
+			transaction.TypeExpense,
 		)
 
 		err := repo.Create(context.Background(), testTransaction)
@@ -231,35 +231,35 @@ func TestTransactionRepository_Integration(t *testing.T) {
 
 		retrievedTransaction, err := repo.GetByID(context.Background(), testTransaction.ID)
 		require.NoError(t, err)
-		assert.Equal(t, 200.0, retrievedTransaction.Amount)
+		assert.InEpsilon(t, 200.0, retrievedTransaction.Amount, 0.001)
 		assert.Equal(t, "Updated transaction", retrievedTransaction.Description)
 	})
 
 	t.Run("Update_NotFound", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
 		user := testhelpers.CreateTestUser(family.ID)
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 		nonExistentTransaction := testhelpers.CreateTestTransaction(
 			family.ID,
 			user.ID,
 			testCategory.ID,
-			transaction.TransactionTypeExpense,
+			transaction.TypeExpense,
 		)
 
 		err := repo.Update(context.Background(), nonExistentTransaction)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
 	t.Run("Delete_Success", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
 		user := testhelpers.CreateTestUser(family.ID)
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 		testTransaction := testhelpers.CreateTestTransaction(
 			family.ID,
 			user.ID,
 			testCategory.ID,
-			transaction.TransactionTypeExpense,
+			transaction.TypeExpense,
 		)
 
 		err := repo.Create(context.Background(), testTransaction)
@@ -269,35 +269,35 @@ func TestTransactionRepository_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = repo.GetByID(context.Background(), testTransaction.ID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
 	t.Run("Delete_NotFound", func(t *testing.T) {
 		nonExistentID := uuid.New()
 		err := repo.Delete(context.Background(), nonExistentID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
 	t.Run("GetTotalByCategory_Success", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
 		user := testhelpers.CreateTestUser(family.ID)
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 
 		// Create multiple expense transactions for the same category
 		transaction1 := testhelpers.CreateTestTransaction(
 			family.ID,
 			user.ID,
 			testCategory.ID,
-			transaction.TransactionTypeExpense,
+			transaction.TypeExpense,
 		)
 		transaction1.Amount = 100.0
 		transaction2 := testhelpers.CreateTestTransaction(
 			family.ID,
 			user.ID,
 			testCategory.ID,
-			transaction.TransactionTypeExpense,
+			transaction.TypeExpense,
 		)
 		transaction2.Amount = 50.0
 
@@ -306,7 +306,7 @@ func TestTransactionRepository_Integration(t *testing.T) {
 			family.ID,
 			user.ID,
 			testCategory.ID,
-			transaction.TransactionTypeIncome,
+			transaction.TypeIncome,
 		)
 		incomeTransaction.Amount = 200.0
 
@@ -317,25 +317,25 @@ func TestTransactionRepository_Integration(t *testing.T) {
 		err = repo.Create(context.Background(), incomeTransaction)
 		require.NoError(t, err)
 
-		total, err := repo.GetTotalByCategory(context.Background(), testCategory.ID, transaction.TransactionTypeExpense)
+		total, err := repo.GetTotalByCategory(context.Background(), testCategory.ID, transaction.TypeExpense)
 		require.NoError(t, err)
-		assert.Equal(t, 150.0, total)
+		assert.InEpsilon(t, 150.0, total, 0.001)
 
 		incomeTotal, err := repo.GetTotalByCategory(
 			context.Background(),
 			testCategory.ID,
-			transaction.TransactionTypeIncome,
+			transaction.TypeIncome,
 		)
 		require.NoError(t, err)
-		assert.Equal(t, 200.0, incomeTotal)
+		assert.InEpsilon(t, 200.0, incomeTotal, 0.001)
 	})
 
 	t.Run("GetTotalByCategory_NoTransactions", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 
-		total, err := repo.GetTotalByCategory(context.Background(), testCategory.ID, transaction.TransactionTypeExpense)
+		total, err := repo.GetTotalByCategory(context.Background(), testCategory.ID, transaction.TypeExpense)
 		require.NoError(t, err)
-		assert.Equal(t, 0.0, total)
+		assert.Equal(t, 0.0, total) //nolint:testifylint // InEpsilon не работает для нуля
 	})
 }

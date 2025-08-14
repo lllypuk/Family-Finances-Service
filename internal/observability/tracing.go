@@ -7,7 +7,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -19,22 +19,25 @@ import (
 type TracingConfig struct {
 	ServiceName    string `json:"service_name"    default:"family-budget-service"`
 	ServiceVersion string `json:"service_version" default:"1.0.0"`
-	JaegerURL      string `json:"jaeger_url"      default:"http://localhost:14268/api/traces"`
+	OTLPEndpoint   string `json:"otlp_endpoint"   default:"http://localhost:4318/v1/traces"`
 	Environment    string `json:"environment"     default:"development"`
 	Enabled        bool   `json:"enabled"         default:"true"`
 }
 
 // InitTracing инициализирует OpenTelemetry tracing
-func InitTracing(config TracingConfig, logger *slog.Logger) (func(context.Context) error, error) {
+func InitTracing(ctx context.Context, config TracingConfig, logger *slog.Logger) (func(context.Context) error, error) {
 	if !config.Enabled {
-		logger.Info("Tracing disabled")
+		logger.InfoContext(ctx, "Tracing disabled")
 		return func(context.Context) error { return nil }, nil
 	}
 
-	// Создаем Jaeger exporter
-	exp, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(config.JaegerURL)))
+	// Создаем OTLP HTTP exporter
+	exp, err := otlptracehttp.New(ctx,
+		otlptracehttp.WithEndpoint(config.OTLPEndpoint),
+		otlptracehttp.WithInsecure(), // для локальной разработки
+	)
 	if err != nil {
-		logger.Error("Failed to create Jaeger exporter", slog.String("error", err.Error()))
+		logger.ErrorContext(ctx, "Failed to create OTLP exporter", slog.String("error", err.Error()))
 		return nil, err
 	}
 
@@ -62,27 +65,58 @@ func InitTracing(config TracingConfig, logger *slog.Logger) (func(context.Contex
 		propagation.Baggage{},
 	))
 
-	logger.Info("Tracing initialized successfully",
+	logger.InfoContext(ctx, "Tracing initialized successfully",
 		slog.String("service", config.ServiceName),
 		slog.String("version", config.ServiceVersion),
-		slog.String("jaeger_url", config.JaegerURL),
+		slog.String("otlp_endpoint", config.OTLPEndpoint),
 	)
 
 	// Возвращаем функцию для graceful shutdown
 	return tp.Shutdown, nil
 }
 
-// Tracer для приложения
-var AppTracer = otel.Tracer("family-budget-service")
+// Tracer структура для инкапсуляции трейсера
+type Tracer struct {
+	tracer trace.Tracer
+}
 
-// StartSpan создает новый span с контекстом
-func StartSpan(ctx context.Context, name string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
-	return AppTracer.Start(ctx, name, opts...)
+// NewTracer создает новый экземпляр трейсера
+func NewTracer(serviceName string) *Tracer {
+	return &Tracer{
+		tracer: otel.Tracer(serviceName),
+	}
+}
+
+// StartSpan создает новый span с контекстом и возвращает функцию cleanup
+// Возвращает функцию cleanup, которую следует вызвать (обычно через defer) для завершения span
+func (t *Tracer) StartSpan(
+	ctx context.Context,
+	name string,
+	opts ...trace.SpanStartOption,
+) (context.Context, func()) {
+	ctx, span := t.tracer.Start(ctx, name, opts...)
+	cleanup := func() { span.End() }
+	return ctx, cleanup
+}
+
+// StartSpanWithSpan создает новый span и возвращает сам span (для обратной совместимости)
+// Caller должен вызвать span.End() для завершения span
+func (t *Tracer) StartSpanWithSpan(
+	ctx context.Context,
+	name string,
+	opts ...trace.SpanStartOption,
+) (context.Context, trace.Span) {
+	return t.tracer.Start(ctx, name, opts...) //nolint:spancheck // span.End() должен вызываться caller'ом
+}
+
+// GetTracer возвращает внутренний трейсер
+func (t *Tracer) GetTracer() trace.Tracer {
+	return t.tracer
 }
 
 // TraceRepository добавляет трейсинг к операциям с репозиторием
-func TraceRepository(ctx context.Context, operation, collection string) (context.Context, trace.Span) {
-	ctx, span := StartSpan(ctx, "repository."+operation,
+func (t *Tracer) TraceRepository(ctx context.Context, operation, collection string) (context.Context, trace.Span) {
+	ctx, span := t.StartSpanWithSpan(ctx, "repository."+operation,
 		trace.WithAttributes(
 			attribute.String("db.operation", operation),
 			attribute.String("db.collection.name", collection),
@@ -94,8 +128,8 @@ func TraceRepository(ctx context.Context, operation, collection string) (context
 }
 
 // TraceHTTPRequest добавляет трейсинг к HTTP запросам
-func TraceHTTPRequest(ctx context.Context, method, path string) (context.Context, trace.Span) {
-	ctx, span := StartSpan(ctx, "http."+method,
+func (t *Tracer) TraceHTTPRequest(ctx context.Context, method, path string) (context.Context, trace.Span) {
+	ctx, span := t.StartSpanWithSpan(ctx, "http."+method,
 		trace.WithAttributes(
 			attribute.String("http.method", method),
 			attribute.String("http.route", path),
@@ -106,7 +140,7 @@ func TraceHTTPRequest(ctx context.Context, method, path string) (context.Context
 }
 
 // TraceBusiness добавляет трейсинг к бизнес-операциям
-func TraceBusiness(
+func (t *Tracer) TraceBusiness(
 	ctx context.Context,
 	domain, operation string,
 	metadata map[string]string,
@@ -121,7 +155,7 @@ func TraceBusiness(
 		attrs = append(attrs, attribute.String("business."+key, value))
 	}
 
-	ctx, span := StartSpan(ctx, "business."+domain+"."+operation,
+	ctx, span := t.StartSpanWithSpan(ctx, "business."+domain+"."+operation,
 		trace.WithAttributes(attrs...),
 	)
 

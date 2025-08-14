@@ -20,7 +20,7 @@ func TestBudgetRepository_Integration(t *testing.T) {
 
 	t.Run("Create_Success", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 		testBudget := testhelpers.CreateTestBudget(family.ID, testCategory.ID)
 
 		err := repo.Create(context.Background(), testBudget)
@@ -29,7 +29,7 @@ func TestBudgetRepository_Integration(t *testing.T) {
 
 	t.Run("GetByID_Success", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 		testBudget := testhelpers.CreateTestBudget(family.ID, testCategory.ID)
 
 		err := repo.Create(context.Background(), testBudget)
@@ -39,7 +39,7 @@ func TestBudgetRepository_Integration(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, testBudget.ID, retrievedBudget.ID)
 		assert.Equal(t, testBudget.Name, retrievedBudget.Name)
-		assert.Equal(t, testBudget.Amount, retrievedBudget.Amount)
+		assert.InEpsilon(t, testBudget.Amount, retrievedBudget.Amount, 0.001)
 		assert.Equal(t, testBudget.FamilyID, retrievedBudget.FamilyID)
 		assert.Equal(t, testBudget.CategoryID, retrievedBudget.CategoryID)
 	})
@@ -47,14 +47,14 @@ func TestBudgetRepository_Integration(t *testing.T) {
 	t.Run("GetByID_NotFound", func(t *testing.T) {
 		nonExistentID := uuid.New()
 		_, err := repo.GetByID(context.Background(), nonExistentID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
 	t.Run("GetByFamilyID_Success", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
-		testCategory1 := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
-		testCategory2 := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory1 := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
+		testCategory2 := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 
 		budget1 := testhelpers.CreateTestBudget(family.ID, testCategory1.ID)
 		budget1.Name = "Food Budget"
@@ -87,7 +87,7 @@ func TestBudgetRepository_Integration(t *testing.T) {
 
 	t.Run("GetActiveBudgets_Success", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 
 		now := time.Now()
 
@@ -139,7 +139,7 @@ func TestBudgetRepository_Integration(t *testing.T) {
 
 	t.Run("Update_Success", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 		testBudget := testhelpers.CreateTestBudget(family.ID, testCategory.ID)
 
 		err := repo.Create(context.Background(), testBudget)
@@ -153,22 +153,22 @@ func TestBudgetRepository_Integration(t *testing.T) {
 		retrievedBudget, err := repo.GetByID(context.Background(), testBudget.ID)
 		require.NoError(t, err)
 		assert.Equal(t, "Updated Budget Name", retrievedBudget.Name)
-		assert.Equal(t, 2000.0, retrievedBudget.Amount)
+		assert.InEpsilon(t, 2000.0, retrievedBudget.Amount, 0.001)
 	})
 
 	t.Run("Update_NotFound", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 		nonExistentBudget := testhelpers.CreateTestBudget(family.ID, testCategory.ID)
 
 		err := repo.Update(context.Background(), nonExistentBudget)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
 	t.Run("Delete_Success", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 		testBudget := testhelpers.CreateTestBudget(family.ID, testCategory.ID)
 
 		err := repo.Create(context.Background(), testBudget)
@@ -178,20 +178,20 @@ func TestBudgetRepository_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = repo.GetByID(context.Background(), testBudget.ID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
 	t.Run("Delete_NotFound", func(t *testing.T) {
 		nonExistentID := uuid.New()
 		err := repo.Delete(context.Background(), nonExistentID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
 	t.Run("GetActiveBudgets_InclusiveEdges", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 
 		now := time.Now()
 
@@ -245,7 +245,7 @@ func TestBudgetRepository_Integration(t *testing.T) {
 
 	t.Run("GetByFamilyID_SortedByCreatedAt", func(t *testing.T) {
 		family := testhelpers.CreateTestFamily()
-		testCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
+		testCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
 
 		older := testhelpers.CreateTestBudget(family.ID, testCategory.ID)
 		middle := testhelpers.CreateTestBudget(family.ID, testCategory.ID)
