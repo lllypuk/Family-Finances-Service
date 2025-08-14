@@ -56,13 +56,15 @@ func (r *Repository) getReportsByFilter(ctx context.Context, filter bson.M, erro
 	var reports []*report.Report
 	for cursor.Next(ctx) {
 		var rep report.Report
-		if err := cursor.Decode(&rep); err != nil {
+		err = cursor.Decode(&rep)
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode report: %w", err)
 		}
 		reports = append(reports, &rep)
 	}
 
-	if err := cursor.Err(); err != nil {
+	err = cursor.Err()
+	if err != nil {
 		return nil, fmt.Errorf("cursor error: %w", err)
 	}
 

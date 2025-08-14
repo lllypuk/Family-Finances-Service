@@ -68,13 +68,15 @@ func (r *Repository) GetByFilter(
 	var transactions []*transaction.Transaction
 	for cursor.Next(ctx) {
 		var t transaction.Transaction
-		if err := cursor.Decode(&t); err != nil {
+		err = cursor.Decode(&t)
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode transaction: %w", err)
 		}
 		transactions = append(transactions, &t)
 	}
 
-	if err := cursor.Err(); err != nil {
+	err = cursor.Err()
+	if err != nil {
 		return nil, fmt.Errorf("cursor error: %w", err)
 	}
 
@@ -107,13 +109,15 @@ func (r *Repository) GetByFamilyID(
 	var transactions []*transaction.Transaction
 	for cursor.Next(ctx) {
 		var t transaction.Transaction
-		if err := cursor.Decode(&t); err != nil {
+		err = cursor.Decode(&t)
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode transaction: %w", err)
 		}
 		transactions = append(transactions, &t)
 	}
 
-	if err := cursor.Err(); err != nil {
+	err = cursor.Err()
+	if err != nil {
 		return nil, fmt.Errorf("cursor error: %w", err)
 	}
 
@@ -180,7 +184,8 @@ func (r *Repository) GetTotalByCategory(
 	}
 
 	if cursor.Next(ctx) {
-		if err := cursor.Decode(&result); err != nil {
+		err = cursor.Decode(&result)
+		if err != nil {
 			return 0, fmt.Errorf("failed to decode aggregation result: %w", err)
 		}
 	}

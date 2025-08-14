@@ -55,13 +55,13 @@ func SetupMongoDB(t *testing.T) *MongoDBContainer {
 	// Cleanup function to be called in test teardown
 	t.Cleanup(func() {
 		if client != nil {
-			if err := client.Disconnect(context.Background()); err != nil {
-				t.Logf("Failed to disconnect MongoDB client: %v", err)
+			if disconnectErr := client.Disconnect(context.Background()); disconnectErr != nil {
+				t.Logf("Failed to disconnect MongoDB client: %v", disconnectErr)
 			}
 		}
 		if mongoContainer != nil {
-			if err := mongoContainer.Terminate(context.Background()); err != nil {
-				t.Logf("Failed to terminate MongoDB container: %v", err)
+			if terminateErr := mongoContainer.Terminate(context.Background()); terminateErr != nil {
+				t.Logf("Failed to terminate MongoDB container: %v", terminateErr)
 			}
 		}
 	})
@@ -83,7 +83,7 @@ func (m *MongoDBContainer) CleanupCollections(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, collectionName := range collections {
-		err := m.Database.Collection(collectionName).Drop(ctx)
+		err = m.Database.Collection(collectionName).Drop(ctx)
 		if err != nil {
 			// Just log the error, don't fail the test
 			t.Logf("Failed to drop collection %s: %v", collectionName, err)

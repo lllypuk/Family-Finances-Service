@@ -43,7 +43,8 @@ func NewMongoDB(uri, databaseName string) (*MongoDB, error) {
 	}
 
 	// Проверка подключения
-	if err := client.Ping(ctx, nil); err != nil {
+	err = client.Ping(ctx, nil)
+	if err != nil {
 		return nil, fmt.Errorf("failed to ping MongoDB: %w", err)
 	}
 
@@ -55,7 +56,8 @@ func NewMongoDB(uri, databaseName string) (*MongoDB, error) {
 		Keys:    bson.D{{Key: "email", Value: 1}},
 		Options: options.Index().SetUnique(true).SetName("uniq_users_email"),
 	}
-	if _, err := usersColl.Indexes().CreateOne(ctx, indexModel); err != nil {
+	_, err = usersColl.Indexes().CreateOne(ctx, indexModel)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create unique index on users.email: %w", err)
 	}
 
