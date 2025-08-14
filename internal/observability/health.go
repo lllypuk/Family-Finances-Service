@@ -17,7 +17,7 @@ const (
 	HTTPHealthCheckTimeout = 3 * time.Second
 	// HealthStatusHealthy represents healthy status
 	HealthStatusHealthy = "healthy"
-	// HealthStatusUnhealthy represents unhealthy status  
+	// HealthStatusUnhealthy represents unhealthy status
 	HealthStatusUnhealthy = "unhealthy"
 )
 

@@ -319,7 +319,9 @@ func (h *TransactionHandler) buildRepositoryFilter(filters TransactionFilterPara
 	}
 }
 
-func (h *TransactionHandler) buildTransactionListResponse(transactions []*transaction.Transaction) []TransactionResponse {
+func (h *TransactionHandler) buildTransactionListResponse(
+	transactions []*transaction.Transaction,
+) []TransactionResponse {
 	var response []TransactionResponse
 	for _, tx := range transactions {
 		response = append(response, TransactionResponse{
