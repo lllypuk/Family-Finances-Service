@@ -158,13 +158,13 @@ func (h *TransactionHandler) GetTransactions(c echo.Context) error {
 
 	// Опциональные параметры
 	if userIDParam := c.QueryParam("user_id"); userIDParam != "" {
-		if userID, err := uuid.Parse(userIDParam); err == nil {
+		if userID, parseErr := uuid.Parse(userIDParam); parseErr == nil {
 			filters.UserID = &userID
 		}
 	}
 
 	if categoryIDParam := c.QueryParam("category_id"); categoryIDParam != "" {
-		if categoryID, err := uuid.Parse(categoryIDParam); err == nil {
+		if categoryID, parseErr := uuid.Parse(categoryIDParam); parseErr == nil {
 			filters.CategoryID = &categoryID
 		}
 	}
@@ -174,25 +174,25 @@ func (h *TransactionHandler) GetTransactions(c echo.Context) error {
 	}
 
 	if dateFromParam := c.QueryParam("date_from"); dateFromParam != "" {
-		if dateFrom, err := time.Parse(time.RFC3339, dateFromParam); err == nil {
+		if dateFrom, parseErr := time.Parse(time.RFC3339, dateFromParam); parseErr == nil {
 			filters.DateFrom = &dateFrom
 		}
 	}
 
 	if dateToParam := c.QueryParam("date_to"); dateToParam != "" {
-		if dateTo, err := time.Parse(time.RFC3339, dateToParam); err == nil {
+		if dateTo, parseErr := time.Parse(time.RFC3339, dateToParam); parseErr == nil {
 			filters.DateTo = &dateTo
 		}
 	}
 
 	if amountFromParam := c.QueryParam("amount_from"); amountFromParam != "" {
-		if amountFrom, err := strconv.ParseFloat(amountFromParam, 64); err == nil {
+		if amountFrom, parseErr := strconv.ParseFloat(amountFromParam, 64); parseErr == nil {
 			filters.AmountFrom = &amountFrom
 		}
 	}
 
 	if amountToParam := c.QueryParam("amount_to"); amountToParam != "" {
-		if amountTo, err := strconv.ParseFloat(amountToParam, 64); err == nil {
+		if amountTo, parseErr := strconv.ParseFloat(amountToParam, 64); parseErr == nil {
 			filters.AmountTo = &amountTo
 		}
 	}
@@ -204,20 +204,21 @@ func (h *TransactionHandler) GetTransactions(c echo.Context) error {
 	// Пагинация
 	filters.Limit = 50 // По умолчанию
 	if limitParam := c.QueryParam("limit"); limitParam != "" {
-		if limit, err := strconv.Atoi(limitParam); err == nil && limit > 0 && limit <= 100 {
+		if limit, parseErr := strconv.Atoi(limitParam); parseErr == nil && limit > 0 && limit <= 100 {
 			filters.Limit = limit
 		}
 	}
 
 	filters.Offset = 0 // По умолчанию
 	if offsetParam := c.QueryParam("offset"); offsetParam != "" {
-		if offset, err := strconv.Atoi(offsetParam); err == nil && offset >= 0 {
+		if offset, parseErr := strconv.Atoi(offsetParam); parseErr == nil && offset >= 0 {
 			filters.Offset = offset
 		}
 	}
 
 	// Валидация фильтров
-	if err := h.validator.Struct(filters); err != nil {
+	err = h.validator.Struct(filters)
+	if err != nil {
 		var validationErrors []ValidationError
 		for _, err := range func() validator.ValidationErrors {
 			var target validator.ValidationErrors
@@ -384,7 +385,8 @@ func (h *TransactionHandler) UpdateTransaction(c echo.Context) error {
 	}
 
 	var req UpdateTransactionRequest
-	if err := c.Bind(&req); err != nil {
+	err = c.Bind(&req)
+	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Code:    "INVALID_REQUEST",
@@ -398,7 +400,8 @@ func (h *TransactionHandler) UpdateTransaction(c echo.Context) error {
 		})
 	}
 
-	if err := h.validator.Struct(req); err != nil {
+	err = h.validator.Struct(req)
+	if err != nil {
 		var validationErrors []ValidationError
 		for _, err := range func() validator.ValidationErrors {
 			var target validator.ValidationErrors
@@ -430,7 +433,8 @@ func (h *TransactionHandler) UpdateTransaction(c echo.Context) error {
 
 	h.updateTransactionFields(existingTransaction, &req)
 
-	if err := h.repositories.Transaction.Update(c.Request().Context(), existingTransaction); err != nil {
+	err = h.repositories.Transaction.Update(c.Request().Context(), existingTransaction)
+	if err != nil {
 		return HandleUpdateError(c, "transaction")
 	}
 

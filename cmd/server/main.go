@@ -27,7 +27,8 @@ func main() {
 		log.Fatalf("Failed to create application: %v", err)
 	}
 
-	if err := app.Run(); err != nil {
+	err = app.Run()
+	if err != nil {
 		log.Fatalf("Failed to run application: %v", err)
 	}
 }

@@ -27,7 +27,8 @@ func DeleteEntityHelper(c echo.Context, deleter func(uuid.UUID) error, entityTyp
 		})
 	}
 
-	if err := deleter(id); err != nil {
+	err = deleter(id)
+	if err != nil {
 		return c.JSON(http.StatusNotFound, ErrorResponse{
 			Error: ErrorDetail{
 				Code:    strings.ToUpper(entityType) + "_NOT_FOUND",

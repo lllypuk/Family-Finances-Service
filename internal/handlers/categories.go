@@ -276,7 +276,8 @@ func (h *CategoryHandler) UpdateCategory(c echo.Context) error {
 	}
 
 	var req UpdateCategoryRequest
-	if err := c.Bind(&req); err != nil {
+	err = c.Bind(&req)
+	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Code:    "INVALID_REQUEST",
@@ -290,7 +291,8 @@ func (h *CategoryHandler) UpdateCategory(c echo.Context) error {
 		})
 	}
 
-	if err := h.validator.Struct(req); err != nil {
+	err = h.validator.Struct(req)
+	if err != nil {
 		var validationErrors []ValidationError
 		for _, err := range func() validator.ValidationErrors {
 			var target validator.ValidationErrors
@@ -322,7 +324,8 @@ func (h *CategoryHandler) UpdateCategory(c echo.Context) error {
 
 	h.updateCategoryFields(existingCategory, &req)
 
-	if err := h.repositories.Category.Update(c.Request().Context(), existingCategory); err != nil {
+	err = h.repositories.Category.Update(c.Request().Context(), existingCategory)
+	if err != nil {
 		return HandleUpdateError(c, "category")
 	}
 

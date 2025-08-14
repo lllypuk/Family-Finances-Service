@@ -331,10 +331,6 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 					CreatedAt: time.Now(),
 					UpdatedAt: time.Now(),
 				}
-				updatedUser := *existingUser
-				updatedUser.FirstName = "Jane"
-				updatedUser.LastName = "Smith"
-
 				repo.On("GetByID", mock.Anything, userID).Return(existingUser, nil)
 				repo.On("Update", mock.Anything, mock.AnythingOfType("*user.User")).Return(nil)
 			},

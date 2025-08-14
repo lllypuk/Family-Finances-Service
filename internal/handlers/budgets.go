@@ -281,7 +281,8 @@ func (h *BudgetHandler) UpdateBudget(c echo.Context) error {
 	}
 
 	var req UpdateBudgetRequest
-	if err := c.Bind(&req); err != nil {
+	err = c.Bind(&req)
+	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Code:    "INVALID_REQUEST",
@@ -295,7 +296,8 @@ func (h *BudgetHandler) UpdateBudget(c echo.Context) error {
 		})
 	}
 
-	if err := h.validator.Struct(req); err != nil {
+	err = h.validator.Struct(req)
+	if err != nil {
 		var validationErrors []ValidationError
 		for _, err := range func() validator.ValidationErrors {
 			var target validator.ValidationErrors
@@ -327,7 +329,8 @@ func (h *BudgetHandler) UpdateBudget(c echo.Context) error {
 
 	h.updateBudgetFields(existingBudget, &req)
 
-	if err := h.repositories.Budget.Update(c.Request().Context(), existingBudget); err != nil {
+	err = h.repositories.Budget.Update(c.Request().Context(), existingBudget)
+	if err != nil {
 		return HandleUpdateError(c, "budget")
 	}
 

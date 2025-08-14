@@ -166,8 +166,8 @@ func (h *ReportHandler) GetReports(c echo.Context) error {
 
 	// Если указан пользователь, получаем отчеты для конкретного пользователя
 	if userIDParam != "" {
-		userID, err := uuid.Parse(userIDParam)
-		if err != nil {
+		userID, parseErr := uuid.Parse(userIDParam)
+		if parseErr != nil {
 			return c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
 					Code:    "INVALID_USER_ID",
