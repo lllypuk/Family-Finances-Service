@@ -183,9 +183,9 @@ jobs:
       - name: Create OSV Scanner ignore config
         run: |
           cat <<EOF > .osv-scanner.toml
-          [[ignores]]
+          [[IgnoredVulns]]
           id = "GO-2025-3829"
-          notes = "Test-only vulnerability in a transitive dependency (docker/docker) with no available fix. Not relevant to production."
+          reason = "Test-only vulnerability in a transitive dependency (docker/docker) with no available fix. Not relevant to production."
           EOF
 
       - name: Run OSV Scanner
