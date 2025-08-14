@@ -95,7 +95,15 @@ func (t *Tracer) StartSpan(
 	opts ...trace.SpanStartOption,
 ) (context.Context, trace.Span) {
 	ctx, span := t.tracer.Start(ctx, name, opts...) //nolint:spancheck // span.End() должен вызываться caller'ом
-	return ctx, span                                //nolint:spancheck // span возвращается для использования caller'ом
+// Возвращает функцию cleanup, которую следует вызвать (обычно через defer) для завершения span
+func (t *Tracer) StartSpan(
+	ctx context.Context,
+	name string,
+	opts ...trace.SpanStartOption,
+) (context.Context, func()) {
+	ctx, span := t.tracer.Start(ctx, name, opts...)
+	cleanup := func() { span.End() }
+	return ctx, cleanup
 }
 
 // GetTracer возвращает внутренний трейсер
