@@ -26,29 +26,33 @@ const (
 	CategoryTypeExpense CategoryType = "expense" // Расходы
 )
 
-// Предустановленные категории расходов
-var DefaultExpenseCategories = []string{
-	"Продукты",
-	"Транспорт",
-	"Жилье и ЖКХ",
-	"Здоровье",
-	"Образование",
-	"Развлечения",
-	"Одежда",
-	"Ресторан и кафе",
-	"Спорт",
-	"Подарки",
-	"Разное",
+// GetDefaultExpenseCategories возвращает предустановленные категории расходов
+func GetDefaultExpenseCategories() []string {
+	return []string{
+		"Продукты",
+		"Транспорт",
+		"Жилье и ЖКХ",
+		"Здоровье",
+		"Образование",
+		"Развлечения",
+		"Одежда",
+		"Ресторан и кафе",
+		"Спорт",
+		"Подарки",
+		"Разное",
+	}
 }
 
-// Предустановленные категории доходов
-var DefaultIncomeCategories = []string{
-	"Зарплата",
-	"Фриланс",
-	"Инвестиции",
-	"Подарки",
-	"Продажи",
-	"Разное",
+// GetDefaultIncomeCategories возвращает предустановленные категории доходов
+func GetDefaultIncomeCategories() []string {
+	return []string{
+		"Зарплата",
+		"Фриланс",
+		"Инвестиции",
+		"Подарки",
+		"Продажи",
+		"Разное",
+	}
 }
 
 func NewCategory(name string, categoryType CategoryType, familyID uuid.UUID) *Category {

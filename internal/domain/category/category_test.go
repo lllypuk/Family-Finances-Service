@@ -82,29 +82,31 @@ func TestCategory_IsSubcategory(t *testing.T) {
 
 func TestDefaultExpenseCategories(t *testing.T) {
 	// Test that default expense categories are defined
-	assert.NotEmpty(t, category.DefaultExpenseCategories)
-	assert.Contains(t, category.DefaultExpenseCategories, "Продукты")
-	assert.Contains(t, category.DefaultExpenseCategories, "Транспорт")
-	assert.Contains(t, category.DefaultExpenseCategories, "Жилье и ЖКХ")
-	assert.Contains(t, category.DefaultExpenseCategories, "Здоровье")
-	assert.Contains(t, category.DefaultExpenseCategories, "Образование")
-	assert.Contains(t, category.DefaultExpenseCategories, "Развлечения")
-	assert.Contains(t, category.DefaultExpenseCategories, "Одежда")
-	assert.Contains(t, category.DefaultExpenseCategories, "Ресторан и кафе")
-	assert.Contains(t, category.DefaultExpenseCategories, "Спорт")
-	assert.Contains(t, category.DefaultExpenseCategories, "Подарки")
-	assert.Contains(t, category.DefaultExpenseCategories, "Разное")
+	defaultCategories := category.GetDefaultExpenseCategories()
+	assert.NotEmpty(t, defaultCategories)
+	assert.Contains(t, defaultCategories, "Продукты")
+	assert.Contains(t, defaultCategories, "Транспорт")
+	assert.Contains(t, defaultCategories, "Жилье и ЖКХ")
+	assert.Contains(t, defaultCategories, "Здоровье")
+	assert.Contains(t, defaultCategories, "Образование")
+	assert.Contains(t, defaultCategories, "Развлечения")
+	assert.Contains(t, defaultCategories, "Одежда")
+	assert.Contains(t, defaultCategories, "Ресторан и кафе")
+	assert.Contains(t, defaultCategories, "Спорт")
+	assert.Contains(t, defaultCategories, "Подарки")
+	assert.Contains(t, defaultCategories, "Разное")
 }
 
 func TestDefaultIncomeCategories(t *testing.T) {
 	// Test that default income categories are defined
-	assert.NotEmpty(t, category.DefaultIncomeCategories)
-	assert.Contains(t, category.DefaultIncomeCategories, "Зарплата")
-	assert.Contains(t, category.DefaultIncomeCategories, "Фриланс")
-	assert.Contains(t, category.DefaultIncomeCategories, "Инвестиции")
-	assert.Contains(t, category.DefaultIncomeCategories, "Подарки")
-	assert.Contains(t, category.DefaultIncomeCategories, "Продажи")
-	assert.Contains(t, category.DefaultIncomeCategories, "Разное")
+	defaultCategories := category.GetDefaultIncomeCategories()
+	assert.NotEmpty(t, defaultCategories)
+	assert.Contains(t, defaultCategories, "Зарплата")
+	assert.Contains(t, defaultCategories, "Фриланс")
+	assert.Contains(t, defaultCategories, "Инвестиции")
+	assert.Contains(t, defaultCategories, "Подарки")
+	assert.Contains(t, defaultCategories, "Продажи")
+	assert.Contains(t, defaultCategories, "Разное")
 }
 
 func TestNewCategory_DifferentTypes(t *testing.T) {
@@ -176,21 +178,21 @@ func TestCategory_TimestampGeneration(t *testing.T) {
 
 func TestDefaultCategories_NonEmpty(t *testing.T) {
 	// Test that we have default categories defined
-	assert.NotEmpty(t, category.DefaultExpenseCategories, "Should have default expense categories")
-	assert.NotEmpty(t, category.DefaultIncomeCategories, "Should have default income categories")
+	assert.NotEmpty(t, category.GetDefaultExpenseCategories(), "Should have default expense categories")
+	assert.NotEmpty(t, category.GetDefaultIncomeCategories(), "Should have default income categories")
 }
 
 func TestDefaultCategories_UniqueValues(t *testing.T) {
 	// Test that default expense categories don't have duplicates
 	expenseSet := make(map[string]bool)
-	for _, cat := range category.DefaultExpenseCategories {
+	for _, cat := range category.GetDefaultExpenseCategories() {
 		assert.False(t, expenseSet[cat], "Duplicate expense category found: %s", cat)
 		expenseSet[cat] = true
 	}
 
 	// Test that default income categories don't have duplicates
 	incomeSet := make(map[string]bool)
-	for _, cat := range category.DefaultIncomeCategories {
+	for _, cat := range category.GetDefaultIncomeCategories() {
 		assert.False(t, incomeSet[cat], "Duplicate income category found: %s", cat)
 		incomeSet[cat] = true
 	}

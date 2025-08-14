@@ -78,15 +78,17 @@ func (m *MongoHealthChecker) CheckHealth(ctx context.Context) CheckResult {
 
 // HealthService управляет health checks
 type HealthService struct {
-	checkers []HealthChecker
-	version  string
+	checkers  []HealthChecker
+	version   string
+	startTime time.Time
 }
 
 // NewHealthService создает новый HealthService
 func NewHealthService(version string) *HealthService {
 	return &HealthService{
-		checkers: make([]HealthChecker, 0),
-		version:  version,
+		checkers:  make([]HealthChecker, 0),
+		version:   version,
+		startTime: time.Now(),
 	}
 }
 
@@ -115,7 +117,7 @@ func (hs *HealthService) CheckHealth(ctx context.Context) HealthStatus {
 		Timestamp: time.Now(),
 		Version:   hs.version,
 		Checks:    checks,
-		Uptime:    time.Since(startTime),
+		Uptime:    time.Since(hs.startTime),
 	}
 }
 
@@ -173,7 +175,7 @@ func (hs *HealthService) LivenessHandler() echo.HandlerFunc {
 		response := map[string]interface{}{
 			"alive":     true,
 			"timestamp": time.Now(),
-			"uptime":    time.Since(startTime).Seconds(),
+			"uptime":    time.Since(hs.startTime).Seconds(),
 		}
 
 		return c.JSON(http.StatusOK, response)

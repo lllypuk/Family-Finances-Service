@@ -75,19 +75,37 @@ func InitTracing(ctx context.Context, config TracingConfig, logger *slog.Logger)
 	return tp.Shutdown, nil
 }
 
-// Tracer для приложения
-var AppTracer = otel.Tracer("family-budget-service")
+// Tracer структура для инкапсуляции трейсера
+type Tracer struct {
+	tracer trace.Tracer
+}
+
+// NewTracer создает новый экземпляр трейсера
+func NewTracer(serviceName string) *Tracer {
+	return &Tracer{
+		tracer: otel.Tracer(serviceName),
+	}
+}
 
 // StartSpan создает новый span с контекстом
 // Caller должен вызвать span.End() для завершения span
-func StartSpan(ctx context.Context, name string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
-	ctx, span := AppTracer.Start(ctx, name, opts...) //nolint:spancheck // span.End() должен вызываться caller'ом
-	return ctx, span                                 //nolint:spancheck // span возвращается для использования caller'ом
+func (t *Tracer) StartSpan(
+	ctx context.Context,
+	name string,
+	opts ...trace.SpanStartOption,
+) (context.Context, trace.Span) {
+	ctx, span := t.tracer.Start(ctx, name, opts...) //nolint:spancheck // span.End() должен вызываться caller'ом
+	return ctx, span                                //nolint:spancheck // span возвращается для использования caller'ом
+}
+
+// GetTracer возвращает внутренний трейсер
+func (t *Tracer) GetTracer() trace.Tracer {
+	return t.tracer
 }
 
 // TraceRepository добавляет трейсинг к операциям с репозиторием
-func TraceRepository(ctx context.Context, operation, collection string) (context.Context, trace.Span) {
-	ctx, span := StartSpan(ctx, "repository."+operation,
+func (t *Tracer) TraceRepository(ctx context.Context, operation, collection string) (context.Context, trace.Span) {
+	ctx, span := t.StartSpan(ctx, "repository."+operation,
 		trace.WithAttributes(
 			attribute.String("db.operation", operation),
 			attribute.String("db.collection.name", collection),
@@ -99,8 +117,8 @@ func TraceRepository(ctx context.Context, operation, collection string) (context
 }
 
 // TraceHTTPRequest добавляет трейсинг к HTTP запросам
-func TraceHTTPRequest(ctx context.Context, method, path string) (context.Context, trace.Span) {
-	ctx, span := StartSpan(ctx, "http."+method,
+func (t *Tracer) TraceHTTPRequest(ctx context.Context, method, path string) (context.Context, trace.Span) {
+	ctx, span := t.StartSpan(ctx, "http."+method,
 		trace.WithAttributes(
 			attribute.String("http.method", method),
 			attribute.String("http.route", path),
@@ -111,7 +129,7 @@ func TraceHTTPRequest(ctx context.Context, method, path string) (context.Context
 }
 
 // TraceBusiness добавляет трейсинг к бизнес-операциям
-func TraceBusiness(
+func (t *Tracer) TraceBusiness(
 	ctx context.Context,
 	domain, operation string,
 	metadata map[string]string,
@@ -126,7 +144,7 @@ func TraceBusiness(
 		attrs = append(attrs, attribute.String("business."+key, value))
 	}
 
-	ctx, span := StartSpan(ctx, "business."+domain+"."+operation,
+	ctx, span := t.StartSpan(ctx, "business."+domain+"."+operation,
 		trace.WithAttributes(attrs...),
 	)
 
