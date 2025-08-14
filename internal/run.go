@@ -17,6 +17,11 @@ import (
 	"family-budget-service/internal/observability"
 )
 
+const (
+	// GracefulShutdownTimeout timeout for graceful application shutdown
+	GracefulShutdownTimeout = 30 * time.Second
+)
+
 type Application struct {
 	config               *Config
 	repositories         *handlers.Repositories
@@ -108,7 +113,7 @@ func (a *Application) shutdown() error {
 	a.observabilityService.Logger.InfoContext(context.Background(), "Shutting down application...")
 
 	// Контекст с таймаутом для graceful shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), GracefulShutdownTimeout)
 	defer cancel()
 
 	// Остановка HTTP сервера

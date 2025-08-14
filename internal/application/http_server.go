@@ -14,6 +14,11 @@ import (
 	"family-budget-service/internal/observability"
 )
 
+const (
+	// HTTPRequestTimeout timeout for HTTP requests
+	HTTPRequestTimeout = 30 * time.Second
+)
+
 type HTTPServer struct {
 	echo                 *echo.Echo
 	repositories         *handlers.Repositories
@@ -54,7 +59,7 @@ func NewHTTPServerWithObservability(
 
 	// Timeout для всех запросов
 	e.Use(middleware.TimeoutWithConfig(middleware.TimeoutConfig{
-		Timeout: 30 * time.Second,
+		Timeout: HTTPRequestTimeout,
 	}))
 
 	// Добавляем observability middleware если сервис доступен

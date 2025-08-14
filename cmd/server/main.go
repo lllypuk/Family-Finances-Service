@@ -10,6 +10,11 @@ import (
 	"family-budget-service/internal"
 )
 
+const (
+	// HealthCheckTimeout timeout for health check requests
+	HealthCheckTimeout = 2 * time.Second
+)
+
 func main() {
 	// Проверка флага healthcheck
 	if len(os.Args) > 1 && os.Args[1] == "-health-check" {
@@ -28,7 +33,7 @@ func main() {
 }
 
 func healthCheck() {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), HealthCheckTimeout)
 	defer cancel()
 
 	client := &http.Client{}

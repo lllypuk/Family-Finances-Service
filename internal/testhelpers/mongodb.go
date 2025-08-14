@@ -11,6 +11,11 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+const (
+	// TestMongoTimeout timeout for test MongoDB operations
+	TestMongoTimeout = 10 * time.Second
+)
+
 // MongoDBContainer wraps the testcontainers MongoDB instance
 type MongoDBContainer struct {
 	Container *mongodb.MongoDBContainer
@@ -39,7 +44,7 @@ func SetupMongoDB(t *testing.T) *MongoDBContainer {
 	require.NoError(t, err)
 
 	// Test the connection
-	ctxTimeout, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctxTimeout, cancel := context.WithTimeout(ctx, TestMongoTimeout)
 	defer cancel()
 
 	err = client.Ping(ctxTimeout, nil)

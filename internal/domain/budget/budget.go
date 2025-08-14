@@ -6,6 +6,11 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	// PercentageBase base value for percentage calculations
+	PercentageBase = 100
+)
+
 type Budget struct {
 	ID         uuid.UUID    `json:"id"          bson:"_id"`
 	Name       string       `json:"name"        bson:"name"`
@@ -69,7 +74,7 @@ func (b *Budget) GetSpentPercentage() float64 {
 	if b.Amount == 0 {
 		return 0
 	}
-	return (b.Spent / b.Amount) * 100
+	return (b.Spent / b.Amount) * PercentageBase
 }
 
 func (b *Budget) IsOverBudget() bool {

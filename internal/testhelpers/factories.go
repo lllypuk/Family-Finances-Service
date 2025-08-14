@@ -13,6 +13,15 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	// TestTransactionAmount test transaction amount
+	TestTransactionAmount = 100.50
+	// TestBudgetAmount test budget amount
+	TestBudgetAmount = 1000.0
+	// TestReportExpenses test report expenses amount
+	TestReportExpenses = 500.0
+)
+
 // CreateTestFamily creates a test family
 func CreateTestFamily() *user.Family {
 	return &user.Family{
@@ -61,7 +70,7 @@ func CreateTestTransaction(
 		FamilyID:    familyID,
 		UserID:      userID,
 		CategoryID:  categoryID,
-		Amount:      100.50,
+		Amount:      TestTransactionAmount,
 		Type:        transactionType,
 		Description: "Test transaction",
 		Date:        time.Now(),
@@ -78,7 +87,7 @@ func CreateTestBudget(familyID, categoryID uuid.UUID) *budget.Budget {
 		FamilyID:   familyID,
 		CategoryID: &categoryID,
 		Name:       "Test Budget",
-		Amount:     1000.0,
+		Amount:     TestBudgetAmount,
 		Spent:      0.0,
 		Period:     budget.BudgetPeriodMonthly,
 		StartDate:  time.Now(),
@@ -100,7 +109,7 @@ func CreateTestReport(familyID, userID uuid.UUID) *report.Report {
 		Period:      report.ReportPeriodMonthly,
 		StartDate:   time.Now().AddDate(0, -1, 0),
 		EndDate:     time.Now(),
-		Data:        report.ReportData{TotalExpenses: 500.0},
+		Data:        report.ReportData{TotalExpenses: TestReportExpenses},
 		GeneratedAt: time.Now(),
 	}
 }

@@ -10,6 +10,13 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
+const (
+	// HealthCheckTimeout timeout for individual health checks
+	HealthCheckTimeout = 5 * time.Second
+	// HTTPHealthCheckTimeout timeout for HTTP health check endpoint
+	HTTPHealthCheckTimeout = 3 * time.Second
+)
+
 // HealthStatus представляет статус health check
 type HealthStatus struct {
 	Status    string                 `json:"status"`
@@ -53,7 +60,7 @@ func (m *MongoHealthChecker) CheckHealth(ctx context.Context) CheckResult {
 	start := time.Now()
 
 	// Создаем контекст с таймаутом для проверки
-	checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	checkCtx, cancel := context.WithTimeout(ctx, HealthCheckTimeout)
 	defer cancel()
 
 	// Пингуем MongoDB
@@ -139,7 +146,7 @@ func (hs *HealthService) HealthHandler() echo.HandlerFunc {
 func (hs *HealthService) ReadinessHandler() echo.HandlerFunc {
 	return func(c echo.Context) error {
 		// Быстрая проверка готовности - только критичные зависимости
-		ctx, cancel := context.WithTimeout(c.Request().Context(), 3*time.Second)
+		ctx, cancel := context.WithTimeout(c.Request().Context(), HTTPHealthCheckTimeout)
 		defer cancel()
 
 		health := hs.CheckHealth(ctx)
