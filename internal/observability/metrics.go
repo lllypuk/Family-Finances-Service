@@ -68,21 +68,21 @@ func createHTTPMetrics() (*prometheus.CounterVec, *prometheus.HistogramVec, *pro
 func createBusinessMetrics() (prometheus.Gauge, prometheus.Gauge, prometheus.Gauge, prometheus.Gauge, *prometheus.HistogramVec) {
 	familiesTotal := promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "families_total",
+			Name: "families",
 			Help: "Total number of families in the system",
 		},
 	)
 
 	usersTotal := promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "users_total",
+			Name: "users",
 			Help: "Total number of users in the system",
 		},
 	)
 
 	transactionsTotal := promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "transactions_total",
+			Name: "transactions",
 			Help: "Total number of transactions in the system",
 		},
 	)
