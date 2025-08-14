@@ -34,114 +34,157 @@ type Metrics struct {
 	startTime time.Time
 }
 
+// createHTTPMetrics создает HTTP метрики
+func createHTTPMetrics() (*prometheus.CounterVec, *prometheus.HistogramVec, *prometheus.CounterVec) {
+	httpRequestsTotal := promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "http_requests_total",
+			Help: "Total number of HTTP requests",
+		},
+		[]string{"method", "endpoint", "status"},
+	)
+
+	httpRequestDuration := promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "http_request_duration_seconds",
+			Help:    "Duration of HTTP requests in seconds",
+			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
+		},
+		[]string{"method", "endpoint"},
+	)
+
+	httpRequestsErrors := promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "http_requests_errors_total",
+			Help: "Total number of HTTP request errors",
+		},
+		[]string{"method", "endpoint", "type"},
+	)
+
+	return httpRequestsTotal, httpRequestDuration, httpRequestsErrors
+}
+
+// createBusinessMetrics создает бизнес метрики
+func createBusinessMetrics() (prometheus.Gauge, prometheus.Gauge, prometheus.Gauge, prometheus.Gauge, *prometheus.HistogramVec) {
+	familiesTotal := promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "families_total",
+			Help: "Total number of families in the system",
+		},
+	)
+
+	usersTotal := promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "users_total",
+			Help: "Total number of users in the system",
+		},
+	)
+
+	transactionsTotal := promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "transactions_total",
+			Help: "Total number of transactions in the system",
+		},
+	)
+
+	budgetsActive := promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "budgets_active",
+			Help: "Number of active budgets in the system",
+		},
+	)
+
+	transactionAmount := promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "transaction_amount",
+			Help:    "Distribution of transaction amounts",
+			Buckets: []float64{1, 10, 50, 100, 500, 1000, 5000, 10000, 50000, 100000},
+		},
+		[]string{"type", "category"},
+	)
+
+	return familiesTotal, usersTotal, transactionsTotal, budgetsActive, transactionAmount
+}
+
+// createDatabaseMetrics создает метрики базы данных
+func createDatabaseMetrics() (prometheus.Gauge, *prometheus.HistogramVec, *prometheus.CounterVec) {
+	databaseConnections := promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "database_connections",
+			Help: "Number of active database connections",
+		},
+	)
+
+	databaseOperationDuration := promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "database_operation_duration_seconds",
+			Help:    "Duration of database operations",
+			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
+		},
+		[]string{"operation", "collection"},
+	)
+
+	databaseOperationsTotal := promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "database_operations_total",
+			Help: "Total number of database operations",
+		},
+		[]string{"operation", "collection", "status"},
+	)
+
+	return databaseConnections, databaseOperationDuration, databaseOperationsTotal
+}
+
+// createApplicationMetrics создает метрики приложения
+func createApplicationMetrics() (prometheus.Gauge, prometheus.Gauge) {
+	applicationStartTime := promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "application_start_time_seconds",
+			Help: "Start time of the application since unix epoch in seconds",
+		},
+	)
+
+	applicationUptime := promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "application_uptime_seconds",
+			Help: "Uptime of the application in seconds",
+		},
+	)
+
+	return applicationStartTime, applicationUptime
+}
+
 // NewMetrics создает новый экземпляр метрик
 func NewMetrics() *Metrics {
 	startTime := time.Now()
 
+	// Создаем группы метрик
+	httpRequestsTotal, httpRequestDuration, httpRequestsErrors := createHTTPMetrics()
+	familiesTotal, usersTotal, transactionsTotal, budgetsActive, transactionAmount := createBusinessMetrics()
+	databaseConnections, databaseOperationDuration, databaseOperationsTotal := createDatabaseMetrics()
+	applicationStartTime, applicationUptime := createApplicationMetrics()
+
 	return &Metrics{
 		// HTTP метрики
-		HTTPRequestsTotal: promauto.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "http_requests_total",
-				Help: "Total number of HTTP requests",
-			},
-			[]string{"method", "endpoint", "status"},
-		),
-
-		HTTPRequestDuration: promauto.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "http_request_duration_seconds",
-				Help:    "Duration of HTTP requests in seconds",
-				Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
-			},
-			[]string{"method", "endpoint"},
-		),
-
-		HTTPRequestsErrors: promauto.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "http_requests_errors_total",
-				Help: "Total number of HTTP request errors",
-			},
-			[]string{"method", "endpoint", "type"},
-		),
+		HTTPRequestsTotal:   httpRequestsTotal,
+		HTTPRequestDuration: httpRequestDuration,
+		HTTPRequestsErrors:  httpRequestsErrors,
 
 		// Business метрики
-		FamiliesTotal: promauto.NewGauge(
-			prometheus.GaugeOpts{
-				Name: "families_total",
-				Help: "Total number of families in the system",
-			},
-		),
-
-		UsersTotal: promauto.NewGauge(
-			prometheus.GaugeOpts{
-				Name: "users_total",
-				Help: "Total number of users in the system",
-			},
-		),
-
-		TransactionsTotal: promauto.NewGauge(
-			prometheus.GaugeOpts{
-				Name: "transactions_total",
-				Help: "Total number of transactions in the system",
-			},
-		),
-
-		BudgetsActive: promauto.NewGauge(
-			prometheus.GaugeOpts{
-				Name: "budgets_active",
-				Help: "Number of active budgets in the system",
-			},
-		),
-
-		TransactionAmount: promauto.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "transaction_amount",
-				Help:    "Distribution of transaction amounts",
-				Buckets: []float64{1, 10, 50, 100, 500, 1000, 5000, 10000, 50000, 100000},
-			},
-			[]string{"type", "category"},
-		),
+		FamiliesTotal:     familiesTotal,
+		UsersTotal:        usersTotal,
+		TransactionsTotal: transactionsTotal,
+		BudgetsActive:     budgetsActive,
+		TransactionAmount: transactionAmount,
 
 		// Database метрики
-		DatabaseConnections: promauto.NewGauge(
-			prometheus.GaugeOpts{
-				Name: "database_connections",
-				Help: "Number of active database connections",
-			},
-		),
-
-		DatabaseOperationDuration: promauto.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "database_operation_duration_seconds",
-				Help:    "Duration of database operations",
-				Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
-			},
-			[]string{"operation", "collection"},
-		),
-
-		DatabaseOperationsTotal: promauto.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "database_operations_total",
-				Help: "Total number of database operations",
-			},
-			[]string{"operation", "collection", "status"},
-		),
+		DatabaseConnections:       databaseConnections,
+		DatabaseOperationDuration: databaseOperationDuration,
+		DatabaseOperationsTotal:   databaseOperationsTotal,
 
 		// Application метрики
-		ApplicationStartTime: promauto.NewGauge(
-			prometheus.GaugeOpts{
-				Name: "application_start_time_seconds",
-				Help: "Start time of the application since unix epoch in seconds",
-			},
-		),
-
-		ApplicationUptime: promauto.NewGauge(
-			prometheus.GaugeOpts{
-				Name: "application_uptime_seconds",
-				Help: "Uptime of the application in seconds",
-			},
-		),
+		ApplicationStartTime: applicationStartTime,
+		ApplicationUptime:    applicationUptime,
 
 		startTime: startTime,
 	}
