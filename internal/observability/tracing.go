@@ -7,7 +7,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -19,22 +19,25 @@ import (
 type TracingConfig struct {
 	ServiceName    string `json:"service_name"    default:"family-budget-service"`
 	ServiceVersion string `json:"service_version" default:"1.0.0"`
-	JaegerURL      string `json:"jaeger_url"      default:"http://localhost:14268/api/traces"`
+	OTLPEndpoint   string `json:"otlp_endpoint"   default:"http://localhost:4318/v1/traces"`
 	Environment    string `json:"environment"     default:"development"`
 	Enabled        bool   `json:"enabled"         default:"true"`
 }
 
 // InitTracing инициализирует OpenTelemetry tracing
-func InitTracing(config TracingConfig, logger *slog.Logger) (func(context.Context) error, error) {
+func InitTracing(ctx context.Context, config TracingConfig, logger *slog.Logger) (func(context.Context) error, error) {
 	if !config.Enabled {
 		logger.Info("Tracing disabled")
 		return func(context.Context) error { return nil }, nil
 	}
 
-	// Создаем Jaeger exporter
-	exp, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(config.JaegerURL)))
+	// Создаем OTLP HTTP exporter
+	exp, err := otlptracehttp.New(ctx,
+		otlptracehttp.WithEndpoint(config.OTLPEndpoint),
+		otlptracehttp.WithInsecure(), // для локальной разработки
+	)
 	if err != nil {
-		logger.Error("Failed to create Jaeger exporter", slog.String("error", err.Error()))
+		logger.Error("Failed to create OTLP exporter", slog.String("error", err.Error()))
 		return nil, err
 	}
 
@@ -65,7 +68,7 @@ func InitTracing(config TracingConfig, logger *slog.Logger) (func(context.Contex
 	logger.Info("Tracing initialized successfully",
 		slog.String("service", config.ServiceName),
 		slog.String("version", config.ServiceVersion),
-		slog.String("jaeger_url", config.JaegerURL),
+		slog.String("otlp_endpoint", config.OTLPEndpoint),
 	)
 
 	// Возвращаем функцию для graceful shutdown

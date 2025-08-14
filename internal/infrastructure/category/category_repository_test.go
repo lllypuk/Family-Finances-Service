@@ -43,7 +43,7 @@ func TestCategoryRepository_Integration(t *testing.T) {
 	t.Run("GetByID_NotFound", func(t *testing.T) {
 		nonExistentID := uuid.New()
 		_, err := repo.GetByID(context.Background(), nonExistentID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
@@ -133,7 +133,7 @@ func TestCategoryRepository_Integration(t *testing.T) {
 		nonExistentCategory := testhelpers.CreateTestCategory(family.ID, category.CategoryTypeExpense)
 
 		err := repo.Update(context.Background(), nonExistentCategory)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
@@ -161,7 +161,7 @@ func TestCategoryRepository_Integration(t *testing.T) {
 	t.Run("Delete_NotFound", func(t *testing.T) {
 		nonExistentID := uuid.New()
 		err := repo.Delete(context.Background(), nonExistentID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 }

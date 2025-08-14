@@ -51,7 +51,7 @@ func TestTransactionRepository_Integration(t *testing.T) {
 		retrievedTransaction, err := repo.GetByID(context.Background(), testTransaction.ID)
 		require.NoError(t, err)
 		assert.Equal(t, testTransaction.ID, retrievedTransaction.ID)
-		assert.Equal(t, testTransaction.Amount, retrievedTransaction.Amount)
+		assert.InEpsilon(t, testTransaction.Amount, retrievedTransaction.Amount, 0.001)
 		assert.Equal(t, testTransaction.Type, retrievedTransaction.Type)
 		assert.Equal(t, testTransaction.Description, retrievedTransaction.Description)
 		assert.Equal(t, testTransaction.FamilyID, retrievedTransaction.FamilyID)
@@ -62,7 +62,7 @@ func TestTransactionRepository_Integration(t *testing.T) {
 	t.Run("GetByID_NotFound", func(t *testing.T) {
 		nonExistentID := uuid.New()
 		_, err := repo.GetByID(context.Background(), nonExistentID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
@@ -231,7 +231,7 @@ func TestTransactionRepository_Integration(t *testing.T) {
 
 		retrievedTransaction, err := repo.GetByID(context.Background(), testTransaction.ID)
 		require.NoError(t, err)
-		assert.Equal(t, 200.0, retrievedTransaction.Amount)
+		assert.InEpsilon(t, 200.0, retrievedTransaction.Amount, 0.001)
 		assert.Equal(t, "Updated transaction", retrievedTransaction.Description)
 	})
 
@@ -247,7 +247,7 @@ func TestTransactionRepository_Integration(t *testing.T) {
 		)
 
 		err := repo.Update(context.Background(), nonExistentTransaction)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
@@ -269,14 +269,14 @@ func TestTransactionRepository_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = repo.GetByID(context.Background(), testTransaction.ID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
 	t.Run("Delete_NotFound", func(t *testing.T) {
 		nonExistentID := uuid.New()
 		err := repo.Delete(context.Background(), nonExistentID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
@@ -319,7 +319,7 @@ func TestTransactionRepository_Integration(t *testing.T) {
 
 		total, err := repo.GetTotalByCategory(context.Background(), testCategory.ID, transaction.TransactionTypeExpense)
 		require.NoError(t, err)
-		assert.Equal(t, 150.0, total)
+		assert.InEpsilon(t, 150.0, total, 0.001)
 
 		incomeTotal, err := repo.GetTotalByCategory(
 			context.Background(),
@@ -327,7 +327,7 @@ func TestTransactionRepository_Integration(t *testing.T) {
 			transaction.TransactionTypeIncome,
 		)
 		require.NoError(t, err)
-		assert.Equal(t, 200.0, incomeTotal)
+		assert.InEpsilon(t, 200.0, incomeTotal, 0.001)
 	})
 
 	t.Run("GetTotalByCategory_NoTransactions", func(t *testing.T) {
@@ -336,6 +336,6 @@ func TestTransactionRepository_Integration(t *testing.T) {
 
 		total, err := repo.GetTotalByCategory(context.Background(), testCategory.ID, transaction.TransactionTypeExpense)
 		require.NoError(t, err)
-		assert.Equal(t, 0.0, total)
+		assert.InEpsilon(t, 0.0, total, 0.001)
 	})
 }

@@ -34,7 +34,7 @@ func NewService(config Config, version string) (*Service, error) {
 	businessLogger := NewBusinessLogger(logger)
 
 	// Инициализируем tracing
-	shutdownTracing, err := InitTracing(config.Tracing, logger)
+	shutdownTracing, err := InitTracing(context.Background(), config.Tracing, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +99,7 @@ func DefaultConfig() Config {
 		Tracing: TracingConfig{
 			ServiceName:    "family-budget-service",
 			ServiceVersion: "1.0.0",
-			JaegerURL:      "http://localhost:14268/api/traces",
+			OTLPEndpoint:   "http://localhost:4318/v1/traces",
 			Environment:    "development",
 			Enabled:        true,
 		},

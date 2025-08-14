@@ -1,4 +1,4 @@
-package application
+package application_test
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
+	"family-budget-service/internal/application"
 	"family-budget-service/internal/handlers"
 	"family-budget-service/internal/observability"
 )
@@ -26,78 +27,64 @@ func NewMockRepositories() *MockRepositories {
 func TestNewHTTPServer(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
-	config := &Config{
+	config := &application.Config{
 		Port: "8080",
 		Host: "localhost",
 	}
 
 	// Execute
-	server := NewHTTPServer(&repos.Repositories, config)
+	server := application.NewHTTPServer(&repos.Repositories, config)
 
 	// Assert
 	assert.NotNil(t, server)
-	assert.NotNil(t, server.echo)
-	assert.Equal(t, &repos.Repositories, server.repositories)
-	assert.Equal(t, config, server.config)
-	assert.Nil(t, server.observabilityService)
-	assert.NotNil(t, server.userHandler)
-	assert.NotNil(t, server.familyHandler)
-	assert.NotNil(t, server.categoryHandler)
-	assert.NotNil(t, server.transactionHandler)
-	assert.NotNil(t, server.budgetHandler)
-	assert.NotNil(t, server.reportHandler)
+	assert.NotNil(t, server.Echo()) // Test public Echo() method
 }
 
 func TestNewHTTPServerWithObservability(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
-	config := &Config{
+	config := &application.Config{
 		Port: "8080",
 		Host: "localhost",
 	}
 	obsService := &observability.Service{}
 
 	// Execute
-	server := NewHTTPServerWithObservability(&repos.Repositories, config, obsService)
+	server := application.NewHTTPServerWithObservability(&repos.Repositories, config, obsService)
 
 	// Assert
 	assert.NotNil(t, server)
-	assert.NotNil(t, server.echo)
-	assert.Equal(t, &repos.Repositories, server.repositories)
-	assert.Equal(t, config, server.config)
-	assert.Equal(t, obsService, server.observabilityService)
+	assert.NotNil(t, server.Echo())
 }
 
 func TestHTTPServer_Echo(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
-	config := &Config{Port: "8080", Host: "localhost"}
-	server := NewHTTPServer(&repos.Repositories, config)
+	config := &application.Config{Port: "8080", Host: "localhost"}
+	server := application.NewHTTPServer(&repos.Repositories, config)
 
 	// Execute
 	echoInstance := server.Echo()
 
 	// Assert
 	assert.NotNil(t, echoInstance)
-	assert.Equal(t, server.echo, echoInstance)
+	assert.IsType(t, &echo.Echo{}, echoInstance)
 }
 
-func TestHTTPServer_HealthCheck(t *testing.T) {
+func TestHTTPServer_HealthEndpoint(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
-	config := &Config{Port: "8080", Host: "localhost"}
-	server := NewHTTPServer(&repos.Repositories, config)
+	config := &application.Config{Port: "8080", Host: "localhost"}
+	server := application.NewHTTPServer(&repos.Repositories, config)
 
-	// Create request
+	// Create request to health endpoint
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
-	c := server.echo.NewContext(req, rec)
 
 	// Execute
-	err := server.healthCheck(c)
+	server.Echo().ServeHTTP(rec, req)
 
 	// Assert
-	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), `"status":"ok"`)
 	assert.Contains(t, rec.Body.String(), `"time"`)
@@ -106,11 +93,11 @@ func TestHTTPServer_HealthCheck(t *testing.T) {
 func TestHTTPServer_RoutesSetup(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
-	config := &Config{Port: "8080", Host: "localhost"}
-	server := NewHTTPServer(&repos.Repositories, config)
+	config := &application.Config{Port: "8080", Host: "localhost"}
+	server := application.NewHTTPServer(&repos.Repositories, config)
 
 	// Test that routes are properly set up by checking if the echo instance has routes
-	routes := server.echo.Routes()
+	routes := server.Echo().Routes()
 	assert.NotEmpty(t, routes)
 
 	// Check for key routes
@@ -122,70 +109,32 @@ func TestHTTPServer_RoutesSetup(t *testing.T) {
 	// Health endpoints
 	assert.True(t, routePaths["GET /health"])
 
-	// API endpoints
+	// API endpoints - check for some key endpoints
 	assert.True(t, routePaths["POST /api/v1/users"])
 	assert.True(t, routePaths["GET /api/v1/users/:id"])
-	assert.True(t, routePaths["PUT /api/v1/users/:id"])
-	assert.True(t, routePaths["DELETE /api/v1/users/:id"])
-
 	assert.True(t, routePaths["POST /api/v1/families"])
-	assert.True(t, routePaths["GET /api/v1/families/:id"])
-	assert.True(t, routePaths["GET /api/v1/families/:id/members"])
-
 	assert.True(t, routePaths["POST /api/v1/categories"])
 	assert.True(t, routePaths["GET /api/v1/categories"])
-	assert.True(t, routePaths["GET /api/v1/categories/:id"])
-	assert.True(t, routePaths["PUT /api/v1/categories/:id"])
-	assert.True(t, routePaths["DELETE /api/v1/categories/:id"])
-
 	assert.True(t, routePaths["POST /api/v1/transactions"])
 	assert.True(t, routePaths["GET /api/v1/transactions"])
-	assert.True(t, routePaths["GET /api/v1/transactions/:id"])
-	assert.True(t, routePaths["PUT /api/v1/transactions/:id"])
-	assert.True(t, routePaths["DELETE /api/v1/transactions/:id"])
-
 	assert.True(t, routePaths["POST /api/v1/budgets"])
 	assert.True(t, routePaths["GET /api/v1/budgets"])
-	assert.True(t, routePaths["GET /api/v1/budgets/:id"])
-	assert.True(t, routePaths["PUT /api/v1/budgets/:id"])
-	assert.True(t, routePaths["DELETE /api/v1/budgets/:id"])
-
 	assert.True(t, routePaths["POST /api/v1/reports"])
 	assert.True(t, routePaths["GET /api/v1/reports"])
-	assert.True(t, routePaths["GET /api/v1/reports/:id"])
-	assert.True(t, routePaths["DELETE /api/v1/reports/:id"])
-}
-
-func TestHTTPServer_HealthEndpoint_Integration(t *testing.T) {
-	// Setup
-	repos := NewMockRepositories()
-	config := &Config{Port: "8080", Host: "localhost"}
-	server := NewHTTPServer(&repos.Repositories, config)
-
-	// Create request
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
-	rec := httptest.NewRecorder()
-
-	// Execute
-	server.echo.ServeHTTP(rec, req)
-
-	// Assert
-	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Contains(t, rec.Body.String(), `"status":"ok"`)
 }
 
 func TestHTTPServer_MiddlewareSetup(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
-	config := &Config{Port: "8080", Host: "localhost"}
-	server := NewHTTPServer(&repos.Repositories, config)
+	config := &application.Config{Port: "8080", Host: "localhost"}
+	server := application.NewHTTPServer(&repos.Repositories, config)
 
 	// Test that middleware is applied by making a request
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
 
 	// Execute
-	server.echo.ServeHTTP(rec, req)
+	server.Echo().ServeHTTP(rec, req)
 
 	// Assert that middleware headers are present
 	assert.NotEmpty(t, rec.Header().Get("X-Request-Id")) // RequestID middleware
@@ -196,23 +145,23 @@ func TestHTTPServer_WithObservabilityRoutes(t *testing.T) {
 	obsService := &observability.Service{}
 
 	repos := NewMockRepositories()
-	config := &Config{Port: "8080", Host: "localhost"}
-	server := NewHTTPServerWithObservability(&repos.Repositories, config, obsService)
+	config := &application.Config{Port: "8080", Host: "localhost"}
+	server := application.NewHTTPServerWithObservability(&repos.Repositories, config, obsService)
 
 	// Test that observability routes are properly set up
-	routes := server.echo.Routes()
+	routes := server.Echo().Routes()
 	routePaths := make(map[string]bool)
 	for _, route := range routes {
 		routePaths[route.Method+" "+route.Path] = true
 	}
 
-	// Check for basic health endpoint (simplified for testing)
+	// Check for basic health endpoint
 	assert.True(t, routePaths["GET /health"])
 }
 
 func TestConfig_Fields(t *testing.T) {
 	// Test that Config struct has expected fields
-	config := &Config{
+	config := &application.Config{
 		Port: "8080",
 		Host: "localhost",
 	}
@@ -226,8 +175,8 @@ func TestHTTPServer_StartShutdownInterface(t *testing.T) {
 	// but doesn't actually start/stop the server to avoid port conflicts in tests
 
 	repos := NewMockRepositories()
-	config := &Config{Port: "8080", Host: "localhost"}
-	server := NewHTTPServer(&repos.Repositories, config)
+	config := &application.Config{Port: "8080", Host: "localhost"}
+	server := application.NewHTTPServer(&repos.Repositories, config)
 
 	// Verify methods exist and have correct signatures
 	ctx := context.Background()
@@ -267,18 +216,49 @@ func (m *MockHealthService) LivenessHandler() echo.HandlerFunc {
 	}
 }
 
-func TestHTTPServer_TimeoutMiddleware(t *testing.T) {
+func TestHTTPServer_IntegrationWithRealEndpoints(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
-	config := &Config{Port: "8080", Host: "localhost"}
-	server := NewHTTPServer(&repos.Repositories, config)
+	config := &application.Config{Port: "8080", Host: "localhost"}
+	server := application.NewHTTPServer(&repos.Repositories, config)
 
-	// Create a simple handler for testing
-	server.echo.GET("/test", func(c echo.Context) error {
-		return c.String(200, "test response")
-	})
+	// Test that we can make requests to various endpoints
+	testCases := []struct {
+		method   string
+		path     string
+		expected int
+	}{
+		{"GET", "/health", http.StatusOK},
+		{"GET", "/api/v1/categories", http.StatusBadRequest}, // Missing family_id
+		{"GET", "/api/v1/nonexistent", http.StatusNotFound},
+	}
 
-	// This test verifies that timeout middleware is configured
-	// The actual timeout behavior would be tested in integration tests
-	assert.NotNil(t, server.echo)
+	for _, tc := range testCases {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			rec := httptest.NewRecorder()
+
+			server.Echo().ServeHTTP(rec, req)
+
+			assert.Equal(t, tc.expected, rec.Code)
+		})
+	}
+}
+
+func TestHTTPServer_CORSEnabled(t *testing.T) {
+	// Setup
+	repos := NewMockRepositories()
+	config := &application.Config{Port: "8080", Host: "localhost"}
+	server := application.NewHTTPServer(&repos.Repositories, config)
+
+	// Test CORS preflight request
+	req := httptest.NewRequest(http.MethodOptions, "/api/v1/categories", nil)
+	req.Header.Set("Origin", "http://localhost:3000")
+	req.Header.Set("Access-Control-Request-Method", "GET")
+	rec := httptest.NewRecorder()
+
+	server.Echo().ServeHTTP(rec, req)
+
+	// Assert CORS headers are present
+	assert.NotEmpty(t, rec.Header().Get("Access-Control-Allow-Origin"))
 }

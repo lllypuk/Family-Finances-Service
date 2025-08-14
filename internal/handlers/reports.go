@@ -329,18 +329,96 @@ func (h *ReportHandler) generateReportData(
 	familyID uuid.UUID,
 	startDate, endDate time.Time,
 ) report.ReportData {
-	// TODO: Реализовать генерацию данных для каждого типа отчета
-	// Пока возвращаем заглушку со значениями по умолчанию
 	data := report.ReportData{}
+
+	// Получаем базовые данные для всех типов отчетов
+	h.populateBasicReportData(ctx, &data, familyID, startDate, endDate)
 
 	switch reportType {
 	case report.ReportTypeExpenses:
-		// заполните поля, когда будет реализована логика
+		h.generateExpensesReportData(ctx, &data, familyID, startDate, endDate)
 	case report.ReportTypeIncome:
+		h.generateIncomeReportData(ctx, &data, familyID, startDate, endDate)
 	case report.ReportTypeBudget:
+		h.generateBudgetReportData(ctx, &data, familyID, startDate, endDate)
 	case report.ReportTypeCashFlow:
+		h.generateCashFlowReportData(ctx, &data, familyID, startDate, endDate)
 	case report.ReportTypeCategoryBreak:
+		h.generateCategoryBreakdownReportData(ctx, &data, familyID, startDate, endDate)
 	}
 
 	return data
+}
+
+// populateBasicReportData заполняет базовые данные для всех типов отчетов
+func (h *ReportHandler) populateBasicReportData(
+	ctx context.Context,
+	data *report.ReportData,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+) {
+	// Базовые расчеты для всех отчетов
+	data.TotalIncome = 0
+	data.TotalExpenses = 0
+	data.NetIncome = 0
+	data.CategoryBreakdown = []report.CategoryReportItem{}
+	data.DailyBreakdown = []report.DailyReportItem{}
+	data.TopExpenses = []report.TransactionReportItem{}
+	data.BudgetComparison = []report.BudgetComparisonItem{}
+}
+
+// generateExpensesReportData генерирует данные для отчета по расходам
+func (h *ReportHandler) generateExpensesReportData(
+	ctx context.Context,
+	data *report.ReportData,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+) {
+	// TODO: Реализовать получение расходов из транзакций
+	// Пример структуры данных для расходов
+	data.TotalExpenses = 0 // Будет рассчитано из транзакций
+}
+
+// generateIncomeReportData генерирует данные для отчета по доходам
+func (h *ReportHandler) generateIncomeReportData(
+	ctx context.Context,
+	data *report.ReportData,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+) {
+	// TODO: Реализовать получение доходов из транзакций
+	data.TotalIncome = 0 // Будет рассчитано из транзакций
+}
+
+// generateBudgetReportData генерирует данные для отчета по бюджету
+func (h *ReportHandler) generateBudgetReportData(
+	ctx context.Context,
+	data *report.ReportData,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+) {
+	// TODO: Реализовать сравнение бюджета с фактическими тратами
+	// Получение активных бюджетов и сравнение с транзакциями
+}
+
+// generateCashFlowReportData генерирует данные для отчета по денежному потоку
+func (h *ReportHandler) generateCashFlowReportData(
+	ctx context.Context,
+	data *report.ReportData,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+) {
+	// TODO: Реализовать расчет денежного потока по дням
+	// Заполнение DailyBreakdown с доходами и расходами по дням
+}
+
+// generateCategoryBreakdownReportData генерирует данные для разбивки по категориям
+func (h *ReportHandler) generateCategoryBreakdownReportData(
+	ctx context.Context,
+	data *report.ReportData,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+) {
+	// TODO: Реализовать группировку транзакций по категориям
+	// Заполнение CategoryBreakdown с суммами по категориям
 }

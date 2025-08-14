@@ -39,7 +39,7 @@ func TestBudgetRepository_Integration(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, testBudget.ID, retrievedBudget.ID)
 		assert.Equal(t, testBudget.Name, retrievedBudget.Name)
-		assert.Equal(t, testBudget.Amount, retrievedBudget.Amount)
+		assert.InEpsilon(t, testBudget.Amount, retrievedBudget.Amount, 0.001)
 		assert.Equal(t, testBudget.FamilyID, retrievedBudget.FamilyID)
 		assert.Equal(t, testBudget.CategoryID, retrievedBudget.CategoryID)
 	})
@@ -47,7 +47,7 @@ func TestBudgetRepository_Integration(t *testing.T) {
 	t.Run("GetByID_NotFound", func(t *testing.T) {
 		nonExistentID := uuid.New()
 		_, err := repo.GetByID(context.Background(), nonExistentID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
@@ -153,7 +153,7 @@ func TestBudgetRepository_Integration(t *testing.T) {
 		retrievedBudget, err := repo.GetByID(context.Background(), testBudget.ID)
 		require.NoError(t, err)
 		assert.Equal(t, "Updated Budget Name", retrievedBudget.Name)
-		assert.Equal(t, 2000.0, retrievedBudget.Amount)
+		assert.InEpsilon(t, 2000.0, retrievedBudget.Amount, 0.001)
 	})
 
 	t.Run("Update_NotFound", func(t *testing.T) {
@@ -162,7 +162,7 @@ func TestBudgetRepository_Integration(t *testing.T) {
 		nonExistentBudget := testhelpers.CreateTestBudget(family.ID, testCategory.ID)
 
 		err := repo.Update(context.Background(), nonExistentBudget)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
@@ -178,14 +178,14 @@ func TestBudgetRepository_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = repo.GetByID(context.Background(), testBudget.ID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
 	t.Run("Delete_NotFound", func(t *testing.T) {
 		nonExistentID := uuid.New()
 		err := repo.Delete(context.Background(), nonExistentID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
