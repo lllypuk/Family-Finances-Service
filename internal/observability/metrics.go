@@ -253,37 +253,31 @@ func (r *MetricsRegistry) Get() *Metrics {
 	return r.instance
 }
 
-// Package-level переменные для глобального доступа к метрикам
-var (
-	globalMetrics *Metrics
-	metricsOnce   sync.Once
-)
-
-// InitMetrics инициализирует глобальный экземпляр метрик
-func InitMetrics() {
-	metricsOnce.Do(func() {
-		globalMetrics = NewMetrics()
-		globalMetrics.Initialize()
-	})
+// getDefaultMetrics возвращает единственный экземпляр метрик, используя sync.OnceValue
+func getDefaultMetrics() *Metrics {
+	// Используем sync.OnceValue для ленивой инициализации без глобальных переменных
+	return sync.OnceValue(func() *Metrics {
+		m := NewMetrics()
+		m.Initialize()
+		return m
+	})()
 }
 
-// getGlobalMetrics возвращает глобальный экземпляр метрик, инициализируя его при необходимости
-func getGlobalMetrics() *Metrics {
-	metricsOnce.Do(func() {
-		globalMetrics = NewMetrics()
-		globalMetrics.Initialize()
-	})
-	return globalMetrics
+// InitMetrics инициализирует экземпляр метрик (для обратной совместимости)
+// В текущей реализации инициализация происходит лениво при первом обращении
+func InitMetrics() {
+	// Вызываем getDefaultMetrics для принудительной инициализации
+	_ = getDefaultMetrics()
 }
 
 // RecordHTTPRequest глобальная функция для обратной совместимости
 func RecordHTTPRequest(method, endpoint, status string, duration float64) {
-	metrics := getGlobalMetrics()
+	metrics := getDefaultMetrics()
 	metrics.RecordHTTPRequest(method, endpoint, status, duration)
 }
 
 // RecordHTTPError глобальная функция для обратной совместимости
 func RecordHTTPError(method, endpoint, errorType string) {
-	metrics := getGlobalMetrics()
+	metrics := getDefaultMetrics()
 	metrics.RecordHTTPError(method, endpoint, errorType)
 }
