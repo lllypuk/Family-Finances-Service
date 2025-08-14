@@ -79,8 +79,10 @@ func InitTracing(ctx context.Context, config TracingConfig, logger *slog.Logger)
 var AppTracer = otel.Tracer("family-budget-service")
 
 // StartSpan создает новый span с контекстом
+// Caller должен вызвать span.End() для завершения span
 func StartSpan(ctx context.Context, name string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
-	return AppTracer.Start(ctx, name, opts...)
+	ctx, span := AppTracer.Start(ctx, name, opts...) //nolint:spancheck // span.End() должен вызываться caller'ом
+	return ctx, span                                 //nolint:spancheck // span возвращается для использования caller'ом
 }
 
 // TraceRepository добавляет трейсинг к операциям с репозиторием
