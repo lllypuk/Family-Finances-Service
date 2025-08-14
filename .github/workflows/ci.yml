@@ -74,7 +74,7 @@ jobs:
           MONGODB_URI: mongodb://admin:password123@localhost:27017/family_budget_test?authSource=admin
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.out
           flags: unittests
