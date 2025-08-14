@@ -131,12 +131,14 @@ func (a *Application) shutdown() error {
 		}
 	}
 
-	// Остановка observability сервиса
-	if err := a.observabilityService.Shutdown(ctx); err != nil {
-		// Используем стандартный logger для последнего сообщения
-		slog.ErrorContext(ctx, "Observability service shutdown error", slog.String("error", err.Error()))
-	}
-
+	// Логируем завершение работы приложения перед остановкой observability сервиса
 	a.observabilityService.Logger.InfoContext(ctx, "Application shutdown complete")
+
+	// Остановка observability сервиса (последний шаг)
+	if err := a.observabilityService.Shutdown(ctx); err != nil {
+		// На этом этапе logger уже может быть недоступен, используем простой log
+		// Альтернативно можно игнорировать эту ошибку, так как приложение завершается
+		_ = err // Игнорируем ошибку при shutdown observability сервиса
+	}
 	return nil
 }
