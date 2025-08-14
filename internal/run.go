@@ -84,11 +84,11 @@ func (a *Application) Run() error {
 
 	// Запуск HTTP сервера в горутине
 	go func() {
-		a.observabilityService.Logger.Info("Starting HTTP server",
+		a.observabilityService.Logger.InfoContext(ctx, "Starting HTTP server",
 			slog.String("host", a.config.Server.Host),
 			slog.String("port", a.config.Server.Port))
 		if err := a.httpServer.Start(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			a.observabilityService.Logger.Error("HTTP server error", slog.String("error", err.Error()))
+			a.observabilityService.Logger.ErrorContext(ctx, "HTTP server error", slog.String("error", err.Error()))
 			cancel()
 		}
 	}()
@@ -96,16 +96,16 @@ func (a *Application) Run() error {
 	// Ожидание сигнала завершения
 	select {
 	case sig := <-sigChan:
-		a.observabilityService.Logger.Info("Received shutdown signal", slog.String("signal", sig.String()))
+		a.observabilityService.Logger.InfoContext(ctx, "Received shutdown signal", slog.String("signal", sig.String()))
 	case <-ctx.Done():
-		a.observabilityService.Logger.Info("Context cancelled")
+		a.observabilityService.Logger.InfoContext(ctx, "Context cancelled")
 	}
 
 	return a.shutdown()
 }
 
 func (a *Application) shutdown() error {
-	a.observabilityService.Logger.Info("Shutting down application...")
+	a.observabilityService.Logger.InfoContext(context.Background(), "Shutting down application...")
 
 	// Контекст с таймаутом для graceful shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -113,26 +113,30 @@ func (a *Application) shutdown() error {
 
 	// Остановка HTTP сервера
 	if err := a.httpServer.Shutdown(ctx); err != nil {
-		a.observabilityService.Logger.Error("HTTP server shutdown error", slog.String("error", err.Error()))
+		a.observabilityService.Logger.ErrorContext(ctx, "HTTP server shutdown error", slog.String("error", err.Error()))
 	} else {
-		a.observabilityService.Logger.Info("HTTP server stopped")
+		a.observabilityService.Logger.InfoContext(ctx, "HTTP server stopped")
 	}
 
 	// Закрытие подключения к MongoDB
 	if a.mongodb != nil {
 		if err := a.mongodb.Close(ctx); err != nil {
-			a.observabilityService.Logger.Error("MongoDB disconnect error", slog.String("error", err.Error()))
+			a.observabilityService.Logger.ErrorContext(
+				ctx,
+				"MongoDB disconnect error",
+				slog.String("error", err.Error()),
+			)
 		} else {
-			a.observabilityService.Logger.Info("MongoDB disconnected")
+			a.observabilityService.Logger.InfoContext(ctx, "MongoDB disconnected")
 		}
 	}
 
 	// Остановка observability сервиса
 	if err := a.observabilityService.Shutdown(ctx); err != nil {
 		// Используем стандартный logger для последнего сообщения
-		slog.Error("Observability service shutdown error", slog.String("error", err.Error()))
+		slog.ErrorContext(ctx, "Observability service shutdown error", slog.String("error", err.Error()))
 	}
 
-	a.observabilityService.Logger.Info("Application shutdown complete")
+	a.observabilityService.Logger.InfoContext(ctx, "Application shutdown complete")
 	return nil
 }

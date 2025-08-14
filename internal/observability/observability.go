@@ -50,7 +50,7 @@ func NewService(config Config, version string) (*Service, error) {
 		shutdownTracing: shutdownTracing,
 	}
 
-	logger.Info("Observability service initialized",
+	logger.InfoContext(context.Background(), "Observability service initialized",
 		slog.String("log_level", config.Logging.Level),
 		slog.String("log_format", config.Logging.Format),
 		slog.Bool("tracing_enabled", config.Tracing.Enabled),
@@ -64,28 +64,28 @@ func NewService(config Config, version string) (*Service, error) {
 func (s *Service) AddMongoHealthCheck(client *mongo.Client) {
 	checker := NewMongoHealthChecker(client)
 	s.HealthService.AddChecker(checker)
-	s.Logger.Info("MongoDB health check added")
+	s.Logger.InfoContext(context.Background(), "MongoDB health check added")
 }
 
 // AddCustomHealthCheck добавляет пользовательский health check
 func (s *Service) AddCustomHealthCheck(name string, checkFunc func(ctx context.Context) error) {
 	checker := NewCustomHealthChecker(name, checkFunc)
 	s.HealthService.AddChecker(checker)
-	s.Logger.Info("Custom health check added", slog.String("name", name))
+	s.Logger.InfoContext(context.Background(), "Custom health check added", slog.String("name", name))
 }
 
 // Shutdown корректно завершает все observability компоненты
 func (s *Service) Shutdown(ctx context.Context) error {
-	s.Logger.Info("Shutting down observability service")
+	s.Logger.InfoContext(ctx, "Shutting down observability service")
 
 	if s.shutdownTracing != nil {
 		if err := s.shutdownTracing(ctx); err != nil {
-			s.Logger.Error("Failed to shutdown tracing", slog.String("error", err.Error()))
+			s.Logger.ErrorContext(ctx, "Failed to shutdown tracing", slog.String("error", err.Error()))
 			return err
 		}
 	}
 
-	s.Logger.Info("Observability service shutdown completed")
+	s.Logger.InfoContext(ctx, "Observability service shutdown completed")
 	return nil
 }
 

@@ -27,7 +27,7 @@ type TracingConfig struct {
 // InitTracing инициализирует OpenTelemetry tracing
 func InitTracing(ctx context.Context, config TracingConfig, logger *slog.Logger) (func(context.Context) error, error) {
 	if !config.Enabled {
-		logger.Info("Tracing disabled")
+		logger.InfoContext(ctx, "Tracing disabled")
 		return func(context.Context) error { return nil }, nil
 	}
 
@@ -37,7 +37,7 @@ func InitTracing(ctx context.Context, config TracingConfig, logger *slog.Logger)
 		otlptracehttp.WithInsecure(), // для локальной разработки
 	)
 	if err != nil {
-		logger.Error("Failed to create OTLP exporter", slog.String("error", err.Error()))
+		logger.ErrorContext(ctx, "Failed to create OTLP exporter", slog.String("error", err.Error()))
 		return nil, err
 	}
 
@@ -65,7 +65,7 @@ func InitTracing(ctx context.Context, config TracingConfig, logger *slog.Logger)
 		propagation.Baggage{},
 	))
 
-	logger.Info("Tracing initialized successfully",
+	logger.InfoContext(ctx, "Tracing initialized successfully",
 		slog.String("service", config.ServiceName),
 		slog.String("version", config.ServiceVersion),
 		slog.String("otlp_endpoint", config.OTLPEndpoint),

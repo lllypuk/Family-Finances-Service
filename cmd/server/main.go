@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -27,11 +28,18 @@ func main() {
 }
 
 func healthCheck() {
-	client := &http.Client{
-		Timeout: 2 * time.Second,
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	client := &http.Client{}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://localhost:8080/health", nil)
+	if err != nil {
+		log.Printf("Failed to create request: %v", err)
+		os.Exit(1)
 	}
 
-	resp, err := client.Get("http://localhost:8080/health")
+	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("Health check failed: %v", err)
 		os.Exit(1)
