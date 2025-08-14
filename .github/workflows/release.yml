@@ -3,16 +3,16 @@ name: Release
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (e.g., v1.0.0)'
+        description: "Version to release (e.g., v1.0.0)"
         required: true
         type: string
 
 env:
-  GO_VERSION: '1.24'
+  GO_VERSION: "1.24"
 
 jobs:
   validate:
@@ -23,31 +23,31 @@ jobs:
       is-prerelease: ${{ steps.version.outputs.is-prerelease }}
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Validate version
-      id: version
-      run: |
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          VERSION="${{ github.event.inputs.version }}"
-        else
-          VERSION="${{ github.ref_name }}"
-        fi
-        
-        echo "version=${VERSION}" >> $GITHUB_OUTPUT
-        
-        # Check if it's a prerelease (contains alpha, beta, rc)
-        if [[ $VERSION =~ (alpha|beta|rc) ]]; then
-          echo "is-prerelease=true" >> $GITHUB_OUTPUT
-        else
-          echo "is-prerelease=false" >> $GITHUB_OUTPUT
-        fi
-        
-        echo "Release version: ${VERSION}"
-        echo "Is prerelease: $(cat $GITHUB_OUTPUT | grep is-prerelease | cut -d'=' -f2)"
+      - name: Validate version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${{ github.ref_name }}"
+          fi
+
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+          # Check if it's a prerelease (contains alpha, beta, rc)
+          if [[ $VERSION =~ (alpha|beta|rc) ]]; then
+            echo "is-prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is-prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+          echo "Release version: ${VERSION}"
+          echo "Is prerelease: $(cat $GITHUB_OUTPUT | grep is-prerelease | cut -d'=' -f2)"
 
   build:
     name: Build Release Binaries
@@ -74,50 +74,50 @@ jobs:
             ext: .exe
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        cache: true
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
 
-    - name: Download dependencies
-      run: make deps
+      - name: Download dependencies
+        run: make deps
 
-    - name: Run tests
-      run: make test
+      - name: Run tests
+        run: make test
 
-    - name: Build binary
-      env:
-        GOOS: ${{ matrix.os }}
-        GOARCH: ${{ matrix.arch }}
-        CGO_ENABLED: 0
-        VERSION: ${{ needs.validate.outputs.version }}
-      run: |
-        BINARY_NAME="family-budget-service-${{ matrix.name }}${{ matrix.ext }}"
-        go build \
-          -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-          -o "build/${BINARY_NAME}" \
-          ./cmd/server
-        
-        # Create checksum
-        cd build
-        if command -v sha256sum > /dev/null; then
-          sha256sum "${BINARY_NAME}" > "${BINARY_NAME}.sha256"
-        else
-          shasum -a 256 "${BINARY_NAME}" > "${BINARY_NAME}.sha256"
-        fi
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 0
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          BINARY_NAME="family-budget-service-${{ matrix.name }}${{ matrix.ext }}"
+          go build \
+            -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -o "build/${BINARY_NAME}" \
+            ./cmd/server
 
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: binary-${{ matrix.name }}
-        path: |
-          build/family-budget-service-${{ matrix.name }}${{ matrix.ext }}
-          build/family-budget-service-${{ matrix.name }}${{ matrix.ext }}.sha256
-        retention-days: 1
+          # Create checksum
+          cd build
+          if command -v sha256sum > /dev/null; then
+            sha256sum "${BINARY_NAME}" > "${BINARY_NAME}.sha256"
+          else
+            shasum -a 256 "${BINARY_NAME}" > "${BINARY_NAME}.sha256"
+          fi
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.name }}
+          path: |
+            build/family-budget-service-${{ matrix.name }}${{ matrix.ext }}
+            build/family-budget-service-${{ matrix.name }}${{ matrix.ext }}.sha256
+          retention-days: 1
 
   docker:
     name: Build and Push Docker Image
@@ -128,44 +128,44 @@ jobs:
       packages: write
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ghcr.io/${{ github.repository }}
-        tags: |
-          type=semver,pattern={{version}},value=${{ needs.validate.outputs.version }}
-          type=semver,pattern={{major}}.{{minor}},value=${{ needs.validate.outputs.version }}
-          type=semver,pattern={{major}},value=${{ needs.validate.outputs.version }}
-          type=raw,value=latest,enable={{is_default_branch}}
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.validate.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.validate.outputs.version }}
+            type=semver,pattern={{major}},value=${{ needs.validate.outputs.version }}
+            type=raw,value=latest,enable={{is_default_branch}}
 
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        platforms: linux/amd64,linux/arm64
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-        build-args: |
-          VERSION=${{ needs.validate.outputs.version }}
-          BUILDTIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
-          REVISION=${{ github.sha }}
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ needs.validate.outputs.version }}
+            BUILDTIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            REVISION=${{ github.sha }}
 
   release:
     name: Create GitHub Release
@@ -176,71 +176,71 @@ jobs:
       discussions: write
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Download all artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: artifacts/
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
 
-    - name: Prepare release assets
-      run: |
-        mkdir -p release-assets
-        find artifacts/ -name "family-budget-service-*" -exec cp {} release-assets/ \;
-        ls -la release-assets/
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          find artifacts/ -name "family-budget-service-*" -exec cp {} release-assets/ \;
+          ls -la release-assets/
 
-    - name: Generate release notes
-      id: release_notes
-      run: |
-        # Get the previous tag
-        PREVIOUS_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
-        
-        if [ -n "$PREVIOUS_TAG" ]; then
-          echo "## Changes since $PREVIOUS_TAG" > release_notes.md
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          # Get the previous tag
+          PREVIOUS_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
+
+          if [ -n "$PREVIOUS_TAG" ]; then
+            echo "## Changes since $PREVIOUS_TAG" > release_notes.md
+            echo "" >> release_notes.md
+            git log --oneline --no-merges "${PREVIOUS_TAG}..HEAD" | sed 's/^/- /' >> release_notes.md
+          else
+            echo "## Initial Release" > release_notes.md
+            echo "" >> release_notes.md
+            echo "First release of Family Finances Service" >> release_notes.md
+          fi
+
           echo "" >> release_notes.md
-          git log --oneline --no-merges "${PREVIOUS_TAG}..HEAD" | sed 's/^/- /' >> release_notes.md
-        else
-          echo "## Initial Release" > release_notes.md
+          echo "## Docker Images" >> release_notes.md
           echo "" >> release_notes.md
-          echo "First release of Family Finances Service" >> release_notes.md
-        fi
-        
-        echo "" >> release_notes.md
-        echo "## Docker Images" >> release_notes.md
-        echo "" >> release_notes.md
-        echo "- \`ghcr.io/${{ github.repository }}:${{ needs.validate.outputs.version }}\`" >> release_notes.md
-        echo "- \`ghcr.io/${{ github.repository }}:latest\`" >> release_notes.md
-        echo "" >> release_notes.md
-        echo "## Binary Downloads" >> release_notes.md
-        echo "" >> release_notes.md
-        echo "Download the appropriate binary for your platform from the assets below." >> release_notes.md
-        echo "All binaries include SHA256 checksums for verification." >> release_notes.md
+          echo "- \`ghcr.io/${{ github.repository }}:${{ needs.validate.outputs.version }}\`" >> release_notes.md
+          echo "- \`ghcr.io/${{ github.repository }}:latest\`" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "## Binary Downloads" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "Download the appropriate binary for your platform from the assets below." >> release_notes.md
+          echo "All binaries include SHA256 checksums for verification." >> release_notes.md
 
-    - name: Create Release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ needs.validate.outputs.version }}
-        name: Release ${{ needs.validate.outputs.version }}
-        body_path: release_notes.md
-        draft: false
-        prerelease: ${{ needs.validate.outputs.is-prerelease == 'true' }}
-        files: |
-          release-assets/*
-        generate_release_notes: false
-        discussion_category_name: Announcements
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.validate.outputs.version }}
+          name: Release ${{ needs.validate.outputs.version }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ needs.validate.outputs.is-prerelease == 'true' }}
+          files: |
+            release-assets/*
+          generate_release_notes: false
+          discussion_category_name: Announcements
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Update latest tag
-      if: needs.validate.outputs.is-prerelease == 'false'
-      run: |
-        git config user.name github-actions
-        git config user.email github-actions@github.com
-        git tag -fa latest -m "Latest stable release: ${{ needs.validate.outputs.version }}"
-        git push origin latest --force
+      - name: Update latest tag
+        if: needs.validate.outputs.is-prerelease == 'false'
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git tag -fa latest -m "Latest stable release: ${{ needs.validate.outputs.version }}"
+          git push origin latest --force
 
   notify:
     name: Notify Release
@@ -249,8 +249,8 @@ jobs:
     if: success()
 
     steps:
-    - name: Send notification
-      run: |
-        echo "✅ Successfully released Family Finances Service ${{ needs.validate.outputs.version }}"
-        echo "🐳 Docker images are available at ghcr.io/${{ github.repository }}"
-        echo "📦 Release assets are available on GitHub"
+      - name: Send notification
+        run: |
+          echo "✅ Successfully released Family Finances Service ${{ needs.validate.outputs.version }}"
+          echo "🐳 Docker images are available at ghcr.io/${{ github.repository }}"
+          echo "📦 Release assets are available on GitHub"

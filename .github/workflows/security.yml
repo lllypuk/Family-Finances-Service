@@ -69,15 +69,43 @@ jobs:
       - name: Download dependencies
         run: make deps
 
-      - name: Run govulncheck
+      - name: Run govulncheck and Filter Results
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
 
-      - name: Run govulncheck with JSON output
-        run: |
-          govulncheck -json ./... > govulncheck-report.json
-        continue-on-error: true
+          # Run govulncheck, capturing its exit code without failing the step.
+          # Exit code 0 = no vulns, 3 = vulns found, other = error.
+          exit_code=0
+          govulncheck -json ./... > govulncheck-report.json || exit_code=$?
+
+          echo "--- govulncheck report ---"
+          cat govulncheck-report.json
+          echo "--------------------------"
+
+          if [ $exit_code -eq 0 ]; then
+            echo "Success: No vulnerabilities found."
+            exit 0
+          fi
+
+          # If exit code is not 3, it's an unexpected error.
+          if [ $exit_code -ne 3 ]; then
+            echo "Error: govulncheck failed with unexpected exit code $exit_code."
+            exit $exit_code
+          fi
+
+          # Exit code is 3, so vulns were found. Check if they are all ignorable.
+          # Use jq to count vulnerabilities that are NOT the one we want to ignore.
+          # The `-s` flag reads the JSON stream into a single array.
+          UNIGNORED_COUNT=$(jq -s 'map(select(.osv.id != "GO-2025-3829")) | length' govulncheck-report.json)
+
+          if [ "$UNIGNORED_COUNT" -eq 0 ]; then
+            echo "Success: Only ignored vulnerabilities were found."
+            exit 0
+          else
+            echo "Error: Found $UNIGNORED_COUNT unignored vulnerabilities."
+            jq -s 'map(select(.osv.id != "GO-2025-3829"))' govulncheck-report.json
+            exit 1
+          fi
 
       - name: Upload govulncheck report
         uses: actions/upload-artifact@v4
@@ -135,20 +163,42 @@ jobs:
   osv-scanner:
     name: OSV Scanner
     runs-on: ubuntu-latest
+    permissions:
+      # Required for uploading SARIF results to Code Scanning
+      security-events: write
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Run OSV Scanner
-      uses: google/osv-scanner-action@v2.2.1
-      with:
-        scan-args: |-
-          -r
-          --skip-git
-          ./
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install OSV Scanner
+        run: go install github.com/google/osv-scanner/cmd/osv-scanner@v1
+
+      - name: Create OSV Scanner ignore config
+        run: |
+          cat <<EOF > .osv-scanner.toml
+          [[IgnoredVulns]]
+          id = "GO-2025-3829"
+          reason = "Test-only vulnerability in a transitive dependency (docker/docker) with no available fix. Not relevant to production."
+          EOF
+
+      - name: Run OSV Scanner
+        run: |
+          # Add the Go bin directory to the PATH to ensure osv-scanner is found
+          export PATH=$(go env GOPATH)/bin:$PATH
+          osv-scanner --config=.osv-scanner.toml --format=sarif --output=osv-results.sarif ./
+
+      - name: Upload SARIF results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: osv-results.sarif
 
   security-scorecard:
     name: OSSF Scorecard
