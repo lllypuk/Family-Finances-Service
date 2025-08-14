@@ -50,10 +50,14 @@ func SetupMongoDB(t *testing.T) *MongoDBContainer {
 	// Cleanup function to be called in test teardown
 	t.Cleanup(func() {
 		if client != nil {
-			client.Disconnect(context.Background())
+			if err := client.Disconnect(context.Background()); err != nil {
+				t.Logf("Failed to disconnect MongoDB client: %v", err)
+			}
 		}
 		if mongoContainer != nil {
-			mongoContainer.Terminate(context.Background())
+			if err := mongoContainer.Terminate(context.Background()); err != nil {
+				t.Logf("Failed to terminate MongoDB container: %v", err)
+			}
 		}
 	})
 
