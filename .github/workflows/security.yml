@@ -135,20 +135,29 @@ jobs:
   osv-scanner:
     name: OSV Scanner
     runs-on: ubuntu-latest
+    permissions:
+      # Required for uploading SARIF results to Code Scanning
+      security-events: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Run OSV Scanner
-        uses: google/osv-scanner-action@v2.2.1
+        uses: google/osv-scanner/actions/scanner@v1
         with:
-          scan-args: |-
-            -r
-            --skip-git
+          # The 'recursive' flag is now the default, so we just specify the directory.
+          # The '--skip-git' flag is also on by default.
+          # We'll add SARIF output for integration with GitHub's code scanning.
+          scan-args: |
+            --sarif=osv-results.sarif
             ./
+
+      - name: Upload SARIF results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: osv-results.sarif
 
   security-scorecard:
     name: OSSF Scorecard
