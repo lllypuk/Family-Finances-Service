@@ -315,69 +315,47 @@ func (h *CategoryHandler) UpdateCategory(c echo.Context) error {
 		})
 	}
 
-	// Получаем существующую категорию
 	existingCategory, err := h.repositories.Category.GetByID(c.Request().Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "CATEGORY_NOT_FOUND",
-				Message: "Category not found",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return HandleNotFoundError(c, "category")
 	}
 
-	// Обновляем поля
-	if req.Name != nil {
-		existingCategory.Name = *req.Name
-	}
-	if req.Color != nil {
-		existingCategory.Color = *req.Color
-	}
-	if req.Icon != nil {
-		existingCategory.Icon = *req.Icon
-	}
-	existingCategory.UpdatedAt = time.Now()
+	h.updateCategoryFields(existingCategory, &req)
 
 	if err := h.repositories.Category.Update(c.Request().Context(), existingCategory); err != nil {
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "UPDATE_FAILED",
-				Message: "Failed to update category",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return HandleUpdateError(c, "category")
 	}
 
-	response := CategoryResponse{
-		ID:        existingCategory.ID,
-		Name:      existingCategory.Name,
-		Type:      string(existingCategory.Type),
-		Color:     existingCategory.Color,
-		Icon:      existingCategory.Icon,
-		ParentID:  existingCategory.ParentID,
-		FamilyID:  existingCategory.FamilyID,
-		IsActive:  existingCategory.IsActive,
-		CreatedAt: existingCategory.CreatedAt,
-		UpdatedAt: existingCategory.UpdatedAt,
-	}
+	response := h.buildCategoryResponse(existingCategory)
+	return ReturnSuccessResponse(c, response)
+}
 
-	return c.JSON(http.StatusOK, APIResponse[CategoryResponse]{
-		Data: response,
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+func (h *CategoryHandler) updateCategoryFields(category *category.Category, req *UpdateCategoryRequest) {
+	if req.Name != nil {
+		category.Name = *req.Name
+	}
+	if req.Color != nil {
+		category.Color = *req.Color
+	}
+	if req.Icon != nil {
+		category.Icon = *req.Icon
+	}
+	category.UpdatedAt = time.Now()
+}
+
+func (h *CategoryHandler) buildCategoryResponse(cat *category.Category) CategoryResponse {
+	return CategoryResponse{
+		ID:        cat.ID,
+		Name:      cat.Name,
+		Type:      string(cat.Type),
+		Color:     cat.Color,
+		Icon:      cat.Icon,
+		ParentID:  cat.ParentID,
+		FamilyID:  cat.FamilyID,
+		IsActive:  cat.IsActive,
+		CreatedAt: cat.CreatedAt,
+		UpdatedAt: cat.UpdatedAt,
+	}
 }
 
 func (h *CategoryHandler) DeleteCategory(c echo.Context) error {

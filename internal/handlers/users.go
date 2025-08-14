@@ -225,67 +225,45 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 		})
 	}
 
-	// Получаем существующего пользователя
 	existingUser, err := h.repositories.User.GetByID(c.Request().Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "USER_NOT_FOUND",
-				Message: "User not found",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return HandleNotFoundError(c, "user")
 	}
 
-	// Обновляем поля
-	if req.FirstName != nil {
-		existingUser.FirstName = *req.FirstName
-	}
-	if req.LastName != nil {
-		existingUser.LastName = *req.LastName
-	}
-	if req.Email != nil {
-		existingUser.Email = *req.Email
-	}
-	existingUser.UpdatedAt = time.Now()
+	h.updateUserFields(existingUser, &req)
 
 	if err := h.repositories.User.Update(c.Request().Context(), existingUser); err != nil {
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "UPDATE_FAILED",
-				Message: "Failed to update user",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return HandleUpdateError(c, "user")
 	}
 
-	response := UserResponse{
-		ID:        existingUser.ID,
-		Email:     existingUser.Email,
-		FirstName: existingUser.FirstName,
-		LastName:  existingUser.LastName,
-		Role:      string(existingUser.Role),
-		FamilyID:  existingUser.FamilyID,
-		CreatedAt: existingUser.CreatedAt,
-		UpdatedAt: existingUser.UpdatedAt,
-	}
+	response := h.buildUserResponse(existingUser)
+	return ReturnSuccessResponse(c, response)
+}
 
-	return c.JSON(http.StatusOK, APIResponse[UserResponse]{
-		Data: response,
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+func (h *UserHandler) updateUserFields(user *user.User, req *UpdateUserRequest) {
+	if req.FirstName != nil {
+		user.FirstName = *req.FirstName
+	}
+	if req.LastName != nil {
+		user.LastName = *req.LastName
+	}
+	if req.Email != nil {
+		user.Email = *req.Email
+	}
+	user.UpdatedAt = time.Now()
+}
+
+func (h *UserHandler) buildUserResponse(u *user.User) UserResponse {
+	return UserResponse{
+		ID:        u.ID,
+		Email:     u.Email,
+		FirstName: u.FirstName,
+		LastName:  u.LastName,
+		Role:      string(u.Role),
+		FamilyID:  u.FamilyID,
+		CreatedAt: u.CreatedAt,
+		UpdatedAt: u.UpdatedAt,
+	}
 }
 
 func (h *UserHandler) DeleteUser(c echo.Context) error {

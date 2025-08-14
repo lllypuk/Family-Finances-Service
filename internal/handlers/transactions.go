@@ -423,79 +423,57 @@ func (h *TransactionHandler) UpdateTransaction(c echo.Context) error {
 		})
 	}
 
-	// Получаем существующую транзакцию
 	existingTransaction, err := h.repositories.Transaction.GetByID(c.Request().Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "TRANSACTION_NOT_FOUND",
-				Message: "Transaction not found",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return HandleNotFoundError(c, "transaction")
 	}
 
-	// Обновляем поля
-	if req.Amount != nil {
-		existingTransaction.Amount = *req.Amount
-	}
-	if req.Type != nil {
-		existingTransaction.Type = transaction.TransactionType(*req.Type)
-	}
-	if req.Description != nil {
-		existingTransaction.Description = *req.Description
-	}
-	if req.CategoryID != nil {
-		existingTransaction.CategoryID = *req.CategoryID
-	}
-	if req.Date != nil {
-		existingTransaction.Date = *req.Date
-	}
-	if req.Tags != nil {
-		existingTransaction.Tags = req.Tags
-	}
-	existingTransaction.UpdatedAt = time.Now()
+	h.updateTransactionFields(existingTransaction, &req)
 
 	if err := h.repositories.Transaction.Update(c.Request().Context(), existingTransaction); err != nil {
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "UPDATE_FAILED",
-				Message: "Failed to update transaction",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return HandleUpdateError(c, "transaction")
 	}
 
-	response := TransactionResponse{
-		ID:          existingTransaction.ID,
-		Amount:      existingTransaction.Amount,
-		Type:        string(existingTransaction.Type),
-		Description: existingTransaction.Description,
-		CategoryID:  existingTransaction.CategoryID,
-		UserID:      existingTransaction.UserID,
-		FamilyID:    existingTransaction.FamilyID,
-		Date:        existingTransaction.Date,
-		Tags:        existingTransaction.Tags,
-		CreatedAt:   existingTransaction.CreatedAt,
-		UpdatedAt:   existingTransaction.UpdatedAt,
-	}
+	response := h.buildTransactionResponse(existingTransaction)
+	return ReturnSuccessResponse(c, response)
+}
 
-	return c.JSON(http.StatusOK, APIResponse[TransactionResponse]{
-		Data: response,
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+func (h *TransactionHandler) updateTransactionFields(tx *transaction.Transaction, req *UpdateTransactionRequest) {
+	if req.Amount != nil {
+		tx.Amount = *req.Amount
+	}
+	if req.Type != nil {
+		tx.Type = transaction.TransactionType(*req.Type)
+	}
+	if req.Description != nil {
+		tx.Description = *req.Description
+	}
+	if req.CategoryID != nil {
+		tx.CategoryID = *req.CategoryID
+	}
+	if req.Date != nil {
+		tx.Date = *req.Date
+	}
+	if req.Tags != nil {
+		tx.Tags = req.Tags
+	}
+	tx.UpdatedAt = time.Now()
+}
+
+func (h *TransactionHandler) buildTransactionResponse(tx *transaction.Transaction) TransactionResponse {
+	return TransactionResponse{
+		ID:          tx.ID,
+		Amount:      tx.Amount,
+		Type:        string(tx.Type),
+		Description: tx.Description,
+		CategoryID:  tx.CategoryID,
+		UserID:      tx.UserID,
+		FamilyID:    tx.FamilyID,
+		Date:        tx.Date,
+		Tags:        tx.Tags,
+		CreatedAt:   tx.CreatedAt,
+		UpdatedAt:   tx.UpdatedAt,
+	}
 }
 
 func (h *TransactionHandler) DeleteTransaction(c echo.Context) error {
