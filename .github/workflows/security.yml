@@ -137,18 +137,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Run OSV Scanner
-      uses: google/osv-scanner-action@v2.2.1
-      with:
-        scan-args: |-
-          -r
-          --skip-git
-          ./
+      - name: Run OSV Scanner
+        uses: google/osv-scanner-action@v2.2.1
+        with:
+          scan-args: |-
+            -r
+            --skip-git
+            ./
 
   security-scorecard:
     name: OSSF Scorecard
