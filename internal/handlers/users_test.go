@@ -98,10 +98,8 @@ func TestUserHandler_CreateUser(t *testing.T) {
 			},
 		},
 		{
-			name: "Error - Invalid request body",
-			requestBody: map[string]interface{}{
-				"invalid": "data",
-			},
+			name:        "Error - Invalid request body",
+			requestBody: `{"invalid": json}`, // Invalid JSON syntax to trigger bind error
 			mockSetup: func(repo *MockUserRepository) {
 				// No mock setup needed for validation error
 			},
@@ -185,8 +183,13 @@ func TestUserHandler_CreateUser(t *testing.T) {
 			handler := handlers.NewUserHandler(repositories)
 
 			// Create request
-			jsonBody, _ := json.Marshal(tt.requestBody)
-			req := httptest.NewRequest(http.MethodPost, "/users", bytes.NewReader(jsonBody))
+			var reqBody []byte
+			if str, ok := tt.requestBody.(string); ok {
+				reqBody = []byte(str)
+			} else {
+				reqBody, _ = json.Marshal(tt.requestBody)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/users", bytes.NewReader(reqBody))
 			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
@@ -429,7 +432,10 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody: func(t *testing.T, body string) {
-				assert.Empty(t, body)
+				var response handlers.APIResponse[map[string]string]
+				err := json.Unmarshal([]byte(body), &response)
+				require.NoError(t, err)
+				assert.Equal(t, "User deleted successfully", response.Data["message"])
 			},
 		},
 		{

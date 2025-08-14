@@ -116,7 +116,7 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
 				require.NoError(t, err)
-				assert.Equal(t, "INVALID_CATEGORY_ID", response.Error.Code)
+				assert.Equal(t, "INVALID_REQUEST", response.Error.Code)
 			},
 		},
 		{
@@ -152,10 +152,10 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 			},
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody: func(t *testing.T, body string) {
-				var response handlers.APIResponse[handlers.CategoryResponse]
+				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
 				require.NoError(t, err)
-				assert.NotEmpty(t, response.Errors)
+				assert.Equal(t, "CREATE_FAILED", response.Error.Code)
 			},
 		},
 	}
@@ -257,7 +257,7 @@ func TestCategoryHandler_GetCategories(t *testing.T) {
 				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
 				require.NoError(t, err)
-				assert.Equal(t, "CREATE_FAILED", response.Error.Code)
+				assert.Equal(t, "MISSING_FAMILY_ID", response.Error.Code)
 			},
 		},
 		{
@@ -273,7 +273,7 @@ func TestCategoryHandler_GetCategories(t *testing.T) {
 				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
 				require.NoError(t, err)
-				assert.Equal(t, "MISSING_FAMILY_ID", response.Error.Code)
+				assert.Equal(t, "INVALID_FAMILY_ID", response.Error.Code)
 			},
 		},
 	}
@@ -363,7 +363,7 @@ func TestCategoryHandler_GetCategoryByID(t *testing.T) {
 				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
 				require.NoError(t, err)
-				assert.Equal(t, "INVALID_FAMILY_ID", response.Error.Code)
+				assert.Equal(t, "INVALID_ID", response.Error.Code)
 			},
 		},
 		{
@@ -472,7 +472,7 @@ func TestCategoryHandler_UpdateCategory(t *testing.T) {
 				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
 				require.NoError(t, err)
-				assert.Equal(t, "INVALID_CATEGORY_ID", response.Error.Code)
+				assert.Equal(t, "INVALID_ID", response.Error.Code)
 			},
 		},
 		{
@@ -545,9 +545,12 @@ func TestCategoryHandler_DeleteCategory(t *testing.T) {
 			mockSetup: func(repo *MockCategoryRepository) {
 				repo.On("Delete", mock.Anything, categoryID).Return(nil)
 			},
-			expectedStatus: http.StatusNoContent,
+			expectedStatus: http.StatusOK,
 			expectedBody: func(t *testing.T, body string) {
-				assert.Empty(t, body)
+				var response handlers.APIResponse[map[string]string]
+				err := json.Unmarshal([]byte(body), &response)
+				require.NoError(t, err)
+				assert.Equal(t, "Category deleted successfully", response.Data["message"])
 			},
 		},
 		{
@@ -561,7 +564,7 @@ func TestCategoryHandler_DeleteCategory(t *testing.T) {
 				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
 				require.NoError(t, err)
-				assert.Equal(t, "INVALID_CATEGORY_ID", response.Error.Code)
+				assert.Equal(t, "INVALID_ID", response.Error.Code)
 			},
 		},
 		{

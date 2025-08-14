@@ -336,6 +336,6 @@ func TestTransactionRepository_Integration(t *testing.T) {
 
 		total, err := repo.GetTotalByCategory(context.Background(), testCategory.ID, transaction.TransactionTypeExpense)
 		require.NoError(t, err)
-		assert.InEpsilon(t, 0.0, total, 0.001)
+		assert.Equal(t, 0.0, total) //nolint:testifylint // InEpsilon не работает для нуля
 	})
 }
