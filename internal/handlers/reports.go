@@ -349,7 +349,8 @@ func (h *ReportHandler) generateIncomeReportData(
 	_ context.Context,
 	data *report.ReportData,
 	_ uuid.UUID,
-	_, _ time.Time,
+	_ time.Time,
+	_ time.Time,
 ) {
 	// TODO: Реализовать получение доходов из транзакций
 	data.TotalIncome = 0 // Будет рассчитано из транзакций
@@ -369,9 +370,10 @@ func (h *ReportHandler) generateBudgetReportData(
 // generateCashFlowReportData генерирует данные для отчета по денежному потоку
 func (h *ReportHandler) generateCashFlowReportData(
 	_ context.Context,
-	data *report.ReportData,
+	_ *report.ReportData,
 	_ uuid.UUID,
-	_, _ time.Time,
+	_ time.Time,
+	_ time.Time,
 ) {
 	// TODO: Реализовать расчет денежного потока по дням
 	// Заполнение DailyBreakdown с доходами и расходами по дням
@@ -380,9 +382,10 @@ func (h *ReportHandler) generateCashFlowReportData(
 // generateCategoryBreakdownReportData генерирует данные для разбивки по категориям
 func (h *ReportHandler) generateCategoryBreakdownReportData(
 	_ context.Context,
-	data *report.ReportData,
+	_ *report.ReportData,
 	_ uuid.UUID,
-	_, _ time.Time,
+	_ time.Time,
+	_ time.Time,
 ) {
 	// TODO: Реализовать группировку транзакций по категориям
 	// Заполнение CategoryBreakdown с суммами по категориям

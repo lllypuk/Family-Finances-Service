@@ -121,13 +121,52 @@ func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
 }
 
 func (h *TransactionHandler) GetTransactions(c echo.Context) error {
-	// Парсим параметры фильтрации
+	filters, err := h.parseTransactionFilters(c)
+	if err != nil {
+		return err
+	}
+
+	err = h.validateTransactionFilters(c, filters)
+	if err != nil {
+		return err
+	}
+
+	repoFilter := h.buildRepositoryFilter(filters)
+
+	transactions, err := h.repositories.Transaction.GetByFilter(c.Request().Context(), repoFilter)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Code:    "FETCH_FAILED",
+				Message: "Failed to fetch transactions",
+			},
+			Meta: ResponseMeta{
+				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
+				Timestamp: time.Now(),
+				Version:   "v1",
+			},
+		})
+	}
+
+	response := h.buildTransactionListResponse(transactions)
+
+	return c.JSON(http.StatusOK, APIResponse[[]TransactionResponse]{
+		Data: response,
+		Meta: ResponseMeta{
+			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
+			Timestamp: time.Now(),
+			Version:   "v1",
+		},
+	})
+}
+
+func (h *TransactionHandler) parseTransactionFilters(c echo.Context) (TransactionFilterParams, error) {
 	var filters TransactionFilterParams
 
 	// Обязательный параметр family_id
 	familyIDParam := c.QueryParam("family_id")
 	if familyIDParam == "" {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
+		return filters, c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Code:    "MISSING_FAMILY_ID",
 				Message: "family_id query parameter is required",
@@ -142,7 +181,7 @@ func (h *TransactionHandler) GetTransactions(c echo.Context) error {
 
 	familyID, err := uuid.Parse(familyIDParam)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
+		return filters, c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Code:    "INVALID_FAMILY_ID",
 				Message: "Invalid family ID format",
@@ -156,7 +195,13 @@ func (h *TransactionHandler) GetTransactions(c echo.Context) error {
 	}
 	filters.FamilyID = familyID
 
-	// Опциональные параметры
+	h.parseOptionalFilters(c, &filters)
+	h.parsePaginationParams(c, &filters)
+
+	return filters, nil
+}
+
+func (h *TransactionHandler) parseOptionalFilters(c echo.Context, filters *TransactionFilterParams) {
 	if userIDParam := c.QueryParam("user_id"); userIDParam != "" {
 		if userID, parseErr := uuid.Parse(userIDParam); parseErr == nil {
 			filters.UserID = &userID
@@ -200,8 +245,9 @@ func (h *TransactionHandler) GetTransactions(c echo.Context) error {
 	if descriptionParam := c.QueryParam("description"); descriptionParam != "" {
 		filters.Description = &descriptionParam
 	}
+}
 
-	// Пагинация
+func (h *TransactionHandler) parsePaginationParams(c echo.Context, filters *TransactionFilterParams) {
 	filters.Limit = 50 // По умолчанию
 	if limitParam := c.QueryParam("limit"); limitParam != "" {
 		if limit, parseErr := strconv.Atoi(limitParam); parseErr == nil && limit > 0 && limit <= 100 {
@@ -215,9 +261,10 @@ func (h *TransactionHandler) GetTransactions(c echo.Context) error {
 			filters.Offset = offset
 		}
 	}
+}
 
-	// Валидация фильтров
-	err = h.validator.Struct(filters)
+func (h *TransactionHandler) validateTransactionFilters(c echo.Context, filters TransactionFilterParams) error {
+	err := h.validator.Struct(filters)
 	if err != nil {
 		var validationErrors []ValidationError
 		for _, err := range func() validator.ValidationErrors {
@@ -242,15 +289,17 @@ func (h *TransactionHandler) GetTransactions(c echo.Context) error {
 			Errors: validationErrors,
 		})
 	}
+	return nil
+}
 
-	// Создаем фильтр для репозитория
+func (h *TransactionHandler) buildRepositoryFilter(filters TransactionFilterParams) transaction.TransactionFilter {
 	var typeFilter *transaction.TransactionType
 	if filters.Type != nil {
 		t := transaction.TransactionType(*filters.Type)
 		typeFilter = &t
 	}
 
-	repoFilter := transaction.TransactionFilter{
+	return transaction.TransactionFilter{
 		FamilyID:   filters.FamilyID,
 		UserID:     filters.UserID,
 		CategoryID: filters.CategoryID,
@@ -268,22 +317,9 @@ func (h *TransactionHandler) GetTransactions(c echo.Context) error {
 		Limit:  filters.Limit,
 		Offset: filters.Offset,
 	}
+}
 
-	transactions, err := h.repositories.Transaction.GetByFilter(c.Request().Context(), repoFilter)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "FETCH_FAILED",
-				Message: "Failed to fetch transactions",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
+func (h *TransactionHandler) buildTransactionListResponse(transactions []*transaction.Transaction) []TransactionResponse {
 	var response []TransactionResponse
 	for _, tx := range transactions {
 		response = append(response, TransactionResponse{
@@ -300,15 +336,7 @@ func (h *TransactionHandler) GetTransactions(c echo.Context) error {
 			UpdatedAt:   tx.UpdatedAt,
 		})
 	}
-
-	return c.JSON(http.StatusOK, APIResponse[[]TransactionResponse]{
-		Data: response,
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+	return response
 }
 
 func (h *TransactionHandler) GetTransactionByID(c echo.Context) error {
