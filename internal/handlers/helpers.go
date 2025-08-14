@@ -42,7 +42,7 @@ func DeleteEntityHelper(c echo.Context, deleter func(uuid.UUID) error, entityTyp
 		})
 	}
 
-	return c.JSON(http.StatusOK, APIResponse[interface{}]{
+	return c.JSON(http.StatusOK, APIResponse[map[string]string]{
 		Data: map[string]string{"message": entityType + " deleted successfully"},
 		Meta: ResponseMeta{
 			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
