@@ -34,6 +34,11 @@ func main() {
 }
 
 func healthCheck() {
+	exitCode := doHealthCheck()
+	os.Exit(exitCode)
+}
+
+func doHealthCheck() int {
 	ctx, cancel := context.WithTimeout(context.Background(), HealthCheckTimeout)
 	defer cancel()
 
@@ -42,25 +47,21 @@ func healthCheck() {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://localhost:8080/health", nil)
 	if err != nil {
 		log.Printf("Failed to create request: %v", err)
-		cancel()
-		os.Exit(1)
+		return 1
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("Health check failed: %v", err)
-		cancel()
-		os.Exit(1)
+		return 1
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("Health check failed with status: %d", resp.StatusCode)
-		cancel()
-		os.Exit(1)
+		return 1
 	}
 
 	log.Println("Health check passed")
-	cancel()
-	os.Exit(0)
+	return 0
 }
