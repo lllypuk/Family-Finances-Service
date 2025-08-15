@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 // Metrics структура для инкапсуляции всех метрик приложения
@@ -34,9 +33,9 @@ type Metrics struct {
 	startTime time.Time
 }
 
-// createHTTPMetrics создает HTTP метрики
+// createHTTPMetrics создает HTTP метрики с безопасной регистрацией
 func createHTTPMetrics() (*prometheus.CounterVec, *prometheus.HistogramVec, *prometheus.CounterVec) {
-	httpRequestsTotal := promauto.NewCounterVec(
+	httpRequestsTotal := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "http_requests_total",
 			Help: "Total number of HTTP requests",
@@ -44,7 +43,7 @@ func createHTTPMetrics() (*prometheus.CounterVec, *prometheus.HistogramVec, *pro
 		[]string{"method", "endpoint", "status"},
 	)
 
-	httpRequestDuration := promauto.NewHistogramVec(
+	httpRequestDuration := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "http_request_duration_seconds",
 			Help:    "Duration of HTTP requests in seconds",
@@ -53,7 +52,7 @@ func createHTTPMetrics() (*prometheus.CounterVec, *prometheus.HistogramVec, *pro
 		[]string{"method", "endpoint"},
 	)
 
-	httpRequestsErrors := promauto.NewCounterVec(
+	httpRequestsErrors := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "http_requests_errors_total",
 			Help: "Total number of HTTP request errors",
@@ -61,40 +60,45 @@ func createHTTPMetrics() (*prometheus.CounterVec, *prometheus.HistogramVec, *pro
 		[]string{"method", "endpoint", "type"},
 	)
 
+	// Безопасная регистрация метрик - игнорируем ошибки дублирования
+	prometheus.Register(httpRequestsTotal)
+	prometheus.Register(httpRequestDuration)
+	prometheus.Register(httpRequestsErrors)
+
 	return httpRequestsTotal, httpRequestDuration, httpRequestsErrors
 }
 
-// createBusinessMetrics создает бизнес метрики
+// createBusinessMetrics создает бизнес метрики с безопасной регистрацией
 func createBusinessMetrics() (prometheus.Gauge, prometheus.Gauge, prometheus.Gauge, prometheus.Gauge, *prometheus.HistogramVec) {
-	familiesTotal := promauto.NewGauge(
+	familiesTotal := prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "families",
 			Help: "Total number of families in the system",
 		},
 	)
 
-	usersTotal := promauto.NewGauge(
+	usersTotal := prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "users",
 			Help: "Total number of users in the system",
 		},
 	)
 
-	transactionsTotal := promauto.NewGauge(
+	transactionsTotal := prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "transactions",
 			Help: "Total number of transactions in the system",
 		},
 	)
 
-	budgetsActive := promauto.NewGauge(
+	budgetsActive := prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "budgets_active",
 			Help: "Number of active budgets in the system",
 		},
 	)
 
-	transactionAmount := promauto.NewHistogramVec(
+	transactionAmount := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "transaction_amount",
 			Help:    "Distribution of transaction amounts",
@@ -103,19 +107,26 @@ func createBusinessMetrics() (prometheus.Gauge, prometheus.Gauge, prometheus.Gau
 		[]string{"type", "category"},
 	)
 
+	// Безопасная регистрация метрик - игнорируем ошибки дублирования
+	prometheus.Register(familiesTotal)
+	prometheus.Register(usersTotal)
+	prometheus.Register(transactionsTotal)
+	prometheus.Register(budgetsActive)
+	prometheus.Register(transactionAmount)
+
 	return familiesTotal, usersTotal, transactionsTotal, budgetsActive, transactionAmount
 }
 
-// createDatabaseMetrics создает метрики базы данных
+// createDatabaseMetrics создает метрики базы данных с безопасной регистрацией
 func createDatabaseMetrics() (prometheus.Gauge, *prometheus.HistogramVec, *prometheus.CounterVec) {
-	databaseConnections := promauto.NewGauge(
+	databaseConnections := prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "database_connections",
 			Help: "Number of active database connections",
 		},
 	)
 
-	databaseOperationDuration := promauto.NewHistogramVec(
+	databaseOperationDuration := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "database_operation_duration_seconds",
 			Help:    "Duration of database operations",
@@ -124,7 +135,7 @@ func createDatabaseMetrics() (prometheus.Gauge, *prometheus.HistogramVec, *prome
 		[]string{"operation", "collection"},
 	)
 
-	databaseOperationsTotal := promauto.NewCounterVec(
+	databaseOperationsTotal := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "database_operations_total",
 			Help: "Total number of database operations",
@@ -132,24 +143,33 @@ func createDatabaseMetrics() (prometheus.Gauge, *prometheus.HistogramVec, *prome
 		[]string{"operation", "collection", "status"},
 	)
 
+	// Безопасная регистрация метрик - игнорируем ошибки дублирования
+	prometheus.Register(databaseConnections)
+	prometheus.Register(databaseOperationDuration)
+	prometheus.Register(databaseOperationsTotal)
+
 	return databaseConnections, databaseOperationDuration, databaseOperationsTotal
 }
 
-// createApplicationMetrics создает метрики приложения
+// createApplicationMetrics создает метрики приложения с безопасной регистрацией
 func createApplicationMetrics() (prometheus.Gauge, prometheus.Gauge) {
-	applicationStartTime := promauto.NewGauge(
+	applicationStartTime := prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "application_start_time_seconds",
 			Help: "Start time of the application since unix epoch in seconds",
 		},
 	)
 
-	applicationUptime := promauto.NewGauge(
+	applicationUptime := prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "application_uptime_seconds",
 			Help: "Uptime of the application in seconds",
 		},
 	)
+
+	// Безопасная регистрация метрик - игнорируем ошибки дублирования
+	prometheus.Register(applicationStartTime)
+	prometheus.Register(applicationUptime)
 
 	return applicationStartTime, applicationUptime
 }

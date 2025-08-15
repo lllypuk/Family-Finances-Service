@@ -103,15 +103,6 @@ generate:
 	@echo "Generating OpenAPI code..."
 	@go generate ./...
 
-# Миграции базы данных (для будущего использования)
-migrate-up:
-	@echo "Running database migrations..."
-	# TODO: Добавить команды миграций
-
-migrate-down:
-	@echo "Rolling back database migrations..."
-	# TODO: Добавить команды отката миграций
-
 # Справка
 help:
 	@echo "Available commands:"
