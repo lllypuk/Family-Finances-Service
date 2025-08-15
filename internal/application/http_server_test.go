@@ -9,6 +9,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/application"
 	"family-budget-service/internal/handlers"
@@ -47,7 +48,12 @@ func TestNewHTTPServerWithObservability(t *testing.T) {
 		Port: "8080",
 		Host: "localhost",
 	}
-	obsService := &observability.Service{}
+
+	// Создаем правильно инициализированный observability service
+	obsConfig := observability.DefaultConfig()
+	obsService, err := observability.NewService(obsConfig, "test-version")
+	require.NoError(t, err)
+	defer obsService.Shutdown(context.Background())
 
 	// Execute
 	server := application.NewHTTPServerWithObservability(&repos.Repositories, config, obsService)
@@ -109,6 +115,10 @@ func TestHTTPServer_RoutesSetup(t *testing.T) {
 	// Health endpoints
 	assert.True(t, routePaths["GET /health"])
 
+	// Web interface routes (if web server is initialized)
+	// Note: Web routes are only available when observability is enabled
+	// In basic HTTP server (without observability), web interface is not initialized
+
 	// API endpoints - check for some key endpoints
 	assert.True(t, routePaths["POST /api/v1/users"])
 	assert.True(t, routePaths["GET /api/v1/users/:id"])
@@ -141,8 +151,11 @@ func TestHTTPServer_MiddlewareSetup(t *testing.T) {
 }
 
 func TestHTTPServer_WithObservabilityRoutes(t *testing.T) {
-	// Setup mock observability service
-	obsService := &observability.Service{}
+	// Setup properly initialized observability service
+	obsConfig := observability.DefaultConfig()
+	obsService, err := observability.NewService(obsConfig, "test-version")
+	require.NoError(t, err)
+	defer obsService.Shutdown(context.Background())
 
 	repos := NewMockRepositories()
 	config := &application.Config{Port: "8080", Host: "localhost"}
@@ -155,8 +168,11 @@ func TestHTTPServer_WithObservabilityRoutes(t *testing.T) {
 		routePaths[route.Method+" "+route.Path] = true
 	}
 
-	// Check for basic health endpoint
+	// Check for observability endpoints
 	assert.True(t, routePaths["GET /health"])
+	assert.True(t, routePaths["GET /metrics"])
+	assert.True(t, routePaths["GET /ready"])
+	assert.True(t, routePaths["GET /live"])
 }
 
 func TestConfig_Fields(t *testing.T) {
@@ -229,6 +245,7 @@ func TestHTTPServer_IntegrationWithRealEndpoints(t *testing.T) {
 		expected int
 	}{
 		{"GET", "/health", http.StatusOK},
+		{"GET", "/", http.StatusNotFound},                    // Dashboard not available without observability
 		{"GET", "/api/v1/categories", http.StatusBadRequest}, // Missing family_id
 		{"GET", "/api/v1/nonexistent", http.StatusNotFound},
 	}

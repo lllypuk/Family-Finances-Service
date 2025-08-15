@@ -1,0 +1,320 @@
+/*! Pico.css v1.5.13 (https://picocss.com) */
+/* Минимальная версия PicoCSS для начала */
+:root {
+  --primary: #1976d2;
+  --primary-hover: #1565c0;
+  --primary-focus: rgba(25, 118, 210, 0.125);
+  --primary-inverse: #fff;
+  --secondary: #546e7a;
+  --secondary-hover: #455a64;
+  --secondary-focus: rgba(84, 110, 122, 0.125);
+  --secondary-inverse: #fff;
+  --contrast: #1976d2;
+  --contrast-hover: #1565c0;
+  --contrast-focus: rgba(25, 118, 210, 0.125);
+  --contrast-inverse: #fff;
+  --ins: #388e3c;
+  --del: #c62828;
+  --background-color: #fff;
+  --color: #1f2937;
+  --h1-color: #1f2937;
+  --h2-color: #374151;
+  --h3-color: #374151;
+  --h4-color: #4b5563;
+  --h5-color: #4b5563;
+  --h6-color: #6b7280;
+  --muted-color: #6b7280;
+  --muted-border-color: #e5e7eb;
+  --border-color: #d1d5db;
+  --box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  --border-radius: 0.375rem;
+  --outline-color: #60a5fa;
+  --typography-spacing-vertical: 1.5rem;
+  --block-spacing-vertical: calc(var(--typography-spacing-vertical) * 2);
+  --block-spacing-horizontal: 1rem;
+  --grid-spacing-vertical: 0;
+  --grid-spacing-horizontal: 1rem;
+  --form-element-spacing-vertical: 0.75rem;
+  --form-element-spacing-horizontal: 1rem;
+  --nav-element-spacing-vertical: 1rem;
+  --nav-element-spacing-horizontal: 0.5rem;
+  --nav-link-spacing-vertical: 0.5rem;
+  --nav-link-spacing-horizontal: 0.5rem;
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  --font-weight: 400;
+  --line-height: 1.5;
+  --font-size: 1rem;
+  --border-width: 1px;
+  --transition: 0.2s ease-in-out;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  background-repeat: no-repeat;
+}
+
+html {
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  font-weight: var(--font-weight);
+  color: var(--color);
+  background-color: var(--background-color);
+  -ms-text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+.container, .container-fluid {
+  width: 100%;
+  margin-right: auto;
+  margin-left: auto;
+  padding-right: var(--block-spacing-horizontal);
+  padding-left: var(--block-spacing-horizontal);
+}
+
+.container {
+  max-width: 1200px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-gap: var(--grid-spacing-vertical) var(--grid-spacing-horizontal);
+  margin-bottom: var(--block-spacing-vertical);
+}
+
+@media (min-width: 576px) {
+  .grid {
+    grid-template-columns: repeat(auto-fit, minmax(0%, 1fr));
+  }
+}
+
+h1, h2, h3, h4, h5, h6 {
+  margin-top: 0;
+  margin-bottom: var(--typography-spacing-vertical);
+  color: var(--h1-color);
+  font-weight: 700;
+  line-height: 1.125;
+}
+
+h1 { font-size: 2rem; }
+h2 { font-size: 1.75rem; color: var(--h2-color); }
+h3 { font-size: 1.5rem; color: var(--h3-color); }
+h4 { font-size: 1.25rem; color: var(--h4-color); }
+h5 { font-size: 1.125rem; color: var(--h5-color); }
+h6 { font-size: 1rem; color: var(--h6-color); }
+
+p {
+  margin-top: 0;
+  margin-bottom: var(--typography-spacing-vertical);
+}
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+  transition: color var(--transition);
+}
+
+a:hover, a:focus {
+  color: var(--primary-hover);
+  text-decoration: underline;
+}
+
+button, input[type="button"], input[type="submit"] {
+  display: inline-block;
+  padding: var(--form-element-spacing-vertical) var(--form-element-spacing-horizontal);
+  border: var(--border-width) solid var(--primary);
+  border-radius: var(--border-radius);
+  background-color: var(--primary);
+  color: var(--primary-inverse);
+  font-size: 1rem;
+  font-weight: var(--font-weight);
+  line-height: var(--line-height);
+  text-align: center;
+  cursor: pointer;
+  transition: background-color var(--transition), border-color var(--transition), color var(--transition), box-shadow var(--transition);
+}
+
+button:hover, input[type="button"]:hover, input[type="submit"]:hover {
+  background-color: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+
+button.secondary, input[type="button"].secondary, input[type="submit"].secondary {
+  background-color: var(--secondary);
+  border-color: var(--secondary);
+  color: var(--secondary-inverse);
+}
+
+button.secondary:hover, input[type="button"].secondary:hover, input[type="submit"].secondary:hover {
+  background-color: var(--secondary-hover);
+  border-color: var(--secondary-hover);
+}
+
+button.outline, input[type="button"].outline, input[type="submit"].outline {
+  background-color: transparent;
+  color: var(--primary);
+}
+
+button.outline:hover, input[type="button"].outline:hover, input[type="submit"].outline:hover {
+  background-color: var(--primary-focus);
+}
+
+input[type="text"], input[type="email"], input[type="password"], input[type="number"], select, textarea {
+  display: block;
+  width: 100%;
+  padding: var(--form-element-spacing-vertical) var(--form-element-spacing-horizontal);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius);
+  background-color: var(--background-color);
+  color: var(--color);
+  font-size: 1rem;
+  line-height: var(--line-height);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus, input[type="number"]:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 0.2rem var(--primary-focus);
+}
+
+nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--nav-element-spacing-vertical) 0;
+}
+
+nav ul {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+nav ul li {
+  margin-right: var(--nav-element-spacing-horizontal);
+}
+
+nav ul li:last-child {
+  margin-right: 0;
+}
+
+nav ul li a {
+  display: block;
+  padding: var(--nav-link-spacing-vertical) var(--nav-link-spacing-horizontal);
+  text-decoration: none;
+  transition: color var(--transition);
+}
+
+article {
+  margin-bottom: var(--block-spacing-vertical);
+  padding: var(--block-spacing-vertical) var(--block-spacing-horizontal);
+  border-radius: var(--border-radius);
+  background-color: var(--background-color);
+  box-shadow: var(--box-shadow);
+}
+
+article header {
+  margin-bottom: calc(var(--block-spacing-vertical) * 0.5);
+}
+
+article footer {
+  margin-top: calc(var(--block-spacing-vertical) * 0.5);
+}
+
+footer {
+  margin-top: var(--block-spacing-vertical);
+  padding-top: var(--block-spacing-vertical);
+  border-top: var(--border-width) solid var(--muted-border-color);
+  color: var(--muted-color);
+}
+
+small {
+  font-size: 0.875em;
+  color: var(--muted-color);
+}
+
+hr {
+  margin: var(--block-spacing-vertical) 0;
+  border: none;
+  border-top: var(--border-width) solid var(--muted-border-color);
+}
+
+details {
+  margin-bottom: var(--typography-spacing-vertical);
+}
+
+details summary {
+  cursor: pointer;
+  margin-bottom: calc(var(--typography-spacing-vertical) * 0.5);
+}
+
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown ul {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 999;
+  min-width: 10rem;
+  padding: 0.5rem 0;
+  margin: 0.125rem 0 0;
+  background-color: var(--background-color);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow);
+  list-style: none;
+}
+
+.dropdown ul li {
+  margin: 0;
+}
+
+.dropdown ul li a {
+  display: block;
+  padding: 0.375rem 1rem;
+  text-decoration: none;
+  color: var(--color);
+}
+
+.dropdown ul li a:hover {
+  background-color: var(--muted-border-color);
+}
+
+[aria-busy="true"] {
+  cursor: progress;
+}
+
+[aria-busy="true"]:not(input, select, textarea)::before {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 0.125em solid var(--muted-color);
+  border-radius: 50%;
+  border-top-color: var(--primary);
+  animation: spin 1s linear infinite;
+  content: "";
+  vertical-align: text-bottom;
+  margin-right: 0.75rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+[role="button"] {
+  display: inline-block;
+  text-decoration: none;
+}
