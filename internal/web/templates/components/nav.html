@@ -1,0 +1,43 @@
+{{define "nav"}}
+<nav class="container-fluid">
+    <ul>
+        <li>
+            <a href="/" class="brand">
+                <strong>💰 Семейный бюджет</strong>
+            </a>
+        </li>
+    </ul>
+    <ul>
+        {{if .CurrentUser}}
+        <li><a href="/">Главная</a></li>
+        <li><a href="/transactions">Транзакции</a></li>
+        <li><a href="/categories">Категории</a></li>
+        <li><a href="/budgets">Бюджеты</a></li>
+        <li><a href="/reports">Отчеты</a></li>
+        <li>
+            <details class="dropdown">
+                <summary role="button" class="secondary">
+                    {{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}
+                </summary>
+                <ul>
+                    <li><a href="/profile">Профиль</a></li>
+                    {{if eq .CurrentUser.Role "admin"}}
+                    <li><a href="/users">Пользователи</a></li>
+                    <li><a href="/family/settings">Настройки семьи</a></li>
+                    {{end}}
+                    <li>
+                        <form method="POST" action="/logout" style="margin: 0;">
+                            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                            <button type="submit" class="outline">Выход</button>
+                        </form>
+                    </li>
+                </ul>
+            </details>
+        </li>
+        {{else}}
+        <li><a href="/login">Вход</a></li>
+        <li><a href="/register" role="button">Регистрация</a></li>
+        {{end}}
+    </ul>
+</nav>
+{{end}}

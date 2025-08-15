@@ -1,0 +1,20 @@
+{{define "footer"}}
+<footer class="container">
+    <hr>
+    <div class="grid">
+        <div>
+            <small>
+                © 2025 Семейный бюджет. 
+                {{if .Family}}Семья: {{.Family.Name}}{{end}}
+            </small>
+        </div>
+        <div>
+            <small class="text-right">
+                <a href="/help">Справка</a> • 
+                <a href="/privacy">Конфиденциальность</a> • 
+                <a href="/terms">Условия</a>
+            </small>
+        </div>
+    </div>
+</footer>
+{{end}}

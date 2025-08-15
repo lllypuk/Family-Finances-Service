@@ -12,6 +12,7 @@ import (
 
 	"family-budget-service/internal/handlers"
 	"family-budget-service/internal/observability"
+	"family-budget-service/internal/web"
 )
 
 const (
@@ -25,13 +26,16 @@ type HTTPServer struct {
 	config               *Config
 	observabilityService *observability.Service
 
-	// Handlers
+	// API Handlers
 	userHandler        *handlers.UserHandler
 	familyHandler      *handlers.FamilyHandler
 	categoryHandler    *handlers.CategoryHandler
 	transactionHandler *handlers.TransactionHandler
 	budgetHandler      *handlers.BudgetHandler
 	reportHandler      *handlers.ReportHandler
+
+	// Web Interface
+	webServer *web.Server
 }
 
 type Config struct {
@@ -86,13 +90,24 @@ func NewHTTPServerWithObservability(
 		config:               config,
 		observabilityService: obsService,
 
-		// Инициализация handlers
+		// Инициализация API handlers
 		userHandler:        handlers.NewUserHandler(repositories),
 		familyHandler:      handlers.NewFamilyHandler(repositories),
 		categoryHandler:    handlers.NewCategoryHandler(repositories),
 		transactionHandler: handlers.NewTransactionHandler(repositories),
 		budgetHandler:      handlers.NewBudgetHandler(repositories),
 		reportHandler:      handlers.NewReportHandler(repositories),
+	}
+
+	// Инициализация веб-интерфейса
+	webServer, err := web.NewWebServer(e, repositories, "internal/web/templates")
+	if err != nil {
+		// Логируем ошибку, но не прерываем работу сервера
+		if obsService != nil {
+			obsService.Logger.Error("Failed to initialize web server", "error", err)
+		}
+	} else {
+		server.webServer = webServer
 	}
 
 	server.setupRoutes()
@@ -114,6 +129,11 @@ func (s *HTTPServer) setupRoutes() {
 	} else {
 		// Fallback health check
 		s.echo.GET("/health", s.healthCheck)
+	}
+
+	// Веб-интерфейс маршруты
+	if s.webServer != nil {
+		s.webServer.SetupRoutes()
 	}
 
 	// API версионирование

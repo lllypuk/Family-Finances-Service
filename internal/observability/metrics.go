@@ -61,9 +61,9 @@ func createHTTPMetrics() (*prometheus.CounterVec, *prometheus.HistogramVec, *pro
 	)
 
 	// Безопасная регистрация метрик - игнорируем ошибки дублирования
-	prometheus.Register(httpRequestsTotal)
-	prometheus.Register(httpRequestDuration)
-	prometheus.Register(httpRequestsErrors)
+	_ = prometheus.Register(httpRequestsTotal)
+	_ = prometheus.Register(httpRequestDuration)
+	_ = prometheus.Register(httpRequestsErrors)
 
 	return httpRequestsTotal, httpRequestDuration, httpRequestsErrors
 }
@@ -108,11 +108,11 @@ func createBusinessMetrics() (prometheus.Gauge, prometheus.Gauge, prometheus.Gau
 	)
 
 	// Безопасная регистрация метрик - игнорируем ошибки дублирования
-	prometheus.Register(familiesTotal)
-	prometheus.Register(usersTotal)
-	prometheus.Register(transactionsTotal)
-	prometheus.Register(budgetsActive)
-	prometheus.Register(transactionAmount)
+	_ = prometheus.Register(familiesTotal)
+	_ = prometheus.Register(usersTotal)
+	_ = prometheus.Register(transactionsTotal)
+	_ = prometheus.Register(budgetsActive)
+	_ = prometheus.Register(transactionAmount)
 
 	return familiesTotal, usersTotal, transactionsTotal, budgetsActive, transactionAmount
 }
@@ -144,9 +144,9 @@ func createDatabaseMetrics() (prometheus.Gauge, *prometheus.HistogramVec, *prome
 	)
 
 	// Безопасная регистрация метрик - игнорируем ошибки дублирования
-	prometheus.Register(databaseConnections)
-	prometheus.Register(databaseOperationDuration)
-	prometheus.Register(databaseOperationsTotal)
+	_ = prometheus.Register(databaseConnections)
+	_ = prometheus.Register(databaseOperationDuration)
+	_ = prometheus.Register(databaseOperationsTotal)
 
 	return databaseConnections, databaseOperationDuration, databaseOperationsTotal
 }
@@ -168,8 +168,8 @@ func createApplicationMetrics() (prometheus.Gauge, prometheus.Gauge) {
 	)
 
 	// Безопасная регистрация метрик - игнорируем ошибки дублирования
-	prometheus.Register(applicationStartTime)
-	prometheus.Register(applicationUptime)
+	_ = prometheus.Register(applicationStartTime)
+	_ = prometheus.Register(applicationUptime)
 
 	return applicationStartTime, applicationUptime
 }

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Семейный бюджет</title>
+    
+    <!-- PicoCSS -->
+    <link rel="stylesheet" href="/static/css/pico.min.css">
+    <link rel="stylesheet" href="/static/css/custom.css">
+    
+    <!-- HTMX -->
+    <script src="/static/js/htmx.min.js"></script>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
+</head>
+<body>
+    <main class="container">
+        <div class="grid">
+            <div></div>
+            <div>
+                <!-- Header -->
+                <header class="auth-header">
+                    <h1>💰 Семейный бюджет</h1>
+                    <p>Управляйте финансами вашей семьи</p>
+                </header>
+                
+                <!-- Flash Messages -->
+                {{if .Messages}}
+                <div id="flash-messages">
+                    {{range .Messages}}
+                    <div class="alert alert-{{.Type}}" role="alert">
+                        {{.Text}}
+                    </div>
+                    {{end}}
+                </div>
+                {{end}}
+                
+                <!-- Auth Content -->
+                {{template "content" .}}
+                
+                <!-- Footer -->
+                <footer class="auth-footer">
+                    <small>
+                        <a href="/login">Вход</a> • 
+                        <a href="/register">Регистрация</a>
+                    </small>
+                </footer>
+            </div>
+            <div></div>
+        </div>
+    </main>
+    
+    <!-- Custom JavaScript -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
