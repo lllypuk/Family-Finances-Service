@@ -19,7 +19,7 @@ run:
 # Запуск с локальными переменными окружения
 run-local:
 	@echo "Running $(APP_NAME) with local config..."
-	@SERVER_PORT=8083 \
+	@SERVER_PORT=8080 \
 	 SERVER_HOST=localhost \
 	 MONGODB_URI=mongodb://admin:password123@localhost:27017/family_budget_local?authSource=admin \
 	 MONGODB_DATABASE=family_budget_local \

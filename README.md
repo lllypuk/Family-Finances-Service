@@ -35,11 +35,11 @@ A comprehensive family budget management system with income/expense tracking, bu
 
 2. **Run the application**:
    ```bash
-   make run-local  # Runs on localhost:8083
+   make run-local  # Runs on localhost:8080
    ```
 
 3. **Access the services**:
-   - **Application**: http://localhost:8083
+   - **Application**: http://localhost:8080
    - **Mongo Express** (DB Admin): http://localhost:8081 (admin/admin)
    - **MongoDB**: localhost:27017 (admin/password123)
    - **Redis**: localhost:6379 (password: redis123)
