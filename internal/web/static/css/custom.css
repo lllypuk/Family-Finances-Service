@@ -35,6 +35,45 @@ nav .dropdown summary {
   border-top: 1px solid var(--muted-border-color);
 }
 
+.auth-card {
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 2rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  background-color: var(--background-color);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.auth-card header h2 {
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+
+.auth-card header p {
+  text-align: center;
+  color: var(--muted-color);
+  margin-bottom: 2rem;
+}
+
+.auth-link {
+  text-align: center;
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--muted-border-color);
+}
+
+.btn-primary {
+  width: 100%;
+  position: relative;
+}
+
+small.error {
+  color: var(--del);
+  display: block;
+  margin-top: 0.25rem;
+}
+
 /* Дашборд */
 .dashboard {
   margin-top: 1rem;

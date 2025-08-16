@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
@@ -39,8 +40,9 @@ type HTTPServer struct {
 }
 
 type Config struct {
-	Port string
-	Host string
+	Port          string
+	Host          string
+	SessionSecret string
 }
 
 // NewHTTPServer создает HTTP сервер без observability (для обратной совместимости)
@@ -55,6 +57,9 @@ func NewHTTPServerWithObservability(
 	obsService *observability.Service,
 ) *HTTPServer {
 	e := echo.New()
+
+	// Настройка валидации
+	e.Validator = &CustomValidator{validator: validator.New()}
 
 	// Базовые middleware
 	e.Use(middleware.Recover())
@@ -100,7 +105,7 @@ func NewHTTPServerWithObservability(
 	}
 
 	// Инициализация веб-интерфейса
-	webServer, err := web.NewWebServer(e, repositories, "internal/web/templates")
+	webServer, err := web.NewWebServer(e, repositories, "internal/web/templates", config.SessionSecret)
 	if err != nil {
 		// Логируем ошибку, но не прерываем работу сервера
 		if obsService != nil {
@@ -197,4 +202,14 @@ func (s *HTTPServer) healthCheck(c echo.Context) error {
 		"status": "ok",
 		"time":   time.Now().Format(time.RFC3339),
 	})
+}
+
+// CustomValidator wraps go-playground/validator for Echo
+type CustomValidator struct {
+	validator *validator.Validate
+}
+
+// Validate validates structs using go-playground/validator
+func (cv *CustomValidator) Validate(i interface{}) error {
+	return cv.validator.Struct(i)
 }

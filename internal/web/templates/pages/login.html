@@ -1,0 +1,60 @@
+{{define "content"}}
+<article class="auth-card">
+    <header>
+        <h2>Вход в систему</h2>
+        <p>Введите свои данные для доступа к семейному бюджету</p>
+    </header>
+    
+    {{if .Error}}
+    <div class="alert alert-error" role="alert">
+        {{.Error}}
+    </div>
+    {{end}}
+    
+    {{template "login_form" .}}
+</article>
+{{end}}
+
+{{define "login_form"}}
+<form method="POST" action="/login" hx-post="/login" hx-target="closest form" hx-swap="outerHTML">
+    <input type="hidden" name="_token" value="{{.CSRFToken}}">
+    
+    <fieldset>
+        <label for="email">Email</label>
+        <input 
+            type="email" 
+            id="email" 
+            name="email" 
+            value="{{.Email}}" 
+            placeholder="your@email.com"
+            {{if .FieldErrors.email}}aria-invalid="true"{{end}}
+            required>
+        {{if .FieldErrors.email}}
+        <small class="error">{{.FieldErrors.email}}</small>
+        {{end}}
+    </fieldset>
+    
+    <fieldset>
+        <label for="password">Пароль</label>
+        <input 
+            type="password" 
+            id="password" 
+            name="password" 
+            placeholder="Введите пароль"
+            {{if .FieldErrors.password}}aria-invalid="true"{{end}}
+            required>
+        {{if .FieldErrors.password}}
+        <small class="error">{{.FieldErrors.password}}</small>
+        {{end}}
+    </fieldset>
+    
+    <button type="submit" class="btn-primary">
+        <span class="htmx-indicator" aria-hidden="true">🔄</span>
+        Войти
+    </button>
+</form>
+
+<p class="auth-link">
+    Нет учетной записи? <a href="/register">Создать семейный аккаунт</a>
+</p>
+{{end}}

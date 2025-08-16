@@ -1,0 +1,125 @@
+{{define "content"}}
+<article class="auth-card">
+    <header>
+        <h2>Создание семейного аккаунта</h2>
+        <p>Зарегистрируйте свою семью для управления общим бюджетом</p>
+    </header>
+    
+    {{if .Error}}
+    <div class="alert alert-error" role="alert">
+        {{.Error}}
+    </div>
+    {{end}}
+    
+    {{template "register_form" .}}
+</article>
+{{end}}
+
+{{define "register_form"}}
+<form method="POST" action="/register" hx-post="/register" hx-target="closest form" hx-swap="outerHTML">
+    <input type="hidden" name="_token" value="{{.CSRFToken}}">
+    
+    <fieldset>
+        <legend>Информация о семье</legend>
+        
+        <label for="family_name">Название семьи</label>
+        <input 
+            type="text" 
+            id="family_name" 
+            name="family_name" 
+            value="{{.FamilyName}}" 
+            placeholder="Семья Ивановых"
+            {{if .FieldErrors.family_name}}aria-invalid="true"{{end}}
+            required>
+        {{if .FieldErrors.family_name}}
+        <small class="error">{{.FieldErrors.family_name}}</small>
+        {{end}}
+        
+        <label for="currency">Валюта</label>
+        <select 
+            id="currency" 
+            name="currency" 
+            {{if .FieldErrors.currency}}aria-invalid="true"{{end}}
+            required>
+            <option value="">Выберите валюту</option>
+            <option value="RUB" {{if eq .Currency "RUB"}}selected{{end}}>RUB - Российский рубль</option>
+            <option value="USD" {{if eq .Currency "USD"}}selected{{end}}>USD - Доллар США</option>
+            <option value="EUR" {{if eq .Currency "EUR"}}selected{{end}}>EUR - Евро</option>
+        </select>
+        {{if .FieldErrors.currency}}
+        <small class="error">{{.FieldErrors.currency}}</small>
+        {{end}}
+    </fieldset>
+    
+    <fieldset>
+        <legend>Ваши данные</legend>
+        
+        <div class="grid">
+            <div>
+                <label for="first_name">Имя</label>
+                <input 
+                    type="text" 
+                    id="first_name" 
+                    name="first_name" 
+                    value="{{.FirstName}}" 
+                    placeholder="Иван"
+                    {{if .FieldErrors.first_name}}aria-invalid="true"{{end}}
+                    required>
+                {{if .FieldErrors.first_name}}
+                <small class="error">{{.FieldErrors.first_name}}</small>
+                {{end}}
+            </div>
+            
+            <div>
+                <label for="last_name">Фамилия</label>
+                <input 
+                    type="text" 
+                    id="last_name" 
+                    name="last_name" 
+                    value="{{.LastName}}" 
+                    placeholder="Иванов"
+                    {{if .FieldErrors.last_name}}aria-invalid="true"{{end}}
+                    required>
+                {{if .FieldErrors.last_name}}
+                <small class="error">{{.FieldErrors.last_name}}</small>
+                {{end}}
+            </div>
+        </div>
+        
+        <label for="email">Email</label>
+        <input 
+            type="email" 
+            id="email" 
+            name="email" 
+            value="{{.Email}}" 
+            placeholder="your@email.com"
+            {{if .FieldErrors.email}}aria-invalid="true"{{end}}
+            required>
+        {{if .FieldErrors.email}}
+        <small class="error">{{.FieldErrors.email}}</small>
+        {{end}}
+        
+        <label for="password">Пароль</label>
+        <input 
+            type="password" 
+            id="password" 
+            name="password" 
+            placeholder="Минимум 6 символов"
+            {{if .FieldErrors.password}}aria-invalid="true"{{end}}
+            required>
+        {{if .FieldErrors.password}}
+        <small class="error">{{.FieldErrors.password}}</small>
+        {{end}}
+        <small>Пароль должен содержать минимум 6 символов</small>
+    </fieldset>
+    
+    <button type="submit" class="btn-primary">
+        <span class="htmx-indicator" aria-hidden="true">🔄</span>
+        Создать аккаунт
+    </button>
+</form>
+
+<p class="auth-link">
+    Уже есть аккаунт? <a href="/login">Войти в систему</a>
+</p>
+{{end}}

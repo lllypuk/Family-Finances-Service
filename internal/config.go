@@ -7,11 +7,16 @@ import (
 type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
+	Web      WebConfig
 }
 
 type ServerConfig struct {
 	Port string
 	Host string
+}
+
+type WebConfig struct {
+	SessionSecret string
 }
 
 type DatabaseConfig struct {
@@ -28,6 +33,9 @@ func LoadConfig() *Config {
 		Database: DatabaseConfig{
 			URI:  getEnv("MONGODB_URI", "mongodb://localhost:27017"),
 			Name: getEnv("MONGODB_DATABASE", "family_budget"),
+		},
+		Web: WebConfig{
+			SessionSecret: getEnv("SESSION_SECRET", "your-super-secret-session-key-change-in-production"),
 		},
 	}
 }
