@@ -59,6 +59,7 @@ jobs:
           make fmt
           if [ -n "$(git diff --exit-code)" ]; then
             echo "Code is not formatted properly. Please run 'make fmt'"
+            git diff
             exit 1
           fi
 
@@ -66,12 +67,26 @@ jobs:
         uses: golangci/golangci-lint-action@v8
         with:
           version: latest
-          args: --timeout=5m
+          args: --timeout=5m --verbose
+
+      - name: Run security vulnerability check
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
 
       - name: Run tests
         run: make test-coverage
         env:
           MONGODB_URI: mongodb://admin:password123@localhost:27017/family_budget_test?authSource=admin
+          LOG_LEVEL: error
+
+      - name: Check test coverage
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
+          echo "Total test coverage: ${COVERAGE}%"
+          if (( $(echo "$COVERAGE" | cut -d. -f1) < 50 )); then
+            echo "Warning: Test coverage is below 50%"
+          fi
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -82,11 +97,6 @@ jobs:
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-      # - name: Run govulncheck
-      #   run: |
-      #     go install golang.org/x/vuln/cmd/govulncheck@latest
-      #     govulncheck ./...
 
   build:
     name: Build
@@ -106,8 +116,26 @@ jobs:
       - name: Build application
         run: make build
 
+      - name: Verify build output
+        run: |
+          if [ ! -f "build/family-budget-service" ]; then
+            echo "Build failed: binary not found"
+            exit 1
+          fi
+          ls -la build/
+          file build/family-budget-service
+
       - name: Test Docker build
-        run: docker build -t family-budget-service:test .
+        run: |
+          docker build -t family-budget-service:test .
+          docker images family-budget-service:test
+
+      - name: Test Docker container runs
+        run: |
+          docker run --rm -d --name test-container family-budget-service:test
+          sleep 5
+          docker ps -a
+          docker stop test-container 2>/dev/null || true
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -115,3 +143,26 @@ jobs:
           name: family-budget-service-${{ github.sha }}
           path: build/
           retention-days: 7
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-results.sarif"
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
