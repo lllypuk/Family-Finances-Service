@@ -41,7 +41,12 @@ jobs:
         run: go mod verify
 
       - name: Check formatting
-        run: make fmt
+        run: |
+          make fmt
+          if ! git diff --exit-code; then
+            echo "Code is not formatted correctly. Please run 'make fmt' and commit the changes."
+            exit 1
+          fi
 
       - name: Run linter
         uses: golangci/golangci-lint-action@v8
