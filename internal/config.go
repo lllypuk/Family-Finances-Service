@@ -5,8 +5,10 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
+	Server      ServerConfig
+	Database    DatabaseConfig
+	Web         WebConfig
+	Environment string
 }
 
 type ServerConfig struct {
@@ -14,9 +16,18 @@ type ServerConfig struct {
 	Host string
 }
 
+type WebConfig struct {
+	SessionSecret string
+}
+
 type DatabaseConfig struct {
 	URI  string
 	Name string
+}
+
+// IsProduction returns true if the application is running in production environment
+func (c *Config) IsProduction() bool {
+	return c.Environment == "production"
 }
 
 func LoadConfig() *Config {
@@ -29,6 +40,10 @@ func LoadConfig() *Config {
 			URI:  getEnv("MONGODB_URI", "mongodb://localhost:27017"),
 			Name: getEnv("MONGODB_DATABASE", "family_budget"),
 		},
+		Web: WebConfig{
+			SessionSecret: getEnv("SESSION_SECRET", "your-super-secret-session-key-change-in-production"),
+		},
+		Environment: getEnv("ENVIRONMENT", "development"),
 	}
 }
 

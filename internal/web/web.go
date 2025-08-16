@@ -5,6 +5,7 @@ import (
 
 	"family-budget-service/internal/handlers"
 	webHandlers "family-budget-service/internal/web/handlers"
+	"family-budget-service/internal/web/middleware"
 )
 
 // Server представляет веб-сервер для HTML интерфейса
@@ -15,10 +16,16 @@ type Server struct {
 
 	// Handlers
 	dashboardHandler *webHandlers.DashboardHandler
+	authHandler      *webHandlers.AuthHandler
 }
 
 // NewWebServer создает новый веб-сервер
-func NewWebServer(e *echo.Echo, repositories *handlers.Repositories, templatesDir string) (*Server, error) {
+func NewWebServer(
+	e *echo.Echo,
+	repositories *handlers.Repositories,
+	templatesDir, sessionSecret string,
+	isProduction bool,
+) (*Server, error) {
 	// Создаем рендерер шаблонов
 	renderer, err := NewTemplateRenderer(templatesDir)
 	if err != nil {
@@ -28,6 +35,10 @@ func NewWebServer(e *echo.Echo, repositories *handlers.Repositories, templatesDi
 	// Устанавливаем рендерер для Echo
 	e.Renderer = renderer
 
+	// Настраиваем middleware
+	e.Use(middleware.SessionStore(sessionSecret, isProduction))
+	e.Use(middleware.CSRFProtection())
+
 	ws := &Server{
 		echo:         e,
 		repositories: repositories,
@@ -35,6 +46,7 @@ func NewWebServer(e *echo.Echo, repositories *handlers.Repositories, templatesDi
 
 		// Инициализируем handlers
 		dashboardHandler: webHandlers.NewDashboardHandler(repositories),
+		authHandler:      webHandlers.NewAuthHandler(repositories),
 	}
 
 	return ws, nil
@@ -45,17 +57,20 @@ func (ws *Server) SetupRoutes() {
 	// Статические файлы
 	ws.echo.Static("/static", "internal/web/static")
 
+	// Аутентификация (доступна без авторизации)
+	ws.echo.GET("/login", ws.authHandler.LoginPage, middleware.RedirectIfAuthenticated("/"))
+	ws.echo.POST("/login", ws.authHandler.Login, middleware.RedirectIfAuthenticated("/"))
+	ws.echo.GET("/register", ws.authHandler.RegisterPage, middleware.RedirectIfAuthenticated("/"))
+	ws.echo.POST("/register", ws.authHandler.Register, middleware.RedirectIfAuthenticated("/"))
+	ws.echo.POST("/logout", ws.authHandler.Logout)
+
+	// Защищенные маршруты (требуют аутентификации)
+	protected := ws.echo.Group("", middleware.RequireAuth())
+
 	// Главная страница
-	ws.echo.GET("/", ws.dashboardHandler.Dashboard)
+	protected.GET("/", ws.dashboardHandler.Dashboard)
 
 	// HTMX endpoints
-	htmx := ws.echo.Group("/htmx")
+	htmx := protected.Group("/htmx")
 	htmx.GET("/dashboard/stats", ws.dashboardHandler.DashboardStats)
-
-	// TODO: Добавить остальные маршруты
-	// ws.echo.GET("/login", ws.authHandler.LoginPage)
-	// ws.echo.POST("/login", ws.authHandler.Login)
-	// ws.echo.GET("/register", ws.authHandler.RegisterPage)
-	// ws.echo.POST("/register", ws.authHandler.Register)
-	// ws.echo.POST("/logout", ws.authHandler.Logout)
 }

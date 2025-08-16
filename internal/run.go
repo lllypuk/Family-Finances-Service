@@ -66,8 +66,10 @@ func NewApplication() (*Application, error) {
 
 	// Создание HTTP сервера с observability
 	serverConfig := &application.Config{
-		Port: config.Server.Port,
-		Host: config.Server.Host,
+		Port:          config.Server.Port,
+		Host:          config.Server.Host,
+		SessionSecret: config.Web.SessionSecret,
+		IsProduction:  config.IsProduction(),
 	}
 	app.httpServer = application.NewHTTPServerWithObservability(
 		app.repositories,

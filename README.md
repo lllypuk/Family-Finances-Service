@@ -21,19 +21,86 @@ A comprehensive family budget management system with income/expense tracking, bu
 
 ## Quick Start
 
+### Prerequisites
+- Go 1.24+
+- Docker & Docker Compose
+- Make
+
+### Local Development Setup
+
+1. **Start required services**:
+   ```bash
+   make dev-up  # Starts MongoDB, Redis, and Mongo Express
+   ```
+
+2. **Run the application**:
+   ```bash
+   make run-local  # Runs on localhost:8083
+   ```
+
+3. **Access the services**:
+   - **Application**: http://localhost:8083
+   - **Mongo Express** (DB Admin): http://localhost:8081 (admin/admin)
+   - **MongoDB**: localhost:27017 (admin/password123)
+   - **Redis**: localhost:6379 (password: redis123)
+
+### Development Commands
+
 ```bash
-# Start MongoDB and supporting services
-make docker-up
+# Development environment
+make dev-up           # Start MongoDB, Redis, Mongo Express
+make run-local        # Run with development config
+make docker-down      # Stop all containers
 
-# Run the application locally
-make run-local
+# Testing and Quality
+make test             # Run tests
+make test-coverage    # Run tests with coverage report
+make lint             # Run linter
+make fmt              # Format code
 
-# Run tests
-make test
+# Building
+make build            # Build binary
+make clean            # Clean build artifacts
 
-# Build the application
-make build
+# Observability (optional)
+make observability-up # Start Prometheus, Grafana, Jaeger
 ```
+
+## Architecture
+
+This project follows **Clean Architecture** principles:
+
+- **Domain Layer**: Business entities and rules (`internal/domain/`)
+- **Application Layer**: Use cases and interfaces (`internal/application/`)
+- **Infrastructure Layer**: External services implementation (`internal/infrastructure/`)
+- **Web Layer**: HTTP handlers and middleware (`internal/web/`)
+
+### Project Structure
+```
+├── cmd/server/          # Application entry point
+├── internal/
+│   ├── domain/          # Business entities (User, Family, Transaction, etc.)
+│   ├── application/     # Use cases and repository interfaces
+│   ├── web/             # HTTP handlers, middleware, templates
+│   └── infrastructure/  # Database implementations (planned)
+├── .memory_bank/        # Project documentation
+└── monitoring/          # Observability configuration
+```
+
+## Configuration
+
+The application uses environment variables for configuration. Key variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SERVER_PORT` | 8080 | HTTP server port |
+| `SERVER_HOST` | localhost | HTTP server host |
+| `MONGODB_URI` | mongodb://localhost:27017 | MongoDB connection string |
+| `MONGODB_DATABASE` | family_budget | Database name |
+| `SESSION_SECRET` | (required) | Session encryption key |
+| `REDIS_URL` | (optional) | Redis connection string |
+| `LOG_LEVEL` | info | Logging level (debug, info, warn, error) |
+| `ENVIRONMENT` | production | Application environment |
 
 ## Development
 

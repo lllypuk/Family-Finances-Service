@@ -1,4 +1,4 @@
-.PHONY: build run test clean docker-up docker-down deps lint fmt lint-fix observability-up observability-down observability-logs
+.PHONY: build run test clean docker-up docker-down deps lint fmt pre-commit lint-fix observability-up observability-down observability-logs
 
 # Переменные
 APP_NAME=family-budget-service
@@ -19,10 +19,14 @@ run:
 # Запуск с локальными переменными окружения
 run-local:
 	@echo "Running $(APP_NAME) with local config..."
-	@SERVER_PORT=8080 \
+	@SERVER_PORT=8083 \
 	 SERVER_HOST=localhost \
-	 MONGODB_URI=mongodb://localhost:27017 \
+	 MONGODB_URI=mongodb://admin:password123@localhost:27017/family_budget_local?authSource=admin \
 	 MONGODB_DATABASE=family_budget_local \
+	 SESSION_SECRET=your-super-secret-session-key-for-local-dev \
+	 REDIS_URL=redis://:redis123@localhost:6379 \
+	 LOG_LEVEL=debug \
+	 ENVIRONMENT=development \
 	 go run ./cmd/server/main.go
 
 # Тестирование
@@ -56,6 +60,13 @@ lint-fix:
 fmt:
 	@echo "Formatting code..."
 	@go fmt ./...
+
+# Проверка перед коммитом
+pre-commit:
+	@echo "Running pre-commit checks..."
+	@go fmt ./...
+	@go test -v ./...
+	@golangci-lint run
 
 # Очистка
 clean:
