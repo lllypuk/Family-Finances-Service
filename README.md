@@ -91,22 +91,42 @@ This project follows **Clean Architecture** principles:
 
 The application uses environment variables for configuration. Key variables:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SERVER_PORT` | 8080 | HTTP server port |
-| `SERVER_HOST` | localhost | HTTP server host |
-| `MONGODB_URI` | mongodb://localhost:27017 | MongoDB connection string |
-| `MONGODB_DATABASE` | family_budget | Database name |
-| `SESSION_SECRET` | (required) | Session encryption key |
-| `REDIS_URL` | (optional) | Redis connection string |
-| `LOG_LEVEL` | info | Logging level (debug, info, warn, error) |
-| `ENVIRONMENT` | production | Application environment |
+| Variable           | Default                   | Description                              |
+|--------------------|---------------------------|------------------------------------------|
+| `SERVER_PORT`      | 8080                      | HTTP server port                         |
+| `SERVER_HOST`      | localhost                 | HTTP server host                         |
+| `MONGODB_URI`      | mongodb://localhost:27017 | MongoDB connection string                |
+| `MONGODB_DATABASE` | family_budget             | Database name                            |
+| `SESSION_SECRET`   | (required)                | Session encryption key                   |
+| `REDIS_URL`        | (optional)                | Redis connection string                  |
+| `LOG_LEVEL`        | info                      | Logging level (debug, info, warn, error) |
+| `ENVIRONMENT`      | production                | Application environment                  |
+
+## Запуск с Docker
+
+```bash
+# Сборка и запуск всех сервисов
+docker-compose -f docker/docker-compose.yml up --build
+
+# Запуск в фоне
+docker-compose -f docker/docker-compose.yml up -d
+
+# Остановка сервисов
+docker-compose -f docker/docker-compose.yml down
+```
+
+## Разработка
+
+```bash
+# Только база данных для разработки
+docker-compose -f docker/docker-compose.yml up postgres -d
+```
 
 ## Development
 
 See [CLAUDE.md](CLAUDE.md) for comprehensive development guidelines and architecture details.
 
-For detailed project documentation, check the [.memory_bank](.memory_bank/) directory.
+For detailed project documentation, check the [.memory_bank](.memory_bank) directory.
 
 ## License
 

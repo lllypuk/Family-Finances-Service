@@ -166,7 +166,7 @@ func (h *TransactionHandler) parseTransactionFilters(c echo.Context) (Transactio
 	// Обязательный параметр family_id
 	familyIDParam := c.QueryParam("family_id")
 	if familyIDParam == "" {
-		return filters, c.JSON(http.StatusBadRequest, ErrorResponse{
+		_ = c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Code:    "MISSING_FAMILY_ID",
 				Message: "family_id query parameter is required",
@@ -177,11 +177,12 @@ func (h *TransactionHandler) parseTransactionFilters(c echo.Context) (Transactio
 				Version:   "v1",
 			},
 		})
+		return filters, errors.New("missing family_id")
 	}
 
 	familyID, err := uuid.Parse(familyIDParam)
 	if err != nil {
-		return filters, c.JSON(http.StatusBadRequest, ErrorResponse{
+		_ = c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Code:    "INVALID_FAMILY_ID",
 				Message: "Invalid family ID format",
@@ -192,6 +193,7 @@ func (h *TransactionHandler) parseTransactionFilters(c echo.Context) (Transactio
 				Version:   "v1",
 			},
 		})
+		return filters, errors.New("invalid family_id")
 	}
 	filters.FamilyID = familyID
 

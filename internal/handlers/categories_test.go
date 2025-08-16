@@ -545,12 +545,10 @@ func TestCategoryHandler_DeleteCategory(t *testing.T) {
 			mockSetup: func(repo *MockCategoryRepository) {
 				repo.On("Delete", mock.Anything, categoryID).Return(nil)
 			},
-			expectedStatus: http.StatusOK,
+			expectedStatus: http.StatusNoContent,
 			expectedBody: func(t *testing.T, body string) {
-				var response handlers.APIResponse[map[string]string]
-				err := json.Unmarshal([]byte(body), &response)
-				require.NoError(t, err)
-				assert.Equal(t, "Category deleted successfully", response.Data["message"])
+				// No content expected for 204 No Content
+				assert.Empty(t, body)
 			},
 		},
 		{
@@ -573,12 +571,12 @@ func TestCategoryHandler_DeleteCategory(t *testing.T) {
 			mockSetup: func(repo *MockCategoryRepository) {
 				repo.On("Delete", mock.Anything, categoryID).Return(errors.New("not found"))
 			},
-			expectedStatus: http.StatusNotFound,
+			expectedStatus: http.StatusInternalServerError,
 			expectedBody: func(t *testing.T, body string) {
 				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
 				require.NoError(t, err)
-				assert.Equal(t, "CATEGORY_NOT_FOUND", response.Error.Code)
+				assert.Equal(t, "DELETE_FAILED", response.Error.Code)
 			},
 		},
 	}

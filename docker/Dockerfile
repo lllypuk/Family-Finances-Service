@@ -1,8 +1,8 @@
 # Multi-stage build для оптимизации размера образа
-FROM golang:1.25-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 # Установка необходимых инструментов
-RUN apk add --no-cache git ca-certificates tzdata
+RUN apk add --no-cache ca-certificates git tzdata
 
 # Создание рабочего каталога
 WORKDIR /app
@@ -41,7 +41,7 @@ EXPOSE 8080
 
 # Healthcheck для проверки состояния приложения
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD ["/family-budget-service", "-health-check"] || exit 1
+    CMD ["/family-budget-service", "-health-check"]
 
 # Точка входа
 ENTRYPOINT ["/family-budget-service"]

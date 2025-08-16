@@ -426,12 +426,10 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 			mockSetup: func(repo *MockUserRepository) {
 				repo.On("Delete", mock.Anything, userID).Return(nil)
 			},
-			expectedStatus: http.StatusOK,
+			expectedStatus: http.StatusNoContent,
 			expectedBody: func(t *testing.T, body string) {
-				var response handlers.APIResponse[map[string]string]
-				err := json.Unmarshal([]byte(body), &response)
-				require.NoError(t, err)
-				assert.Equal(t, "User deleted successfully", response.Data["message"])
+				// No content expected for 204 No Content
+				assert.Empty(t, body)
 			},
 		},
 		{
@@ -454,12 +452,12 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 			mockSetup: func(repo *MockUserRepository) {
 				repo.On("Delete", mock.Anything, userID).Return(errors.New("not found"))
 			},
-			expectedStatus: http.StatusNotFound,
+			expectedStatus: http.StatusInternalServerError,
 			expectedBody: func(t *testing.T, body string) {
 				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
 				require.NoError(t, err)
-				assert.Equal(t, "USER_NOT_FOUND", response.Error.Code)
+				assert.Equal(t, "DELETE_FAILED", response.Error.Code)
 			},
 		},
 	}

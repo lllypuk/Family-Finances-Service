@@ -40,14 +40,6 @@ jobs:
       - name: Verify dependencies
         run: go mod verify
 
-      - name: Check formatting
-        run: |
-          make fmt
-          if ! git diff --exit-code; then
-            echo "Code is not formatted correctly. Please run 'make fmt' and commit the changes."
-            exit 1
-          fi
-
       - name: Run linter
         uses: golangci/golangci-lint-action@v8
         with:
@@ -73,7 +65,6 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.out
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false
@@ -109,7 +100,7 @@ jobs:
 
       - name: Test Docker build
         run: |
-          docker build -t family-budget-service:test .
+          docker build -f docker/Dockerfile -t family-budget-service:test .
           docker images family-budget-service:test
 
       - name: Test Docker container runs

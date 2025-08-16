@@ -31,10 +31,10 @@ func DeleteEntityHelper(c echo.Context, deleter func(uuid.UUID) error, entityTyp
 
 	err = deleter(id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, ErrorResponse{
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
-				Code:    strings.ToUpper(entityType) + "_NOT_FOUND",
-				Message: entityType + " not found",
+				Code:    "DELETE_FAILED",
+				Message: "Failed to delete " + strings.ToLower(entityType),
 			},
 			Meta: ResponseMeta{
 				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
@@ -44,14 +44,7 @@ func DeleteEntityHelper(c echo.Context, deleter func(uuid.UUID) error, entityTyp
 		})
 	}
 
-	return c.JSON(http.StatusOK, APIResponse[map[string]string]{
-		Data: map[string]string{"message": entityType + " deleted successfully"},
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+	return c.NoContent(http.StatusNoContent)
 }
 
 // ParseIDParam extracts and validates UUID from request parameter
