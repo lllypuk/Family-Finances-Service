@@ -280,7 +280,9 @@ func TestSessionData_SecurityFields_ValidUUIDs(t *testing.T) {
 		FamilyID:  familyID,
 		Role:      user.RoleAdmin,
 		Email:     "security@example.com",
-		ExpiresAt: time.Now().Add(time.Hour), //nolint:govet // Used in test assertions
+		Email:     "security@example.com",
+		Role:      user.RoleAdmin,
+		ExpiresAt: time.Now().Add(time.Hour),
 	}
 
 	// Проверяем что UUID корректные
