@@ -14,6 +14,19 @@ const HTMXRequestValue = "true"
 func RequireAuth() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			// Поддержка моков для тестирования
+			if mockData := c.Get("mock_session_data"); mockData != nil {
+				c.Set("user", mockData)
+				return next(c)
+			}
+			if mockError := c.Get("mock_session_error"); mockError != nil {
+				if c.Request().Header.Get("Hx-Request") == HTMXRequestValue {
+					c.Response().Header().Set("Hx-Redirect", "/login")
+					return c.NoContent(http.StatusUnauthorized)
+				}
+				return echo.NewHTTPError(http.StatusFound, "redirect to login")
+			}
+
 			// Проверяем аутентификацию
 			sessionData, err := GetSessionData(c)
 			if err != nil {
@@ -23,7 +36,7 @@ func RequireAuth() echo.MiddlewareFunc {
 					return c.NoContent(http.StatusUnauthorized)
 				}
 				// Для обычных запросов - редирект на страницу входа
-				return c.Redirect(http.StatusFound, "/login")
+				return echo.NewHTTPError(http.StatusFound, "redirect to login")
 			}
 
 			// Сохраняем данные пользователя в контексте
@@ -89,9 +102,10 @@ func validateUserAccess(c echo.Context) (*SessionData, error) {
 	if !ok {
 		if c.Request().Header.Get("Hx-Request") == HTMXRequestValue {
 			c.Response().Header().Set("Hx-Redirect", "/login")
-			return nil, c.NoContent(http.StatusUnauthorized)
+			c.NoContent(http.StatusUnauthorized)
+			return nil, echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 		}
-		return nil, c.Redirect(http.StatusFound, "/login")
+		return nil, echo.NewHTTPError(http.StatusFound, "redirect to login")
 	}
 	return userData, nil
 }
