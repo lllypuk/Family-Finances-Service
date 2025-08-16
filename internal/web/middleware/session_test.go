@@ -457,7 +457,9 @@ func BenchmarkSetSessionData(b *testing.B) {
 	}
 
 	for range b.N {
-		c, _ := setupSessionContext(e, sessionMiddleware)
+	c, _ := setupSessionContext(e, sessionMiddleware)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
 		middleware.SetSessionData(c, sessionData)
 	}
 }
