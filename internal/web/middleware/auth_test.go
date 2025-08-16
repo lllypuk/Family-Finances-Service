@@ -8,6 +8,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/web/middleware"
@@ -51,7 +52,7 @@ func TestRequireAuth_AuthenticatedUser(t *testing.T) {
 	err := handler(c)
 
 	// Проверяем результат
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "protected content", rec.Body.String())
 
@@ -119,7 +120,7 @@ func TestRequireAuth_UnauthenticatedUser_HTMXRequest(t *testing.T) {
 	err := handler(c)
 
 	// Проверяем результат - должен быть HTMX редирект
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	assert.Equal(t, "/login", rec.Header().Get("Hx-Redirect"))
 }
@@ -200,7 +201,7 @@ func TestRequireRole_ValidRole(t *testing.T) {
 			err := handler(c)
 
 			if tt.shouldPass {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, http.StatusOK, rec.Code)
 				assert.Equal(t, "role protected content", rec.Body.String())
 			} else {
@@ -248,7 +249,7 @@ func TestRequireRole_MultipleRoles(t *testing.T) {
 	// Выполняем запрос
 	err := handler(c)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "multi-role content", rec.Body.String())
 }
@@ -318,7 +319,7 @@ func TestRequireRole_HTMXForbidden(t *testing.T) {
 	err := handler(c)
 
 	// Для HTMX должен быть JSON response с ошибкой
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 	assert.Contains(t, rec.Body.String(), "Insufficient permissions")
 }
@@ -349,7 +350,7 @@ func TestRequireAdmin_Shortcut(t *testing.T) {
 	// Выполняем запрос
 	err := handler(c)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "admin content", rec.Body.String())
 }
@@ -380,7 +381,7 @@ func TestRequireAdminOrMember_Shortcut(t *testing.T) {
 	// Выполняем запрос
 	err := handler(c)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "family content", rec.Body.String())
 }
@@ -399,7 +400,7 @@ func TestGetUserFromContext_Success(t *testing.T) {
 	// Получаем пользователя
 	userData, err := middleware.GetUserFromContext(c)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, expectedUser, userData)
 }
 
@@ -412,7 +413,7 @@ func TestGetUserFromContext_NoUser(t *testing.T) {
 	// Пытаемся получить пользователя
 	userData, err := middleware.GetUserFromContext(c)
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, userData)
 	assert.Equal(t, echo.ErrUnauthorized, err)
 }
@@ -479,7 +480,7 @@ func TestRedirectIfAuthenticated_UnauthenticatedUser(t *testing.T) {
 	err := handler(c)
 
 	// Должен пройти к следующему handler
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "login page", rec.Body.String())
 }

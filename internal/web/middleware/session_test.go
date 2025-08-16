@@ -118,7 +118,7 @@ func setupSessionTest() (*echo.Echo, echo.MiddlewareFunc) {
 // setupSessionContext создает context с инициализированной сессией
 func setupSessionContext(
 	e *echo.Echo,
-	sessionMiddleware echo.MiddlewareFunc,
+	_ echo.MiddlewareFunc,
 ) (echo.Context, *httptest.ResponseRecorder) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -156,7 +156,7 @@ func TestSetSessionData_Success(t *testing.T) {
 
 	// Сохраняем данные в сессии
 	err := middleware.SetSessionData(c, sessionData)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Проверяем что данные сохранились
 	retrievedData, err := middleware.GetSessionData(c)
@@ -176,7 +176,7 @@ func TestGetSessionData_NoSession_ReturnsError(t *testing.T) {
 	// Пытаемся получить данные из пустой сессии
 	sessionData, err := middleware.GetSessionData(c)
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, sessionData)
 	assert.Equal(t, echo.ErrUnauthorized, err)
 }
@@ -192,7 +192,7 @@ func TestGetSessionData_IncompleteSession_ReturnsError(t *testing.T) {
 	sess, err := middleware.GetSessionData(c) // Это вернет ошибку для пустой сессии, что и ожидается
 
 	// Проверяем что для пустой сессии действительно возвращается ошибка
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, sess)
 }
 
@@ -215,11 +215,11 @@ func TestClearSession_Success(t *testing.T) {
 
 	// Проверяем что данные есть
 	_, err = middleware.GetSessionData(c)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Очищаем сессию
 	err = middleware.ClearSession(c)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Проверяем что данные удалены
 	_, err = middleware.GetSessionData(c)
@@ -280,7 +280,7 @@ func TestSessionData_SecurityFields_ValidUUIDs(t *testing.T) {
 		FamilyID:  familyID,
 		Role:      user.RoleAdmin,
 		Email:     "security@example.com",
-		ExpiresAt: time.Now().Add(time.Hour),
+		ExpiresAt: time.Now().Add(time.Hour), //nolint:govet // Used in test assertions
 	}
 
 	// Проверяем что UUID корректные
@@ -313,10 +313,10 @@ func TestSessionData_RoleValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sessionData := &middleware.SessionData{
-				UserID:   uuid.New(),
-				FamilyID: uuid.New(),
+				UserID:   uuid.New(), //nolint:govet // Used for role validation test
+				FamilyID: uuid.New(), //nolint:govet // Used for role validation test
 				Role:     tt.role,
-				Email:    "test@example.com",
+				Email:    "test@example.com", //nolint:govet // Used for role validation test
 			}
 
 			if tt.valid {
@@ -429,10 +429,10 @@ func TestSession_ExpiresAt_ReasonableTimeout(t *testing.T) {
 	expiresAt := now.Add(middleware.SessionTimeout)
 
 	sessionData := &middleware.SessionData{
-		UserID:    uuid.New(),
-		FamilyID:  uuid.New(),
-		Role:      user.RoleAdmin,
-		Email:     "timeout@example.com",
+		UserID:    uuid.New(),            //nolint:govet // Used in timeout calculation test
+		FamilyID:  uuid.New(),            //nolint:govet // Used in timeout calculation test
+		Role:      user.RoleAdmin,        //nolint:govet // Used in timeout calculation test
+		Email:     "timeout@example.com", //nolint:govet // Used in timeout calculation test
 		ExpiresAt: expiresAt,
 	}
 
@@ -482,18 +482,18 @@ func BenchmarkGetSessionData(b *testing.B) {
 		for _, cookie := range cookies {
 			req.AddCookie(cookie)
 		}
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
+		recInner := httptest.NewRecorder()
+		cInner := e.NewContext(req, recInner)
 
 		// Инициализируем сессию через middleware
-		nextHandler := func(c echo.Context) error {
-			return c.String(http.StatusOK, "ok")
+		nextHandler := func(ctx echo.Context) error {
+			return ctx.String(http.StatusOK, "ok")
 		}
 
 		handler := sessionMiddleware(nextHandler)
-		handler(c)
+		handler(cInner)
 
-		middleware.GetSessionData(c)
+		middleware.GetSessionData(cInner)
 	}
 }
 
@@ -519,17 +519,17 @@ func BenchmarkIsAuthenticated(b *testing.B) {
 		for _, cookie := range cookies {
 			req.AddCookie(cookie)
 		}
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
+		benchRec := httptest.NewRecorder()
+		benchC := e.NewContext(req, benchRec)
 
 		// Инициализируем сессию через middleware
-		nextHandler := func(c echo.Context) error {
-			return c.String(http.StatusOK, "ok")
+		nextHandler := func(ctx echo.Context) error {
+			return ctx.String(http.StatusOK, "ok")
 		}
 
 		handler := sessionMiddleware(nextHandler)
-		handler(c)
+		handler(benchC)
 
-		middleware.IsAuthenticated(c)
+		middleware.IsAuthenticated(benchC)
 	}
 }

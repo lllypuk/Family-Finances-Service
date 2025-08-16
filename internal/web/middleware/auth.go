@@ -102,7 +102,7 @@ func validateUserAccess(c echo.Context) (*SessionData, error) {
 	if !ok {
 		if c.Request().Header.Get("Hx-Request") == HTMXRequestValue {
 			c.Response().Header().Set("Hx-Redirect", "/login")
-			c.NoContent(http.StatusUnauthorized)
+			_ = c.NoContent(http.StatusUnauthorized)
 			return nil, echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 		}
 		return nil, echo.NewHTTPError(http.StatusFound, "redirect to login")

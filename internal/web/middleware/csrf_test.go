@@ -45,12 +45,12 @@ func TestCSRFProtection_GET_Request_GeneratesToken(t *testing.T) {
 	handler := csrfMiddleware(nextHandler)
 	err := handler(c)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	// Проверяем что токен был сгенерирован
 	token, err := middleware.GetCSRFToken(c)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotEmpty(t, token)
 }
 
@@ -91,7 +91,7 @@ func TestCSRFProtection_POST_WithValidToken_Success(t *testing.T) {
 	postCtx := e.NewContext(postReq, postRec)
 
 	err = handler(postCtx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, postRec.Code)
 }
 
@@ -128,7 +128,7 @@ func TestCSRFProtection_POST_WithValidToken_InHeader_Success(t *testing.T) {
 	postCtx := e.NewContext(postReq, postRec)
 
 	err = handler(postCtx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, postRec.Code)
 }
 
@@ -221,7 +221,7 @@ func TestCSRFProtection_POST_HTMX_Request_ReturnsJSON(t *testing.T) {
 	handler := csrfMiddleware(nextHandler)
 	err := handler(c)
 
-	assert.NoError(t, err) // HTMX ошибки возвращаются как JSON response, не как error
+	require.NoError(t, err) // HTMX ошибки возвращаются как JSON response, не как error
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 	assert.Contains(t, rec.Body.String(), "CSRF token validation failed")
 	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
@@ -295,7 +295,7 @@ func TestCSRFProtection_HEAD_Request_Allowed(t *testing.T) {
 	handler := csrfMiddleware(nextHandler)
 	err := handler(c)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
@@ -313,7 +313,7 @@ func TestCSRFProtection_OPTIONS_Request_Allowed(t *testing.T) {
 	handler := csrfMiddleware(nextHandler)
 	err := handler(c)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
@@ -335,7 +335,7 @@ func TestGetCSRFToken_GeneratesNewToken_WhenNoneExists(t *testing.T) {
 
 	token, err := middleware.GetCSRFToken(c)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotEmpty(t, token)
 	assert.Greater(t, len(token), 30) // Base64 encoded token should be sufficiently long
 }
