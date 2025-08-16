@@ -105,7 +105,7 @@ func validateUserAccess(c echo.Context) (*SessionData, error) {
 			_ = c.NoContent(http.StatusUnauthorized)
 			return nil, echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 		}
-		return nil, echo.NewHTTPError(http.StatusFound, "redirect to login")
+		return nil, c.Redirect(http.StatusFound, "/login")
 	}
 	return userData, nil
 }
