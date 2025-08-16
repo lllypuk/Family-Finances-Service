@@ -4,12 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/mail"
+	"strings"
 
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 
 	"family-budget-service/internal/domain/user"
+)
+
+const (
+	// MaxEmailLength defines the maximum allowed length for email addresses (RFC 5321)
+	MaxEmailLength = 254
 )
 
 type Repository struct {
@@ -22,7 +29,48 @@ func NewRepository(database *mongo.Database) *Repository {
 	}
 }
 
+// ValidateEmail performs comprehensive email validation to prevent injection attacks
+func ValidateEmail(email string) error {
+	if email == "" {
+		return errors.New("email cannot be empty")
+	}
+
+	// Trim whitespace and convert to lowercase for consistency
+	email = strings.TrimSpace(strings.ToLower(email))
+
+	// Check for basic injection patterns
+	if strings.ContainsAny(email, "${}[]") {
+		return errors.New("email contains invalid characters")
+	}
+
+	// Use Go's built-in email validation
+	_, err := mail.ParseAddress(email)
+	if err != nil {
+		return fmt.Errorf("invalid email format: %w", err)
+	}
+
+	// Additional length check to prevent excessively long emails
+	if len(email) > MaxEmailLength {
+		return errors.New("email too long")
+	}
+
+	return nil
+}
+
+// SanitizeEmail safely prepares email for database query
+func SanitizeEmail(email string) string {
+	return strings.TrimSpace(strings.ToLower(email))
+}
+
 func (r *Repository) Create(ctx context.Context, u *user.User) error {
+	// Validate email to prevent injection attacks
+	if err := ValidateEmail(u.Email); err != nil {
+		return fmt.Errorf("invalid user email: %w", err)
+	}
+
+	// Sanitize email before storing
+	u.Email = SanitizeEmail(u.Email)
+
 	_, err := r.collection.InsertOne(ctx, u)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
@@ -46,11 +94,24 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*user.User, err
 }
 
 func (r *Repository) GetByEmail(ctx context.Context, email string) (*user.User, error) {
+	// Validate email to prevent injection attacks
+	if err := ValidateEmail(email); err != nil {
+		return nil, fmt.Errorf("invalid email parameter: %w", err)
+	}
+
+	// Sanitize email for consistent querying
+	sanitizedEmail := SanitizeEmail(email)
+
+	// Use explicit field matching with sanitized input
+	filter := bson.D{
+		{Key: "email", Value: sanitizedEmail},
+	}
+
 	var u user.User
-	err := r.collection.FindOne(ctx, bson.M{"email": email}).Decode(&u)
+	err := r.collection.FindOne(ctx, filter).Decode(&u)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, fmt.Errorf("user with email %s not found", email)
+			return nil, fmt.Errorf("user with email %s not found", sanitizedEmail)
 		}
 		return nil, fmt.Errorf("failed to get user by email: %w", err)
 	}
@@ -83,6 +144,14 @@ func (r *Repository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*
 }
 
 func (r *Repository) Update(ctx context.Context, u *user.User) error {
+	// Validate email to prevent injection attacks
+	if err := ValidateEmail(u.Email); err != nil {
+		return fmt.Errorf("invalid user email: %w", err)
+	}
+
+	// Sanitize email before updating
+	u.Email = SanitizeEmail(u.Email)
+
 	filter := bson.M{"_id": u.ID}
 	update := bson.M{"$set": u}
 
