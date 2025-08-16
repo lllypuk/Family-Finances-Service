@@ -69,6 +69,7 @@ func NewApplication() (*Application, error) {
 		Port:          config.Server.Port,
 		Host:          config.Server.Host,
 		SessionSecret: config.Web.SessionSecret,
+		IsProduction:  config.IsProduction(),
 	}
 	app.httpServer = application.NewHTTPServerWithObservability(
 		app.repositories,

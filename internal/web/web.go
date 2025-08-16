@@ -24,6 +24,7 @@ func NewWebServer(
 	e *echo.Echo,
 	repositories *handlers.Repositories,
 	templatesDir, sessionSecret string,
+	isProduction bool,
 ) (*Server, error) {
 	// Создаем рендерер шаблонов
 	renderer, err := NewTemplateRenderer(templatesDir)
@@ -35,7 +36,7 @@ func NewWebServer(
 	e.Renderer = renderer
 
 	// Настраиваем middleware
-	e.Use(middleware.SessionStore(sessionSecret))
+	e.Use(middleware.SessionStore(sessionSecret, isProduction))
 	e.Use(middleware.CSRFProtection())
 
 	ws := &Server{

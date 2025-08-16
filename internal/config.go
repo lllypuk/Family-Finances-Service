@@ -5,9 +5,10 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	Web      WebConfig
+	Server      ServerConfig
+	Database    DatabaseConfig
+	Web         WebConfig
+	Environment string
 }
 
 type ServerConfig struct {
@@ -24,6 +25,11 @@ type DatabaseConfig struct {
 	Name string
 }
 
+// IsProduction returns true if the application is running in production environment
+func (c *Config) IsProduction() bool {
+	return c.Environment == "production"
+}
+
 func LoadConfig() *Config {
 	return &Config{
 		Server: ServerConfig{
@@ -37,6 +43,7 @@ func LoadConfig() *Config {
 		Web: WebConfig{
 			SessionSecret: getEnv("SESSION_SECRET", "your-super-secret-session-key-change-in-production"),
 		},
+		Environment: getEnv("ENVIRONMENT", "development"),
 	}
 }
 

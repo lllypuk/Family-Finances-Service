@@ -43,6 +43,7 @@ type Config struct {
 	Port          string
 	Host          string
 	SessionSecret string
+	IsProduction  bool
 }
 
 // NewHTTPServer создает HTTP сервер без observability (для обратной совместимости)
@@ -105,7 +106,9 @@ func NewHTTPServerWithObservability(
 	}
 
 	// Инициализация веб-интерфейса
-	webServer, err := web.NewWebServer(e, repositories, "internal/web/templates", config.SessionSecret)
+	webServer, err := web.NewWebServer(
+		e, repositories, "internal/web/templates", config.SessionSecret, config.IsProduction,
+	)
 	if err != nil {
 		// Логируем ошибку, но не прерываем работу сервера
 		if obsService != nil {

@@ -32,7 +32,7 @@ type SessionData struct {
 }
 
 // SessionStore настраивает хранилище сессий
-func SessionStore(secretKey string) echo.MiddlewareFunc {
+func SessionStore(secretKey string, isProduction bool) echo.MiddlewareFunc {
 	// Регистрируем типы для сессий
 	gob.Register(uuid.UUID{})
 	gob.Register(user.Role(""))
@@ -42,7 +42,7 @@ func SessionStore(secretKey string) echo.MiddlewareFunc {
 		Path:     "/",
 		MaxAge:   int(SessionTimeout.Seconds()),
 		HttpOnly: true,
-		Secure:   false, // TODO: установить в true для production с HTTPS
+		Secure:   isProduction, // true для production с HTTPS, false для разработки
 		SameSite: http.SameSiteLaxMode,
 	}
 
