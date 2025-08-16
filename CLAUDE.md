@@ -7,7 +7,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Building and Running
 - `make build` - Build the application (outputs to ./build/family-budget-service)
 - `make run` - Run the application directly with go run
-- `make run-local` - Run with local development environment variables (PORT=8080, MongoDB on localhost:27017)
+- `make run-local` - Run with local development environment variables (requires `make dev-up` first)
+
+#### Local Development Setup
+**Prerequisites**: Before running `make run-local`, you must start the required services:
+```bash
+make dev-up  # Starts MongoDB and Redis containers
+make run-local  # Runs the application on localhost:8083
+```
+
+The `run-local` command sets up the following environment:
+- **Server**: localhost:8083 (port 8083 to avoid conflicts)
+- **MongoDB**: mongodb://admin:password123@localhost:27017 with authentication
+- **Database**: family_budget_local (separate from production)
+- **Redis**: redis://:redis123@localhost:6379 (optional caching)
+- **Logging**: DEBUG level for development
+- **Session Secret**: Development-specific secret key
 
 ### Testing and Code Quality
 - `make test` - Run all tests
@@ -33,14 +48,18 @@ Run `make test` and `make lint` before committing to ensure code quality standar
 - `make generate` - Generate OpenAPI code
 
 ### Docker Environment
-- `make docker-up` - Start MongoDB and supporting services via Docker Compose
+- `make dev-up` - Start development environment (MongoDB + Redis + Mongo Express)
+- `make docker-up` - Start basic Docker containers (MongoDB, Redis)
 - `make docker-down` - Stop Docker containers
 - `make docker-logs` - View Docker container logs
+- `make observability-up` - Start observability stack (Prometheus, Grafana, Jaeger)
+- `make full-up` - Start complete stack (app + observability)
 
 The Docker environment includes:
-- MongoDB (port 27017) with admin/password123 credentials
-- Mongo Express web UI (port 8081) for database administration
-- Redis (port 6379) for caching with password "redis123"
+- **MongoDB** (port 27017) with admin/password123 credentials
+- **Mongo Express** web UI (port 8081) for database administration
+- **Redis** (port 6379) for caching with password "redis123"
+- **Observability Stack**: Prometheus (9090), Grafana (3000), Jaeger (16686)
 
 ## Architecture Overview
 
@@ -69,9 +88,12 @@ The application is organized into domain modules in `internal/domain/`:
 
 ### Configuration
 Environment variables are managed in `internal/config.go`. Key variables:
-- `SERVER_PORT` / `SERVER_HOST` - Server configuration
-- `MONGODB_URI` / `MONGODB_DATABASE` - Database connection
+- `SERVER_PORT` / `SERVER_HOST` - Server configuration (default: localhost:8080)
+- `MONGODB_URI` / `MONGODB_DATABASE` - Database connection 
+- `SESSION_SECRET` - Secret key for session management
 - `REDIS_URL` - Cache configuration (optional)
+- `LOG_LEVEL` - Logging level (debug, info, warn, error)
+- `ENVIRONMENT` - Application environment (development, production)
 
 ### Repository Pattern
 All data access is abstracted through repository interfaces defined in `internal/application/interfaces.go`. Repository implementations are planned for the `internal/infrastructure/` directory.
