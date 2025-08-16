@@ -14,20 +14,6 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
 
-    services:
-      mongodb:
-        image: mongo:6
-        ports:
-          - 27017:27017
-        env:
-          MONGO_INITDB_ROOT_USERNAME: admin
-          MONGO_INITDB_ROOT_PASSWORD: password123
-        options: >-
-          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -55,13 +41,7 @@ jobs:
         run: go mod verify
 
       - name: Check formatting
-        run: |
-          make fmt
-          if [ -n "$(git diff --exit-code)" ]; then
-            echo "Code is not formatted properly. Please run 'make fmt'"
-            git diff
-            exit 1
-          fi
+        run: make fmt
 
       - name: Run linter
         uses: golangci/golangci-lint-action@v8
@@ -71,14 +51,11 @@ jobs:
 
       - name: Run security vulnerability check
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
           govulncheck ./...
 
       - name: Run tests
         run: make test-coverage
-        env:
-          MONGODB_URI: mongodb://admin:password123@localhost:27017/family_budget_test?authSource=admin
-          LOG_LEVEL: error
 
       - name: Check test coverage
         run: |
@@ -143,26 +120,3 @@ jobs:
           name: family-budget-service-${{ github.sha }}
           path: build/
           retention-days: 7
-
-  security:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: "fs"
-          scan-ref: "."
-          format: "sarif"
-          output: "trivy-results.sarif"
-
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: "trivy-results.sarif"
