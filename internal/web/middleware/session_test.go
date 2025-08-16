@@ -280,8 +280,6 @@ func TestSessionData_SecurityFields_ValidUUIDs(t *testing.T) {
 		FamilyID:  familyID,
 		Role:      user.RoleAdmin,
 		Email:     "security@example.com",
-		Email:     "security@example.com",
-		Role:      user.RoleAdmin,
 		ExpiresAt: time.Now().Add(time.Hour),
 	}
 
@@ -297,6 +295,9 @@ func TestSessionData_SecurityFields_ValidUUIDs(t *testing.T) {
 	// Проверяем email формат
 	assert.Contains(t, sessionData.Email, "@")
 	assert.Contains(t, sessionData.Email, ".")
+
+	// Проверяем ExpiresAt
+	assert.True(t, sessionData.ExpiresAt.After(time.Now()), "ExpiresAt should be in the future")
 }
 
 func TestSessionData_RoleValidation(t *testing.T) {
@@ -456,10 +457,9 @@ func BenchmarkSetSessionData(b *testing.B) {
 		Email:    "benchmark@example.com",
 	}
 
-	for range b.N {
 	c, _ := setupSessionContext(e, sessionMiddleware)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		middleware.SetSessionData(c, sessionData)
 	}
 }

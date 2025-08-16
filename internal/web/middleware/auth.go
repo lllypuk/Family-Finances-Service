@@ -24,7 +24,8 @@ func RequireAuth() echo.MiddlewareFunc {
 					c.Response().Header().Set("Hx-Redirect", "/login")
 					return c.NoContent(http.StatusUnauthorized)
 				}
-				return c.Redirect(http.StatusFound, "/login")
+				_ = c.Redirect(http.StatusFound, "/login")
+				return echo.NewHTTPError(http.StatusFound, "redirect to login")
 			}
 
 			// Проверяем аутентификацию
@@ -36,7 +37,8 @@ func RequireAuth() echo.MiddlewareFunc {
 					return c.NoContent(http.StatusUnauthorized)
 				}
 				// Для обычных запросов - редирект на страницу входа
-				return c.Redirect(http.StatusFound, "/login")
+				_ = c.Redirect(http.StatusFound, "/login")
+				return echo.NewHTTPError(http.StatusFound, "redirect to login")
 			}
 
 			// Сохраняем данные пользователя в контексте
@@ -105,7 +107,8 @@ func validateUserAccess(c echo.Context) (*SessionData, error) {
 			_ = c.NoContent(http.StatusUnauthorized)
 			return nil, echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 		}
-		return nil, c.Redirect(http.StatusFound, "/login")
+		_ = c.Redirect(http.StatusFound, "/login")
+		return nil, echo.NewHTTPError(http.StatusFound, "redirect to login")
 	}
 	return userData, nil
 }

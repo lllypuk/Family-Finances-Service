@@ -1,7 +1,6 @@
 package middleware_test
 
 import (
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -87,12 +86,10 @@ func TestRequireAuth_UnauthenticatedUser_RegularRequest(t *testing.T) {
 
 	// Проверяем результат - должен быть редирект
 	assert.IsType(t, &echo.HTTPError{}, err)
-	httpErr := func() *echo.HTTPError {
-		target := &echo.HTTPError{}
-		_ = errors.As(err, &target)
-		return target
-	}()
+	var httpErr *echo.HTTPError
+	require.ErrorAs(t, err, &httpErr)
 	assert.Equal(t, http.StatusFound, httpErr.Code)
+	assert.Equal(t, http.StatusFound, rec.Code)
 }
 
 func TestRequireAuth_UnauthenticatedUser_HTMXRequest(t *testing.T) {
@@ -206,13 +203,11 @@ func TestRequireRole_ValidRole(t *testing.T) {
 				assert.Equal(t, "role protected content", rec.Body.String())
 			} else {
 				// Проверяем что доступ был отклонен
+				// Если вернулась ошибка, проверяем ее тип
 				if err != nil {
 					// Если вернулась ошибка, проверяем ее тип
-					httpErr := func() *echo.HTTPError {
-						target := &echo.HTTPError{}
-						_ = errors.As(err, &target)
-						return target
-					}()
+					var httpErr *echo.HTTPError
+					require.ErrorAs(t, err, &httpErr)
 					assert.Equal(t, http.StatusForbidden, httpErr.Code)
 				} else {
 					// Если ошибки нет, проверяем статус код ответа
@@ -276,19 +271,12 @@ func TestRequireRole_NoUserInContext(t *testing.T) {
 	// Выполняем запрос
 	err := handler(c)
 
-	// Должен быть редирект на логин или ошибка авторизации
-	if err != nil {
-		assert.IsType(t, &echo.HTTPError{}, err)
-		httpErr := func() *echo.HTTPError {
-			target := &echo.HTTPError{}
-			_ = errors.As(err, &target)
-			return target
-		}()
-		assert.Equal(t, http.StatusFound, httpErr.Code)
-	} else {
-		// Если ошибки нет, проверяем код ответа
-		assert.Equal(t, http.StatusFound, rec.Code)
-	}
+	// Должен быть ошибка авторизации с редиректом
+	assert.IsType(t, &echo.HTTPError{}, err)
+	var httpErr *echo.HTTPError
+	require.ErrorAs(t, err, &httpErr)
+	assert.Equal(t, http.StatusFound, httpErr.Code)
+	assert.Equal(t, http.StatusFound, rec.Code)
 }
 
 func TestRequireRole_HTMXForbidden(t *testing.T) {
@@ -444,11 +432,8 @@ func TestRedirectIfAuthenticated_AuthenticatedUser(t *testing.T) {
 	// Должен быть редирект на dashboard
 	if err != nil {
 		assert.IsType(t, &echo.HTTPError{}, err)
-		httpErr := func() *echo.HTTPError {
-			target := &echo.HTTPError{}
-			_ = errors.As(err, &target)
-			return target
-		}()
+		var httpErr *echo.HTTPError
+		require.ErrorAs(t, err, &httpErr)
 		assert.Equal(t, http.StatusFound, httpErr.Code)
 	} else {
 		// Проверяем что был установлен редирект заголовок
