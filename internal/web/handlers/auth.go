@@ -10,6 +10,7 @@ import (
 
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/handlers"
+	userRepo "family-budget-service/internal/infrastructure/user"
 	"family-budget-service/internal/web/middleware"
 	"family-budget-service/internal/web/models"
 )
@@ -51,6 +52,13 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	// Валидация
 	if err := c.Validate(&form); err != nil {
 		return h.loginError(c, "Please check your input", models.GetValidationErrors(err))
+	}
+
+	// Дополнительная валидация email на уровне репозитория для предотвращения инъекций
+	if err := userRepo.ValidateEmail(form.Email); err != nil {
+		return h.loginError(c, "Invalid email format", map[string]string{
+			"email": "Please enter a valid email address",
+		})
 	}
 
 	// Поиск пользователя по email
@@ -124,6 +132,13 @@ func (h *AuthHandler) Register(c echo.Context) error {
 	// Валидация
 	if err := c.Validate(&form); err != nil {
 		return h.registerError(c, "Please check your input", models.GetValidationErrors(err))
+	}
+
+	// Дополнительная валидация email на уровне репозитория для предотвращения инъекций
+	if err := userRepo.ValidateEmail(form.Email); err != nil {
+		return h.registerError(c, "Invalid email format", map[string]string{
+			"email": "Please enter a valid email address",
+		})
 	}
 
 	// Проверяем, что пользователь с таким email не существует

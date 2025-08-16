@@ -1,4 +1,4 @@
-.PHONY: build run test clean docker-up docker-down deps lint fmt lint-fix observability-up observability-down observability-logs
+.PHONY: build run test clean docker-up docker-down deps lint fmt pre-commit lint-fix observability-up observability-down observability-logs
 
 # Переменные
 APP_NAME=family-budget-service
@@ -60,6 +60,13 @@ lint-fix:
 fmt:
 	@echo "Formatting code..."
 	@go fmt ./...
+
+# Проверка перед коммитом
+pre-commit:
+	@echo "Running pre-commit checks..."
+	@go fmt ./...
+	@go test -v ./...
+	@golangci-lint run
 
 # Очистка
 clean:

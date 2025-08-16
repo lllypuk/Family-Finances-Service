@@ -38,9 +38,16 @@ func ValidateEmail(email string) error {
 	// Trim whitespace and convert to lowercase for consistency
 	email = strings.TrimSpace(strings.ToLower(email))
 
-	// Check for basic injection patterns
-	if strings.ContainsAny(email, "${}[]") {
+	// Check for MongoDB injection patterns and dangerous characters
+	if strings.ContainsAny(email, "${}[]()\"'\\;") {
 		return errors.New("email contains invalid characters")
+	}
+
+	// Check for control characters that could be used in attacks
+	for _, char := range email {
+		if char < 32 || char == 127 {
+			return errors.New("email contains control characters")
+		}
 	}
 
 	// Use Go's built-in email validation
@@ -52,6 +59,17 @@ func ValidateEmail(email string) error {
 	// Additional length check to prevent excessively long emails
 	if len(email) > MaxEmailLength {
 		return errors.New("email too long")
+	}
+
+	// Ensure email doesn't start or end with potentially dangerous characters
+	if strings.HasPrefix(email, ".") || strings.HasSuffix(email, ".") {
+		return errors.New("email cannot start or end with a dot")
+	}
+
+	// Basic domain validation - must contain at least one dot after @
+	atIndex := strings.LastIndex(email, "@")
+	if atIndex == -1 || !strings.Contains(email[atIndex:], ".") {
+		return errors.New("email must have a valid domain")
 	}
 
 	return nil

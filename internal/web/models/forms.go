@@ -10,8 +10,8 @@ import (
 
 // LoginForm представляет форму входа в систему
 type LoginForm struct {
-	Email    string `form:"email"    validate:"required,email" json:"email"`
-	Password string `form:"password" validate:"required,min=6" json:"password"`
+	Email    string `form:"email"    validate:"required,email,max=254" json:"email"`
+	Password string `form:"password" validate:"required,min=6"         json:"password"`
 }
 
 // RegisterForm представляет форму регистрации семьи
@@ -20,7 +20,7 @@ type RegisterForm struct {
 	Currency   string `form:"currency"    validate:"required,len=3"         json:"currency"`
 	FirstName  string `form:"first_name"  validate:"required,min=2,max=50"  json:"first_name"`
 	LastName   string `form:"last_name"   validate:"required,min=2,max=50"  json:"last_name"`
-	Email      string `form:"email"       validate:"required,email"         json:"email"`
+	Email      string `form:"email"       validate:"required,email,max=254" json:"email"`
 	Password   string `form:"password"    validate:"required,min=6"         json:"password"`
 }
 
