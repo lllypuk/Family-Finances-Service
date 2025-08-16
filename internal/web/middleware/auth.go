@@ -36,7 +36,7 @@ func RequireAuth() echo.MiddlewareFunc {
 					return c.NoContent(http.StatusUnauthorized)
 				}
 				// Для обычных запросов - редирект на страницу входа
-				return echo.NewHTTPError(http.StatusFound, "redirect to login")
+				return c.Redirect(http.StatusFound, "/login")
 			}
 
 			// Сохраняем данные пользователя в контексте
