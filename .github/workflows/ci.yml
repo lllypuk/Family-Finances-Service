@@ -100,7 +100,7 @@ jobs:
 
       - name: Test Docker build
         run: |
-          docker build -t family-budget-service:test .
+          docker build -f docker/Dockerfile -t family-budget-service:test .
           docker images family-budget-service:test
 
       - name: Test Docker container runs
