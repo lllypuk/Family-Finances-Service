@@ -24,7 +24,7 @@ func RequireAuth() echo.MiddlewareFunc {
 					c.Response().Header().Set("Hx-Redirect", "/login")
 					return c.NoContent(http.StatusUnauthorized)
 				}
-				return echo.NewHTTPError(http.StatusFound, "redirect to login")
+				return c.Redirect(http.StatusFound, "/login")
 			}
 
 			// Проверяем аутентификацию
