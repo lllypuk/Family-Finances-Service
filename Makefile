@@ -3,7 +3,7 @@
 # Переменные
 APP_NAME=family-budget-service
 BUILD_DIR=./build
-DOCKER_COMPOSE_FILE=docker-compose.yml
+DOCKER_COMPOSE_FILE=docker/docker-compose.yml
 
 # Сборка приложения
 build:
@@ -75,8 +75,16 @@ clean:
 	@rm -f coverage.out coverage.html
 
 # Docker команды
+docker-build:
+	@echo "Building Docker images..."
+	@docker-compose -f $(DOCKER_COMPOSE_FILE) build
+
 docker-up:
 	@echo "Starting Docker containers..."
+	@docker-compose -f $(DOCKER_COMPOSE_FILE) up --build
+
+docker-up-d:
+	@echo "Starting Docker containers in detached mode..."
 	@docker-compose -f $(DOCKER_COMPOSE_FILE) up -d
 
 docker-down:
@@ -129,7 +137,9 @@ help:
 	@echo "  clean            - Clean build artifacts"
 	@echo ""
 	@echo "Docker commands:"
-	@echo "  docker-up        - Start basic Docker containers (MongoDB, Redis)"
+	@echo "  docker-build      - Build Docker images"
+	@echo "  docker-up        - Start Docker containers"
+	@echo "  docker-up-d      - Start Docker containers in detached mode"
 	@echo "  docker-down      - Stop Docker containers"
 	@echo "  docker-logs      - Show Docker logs"
 	@echo "  dev-up           - Start development environment"
