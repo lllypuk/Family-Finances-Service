@@ -1,6 +1,7 @@
 package middleware_test
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -28,7 +29,13 @@ func TestRequireAuth_AuthenticatedUser(t *testing.T) {
 
 	// Мокируем аутентифицированного пользователя
 	sessionData := &middleware.SessionData{
-		UserID:   user.NewUser("test@example.com", "Test", "User", user.NewFamily("Test Family", "USD").ID, user.RoleMember).ID,
+		UserID: user.NewUser(
+			"test@example.com",
+			"Test",
+			"User",
+			user.NewFamily("Test Family", "USD").ID,
+			user.RoleMember,
+		).ID,
 		FamilyID: user.NewFamily("Test Family", "USD").ID,
 		Role:     user.RoleMember,
 		Email:    "test@example.com",
@@ -79,7 +86,11 @@ func TestRequireAuth_UnauthenticatedUser_RegularRequest(t *testing.T) {
 
 	// Проверяем результат - должен быть редирект
 	assert.IsType(t, &echo.HTTPError{}, err)
-	httpErr := err.(*echo.HTTPError)
+	httpErr := func() *echo.HTTPError {
+		target := &echo.HTTPError{}
+		_ = errors.As(err, &target)
+		return target
+	}()
 	assert.Equal(t, http.StatusFound, httpErr.Code)
 }
 
@@ -169,7 +180,13 @@ func TestRequireRole_ValidRole(t *testing.T) {
 
 			// Мокируем пользователя с определенной ролью
 			sessionData := &middleware.SessionData{
-				UserID:   user.NewUser("test@example.com", "Test", "User", user.NewFamily("Test Family", "USD").ID, tt.userRole).ID,
+				UserID: user.NewUser(
+					"test@example.com",
+					"Test",
+					"User",
+					user.NewFamily("Test Family", "USD").ID,
+					tt.userRole,
+				).ID,
 				FamilyID: user.NewFamily("Test Family", "USD").ID,
 				Role:     tt.userRole,
 				Email:    "test@example.com",
@@ -190,7 +207,11 @@ func TestRequireRole_ValidRole(t *testing.T) {
 				// Проверяем что доступ был отклонен
 				if err != nil {
 					// Если вернулась ошибка, проверяем ее тип
-					httpErr := err.(*echo.HTTPError)
+					httpErr := func() *echo.HTTPError {
+						target := &echo.HTTPError{}
+						_ = errors.As(err, &target)
+						return target
+					}()
 					assert.Equal(t, http.StatusForbidden, httpErr.Code)
 				} else {
 					// Если ошибки нет, проверяем статус код ответа
@@ -257,7 +278,11 @@ func TestRequireRole_NoUserInContext(t *testing.T) {
 	// Должен быть редирект на логин или ошибка авторизации
 	if err != nil {
 		assert.IsType(t, &echo.HTTPError{}, err)
-		httpErr := err.(*echo.HTTPError)
+		httpErr := func() *echo.HTTPError {
+			target := &echo.HTTPError{}
+			_ = errors.As(err, &target)
+			return target
+		}()
 		assert.Equal(t, http.StatusFound, httpErr.Code)
 	} else {
 		// Если ошибки нет, проверяем код ответа
@@ -418,7 +443,11 @@ func TestRedirectIfAuthenticated_AuthenticatedUser(t *testing.T) {
 	// Должен быть редирект на dashboard
 	if err != nil {
 		assert.IsType(t, &echo.HTTPError{}, err)
-		httpErr := err.(*echo.HTTPError)
+		httpErr := func() *echo.HTTPError {
+			target := &echo.HTTPError{}
+			_ = errors.As(err, &target)
+			return target
+		}()
 		assert.Equal(t, http.StatusFound, httpErr.Code)
 	} else {
 		// Проверяем что был установлен редирект заголовок
@@ -466,7 +495,7 @@ func BenchmarkRequireAuth(b *testing.B) {
 
 	handler := authMiddleware(nextHandler)
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
@@ -491,7 +520,7 @@ func BenchmarkRequireRole(b *testing.B) {
 
 	handler := roleMiddleware(nextHandler)
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)

@@ -1,6 +1,7 @@
 package middleware_test
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -147,7 +148,11 @@ func TestCSRFProtection_POST_WithoutToken_Forbidden(t *testing.T) {
 
 	if err != nil {
 		assert.IsType(t, &echo.HTTPError{}, err)
-		httpErr := err.(*echo.HTTPError)
+		httpErr := func() *echo.HTTPError {
+			target := &echo.HTTPError{}
+			_ = errors.As(err, &target)
+			return target
+		}()
 		assert.Equal(t, http.StatusForbidden, httpErr.Code)
 		assert.Contains(t, httpErr.Message, "CSRF token not provided")
 	} else {
@@ -189,7 +194,11 @@ func TestCSRFProtection_POST_WithInvalidToken_Forbidden(t *testing.T) {
 	err = handler(postCtx)
 	if err != nil {
 		assert.IsType(t, &echo.HTTPError{}, err)
-		httpErr := err.(*echo.HTTPError)
+		httpErr := func() *echo.HTTPError {
+			target := &echo.HTTPError{}
+			_ = errors.As(err, &target)
+			return target
+		}()
 		assert.Equal(t, http.StatusForbidden, httpErr.Code)
 		assert.Contains(t, httpErr.Message, "CSRF token mismatch")
 	} else {
@@ -234,7 +243,11 @@ func TestCSRFProtection_PUT_Request_RequiresToken(t *testing.T) {
 
 	if err != nil {
 		assert.IsType(t, &echo.HTTPError{}, err)
-		httpErr := err.(*echo.HTTPError)
+		httpErr := func() *echo.HTTPError {
+			target := &echo.HTTPError{}
+			_ = errors.As(err, &target)
+			return target
+		}()
 		assert.Equal(t, http.StatusForbidden, httpErr.Code)
 	} else {
 		assert.Equal(t, http.StatusForbidden, rec.Code)
@@ -257,7 +270,11 @@ func TestCSRFProtection_DELETE_Request_RequiresToken(t *testing.T) {
 
 	if err != nil {
 		assert.IsType(t, &echo.HTTPError{}, err)
-		httpErr := err.(*echo.HTTPError)
+		httpErr := func() *echo.HTTPError {
+			target := &echo.HTTPError{}
+			_ = errors.As(err, &target)
+			return target
+		}()
 		assert.Equal(t, http.StatusForbidden, httpErr.Code)
 	} else {
 		assert.Equal(t, http.StatusForbidden, rec.Code)
@@ -320,7 +337,7 @@ func TestGetCSRFToken_GeneratesNewToken_WhenNoneExists(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, token)
-	assert.True(t, len(token) > 30) // Base64 encoded token should be sufficiently long
+	assert.Greater(t, len(token), 30) // Base64 encoded token should be sufficiently long
 }
 
 func TestGetCSRFToken_ReturnsExistingToken(t *testing.T) {
@@ -359,7 +376,7 @@ func TestCSRFToken_Security_Properties(t *testing.T) {
 		return c.String(http.StatusOK, "ok")
 	}
 
-	for i := 0; i < 10; i++ { // Уменьшим количество для быстроты
+	for range 10 { // Уменьшим количество для быстроты
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
@@ -378,7 +395,7 @@ func TestCSRFToken_Security_Properties(t *testing.T) {
 		tokens[token] = true
 
 		// Проверяем длину и формат
-		assert.True(t, len(token) > 30, "Token should be sufficiently long")
+		assert.Greater(t, len(token), 30, "Token should be sufficiently long")
 		assert.NotContains(t, token, " ", "Token should not contain spaces")
 	}
 }
@@ -393,7 +410,7 @@ func BenchmarkCSRFProtection_GET(b *testing.B) {
 
 	handler := csrfMiddleware(nextHandler)
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
@@ -420,7 +437,7 @@ func BenchmarkCSRFProtection_POST_WithToken(b *testing.B) {
 	token, _ := middleware.GetCSRFToken(getCtx)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		form := url.Values{}
 		form.Add("_token", token)
 
@@ -442,7 +459,7 @@ func BenchmarkCSRFProtection_POST_WithToken(b *testing.B) {
 func BenchmarkGetCSRFToken(b *testing.B) {
 	e, _ := setupCSRFTest()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)

@@ -116,7 +116,10 @@ func setupSessionTest() (*echo.Echo, echo.MiddlewareFunc) {
 }
 
 // setupSessionContext создает context с инициализированной сессией
-func setupSessionContext(e *echo.Echo, sessionMiddleware echo.MiddlewareFunc) (echo.Context, *httptest.ResponseRecorder) {
+func setupSessionContext(
+	e *echo.Echo,
+	sessionMiddleware echo.MiddlewareFunc,
+) (echo.Context, *httptest.ResponseRecorder) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
@@ -435,8 +438,8 @@ func TestSession_ExpiresAt_ReasonableTimeout(t *testing.T) {
 
 	// Проверяем что timeout не слишком короткий и не слишком длинный
 	timeDiff := sessionData.ExpiresAt.Sub(now)
-	assert.True(t, timeDiff > time.Hour, "Session should last more than 1 hour")
-	assert.True(t, timeDiff <= 24*time.Hour, "Session should not last more than 24 hours")
+	assert.Greater(t, timeDiff, time.Hour, "Session should last more than 1 hour")
+	assert.LessOrEqual(t, timeDiff, 24*time.Hour, "Session should not last more than 24 hours")
 	assert.Equal(t, 24*time.Hour, middleware.SessionTimeout, "Default timeout should be 24 hours")
 }
 
@@ -451,7 +454,7 @@ func BenchmarkSetSessionData(b *testing.B) {
 		Email:    "benchmark@example.com",
 	}
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		c, _ := setupSessionContext(e, sessionMiddleware)
 		middleware.SetSessionData(c, sessionData)
 	}
@@ -474,7 +477,7 @@ func BenchmarkGetSessionData(b *testing.B) {
 	cookies := rec.Result().Cookies()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		for _, cookie := range cookies {
 			req.AddCookie(cookie)
@@ -511,7 +514,7 @@ func BenchmarkIsAuthenticated(b *testing.B) {
 	cookies := rec.Result().Cookies()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		for _, cookie := range cookies {
 			req.AddCookie(cookie)

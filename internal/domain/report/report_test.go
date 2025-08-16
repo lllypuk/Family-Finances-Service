@@ -47,20 +47,20 @@ func TestNewReport_Success(t *testing.T) {
 
 func TestReportType_Constants(t *testing.T) {
 	// Проверяем что все типы отчетов определены корректно
-	assert.Equal(t, Type("expenses"), TypeExpenses)
-	assert.Equal(t, Type("income"), TypeIncome)
-	assert.Equal(t, Type("budget"), TypeBudget)
-	assert.Equal(t, Type("cash_flow"), TypeCashFlow)
-	assert.Equal(t, Type("category_break"), TypeCategoryBreak)
+	assert.Equal(t, TypeExpenses, Type("expenses"))
+	assert.Equal(t, TypeIncome, Type("income"))
+	assert.Equal(t, TypeBudget, Type("budget"))
+	assert.Equal(t, TypeCashFlow, Type("cash_flow"))
+	assert.Equal(t, TypeCategoryBreak, Type("category_break"))
 }
 
 func TestReportPeriod_Constants(t *testing.T) {
 	// Проверяем что все периоды определены корректно
-	assert.Equal(t, Period("daily"), PeriodDaily)
-	assert.Equal(t, Period("weekly"), PeriodWeekly)
-	assert.Equal(t, Period("monthly"), PeriodMonthly)
-	assert.Equal(t, Period("yearly"), PeriodYearly)
-	assert.Equal(t, Period("custom"), PeriodCustom)
+	assert.Equal(t, PeriodDaily, Period("daily"))
+	assert.Equal(t, PeriodWeekly, Period("weekly"))
+	assert.Equal(t, PeriodMonthly, Period("monthly"))
+	assert.Equal(t, PeriodYearly, Period("yearly"))
+	assert.Equal(t, PeriodCustom, Period("custom"))
 }
 
 func TestReport_ValidationScenarios(t *testing.T) {
@@ -551,7 +551,15 @@ func TestReport_EdgeCases(t *testing.T) {
 		familyID := uuid.New()
 		userID := uuid.New()
 
-		report := NewReport("Zero Report", TypeIncome, PeriodMonthly, familyID, userID, time.Now(), time.Now().AddDate(0, 1, 0))
+		report := NewReport(
+			"Zero Report",
+			TypeIncome,
+			PeriodMonthly,
+			familyID,
+			userID,
+			time.Now(),
+			time.Now().AddDate(0, 1, 0),
+		)
 
 		// Все суммы нулевые
 		report.Data = Data{
@@ -569,7 +577,15 @@ func TestReport_EdgeCases(t *testing.T) {
 		familyID := uuid.New()
 		userID := uuid.New()
 
-		report := NewReport("Large Report", TypeCashFlow, PeriodYearly, familyID, userID, time.Now(), time.Now().AddDate(1, 0, 0))
+		report := NewReport(
+			"Large Report",
+			TypeCashFlow,
+			PeriodYearly,
+			familyID,
+			userID,
+			time.Now(),
+			time.Now().AddDate(1, 0, 0),
+		)
 
 		largeAmount := 999999999.99
 		report.Data = Data{
@@ -579,15 +595,23 @@ func TestReport_EdgeCases(t *testing.T) {
 		}
 
 		assert.Equal(t, largeAmount, report.Data.TotalIncome)
-		assert.True(t, report.Data.NetIncome > 0)
-		assert.True(t, report.Data.TotalExpenses < report.Data.TotalIncome)
+		assert.Positive(t, report.Data.NetIncome)
+		assert.Less(t, report.Data.TotalExpenses, report.Data.TotalIncome)
 	})
 
 	t.Run("Report with negative net income", func(t *testing.T) {
 		familyID := uuid.New()
 		userID := uuid.New()
 
-		report := NewReport("Loss Report", TypeCashFlow, PeriodMonthly, familyID, userID, time.Now(), time.Now().AddDate(0, 1, 0))
+		report := NewReport(
+			"Loss Report",
+			TypeCashFlow,
+			PeriodMonthly,
+			familyID,
+			userID,
+			time.Now(),
+			time.Now().AddDate(0, 1, 0),
+		)
 
 		report.Data = Data{
 			TotalIncome:   3000.00,
@@ -598,7 +622,7 @@ func TestReport_EdgeCases(t *testing.T) {
 		assert.Equal(t, 3000.00, report.Data.TotalIncome)
 		assert.Equal(t, 3500.00, report.Data.TotalExpenses)
 		assert.Equal(t, -500.00, report.Data.NetIncome)
-		assert.True(t, report.Data.NetIncome < 0)
+		assert.Negative(t, report.Data.NetIncome)
 	})
 }
 
@@ -609,7 +633,7 @@ func BenchmarkNewReport(b *testing.B) {
 	startDate := time.Now()
 	endDate := startDate.AddDate(0, 1, 0)
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		NewReport("Benchmark Report", TypeExpenses, PeriodMonthly, familyID, userID, startDate, endDate)
 	}
 }
@@ -623,7 +647,7 @@ func BenchmarkReport_CategoryBreakdownProcessing(b *testing.B) {
 	}
 
 	// Заполняем данными
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		report.Data.CategoryBreakdown[i] = CategoryReportItem{
 			CategoryID:   uuid.New(),
 			CategoryName: "Category " + string(rune(i)),
@@ -634,7 +658,7 @@ func BenchmarkReport_CategoryBreakdownProcessing(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		total := 0.0
 		for _, item := range report.Data.CategoryBreakdown {
 			total += item.Amount
@@ -652,7 +676,7 @@ func BenchmarkReport_DailyBreakdownProcessing(b *testing.B) {
 	}
 
 	baseDate := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	for i := 0; i < 365; i++ {
+	for i := range 365 {
 		report.Data.DailyBreakdown[i] = DailyReportItem{
 			Date:     baseDate.AddDate(0, 0, i),
 			Income:   float64(100 + i),
@@ -662,7 +686,7 @@ func BenchmarkReport_DailyBreakdownProcessing(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		totalIncome := 0.0
 		totalExpenses := 0.0
 		for _, item := range report.Data.DailyBreakdown {

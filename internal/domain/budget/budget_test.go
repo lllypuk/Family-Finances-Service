@@ -307,10 +307,10 @@ func TestBudget_UpdateSpent_MultipleOperations(t *testing.T) {
 
 func TestPeriod_Constants(t *testing.T) {
 	// Проверяем что все константы периодов определены корректно
-	assert.Equal(t, Period("weekly"), PeriodWeekly)
-	assert.Equal(t, Period("monthly"), PeriodMonthly)
-	assert.Equal(t, Period("yearly"), PeriodYearly)
-	assert.Equal(t, Period("custom"), PeriodCustom)
+	assert.Equal(t, PeriodWeekly, Period("weekly"))
+	assert.Equal(t, PeriodMonthly, Period("monthly"))
+	assert.Equal(t, PeriodYearly, Period("yearly"))
+	assert.Equal(t, PeriodCustom, Period("custom"))
 }
 
 func TestBudget_DateValidation_Scenarios(t *testing.T) {
@@ -438,8 +438,8 @@ func TestBudget_RealWorldScenarios(t *testing.T) {
 		// Превышение бюджета
 		groceryBudget.UpdateSpent(250.00) // Большая покупка
 		assert.True(t, groceryBudget.IsOverBudget())
-		assert.True(t, groceryBudget.GetSpentPercentage() > 100.0)
-		assert.True(t, groceryBudget.GetRemainingAmount() < 0)
+		assert.Greater(t, groceryBudget.GetSpentPercentage(), 100.0)
+		assert.Negative(t, groceryBudget.GetRemainingAmount())
 	})
 
 	t.Run("Weekly entertainment budget", func(t *testing.T) {
@@ -466,11 +466,18 @@ func TestBudget_EdgeCases(t *testing.T) {
 		familyID := uuid.New()
 		largeAmount := 999999999.99
 
-		budget := NewBudget("Large Budget", largeAmount, PeriodYearly, familyID, time.Now(), time.Now().AddDate(1, 0, 0))
+		budget := NewBudget(
+			"Large Budget",
+			largeAmount,
+			PeriodYearly,
+			familyID,
+			time.Now(),
+			time.Now().AddDate(1, 0, 0),
+		)
 		budget.UpdateSpent(500000000.00)
 
-		assert.True(t, budget.GetSpentPercentage() > 50.0)
-		assert.True(t, budget.GetRemainingAmount() > 0)
+		assert.Greater(t, budget.GetSpentPercentage(), 50.0)
+		assert.Positive(t, budget.GetRemainingAmount())
 		assert.False(t, budget.IsOverBudget())
 	})
 
@@ -478,7 +485,14 @@ func TestBudget_EdgeCases(t *testing.T) {
 		familyID := uuid.New()
 		smallAmount := 0.01
 
-		budget := NewBudget("Micro Budget", smallAmount, PeriodCustom, familyID, time.Now(), time.Now().AddDate(0, 0, 1))
+		budget := NewBudget(
+			"Micro Budget",
+			smallAmount,
+			PeriodCustom,
+			familyID,
+			time.Now(),
+			time.Now().AddDate(0, 0, 1),
+		)
 		budget.UpdateSpent(0.005)
 
 		assert.Equal(t, 50.0, budget.GetSpentPercentage())
@@ -496,7 +510,7 @@ func BenchmarkNewBudget(b *testing.B) {
 	startDate := time.Now()
 	endDate := startDate.AddDate(0, 1, 0)
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		NewBudget("Benchmark Budget", 1000.0, PeriodMonthly, familyID, startDate, endDate)
 	}
 }
@@ -507,7 +521,7 @@ func BenchmarkBudget_GetSpentPercentage(b *testing.B) {
 		Spent:  450.75,
 	}
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		budget.GetSpentPercentage()
 	}
 }
@@ -518,7 +532,7 @@ func BenchmarkBudget_UpdateSpent(b *testing.B) {
 		Spent:  0.0,
 	}
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		budget.UpdateSpent(1.0)
 	}
 }
@@ -529,7 +543,7 @@ func BenchmarkBudget_IsOverBudget(b *testing.B) {
 		Spent:  950.0,
 	}
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		budget.IsOverBudget()
 	}
 }
