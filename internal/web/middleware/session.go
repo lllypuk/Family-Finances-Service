@@ -142,6 +142,14 @@ func ClearSession(c echo.Context) error {
 
 // IsAuthenticated проверяет, аутентифицирован ли пользователь
 func IsAuthenticated(c echo.Context) bool {
+	// Поддержка моков для тестирования
+	if mockAuth := c.Get("mock_is_authenticated"); mockAuth != nil {
+		if mockValue, ok := mockAuth.(bool); ok {
+			return mockValue
+		}
+		return false
+	}
+
 	_, err := GetSessionData(c)
 	return err == nil
 }

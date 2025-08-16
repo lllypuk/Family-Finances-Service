@@ -66,7 +66,7 @@ pre-commit:
 	@echo "Running pre-commit checks..."
 	@go fmt ./...
 	@go test -v ./...
-	@golangci-lint run
+	@golangci-lint run --fix
 
 # Очистка
 clean:
