@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"golang.org/x/crypto/bcrypt"
@@ -78,6 +80,14 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	redirectTo := c.QueryParam("redirect")
 	if redirectTo == "" {
 		redirectTo = "/"
+	} else {
+		// Replace backslashes with forward slashes to normalize
+		redirectTo = strings.ReplaceAll(redirectTo, "\\", "/")
+		parsed, parsErr := url.Parse(redirectTo)
+		// Only allow local redirects (no host, no scheme)
+		if parsErr != nil || parsed.IsAbs() || parsed.Host != "" {
+			redirectTo = "/"
+		}
 	}
 
 	// Если это HTMX запрос, возвращаем redirect header
