@@ -40,7 +40,14 @@ The project uses **golangci-lint** with a comprehensive configuration (`.golangc
 - **Best practices**: gocritic, unconvert, unused
 - **Testing**: testifylint for proper test assertions
 
-Run `make test` and `make lint` before committing to ensure code quality standards.
+**IMPORTANT**: Always run `make lint` after completing any development work to ensure code quality standards. All linter errors must be fixed before committing changes.
+
+**Workflow for development:**
+1. Make your changes
+2. Run `make fmt` to format code
+3. Run `make test` to ensure tests pass
+4. **Run `make lint` and fix ALL errors** - this is mandatory
+5. Commit changes only after lint passes with 0 issues
 
 ### Dependencies and Maintenance
 - `make deps` - Download and tidy Go modules
@@ -159,3 +166,40 @@ Automated releases on version tags:
 - **Build Metrics**: Automated tracking of build times and success rates
 
 Use `make lint` and `make test` locally to ensure CI pipeline success before pushing changes.
+
+## 🚨 CRITICAL: Code Quality Requirements
+
+**MANDATORY LINTER COMPLIANCE**: This project enforces strict code quality standards through golangci-lint. 
+
+### For ALL Development Work:
+
+**After completing ANY task that modifies code, you MUST:**
+
+1. **Run `make fmt`** - Format code according to project standards
+2. **Run `make test`** - Ensure all tests pass 
+3. **Run `make lint`** - **MANDATORY** - Must result in 0 issues
+4. **Fix ALL linter errors** - No exceptions, no compromises
+
+### What the Linter Catches:
+- Type errors and unused variables/imports
+- Security vulnerabilities (gosec)
+- Code style violations (revive, gofmt)
+- Test assertion problems (testifylint)  
+- Performance issues (ineffassign)
+- Complexity violations (funlen, cyclop)
+- Best practices violations (gocritic)
+
+### Zero Tolerance Policy:
+- **0 linter issues** required before task completion
+- **No bypassing** linter rules without explicit approval
+- **All warnings must be addressed** 
+- If unable to resolve, escalate with specific error details
+
+### Quick Fix Commands:
+```bash
+make fmt          # Auto-format code
+make lint-fix     # Auto-fix simple issues  
+make lint         # Check for remaining issues
+```
+
+**Remember: Clean code is not optional - it's mandatory for project integrity.**
