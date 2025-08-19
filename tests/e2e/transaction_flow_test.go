@@ -109,9 +109,13 @@ func TestTransactionWorkflow(t *testing.T) {
 
 			transactionID = extractIDFromResponse(response)
 			assert.NotEmpty(t, transactionID)
-			assert.InDelta(t, 125.50, response["amount"], 0.01)
-			assert.Equal(t, "expense", response["type"])
-			assert.Equal(t, "Weekly grocery shopping", response["description"])
+
+			// Extract transaction data from nested response
+			transactionData, ok := response["data"].(map[string]any)
+			require.True(t, ok, "Response should contain data field")
+			assert.InDelta(t, 125.50, transactionData["amount"], 0.01)
+			assert.Equal(t, "expense", transactionData["type"])
+			assert.Equal(t, "Weekly grocery shopping", transactionData["description"])
 		})
 
 		// Step 2: Retrieve Transaction
@@ -122,10 +126,13 @@ func TestTransactionWorkflow(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-			var transaction map[string]any
-			err = json.NewDecoder(resp.Body).Decode(&transaction)
+			var transactionResponse struct {
+				Data map[string]any `json:"data"`
+			}
+			err = json.NewDecoder(resp.Body).Decode(&transactionResponse)
 			require.NoError(t, err)
 
+			transaction := transactionResponse.Data
 			assert.Equal(t, transactionID, transaction["id"])
 			assert.InDelta(t, 125.50, transaction["amount"], 0.01)
 			assert.Equal(t, categoryID, transaction["category_id"])
@@ -155,10 +162,13 @@ func TestTransactionWorkflow(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-			var transaction map[string]any
-			err = json.NewDecoder(resp.Body).Decode(&transaction)
+			var transactionResponse struct {
+				Data map[string]any `json:"data"`
+			}
+			err = json.NewDecoder(resp.Body).Decode(&transactionResponse)
 			require.NoError(t, err)
 
+			transaction := transactionResponse.Data
 			assert.InEpsilon(t, 135.75, transaction["amount"], 0.001)
 			assert.Equal(t, "Weekly grocery shopping - updated amount", transaction["description"])
 
@@ -203,10 +213,13 @@ func TestTransactionWorkflow(t *testing.T) {
 			require.NoError(t, err)
 			defer resp.Body.Close()
 
-			var transactions []map[string]any
-			err = json.NewDecoder(resp.Body).Decode(&transactions)
+			var transactionsResponse struct {
+				Data []map[string]any `json:"data"`
+			}
+			err = json.NewDecoder(resp.Body).Decode(&transactionsResponse)
 			require.NoError(t, err)
 
+			transactions := transactionsResponse.Data
 			assert.Len(t, transactions, 3, "Should return all family transactions")
 
 			// Test filtering by type
@@ -214,9 +227,10 @@ func TestTransactionWorkflow(t *testing.T) {
 			require.NoError(t, err)
 			defer resp.Body.Close()
 
-			err = json.NewDecoder(resp.Body).Decode(&transactions)
+			err = json.NewDecoder(resp.Body).Decode(&transactionsResponse)
 			require.NoError(t, err)
 
+			transactions = transactionsResponse.Data
 			assert.Len(t, transactions, 2, "Should return only expense transactions")
 			for _, transaction := range transactions {
 				assert.Equal(t, "expense", transaction["type"])
@@ -227,9 +241,10 @@ func TestTransactionWorkflow(t *testing.T) {
 			require.NoError(t, err)
 			defer resp.Body.Close()
 
-			err = json.NewDecoder(resp.Body).Decode(&transactions)
+			err = json.NewDecoder(resp.Body).Decode(&transactionsResponse)
 			require.NoError(t, err)
 
+			transactions = transactionsResponse.Data
 			assert.Len(t, transactions, 2, "Should return transactions >= 100")
 			for _, transaction := range transactions {
 				amount := transaction["amount"].(float64)
@@ -564,10 +579,13 @@ func TestTransactionConcurrency(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
-		var transactions []map[string]any
-		err = json.NewDecoder(resp.Body).Decode(&transactions)
+		var transactionsResponse struct {
+			Data []map[string]any `json:"data"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&transactionsResponse)
 		require.NoError(t, err)
 
+		transactions := transactionsResponse.Data
 		assert.GreaterOrEqual(t, len(transactions), numGoroutines,
 			"Should find at least %d transactions", numGoroutines)
 	})
@@ -678,10 +696,13 @@ func TestTransactionReporting(t *testing.T) {
 
 	t.Run("GenerateTransactionReport", func(t *testing.T) {
 		reportData := map[string]any{
-			"type":      "transaction_summary",
-			"family_id": familyID,
-			"date_from": time.Now().AddDate(0, 0, -30).Format("2006-01-02"),
-			"date_to":   time.Now().Format("2006-01-02"),
+			"name":       "Transaction Summary Report",
+			"type":       "expenses",
+			"period":     "monthly",
+			"family_id":  familyID,
+			"user_id":    userID,
+			"start_date": time.Now().AddDate(0, 0, -30).Format(time.RFC3339),
+			"end_date":   time.Now().Format(time.RFC3339),
 		}
 
 		body, _ := json.Marshal(reportData)
@@ -703,11 +724,14 @@ func TestTransactionReporting(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
-		var report map[string]any
-		err = json.NewDecoder(resp.Body).Decode(&report)
+		var reportResponse struct {
+			Data map[string]any `json:"data"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&reportResponse)
 		require.NoError(t, err)
 
-		assert.Equal(t, "transaction_summary", report["type"])
+		report := reportResponse.Data
+		assert.Equal(t, "expenses", report["type"])
 		assert.Equal(t, familyID, report["family_id"])
 	})
 }
