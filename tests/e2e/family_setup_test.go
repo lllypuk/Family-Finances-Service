@@ -48,8 +48,12 @@ func TestFamilySetupWorkflow(t *testing.T) {
 
 			familyID = extractIDFromResponse(response)
 			assert.NotEmpty(t, familyID)
-			assert.Equal(t, "The Smith Family", response["name"])
-			assert.Equal(t, "USD", response["currency"])
+
+			// Extract family data from nested response
+			familyData, ok := response["data"].(map[string]any)
+			require.True(t, ok, "Response should contain data field")
+			assert.Equal(t, "The Smith Family", familyData["name"])
+			assert.Equal(t, "USD", familyData["currency"])
 		})
 
 		// Step 2: Create Admin User
@@ -77,7 +81,11 @@ func TestFamilySetupWorkflow(t *testing.T) {
 
 			adminUserID = extractIDFromResponse(response)
 			assert.NotEmpty(t, adminUserID)
-			assert.Equal(t, "admin", response["role"])
+
+			// Extract user data from nested response
+			userData, ok := response["data"].(map[string]any)
+			require.True(t, ok, "Response should contain data field")
+			assert.Equal(t, "admin", userData["role"])
 		})
 
 		// Step 3: Create Family Members
@@ -196,22 +204,31 @@ func TestFamilySetupWorkflow(t *testing.T) {
 		t.Run("SetupBudgets", func(t *testing.T) {
 			budgets := []map[string]any{
 				{
+					"name":        "Food & Groceries Budget",
 					"amount":      600.0,
 					"period":      "monthly",
 					"category_id": categoryIDs[0], // Food & Groceries
 					"family_id":   familyID,
+					"start_date":  time.Now().Format(time.RFC3339),
+					"end_date":    time.Now().AddDate(0, 1, 0).Format(time.RFC3339),
 				},
 				{
+					"name":        "Transportation Budget",
 					"amount":      300.0,
 					"period":      "monthly",
 					"category_id": categoryIDs[1], // Transportation
 					"family_id":   familyID,
+					"start_date":  time.Now().Format(time.RFC3339),
+					"end_date":    time.Now().AddDate(0, 1, 0).Format(time.RFC3339),
 				},
 				{
+					"name":        "Entertainment Budget",
 					"amount":      200.0,
 					"period":      "monthly",
 					"category_id": categoryIDs[2], // Entertainment
 					"family_id":   familyID,
+					"start_date":  time.Now().Format(time.RFC3339),
+					"end_date":    time.Now().AddDate(0, 1, 0).Format(time.RFC3339),
 				},
 			}
 
@@ -319,9 +336,13 @@ func TestFamilySetupWorkflow(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-			var members []map[string]any
-			err = json.NewDecoder(resp.Body).Decode(&members)
+			var membersResponse struct {
+				Data []map[string]any `json:"data"`
+			}
+			err = json.NewDecoder(resp.Body).Decode(&membersResponse)
 			require.NoError(t, err)
+
+			members := membersResponse.Data
 
 			assert.Len(t, members, 4, "Family should have 4 members (1 admin + 3 members)")
 
@@ -345,17 +366,32 @@ func TestFamilySetupWorkflow(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-			var budgets []map[string]any
-			err = json.NewDecoder(resp.Body).Decode(&budgets)
+			var budgetsResponse struct {
+				Data []map[string]any `json:"data"`
+			}
+			err = json.NewDecoder(resp.Body).Decode(&budgetsResponse)
 			require.NoError(t, err)
+
+			budgets := budgetsResponse.Data
 
 			assert.Len(t, budgets, 3, "Should have 3 budgets")
 
 			// Verify budget spending
 			for _, budget := range budgets {
 				amount := budget["amount"].(float64)
-				spent := budget["spent"].(float64)
-				assert.GreaterOrEqual(t, spent, 0, "Spent amount should be non-negative")
+
+				// Handle both int and float types for spent field
+				var spent float64
+				switch s := budget["spent"].(type) {
+				case float64:
+					spent = s
+				case int:
+					spent = float64(s)
+				default:
+					t.Fatalf("Unexpected type for spent field: %T", budget["spent"])
+				}
+
+				assert.GreaterOrEqual(t, spent, 0.0, "Spent amount should be non-negative")
 				assert.LessOrEqual(t, spent, amount*2, "Spent amount should be reasonable") // Allow for over-budget
 			}
 		})
@@ -363,10 +399,13 @@ func TestFamilySetupWorkflow(t *testing.T) {
 		// Step 9: Generate Family Report
 		t.Run("GenerateFamilyReport", func(t *testing.T) {
 			reportData := map[string]any{
-				"type":      "family_summary",
-				"family_id": familyID,
-				"date_from": time.Now().AddDate(0, -1, 0).Format("2006-01-02"),
-				"date_to":   time.Now().Format("2006-01-02"),
+				"name":       "Family Summary Report",
+				"type":       "expenses",
+				"period":     "monthly",
+				"family_id":  familyID,
+				"user_id":    adminUserID,
+				"start_date": time.Now().AddDate(0, -1, 0).Format(time.RFC3339),
+				"end_date":   time.Now().Format(time.RFC3339),
 			}
 
 			body, _ := json.Marshal(reportData)
@@ -518,6 +557,7 @@ func TestMultiFamilyIsolation(t *testing.T) {
 				"category_id": category1ID,
 				"user_id":     user1ID,
 				"family_id":   family1ID,
+				"date":        time.Now().Format(time.RFC3339),
 			},
 			{
 				"amount":      200.0,
@@ -526,6 +566,7 @@ func TestMultiFamilyIsolation(t *testing.T) {
 				"category_id": category2ID,
 				"user_id":     user2ID,
 				"family_id":   family2ID,
+				"date":        time.Now().Format(time.RFC3339),
 			},
 		}
 
@@ -546,10 +587,13 @@ func TestMultiFamilyIsolation(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
-		var members []map[string]any
-		err = json.NewDecoder(resp.Body).Decode(&members)
+		var membersResponse struct {
+			Data []map[string]any `json:"data"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&membersResponse)
 		require.NoError(t, err)
 
+		members := membersResponse.Data
 		assert.Len(t, members, 1)
 		assert.Equal(t, user1ID, members[0]["id"])
 
@@ -558,10 +602,13 @@ func TestMultiFamilyIsolation(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
-		var transactions []map[string]any
-		err = json.NewDecoder(resp.Body).Decode(&transactions)
+		var transactionsResponse struct {
+			Data []map[string]any `json:"data"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&transactionsResponse)
 		require.NoError(t, err)
 
+		transactions := transactionsResponse.Data
 		assert.Len(t, transactions, 1)
 		assert.Equal(t, "Family 1 Transaction", transactions[0]["description"])
 
@@ -570,10 +617,13 @@ func TestMultiFamilyIsolation(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
-		var categories []map[string]any
-		err = json.NewDecoder(resp.Body).Decode(&categories)
+		var categoriesResponse struct {
+			Data []map[string]any `json:"data"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&categoriesResponse)
 		require.NoError(t, err)
 
+		categories := categoriesResponse.Data
 		assert.Len(t, categories, 1)
 		assert.Equal(t, "Food Family 1", categories[0]["name"])
 	})
@@ -585,10 +635,13 @@ func TestMultiFamilyIsolation(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
-		var members []map[string]any
-		err = json.NewDecoder(resp.Body).Decode(&members)
+		var membersResponse struct {
+			Data []map[string]any `json:"data"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&membersResponse)
 		require.NoError(t, err)
 
+		members := membersResponse.Data
 		assert.Len(t, members, 1)
 		assert.Equal(t, user2ID, members[0]["id"])
 
@@ -597,10 +650,13 @@ func TestMultiFamilyIsolation(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
-		var transactions []map[string]any
-		err = json.NewDecoder(resp.Body).Decode(&transactions)
+		var transactionsResponse struct {
+			Data []map[string]any `json:"data"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&transactionsResponse)
 		require.NoError(t, err)
 
+		transactions := transactionsResponse.Data
 		assert.Len(t, transactions, 1)
 		assert.Equal(t, "Family 2 Transaction", transactions[0]["description"])
 
@@ -609,10 +665,13 @@ func TestMultiFamilyIsolation(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
-		var categories []map[string]any
-		err = json.NewDecoder(resp.Body).Decode(&categories)
+		var categoriesResponse struct {
+			Data []map[string]any `json:"data"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&categoriesResponse)
 		require.NoError(t, err)
 
+		categories := categoriesResponse.Data
 		assert.Len(t, categories, 1)
 		assert.Equal(t, "Food Family 2", categories[0]["name"])
 	})

@@ -509,10 +509,13 @@ func TestMultipleBudgetCategories(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
-		var budgets []map[string]any
-		err = json.NewDecoder(resp.Body).Decode(&budgets)
+		var budgetsResponse struct {
+			Data []map[string]any `json:"data"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&budgetsResponse)
 		require.NoError(t, err)
 
+		budgets := budgetsResponse.Data
 		assert.Len(t, budgets, 4)
 
 		totalBudgeted := 0.0
@@ -766,7 +769,7 @@ func TestBudgetReporting(t *testing.T) {
 		var budgetResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&budgetResponse)
 		require.NoError(t, err)
-		budgetID = budgetResponse["id"].(string)
+		budgetID = extractIDFromResponse(budgetResponse)
 
 		// Add transactions
 		transactions := []map[string]any{
@@ -809,16 +812,26 @@ func TestBudgetReporting(t *testing.T) {
 
 	t.Run("GenerateBudgetReport", func(t *testing.T) {
 		reportData := map[string]any{
-			"type":      "budget_analysis",
-			"family_id": familyID,
-			"date_from": time.Now().AddDate(0, -1, 0).Format("2006-01-02"),
-			"date_to":   time.Now().Format("2006-01-02"),
+			"name":       "Budget Analysis Report",
+			"type":       "budget",
+			"period":     "monthly",
+			"family_id":  familyID,
+			"user_id":    userID,
+			"start_date": time.Now().AddDate(0, -1, 0).Format(time.RFC3339),
+			"end_date":   time.Now().Format(time.RFC3339),
 		}
 
 		body, _ := json.Marshal(reportData)
 		resp, err := http.Post(baseURL+"/reports", "application/json", bytes.NewReader(body))
 		require.NoError(t, err)
 		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusCreated {
+			// Log the error response for debugging
+			var errorResponse map[string]any
+			json.NewDecoder(resp.Body).Decode(&errorResponse)
+			t.Logf("Report creation failed with status %d: %+v", resp.StatusCode, errorResponse)
+		}
 
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
@@ -834,11 +847,14 @@ func TestBudgetReporting(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
-		var report map[string]any
-		err = json.NewDecoder(resp.Body).Decode(&report)
+		var reportResponse struct {
+			Data map[string]any `json:"data"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&reportResponse)
 		require.NoError(t, err)
 
-		assert.Equal(t, "budget_analysis", report["type"])
-		assert.Equal(t, familyID, report["family_id"])
+		reportData = reportResponse.Data
+		assert.Equal(t, "budget", reportData["type"])
+		assert.Equal(t, familyID, reportData["family_id"])
 	})
 }

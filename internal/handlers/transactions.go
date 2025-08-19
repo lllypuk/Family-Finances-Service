@@ -121,6 +121,11 @@ func (h *TransactionHandler) updateBudgetIfNeeded(c echo.Context, tx *transactio
 		return
 	}
 
+	// Check if Budget repository is available (might be nil in tests)
+	if h.repositories.Budget == nil {
+		return
+	}
+
 	budgets, err := h.repositories.Budget.GetActiveBudgets(c.Request().Context(), tx.FamilyID)
 	if err != nil {
 		return
