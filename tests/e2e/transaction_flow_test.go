@@ -42,7 +42,7 @@ func TestTransactionWorkflow(t *testing.T) {
 		var familyResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&familyResponse)
 		require.NoError(t, err)
-		familyID = familyResponse["id"].(string)
+		familyID = extractIDFromResponse(familyResponse)
 
 		// Create user
 		userData := map[string]any{
@@ -61,13 +61,15 @@ func TestTransactionWorkflow(t *testing.T) {
 		var userResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&userResponse)
 		require.NoError(t, err)
-		userID = userResponse["id"].(string)
+		userID = extractIDFromResponse(userResponse)
 
 		// Create category
 		categoryData := map[string]any{
 			"name":      "Groceries",
 			"type":      "expense",
 			"family_id": familyID,
+			"color":     "#FF5733",
+			"icon":      "shopping-cart",
 		}
 		body, _ = json.Marshal(categoryData)
 		resp, err = http.Post(baseURL+"/categories", "application/json", bytes.NewReader(body))
@@ -77,7 +79,7 @@ func TestTransactionWorkflow(t *testing.T) {
 		var categoryResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&categoryResponse)
 		require.NoError(t, err)
-		categoryID = categoryResponse["id"].(string)
+		categoryID = extractIDFromResponse(categoryResponse)
 	})
 
 	t.Run("TransactionLifecycle", func(t *testing.T) {
@@ -105,7 +107,7 @@ func TestTransactionWorkflow(t *testing.T) {
 			err = json.NewDecoder(resp.Body).Decode(&response)
 			require.NoError(t, err)
 
-			transactionID = response["id"].(string)
+			transactionID = extractIDFromResponse(response)
 			assert.NotEmpty(t, transactionID)
 			assert.InDelta(t, 125.50, response["amount"], 0.01)
 			assert.Equal(t, "expense", response["type"])
@@ -282,7 +284,7 @@ func TestTransactionValidation(t *testing.T) {
 		var familyResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&familyResponse)
 		require.NoError(t, err)
-		familyID = familyResponse["id"].(string)
+		familyID = extractIDFromResponse(familyResponse)
 
 		userData := map[string]any{
 			"email":      "validation@test.com",
@@ -300,12 +302,14 @@ func TestTransactionValidation(t *testing.T) {
 		var userResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&userResponse)
 		require.NoError(t, err)
-		userID = userResponse["id"].(string)
+		userID = extractIDFromResponse(userResponse)
 
 		categoryData := map[string]any{
 			"name":      "Test Category",
 			"type":      "expense",
 			"family_id": familyID,
+			"color":     "#33FF57",
+			"icon":      "tag",
 		}
 		body, _ = json.Marshal(categoryData)
 		resp, err = http.Post(baseURL+"/categories", "application/json", bytes.NewReader(body))
@@ -315,7 +319,7 @@ func TestTransactionValidation(t *testing.T) {
 		var categoryResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&categoryResponse)
 		require.NoError(t, err)
-		categoryID = categoryResponse["id"].(string)
+		categoryID = extractIDFromResponse(categoryResponse)
 	})
 
 	t.Run("InvalidTransactionData", func(t *testing.T) {
@@ -461,7 +465,7 @@ func TestTransactionConcurrency(t *testing.T) {
 		var familyResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&familyResponse)
 		require.NoError(t, err)
-		familyID = familyResponse["id"].(string)
+		familyID = extractIDFromResponse(familyResponse)
 
 		userData := map[string]any{
 			"email":      "concurrency@test.com",
@@ -479,12 +483,14 @@ func TestTransactionConcurrency(t *testing.T) {
 		var userResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&userResponse)
 		require.NoError(t, err)
-		userID = userResponse["id"].(string)
+		userID = extractIDFromResponse(userResponse)
 
 		categoryData := map[string]any{
 			"name":      "Concurrent Category",
 			"type":      "expense",
 			"family_id": familyID,
+			"color":     "#3357FF",
+			"icon":      "layers",
 		}
 		body, _ = json.Marshal(categoryData)
 		resp, err = http.Post(baseURL+"/categories", "application/json", bytes.NewReader(body))
@@ -494,7 +500,7 @@ func TestTransactionConcurrency(t *testing.T) {
 		var categoryResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&categoryResponse)
 		require.NoError(t, err)
-		categoryID = categoryResponse["id"].(string)
+		categoryID = extractIDFromResponse(categoryResponse)
 	})
 
 	t.Run("ConcurrentTransactionCreation", func(t *testing.T) {
@@ -534,7 +540,7 @@ func TestTransactionConcurrency(t *testing.T) {
 					return
 				}
 
-				createdIDs <- response["id"].(string)
+				createdIDs <- extractIDFromResponse(response)
 				results <- nil
 			}(i)
 		}
@@ -594,7 +600,7 @@ func TestTransactionReporting(t *testing.T) {
 		var familyResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&familyResponse)
 		require.NoError(t, err)
-		familyID = familyResponse["id"].(string)
+		familyID = extractIDFromResponse(familyResponse)
 
 		userData := map[string]any{
 			"email":      "reporting@test.com",
@@ -612,12 +618,14 @@ func TestTransactionReporting(t *testing.T) {
 		var userResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&userResponse)
 		require.NoError(t, err)
-		userID = userResponse["id"].(string)
+		userID = extractIDFromResponse(userResponse)
 
 		categoryData := map[string]any{
 			"name":      "Food",
 			"type":      "expense",
 			"family_id": familyID,
+			"color":     "#FF33F5",
+			"icon":      "utensils",
 		}
 		body, _ = json.Marshal(categoryData)
 		resp, err = http.Post(baseURL+"/categories", "application/json", bytes.NewReader(body))
@@ -627,7 +635,7 @@ func TestTransactionReporting(t *testing.T) {
 		var categoryResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&categoryResponse)
 		require.NoError(t, err)
-		categoryID = categoryResponse["id"].(string)
+		categoryID = extractIDFromResponse(categoryResponse)
 
 		// Create sample transactions for reporting
 		transactions := []map[string]any{
@@ -687,7 +695,7 @@ func TestTransactionReporting(t *testing.T) {
 		err = json.NewDecoder(resp.Body).Decode(&response)
 		require.NoError(t, err)
 
-		reportID := response["id"].(string)
+		reportID := extractIDFromResponse(response)
 		assert.NotEmpty(t, reportID)
 
 		// Retrieve and verify report

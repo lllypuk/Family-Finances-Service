@@ -49,7 +49,7 @@ func TestAuthenticationFlow(t *testing.T) {
 		var familyResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&familyResponse)
 		require.NoError(t, err)
-		familyID = familyResponse["id"].(string)
+		familyID = extractIDFromResponse(familyResponse)
 
 		// Create admin user
 		userData := map[string]any{
@@ -68,7 +68,7 @@ func TestAuthenticationFlow(t *testing.T) {
 		var userResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&userResponse)
 		require.NoError(t, err)
-		_ = userResponse["id"].(string) // adminUserID not used elsewhere
+		_ = extractIDFromResponse(userResponse) // adminUserID not used elsewhere
 	})
 
 	t.Run("WebAuthenticationFlow", func(t *testing.T) {
@@ -196,7 +196,7 @@ func TestSessionManagement(t *testing.T) {
 		var familyResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&familyResponse)
 		require.NoError(t, err)
-		familyID = familyResponse["id"].(string)
+		familyID = extractIDFromResponse(familyResponse)
 
 		// Create user
 		userData := map[string]any{
@@ -215,7 +215,7 @@ func TestSessionManagement(t *testing.T) {
 		var userResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&userResponse)
 		require.NoError(t, err)
-		_ = userResponse["id"].(string) // userID not used elsewhere
+		_ = extractIDFromResponse(userResponse) // userID not used elsewhere
 	})
 
 	t.Run("ConcurrentSessions", func(t *testing.T) {
@@ -309,7 +309,7 @@ func TestRoleBasedAccess(t *testing.T) {
 		var familyResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&familyResponse)
 		require.NoError(t, err)
-		familyID = familyResponse["id"].(string)
+		familyID = extractIDFromResponse(familyResponse)
 
 		// Create users with different roles
 		users := []map[string]any{
@@ -350,7 +350,7 @@ func TestRoleBasedAccess(t *testing.T) {
 			var userResponse map[string]any
 			err = json.NewDecoder(resp.Body).Decode(&userResponse)
 			require.NoError(t, err)
-			*userIDs[i] = userResponse["id"].(string)
+			*userIDs[i] = extractIDFromResponse(userResponse)
 		}
 	})
 
@@ -472,7 +472,7 @@ func TestPasswordSecurity(t *testing.T) {
 		var familyResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&familyResponse)
 		require.NoError(t, err)
-		familyID = familyResponse["id"].(string)
+		familyID = extractIDFromResponse(familyResponse)
 	})
 
 	t.Run("WeakPasswordRejection", func(t *testing.T) {

@@ -29,22 +29,17 @@ run-local:
 	 ENVIRONMENT=development \
 	 go run ./cmd/server/main.go
 
-# Тестирование (только internal/)
+# Основные тесты (исключая производительность)
 test:
-	@echo "Running unit tests (internal/ only)..."
-	@go test -v ./internal/...
-
-# Тестирование всех тестов
-test-all:
-	@echo "Running all tests..."
-	@go test -v ./...
+	@echo "Running tests (excluding performance)..."
+	@go test -v $$(go list ./... | grep -v '/tests/performance')
 
 # Юнит тесты (internal/)
 test-unit:
 	@echo "Running unit tests..."
 	@go test -v ./internal/...
 
-# Интеграционные тесты
+# Инgo test -v $$(go list ./... | grep -v '/tests/performance')теграционные тесты
 test-integration:
 	@echo "Running integration tests..."
 	@go test -v ./tests/integration/...
@@ -59,11 +54,17 @@ test-performance:
 	@echo "Running performance tests..."
 	@go test -v ./tests/performance/...
 
-# Тестирование с покрытием
+# Все тесты включая производительность
+test-all:
+	@echo "Running all tests including performance..."
+	@go test -v ./...
+
+# Тесты с покрытием (исключая производительность)
 test-coverage:
-	@echo "Running tests with coverage..."
-	@go test -v -coverprofile=coverage.out ./...
+	@echo "Running tests with coverage (excluding performance)..."
+	@go test -v -coverprofile=coverage.out $$(go list ./... | grep -v '/tests/performance')
 	@go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
 
 # Установка зависимостей
 deps:
@@ -90,7 +91,7 @@ fmt:
 pre-commit:
 	@echo "Running pre-commit checks..."
 	@go fmt ./...
-	@go test -v ./internal/...
+	@go test -v $$(go list ./... | grep -v '/tests/performance')
 	@golangci-lint run --fix
 
 # Очистка

@@ -355,11 +355,6 @@ func TestRaceConditions(t *testing.T) {
 				}
 
 				// Basic validation
-				if config == nil {
-					t.Errorf("Goroutine %d: got nil config", id)
-					return
-				}
-
 				if config.Host == "" {
 					t.Errorf("Goroutine %d: empty host", id)
 				}

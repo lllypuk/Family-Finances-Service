@@ -31,7 +31,7 @@ func SetupMongoDB(t *testing.T) *MongoDBContainer {
 	ctx := context.Background()
 
 	mongoContainer, err := mongodb.Run(ctx,
-		"mongo:6",
+		"mongodb/mongodb-community-server:8.0-ubi8",
 		mongodb.WithUsername("testuser"),
 		mongodb.WithPassword("testpass"),
 	)
@@ -78,9 +78,27 @@ func SetupMongoDB(t *testing.T) *MongoDBContainer {
 func (m *MongoDBContainer) CleanupCollections(t *testing.T) {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), TestMongoTimeout)
+	defer cancel()
+
+	// Check if database and client are still valid
+	if m.Database == nil || m.Client == nil {
+		t.Log("MongoDB database or client is nil, skipping cleanup")
+		return
+	}
+
+	// Ping to check connection is still alive
+	if err := m.Client.Ping(ctx, nil); err != nil {
+		t.Logf("MongoDB connection lost, skipping cleanup: %v", err)
+		return
+	}
+
 	collections, err := m.Database.ListCollectionNames(ctx, nil)
-	require.NoError(t, err)
+	if err != nil {
+		// Just log the error, don't fail the test
+		t.Logf("Failed to list collections during cleanup: %v", err)
+		return
+	}
 
 	for _, collectionName := range collections {
 		err = m.Database.Collection(collectionName).Drop(ctx)

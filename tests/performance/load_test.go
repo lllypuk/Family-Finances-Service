@@ -290,7 +290,7 @@ func TestRampUpLoad(t *testing.T) {
 	for step := 1; step <= steps; step++ {
 		select {
 		case <-ctx.Done():
-			break
+			return
 		default:
 		}
 

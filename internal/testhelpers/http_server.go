@@ -1,7 +1,9 @@
 package testhelpers
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"family-budget-service/internal/application"
 	"family-budget-service/internal/handlers"
@@ -10,6 +12,10 @@ import (
 	reportRepo "family-budget-service/internal/infrastructure/report"
 	transactionRepo "family-budget-service/internal/infrastructure/transaction"
 	userRepo "family-budget-service/internal/infrastructure/user"
+)
+
+const (
+	HunderMilliSeconds = 100 * time.Millisecond
 )
 
 // TestHTTPServer wraps HTTP server setup for testing
@@ -52,6 +58,23 @@ func SetupHTTPServer(t *testing.T) *TestHTTPServer {
 
 	// Create HTTP server
 	server := application.NewHTTPServer(repositories, config)
+
+	// Start server in background
+	go func() {
+		if err := server.Start(context.Background()); err != nil {
+			t.Logf("Server failed to start: %v", err)
+		}
+	}()
+
+	// Give the server a moment to start
+	time.Sleep(HunderMilliSeconds)
+
+	// Cleanup function to stop the server
+	t.Cleanup(func() {
+		if shutdownErr := server.Shutdown(context.Background()); shutdownErr != nil {
+			t.Logf("Failed to shutdown HTTP server: %v", shutdownErr)
+		}
+	})
 
 	return &TestHTTPServer{
 		Server:  server,

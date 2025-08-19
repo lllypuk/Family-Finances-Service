@@ -46,7 +46,7 @@ func TestFamilySetupWorkflow(t *testing.T) {
 			err = json.NewDecoder(resp.Body).Decode(&response)
 			require.NoError(t, err)
 
-			familyID = response["id"].(string)
+			familyID = extractIDFromResponse(response)
 			assert.NotEmpty(t, familyID)
 			assert.Equal(t, "The Smith Family", response["name"])
 			assert.Equal(t, "USD", response["currency"])
@@ -75,7 +75,7 @@ func TestFamilySetupWorkflow(t *testing.T) {
 			err = json.NewDecoder(resp.Body).Decode(&response)
 			require.NoError(t, err)
 
-			adminUserID = response["id"].(string)
+			adminUserID = extractIDFromResponse(response)
 			assert.NotEmpty(t, adminUserID)
 			assert.Equal(t, "admin", response["role"])
 		})
@@ -122,7 +122,7 @@ func TestFamilySetupWorkflow(t *testing.T) {
 				err = json.NewDecoder(resp.Body).Decode(&response)
 				require.NoError(t, err)
 
-				memberID := response["id"].(string)
+				memberID := extractIDFromResponse(response)
 				memberUserIDs = append(memberUserIDs, memberID)
 				assert.NotEmpty(t, memberID)
 			}
@@ -138,26 +138,36 @@ func TestFamilySetupWorkflow(t *testing.T) {
 					"name":      "Food & Groceries",
 					"type":      "expense",
 					"family_id": familyID,
+					"color":     "#FF5733",
+					"icon":      "shopping-cart",
 				},
 				{
 					"name":      "Transportation",
 					"type":      "expense",
 					"family_id": familyID,
+					"color":     "#33FF57",
+					"icon":      "car",
 				},
 				{
 					"name":      "Entertainment",
 					"type":      "expense",
 					"family_id": familyID,
+					"color":     "#3357FF",
+					"icon":      "film",
 				},
 				{
 					"name":      "Salary",
 					"type":      "income",
 					"family_id": familyID,
+					"color":     "#FF33F5",
+					"icon":      "dollar-sign",
 				},
 				{
 					"name":      "Freelance",
 					"type":      "income",
 					"family_id": familyID,
+					"color":     "#FF7733",
+					"icon":      "briefcase",
 				},
 			}
 
@@ -173,7 +183,7 @@ func TestFamilySetupWorkflow(t *testing.T) {
 				err = json.NewDecoder(resp.Body).Decode(&response)
 				require.NoError(t, err)
 
-				categoryID := response["id"].(string)
+				categoryID := extractIDFromResponse(response)
 				categoryIDs = append(categoryIDs, categoryID)
 				assert.NotEmpty(t, categoryID)
 			}
@@ -217,7 +227,7 @@ func TestFamilySetupWorkflow(t *testing.T) {
 				err = json.NewDecoder(resp.Body).Decode(&response)
 				require.NoError(t, err)
 
-				budgetID := response["id"].(string)
+				budgetID := extractIDFromResponse(response)
 				budgetIDs = append(budgetIDs, budgetID)
 				assert.NotEmpty(t, budgetID)
 			}
@@ -370,7 +380,7 @@ func TestFamilySetupWorkflow(t *testing.T) {
 			err = json.NewDecoder(resp.Body).Decode(&response)
 			require.NoError(t, err)
 
-			reportID := response["id"].(string)
+			reportID := extractIDFromResponse(response)
 			assert.NotEmpty(t, reportID)
 
 			// Verify report can be retrieved
@@ -417,7 +427,7 @@ func TestMultiFamilyIsolation(t *testing.T) {
 			err = json.NewDecoder(resp.Body).Decode(&response)
 			require.NoError(t, err)
 
-			*familyIDs[i] = response["id"].(string)
+			*familyIDs[i] = extractIDFromResponse(response)
 		}
 	})
 
@@ -456,7 +466,7 @@ func TestMultiFamilyIsolation(t *testing.T) {
 			err = json.NewDecoder(resp.Body).Decode(&response)
 			require.NoError(t, err)
 
-			*userIDs[i] = response["id"].(string)
+			*userIDs[i] = extractIDFromResponse(response)
 		}
 	})
 
@@ -464,8 +474,8 @@ func TestMultiFamilyIsolation(t *testing.T) {
 	var category1ID, category2ID string
 	t.Run("CreateCategories", func(t *testing.T) {
 		categories := []map[string]any{
-			{"name": "Food Family 1", "type": "expense", "family_id": family1ID},
-			{"name": "Food Family 2", "type": "expense", "family_id": family2ID},
+			{"name": "Food Family 1", "type": "expense", "family_id": family1ID, "color": "#FF5733", "icon": "utensils"},
+			{"name": "Food Family 2", "type": "expense", "family_id": family2ID, "color": "#33FF57", "icon": "utensils"},
 		}
 
 		categoryIDs := []*string{&category1ID, &category2ID}
@@ -482,7 +492,7 @@ func TestMultiFamilyIsolation(t *testing.T) {
 			err = json.NewDecoder(resp.Body).Decode(&response)
 			require.NoError(t, err)
 
-			*categoryIDs[i] = response["id"].(string)
+			*categoryIDs[i] = extractIDFromResponse(response)
 		}
 	})
 

@@ -42,7 +42,7 @@ func TestBudgetManagementWorkflow(t *testing.T) {
 		var familyResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&familyResponse)
 		require.NoError(t, err)
-		familyID = familyResponse["id"].(string)
+		familyID = extractIDFromResponse(familyResponse)
 
 		// Create user
 		userData := map[string]any{
@@ -61,13 +61,15 @@ func TestBudgetManagementWorkflow(t *testing.T) {
 		var userResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&userResponse)
 		require.NoError(t, err)
-		userID = userResponse["id"].(string)
+		userID = extractIDFromResponse(userResponse)
 
 		// Create category
 		categoryData := map[string]any{
 			"name":      "Food",
 			"type":      "expense",
 			"family_id": familyID,
+			"color":     "#FF5733",
+			"icon":      "utensils",
 		}
 		body, _ = json.Marshal(categoryData)
 		resp, err = http.Post(baseURL+"/categories", "application/json", bytes.NewReader(body))
@@ -77,17 +79,20 @@ func TestBudgetManagementWorkflow(t *testing.T) {
 		var categoryResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&categoryResponse)
 		require.NoError(t, err)
-		categoryID = categoryResponse["id"].(string)
+		categoryID = extractIDFromResponse(categoryResponse)
 	})
 
 	t.Run("BudgetLifecycle", func(t *testing.T) {
 		// Step 1: Create Budget
 		t.Run("CreateBudget", func(t *testing.T) {
 			budgetData := map[string]any{
+				"name":        "Food Budget",
 				"amount":      500.0,
 				"period":      "monthly",
 				"category_id": categoryID,
 				"family_id":   familyID,
+				"start_date":  time.Now().Format(time.RFC3339),
+				"end_date":    time.Now().AddDate(0, 1, 0).Format(time.RFC3339),
 			}
 
 			body, _ := json.Marshal(budgetData)
@@ -101,10 +106,14 @@ func TestBudgetManagementWorkflow(t *testing.T) {
 			err = json.NewDecoder(resp.Body).Decode(&response)
 			require.NoError(t, err)
 
-			budgetID = response["id"].(string)
+			budgetID = extractIDFromResponse(response)
 			assert.NotEmpty(t, budgetID)
-			assert.InDelta(t, 500.0, response["amount"], 0.01)
-			assert.InDelta(t, 0.0, response["spent"], 0.01)
+
+			// Extract budget data from nested response
+			budgetData, ok := response["data"].(map[string]any)
+			require.True(t, ok, "Response should contain data field")
+			assert.InDelta(t, 500.0, budgetData["amount"], 0.01)
+			assert.InDelta(t, 0.0, budgetData["spent"], 0.01)
 		})
 
 		// Step 2: Add transactions and track spending
@@ -117,6 +126,7 @@ func TestBudgetManagementWorkflow(t *testing.T) {
 					"category_id": categoryID,
 					"user_id":     userID,
 					"family_id":   familyID,
+					"date":        time.Now().Format(time.RFC3339),
 				},
 				{
 					"amount":      75.0,
@@ -125,6 +135,7 @@ func TestBudgetManagementWorkflow(t *testing.T) {
 					"category_id": categoryID,
 					"user_id":     userID,
 					"family_id":   familyID,
+					"date":        time.Now().Format(time.RFC3339),
 				},
 				{
 					"amount":      150.0,
@@ -133,6 +144,7 @@ func TestBudgetManagementWorkflow(t *testing.T) {
 					"category_id": categoryID,
 					"user_id":     userID,
 					"family_id":   familyID,
+					"date":        time.Now().Format(time.RFC3339),
 				},
 			}
 
@@ -156,9 +168,13 @@ func TestBudgetManagementWorkflow(t *testing.T) {
 			err = json.NewDecoder(resp.Body).Decode(&budget)
 			require.NoError(t, err)
 
-			spent := budget["spent"].(float64)
+			// Extract budget data from nested response
+			budgetData, ok := budget["data"].(map[string]any)
+			require.True(t, ok, "Budget response should contain data field")
+
+			spent := budgetData["spent"].(float64)
 			assert.InDelta(t, totalSpent, spent, 0.01, "Budget should reflect total spending")
-			assert.InDelta(t, 175.0, budget["remaining"].(float64), 0.01, "Remaining should be 500 - 325 = 175")
+			assert.InDelta(t, 175.0, budgetData["remaining"].(float64), 0.01, "Remaining should be 500 - 325 = 175")
 		})
 
 		// Step 3: Test budget over-spending
@@ -255,7 +271,7 @@ func TestMultipleBudgetCategories(t *testing.T) {
 		var familyResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&familyResponse)
 		require.NoError(t, err)
-		familyID = familyResponse["id"].(string)
+		familyID = extractIDFromResponse(familyResponse)
 
 		// Create user
 		userData := map[string]any{
@@ -274,14 +290,14 @@ func TestMultipleBudgetCategories(t *testing.T) {
 		var userResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&userResponse)
 		require.NoError(t, err)
-		userID = userResponse["id"].(string)
+		userID = extractIDFromResponse(userResponse)
 
 		// Create multiple categories
 		categories := []map[string]any{
-			{"name": "Food", "type": "expense", "family_id": familyID},
-			{"name": "Transportation", "type": "expense", "family_id": familyID},
-			{"name": "Entertainment", "type": "expense", "family_id": familyID},
-			{"name": "Utilities", "type": "expense", "family_id": familyID},
+			{"name": "Food", "type": "expense", "family_id": familyID, "color": "#FF5733", "icon": "utensils"},
+			{"name": "Transportation", "type": "expense", "family_id": familyID, "color": "#33FF57", "icon": "car"},
+			{"name": "Entertainment", "type": "expense", "family_id": familyID, "color": "#3357FF", "icon": "film"},
+			{"name": "Utilities", "type": "expense", "family_id": familyID, "color": "#FF33F5", "icon": "bolt"},
 		}
 
 		for _, categoryData := range categories {
@@ -293,26 +309,36 @@ func TestMultipleBudgetCategories(t *testing.T) {
 			var categoryResponse map[string]any
 			err = json.NewDecoder(resp.Body).Decode(&categoryResponse)
 			require.NoError(t, err)
-			categoryIDs = append(categoryIDs, categoryResponse["id"].(string))
+			categoryIDs = append(categoryIDs, extractIDFromResponse(categoryResponse))
 		}
 	})
 
 	t.Run("CreateMultipleBudgets", func(t *testing.T) {
+		if len(categoryIDs) < 4 {
+			t.Fatalf("Expected at least 4 category IDs, got %d. Setup test may have failed.", len(categoryIDs))
+		}
+
 		budgets := []map[string]any{
-			{"amount": 600.0, "period": "monthly", "category_id": categoryIDs[0], "family_id": familyID}, // Food
+			{"name": "Food Budget", "amount": 600.0, "period": "monthly", "category_id": categoryIDs[0], "family_id": familyID, "start_date": time.Now().Format(time.RFC3339), "end_date": time.Now().AddDate(0, 1, 0).Format(time.RFC3339)}, // Food
 			{
+				"name":        "Transportation Budget",
 				"amount":      300.0,
 				"period":      "monthly",
 				"category_id": categoryIDs[1],
 				"family_id":   familyID,
+				"start_date":  time.Now().Format(time.RFC3339),
+				"end_date":    time.Now().AddDate(0, 1, 0).Format(time.RFC3339),
 			}, // Transportation
 			{
+				"name":        "Entertainment Budget",
 				"amount":      200.0,
 				"period":      "monthly",
 				"category_id": categoryIDs[2],
 				"family_id":   familyID,
+				"start_date":  time.Now().Format(time.RFC3339),
+				"end_date":    time.Now().AddDate(0, 1, 0).Format(time.RFC3339),
 			}, // Entertainment
-			{"amount": 400.0, "period": "monthly", "category_id": categoryIDs[3], "family_id": familyID}, // Utilities
+			{"name": "Utilities Budget", "amount": 400.0, "period": "monthly", "category_id": categoryIDs[3], "family_id": familyID, "start_date": time.Now().Format(time.RFC3339), "end_date": time.Now().AddDate(0, 1, 0).Format(time.RFC3339)}, // Utilities
 		}
 
 		for _, budgetData := range budgets {
@@ -326,7 +352,7 @@ func TestMultipleBudgetCategories(t *testing.T) {
 			var response map[string]any
 			err = json.NewDecoder(resp.Body).Decode(&response)
 			require.NoError(t, err)
-			budgetIDs = append(budgetIDs, response["id"].(string))
+			budgetIDs = append(budgetIDs, extractIDFromResponse(response))
 		}
 
 		assert.Len(t, budgetIDs, 4)
@@ -489,7 +515,7 @@ func TestBudgetPeriods(t *testing.T) {
 		var familyResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&familyResponse)
 		require.NoError(t, err)
-		familyID = familyResponse["id"].(string)
+		familyID = extractIDFromResponse(familyResponse)
 
 		// Create user
 		userData := map[string]any{
@@ -508,13 +534,15 @@ func TestBudgetPeriods(t *testing.T) {
 		var userResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&userResponse)
 		require.NoError(t, err)
-		_ = userResponse["id"].(string) // userID not used elsewhere
+		_ = extractIDFromResponse(userResponse) // userID not used elsewhere
 
 		// Create category
 		categoryData := map[string]any{
 			"name":      "Vacation",
 			"type":      "expense",
 			"family_id": familyID,
+			"color":     "#33A5FF",
+			"icon":      "plane",
 		}
 		body, _ = json.Marshal(categoryData)
 		resp, err = http.Post(baseURL+"/categories", "application/json", bytes.NewReader(body))
@@ -524,15 +552,18 @@ func TestBudgetPeriods(t *testing.T) {
 		var categoryResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&categoryResponse)
 		require.NoError(t, err)
-		categoryID = categoryResponse["id"].(string)
+		categoryID = extractIDFromResponse(categoryResponse)
 	})
 
 	t.Run("MonthlyBudget", func(t *testing.T) {
 		budgetData := map[string]any{
+			"name":        "Monthly Vacation Budget",
 			"amount":      1000.0,
 			"period":      "monthly",
 			"category_id": categoryID,
 			"family_id":   familyID,
+			"start_date":  time.Now().Format(time.RFC3339),
+			"end_date":    time.Now().AddDate(0, 1, 0).Format(time.RFC3339),
 		}
 
 		body, _ := json.Marshal(budgetData)
@@ -570,10 +601,13 @@ func TestBudgetPeriods(t *testing.T) {
 
 		// Create yearly budget
 		budgetData := map[string]any{
+			"name":        "Yearly Vacation Budget",
 			"amount":      12000.0,
 			"period":      "yearly",
 			"category_id": categoryID,
 			"family_id":   familyID,
+			"start_date":  time.Now().Format(time.RFC3339),
+			"end_date":    time.Now().AddDate(1, 0, 0).Format(time.RFC3339),
 		}
 
 		body, _ := json.Marshal(budgetData)
@@ -622,7 +656,7 @@ func TestBudgetReporting(t *testing.T) {
 		var familyResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&familyResponse)
 		require.NoError(t, err)
-		familyID = familyResponse["id"].(string)
+		familyID = extractIDFromResponse(familyResponse)
 
 		// Create user
 		userData := map[string]any{
@@ -641,13 +675,15 @@ func TestBudgetReporting(t *testing.T) {
 		var userResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&userResponse)
 		require.NoError(t, err)
-		userID = userResponse["id"].(string)
+		userID = extractIDFromResponse(userResponse)
 
 		// Create category
 		categoryData := map[string]any{
 			"name":      "Shopping",
 			"type":      "expense",
 			"family_id": familyID,
+			"color":     "#FF3377",
+			"icon":      "shopping-bag",
 		}
 		body, _ = json.Marshal(categoryData)
 		resp, err = http.Post(baseURL+"/categories", "application/json", bytes.NewReader(body))
@@ -657,14 +693,17 @@ func TestBudgetReporting(t *testing.T) {
 		var categoryResponse map[string]any
 		err = json.NewDecoder(resp.Body).Decode(&categoryResponse)
 		require.NoError(t, err)
-		categoryID = categoryResponse["id"].(string)
+		categoryID = extractIDFromResponse(categoryResponse)
 
 		// Create budget
 		budgetData := map[string]any{
+			"name":        "Shopping Budget",
 			"amount":      800.0,
 			"period":      "monthly",
 			"category_id": categoryID,
 			"family_id":   familyID,
+			"start_date":  time.Now().Format(time.RFC3339),
+			"end_date":    time.Now().AddDate(0, 1, 0).Format(time.RFC3339),
 		}
 		body, _ = json.Marshal(budgetData)
 		resp, err = http.Post(baseURL+"/budgets", "application/json", bytes.NewReader(body))
@@ -731,7 +770,7 @@ func TestBudgetReporting(t *testing.T) {
 		err = json.NewDecoder(resp.Body).Decode(&response)
 		require.NoError(t, err)
 
-		reportID := response["id"].(string)
+		reportID := extractIDFromResponse(response)
 		assert.NotEmpty(t, reportID)
 
 		// Retrieve and verify report
