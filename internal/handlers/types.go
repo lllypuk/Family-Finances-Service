@@ -184,6 +184,7 @@ type BudgetResponse struct {
 	Name       string     `json:"name"`
 	Amount     float64    `json:"amount"`
 	Spent      float64    `json:"spent"`
+	Remaining  float64    `json:"remaining"`
 	Period     string     `json:"period"`
 	CategoryID *uuid.UUID `json:"category_id,omitempty"`
 	FamilyID   uuid.UUID  `json:"family_id"`

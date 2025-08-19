@@ -43,44 +43,10 @@ func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
 	}
 
 	if err := h.validator.Struct(req); err != nil {
-		var validationErrors []ValidationError
-		for _, err := range func() validator.ValidationErrors {
-			var target validator.ValidationErrors
-			_ = errors.As(err, &target)
-			return target
-		}() {
-			validationErrors = append(validationErrors, ValidationError{
-				Field:   err.Field(),
-				Message: err.Tag(),
-				Code:    "VALIDATION_ERROR",
-			})
-		}
-
-		return c.JSON(http.StatusBadRequest, APIResponse[any]{
-			Data: nil,
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-			Errors: validationErrors,
-		})
+		return h.handleValidationError(c, err)
 	}
 
-	// Создаем новую транзакцию
-	newTransaction := &transaction.Transaction{
-		ID:          uuid.New(),
-		Amount:      req.Amount,
-		Type:        transaction.Type(req.Type),
-		Description: req.Description,
-		CategoryID:  req.CategoryID,
-		UserID:      req.UserID,
-		FamilyID:    req.FamilyID,
-		Date:        req.Date,
-		Tags:        req.Tags,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
+	newTransaction := h.buildTransaction(req)
 
 	if err := h.repositories.Transaction.Create(c.Request().Context(), newTransaction); err != nil {
 		return c.JSON(http.StatusInternalServerError, ErrorResponse{
@@ -96,20 +62,9 @@ func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
 		})
 	}
 
-	response := TransactionResponse{
-		ID:          newTransaction.ID,
-		Amount:      newTransaction.Amount,
-		Type:        string(newTransaction.Type),
-		Description: newTransaction.Description,
-		CategoryID:  newTransaction.CategoryID,
-		UserID:      newTransaction.UserID,
-		FamilyID:    newTransaction.FamilyID,
-		Date:        newTransaction.Date,
-		Tags:        newTransaction.Tags,
-		CreatedAt:   newTransaction.CreatedAt,
-		UpdatedAt:   newTransaction.UpdatedAt,
-	}
+	h.updateBudgetIfNeeded(c, newTransaction)
 
+	response := h.buildTransactionResponse(newTransaction)
 	return c.JSON(http.StatusCreated, APIResponse[TransactionResponse]{
 		Data: response,
 		Meta: ResponseMeta{
@@ -118,6 +73,83 @@ func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
 			Version:   "v1",
 		},
 	})
+}
+
+func (h *TransactionHandler) handleValidationError(c echo.Context, err error) error {
+	var validationErrors []ValidationError
+	for _, err := range func() validator.ValidationErrors {
+		var target validator.ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}() {
+		validationErrors = append(validationErrors, ValidationError{
+			Field:   err.Field(),
+			Message: err.Tag(),
+			Code:    "VALIDATION_ERROR",
+		})
+	}
+
+	return c.JSON(http.StatusBadRequest, APIResponse[any]{
+		Data: nil,
+		Meta: ResponseMeta{
+			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
+			Timestamp: time.Now(),
+			Version:   "v1",
+		},
+		Errors: validationErrors,
+	})
+}
+
+func (h *TransactionHandler) buildTransaction(req CreateTransactionRequest) *transaction.Transaction {
+	return &transaction.Transaction{
+		ID:          uuid.New(),
+		Amount:      req.Amount,
+		Type:        transaction.Type(req.Type),
+		Description: req.Description,
+		CategoryID:  req.CategoryID,
+		UserID:      req.UserID,
+		FamilyID:    req.FamilyID,
+		Date:        req.Date,
+		Tags:        req.Tags,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+}
+
+func (h *TransactionHandler) updateBudgetIfNeeded(c echo.Context, tx *transaction.Transaction) {
+	if tx.Type != transaction.TypeExpense {
+		return
+	}
+
+	budgets, err := h.repositories.Budget.GetActiveBudgets(c.Request().Context(), tx.FamilyID)
+	if err != nil {
+		return
+	}
+
+	for _, b := range budgets {
+		if b.CategoryID != nil && *b.CategoryID == tx.CategoryID {
+			b.Spent += tx.Amount
+			b.UpdatedAt = time.Now()
+			_ = h.repositories.Budget.Update(c.Request().Context(), b)
+			break
+		}
+	}
+}
+
+func (h *TransactionHandler) buildTransactionResponse(tx *transaction.Transaction) TransactionResponse {
+	return TransactionResponse{
+		ID:          tx.ID,
+		Amount:      tx.Amount,
+		Type:        string(tx.Type),
+		Description: tx.Description,
+		CategoryID:  tx.CategoryID,
+		UserID:      tx.UserID,
+		FamilyID:    tx.FamilyID,
+		Date:        tx.Date,
+		Tags:        tx.Tags,
+		CreatedAt:   tx.CreatedAt,
+		UpdatedAt:   tx.UpdatedAt,
+	}
 }
 
 func (h *TransactionHandler) GetTransactions(c echo.Context) error {
@@ -437,22 +469,6 @@ func (h *TransactionHandler) updateTransactionFields(tx *transaction.Transaction
 		tx.Tags = req.Tags
 	}
 	tx.UpdatedAt = time.Now()
-}
-
-func (h *TransactionHandler) buildTransactionResponse(tx *transaction.Transaction) TransactionResponse {
-	return TransactionResponse{
-		ID:          tx.ID,
-		Amount:      tx.Amount,
-		Type:        string(tx.Type),
-		Description: tx.Description,
-		CategoryID:  tx.CategoryID,
-		UserID:      tx.UserID,
-		FamilyID:    tx.FamilyID,
-		Date:        tx.Date,
-		Tags:        tx.Tags,
-		CreatedAt:   tx.CreatedAt,
-		UpdatedAt:   tx.UpdatedAt,
-	}
 }
 
 func (h *TransactionHandler) DeleteTransaction(c echo.Context) error {

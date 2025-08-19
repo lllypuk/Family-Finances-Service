@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	HunderMilliSeconds = 100 * time.Millisecond
+	StartupDelay = 100 * time.Millisecond
 )
 
 // TestHTTPServer wraps HTTP server setup for testing
@@ -67,7 +67,7 @@ func SetupHTTPServer(t *testing.T) *TestHTTPServer {
 	}()
 
 	// Give the server a moment to start
-	time.Sleep(HunderMilliSeconds)
+	time.Sleep(StartupDelay)
 
 	// Cleanup function to stop the server
 	t.Cleanup(func() {

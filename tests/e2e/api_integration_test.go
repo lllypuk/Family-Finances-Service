@@ -418,6 +418,8 @@ func TestDataConsistency(t *testing.T) {
 		categoryData := map[string]any{
 			"name":      "Food",
 			"type":      "expense",
+			"color":     "#FF5733",
+			"icon":      "utensils",
 			"family_id": familyID,
 		}
 		body, _ = json.Marshal(categoryData)
@@ -432,10 +434,13 @@ func TestDataConsistency(t *testing.T) {
 
 		// Create budget
 		budgetData := map[string]any{
+			"name":        "Food Budget",
 			"amount":      500.0,
 			"period":      "monthly",
 			"category_id": categoryID,
 			"family_id":   familyID,
+			"start_date":  time.Now().Format(time.RFC3339),
+			"end_date":    time.Now().AddDate(0, 1, 0).Format(time.RFC3339),
 		}
 		body, _ = json.Marshal(budgetData)
 		resp, err = http.Post(baseURL+"/budgets", "application/json", bytes.NewReader(body))
@@ -452,6 +457,7 @@ func TestDataConsistency(t *testing.T) {
 				"category_id": categoryID,
 				"user_id":     userID,
 				"family_id":   familyID,
+				"date":        time.Now().Format(time.RFC3339),
 			}
 
 			body, _ = json.Marshal(transactionData)
@@ -466,8 +472,11 @@ func TestDataConsistency(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
-		var budgets []map[string]any
-		err = json.NewDecoder(resp.Body).Decode(&budgets)
+		var budgetResponse struct {
+			Data []map[string]any `json:"data"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&budgetResponse)
+		budgets := budgetResponse.Data
 		require.NoError(t, err)
 		assert.Len(t, budgets, 1)
 

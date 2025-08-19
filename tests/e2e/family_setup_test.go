@@ -474,8 +474,20 @@ func TestMultiFamilyIsolation(t *testing.T) {
 	var category1ID, category2ID string
 	t.Run("CreateCategories", func(t *testing.T) {
 		categories := []map[string]any{
-			{"name": "Food Family 1", "type": "expense", "family_id": family1ID, "color": "#FF5733", "icon": "utensils"},
-			{"name": "Food Family 2", "type": "expense", "family_id": family2ID, "color": "#33FF57", "icon": "utensils"},
+			{
+				"name":      "Food Family 1",
+				"type":      "expense",
+				"family_id": family1ID,
+				"color":     "#FF5733",
+				"icon":      "utensils",
+			},
+			{
+				"name":      "Food Family 2",
+				"type":      "expense",
+				"family_id": family2ID,
+				"color":     "#33FF57",
+				"icon":      "utensils",
+			},
 		}
 
 		categoryIDs := []*string{&category1ID, &category2ID}

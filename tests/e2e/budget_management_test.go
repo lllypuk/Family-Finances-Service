@@ -172,9 +172,19 @@ func TestBudgetManagementWorkflow(t *testing.T) {
 			budgetData, ok := budget["data"].(map[string]any)
 			require.True(t, ok, "Budget response should contain data field")
 
-			spent := budgetData["spent"].(float64)
+			spentVal, spentOk := budgetData["spent"]
+			require.True(t, spentOk, "Budget response should contain 'spent' field")
+			require.NotNil(t, spentVal, "'spent' field should not be nil")
+			spent, ok := spentVal.(float64)
+			require.True(t, ok, "'spent' field should be float64")
 			assert.InDelta(t, totalSpent, spent, 0.01, "Budget should reflect total spending")
-			assert.InDelta(t, 175.0, budgetData["remaining"].(float64), 0.01, "Remaining should be 500 - 325 = 175")
+
+			remainingVal, remainingOk := budgetData["remaining"]
+			require.True(t, remainingOk, "Budget response should contain 'remaining' field")
+			require.NotNil(t, remainingVal, "'remaining' field should not be nil")
+			remaining, ok := remainingVal.(float64)
+			require.True(t, ok, "'remaining' field should be float64")
+			assert.InDelta(t, 175.0, remaining, 0.01, "Remaining should be 500 - 325 = 175")
 		})
 
 		// Step 3: Test budget over-spending
@@ -186,6 +196,7 @@ func TestBudgetManagementWorkflow(t *testing.T) {
 				"category_id": categoryID,
 				"user_id":     userID,
 				"family_id":   familyID,
+				"date":        time.Now().Format(time.RFC3339),
 			}
 
 			body, _ := json.Marshal(overSpendTransaction)
@@ -200,12 +211,15 @@ func TestBudgetManagementWorkflow(t *testing.T) {
 			require.NoError(t, err)
 			defer resp.Body.Close()
 
-			var budget map[string]any
-			err = json.NewDecoder(resp.Body).Decode(&budget)
+			var budgetResponse struct {
+				Data map[string]any `json:"data"`
+			}
+			err = json.NewDecoder(resp.Body).Decode(&budgetResponse)
 			require.NoError(t, err)
 
-			spent := budget["spent"].(float64)
-			remaining := budget["remaining"].(float64)
+			budgetData := budgetResponse.Data
+			spent := budgetData["spent"].(float64)
+			remaining := budgetData["remaining"].(float64)
 			assert.InEpsilon(t, 525.0, spent, 0.01, "Total spent should be 525")
 			assert.InEpsilon(t, -25.0, remaining, 0.01, "Should be 25 over budget")
 		})
@@ -230,13 +244,16 @@ func TestBudgetManagementWorkflow(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-			var budget map[string]any
-			err = json.NewDecoder(resp.Body).Decode(&budget)
+			var budgetResponse struct {
+				Data map[string]any `json:"data"`
+			}
+			err = json.NewDecoder(resp.Body).Decode(&budgetResponse)
 			require.NoError(t, err)
 
-			assert.InEpsilon(t, 600.0, budget["amount"], 0.01)
-			assert.InEpsilon(t, 525.0, budget["spent"], 0.01)
-			assert.InEpsilon(t, 75.0, budget["remaining"], 0.01, "Should now have 75 remaining")
+			budgetData := budgetResponse.Data
+			assert.InEpsilon(t, 600.0, budgetData["amount"], 0.01)
+			assert.InEpsilon(t, 525.0, budgetData["spent"], 0.01)
+			assert.InEpsilon(t, 75.0, budgetData["remaining"], 0.01, "Should now have 75 remaining")
 		})
 	})
 }
@@ -319,7 +336,15 @@ func TestMultipleBudgetCategories(t *testing.T) {
 		}
 
 		budgets := []map[string]any{
-			{"name": "Food Budget", "amount": 600.0, "period": "monthly", "category_id": categoryIDs[0], "family_id": familyID, "start_date": time.Now().Format(time.RFC3339), "end_date": time.Now().AddDate(0, 1, 0).Format(time.RFC3339)}, // Food
+			{
+				"name":        "Food Budget",
+				"amount":      600.0,
+				"period":      "monthly",
+				"category_id": categoryIDs[0],
+				"family_id":   familyID,
+				"start_date":  time.Now().Format(time.RFC3339),
+				"end_date":    time.Now().AddDate(0, 1, 0).Format(time.RFC3339),
+			}, // Food
 			{
 				"name":        "Transportation Budget",
 				"amount":      300.0,
@@ -338,7 +363,15 @@ func TestMultipleBudgetCategories(t *testing.T) {
 				"start_date":  time.Now().Format(time.RFC3339),
 				"end_date":    time.Now().AddDate(0, 1, 0).Format(time.RFC3339),
 			}, // Entertainment
-			{"name": "Utilities Budget", "amount": 400.0, "period": "monthly", "category_id": categoryIDs[3], "family_id": familyID, "start_date": time.Now().Format(time.RFC3339), "end_date": time.Now().AddDate(0, 1, 0).Format(time.RFC3339)}, // Utilities
+			{
+				"name":        "Utilities Budget",
+				"amount":      400.0,
+				"period":      "monthly",
+				"category_id": categoryIDs[3],
+				"family_id":   familyID,
+				"start_date":  time.Now().Format(time.RFC3339),
+				"end_date":    time.Now().AddDate(0, 1, 0).Format(time.RFC3339),
+			}, // Utilities
 		}
 
 		for _, budgetData := range budgets {
@@ -368,6 +401,7 @@ func TestMultipleBudgetCategories(t *testing.T) {
 				"category_id": categoryIDs[0],
 				"user_id":     userID,
 				"family_id":   familyID,
+				"date":        time.Now().Format(time.RFC3339),
 			},
 			{
 				"amount":      80.0,
@@ -376,6 +410,7 @@ func TestMultipleBudgetCategories(t *testing.T) {
 				"category_id": categoryIDs[0],
 				"user_id":     userID,
 				"family_id":   familyID,
+				"date":        time.Now().Format(time.RFC3339),
 			},
 			// Transportation transactions
 			{
@@ -385,6 +420,7 @@ func TestMultipleBudgetCategories(t *testing.T) {
 				"category_id": categoryIDs[1],
 				"user_id":     userID,
 				"family_id":   familyID,
+				"date":        time.Now().Format(time.RFC3339),
 			},
 			{
 				"amount":      120.0,
@@ -393,6 +429,7 @@ func TestMultipleBudgetCategories(t *testing.T) {
 				"category_id": categoryIDs[1],
 				"user_id":     userID,
 				"family_id":   familyID,
+				"date":        time.Now().Format(time.RFC3339),
 			},
 			// Entertainment transactions
 			{
@@ -402,6 +439,7 @@ func TestMultipleBudgetCategories(t *testing.T) {
 				"category_id": categoryIDs[2],
 				"user_id":     userID,
 				"family_id":   familyID,
+				"date":        time.Now().Format(time.RFC3339),
 			},
 			{
 				"amount":      25.0,
@@ -410,6 +448,7 @@ func TestMultipleBudgetCategories(t *testing.T) {
 				"category_id": categoryIDs[2],
 				"user_id":     userID,
 				"family_id":   familyID,
+				"date":        time.Now().Format(time.RFC3339),
 			},
 			// Utilities transactions
 			{
@@ -419,6 +458,7 @@ func TestMultipleBudgetCategories(t *testing.T) {
 				"category_id": categoryIDs[3],
 				"user_id":     userID,
 				"family_id":   familyID,
+				"date":        time.Now().Format(time.RFC3339),
 			},
 			{
 				"amount":      100.0,
@@ -427,6 +467,7 @@ func TestMultipleBudgetCategories(t *testing.T) {
 				"category_id": categoryIDs[3],
 				"user_id":     userID,
 				"family_id":   familyID,
+				"date":        time.Now().Format(time.RFC3339),
 			},
 		}
 
@@ -448,12 +489,15 @@ func TestMultipleBudgetCategories(t *testing.T) {
 			require.NoError(t, err)
 			defer resp.Body.Close()
 
-			var budget map[string]any
-			err = json.NewDecoder(resp.Body).Decode(&budget)
+			var budgetResponse struct {
+				Data map[string]any `json:"data"`
+			}
+			err = json.NewDecoder(resp.Body).Decode(&budgetResponse)
 			require.NoError(t, err)
 
-			spent := budget["spent"].(float64)
-			remaining := budget["remaining"].(float64)
+			budgetData := budgetResponse.Data
+			spent := budgetData["spent"].(float64)
+			remaining := budgetData["remaining"].(float64)
 
 			assert.InEpsilon(t, expectedSpending[i], spent, 0.01, "Budget %d spending mismatch", i)
 			assert.InEpsilon(t, expectedRemaining[i], remaining, 0.01, "Budget %d remaining mismatch", i)
@@ -573,12 +617,15 @@ func TestBudgetPeriods(t *testing.T) {
 
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
-		var response map[string]any
-		err = json.NewDecoder(resp.Body).Decode(&response)
+		var budgetResponse struct {
+			Data map[string]any `json:"data"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&budgetResponse)
 		require.NoError(t, err)
 
-		assert.Equal(t, "monthly", response["period"])
-		assert.InDelta(t, 1000.0, response["amount"], 0.01)
+		budgetData = budgetResponse.Data
+		assert.Equal(t, "monthly", budgetData["period"])
+		assert.InDelta(t, 1000.0, budgetData["amount"], 0.01)
 	})
 
 	t.Run("YearlyBudget", func(t *testing.T) {
@@ -587,10 +634,13 @@ func TestBudgetPeriods(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
-		var budgets []map[string]any
-		err = json.NewDecoder(resp.Body).Decode(&budgets)
+		var budgetsResponse struct {
+			Data []map[string]any `json:"data"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&budgetsResponse)
 		require.NoError(t, err)
 
+		budgets := budgetsResponse.Data
 		if len(budgets) > 0 {
 			deleteBudgetID := budgets[0]["id"].(string)
 			req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s/budgets/%s", baseURL, deleteBudgetID), nil)
@@ -617,12 +667,15 @@ func TestBudgetPeriods(t *testing.T) {
 
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
-		var response map[string]any
-		err = json.NewDecoder(resp.Body).Decode(&response)
+		var yearlyBudgetResponse struct {
+			Data map[string]any `json:"data"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&yearlyBudgetResponse)
 		require.NoError(t, err)
 
-		assert.Equal(t, "yearly", response["period"])
-		assert.InDelta(t, 12000.0, response["amount"], 0.01)
+		yearlyBudgetData := yearlyBudgetResponse.Data
+		assert.Equal(t, "yearly", yearlyBudgetData["period"])
+		assert.InDelta(t, 12000.0, yearlyBudgetData["amount"], 0.01)
 	})
 }
 
@@ -724,6 +777,7 @@ func TestBudgetReporting(t *testing.T) {
 				"category_id": categoryID,
 				"user_id":     userID,
 				"family_id":   familyID,
+				"date":        time.Now().Format(time.RFC3339),
 			},
 			{
 				"amount":      200.0,
@@ -732,6 +786,7 @@ func TestBudgetReporting(t *testing.T) {
 				"category_id": categoryID,
 				"user_id":     userID,
 				"family_id":   familyID,
+				"date":        time.Now().Format(time.RFC3339),
 			},
 			{
 				"amount":      100.0,
@@ -740,6 +795,7 @@ func TestBudgetReporting(t *testing.T) {
 				"category_id": categoryID,
 				"user_id":     userID,
 				"family_id":   familyID,
+				"date":        time.Now().Format(time.RFC3339),
 			},
 		}
 

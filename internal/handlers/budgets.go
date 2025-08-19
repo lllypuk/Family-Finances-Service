@@ -101,6 +101,7 @@ func (h *BudgetHandler) CreateBudget(c echo.Context) error {
 		Name:       newBudget.Name,
 		Amount:     newBudget.Amount,
 		Spent:      newBudget.Spent,
+		Remaining:  newBudget.Amount - newBudget.Spent,
 		Period:     string(newBudget.Period),
 		CategoryID: newBudget.CategoryID,
 		FamilyID:   newBudget.FamilyID,
@@ -185,6 +186,7 @@ func (h *BudgetHandler) GetBudgets(c echo.Context) error {
 			Name:       b.Name,
 			Amount:     b.Amount,
 			Spent:      b.Spent,
+			Remaining:  b.Amount - b.Spent,
 			Period:     string(b.Period),
 			CategoryID: b.CategoryID,
 			FamilyID:   b.FamilyID,
@@ -238,11 +240,30 @@ func (h *BudgetHandler) GetBudgetByID(c echo.Context) error {
 		})
 	}
 
+	// Вычисляем сумму расходов по бюджету (по категории и семье)
+	var spent float64
+	if foundBudget.CategoryID != nil {
+		// Получаем сумму расходов по категории бюджета
+		spent, err = h.repositories.Transaction.GetTotalByCategory(
+			c.Request().Context(),
+			*foundBudget.CategoryID,
+			"expense",
+		)
+		if err != nil {
+			spent = 0
+		}
+	} else {
+		// Если категория не указана, считаем все расходы семьи
+		// (можно добавить GetTotalByFamily если потребуется)
+		spent = foundBudget.Spent
+	}
+
 	response := BudgetResponse{
 		ID:         foundBudget.ID,
 		Name:       foundBudget.Name,
 		Amount:     foundBudget.Amount,
-		Spent:      foundBudget.Spent,
+		Spent:      spent,
+		Remaining:  foundBudget.Amount - spent,
 		Period:     string(foundBudget.Period),
 		CategoryID: foundBudget.CategoryID,
 		FamilyID:   foundBudget.FamilyID,
@@ -306,6 +327,7 @@ func (h *BudgetHandler) buildBudgetResponse(b *budget.Budget) BudgetResponse {
 		Name:       b.Name,
 		Amount:     b.Amount,
 		Spent:      b.Spent,
+		Remaining:  b.Amount - b.Spent,
 		Period:     string(b.Period),
 		CategoryID: b.CategoryID,
 		FamilyID:   b.FamilyID,
