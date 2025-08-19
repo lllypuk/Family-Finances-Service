@@ -155,7 +155,7 @@ func TestFamilyHandler_CreateFamily_InvalidRequest(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		requestBody interface{}
+		requestBody any
 		expectedMsg string
 	}{
 		{
@@ -165,14 +165,14 @@ func TestFamilyHandler_CreateFamily_InvalidRequest(t *testing.T) {
 		},
 		{
 			name: "Missing name",
-			requestBody: map[string]interface{}{
+			requestBody: map[string]any{
 				"currency": "USD",
 			},
 			expectedMsg: "",
 		},
 		{
 			name: "Empty name",
-			requestBody: map[string]interface{}{
+			requestBody: map[string]any{
 				"name":     "",
 				"currency": "USD",
 			},
@@ -180,7 +180,7 @@ func TestFamilyHandler_CreateFamily_InvalidRequest(t *testing.T) {
 		},
 		{
 			name: "Name too short",
-			requestBody: map[string]interface{}{
+			requestBody: map[string]any{
 				"name":     "A",
 				"currency": "USD",
 			},
@@ -188,7 +188,7 @@ func TestFamilyHandler_CreateFamily_InvalidRequest(t *testing.T) {
 		},
 		{
 			name: "Name too long",
-			requestBody: map[string]interface{}{
+			requestBody: map[string]any{
 				"name":     "This is a very long family name that exceeds the maximum allowed length for family names in the system which should be around 100 characters",
 				"currency": "USD",
 			},
@@ -196,14 +196,14 @@ func TestFamilyHandler_CreateFamily_InvalidRequest(t *testing.T) {
 		},
 		{
 			name: "Missing currency",
-			requestBody: map[string]interface{}{
+			requestBody: map[string]any{
 				"name": "Test Family",
 			},
 			expectedMsg: "",
 		},
 		{
 			name: "Invalid currency length",
-			requestBody: map[string]interface{}{
+			requestBody: map[string]any{
 				"name":     "Test Family",
 				"currency": "US",
 			},
@@ -211,7 +211,7 @@ func TestFamilyHandler_CreateFamily_InvalidRequest(t *testing.T) {
 		},
 		{
 			name: "Invalid currency format",
-			requestBody: map[string]interface{}{
+			requestBody: map[string]any{
 				"name":     "Test Family",
 				"currency": "USDD",
 			},
@@ -685,7 +685,7 @@ func BenchmarkFamilyHandler_CreateFamily(b *testing.B) {
 	req := createValidFamilyRequest()
 	body, _ := json.Marshal(req)
 
-	for range b.N {
+	for b.Loop() {
 		e := echo.New()
 		httpReq := httptest.NewRequest(http.MethodPost, "/families", bytes.NewBuffer(body))
 		httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -705,7 +705,7 @@ func BenchmarkFamilyHandler_GetFamilyMembers(b *testing.B) {
 
 	familyID := uuid.New()
 
-	for range b.N {
+	for b.Loop() {
 		e := echo.New()
 		httpReq := httptest.NewRequest(http.MethodGet, "/families/"+familyID.String()+"/members", nil)
 		rec := httptest.NewRecorder()

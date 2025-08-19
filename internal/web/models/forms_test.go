@@ -94,7 +94,7 @@ func TestGetValidationErrors_RequiredFields(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		form          interface{}
+		form          any
 		expectedCount int
 		expectedField string
 		expectedMsg   string
@@ -474,8 +474,7 @@ func BenchmarkGetValidationErrors(b *testing.B) {
 	err := v.Struct(form)
 	require.Error(b, err)
 
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		_ = models.GetValidationErrors(err)
 	}
 }
@@ -494,8 +493,7 @@ func BenchmarkGetFieldName(b *testing.B) {
 	// We don't need fieldError since we test through public API
 	_ = err // Use err to validate the test setup
 
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		// Test private function through public API
 		_ = models.GetValidationErrors(err)
 	}
@@ -515,8 +513,7 @@ func BenchmarkGetErrorMessage(b *testing.B) {
 	// We don't need fieldError since we test through public API
 	_ = err // Use err to validate the test setup
 
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		// Test private function through public API
 		_ = models.GetValidationErrors(err)
 	}

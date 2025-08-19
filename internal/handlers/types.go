@@ -31,9 +31,9 @@ type ErrorResponse struct {
 }
 
 type ErrorDetail struct {
-	Code    string      `json:"code"`
-	Message string      `json:"message"`
-	Details interface{} `json:"details,omitempty"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Details any    `json:"details,omitempty"`
 }
 
 // CreateUserRequest represents the request payload for creating a new user
@@ -206,14 +206,14 @@ type CreateReportRequest struct {
 }
 
 type ReportResponse struct {
-	ID          uuid.UUID   `json:"id"`
-	Name        string      `json:"name"`
-	Type        string      `json:"type"`
-	Period      string      `json:"period"`
-	FamilyID    uuid.UUID   `json:"family_id"`
-	UserID      uuid.UUID   `json:"user_id"`
-	StartDate   time.Time   `json:"start_date"`
-	EndDate     time.Time   `json:"end_date"`
-	Data        interface{} `json:"data"`
-	GeneratedAt time.Time   `json:"generated_at"`
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Type        string    `json:"type"`
+	Period      string    `json:"period"`
+	FamilyID    uuid.UUID `json:"family_id"`
+	UserID      uuid.UUID `json:"user_id"`
+	StartDate   time.Time `json:"start_date"`
+	EndDate     time.Time `json:"end_date"`
+	Data        any       `json:"data"`
+	GeneratedAt time.Time `json:"generated_at"`
 }

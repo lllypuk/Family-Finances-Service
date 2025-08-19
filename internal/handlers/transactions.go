@@ -56,7 +56,7 @@ func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
 			})
 		}
 
-		return c.JSON(http.StatusBadRequest, APIResponse[interface{}]{
+		return c.JSON(http.StatusBadRequest, APIResponse[any]{
 			Data: nil,
 			Meta: ResponseMeta{
 				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
@@ -281,7 +281,7 @@ func (h *TransactionHandler) validateTransactionFilters(c echo.Context, filters 
 			})
 		}
 
-		return c.JSON(http.StatusBadRequest, APIResponse[interface{}]{
+		return c.JSON(http.StatusBadRequest, APIResponse[any]{
 			Data: nil,
 			Meta: ResponseMeta{
 				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),

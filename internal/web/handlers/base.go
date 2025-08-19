@@ -66,12 +66,12 @@ type Message struct {
 type FormErrors map[string]string
 
 // renderPage отображает страницу с данными
-func (h *BaseHandler) renderPage(c echo.Context, template string, data interface{}) error {
+func (h *BaseHandler) renderPage(c echo.Context, template string, data any) error {
 	return c.Render(http.StatusOK, template, data)
 }
 
 // renderPartial отображает частичный шаблон (для HTMX)
-func (h *BaseHandler) renderPartial(c echo.Context, template string, data interface{}) error {
+func (h *BaseHandler) renderPartial(c echo.Context, template string, data any) error {
 	return c.Render(http.StatusOK, template, data)
 }
 
@@ -144,7 +144,7 @@ func (h *BaseHandler) getFlashMessages(_ echo.Context) []Message {
 // validateForm валидирует структуру формы и возвращает ошибки
 //
 //nolint:unused // Will be used in future form handlers
-func (h *BaseHandler) validateForm(c echo.Context, form interface{}) FormErrors {
+func (h *BaseHandler) validateForm(c echo.Context, form any) FormErrors {
 	errors := make(FormErrors)
 
 	// Привязываем данные формы

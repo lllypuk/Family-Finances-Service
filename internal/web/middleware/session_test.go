@@ -458,8 +458,8 @@ func BenchmarkSetSessionData(b *testing.B) {
 	}
 
 	c, _ := setupSessionContext(e, sessionMiddleware)
-	b.ResetTimer()
-	for range b.N {
+
+	for b.Loop() {
 		middleware.SetSessionData(c, sessionData)
 	}
 }
@@ -480,8 +480,7 @@ func BenchmarkGetSessionData(b *testing.B) {
 	middleware.SetSessionData(c, sessionData)
 	cookies := rec.Result().Cookies()
 
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		for _, cookie := range cookies {
 			req.AddCookie(cookie)
@@ -517,8 +516,7 @@ func BenchmarkIsAuthenticated(b *testing.B) {
 	middleware.SetSessionData(c, sessionData)
 	cookies := rec.Result().Cookies()
 
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		for _, cookie := range cookies {
 			req.AddCookie(cookie)

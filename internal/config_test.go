@@ -372,8 +372,7 @@ func BenchmarkLoadConfig(b *testing.B) {
 	b.Setenv("SERVER_PORT", "8080")
 	b.Setenv("MONGODB_URI", "mongodb://localhost:27017")
 
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		_ = internal.LoadConfig()
 	}
 }
@@ -381,8 +380,7 @@ func BenchmarkLoadConfig(b *testing.B) {
 func BenchmarkConfig_IsProduction(b *testing.B) {
 	config := &internal.Config{Environment: "production"}
 
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		_ = config.IsProduction()
 	}
 }

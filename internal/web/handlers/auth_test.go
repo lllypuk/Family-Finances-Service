@@ -101,7 +101,7 @@ type MockTemplateRenderer struct {
 	mock.Mock
 }
 
-func (m *MockTemplateRenderer) Render(w io.Writer, name string, data interface{}, c echo.Context) error {
+func (m *MockTemplateRenderer) Render(w io.Writer, name string, data any, c echo.Context) error {
 	args := m.Called(w, name, data, c)
 	return args.Error(0)
 }
@@ -162,8 +162,8 @@ func TestAuthHandler_LoginPage_Success(t *testing.T) {
 	// Setup mock renderer
 	mockRenderer := &MockTemplateRenderer{}
 	e.Renderer = mockRenderer
-	mockRenderer.On("Render", mock.Anything, "login.html", mock.MatchedBy(func(data interface{}) bool {
-		dataMap := data.(map[string]interface{})
+	mockRenderer.On("Render", mock.Anything, "login.html", mock.MatchedBy(func(data any) bool {
+		dataMap := data.(map[string]any)
 		return dataMap["Title"] == "Sign In" && dataMap["CSRFToken"] != nil
 	}), mock.Anything).Return(nil)
 
@@ -295,8 +295,8 @@ func TestAuthHandler_Login_InvalidCredentials(t *testing.T) {
 			// Setup mock renderer for error case
 			mockRenderer := &MockTemplateRenderer{}
 			e.Renderer = mockRenderer
-			mockRenderer.On("Render", mock.Anything, "login.html", mock.MatchedBy(func(data interface{}) bool {
-				dataMap := data.(map[string]interface{})
+			mockRenderer.On("Render", mock.Anything, "login.html", mock.MatchedBy(func(data any) bool {
+				dataMap := data.(map[string]any)
 				return dataMap["Error"] == "Invalid email or password"
 			}), mock.Anything).Return(nil)
 
@@ -439,8 +439,8 @@ func TestAuthHandler_RegisterPage_Success(t *testing.T) {
 	// Setup mock renderer
 	mockRenderer := &MockTemplateRenderer{}
 	e.Renderer = mockRenderer
-	mockRenderer.On("Render", mock.Anything, "register.html", mock.MatchedBy(func(data interface{}) bool {
-		dataMap := data.(map[string]interface{})
+	mockRenderer.On("Render", mock.Anything, "register.html", mock.MatchedBy(func(data any) bool {
+		dataMap := data.(map[string]any)
 		return dataMap["Title"] == "Create Family Account" && dataMap["CSRFToken"] != nil
 	}), mock.Anything).Return(nil)
 
@@ -505,8 +505,8 @@ func TestAuthHandler_Register_UserAlreadyExists(t *testing.T) {
 	// Setup mock renderer for error case
 	mockRenderer := &MockTemplateRenderer{}
 	e.Renderer = mockRenderer
-	mockRenderer.On("Render", mock.Anything, "register.html", mock.MatchedBy(func(data interface{}) bool {
-		dataMap := data.(map[string]interface{})
+	mockRenderer.On("Render", mock.Anything, "register.html", mock.MatchedBy(func(data any) bool {
+		dataMap := data.(map[string]any)
 		fieldErrors := dataMap["FieldErrors"].(map[string]string)
 		return fieldErrors["email"] == "User with this email already exists"
 	}), mock.Anything).Return(nil)
@@ -573,7 +573,7 @@ func TestAuthHandler_Logout_HTMXRequest(t *testing.T) {
 // mockValidator is a simple mock validator for testing
 type mockValidator struct{}
 
-func (m *mockValidator) Validate(_ interface{}) error {
+func (m *mockValidator) Validate(_ any) error {
 	// For testing purposes, we'll assume validation always passes
 	// In real tests, you might want to implement actual validation logic
 	return nil
@@ -584,7 +584,7 @@ type CustomValidator struct {
 	validator *validator.Validate
 }
 
-func (cv *CustomValidator) Validate(i interface{}) error {
+func (cv *CustomValidator) Validate(i any) error {
 	if err := cv.validator.Struct(i); err != nil {
 		return err
 	}
@@ -611,7 +611,7 @@ func BenchmarkAuthHandler_Login(b *testing.B) {
 	form.Add("email", "bench@example.com")
 	form.Add("password", "password123")
 
-	for range b.N {
+	for b.Loop() {
 		req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
 		rec := httptest.NewRecorder()
@@ -638,7 +638,7 @@ func BenchmarkAuthHandler_Register(b *testing.B) {
 	form.Add("email", "bench@example.com")
 	form.Add("password", "password123")
 
-	for range b.N {
+	for b.Loop() {
 		req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
 		rec := httptest.NewRecorder()

@@ -55,7 +55,7 @@ func (h *FamilyHandler) CreateFamily(c echo.Context) error {
 			})
 		}
 
-		return c.JSON(http.StatusBadRequest, APIResponse[interface{}]{
+		return c.JSON(http.StatusBadRequest, APIResponse[any]{
 			Data: nil,
 			Meta: ResponseMeta{
 				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),

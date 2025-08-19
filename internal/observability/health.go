@@ -165,7 +165,7 @@ func (hs *HealthService) ReadinessHandler() echo.HandlerFunc {
 			}
 		}
 
-		response := map[string]interface{}{
+		response := map[string]any{
 			"ready":     ready,
 			"timestamp": time.Now(),
 		}
@@ -183,7 +183,7 @@ func (hs *HealthService) ReadinessHandler() echo.HandlerFunc {
 func (hs *HealthService) LivenessHandler() echo.HandlerFunc {
 	return func(c echo.Context) error {
 		// Простая проверка жизнеспособности - сервис отвечает
-		response := map[string]interface{}{
+		response := map[string]any{
 			"alive":     true,
 			"timestamp": time.Now(),
 			"uptime":    time.Since(hs.startTime).Seconds(),

@@ -79,7 +79,7 @@ func NewTemplateRenderer(templatesDir string) (*TemplateRenderer, error) {
 }
 
 // Render рендерит шаблон с данными
-func (t *TemplateRenderer) Render(w io.Writer, name string, data interface{}, _ echo.Context) error {
+func (t *TemplateRenderer) Render(w io.Writer, name string, data any, _ echo.Context) error {
 	return t.templates.ExecuteTemplate(w, name, data)
 }
 
@@ -109,14 +109,14 @@ func formatNumber(amount float64) string {
 }
 
 // formatDate форматирует дату
-func formatDate(_ interface{}) string {
+func formatDate(_ any) string {
 	// TODO: Реализовать форматирование даты
 	return "01.01.2024"
 }
 
 // createDict создает словарь для передачи в шаблон
-func createDict(values ...interface{}) map[string]interface{} {
-	dict := make(map[string]interface{})
+func createDict(values ...any) map[string]any {
+	dict := make(map[string]any)
 	for i := 0; i < len(values); i += 2 {
 		if i+1 < len(values) {
 			if key, ok := values[i].(string); ok {

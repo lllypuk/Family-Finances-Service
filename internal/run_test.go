@@ -312,8 +312,7 @@ func BenchmarkLoadConfigApplication(b *testing.B) {
 	b.Setenv("SERVER_PORT", "8080")
 	b.Setenv("LOG_LEVEL", "info")
 
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		_ = internal.LoadConfig()
 	}
 }
@@ -321,15 +320,13 @@ func BenchmarkLoadConfigApplication(b *testing.B) {
 func BenchmarkConfigIsProduction(b *testing.B) {
 	config := &internal.Config{Environment: "production"}
 
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		_ = config.IsProduction()
 	}
 }
 
 func BenchmarkContextCreation(b *testing.B) {
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		ctx, cancel := context.WithTimeout(context.Background(), internal.GracefulShutdownTimeout)
 		cancel()
 		_ = ctx

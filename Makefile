@@ -1,4 +1,4 @@
-.PHONY: build run test clean docker-up docker-down deps lint fmt pre-commit lint-fix observability-up observability-down observability-logs
+.PHONY: build run test test-all test-unit test-integration test-e2e test-performance clean docker-up docker-down deps lint fmt pre-commit lint-fix observability-up observability-down observability-logs
 
 # Переменные
 APP_NAME=family-budget-service
@@ -29,10 +29,35 @@ run-local:
 	 ENVIRONMENT=development \
 	 go run ./cmd/server/main.go
 
-# Тестирование
+# Тестирование (только internal/)
 test:
-	@echo "Running tests..."
+	@echo "Running unit tests (internal/ only)..."
+	@go test -v ./internal/...
+
+# Тестирование всех тестов
+test-all:
+	@echo "Running all tests..."
 	@go test -v ./...
+
+# Юнит тесты (internal/)
+test-unit:
+	@echo "Running unit tests..."
+	@go test -v ./internal/...
+
+# Интеграционные тесты
+test-integration:
+	@echo "Running integration tests..."
+	@go test -v ./tests/integration/...
+
+# E2E тесты
+test-e2e:
+	@echo "Running e2e tests..."
+	@go test -v ./tests/e2e/...
+
+# Тесты производительности
+test-performance:
+	@echo "Running performance tests..."
+	@go test -v ./tests/performance/...
 
 # Тестирование с покрытием
 test-coverage:
@@ -65,7 +90,7 @@ fmt:
 pre-commit:
 	@echo "Running pre-commit checks..."
 	@go fmt ./...
-	@go test -v ./...
+	@go test -v ./internal/...
 	@golangci-lint run --fix
 
 # Очистка
@@ -128,7 +153,12 @@ help:
 	@echo "  build            - Build the application"
 	@echo "  run              - Run the application"
 	@echo "  run-local        - Run with local environment variables"
-	@echo "  test             - Run tests"
+	@echo "  test             - Run unit tests (internal/ only)"
+	@echo "  test-all         - Run all tests"
+	@echo "  test-unit        - Run unit tests (internal/)"
+	@echo "  test-integration - Run integration tests (tests/integration/)"
+	@echo "  test-e2e         - Run e2e tests (tests/e2e/)"
+	@echo "  test-performance - Run performance tests (tests/performance/)"
 	@echo "  test-coverage    - Run tests with coverage report"
 	@echo "  deps             - Install dependencies"
 	@echo "  lint             - Run linter"
