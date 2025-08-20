@@ -2,7 +2,7 @@ package testhelpers
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"strconv"
 	"testing"
 	"time"
@@ -90,5 +90,11 @@ func SetupHTTPServer(t *testing.T) *TestHTTPServer {
 }
 
 func getRandomPort() int {
-	return rand.Intn(65535-1024) + 1024
+	const (
+		portRangeSize = 10000 // Port range size for random selection
+		basePort      = 30000 // Starting port for random range
+	)
+	//nolint:gosec // Using math/rand/v2 is acceptable for test port generation
+	r := rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
+	return r.IntN(portRangeSize) + basePort // Random port between 30000 and 39999
 }
