@@ -2,7 +2,8 @@ package testhelpers
 
 import (
 	"context"
-	"math/rand/v2"
+	"crypto/rand"
+	"math/big"
 	"strconv"
 	"testing"
 	"time"
@@ -94,7 +95,14 @@ func getRandomPort() int {
 		portRangeSize = 10000 // Port range size for random selection
 		basePort      = 30000 // Starting port for random range
 	)
-	//nolint:gosec // Using math/rand/v2 is acceptable for test port generation
-	r := rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
-	return r.IntN(portRangeSize) + basePort // Random port between 30000 and 39999
+
+	// Generate cryptographically secure random number
+	maxBig := big.NewInt(portRangeSize)
+	n, err := rand.Int(rand.Reader, maxBig)
+	if err != nil {
+		// Fallback to a deterministic port offset if random generation fails
+		const fallbackOffset = 8080
+		return basePort + fallbackOffset
+	}
+	return int(n.Int64()) + basePort // Random port between 30000 and 39999
 }
