@@ -67,7 +67,7 @@ func (m *MockUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
 func TestUserHandler_CreateUser(t *testing.T) {
 	tests := []struct {
 		name           string
-		requestBody    interface{}
+		requestBody    any
 		mockSetup      func(*MockUserRepository)
 		expectedStatus int
 		expectedBody   func(t *testing.T, body string)
@@ -308,7 +308,7 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 	tests := []struct {
 		name           string
 		userID         string
-		requestBody    interface{}
+		requestBody    any
 		mockSetup      func(*MockUserRepository)
 		expectedStatus int
 		expectedBody   func(t *testing.T, body string)

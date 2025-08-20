@@ -53,7 +53,7 @@ func TestNewHTTPServerWithObservability(t *testing.T) {
 	obsConfig := observability.DefaultConfig()
 	obsService, err := observability.NewService(obsConfig, "test-version")
 	require.NoError(t, err)
-	defer obsService.Shutdown(context.Background())
+	defer func() { _ = obsService.Shutdown(context.Background()) }()
 
 	// Execute
 	server := application.NewHTTPServerWithObservability(&repos.Repositories, config, obsService)
@@ -155,7 +155,7 @@ func TestHTTPServer_WithObservabilityRoutes(t *testing.T) {
 	obsConfig := observability.DefaultConfig()
 	obsService, err := observability.NewService(obsConfig, "test-version")
 	require.NoError(t, err)
-	defer obsService.Shutdown(context.Background())
+	defer func() { _ = obsService.Shutdown(context.Background()) }()
 
 	repos := NewMockRepositories()
 	config := &application.Config{Port: "8080", Host: "localhost"}

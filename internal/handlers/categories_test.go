@@ -77,7 +77,7 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		requestBody    interface{}
+		requestBody    any
 		mockSetup      func(*MockCategoryRepository)
 		expectedStatus int
 		expectedBody   func(t *testing.T, body string)
@@ -422,7 +422,7 @@ func TestCategoryHandler_UpdateCategory(t *testing.T) {
 	tests := []struct {
 		name           string
 		categoryID     string
-		requestBody    interface{}
+		requestBody    any
 		mockSetup      func(*MockCategoryRepository)
 		expectedStatus int
 		expectedBody   func(t *testing.T, body string)

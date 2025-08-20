@@ -100,7 +100,7 @@ func TestTemplateRenderer_Render(t *testing.T) {
 	e.Renderer = renderer
 
 	// Test data
-	data := map[string]interface{}{
+	data := map[string]any{
 		"Name":  "Test User",
 		"Count": 42,
 	}

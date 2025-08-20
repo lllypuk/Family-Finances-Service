@@ -428,6 +428,31 @@ linters:
       - common-false-positives
     # Excluding configuration per-path, per-linter, per-text and per-source.
     rules:
+      # General test exclusions for all test files and directories
+      - path: '(.+)_test\.go'
+        linters:
+          - dupl
+      - path: "tests/"
+        linters:
+          - gochecknoglobals
+          - noctx
+          - testpackage
+          - ineffassign
+          - gocognit
+          - cyclop
+          - funlen
+          - dupl
+          - revive
+          - unparam
+          - govet
+          - staticcheck
+          - wastedassign
+      # Exclude multiple linters for observability tests - they need internal access
+      - path: "internal/observability/"
+        linters:
+          - testpackage
+          - govet # Allow shadow variables in test setup
+          - revive # Allow unused parameters in test functions
       - source: "TODO"
         linters: [godot]
       - text: "should have a package comment"

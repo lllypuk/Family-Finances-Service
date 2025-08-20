@@ -1,6 +1,7 @@
 package transaction
 
 import (
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -65,10 +66,8 @@ func NewTransaction(
 }
 
 func (t *Transaction) AddTag(tag string) {
-	for _, existingTag := range t.Tags {
-		if existingTag == tag {
-			return // Тег уже существует
-		}
+	if slices.Contains(t.Tags, tag) {
+		return // Тег уже существует
 	}
 	t.Tags = append(t.Tags, tag)
 	t.UpdatedAt = time.Now()

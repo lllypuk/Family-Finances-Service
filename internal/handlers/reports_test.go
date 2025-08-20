@@ -128,7 +128,7 @@ func TestReportHandler_CreateReport_InvalidRequest(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		requestBody interface{}
+		requestBody any
 		expectedMsg string
 	}{
 		{
@@ -138,7 +138,7 @@ func TestReportHandler_CreateReport_InvalidRequest(t *testing.T) {
 		},
 		{
 			name: "Missing name",
-			requestBody: map[string]interface{}{
+			requestBody: map[string]any{
 				"type":       "expenses",
 				"period":     "monthly",
 				"family_id":  uuid.New().String(),
@@ -150,7 +150,7 @@ func TestReportHandler_CreateReport_InvalidRequest(t *testing.T) {
 		},
 		{
 			name: "Invalid type",
-			requestBody: map[string]interface{}{
+			requestBody: map[string]any{
 				"name":       "Test Report",
 				"type":       "invalid",
 				"period":     "monthly",
@@ -163,7 +163,7 @@ func TestReportHandler_CreateReport_InvalidRequest(t *testing.T) {
 		},
 		{
 			name: "Invalid period",
-			requestBody: map[string]interface{}{
+			requestBody: map[string]any{
 				"name":       "Test Report",
 				"type":       "expenses",
 				"period":     "invalid",
@@ -706,7 +706,7 @@ func BenchmarkReportHandler_CreateReport(b *testing.B) {
 	req := createValidReportRequest()
 	body, _ := json.Marshal(req)
 
-	for range b.N {
+	for b.Loop() {
 		e := echo.New()
 		httpReq := httptest.NewRequest(http.MethodPost, "/reports", bytes.NewBuffer(body))
 		httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -726,7 +726,7 @@ func BenchmarkReportHandler_GetReports(b *testing.B) {
 
 	familyID := uuid.New()
 
-	for range b.N {
+	for b.Loop() {
 		e := echo.New()
 		httpReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/reports?family_id=%s", familyID), nil)
 		rec := httptest.NewRecorder()

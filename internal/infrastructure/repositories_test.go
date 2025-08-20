@@ -180,7 +180,7 @@ func TestNewRepositories_MemoryUsage(t *testing.T) {
 	client, err := mongo.Connect(context.Background(), clientOpts)
 	require.NoError(t, err)
 
-	var repositories []interface{}
+	var repositories []any
 
 	for range numInstances {
 		database := client.Database("test")
@@ -269,7 +269,7 @@ func TestNewRepositories_ConcurrentAccess(t *testing.T) {
 		Database: database,
 	}
 
-	results := make(chan interface{}, numGoroutines)
+	results := make(chan any, numGoroutines)
 
 	// Create repositories concurrently
 	for range numGoroutines {
@@ -280,7 +280,7 @@ func TestNewRepositories_ConcurrentAccess(t *testing.T) {
 	}
 
 	// Collect results
-	var repositories []interface{}
+	var repositories []any
 	for range numGoroutines {
 		repo := <-results
 		repositories = append(repositories, repo)
@@ -302,8 +302,7 @@ func BenchmarkNewRepositories(b *testing.B) {
 		Database: database,
 	}
 
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		_ = infrastructure.NewRepositories(mongodb)
 	}
 }

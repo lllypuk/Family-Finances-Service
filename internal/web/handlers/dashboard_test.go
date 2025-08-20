@@ -17,9 +17,9 @@ import (
 // MockRenderer для тестирования без реальных шаблонов
 type MockRenderer struct{}
 
-func (m *MockRenderer) Render(_ io.Writer, name string, data interface{}, c echo.Context) error {
+func (m *MockRenderer) Render(_ io.Writer, name string, data any, c echo.Context) error {
 	// Простой mock - возвращаем JSON вместо HTML для тестов
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return c.JSON(http.StatusOK, map[string]any{
 		"template": name,
 		"data":     data,
 	})
@@ -458,8 +458,7 @@ func BenchmarkDashboardHandler_Dashboard(b *testing.B) {
 	e := echo.New()
 	e.Renderer = &MockRenderer{}
 
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
@@ -475,8 +474,7 @@ func BenchmarkDashboardHandler_DashboardStats(b *testing.B) {
 	e := echo.New()
 	e.Renderer = &MockRenderer{}
 
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		req := httptest.NewRequest(http.MethodGet, "/htmx/dashboard/stats", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)

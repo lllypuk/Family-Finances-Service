@@ -273,8 +273,8 @@ func (r *MetricsRegistry) Get() *Metrics {
 	return r.instance
 }
 
-// getDefaultMetrics возвращает единственный экземпляр метрик, используя sync.OnceValue
-func getDefaultMetrics() *Metrics {
+// GetDefaultMetrics возвращает единственный экземпляр метрик, используя sync.OnceValue
+func GetDefaultMetrics() *Metrics {
 	// Используем sync.OnceValue для ленивой инициализации без глобальных переменных
 	return sync.OnceValue(func() *Metrics {
 		m := NewMetrics()
@@ -287,17 +287,17 @@ func getDefaultMetrics() *Metrics {
 // В текущей реализации инициализация происходит лениво при первом обращении
 func InitMetrics() {
 	// Вызываем getDefaultMetrics для принудительной инициализации
-	_ = getDefaultMetrics()
+	_ = GetDefaultMetrics()
 }
 
 // RecordHTTPRequest глобальная функция для обратной совместимости
 func RecordHTTPRequest(method, endpoint, status string, duration float64) {
-	metrics := getDefaultMetrics()
+	metrics := GetDefaultMetrics()
 	metrics.RecordHTTPRequest(method, endpoint, status, duration)
 }
 
 // RecordHTTPError глобальная функция для обратной совместимости
 func RecordHTTPError(method, endpoint, errorType string) {
-	metrics := getDefaultMetrics()
+	metrics := GetDefaultMetrics()
 	metrics.RecordHTTPError(method, endpoint, errorType)
 }

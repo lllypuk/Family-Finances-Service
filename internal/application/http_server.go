@@ -213,6 +213,6 @@ type CustomValidator struct {
 }
 
 // Validate validates structs using go-playground/validator
-func (cv *CustomValidator) Validate(i interface{}) error {
+func (cv *CustomValidator) Validate(i any) error {
 	return cv.validator.Struct(i)
 }

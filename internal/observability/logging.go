@@ -67,7 +67,7 @@ func NewBusinessLogger(logger *slog.Logger) *BusinessLogger {
 func (bl *BusinessLogger) LogUserAction(
 	ctx context.Context,
 	userID, familyID, action string,
-	details map[string]interface{},
+	details map[string]any,
 ) {
 	logArgs := []any{
 		slog.String("domain", "user"),
@@ -106,7 +106,7 @@ func (bl *BusinessLogger) LogTransactionEvent(
 func (bl *BusinessLogger) LogBudgetEvent(
 	ctx context.Context,
 	budgetID, userID, familyID, eventType string,
-	details map[string]interface{},
+	details map[string]any,
 ) {
 	logArgs := []any{
 		slog.String("domain", "budget"),
@@ -128,7 +128,7 @@ func (bl *BusinessLogger) LogSecurityEvent(
 	ctx context.Context,
 	eventType, userID, ip, userAgent string,
 	success bool,
-	details map[string]interface{},
+	details map[string]any,
 ) {
 	logArgs := []any{
 		slog.String("domain", "security"),
@@ -199,7 +199,7 @@ func (bl *BusinessLogger) LogPerformanceMetric(
 	ctx context.Context,
 	operation string,
 	duration time.Duration,
-	metadata map[string]interface{},
+	metadata map[string]any,
 ) {
 	logArgs := []any{
 		slog.String("domain", "performance"),

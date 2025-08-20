@@ -78,7 +78,7 @@ func TestUserHandler_Integration(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 
-		var response handlers.APIResponse[interface{}]
+		var response handlers.APIResponse[any]
 		err = json.Unmarshal(rec.Body.Bytes(), &response)
 		require.NoError(t, err)
 

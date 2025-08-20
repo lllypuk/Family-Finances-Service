@@ -333,8 +333,7 @@ func TestMongoDB_IndexCreation(t *testing.T) {
 func BenchmarkMongoDB_ClientCreation(b *testing.B) {
 	uri := "mongodb://localhost:27017"
 
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		clientOptions := options.Client().ApplyURI(uri)
 		clientOptions.SetMaxPoolSize(infrastructure.MaxConnectionPoolSize)
 		clientOptions.SetMinPoolSize(infrastructure.MinConnectionPoolSize)
@@ -355,15 +354,13 @@ func BenchmarkMongoDB_CollectionAccess(b *testing.B) {
 		Database: database,
 	}
 
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		_ = mongodb.Collection("users")
 	}
 }
 
 func BenchmarkMongoDB_ContextCreation(b *testing.B) {
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		ctx, cancel := context.WithTimeout(context.Background(), infrastructure.MongoConnectTimeout)
 		cancel()
 		_ = ctx

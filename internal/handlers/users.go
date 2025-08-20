@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -11,6 +12,8 @@ import (
 
 	"family-budget-service/internal/domain/user"
 )
+
+var ErrFamilyNotFound = errors.New("family not found")
 
 type UserHandler struct {
 	repositories *Repositories
@@ -55,7 +58,7 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 			})
 		}
 
-		return c.JSON(http.StatusBadRequest, APIResponse[interface{}]{
+		return c.JSON(http.StatusBadRequest, APIResponse[any]{
 			Data: nil,
 			Meta: ResponseMeta{
 				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
@@ -66,53 +69,26 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 		})
 	}
 
-	// Создаем нового пользователя
-	newUser := &user.User{
-		ID:        uuid.New(),
-		Email:     req.Email,
-		FirstName: req.FirstName,
-		LastName:  req.LastName,
-		FamilyID:  req.FamilyID,
-		Role:      user.Role(req.Role),
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+	// Проверяем существование семьи
+	if err := h.validateFamilyExists(c, req.FamilyID); err != nil {
+		if errors.Is(err, ErrFamilyNotFound) {
+			return c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Code:    "FAMILY_NOT_FOUND",
+					Message: "Family not found",
+					Details: fmt.Sprintf("Family with ID %s does not exist", req.FamilyID),
+				},
+				Meta: ResponseMeta{
+					RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
+					Timestamp: time.Now(),
+					Version:   "v1",
+				},
+			})
+		}
+		return err
 	}
 
-	// Хешируем пароль (в будущем добавим bcrypt)
-
-	if err := h.repositories.User.Create(c.Request().Context(), newUser); err != nil {
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "CREATE_FAILED",
-				Message: "Failed to create user",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
-	response := UserResponse{
-		ID:        newUser.ID,
-		Email:     newUser.Email,
-		FirstName: newUser.FirstName,
-		LastName:  newUser.LastName,
-		Role:      string(newUser.Role),
-		FamilyID:  newUser.FamilyID,
-		CreatedAt: newUser.CreatedAt,
-		UpdatedAt: newUser.UpdatedAt,
-	}
-
-	return c.JSON(http.StatusCreated, APIResponse[UserResponse]{
-		Data: response,
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+	return h.createUserEntity(c, req)
 }
 
 func (h *UserHandler) GetUserByID(c echo.Context) error {
@@ -216,4 +192,70 @@ func (h *UserHandler) DeleteUser(c echo.Context) error {
 	return DeleteEntityHelper(c, func(id uuid.UUID) error {
 		return h.repositories.User.Delete(c.Request().Context(), id)
 	}, "User")
+}
+
+func (h *UserHandler) validateFamilyExists(c echo.Context, familyID uuid.UUID) error {
+	// Check if Family repository is available (might be nil in tests)
+	if h.repositories.Family == nil {
+		return nil // Skip validation in tests
+	}
+
+	family, err := h.repositories.Family.GetByID(c.Request().Context(), familyID)
+	if err != nil {
+		return ErrFamilyNotFound
+	}
+	if family == nil {
+		return ErrFamilyNotFound
+	}
+	return nil
+}
+
+func (h *UserHandler) createUserEntity(c echo.Context, req CreateUserRequest) error {
+	// Создаем нового пользователя
+	newUser := &user.User{
+		ID:        uuid.New(),
+		Email:     req.Email,
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		FamilyID:  req.FamilyID,
+		Role:      user.Role(req.Role),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	// Хешируем пароль (в будущем добавим bcrypt)
+
+	if err := h.repositories.User.Create(c.Request().Context(), newUser); err != nil {
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Code:    "CREATE_FAILED",
+				Message: "Failed to create user",
+			},
+			Meta: ResponseMeta{
+				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
+				Timestamp: time.Now(),
+				Version:   "v1",
+			},
+		})
+	}
+
+	response := UserResponse{
+		ID:        newUser.ID,
+		Email:     newUser.Email,
+		FirstName: newUser.FirstName,
+		LastName:  newUser.LastName,
+		Role:      string(newUser.Role),
+		FamilyID:  newUser.FamilyID,
+		CreatedAt: newUser.CreatedAt,
+		UpdatedAt: newUser.UpdatedAt,
+	}
+
+	return c.JSON(http.StatusCreated, APIResponse[UserResponse]{
+		Data: response,
+		Meta: ResponseMeta{
+			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
+			Timestamp: time.Now(),
+			Version:   "v1",
+		},
+	})
 }

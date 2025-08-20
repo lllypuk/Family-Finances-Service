@@ -410,7 +410,7 @@ func BenchmarkCSRFProtection_GET(b *testing.B) {
 
 	handler := csrfMiddleware(nextHandler)
 
-	for range b.N {
+	for b.Loop() {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
@@ -436,8 +436,7 @@ func BenchmarkCSRFProtection_POST_WithToken(b *testing.B) {
 
 	token, _ := middleware.GetCSRFToken(getCtx)
 
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		form := url.Values{}
 		form.Add("_token", token)
 
@@ -459,7 +458,7 @@ func BenchmarkCSRFProtection_POST_WithToken(b *testing.B) {
 func BenchmarkGetCSRFToken(b *testing.B) {
 	e, _ := setupCSRFTest()
 
-	for range b.N {
+	for b.Loop() {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)

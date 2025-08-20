@@ -100,9 +100,12 @@ func TestDoHealthCheck_Timeout(t *testing.T) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+"/health", nil)
 	require.NoError(t, err)
 
-	_, err = client.Do(req)
+	resp, err := client.Do(req)
 	// Should get a context deadline exceeded error
 	require.Error(t, err)
+	if resp != nil {
+		resp.Body.Close()
+	}
 	assert.Contains(t, err.Error(), "context deadline exceeded")
 }
 
@@ -281,8 +284,11 @@ func TestHealthCheck_NetworkErrors(t *testing.T) {
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, tc.url, nil)
 			require.NoError(t, err)
 
-			_, err = client.Do(req)
+			resp, err := client.Do(req)
 			require.Error(t, err)
+			if resp != nil {
+				resp.Body.Close()
+			}
 		})
 	}
 }
@@ -365,15 +371,13 @@ func TestMain_ArgumentParsing(t *testing.T) {
 func BenchmarkHTTPRequestCreation(b *testing.B) {
 	ctx := context.Background()
 
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		_, _ = http.NewRequestWithContext(ctx, http.MethodGet, "http://localhost:8080/health", nil)
 	}
 }
 
 func BenchmarkContextCreation(b *testing.B) {
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		ctx, cancel := context.WithTimeout(context.Background(), HealthCheckTimeout)
 		cancel()
 		_ = ctx
@@ -389,8 +393,7 @@ func BenchmarkHealthCheckSuccess(b *testing.B) {
 
 	client := &http.Client{}
 
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		ctx, cancel := context.WithTimeout(context.Background(), HealthCheckTimeout)
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+"/health", nil)
 		resp, _ := client.Do(req)

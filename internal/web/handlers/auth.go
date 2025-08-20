@@ -34,7 +34,7 @@ func (h *AuthHandler) LoginPage(c echo.Context) error {
 		return err
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"CSRFToken": csrfToken,
 		"Title":     "Sign In",
 	}
@@ -114,7 +114,7 @@ func (h *AuthHandler) RegisterPage(c echo.Context) error {
 		return err
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"CSRFToken": csrfToken,
 		"Title":     "Create Family Account",
 	}
@@ -209,7 +209,7 @@ func (h *AuthHandler) Logout(c echo.Context) error {
 func (h *AuthHandler) loginError(c echo.Context, message string, fieldErrors map[string]string) error {
 	csrfToken, _ := middleware.GetCSRFToken(c)
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"CSRFToken":   csrfToken,
 		"Title":       "Sign In",
 		"Error":       message,
@@ -229,7 +229,7 @@ func (h *AuthHandler) loginError(c echo.Context, message string, fieldErrors map
 func (h *AuthHandler) registerError(c echo.Context, message string, fieldErrors map[string]string) error {
 	csrfToken, _ := middleware.GetCSRFToken(c)
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"CSRFToken":   csrfToken,
 		"Title":       "Create Family Account",
 		"Error":       message,

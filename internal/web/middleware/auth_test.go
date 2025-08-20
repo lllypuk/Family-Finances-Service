@@ -481,7 +481,7 @@ func BenchmarkRequireAuth(b *testing.B) {
 
 	handler := authMiddleware(nextHandler)
 
-	for range b.N {
+	for b.Loop() {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
@@ -506,7 +506,7 @@ func BenchmarkRequireRole(b *testing.B) {
 
 	handler := roleMiddleware(nextHandler)
 
-	for range b.N {
+	for b.Loop() {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)

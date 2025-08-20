@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"slices"
 
 	"github.com/labstack/echo/v4"
 
@@ -115,12 +116,7 @@ func validateUserAccess(c echo.Context) (*SessionData, error) {
 
 // hasRequiredRole проверяет наличие требуемой роли
 func hasRequiredRole(userRole user.Role, requiredRoles []user.Role) bool {
-	for _, role := range requiredRoles {
-		if userRole == role {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(requiredRoles, userRole)
 }
 
 // handleForbiddenAccess обрабатывает случай недостатка прав

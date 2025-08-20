@@ -1,4 +1,4 @@
-.PHONY: build run test clean docker-up docker-down deps lint fmt pre-commit lint-fix observability-up observability-down observability-logs
+.PHONY: build run test test-all test-unit test-integration test-e2e test-performance clean docker-up docker-down deps lint fmt pre-commit lint-fix observability-up observability-down observability-logs
 
 # Переменные
 APP_NAME=family-budget-service
@@ -29,16 +29,42 @@ run-local:
 	 ENVIRONMENT=development \
 	 go run ./cmd/server/main.go
 
-# Тестирование
+# Основные тесты (исключая производительность)
 test:
-	@echo "Running tests..."
+	@echo "Running tests (excluding performance)..."
+	@go test -v $$(go list ./... | grep -v '/tests/performance')
+
+# Юнит тесты (internal/)
+test-unit:
+	@echo "Running unit tests..."
+	@go test -v ./internal/...
+
+# Инgo test -v $$(go list ./... | grep -v '/tests/performance')теграционные тесты
+test-integration:
+	@echo "Running integration tests..."
+	@go test -v ./tests/integration/...
+
+# E2E тесты
+test-e2e:
+	@echo "Running e2e tests..."
+	@go test -v ./tests/e2e/...
+
+# Тесты производительности
+test-performance:
+	@echo "Running performance tests..."
+	@go test -v ./tests/performance/...
+
+# Все тесты включая производительность
+test-all:
+	@echo "Running all tests including performance..."
 	@go test -v ./...
 
-# Тестирование с покрытием
+# Тесты с покрытием (исключая производительность)
 test-coverage:
-	@echo "Running tests with coverage..."
-	@go test -v -coverprofile=coverage.out ./...
+	@echo "Running tests with coverage (excluding performance)..."
+	@go test -coverprofile=coverage.out $$(go list ./... | grep -v '/tests/performance')
 	@go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
 
 # Установка зависимостей
 deps:
@@ -65,7 +91,7 @@ fmt:
 pre-commit:
 	@echo "Running pre-commit checks..."
 	@go fmt ./...
-	@go test -v ./...
+	@go test -v $$(go list ./... | grep -v '/tests/performance')
 	@golangci-lint run --fix
 
 # Очистка
@@ -128,7 +154,12 @@ help:
 	@echo "  build            - Build the application"
 	@echo "  run              - Run the application"
 	@echo "  run-local        - Run with local environment variables"
-	@echo "  test             - Run tests"
+	@echo "  test             - Run unit tests (internal/ only)"
+	@echo "  test-all         - Run all tests"
+	@echo "  test-unit        - Run unit tests (internal/)"
+	@echo "  test-integration - Run integration tests (tests/integration/)"
+	@echo "  test-e2e         - Run e2e tests (tests/e2e/)"
+	@echo "  test-performance - Run performance tests (tests/performance/)"
 	@echo "  test-coverage    - Run tests with coverage report"
 	@echo "  deps             - Install dependencies"
 	@echo "  lint             - Run linter"

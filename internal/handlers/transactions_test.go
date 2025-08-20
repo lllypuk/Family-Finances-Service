@@ -173,7 +173,7 @@ func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		requestBody interface{}
+		requestBody any
 		expectedMsg string
 	}{
 		{
@@ -183,7 +183,7 @@ func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
 		},
 		{
 			name: "Missing amount",
-			requestBody: map[string]interface{}{
+			requestBody: map[string]any{
 				"type":        "expense",
 				"description": "Test",
 				"category_id": uuid.New().String(),
@@ -195,7 +195,7 @@ func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
 		},
 		{
 			name: "Negative amount",
-			requestBody: map[string]interface{}{
+			requestBody: map[string]any{
 				"amount":      -100.0,
 				"type":        "expense",
 				"description": "Test",
@@ -208,7 +208,7 @@ func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
 		},
 		{
 			name: "Invalid type",
-			requestBody: map[string]interface{}{
+			requestBody: map[string]any{
 				"amount":      100.0,
 				"type":        "invalid",
 				"description": "Test",
@@ -666,7 +666,7 @@ func BenchmarkTransactionHandler_CreateTransaction(b *testing.B) {
 	req := createValidTransactionRequest()
 	body, _ := json.Marshal(req)
 
-	for range b.N {
+	for b.Loop() {
 		e := echo.New()
 		httpReq := httptest.NewRequest(http.MethodPost, "/transactions", bytes.NewBuffer(body))
 		httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -686,7 +686,7 @@ func BenchmarkTransactionHandler_GetTransactions(b *testing.B) {
 
 	familyID := uuid.New()
 
-	for range b.N {
+	for b.Loop() {
 		e := echo.New()
 		httpReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/transactions?family_id=%s", familyID), nil)
 		rec := httptest.NewRecorder()

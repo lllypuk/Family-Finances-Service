@@ -223,14 +223,14 @@ func TestEmailValidation_EdgeCases(t *testing.T) {
 // Benchmark tests to ensure validation doesn't significantly impact performance
 func BenchmarkValidateEmail(b *testing.B) {
 	email := "test@example.com"
-	for range b.N {
+	for b.Loop() {
 		userRepo.ValidateEmail(email)
 	}
 }
 
 func BenchmarkSanitizeEmail(b *testing.B) {
 	email := "  TEST@EXAMPLE.COM  "
-	for range b.N {
+	for b.Loop() {
 		userRepo.SanitizeEmail(email)
 	}
 }
