@@ -2,6 +2,8 @@ package testhelpers
 
 import (
 	"context"
+	"math/rand"
+	"strconv"
 	"testing"
 	"time"
 
@@ -23,6 +25,7 @@ type TestHTTPServer struct {
 	Server  *application.HTTPServer
 	MongoDB *MongoDBContainer
 	Repos   *handlers.Repositories
+	Port    string
 }
 
 // SetupHTTPServer creates a test HTTP server with MongoDB testcontainers
@@ -50,9 +53,11 @@ func SetupHTTPServer(t *testing.T) *TestHTTPServer {
 		Report:      reportRepository,
 	}
 
+	rndPort := getRandomPort()
+
 	// Create HTTP server config
 	config := &application.Config{
-		Port: "8080",
+		Port: strconv.Itoa(rndPort),
 		Host: "localhost",
 	}
 
@@ -80,5 +85,10 @@ func SetupHTTPServer(t *testing.T) *TestHTTPServer {
 		Server:  server,
 		MongoDB: mongoContainer,
 		Repos:   repositories,
+		Port:    config.Port,
 	}
+}
+
+func getRandomPort() int {
+	return rand.Intn(65535-1024) + 1024
 }

@@ -23,7 +23,7 @@ func TestTransactionWorkflow(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	defer testServer.MongoDB.CleanupCollections(t)
 
-	baseURL := "http://localhost:8080/api/v1"
+	baseURL := fmt.Sprintf("http://localhost:%s/api/v1", testServer.Port)
 
 	var familyID, userID, categoryID, transactionID string
 
@@ -280,7 +280,7 @@ func TestTransactionValidation(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	defer testServer.MongoDB.CleanupCollections(t)
 
-	baseURL := "http://localhost:8080/api/v1"
+	baseURL := fmt.Sprintf("http://localhost:%s/api/v1", testServer.Port)
 
 	var familyID, userID, categoryID string
 
@@ -462,7 +462,7 @@ func TestTransactionConcurrency(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	defer testServer.MongoDB.CleanupCollections(t)
 
-	baseURL := "http://localhost:8080/api/v1"
+	baseURL := fmt.Sprintf("http://localhost:%s/api/v1", testServer.Port)
 
 	var familyID, userID, categoryID string
 
@@ -600,7 +600,7 @@ func TestTransactionReporting(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	defer testServer.MongoDB.CleanupCollections(t)
 
-	baseURL := "http://localhost:8080/api/v1"
+	baseURL := fmt.Sprintf("http://localhost:%s/api/v1", testServer.Port)
 
 	var familyID, userID, categoryID string
 

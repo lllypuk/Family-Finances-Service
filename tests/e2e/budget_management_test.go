@@ -23,7 +23,7 @@ func TestBudgetManagementWorkflow(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	defer testServer.MongoDB.CleanupCollections(t)
 
-	baseURL := "http://localhost:8080/api/v1"
+	baseURL := fmt.Sprintf("http://localhost:%s/api/v1", testServer.Port)
 
 	var familyID, userID, categoryID, budgetID string
 
@@ -267,7 +267,7 @@ func TestMultipleBudgetCategories(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	defer testServer.MongoDB.CleanupCollections(t)
 
-	baseURL := "http://localhost:8080/api/v1"
+	baseURL := fmt.Sprintf("http://localhost:%s/api/v1", testServer.Port)
 
 	var familyID, userID string
 	var categoryIDs []string
@@ -543,7 +543,7 @@ func TestBudgetPeriods(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	defer testServer.MongoDB.CleanupCollections(t)
 
-	baseURL := "http://localhost:8080/api/v1"
+	baseURL := fmt.Sprintf("http://localhost:%s/api/v1", testServer.Port)
 
 	var familyID, categoryID string
 
@@ -691,7 +691,7 @@ func TestBudgetReporting(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	defer testServer.MongoDB.CleanupCollections(t)
 
-	baseURL := "http://localhost:8080/api/v1"
+	baseURL := fmt.Sprintf("http://localhost:%s/api/v1", testServer.Port)
 
 	var familyID, userID, categoryID string
 	var budgetID string // Will be assigned in nested test functions

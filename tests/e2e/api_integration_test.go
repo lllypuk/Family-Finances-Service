@@ -37,7 +37,7 @@ func TestCompleteAPIWorkflow(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	defer testServer.MongoDB.CleanupCollections(t)
 
-	baseURL := "http://localhost:8080/api/v1"
+	baseURL := fmt.Sprintf("http://localhost:%s/api/v1", testServer.Port)
 
 	// Test data
 	familyData := map[string]any{
@@ -309,7 +309,7 @@ func TestConcurrentAPIAccess(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	defer testServer.MongoDB.CleanupCollections(t)
 
-	baseURL := "http://localhost:8080/api/v1"
+	baseURL := fmt.Sprintf("http://localhost:%s/api/v1", testServer.Port)
 
 	// Create test family first
 	familyData := map[string]any{
@@ -377,7 +377,7 @@ func TestDataConsistency(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	defer testServer.MongoDB.CleanupCollections(t)
 
-	baseURL := "http://localhost:8080/api/v1"
+	baseURL := fmt.Sprintf("http://localhost:%s/api/v1", testServer.Port)
 
 	t.Run("BudgetTransactionConsistency", func(t *testing.T) {
 		// Create family
@@ -496,7 +496,7 @@ func TestErrorHandling(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	defer testServer.MongoDB.CleanupCollections(t)
 
-	baseURL := "http://localhost:8080/api/v1"
+	baseURL := fmt.Sprintf("http://localhost:%s/api/v1", testServer.Port)
 
 	t.Run("InvalidDataHandling", func(t *testing.T) {
 		// Test invalid family creation

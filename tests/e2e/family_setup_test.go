@@ -23,7 +23,7 @@ func TestFamilySetupWorkflow(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	defer testServer.MongoDB.CleanupCollections(t)
 
-	baseURL := "http://localhost:8080/api/v1"
+	baseURL := fmt.Sprintf("http://localhost:%s/api/v1", testServer.Port)
 
 	t.Run("CompleteFamilySetup", func(t *testing.T) {
 		var familyID string
@@ -440,7 +440,7 @@ func TestMultiFamilyIsolation(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	defer testServer.MongoDB.CleanupCollections(t)
 
-	baseURL := "http://localhost:8080/api/v1"
+	baseURL := fmt.Sprintf("http://localhost:%s/api/v1", testServer.Port)
 
 	var family1ID, family2ID string
 	var user1ID, user2ID string

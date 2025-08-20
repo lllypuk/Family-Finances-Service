@@ -62,7 +62,7 @@ test-all:
 # Тесты с покрытием (исключая производительность)
 test-coverage:
 	@echo "Running tests with coverage (excluding performance)..."
-	@go test -v -coverprofile=coverage.out $$(go list ./... | grep -v '/tests/performance')
+	@go test -coverprofile=coverage.out $$(go list ./... | grep -v '/tests/performance')
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
