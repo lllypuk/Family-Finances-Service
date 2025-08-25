@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"family-budget-service/internal/handlers"
+	"family-budget-service/internal/application/handlers"
 	webHandlers "family-budget-service/internal/web/handlers"
 )
 

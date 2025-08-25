@@ -2,6 +2,9 @@ package testhelpers
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -13,7 +16,16 @@ import (
 
 const (
 	// TestMongoTimeout timeout for test MongoDB operations
-	TestMongoTimeout = 10 * time.Second
+	TestMongoTimeout          = 10 * time.Second
+	TwoSecondsMongoTimeout    = 2 * time.Second
+	ThirtySecondsMongoTimeout = 30 * time.Second
+)
+
+var (
+	// Global MongoDB container for reuse across tests
+	globalMongoContainer *MongoDBContainer //nolint:gochecknoglobals // reused in tests
+	containerMutex       sync.RWMutex      //nolint:gochecknoglobals // reused in tests
+	initOnce             sync.Once         //nolint:gochecknoglobals // reused in tests
 )
 
 // MongoDBContainer wraps the testcontainers MongoDB instance
@@ -25,7 +37,127 @@ type MongoDBContainer struct {
 }
 
 // SetupMongoDB creates a new MongoDB testcontainer and returns a configured client
+// For faster tests, it can reuse an existing container if REUSE_MONGO_CONTAINER=true
 func SetupMongoDB(t *testing.T) *MongoDBContainer {
+	t.Helper()
+
+	// Check if we should reuse container
+	if os.Getenv("REUSE_MONGO_CONTAINER") == "true" {
+		return GetOrCreateSharedMongoDB(t)
+	}
+
+	// Original behavior - create new container per test
+	return createNewMongoContainer(t)
+}
+
+// GetOrCreateSharedMongoDB returns a shared MongoDB container, creating it if necessary
+func GetOrCreateSharedMongoDB(t *testing.T) *MongoDBContainer {
+	t.Helper()
+
+	containerMutex.RLock()
+	if globalMongoContainer != nil {
+		// Test connection to ensure container is still alive
+		ctx, cancel := context.WithTimeout(context.Background(), TwoSecondsMongoTimeout)
+		defer cancel()
+
+		if err := globalMongoContainer.Client.Ping(ctx, nil); err == nil {
+			// Container is alive, create a new database for this test
+			testDB := globalMongoContainer.Client.Database(fmt.Sprintf("testdb_%d", time.Now().UnixNano()))
+			containerMutex.RUnlock()
+
+			// Cleanup only the test database, not the container
+			t.Cleanup(func() {
+				ctx = context.Background()
+				if dropErr := testDB.Drop(ctx); dropErr != nil {
+					t.Logf("Failed to drop test database: %v", dropErr)
+				}
+			})
+
+			return &MongoDBContainer{
+				Container: globalMongoContainer.Container,
+				URI:       globalMongoContainer.URI,
+				Client:    globalMongoContainer.Client,
+				Database:  testDB,
+			}
+		}
+
+		// Container is dead, need to recreate
+		globalMongoContainer = nil
+	}
+	containerMutex.RUnlock()
+
+	containerMutex.Lock()
+	defer containerMutex.Unlock()
+
+	// Double-check pattern
+	if globalMongoContainer != nil {
+		testDB := globalMongoContainer.Client.Database(fmt.Sprintf("testdb_%d", time.Now().UnixNano()))
+		t.Cleanup(func() {
+			ctx := context.Background()
+			if dropErr := testDB.Drop(ctx); dropErr != nil {
+				t.Logf("Failed to drop test database: %v", dropErr)
+			}
+		})
+
+		return &MongoDBContainer{
+			Container: globalMongoContainer.Container,
+			URI:       globalMongoContainer.URI,
+			Client:    globalMongoContainer.Client,
+			Database:  testDB,
+		}
+	}
+
+	// Create new shared container
+	initOnce.Do(func() {
+		ctx := context.Background()
+
+		mongoContainer, err := mongodb.Run(ctx,
+			"mongodb/mongodb-community-server:8.0-ubi8",
+			mongodb.WithUsername("testuser"),
+			mongodb.WithPassword("testpass"),
+		)
+		require.NoError(t, err)
+
+		uri, err := mongoContainer.ConnectionString(ctx)
+		require.NoError(t, err)
+
+		client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+		require.NoError(t, err)
+
+		// Test the connection
+		ctxTimeout, cancel := context.WithTimeout(ctx, TestMongoTimeout)
+		defer cancel()
+
+		err = client.Ping(ctxTimeout, nil)
+		require.NoError(t, err)
+
+		globalMongoContainer = &MongoDBContainer{
+			Container: mongoContainer,
+			URI:       uri,
+			Client:    client,
+			Database:  nil, // Will be set per test
+		}
+	})
+
+	testDB := globalMongoContainer.Client.Database(fmt.Sprintf("testdb_%d", time.Now().UnixNano()))
+
+	t.Cleanup(func() {
+		ctx := context.Background()
+		if dropErr := testDB.Drop(ctx); dropErr != nil {
+			t.Logf("Failed to drop test database: %v", dropErr)
+		}
+	})
+
+	return &MongoDBContainer{
+		Container: globalMongoContainer.Container,
+		URI:       globalMongoContainer.URI,
+		Client:    globalMongoContainer.Client,
+		Database:  testDB,
+	}
+}
+
+// createNewMongoContainer creates a new container for each test (original behavior)
+func createNewMongoContainer(t *testing.T) *MongoDBContainer {
 	t.Helper()
 
 	ctx := context.Background()
@@ -72,6 +204,27 @@ func SetupMongoDB(t *testing.T) *MongoDBContainer {
 		Client:    client,
 		Database:  database,
 	}
+}
+
+// CleanupSharedContainer terminates the shared container (call this from TestMain)
+func CleanupSharedContainer() error {
+	containerMutex.Lock()
+	defer containerMutex.Unlock()
+
+	if globalMongoContainer != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), ThirtySecondsMongoTimeout)
+		defer cancel()
+
+		if globalMongoContainer.Client != nil {
+			_ = globalMongoContainer.Client.Disconnect(ctx)
+		}
+
+		if globalMongoContainer.Container != nil {
+			return globalMongoContainer.Container.Terminate(ctx)
+		}
+	}
+
+	return nil
 }
 
 // CleanupCollections drops all collections in the test database

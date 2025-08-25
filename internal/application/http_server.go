@@ -11,7 +11,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 
-	"family-budget-service/internal/handlers"
+	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/observability"
 	"family-budget-service/internal/web"
 )

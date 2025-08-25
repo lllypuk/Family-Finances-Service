@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"family-budget-service/internal/application"
-	"family-budget-service/internal/handlers"
+	"family-budget-service/internal/application/handlers"
 	budgetRepo "family-budget-service/internal/infrastructure/budget"
 	categoryRepo "family-budget-service/internal/infrastructure/category"
 	reportRepo "family-budget-service/internal/infrastructure/report"

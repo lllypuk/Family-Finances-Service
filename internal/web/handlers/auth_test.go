@@ -18,8 +18,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 
+	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/user"
-	"family-budget-service/internal/handlers"
 	webHandlers "family-budget-service/internal/web/handlers"
 	"family-budget-service/internal/web/middleware"
 )

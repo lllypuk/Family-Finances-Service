@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"family-budget-service/internal/application"
-	"family-budget-service/internal/handlers"
+	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/infrastructure"
 	"family-budget-service/internal/observability"
 )

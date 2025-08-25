@@ -1,4 +1,4 @@
-package repositories
+package handlers
 
 import (
 	"context"
@@ -11,6 +11,15 @@ import (
 
 	"github.com/google/uuid"
 )
+
+type Repositories struct {
+	User        UserRepository
+	Family      FamilyRepository
+	Category    CategoryRepository
+	Transaction TransactionRepository
+	Budget      BudgetRepository
+	Report      ReportRepository
+}
 
 // UserRepository определяет операции с пользователями
 type UserRepository interface {
