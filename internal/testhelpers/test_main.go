@@ -1,6 +1,7 @@
 package testhelpers
 
 import (
+	"log/slog"
 	"os"
 	"testing"
 )
@@ -9,12 +10,15 @@ import (
 // Use this in TestMain functions of test packages that need MongoDB
 //
 // Example usage:
-//   func TestMain(m *testing.M) {
-//       testhelpers.TestMainWithSharedMongo(m)
-//   }
+//
+//	func TestMain(m *testing.M) {
+//	    testhelpers.TestMainWithSharedMongo(m)
+//	}
 func TestMainWithSharedMongo(m *testing.M) {
 	// Set environment variable to enable container reuse
-	os.Setenv("REUSE_MONGO_CONTAINER", "true")
+	if err := os.Setenv("REUSE_MONGO_CONTAINER", "true"); err != nil {
+		slog.String("testhelpers: failed to set REUSE_MONGO_CONTAINER: %v", err.Error())
+	}
 
 	// Run tests
 	code := m.Run()
@@ -34,9 +38,9 @@ func TestMainWithSharedMongo(m *testing.M) {
 func TestMainWithNewMongo(m *testing.M) {
 	// Ensure we don't reuse containers
 	os.Unsetenv("REUSE_MONGO_CONTAINER")
-	
+
 	// Run tests
 	code := m.Run()
-	
+
 	os.Exit(code)
 }
