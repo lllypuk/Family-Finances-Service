@@ -52,7 +52,7 @@ jobs:
           govulncheck ./...
 
       - name: Run tests
-        run: make test-coverage
+        run: make test-coverage-fast
 
       - name: Check test coverage
         run: |

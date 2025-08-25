@@ -34,20 +34,40 @@ test:
 	@echo "Running tests (excluding performance)..."
 	@go test -v $$(go list ./... | grep -v '/tests/performance')
 
-# Юнит тесты (internal/)
-test-unit:
-	@echo "Running unit tests..."
-	@go test -v ./internal/...
+# Быстрые тесты с переиспользованием MongoDB контейнера
+test-fast:
+	@echo "Running fast tests with shared MongoDB container..."
+	@REUSE_MONGO_CONTAINER=true go test -v $$(go list ./... | grep -v '/tests/performance')
 
-# Инgo test -v $$(go list ./... | grep -v '/tests/performance')теграционные тесты
+# Юнит тесты без контейнеров (только internal/, исключая integration тесты)
+test-unit:
+	@echo "Running unit tests without containers..."
+	@go test -v $$(go list ./internal/... | grep -v 'infrastructure')
+
+# Юнит тесты с быстрыми контейнерами
+test-unit-fast:
+	@echo "Running unit tests with fast containers..."
+	@REUSE_MONGO_CONTAINER=true go test -v ./internal/...
+
+# Интеграционные тесты
 test-integration:
 	@echo "Running integration tests..."
 	@go test -v ./tests/integration/...
+
+# Интеграционные тесты с переиспользованием контейнера
+test-integration-fast:
+	@echo "Running integration tests with shared container..."
+	@REUSE_MONGO_CONTAINER=true go test -v ./tests/integration/...
 
 # E2E тесты
 test-e2e:
 	@echo "Running e2e tests..."
 	@go test -v ./tests/e2e/...
+
+# E2E тесты с переиспользованием контейнера
+test-e2e-fast:
+	@echo "Running e2e tests with shared container..."
+	@REUSE_MONGO_CONTAINER=true go test -v ./tests/e2e/...
 
 # Тесты производительности
 test-performance:
@@ -65,6 +85,19 @@ test-coverage:
 	@go test -coverprofile=coverage.out $$(go list ./... | grep -v '/tests/performance')
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
+
+# Быстрые тесты с покрытием и переиспользованием контейнера
+test-coverage-fast:
+	@echo "Running fast tests with coverage and shared MongoDB container..."
+	@REUSE_MONGO_CONTAINER=true go test -coverprofile=coverage.out $$(go list ./... | grep -v '/tests/performance')
+	@go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
+
+# CI-оптимизированные тесты (параллельные + fast)
+test-ci:
+	@echo "Running CI-optimized tests..."
+	@REUSE_MONGO_CONTAINER=true go test -short -race -coverprofile=coverage.out $$(go list ./... | grep -v '/tests/performance')
+	@go tool cover -html=coverage.out -o coverage.html
 
 # Установка зависимостей
 deps:
@@ -154,13 +187,19 @@ help:
 	@echo "  build            - Build the application"
 	@echo "  run              - Run the application"
 	@echo "  run-local        - Run with local environment variables"
-	@echo "  test             - Run unit tests (internal/ only)"
-	@echo "  test-all         - Run all tests"
-	@echo "  test-unit        - Run unit tests (internal/)"
-	@echo "  test-integration - Run integration tests (tests/integration/)"
-	@echo "  test-e2e         - Run e2e tests (tests/e2e/)"
-	@echo "  test-performance - Run performance tests (tests/performance/)"
+	@echo "  test             - Run tests (excluding performance)"
+	@echo "  test-fast        - Run fast tests with shared MongoDB container"
+	@echo "  test-all         - Run all tests including performance"
+	@echo "  test-unit        - Run unit tests without containers"
+	@echo "  test-unit-fast   - Run unit tests with fast containers"
+	@echo "  test-integration - Run integration tests"
+	@echo "  test-integration-fast - Run integration tests with shared container"
+	@echo "  test-e2e         - Run e2e tests"
+	@echo "  test-e2e-fast    - Run e2e tests with shared container"
+	@echo "  test-performance - Run performance tests"
 	@echo "  test-coverage    - Run tests with coverage report"
+	@echo "  test-coverage-fast - Run fast tests with coverage"
+	@echo "  test-ci          - Run CI-optimized tests (parallel + fast)"
 	@echo "  deps             - Install dependencies"
 	@echo "  lint             - Run linter"
 	@echo "  lint-fix         - Run linter with auto-fix"

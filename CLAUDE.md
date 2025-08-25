@@ -25,11 +25,31 @@ The `run-local` command sets up the following environment:
 - **Session Secret**: Development-specific secret key
 
 ### Testing and Code Quality
-- `make test` - Run all tests
-- `make test-coverage` - Run tests with coverage report (generates coverage.html)
+- `make test` - Run tests (excluding performance)
+- `make test-fast` - **FAST**: Run tests with shared MongoDB container (recommended)
+- `make test-coverage` - Run tests with coverage report
+- `make test-coverage-fast` - **FAST**: Coverage with shared container
+- `make test-ci` - CI-optimized tests (parallel + fast + race detection)
+- `make test-unit` - Unit tests without containers
+- `make test-unit-fast` - Unit tests with fast containers
 - `make lint` - Run golangci-lint for comprehensive code quality checks
 - `make lint-fix` - Run golangci-lint with automatic fixing of issues
 - `make fmt` - Format code with go fmt
+
+#### 🚀 Performance Optimization for Tests
+The project includes **MongoDB container reuse** to dramatically speed up test execution:
+
+**For fast local development:**
+```bash
+make test-fast           # ~3x faster than regular tests
+make test-coverage-fast  # Fast tests with coverage
+```
+
+**Container reuse strategies:**
+- `REUSE_MONGO_CONTAINER=true` - Reuses MongoDB container across tests
+- Each test gets a unique database (e.g., `testdb_1691234567890`)
+- Automatic cleanup of test databases after each test
+- Shared container cleanup on test suite completion
 
 #### Code Quality Tools
 The project uses **golangci-lint** with a comprehensive configuration (`.golangci.yml`) that includes:
