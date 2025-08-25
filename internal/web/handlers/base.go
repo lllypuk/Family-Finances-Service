@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
+	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/user"
-	"family-budget-service/internal/handlers"
 )
 
 const (

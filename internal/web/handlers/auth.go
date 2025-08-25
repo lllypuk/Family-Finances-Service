@@ -8,8 +8,8 @@ import (
 	"github.com/labstack/echo/v4"
 	"golang.org/x/crypto/bcrypt"
 
+	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/user"
-	"family-budget-service/internal/handlers"
 	userRepo "family-budget-service/internal/infrastructure/user"
 	"family-budget-service/internal/web/middleware"
 	"family-budget-service/internal/web/models"

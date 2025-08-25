@@ -17,8 +17,8 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/user"
-	"family-budget-service/internal/handlers"
 )
 
 // MockFamilyRepository is a mock implementation of family repository

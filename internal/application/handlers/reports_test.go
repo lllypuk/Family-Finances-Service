@@ -17,8 +17,8 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/report"
-	"family-budget-service/internal/handlers"
 )
 
 // MockReportRepository is a mock implementation of report repository

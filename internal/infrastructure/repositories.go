@@ -1,7 +1,7 @@
 package infrastructure
 
 import (
-	"family-budget-service/internal/handlers"
+	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/infrastructure/budget"
 	"family-budget-service/internal/infrastructure/category"
 	"family-budget-service/internal/infrastructure/report"

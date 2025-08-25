@@ -3,7 +3,7 @@ package web
 import (
 	"github.com/labstack/echo/v4"
 
-	"family-budget-service/internal/handlers"
+	"family-budget-service/internal/application/handlers"
 	webHandlers "family-budget-service/internal/web/handlers"
 	"family-budget-service/internal/web/middleware"
 )

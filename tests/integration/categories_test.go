@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/category"
-	"family-budget-service/internal/handlers"
 	"family-budget-service/internal/testhelpers"
 )
 

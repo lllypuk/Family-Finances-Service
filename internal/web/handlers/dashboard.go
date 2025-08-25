@@ -3,7 +3,7 @@ package handlers
 import (
 	"github.com/labstack/echo/v4"
 
-	"family-budget-service/internal/handlers"
+	"family-budget-service/internal/application/handlers"
 )
 
 const (

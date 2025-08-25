@@ -18,17 +18,28 @@
 
 ### Backend
 - **Язык**: Go 1.24+
-- **Framework**: Echo Web Framework v4
+- **Framework**: Echo Web Framework v4.13.4+
 - **База данных**: MongoDB 7.0+
-- **Driver**: Official MongoDB Go Driver
-- **Валидация**: Built-in validation with struct tags
-- **UUID**: google/uuid для идентификаторов
+- **Driver**: Official MongoDB Go Driver v1.17.4+
+- **Валидация**: go-playground/validator v10.27.0
+- **UUID**: google/uuid v1.6.0 для идентификаторов
+- **Sessions**: gorilla/sessions v1.4.0
+- **Password Hashing**: golang.org/x/crypto/bcrypt
+- **Testing**: testify v1.10.0 + testcontainers-go v0.38.0
+
+### Frontend (Web Interface)
+- **Framework**: HTMX v1.9+ для dynamic updates
+- **CSS**: PicoCSS v1.5+ minimalist framework
+- **Templates**: Go Templates с layout system
+- **Static Assets**: Echo static middleware
+- **PWA**: Service Worker ready
 
 ### Инфраструктура
 - **Контейнеризация**: Docker & Docker Compose
-- **Веб-сервер**: Nginx (в продакшене)
-- **Процесс-менеджер**: systemd
-- **CI/CD**: GitHub Actions (планируется)
+- **Multi-platform**: linux/amd64, linux/arm64
+- **CI/CD**: GitHub Actions (ci, docker, security, release)
+- **Registry**: GitHub Container Registry
+- **Security Scanning**: CodeQL, Semgrep, TruffleHog, OSV Scanner
 
 ### Документация API
 - **Спецификация**: OpenAPI 3.0 (планируется)
@@ -68,11 +79,12 @@ Family-Finances-Service/
 - **Integration тесты**: testcontainers-go
 - **Coverage**: go test -cover
 
-### Отладка и мониторинг
-- **Логирование**: slog (встроенный в Go 1.21+)
-- **Метрики**: Prometheus (планируется)
-- **Трейсинг**: OpenTelemetry (планируется)
-- **Health checks**: Встроенные эндпоинты
+### Observability
+- **Логирование**: slog (structured logging)
+- **Метрики**: Prometheus v1.23.0 с custom metrics
+- **Трейсинг**: OpenTelemetry v1.37.0 с Jaeger
+- **Health checks**: Liveness/Readiness probes
+- **Monitoring**: Grafana dashboards для visualization
 
 ## 🗄️ База данных
 
