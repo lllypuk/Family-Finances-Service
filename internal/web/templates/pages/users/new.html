@@ -1,0 +1,196 @@
+{{define "users/new"}}
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Семейный бюджет</title>
+    
+    <!-- PicoCSS -->
+    <link rel="stylesheet" href="/static/css/pico.min.css">
+    <link rel="stylesheet" href="/static/css/custom.css">
+    
+    <!-- HTMX -->
+    <script src="/static/js/htmx.min.js"></script>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="container-fluid">
+        <ul>
+            <li>
+                <a href="/" class="brand">
+                    <strong>💰 Семейный бюджет</strong>
+                </a>
+            </li>
+        </ul>
+        <ul>
+            <li><a href="/">Главная</a></li>
+            <li><a href="/transactions">Транзакции</a></li>
+            <li><a href="/categories">Категории</a></li>
+            <li><a href="/budgets">Бюджеты</a></li>
+            <li><a href="/reports">Отчеты</a></li>
+            <li><a href="/users">Пользователи</a></li>
+        </ul>
+    </nav>
+    
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Page Header -->
+        <div class="page-header">
+            <h1>➕ {{.Title}}</h1>
+            <nav aria-label="breadcrumb">
+                <ol>
+                    <li><a href="/">Главная</a></li>
+                    <li><a href="/users">Пользователи</a></li>
+                    <li>Добавить</li>
+                </ol>
+            </nav>
+        </div>
+        
+        <!-- Error Messages -->
+        {{if .Error}}
+        <div class="alert alert-danger" role="alert">
+            {{.Error}}
+        </div>
+        {{end}}
+        
+        <!-- Add User Form -->
+        <section class="form-section">
+            <div class="grid">
+                <div></div>
+                <div>
+                    <form method="POST" 
+                          action="/users" 
+                          hx-post="/users"
+                          hx-target="this"
+                          hx-swap="outerHTML">
+                        
+                        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                        
+                        <!-- Personal Information -->
+                        <fieldset>
+                            <legend>Личная информация</legend>
+                            
+                            <div class="grid">
+                                <div>
+                                    <label for="first_name">
+                                        Имя
+                                        <input type="text" 
+                                               id="first_name" 
+                                               name="first_name" 
+                                               value="{{.FirstName}}"
+                                               placeholder="Введите имя"
+                                               required
+                                               {{if index .FieldErrors "first_name"}}aria-invalid="true"{{end}}>
+                                        {{if index .FieldErrors "first_name"}}
+                                        <small class="error">{{index .FieldErrors "first_name"}}</small>
+                                        {{end}}
+                                    </label>
+                                </div>
+                                <div>
+                                    <label for="last_name">
+                                        Фамилия
+                                        <input type="text" 
+                                               id="last_name" 
+                                               name="last_name" 
+                                               value="{{.LastName}}"
+                                               placeholder="Введите фамилию"
+                                               required
+                                               {{if index .FieldErrors "last_name"}}aria-invalid="true"{{end}}>
+                                        {{if index .FieldErrors "last_name"}}
+                                        <small class="error">{{index .FieldErrors "last_name"}}</small>
+                                        {{end}}
+                                    </label>
+                                </div>
+                            </div>
+                        </fieldset>
+                        
+                        <!-- Account Information -->
+                        <fieldset>
+                            <legend>Информация учетной записи</legend>
+                            
+                            <label for="email">
+                                Email адрес
+                                <input type="email" 
+                                       id="email" 
+                                       name="email" 
+                                       value="{{.Email}}"
+                                       placeholder="user@example.com"
+                                       required
+                                       {{if index .FieldErrors "email"}}aria-invalid="true"{{end}}>
+                                {{if index .FieldErrors "email"}}
+                                <small class="error">{{index .FieldErrors "email"}}</small>
+                                {{end}}
+                            </label>
+                            
+                            <label for="password">
+                                Пароль
+                                <input type="password" 
+                                       id="password" 
+                                       name="password" 
+                                       placeholder="Минимум 6 символов"
+                                       required
+                                       {{if index .FieldErrors "password"}}aria-invalid="true"{{end}}>
+                                {{if index .FieldErrors "password"}}
+                                <small class="error">{{index .FieldErrors "password"}}</small>
+                                {{end}}
+                            </label>
+                            
+                            <label for="role">
+                                Роль в семье
+                                <select id="role" 
+                                        name="role" 
+                                        required
+                                        {{if index .FieldErrors "role"}}aria-invalid="true"{{end}}>
+                                    <option value="">Выберите роль...</option>
+                                    {{range .Roles}}
+                                    <option value="{{.Value}}" {{if eq .Value $.Role}}selected{{end}}>
+                                        {{.Label}}
+                                    </option>
+                                    {{end}}
+                                </select>
+                                {{if index .FieldErrors "role"}}
+                                <small class="error">{{index .FieldErrors "role"}}</small>
+                                {{end}}
+                                <small>
+                                    <strong>Администратор:</strong> Полные права на управление семьей<br>
+                                    <strong>Участник:</strong> Может создавать транзакции и категории<br>
+                                    <strong>Ребенок:</strong> Только просмотр данных семьи
+                                </small>
+                            </label>
+                        </fieldset>
+                        
+                        <!-- Form Actions -->
+                        <div class="grid">
+                            <a href="/users" role="button" class="secondary">
+                                ← Отмена
+                            </a>
+                            <button type="submit" class="primary">
+                                ✅ Создать пользователя
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                <div></div>
+            </div>
+        </section>
+    </main>
+    
+    <!-- Footer -->
+    <footer class="container">
+        <hr>
+        <div class="grid">
+            <div>
+                <small>© 2025 Семейный бюджет</small>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- Custom JavaScript -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
+{{end}}

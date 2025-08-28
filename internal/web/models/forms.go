@@ -24,6 +24,15 @@ type RegisterForm struct {
 	Password   string `form:"password"    validate:"required,min=6"         json:"password"`
 }
 
+// CreateUserForm представляет форму создания пользователя в семье
+type CreateUserForm struct {
+	FirstName string `form:"first_name" validate:"required,min=2,max=50"  json:"first_name"`
+	LastName  string `form:"last_name"  validate:"required,min=2,max=50"  json:"last_name"`
+	Email     string `form:"email"      validate:"required,email,max=254" json:"email"`
+	Password  string `form:"password"   validate:"required,min=6"         json:"password"`
+	Role      string `form:"role"       validate:"required"               json:"role"`
+}
+
 // GetValidationErrors конвертирует ошибки валидации в карту field->message
 func GetValidationErrors(err error) map[string]string {
 	validationErrorsMap := make(map[string]string)

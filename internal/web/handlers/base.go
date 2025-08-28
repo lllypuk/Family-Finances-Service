@@ -77,7 +77,7 @@ func (h *BaseHandler) renderPartial(c echo.Context, template string, data any) e
 
 // handleError обрабатывает ошибки и отображает страницу ошибки
 //
-//nolint:unused // Will be used in future authentication and form handlers
+
 func (h *BaseHandler) handleError(c echo.Context, err error, message string) error {
 	// Логируем ошибку
 	c.Logger().Error(err)
@@ -106,7 +106,7 @@ func (h *BaseHandler) handleError(c echo.Context, err error, message string) err
 
 // redirect выполняет перенаправление
 //
-//nolint:unused // Will be used in future authentication and form handlers
+
 func (h *BaseHandler) redirect(c echo.Context, url string) error {
 	// Если это HTMX запрос, используем HX-Redirect
 	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
@@ -160,7 +160,7 @@ func (h *BaseHandler) validateForm(c echo.Context, form any) FormErrors {
 
 // isHTMXRequest проверяет, является ли запрос HTMX запросом
 //
-//nolint:unused // Will be used in future HTMX handlers
+
 func (h *BaseHandler) isHTMXRequest(c echo.Context) bool {
 	return c.Request().Header.Get("Hx-Request") == HTMXRequestHeader
 }

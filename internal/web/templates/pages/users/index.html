@@ -1,0 +1,181 @@
+{{define "users/index"}}
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Семейный бюджет</title>
+    
+    <!-- PicoCSS -->
+    <link rel="stylesheet" href="/static/css/pico.min.css">
+    <link rel="stylesheet" href="/static/css/custom.css">
+    
+    <!-- HTMX -->
+    <script src="/static/js/htmx.min.js"></script>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="container-fluid">
+        <ul>
+            <li>
+                <a href="/" class="brand">
+                    <strong>💰 Семейный бюджет</strong>
+                </a>
+            </li>
+        </ul>
+        <ul>
+            {{if .CurrentUser}}
+            <li><a href="/">Главная</a></li>
+            <li><a href="/transactions">Транзакции</a></li>
+            <li><a href="/categories">Категории</a></li>
+            <li><a href="/budgets">Бюджеты</a></li>
+            <li><a href="/reports">Отчеты</a></li>
+            <li>
+                <details class="dropdown">
+                    <summary role="button" class="secondary">
+                        {{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}
+                    </summary>
+                    <ul>
+                        <li><a href="/profile">Профиль</a></li>
+                        {{if eq .CurrentUser.Role "admin"}}
+                        <li><a href="/users">Пользователи</a></li>
+                        <li><a href="/family/settings">Настройки семьи</a></li>
+                        {{end}}
+                        <li>
+                            <form method="POST" action="/logout" style="margin: 0;">
+                                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                                <button type="submit" class="outline">Выход</button>
+                            </form>
+                        </li>
+                    </ul>
+                </details>
+            </li>
+            {{end}}
+        </ul>
+    </nav>
+    
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Page Header -->
+        <div class="page-header">
+            <div class="grid">
+                <div>
+                    <h1>👥 {{.Title}}</h1>
+                    <p>Семья: <strong>{{.Family.Name}}</strong></p>
+                </div>
+                <div>
+                    {{if .CanManage}}
+                    <a href="/users/new" role="button" class="primary">
+                        ➕ Добавить пользователя
+                    </a>
+                    {{end}}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Users List -->
+        <section class="users-list">
+            {{if .Users}}
+            <div class="overflow-auto">
+                <table role="table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Пользователь</th>
+                            <th scope="col">Email</th>
+                            <th scope="col">Роль</th>
+                            <th scope="col">Дата создания</th>
+                            {{if .CanManage}}
+                            <th scope="col">Действия</th>
+                            {{end}}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .Users}}
+                        <tr>
+                            <td>
+                                <div class="user-info">
+                                    <strong>{{.FirstName}} {{.LastName}}</strong>
+                                    {{if eq .ID $.CurrentUser.ID}}
+                                    <small class="badge secondary">Это вы</small>
+                                    {{end}}
+                                </div>
+                            </td>
+                            <td>{{.Email}}</td>
+                            <td>
+                                <span class="role-badge role-{{.Role}}">
+                                    {{if eq .Role "admin"}}👑 Администратор{{end}}
+                                    {{if eq .Role "member"}}👤 Участник{{end}}
+                                    {{if eq .Role "child"}}🧒 Ребенок{{end}}
+                                </span>
+                            </td>
+                            <td>
+                                <time datetime="{{.CreatedAt.Format "2006-01-02"}}">
+                                    {{.CreatedAt.Format "02.01.2006"}}
+                                </time>
+                            </td>
+                            {{if $.CanManage}}
+                            <td>
+                                <div class="user-actions">
+                                    <a href="/users/{{.ID}}" class="secondary outline" title="Профиль">
+                                        👁️ Профиль
+                                    </a>
+                                    {{if ne .ID $.CurrentUser.ID}}
+                                    <a href="/users/{{.ID}}/edit" class="secondary outline" title="Редактировать">
+                                        ✏️ Изменить
+                                    </a>
+                                    <button class="danger outline" 
+                                            hx-delete="/htmx/users/{{.ID}}"
+                                            hx-confirm="Вы уверены, что хотите удалить пользователя {{.FirstName}} {{.LastName}}?"
+                                            hx-target="closest tr"
+                                            hx-swap="outerHTML"
+                                            title="Удалить">
+                                        🗑️ Удалить
+                                    </button>
+                                    {{end}}
+                                </div>
+                            </td>
+                            {{end}}
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+            {{else}}
+            <div class="empty-state">
+                <p>В вашей семье пока нет других пользователей.</p>
+                {{if .CanManage}}
+                <a href="/users/new" role="button">Добавить первого пользователя</a>
+                {{end}}
+            </div>
+            {{end}}
+        </section>
+    </main>
+    
+    <!-- Footer -->
+    <footer class="container">
+        <hr>
+        <div class="grid">
+            <div>
+                <small>
+                    © 2025 Семейный бюджет. 
+                    Семья: {{.Family.Name}}
+                </small>
+            </div>
+            <div>
+                <small class="text-right">
+                    <a href="/help">Справка</a> • 
+                    <a href="/privacy">Конфиденциальность</a> • 
+                    <a href="/terms">Условия</a>
+                </small>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- Custom JavaScript -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
+{{end}}
