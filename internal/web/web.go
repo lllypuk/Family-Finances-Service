@@ -17,6 +17,7 @@ type Server struct {
 	// Handlers
 	dashboardHandler *webHandlers.DashboardHandler
 	authHandler      *webHandlers.AuthHandler
+	userHandler      *webHandlers.UserHandler
 }
 
 // NewWebServer создает новый веб-сервер
@@ -47,6 +48,7 @@ func NewWebServer(
 		// Инициализируем handlers
 		dashboardHandler: webHandlers.NewDashboardHandler(repositories),
 		authHandler:      webHandlers.NewAuthHandler(repositories),
+		userHandler:      webHandlers.NewUserHandler(repositories),
 	}
 
 	return ws, nil
@@ -69,6 +71,12 @@ func (ws *Server) SetupRoutes() {
 
 	// Главная страница
 	protected.GET("/", ws.dashboardHandler.Dashboard)
+
+	// Управление пользователями
+	users := protected.Group("/users")
+	users.GET("", ws.userHandler.Index)
+	users.GET("/new", ws.userHandler.New)
+	users.POST("", ws.userHandler.Create)
 
 	// HTMX endpoints
 	htmx := protected.Group("/htmx")
