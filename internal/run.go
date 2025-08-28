@@ -67,7 +67,12 @@ func NewApplication() (*Application, error) {
 	app.repositories = infrastructure.NewRepositories(mongodb)
 
 	// Инициализация сервисов
-	app.services = services.NewServices(app.repositories.User, app.repositories.Family)
+	app.services = services.NewServices(
+		app.repositories.User,
+		app.repositories.Family,
+		app.repositories.Category,
+		app.repositories.Transaction,
+	)
 
 	// Создание HTTP сервера с observability
 	serverConfig := &application.Config{

@@ -56,7 +56,12 @@ func SetupHTTPServer(t *testing.T) *TestHTTPServer {
 	}
 
 	// Create services
-	serviceContainer := services.NewServices(userRepository, familyRepository)
+	serviceContainer := services.NewServices(
+		userRepository,
+		familyRepository,
+		categoryRepository,
+		transactionRepository,
+	)
 
 	rndPort := getRandomPort()
 

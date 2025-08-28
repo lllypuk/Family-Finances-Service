@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/user"
 )
 
@@ -63,5 +64,67 @@ func ToUserAPIResponse(u *user.User) UserAPIResponse {
 		FamilyID:  u.FamilyID,
 		CreatedAt: u.CreatedAt,
 		UpdatedAt: u.UpdatedAt,
+	}
+}
+
+// CreateCategoryAPIRequest represents API request for category creation
+type CreateCategoryAPIRequest struct {
+	Name     string     `json:"name"`
+	Type     string     `json:"type"`
+	Color    string     `json:"color"`
+	Icon     string     `json:"icon"`
+	ParentID *uuid.UUID `json:"parent_id,omitempty"`
+	FamilyID uuid.UUID  `json:"family_id"`
+}
+
+type UpdateCategoryAPIRequest struct {
+	Name  *string `json:"name,omitempty"`
+	Color *string `json:"color,omitempty"`
+	Icon  *string `json:"icon,omitempty"`
+}
+
+type CategoryAPIResponse struct {
+	ID        uuid.UUID  `json:"id"`
+	Name      string     `json:"name"`
+	Type      string     `json:"type"`
+	Color     string     `json:"color"`
+	Icon      string     `json:"icon"`
+	ParentID  *uuid.UUID `json:"parent_id,omitempty"`
+	FamilyID  uuid.UUID  `json:"family_id"`
+	IsActive  bool       `json:"is_active"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
+// FromCreateCategoryAPIRequest converts API CreateCategoryRequest to CreateCategoryDTO
+func FromCreateCategoryAPIRequest(req CreateCategoryAPIRequest) CreateCategoryDTO {
+	return CreateCategoryDTO{
+		Name:     req.Name,
+		Type:     category.Type(req.Type),
+		Color:    req.Color,
+		Icon:     req.Icon,
+		ParentID: req.ParentID,
+		FamilyID: req.FamilyID,
+	}
+}
+
+// FromUpdateCategoryAPIRequest converts API UpdateCategoryRequest to UpdateCategoryDTO
+func FromUpdateCategoryAPIRequest(req UpdateCategoryAPIRequest) UpdateCategoryDTO {
+	return UpdateCategoryDTO(req)
+}
+
+// ToCategoryAPIResponse converts domain Category to API CategoryResponse
+func ToCategoryAPIResponse(c *category.Category) CategoryAPIResponse {
+	return CategoryAPIResponse{
+		ID:        c.ID,
+		Name:      c.Name,
+		Type:      string(c.Type),
+		Color:     c.Color,
+		Icon:      c.Icon,
+		ParentID:  c.ParentID,
+		FamilyID:  c.FamilyID,
+		IsActive:  c.IsActive,
+		CreatedAt: c.CreatedAt,
+		UpdatedAt: c.UpdatedAt,
 	}
 }

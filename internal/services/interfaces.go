@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services/dto"
 )
@@ -30,4 +31,23 @@ type FamilyService interface {
 	GetFamilyByID(ctx context.Context, id uuid.UUID) (*user.Family, error)
 	UpdateFamily(ctx context.Context, id uuid.UUID, req dto.UpdateFamilyDTO) (*user.Family, error)
 	DeleteFamily(ctx context.Context, id uuid.UUID) error
+}
+
+// CategoryService defines business operations for category management
+type CategoryService interface {
+	// CRUD Operations
+	CreateCategory(ctx context.Context, req dto.CreateCategoryDTO) (*category.Category, error)
+	GetCategoryByID(ctx context.Context, id uuid.UUID) (*category.Category, error)
+	GetCategoriesByFamily(
+		ctx context.Context,
+		familyID uuid.UUID,
+		typeFilter *category.Type,
+	) ([]*category.Category, error)
+	UpdateCategory(ctx context.Context, id uuid.UUID, req dto.UpdateCategoryDTO) (*category.Category, error)
+	DeleteCategory(ctx context.Context, id uuid.UUID) error
+
+	// Business Operations
+	GetCategoryHierarchy(ctx context.Context, familyID uuid.UUID) ([]*category.Category, error)
+	ValidateCategoryHierarchy(ctx context.Context, categoryID, parentID uuid.UUID) error
+	CheckCategoryUsage(ctx context.Context, categoryID uuid.UUID) (bool, error)
 }

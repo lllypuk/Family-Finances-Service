@@ -26,12 +26,12 @@ func NewCategoryHandler(repositories *Repositories) *CategoryHandler {
 
 func (h *CategoryHandler) CreateCategory(c echo.Context) error {
 	var req CreateCategoryRequest
-	if err := c.Bind(&req); err != nil {
+	if bindErr := c.Bind(&req); bindErr != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Code:    "INVALID_REQUEST",
 				Message: "Invalid request body",
-				Details: err.Error(),
+				Details: bindErr.Error(),
 			},
 			Meta: ResponseMeta{
 				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
