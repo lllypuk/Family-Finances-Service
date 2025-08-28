@@ -165,7 +165,7 @@ func TestConcurrentHTTPRequests(t *testing.T) {
 		Port: "8080",
 	}
 
-	server := application.NewHTTPServer(nil, config)
+	server := application.NewHTTPServer(nil, nil, config)
 	testServer := httptest.NewServer(server.Echo())
 	defer testServer.Close()
 
@@ -445,7 +445,7 @@ func TestGoroutineLeaks(t *testing.T) {
 
 		// Create and close multiple servers
 		for range 5 {
-			server := application.NewHTTPServer(nil, config)
+			server := application.NewHTTPServer(nil, nil, config)
 			testServer := httptest.NewServer(server.Echo())
 
 			// Make some requests

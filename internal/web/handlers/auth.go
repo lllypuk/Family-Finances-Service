@@ -11,19 +11,22 @@ import (
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/user"
 	userRepo "family-budget-service/internal/infrastructure/user"
+	"family-budget-service/internal/services"
 	"family-budget-service/internal/web/middleware"
 	"family-budget-service/internal/web/models"
 )
 
 // AuthHandler обрабатывает запросы аутентификации
 type AuthHandler struct {
-	repos *handlers.Repositories
+	repos    *handlers.Repositories
+	services *services.Services
 }
 
 // NewAuthHandler создает новый обработчик аутентификации
-func NewAuthHandler(repos *handlers.Repositories) *AuthHandler {
+func NewAuthHandler(repos *handlers.Repositories, services *services.Services) *AuthHandler {
 	return &AuthHandler{
-		repos: repos,
+		repos:    repos,
+		services: services,
 	}
 }
 

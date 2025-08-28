@@ -13,6 +13,7 @@ import (
 
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/observability"
+	"family-budget-service/internal/services"
 	"family-budget-service/internal/web"
 )
 
@@ -24,6 +25,7 @@ const (
 type HTTPServer struct {
 	echo                 *echo.Echo
 	repositories         *handlers.Repositories
+	services             *services.Services
 	config               *Config
 	observabilityService *observability.Service
 
@@ -47,13 +49,14 @@ type Config struct {
 }
 
 // NewHTTPServer создает HTTP сервер без observability (для обратной совместимости)
-func NewHTTPServer(repositories *handlers.Repositories, config *Config) *HTTPServer {
-	return NewHTTPServerWithObservability(repositories, config, nil)
+func NewHTTPServer(repositories *handlers.Repositories, services *services.Services, config *Config) *HTTPServer {
+	return NewHTTPServerWithObservability(repositories, services, config, nil)
 }
 
 // NewHTTPServerWithObservability создает HTTP сервер с observability
 func NewHTTPServerWithObservability(
 	repositories *handlers.Repositories,
+	services *services.Services,
 	config *Config,
 	obsService *observability.Service,
 ) *HTTPServer {
@@ -93,11 +96,12 @@ func NewHTTPServerWithObservability(
 	server := &HTTPServer{
 		echo:                 e,
 		repositories:         repositories,
+		services:             services,
 		config:               config,
 		observabilityService: obsService,
 
 		// Инициализация API handlers
-		userHandler:        handlers.NewUserHandler(repositories),
+		userHandler:        handlers.NewUserHandler(repositories, services.User),
 		familyHandler:      handlers.NewFamilyHandler(repositories),
 		categoryHandler:    handlers.NewCategoryHandler(repositories),
 		transactionHandler: handlers.NewTransactionHandler(repositories),
@@ -107,7 +111,7 @@ func NewHTTPServerWithObservability(
 
 	// Инициализация веб-интерфейса
 	webServer, err := web.NewWebServer(
-		e, repositories, "internal/web/templates", config.SessionSecret, config.IsProduction,
+		e, repositories, services, "internal/web/templates", config.SessionSecret, config.IsProduction,
 	)
 	if err != nil {
 		// Логируем ошибку, но не прерываем работу сервера

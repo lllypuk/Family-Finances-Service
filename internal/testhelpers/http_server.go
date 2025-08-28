@@ -15,6 +15,7 @@ import (
 	reportRepo "family-budget-service/internal/infrastructure/report"
 	transactionRepo "family-budget-service/internal/infrastructure/transaction"
 	userRepo "family-budget-service/internal/infrastructure/user"
+	"family-budget-service/internal/services"
 )
 
 const (
@@ -54,6 +55,9 @@ func SetupHTTPServer(t *testing.T) *TestHTTPServer {
 		Report:      reportRepository,
 	}
 
+	// Create services
+	serviceContainer := services.NewServices(userRepository, familyRepository)
+
 	rndPort := getRandomPort()
 
 	// Create HTTP server config
@@ -63,7 +67,7 @@ func SetupHTTPServer(t *testing.T) *TestHTTPServer {
 	}
 
 	// Create HTTP server
-	server := application.NewHTTPServer(repositories, config)
+	server := application.NewHTTPServer(repositories, serviceContainer, config)
 
 	// Start server in background
 	go func() {

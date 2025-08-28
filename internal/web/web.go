@@ -4,6 +4,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/services"
 	webHandlers "family-budget-service/internal/web/handlers"
 	"family-budget-service/internal/web/middleware"
 )
@@ -12,6 +13,7 @@ import (
 type Server struct {
 	echo         *echo.Echo
 	repositories *handlers.Repositories
+	services     *services.Services
 	renderer     *TemplateRenderer
 
 	// Handlers
@@ -24,6 +26,7 @@ type Server struct {
 func NewWebServer(
 	e *echo.Echo,
 	repositories *handlers.Repositories,
+	services *services.Services,
 	templatesDir, sessionSecret string,
 	isProduction bool,
 ) (*Server, error) {
@@ -43,12 +46,13 @@ func NewWebServer(
 	ws := &Server{
 		echo:         e,
 		repositories: repositories,
+		services:     services,
 		renderer:     renderer,
 
 		// Инициализируем handlers
-		dashboardHandler: webHandlers.NewDashboardHandler(repositories),
-		authHandler:      webHandlers.NewAuthHandler(repositories),
-		userHandler:      webHandlers.NewUserHandler(repositories),
+		dashboardHandler: webHandlers.NewDashboardHandler(repositories, services),
+		authHandler:      webHandlers.NewAuthHandler(repositories, services),
+		userHandler:      webHandlers.NewUserHandler(repositories, services),
 	}
 
 	return ws, nil

@@ -17,7 +17,7 @@ import (
 
 func TestNewBaseHandler(t *testing.T) {
 	repos := NewMockRepositories()
-	baseHandler := webHandlers.NewBaseHandler(&repos.Repositories)
+	baseHandler := webHandlers.NewBaseHandler(&repos.Repositories, nil)
 
 	assert.NotNil(t, baseHandler)
 }
@@ -267,7 +267,7 @@ func TestBaseHandler_RenderPage(t *testing.T) {
 
 	// Using reflection or public methods we can test the base handler indirectly
 	// Since renderPage is not exported, we'll test through a handler that uses it
-	dashboardHandler := webHandlers.NewDashboardHandler(&repos.Repositories)
+	dashboardHandler := webHandlers.NewDashboardHandler(&repos.Repositories, nil)
 	err := dashboardHandler.Dashboard(c)
 
 	require.NoError(t, err)
@@ -279,8 +279,8 @@ func TestBaseHandler_MultipleInstancesIsolation(t *testing.T) {
 	repos1 := NewMockRepositories()
 	repos2 := NewMockRepositories()
 
-	handler1 := webHandlers.NewBaseHandler(&repos1.Repositories)
-	handler2 := webHandlers.NewBaseHandler(&repos2.Repositories)
+	handler1 := webHandlers.NewBaseHandler(&repos1.Repositories, nil)
+	handler2 := webHandlers.NewBaseHandler(&repos2.Repositories, nil)
 
 	// Test that handlers are independent instances
 	assert.NotSame(t, handler1, handler2)
