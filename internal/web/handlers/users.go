@@ -34,13 +34,13 @@ func (h *UserHandler) Index(c echo.Context) error {
 	}
 
 	// Получаем всех пользователей семьи через сервис
-	users, err := h.repositories.User.GetByFamilyID(c.Request().Context(), session.FamilyID)
+	users, err := h.services.User.GetUsersByFamily(c.Request().Context(), session.FamilyID)
 	if err != nil {
 		return h.handleError(c, err, "Failed to load users")
 	}
 
 	// Получаем семью для отображения названия через сервис
-	family, err := h.repositories.Family.GetByID(c.Request().Context(), session.FamilyID)
+	family, err := h.services.Family.GetFamilyByID(c.Request().Context(), session.FamilyID)
 	if err != nil {
 		return h.handleError(c, err, "Failed to load family")
 	}
