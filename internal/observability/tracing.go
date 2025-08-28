@@ -19,7 +19,7 @@ import (
 type TracingConfig struct {
 	ServiceName    string `json:"service_name"    default:"family-budget-service"`
 	ServiceVersion string `json:"service_version" default:"1.0.0"`
-	OTLPEndpoint   string `json:"otlp_endpoint"   default:"http://localhost:4318/v1/traces"`
+	OTLPEndpoint   string `json:"otlp_endpoint"   default:"http://localhost:4318"`
 	Environment    string `json:"environment"     default:"development"`
 	Enabled        bool   `json:"enabled"         default:"true"`
 }
@@ -31,9 +31,20 @@ func InitTracing(ctx context.Context, config TracingConfig, logger *slog.Logger)
 		return func(context.Context) error { return nil }, nil
 	}
 
+	logger.InfoContext(ctx, "Initializing tracing",
+		slog.String("otlp_endpoint", config.OTLPEndpoint),
+		slog.String("service_name", config.ServiceName),
+	)
+
 	// Создаем OTLP HTTP exporter
+	// Используем WithEndpointURL для полного контроля над URL
+	fullURL := config.OTLPEndpoint + "/v1/traces"
+	logger.InfoContext(ctx, "Creating OTLP exporter",
+		slog.String("full_url", fullURL),
+	)
+
 	exp, err := otlptracehttp.New(ctx,
-		otlptracehttp.WithEndpoint(config.OTLPEndpoint),
+		otlptracehttp.WithEndpointURL(fullURL),
 		otlptracehttp.WithInsecure(), // для локальной разработки
 	)
 	if err != nil {

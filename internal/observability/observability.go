@@ -99,7 +99,7 @@ func DefaultConfig() Config {
 		Tracing: TracingConfig{
 			ServiceName:    "family-budget-service",
 			ServiceVersion: "1.0.0",
-			OTLPEndpoint:   "http://localhost:4318/v1/traces",
+			OTLPEndpoint:   "http://localhost:4318",
 			Environment:    "development",
 			Enabled:        true,
 		},

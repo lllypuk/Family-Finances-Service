@@ -169,8 +169,8 @@ observability-logs:
 
 # Комбинированные команды
 dev-up:
-	@echo "Starting development environment..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) up -d mongodb mongo-express redis
+	@echo "Starting development environment with observability..."
+	@docker-compose -f $(DOCKER_COMPOSE_FILE) --profile observability up -d mongodb mongo-express redis jaeger prometheus grafana
 
 full-up:
 	@echo "Starting full stack (app + observability)..."
