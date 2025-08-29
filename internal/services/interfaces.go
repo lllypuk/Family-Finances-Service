@@ -2,10 +2,12 @@ package services
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services/dto"
 )
@@ -50,4 +52,42 @@ type CategoryService interface {
 	GetCategoryHierarchy(ctx context.Context, familyID uuid.UUID) ([]*category.Category, error)
 	ValidateCategoryHierarchy(ctx context.Context, categoryID, parentID uuid.UUID) error
 	CheckCategoryUsage(ctx context.Context, categoryID uuid.UUID) (bool, error)
+}
+
+// TransactionService defines business operations for transaction management
+type TransactionService interface {
+	// CRUD Operations
+	CreateTransaction(ctx context.Context, req dto.CreateTransactionDTO) (*transaction.Transaction, error)
+	GetTransactionByID(ctx context.Context, id uuid.UUID) (*transaction.Transaction, error)
+	GetTransactionsByFamily(
+		ctx context.Context,
+		familyID uuid.UUID,
+		filter dto.TransactionFilterDTO,
+	) ([]*transaction.Transaction, error)
+	UpdateTransaction(ctx context.Context, id uuid.UUID, req dto.UpdateTransactionDTO) (*transaction.Transaction, error)
+	DeleteTransaction(ctx context.Context, id uuid.UUID) error
+
+	// Business Operations
+	GetTransactionsByCategory(
+		ctx context.Context,
+		categoryID uuid.UUID,
+		filter dto.TransactionFilterDTO,
+	) ([]*transaction.Transaction, error)
+	GetTransactionsByDateRange(
+		ctx context.Context,
+		familyID uuid.UUID,
+		from, to time.Time,
+	) ([]*transaction.Transaction, error)
+	BulkCategorizeTransactions(
+		ctx context.Context,
+		transactionIDs []uuid.UUID,
+		categoryID uuid.UUID,
+	) error
+	ValidateTransactionLimits(
+		ctx context.Context,
+		familyID uuid.UUID,
+		categoryID uuid.UUID,
+		amount float64,
+		transactionType transaction.Type,
+	) error
 }

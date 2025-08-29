@@ -61,6 +61,7 @@ func SetupHTTPServer(t *testing.T) *TestHTTPServer {
 		familyRepository,
 		categoryRepository,
 		transactionRepository,
+		budgetRepository,
 	)
 
 	rndPort := getRandomPort()
