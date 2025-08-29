@@ -185,7 +185,7 @@ func TestTransactionService_CreateTransaction_IncomeNoLimitCheck(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Equal(t, req.Amount, result.Amount)
+	assert.InEpsilon(t, req.Amount, result.Amount, 0.01)
 	assert.Equal(t, req.Type, result.Type)
 
 	userRepo.AssertExpectations(t)

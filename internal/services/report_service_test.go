@@ -20,7 +20,7 @@ import (
 
 // Tests for GenerateExpenseReport
 func TestReportService_GenerateExpenseReport(t *testing.T) {
-	service, _, _, _, _, mockUserRepo, mockTransactionService, _, mockCategoryService := setupReportService()
+	service, _, mockUserRepo, mockTransactionService, _, mockCategoryService := setupReportService()
 	ctx := context.Background()
 
 	familyID := uuid.New()
@@ -96,7 +96,7 @@ func TestReportService_GenerateExpenseReport(t *testing.T) {
 	assert.Equal(t, req.FamilyID, result.FamilyID)
 	assert.Equal(t, req.UserID, result.UserID)
 	assert.Equal(t, req.Period, result.Period)
-	assert.Equal(t, 450.0, result.TotalExpenses) // 100 + 200 + 150
+	assert.InEpsilon(t, 450.0, result.TotalExpenses, 0.01) // 100 + 200 + 150
 	assert.Positive(t, result.AverageDaily)
 	assert.Len(t, result.CategoryBreakdown, 1) // All transactions have same category
 	assert.Len(t, result.DailyBreakdown, 3)    // 3 different days
@@ -108,7 +108,7 @@ func TestReportService_GenerateExpenseReport(t *testing.T) {
 }
 
 func TestReportService_GenerateExpenseReport_NoTransactions(t *testing.T) {
-	service, _, _, _, _, _, mockTransactionService, _, _ := setupReportService()
+	service, _, _, mockTransactionService, _, _ := setupReportService()
 	ctx := context.Background()
 
 	familyID := uuid.New()
@@ -136,8 +136,8 @@ func TestReportService_GenerateExpenseReport_NoTransactions(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Equal(t, 0.0, result.TotalExpenses)
-	assert.Equal(t, 0.0, result.AverageDaily)
+	assert.Zero(t, result.TotalExpenses)
+	assert.Zero(t, result.AverageDaily)
 	assert.Empty(t, result.CategoryBreakdown)
 	assert.Empty(t, result.DailyBreakdown)
 	assert.Empty(t, result.TopExpenses)
@@ -147,7 +147,7 @@ func TestReportService_GenerateExpenseReport_NoTransactions(t *testing.T) {
 
 // Tests for GenerateIncomeReport
 func TestReportService_GenerateIncomeReport(t *testing.T) {
-	service, _, _, _, _, mockUserRepo, mockTransactionService, _, mockCategoryService := setupReportService()
+	service, _, mockUserRepo, mockTransactionService, _, mockCategoryService := setupReportService()
 	ctx := context.Background()
 
 	familyID := uuid.New()
@@ -212,7 +212,7 @@ func TestReportService_GenerateIncomeReport(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Equal(t, req.Name, result.Name)
-	assert.Equal(t, 6000.0, result.TotalIncome) // 5000 + 1000
+	assert.InEpsilon(t, 6000.0, result.TotalIncome, 0.01) // 5000 + 1000
 	assert.Positive(t, result.AverageDaily)
 
 	mockTransactionService.AssertExpectations(t)
@@ -222,7 +222,7 @@ func TestReportService_GenerateIncomeReport(t *testing.T) {
 
 // Tests for GenerateBudgetComparisonReport
 func TestReportService_GenerateBudgetComparisonReport(t *testing.T) {
-	service, _, _, _, _, _, mockTransactionService, mockBudgetService, _ := setupReportService()
+	service, _, _, mockTransactionService, mockBudgetService, _ := setupReportService()
 	ctx := context.Background()
 
 	familyID := uuid.New()
@@ -253,17 +253,17 @@ func TestReportService_GenerateBudgetComparisonReport(t *testing.T) {
 	assert.NotNil(t, result)
 	assert.Equal(t, familyID, result.FamilyID)
 	assert.Equal(t, period, result.Period)
-	assert.Equal(t, 1000.0, result.TotalBudget)
-	assert.Equal(t, 550.0, result.TotalSpent)         // 300 + 250
-	assert.Equal(t, 450.0, result.TotalVariance)      // 1000 - 550
-	assert.InDelta(t, 55.0, result.Utilization, 0.01) // (550/1000) * 100
+	assert.InEpsilon(t, 1000.0, result.TotalBudget, 0.01)
+	assert.InEpsilon(t, 550.0, result.TotalSpent, 0.01)    // 300 + 250
+	assert.InEpsilon(t, 450.0, result.TotalVariance, 0.01) // 1000 - 550
+	assert.InDelta(t, 55.0, result.Utilization, 0.01)      // (550/1000) * 100
 
 	mockBudgetService.AssertExpectations(t)
 	mockTransactionService.AssertExpectations(t)
 }
 
 func TestReportService_GenerateBudgetComparisonReport_NoBudgets(t *testing.T) {
-	service, _, _, _, _, _, _, mockBudgetService, _ := setupReportService()
+	service, _, _, _, mockBudgetService, _ := setupReportService()
 	ctx := context.Background()
 
 	familyID := uuid.New()
@@ -279,17 +279,17 @@ func TestReportService_GenerateBudgetComparisonReport_NoBudgets(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Equal(t, 0.0, result.TotalBudget)
-	assert.Equal(t, 0.0, result.TotalSpent)
-	assert.Equal(t, 0.0, result.TotalVariance)
-	assert.Equal(t, 0.0, result.Utilization)
+	assert.Zero(t, result.TotalBudget)
+	assert.Zero(t, result.TotalSpent)
+	assert.Zero(t, result.TotalVariance)
+	assert.Zero(t, result.Utilization)
 
 	mockBudgetService.AssertExpectations(t)
 }
 
 // Tests for GenerateCashFlowReport
 func TestReportService_GenerateCashFlowReport(t *testing.T) {
-	service, _, _, _, _, _, mockTransactionService, _, _ := setupReportService()
+	service, _, _, mockTransactionService, _, _ := setupReportService()
 	ctx := context.Background()
 
 	familyID := uuid.New()
@@ -315,16 +315,16 @@ func TestReportService_GenerateCashFlowReport(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Equal(t, familyID, result.FamilyID)
-	assert.Equal(t, 6000.0, result.TotalInflows) // 5000 + 1000
-	assert.Equal(t, 500.0, result.TotalOutflows) // 300 + 200
-	assert.Equal(t, 5500.0, result.NetCashFlow)  // 6000 - 500
+	assert.InEpsilon(t, 6000.0, result.TotalInflows, 0.01) // 5000 + 1000
+	assert.InEpsilon(t, 500.0, result.TotalOutflows, 0.01) // 300 + 200
+	assert.InEpsilon(t, 5500.0, result.NetCashFlow, 0.01)  // 6000 - 500
 
 	mockTransactionService.AssertExpectations(t)
 }
 
 // Tests for SaveReport
 func TestReportService_SaveReport(t *testing.T) {
-	service, mockReportRepo, _, _, _, _, _, _, _ := setupReportService()
+	service, mockReportRepo, _, _, _, _ := setupReportService()
 	ctx := context.Background()
 
 	familyID := uuid.New()
@@ -366,7 +366,7 @@ func TestReportService_SaveReport(t *testing.T) {
 
 // Tests for GetReportByID
 func TestReportService_GetReportByID(t *testing.T) {
-	service, mockReportRepo, _, _, _, _, _, _, _ := setupReportService()
+	service, mockReportRepo, _, _, _, _ := setupReportService()
 	ctx := context.Background()
 
 	reportID := uuid.New()
@@ -399,7 +399,7 @@ func TestReportService_GetReportByID(t *testing.T) {
 
 // Tests for GetReportsByFamily
 func TestReportService_GetReportsByFamily(t *testing.T) {
-	service, mockReportRepo, _, _, _, _, _, _, _ := setupReportService()
+	service, mockReportRepo, _, _, _, _ := setupReportService()
 	ctx := context.Background()
 
 	familyID := uuid.New()
@@ -440,7 +440,7 @@ func TestReportService_GetReportsByFamily(t *testing.T) {
 
 // Tests for DeleteReport
 func TestReportService_DeleteReport(t *testing.T) {
-	service, mockReportRepo, _, _, _, _, _, _, _ := setupReportService()
+	service, mockReportRepo, _, _, _, _ := setupReportService()
 	ctx := context.Background()
 
 	reportID := uuid.New()

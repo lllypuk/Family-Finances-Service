@@ -734,9 +734,6 @@ func createTestUser(familyID uuid.UUID) *user.User {
 func setupReportService() (
 	services.ReportService,
 	*MockReportRepository,
-	*MockTransactionRepository,
-	*MockBudgetRepository,
-	*MockCategoryRepository,
 	*MockUserRepository,
 	*MockTransactionService,
 	*MockBudgetService,
@@ -762,7 +759,7 @@ func setupReportService() (
 		mockCategoryService,
 	)
 
-	return service, mockReportRepo, mockTransactionRepo, mockBudgetRepo, mockCategoryRepo, mockUserRepo, mockTransactionService, mockBudgetService, mockCategoryService
+	return service, mockReportRepo, mockUserRepo, mockTransactionService, mockBudgetService, mockCategoryService
 }
 
 // setupTransactionService creates a properly configured transaction service for testing

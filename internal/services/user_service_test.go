@@ -69,7 +69,7 @@ func TestUserService_CreateUser(t *testing.T) {
 				Email: "test@example.com",
 				// Missing FirstName, LastName, Password, Role, FamilyID
 			},
-			setup: func(ur *MockUserRepository, fr *MockFamilyRepository) {
+			setup: func(_ *MockUserRepository, _ *MockFamilyRepository) {
 				// No setup needed for validation test
 			},
 			wantError: true,
@@ -85,7 +85,7 @@ func TestUserService_CreateUser(t *testing.T) {
 				Role:      user.RoleMember,
 				FamilyID:  uuid.New(),
 			},
-			setup: func(ur *MockUserRepository, fr *MockFamilyRepository) {
+			setup: func(_ *MockUserRepository, fr *MockFamilyRepository) {
 				// Family doesn't exist
 				fr.On("GetByID", mock.Anything, mock.Anything).Return(nil, errors.New("not found"))
 			},

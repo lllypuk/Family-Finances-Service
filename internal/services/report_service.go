@@ -140,11 +140,11 @@ func (s *reportService) generateTransactionReportComplete(
 
 	// Generate type-specific components
 	if transactionType == transaction.TypeExpense {
-		if err := s.generateExpenseSpecificData(ctx, req, baseData, result); err != nil {
+		if err = s.generateExpenseSpecificData(ctx, req, baseData, result); err != nil {
 			return nil, err
 		}
 	} else {
-		if err := s.generateIncomeSpecificData(ctx, req, baseData, result); err != nil {
+		if err = s.generateIncomeSpecificData(ctx, req, baseData, result); err != nil {
 			return nil, err
 		}
 	}
