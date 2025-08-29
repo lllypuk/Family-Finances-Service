@@ -103,7 +103,7 @@ func NewHTTPServerWithObservability(
 		// Инициализация API handlers
 		userHandler:        handlers.NewUserHandler(repositories, services.User),
 		familyHandler:      handlers.NewFamilyHandler(repositories),
-		categoryHandler:    handlers.NewCategoryHandler(repositories),
+		categoryHandler:    handlers.NewCategoryHandler(repositories, services.Category),
 		transactionHandler: handlers.NewTransactionHandler(repositories),
 		budgetHandler:      handlers.NewBudgetHandler(repositories),
 		reportHandler:      handlers.NewReportHandler(repositories),

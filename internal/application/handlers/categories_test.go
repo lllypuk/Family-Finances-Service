@@ -175,17 +175,16 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 				Type:     "expense",
 				FamilyID: familyID,
 			},
-			mockSetup: func(service *MockCategoryService) {
-				// Service should return validation error
-				service.On("CreateCategory", mock.Anything, mock.AnythingOfType("dto.CreateCategoryDTO")).
-					Return(nil, errors.New("validation failed"))
+			mockSetup: func(_ *MockCategoryService) {
+				// No service call expected since validation fails at handler level
 			},
-			expectedStatus: http.StatusInternalServerError,
+			expectedStatus: http.StatusBadRequest,
 			expectedBody: func(t *testing.T, body string) {
-				var response handlers.ErrorResponse
+				var response handlers.APIResponse[any]
 				err := json.Unmarshal([]byte(body), &response)
 				require.NoError(t, err)
-				assert.Equal(t, "CREATE_FAILED", response.Error.Code)
+				assert.NotEmpty(t, response.Errors)
+				assert.Equal(t, "VALIDATION_ERROR", response.Errors[0].Code)
 			},
 		},
 		{
@@ -218,7 +217,7 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 			tt.mockSetup(mockService)
 
 			repos := &handlers.Repositories{}
-			handler := handlers.NewCategoryHandler(repos)
+			handler := handlers.NewCategoryHandler(repos, mockService)
 
 			e := echo.New()
 			var req *http.Request
@@ -335,7 +334,7 @@ func TestCategoryHandler_GetCategories(t *testing.T) {
 			tt.mockSetup(mockService)
 
 			repos := &handlers.Repositories{}
-			handler := handlers.NewCategoryHandler(repos)
+			handler := handlers.NewCategoryHandler(repos, mockService)
 
 			e := echo.New()
 			req := httptest.NewRequest(http.MethodGet, "/categories", nil)
@@ -437,7 +436,7 @@ func TestCategoryHandler_GetCategoryByID(t *testing.T) {
 			tt.mockSetup(mockService)
 
 			repos := &handlers.Repositories{}
-			handler := handlers.NewCategoryHandler(repos)
+			handler := handlers.NewCategoryHandler(repos, mockService)
 
 			e := echo.New()
 			req := httptest.NewRequest(http.MethodGet, "/categories/"+tt.categoryID, nil)
@@ -548,7 +547,7 @@ func TestCategoryHandler_UpdateCategory(t *testing.T) {
 			tt.mockSetup(mockService)
 
 			repos := &handlers.Repositories{}
-			handler := handlers.NewCategoryHandler(repos)
+			handler := handlers.NewCategoryHandler(repos, mockService)
 
 			e := echo.New()
 			body, _ := json.Marshal(tt.requestBody)
@@ -638,7 +637,7 @@ func TestCategoryHandler_DeleteCategory(t *testing.T) {
 			tt.mockSetup(mockService)
 
 			repos := &handlers.Repositories{}
-			handler := handlers.NewCategoryHandler(repos)
+			handler := handlers.NewCategoryHandler(repos, mockService)
 
 			e := echo.New()
 			req := httptest.NewRequest(http.MethodDelete, "/categories/"+tt.categoryID, nil)
