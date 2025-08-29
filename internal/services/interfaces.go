@@ -8,6 +8,7 @@ import (
 
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services/dto"
@@ -116,4 +117,55 @@ type BudgetService interface {
 		startDate, endDate time.Time,
 	) error
 	RecalculateBudgetSpent(ctx context.Context, budgetID uuid.UUID) error
+}
+
+// ReportService defines business operations for report generation and analytics
+type ReportService interface {
+	// Report Generation
+	GenerateExpenseReport(ctx context.Context, req dto.ReportRequestDTO) (*dto.ExpenseReportDTO, error)
+	GenerateIncomeReport(ctx context.Context, req dto.ReportRequestDTO) (*dto.IncomeReportDTO, error)
+	GenerateBudgetComparisonReport(
+		ctx context.Context,
+		familyID uuid.UUID,
+		period report.Period,
+	) (*dto.BudgetComparisonDTO, error)
+	GenerateCashFlowReport(ctx context.Context, familyID uuid.UUID, from, to time.Time) (*dto.CashFlowReportDTO, error)
+	GenerateCategoryBreakdownReport(
+		ctx context.Context,
+		familyID uuid.UUID,
+		period report.Period,
+	) (*dto.CategoryBreakdownDTO, error)
+
+	// Report Management
+	SaveReport(
+		ctx context.Context,
+		reportData any,
+		reportType report.Type,
+		req dto.ReportRequestDTO,
+	) (*report.Report, error)
+	GetReportByID(ctx context.Context, id uuid.UUID) (*report.Report, error)
+	GetReportsByFamily(ctx context.Context, familyID uuid.UUID, typeFilter *report.Type) ([]*report.Report, error)
+	DeleteReport(ctx context.Context, id uuid.UUID) error
+
+	// Export Operations
+	ExportReport(ctx context.Context, reportID uuid.UUID, format string, options dto.ExportOptionsDTO) ([]byte, error)
+	ExportReportData(ctx context.Context, reportData any, format string, options dto.ExportOptionsDTO) ([]byte, error)
+
+	// Scheduled Reports
+	ScheduleReport(ctx context.Context, req dto.ScheduleReportDTO) (*dto.ScheduledReportDTO, error)
+	GetScheduledReports(ctx context.Context, familyID uuid.UUID) ([]*dto.ScheduledReportDTO, error)
+	UpdateScheduledReport(ctx context.Context, id uuid.UUID, req dto.ScheduleReportDTO) (*dto.ScheduledReportDTO, error)
+	DeleteScheduledReport(ctx context.Context, id uuid.UUID) error
+	ExecuteScheduledReport(ctx context.Context, scheduledReportID uuid.UUID) error
+
+	// Analytics & Insights
+	GenerateTrendAnalysis(
+		ctx context.Context,
+		familyID uuid.UUID,
+		categoryID *uuid.UUID,
+		period report.Period,
+	) (*dto.TrendAnalysisDTO, error)
+	GenerateSpendingForecast(ctx context.Context, familyID uuid.UUID, months int) ([]dto.ForecastDTO, error)
+	GenerateFinancialInsights(ctx context.Context, familyID uuid.UUID) ([]dto.RecommendationDTO, error)
+	CalculateBenchmarks(ctx context.Context, familyID uuid.UUID) (*dto.BenchmarkComparisonDTO, error)
 }

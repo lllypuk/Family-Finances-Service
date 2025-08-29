@@ -16,55 +16,11 @@ import (
 	"family-budget-service/internal/services/dto"
 )
 
-// MockUserRepository is a mock implementation of UserRepository
-type MockUserRepository struct {
-	mock.Mock
-}
-
-func (m *MockUserRepository) Create(ctx context.Context, user *user.User) error {
-	args := m.Called(ctx, user)
-	return args.Error(0)
-}
-
-func (m *MockUserRepository) GetByID(ctx context.Context, id uuid.UUID) (*user.User, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*user.User), args.Error(1)
-}
-
-func (m *MockUserRepository) GetByEmail(ctx context.Context, email string) (*user.User, error) {
-	args := m.Called(ctx, email)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*user.User), args.Error(1)
-}
-
-func (m *MockUserRepository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*user.User, error) {
-	args := m.Called(ctx, familyID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*user.User), args.Error(1)
-}
-
-func (m *MockUserRepository) Update(ctx context.Context, user *user.User) error {
-	args := m.Called(ctx, user)
-	return args.Error(0)
-}
-
-func (m *MockUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
-}
-
 func TestUserService_CreateUser(t *testing.T) {
 	tests := []struct {
 		name      string
 		dto       dto.CreateUserDTO
-		setup     func(*MockUserRepository, *services.MockFamilyRepository)
+		setup     func(*MockUserRepository, *MockFamilyRepository)
 		wantError bool
 		errorType error
 	}{
@@ -78,7 +34,7 @@ func TestUserService_CreateUser(t *testing.T) {
 				Role:      user.RoleMember,
 				FamilyID:  uuid.New(),
 			},
-			setup: func(userRepo *MockUserRepository, familyRepo *services.MockFamilyRepository) {
+			setup: func(userRepo *MockUserRepository, familyRepo *MockFamilyRepository) {
 				// Family exists
 				familyRepo.On("GetByID", mock.Anything, mock.Anything).Return(&user.Family{
 					ID:   uuid.New(),
@@ -103,7 +59,7 @@ func TestUserService_CreateUser(t *testing.T) {
 				Role:      user.RoleMember,
 				FamilyID:  uuid.New(),
 			},
-			setup:     func(*MockUserRepository, *services.MockFamilyRepository) {},
+			setup:     func(*MockUserRepository, *MockFamilyRepository) {},
 			wantError: true,
 			errorType: services.ErrValidationFailed,
 		},
@@ -113,7 +69,9 @@ func TestUserService_CreateUser(t *testing.T) {
 				Email: "test@example.com",
 				// Missing FirstName, LastName, Password, Role, FamilyID
 			},
-			setup:     func(*MockUserRepository, *services.MockFamilyRepository) {},
+			setup: func(ur *MockUserRepository, fr *MockFamilyRepository) {
+				// No setup needed for validation test
+			},
 			wantError: true,
 			errorType: services.ErrValidationFailed,
 		},
@@ -127,9 +85,9 @@ func TestUserService_CreateUser(t *testing.T) {
 				Role:      user.RoleMember,
 				FamilyID:  uuid.New(),
 			},
-			setup: func(_ *MockUserRepository, familyRepo *services.MockFamilyRepository) {
+			setup: func(ur *MockUserRepository, fr *MockFamilyRepository) {
 				// Family doesn't exist
-				familyRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, errors.New("not found"))
+				fr.On("GetByID", mock.Anything, mock.Anything).Return(nil, errors.New("not found"))
 			},
 			wantError: true,
 			errorType: services.ErrFamilyNotFound,
@@ -144,15 +102,14 @@ func TestUserService_CreateUser(t *testing.T) {
 				Role:      user.RoleMember,
 				FamilyID:  uuid.New(),
 			},
-			setup: func(userRepo *MockUserRepository, familyRepo *services.MockFamilyRepository) {
+			setup: func(ur *MockUserRepository, fr *MockFamilyRepository) {
 				// Family exists
-				familyRepo.On("GetByID", mock.Anything, mock.Anything).Return(&user.Family{
+				fr.On("GetByID", mock.Anything, mock.Anything).Return(&user.Family{
 					ID:   uuid.New(),
 					Name: "Test Family",
 				}, nil)
-
-				// Email already exists
-				userRepo.On("GetByEmail", mock.Anything, "existing@example.com").Return(&user.User{
+				// User with same email already exists
+				ur.On("GetByEmail", mock.Anything, "existing@example.com").Return(&user.User{
 					ID:    uuid.New(),
 					Email: "existing@example.com",
 				}, nil)
@@ -166,7 +123,7 @@ func TestUserService_CreateUser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup mocks
 			userRepo := &MockUserRepository{}
-			familyRepo := &services.MockFamilyRepository{}
+			familyRepo := &MockFamilyRepository{}
 			tt.setup(userRepo, familyRepo)
 
 			// Create service
@@ -208,14 +165,14 @@ func TestUserService_GetUserByID(t *testing.T) {
 	tests := []struct {
 		name      string
 		userID    uuid.UUID
-		setup     func(*MockUserRepository, *services.MockFamilyRepository)
+		setup     func(*MockUserRepository, *MockFamilyRepository)
 		wantError bool
 		errorType error
 	}{
 		{
 			name:   "Success - User found",
 			userID: uuid.New(),
-			setup: func(userRepo *MockUserRepository, _ *services.MockFamilyRepository) {
+			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
 				expectedUser := &user.User{
 					ID:        uuid.New(),
 					Email:     "test@example.com",
@@ -230,7 +187,7 @@ func TestUserService_GetUserByID(t *testing.T) {
 		{
 			name:   "Error - User not found",
 			userID: uuid.New(),
-			setup: func(userRepo *MockUserRepository, _ *services.MockFamilyRepository) {
+			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
 				userRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, errors.New("not found"))
 			},
 			wantError: true,
@@ -242,7 +199,7 @@ func TestUserService_GetUserByID(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup mocks
 			userRepo := &MockUserRepository{}
-			familyRepo := &services.MockFamilyRepository{}
+			familyRepo := &MockFamilyRepository{}
 			tt.setup(userRepo, familyRepo)
 
 			// Create service
@@ -284,7 +241,7 @@ func TestUserService_UpdateUser(t *testing.T) {
 		name      string
 		userID    uuid.UUID
 		dto       dto.UpdateUserDTO
-		setup     func(*MockUserRepository, *services.MockFamilyRepository)
+		setup     func(*MockUserRepository, *MockFamilyRepository)
 		wantError bool
 		errorType error
 	}{
@@ -295,7 +252,7 @@ func TestUserService_UpdateUser(t *testing.T) {
 				FirstName: stringPtr("NewFirst"),
 				LastName:  stringPtr("NewLast"),
 			},
-			setup: func(userRepo *MockUserRepository, _ *services.MockFamilyRepository) {
+			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
 				userRepo.On("GetByID", mock.Anything, existingUser.ID).Return(existingUser, nil)
 				userRepo.On("Update", mock.Anything, mock.AnythingOfType("*user.User")).Return(nil)
 			},
@@ -307,7 +264,7 @@ func TestUserService_UpdateUser(t *testing.T) {
 			dto: dto.UpdateUserDTO{
 				Email: stringPtr("new@example.com"),
 			},
-			setup: func(userRepo *MockUserRepository, _ *services.MockFamilyRepository) {
+			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
 				userRepo.On("GetByID", mock.Anything, existingUser.ID).Return(existingUser, nil)
 				userRepo.On("GetByEmail", mock.Anything, "new@example.com").Return(nil, errors.New("not found"))
 				userRepo.On("Update", mock.Anything, mock.AnythingOfType("*user.User")).Return(nil)
@@ -320,7 +277,7 @@ func TestUserService_UpdateUser(t *testing.T) {
 			dto: dto.UpdateUserDTO{
 				FirstName: stringPtr("NewFirst"),
 			},
-			setup: func(userRepo *MockUserRepository, _ *services.MockFamilyRepository) {
+			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
 				userRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, errors.New("not found"))
 			},
 			wantError: true,
@@ -332,7 +289,7 @@ func TestUserService_UpdateUser(t *testing.T) {
 			dto: dto.UpdateUserDTO{
 				Email: stringPtr("existing@example.com"),
 			},
-			setup: func(userRepo *MockUserRepository, _ *services.MockFamilyRepository) {
+			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
 				userRepo.On("GetByID", mock.Anything, existingUser.ID).Return(existingUser, nil)
 				userRepo.On("GetByEmail", mock.Anything, "existing@example.com").Return(&user.User{
 					ID:    uuid.New(),
@@ -348,7 +305,7 @@ func TestUserService_UpdateUser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup mocks
 			userRepo := &MockUserRepository{}
-			familyRepo := &services.MockFamilyRepository{}
+			familyRepo := &MockFamilyRepository{}
 			tt.setup(userRepo, familyRepo)
 
 			// Create service
@@ -387,14 +344,14 @@ func TestUserService_DeleteUser(t *testing.T) {
 	tests := []struct {
 		name      string
 		userID    uuid.UUID
-		setup     func(*MockUserRepository, *services.MockFamilyRepository)
+		setup     func(*MockUserRepository, *MockFamilyRepository)
 		wantError bool
 		errorType error
 	}{
 		{
 			name:   "Success - Delete user",
 			userID: existingUser.ID,
-			setup: func(userRepo *MockUserRepository, _ *services.MockFamilyRepository) {
+			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
 				userRepo.On("GetByID", mock.Anything, existingUser.ID).Return(existingUser, nil)
 				userRepo.On("Delete", mock.Anything, existingUser.ID).Return(nil)
 			},
@@ -403,7 +360,7 @@ func TestUserService_DeleteUser(t *testing.T) {
 		{
 			name:   "Error - User not found",
 			userID: uuid.New(),
-			setup: func(userRepo *MockUserRepository, _ *services.MockFamilyRepository) {
+			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
 				userRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, errors.New("not found"))
 			},
 			wantError: true,
@@ -415,7 +372,7 @@ func TestUserService_DeleteUser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup mocks
 			userRepo := &MockUserRepository{}
-			familyRepo := &services.MockFamilyRepository{}
+			familyRepo := &MockFamilyRepository{}
 			tt.setup(userRepo, familyRepo)
 
 			// Create service
@@ -451,7 +408,7 @@ func TestUserService_ChangeUserRole(t *testing.T) {
 		name      string
 		userID    uuid.UUID
 		role      user.Role
-		setup     func(*MockUserRepository, *services.MockFamilyRepository)
+		setup     func(*MockUserRepository, *MockFamilyRepository)
 		wantError bool
 		errorType error
 	}{
@@ -459,7 +416,7 @@ func TestUserService_ChangeUserRole(t *testing.T) {
 			name:   "Success - Change role to admin",
 			userID: existingUser.ID,
 			role:   user.RoleAdmin,
-			setup: func(userRepo *MockUserRepository, _ *services.MockFamilyRepository) {
+			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
 				userRepo.On("GetByID", mock.Anything, existingUser.ID).Return(existingUser, nil)
 				userRepo.On("Update", mock.Anything, mock.AnythingOfType("*user.User")).Return(nil)
 			},
@@ -469,7 +426,7 @@ func TestUserService_ChangeUserRole(t *testing.T) {
 			name:   "Error - Invalid role",
 			userID: existingUser.ID,
 			role:   user.Role("invalid"),
-			setup: func(_ *MockUserRepository, _ *services.MockFamilyRepository) {
+			setup: func(_ *MockUserRepository, _ *MockFamilyRepository) {
 				// No expectations since role validation happens first
 			},
 			wantError: true,
@@ -479,7 +436,7 @@ func TestUserService_ChangeUserRole(t *testing.T) {
 			name:   "Error - User not found",
 			userID: uuid.New(),
 			role:   user.RoleAdmin,
-			setup: func(userRepo *MockUserRepository, _ *services.MockFamilyRepository) {
+			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
 				userRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, errors.New("not found"))
 			},
 			wantError: true,
@@ -491,7 +448,7 @@ func TestUserService_ChangeUserRole(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup mocks
 			userRepo := &MockUserRepository{}
-			familyRepo := &services.MockFamilyRepository{}
+			familyRepo := &MockFamilyRepository{}
 			tt.setup(userRepo, familyRepo)
 
 			// Create service
@@ -536,7 +493,7 @@ func TestUserService_ValidateUserAccess(t *testing.T) {
 		name            string
 		userID          uuid.UUID
 		resourceOwnerID uuid.UUID
-		setup           func(*MockUserRepository, *services.MockFamilyRepository)
+		setup           func(*MockUserRepository, *MockFamilyRepository)
 		wantError       bool
 		errorType       error
 	}{
@@ -544,7 +501,7 @@ func TestUserService_ValidateUserAccess(t *testing.T) {
 			name:            "Success - Same family access",
 			userID:          user1.ID,
 			resourceOwnerID: user2.ID,
-			setup: func(userRepo *MockUserRepository, _ *services.MockFamilyRepository) {
+			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
 				userRepo.On("GetByID", mock.Anything, user1.ID).Return(user1, nil)
 				userRepo.On("GetByID", mock.Anything, user2.ID).Return(user2, nil)
 			},
@@ -554,7 +511,7 @@ func TestUserService_ValidateUserAccess(t *testing.T) {
 			name:            "Error - Different family access",
 			userID:          user1.ID,
 			resourceOwnerID: userFromAnotherFamily.ID,
-			setup: func(userRepo *MockUserRepository, _ *services.MockFamilyRepository) {
+			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
 				userRepo.On("GetByID", mock.Anything, user1.ID).Return(user1, nil)
 				userRepo.On("GetByID", mock.Anything, userFromAnotherFamily.ID).Return(userFromAnotherFamily, nil)
 			},
@@ -565,7 +522,7 @@ func TestUserService_ValidateUserAccess(t *testing.T) {
 			name:            "Error - Requesting user not found",
 			userID:          uuid.New(),
 			resourceOwnerID: user2.ID,
-			setup: func(userRepo *MockUserRepository, _ *services.MockFamilyRepository) {
+			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
 				userRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, errors.New("not found")).Once()
 			},
 			wantError: true,
@@ -577,7 +534,7 @@ func TestUserService_ValidateUserAccess(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup mocks
 			userRepo := &MockUserRepository{}
-			familyRepo := &services.MockFamilyRepository{}
+			familyRepo := &MockFamilyRepository{}
 			tt.setup(userRepo, familyRepo)
 
 			// Create service

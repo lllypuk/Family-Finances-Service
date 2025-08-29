@@ -17,48 +17,7 @@ import (
 	"family-budget-service/internal/services/dto"
 )
 
-// Mock repositories
-type MockCategoryRepository struct {
-	mock.Mock
-}
-
-func (m *MockCategoryRepository) Create(ctx context.Context, category *category.Category) error {
-	args := m.Called(ctx, category)
-	return args.Error(0)
-}
-
-func (m *MockCategoryRepository) GetByID(ctx context.Context, id uuid.UUID) (*category.Category, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*category.Category), args.Error(1)
-}
-
-func (m *MockCategoryRepository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*category.Category, error) {
-	args := m.Called(ctx, familyID)
-	return args.Get(0).([]*category.Category), args.Error(1)
-}
-
-func (m *MockCategoryRepository) GetByType(
-	ctx context.Context,
-	familyID uuid.UUID,
-	categoryType category.Type,
-) ([]*category.Category, error) {
-	args := m.Called(ctx, familyID, categoryType)
-	return args.Get(0).([]*category.Category), args.Error(1)
-}
-
-func (m *MockCategoryRepository) Update(ctx context.Context, category *category.Category) error {
-	args := m.Called(ctx, category)
-	return args.Error(0)
-}
-
-func (m *MockCategoryRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
-}
-
+// Mock usage checker for category service tests
 type MockCategoryUsageChecker struct {
 	mock.Mock
 }
@@ -68,9 +27,9 @@ func (m *MockCategoryUsageChecker) IsCategoryUsed(ctx context.Context, categoryI
 	return args.Get(0).(bool), args.Error(1)
 }
 
-func setupCategoryService() (services.CategoryService, *MockCategoryRepository, *services.MockFamilyRepository, *MockCategoryUsageChecker) {
+func setupCategoryService() (services.CategoryService, *MockCategoryRepository, *MockFamilyRepository, *MockCategoryUsageChecker) {
 	mockCategoryRepo := &MockCategoryRepository{}
-	mockFamilyRepo := &services.MockFamilyRepository{}
+	mockFamilyRepo := &MockFamilyRepository{}
 	mockUsageChecker := &MockCategoryUsageChecker{}
 	service := services.NewCategoryService(mockCategoryRepo, mockFamilyRepo, mockUsageChecker)
 	return service, mockCategoryRepo, mockFamilyRepo, mockUsageChecker

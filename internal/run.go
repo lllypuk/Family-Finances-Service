@@ -74,6 +74,7 @@ func NewApplication() (*Application, error) {
 		app.repositories.Transaction,
 		app.repositories.Budget,
 		app.repositories.Budget,
+		app.repositories.Report,
 	)
 
 	// Создание HTTP сервера с observability
