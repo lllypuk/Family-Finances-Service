@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"family-budget-service/internal/domain/report"
+	"family-budget-service/internal/infrastructure/validation"
 )
 
 type Repository struct {
@@ -24,6 +25,17 @@ func NewRepository(database *mongo.Database) *Repository {
 }
 
 func (r *Repository) Create(ctx context.Context, rep *report.Report) error {
+	// Validate report parameters before creating
+	if err := validation.ValidateUUID(rep.ID); err != nil {
+		return fmt.Errorf("invalid report ID: %w", err)
+	}
+	if err := validation.ValidateUUID(rep.FamilyID); err != nil {
+		return fmt.Errorf("invalid report familyID: %w", err)
+	}
+	if err := validation.ValidateUUID(rep.UserID); err != nil {
+		return fmt.Errorf("invalid report userID: %w", err)
+	}
+
 	_, err := r.collection.InsertOne(ctx, rep)
 	if err != nil {
 		return fmt.Errorf("failed to create report: %w", err)
@@ -32,8 +44,16 @@ func (r *Repository) Create(ctx context.Context, rep *report.Report) error {
 }
 
 func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*report.Report, error) {
+	// Validate UUID parameter to prevent injection attacks
+	if err := validation.ValidateUUID(id); err != nil {
+		return nil, fmt.Errorf("invalid id parameter: %w", err)
+	}
+
+	// Use explicit field specification to prevent injection
+	filter := bson.D{{Key: "_id", Value: id}}
+
 	var rep report.Report
-	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&rep)
+	err := r.collection.FindOne(ctx, filter).Decode(&rep)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, fmt.Errorf("report with id %s not found", id)
@@ -44,8 +64,8 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*report.Report,
 }
 
 // getReportsByFilter is a helper function to get reports by filter with sorting
-func (r *Repository) getReportsByFilter(ctx context.Context, filter bson.M, errorMsg string) ([]*report.Report, error) {
-	opts := options.Find().SetSort(bson.M{"generated_at": -1})
+func (r *Repository) getReportsByFilter(ctx context.Context, filter bson.D, errorMsg string) ([]*report.Report, error) {
+	opts := options.Find().SetSort(bson.D{{Key: "generated_at", Value: -1}})
 
 	cursor, err := r.collection.Find(ctx, filter, opts)
 	if err != nil {
@@ -72,17 +92,37 @@ func (r *Repository) getReportsByFilter(ctx context.Context, filter bson.M, erro
 }
 
 func (r *Repository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*report.Report, error) {
-	filter := bson.M{"family_id": familyID}
+	// Validate UUID parameter to prevent injection attacks
+	if err := validation.ValidateUUID(familyID); err != nil {
+		return nil, fmt.Errorf("invalid familyID parameter: %w", err)
+	}
+
+	// Use explicit field specification to prevent injection
+	filter := bson.D{{Key: "family_id", Value: familyID}}
 	return r.getReportsByFilter(ctx, filter, "failed to get reports by family id")
 }
 
 func (r *Repository) GetByUserID(ctx context.Context, userID uuid.UUID) ([]*report.Report, error) {
-	filter := bson.M{"user_id": userID}
+	// Validate UUID parameter to prevent injection attacks
+	if err := validation.ValidateUUID(userID); err != nil {
+		return nil, fmt.Errorf("invalid userID parameter: %w", err)
+	}
+
+	// Use explicit field specification to prevent injection
+	filter := bson.D{{Key: "user_id", Value: userID}}
 	return r.getReportsByFilter(ctx, filter, "failed to get reports by user id")
 }
 
 func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
-	result, err := r.collection.DeleteOne(ctx, bson.M{"_id": id})
+	// Validate UUID parameter to prevent injection attacks
+	if err := validation.ValidateUUID(id); err != nil {
+		return fmt.Errorf("invalid id parameter: %w", err)
+	}
+
+	// Use explicit field specification to prevent injection
+	filter := bson.D{{Key: "_id", Value: id}}
+
+	result, err := r.collection.DeleteOne(ctx, filter)
 	if err != nil {
 		return fmt.Errorf("failed to delete report: %w", err)
 	}

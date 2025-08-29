@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"family-budget-service/internal/domain/budget"
+	"family-budget-service/internal/infrastructure/validation"
 )
 
 type Repository struct {
@@ -25,6 +26,19 @@ func NewRepository(database *mongo.Database) *Repository {
 }
 
 func (r *Repository) Create(ctx context.Context, b *budget.Budget) error {
+	// Validate budget parameters before creating
+	if err := validation.ValidateUUID(b.ID); err != nil {
+		return fmt.Errorf("invalid budget ID: %w", err)
+	}
+	if err := validation.ValidateUUID(b.FamilyID); err != nil {
+		return fmt.Errorf("invalid budget familyID: %w", err)
+	}
+	if b.CategoryID != nil {
+		if err := validation.ValidateUUID(*b.CategoryID); err != nil {
+			return fmt.Errorf("invalid budget categoryID: %w", err)
+		}
+	}
+
 	_, err := r.collection.InsertOne(ctx, b)
 	if err != nil {
 		return fmt.Errorf("failed to create budget: %w", err)
@@ -33,8 +47,16 @@ func (r *Repository) Create(ctx context.Context, b *budget.Budget) error {
 }
 
 func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*budget.Budget, error) {
+	// Validate UUID parameter to prevent injection attacks
+	if err := validation.ValidateUUID(id); err != nil {
+		return nil, fmt.Errorf("invalid id parameter: %w", err)
+	}
+
+	// Use explicit field specification to prevent injection
+	filter := bson.D{{Key: "_id", Value: id}}
+
 	var b budget.Budget
-	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&b)
+	err := r.collection.FindOne(ctx, filter).Decode(&b)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, fmt.Errorf("budget with id %s not found", id)
@@ -45,8 +67,14 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*budget.Budget,
 }
 
 func (r *Repository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*budget.Budget, error) {
-	filter := bson.M{"family_id": familyID}
-	opts := options.Find().SetSort(bson.M{"created_at": -1})
+	// Validate UUID parameter to prevent injection attacks
+	if err := validation.ValidateUUID(familyID); err != nil {
+		return nil, fmt.Errorf("invalid familyID parameter: %w", err)
+	}
+
+	// Use explicit field specification to prevent injection
+	filter := bson.D{{Key: "family_id", Value: familyID}}
+	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
 
 	cursor, err := r.collection.Find(ctx, filter, opts)
 	if err != nil {
@@ -107,8 +135,22 @@ func (r *Repository) GetActiveBudgets(ctx context.Context, familyID uuid.UUID) (
 }
 
 func (r *Repository) Update(ctx context.Context, b *budget.Budget) error {
-	filter := bson.M{"_id": b.ID}
-	update := bson.M{"$set": b}
+	// Validate budget parameters before updating
+	if err := validation.ValidateUUID(b.ID); err != nil {
+		return fmt.Errorf("invalid budget ID: %w", err)
+	}
+	if err := validation.ValidateUUID(b.FamilyID); err != nil {
+		return fmt.Errorf("invalid budget familyID: %w", err)
+	}
+	if b.CategoryID != nil {
+		if err := validation.ValidateUUID(*b.CategoryID); err != nil {
+			return fmt.Errorf("invalid budget categoryID: %w", err)
+		}
+	}
+
+	// Use explicit field specification to prevent injection
+	filter := bson.D{{Key: "_id", Value: b.ID}}
+	update := bson.D{{Key: "$set", Value: b}}
 
 	result, err := r.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
@@ -123,7 +165,15 @@ func (r *Repository) Update(ctx context.Context, b *budget.Budget) error {
 }
 
 func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
-	result, err := r.collection.DeleteOne(ctx, bson.M{"_id": id})
+	// Validate UUID parameter to prevent injection attacks
+	if err := validation.ValidateUUID(id); err != nil {
+		return fmt.Errorf("invalid id parameter: %w", err)
+	}
+
+	// Use explicit field specification to prevent injection
+	filter := bson.D{{Key: "_id", Value: id}}
+
+	result, err := r.collection.DeleteOne(ctx, filter)
 	if err != nil {
 		return fmt.Errorf("failed to delete budget: %w", err)
 	}
@@ -140,16 +190,27 @@ func (r *Repository) GetByFamilyAndCategory(
 	familyID uuid.UUID,
 	categoryID *uuid.UUID,
 ) ([]*budget.Budget, error) {
-	filter := bson.M{"family_id": familyID}
-
+	// Validate UUID parameters to prevent injection attacks
+	if err := validation.ValidateUUID(familyID); err != nil {
+		return nil, fmt.Errorf("invalid familyID parameter: %w", err)
+	}
 	if categoryID != nil {
-		filter["category_id"] = *categoryID
-	} else {
-		// Find budgets without a specific category (family-wide budgets)
-		filter["category_id"] = bson.M{"$exists": false}
+		if err := validation.ValidateUUID(*categoryID); err != nil {
+			return nil, fmt.Errorf("invalid categoryID parameter: %w", err)
+		}
 	}
 
-	opts := options.Find().SetSort(bson.M{"created_at": -1})
+	// Use explicit field specification to prevent injection
+	filter := bson.D{{Key: "family_id", Value: familyID}}
+
+	if categoryID != nil {
+		filter = append(filter, bson.E{Key: "category_id", Value: *categoryID})
+	} else {
+		// Find budgets without a specific category (family-wide budgets)
+		filter = append(filter, bson.E{Key: "category_id", Value: bson.D{{Key: "$exists", Value: false}}})
+	}
+
+	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
 	cursor, err := r.collection.Find(ctx, filter, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get budgets by family and category: %w", err)
