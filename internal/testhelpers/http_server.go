@@ -43,6 +43,7 @@ func SetupHTTPServer(t *testing.T) *TestHTTPServer {
 	categoryRepository := categoryRepo.NewRepository(mongoContainer.Database)
 	transactionRepository := transactionRepo.NewRepository(mongoContainer.Database)
 	budgetRepository := budgetRepo.NewRepository(mongoContainer.Database)
+	fullBudgetRepository := budgetRepo.NewRepository(mongoContainer.Database)
 	reportRepository := reportRepo.NewRepository(mongoContainer.Database)
 
 	// Create repositories struct
@@ -62,7 +63,7 @@ func SetupHTTPServer(t *testing.T) *TestHTTPServer {
 		categoryRepository,
 		transactionRepository,
 		budgetRepository,
-		budgetRepository,
+		fullBudgetRepository,
 		reportRepository,
 	)
 

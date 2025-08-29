@@ -537,8 +537,10 @@ func TestTransactionHandler_Integration_Filters(t *testing.T) {
 	})
 
 	t.Run("GetTransactions_ByDateRange", func(t *testing.T) {
-		dateFrom := time.Now().AddDate(0, 0, -3).Format(time.RFC3339) // 3 days ago
-		dateTo := time.Now().AddDate(0, 0, -1).Format(time.RFC3339)   // yesterday
+		// Use a consistent time reference to avoid timing issues in CI
+		baseTime := time.Now()
+		dateFrom := baseTime.AddDate(0, 0, -3).Format(time.RFC3339) // 3 days ago
+		dateTo := baseTime.Format(time.RFC3339)                     // now (includes both transactions)
 
 		req := httptest.NewRequest(
 			http.MethodGet,
