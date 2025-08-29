@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
@@ -11,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"family-budget-service/internal/domain/transaction"
+	"family-budget-service/internal/infrastructure/validation"
 )
 
 type Repository struct {
@@ -24,6 +26,23 @@ func NewRepository(database *mongo.Database) *Repository {
 }
 
 func (r *Repository) Create(ctx context.Context, t *transaction.Transaction) error {
+	// Validate transaction parameters before creating
+	if err := validation.ValidateUUID(t.ID); err != nil {
+		return fmt.Errorf("invalid transaction ID: %w", err)
+	}
+	if err := validation.ValidateUUID(t.FamilyID); err != nil {
+		return fmt.Errorf("invalid transaction familyID: %w", err)
+	}
+	if err := validation.ValidateUUID(t.UserID); err != nil {
+		return fmt.Errorf("invalid transaction userID: %w", err)
+	}
+	if err := validation.ValidateUUID(t.CategoryID); err != nil {
+		return fmt.Errorf("invalid transaction categoryID: %w", err)
+	}
+	if err := validation.ValidateTransactionType(t.Type); err != nil {
+		return fmt.Errorf("invalid transaction type: %w", err)
+	}
+
 	_, err := r.collection.InsertOne(ctx, t)
 	if err != nil {
 		return fmt.Errorf("failed to create transaction: %w", err)
@@ -32,8 +51,16 @@ func (r *Repository) Create(ctx context.Context, t *transaction.Transaction) err
 }
 
 func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*transaction.Transaction, error) {
+	// Validate UUID parameter to prevent injection attacks
+	if err := validation.ValidateUUID(id); err != nil {
+		return nil, fmt.Errorf("invalid id parameter: %w", err)
+	}
+
+	// Use explicit field specification to prevent injection
+	filter := bson.D{{Key: "_id", Value: id}}
+
 	var t transaction.Transaction
-	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&t)
+	err := r.collection.FindOne(ctx, filter).Decode(&t)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, fmt.Errorf("transaction with id %s not found", id)
@@ -125,8 +152,26 @@ func (r *Repository) GetByFamilyID(
 }
 
 func (r *Repository) Update(ctx context.Context, t *transaction.Transaction) error {
-	filter := bson.M{"_id": t.ID}
-	update := bson.M{"$set": t}
+	// Validate transaction parameters before updating
+	if err := validation.ValidateUUID(t.ID); err != nil {
+		return fmt.Errorf("invalid transaction ID: %w", err)
+	}
+	if err := validation.ValidateUUID(t.FamilyID); err != nil {
+		return fmt.Errorf("invalid transaction familyID: %w", err)
+	}
+	if err := validation.ValidateUUID(t.UserID); err != nil {
+		return fmt.Errorf("invalid transaction userID: %w", err)
+	}
+	if err := validation.ValidateUUID(t.CategoryID); err != nil {
+		return fmt.Errorf("invalid transaction categoryID: %w", err)
+	}
+	if err := validation.ValidateTransactionType(t.Type); err != nil {
+		return fmt.Errorf("invalid transaction type: %w", err)
+	}
+
+	// Use explicit field specification to prevent injection
+	filter := bson.D{{Key: "_id", Value: t.ID}}
+	update := bson.D{{Key: "$set", Value: t}}
 
 	result, err := r.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
@@ -141,7 +186,15 @@ func (r *Repository) Update(ctx context.Context, t *transaction.Transaction) err
 }
 
 func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
-	result, err := r.collection.DeleteOne(ctx, bson.M{"_id": id})
+	// Validate UUID parameter to prevent injection attacks
+	if err := validation.ValidateUUID(id); err != nil {
+		return fmt.Errorf("invalid id parameter: %w", err)
+	}
+
+	// Use explicit field specification to prevent injection
+	filter := bson.D{{Key: "_id", Value: id}}
+
+	result, err := r.collection.DeleteOne(ctx, filter)
 	if err != nil {
 		return fmt.Errorf("failed to delete transaction: %w", err)
 	}
@@ -158,13 +211,54 @@ func (r *Repository) GetTotalByCategory(
 	categoryID uuid.UUID,
 	transactionType transaction.Type,
 ) (float64, error) {
-	pipeline := []bson.M{
-		{
-			"$match": bson.M{
-				"category_id": categoryID,
-				"type":        transactionType,
-			},
+	matchFilter := bson.M{
+		"category_id": categoryID,
+		"type":        transactionType,
+	}
+
+	return r.getTotalWithFilter(ctx, matchFilter, "category")
+}
+
+func (r *Repository) GetTotalByFamilyAndDateRange(
+	ctx context.Context,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+	transactionType transaction.Type,
+) (float64, error) {
+	matchFilter := bson.M{
+		"family_id": familyID,
+		"type":      transactionType,
+		"date": bson.M{
+			"$gte": startDate,
+			"$lte": endDate,
 		},
+	}
+
+	return r.getTotalWithFilter(ctx, matchFilter, "family and date range")
+}
+
+func (r *Repository) GetTotalByCategoryAndDateRange(
+	ctx context.Context,
+	categoryID uuid.UUID,
+	startDate, endDate time.Time,
+	transactionType transaction.Type,
+) (float64, error) {
+	matchFilter := bson.M{
+		"category_id": categoryID,
+		"type":        transactionType,
+		"date": bson.M{
+			"$gte": startDate,
+			"$lte": endDate,
+		},
+	}
+
+	return r.getTotalWithFilter(ctx, matchFilter, "category and date range")
+}
+
+// getTotalWithFilter is a helper function to reduce code duplication in total calculation methods
+func (r *Repository) getTotalWithFilter(ctx context.Context, matchFilter bson.M, description string) (float64, error) {
+	pipeline := []bson.M{
+		{"$match": matchFilter},
 		{
 			"$group": bson.M{
 				"_id":   nil,
@@ -175,7 +269,7 @@ func (r *Repository) GetTotalByCategory(
 
 	cursor, err := r.collection.Aggregate(ctx, pipeline)
 	if err != nil {
-		return 0, fmt.Errorf("failed to aggregate transactions: %w", err)
+		return 0, fmt.Errorf("failed to aggregate transactions by %s: %w", description, err)
 	}
 	defer cursor.Close(ctx)
 
@@ -193,52 +287,50 @@ func (r *Repository) GetTotalByCategory(
 	return result.Total, nil
 }
 
-func (r *Repository) buildFilterQuery(filter transaction.Filter) bson.M {
-	query := bson.M{"family_id": filter.FamilyID}
+func (r *Repository) buildFilterQuery(filter transaction.Filter) bson.D {
+	// Use explicit field specification to prevent injection
+	query := bson.D{{Key: "family_id", Value: filter.FamilyID}}
 
 	if filter.UserID != nil {
-		query["user_id"] = *filter.UserID
+		query = append(query, bson.E{Key: "user_id", Value: *filter.UserID})
 	}
 
 	if filter.CategoryID != nil {
-		query["category_id"] = *filter.CategoryID
+		query = append(query, bson.E{Key: "category_id", Value: *filter.CategoryID})
 	}
 
 	if filter.Type != nil {
-		query["type"] = *filter.Type
+		query = append(query, bson.E{Key: "type", Value: string(*filter.Type)})
 	}
 
 	if filter.DateFrom != nil || filter.DateTo != nil {
-		dateFilter := bson.M{}
+		dateFilter := bson.D{}
 		if filter.DateFrom != nil {
-			dateFilter["$gte"] = *filter.DateFrom
+			dateFilter = append(dateFilter, bson.E{Key: "$gte", Value: *filter.DateFrom})
 		}
 		if filter.DateTo != nil {
-			dateFilter["$lte"] = *filter.DateTo
+			dateFilter = append(dateFilter, bson.E{Key: "$lte", Value: *filter.DateTo})
 		}
-		query["date"] = dateFilter
+		query = append(query, bson.E{Key: "date", Value: dateFilter})
 	}
 
 	if filter.AmountFrom != nil || filter.AmountTo != nil {
-		amountFilter := bson.M{}
+		amountFilter := bson.D{}
 		if filter.AmountFrom != nil {
-			amountFilter["$gte"] = *filter.AmountFrom
+			amountFilter = append(amountFilter, bson.E{Key: "$gte", Value: *filter.AmountFrom})
 		}
 		if filter.AmountTo != nil {
-			amountFilter["$lte"] = *filter.AmountTo
+			amountFilter = append(amountFilter, bson.E{Key: "$lte", Value: *filter.AmountTo})
 		}
-		query["amount"] = amountFilter
-	}
-
-	if len(filter.Tags) > 0 {
-		query["tags"] = bson.M{"$in": filter.Tags}
+		query = append(query, bson.E{Key: "amount", Value: amountFilter})
 	}
 
 	if filter.Description != "" {
-		query["description"] = bson.M{
-			"$regex":   filter.Description,
-			"$options": "i", // case insensitive
+		regexFilter := bson.D{
+			{Key: "$regex", Value: filter.Description},
+			{Key: "$options", Value: "i"},
 		}
+		query = append(query, bson.E{Key: "description", Value: regexFilter})
 	}
 
 	return query

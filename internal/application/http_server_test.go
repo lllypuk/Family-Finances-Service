@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -13,7 +14,10 @@ import (
 
 	"family-budget-service/internal/application"
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/observability"
+	"family-budget-service/internal/services"
+	"family-budget-service/internal/services/dto"
 )
 
 // MockRepositories provides mock implementations for all repositories
@@ -25,16 +29,132 @@ func NewMockRepositories() *MockRepositories {
 	return &MockRepositories{}
 }
 
+// MockUserService provides mock implementation for UserService
+type MockUserService struct {
+	mock.Mock
+}
+
+// Implement the UserService interface methods
+func (m *MockUserService) CreateUser(ctx context.Context, req dto.CreateUserDTO) (*user.User, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*user.User), args.Error(1)
+}
+
+func (m *MockUserService) GetUserByID(ctx context.Context, id uuid.UUID) (*user.User, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*user.User), args.Error(1)
+}
+
+func (m *MockUserService) GetUsersByFamily(ctx context.Context, familyID uuid.UUID) ([]*user.User, error) {
+	args := m.Called(ctx, familyID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*user.User), args.Error(1)
+}
+
+func (m *MockUserService) UpdateUser(ctx context.Context, id uuid.UUID, req dto.UpdateUserDTO) (*user.User, error) {
+	args := m.Called(ctx, id, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*user.User), args.Error(1)
+}
+
+func (m *MockUserService) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockUserService) ChangeUserRole(ctx context.Context, id uuid.UUID, newRole user.Role) error {
+	args := m.Called(ctx, id, newRole)
+	return args.Error(0)
+}
+
+func (m *MockUserService) GetUserByEmail(ctx context.Context, email string) (*user.User, error) {
+	args := m.Called(ctx, email)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*user.User), args.Error(1)
+}
+
+func (m *MockUserService) ValidateUserAccess(ctx context.Context, userID uuid.UUID, targetFamilyID uuid.UUID) error {
+	args := m.Called(ctx, userID, targetFamilyID)
+	return args.Error(0)
+}
+
+// MockFamilyService provides mock implementation for FamilyService
+type MockFamilyService struct {
+	mock.Mock
+}
+
+func (m *MockFamilyService) CreateFamily(ctx context.Context, req dto.CreateFamilyDTO) (*user.Family, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*user.Family), args.Error(1)
+}
+
+func (m *MockFamilyService) GetFamilyByID(ctx context.Context, id uuid.UUID) (*user.Family, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*user.Family), args.Error(1)
+}
+
+func (m *MockFamilyService) UpdateFamily(
+	ctx context.Context,
+	id uuid.UUID,
+	req dto.UpdateFamilyDTO,
+) (*user.Family, error) {
+	args := m.Called(ctx, id, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*user.Family), args.Error(1)
+}
+
+func (m *MockFamilyService) DeleteFamily(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockFamilyService) GetFamilyMembers(ctx context.Context, familyID uuid.UUID) ([]*user.User, error) {
+	args := m.Called(ctx, familyID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*user.User), args.Error(1)
+}
+
+// Create a services struct that satisfies the services.Services interface
+func NewMockServices() *services.Services {
+	return &services.Services{
+		User:   &MockUserService{},
+		Family: &MockFamilyService{},
+	}
+}
+
 func TestNewHTTPServer(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
+	mockServices := NewMockServices()
 	config := &application.Config{
 		Port: "8080",
 		Host: "localhost",
 	}
 
 	// Execute
-	server := application.NewHTTPServer(&repos.Repositories, config)
+	server := application.NewHTTPServer(&repos.Repositories, mockServices, config)
 
 	// Assert
 	assert.NotNil(t, server)
@@ -44,6 +164,7 @@ func TestNewHTTPServer(t *testing.T) {
 func TestNewHTTPServerWithObservability(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
+	mockServices := NewMockServices()
 	config := &application.Config{
 		Port: "8080",
 		Host: "localhost",
@@ -56,7 +177,7 @@ func TestNewHTTPServerWithObservability(t *testing.T) {
 	defer func() { _ = obsService.Shutdown(context.Background()) }()
 
 	// Execute
-	server := application.NewHTTPServerWithObservability(&repos.Repositories, config, obsService)
+	server := application.NewHTTPServerWithObservability(&repos.Repositories, mockServices, config, obsService)
 
 	// Assert
 	assert.NotNil(t, server)
@@ -66,8 +187,9 @@ func TestNewHTTPServerWithObservability(t *testing.T) {
 func TestHTTPServer_Echo(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
+	mockServices := NewMockServices()
 	config := &application.Config{Port: "8080", Host: "localhost"}
-	server := application.NewHTTPServer(&repos.Repositories, config)
+	server := application.NewHTTPServer(&repos.Repositories, mockServices, config)
 
 	// Execute
 	echoInstance := server.Echo()
@@ -81,7 +203,8 @@ func TestHTTPServer_HealthEndpoint(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
 	config := &application.Config{Port: "8080", Host: "localhost"}
-	server := application.NewHTTPServer(&repos.Repositories, config)
+	mockServices := NewMockServices()
+	server := application.NewHTTPServer(&repos.Repositories, mockServices, config)
 
 	// Create request to health endpoint
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
@@ -100,7 +223,8 @@ func TestHTTPServer_RoutesSetup(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
 	config := &application.Config{Port: "8080", Host: "localhost"}
-	server := application.NewHTTPServer(&repos.Repositories, config)
+	mockServices := NewMockServices()
+	server := application.NewHTTPServer(&repos.Repositories, mockServices, config)
 
 	// Test that routes are properly set up by checking if the echo instance has routes
 	routes := server.Echo().Routes()
@@ -137,7 +261,8 @@ func TestHTTPServer_MiddlewareSetup(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
 	config := &application.Config{Port: "8080", Host: "localhost"}
-	server := application.NewHTTPServer(&repos.Repositories, config)
+	mockServices := NewMockServices()
+	server := application.NewHTTPServer(&repos.Repositories, mockServices, config)
 
 	// Test that middleware is applied by making a request
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
@@ -159,7 +284,8 @@ func TestHTTPServer_WithObservabilityRoutes(t *testing.T) {
 
 	repos := NewMockRepositories()
 	config := &application.Config{Port: "8080", Host: "localhost"}
-	server := application.NewHTTPServerWithObservability(&repos.Repositories, config, obsService)
+	mockServices := NewMockServices()
+	server := application.NewHTTPServerWithObservability(&repos.Repositories, mockServices, config, obsService)
 
 	// Test that observability routes are properly set up
 	routes := server.Echo().Routes()
@@ -192,7 +318,8 @@ func TestHTTPServer_StartShutdownInterface(t *testing.T) {
 
 	repos := NewMockRepositories()
 	config := &application.Config{Port: "8080", Host: "localhost"}
-	server := application.NewHTTPServer(&repos.Repositories, config)
+	mockServices := NewMockServices()
+	server := application.NewHTTPServer(&repos.Repositories, mockServices, config)
 
 	// Verify methods exist and have correct signatures
 	ctx := context.Background()
@@ -236,7 +363,8 @@ func TestHTTPServer_IntegrationWithRealEndpoints(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
 	config := &application.Config{Port: "8080", Host: "localhost"}
-	server := application.NewHTTPServer(&repos.Repositories, config)
+	mockServices := NewMockServices()
+	server := application.NewHTTPServer(&repos.Repositories, mockServices, config)
 
 	// Test that we can make requests to various endpoints
 	testCases := []struct {
@@ -266,7 +394,8 @@ func TestHTTPServer_CORSEnabled(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
 	config := &application.Config{Port: "8080", Host: "localhost"}
-	server := application.NewHTTPServer(&repos.Repositories, config)
+	mockServices := NewMockServices()
+	server := application.NewHTTPServer(&repos.Repositories, mockServices, config)
 
 	// Test CORS preflight request
 	req := httptest.NewRequest(http.MethodOptions, "/api/v1/categories", nil)

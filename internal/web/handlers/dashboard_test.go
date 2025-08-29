@@ -37,7 +37,7 @@ func NewMockRepositories() *MockRepositories {
 func TestDashboardHandler_Dashboard(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
-	handler := webHandlers.NewDashboardHandler(&repos.Repositories)
+	handler := webHandlers.NewDashboardHandler(&repos.Repositories, nil)
 
 	// Setup Echo с mock renderer
 	e := echo.New()
@@ -63,7 +63,7 @@ func TestDashboardHandler_Dashboard(t *testing.T) {
 func TestDashboardHandler_DashboardStats(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
-	handler := webHandlers.NewDashboardHandler(&repos.Repositories)
+	handler := webHandlers.NewDashboardHandler(&repos.Repositories, nil)
 
 	// Setup Echo с mock renderer
 	e := echo.New()
@@ -106,7 +106,7 @@ func TestDashboardData_StructFields(t *testing.T) {
 func TestBaseHandler_IsHTMXRequest(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
-	baseHandler := webHandlers.NewBaseHandler(&repos.Repositories)
+	baseHandler := webHandlers.NewBaseHandler(&repos.Repositories, nil)
 
 	// Setup Echo
 	e := echo.New()
@@ -189,7 +189,7 @@ func TestMessage_StructFields(t *testing.T) {
 
 func TestDashboardHandler_Dashboard_DataStructure(t *testing.T) {
 	repos := NewMockRepositories()
-	handler := webHandlers.NewDashboardHandler(&repos.Repositories)
+	handler := webHandlers.NewDashboardHandler(&repos.Repositories, nil)
 
 	e := echo.New()
 	e.Renderer = &MockRenderer{}
@@ -217,7 +217,7 @@ func TestDashboardHandler_Dashboard_DataStructure(t *testing.T) {
 
 func TestDashboardHandler_DashboardStats_UpdatedData(t *testing.T) {
 	repos := NewMockRepositories()
-	handler := webHandlers.NewDashboardHandler(&repos.Repositories)
+	handler := webHandlers.NewDashboardHandler(&repos.Repositories, nil)
 
 	e := echo.New()
 	e.Renderer = &MockRenderer{}
@@ -243,7 +243,7 @@ func TestDashboardHandler_DashboardStats_UpdatedData(t *testing.T) {
 
 func TestDashboardHandler_DashboardStats_HTMXEndpoint(t *testing.T) {
 	repos := NewMockRepositories()
-	handler := webHandlers.NewDashboardHandler(&repos.Repositories)
+	handler := webHandlers.NewDashboardHandler(&repos.Repositories, nil)
 
 	e := echo.New()
 	e.Renderer = &MockRenderer{}
@@ -431,7 +431,7 @@ func TestPageData_CompleteStructure(t *testing.T) {
 
 func TestDashboardHandler_MultipleRequests(t *testing.T) {
 	repos := NewMockRepositories()
-	handler := webHandlers.NewDashboardHandler(&repos.Repositories)
+	handler := webHandlers.NewDashboardHandler(&repos.Repositories, nil)
 
 	e := echo.New()
 	e.Renderer = &MockRenderer{}
@@ -453,7 +453,7 @@ func TestDashboardHandler_MultipleRequests(t *testing.T) {
 // Benchmark тесты для performance
 func BenchmarkDashboardHandler_Dashboard(b *testing.B) {
 	repos := NewMockRepositories()
-	handler := webHandlers.NewDashboardHandler(&repos.Repositories)
+	handler := webHandlers.NewDashboardHandler(&repos.Repositories, nil)
 
 	e := echo.New()
 	e.Renderer = &MockRenderer{}
@@ -469,7 +469,7 @@ func BenchmarkDashboardHandler_Dashboard(b *testing.B) {
 
 func BenchmarkDashboardHandler_DashboardStats(b *testing.B) {
 	repos := NewMockRepositories()
-	handler := webHandlers.NewDashboardHandler(&repos.Repositories)
+	handler := webHandlers.NewDashboardHandler(&repos.Repositories, nil)
 
 	e := echo.New()
 	e.Renderer = &MockRenderer{}

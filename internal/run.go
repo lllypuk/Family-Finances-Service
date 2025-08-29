@@ -15,6 +15,7 @@ import (
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/infrastructure"
 	"family-budget-service/internal/observability"
+	"family-budget-service/internal/services"
 )
 
 const (
@@ -25,6 +26,7 @@ const (
 type Application struct {
 	config               *Config
 	repositories         *handlers.Repositories
+	services             *services.Services
 	httpServer           *application.HTTPServer
 	mongodb              *infrastructure.MongoDB
 	observabilityService *observability.Service
@@ -64,6 +66,17 @@ func NewApplication() (*Application, error) {
 	// Инициализация репозиториев
 	app.repositories = infrastructure.NewRepositories(mongodb)
 
+	// Инициализация сервисов
+	app.services = services.NewServices(
+		app.repositories.User,
+		app.repositories.Family,
+		app.repositories.Category,
+		app.repositories.Transaction,
+		app.repositories.Budget,
+		app.repositories.Budget,
+		app.repositories.Report,
+	)
+
 	// Создание HTTP сервера с observability
 	serverConfig := &application.Config{
 		Port:          config.Server.Port,
@@ -73,6 +86,7 @@ func NewApplication() (*Application, error) {
 	}
 	app.httpServer = application.NewHTTPServerWithObservability(
 		app.repositories,
+		app.services,
 		serverConfig,
 		app.observabilityService,
 	)

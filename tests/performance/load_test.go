@@ -23,7 +23,7 @@ func TestConcurrentUsers(t *testing.T) {
 		Port: "8080",
 	}
 
-	server := application.NewHTTPServer(nil, config)
+	server := application.NewHTTPServer(nil, nil, config)
 	testServer := httptest.NewServer(server.Echo())
 	defer testServer.Close()
 
@@ -165,7 +165,7 @@ func TestSustainedLoad(t *testing.T) {
 		Port: "8080",
 	}
 
-	server := application.NewHTTPServer(nil, config)
+	server := application.NewHTTPServer(nil, nil, config)
 	testServer := httptest.NewServer(server.Echo())
 	defer testServer.Close()
 
@@ -260,7 +260,7 @@ func TestRampUpLoad(t *testing.T) {
 		Port: "8080",
 	}
 
-	server := application.NewHTTPServer(nil, config)
+	server := application.NewHTTPServer(nil, nil, config)
 	testServer := httptest.NewServer(server.Echo())
 	defer testServer.Close()
 
@@ -383,7 +383,7 @@ func TestSpikeLoad(t *testing.T) {
 		Port: "8080",
 	}
 
-	server := application.NewHTTPServer(nil, config)
+	server := application.NewHTTPServer(nil, nil, config)
 	testServer := httptest.NewServer(server.Echo())
 	defer testServer.Close()
 

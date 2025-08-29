@@ -1,14 +1,15 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"golang.org/x/crypto/bcrypt"
 
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/user"
-	userRepo "family-budget-service/internal/infrastructure/user"
+	"family-budget-service/internal/services"
+	"family-budget-service/internal/services/dto"
 	"family-budget-service/internal/web/middleware"
 	"family-budget-service/internal/web/models"
 )
@@ -19,9 +20,9 @@ type UserHandler struct {
 }
 
 // NewUserHandler создает новый обработчик пользователей
-func NewUserHandler(repos *handlers.Repositories) *UserHandler {
+func NewUserHandler(repos *handlers.Repositories, services *services.Services) *UserHandler {
 	return &UserHandler{
-		BaseHandler: NewBaseHandler(repos),
+		BaseHandler: NewBaseHandler(repos, services),
 	}
 }
 
@@ -32,20 +33,20 @@ func (h *UserHandler) Index(c echo.Context) error {
 		return h.redirect(c, "/login")
 	}
 
-	// Получаем всех пользователей семьи
-	users, err := h.repositories.User.GetByFamilyID(c.Request().Context(), session.FamilyID)
+	// Получаем всех пользователей семьи через сервис
+	users, err := h.services.User.GetUsersByFamily(c.Request().Context(), session.FamilyID)
 	if err != nil {
 		return h.handleError(c, err, "Failed to load users")
 	}
 
-	// Получаем семью для отображения названия
-	family, err := h.repositories.Family.GetByID(c.Request().Context(), session.FamilyID)
+	// Получаем семью для отображения названия через сервис
+	family, err := h.services.Family.GetFamilyByID(c.Request().Context(), session.FamilyID)
 	if err != nil {
 		return h.handleError(c, err, "Failed to load family")
 	}
 
-	// Получаем текущего пользователя для проверки прав
-	currentUser, err := h.repositories.User.GetByID(c.Request().Context(), session.UserID)
+	// Получаем текущего пользователя для проверки прав через сервис
+	currentUser, err := h.services.User.GetUserByID(c.Request().Context(), session.UserID)
 	if err != nil {
 		return h.handleError(c, err, "Failed to load current user")
 	}
@@ -74,8 +75,8 @@ func (h *UserHandler) New(c echo.Context) error {
 		return h.redirect(c, "/login")
 	}
 
-	// Проверяем права доступа - только админ может добавлять пользователей
-	currentUser, err := h.repositories.User.GetByID(c.Request().Context(), session.UserID)
+	// Проверяем права доступа через сервис - только админ может добавлять пользователей
+	currentUser, err := h.services.User.GetUserByID(c.Request().Context(), session.UserID)
 	if err != nil {
 		return h.handleError(c, err, "Failed to load current user")
 	}
@@ -109,62 +110,33 @@ func (h *UserHandler) Create(c echo.Context) error {
 		return h.redirect(c, "/login")
 	}
 
-	// Проверяем права доступа
-	currentUser, userErr := h.repositories.User.GetByID(c.Request().Context(), session.UserID)
-	if userErr != nil {
-		return h.handleError(c, userErr, "Failed to load current user")
-	}
-
-	if currentUser.Role != user.RoleAdmin {
-		return c.String(http.StatusForbidden, "Only family admin can add new members")
-	}
-
 	var form models.CreateUserForm
 	if bindErr := c.Bind(&form); bindErr != nil {
 		return h.userError(c, "Invalid form data", nil, &form)
 	}
 
-	// Валидация
+	// Валидация формы
 	if validateErr := c.Validate(&form); validateErr != nil {
 		return h.userError(c, "Please check your input", models.GetValidationErrors(validateErr), &form)
 	}
 
-	// Валидация email
-	if emailErr := userRepo.ValidateEmail(form.Email); emailErr != nil {
-		return h.userError(c, "Invalid email format", map[string]string{
-			"email": "Please enter a valid email address",
-		}, &form)
+	// Конвертируем форму в DTO
+	webReq := dto.CreateUserWebRequest{
+		Email:     form.Email,
+		Password:  form.Password,
+		FirstName: form.FirstName,
+		LastName:  form.LastName,
+		Role:      form.Role,
+	}
+	userDTO := dto.FromCreateUserWebRequest(webReq, session.FamilyID)
+
+	// Вызываем сервис
+	createdUser, err := h.services.User.CreateUser(c.Request().Context(), userDTO)
+	if err != nil {
+		return h.handleServiceError(c, err, &form)
 	}
 
-	// Проверяем, что пользователь с таким email не существует
-	existingUser, _ := h.repositories.User.GetByEmail(c.Request().Context(), form.Email)
-	if existingUser != nil {
-		return h.userError(c, "", map[string]string{
-			"email": "User with this email already exists",
-		}, &form)
-	}
-
-	// Валидация роли
-	role := user.Role(form.Role)
-	if role != user.RoleAdmin && role != user.RoleMember && role != user.RoleChild {
-		return h.userError(c, "", map[string]string{
-			"role": "Invalid role selected",
-		}, &form)
-	}
-
-	// Хешируем пароль
-	hashedPassword, hashErr := bcrypt.GenerateFromPassword([]byte(form.Password), bcrypt.DefaultCost)
-	if hashErr != nil {
-		return c.String(http.StatusInternalServerError, "Failed to process password")
-	}
-
-	// Создаем пользователя
-	newUser := user.NewUser(form.Email, form.FirstName, form.LastName, session.FamilyID, role)
-	newUser.Password = string(hashedPassword)
-
-	if createErr := h.repositories.User.Create(c.Request().Context(), newUser); createErr != nil {
-		return h.handleError(c, createErr, "Failed to create user")
-	}
+	_ = createdUser // Use the created user if needed for response
 
 	// Если это HTMX запрос
 	if h.isHTMXRequest(c) {
@@ -173,6 +145,30 @@ func (h *UserHandler) Create(c echo.Context) error {
 	}
 
 	return c.Redirect(http.StatusFound, "/users")
+}
+
+// handleServiceError handles service errors and converts them to web form errors
+func (h *UserHandler) handleServiceError(c echo.Context, err error, form *models.CreateUserForm) error {
+	switch {
+	case errors.Is(err, services.ErrValidationFailed):
+		return h.userError(c, "Please check your input", map[string]string{
+			"form": err.Error(),
+		}, form)
+	case errors.Is(err, services.ErrEmailAlreadyExists):
+		return h.userError(c, "", map[string]string{
+			"email": "User with this email already exists",
+		}, form)
+	case errors.Is(err, services.ErrFamilyNotFound):
+		return h.userError(c, "Family not found", nil, form)
+	case errors.Is(err, services.ErrUnauthorized):
+		return c.String(http.StatusForbidden, "Only family admin can add new members")
+	case errors.Is(err, services.ErrInvalidRole):
+		return h.userError(c, "", map[string]string{
+			"role": "Invalid role selected",
+		}, form)
+	default:
+		return h.handleError(c, err, "Failed to create user")
+	}
 }
 
 // userError возвращает ошибку для форм пользователей

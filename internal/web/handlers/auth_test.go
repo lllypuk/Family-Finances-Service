@@ -114,7 +114,7 @@ func setupAuthHandler() (*webHandlers.AuthHandler, *MockUserRepositoryWeb, *Mock
 		User:   mockUserRepo,
 		Family: mockFamilyRepo,
 	}
-	handler := webHandlers.NewAuthHandler(repositories)
+	handler := webHandlers.NewAuthHandler(repositories, nil)
 	return handler, mockUserRepo, mockFamilyRepo
 }
 

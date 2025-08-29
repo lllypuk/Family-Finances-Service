@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 
 	"family-budget-service/internal/domain/user"
+	"family-budget-service/internal/infrastructure/validation"
 )
 
 const (
@@ -81,6 +82,14 @@ func SanitizeEmail(email string) string {
 }
 
 func (r *Repository) Create(ctx context.Context, u *user.User) error {
+	// Validate UUID parameters to prevent injection attacks
+	if err := validation.ValidateUUID(u.ID); err != nil {
+		return fmt.Errorf("invalid user ID: %w", err)
+	}
+	if err := validation.ValidateUUID(u.FamilyID); err != nil {
+		return fmt.Errorf("invalid user familyID: %w", err)
+	}
+
 	// Validate email to prevent injection attacks
 	if err := ValidateEmail(u.Email); err != nil {
 		return fmt.Errorf("invalid user email: %w", err)
@@ -100,8 +109,16 @@ func (r *Repository) Create(ctx context.Context, u *user.User) error {
 }
 
 func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*user.User, error) {
+	// Validate UUID parameter to prevent injection attacks
+	if err := validation.ValidateUUID(id); err != nil {
+		return nil, fmt.Errorf("invalid id parameter: %w", err)
+	}
+
+	// Use explicit field specification to prevent injection
+	filter := bson.D{{Key: "_id", Value: id}}
+
 	var u user.User
-	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&u)
+	err := r.collection.FindOne(ctx, filter).Decode(&u)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, fmt.Errorf("user with id %s not found", id)
@@ -137,7 +154,15 @@ func (r *Repository) GetByEmail(ctx context.Context, email string) (*user.User, 
 }
 
 func (r *Repository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*user.User, error) {
-	cursor, err := r.collection.Find(ctx, bson.M{"family_id": familyID})
+	// Validate UUID parameter to prevent injection attacks
+	if err := validation.ValidateUUID(familyID); err != nil {
+		return nil, fmt.Errorf("invalid familyID parameter: %w", err)
+	}
+
+	// Use explicit field specification to prevent injection
+	filter := bson.D{{Key: "family_id", Value: familyID}}
+
+	cursor, err := r.collection.Find(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get users by family id: %w", err)
 	}
@@ -162,6 +187,14 @@ func (r *Repository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*
 }
 
 func (r *Repository) Update(ctx context.Context, u *user.User) error {
+	// Validate UUID parameters to prevent injection attacks
+	if err := validation.ValidateUUID(u.ID); err != nil {
+		return fmt.Errorf("invalid user ID: %w", err)
+	}
+	if err := validation.ValidateUUID(u.FamilyID); err != nil {
+		return fmt.Errorf("invalid user familyID: %w", err)
+	}
+
 	// Validate email to prevent injection attacks
 	if err := ValidateEmail(u.Email); err != nil {
 		return fmt.Errorf("invalid user email: %w", err)
@@ -170,8 +203,9 @@ func (r *Repository) Update(ctx context.Context, u *user.User) error {
 	// Sanitize email before updating
 	u.Email = SanitizeEmail(u.Email)
 
-	filter := bson.M{"_id": u.ID}
-	update := bson.M{"$set": u}
+	// Use explicit field specification to prevent injection
+	filter := bson.D{{Key: "_id", Value: u.ID}}
+	update := bson.D{{Key: "$set", Value: u}}
 
 	result, err := r.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
@@ -186,7 +220,15 @@ func (r *Repository) Update(ctx context.Context, u *user.User) error {
 }
 
 func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
-	result, err := r.collection.DeleteOne(ctx, bson.M{"_id": id})
+	// Validate UUID parameter to prevent injection attacks
+	if err := validation.ValidateUUID(id); err != nil {
+		return fmt.Errorf("invalid id parameter: %w", err)
+	}
+
+	// Use explicit field specification to prevent injection
+	filter := bson.D{{Key: "_id", Value: id}}
+
+	result, err := r.collection.DeleteOne(ctx, filter)
 	if err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}

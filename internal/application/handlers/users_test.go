@@ -18,6 +18,8 @@ import (
 
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/user"
+	"family-budget-service/internal/services"
+	"family-budget-service/internal/services/dto"
 )
 
 // MockUserRepository is a mock implementation of user repository
@@ -64,11 +66,71 @@ func (m *MockUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return args.Error(0)
 }
 
+// MockUserService provides mock implementation for UserService
+type MockUserService struct {
+	mock.Mock
+}
+
+func (m *MockUserService) CreateUser(ctx context.Context, req dto.CreateUserDTO) (*user.User, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*user.User), args.Error(1)
+}
+
+func (m *MockUserService) GetUserByID(ctx context.Context, id uuid.UUID) (*user.User, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*user.User), args.Error(1)
+}
+
+func (m *MockUserService) GetUsersByFamily(ctx context.Context, familyID uuid.UUID) ([]*user.User, error) {
+	args := m.Called(ctx, familyID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*user.User), args.Error(1)
+}
+
+func (m *MockUserService) UpdateUser(ctx context.Context, id uuid.UUID, req dto.UpdateUserDTO) (*user.User, error) {
+	args := m.Called(ctx, id, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*user.User), args.Error(1)
+}
+
+func (m *MockUserService) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockUserService) ChangeUserRole(ctx context.Context, id uuid.UUID, newRole user.Role) error {
+	args := m.Called(ctx, id, newRole)
+	return args.Error(0)
+}
+
+func (m *MockUserService) GetUserByEmail(ctx context.Context, email string) (*user.User, error) {
+	args := m.Called(ctx, email)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*user.User), args.Error(1)
+}
+
+func (m *MockUserService) ValidateUserAccess(ctx context.Context, userID uuid.UUID, targetFamilyID uuid.UUID) error {
+	args := m.Called(ctx, userID, targetFamilyID)
+	return args.Error(0)
+}
+
 func TestUserHandler_CreateUser(t *testing.T) {
 	tests := []struct {
 		name           string
 		requestBody    any
-		mockSetup      func(*MockUserRepository)
+		mockSetup      func(*MockUserService)
 		expectedStatus int
 		expectedBody   func(t *testing.T, body string)
 	}{
@@ -82,8 +144,18 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				FamilyID:  uuid.New(),
 				Role:      "member",
 			},
-			mockSetup: func(repo *MockUserRepository) {
-				repo.On("Create", mock.Anything, mock.AnythingOfType("*user.User")).Return(nil)
+			mockSetup: func(service *MockUserService) {
+				testUser := &user.User{
+					ID:        uuid.New(),
+					Email:     "test@example.com",
+					FirstName: "John",
+					LastName:  "Doe",
+					Role:      user.RoleMember,
+					FamilyID:  uuid.New(),
+					CreatedAt: time.Now(),
+					UpdatedAt: time.Now(),
+				}
+				service.On("CreateUser", mock.Anything, mock.AnythingOfType("dto.CreateUserDTO")).Return(testUser, nil)
 			},
 			expectedStatus: http.StatusCreated,
 			expectedBody: func(t *testing.T, body string) {
@@ -98,17 +170,25 @@ func TestUserHandler_CreateUser(t *testing.T) {
 			},
 		},
 		{
-			name:        "Error - Invalid request body",
-			requestBody: `{"invalid": json}`, // Invalid JSON syntax to trigger bind error
-			mockSetup: func(_ *MockUserRepository) {
-				// No mock setup needed for validation error
+			name: "Error - Service validation failed",
+			requestBody: handlers.CreateUserRequest{
+				Email:     "invalid-email", // Invalid email format
+				Password:  "123",           // Too short password
+				FirstName: "",              // Empty first name
+				LastName:  "Doe",
+				FamilyID:  uuid.New(),
+				Role:      "member",
+			},
+			mockSetup: func(service *MockUserService) {
+				service.On("CreateUser", mock.Anything, mock.AnythingOfType("dto.CreateUserDTO")).
+					Return(nil, services.ErrValidationFailed)
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectedBody: func(t *testing.T, body string) {
 				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
 				require.NoError(t, err)
-				assert.Equal(t, "INVALID_REQUEST", response.Error.Code)
+				assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
 			},
 		},
 		{
@@ -117,15 +197,16 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				Email: "test@example.com",
 				// Missing password, name, etc.
 			},
-			mockSetup: func(_ *MockUserRepository) {
-				// No mock setup needed for validation error
+			mockSetup: func(service *MockUserService) {
+				service.On("CreateUser", mock.Anything, mock.AnythingOfType("dto.CreateUserDTO")).
+					Return(nil, services.ErrValidationFailed)
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectedBody: func(t *testing.T, body string) {
-				var response handlers.APIResponse[handlers.UserResponse]
+				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
 				require.NoError(t, err)
-				assert.NotEmpty(t, response.Errors)
+				assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
 			},
 		},
 		{
@@ -138,15 +219,16 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				FamilyID:  uuid.New(),
 				Role:      "member",
 			},
-			mockSetup: func(_ *MockUserRepository) {
-				// No mock setup needed for validation error
+			mockSetup: func(service *MockUserService) {
+				service.On("CreateUser", mock.Anything, mock.AnythingOfType("dto.CreateUserDTO")).
+					Return(nil, services.ErrValidationFailed)
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectedBody: func(t *testing.T, body string) {
-				var response handlers.APIResponse[handlers.UserResponse]
+				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
 				require.NoError(t, err)
-				assert.NotEmpty(t, response.Errors)
+				assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
 			},
 		},
 		{
@@ -159,15 +241,16 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				FamilyID:  uuid.New(),
 				Role:      "member",
 			},
-			mockSetup: func(repo *MockUserRepository) {
-				repo.On("Create", mock.Anything, mock.AnythingOfType("*user.User")).Return(errors.New("database error"))
+			mockSetup: func(service *MockUserService) {
+				service.On("CreateUser", mock.Anything, mock.AnythingOfType("dto.CreateUserDTO")).
+					Return(nil, errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody: func(t *testing.T, body string) {
 				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
 				require.NoError(t, err)
-				assert.Equal(t, "CREATE_FAILED", response.Error.Code)
+				assert.Equal(t, "INTERNAL_ERROR", response.Error.Code)
 			},
 		},
 	}
@@ -176,11 +259,11 @@ func TestUserHandler_CreateUser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
 			e := echo.New()
-			mockRepo := &MockUserRepository{}
-			tt.mockSetup(mockRepo)
+			mockService := &MockUserService{}
+			tt.mockSetup(mockService)
 
-			repositories := &handlers.Repositories{User: mockRepo}
-			handler := handlers.NewUserHandler(repositories)
+			repositories := &handlers.Repositories{}
+			handler := handlers.NewUserHandler(repositories, mockService)
 
 			// Create request
 			var reqBody []byte
@@ -201,7 +284,7 @@ func TestUserHandler_CreateUser(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			tt.expectedBody(t, rec.Body.String())
-			mockRepo.AssertExpectations(t)
+			mockService.AssertExpectations(t)
 		})
 	}
 }
@@ -213,14 +296,14 @@ func TestUserHandler_GetUserByID(t *testing.T) {
 	tests := []struct {
 		name           string
 		userID         string
-		mockSetup      func(*MockUserRepository)
+		mockSetup      func(*MockUserService)
 		expectedStatus int
 		expectedBody   func(t *testing.T, body string)
 	}{
 		{
 			name:   "Success - User found",
 			userID: userID.String(),
-			mockSetup: func(repo *MockUserRepository) {
+			mockSetup: func(service *MockUserService) {
 				user := &user.User{
 					ID:        userID,
 					Email:     "test@example.com",
@@ -231,7 +314,7 @@ func TestUserHandler_GetUserByID(t *testing.T) {
 					CreatedAt: time.Now(),
 					UpdatedAt: time.Now(),
 				}
-				repo.On("GetByID", mock.Anything, userID).Return(user, nil)
+				service.On("GetUserByID", mock.Anything, userID).Return(user, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody: func(t *testing.T, body string) {
@@ -245,7 +328,7 @@ func TestUserHandler_GetUserByID(t *testing.T) {
 		{
 			name:   "Error - Invalid UUID format",
 			userID: "invalid-uuid",
-			mockSetup: func(_ *MockUserRepository) {
+			mockSetup: func(_ *MockUserService) {
 				// No mock setup needed for UUID validation error
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -259,8 +342,8 @@ func TestUserHandler_GetUserByID(t *testing.T) {
 		{
 			name:   "Error - User not found",
 			userID: userID.String(),
-			mockSetup: func(repo *MockUserRepository) {
-				repo.On("GetByID", mock.Anything, userID).Return(nil, errors.New("not found"))
+			mockSetup: func(service *MockUserService) {
+				service.On("GetUserByID", mock.Anything, userID).Return(nil, services.ErrUserNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
 			expectedBody: func(t *testing.T, body string) {
@@ -276,11 +359,11 @@ func TestUserHandler_GetUserByID(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
 			e := echo.New()
-			mockRepo := &MockUserRepository{}
-			tt.mockSetup(mockRepo)
+			mockService := &MockUserService{}
+			tt.mockSetup(mockService)
 
-			repositories := &handlers.Repositories{User: mockRepo}
-			handler := handlers.NewUserHandler(repositories)
+			repositories := &handlers.Repositories{}
+			handler := handlers.NewUserHandler(repositories, mockService)
 
 			// Create request
 			req := httptest.NewRequest(http.MethodGet, "/users/"+tt.userID, nil)
@@ -296,7 +379,7 @@ func TestUserHandler_GetUserByID(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			tt.expectedBody(t, rec.Body.String())
-			mockRepo.AssertExpectations(t)
+			mockService.AssertExpectations(t)
 		})
 	}
 }
@@ -309,7 +392,7 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 		name           string
 		userID         string
 		requestBody    any
-		mockSetup      func(*MockUserRepository)
+		mockSetup      func(*MockUserService)
 		expectedStatus int
 		expectedBody   func(t *testing.T, body string)
 	}{
@@ -320,19 +403,19 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 				FirstName: stringPtr("UpdatedName"),
 				LastName:  stringPtr("UpdatedLastName"),
 			},
-			mockSetup: func(repo *MockUserRepository) {
-				existingUser := &user.User{
+			mockSetup: func(service *MockUserService) {
+				updatedUser := &user.User{
 					ID:        userID,
 					Email:     "test@example.com",
-					FirstName: "John",
-					LastName:  "Doe",
+					FirstName: "UpdatedName",
+					LastName:  "UpdatedLastName",
 					Role:      user.RoleMember,
 					FamilyID:  familyID,
 					CreatedAt: time.Now(),
 					UpdatedAt: time.Now(),
 				}
-				repo.On("GetByID", mock.Anything, userID).Return(existingUser, nil)
-				repo.On("Update", mock.Anything, mock.AnythingOfType("*user.User")).Return(nil)
+				service.On("UpdateUser", mock.Anything, userID, mock.AnythingOfType("dto.UpdateUserDTO")).
+					Return(updatedUser, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody: func(t *testing.T, body string) {
@@ -349,7 +432,7 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 			requestBody: handlers.UpdateUserRequest{
 				FirstName: stringPtr("UpdatedName"),
 			},
-			mockSetup: func(_ *MockUserRepository) {
+			mockSetup: func(_ *MockUserService) {
 				// No mock needed for UUID validation error
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -366,8 +449,9 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 			requestBody: handlers.UpdateUserRequest{
 				FirstName: stringPtr("UpdatedName"),
 			},
-			mockSetup: func(repo *MockUserRepository) {
-				repo.On("GetByID", mock.Anything, userID).Return(nil, errors.New("not found"))
+			mockSetup: func(service *MockUserService) {
+				service.On("UpdateUser", mock.Anything, userID, mock.AnythingOfType("dto.UpdateUserDTO")).
+					Return(nil, services.ErrUserNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
 			expectedBody: func(t *testing.T, body string) {
@@ -383,11 +467,11 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
 			e := echo.New()
-			mockRepo := &MockUserRepository{}
-			tt.mockSetup(mockRepo)
+			mockService := &MockUserService{}
+			tt.mockSetup(mockService)
 
-			repositories := &handlers.Repositories{User: mockRepo}
-			handler := handlers.NewUserHandler(repositories)
+			repositories := &handlers.Repositories{}
+			handler := handlers.NewUserHandler(repositories, mockService)
 
 			// Create request
 			jsonBody, _ := json.Marshal(tt.requestBody)
@@ -405,7 +489,7 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			tt.expectedBody(t, rec.Body.String())
-			mockRepo.AssertExpectations(t)
+			mockService.AssertExpectations(t)
 		})
 	}
 }
@@ -416,15 +500,15 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 	tests := []struct {
 		name           string
 		userID         string
-		mockSetup      func(*MockUserRepository)
+		mockSetup      func(*MockUserService)
 		expectedStatus int
 		expectedBody   func(t *testing.T, body string)
 	}{
 		{
 			name:   "Success - User deleted",
 			userID: userID.String(),
-			mockSetup: func(repo *MockUserRepository) {
-				repo.On("Delete", mock.Anything, userID).Return(nil)
+			mockSetup: func(service *MockUserService) {
+				service.On("DeleteUser", mock.Anything, userID).Return(nil)
 			},
 			expectedStatus: http.StatusNoContent,
 			expectedBody: func(t *testing.T, body string) {
@@ -435,7 +519,7 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 		{
 			name:   "Error - Invalid UUID",
 			userID: "invalid-uuid",
-			mockSetup: func(_ *MockUserRepository) {
+			mockSetup: func(_ *MockUserService) {
 				// No mock needed for UUID validation error
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -449,15 +533,15 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 		{
 			name:   "Error - User not found",
 			userID: userID.String(),
-			mockSetup: func(repo *MockUserRepository) {
-				repo.On("Delete", mock.Anything, userID).Return(errors.New("not found"))
+			mockSetup: func(service *MockUserService) {
+				service.On("DeleteUser", mock.Anything, userID).Return(errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody: func(t *testing.T, body string) {
 				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
 				require.NoError(t, err)
-				assert.Equal(t, "DELETE_FAILED", response.Error.Code)
+				assert.Equal(t, "INTERNAL_ERROR", response.Error.Code)
 			},
 		},
 	}
@@ -466,11 +550,11 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
 			e := echo.New()
-			mockRepo := &MockUserRepository{}
-			tt.mockSetup(mockRepo)
+			mockService := &MockUserService{}
+			tt.mockSetup(mockService)
 
-			repositories := &handlers.Repositories{User: mockRepo}
-			handler := handlers.NewUserHandler(repositories)
+			repositories := &handlers.Repositories{}
+			handler := handlers.NewUserHandler(repositories, mockService)
 
 			// Create request
 			req := httptest.NewRequest(http.MethodDelete, "/users/"+tt.userID, nil)
@@ -486,7 +570,7 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			tt.expectedBody(t, rec.Body.String())
-			mockRepo.AssertExpectations(t)
+			mockService.AssertExpectations(t)
 		})
 	}
 }

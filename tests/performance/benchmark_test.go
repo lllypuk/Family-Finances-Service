@@ -25,7 +25,7 @@ func BenchmarkHTTPServerPerformance(b *testing.B) {
 		Port: "8080",
 	}
 
-	server := application.NewHTTPServer(nil, config)
+	server := application.NewHTTPServer(nil, nil, config)
 	testServer := httptest.NewServer(server.Echo())
 	defer testServer.Close()
 
@@ -242,7 +242,7 @@ func BenchmarkResponseTimes(b *testing.B) {
 		Port: "8080",
 	}
 
-	server := application.NewHTTPServer(nil, config)
+	server := application.NewHTTPServer(nil, nil, config)
 	testServer := httptest.NewServer(server.Echo())
 	defer testServer.Close()
 

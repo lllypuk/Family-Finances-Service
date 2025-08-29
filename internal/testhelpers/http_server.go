@@ -15,6 +15,7 @@ import (
 	reportRepo "family-budget-service/internal/infrastructure/report"
 	transactionRepo "family-budget-service/internal/infrastructure/transaction"
 	userRepo "family-budget-service/internal/infrastructure/user"
+	"family-budget-service/internal/services"
 )
 
 const (
@@ -42,6 +43,7 @@ func SetupHTTPServer(t *testing.T) *TestHTTPServer {
 	categoryRepository := categoryRepo.NewRepository(mongoContainer.Database)
 	transactionRepository := transactionRepo.NewRepository(mongoContainer.Database)
 	budgetRepository := budgetRepo.NewRepository(mongoContainer.Database)
+	fullBudgetRepository := budgetRepo.NewRepository(mongoContainer.Database)
 	reportRepository := reportRepo.NewRepository(mongoContainer.Database)
 
 	// Create repositories struct
@@ -54,6 +56,17 @@ func SetupHTTPServer(t *testing.T) *TestHTTPServer {
 		Report:      reportRepository,
 	}
 
+	// Create services
+	serviceContainer := services.NewServices(
+		userRepository,
+		familyRepository,
+		categoryRepository,
+		transactionRepository,
+		budgetRepository,
+		fullBudgetRepository,
+		reportRepository,
+	)
+
 	rndPort := getRandomPort()
 
 	// Create HTTP server config
@@ -63,7 +76,7 @@ func SetupHTTPServer(t *testing.T) *TestHTTPServer {
 	}
 
 	// Create HTTP server
-	server := application.NewHTTPServer(repositories, config)
+	server := application.NewHTTPServer(repositories, serviceContainer, config)
 
 	// Start server in background
 	go func() {

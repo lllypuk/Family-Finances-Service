@@ -4,6 +4,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/services"
 )
 
 const (
@@ -25,9 +26,9 @@ type DashboardHandler struct {
 }
 
 // NewDashboardHandler создает новый обработчик дашборда
-func NewDashboardHandler(repositories *handlers.Repositories) *DashboardHandler {
+func NewDashboardHandler(repositories *handlers.Repositories, services *services.Services) *DashboardHandler {
 	return &DashboardHandler{
-		BaseHandler: NewBaseHandler(repositories),
+		BaseHandler: NewBaseHandler(repositories, services),
 	}
 }
 

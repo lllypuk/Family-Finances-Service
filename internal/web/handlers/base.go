@@ -10,6 +10,7 @@ import (
 
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/user"
+	"family-budget-service/internal/services"
 )
 
 const (
@@ -25,12 +26,14 @@ var (
 // BaseHandler содержит общие методы для всех веб-обработчиков
 type BaseHandler struct {
 	repositories *handlers.Repositories
+	services     *services.Services
 }
 
 // NewBaseHandler создает новый базовый обработчик
-func NewBaseHandler(repositories *handlers.Repositories) *BaseHandler {
+func NewBaseHandler(repositories *handlers.Repositories, services *services.Services) *BaseHandler {
 	return &BaseHandler{
 		repositories: repositories,
+		services:     services,
 	}
 }
 
