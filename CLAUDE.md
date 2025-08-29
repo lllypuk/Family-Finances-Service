@@ -104,7 +104,7 @@ This is a production-ready family budget management service built with Go, follo
 ### Domain Structure
 The application is organized into domain modules in `internal/domain/`:
 - **User/Family**: User management with role-based access (admin, member, child)
-- **Category**: Income and expense category management  
+- **Category**: Income and expense category management
 - **Transaction**: Financial transaction tracking
 - **Budget**: Budget planning and monitoring
 - **Report**: Financial reporting and analytics
@@ -130,14 +130,14 @@ The application is organized into domain modules in `internal/domain/`:
 ### Configuration
 Environment variables are managed in `internal/config.go`. Key variables:
 - `SERVER_PORT` / `SERVER_HOST` - Server configuration (default: localhost:8080)
-- `MONGODB_URI` / `MONGODB_DATABASE` - Database connection 
+- `MONGODB_URI` / `MONGODB_DATABASE` - Database connection
 - `SESSION_SECRET` - Secret key for session management (required for web interface)
 - `REDIS_URL` - Cache configuration (optional)
 - `LOG_LEVEL` - Logging level (debug, info, warn, error)
 - `ENVIRONMENT` - Application environment (development, production)
 
 ### Repository Pattern
-All data access is abstracted through repository interfaces in `internal/application/handlers/repositories.go`. 
+All data access is abstracted through repository interfaces in `internal/application/handlers/repositories.go`.
 Full implementations are available in `internal/infrastructure/` with comprehensive error handling.
 
 ### Multi-tenancy & Security
@@ -157,7 +157,7 @@ The project includes a complete web interface built with modern technologies:
 - **Progressive Web App** - Installable with offline capabilities
 
 **Web Components:**
-- `internal/web/handlers/` - Authentication, dashboard, and HTMX endpoints  
+- `internal/web/handlers/` - Authentication, dashboard, and HTMX endpoints
 - `internal/web/middleware/` - Session management, CSRF protection, auth guards
 - `internal/web/templates/` - HTML templates with layouts and components
 - `internal/web/static/` - CSS, JS, and image assets
@@ -174,7 +174,7 @@ The project has comprehensive testing across all layers:
 
 **Unit Tests (200+ tests):**
 - Domain models with business logic validation
-- Repository implementations with mocking  
+- Repository implementations with mocking
 - HTTP handlers with table-driven tests
 - Middleware components with edge cases
 - Web form validation and error handling
@@ -187,7 +187,7 @@ The project has comprehensive testing across all layers:
 
 **Performance Tests (50+ tests):**
 - Load testing for API endpoints
-- Concurrent access scenarios  
+- Concurrent access scenarios
 - Memory leak detection
 - Database query optimization benchmarks
 
@@ -212,7 +212,7 @@ The project uses GitHub Actions for continuous integration and deployment with t
 ### CI Pipeline (`.github/workflows/ci.yml`)
 Runs on every push and pull request to main/develop branches:
 - **Environment Setup**: Go 1.24, MongoDB service for integration tests
-- **Quality Checks**: 
+- **Quality Checks**:
   - Code formatting verification with `make fmt`
   - Comprehensive linting with golangci-lint (50+ rules)
   - Security scanning with `govulncheck`
@@ -263,14 +263,14 @@ Use `make lint` and `make test` locally to ensure CI pipeline success before pus
 
 ## 🚨 CRITICAL: Code Quality Requirements
 
-**MANDATORY LINTER COMPLIANCE**: This project enforces strict code quality standards through golangci-lint. 
+**MANDATORY LINTER COMPLIANCE**: This project enforces strict code quality standards through golangci-lint.
 
 ### For ALL Development Work:
 
 **After completing ANY task that modifies code, you MUST:**
 
 1. **Run `make fmt`** - Format code according to project standards
-2. **Run `make test`** - Ensure all tests pass 
+2. **Run `make test`** - Ensure all tests pass
 3. **Run `make lint`** - **MANDATORY** - Must result in 0 issues
 4. **Fix ALL linter errors** - No exceptions, no compromises
 
@@ -278,7 +278,7 @@ Use `make lint` and `make test` locally to ensure CI pipeline success before pus
 - Type errors and unused variables/imports
 - Security vulnerabilities (gosec)
 - Code style violations (revive, gofmt)
-- Test assertion problems (testifylint)  
+- Test assertion problems (testifylint)
 - Performance issues (ineffassign)
 - Complexity violations (funlen, cyclop)
 - Best practices violations (gocritic)
@@ -286,13 +286,13 @@ Use `make lint` and `make test` locally to ensure CI pipeline success before pus
 ### Zero Tolerance Policy:
 - **0 linter issues** required before task completion
 - **No bypassing** linter rules without explicit approval
-- **All warnings must be addressed** 
+- **All warnings must be addressed**
 - If unable to resolve, escalate with specific error details
 
 ### Quick Fix Commands:
 ```bash
 make fmt          # Auto-format code
-make lint-fix     # Auto-fix simple issues  
+make lint-fix     # Auto-fix simple issues
 make lint         # Check for remaining issues
 ```
 
