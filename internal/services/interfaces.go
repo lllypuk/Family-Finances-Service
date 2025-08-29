@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
@@ -90,4 +91,29 @@ type TransactionService interface {
 		amount float64,
 		transactionType transaction.Type,
 	) error
+}
+
+// BudgetService defines business operations for budget management and calculations
+type BudgetService interface {
+	// CRUD Operations
+	CreateBudget(ctx context.Context, req dto.CreateBudgetDTO) (*budget.Budget, error)
+	GetBudgetByID(ctx context.Context, id uuid.UUID) (*budget.Budget, error)
+	GetBudgetsByFamily(ctx context.Context, familyID uuid.UUID, filter dto.BudgetFilterDTO) ([]*budget.Budget, error)
+	UpdateBudget(ctx context.Context, id uuid.UUID, req dto.UpdateBudgetDTO) (*budget.Budget, error)
+	DeleteBudget(ctx context.Context, id uuid.UUID) error
+
+	// Business Operations
+	GetActiveBudgets(ctx context.Context, familyID uuid.UUID, date time.Time) ([]*budget.Budget, error)
+	UpdateBudgetSpent(ctx context.Context, budgetID uuid.UUID, amount float64) error
+	CheckBudgetLimits(ctx context.Context, familyID uuid.UUID, categoryID uuid.UUID, amount float64) error
+	GetBudgetStatus(ctx context.Context, budgetID uuid.UUID) (*dto.BudgetStatusDTO, error)
+	CalculateBudgetUtilization(ctx context.Context, budgetID uuid.UUID) (*dto.BudgetUtilizationDTO, error)
+	GetBudgetsByCategory(ctx context.Context, familyID uuid.UUID, categoryID uuid.UUID) ([]*budget.Budget, error)
+	ValidateBudgetPeriod(
+		ctx context.Context,
+		familyID uuid.UUID,
+		categoryID *uuid.UUID,
+		startDate, endDate time.Time,
+	) error
+	RecalculateBudgetSpent(ctx context.Context, budgetID uuid.UUID) error
 }

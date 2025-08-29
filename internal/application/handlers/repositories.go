@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"time"
 
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
@@ -62,6 +63,18 @@ type TransactionRepository interface {
 		categoryID uuid.UUID,
 		transactionType transaction.Type,
 	) (float64, error)
+	GetTotalByFamilyAndDateRange(
+		ctx context.Context,
+		familyID uuid.UUID,
+		startDate, endDate time.Time,
+		transactionType transaction.Type,
+	) (float64, error)
+	GetTotalByCategoryAndDateRange(
+		ctx context.Context,
+		categoryID uuid.UUID,
+		startDate, endDate time.Time,
+		transactionType transaction.Type,
+	) (float64, error)
 }
 
 // BudgetRepository определяет операции с бюджетами
@@ -72,6 +85,16 @@ type BudgetRepository interface {
 	GetActiveBudgets(ctx context.Context, familyID uuid.UUID) ([]*budget.Budget, error)
 	Update(ctx context.Context, budget *budget.Budget) error
 	Delete(ctx context.Context, id uuid.UUID) error
+	GetByFamilyAndCategory(
+		ctx context.Context,
+		familyID uuid.UUID,
+		categoryID *uuid.UUID,
+	) ([]*budget.Budget, error)
+	GetByPeriod(
+		ctx context.Context,
+		familyID uuid.UUID,
+		startDate, endDate time.Time,
+	) ([]*budget.Budget, error)
 }
 
 // ReportRepository определяет операции с отчетами

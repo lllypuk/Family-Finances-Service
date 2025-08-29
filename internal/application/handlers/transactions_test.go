@@ -98,10 +98,30 @@ func (m *MockTransactionRepository) GetMonthlyTotals(
 
 func (m *MockTransactionRepository) GetTotalByCategory(
 	ctx context.Context,
-	familyID uuid.UUID,
+	categoryID uuid.UUID,
 	txType transaction.Type,
 ) (float64, error) {
-	args := m.Called(ctx, familyID, txType)
+	args := m.Called(ctx, categoryID, txType)
+	return args.Get(0).(float64), args.Error(1)
+}
+
+func (m *MockTransactionRepository) GetTotalByFamilyAndDateRange(
+	ctx context.Context,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+	transactionType transaction.Type,
+) (float64, error) {
+	args := m.Called(ctx, familyID, startDate, endDate, transactionType)
+	return args.Get(0).(float64), args.Error(1)
+}
+
+func (m *MockTransactionRepository) GetTotalByCategoryAndDateRange(
+	ctx context.Context,
+	categoryID uuid.UUID,
+	startDate, endDate time.Time,
+	transactionType transaction.Type,
+) (float64, error) {
+	args := m.Called(ctx, categoryID, startDate, endDate, transactionType)
 	return args.Get(0).(float64), args.Error(1)
 }
 

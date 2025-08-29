@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
@@ -158,13 +159,54 @@ func (r *Repository) GetTotalByCategory(
 	categoryID uuid.UUID,
 	transactionType transaction.Type,
 ) (float64, error) {
-	pipeline := []bson.M{
-		{
-			"$match": bson.M{
-				"category_id": categoryID,
-				"type":        transactionType,
-			},
+	matchFilter := bson.M{
+		"category_id": categoryID,
+		"type":        transactionType,
+	}
+
+	return r.getTotalWithFilter(ctx, matchFilter, "category")
+}
+
+func (r *Repository) GetTotalByFamilyAndDateRange(
+	ctx context.Context,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+	transactionType transaction.Type,
+) (float64, error) {
+	matchFilter := bson.M{
+		"family_id": familyID,
+		"type":      transactionType,
+		"date": bson.M{
+			"$gte": startDate,
+			"$lte": endDate,
 		},
+	}
+
+	return r.getTotalWithFilter(ctx, matchFilter, "family and date range")
+}
+
+func (r *Repository) GetTotalByCategoryAndDateRange(
+	ctx context.Context,
+	categoryID uuid.UUID,
+	startDate, endDate time.Time,
+	transactionType transaction.Type,
+) (float64, error) {
+	matchFilter := bson.M{
+		"category_id": categoryID,
+		"type":        transactionType,
+		"date": bson.M{
+			"$gte": startDate,
+			"$lte": endDate,
+		},
+	}
+
+	return r.getTotalWithFilter(ctx, matchFilter, "category and date range")
+}
+
+// getTotalWithFilter is a helper function to reduce code duplication in total calculation methods
+func (r *Repository) getTotalWithFilter(ctx context.Context, matchFilter bson.M, description string) (float64, error) {
+	pipeline := []bson.M{
+		{"$match": matchFilter},
 		{
 			"$group": bson.M{
 				"_id":   nil,
@@ -175,7 +217,7 @@ func (r *Repository) GetTotalByCategory(
 
 	cursor, err := r.collection.Aggregate(ctx, pipeline)
 	if err != nil {
-		return 0, fmt.Errorf("failed to aggregate transactions: %w", err)
+		return 0, fmt.Errorf("failed to aggregate transactions by %s: %w", description, err)
 	}
 	defer cursor.Close(ctx)
 

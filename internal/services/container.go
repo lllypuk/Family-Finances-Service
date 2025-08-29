@@ -6,6 +6,7 @@ type Services struct {
 	Family      FamilyService
 	Category    CategoryService
 	Transaction TransactionService
+	Budget      BudgetService
 }
 
 // NewServices creates a new services container with all dependencies
@@ -15,6 +16,7 @@ func NewServices(
 	categoryRepo CategoryRepository,
 	transactionRepo TransactionRepository,
 	budgetRepo BudgetRepositoryForTransactions,
+	fullBudgetRepo BudgetRepository,
 ) *Services {
 	usageChecker := NewCategoryUsageChecker(transactionRepo)
 	return &Services{
@@ -22,5 +24,6 @@ func NewServices(
 		Family:      NewFamilyService(familyRepo),
 		Category:    NewCategoryService(categoryRepo, familyRepo, usageChecker),
 		Transaction: NewTransactionService(transactionRepo, budgetRepo, categoryRepo, userRepo),
+		Budget:      NewBudgetService(fullBudgetRepo, transactionRepo),
 	}
 }

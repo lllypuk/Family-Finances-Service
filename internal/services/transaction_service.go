@@ -38,6 +38,18 @@ type TransactionRepository interface {
 	Update(ctx context.Context, transaction *transaction.Transaction) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetTotalByCategory(ctx context.Context, categoryID uuid.UUID, transactionType transaction.Type) (float64, error)
+	GetTotalByFamilyAndDateRange(
+		ctx context.Context,
+		familyID uuid.UUID,
+		startDate, endDate time.Time,
+		transactionType transaction.Type,
+	) (float64, error)
+	GetTotalByCategoryAndDateRange(
+		ctx context.Context,
+		categoryID uuid.UUID,
+		startDate, endDate time.Time,
+		transactionType transaction.Type,
+	) (float64, error)
 	// Note: UpdateBulkCategory may need to be implemented in the repository
 	// For now, we'll use individual updates in a transaction
 }

@@ -79,6 +79,26 @@ func (m *MockTransactionRepository) GetTotalByCategory(
 	return args.Get(0).(float64), args.Error(1)
 }
 
+func (m *MockTransactionRepository) GetTotalByFamilyAndDateRange(
+	ctx context.Context,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+	txType transaction.Type,
+) (float64, error) {
+	args := m.Called(ctx, familyID, startDate, endDate, txType)
+	return args.Get(0).(float64), args.Error(1)
+}
+
+func (m *MockTransactionRepository) GetTotalByCategoryAndDateRange(
+	ctx context.Context,
+	categoryID uuid.UUID,
+	startDate, endDate time.Time,
+	txType transaction.Type,
+) (float64, error) {
+	args := m.Called(ctx, categoryID, startDate, endDate, txType)
+	return args.Get(0).(float64), args.Error(1)
+}
+
 type MockBudgetRepository struct {
 	mock.Mock
 }
@@ -94,6 +114,30 @@ func (m *MockBudgetRepository) GetActiveBudgets(ctx context.Context, familyID uu
 func (m *MockBudgetRepository) Update(ctx context.Context, b *budget.Budget) error {
 	args := m.Called(ctx, b)
 	return args.Error(0)
+}
+
+func (m *MockBudgetRepository) GetByFamilyAndCategory(
+	ctx context.Context,
+	familyID uuid.UUID,
+	categoryID *uuid.UUID,
+) ([]*budget.Budget, error) {
+	args := m.Called(ctx, familyID, categoryID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*budget.Budget), args.Error(1)
+}
+
+func (m *MockBudgetRepository) GetByPeriod(
+	ctx context.Context,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+) ([]*budget.Budget, error) {
+	args := m.Called(ctx, familyID, startDate, endDate)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*budget.Budget), args.Error(1)
 }
 
 type MockCategoryRepositoryForTransactions struct {

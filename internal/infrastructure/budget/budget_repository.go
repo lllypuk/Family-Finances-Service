@@ -134,3 +134,98 @@ func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
 
 	return nil
 }
+
+func (r *Repository) GetByFamilyAndCategory(
+	ctx context.Context,
+	familyID uuid.UUID,
+	categoryID *uuid.UUID,
+) ([]*budget.Budget, error) {
+	filter := bson.M{"family_id": familyID}
+
+	if categoryID != nil {
+		filter["category_id"] = *categoryID
+	} else {
+		// Find budgets without a specific category (family-wide budgets)
+		filter["category_id"] = bson.M{"$exists": false}
+	}
+
+	opts := options.Find().SetSort(bson.M{"created_at": -1})
+	cursor, err := r.collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get budgets by family and category: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var budgets []*budget.Budget
+	for cursor.Next(ctx) {
+		var b budget.Budget
+		err = cursor.Decode(&b)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode budget: %w", err)
+		}
+		budgets = append(budgets, &b)
+	}
+
+	err = cursor.Err()
+	if err != nil {
+		return nil, fmt.Errorf("cursor error: %w", err)
+	}
+
+	return budgets, nil
+}
+
+func (r *Repository) GetByPeriod(
+	ctx context.Context,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+) ([]*budget.Budget, error) {
+	// Find budgets that overlap with the specified period
+	filter := bson.M{
+		"family_id": familyID,
+		"$or": []bson.M{
+			{
+				// Budget starts within the period
+				"start_date": bson.M{
+					"$gte": startDate,
+					"$lte": endDate,
+				},
+			},
+			{
+				// Budget ends within the period
+				"end_date": bson.M{
+					"$gte": startDate,
+					"$lte": endDate,
+				},
+			},
+			{
+				// Budget contains the entire period
+				"start_date": bson.M{"$lte": startDate},
+				"end_date":   bson.M{"$gte": endDate},
+			},
+		},
+	}
+
+	opts := options.Find().SetSort(bson.M{"start_date": 1, "created_at": -1})
+	cursor, err := r.collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get budgets by period: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var budgets []*budget.Budget
+	for cursor.Next(ctx) {
+		var b budget.Budget
+		err = cursor.Decode(&b)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode budget: %w", err)
+		}
+		budgets = append(budgets, &b)
+	}
+
+	err = cursor.Err()
+	if err != nil {
+		return nil, fmt.Errorf("cursor error: %w", err)
+	}
+
+	return budgets, nil
+}
