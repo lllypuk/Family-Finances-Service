@@ -1,0 +1,345 @@
+{{define "budget-overview"}}
+<div class="budget-overview"
+     hx-get="/htmx/budgets/overview"
+     hx-trigger="load, every 120s"
+     hx-target="this"
+     hx-swap="outerHTML">
+
+    {{if .BudgetOverview}}
+    <!-- Budget Summary Stats -->
+    <div class="budget-stats">
+        <div class="grid">
+            <div class="stat-item">
+                <h4>📊 Всего бюджетов</h4>
+                <span class="stat-number">{{.BudgetOverview.TotalBudgets}}</span>
+            </div>
+            <div class="stat-item">
+                <h4>✅ Активных</h4>
+                <span class="stat-number text-success">{{.BudgetOverview.ActiveBudgets}}</span>
+            </div>
+            <div class="stat-item">
+                <h4>⚠️ Близко к лимиту</h4>
+                <span class="stat-number text-warning">{{.BudgetOverview.NearLimit}}</span>
+            </div>
+            <div class="stat-item">
+                <h4>🚨 Превышен</h4>
+                <span class="stat-number text-danger">{{.BudgetOverview.OverBudget}}</span>
+            </div>
+        </div>
+    </div>
+
+    {{if .BudgetOverview.AlertsSummary.TotalAlerts}}
+    <!-- Alerts Summary -->
+    <div class="alerts-summary">
+        <div class="alert-banner {{if gt .BudgetOverview.AlertsSummary.CriticalAlerts 0}}alert-danger{{else}}alert-warning{{end}}">
+            <strong>⚠️ Требует внимания:</strong>
+            {{if gt .BudgetOverview.AlertsSummary.CriticalAlerts 0}}
+                {{.BudgetOverview.AlertsSummary.CriticalAlerts}} бюджетов превышены
+            {{else}}
+                {{.BudgetOverview.AlertsSummary.WarningAlerts}} бюджетов близки к лимиту
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+
+    {{if .BudgetOverview.TopBudgets}}
+    <!-- Top Budgets List -->
+    <div class="top-budgets">
+        <h4>Топ бюджетов по использованию</h4>
+        {{range .BudgetOverview.TopBudgets}}
+        <div class="budget-item">
+            <div class="budget-header">
+                <div class="budget-title">
+                    <strong>{{.Name}}</strong>
+                    {{if .CategoryName}}
+                    <small class="category-name">{{.CategoryName}}</small>
+                    {{end}}
+                </div>
+                <div class="budget-status">
+                    <span class="badge {{.GetAlertBadgeClass}}">
+                        {{if .IsOverBudget}}Превышен{{else if .IsNearLimit}}Близко к лимиту{{else}}В норме{{end}}
+                    </span>
+                </div>
+            </div>
+
+            <div class="budget-progress">
+                <div class="progress-info">
+                    <span class="spent">{{printf "%.2f" .Spent}} ₽</span>
+                    <span class="separator">/</span>
+                    <span class="total">{{printf "%.2f" .Amount}} ₽</span>
+                    <span class="percentage">({{printf "%.1f" .Percentage}}%)</span>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar {{.GetProgressBarClass}}"
+                         style="width: {{if gt .Percentage 100.0}}100{{else}}{{printf "%.1f" .Percentage}}{{end}}%">
+                    </div>
+                </div>
+            </div>
+
+            <div class="budget-meta">
+                <div class="period-info">
+                    <small class="text-muted">
+                        {{.Period}} • {{.StartDate.Format "02.01"}} - {{.EndDate.Format "02.01.2006"}}
+                    </small>
+                </div>
+                <div class="time-remaining">
+                    <small class="text-muted">
+                        {{if gt .DaysRemaining 0}}
+                            Осталось: {{.DaysRemaining}} дн.
+                        {{else}}
+                            Период завершен
+                        {{end}}
+                    </small>
+                </div>
+            </div>
+
+            {{if .IsOverBudget}}
+            <div class="budget-alert">
+                <small class="text-danger">
+                    ⚠️ Превышение: {{printf "%.2f" (sub .Spent .Amount)}} ₽
+                </small>
+            </div>
+            {{else if gt .Remaining 0}}
+            <div class="budget-remaining">
+                <small class="text-success">
+                    💰 Осталось: {{printf "%.2f" .Remaining}} ₽
+                </small>
+            </div>
+            {{end}}
+        </div>
+        {{end}}
+    </div>
+
+    <footer class="budget-footer">
+        <div class="text-center">
+            <a href="/budgets" role="button" class="secondary">
+                Все бюджеты →
+            </a>
+        </div>
+    </footer>
+
+    {{else}}
+    <!-- Empty State -->
+    <div class="empty-state">
+        <div class="empty-icon">📊</div>
+        <h3>Нет активных бюджетов</h3>
+        <p class="text-muted">Создайте бюджет, чтобы отслеживать расходы по категориям</p>
+        <a href="/budgets/new" role="button" class="secondary">
+            ➕ Создать бюджет
+        </a>
+    </div>
+    {{end}}
+
+    {{end}}
+</div>
+
+<style>
+.budget-stats .grid {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.stat-item {
+    text-align: center;
+    padding: 1rem;
+    background: var(--pico-card-background-color);
+    border-radius: var(--pico-border-radius);
+    border: 1px solid var(--pico-muted-border-color);
+}
+
+.stat-item h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.875rem;
+    color: var(--pico-muted-color);
+}
+
+.stat-number {
+    font-size: 1.5rem;
+    font-weight: bold;
+    display: block;
+}
+
+.alerts-summary {
+    margin-bottom: 1.5rem;
+}
+
+.alert-banner {
+    padding: 0.75rem 1rem;
+    border-radius: var(--pico-border-radius);
+    background: var(--pico-color-amber-50);
+    border: 1px solid var(--pico-color-amber-200);
+    color: var(--pico-color-amber-800);
+}
+
+.alert-banner.alert-danger {
+    background: var(--pico-color-red-50);
+    border-color: var(--pico-color-red-200);
+    color: var(--pico-color-red-800);
+}
+
+.budget-item {
+    background: var(--pico-card-background-color);
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: var(--pico-border-radius);
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.budget-item:last-child {
+    margin-bottom: 0;
+}
+
+.budget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+}
+
+.budget-title strong {
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.category-name {
+    color: var(--pico-muted-color);
+    font-size: 0.875rem;
+}
+
+.badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.badge-success {
+    background: var(--pico-color-green-100);
+    color: var(--pico-color-green-800);
+}
+
+.badge-warning {
+    background: var(--pico-color-amber-100);
+    color: var(--pico-color-amber-800);
+}
+
+.badge-danger {
+    background: var(--pico-color-red-100);
+    color: var(--pico-color-red-800);
+}
+
+.budget-progress {
+    margin-bottom: 0.75rem;
+}
+
+.progress-info {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.spent {
+    font-weight: bold;
+}
+
+.percentage {
+    color: var(--pico-muted-color);
+    margin-left: auto;
+}
+
+.progress-bar-container {
+    width: 100%;
+    height: 8px;
+    background: var(--pico-muted-border-color);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    transition: width 0.3s ease;
+    border-radius: 4px;
+}
+
+.progress-success {
+    background: var(--pico-color-green-500);
+}
+
+.progress-warning {
+    background: var(--pico-color-amber-500);
+}
+
+.progress-danger {
+    background: var(--pico-color-red-500);
+}
+
+.budget-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.budget-alert,
+.budget-remaining {
+    text-align: center;
+    padding: 0.5rem;
+    border-radius: var(--pico-border-radius);
+    background: var(--pico-background-color);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 2rem 1rem;
+}
+
+.empty-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.empty-state h3 {
+    margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+    margin-bottom: 1.5rem;
+}
+
+.budget-footer {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--pico-muted-border-color);
+}
+
+@media (max-width: 768px) {
+    .budget-stats .grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .budget-header {
+        flex-direction: column;
+        gap: 0.5rem;
+        align-items: stretch;
+    }
+
+    .budget-meta {
+        flex-direction: column;
+        gap: 0.25rem;
+        align-items: flex-start;
+    }
+
+    .progress-info {
+        flex-wrap: wrap;
+    }
+
+    .percentage {
+        margin-left: 0;
+    }
+}
+</style>
+{{end}}

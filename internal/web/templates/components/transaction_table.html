@@ -1,0 +1,131 @@
+{{define "components/transaction_table"}}
+{{if .Transactions}}
+<div class="overflow-auto">
+    <table role="table">
+        <thead>
+            <tr>
+                <th scope="col">
+                    <input type="checkbox" 
+                           id="select-all" 
+                           onchange="toggleSelectAll(this)">
+                </th>
+                <th scope="col">Дата</th>
+                <th scope="col">Описание</th>
+                <th scope="col">Категория</th>
+                <th scope="col">Теги</th>
+                <th scope="col">Сумма</th>
+                <th scope="col">Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Transactions}}
+            <tr>
+                <td>
+                    <input type="checkbox" 
+                           name="transaction_ids" 
+                           value="{{.ID}}"
+                           onchange="updateBulkActions()">
+                </td>
+                <td>
+                    <time datetime="{{.Date.Format "2006-01-02"}}">
+                        {{.FormattedDate}}
+                    </time>
+                </td>
+                <td>
+                    <div class="transaction-description">
+                        <strong>{{.Description}}</strong>
+                        {{if .UserName}}
+                        <br><small>от {{.UserName}}</small>
+                        {{end}}
+                    </div>
+                </td>
+                <td>
+                    <span class="category-badge category-{{.Type}}">
+                        {{if eq .Type "income"}}💰{{else}}💸{{end}}
+                        {{.CategoryName}}
+                    </span>
+                </td>
+                <td>
+                    {{if .Tags}}
+                    <div class="tags">
+                        {{range .Tags}}
+                        <span class="tag">{{.}}</span>
+                        {{end}}
+                    </div>
+                    {{else}}
+                    <small class="muted">без тегов</small>
+                    {{end}}
+                </td>
+                <td>
+                    <strong class="amount-{{.Type}}">
+                        {{.FormattedAmount}} ₽
+                    </strong>
+                </td>
+                <td>
+                    <div class="transaction-actions">
+                        <a href="/transactions/{{.ID}}/edit" 
+                           class="secondary outline" 
+                           title="Редактировать">
+                            ✏️
+                        </a>
+                        <button class="danger outline" 
+                                hx-delete="/htmx/transactions/{{.ID}}"
+                                hx-confirm="Удалить транзакцию '{{.Description}}'?"
+                                hx-target="closest tr"
+                                hx-swap="outerHTML"
+                                title="Удалить">
+                            🗑️
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+{{if .Pagination}}
+<nav class="pagination" style="margin-top: 2rem;">
+    <div class="grid">
+        <div>
+            <small>
+                Показано {{len .Transactions}} из {{.Pagination.Total}}
+            </small>
+        </div>
+        <div>
+            {{if .Pagination.HasPrev}}
+            <button hx-get="/htmx/transactions/list?page={{sub .Pagination.Page 1}}{{range $key, $value := .Filters}}{{if $value}}&{{$key}}={{$value}}{{end}}{{end}}"
+                    hx-target="#transactions-list"
+                    class="secondary outline">
+                ← Предыдущая
+            </button>
+            {{end}}
+            
+            <span class="current-page">
+                Страница {{.Pagination.Page}} из {{.Pagination.TotalPages}}
+            </span>
+            
+            {{if .Pagination.HasNext}}
+            <button hx-get="/htmx/transactions/list?page={{add .Pagination.Page 1}}{{range $key, $value := .Filters}}{{if $value}}&{{$key}}={{$value}}{{end}}{{end}}"
+                    hx-target="#transactions-list"
+                    class="secondary outline">
+                Следующая →
+            </button>
+            {{end}}
+        </div>
+    </div>
+</nav>
+{{end}}
+{{else}}
+<!-- Empty State -->
+<div class="empty-state" style="text-align: center; padding: 3rem;">
+    <p style="font-size: 3rem;">💸</p>
+    <h3>Нет транзакций</h3>
+    <p>Транзакции не найдены по заданным критериям</p>
+    <a href="/transactions/new" role="button" class="primary">
+        ➕ Добавить транзакцию
+    </a>
+</div>
+{{end}}
+{{end}}

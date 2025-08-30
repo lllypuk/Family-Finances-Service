@@ -1,0 +1,243 @@
+{{template "layouts/base" .}}
+
+{{define "content"}}
+<div class="container">
+    <header>
+        <h1>{{.PageData.Title}}</h1>
+        <a href="/budgets" role="button" class="secondary outline">← Back to Budgets</a>
+    </header>
+
+    <article>
+        <form method="POST" action="/budgets">
+            <!-- Form Errors -->
+            {{if .PageData.Errors}}
+                {{template "components/form_errors" .PageData.Errors}}
+            {{end}}
+
+            <div class="grid">
+                <div>
+                    <label for="name">Budget Name</label>
+                    <input type="text" 
+                           id="name" 
+                           name="name" 
+                           placeholder="Monthly Grocery Budget" 
+                           value="{{.DefaultForm.Name}}"
+                           required>
+                    <small>Give your budget a descriptive name</small>
+                </div>
+                
+                <div>
+                    <label for="amount">Budget Amount</label>
+                    <input type="number" 
+                           id="amount" 
+                           name="amount" 
+                           step="0.01" 
+                           min="0.01" 
+                           placeholder="1000.00" 
+                           value="{{.DefaultForm.Amount}}"
+                           required>
+                    <small>Maximum amount you want to spend</small>
+                </div>
+            </div>
+
+            <div class="grid">
+                <div>
+                    <label for="period">Budget Period</label>
+                    <select id="period" name="period" required>
+                        <option value="weekly" {{if eq .DefaultForm.Period "weekly"}}selected{{end}}>Weekly</option>
+                        <option value="monthly" {{if eq .DefaultForm.Period "monthly"}}selected{{end}}>Monthly</option>
+                        <option value="yearly" {{if eq .DefaultForm.Period "yearly"}}selected{{end}}>Yearly</option>
+                        <option value="custom" {{if eq .DefaultForm.Period "custom"}}selected{{end}}>Custom Period</option>
+                    </select>
+                    <small>How long should this budget last?</small>
+                </div>
+                
+                <div>
+                    <label for="category_id">Category (Optional)</label>
+                    <select id="category_id" name="category_id">
+                        {{range .CategoryOptions}}
+                        <option value="{{.ID}}" {{if eq .ID $.DefaultForm.CategoryID}}selected{{end}}>
+                            {{.Name}}
+                        </option>
+                        {{end}}
+                    </select>
+                    <small>Leave as "All Categories" to track all spending</small>
+                </div>
+            </div>
+
+            <div class="grid">
+                <div>
+                    <label for="start_date">Start Date</label>
+                    <input type="date" 
+                           id="start_date" 
+                           name="start_date" 
+                           value="{{.DefaultForm.StartDate}}"
+                           required>
+                </div>
+                
+                <div>
+                    <label for="end_date">End Date</label>
+                    <input type="date" 
+                           id="end_date" 
+                           name="end_date" 
+                           value="{{.DefaultForm.EndDate}}"
+                           required>
+                </div>
+            </div>
+
+            <div>
+                <label>
+                    <input type="checkbox" 
+                           name="is_active" 
+                           value="true" 
+                           {{if .DefaultForm.IsActive}}checked{{end}}>
+                    Start this budget immediately
+                </label>
+                <small>Uncheck to create an inactive budget that you can activate later</small>
+            </div>
+
+            <div class="button-group">
+                <button type="submit">Create Budget</button>
+                <a href="/budgets" role="button" class="secondary">Cancel</a>
+            </div>
+        </form>
+    </article>
+
+    <!-- Budget Tips -->
+    <aside>
+        <details>
+            <summary>💡 Budget Tips</summary>
+            <div class="tips-content">
+                <h4>Creating Effective Budgets</h4>
+                <ul>
+                    <li><strong>Be Realistic:</strong> Set amounts you can actually stick to</li>
+                    <li><strong>Start Small:</strong> Begin with one category (like groceries) before expanding</li>
+                    <li><strong>Review Regularly:</strong> Check your progress weekly to stay on track</li>
+                    <li><strong>Category vs All:</strong> Category budgets are more specific, "All Categories" gives you overall control</li>
+                    <li><strong>Period Length:</strong> Monthly budgets work well for most expenses, weekly for variable costs</li>
+                </ul>
+                
+                <h4>Budget Periods</h4>
+                <ul>
+                    <li><strong>Weekly:</strong> Good for groceries, entertainment, gas</li>
+                    <li><strong>Monthly:</strong> Perfect for most recurring expenses</li>
+                    <li><strong>Yearly:</strong> Great for insurance, subscriptions, vacation funds</li>
+                    <li><strong>Custom:</strong> Use for specific projects or events</li>
+                </ul>
+            </div>
+        </details>
+    </aside>
+</div>
+
+<style>
+    .button-group {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-top: 1.5rem;
+    }
+    
+    .button-group > * {
+        margin: 0;
+    }
+
+    .tips-content {
+        margin-top: 1rem;
+    }
+    
+    .tips-content h4 {
+        color: var(--pico-primary);
+        margin-top: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .tips-content h4:first-child {
+        margin-top: 0;
+    }
+    
+    .tips-content ul {
+        margin-bottom: 1rem;
+    }
+    
+    .tips-content li {
+        margin-bottom: 0.5rem;
+    }
+
+    aside {
+        margin-top: 2rem;
+    }
+    
+    aside details {
+        background: var(--pico-background-color);
+        padding: 1rem;
+        border-radius: var(--pico-border-radius);
+        border: 1px solid var(--pico-muted-border-color);
+    }
+    
+    aside summary {
+        font-weight: 600;
+        cursor: pointer;
+        margin-bottom: 0;
+    }
+    
+    aside summary:hover {
+        color: var(--pico-primary);
+    }
+
+    @media (max-width: 768px) {
+        .button-group {
+            justify-content: stretch;
+        }
+        
+        .button-group > * {
+            flex: 1;
+        }
+    }
+</style>
+
+<script>
+    // Auto-populate end date based on period selection
+    document.getElementById('period').addEventListener('change', function() {
+        const startDateInput = document.getElementById('start_date');
+        const endDateInput = document.getElementById('end_date');
+        const startDate = new Date(startDateInput.value);
+        
+        if (!startDate || isNaN(startDate)) {
+            return; // No valid start date
+        }
+        
+        let endDate = new Date(startDate);
+        
+        switch(this.value) {
+            case 'weekly':
+                endDate.setDate(startDate.getDate() + 7);
+                break;
+            case 'monthly':
+                endDate.setMonth(startDate.getMonth() + 1);
+                break;
+            case 'yearly':
+                endDate.setFullYear(startDate.getFullYear() + 1);
+                break;
+            default:
+                // For custom, don't auto-change
+                return;
+        }
+        
+        // Subtract one day to make it end of period
+        endDate.setDate(endDate.getDate() - 1);
+        
+        // Format as YYYY-MM-DD
+        const year = endDate.getFullYear();
+        const month = String(endDate.getMonth() + 1).padStart(2, '0');
+        const day = String(endDate.getDate()).padStart(2, '0');
+        
+        endDateInput.value = `${year}-${month}-${day}`;
+    });
+    
+    // Also update when start date changes
+    document.getElementById('start_date').addEventListener('change', function() {
+        // Trigger period change to recalculate end date
+        document.getElementById('period').dispatchEvent(new Event('change'));
+    });
+</script>
+{{end}}

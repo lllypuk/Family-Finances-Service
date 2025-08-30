@@ -1,0 +1,286 @@
+{{template "layouts/base" .}}
+
+{{define "content"}}
+<div class="container">
+    <header>
+        <h1>{{.Report.Name}}</h1>
+        <p>
+            <span class="badge report-type-{{.Report.Type}}">{{.Report.Type | title}}</span>
+            {{.Report.FormattedPeriod}} • Generated on {{.Report.GeneratedAt.Format "02.01.2006 15:04"}}
+        </p>
+        
+        <div class="button-group">
+            <a href="/reports" role="button" class="secondary outline">← Back to Reports</a>
+            {{if .Report.CanExport}}
+            <a href="{{.Report.ExportURL}}" 
+               role="button" 
+               class="secondary outline"
+               download>
+                Export CSV
+            </a>
+            {{end}}
+        </div>
+    </header>
+
+    <!-- Summary Cards -->
+    <section class="summary-cards">
+        <div class="grid">
+            {{if ne .Report.TotalIncome 0}}
+            <article class="summary-card income">
+                <header>Total Income</header>
+                <h2 class="amount positive">{{.Report.FormattedIncome}}</h2>
+            </article>
+            {{end}}
+            
+            {{if ne .Report.TotalExpenses 0}}
+            <article class="summary-card expenses">
+                <header>Total Expenses</header>
+                <h2 class="amount negative">{{.Report.FormattedExpenses}}</h2>
+            </article>
+            {{end}}
+            
+            {{if ne .Report.NetIncome 0}}
+            <article class="summary-card net">
+                <header>Net Result</header>
+                <h2 class="amount {{.Report.NetIncomeClass}}">{{.Report.FormattedNet}}</h2>
+            </article>
+            {{end}}
+        </div>
+    </section>
+
+    <!-- Category Breakdown -->
+    {{if .Report.CategoryBreakdown}}
+    <section>
+        <h2>Category Breakdown</h2>
+        <div class="overflow-auto">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Amount</th>
+                        <th>Percentage</th>
+                        <th>Transactions</th>
+                        <th>Visual</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Report.CategoryBreakdown}}
+                    <tr>
+                        <td><strong>{{.CategoryName}}</strong></td>
+                        <td class="amount">{{.FormattedAmount}}</td>
+                        <td>{{printf "%.1f" .Percentage}}%</td>
+                        <td>{{.Count}}</td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: {{.ProgressWidth}}"></div>
+                            </div>
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {{end}}
+
+    <!-- Daily Breakdown -->
+    {{if .Report.DailyBreakdown}}
+    <section>
+        <h2>Daily Breakdown</h2>
+        <div class="overflow-auto">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Income</th>
+                        <th>Expenses</th>
+                        <th>Balance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Report.DailyBreakdown}}
+                    <tr>
+                        <td>{{.FormattedDate}}</td>
+                        <td class="amount positive">{{.FormattedIncome}}</td>
+                        <td class="amount negative">{{.FormattedExpenses}}</td>
+                        <td class="amount {{.BalanceClass}}">{{.FormattedBalance}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {{end}}
+
+    <!-- Top Expenses -->
+    {{if .Report.TopExpenses}}
+    <section>
+        <h2>Top Expenses</h2>
+        <div class="overflow-auto">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th>Category</th>
+                        <th>Amount</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Report.TopExpenses}}
+                    <tr>
+                        <td>{{.Description}}</td>
+                        <td>{{.Category}}</td>
+                        <td class="amount negative">{{.FormattedAmount}}</td>
+                        <td>{{.FormattedDate}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {{end}}
+
+    <!-- Budget Comparison -->
+    {{if .Report.BudgetComparison}}
+    <section>
+        <h2>Budget vs Actual</h2>
+        <div class="overflow-auto">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Budget</th>
+                        <th>Planned</th>
+                        <th>Actual</th>
+                        <th>Difference</th>
+                        <th>Performance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Report.BudgetComparison}}
+                    <tr>
+                        <td><strong>{{.BudgetName}}</strong></td>
+                        <td class="amount">{{.FormattedPlanned}}</td>
+                        <td class="amount">{{.FormattedActual}}</td>
+                        <td class="amount {{.DifferenceClass}}">{{.FormattedDiff}}</td>
+                        <td>
+                            <span class="performance-badge {{.PerformanceClass}}">
+                                {{printf "%.1f" .Percentage}}%
+                            </span>
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {{end}}
+</div>
+
+<style>
+    .badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+    
+    .report-type-expenses { background-color: #fee2e2; color: #991b1b; }
+    .report-type-income { background-color: #dcfce7; color: #166534; }
+    .report-type-budget { background-color: #dbeafe; color: #1d4ed8; }
+    .report-type-cash_flow { background-color: #f3e8ff; color: #7c3aed; }
+    .report-type-category_break { background-color: #fef3c7; color: #d97706; }
+    
+    .button-group {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+    }
+    
+    .button-group > * {
+        margin: 0;
+    }
+    
+    .summary-cards {
+        margin: 2rem 0;
+    }
+    
+    .summary-card {
+        text-align: center;
+        padding: 1.5rem;
+    }
+    
+    .summary-card header {
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.5rem;
+    }
+    
+    .amount {
+        font-weight: 600;
+        font-family: ui-monospace, SFMono-Regular, monospace;
+    }
+    
+    .amount.positive { color: #059669; }
+    .amount.negative { color: #dc2626; }
+    .amount.zero { color: #6b7280; }
+    
+    .progress-bar {
+        width: 100%;
+        height: 8px;
+        background-color: #f3f4f6;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    
+    .progress-fill {
+        height: 100%;
+        background-color: #3b82f6;
+        transition: width 0.3s ease;
+    }
+    
+    .performance-badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+    
+    .performance-badge.good { background-color: #dcfce7; color: #166534; }
+    .performance-badge.warning { background-color: #fef3c7; color: #d97706; }
+    .performance-badge.danger { background-color: #fee2e2; color: #991b1b; }
+    
+    .over { color: #dc2626; }
+    .under { color: #059669; }
+    .exact { color: #6b7280; }
+    
+    table td.amount {
+        text-align: right;
+    }
+    
+    section {
+        margin-bottom: 2rem;
+    }
+    
+    @media (max-width: 768px) {
+        .button-group {
+            justify-content: stretch;
+        }
+        
+        .button-group > * {
+            flex: 1;
+        }
+        
+        .summary-cards .grid {
+            grid-template-columns: 1fr;
+        }
+        
+        table {
+            font-size: 0.875rem;
+        }
+    }
+</style>
+{{end}}

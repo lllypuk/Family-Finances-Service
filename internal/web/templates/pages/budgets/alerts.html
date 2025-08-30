@@ -1,0 +1,448 @@
+{{template "layouts/base" .}}
+
+{{define "content"}}
+<div class="container">
+    <header>
+        <h1>{{.PageData.Title}}</h1>
+        <div class="button-group">
+            <a href="/budgets" role="button" class="secondary outline">← Back to Budgets</a>
+        </div>
+    </header>
+
+    <!-- Alert Summary -->
+    <section class="alert-summary">
+        <div class="grid">
+            <article class="summary-card">
+                <header>Total Budgets</header>
+                <h3>{{.TotalCount}}</h3>
+            </article>
+            
+            <article class="summary-card">
+                <header>Active Alerts</header>
+                <h3 class="{{if gt .TriggeredCount 0}}text-warning{{else}}text-success{{end}}">
+                    {{.TriggeredCount}}
+                </h3>
+            </article>
+            
+            <article class="summary-card">
+                <header>Healthy Budgets</header>
+                <h3 class="text-success">{{.HealthyCount}}</h3>
+            </article>
+        </div>
+    </section>
+
+    <!-- Alerts List -->
+    <section>
+        {{if .Alerts}}
+        <div class="alerts-list">
+            {{range .Alerts}}
+            <article class="alert-item {{.AlertClass}}">
+                <div class="alert-content">
+                    <div class="alert-header">
+                        <div class="alert-info">
+                            <h4>{{.BudgetName}}</h4>
+                            <div class="alert-status">
+                                {{if .IsTriggered}}
+                                    <span class="status-badge triggered {{.AlertClass}}">
+                                        {{if eq .AlertClass "danger"}}🚨{{else}}⚠️{{end}} Alert Active
+                                    </span>
+                                {{else}}
+                                    <span class="status-badge normal">✅ Normal</span>
+                                {{end}}
+                            </div>
+                        </div>
+                        <div class="alert-actions">
+                            {{if .IsTriggered}}
+                                <button hx-post="/budgets/alerts/{{.ID}}/acknowledge" 
+                                        hx-confirm="Mark this alert as acknowledged?"
+                                        hx-target="closest .alert-item"
+                                        hx-swap="outerHTML"
+                                        class="secondary outline">
+                                    Acknowledge
+                                </button>
+                            {{end}}
+                            <button hx-delete="/budgets/alerts/{{.ID}}" 
+                                    hx-confirm="Are you sure you want to delete this alert configuration?"
+                                    hx-target="closest .alert-item"
+                                    hx-swap="outerHTML"
+                                    class="secondary outline danger">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="alert-details">
+                        <div class="alert-message">
+                            <p>{{.Message}}</p>
+                        </div>
+                        
+                        <div class="alert-meta">
+                            <div class="threshold-info">
+                                <span class="label">Alert Threshold:</span>
+                                <span class="value">{{printf "%.0f" .Threshold}}%</span>
+                            </div>
+                            {{if .TriggeredAt}}
+                            <div class="triggered-info">
+                                <span class="label">Triggered:</span>
+                                <span class="value">{{.TriggeredAt.Format "Jan 2, 2006 at 3:04 PM"}}</span>
+                            </div>
+                            {{end}}
+                        </div>
+                    </div>
+
+                    <div class="alert-budget-link">
+                        <a href="/budgets/{{.BudgetID}}" class="budget-link">
+                            View Budget Details →
+                        </a>
+                    </div>
+                </div>
+            </article>
+            {{end}}
+        </div>
+        {{else}}
+        <article>
+            <div class="empty-state">
+                <h3>No Budget Alerts</h3>
+                <p>All your budgets are currently healthy or you haven't set up any alerts yet.</p>
+                <a href="/budgets" role="button">View Budgets</a>
+            </div>
+        </article>
+        {{end}}
+    </section>
+
+    <!-- Create Alert Form -->
+    <section class="create-alert-section">
+        <details>
+            <summary>Create New Alert</summary>
+            <form hx-post="/budgets/alerts" 
+                  hx-target="#alerts-list" 
+                  hx-swap="beforeend">
+                
+                <div class="grid">
+                    <div>
+                        <label for="budget_id">Budget</label>
+                        <select id="budget_id" name="budget_id" required>
+                            <option value="">Select a budget...</option>
+                            {{range .Alerts}}
+                            <option value="{{.BudgetID}}">{{.BudgetName}}</option>
+                            {{end}}
+                        </select>
+                        <small>Choose which budget to monitor</small>
+                    </div>
+                    
+                    <div>
+                        <label for="threshold">Alert Threshold (%)</label>
+                        <input type="number" 
+                               id="threshold" 
+                               name="threshold" 
+                               min="1" 
+                               max="100" 
+                               step="5"
+                               value="80"
+                               required>
+                        <small>Alert when budget usage exceeds this percentage</small>
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button type="submit">Create Alert</button>
+                    <button type="button" onclick="this.closest('details').removeAttribute('open')" class="secondary">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </details>
+    </section>
+
+    <!-- Alert Tips -->
+    <aside>
+        <details>
+            <summary>💡 About Budget Alerts</summary>
+            <div class="tips-content">
+                <h4>How Budget Alerts Work</h4>
+                <ul>
+                    <li><strong>Automatic Monitoring:</strong> We continuously monitor your budget usage</li>
+                    <li><strong>Smart Thresholds:</strong> Set custom thresholds (80%, 90%, 100%) for different alert levels</li>
+                    <li><strong>Real-time Notifications:</strong> Get notified as soon as your spending approaches limits</li>
+                    <li><strong>Multiple Budgets:</strong> Set different alert rules for different budget categories</li>
+                </ul>
+                
+                <h4>Alert Levels</h4>
+                <ul>
+                    <li><strong>🟢 Normal (0-79%):</strong> Budget is healthy, no alerts needed</li>
+                    <li><strong>🟡 Warning (80-89%):</strong> Approaching limit, time to be cautious</li>
+                    <li><strong>🔴 Critical (90-99%):</strong> Very close to limit, immediate attention needed</li>
+                    <li><strong>🚨 Exceeded (100%+):</strong> Budget exceeded, review spending urgently</li>
+                </ul>
+                
+                <h4>Best Practices</h4>
+                <ul>
+                    <li><strong>Set Early Warnings:</strong> 70-80% thresholds give you time to adjust</li>
+                    <li><strong>Regular Review:</strong> Check alerts weekly to stay on track</li>
+                    <li><strong>Adjust Budgets:</strong> Update budget amounts based on alert patterns</li>
+                    <li><strong>Category Focus:</strong> Set stricter alerts for volatile spending categories</li>
+                </ul>
+            </div>
+        </details>
+    </aside>
+</div>
+
+<style>
+    .button-group {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+    }
+    
+    .button-group > * {
+        margin: 0;
+    }
+
+    .alert-summary {
+        margin: 2rem 0;
+    }
+    
+    .summary-card {
+        text-align: center;
+        padding: 1.5rem;
+        background: var(--pico-card-background-color);
+        border-radius: var(--pico-border-radius);
+        border: 1px solid var(--pico-muted-border-color);
+    }
+    
+    .summary-card header {
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: var(--pico-muted-color);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .summary-card h3 {
+        margin: 0;
+        font-size: 1.75rem;
+        font-weight: 700;
+    }
+
+    .alerts-list {
+        margin: 1.5rem 0;
+    }
+    
+    .alert-item {
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        border-radius: var(--pico-border-radius);
+        border: 2px solid;
+        background: var(--pico-card-background-color);
+    }
+    
+    .alert-item.info {
+        border-color: #17a2b8;
+        background-color: #d1ecf1;
+    }
+    
+    .alert-item.warning {
+        border-color: #ffc107;
+        background-color: #fff3cd;
+    }
+    
+    .alert-item.danger {
+        border-color: #dc3545;
+        background-color: #f8d7da;
+    }
+    
+    .alert-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 1rem;
+    }
+    
+    .alert-info h4 {
+        margin: 0 0 0.5rem 0;
+        color: var(--pico-color);
+    }
+    
+    .status-badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .status-badge.normal {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    
+    .status-badge.triggered.warning {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+    
+    .status-badge.triggered.danger {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    
+    .alert-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    
+    .alert-details {
+        margin-bottom: 1rem;
+    }
+    
+    .alert-message p {
+        font-size: 1rem;
+        margin: 0 0 1rem 0;
+        font-weight: 500;
+        color: var(--pico-color);
+    }
+    
+    .alert-meta {
+        display: flex;
+        gap: 2rem;
+        font-size: 0.875rem;
+        color: var(--pico-muted-color);
+    }
+    
+    .alert-meta .label {
+        font-weight: 600;
+    }
+    
+    .alert-meta .value {
+        color: var(--pico-color);
+    }
+    
+    .alert-budget-link {
+        border-top: 1px solid var(--pico-muted-border-color);
+        padding-top: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .budget-link {
+        color: var(--pico-primary);
+        text-decoration: none;
+        font-weight: 500;
+    }
+    
+    .budget-link:hover {
+        text-decoration: underline;
+    }
+
+    .create-alert-section {
+        margin: 2rem 0;
+        padding: 1.5rem;
+        background: var(--pico-background-color);
+        border-radius: var(--pico-border-radius);
+        border: 1px solid var(--pico-muted-border-color);
+    }
+    
+    .create-alert-section summary {
+        font-weight: 600;
+        cursor: pointer;
+        margin-bottom: 1rem;
+    }
+    
+    .create-alert-section summary:hover {
+        color: var(--pico-primary);
+    }
+
+    .tips-content {
+        margin-top: 1rem;
+    }
+    
+    .tips-content h4 {
+        color: var(--pico-primary);
+        margin-top: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .tips-content h4:first-child {
+        margin-top: 0;
+    }
+    
+    .tips-content ul {
+        margin-bottom: 1rem;
+    }
+    
+    .tips-content li {
+        margin-bottom: 0.5rem;
+    }
+
+    aside {
+        margin-top: 2rem;
+    }
+    
+    aside details {
+        background: var(--pico-background-color);
+        padding: 1rem;
+        border-radius: var(--pico-border-radius);
+        border: 1px solid var(--pico-muted-border-color);
+    }
+    
+    aside summary {
+        font-weight: 600;
+        cursor: pointer;
+        margin-bottom: 0;
+    }
+    
+    aside summary:hover {
+        color: var(--pico-primary);
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+    }
+    
+    .empty-state h3 {
+        color: var(--pico-muted-color);
+    }
+
+    .danger {
+        --pico-primary: #dc3545;
+        --pico-primary-hover: #c82333;
+    }
+
+    .text-success { color: #28a745; }
+    .text-warning { color: #ffc107; }
+    .text-danger { color: #dc3545; }
+
+    @media (max-width: 768px) {
+        .alert-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+        
+        .alert-actions {
+            align-self: stretch;
+        }
+        
+        .alert-actions > * {
+            flex: 1;
+        }
+        
+        .alert-meta {
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .button-group {
+            justify-content: stretch;
+        }
+        
+        .button-group > * {
+            flex: 1;
+        }
+    }
+</style>
+{{end}}

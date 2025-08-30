@@ -1,0 +1,261 @@
+{{define "pages/transactions/new"}}
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.PageData.Title}} - Семейный бюджет</title>
+    
+    <!-- PicoCSS -->
+    <link rel="stylesheet" href="/static/css/pico.min.css">
+    <link rel="stylesheet" href="/static/css/custom.css">
+    
+    <!-- HTMX -->
+    <script src="/static/js/htmx.min.js"></script>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="container-fluid">
+        <ul>
+            <li>
+                <a href="/" class="brand">
+                    <strong>💰 Семейный бюджет</strong>
+                </a>
+            </li>
+        </ul>
+        <ul>
+            <li><a href="/">Главная</a></li>
+            <li><a href="/transactions" class="current">Транзакции</a></li>
+            <li><a href="/categories">Категории</a></li>
+            <li><a href="/budgets">Бюджеты</a></li>
+            <li><a href="/reports">Отчеты</a></li>
+        </ul>
+    </nav>
+    
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Page Header -->
+        <div class="page-header">
+            <h1>➕ {{.PageData.Title}}</h1>
+            <nav aria-label="breadcrumb">
+                <ol>
+                    <li><a href="/">Главная</a></li>
+                    <li><a href="/transactions">Транзакции</a></li>
+                    <li>Добавить</li>
+                </ol>
+            </nav>
+        </div>
+        
+        <!-- Error Messages -->
+        {{if .PageData.Errors}}
+        <div class="alert alert-danger" role="alert" id="form-errors">
+            <ul style="margin: 0; padding-left: 1rem;">
+                {{range $field, $error := .PageData.Errors}}
+                <li>{{$error}}</li>
+                {{end}}
+            </ul>
+        </div>
+        {{end}}
+        
+        <!-- Add Transaction Form -->
+        <section class="form-section">
+            <div class="grid">
+                <div></div>
+                <div>
+                    <form method="POST" 
+                          action="/transactions" 
+                          hx-post="/transactions"
+                          hx-target="#form-errors"
+                          hx-swap="outerHTML">
+                        
+                        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                        
+                        <!-- Transaction Basic Info -->
+                        <fieldset>
+                            <legend>Основная информация</legend>
+                            
+                            <div class="grid">
+                                <!-- Amount -->
+                                <div>
+                                    <label for="amount">
+                                        Сумма (₽) *
+                                        <input type="number" 
+                                               id="amount" 
+                                               name="amount" 
+                                               value="{{.Form.Amount}}"
+                                               step="0.01"
+                                               min="0.01"
+                                               placeholder="0.00"
+                                               required
+                                               autofocus
+                                               {{if index .PageData.Errors "amount"}}aria-invalid="true"{{end}}>
+                                        {{if index .PageData.Errors "amount"}}
+                                        <small class="error">{{index .PageData.Errors "amount"}}</small>
+                                        {{end}}
+                                    </label>
+                                </div>
+                                
+                                <!-- Type -->
+                                <div>
+                                    <label for="type">
+                                        Тип операции *
+                                        <select id="type" 
+                                                name="type" 
+                                                required
+                                                onchange="updateCategoryOptions()"
+                                                {{if index .PageData.Errors "type"}}aria-invalid="true"{{end}}>
+                                            <option value="">Выберите тип...</option>
+                                            <option value="income" {{if eq .Form.Type "income"}}selected{{end}}>
+                                                💰 Доход
+                                            </option>
+                                            <option value="expense" {{if eq .Form.Type "expense"}}selected{{end}}>
+                                                💸 Расход
+                                            </option>
+                                        </select>
+                                        {{if index .PageData.Errors "type"}}
+                                        <small class="error">{{index .PageData.Errors "type"}}</small>
+                                        {{end}}
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="grid">
+                                <!-- Category -->
+                                <div>
+                                    <label for="category_id">
+                                        Категория *
+                                        <select id="category_id" 
+                                                name="category_id" 
+                                                required
+                                                {{if index .PageData.Errors "category_id"}}aria-invalid="true"{{end}}>
+                                            <option value="">Выберите категорию...</option>
+                                            {{range .CategoryOptions}}
+                                            <option value="{{.ID}}" 
+                                                    data-type="{{.Type}}"
+                                                    {{if eq .ID.String $.Form.CategoryID}}selected{{end}}>
+                                                {{.Name}}
+                                            </option>
+                                            {{end}}
+                                        </select>
+                                        {{if index .PageData.Errors "category_id"}}
+                                        <small class="error">{{index .PageData.Errors "category_id"}}</small>
+                                        {{end}}
+                                    </label>
+                                </div>
+                                
+                                <!-- Date -->
+                                <div>
+                                    <label for="date">
+                                        Дата операции *
+                                        <input type="date" 
+                                               id="date" 
+                                               name="date" 
+                                               value="{{.Form.Date}}"
+                                               required
+                                               {{if index .PageData.Errors "date"}}aria-invalid="true"{{end}}>
+                                        {{if index .PageData.Errors "date"}}
+                                        <small class="error">{{index .PageData.Errors "date"}}</small>
+                                        {{end}}
+                                    </label>
+                                </div>
+                            </div>
+                        </fieldset>
+                        
+                        <!-- Transaction Details -->
+                        <fieldset>
+                            <legend>Дополнительная информация</legend>
+                            
+                            <label for="description">
+                                Описание *
+                                <textarea id="description" 
+                                          name="description" 
+                                          placeholder="Опишите транзакцию..."
+                                          rows="3"
+                                          required
+                                          {{if index .PageData.Errors "description"}}aria-invalid="true"{{end}}>{{.Form.Description}}</textarea>
+                                {{if index .PageData.Errors "description"}}
+                                <small class="error">{{index .PageData.Errors "description"}}</small>
+                                {{end}}
+                                <small>Минимум 2 символа, максимум 500</small>
+                            </label>
+                            
+                            <label for="tags">
+                                Теги
+                                <input type="text" 
+                                       id="tags" 
+                                       name="tags" 
+                                       value="{{.Form.Tags}}"
+                                       placeholder="покупки, развлечения, работа (через запятую)"
+                                       {{if index .PageData.Errors "tags"}}aria-invalid="true"{{end}}>
+                                {{if index .PageData.Errors "tags"}}
+                                <small class="error">{{index .PageData.Errors "tags"}}</small>
+                                {{end}}
+                                <small>Разделяйте теги запятыми. Максимум 10 тегов по 50 символов</small>
+                            </label>
+                        </fieldset>
+                        
+                        <!-- Form Actions -->
+                        <div class="grid">
+                            <a href="/transactions" role="button" class="secondary">
+                                ← Отмена
+                            </a>
+                            <button type="submit" class="primary">
+                                ✅ Создать транзакцию
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                <div></div>
+            </div>
+        </section>
+    </main>
+    
+    <!-- Footer -->
+    <footer class="container">
+        <hr>
+        <div class="grid">
+            <div>
+                <small>© 2025 Семейный бюджет</small>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- Custom JavaScript -->
+    <script src="/static/js/app.js"></script>
+    <script>
+        // Filter categories based on selected transaction type
+        function updateCategoryOptions() {
+            const typeSelect = document.getElementById('type');
+            const categorySelect = document.getElementById('category_id');
+            const selectedType = typeSelect.value;
+            
+            // Reset category selection
+            categorySelect.value = '';
+            
+            // Show/hide options based on type
+            for (let option of categorySelect.options) {
+                if (option.value === '') {
+                    option.style.display = 'block';
+                    continue;
+                }
+                
+                const optionType = option.getAttribute('data-type');
+                if (selectedType === '' || optionType === selectedType) {
+                    option.style.display = 'block';
+                } else {
+                    option.style.display = 'none';
+                }
+            }
+        }
+        
+        // Initialize category filtering on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            updateCategoryOptions();
+        });
+    </script>
+</body>
+</html>
+{{end}}

@@ -1,0 +1,269 @@
+{{template "layouts/base" .}}
+
+{{define "content"}}
+<div class="container">
+    <header>
+        <h1>{{.PageData.Title}}</h1>
+        <div class="button-group">
+            <a href="/budgets" role="button" class="secondary outline">← Back to Budgets</a>
+            <a href="/budgets/{{.BudgetID}}" role="button" class="secondary outline">View Budget</a>
+        </div>
+    </header>
+
+    <article>
+        <form method="POST" action="/budgets/{{.BudgetID}}">
+            <input type="hidden" name="_method" value="PUT">
+            
+            <!-- Form Errors -->
+            {{if .PageData.Errors}}
+                {{template "components/form_errors" .PageData.Errors}}
+            {{end}}
+
+            <div class="grid">
+                <div>
+                    <label for="name">Budget Name</label>
+                    <input type="text" 
+                           id="name" 
+                           name="name" 
+                           placeholder="Monthly Grocery Budget" 
+                           value="{{.Form.Name}}"
+                           required>
+                    <small>Give your budget a descriptive name</small>
+                </div>
+                
+                <div>
+                    <label for="amount">Budget Amount</label>
+                    <input type="number" 
+                           id="amount" 
+                           name="amount" 
+                           step="0.01" 
+                           min="0.01" 
+                           placeholder="1000.00" 
+                           value="{{.Form.Amount}}"
+                           required>
+                    <small>Maximum amount you want to spend</small>
+                </div>
+            </div>
+
+            <div class="grid">
+                <div>
+                    <label for="period">Budget Period</label>
+                    <select id="period" name="period" required>
+                        <option value="weekly" {{if eq .Form.Period "weekly"}}selected{{end}}>Weekly</option>
+                        <option value="monthly" {{if eq .Form.Period "monthly"}}selected{{end}}>Monthly</option>
+                        <option value="yearly" {{if eq .Form.Period "yearly"}}selected{{end}}>Yearly</option>
+                        <option value="custom" {{if eq .Form.Period "custom"}}selected{{end}}>Custom Period</option>
+                    </select>
+                    <small>How long should this budget last?</small>
+                </div>
+                
+                <div>
+                    <label for="category_id">Category (Optional)</label>
+                    <select id="category_id" name="category_id">
+                        {{range .CategoryOptions}}
+                        <option value="{{.ID}}" {{if eq .ID $.Form.CategoryID}}selected{{end}}>
+                            {{.Name}}
+                        </option>
+                        {{end}}
+                    </select>
+                    <small>Leave as "All Categories" to track all spending</small>
+                </div>
+            </div>
+
+            <div class="grid">
+                <div>
+                    <label for="start_date">Start Date</label>
+                    <input type="date" 
+                           id="start_date" 
+                           name="start_date" 
+                           value="{{.Form.StartDate}}"
+                           required>
+                </div>
+                
+                <div>
+                    <label for="end_date">End Date</label>
+                    <input type="date" 
+                           id="end_date" 
+                           name="end_date" 
+                           value="{{.Form.EndDate}}"
+                           required>
+                </div>
+            </div>
+
+            <div>
+                <label>
+                    <input type="checkbox" 
+                           name="is_active" 
+                           value="true" 
+                           {{if .Form.IsActive}}checked{{end}}>
+                    Budget is active
+                </label>
+                <small>Inactive budgets are not monitored and don't generate alerts</small>
+            </div>
+
+            <div class="button-group">
+                <button type="submit">Update Budget</button>
+                <a href="/budgets/{{.BudgetID}}" role="button" class="secondary">Cancel</a>
+                <button type="button" 
+                        hx-delete="/budgets/{{.BudgetID}}" 
+                        hx-confirm="Are you sure you want to delete this budget? This action cannot be undone."
+                        hx-target="body"
+                        hx-push-url="/budgets"
+                        class="secondary outline danger">
+                    Delete Budget
+                </button>
+            </div>
+        </form>
+    </article>
+
+    <!-- Edit Warnings -->
+    <aside>
+        <details>
+            <summary>⚠️ Important Notes</summary>
+            <div class="warning-content">
+                <h4>Editing Budget Amounts</h4>
+                <ul>
+                    <li><strong>Increase Safely:</strong> You can always increase budget amounts</li>
+                    <li><strong>Decrease Carefully:</strong> If you've already spent more than the new amount, the budget will show as over-budget</li>
+                    <li><strong>Period Changes:</strong> Changing dates won't affect already tracked spending</li>
+                </ul>
+                
+                <h4>Budget Status</h4>
+                <ul>
+                    <li><strong>Active:</strong> Budget is monitored and generates alerts</li>
+                    <li><strong>Inactive:</strong> Budget is paused and won't track new spending</li>
+                </ul>
+                
+                <h4>Deletion Warning</h4>
+                <p class="text-warning">
+                    <strong>Deleting a budget is permanent!</strong> All spending tracking and history for this budget will be lost. 
+                    Consider making it inactive instead if you might need it later.
+                </p>
+            </div>
+        </details>
+    </aside>
+</div>
+
+<style>
+    .button-group {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-top: 1.5rem;
+    }
+    
+    .button-group > * {
+        margin: 0;
+    }
+
+    .danger {
+        --pico-primary: #dc3545;
+        --pico-primary-hover: #c82333;
+    }
+
+    .warning-content {
+        margin-top: 1rem;
+    }
+    
+    .warning-content h4 {
+        color: var(--pico-primary);
+        margin-top: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .warning-content h4:first-child {
+        margin-top: 0;
+    }
+    
+    .warning-content ul {
+        margin-bottom: 1rem;
+    }
+    
+    .warning-content li {
+        margin-bottom: 0.5rem;
+    }
+
+    .text-warning {
+        color: #856404;
+        background-color: #fff3cd;
+        padding: 0.75rem;
+        border-radius: var(--pico-border-radius);
+        border: 1px solid #ffeaa7;
+    }
+
+    aside {
+        margin-top: 2rem;
+    }
+    
+    aside details {
+        background: var(--pico-background-color);
+        padding: 1rem;
+        border-radius: var(--pico-border-radius);
+        border: 1px solid var(--pico-muted-border-color);
+    }
+    
+    aside summary {
+        font-weight: 600;
+        cursor: pointer;
+        margin-bottom: 0;
+    }
+    
+    aside summary:hover {
+        color: var(--pico-primary);
+    }
+
+    @media (max-width: 768px) {
+        .button-group {
+            justify-content: stretch;
+        }
+        
+        .button-group > * {
+            flex: 1;
+        }
+    }
+</style>
+
+<script>
+    // Auto-populate end date based on period selection (same as new budget)
+    document.getElementById('period').addEventListener('change', function() {
+        const startDateInput = document.getElementById('start_date');
+        const endDateInput = document.getElementById('end_date');
+        const startDate = new Date(startDateInput.value);
+        
+        if (!startDate || isNaN(startDate)) {
+            return; // No valid start date
+        }
+        
+        let endDate = new Date(startDate);
+        
+        switch(this.value) {
+            case 'weekly':
+                endDate.setDate(startDate.getDate() + 7);
+                break;
+            case 'monthly':
+                endDate.setMonth(startDate.getMonth() + 1);
+                break;
+            case 'yearly':
+                endDate.setFullYear(startDate.getFullYear() + 1);
+                break;
+            default:
+                // For custom, don't auto-change
+                return;
+        }
+        
+        // Subtract one day to make it end of period
+        endDate.setDate(endDate.getDate() - 1);
+        
+        // Format as YYYY-MM-DD
+        const year = endDate.getFullYear();
+        const month = String(endDate.getMonth() + 1).padStart(2, '0');
+        const day = String(endDate.getDate()).padStart(2, '0');
+        
+        endDateInput.value = `${year}-${month}-${day}`;
+    });
+    
+    document.getElementById('start_date').addEventListener('change', function() {
+        document.getElementById('period').dispatchEvent(new Event('change'));
+    });
+</script>
+{{end}}

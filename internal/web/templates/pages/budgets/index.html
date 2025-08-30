@@ -1,0 +1,386 @@
+{{template "layouts/base" .}}
+
+{{define "content"}}
+<div class="container">
+    <header>
+        <h1>Budget Management</h1>
+        <p>Track your spending limits and monitor progress</p>
+        
+        <div class="button-group">
+            <a href="/budgets/new" role="button">Create New Budget</a>
+        </div>
+    </header>
+
+    <!-- Budget Filters -->
+    <section>
+        <details>
+            <summary>Filter Budgets</summary>
+            <form hx-get="/budgets" 
+                  hx-target="#budgets-list" 
+                  hx-trigger="change"
+                  hx-include="this">
+                
+                <div class="grid">
+                    <div>
+                        <label for="period">Period</label>
+                        <select id="period" name="period">
+                            <option value="">All Periods</option>
+                            <option value="weekly" {{if eq .Filter.Period "weekly"}}selected{{end}}>Weekly</option>
+                            <option value="monthly" {{if eq .Filter.Period "monthly"}}selected{{end}}>Monthly</option>
+                            <option value="yearly" {{if eq .Filter.Period "yearly"}}selected{{end}}>Yearly</option>
+                            <option value="custom" {{if eq .Filter.Period "custom"}}selected{{end}}>Custom</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="is_active">Status</label>
+                        <select id="is_active" name="is_active">
+                            <option value="">All Budgets</option>
+                            <option value="true" {{if and .Filter.IsActive (deref .Filter.IsActive)}}selected{{end}}>Active Only</option>
+                            <option value="false" {{if and .Filter.IsActive (not (deref .Filter.IsActive))}}selected{{end}}>Inactive Only</option>
+                        </select>
+                    </div>
+                </div>
+            </form>
+        </details>
+    </section>
+
+    <!-- Budget Summary Cards -->
+    {{if .Budgets}}
+    <section>
+        <h2>Budget Overview</h2>
+        <div class="budget-summary">
+            {{$activeBudgets := 0}}
+            {{$totalBudget := 0.0}}
+            {{$totalSpent := 0.0}}
+            {{$overBudgetCount := 0}}
+            
+            {{range .Budgets}}
+                {{if .IsActive}}
+                    {{$activeBudgets = add $activeBudgets 1}}
+                    {{$totalBudget = add $totalBudget .Amount}}
+                    {{$totalSpent = add $totalSpent .Spent}}
+                    {{if .IsOverBudget}}
+                        {{$overBudgetCount = add $overBudgetCount 1}}
+                    {{end}}
+                {{end}}
+            {{end}}
+            
+            <div class="grid">
+                <article class="summary-card">
+                    <header>Active Budgets</header>
+                    <h3>{{$activeBudgets}}</h3>
+                </article>
+                
+                <article class="summary-card">
+                    <header>Total Budget</header>
+                    <h3>{{printf "%.2f" $totalBudget}}</h3>
+                </article>
+                
+                <article class="summary-card">
+                    <header>Total Spent</header>
+                    <h3 class="{{if gt $totalSpent $totalBudget}}text-danger{{else}}text-success{{end}}">
+                        {{printf "%.2f" $totalSpent}}
+                    </h3>
+                </article>
+                
+                <article class="summary-card">
+                    <header>Over Budget</header>
+                    <h3 class="{{if gt $overBudgetCount 0}}text-warning{{else}}text-success{{end}}">
+                        {{$overBudgetCount}}
+                    </h3>
+                </article>
+            </div>
+        </div>
+    </section>
+    {{end}}
+
+    <!-- Budget List -->
+    <section id="budgets-list">
+        {{if .Budgets}}
+        <div class="budget-grid">
+            {{range .Budgets}}
+            <article class="budget-card {{if not .IsActive}}inactive{{end}}">
+                <header>
+                    <div class="budget-header">
+                        <h4>{{.Name}}</h4>
+                        {{if not .IsActive}}
+                            <span class="badge secondary">Inactive</span>
+                        {{else if .IsOverBudget}}
+                            <span class="badge danger">Over Budget</span>
+                        {{else if eq .AlertLevel "warning"}}
+                            <span class="badge warning">{{printf "%.0f" .Percentage}}%</span>
+                        {{else}}
+                            <span class="badge success">{{printf "%.0f" .Percentage}}%</span>
+                        {{end}}
+                    </div>
+                    
+                    {{if .CategoryName}}
+                    <small class="category-info">
+                        <span class="category-color" style="background-color: {{.CategoryColor}}"></span>
+                        {{.CategoryName}}
+                    </small>
+                    {{else}}
+                    <small>All Categories</small>
+                    {{end}}
+                </header>
+
+                <!-- Progress Bar -->
+                <div class="progress-section">
+                    <div class="progress {{.ProgressBarClass}}" 
+                         hx-get="/budgets/{{.ID}}/progress" 
+                         hx-trigger="load, every 30s"
+                         hx-swap="outerHTML">
+                        <div class="progress-bar" style="width: {{if gt .Percentage 100}}100{{else}}{{printf "%.1f" .Percentage}}{{end}}%">
+                            <span class="progress-text">{{printf "%.1f" .Percentage}}%</span>
+                        </div>
+                    </div>
+                    
+                    <div class="progress-details">
+                        <div class="amount-info">
+                            <span class="spent">Spent: {{.FormattedSpent}}</span>
+                            <span class="total">of {{.FormattedAmount}}</span>
+                        </div>
+                        <div class="remaining {{if .IsOverBudget}}text-danger{{else}}text-success{{end}}">
+                            Remaining: {{.FormattedRemaining}}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Period and Time Info -->
+                <div class="period-info">
+                    <div class="grid">
+                        <div>
+                            <small>Period: {{.Period | title}}</small>
+                            <br><small>{{.StartDate.Format "02.01.2006"}} - {{.EndDate.Format "02.01.2006"}}</small>
+                        </div>
+                        <div style="text-align: right;">
+                            {{if .IsActive}}
+                                {{if gt .DaysLeft 0}}
+                                    <small>{{.DaysLeft}} days left</small>
+                                {{else}}
+                                    <small class="text-warning">Expired</small>
+                                {{end}}
+                            {{else}}
+                                <small class="text-muted">Inactive</small>
+                            {{end}}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <footer>
+                    <div class="button-group">
+                        <a href="/budgets/{{.ID}}" role="button" class="secondary outline">View</a>
+                        <a href="/budgets/{{.ID}}/edit" role="button" class="secondary outline">Edit</a>
+                        <button hx-delete="/budgets/{{.ID}}" 
+                                hx-confirm="Are you sure you want to delete this budget?"
+                                hx-target="closest article"
+                                hx-swap="outerHTML"
+                                class="secondary outline">
+                            Delete
+                        </button>
+                    </div>
+                </footer>
+            </article>
+            {{end}}
+        </div>
+        {{else}}
+        <article>
+            <div class="empty-state">
+                <h3>No budgets found</h3>
+                <p>Create your first budget to start tracking your spending limits.</p>
+                <a href="/budgets/new" role="button">Create Budget</a>
+            </div>
+        </article>
+        {{end}}
+    </section>
+</div>
+
+<style>
+    .button-group {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+    }
+    
+    .button-group > * {
+        margin: 0;
+    }
+
+    .budget-summary {
+        margin: 1.5rem 0;
+    }
+    
+    .summary-card {
+        text-align: center;
+        padding: 1rem;
+    }
+    
+    .summary-card header {
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: var(--pico-muted-color);
+    }
+    
+    .summary-card h3 {
+        margin: 0;
+        font-size: 1.5rem;
+    }
+
+    .budget-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: 1.5rem;
+        margin: 1.5rem 0;
+    }
+
+    .budget-card {
+        border: 1px solid var(--pico-muted-border-color);
+        border-radius: var(--pico-border-radius);
+        padding: 1.5rem;
+        background: var(--pico-card-background-color);
+    }
+    
+    .budget-card.inactive {
+        opacity: 0.6;
+        border-style: dashed;
+    }
+
+    .budget-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    
+    .budget-header h4 {
+        margin: 0;
+    }
+
+    .category-info {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    
+    .category-color {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    .progress-section {
+        margin: 1rem 0;
+    }
+    
+    .progress {
+        width: 100%;
+        height: 20px;
+        background-color: var(--pico-muted-border-color);
+        border-radius: 10px;
+        overflow: hidden;
+        position: relative;
+        margin-bottom: 0.5rem;
+    }
+    
+    .progress-bar {
+        height: 100%;
+        background-color: var(--pico-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        transition: width 0.3s ease;
+        position: relative;
+    }
+    
+    .progress-text {
+        color: white;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-shadow: 0 0 3px rgba(0,0,0,0.5);
+    }
+    
+    .progress.progress-success .progress-bar { background-color: #28a745; }
+    .progress.progress-info .progress-bar { background-color: #17a2b8; }
+    .progress.progress-warning .progress-bar { background-color: #ffc107; }
+    .progress.progress-danger .progress-bar { background-color: #dc3545; }
+
+    .progress-details {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.875rem;
+    }
+    
+    .amount-info {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .spent {
+        font-weight: 600;
+    }
+
+    .period-info {
+        margin: 1rem 0;
+        padding: 0.75rem;
+        background: var(--pico-background-color);
+        border-radius: var(--pico-border-radius);
+        font-size: 0.875rem;
+    }
+
+    .badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .badge.success { background-color: #d4edda; color: #155724; }
+    .badge.warning { background-color: #fff3cd; color: #856404; }
+    .badge.danger { background-color: #f8d7da; color: #721c24; }
+    .badge.secondary { background-color: #e2e3e5; color: #383d41; }
+
+    .text-success { color: #28a745; }
+    .text-warning { color: #ffc107; }
+    .text-danger { color: #dc3545; }
+    .text-muted { color: var(--pico-muted-color); }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+    }
+    
+    .empty-state h3 {
+        color: var(--pico-muted-color);
+    }
+
+    @media (max-width: 768px) {
+        .budget-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .button-group {
+            justify-content: stretch;
+        }
+        
+        .button-group > * {
+            flex: 1;
+        }
+        
+        .progress-details {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.25rem;
+        }
+    }
+</style>
+{{end}}

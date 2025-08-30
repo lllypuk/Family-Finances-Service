@@ -1,196 +1,353 @@
 {{define "dashboard"}}
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru" data-theme="light">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{.Title}} - Семейный бюджет</title>
-    
-    <!-- PicoCSS -->
-    <link rel="stylesheet" href="/static/css/pico.min.css">
-    <link rel="stylesheet" href="/static/css/custom.css">
-    
-    <!-- HTMX -->
-    <script src="/static/js/htmx.min.js"></script>
-    
-    <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
-</head>
-<body>
-    <!-- Navigation -->
-    <nav class="container-fluid">
-        <ul>
-            <li>
-                <a href="/" class="brand">
-                    <strong>💰 Семейный бюджет</strong>
-                </a>
-            </li>
-        </ul>
-        <ul>
-            {{if .CurrentUser}}
-            <li><a href="/">Главная</a></li>
-            <li><a href="/transactions">Транзакции</a></li>
-            <li><a href="/categories">Категории</a></li>
-            <li><a href="/budgets">Бюджеты</a></li>
-            <li><a href="/reports">Отчеты</a></li>
-            <li>
-                <details class="dropdown">
-                    <summary role="button" class="secondary">
-                        {{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}
-                    </summary>
-                    <ul>
-                        <li><a href="/profile">Профиль</a></li>
-                        {{if eq .CurrentUser.Role "admin"}}
-                        <li><a href="/users">Пользователи</a></li>
-                        <li><a href="/family/settings">Настройки семьи</a></li>
-                        {{end}}
-                        <li>
-                            <form method="POST" action="/logout" style="margin: 0;">
-                                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-                                <button type="submit" class="outline">Выход</button>
-                            </form>
-                        </li>
-                    </ul>
-                </details>
-            </li>
-            {{else}}
-            <li><a href="/login">Вход</a></li>
-            <li><a href="/register" role="button">Регистрация</a></li>
-            {{end}}
-        </ul>
-    </nav>
-    
-    <!-- Main Content -->
-    <main class="container">
-        <!-- Flash Messages -->
-        {{if .Messages}}
-        <div id="flash-messages">
-            {{range .Messages}}
-            <div class="alert alert-{{.Type}}" role="alert">
-                {{.Text}}
-                <button type="button" class="close" aria-label="Закрыть">
-                    <span aria-hidden="true">&times;</span>
-                </button>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>{{.Title}} - Семейный бюджет</title>
+
+        <!-- PicoCSS -->
+        <link rel="stylesheet" href="/static/css/pico.min.css" />
+        <link rel="stylesheet" href="/static/css/custom.css" />
+
+        <!-- HTMX -->
+        <script src="/static/js/htmx.min.js"></script>
+
+        <!-- Favicon -->
+        <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico" />
+    </head>
+    <body>
+        <!-- Navigation -->
+        <nav class="container-fluid">
+            <ul>
+                <li>
+                    <a href="/" class="brand">
+                        <strong>💰 Семейный бюджет</strong>
+                    </a>
+                </li>
+            </ul>
+            <ul>
+                {{if .CurrentUser}}
+                <li><a href="/">Главная</a></li>
+                <li><a href="/transactions">Транзакции</a></li>
+                <li><a href="/categories">Категории</a></li>
+                <li><a href="/budgets">Бюджеты</a></li>
+                <li><a href="/reports">Отчеты</a></li>
+                <li>
+                    <details class="dropdown">
+                        <summary role="button" class="secondary">
+                            {{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}
+                        </summary>
+                        <ul>
+                            <li><a href="/profile">Профиль</a></li>
+                            {{if eq .CurrentUser.Role "admin"}}
+                            <li><a href="/users">Пользователи</a></li>
+                            <li>
+                                <a href="/family/settings">Настройки семьи</a>
+                            </li>
+                            {{end}}
+                            <li>
+                                <form
+                                    method="POST"
+                                    action="/logout"
+                                    style="margin: 0"
+                                >
+                                    <input
+                                        type="hidden"
+                                        name="csrf_token"
+                                        value="{{.CSRFToken}}"
+                                    />
+                                    <button type="submit" class="outline">
+                                        Выход
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </details>
+                </li>
+                {{else}}
+                <li><a href="/login">Вход</a></li>
+                <li><a href="/register" role="button">Регистрация</a></li>
+                {{end}}
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="container">
+            <!-- Flash Messages -->
+            {{if .Messages}}
+            <div id="flash-messages">
+                {{range .Messages}}
+                <div class="alert alert-{{.Type}}" role="alert">
+                    {{.Text}}
+                    <button type="button" class="close" aria-label="Закрыть">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                {{end}}
             </div>
             {{end}}
-        </div>
-        {{end}}
-        
-        <!-- Dashboard Content -->
-        <div class="dashboard">
-            <!-- Welcome Section -->
-            <section class="welcome">
-                <h1>Добро пожаловать в семейный бюджет!</h1>
-                <p>Вот обзор финансов вашей семьи</p>
-            </section>
-            
-            <!-- Stats Cards -->
-            <section class="stats-grid" 
-                     hx-get="/htmx/dashboard/stats" 
-                     hx-trigger="load, every 30s"
-                     hx-target="this"
-                     hx-swap="outerHTML">
-                
-                <div class="grid">
-                    <!-- Total Income Card -->
-                    <article class="stat-card income">
-                        <header>
-                            <h3>💵 Доходы</h3>
-                        </header>
-                        <main>
-                            <h2>{{printf "%.2f" .TotalIncome}} ₽</h2>
-                            <small>За текущий месяц</small>
-                        </main>
-                    </article>
-                    
-                    <!-- Total Expenses Card -->
-                    <article class="stat-card expenses">
-                        <header>
-                            <h3>💸 Расходы</h3>
-                        </header>
-                        <main>
-                            <h2>{{printf "%.2f" .TotalExpenses}} ₽</h2>
-                            <small>За текущий месяц</small>
-                        </main>
-                    </article>
-                    
-                    <!-- Net Income Card -->
-                    <article class="stat-card net">
-                        <header>
-                            <h3>💰 Остаток</h3>
-                        </header>
-                        <main>
-                            <h2 class="{{if lt .NetIncome 0.0}}text-danger{{else}}text-success{{end}}">
-                                {{printf "%.2f" .NetIncome}} ₽
-                            </h2>
-                            <small>Доходы - Расходы</small>
-                        </main>
-                    </article>
+
+            <!-- Dashboard Content -->
+            <div class="dashboard">
+                <!-- Welcome Section -->
+                <section class="welcome">
+                    <h1>Добро пожаловать, {{.CurrentUser.FirstName}}!</h1>
+                    <p>
+                        Вот обзор финансов {{if .Family}}семьи
+                        "{{.Family.Name}}"{{else}}вашей семьи{{end}}
+                    </p>
+                    {{if .Filters}}
+                    <div class="period-selector">
+                        <small class="text-muted">
+                            Период: {{.Filters.Period}} {{if
+                            .DashboardViewModel.MonthlySummary}}
+                            ({{.DashboardViewModel.MonthlySummary.CurrentMonth}})
+                            {{end}}
+                        </small>
+                    </div>
+                    {{end}}
+                </section>
+
+                <!-- Stats Cards -->
+                {{if .DashboardViewModel.MonthlySummary}} {{template
+                "dashboard-stats" .}} {{else}}
+                <section class="stats-grid">
+                    <p aria-busy="true">Загрузка статистики...</p>
+                </section>
+                {{end}}
+
+                <!-- Quick Actions -->
+                <section class="quick-actions">
+                    <h2>Быстрые действия</h2>
+                    <div class="grid">
+                        <a
+                            href="/transactions/new"
+                            role="button"
+                            class="secondary"
+                        >
+                            ➕ Добавить транзакцию
+                        </a>
+                        <a href="/budgets/new" role="button" class="secondary">
+                            📊 Создать бюджет
+                        </a>
+                        <a href="/reports" role="button" class="secondary">
+                            📈 Просмотреть отчеты
+                        </a>
+                        <a href="/categories" role="button" class="secondary">
+                            🏷️ Управление категориями
+                        </a>
+                    </div>
+                </section>
+
+                <!-- Main Dashboard Content -->
+                <div class="dashboard-content">
+                    <div class="grid">
+                        <!-- Recent Activity -->
+                        <section class="recent-activity">
+                            <h2>Последние транзакции</h2>
+                            {{if .DashboardViewModel.RecentActivity}} {{template
+                            "recent-transactions" .}} {{else}}
+                            <div
+                                hx-get="/htmx/transactions/recent"
+                                hx-trigger="load"
+                                hx-target="this"
+                                hx-swap="outerHTML"
+                            >
+                                <p aria-busy="true">Загрузка транзакций...</p>
+                            </div>
+                            {{end}}
+                        </section>
+
+                        <!-- Budget Overview -->
+                        <section class="budget-overview-section">
+                            <h2>Состояние бюджетов</h2>
+                            {{if .DashboardViewModel.BudgetOverview}} {{template
+                            "budget-overview" .}} {{else}}
+                            <div
+                                hx-get="/htmx/budgets/overview"
+                                hx-trigger="load"
+                                hx-target="this"
+                                hx-swap="outerHTML"
+                            >
+                                <p aria-busy="true">Загрузка бюджетов...</p>
+                            </div>
+                            {{end}}
+                        </section>
+                    </div>
+
+                    <!-- Category Insights -->
+                    {{if .DashboardViewModel.CategoryInsights}}
+                    <section class="category-insights">
+                        <h2>Аналитика по категориям</h2>
+                        <div class="insights-content">
+                            {{if
+                            .DashboardViewModel.CategoryInsights.TopExpenseCategories}}
+                            <div class="expense-categories">
+                                <h3>Топ расходов</h3>
+                                {{range
+                                .DashboardViewModel.CategoryInsights.TopExpenseCategories}}
+                                <div class="category-item">
+                                    <div class="category-info">
+                                        {{if
+                                        .CategoryIcon}}{{.CategoryIcon}}{{end}}
+                                        <span class="category-name"
+                                            >{{.CategoryName}}</span
+                                        >
+                                    </div>
+                                    <div class="category-amount text-danger">
+                                        {{printf "%.2f" .Amount}} ₽ ({{printf
+                                        "%.1f" .Percentage}}%)
+                                    </div>
+                                </div>
+                                {{end}}
+                            </div>
+                            {{end}} {{if
+                            .DashboardViewModel.CategoryInsights.TopIncomeCategories}}
+                            <div class="income-categories">
+                                <h3>Топ доходов</h3>
+                                {{range
+                                .DashboardViewModel.CategoryInsights.TopIncomeCategories}}
+                                <div class="category-item">
+                                    <div class="category-info">
+                                        {{if
+                                        .CategoryIcon}}{{.CategoryIcon}}{{end}}
+                                        <span class="category-name"
+                                            >{{.CategoryName}}</span
+                                        >
+                                    </div>
+                                    <div class="category-amount text-success">
+                                        {{printf "%.2f" .Amount}} ₽ ({{printf
+                                        "%.1f" .Percentage}}%)
+                                    </div>
+                                </div>
+                                {{end}}
+                            </div>
+                            {{end}}
+                        </div>
+                    </section>
+                    {{end}}
                 </div>
-            </section>
-            
-            <!-- Quick Actions -->
-            <section class="quick-actions">
-                <h2>Быстрые действия</h2>
-                <div class="grid">
-                    <a href="/transactions/new" role="button" class="secondary">
-                        ➕ Добавить транзакцию
-                    </a>
-                    <a href="/budgets/new" role="button" class="secondary">
-                        📊 Создать бюджет
-                    </a>
-                    <a href="/reports" role="button" class="secondary">
-                        📈 Просмотреть отчеты
-                    </a>
-                </div>
-            </section>
-            
-            <!-- Recent Activity -->
-            <section class="recent-activity">
-                <h2>Последние транзакции</h2>
-                <div hx-get="/htmx/transactions/recent" 
-                     hx-trigger="load"
-                     hx-target="this"
-                     hx-swap="innerHTML">
-                    <p aria-busy="true">Загрузка...</p>
-                </div>
-            </section>
-            
-            <!-- Budget Overview -->
-            <section class="budget-overview">
-                <h2>Состояние бюджетов</h2>
-                <div hx-get="/htmx/budgets/overview" 
-                     hx-trigger="load"
-                     hx-target="this"
-                     hx-swap="innerHTML">
-                    <p aria-busy="true">Загрузка...</p>
-                </div>
-            </section>
-        </div>
-    </main>
-    
-    <!-- Footer -->
-    <footer class="container">
-        <hr>
-        <div class="grid">
-            <div>
-                <small>
-                    © 2025 Семейный бюджет. 
-                    {{if .Family}}Семья: {{.Family.Name}}{{end}}
-                </small>
             </div>
-            <div>
-                <small class="text-right">
-                    <a href="/help">Справка</a> • 
-                    <a href="/privacy">Конфиденциальность</a> • 
-                    <a href="/terms">Условия</a>
-                </small>
+        </main>
+
+        <!-- Footer -->
+        <footer class="container">
+            <hr />
+            <div class="grid">
+                <div>
+                    <small>
+                        © 2025 Семейный бюджет. {{if .Family}}Семья:
+                        {{.Family.Name}}{{end}}
+                    </small>
+                </div>
+                <div>
+                    <small class="text-right">
+                        <a href="/help">Справка</a> •
+                        <a href="/privacy">Конфиденциальность</a> •
+                        <a href="/terms">Условия</a>
+                    </small>
+                </div>
             </div>
-        </div>
-    </footer>
-    
-    <!-- Custom JavaScript -->
-    <script src="/static/js/app.js"></script>
-</body>
+        </footer>
+
+        <!-- Custom JavaScript -->
+        <script src="/static/js/app.js"></script>
+
+        <!-- Dashboard Styles -->
+        <style>
+            .dashboard {
+                max-width: 1200px;
+                margin: 0 auto;
+            }
+
+            .welcome {
+                text-align: center;
+                margin-bottom: 2rem;
+            }
+
+            .period-selector {
+                margin-top: 0.5rem;
+            }
+
+            .quick-actions .grid {
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 1rem;
+                margin-bottom: 2rem;
+            }
+
+            .dashboard-content .grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 2rem;
+                margin-bottom: 2rem;
+            }
+
+            .category-insights {
+                margin-top: 2rem;
+            }
+
+            .insights-content {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 2rem;
+            }
+
+            .category-item {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 0.5rem 0;
+                border-bottom: 1px solid var(--pico-muted-border-color);
+            }
+
+            .category-item:last-child {
+                border-bottom: none;
+            }
+
+            .category-info {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+            }
+
+            .category-amount {
+                font-weight: bold;
+            }
+
+            .stats-grid {
+                margin-bottom: 2rem;
+            }
+
+            .recent-activity,
+            .budget-overview-section {
+                background: var(--pico-card-background-color);
+                border: 1px solid var(--pico-muted-border-color);
+                border-radius: var(--pico-border-radius);
+                padding: 1.5rem;
+            }
+
+            .recent-activity h2,
+            .budget-overview-section h2 {
+                margin-top: 0;
+                margin-bottom: 1rem;
+            }
+
+            @media (max-width: 768px) {
+                .quick-actions .grid {
+                    grid-template-columns: repeat(2, 1fr);
+                }
+
+                .dashboard-content .grid {
+                    grid-template-columns: 1fr;
+                    gap: 1rem;
+                }
+
+                .insights-content {
+                    grid-template-columns: 1fr;
+                    gap: 1rem;
+                }
+            }
+        </style>
+    </body>
 </html>
 {{end}}

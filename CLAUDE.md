@@ -24,6 +24,19 @@ The `run-local` command sets up the following environment:
 - **Logging**: DEBUG level for development
 - **Session Secret**: Development-specific secret key
 
+#### Testing Local Interface
+When testing the web interface locally, use the `--noproxy` flag to bypass proxy settings:
+```bash
+# Test health endpoint
+curl -s --noproxy '*' 127.0.0.1:8080/health
+
+# Test main page
+curl -s --noproxy '*' 127.0.0.1:8080/
+
+# Test login page
+curl -s --noproxy '*' 127.0.0.1:8080/login
+```
+
 ### Testing and Code Quality
 - `make test` - Run tests (excluding performance)
 - `make test-fast` - **FAST**: Run tests with shared MongoDB container (recommended)
@@ -93,7 +106,7 @@ The Docker environment includes:
 This is a production-ready family budget management service built with Go, following Clean Architecture principles and comprehensive testing practices.
 
 ### Current Status: PRODUCTION READY
-- ✅ **Complete web interface** with HTMX + PicoCSS
+- ✅ **Complete web interface** with HTMX 2.0.4 + PicoCSS 2.1.1
 - ✅ **Full API implementation** with REST endpoints
 - ✅ **Comprehensive security** with authentication & authorization
 - ✅ **59.5%+ test coverage** with 450+ tests
@@ -121,7 +134,7 @@ The application is organized into domain modules in `internal/domain/`:
 ### Key Technologies (Production Stack)
 - **Echo v4.13.4+** - HTTP web framework with middleware
 - **MongoDB v1.17.4+** - Primary database with official Go driver
-- **HTMX + PicoCSS** - Modern web interface without complex JavaScript
+- **HTMX 2.0.4 + PicoCSS 2.1.1** - Modern web interface without complex JavaScript
 - **Prometheus + Grafana** - Metrics and monitoring
 - **OpenTelemetry + Jaeger** - Distributed tracing
 - **Docker + GitHub Actions** - Multi-platform CI/CD
@@ -151,10 +164,17 @@ Full implementations are available in `internal/infrastructure/` with comprehens
 The project includes a complete web interface built with modern technologies:
 
 **Frontend Stack:**
-- **HTMX** - Dynamic updates without complex JavaScript
-- **PicoCSS** - Minimalist CSS framework for clean UI
+- **HTMX 2.0.4** - Dynamic updates without complex JavaScript (MANDATORY: use HTMX 2+ only)
+- **PicoCSS 2.1.1** - Minimalist CSS framework for clean UI (MANDATORY: use PicoCSS 2+ only)
 - **Go Templates** - Server-side rendering with layout system
 - **Progressive Web App** - Installable with offline capabilities
+
+**🚨 CRITICAL Frontend Development Rules:**
+1. **MANDATORY: Use HTMX 2.0.4+** - Never downgrade to HTMX v1.x
+2. **MANDATORY: Use PicoCSS 2.1.1+** - Leverage class-less approach and modern CSS variables
+3. **AVOID JavaScript** - Use HTMX for dynamic behavior instead of custom JS
+4. **Server-Side First** - Prefer server rendering over client-side solutions
+5. **HTMX-Only Interactivity** - Use hx-* attributes for all dynamic features
 
 **Web Components:**
 - `internal/web/handlers/` - Authentication, dashboard, and HTMX endpoints

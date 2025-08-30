@@ -41,6 +41,12 @@ func NewTemplateRenderer(templatesDir string) (*TemplateRenderer, error) {
 			}
 			return 0
 		},
+		"abs": func(a float64) float64 {
+			if a < 0 {
+				return -a
+			}
+			return a
+		},
 		"formatCurrency": formatCurrency,
 		"formatDate":     formatDate,
 		"safe": func(s string) template.HTML {

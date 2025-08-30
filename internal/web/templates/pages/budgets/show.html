@@ -1,0 +1,476 @@
+{{template "layouts/base" .}}
+
+{{define "content"}}
+<div class="container">
+    <header>
+        <h1>{{.Budget.Name}}</h1>
+        <div class="button-group">
+            <a href="/budgets" role="button" class="secondary outline">← Back to Budgets</a>
+            <a href="/budgets/{{.Budget.ID}}/edit" role="button" class="secondary outline">Edit Budget</a>
+        </div>
+    </header>
+
+    <!-- Budget Status Cards -->
+    <section class="budget-overview">
+        <div class="grid">
+            <article class="status-card">
+                <header>Total Budget</header>
+                <h2>{{.Budget.FormattedAmount}}</h2>
+            </article>
+            
+            <article class="status-card">
+                <header>Amount Spent</header>
+                <h2 class="{{if .Budget.IsOverBudget}}text-danger{{else}}text-success{{end}}">
+                    {{.Budget.FormattedSpent}}
+                </h2>
+            </article>
+            
+            <article class="status-card">
+                <header>Remaining</header>
+                <h2 class="{{if .Budget.IsOverBudget}}text-danger{{else}}text-success{{end}}">
+                    {{.Budget.FormattedRemaining}}
+                </h2>
+            </article>
+            
+            <article class="status-card">
+                <header>Progress</header>
+                <h2 class="{{.Budget.AlertLevel}}">{{printf "%.1f" .Budget.Percentage}}%</h2>
+            </article>
+        </div>
+    </section>
+
+    <!-- Budget Progress -->
+    <section class="progress-section">
+        <h3>Budget Progress</h3>
+        <div class="progress-container" 
+             hx-get="/budgets/{{.Budget.ID}}/progress" 
+             hx-trigger="load, every 30s"
+             hx-swap="innerHTML">
+            {{template "components/budget_progress" .}}
+        </div>
+    </section>
+
+    <!-- Budget Details -->
+    <section>
+        <h3>Budget Details</h3>
+        <div class="grid">
+            <div class="details-card">
+                <h4>Period Information</h4>
+                <dl>
+                    <dt>Period Type</dt>
+                    <dd>{{.Budget.Period | title}}</dd>
+                    
+                    <dt>Start Date</dt>
+                    <dd>{{.Budget.StartDate.Format "January 2, 2006"}}</dd>
+                    
+                    <dt>End Date</dt>
+                    <dd>{{.Budget.EndDate.Format "January 2, 2006"}}</dd>
+                    
+                    <dt>Duration</dt>
+                    <dd>{{.Budget.DaysTotal}} days total</dd>
+                    
+                    <dt>Time Remaining</dt>
+                    <dd>
+                        {{if .Budget.IsActive}}
+                            {{if gt .Budget.DaysLeft 0}}
+                                {{.Budget.DaysLeft}} days left
+                            {{else}}
+                                <span class="text-warning">Expired</span>
+                            {{end}}
+                        {{else}}
+                            <span class="text-muted">Inactive</span>
+                        {{end}}
+                    </dd>
+                </dl>
+            </div>
+            
+            <div class="details-card">
+                <h4>Category & Status</h4>
+                <dl>
+                    <dt>Category</dt>
+                    <dd>
+                        {{if .Budget.CategoryName}}
+                            <div class="category-info">
+                                <span class="category-color" style="background-color: {{.Budget.CategoryColor}}"></span>
+                                {{.Budget.CategoryName}}
+                            </div>
+                        {{else}}
+                            All Categories
+                        {{end}}
+                    </dd>
+                    
+                    <dt>Status</dt>
+                    <dd>
+                        {{if not .Budget.IsActive}}
+                            <span class="badge secondary">Inactive</span>
+                        {{else if .Budget.IsOverBudget}}
+                            <span class="badge danger">Over Budget</span>
+                        {{else if eq .Budget.AlertLevel "warning"}}
+                            <span class="badge warning">Near Limit</span>
+                        {{else}}
+                            <span class="badge success">On Track</span>
+                        {{end}}
+                    </dd>
+                    
+                    <dt>Created</dt>
+                    <dd>{{.Budget.CreatedAt.Format "January 2, 2006 at 3:04 PM"}}</dd>
+                    
+                    <dt>Last Updated</dt>
+                    <dd>{{.Budget.UpdatedAt.Format "January 2, 2006 at 3:04 PM"}}</dd>
+                </dl>
+            </div>
+        </div>
+    </section>
+
+    <!-- Spending Analysis -->
+    {{if .SpendingData}}
+    <section>
+        <h3>Spending Analysis</h3>
+        <div class="spending-analysis">
+            <div class="grid">
+                <div class="analysis-card">
+                    <h4>Daily Average</h4>
+                    <div class="metric">
+                        <span class="metric-value">{{printf "%.2f" .SpendingData.DailyAverage}}</span>
+                        <span class="metric-label">per day</span>
+                    </div>
+                    <small>Based on {{.SpendingData.DaysElapsed}} days elapsed</small>
+                </div>
+                
+                <div class="analysis-card">
+                    <h4>Budget Pace</h4>
+                    <div class="metric">
+                        <span class="metric-value">{{printf "%.2f" .SpendingData.BudgetPace}}</span>
+                        <span class="metric-label">daily limit</span>
+                    </div>
+                    <small>To stay within budget</small>
+                </div>
+                
+                <div class="analysis-card">
+                    <h4>Projected Total</h4>
+                    <div class="metric">
+                        <span class="metric-value {{if gt .SpendingData.ProjectedTotal .Budget.Amount}}text-danger{{else}}text-success{{end}}">
+                            {{printf "%.2f" .SpendingData.ProjectedTotal}}
+                        </span>
+                        <span class="metric-label">estimated</span>
+                    </div>
+                    <small>At current spending rate</small>
+                </div>
+                
+                <div class="analysis-card">
+                    <h4>Variance</h4>
+                    <div class="metric">
+                        <span class="metric-value {{if gt .SpendingData.DailyAverage .SpendingData.BudgetPace}}text-danger{{else}}text-success{{end}}">
+                            {{if gt .SpendingData.DailyAverage .SpendingData.BudgetPace}}+{{end}}{{printf "%.2f" .SpendingData.Variance}}
+                        </span>
+                        <span class="metric-label">vs target</span>
+                    </div>
+                    <small>Daily spending difference</small>
+                </div>
+            </div>
+        </div>
+    </section>
+    {{end}}
+
+    <!-- Recent Transactions -->
+    {{if .RecentTransactions}}
+    <section>
+        <h3>Recent Transactions</h3>
+        <div class="transactions-list">
+            {{range .RecentTransactions}}
+            <article class="transaction-item">
+                <div class="transaction-info">
+                    <div class="transaction-header">
+                        <strong>{{.Description}}</strong>
+                        <span class="transaction-amount {{if eq .Type "expense"}}text-danger{{else}}text-success{{end}}">
+                            {{if eq .Type "expense"}}-{{end}}{{.FormattedAmount}}
+                        </span>
+                    </div>
+                    <div class="transaction-details">
+                        <span class="transaction-category">{{.CategoryName}}</span>
+                        <span class="transaction-date">{{.Date.Format "Jan 2, 2006"}}</span>
+                    </div>
+                </div>
+            </article>
+            {{end}}
+        </div>
+        <div class="view-all">
+            <a href="/transactions?budget_id={{.Budget.ID}}" role="button" class="secondary outline">
+                View All Transactions for This Budget
+            </a>
+        </div>
+    </section>
+    {{end}}
+
+    <!-- Budget Actions -->
+    <section class="budget-actions">
+        <div class="button-group">
+            <a href="/budgets/{{.Budget.ID}}/edit" role="button">Edit Budget</a>
+            {{if .Budget.IsActive}}
+                <button hx-post="/budgets/{{.Budget.ID}}/deactivate" 
+                        hx-confirm="Are you sure you want to deactivate this budget?"
+                        hx-target="body"
+                        hx-push-url="/budgets/{{.Budget.ID}}"
+                        class="secondary">
+                    Deactivate Budget
+                </button>
+            {{else}}
+                <button hx-post="/budgets/{{.Budget.ID}}/activate" 
+                        hx-confirm="Are you sure you want to activate this budget?"
+                        hx-target="body"
+                        hx-push-url="/budgets/{{.Budget.ID}}"
+                        class="secondary">
+                    Activate Budget
+                </button>
+            {{end}}
+            <button hx-delete="/budgets/{{.Budget.ID}}" 
+                    hx-confirm="Are you sure you want to delete this budget? This action cannot be undone."
+                    hx-target="body"
+                    hx-push-url="/budgets"
+                    class="secondary outline danger">
+                Delete Budget
+            </button>
+        </div>
+    </section>
+</div>
+
+<style>
+    .button-group {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+    }
+    
+    .button-group > * {
+        margin: 0;
+    }
+
+    .budget-overview {
+        margin: 2rem 0;
+    }
+    
+    .status-card {
+        text-align: center;
+        padding: 1.5rem;
+        background: var(--pico-card-background-color);
+        border-radius: var(--pico-border-radius);
+        border: 1px solid var(--pico-muted-border-color);
+    }
+    
+    .status-card header {
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: var(--pico-muted-color);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .status-card h2 {
+        margin: 0;
+        font-size: 1.75rem;
+        font-weight: 700;
+    }
+
+    .progress-section {
+        margin: 2rem 0;
+        padding: 1.5rem;
+        background: var(--pico-background-color);
+        border-radius: var(--pico-border-radius);
+        border: 1px solid var(--pico-muted-border-color);
+    }
+    
+    .progress-container {
+        margin-top: 1rem;
+    }
+
+    .details-card {
+        background: var(--pico-card-background-color);
+        padding: 1.5rem;
+        border-radius: var(--pico-border-radius);
+        border: 1px solid var(--pico-muted-border-color);
+    }
+    
+    .details-card h4 {
+        margin-top: 0;
+        margin-bottom: 1rem;
+        color: var(--pico-primary);
+    }
+    
+    .details-card dl {
+        margin: 0;
+    }
+    
+    .details-card dt {
+        font-weight: 600;
+        margin-top: 1rem;
+        margin-bottom: 0.25rem;
+        color: var(--pico-color);
+    }
+    
+    .details-card dt:first-child {
+        margin-top: 0;
+    }
+    
+    .details-card dd {
+        margin: 0 0 0.5rem 0;
+        color: var(--pico-muted-color);
+    }
+
+    .category-info {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .category-color {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    .spending-analysis {
+        margin: 1rem 0;
+    }
+    
+    .analysis-card {
+        text-align: center;
+        background: var(--pico-card-background-color);
+        padding: 1.5rem;
+        border-radius: var(--pico-border-radius);
+        border: 1px solid var(--pico-muted-border-color);
+    }
+    
+    .analysis-card h4 {
+        margin: 0 0 1rem 0;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--pico-muted-color);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .metric {
+        margin-bottom: 0.5rem;
+    }
+    
+    .metric-value {
+        display: block;
+        font-size: 1.5rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+    
+    .metric-label {
+        display: block;
+        font-size: 0.75rem;
+        color: var(--pico-muted-color);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-top: 0.25rem;
+    }
+
+    .transactions-list {
+        margin: 1rem 0;
+    }
+    
+    .transaction-item {
+        padding: 1rem;
+        margin-bottom: 0.5rem;
+        background: var(--pico-card-background-color);
+        border: 1px solid var(--pico-muted-border-color);
+        border-radius: var(--pico-border-radius);
+    }
+    
+    .transaction-info {
+        width: 100%;
+    }
+    
+    .transaction-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    
+    .transaction-amount {
+        font-weight: 600;
+        font-size: 1.1rem;
+    }
+    
+    .transaction-details {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.875rem;
+        color: var(--pico-muted-color);
+    }
+    
+    .view-all {
+        margin-top: 1rem;
+        text-align: center;
+    }
+
+    .budget-actions {
+        margin: 2rem 0;
+        padding: 1.5rem;
+        background: var(--pico-background-color);
+        border-radius: var(--pico-border-radius);
+        border: 1px solid var(--pico-muted-border-color);
+    }
+
+    .badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .badge.success { background-color: #d4edda; color: #155724; }
+    .badge.warning { background-color: #fff3cd; color: #856404; }
+    .badge.danger { background-color: #f8d7da; color: #721c24; }
+    .badge.secondary { background-color: #e2e3e5; color: #383d41; }
+
+    .text-success { color: #28a745; }
+    .text-warning { color: #ffc107; }
+    .text-danger { color: #dc3545; }
+    .text-muted { color: var(--pico-muted-color); }
+
+    .danger {
+        --pico-primary: #dc3545;
+        --pico-primary-hover: #c82333;
+    }
+
+    @media (max-width: 768px) {
+        .button-group {
+            justify-content: stretch;
+        }
+        
+        .button-group > * {
+            flex: 1;
+        }
+        
+        .transaction-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.25rem;
+        }
+        
+        .transaction-details {
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        
+        .status-card h2 {
+            font-size: 1.5rem;
+        }
+        
+        .metric-value {
+            font-size: 1.25rem;
+        }
+    }
+</style>
+{{end}}

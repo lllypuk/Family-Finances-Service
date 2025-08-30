@@ -1,0 +1,64 @@
+{{define "components/transaction_rows"}}
+{{range .Transactions}}
+<tr>
+    <td>
+        <input type="checkbox" 
+               name="transaction_ids" 
+               value="{{.ID}}"
+               onchange="updateBulkActions()">
+    </td>
+    <td>
+        <time datetime="{{.Date.Format "2006-01-02"}}">
+            {{.FormattedDate}}
+        </time>
+    </td>
+    <td>
+        <div class="transaction-description">
+            <strong>{{.Description}}</strong>
+            {{if .UserName}}
+            <br><small>от {{.UserName}}</small>
+            {{end}}
+        </div>
+    </td>
+    <td>
+        <span class="category-badge category-{{.Type}}">
+            {{if eq .Type "income"}}💰{{else}}💸{{end}}
+            {{.CategoryName}}
+        </span>
+    </td>
+    <td>
+        {{if .Tags}}
+        <div class="tags">
+            {{range .Tags}}
+            <span class="tag">{{.}}</span>
+            {{end}}
+        </div>
+        {{else}}
+        <small class="muted">без тегов</small>
+        {{end}}
+    </td>
+    <td>
+        <strong class="amount-{{.Type}}">
+            {{.FormattedAmount}} ₽
+        </strong>
+    </td>
+    <td>
+        <div class="transaction-actions">
+            <a href="/transactions/{{.ID}}/edit" 
+               class="secondary outline" 
+               title="Редактировать">
+                ✏️
+            </a>
+            <button class="danger outline" 
+                    hx-delete="/htmx/transactions/{{.ID}}"
+                    hx-confirm="Удалить транзакцию '{{.Description}}'?"
+                    hx-target="closest tr"
+                    hx-swap="outerHTML"
+                    title="Удалить">
+                🗑️
+            </button>
+        </div>
+    </td>
+</tr>
+{{end}}
+{{end}}
