@@ -38,7 +38,11 @@
                 {{end}}
                 
                 <!-- Auth Content -->
-                {{template "content" .}}
+                {{if .IsLogin}}
+                {{template "login_content" .}}
+                {{else if .IsRegister}}
+                {{template "register_content" .}}
+                {{end}}
                 
                 <!-- Footer -->
                 <footer class="auth-footer">

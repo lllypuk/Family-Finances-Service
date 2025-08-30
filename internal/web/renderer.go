@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"io"
 	"path/filepath"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 )
@@ -52,7 +53,8 @@ func NewTemplateRenderer(templatesDir string) (*TemplateRenderer, error) {
 		"safe": func(s string) template.HTML {
 			return template.HTML(s) //nolint:gosec // This is intentionally used for trusted content
 		},
-		"dict": createDict,
+		"dict":  createDict,
+		"title": titleCase,
 	}
 
 	// Загружаем все шаблоны
@@ -131,4 +133,24 @@ func createDict(values ...any) map[string]any {
 		}
 	}
 	return dict
+}
+
+// titleCase конвертирует строку в заглавный регистр (замена для deprecated strings.Title)
+func titleCase(s string) string {
+	if s == "" {
+		return s
+	}
+	
+	// Заменяем подчеркивания на пробелы для читаемости
+	s = strings.ReplaceAll(s, "_", " ")
+	
+	// Разбиваем на слова и капитализируем первую букву каждого
+	words := strings.Fields(s)
+	for i, word := range words {
+		if len(word) > 0 {
+			words[i] = strings.ToUpper(word[:1]) + strings.ToLower(word[1:])
+		}
+	}
+	
+	return strings.Join(words, " ")
 }
