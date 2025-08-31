@@ -377,7 +377,8 @@ func (h *TransactionHandler) renderTransactionFormWithErrors(
 	categoryOptions := h.buildCategorySelectOptions(categories)
 
 	pageData := &PageData{
-		Title: title,
+		Title:  title,
+		Errors: errors,
 		Messages: []Message{
 			{Type: "error", Text: "Проверьте правильность заполнения формы"},
 		},

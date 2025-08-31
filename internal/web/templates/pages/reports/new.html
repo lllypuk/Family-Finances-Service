@@ -1,0 +1,312 @@
+{{define "pages/reports/new"}}
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.PageData.Title}} - Семейный бюджет</title>
+
+    <!-- PicoCSS -->
+    <link rel="stylesheet" href="/static/css/pico.min.css">
+    <link rel="stylesheet" href="/static/css/custom.css">
+
+    <!-- HTMX -->
+    <script src="/static/js/htmx.min.js"></script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="container-fluid">
+        <ul>
+            <li>
+                <a href="/" class="brand">
+                    <strong>💰 Семейный бюджет</strong>
+                </a>
+            </li>
+        </ul>
+        <ul>
+            <li><a href="/">Главная</a></li>
+            <li><a href="/transactions">Транзакции</a></li>
+            <li><a href="/categories">Категории</a></li>
+            <li><a href="/budgets">Бюджеты</a></li>
+            <li><a href="/reports" class="current">Отчеты</a></li>
+        </ul>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Page Header -->
+        <div class="page-header">
+            <h1>📊 {{.PageData.Title}}</h1>
+            <nav aria-label="breadcrumb">
+                <ol>
+                    <li><a href="/">Главная</a></li>
+                    <li><a href="/reports">Отчеты</a></li>
+                    <li>Создать</li>
+                </ol>
+            </nav>
+        </div>
+
+        <!-- Error Messages -->
+        {{if .PageData.Errors}}
+        <div class="alert alert-danger" role="alert" id="form-errors">
+            <ul style="margin: 0; padding-left: 1rem;">
+                {{range $field, $error := .PageData.Errors}}
+                <li>{{$error}}</li>
+                {{end}}
+            </ul>
+        </div>
+        {{end}}
+
+        <!-- Create Report Form -->
+        <section class="form-section">
+            <div class="grid">
+                <div></div>
+                <div>
+                    <form method="POST"
+                          action="/reports"
+                          hx-post="/reports"
+                          hx-target="#form-errors"
+                          hx-swap="outerHTML">
+
+                        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+
+                        <!-- Report Basic Info -->
+                        <fieldset>
+                            <legend>Основная информация</legend>
+
+                            <label for="name">
+                                Название отчета *
+                                <input type="text"
+                                       id="name"
+                                       name="name"
+                                       value="{{.Form.Name}}"
+                                       placeholder="Ежемесячный отчет по расходам"
+                                       required
+                                       autofocus
+                                       {{if index .PageData.Errors "name"}}aria-invalid="true"{{end}}>
+                                {{if index .PageData.Errors "name"}}
+                                <small class="error">{{index .PageData.Errors "name"}}</small>
+                                {{end}}
+                            </label>
+
+                            <div class="grid">
+                                <!-- Report Type -->
+                                <div>
+                                    <label for="type">
+                                        Тип отчета *
+                                        <select id="type"
+                                                name="type"
+                                                required
+                                                {{if index .PageData.Errors "type"}}aria-invalid="true"{{end}}>
+                                            <option value="">Выберите тип...</option>
+                                            <option value="expenses" {{if eq .Form.Type "expenses"}}selected{{end}}>
+                                                💸 Отчет по расходам
+                                            </option>
+                                            <option value="income" {{if eq .Form.Type "income"}}selected{{end}}>
+                                                💰 Отчет по доходам
+                                            </option>
+                                            <option value="budget" {{if eq .Form.Type "budget"}}selected{{end}}>
+                                                📊 Бюджетный отчет
+                                            </option>
+                                            <option value="cash_flow" {{if eq .Form.Type "cash_flow"}}selected{{end}}>
+                                                💹 Денежный поток
+                                            </option>
+                                            <option value="category_breakdown" {{if eq .Form.Type "category_breakdown"}}selected{{end}}>
+                                                📋 Разбивка по категориям
+                                            </option>
+                                        </select>
+                                        {{if index .PageData.Errors "type"}}
+                                        <small class="error">{{index .PageData.Errors "type"}}</small>
+                                        {{end}}
+                                    </label>
+                                </div>
+
+                                <!-- Period -->
+                                <div>
+                                    <label for="period">
+                                        Период *
+                                        <select id="period"
+                                                name="period"
+                                                required
+                                                onchange="updateDateFields()"
+                                                {{if index .PageData.Errors "period"}}aria-invalid="true"{{end}}>
+                                            <option value="">Выберите период...</option>
+                                            <option value="daily" {{if eq .Form.Period "daily"}}selected{{end}}>Ежедневно</option>
+                                            <option value="weekly" {{if eq .Form.Period "weekly"}}selected{{end}}>Еженедельно</option>
+                                            <option value="monthly" {{if eq .Form.Period "monthly"}}selected{{end}}>Ежемесячно</option>
+                                            <option value="quarterly" {{if eq .Form.Period "quarterly"}}selected{{end}}>Ежеквартально</option>
+                                            <option value="yearly" {{if eq .Form.Period "yearly"}}selected{{end}}>Ежегодно</option>
+                                            <option value="custom" {{if eq .Form.Period "custom"}}selected{{end}}>Произвольный период</option>
+                                        </select>
+                                        {{if index .PageData.Errors "period"}}
+                                        <small class="error">{{index .PageData.Errors "period"}}</small>
+                                        {{end}}
+                                    </label>
+                                </div>
+                            </div>
+                        </fieldset>
+
+                        <!-- Date Range -->
+                        <fieldset>
+                            <legend>Период отчета</legend>
+
+                            <div class="grid">
+                                <div>
+                                    <label for="start_date">
+                                        Дата начала *
+                                        <input type="date"
+                                               id="start_date"
+                                               name="start_date"
+                                               value="{{.Form.StartDate}}"
+                                               required
+                                               {{if index .PageData.Errors "start_date"}}aria-invalid="true"{{end}}>
+                                        {{if index .PageData.Errors "start_date"}}
+                                        <small class="error">{{index .PageData.Errors "start_date"}}</small>
+                                        {{end}}
+                                    </label>
+                                </div>
+
+                                <div>
+                                    <label for="end_date">
+                                        Дата окончания *
+                                        <input type="date"
+                                               id="end_date"
+                                               name="end_date"
+                                               value="{{.Form.EndDate}}"
+                                               required
+                                               {{if index .PageData.Errors "end_date"}}aria-invalid="true"{{end}}>
+                                        {{if index .PageData.Errors "end_date"}}
+                                        <small class="error">{{index .PageData.Errors "end_date"}}</small>
+                                        {{end}}
+                                    </label>
+                                </div>
+                            </div>
+
+                            <small>Выберите диапазон дат для анализа данных отчета</small>
+                        </fieldset>
+
+                        <!-- Report Options -->
+                        <fieldset>
+                            <legend>Дополнительные параметры</legend>
+
+                            <label for="description">
+                                Описание
+                                <textarea id="description"
+                                          name="description"
+                                          placeholder="Краткое описание отчета..."
+                                          rows="3"
+                                          {{if index .PageData.Errors "description"}}aria-invalid="true"{{end}}>{{.Form.Description}}</textarea>
+                                {{if index .PageData.Errors "description"}}
+                                <small class="error">{{index .PageData.Errors "description"}}</small>
+                                {{end}}
+                                <small>Опциональное описание для лучшего понимания отчета</small>
+                            </label>
+
+                            <div class="grid">
+                                <label>
+                                    <input type="checkbox"
+                                           name="include_charts"
+                                           value="true"
+                                           {{if .Form.IncludeCharts}}checked{{end}}>
+                                    Включить графики
+                                    <small>Добавить визуальные графики к отчету</small>
+                                </label>
+
+                                <label>
+                                    <input type="checkbox"
+                                           name="export_csv"
+                                           value="true"
+                                           {{if .Form.ExportCSV}}checked{{end}}>
+                                    Экспорт в CSV
+                                    <small>Создать файл CSV для скачивания</small>
+                                </label>
+                            </div>
+                        </fieldset>
+
+                        <!-- Form Actions -->
+                        <div class="grid">
+                            <a href="/reports" role="button" class="secondary">
+                                ← Отмена
+                            </a>
+                            <button type="submit" class="primary">
+                                📊 Создать отчет
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                <div></div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="container">
+        <hr>
+        <div class="grid">
+            <div>
+                <small>© 2025 Семейный бюджет</small>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Custom JavaScript -->
+    <script src="/static/js/app.js"></script>
+    <script>
+        // Update date fields based on selected period
+        function updateDateFields() {
+            const periodSelect = document.getElementById('period');
+            const startDateInput = document.getElementById('start_date');
+            const endDateInput = document.getElementById('end_date');
+            const selectedPeriod = periodSelect.value;
+
+            const today = new Date();
+            let startDate = new Date();
+            let endDate = new Date();
+
+            switch (selectedPeriod) {
+                case 'daily':
+                    startDate = new Date(today);
+                    endDate = new Date(today);
+                    break;
+                case 'weekly':
+                    startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7);
+                    endDate = new Date(today);
+                    break;
+                case 'monthly':
+                    startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+                    endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                    break;
+                case 'quarterly':
+                    const quarter = Math.floor(today.getMonth() / 3);
+                    startDate = new Date(today.getFullYear(), quarter * 3, 1);
+                    endDate = new Date(today.getFullYear(), quarter * 3 + 3, 0);
+                    break;
+                case 'yearly':
+                    startDate = new Date(today.getFullYear(), 0, 1);
+                    endDate = new Date(today.getFullYear(), 11, 31);
+                    break;
+                case 'custom':
+                    // Don't auto-fill for custom periods
+                    return;
+                default:
+                    return;
+            }
+
+            // Format dates for input fields (YYYY-MM-DD)
+            if (selectedPeriod !== 'custom') {
+                startDateInput.value = startDate.toISOString().split('T')[0];
+                endDateInput.value = endDate.toISOString().split('T')[0];
+            }
+        }
+
+        // Initialize date fields on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            updateDateFields();
+        });
+    </script>
+</body>
+</html>
+{{end}}

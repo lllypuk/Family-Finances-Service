@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -55,6 +56,7 @@ func NewTemplateRenderer(templatesDir string) (*TemplateRenderer, error) {
 		},
 		"dict":  createDict,
 		"title": titleCase,
+		"deref": derefBool,
 	}
 
 	// Загружаем все шаблоны
@@ -74,9 +76,20 @@ func NewTemplateRenderer(templatesDir string) (*TemplateRenderer, error) {
 		return nil, err
 	}
 
-	// Загружаем страницы
-	pagePattern := filepath.Join(templatesDir, "pages", "*.html")
-	tmpl, err = tmpl.ParseGlob(pagePattern)
+	// Загружаем страницы рекурсивно
+	pagesDir := filepath.Join(templatesDir, "pages")
+	err = filepath.Walk(pagesDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && strings.HasSuffix(path, ".html") {
+			tmpl, err = tmpl.ParseFiles(path)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -140,10 +153,10 @@ func titleCase(s string) string {
 	if s == "" {
 		return s
 	}
-	
+
 	// Заменяем подчеркивания на пробелы для читаемости
 	s = strings.ReplaceAll(s, "_", " ")
-	
+
 	// Разбиваем на слова и капитализируем первую букву каждого
 	words := strings.Fields(s)
 	for i, word := range words {
@@ -151,6 +164,14 @@ func titleCase(s string) string {
 			words[i] = strings.ToUpper(word[:1]) + strings.ToLower(word[1:])
 		}
 	}
-	
+
 	return strings.Join(words, " ")
+}
+
+// derefBool dereferences a boolean pointer, returning false if nil
+func derefBool(ptr *bool) bool {
+	if ptr == nil {
+		return false
+	}
+	return *ptr
 }

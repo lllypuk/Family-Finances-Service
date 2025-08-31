@@ -50,11 +50,12 @@ type SessionData struct {
 
 // PageData содержит общие данные для всех страниц
 type PageData struct {
-	Title       string       `json:"title"`
-	CurrentUser *SessionData `json:"current_user,omitempty"`
-	Family      *FamilyInfo  `json:"family,omitempty"`
-	Messages    []Message    `json:"messages,omitempty"`
-	CSRFToken   string       `json:"csrf_token,omitempty"`
+	Title       string            `json:"title"`
+	CurrentUser *SessionData      `json:"current_user,omitempty"`
+	Family      *FamilyInfo       `json:"family,omitempty"`
+	Errors      map[string]string `json:"errors,omitempty"`
+	Messages    []Message         `json:"messages,omitempty"`
+	CSRFToken   string            `json:"csrf_token,omitempty"`
 }
 
 // FamilyInfo содержит базовую информацию о семье

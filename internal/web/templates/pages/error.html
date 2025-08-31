@@ -1,0 +1,224 @@
+{{define "pages/error"}}
+<!doctype html>
+<html lang="ru" data-theme="light">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>{{.PageData.Title}} - Семейный бюджет</title>
+
+        <!-- PicoCSS -->
+        <link rel="stylesheet" href="/static/css/pico.min.css" />
+        <link rel="stylesheet" href="/static/css/custom.css" />
+
+        <!-- HTMX -->
+        <script src="/static/js/htmx.min.js"></script>
+
+        <!-- Favicon -->
+        <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico" />
+    </head>
+    <body>
+        <!-- Navigation -->
+        <nav class="container-fluid">
+            <ul>
+                <li>
+                    <a href="/" class="brand">
+                        <strong>💰 Семейный бюджет</strong>
+                    </a>
+                </li>
+            </ul>
+            <ul>
+                <li><a href="/">Главная</a></li>
+                <li><a href="/transactions">Транзакции</a></li>
+                <li><a href="/categories">Категории</a></li>
+                <li><a href="/budgets">Бюджеты</a></li>
+                <li><a href="/reports">Отчеты</a></li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="container">
+            <div class="error-container">
+                <div class="error-content">
+                    <div class="error-icon">
+                        {{if eq .StatusCode 404}} 🔍 {{else if eq .StatusCode
+                        500}} ⚠️ {{else if eq .StatusCode 403}} 🔒 {{else}} ❌
+                        {{end}}
+                    </div>
+
+                    <h1 class="error-title">
+                        {{if .PageData.Title}} {{.PageData.Title}} {{else if eq
+                        .StatusCode 404}} Страница не найдена {{else if eq
+                        .StatusCode 500}} Внутренняя ошибка сервера {{else if eq
+                        .StatusCode 403}} Доступ запрещен {{else}} Произошла
+                        ошибка {{end}}
+                    </h1>
+
+                    <p class="error-message">
+                        {{if .ErrorMessage}} {{.ErrorMessage}} {{else if eq
+                        .StatusCode 404}} Запрашиваемая страница не существует
+                        или была перемещена. {{else if eq .StatusCode 500}} На
+                        сервере произошла ошибка. Пожалуйста, попробуйте позже.
+                        {{else if eq .StatusCode 403}} У вас нет прав для
+                        доступа к этой странице. {{else}} Что-то пошло не так.
+                        Пожалуйста, попробуйте позже. {{end}}
+                    </p>
+
+                    <div class="error-actions">
+                        <a href="/" role="button" class="primary">
+                            🏠 На главную
+                        </a>
+
+                        <button onclick="history.back()" class="secondary">
+                            ← Назад
+                        </button>
+
+                        {{if eq .StatusCode 404}}
+                        <details class="help-section">
+                            <summary>Полезные ссылки</summary>
+                            <ul>
+                                <li>
+                                    <a href="/transactions">📊 Транзакции</a>
+                                </li>
+                                <li><a href="/budgets">💰 Бюджеты</a></li>
+                                <li><a href="/reports">📈 Отчеты</a></li>
+                                <li><a href="/categories">📋 Категории</a></li>
+                            </ul>
+                        </details>
+                        {{end}}
+                    </div>
+
+                    {{if .RequestID}}
+                    <div class="error-details">
+                        <small>ID запроса: {{.RequestID}}</small>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="container">
+            <hr />
+            <div class="grid">
+                <div>
+                    <small>© 2025 Семейный бюджет</small>
+                </div>
+            </div>
+        </footer>
+
+        <!-- Custom JavaScript -->
+        <script src="/static/js/app.js"></script>
+    </body>
+</html>
+
+<style>
+    .error-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 60vh;
+        text-align: center;
+    }
+
+    .error-content {
+        max-width: 500px;
+        padding: 2rem;
+    }
+
+    .error-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        display: block;
+    }
+
+    .error-title {
+        font-size: 2rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        color: var(--pico-color);
+    }
+
+    .error-message {
+        font-size: 1.1rem;
+        margin-bottom: 2rem;
+        color: var(--pico-muted-color);
+        line-height: 1.6;
+    }
+
+    .error-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .error-actions > * {
+        margin: 0;
+    }
+
+    .help-section {
+        margin-top: 1rem;
+        text-align: left;
+    }
+
+    .help-section ul {
+        margin: 0.5rem 0 0 0;
+        padding-left: 1rem;
+    }
+
+    .help-section li {
+        margin-bottom: 0.25rem;
+    }
+
+    .help-section a {
+        text-decoration: none;
+        color: var(--pico-primary);
+    }
+
+    .help-section a:hover {
+        text-decoration: underline;
+    }
+
+    .error-details {
+        padding-top: 1rem;
+        border-top: 1px solid var(--pico-muted-border-color);
+        color: var(--pico-muted-color);
+    }
+
+    @media (min-width: 768px) {
+        .error-actions {
+            flex-direction: row;
+            justify-content: center;
+        }
+
+        .error-actions > button,
+        .error-actions > a {
+            flex: 0 0 auto;
+            min-width: 120px;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .error-container {
+            min-height: 50vh;
+            padding: 1rem 0;
+        }
+
+        .error-content {
+            padding: 1rem;
+        }
+
+        .error-icon {
+            font-size: 3rem;
+        }
+
+        .error-title {
+            font-size: 1.5rem;
+        }
+
+        .error-message {
+            font-size: 1rem;
+        }
+    }
+</style>
+{{end}}

@@ -119,9 +119,9 @@ func (h *AuthHandler) RegisterPage(c echo.Context) error {
 	}
 
 	data := map[string]any{
-		"CSRFToken":   csrfToken,
-		"Title":       "Create Family Account",
-		"IsRegister":  true,
+		"CSRFToken":  csrfToken,
+		"Title":      "Create Family Account",
+		"IsRegister": true,
 	}
 
 	return c.Render(http.StatusOK, "register.html", data)

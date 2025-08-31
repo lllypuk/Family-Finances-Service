@@ -81,7 +81,7 @@ func (h *DashboardHandler) Dashboard(c echo.Context) error {
 			TotalExpenses:        0.0,
 		},
 	}
-	
+
 	if dashboardData == nil {
 		return c.JSON(500, map[string]string{"error": "Dashboard data is nil"})
 	}

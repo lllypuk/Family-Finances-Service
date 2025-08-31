@@ -1,6 +1,9 @@
 package web
 
 import (
+	"errors"
+	"net/http"
+
 	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/application/handlers"
@@ -46,6 +49,9 @@ func NewWebServer(
 	// Настраиваем middleware
 	e.Use(middleware.SessionStore(sessionSecret, isProduction))
 	e.Use(middleware.CSRFProtection())
+
+	// Настраиваем обработчик ошибок
+	e.HTTPErrorHandler = customHTTPErrorHandler(renderer)
 
 	ws := &Server{
 		echo:         e,
@@ -158,4 +164,67 @@ func (ws *Server) SetupRoutes() {
 
 	// HTMX для отчетов
 	htmx.POST("/reports/generate", ws.reportHandler.Generate, middleware.RequireAdminOrMember())
+}
+
+// customHTTPErrorHandler создает кастомный обработчик HTTP ошибок
+func customHTTPErrorHandler(renderer *TemplateRenderer) echo.HTTPErrorHandler {
+	return func(err error, c echo.Context) {
+		var (
+			code = http.StatusInternalServerError
+			msg  any
+		)
+
+		// Определяем тип ошибки
+		var he *echo.HTTPError
+		if errors.As(err, &he) {
+			code = he.Code
+			msg = he.Message
+		} else {
+			msg = err.Error()
+		}
+
+		// Если ответ уже отправлен, не делаем ничего
+		if c.Response().Committed {
+			return
+		}
+
+		// Для HTMX запросов возвращаем простой текст
+		if c.Request().Header.Get("Hx-Request") == "true" {
+			_ = c.String(code, "Error: "+err.Error())
+			return
+		}
+
+		// Для обычных запросов рендерим страницу ошибки
+		data := map[string]any{
+			"PageData": map[string]any{
+				"Title": getErrorTitle(code),
+			},
+			"StatusCode":   code,
+			"ErrorMessage": msg,
+		}
+
+		// Пытаемся отрендерить страницу ошибки
+		if renderErr := renderer.Render(c.Response(), "pages/error", data, c); renderErr != nil {
+			// Fallback: простой текстовый ответ
+			_ = c.String(code, "Error "+string(rune(code))+": "+renderErr.Error())
+		}
+	}
+}
+
+// getErrorTitle возвращает заголовок для страницы ошибки
+func getErrorTitle(code int) string {
+	switch code {
+	case http.StatusNotFound:
+		return "Страница не найдена"
+	case http.StatusInternalServerError:
+		return "Внутренняя ошибка сервера"
+	case http.StatusForbidden:
+		return "Доступ запрещен"
+	case http.StatusUnauthorized:
+		return "Требуется авторизация"
+	case http.StatusBadRequest:
+		return "Неверный запрос"
+	default:
+		return "Произошла ошибка"
+	}
 }
