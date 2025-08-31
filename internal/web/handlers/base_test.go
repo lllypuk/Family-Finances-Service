@@ -13,17 +13,6 @@ import (
 	"family-budget-service/internal/web/middleware"
 )
 
-// createMockSessionData создает mock данные сессии для тестов
-func createMockSessionDataBase() *middleware.SessionData {
-	return &middleware.SessionData{
-		UserID:    uuid.New(),
-		FamilyID:  uuid.New(),
-		Role:      user.RoleAdmin,
-		Email:     "test@example.com",
-		ExpiresAt: time.Now().Add(24 * time.Hour),
-	}
-}
-
 func TestNewBaseHandler(t *testing.T) {
 	repos := NewMockRepositories()
 	baseHandler := webHandlers.NewBaseHandler(&repos.Repositories, nil)

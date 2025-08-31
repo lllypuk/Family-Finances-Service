@@ -93,7 +93,7 @@ func TestTemplateRenderer_RealTemplatesExist(t *testing.T) {
 			err := renderer.Render(&output, tc.templateName, data, nil)
 
 			if tc.shouldExist {
-				assert.NoError(t, err, "Template %s should exist and render without error", tc.templateName)
+				require.NoError(t, err, "Template %s should exist and render without error", tc.templateName)
 				assert.NotEmpty(t, output.String(), "Template %s should produce output", tc.templateName)
 			} else {
 				assert.Error(t, err, "Template %s should not exist", tc.templateName)

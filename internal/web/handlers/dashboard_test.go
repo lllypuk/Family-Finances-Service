@@ -97,9 +97,9 @@ func TestDashboardViewModel_Structure(t *testing.T) {
 	}
 
 	assert.NotNil(t, dashboard.MonthlySummary)
-	assert.Equal(t, 50000.0, dashboard.MonthlySummary.TotalIncome)
-	assert.Equal(t, 35000.0, dashboard.MonthlySummary.TotalExpenses)
-	assert.Equal(t, 15000.0, dashboard.MonthlySummary.NetIncome)
+	assert.InEpsilon(t, 50000.0, dashboard.MonthlySummary.TotalIncome, 0.01)
+	assert.InEpsilon(t, 35000.0, dashboard.MonthlySummary.TotalExpenses, 0.01)
+	assert.InEpsilon(t, 15000.0, dashboard.MonthlySummary.NetIncome, 0.01)
 	assert.Equal(t, 42, dashboard.MonthlySummary.TransactionCount)
 }
 

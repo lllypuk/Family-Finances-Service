@@ -82,10 +82,6 @@ func (h *DashboardHandler) Dashboard(c echo.Context) error {
 		},
 	}
 
-	if dashboardData == nil {
-		return c.JSON(500, map[string]string{"error": "Dashboard data is nil"})
-	}
-
 	// Подготавливаем данные для страницы
 	pageData := &PageData{
 		Title:    "Главная",
@@ -183,41 +179,6 @@ func (h *DashboardHandler) BudgetOverview(c echo.Context) error {
 	return h.renderPartial(c, "components/budget-overview", map[string]interface{}{
 		"BudgetOverview": budgetOverview,
 	})
-}
-
-// buildDashboardData собирает все данные для dashboard
-func (h *DashboardHandler) buildDashboardData(
-	ctx context.Context,
-	familyID uuid.UUID,
-	filters *webModels.DashboardFilters,
-) (*webModels.DashboardViewModel, error) {
-	// Собираем данные параллельно
-	monthlySummary, err := h.buildMonthlySummary(ctx, familyID, filters)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build monthly summary: %w", err)
-	}
-
-	budgetOverview, err := h.buildBudgetOverview(ctx, familyID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build budget overview: %w", err)
-	}
-
-	recentActivity, err := h.buildRecentActivity(ctx, familyID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build recent activity: %w", err)
-	}
-
-	categoryInsights, err := h.buildCategoryInsights(ctx, familyID, filters)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build category insights: %w", err)
-	}
-
-	return &webModels.DashboardViewModel{
-		MonthlySummary:   monthlySummary,
-		BudgetOverview:   budgetOverview,
-		RecentActivity:   recentActivity,
-		CategoryInsights: categoryInsights,
-	}, nil
 }
 
 // buildMonthlySummary создает сводку за месяц
