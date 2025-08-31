@@ -110,12 +110,19 @@ func (h *CategoryHandler) New(c echo.Context) error {
 		}
 	}
 
+	// Получаем CSRF токен
+	csrfToken, err := middleware.GetCSRFToken(c)
+	if err != nil {
+		return h.handleError(c, err, "Failed to get CSRF token")
+	}
+
 	pageData := &PageData{
 		Title: "New Category",
 	}
 
 	data := map[string]interface{}{
 		"PageData":      pageData,
+		"CSRFToken":     csrfToken,
 		"ParentOptions": parentOptions,
 		"DefaultColors": getDefaultCategoryColors(),
 		"DefaultIcons":  getDefaultCategoryIcons(),
@@ -285,12 +292,19 @@ func (h *CategoryHandler) Edit(c echo.Context) error {
 		form.ParentID = category.ParentID.String()
 	}
 
+	// Получаем CSRF токен
+	csrfToken, err := middleware.GetCSRFToken(c)
+	if err != nil {
+		return h.handleError(c, err, "Failed to get CSRF token")
+	}
+
 	pageData := &PageData{
 		Title: "Edit Category",
 	}
 
 	data := map[string]interface{}{
 		"PageData":      pageData,
+		"CSRFToken":     csrfToken,
 		"Form":          form,
 		"Category":      category,
 		"ParentOptions": parentOptions,
@@ -415,6 +429,74 @@ func (h *CategoryHandler) Update(c echo.Context) error {
 
 	// Успешное обновление - редирект
 	return h.redirect(c, "/categories")
+}
+
+// Show отображает детали конкретной категории
+func (h *CategoryHandler) Show(c echo.Context) error {
+	// Получаем данные пользователя из сессии
+	sessionData, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		return h.handleError(c, err, "Unable to get user session")
+	}
+
+	// Парсим ID категории
+	id := c.Param("id")
+	categoryID, err := uuid.Parse(id)
+	if err != nil {
+		return h.handleError(c, err, "Invalid category ID")
+	}
+
+	// Получаем категорию
+	category, err := h.services.Category.GetCategoryByID(c.Request().Context(), categoryID)
+	if err != nil {
+		return h.handleError(c, err, "Category not found")
+	}
+
+	// Проверяем, что категория принадлежит семье пользователя
+	if category.FamilyID != sessionData.FamilyID {
+		return h.handleError(c, echo.ErrForbidden, "Access denied")
+	}
+
+	// Получаем подкатегории
+	allCategories, err := h.services.Category.GetCategoriesByFamily(c.Request().Context(), sessionData.FamilyID, nil)
+	if err != nil {
+		return h.handleError(c, err, "Failed to get categories")
+	}
+
+	// Создаем view model для категории
+	var categoryVM webModels.CategoryViewModel
+	categoryVM.FromDomain(category)
+
+	// Если это подкатегория, найдем родительскую
+	if category.ParentID != nil {
+		for _, parent := range allCategories {
+			if parent.ID == *category.ParentID {
+				categoryVM.ParentName = parent.Name
+				break
+			}
+		}
+	}
+
+	// Найдем подкатегории для текущей категории и создадим view models
+	var subcategoryVMs []webModels.CategoryViewModel
+	for _, cat := range allCategories {
+		if cat.ParentID != nil && *cat.ParentID == categoryID {
+			var subVM webModels.CategoryViewModel
+			subVM.FromDomain(cat)
+			subcategoryVMs = append(subcategoryVMs, subVM)
+		}
+	}
+
+	// Получаем последние транзакции для этой категории (если есть Transaction сервис)
+	var recentTransactions []interface{} // TODO: заменить на Transaction модель когда будет доступна
+
+	data := map[string]interface{}{
+		"Category":      categoryVM,
+		"Subcategories": subcategoryVMs,
+		"Transactions":  recentTransactions,
+	}
+
+	return h.renderPage(c, "pages/categories/show", data)
 }
 
 // Delete удаляет категорию

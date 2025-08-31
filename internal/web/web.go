@@ -101,6 +101,7 @@ func (ws *Server) SetupRoutes() {
 	categories.GET("", ws.categoryHandler.Index)
 	categories.GET("/new", ws.categoryHandler.New)
 	categories.POST("", ws.categoryHandler.Create)
+	categories.GET("/:id", ws.categoryHandler.Show)
 	categories.GET("/:id/edit", ws.categoryHandler.Edit)
 	categories.PUT("/:id", ws.categoryHandler.Update)
 	categories.DELETE("/:id", ws.categoryHandler.Delete)
