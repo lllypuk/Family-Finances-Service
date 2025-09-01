@@ -62,5 +62,5 @@ test_pages
 ## Примечания
 - Пользователь имеет роль Admin в своей семье
 - Может использоваться для тестирования всех функций приложения
-- База данных: MongoDB (family_budget_local)
+- База данных: MongoDB (family_budget)
 - Окружение: Local development (localhost:8080)

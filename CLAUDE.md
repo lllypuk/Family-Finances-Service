@@ -19,7 +19,7 @@ make run-local  # Runs the application on localhost:8083
 The `run-local` command sets up the following environment:
 - **Server**: localhost:8080 (port 8080 to avoid conflicts)
 - **MongoDB**: mongodb://admin:password123@localhost:27017 with authentication
-- **Database**: family_budget_local (separate from production)
+- **Database**: family_budget (separate from production)
 - **Redis**: redis://:redis123@localhost:6379 (optional caching)
 - **Logging**: DEBUG level for development
 - **Session Secret**: Development-specific secret key

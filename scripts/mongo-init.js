@@ -302,10 +302,7 @@ db.createCollection("sessions");
 print("📊 Creating indexes for optimal performance...");
 
 // Users indexes
-db.users.createIndex(
-  { email: 1 },
-  { unique: true, name: "users_email_unique" },
-);
+db.users.createIndex({ email: 1 }, { unique: true, name: "uniq_users_email" });
 db.users.createIndex({ family_id: 1 }, { name: "users_family_id" });
 db.users.createIndex({ family_id: 1, role: 1 }, { name: "users_family_role" });
 db.users.createIndex({ created_at: -1 }, { name: "users_created_at" });
