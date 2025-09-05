@@ -156,7 +156,7 @@ type TransactionFilterParams struct {
 	AmountFrom  *float64   `query:"amount_from"`
 	AmountTo    *float64   `query:"amount_to"`
 	Description *string    `query:"description"`
-	Limit       int        `query:"limit"       validate:"min=1,max=100"`
+	Limit       int        `query:"limit"       validate:"min=1,max=1000"`
 	Offset      int        `query:"offset"      validate:"min=0"`
 }
 

@@ -3,3 +3,4 @@ coverage**
 /build/
 cookies.txt
 .env
+.zed/

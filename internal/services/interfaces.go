@@ -54,6 +54,7 @@ type CategoryService interface {
 	GetCategoryHierarchy(ctx context.Context, familyID uuid.UUID) ([]*category.Category, error)
 	ValidateCategoryHierarchy(ctx context.Context, categoryID, parentID uuid.UUID) error
 	CheckCategoryUsage(ctx context.Context, categoryID uuid.UUID) (bool, error)
+	CreateDefaultCategories(ctx context.Context, familyID uuid.UUID) error
 }
 
 // TransactionService defines business operations for transaction management

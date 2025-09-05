@@ -28,11 +28,45 @@ type TemplateRenderer struct {
 func NewTemplateRenderer(templatesDir string) (*TemplateRenderer, error) {
 	// Определяем функции для использования в шаблонах
 	funcMap := template.FuncMap{
-		"add": func(a, b int) int {
-			return a + b
+		"add": func(a, b any) float64 {
+			var aFloat, bFloat float64
+			switch v := a.(type) {
+			case int:
+				aFloat = float64(v)
+			case float64:
+				aFloat = v
+			default:
+				return 0
+			}
+			switch v := b.(type) {
+			case int:
+				bFloat = float64(v)
+			case float64:
+				bFloat = v
+			default:
+				return 0
+			}
+			return aFloat + bFloat
 		},
-		"sub": func(a, b int) int {
-			return a - b
+		"sub": func(a, b any) float64 {
+			var aFloat, bFloat float64
+			switch v := a.(type) {
+			case int:
+				aFloat = float64(v)
+			case float64:
+				aFloat = v
+			default:
+				return 0
+			}
+			switch v := b.(type) {
+			case int:
+				bFloat = float64(v)
+			case float64:
+				bFloat = v
+			default:
+				return 0
+			}
+			return aFloat - bFloat
 		},
 		"mul": func(a, b int) int {
 			return a * b
