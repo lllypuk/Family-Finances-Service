@@ -501,7 +501,7 @@ const defaultIncomeCategories = [
 // Helper function to generate MongoDB UUID (Binary UUID)
 function generateUUID() {
   // Generate a proper UUID4 binary format for MongoDB
-  const uuid = UUID();
+  const uuid = new UUID();
   return uuid;
 }
 
