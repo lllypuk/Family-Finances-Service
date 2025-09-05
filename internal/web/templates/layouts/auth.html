@@ -38,10 +38,11 @@
                 {{end}}
                 
                 <!-- Auth Content -->
-                {{if .IsLogin}}
-                {{template "login_content" .}}
-                {{else if .IsRegister}}
                 {{template "register_content" .}}
+                {{else}}
+                <div class="alert alert-warning" role="alert">
+                    Не указан тип аутентификации. Пожалуйста, попробуйте снова или обратитесь в поддержку.
+                </div>
                 {{end}}
                 
                 <!-- Footer -->
