@@ -22,6 +22,24 @@ import (
 const (
 	// MockBudgetPercentage represents demo budget usage percentage
 	MockBudgetPercentage = 65.5
+
+	// DefaultBudgetLimit is the default pagination limit for budget queries
+	DefaultBudgetLimit = 50
+
+	// MockFoodBudgetAmount is a mock amount for food budget transactions in tests
+	MockFoodBudgetAmount = 85.50
+	// MockTransportBudgetAmount is a mock amount for transport budget transactions in tests
+	MockTransportBudgetAmount = 45.20
+
+	// BudgetExceededThreshold is the percentage threshold when budget is considered exceeded (100%)
+	BudgetExceededThreshold = 100
+	// BudgetCriticalThreshold is the percentage threshold for critical budget alerts (90%)
+	BudgetCriticalThreshold = 90
+	// BudgetWarningThreshold is the percentage threshold for budget warning alerts (80%)
+	BudgetWarningThreshold = 80
+
+	// DefaultAlertThreshold is the default threshold used for healthy budget status (80%)
+	DefaultAlertThreshold = 80
 )
 
 // BudgetHandler обрабатывает HTTP запросы для бюджетов
@@ -50,7 +68,7 @@ func (h *BudgetHandler) Index(c echo.Context) error {
 	// Парсим параметры фильтрации
 	filter := dto.BudgetFilterDTO{
 		FamilyID: sessionData.FamilyID,
-		Limit:    50, // По умолчанию
+		Limit:    DefaultBudgetLimit, // По умолчанию
 		Offset:   0,
 	}
 
@@ -191,7 +209,7 @@ func (h *BudgetHandler) Create(c echo.Context) error {
 			})
 		}
 
-		return h.renderBudgetFormWithErrors(c, form, validationErrors, "New Budget")
+		return h.renderBudgetFormWithErrors(c, form, "New Budget")
 	}
 
 	// Парсим сумму
@@ -358,7 +376,7 @@ func (h *BudgetHandler) Update(c echo.Context) error {
 			})
 		}
 
-		return h.renderBudgetFormWithErrors(c, form, validationErrors, "Edit Budget")
+		return h.renderBudgetFormWithErrors(c, form, "Edit Budget")
 	}
 
 	// Парсим новые значения
@@ -406,50 +424,17 @@ func (h *BudgetHandler) Update(c echo.Context) error {
 
 // Delete удаляет бюджет
 func (h *BudgetHandler) Delete(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
-	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
-	}
-
-	// Парсим ID бюджета
-	id := c.Param("id")
-	budgetID, err := uuid.Parse(id)
-	if err != nil {
-		return h.handleError(c, err, "Invalid budget ID")
-	}
-
-	// Проверяем, что бюджет существует и принадлежит семье
-	budgetEntity, err := h.services.Budget.GetBudgetByID(c.Request().Context(), budgetID)
-	if err != nil {
-		return h.handleError(c, err, "Budget not found")
-	}
-
-	if budgetEntity.FamilyID != sessionData.FamilyID {
-		return h.handleError(c, echo.ErrForbidden, "Access denied")
-	}
-
-	// Удаляем бюджет через сервис
-	err = h.services.Budget.DeleteBudget(c.Request().Context(), budgetID)
-	if err != nil {
-		errorMsg := h.getBudgetServiceErrorMessage(err)
-
-		if h.isHTMXRequest(c) {
-			return h.renderPartial(c, "components/alert", map[string]interface{}{
-				"Type":    "error",
-				"Message": errorMsg,
-			})
-		}
-
-		return h.handleError(c, err, errorMsg)
-	}
-
-	if h.isHTMXRequest(c) {
-		// Для HTMX возвращаем пустой ответ для удаления строки
-		return c.NoContent(http.StatusOK)
-	}
-
-	return h.redirect(c, "/budgets")
+	return h.handleDelete(c, DeleteEntityParams{
+		EntityName: "budget",
+		GetEntityFunc: func(ctx echo.Context, entityID uuid.UUID) (interface{}, error) {
+			return h.services.Budget.GetBudgetByID(ctx.Request().Context(), entityID)
+		},
+		DeleteEntityFunc: func(ctx echo.Context, entityID uuid.UUID) error {
+			return h.services.Budget.DeleteBudget(ctx.Request().Context(), entityID)
+		},
+		GetErrorMsgFunc: h.getBudgetServiceErrorMessage,
+		RedirectURL:     "/budgets",
+	})
 }
 
 // Progress возвращает обновленный прогресс бюджета (HTMX)
@@ -560,7 +545,7 @@ func (h *BudgetHandler) Show(c echo.Context) error {
 		recentTransactions = []*webModels.TransactionSummary{
 			{
 				Description:     "Grocery Shopping",
-				Amount:          85.50,
+				Amount:          MockFoodBudgetAmount,
 				FormattedAmount: "85.50",
 				Type:            "expense",
 				CategoryName:    "Groceries",
@@ -568,7 +553,7 @@ func (h *BudgetHandler) Show(c echo.Context) error {
 			},
 			{
 				Description:     "Gas Station",
-				Amount:          45.20,
+				Amount:          MockTransportBudgetAmount,
 				FormattedAmount: "45.20",
 				Type:            "expense",
 				CategoryName:    "Transportation",
@@ -595,7 +580,6 @@ func (h *BudgetHandler) Show(c echo.Context) error {
 func (h *BudgetHandler) renderBudgetFormWithErrors(
 	c echo.Context,
 	form webModels.BudgetForm,
-	errors map[string]string,
 	title string,
 ) error {
 	// Получаем данные пользователя из сессии для категорий
@@ -648,8 +632,8 @@ func (h *BudgetHandler) renderBudgetFormWithErrors(
 	return h.renderPage(c, template, data)
 }
 
-// Activate активирует бюджет
-func (h *BudgetHandler) Activate(c echo.Context) error {
+// handleBudgetActivation общий метод для изменения статуса бюджета
+func (h *BudgetHandler) handleBudgetActivation(c echo.Context, isActive bool) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
@@ -675,7 +659,6 @@ func (h *BudgetHandler) Activate(c echo.Context) error {
 	}
 
 	// Создаем DTO для обновления
-	isActive := true
 	updateDTO := &dto.UpdateBudgetDTO{
 		IsActive: &isActive,
 	}
@@ -695,51 +678,14 @@ func (h *BudgetHandler) Activate(c echo.Context) error {
 	return c.Redirect(http.StatusFound, fmt.Sprintf("/budgets/%s", budgetID))
 }
 
+// Activate активирует бюджет
+func (h *BudgetHandler) Activate(c echo.Context) error {
+	return h.handleBudgetActivation(c, true)
+}
+
 // Deactivate деактивирует бюджет
 func (h *BudgetHandler) Deactivate(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
-	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
-	}
-
-	// Парсим ID бюджета
-	id := c.Param("id")
-	budgetID, err := uuid.Parse(id)
-	if err != nil {
-		return h.handleError(c, err, "Invalid budget ID")
-	}
-
-	// Получаем бюджет для проверки прав доступа
-	budgetEntity, err := h.services.Budget.GetBudgetByID(c.Request().Context(), budgetID)
-	if err != nil {
-		return h.handleError(c, err, "Budget not found")
-	}
-
-	// Проверяем права доступа
-	if budgetEntity.FamilyID != sessionData.FamilyID {
-		return h.handleError(c, echo.ErrForbidden, "Access denied")
-	}
-
-	// Создаем DTO для обновления
-	isActive := false
-	updateDTO := &dto.UpdateBudgetDTO{
-		IsActive: &isActive,
-	}
-
-	// Обновляем бюджет
-	_, err = h.services.Budget.UpdateBudget(c.Request().Context(), budgetID, *updateDTO)
-	if err != nil {
-		return h.handleError(c, err, h.getBudgetServiceErrorMessage(err))
-	}
-
-	// Для HTMX запросов возвращаем обновленную страницу
-	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
-		return h.Show(c)
-	}
-
-	// Обычный редирект
-	return c.Redirect(http.StatusFound, fmt.Sprintf("/budgets/%s", budgetID))
+	return h.handleBudgetActivation(c, false)
 }
 
 // Alerts отображает страницу с алертами для бюджетов
@@ -778,26 +724,27 @@ func (h *BudgetHandler) Alerts(c echo.Context) error {
 
 		// Определяем тип алерта на основе процента использования
 		percentage := budgetEntity.GetSpentPercentage()
-		if percentage >= 100 {
-			alert.Threshold = 100
+		switch {
+		case percentage >= BudgetExceededThreshold:
+			alert.Threshold = BudgetExceededThreshold
 			alert.IsTriggered = true
 			alert.Message = fmt.Sprintf("Budget exceeded! You've spent %.1f%% of your allocated amount.", percentage)
 			alert.AlertClass = "danger"
 			triggeredCount++
-		} else if percentage >= 90 {
-			alert.Threshold = 90
+		case percentage >= BudgetCriticalThreshold:
+			alert.Threshold = BudgetCriticalThreshold
 			alert.IsTriggered = true
 			alert.Message = fmt.Sprintf("Critical alert: You've reached %.1f%% of your budget.", percentage)
 			alert.AlertClass = "danger"
 			triggeredCount++
-		} else if percentage >= 80 {
-			alert.Threshold = 80
+		case percentage >= BudgetWarningThreshold:
+			alert.Threshold = BudgetWarningThreshold
 			alert.IsTriggered = true
 			alert.Message = fmt.Sprintf("Warning: You've used %.1f%% of your budget.", percentage)
 			alert.AlertClass = "warning"
 			triggeredCount++
-		} else {
-			alert.Threshold = 80
+		default:
+			alert.Threshold = DefaultAlertThreshold
 			alert.IsTriggered = false
 			alert.Message = fmt.Sprintf("Budget is healthy at %.1f%% usage.", percentage)
 			alert.AlertClass = "info"
@@ -834,13 +781,13 @@ func (h *BudgetHandler) CreateAlert(c echo.Context) error {
 
 	// Парсим форму
 	var form webModels.BudgetAlertForm
-	if err := c.Bind(&form); err != nil {
-		return h.handleError(c, err, "Invalid form data")
+	if bindErr := c.Bind(&form); bindErr != nil {
+		return h.handleError(c, bindErr, "Invalid form data")
 	}
 
 	// Валидируем форму
-	if err := h.validator.Struct(form); err != nil {
-		return h.handleError(c, err, "Form validation failed")
+	if validationErr := h.validator.Struct(form); validationErr != nil {
+		return h.handleError(c, validationErr, "Form validation failed")
 	}
 
 	// Парсим ID бюджета

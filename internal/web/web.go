@@ -77,12 +77,8 @@ func (ws *Server) SetupRoutes() {
 	// Статические файлы
 	ws.echo.Static("/static", "internal/web/static")
 
-	// Аутентификация (доступна без авторизации)
-	ws.echo.GET("/login", ws.authHandler.LoginPage, middleware.RedirectIfAuthenticated("/"))
-	ws.echo.POST("/login", ws.authHandler.Login, middleware.RedirectIfAuthenticated("/"))
-	ws.echo.GET("/register", ws.authHandler.RegisterPage, middleware.RedirectIfAuthenticated("/"))
-	ws.echo.POST("/register", ws.authHandler.Register, middleware.RedirectIfAuthenticated("/"))
-	ws.echo.POST("/logout", ws.authHandler.Logout)
+	// Настраиваем маршруты аутентификации
+	ws.setupAuthRoutes()
 
 	// Защищенные маршруты (требуют аутентификации)
 	protected := ws.echo.Group("", middleware.RequireAuth())
@@ -90,13 +86,41 @@ func (ws *Server) SetupRoutes() {
 	// Главная страница
 	protected.GET("/", ws.dashboardHandler.Dashboard)
 
-	// Управление пользователями (только для Admin)
+	// Настраиваем группы защищенных маршрутов
+	ws.setupProtectedRoutes(protected)
+
+	// Настраиваем HTMX endpoints
+	ws.setupHTMXRoutes(protected)
+}
+
+// setupAuthRoutes настраивает маршруты аутентификации
+func (ws *Server) setupAuthRoutes() {
+	ws.echo.GET("/login", ws.authHandler.LoginPage, middleware.RedirectIfAuthenticated("/"))
+	ws.echo.POST("/login", ws.authHandler.Login, middleware.RedirectIfAuthenticated("/"))
+	ws.echo.GET("/register", ws.authHandler.RegisterPage, middleware.RedirectIfAuthenticated("/"))
+	ws.echo.POST("/register", ws.authHandler.Register, middleware.RedirectIfAuthenticated("/"))
+	ws.echo.POST("/logout", ws.authHandler.Logout)
+}
+
+// setupProtectedRoutes настраивает защищенные маршруты
+func (ws *Server) setupProtectedRoutes(protected *echo.Group) {
+	ws.setupUserRoutes(protected)
+	ws.setupCategoryRoutes(protected)
+	ws.setupTransactionRoutes(protected)
+	ws.setupBudgetRoutes(protected)
+	ws.setupReportRoutes(protected)
+}
+
+// setupUserRoutes настраивает маршруты управления пользователями
+func (ws *Server) setupUserRoutes(protected *echo.Group) {
 	users := protected.Group("/users", middleware.RequireAdmin())
 	users.GET("", ws.userHandler.Index)
 	users.GET("/new", ws.userHandler.New)
 	users.POST("", ws.userHandler.Create)
+}
 
-	// Категории (Admin и Member)
+// setupCategoryRoutes настраивает маршруты категорий
+func (ws *Server) setupCategoryRoutes(protected *echo.Group) {
 	categories := protected.Group("/categories", middleware.RequireAdminOrMember())
 	categories.GET("", ws.categoryHandler.Index)
 	categories.GET("/new", ws.categoryHandler.New)
@@ -105,8 +129,10 @@ func (ws *Server) SetupRoutes() {
 	categories.GET("/:id/edit", ws.categoryHandler.Edit)
 	categories.PUT("/:id", ws.categoryHandler.Update)
 	categories.DELETE("/:id", ws.categoryHandler.Delete)
+}
 
-	// Транзакции (Admin и Member)
+// setupTransactionRoutes настраивает маршруты транзакций
+func (ws *Server) setupTransactionRoutes(protected *echo.Group) {
 	transactions := protected.Group("/transactions", middleware.RequireAdminOrMember())
 	transactions.GET("", ws.transactionHandler.Index)
 	transactions.GET("/new", ws.transactionHandler.New)
@@ -115,8 +141,10 @@ func (ws *Server) SetupRoutes() {
 	transactions.PUT("/:id", ws.transactionHandler.Update)
 	transactions.DELETE("/:id", ws.transactionHandler.Delete)
 	transactions.POST("/bulk-delete", ws.transactionHandler.BulkDelete)
+}
 
-	// Бюджеты (Admin и Member)
+// setupBudgetRoutes настраивает маршруты бюджетов
+func (ws *Server) setupBudgetRoutes(protected *echo.Group) {
 	budgets := protected.Group("/budgets", middleware.RequireAdminOrMember())
 	budgets.GET("", ws.budgetHandler.Index)
 	budgets.GET("/new", ws.budgetHandler.New)
@@ -132,8 +160,10 @@ func (ws *Server) SetupRoutes() {
 	budgets.GET("/alerts", ws.budgetHandler.Alerts)
 	budgets.POST("/alerts", ws.budgetHandler.CreateAlert)
 	budgets.DELETE("/alerts/:alert_id", ws.budgetHandler.DeleteAlert)
+}
 
-	// Отчеты (Admin и Member)
+// setupReportRoutes настраивает маршруты отчетов
+func (ws *Server) setupReportRoutes(protected *echo.Group) {
 	reports := protected.Group("/reports", middleware.RequireAdminOrMember())
 	reports.GET("", ws.reportHandler.Index)
 	reports.GET("/new", ws.reportHandler.New)
@@ -141,8 +171,10 @@ func (ws *Server) SetupRoutes() {
 	reports.GET("/:id", ws.reportHandler.Show)
 	reports.DELETE("/:id", ws.reportHandler.Delete)
 	reports.GET("/:id/export", ws.reportHandler.Export)
+}
 
-	// HTMX endpoints
+// setupHTMXRoutes настраивает HTMX endpoints
+func (ws *Server) setupHTMXRoutes(protected *echo.Group) {
 	htmx := protected.Group("/htmx", middleware.RequireAuth())
 
 	// HTMX для dashboard

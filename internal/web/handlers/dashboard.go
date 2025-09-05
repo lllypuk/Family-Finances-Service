@@ -9,11 +9,33 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
 	"family-budget-service/internal/web/middleware"
 	webModels "family-budget-service/internal/web/models"
+)
+
+// Alert level константы
+const (
+	AlertLevelSuccess = "success"
+	AlertLevelDanger  = "danger"
+	AlertLevelWarning = "warning"
+)
+
+// Dashboard constants
+const (
+	// HTTP status codes
+	HTTPStatusInternalServerError = 500
+
+	// Mock data for dashboard
+	MockTotalIncome   = 1000.0
+	MockTotalExpenses = 500.0
+	MockNetIncome     = 500.0
+
+	// Query limits for data fetching
+	DefaultQueryLimit = 1000
 )
 
 // DashboardHandler обрабатывает главную страницу
@@ -33,7 +55,7 @@ func (h *DashboardHandler) Dashboard(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return c.JSON(500, map[string]string{"error": "Session error: " + err.Error()})
+		return c.JSON(HTTPStatusInternalServerError, map[string]string{"error": "Session error: " + err.Error()})
 	}
 
 	// Парсим фильтры
@@ -48,9 +70,9 @@ func (h *DashboardHandler) Dashboard(c echo.Context) error {
 	// Создаем минимальные данные для тестирования
 	dashboardData := &webModels.DashboardViewModel{
 		MonthlySummary: &webModels.MonthlySummaryCard{
-			TotalIncome:     1000.0,
-			TotalExpenses:   500.0,
-			NetIncome:       500.0,
+			TotalIncome:     MockTotalIncome,
+			TotalExpenses:   MockTotalExpenses,
+			NetIncome:       MockNetIncome,
 			CurrentMonth:    "Декабрь 2024",
 			HasPreviousData: false,
 		},
@@ -73,13 +95,19 @@ func (h *DashboardHandler) Dashboard(c echo.Context) error {
 			HasMoreData:  false,
 			LastUpdated:  time.Now(),
 		},
-		CategoryInsights: &webModels.CategoryInsightsCard{
-			TopExpenseCategories: []*webModels.CategoryInsightItem{},
-			TopIncomeCategories:  []*webModels.CategoryInsightItem{},
-			PeriodStart:          time.Now().AddDate(0, -1, 0),
-			PeriodEnd:            time.Now(),
-			TotalExpenses:        0.0,
-		},
+		CategoryInsights: func() *webModels.CategoryInsightsCard {
+			insights, insightsErr := h.buildCategoryInsights(c.Request().Context(), sessionData.FamilyID, filters)
+			if insightsErr != nil {
+				return &webModels.CategoryInsightsCard{
+					TopExpenseCategories: []*webModels.CategoryInsightItem{},
+					TopIncomeCategories:  []*webModels.CategoryInsightItem{},
+					PeriodStart:          time.Now().AddDate(0, -1, 0),
+					PeriodEnd:            time.Now(),
+					TotalExpenses:        0.0,
+				}
+			}
+			return insights
+		}(),
 	}
 
 	// Подготавливаем данные для страницы
@@ -111,7 +139,7 @@ func (h *DashboardHandler) Dashboard(c echo.Context) error {
 	// Пробуем рендерить
 	err = h.renderPage(c, "dashboard", data)
 	if err != nil {
-		return c.JSON(500, map[string]string{"error": "Render error: " + err.Error()})
+		return c.JSON(HTTPStatusInternalServerError, map[string]string{"error": "Render error: " + err.Error()})
 	}
 	return nil
 }
@@ -194,7 +222,7 @@ func (h *DashboardHandler) buildMonthlySummary(
 		FamilyID: familyID,
 		DateFrom: &startDate,
 		DateTo:   &endDate,
-		Limit:    1000, // Достаточно для подсчета
+		Limit:    DefaultQueryLimit, // Достаточно для подсчета
 	}
 
 	transactions, err := h.services.Transaction.GetTransactionsByFamily(ctx, familyID, currentFilter)
@@ -218,41 +246,16 @@ func (h *DashboardHandler) buildMonthlySummary(
 	netIncome := totalIncome - totalExpenses
 
 	// Получаем данные за предыдущий период для сравнения
-	var previousIncome, previousExpenses float64
-	var incomeChange, expensesChange float64
-	hasPreviousData := false
-
 	previousStart, previousEnd := h.getPreviousPeriodDates(startDate, endDate)
-	if !previousStart.IsZero() && !previousEnd.IsZero() {
-		previousFilter := dto.TransactionFilterDTO{
-			FamilyID: familyID,
-			DateFrom: &previousStart,
-			DateTo:   &previousEnd,
-			Limit:    1000,
-		}
-
-		previousTransactions, prevErr := h.services.Transaction.GetTransactionsByFamily(ctx, familyID, previousFilter)
-		if prevErr == nil && len(previousTransactions) > 0 {
-			hasPreviousData = true
-
-			for _, tx := range previousTransactions {
-				switch tx.Type {
-				case transaction.TypeIncome:
-					previousIncome += tx.Amount
-				case transaction.TypeExpense:
-					previousExpenses += tx.Amount
-				}
-			}
-
-			// Вычисляем процентные изменения
-			if previousIncome > 0 {
-				incomeChange = ((totalIncome - previousIncome) / previousIncome) * webModels.PercentageMultiplier
-			}
-			if previousExpenses > 0 {
-				expensesChange = ((totalExpenses - previousExpenses) / previousExpenses) * webModels.PercentageMultiplier
-			}
-		}
-	}
+	previousIncome, previousExpenses, hasPreviousData := h.calculatePreviousData(
+		ctx, familyID, previousStart, previousEnd)
+	incomeChange, expensesChange := h.calculateChanges(
+		totalIncome,
+		totalExpenses,
+		previousIncome,
+		previousExpenses,
+		hasPreviousData,
+	)
 
 	return &webModels.MonthlySummaryCard{
 		TotalIncome:      totalIncome,
@@ -269,6 +272,64 @@ func (h *DashboardHandler) buildMonthlySummary(
 	}, nil
 }
 
+// calculatePreviousData получает и вычисляет данные за предыдущий период
+func (h *DashboardHandler) calculatePreviousData(
+	ctx context.Context,
+	familyID uuid.UUID,
+	previousStart, previousEnd time.Time,
+) (float64, float64, bool) {
+	if previousStart.IsZero() || previousEnd.IsZero() {
+		return 0, 0, false
+	}
+
+	previousFilter := dto.TransactionFilterDTO{
+		FamilyID: familyID,
+		DateFrom: &previousStart,
+		DateTo:   &previousEnd,
+		Limit:    DefaultQueryLimit,
+	}
+
+	previousTransactions, prevErr := h.services.Transaction.GetTransactionsByFamily(ctx, familyID, previousFilter)
+	if prevErr != nil || len(previousTransactions) == 0 {
+		return 0, 0, false
+	}
+
+	var previousIncome float64
+	var previousExpenses float64
+	hasPreviousData := true
+	for _, tx := range previousTransactions {
+		switch tx.Type {
+		case transaction.TypeIncome:
+			previousIncome += tx.Amount
+		case transaction.TypeExpense:
+			previousExpenses += tx.Amount
+		}
+	}
+
+	return previousIncome, previousExpenses, hasPreviousData
+}
+
+// calculateChanges вычисляет процентные изменения относительно предыдущего периода
+func (h *DashboardHandler) calculateChanges(
+	currentIncome, currentExpenses, previousIncome, previousExpenses float64,
+	hasPreviousData bool,
+) (float64, float64) {
+	if !hasPreviousData {
+		return 0, 0
+	}
+
+	var incomeChange float64
+	var expensesChange float64
+
+	if previousIncome > 0 {
+		incomeChange = ((currentIncome - previousIncome) / previousIncome) * webModels.PercentageMultiplier
+	}
+	if previousExpenses > 0 {
+		expensesChange = ((currentExpenses - previousExpenses) / previousExpenses) * webModels.PercentageMultiplier
+	}
+	return incomeChange, expensesChange
+}
+
 // buildBudgetOverview создает обзор бюджетов
 func (h *DashboardHandler) buildBudgetOverview(
 	ctx context.Context,
@@ -282,101 +343,149 @@ func (h *DashboardHandler) buildBudgetOverview(
 		return nil, fmt.Errorf("failed to get active budgets: %w", err)
 	}
 
-	// Подсчитываем статистику
-	totalBudgets := len(activeBudgets)
-	activeBudgetsCount := 0
-	overBudgetCount := 0
-	nearLimitCount := 0
+	// Обрабатываем каждый бюджет
+	stats, topBudgets := h.processBudgets(ctx, convertBudgetSlice(activeBudgets), now)
 
+	// Сортируем и ограничиваем топ бюджеты
+	h.sortAndLimitBudgets(&topBudgets)
+
+	return &webModels.BudgetOverviewCard{
+		TotalBudgets:  len(activeBudgets),
+		ActiveBudgets: stats.activeBudgetsCount,
+		OverBudget:    stats.overBudgetCount,
+		NearLimit:     stats.nearLimitCount,
+		TopBudgets:    topBudgets,
+		AlertsSummary: &webModels.BudgetAlertsSummary{
+			CriticalAlerts: stats.overBudgetCount,
+			WarningAlerts:  stats.nearLimitCount,
+			TotalAlerts:    stats.overBudgetCount + stats.nearLimitCount,
+		},
+	}, nil
+}
+
+// budgetStats содержит статистику по бюджетам
+type budgetStats struct {
+	activeBudgetsCount int
+	overBudgetCount    int
+	nearLimitCount     int
+}
+
+// processBudgets обрабатывает список бюджетов и возвращает статистику
+func (h *DashboardHandler) processBudgets(
+	ctx context.Context,
+	budgets []*budget.Budget,
+	now time.Time,
+) (budgetStats, []*webModels.BudgetProgressItem) {
+	stats := budgetStats{}
 	var topBudgets []*webModels.BudgetProgressItem
 
-	for _, b := range activeBudgets {
+	for _, b := range budgets {
 		if b.IsActive {
-			activeBudgetsCount++
+			stats.activeBudgetsCount++
 		}
 
-		// Рассчитываем прогресс
-		percentage := 0.0
-		if b.Amount > 0 {
-			percentage = (b.Spent / b.Amount) * webModels.PercentageMultiplier
-		}
-
-		remaining := b.Amount - b.Spent
-		daysRemaining := int(b.EndDate.Sub(now).Hours() / webModels.HoursInDay)
-		if daysRemaining < 0 {
-			daysRemaining = 0
-		}
-
-		isOverBudget := percentage >= webModels.BudgetOverLimitThreshold
-		isNearLimit := percentage >= webModels.BudgetNearLimitThreshold && !isOverBudget
+		budgetItem, isOverBudget, isNearLimit := h.createBudgetItem(ctx, *b, now)
 
 		if isOverBudget {
-			overBudgetCount++
+			stats.overBudgetCount++
 		} else if isNearLimit {
-			nearLimitCount++
-		}
-
-		// Определяем уровень алерта
-		alertLevel := "success"
-		if isOverBudget {
-			alertLevel = "danger"
-		} else if isNearLimit {
-			alertLevel = "warning"
-		}
-
-		// Получаем название категории если есть
-		categoryName := "Общий бюджет"
-		if b.CategoryID != nil {
-			if category, catErr := h.services.Category.GetCategoryByID(ctx, *b.CategoryID); catErr == nil {
-				categoryName = category.Name
-			}
-		}
-
-		budgetItem := &webModels.BudgetProgressItem{
-			ID:            b.ID,
-			Name:          b.Name,
-			CategoryName:  categoryName,
-			Amount:        b.Amount,
-			Spent:         b.Spent,
-			Remaining:     remaining,
-			Percentage:    percentage,
-			Period:        b.Period,
-			StartDate:     b.StartDate,
-			EndDate:       b.EndDate,
-			DaysRemaining: daysRemaining,
-			IsOverBudget:  isOverBudget,
-			IsNearLimit:   isNearLimit,
-			AlertLevel:    alertLevel,
+			stats.nearLimitCount++
 		}
 
 		topBudgets = append(topBudgets, budgetItem)
 	}
 
-	// Сортируем по проценту использования (убывание) и берем топ 5
-	if len(topBudgets) > webModels.MaxTopBudgets {
-		// Простая сортировка по percentage
-		for i := range len(topBudgets) - 1 {
-			for j := i + 1; j < len(topBudgets); j++ {
-				if topBudgets[j].Percentage > topBudgets[i].Percentage {
-					topBudgets[i], topBudgets[j] = topBudgets[j], topBudgets[i]
-				}
-			}
-		}
-		topBudgets = topBudgets[:webModels.MaxTopBudgets]
+	return stats, topBudgets
+}
+
+// createBudgetItem создает элемент прогресса бюджета
+func (h *DashboardHandler) createBudgetItem(
+	ctx context.Context,
+	b budget.Budget,
+	now time.Time,
+) (*webModels.BudgetProgressItem, bool, bool) {
+	// Рассчитываем прогресс
+	percentage := 0.0
+	if b.Amount > 0 {
+		percentage = (b.Spent / b.Amount) * webModels.PercentageMultiplier
 	}
 
-	return &webModels.BudgetOverviewCard{
-		TotalBudgets:  totalBudgets,
-		ActiveBudgets: activeBudgetsCount,
-		OverBudget:    overBudgetCount,
-		NearLimit:     nearLimitCount,
-		TopBudgets:    topBudgets,
-		AlertsSummary: &webModels.BudgetAlertsSummary{
-			CriticalAlerts: overBudgetCount,
-			WarningAlerts:  nearLimitCount,
-			TotalAlerts:    overBudgetCount + nearLimitCount,
-		},
-	}, nil
+	remaining := b.Amount - b.Spent
+	daysRemaining := int(b.EndDate.Sub(now).Hours() / webModels.HoursInDay)
+	if daysRemaining < 0 {
+		daysRemaining = 0
+	}
+
+	isOverBudget := percentage >= webModels.BudgetOverLimitThreshold
+	isNearLimit := percentage >= webModels.BudgetNearLimitThreshold && !isOverBudget
+
+	// Определяем уровень алерта
+	alertLevel := h.getBudgetAlertLevel(isOverBudget, isNearLimit)
+
+	// Получаем название категории
+	categoryName := h.getBudgetCategoryName(ctx, b.CategoryID)
+
+	budgetItem := &webModels.BudgetProgressItem{
+		ID:            b.ID,
+		Name:          b.Name,
+		CategoryName:  categoryName,
+		Amount:        b.Amount,
+		Spent:         b.Spent,
+		Remaining:     remaining,
+		Percentage:    percentage,
+		Period:        b.Period,
+		StartDate:     b.StartDate,
+		EndDate:       b.EndDate,
+		DaysRemaining: daysRemaining,
+		IsOverBudget:  isOverBudget,
+		IsNearLimit:   isNearLimit,
+		AlertLevel:    alertLevel,
+	}
+
+	return budgetItem, isOverBudget, isNearLimit
+}
+
+// getBudgetAlertLevel определяет уровень алерта для бюджета
+func (h *DashboardHandler) getBudgetAlertLevel(isOverBudget, isNearLimit bool) string {
+	if isOverBudget {
+		return AlertLevelDanger
+	}
+	if isNearLimit {
+		return AlertLevelWarning
+	}
+	return AlertLevelSuccess
+}
+
+// getBudgetCategoryName получает название категории бюджета
+func (h *DashboardHandler) getBudgetCategoryName(ctx context.Context, categoryID *uuid.UUID) string {
+	if categoryID == nil {
+		return "Общий бюджет"
+	}
+
+	if category, err := h.services.Category.GetCategoryByID(ctx, *categoryID); err == nil {
+		return category.Name
+	}
+
+	return "Общий бюджет"
+}
+
+// sortAndLimitBudgets сортирует бюджеты по проценту использования и ограничивает количество
+func (h *DashboardHandler) sortAndLimitBudgets(topBudgets *[]*webModels.BudgetProgressItem) {
+	if len(*topBudgets) <= webModels.MaxTopBudgets {
+		return
+	}
+
+	// Простая сортировка по percentage
+	for i := range len(*topBudgets) - 1 {
+		for j := i + 1; j < len(*topBudgets); j++ {
+			if (*topBudgets)[j].Percentage > (*topBudgets)[i].Percentage {
+				(*topBudgets)[i], (*topBudgets)[j] = (*topBudgets)[j], (*topBudgets)[i]
+			}
+		}
+	}
+
+	// Ограничиваем до MaxTopBudgets элементов
+	*topBudgets = (*topBudgets)[:webModels.MaxTopBudgets]
 }
 
 // buildRecentActivity создает список последних транзакций
@@ -424,7 +533,7 @@ func (h *DashboardHandler) buildRecentActivity(
 	// Получаем общее количество транзакций для показа статистики
 	totalFilter := dto.TransactionFilterDTO{
 		FamilyID: familyID,
-		Limit:    1000, // Достаточно для подсчета
+		Limit:    DefaultQueryLimit, // Достаточно для подсчета
 	}
 	allTransactions, totalErr := h.services.Transaction.GetTransactionsByFamily(ctx, familyID, totalFilter)
 	totalCount := 0
@@ -449,119 +558,22 @@ func (h *DashboardHandler) buildCategoryInsights(
 ) (*webModels.CategoryInsightsCard, error) {
 	startDate, endDate := filters.GetPeriodDates()
 
-	// Получаем все транзакции за период
-	filter := dto.TransactionFilterDTO{
-		FamilyID: familyID,
-		DateFrom: &startDate,
-		DateTo:   &endDate,
-		Limit:    1000,
-	}
-
-	transactions, err := h.services.Transaction.GetTransactionsByFamily(ctx, familyID, filter)
+	// Получаем транзакции за период
+	transactions, err := h.getTransactionsForPeriod(ctx, familyID, startDate, endDate)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get transactions for insights: %w", err)
+		return nil, err
 	}
 
-	// Группируем по категориям
-	categoryStats := make(map[uuid.UUID]*struct {
-		name     string
-		color    string
-		icon     string
-		income   float64
-		expenses float64
-		count    int
-	})
-
-	var totalIncome, totalExpenses float64
-
-	for _, tx := range transactions {
-		// CategoryID всегда uuid.UUID, не указатель
-		categoryID := tx.CategoryID
-		if _, exists := categoryStats[categoryID]; !exists {
-			// Получаем информацию о категории
-			category, catErr := h.services.Category.GetCategoryByID(ctx, categoryID)
-			if catErr != nil {
-				continue
-			}
-
-			categoryStats[categoryID] = &struct {
-				name     string
-				color    string
-				icon     string
-				income   float64
-				expenses float64
-				count    int
-			}{
-				name:  category.Name,
-				color: category.Color,
-				icon:  category.Icon,
-			}
-		}
-
-		stats := categoryStats[categoryID]
-		stats.count++
-
-		switch tx.Type {
-		case transaction.TypeIncome:
-			stats.income += tx.Amount
-			totalIncome += tx.Amount
-		case transaction.TypeExpense:
-			stats.expenses += tx.Amount
-			totalExpenses += tx.Amount
-		}
-	}
+	// Группируем транзакции по категориям
+	categoryStats, totalIncome, totalExpenses := h.groupTransactionsByCategory(ctx, transactions)
 
 	// Создаем списки топ категорий
-	var topExpenseCategories, topIncomeCategories []*webModels.CategoryInsightItem
+	topExpenseCategories := h.createCategoryInsights(categoryStats, totalExpenses, transaction.TypeExpense)
+	topIncomeCategories := h.createCategoryInsights(categoryStats, totalIncome, transaction.TypeIncome)
 
-	for categoryID, stats := range categoryStats {
-		if stats.expenses > 0 {
-			percentage := 0.0
-			if totalExpenses > 0 {
-				percentage = (stats.expenses / totalExpenses) * webModels.PercentageMultiplier
-			}
-
-			expenseItem := &webModels.CategoryInsightItem{
-				CategoryID:       categoryID,
-				CategoryName:     stats.name,
-				CategoryColor:    stats.color,
-				CategoryIcon:     stats.icon,
-				Amount:           stats.expenses,
-				TransactionCount: stats.count,
-				Percentage:       percentage,
-			}
-			topExpenseCategories = append(topExpenseCategories, expenseItem)
-		}
-
-		if stats.income > 0 {
-			percentage := 0.0
-			if totalIncome > 0 {
-				percentage = (stats.income / totalIncome) * webModels.PercentageMultiplier
-			}
-
-			incomeItem := &webModels.CategoryInsightItem{
-				CategoryID:       categoryID,
-				CategoryName:     stats.name,
-				CategoryColor:    stats.color,
-				CategoryIcon:     stats.icon,
-				Amount:           stats.income,
-				TransactionCount: stats.count,
-				Percentage:       percentage,
-			}
-			topIncomeCategories = append(topIncomeCategories, incomeItem)
-		}
-	}
-
-	// Сортируем по сумме (убывание) и берем топ 5
-	h.sortCategoryInsights(topExpenseCategories)
-	h.sortCategoryInsights(topIncomeCategories)
-
-	if len(topExpenseCategories) > webModels.MaxTopCategories {
-		topExpenseCategories = topExpenseCategories[:webModels.MaxTopCategories]
-	}
-	if len(topIncomeCategories) > webModels.MaxTopCategories {
-		topIncomeCategories = topIncomeCategories[:webModels.MaxTopCategories]
-	}
+	// Сортируем и ограничиваем
+	h.sortAndLimitCategoryInsights(&topExpenseCategories)
+	h.sortAndLimitCategoryInsights(&topIncomeCategories)
 
 	return &webModels.CategoryInsightsCard{
 		TopExpenseCategories: topExpenseCategories,
@@ -573,7 +585,162 @@ func (h *DashboardHandler) buildCategoryInsights(
 	}, nil
 }
 
+// categoryStatsData содержит статистику по категории
+type categoryStatsData struct {
+	name     string
+	color    string
+	icon     string
+	income   float64
+	expenses float64
+	count    int
+}
+
+// getTransactionsForPeriod получает транзакции за указанный период
+func (h *DashboardHandler) getTransactionsForPeriod(
+	ctx context.Context,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+) ([]*transaction.Transaction, error) {
+	filter := dto.TransactionFilterDTO{
+		FamilyID: familyID,
+		DateFrom: &startDate,
+		DateTo:   &endDate,
+		Limit:    DefaultQueryLimit,
+	}
+
+	transactions, err := h.services.Transaction.GetTransactionsByFamily(ctx, familyID, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get transactions for insights: %w", err)
+	}
+	return transactions, nil
+}
+
+// groupTransactionsByCategory группирует транзакции по категориям
+func (h *DashboardHandler) groupTransactionsByCategory(
+	ctx context.Context,
+	transactions []*transaction.Transaction,
+) (map[uuid.UUID]*categoryStatsData, float64, float64) {
+	categoryStats := make(map[uuid.UUID]*categoryStatsData)
+	var totalIncome, totalExpenses float64
+
+	for _, tx := range transactions {
+		categoryID := tx.CategoryID
+
+		// Создаем статистику для категории если её ещё нет
+		if _, exists := categoryStats[categoryID]; !exists {
+			stats := h.createCategoryStats(ctx, categoryID)
+			if stats == nil {
+				continue
+			}
+			categoryStats[categoryID] = stats
+		}
+
+		stats := categoryStats[categoryID]
+		stats.count++
+
+		// Обновляем суммы
+		h.updateCategoryAmounts(stats, *tx, &totalIncome, &totalExpenses)
+	}
+
+	return categoryStats, totalIncome, totalExpenses
+}
+
+// createCategoryStats создает статистику для категории
+func (h *DashboardHandler) createCategoryStats(ctx context.Context, categoryID uuid.UUID) *categoryStatsData {
+	category, err := h.services.Category.GetCategoryByID(ctx, categoryID)
+	if err != nil {
+		return nil
+	}
+
+	return &categoryStatsData{
+		name:  category.Name,
+		color: category.Color,
+		icon:  category.Icon,
+	}
+}
+
+// updateCategoryAmounts обновляет суммы по категории
+func (h *DashboardHandler) updateCategoryAmounts(
+	stats *categoryStatsData,
+	tx transaction.Transaction,
+	totalIncome, totalExpenses *float64,
+) {
+	switch tx.Type {
+	case transaction.TypeIncome:
+		stats.income += tx.Amount
+		*totalIncome += tx.Amount
+	case transaction.TypeExpense:
+		stats.expenses += tx.Amount
+		*totalExpenses += tx.Amount
+	}
+}
+
+// createCategoryInsights создает список аналитики по категориям для определенного типа
+func (h *DashboardHandler) createCategoryInsights(
+	categoryStats map[uuid.UUID]*categoryStatsData,
+	total float64,
+	txType transaction.Type,
+) []*webModels.CategoryInsightItem {
+	var insights []*webModels.CategoryInsightItem
+
+	for categoryID, stats := range categoryStats {
+		amount := h.getAmountByType(stats, txType)
+		if amount <= 0 {
+			continue
+		}
+
+		percentage := h.calculatePercentage(amount, total)
+
+		item := &webModels.CategoryInsightItem{
+			CategoryID:       categoryID,
+			CategoryName:     stats.name,
+			CategoryColor:    stats.color,
+			CategoryIcon:     stats.icon,
+			Amount:           amount,
+			TransactionCount: stats.count,
+			Percentage:       percentage,
+		}
+		insights = append(insights, item)
+	}
+
+	return insights
+}
+
+// getAmountByType возвращает сумму по типу транзакции
+func (h *DashboardHandler) getAmountByType(stats *categoryStatsData, txType transaction.Type) float64 {
+	switch txType {
+	case transaction.TypeIncome:
+		return stats.income
+	case transaction.TypeExpense:
+		return stats.expenses
+	default:
+		return 0
+	}
+}
+
+// calculatePercentage вычисляет процент от общей суммы
+func (h *DashboardHandler) calculatePercentage(amount, total float64) float64 {
+	if total <= 0 {
+		return 0
+	}
+	return (amount / total) * webModels.PercentageMultiplier
+}
+
+// sortAndLimitCategoryInsights сортирует и ограничивает список аналитики по категориям
+func (h *DashboardHandler) sortAndLimitCategoryInsights(insights *[]*webModels.CategoryInsightItem) {
+	sortCategoryInsights(*insights)
+
+	if len(*insights) > webModels.MaxTopCategories {
+		*insights = (*insights)[:webModels.MaxTopCategories]
+	}
+}
+
 // Helper methods
+
+// convertBudgetSlice converts []*budget.Budget to []*budget.Budget (no-op for type compatibility)
+func convertBudgetSlice(budgets []*budget.Budget) []*budget.Budget {
+	return budgets
+}
 
 func (h *DashboardHandler) getPreviousPeriodDates(currentStart, currentEnd time.Time) (time.Time, time.Time) {
 	duration := currentEnd.Sub(currentStart)
@@ -618,7 +785,7 @@ func (h *DashboardHandler) formatRelativeTime(t time.Time) string {
 	}
 }
 
-func (h *DashboardHandler) sortCategoryInsights(insights []*webModels.CategoryInsightItem) {
+func sortCategoryInsights(insights []*webModels.CategoryInsightItem) {
 	// Простая сортировка по убыванию суммы
 	for i := range len(insights) - 1 {
 		for j := i + 1; j < len(insights); j++ {

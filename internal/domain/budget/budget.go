@@ -85,3 +85,8 @@ func (b *Budget) UpdateSpent(amount float64) {
 	b.Spent += amount
 	b.UpdatedAt = time.Now()
 }
+
+// GetFamilyID returns the family ID of the budget
+func (b *Budget) GetFamilyID() uuid.UUID {
+	return b.FamilyID
+}

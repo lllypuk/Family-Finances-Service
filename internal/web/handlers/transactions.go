@@ -3,7 +3,6 @@ package handlers
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -334,52 +333,17 @@ func (h *TransactionHandler) Update(c echo.Context) error {
 
 // Delete удаляет транзакцию
 func (h *TransactionHandler) Delete(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
-	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
-	}
-
-	// Парсим ID транзакции
-	id := c.Param("id")
-	transactionID, err := uuid.Parse(id)
-	if err != nil {
-		return h.handleError(c, err, "Invalid transaction ID")
-	}
-
-	// Проверяем, что транзакция существует и принадлежит семье
-	transaction, err := h.services.Transaction.GetTransactionByID(c.Request().Context(), transactionID)
-	if err != nil {
-		return h.handleError(c, err, "Transaction not found")
-	}
-
-	// Проверяем, что транзакция принадлежит семье пользователя
-	if transaction.FamilyID != sessionData.FamilyID {
-		return h.handleError(c, echo.ErrForbidden, "Access denied")
-	}
-
-	// Удаляем транзакцию через сервис
-	err = h.services.Transaction.DeleteTransaction(c.Request().Context(), transactionID)
-	if err != nil {
-		// Обрабатываем специфичные ошибки сервиса
-		errorMsg := h.getTransactionServiceErrorMessage(err)
-
-		if h.isHTMXRequest(c) {
-			return h.renderPartial(c, "components/alert", map[string]interface{}{
-				"Type":    "error",
-				"Message": errorMsg,
-			})
-		}
-
-		return h.handleError(c, err, errorMsg)
-	}
-
-	if h.isHTMXRequest(c) {
-		// Для HTMX возвращаем пустой ответ для удаления строки
-		return c.NoContent(http.StatusOK)
-	}
-
-	return h.redirect(c, "/transactions")
+	return h.handleDelete(c, DeleteEntityParams{
+		EntityName: "transaction",
+		GetEntityFunc: func(ctx echo.Context, entityID uuid.UUID) (interface{}, error) {
+			return h.services.Transaction.GetTransactionByID(ctx.Request().Context(), entityID)
+		},
+		DeleteEntityFunc: func(ctx echo.Context, entityID uuid.UUID) error {
+			return h.services.Transaction.DeleteTransaction(ctx.Request().Context(), entityID)
+		},
+		GetErrorMsgFunc: h.getTransactionServiceErrorMessage,
+		RedirectURL:     "/transactions",
+	})
 }
 
 // BulkDelete удаляет несколько транзакций

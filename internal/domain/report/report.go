@@ -101,3 +101,8 @@ func NewReport(
 		GeneratedAt: time.Now(),
 	}
 }
+
+// GetFamilyID returns the family ID of the report
+func (r *Report) GetFamilyID() uuid.UUID {
+	return r.FamilyID
+}

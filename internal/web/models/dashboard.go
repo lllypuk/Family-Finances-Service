@@ -9,6 +9,13 @@ import (
 	"family-budget-service/internal/domain/transaction"
 )
 
+// CSS класс константы
+const (
+	CSSClassTextSuccess = "text-success"
+	CSSClassTextDanger  = "text-danger"
+	CSSClassTextMuted   = "text-muted"
+)
+
 // DashboardViewModel представляет данные для главной страницы
 type DashboardViewModel struct {
 	MonthlySummary   *MonthlySummaryCard   `json:"monthly_summary"`
@@ -35,31 +42,31 @@ type MonthlySummaryCard struct {
 // GetIncomeChangeClass возвращает CSS класс для изменения доходов
 func (m *MonthlySummaryCard) GetIncomeChangeClass() string {
 	if m.IncomeChange > 0 {
-		return "text-success"
+		return CSSClassTextSuccess
 	} else if m.IncomeChange < 0 {
-		return "text-danger"
+		return CSSClassTextDanger
 	}
-	return "text-muted"
+	return CSSClassTextMuted
 }
 
 // GetExpensesChangeClass возвращает CSS класс для изменения расходов
 func (m *MonthlySummaryCard) GetExpensesChangeClass() string {
 	if m.ExpensesChange > 0 {
-		return "text-danger" // Рост расходов - плохо
+		return CSSClassTextDanger // Рост расходов - плохо
 	} else if m.ExpensesChange < 0 {
-		return "text-success" // Снижение расходов - хорошо
+		return CSSClassTextSuccess // Снижение расходов - хорошо
 	}
-	return "text-muted"
+	return CSSClassTextMuted
 }
 
 // GetNetIncomeClass возвращает CSS класс для чистого дохода
 func (m *MonthlySummaryCard) GetNetIncomeClass() string {
 	if m.NetIncome > 0 {
-		return "text-success"
+		return CSSClassTextSuccess
 	} else if m.NetIncome < 0 {
-		return "text-danger"
+		return CSSClassTextDanger
 	}
-	return "text-muted"
+	return CSSClassTextMuted
 }
 
 // BudgetOverviewCard содержит сводку по бюджетам

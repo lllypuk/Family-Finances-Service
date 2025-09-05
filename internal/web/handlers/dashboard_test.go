@@ -247,6 +247,14 @@ func TestMonthlySummaryCard_Calculations(t *testing.T) {
 	assert.IsType(t, float64(0), card.TotalIncome)
 	assert.IsType(t, float64(0), card.TotalExpenses)
 	assert.IsType(t, float64(0), card.NetIncome)
+
+	// Проверяем значения изменений
+	assert.InDelta(t, 10.5, card.IncomeChange, 0.001)
+	assert.InDelta(t, -5.2, card.ExpensesChange, 0.001)
+
+	// Проверяем CSS классы на основе изменений
+	assert.Equal(t, webModels.CSSClassTextSuccess, card.GetIncomeChangeClass())
+	assert.Equal(t, webModels.CSSClassTextSuccess, card.GetExpensesChangeClass())
 	assert.IsType(t, 0, card.TransactionCount)
 }
 

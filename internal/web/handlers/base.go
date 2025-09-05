@@ -11,6 +11,7 @@ import (
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services"
+	"family-budget-service/internal/web/middleware"
 )
 
 const (
@@ -108,4 +109,74 @@ func (h *BaseHandler) redirect(c echo.Context, url string) error {
 // isHTMXRequest проверяет, является ли запрос HTMX запросом
 func (h *BaseHandler) isHTMXRequest(c echo.Context) bool {
 	return c.Request().Header.Get("Hx-Request") == HTMXRequestHeader
+}
+
+// DeleteEntityParams содержит параметры для общего метода удаления
+type DeleteEntityParams struct {
+	EntityName       string                                                          // Название сущности для сообщений об ошибках
+	IDParamName      string                                                          // Имя параметра ID в URL (по умолчанию "id")
+	GetEntityFunc    func(ctx echo.Context, entityID uuid.UUID) (interface{}, error) // Функция получения сущности
+	DeleteEntityFunc func(ctx echo.Context, entityID uuid.UUID) error                // Функция удаления сущности
+	GetErrorMsgFunc  func(err error) string                                          // Функция получения сообщения об ошибке
+	RedirectURL      string                                                          // URL для редиректа после успешного удаления
+}
+
+// EntityWithFamilyID интерфейс для сущностей с FamilyID
+type EntityWithFamilyID interface {
+	GetFamilyID() uuid.UUID
+}
+
+// handleDelete общий метод для удаления сущностей
+func (h *BaseHandler) handleDelete(c echo.Context, params DeleteEntityParams) error {
+	// Получаем данные пользователя из сессии
+	sessionData, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		return h.handleError(c, err, "Unable to get user session")
+	}
+
+	// Парсим ID
+	paramName := params.IDParamName
+	if paramName == "" {
+		paramName = "id"
+	}
+	id := c.Param(paramName)
+	entityID, err := uuid.Parse(id)
+	if err != nil {
+		return h.handleError(c, err, "Invalid "+params.EntityName+" ID")
+	}
+
+	// Получаем сущность для проверки прав доступа
+	entity, err := params.GetEntityFunc(c, entityID)
+	if err != nil {
+		return h.handleError(c, err, params.EntityName+" not found")
+	}
+
+	// Проверяем права доступа
+	if entityWithFamily, ok := entity.(EntityWithFamilyID); ok {
+		if entityWithFamily.GetFamilyID() != sessionData.FamilyID {
+			return h.handleError(c, echo.ErrForbidden, "Access denied")
+		}
+	}
+
+	// Удаляем сущность
+	err = params.DeleteEntityFunc(c, entityID)
+	if err != nil {
+		errorMsg := params.GetErrorMsgFunc(err)
+
+		if h.isHTMXRequest(c) {
+			return h.renderPartial(c, "components/alert", map[string]interface{}{
+				"Type":    "error",
+				"Message": errorMsg,
+			})
+		}
+
+		return h.handleError(c, err, errorMsg)
+	}
+
+	if h.isHTMXRequest(c) {
+		// Для HTMX возвращаем пустой ответ для удаления строки
+		return c.NoContent(http.StatusOK)
+	}
+
+	return h.redirect(c, params.RedirectURL)
 }
