@@ -58,7 +58,7 @@ type TransactionFilterDTO struct {
 	Tags        []string `validate:"omitempty,dive,min=1,max=50"`
 
 	// Pagination
-	Limit  int `validate:"min=1,max=100"`
+	Limit  int `validate:"min=1,max=1000"`
 	Offset int `validate:"min=0"`
 
 	// Sorting

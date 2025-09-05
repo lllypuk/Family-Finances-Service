@@ -52,13 +52,39 @@ func NewMongoDB(uri, databaseName string) (*MongoDB, error) {
 
 	// Ensure unique index on users.email
 	usersColl := database.Collection("users")
-	indexModel := mongo.IndexModel{
-		Keys:    bson.D{{Key: "email", Value: 1}},
-		Options: options.Index().SetUnique(true).SetName("uniq_users_email"),
-	}
-	_, err = usersColl.Indexes().CreateOne(ctx, indexModel)
+
+	// Check if index already exists
+	cursor, err := usersColl.Indexes().List(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create unique index on users.email: %w", err)
+		return nil, fmt.Errorf("failed to list indexes: %w", err)
+	}
+
+	var existingIndexes []bson.M
+	if err = cursor.All(ctx, &existingIndexes); err != nil {
+		return nil, fmt.Errorf("failed to decode indexes: %w", err)
+	}
+
+	// Check if email index exists
+	emailIndexExists := false
+	for _, index := range existingIndexes {
+		if keys, ok := index["key"].(bson.M); ok {
+			if _, hasEmail := keys["email"]; hasEmail {
+				emailIndexExists = true
+				break
+			}
+		}
+	}
+
+	// Create index only if it doesn't exist
+	if !emailIndexExists {
+		indexModel := mongo.IndexModel{
+			Keys:    bson.D{{Key: "email", Value: 1}},
+			Options: options.Index().SetUnique(true).SetName("uniq_users_email"),
+		}
+		_, err = usersColl.Indexes().CreateOne(ctx, indexModel)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create unique index on users.email: %w", err)
+		}
 	}
 
 	return &MongoDB{

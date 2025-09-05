@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 )
@@ -24,51 +26,8 @@ type TemplateRenderer struct {
 
 // NewTemplateRenderer создает новый рендерер шаблонов
 func NewTemplateRenderer(templatesDir string) (*TemplateRenderer, error) {
-	// Определяем функции для использования в шаблонах
-	funcMap := template.FuncMap{
-		"add": func(a, b int) int {
-			return a + b
-		},
-		"sub": func(a, b int) int {
-			return a - b
-		},
-		"mul": func(a, b int) int {
-			return a * b
-		},
-		"div": func(a, b int) int {
-			if b != 0 {
-				return a / b
-			}
-			return 0
-		},
-		"formatCurrency": formatCurrency,
-		"formatDate":     formatDate,
-		"safe": func(s string) template.HTML {
-			return template.HTML(s) //nolint:gosec // This is intentionally used for trusted content
-		},
-		"dict": createDict,
-	}
-
-	// Загружаем все шаблоны
-	tmpl := template.New("").Funcs(funcMap)
-
-	// Загружаем layouts
-	layoutPattern := filepath.Join(templatesDir, "layouts", "*.html")
-	tmpl, err := tmpl.ParseGlob(layoutPattern)
-	if err != nil {
-		return nil, err
-	}
-
-	// Загружаем компоненты
-	componentPattern := filepath.Join(templatesDir, "components", "*.html")
-	tmpl, err = tmpl.ParseGlob(componentPattern)
-	if err != nil {
-		return nil, err
-	}
-
-	// Загружаем страницы
-	pagePattern := filepath.Join(templatesDir, "pages", "*.html")
-	tmpl, err = tmpl.ParseGlob(pagePattern)
+	funcMap := createTemplateFuncMap()
+	tmpl, err := loadAllTemplates(templatesDir, funcMap)
 	if err != nil {
 		return nil, err
 	}
@@ -76,6 +35,130 @@ func NewTemplateRenderer(templatesDir string) (*TemplateRenderer, error) {
 	return &TemplateRenderer{
 		templates: tmpl,
 	}, nil
+}
+
+// createTemplateFuncMap создает карту функций для шаблонов
+func createTemplateFuncMap() template.FuncMap {
+	return template.FuncMap{
+		"add":            templateAdd,
+		"sub":            templateSub,
+		"mul":            templateMul,
+		"div":            templateDiv,
+		"abs":            templateAbs,
+		"formatCurrency": formatCurrency,
+		"formatDate":     formatDate,
+		"safe":           templateSafe,
+		"dict":           createDict,
+		"title":          titleCase,
+		"deref":          derefBool,
+	}
+}
+
+// templateAdd складывает два числа любого типа
+func templateAdd(a, b any) float64 {
+	aFloat := convertToFloat64(a)
+	bFloat := convertToFloat64(b)
+	return aFloat + bFloat
+}
+
+// templateSub вычитает два числа любого типа
+func templateSub(a, b any) float64 {
+	aFloat := convertToFloat64(a)
+	bFloat := convertToFloat64(b)
+	return aFloat - bFloat
+}
+
+// templateMul умножает два целых числа
+func templateMul(a, b int) int {
+	return a * b
+}
+
+// templateDiv делит два целых числа
+func templateDiv(a, b int) int {
+	if b != 0 {
+		return a / b
+	}
+	return 0
+}
+
+// templateAbs возвращает абсолютное значение числа
+func templateAbs(a float64) float64 {
+	if a < 0 {
+		return -a
+	}
+	return a
+}
+
+// templateSafe создает безопасный HTML
+func templateSafe(s string) template.HTML {
+	return template.HTML(s) //nolint:gosec // This is intentionally used for trusted content
+}
+
+// convertToFloat64 конвертирует значение в float64
+func convertToFloat64(v any) float64 {
+	switch val := v.(type) {
+	case int:
+		return float64(val)
+	case float64:
+		return val
+	default:
+		return 0
+	}
+}
+
+// loadAllTemplates загружает все шаблоны
+func loadAllTemplates(templatesDir string, funcMap template.FuncMap) (*template.Template, error) {
+	tmpl := template.New("").Funcs(funcMap)
+
+	// Загружаем layouts
+	tmpl, err := loadLayoutTemplates(tmpl, templatesDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// Загружаем компоненты
+	tmpl, err = loadComponentTemplates(tmpl, templatesDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// Загружаем страницы
+	tmpl, err = loadPageTemplates(tmpl, templatesDir)
+	if err != nil {
+		return nil, err
+	}
+
+	return tmpl, nil
+}
+
+// loadLayoutTemplates загружает шаблоны макетов
+func loadLayoutTemplates(tmpl *template.Template, templatesDir string) (*template.Template, error) {
+	layoutPattern := filepath.Join(templatesDir, "layouts", "*.html")
+	return tmpl.ParseGlob(layoutPattern)
+}
+
+// loadComponentTemplates загружает шаблоны компонентов
+func loadComponentTemplates(tmpl *template.Template, templatesDir string) (*template.Template, error) {
+	componentPattern := filepath.Join(templatesDir, "components", "*.html")
+	return tmpl.ParseGlob(componentPattern)
+}
+
+// loadPageTemplates загружает шаблоны страниц рекурсивно
+func loadPageTemplates(tmpl *template.Template, templatesDir string) (*template.Template, error) {
+	pagesDir := filepath.Join(templatesDir, "pages")
+	err := filepath.Walk(pagesDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && strings.HasSuffix(path, ".html") {
+			tmpl, err = tmpl.ParseFiles(path)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return tmpl, err
 }
 
 // Render рендерит шаблон с данными
@@ -125,4 +208,32 @@ func createDict(values ...any) map[string]any {
 		}
 	}
 	return dict
+}
+
+// titleCase конвертирует строку в заглавный регистр (замена для deprecated strings.Title)
+func titleCase(s string) string {
+	if s == "" {
+		return s
+	}
+
+	// Заменяем подчеркивания на пробелы для читаемости
+	s = strings.ReplaceAll(s, "_", " ")
+
+	// Разбиваем на слова и капитализируем первую букву каждого
+	words := strings.Fields(s)
+	for i, word := range words {
+		if len(word) > 0 {
+			words[i] = strings.ToUpper(word[:1]) + strings.ToLower(word[1:])
+		}
+	}
+
+	return strings.Join(words, " ")
+}
+
+// derefBool dereferences a boolean pointer, returning false if nil
+func derefBool(ptr *bool) bool {
+	if ptr == nil {
+		return false
+	}
+	return *ptr
 }

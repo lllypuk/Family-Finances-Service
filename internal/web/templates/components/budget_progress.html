@@ -1,0 +1,393 @@
+{{define "components/budget_progress"}}
+<div class="budget-progress">
+    <!-- Main Progress Bar -->
+    <div class="main-progress">
+        <div class="progress-header">
+            <div class="progress-info">
+                <h4>{{.Budget.Name}}</h4>
+                <div class="progress-stats">
+                    <span class="spent">{{.Budget.FormattedSpent}}</span>
+                    <span class="separator">of</span>
+                    <span class="total">{{.Budget.FormattedAmount}}</span>
+                    <span class="percentage {{.Budget.AlertLevel}}">({{printf "%.1f" .Budget.Percentage}}%)</span>
+                </div>
+            </div>
+            <div class="progress-status">
+                {{if not .Budget.IsActive}}
+                    <span class="status-badge inactive">Inactive</span>
+                {{else if .Budget.IsOverBudget}}
+                    <span class="status-badge over-budget">Over Budget</span>
+                {{else if eq .Budget.AlertLevel "warning"}}
+                    <span class="status-badge warning">Near Limit</span>
+                {{else}}
+                    <span class="status-badge success">On Track</span>
+                {{end}}
+            </div>
+        </div>
+        
+        <div class="progress-bar-container">
+            <div class="progress-bar {{.Budget.ProgressBarClass}}" 
+                 role="progressbar" 
+                 aria-valuenow="{{printf "%.1f" .Budget.Percentage}}" 
+                 aria-valuemin="0" 
+                 aria-valuemax="100">
+                <div class="progress-fill" style="width: {{if gt .Budget.Percentage 100}}100{{else}}{{printf "%.1f" .Budget.Percentage}}{{end}}%">
+                    <span class="progress-text">{{printf "%.1f" .Budget.Percentage}}%</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="progress-details">
+            <div class="remaining-amount">
+                <span class="label">Remaining:</span>
+                <span class="amount {{if .Budget.IsOverBudget}}text-danger{{else}}text-success{{end}}">
+                    {{.Budget.FormattedRemaining}}
+                </span>
+            </div>
+            <div class="time-info">
+                {{if .Budget.IsActive}}
+                    {{if gt .Budget.DaysLeft 0}}
+                        <span class="days-left">{{.Budget.DaysLeft}} days left</span>
+                    {{else}}
+                        <span class="days-left expired">Expired</span>
+                    {{end}}
+                {{else}}
+                    <span class="days-left inactive">Inactive</span>
+                {{end}}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Time Progress Bar -->
+    {{if .Budget.IsActive}}
+    <div class="time-progress">
+        <div class="time-progress-header">
+            <span class="time-label">Time Progress</span>
+            <span class="time-percentage">{{printf "%.1f" .Budget.TimePercentage}}%</span>
+        </div>
+        <div class="time-progress-bar">
+            <div class="time-progress-fill" style="width: {{printf "%.1f" .Budget.TimePercentage}}%"></div>
+        </div>
+        <div class="time-details">
+            <span class="time-elapsed">{{.Budget.DaysElapsed}} days elapsed</span>
+            <span class="time-total">{{.Budget.DaysTotal}} days total</span>
+        </div>
+    </div>
+    {{end}}
+    
+    <!-- Alert Messages -->
+    {{if .Budget.IsActive}}
+        {{if .Budget.IsOverBudget}}
+            <div class="alert alert-danger">
+                <strong>⚠️ Over Budget!</strong>
+                You have exceeded your budget by {{.Budget.FormattedOverage}}.
+                {{if gt .Budget.DaysLeft 0}}
+                    Consider reducing spending for the remaining {{.Budget.DaysLeft}} days.
+                {{end}}
+            </div>
+        {{else if eq .Budget.AlertLevel "warning"}}
+            <div class="alert alert-warning">
+                <strong>⚡ Approaching Limit</strong>
+                You've used {{printf "%.1f" .Budget.Percentage}}% of your budget.
+                {{if gt .Budget.DaysLeft 0}}
+                    You have {{.Budget.FormattedRemaining}} remaining for {{.Budget.DaysLeft}} days.
+                {{end}}
+            </div>
+        {{else if and (gt .Budget.DailyBudgetPace .Budget.DailySpendingPace) (gt .Budget.DaysLeft 0)}}
+            <div class="alert alert-info">
+                <strong>👍 Staying On Track</strong>
+                Your daily spending ({{printf "%.2f" .Budget.DailySpendingPace}}) is below your daily budget ({{printf "%.2f" .Budget.DailyBudgetPace}}).
+            </div>
+        {{else if and (lt .Budget.DailyBudgetPace .Budget.DailySpendingPace) (gt .Budget.DaysLeft 0)}}
+            <div class="alert alert-warning">
+                <strong>📈 High Spending Pace</strong>
+                Your daily spending ({{printf "%.2f" .Budget.DailySpendingPace}}) exceeds your daily budget ({{printf "%.2f" .Budget.DailyBudgetPace}}).
+            </div>
+        {{end}}
+    {{end}}
+</div>
+
+<style>
+    .budget-progress {
+        width: 100%;
+    }
+    
+    .main-progress {
+        margin-bottom: 1.5rem;
+    }
+    
+    .progress-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 1rem;
+    }
+    
+    .progress-info h4 {
+        margin: 0 0 0.5rem 0;
+        font-size: 1.1rem;
+        color: var(--pico-color);
+    }
+    
+    .progress-stats {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.9rem;
+    }
+    
+    .progress-stats .spent {
+        font-weight: 600;
+        color: var(--pico-color);
+    }
+    
+    .progress-stats .separator {
+        color: var(--pico-muted-color);
+    }
+    
+    .progress-stats .total {
+        color: var(--pico-muted-color);
+    }
+    
+    .progress-stats .percentage {
+        font-weight: 600;
+        padding: 0.2rem 0.4rem;
+        border-radius: 0.2rem;
+        font-size: 0.8rem;
+    }
+    
+    .progress-stats .percentage.success {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    
+    .progress-stats .percentage.warning {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+    
+    .progress-stats .percentage.danger {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    
+    .progress-status .status-badge {
+        padding: 0.3rem 0.6rem;
+        border-radius: 0.3rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .status-badge.success {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    
+    .status-badge.warning {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+    
+    .status-badge.over-budget {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    
+    .status-badge.inactive {
+        background-color: #e2e3e5;
+        color: #383d41;
+    }
+    
+    .progress-bar-container {
+        margin-bottom: 0.75rem;
+    }
+    
+    .progress-bar {
+        width: 100%;
+        height: 24px;
+        background-color: var(--pico-muted-border-color);
+        border-radius: 12px;
+        overflow: hidden;
+        position: relative;
+    }
+    
+    .progress-fill {
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 12px;
+        transition: width 0.3s ease;
+        position: relative;
+        background-color: var(--pico-primary);
+    }
+    
+    .progress-bar.progress-success .progress-fill {
+        background-color: #28a745;
+    }
+    
+    .progress-bar.progress-info .progress-fill {
+        background-color: #17a2b8;
+    }
+    
+    .progress-bar.progress-warning .progress-fill {
+        background-color: #ffc107;
+    }
+    
+    .progress-bar.progress-danger .progress-fill {
+        background-color: #dc3545;
+    }
+    
+    .progress-text {
+        color: white;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-shadow: 0 0 3px rgba(0,0,0,0.5);
+        position: absolute;
+        white-space: nowrap;
+    }
+    
+    .progress-details {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.875rem;
+    }
+    
+    .remaining-amount .label {
+        color: var(--pico-muted-color);
+        margin-right: 0.5rem;
+    }
+    
+    .remaining-amount .amount {
+        font-weight: 600;
+    }
+    
+    .time-info {
+        color: var(--pico-muted-color);
+    }
+    
+    .days-left.expired {
+        color: #ffc107;
+        font-weight: 600;
+    }
+    
+    .days-left.inactive {
+        color: var(--pico-muted-color);
+        font-style: italic;
+    }
+    
+    .time-progress {
+        padding: 1rem;
+        background-color: var(--pico-background-color);
+        border-radius: var(--pico-border-radius);
+        border: 1px solid var(--pico-muted-border-color);
+        margin-bottom: 1rem;
+    }
+    
+    .time-progress-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    
+    .time-label {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--pico-color);
+    }
+    
+    .time-percentage {
+        font-size: 0.875rem;
+        color: var(--pico-muted-color);
+    }
+    
+    .time-progress-bar {
+        width: 100%;
+        height: 8px;
+        background-color: var(--pico-muted-border-color);
+        border-radius: 4px;
+        overflow: hidden;
+        margin-bottom: 0.5rem;
+    }
+    
+    .time-progress-fill {
+        height: 100%;
+        background-color: #6c757d;
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+    
+    .time-details {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.75rem;
+        color: var(--pico-muted-color);
+    }
+    
+    .alert {
+        padding: 1rem;
+        border-radius: var(--pico-border-radius);
+        margin-bottom: 1rem;
+        font-size: 0.875rem;
+    }
+    
+    .alert-info {
+        background-color: #d1ecf1;
+        border: 1px solid #bee5eb;
+        color: #0c5460;
+    }
+    
+    .alert-warning {
+        background-color: #fff3cd;
+        border: 1px solid #ffeaa7;
+        color: #856404;
+    }
+    
+    .alert-danger {
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+    }
+    
+    .text-success { color: #28a745; }
+    .text-warning { color: #ffc107; }
+    .text-danger { color: #dc3545; }
+    
+    @media (max-width: 768px) {
+        .progress-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+        
+        .progress-stats {
+            flex-wrap: wrap;
+            gap: 0.25rem;
+        }
+        
+        .progress-details {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+        
+        .time-details {
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        
+        .progress-text {
+            font-size: 0.7rem;
+        }
+        
+        .alert {
+            font-size: 0.8rem;
+            padding: 0.75rem;
+        }
+    }
+</style>
+{{end}}

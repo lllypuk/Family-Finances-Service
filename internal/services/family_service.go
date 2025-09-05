@@ -19,15 +19,17 @@ var (
 
 // familyService implements FamilyService interface
 type familyService struct {
-	familyRepo FamilyRepository
-	validator  *validator.Validate
+	familyRepo      FamilyRepository
+	categoryService CategoryService
+	validator       *validator.Validate
 }
 
 // NewFamilyService creates a new FamilyService instance
-func NewFamilyService(familyRepo FamilyRepository) FamilyService {
+func NewFamilyService(familyRepo FamilyRepository, categoryService CategoryService) FamilyService {
 	return &familyService{
-		familyRepo: familyRepo,
-		validator:  validator.New(),
+		familyRepo:      familyRepo,
+		categoryService: categoryService,
+		validator:       validator.New(),
 	}
 }
 
@@ -50,6 +52,11 @@ func (s *familyService) CreateFamily(ctx context.Context, req dto.CreateFamilyDT
 	// Save to database
 	if err := s.familyRepo.Create(ctx, newFamily); err != nil {
 		return nil, fmt.Errorf("failed to create family: %w", err)
+	}
+
+	// Create default categories for the new family
+	if err := s.categoryService.CreateDefaultCategories(ctx, newFamily.ID); err != nil {
+		return nil, fmt.Errorf("failed to create default categories: %w", err)
 	}
 
 	return newFamily, nil

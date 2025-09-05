@@ -82,3 +82,8 @@ func (t *Transaction) RemoveTag(tag string) {
 		}
 	}
 }
+
+// GetFamilyID returns the family ID of the transaction
+func (t *Transaction) GetFamilyID() uuid.UUID {
+	return t.FamilyID
+}

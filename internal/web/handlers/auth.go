@@ -40,6 +40,7 @@ func (h *AuthHandler) LoginPage(c echo.Context) error {
 	data := map[string]any{
 		"CSRFToken": csrfToken,
 		"Title":     "Sign In",
+		"IsLogin":   true,
 	}
 
 	return c.Render(http.StatusOK, "login.html", data)
@@ -118,8 +119,9 @@ func (h *AuthHandler) RegisterPage(c echo.Context) error {
 	}
 
 	data := map[string]any{
-		"CSRFToken": csrfToken,
-		"Title":     "Create Family Account",
+		"CSRFToken":  csrfToken,
+		"Title":      "Create Family Account",
+		"IsRegister": true,
 	}
 
 	return c.Render(http.StatusOK, "register.html", data)
@@ -218,6 +220,7 @@ func (h *AuthHandler) loginError(c echo.Context, message string, fieldErrors map
 		"Error":       message,
 		"FieldErrors": fieldErrors,
 		"Email":       c.FormValue("email"), // Сохраняем введенный email
+		"IsLogin":     true,
 	}
 
 	// Если это HTMX запрос, возвращаем только форму
@@ -242,6 +245,7 @@ func (h *AuthHandler) registerError(c echo.Context, message string, fieldErrors 
 		"Email":       c.FormValue("email"),
 		"FamilyName":  c.FormValue("family_name"),
 		"Currency":    c.FormValue("currency"),
+		"IsRegister":  true,
 	}
 
 	// Если это HTMX запрос, возвращаем только форму

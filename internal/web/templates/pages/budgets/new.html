@@ -1,0 +1,336 @@
+{{define "pages/budgets/new"}}
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.PageData.Title}} - Семейный бюджет</title>
+    
+    <!-- PicoCSS -->
+    <link rel="stylesheet" href="/static/css/pico.min.css">
+    <link rel="stylesheet" href="/static/css/custom.css">
+    
+    <!-- HTMX -->
+    <script src="/static/js/htmx.min.js"></script>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="container-fluid">
+        <ul>
+            <li>
+                <a href="/" class="brand">
+                    <strong>💰 Семейный бюджет</strong>
+                </a>
+            </li>
+        </ul>
+        <ul>
+            {{if .CurrentUser}}
+            <li><a href="/">Главная</a></li>
+            <li><a href="/transactions">Транзакции</a></li>
+            <li><a href="/categories">Категории</a></li>
+            <li><a href="/budgets" class="current">Бюджеты</a></li>
+            <li><a href="/reports">Отчеты</a></li>
+            <li>
+                <details class="dropdown">
+                    <summary role="button" class="secondary">
+                        {{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}
+                    </summary>
+                    <ul>
+                        <li><a href="/profile">Профиль</a></li>
+                        {{if eq .CurrentUser.Role "admin"}}
+                        <li><a href="/users">Пользователи</a></li>
+                        <li><a href="/family/settings">Настройки семьи</a></li>
+                        {{end}}
+                        <li>
+                            <form method="POST" action="/logout" style="margin: 0;">
+                                <input type="hidden" name="_token" value="{{.CSRFToken}}">
+                                <button type="submit" class="outline">Выход</button>
+                            </form>
+                        </li>
+                    </ul>
+                </details>
+            </li>
+            {{end}}
+        </ul>
+    </nav>
+    
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Page Header -->
+        <div class="page-header">
+            <div class="grid">
+                <div>
+                    <h1>💰 {{.PageData.Title}}</h1>
+                    <p>Создание нового бюджета</p>
+                </div>
+                <div>
+                    <a href="/budgets" role="button" class="secondary outline">
+                        ← Назад к бюджетам
+                    </a>
+                </div>
+            </div>
+        </div>
+
+    <article>
+        <form method="POST" action="/budgets">
+            <!-- Form Errors -->
+            {{if .PageData.Errors}}
+                <div class="alert alert-error" style="margin-bottom: 1.5rem;">
+                    <h4>Ошибки в форме:</h4>
+                    <ul style="margin: 0.5rem 0 0 0;">
+                        {{range $field, $error := .PageData.Errors}}
+                        <li>{{$error}}</li>
+                        {{end}}
+                    </ul>
+                </div>
+            {{end}}
+            
+            <!-- CSRF Token -->
+            <input type="hidden" name="_token" value="{{.CSRFToken}}">
+
+            <div class="grid">
+                <div>
+                    <label for="name">Название бюджета</label>
+                    <input type="text" 
+                           id="name" 
+                           name="name" 
+                           placeholder="Ежемесячный бюджет на продукты" 
+                           value="{{.DefaultForm.Name}}"
+                           required>
+                    <small>Дайте вашему бюджету понятное название</small>
+                </div>
+                
+                <div>
+                    <label for="amount">Сумма бюджета</label>
+                    <input type="number" 
+                           id="amount" 
+                           name="amount" 
+                           step="0.01" 
+                           min="0.01" 
+                           placeholder="50000.00" 
+                           value="{{.DefaultForm.Amount}}"
+                           required>
+                    <small>Максимальная сумма для трат</small>
+                </div>
+            </div>
+
+            <div class="grid">
+                <div>
+                    <label for="period">Период бюджета</label>
+                    <select id="period" name="period" required>
+                        <option value="weekly" {{if eq .DefaultForm.Period "weekly"}}selected{{end}}>Еженедельно</option>
+                        <option value="monthly" {{if eq .DefaultForm.Period "monthly"}}selected{{end}}>Ежемесячно</option>
+                        <option value="yearly" {{if eq .DefaultForm.Period "yearly"}}selected{{end}}>Ежегодно</option>
+                        <option value="custom" {{if eq .DefaultForm.Period "custom"}}selected{{end}}>Произвольный период</option>
+                    </select>
+                    <small>На какой срок планируется бюджет?</small>
+                </div>
+                
+                <div>
+                    <label for="category_id">Категория (необязательно)</label>
+                    <select id="category_id" name="category_id">
+                        <option value="">Все категории</option>
+                        {{range .CategoryOptions}}
+                        <option value="{{.ID}}" {{if eq .ID $.DefaultForm.CategoryID}}selected{{end}}>
+                            {{.Name}}
+                        </option>
+                        {{end}}
+                    </select>
+                    <small>Оставьте "Все категории" для общего контроля трат</small>
+                </div>
+            </div>
+
+            <div class="grid">
+                <div>
+                    <label for="start_date">Дата начала</label>
+                    <input type="date" 
+                           id="start_date" 
+                           name="start_date" 
+                           value="{{.DefaultForm.StartDate}}"
+                           required>
+                </div>
+                
+                <div>
+                    <label for="end_date">Дата окончания</label>
+                    <input type="date" 
+                           id="end_date" 
+                           name="end_date" 
+                           value="{{.DefaultForm.EndDate}}"
+                           required>
+                </div>
+            </div>
+
+            <div>
+                <label>
+                    <input type="checkbox" 
+                           name="is_active" 
+                           value="true" 
+                           {{if .DefaultForm.IsActive}}checked{{end}}>
+                    Активировать бюджет сразу
+                </label>
+                <small>Снимите флажок, чтобы создать неактивный бюджет для активации позже</small>
+            </div>
+
+            <div class="button-group">
+                <button type="submit" class="primary">Создать бюджет</button>
+                <a href="/budgets" role="button" class="secondary">Отмена</a>
+            </div>
+        </form>
+    </article>
+
+        <!-- Budget Tips -->
+        <aside style="margin-top: 2rem;">
+            <details>
+                <summary>💡 Советы по созданию бюджетов</summary>
+                <div class="tips-content">
+                    <h4>Создание эффективных бюджетов</h4>
+                    <ul>
+                        <li><strong>Будьте реалистичны:</strong> Устанавливайте суммы, которых действительно можете придерживаться</li>
+                        <li><strong>Начните с малого:</strong> Начните с одной категории (например, продукты) перед расширением</li>
+                        <li><strong>Регулярно проверяйте:</strong> Проверяйте прогресс еженедельно</li>
+                        <li><strong>Категория vs Все:</strong> Бюджеты по категориям более специфичны</li>
+                        <li><strong>Длительность периода:</strong> Месячные бюджеты подходят для большинства расходов</li>
+                    </ul>
+                    
+                    <h4>Периоды бюджета</h4>
+                    <ul>
+                        <li><strong>Еженедельно:</strong> Подходит для продуктов, развлечений, бензина</li>
+                        <li><strong>Ежемесячно:</strong> Идеально для регулярных расходов</li>
+                        <li><strong>Ежегодно:</strong> Отлично для страховки, подписок, отпуска</li>
+                        <li><strong>Произвольно:</strong> Используйте для специальных проектов</li>
+                    </ul>
+                </div>
+            </details>
+        </aside>
+    </main>
+    
+    <!-- Footer -->
+    <footer class="container">
+        <hr>
+        <div class="grid">
+            <div>
+                <small>© 2025 Семейный бюджет</small>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- Custom JavaScript -->
+    <script src="/static/js/app.js"></script>
+
+<style>
+    .button-group {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-top: 1.5rem;
+    }
+    
+    .button-group > * {
+        margin: 0;
+    }
+
+    .tips-content {
+        margin-top: 1rem;
+    }
+    
+    .tips-content h4 {
+        color: var(--pico-primary);
+        margin-top: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .tips-content h4:first-child {
+        margin-top: 0;
+    }
+    
+    .tips-content ul {
+        margin-bottom: 1rem;
+    }
+    
+    .tips-content li {
+        margin-bottom: 0.5rem;
+    }
+
+    aside {
+        margin-top: 2rem;
+    }
+    
+    aside details {
+        background: var(--pico-background-color);
+        padding: 1rem;
+        border-radius: var(--pico-border-radius);
+        border: 1px solid var(--pico-muted-border-color);
+    }
+    
+    aside summary {
+        font-weight: 600;
+        cursor: pointer;
+        margin-bottom: 0;
+    }
+    
+    aside summary:hover {
+        color: var(--pico-primary);
+    }
+
+    @media (max-width: 768px) {
+        .button-group {
+            justify-content: stretch;
+        }
+        
+        .button-group > * {
+            flex: 1;
+        }
+    }
+</style>
+
+    <script>
+        // Auto-populate end date based on period selection
+        document.getElementById('period').addEventListener('change', function() {
+            const startDateInput = document.getElementById('start_date');
+            const endDateInput = document.getElementById('end_date');
+            const startDate = new Date(startDateInput.value);
+            
+            if (!startDate || isNaN(startDate)) {
+                return; // No valid start date
+            }
+            
+            let endDate = new Date(startDate);
+            
+            switch(this.value) {
+                case 'weekly':
+                    endDate.setDate(startDate.getDate() + 7);
+                    break;
+                case 'monthly':
+                    endDate.setMonth(startDate.getMonth() + 1);
+                    break;
+                case 'yearly':
+                    endDate.setFullYear(startDate.getFullYear() + 1);
+                    break;
+                default:
+                    // For custom, don't auto-change
+                    return;
+            }
+            
+            // Subtract one day to make it end of period
+            endDate.setDate(endDate.getDate() - 1);
+            
+            // Format as YYYY-MM-DD
+            const year = endDate.getFullYear();
+            const month = String(endDate.getMonth() + 1).padStart(2, '0');
+            const day = String(endDate.getDate()).padStart(2, '0');
+            
+            endDateInput.value = `${year}-${month}-${day}`;
+        });
+        
+        // Also update when start date changes
+        document.getElementById('start_date').addEventListener('change', function() {
+            // Trigger period change to recalculate end date
+            document.getElementById('period').dispatchEvent(new Event('change'));
+        });
+    </script>
+</body>
+</html>
+{{end}}

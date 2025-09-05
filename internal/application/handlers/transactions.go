@@ -289,7 +289,7 @@ func (h *TransactionHandler) parseOptionalFilters(c echo.Context, filters *Trans
 func (h *TransactionHandler) parsePaginationParams(c echo.Context, filters *TransactionFilterParams) {
 	filters.Limit = 50 // По умолчанию
 	if limitParam := c.QueryParam("limit"); limitParam != "" {
-		if limit, parseErr := strconv.Atoi(limitParam); parseErr == nil && limit > 0 && limit <= 100 {
+		if limit, parseErr := strconv.Atoi(limitParam); parseErr == nil && limit > 0 && limit <= 1000 {
 			filters.Limit = limit
 		}
 	}

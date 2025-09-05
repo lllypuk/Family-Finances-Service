@@ -1,0 +1,341 @@
+<div class="report-preview">
+    <header class="report-header">
+        <h3>{{.Report.Name}}</h3>
+        <p>
+            <span class="badge report-type-{{.Report.Type}}">{{.Report.Type | title}}</span>
+            {{.Report.FormattedPeriod}}
+        </p>
+    </header>
+
+    <!-- Summary Cards -->
+    <div class="summary-cards">
+        <div class="grid">
+            {{if ne .Report.TotalIncome 0}}
+            <article class="summary-card income">
+                <header>Total Income</header>
+                <h4 class="amount positive">{{.Report.FormattedIncome}}</h4>
+            </article>
+            {{end}}
+            
+            {{if ne .Report.TotalExpenses 0}}
+            <article class="summary-card expenses">
+                <header>Total Expenses</header>
+                <h4 class="amount negative">{{.Report.FormattedExpenses}}</h4>
+            </article>
+            {{end}}
+            
+            {{if ne .Report.NetIncome 0}}
+            <article class="summary-card net">
+                <header>Net Result</header>
+                <h4 class="amount {{.Report.NetIncomeClass}}">{{.Report.FormattedNet}}</h4>
+            </article>
+            {{end}}
+        </div>
+    </div>
+
+    <!-- Category Breakdown -->
+    {{if .Report.CategoryBreakdown}}
+    <section class="report-section">
+        <h4>Category Breakdown</h4>
+        <div class="category-chart">
+            {{range .Report.CategoryBreakdown}}
+            <div class="category-item">
+                <div class="category-info">
+                    <strong>{{.CategoryName}}</strong>
+                    <span class="amount">{{.FormattedAmount}}</span>
+                </div>
+                <div class="category-bar">
+                    <div class="category-progress" style="width: {{.ProgressWidth}}"></div>
+                    <span class="category-percentage">{{printf "%.1f" .Percentage}}%</span>
+                </div>
+                <small>{{.Count}} transactions</small>
+            </div>
+            {{end}}
+        </div>
+        
+        <!-- Table View for smaller screens -->
+        <div class="table-view">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Amount</th>
+                        <th>%</th>
+                        <th>Count</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Report.CategoryBreakdown}}
+                    <tr>
+                        <td>{{.CategoryName}}</td>
+                        <td class="amount">{{.FormattedAmount}}</td>
+                        <td>{{printf "%.1f" .Percentage}}%</td>
+                        <td>{{.Count}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {{end}}
+
+    <!-- Daily Breakdown (for Cash Flow) -->
+    {{if .Report.DailyBreakdown}}
+    <section class="report-section">
+        <h4>Daily Summary</h4>
+        <div class="overflow-auto">
+            <table class="daily-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Income</th>
+                        <th>Expenses</th>
+                        <th>Balance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range slice .Report.DailyBreakdown 0 10}}<!-- Show first 10 days -->
+                    <tr>
+                        <td>{{.FormattedDate}}</td>
+                        <td class="amount positive">{{.FormattedIncome}}</td>
+                        <td class="amount negative">{{.FormattedExpenses}}</td>
+                        <td class="amount {{.BalanceClass}}">{{.FormattedBalance}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+            {{if gt (len .Report.DailyBreakdown) 10}}
+            <p><small>Showing first 10 days. View full report for complete data.</small></p>
+            {{end}}
+        </div>
+    </section>
+    {{end}}
+
+    <!-- Top Expenses -->
+    {{if .Report.TopExpenses}}
+    <section class="report-section">
+        <h4>Top Expenses</h4>
+        <div class="top-expenses">
+            {{range slice .Report.TopExpenses 0 5}}<!-- Show top 5 -->
+            <div class="expense-item">
+                <div class="expense-info">
+                    <strong>{{.Description}}</strong>
+                    <small>{{.Category}} • {{.FormattedDate}}</small>
+                </div>
+                <span class="amount negative">{{.FormattedAmount}}</span>
+            </div>
+            {{end}}
+        </div>
+        {{if gt (len .Report.TopExpenses) 5}}
+        <p><small>Showing top 5 expenses. View full report for complete list.</small></p>
+        {{end}}
+    </section>
+    {{end}}
+
+    <!-- Budget Comparison -->
+    {{if .Report.BudgetComparison}}
+    <section class="report-section">
+        <h4>Budget Performance</h4>
+        <div class="budget-comparison">
+            {{range .Report.BudgetComparison}}
+            <div class="budget-item">
+                <div class="budget-info">
+                    <strong>{{.BudgetName}}</strong>
+                    <div class="budget-amounts">
+                        <span class="planned">Planned: {{.FormattedPlanned}}</span>
+                        <span class="actual">Actual: {{.FormattedActual}}</span>
+                    </div>
+                </div>
+                <div class="budget-performance">
+                    <span class="performance-badge {{.PerformanceClass}}">
+                        {{printf "%.1f" .Percentage}}%
+                    </span>
+                    <span class="amount {{.DifferenceClass}}">{{.FormattedDiff}}</span>
+                </div>
+            </div>
+            {{end}}
+        </div>
+    </section>
+    {{end}}
+
+    <!-- Action buttons -->
+    <footer class="report-actions">
+        <p><em>This is a preview. Save this report to access full details and export options.</em></p>
+    </footer>
+</div>
+
+<style>
+    .report-preview {
+        background: var(--pico-card-background-color);
+        border: 1px solid var(--pico-muted-border-color);
+        border-radius: var(--pico-border-radius);
+        padding: 1.5rem;
+        margin-top: 1rem;
+    }
+    
+    .report-header {
+        text-align: center;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--pico-muted-border-color);
+    }
+    
+    .badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+    
+    .report-type-expenses { background-color: #fee2e2; color: #991b1b; }
+    .report-type-income { background-color: #dcfce7; color: #166534; }
+    .report-type-budget { background-color: #dbeafe; color: #1d4ed8; }
+    .report-type-cash_flow { background-color: #f3e8ff; color: #7c3aed; }
+    .report-type-category_break { background-color: #fef3c7; color: #d97706; }
+    
+    .summary-cards .grid {
+        margin-bottom: 1.5rem;
+    }
+    
+    .summary-card {
+        text-align: center;
+        padding: 1rem;
+        background: var(--pico-background-color);
+        border-radius: var(--pico-border-radius);
+    }
+    
+    .summary-card header {
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+    
+    .amount {
+        font-weight: 600;
+        font-family: ui-monospace, SFMono-Regular, monospace;
+    }
+    
+    .amount.positive { color: #059669; }
+    .amount.negative { color: #dc2626; }
+    .amount.zero { color: #6b7280; }
+    
+    .report-section {
+        margin: 1.5rem 0;
+    }
+    
+    .report-section h4 {
+        margin-bottom: 1rem;
+        color: var(--pico-primary);
+    }
+    
+    .category-chart {
+        display: none; /* Show on larger screens */
+    }
+    
+    .table-view {
+        display: block;
+    }
+    
+    @media (min-width: 768px) {
+        .category-chart {
+            display: block;
+        }
+        
+        .table-view {
+            display: none;
+        }
+    }
+    
+    .category-item {
+        margin-bottom: 1rem;
+        padding: 0.75rem;
+        background: var(--pico-background-color);
+        border-radius: var(--pico-border-radius);
+    }
+    
+    .category-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    
+    .category-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.25rem;
+    }
+    
+    .category-progress {
+        height: 8px;
+        background-color: #3b82f6;
+        border-radius: 4px;
+        flex-grow: 1;
+        max-width: 60%;
+    }
+    
+    .category-percentage {
+        min-width: 3rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+    
+    .top-expenses, .budget-comparison {
+        space-y: 0.75rem;
+    }
+    
+    .expense-item, .budget-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem;
+        background: var(--pico-background-color);
+        border-radius: var(--pico-border-radius);
+        margin-bottom: 0.75rem;
+    }
+    
+    .expense-info small, .budget-amounts {
+        display: block;
+        color: var(--pico-muted-color);
+        font-size: 0.875rem;
+    }
+    
+    .budget-amounts {
+        display: flex;
+        gap: 1rem;
+        margin-top: 0.25rem;
+    }
+    
+    .budget-performance {
+        text-align: right;
+    }
+    
+    .performance-badge {
+        display: block;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        margin-bottom: 0.25rem;
+    }
+    
+    .performance-badge.good { background-color: #dcfce7; color: #166534; }
+    .performance-badge.warning { background-color: #fef3c7; color: #d97706; }
+    .performance-badge.danger { background-color: #fee2e2; color: #991b1b; }
+    
+    .over { color: #dc2626; }
+    .under { color: #059669; }
+    .exact { color: #6b7280; }
+    
+    .daily-table td.amount {
+        text-align: right;
+    }
+    
+    .report-actions {
+        margin-top: 1.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--pico-muted-border-color);
+        text-align: center;
+    }
+</style>

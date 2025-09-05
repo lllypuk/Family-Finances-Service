@@ -10,10 +10,12 @@
     <ul>
         {{if .CurrentUser}}
         <li><a href="/">Главная</a></li>
+        {{if or (eq .CurrentUser.Role "admin") (eq .CurrentUser.Role "member")}}
         <li><a href="/transactions">Транзакции</a></li>
         <li><a href="/categories">Категории</a></li>
         <li><a href="/budgets">Бюджеты</a></li>
         <li><a href="/reports">Отчеты</a></li>
+        {{end}}
         <li>
             <details class="dropdown">
                 <summary role="button" class="secondary">

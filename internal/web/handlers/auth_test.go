@@ -611,7 +611,7 @@ func BenchmarkAuthHandler_Login(b *testing.B) {
 	form.Add("email", "bench@example.com")
 	form.Add("password", "password123")
 
-	for b.Loop() {
+	for range b.N {
 		req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
 		rec := httptest.NewRecorder()
@@ -638,7 +638,7 @@ func BenchmarkAuthHandler_Register(b *testing.B) {
 	form.Add("email", "bench@example.com")
 	form.Add("password", "password123")
 
-	for b.Loop() {
+	for range b.N {
 		req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
 		rec := httptest.NewRecorder()

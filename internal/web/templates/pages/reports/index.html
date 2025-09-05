@@ -1,0 +1,279 @@
+{{define "pages/reports/index"}}
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.PageData.Title}} - Семейный бюджет</title>
+
+    <!-- PicoCSS -->
+    <link rel="stylesheet" href="/static/css/pico.min.css">
+    <link rel="stylesheet" href="/static/css/custom.css">
+
+    <!-- HTMX -->
+    <script src="/static/js/htmx.min.js"></script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="container-fluid">
+        <ul>
+            <li>
+                <a href="/" class="brand">
+                    <strong>💰 Семейный бюджет</strong>
+                </a>
+            </li>
+        </ul>
+        <ul>
+            <li><a href="/">Главная</a></li>
+            <li><a href="/transactions">Транзакции</a></li>
+            <li><a href="/categories">Категории</a></li>
+            <li><a href="/budgets">Бюджеты</a></li>
+            <li><a href="/reports" class="current">Отчеты</a></li>
+        </ul>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container">
+<div class="container">
+    <header>
+        <h1>Financial Reports</h1>
+        <p>Generate detailed financial reports for analysis and insights</p>
+    </header>
+
+    <!-- Report Generation Form -->
+    <section>
+        <h2>Generate New Report</h2>
+        <form hx-post="/reports/generate"
+              hx-target="#report-preview"
+              hx-indicator="#loading-indicator"
+              hx-swap="innerHTML">
+
+            <div class="grid">
+                <div>
+                    <label for="name">Report Name</label>
+                    <input type="text"
+                           id="name"
+                           name="name"
+                           placeholder="Monthly Expense Report"
+                           value="{{.DefaultForm.Name}}"
+                           required>
+                </div>
+
+                <div>
+                    <label for="type">Report Type</label>
+                    <select id="type" name="type" required>
+                        {{range .ReportTypeOptions}}
+                        <option value="{{.Value}}"
+                                {{if eq .Value $.DefaultForm.Type}}selected{{end}}>
+                            {{.Label}}
+                        </option>
+                        {{end}}
+                    </select>
+                    <small>{{range .ReportTypeOptions}}
+                        {{if eq .Value $.DefaultForm.Type}}{{.Description}}{{end}}
+                    {{end}}</small>
+                </div>
+            </div>
+
+            <div class="grid">
+                <div>
+                    <label for="period">Period</label>
+                    <select id="period" name="period" required>
+                        <option value="daily" {{if eq "daily" .DefaultForm.Period}}selected{{end}}>Daily</option>
+                        <option value="weekly" {{if eq "weekly" .DefaultForm.Period}}selected{{end}}>Weekly</option>
+                        <option value="monthly" {{if eq "monthly" .DefaultForm.Period}}selected{{end}}>Monthly</option>
+                        <option value="yearly" {{if eq "yearly" .DefaultForm.Period}}selected{{end}}>Yearly</option>
+                        <option value="custom" {{if eq "custom" .DefaultForm.Period}}selected{{end}}>Custom Range</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid">
+                <div>
+                    <label for="start_date">Start Date</label>
+                    <input type="date"
+                           id="start_date"
+                           name="start_date"
+                           value="{{.DefaultForm.StartDate}}"
+                           required>
+                </div>
+
+                <div>
+                    <label for="end_date">End Date</label>
+                    <input type="date"
+                           id="end_date"
+                           name="end_date"
+                           value="{{.DefaultForm.EndDate}}"
+                           required>
+                </div>
+            </div>
+
+            <div class="grid">
+                <button type="submit" class="contrast">
+                    <span id="loading-indicator" class="htmx-indicator">Generating...</span>
+                    <span class="htmx-ready">Generate Report Preview</span>
+                </button>
+
+                <button type="button"
+                        hx-post="/reports"
+                        hx-include="form"
+                        hx-target="main"
+                        hx-swap="innerHTML"
+                        hx-indicator="#save-loading">
+                    <span id="save-loading" class="htmx-indicator">Saving...</span>
+                    <span class="htmx-ready">Save & Create Report</span>
+                </button>
+            </div>
+        </form>
+    </section>
+
+    <!-- Report Preview Area -->
+    <section id="report-preview">
+        <div class="placeholder">
+            <p>Select report parameters above and click "Generate Report Preview" to see your data</p>
+        </div>
+    </section>
+
+    <!-- Existing Reports -->
+    <section>
+        <header>
+            <h2>Existing Reports</h2>
+            <p>Your previously generated reports</p>
+        </header>
+
+        {{if .Reports}}
+        <div class="overflow-auto">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Period</th>
+                        <th>Date Range</th>
+                        <th>Generated</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Reports}}
+                    <tr>
+                        <td>
+                            <strong>{{.Name}}</strong>
+                        </td>
+                        <td>
+                            <span class="badge report-type-{{.Type}}">
+                                {{.Type | title}}
+                            </span>
+                        </td>
+                        <td>{{.FormattedPeriod}}</td>
+                        <td>
+                            <small>
+                                {{.StartDate.Format "02.01.2006"}} -
+                                {{.EndDate.Format "02.01.2006"}}
+                            </small>
+                        </td>
+                        <td>
+                            <small>{{.GeneratedAt.Format "02.01.2006 15:04"}}</small>
+                        </td>
+                        <td>
+                            <div class="button-group">
+                                <a href="/reports/{{.ID}}"
+                                   role="button"
+                                   class="secondary outline">
+                                    View
+                                </a>
+
+                                {{if .CanExport}}
+                                <a href="{{.ExportURL}}"
+                                   role="button"
+                                   class="secondary outline"
+                                   download>
+                                    Export CSV
+                                </a>
+                                {{end}}
+
+                                <button hx-delete="/reports/{{.ID}}"
+                                        hx-confirm="Are you sure you want to delete this report?"
+                                        hx-target="closest tr"
+                                        hx-swap="outerHTML"
+                                        class="secondary outline">
+                                    Delete
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{else}}
+        <article>
+            <p>No reports have been generated yet. Create your first report using the form above.</p>
+        </article>
+        {{end}}
+    </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="container">
+        <hr>
+        <div class="grid">
+            <div>
+                <small>© 2025 Семейный бюджет</small>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Custom JavaScript -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
+
+<style>
+    .badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+
+    .report-type-expenses { background-color: #fee2e2; color: #991b1b; }
+    .report-type-income { background-color: #dcfce7; color: #166534; }
+    .report-type-budget { background-color: #dbeafe; color: #1d4ed8; }
+    .report-type-cash_flow { background-color: #f3e8ff; color: #7c3aed; }
+    .report-type-category_break { background-color: #fef3c7; color: #d97706; }
+
+    .button-group {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .button-group > * {
+        margin: 0;
+    }
+
+    .placeholder {
+        text-align: center;
+        padding: 2rem;
+        background-color: var(--pico-background-color);
+        border-radius: var(--pico-border-radius);
+        border: 2px dashed var(--pico-muted-border-color);
+    }
+
+    .htmx-indicator {
+        display: none;
+    }
+
+    .htmx-request .htmx-indicator {
+        display: inline;
+    }
+
+    .htmx-request .htmx-ready {
+        display: none;
+    }
+</style>
+{{end}}

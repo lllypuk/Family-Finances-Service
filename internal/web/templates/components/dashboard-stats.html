@@ -1,0 +1,70 @@
+{{define "dashboard-stats"}}
+<section class="stats-grid"
+         hx-get="/htmx/dashboard/stats"
+         hx-trigger="load, every 30s"
+         hx-target="this"
+         hx-swap="outerHTML">
+
+    <div class="grid">
+        <!-- Total Income Card -->
+        <article class="stat-card income">
+            <header>
+                <h3>💵 Доходы</h3></header>
+                {{if .MonthlySummary.HasPreviousData}}
+                <small class="{{.MonthlySummary.GetIncomeChangeClass}}">
+                    {{if gt .MonthlySummary.IncomeChange 0.0}}▲{{else if lt .MonthlySummary.IncomeChange 0.0}}▼{{end}}
+                    {{printf "%.1f%%" (abs .MonthlySummary.IncomeChange)}}
+                </small>
+                {{end}}
+            </header>
+            <main>
+                <h2>{{printf "%.2f" .MonthlySummary.TotalIncome}} ₽</h2>
+                <small>{{.MonthlySummary.CurrentMonth}}</small>
+                {{if .MonthlySummary.HasPreviousData}}
+                <small class="text-muted">
+                    Было: {{printf "%.2f" .MonthlySummary.PreviousIncome}} ₽
+                </small>
+                {{end}}
+            </main>
+        </article>
+
+        <!-- Total Expenses Card -->
+        <article class="stat-card expenses">
+            <header>
+                <h3>💸 Расходы</h3>
+                {{if .MonthlySummary.HasPreviousData}}
+                <small class="{{.MonthlySummary.GetExpensesChangeClass}}">
+                    {{if gt .MonthlySummary.ExpensesChange 0.0}}▲{{else if lt .MonthlySummary.ExpensesChange 0.0}}▼{{end}}
+                    {{printf "%.1f%%" (abs .MonthlySummary.ExpensesChange)}}
+                </small>
+                {{end}}
+            </header>
+            <main>
+                <h2>{{printf "%.2f" .MonthlySummary.TotalExpenses}} ₽</h2>
+                <small>{{.MonthlySummary.CurrentMonth}}</small>
+                {{if .MonthlySummary.HasPreviousData}}
+                <small class="text-muted">
+                    Было: {{printf "%.2f" .MonthlySummary.PreviousExpenses}} ₽
+                </small>
+                {{end}}
+            </main>
+        </article>
+
+        <!-- Net Income Card -->
+        <article class="stat-card net">
+            <header>
+                <h3>💰 Остаток</h3>
+            </header>
+            <main>
+                <h2 class="{{.MonthlySummary.GetNetIncomeClass}}">
+                    {{printf "%.2f" .MonthlySummary.NetIncome}} ₽
+                </h2>
+                <small>Доходы - Расходы</small>
+                <small class="text-muted">
+                    Транзакций: {{.MonthlySummary.TransactionCount}}
+                </small>
+            </main>
+        </article>
+    </div>
+</section>
+{{end}}

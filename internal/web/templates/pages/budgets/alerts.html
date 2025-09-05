@@ -1,0 +1,510 @@
+{{define "pages/budgets/alerts"}}
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.PageData.Title}} - Семейный бюджет</title>
+    
+    <!-- PicoCSS -->
+    <link rel="stylesheet" href="/static/css/pico.min.css">
+    <link rel="stylesheet" href="/static/css/custom.css">
+    
+    <!-- HTMX -->
+    <script src="/static/js/htmx.min.js"></script>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="container-fluid">
+        <ul>
+            <li>
+                <a href="/" class="brand">
+                    <strong>💰 Семейный бюджет</strong>
+                </a>
+            </li>
+        </ul>
+        <ul>
+            {{if .CurrentUser}}
+            <li><a href="/">Главная</a></li>
+            <li><a href="/transactions">Транзакции</a></li>
+            <li><a href="/categories">Категории</a></li>
+            <li><a href="/budgets" class="current">Бюджеты</a></li>
+            <li><a href="/reports">Отчеты</a></li>
+            <li>
+                <details class="dropdown">
+                    <summary role="button" class="secondary">
+                        {{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}
+                    </summary>
+                    <ul>
+                        <li><a href="/profile">Профиль</a></li>
+                        {{if eq .CurrentUser.Role "admin"}}
+                        <li><a href="/users">Пользователи</a></li>
+                        <li><a href="/family/settings">Настройки семьи</a></li>
+                        {{end}}
+                        <li>
+                            <form method="POST" action="/logout" style="margin: 0;">
+                                <input type="hidden" name="_token" value="{{.CSRFToken}}">
+                                <button type="submit" class="outline">Выход</button>
+                            </form>
+                        </li>
+                    </ul>
+                </details>
+            </li>
+            {{end}}
+        </ul>
+    </nav>
+    
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Page Header -->
+        <div class="page-header">
+            <div class="grid">
+                <div>
+                    <h1>🚨 {{.PageData.Title}}</h1>
+                    <p>Уведомления и предупреждения по бюджетам</p>
+                </div>
+                <div>
+                    <a href="/budgets" role="button" class="secondary outline">
+                        ← Назад к бюджетам
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alert Summary -->
+        <section class="alert-summary">
+            <div class="grid">
+                <article class="summary-card">
+                    <header>Всего бюджетов</header>
+                    <h3>{{.TotalCount}}</h3>
+                </article>
+                
+                <article class="summary-card critical">
+                    <header>Превышенные</header>
+                    <h3>{{.OverBudgetCount}}</h3>
+                </article>
+                
+                <article class="summary-card warning">
+                    <header>Близкие к лимиту</header>
+                    <h3>{{.WarningCount}}</h3>
+                </article>
+                
+                <article class="summary-card success">
+                    <header>В норме</header>
+                    <h3>{{.NormalCount}}</h3>
+                </article>
+            </div>
+        </section>
+
+        <!-- Critical Alerts (Over Budget) -->
+        {{if .OverBudgetAlerts}}
+        <section class="alerts-section critical">
+            <h2>⚠️ Критические уведомления</h2>
+            <p class="section-description">Бюджеты, которые превысили запланированную сумму</p>
+            
+            <div class="alerts-grid">
+                {{range .OverBudgetAlerts}}
+                <article class="alert-card critical">
+                    <header>
+                        <h4>{{.Name}}</h4>
+                        <span class="alert-badge critical">Превышен на {{.OverspentFormatted}} ₽</span>
+                    </header>
+                    
+                    <div class="alert-content">
+                        <div class="progress-mini critical">
+                            <div class="progress-bar" style="width: 100%"></div>
+                        </div>
+                        
+                        <div class="alert-details">
+                            <div class="detail">
+                                <strong>Потрачено:</strong> {{.SpentFormatted}} ₽ из {{.AmountFormatted}} ₽
+                            </div>
+                            <div class="detail">
+                                <strong>Период:</strong> {{.Period}} ({{.StartDate.Format "02.01.2006"}} - {{.EndDate.Format "02.01.2006"}})
+                            </div>
+                            {{if .CategoryName}}
+                            <div class="detail">
+                                <strong>Категория:</strong> {{.CategoryName}}
+                            </div>
+                            {{end}}
+                        </div>
+                    </div>
+                    
+                    <footer>
+                        <div class="button-group">
+                            <a href="/budgets/{{.ID}}" role="button" class="secondary outline">Посмотреть</a>
+                            <a href="/budgets/{{.ID}}/edit" role="button" class="secondary outline">Изменить лимит</a>
+                        </div>
+                    </footer>
+                </article>
+                {{end}}
+            </div>
+        </section>
+        {{end}}
+
+        <!-- Warning Alerts (Close to Budget) -->
+        {{if .WarningAlerts}}
+        <section class="alerts-section warning">
+            <h2>🔶 Предупреждения</h2>
+            <p class="section-description">Бюджеты, которые близки к превышению (80%+ использовано)</p>
+            
+            <div class="alerts-grid">
+                {{range .WarningAlerts}}
+                <article class="alert-card warning">
+                    <header>
+                        <h4>{{.Name}}</h4>
+                        <span class="alert-badge warning">{{printf "%.1f" .Percentage}}% использовано</span>
+                    </header>
+                    
+                    <div class="alert-content">
+                        <div class="progress-mini warning">
+                            <div class="progress-bar" style="width: {{printf "%.1f" .Percentage}}%"></div>
+                        </div>
+                        
+                        <div class="alert-details">
+                            <div class="detail">
+                                <strong>Потрачено:</strong> {{.SpentFormatted}} ₽ из {{.AmountFormatted}} ₽
+                            </div>
+                            <div class="detail">
+                                <strong>Осталось:</strong> {{.RemainingFormatted}} ₽
+                            </div>
+                            <div class="detail">
+                                <strong>Дней до конца:</strong> {{.DaysLeft}}
+                            </div>
+                            {{if .CategoryName}}
+                            <div class="detail">
+                                <strong>Категория:</strong> {{.CategoryName}}
+                            </div>
+                            {{end}}
+                        </div>
+                    </div>
+                    
+                    <footer>
+                        <div class="button-group">
+                            <a href="/budgets/{{.ID}}" role="button" class="secondary outline">Посмотреть</a>
+                            <a href="/budgets/{{.ID}}/edit" role="button" class="secondary outline">Редактировать</a>
+                        </div>
+                    </footer>
+                </article>
+                {{end}}
+            </div>
+        </section>
+        {{end}}
+
+        <!-- Expired Budgets -->
+        {{if .ExpiredAlerts}}
+        <section class="alerts-section expired">
+            <h2>⏰ Просроченные бюджеты</h2>
+            <p class="section-description">Бюджеты с истекшим сроком действия</p>
+            
+            <div class="alerts-grid">
+                {{range .ExpiredAlerts}}
+                <article class="alert-card expired">
+                    <header>
+                        <h4>{{.Name}}</h4>
+                        <span class="alert-badge expired">Просрочен {{.DaysExpired}} дн. назад</span>
+                    </header>
+                    
+                    <div class="alert-content">
+                        <div class="alert-details">
+                            <div class="detail">
+                                <strong>Период:</strong> {{.StartDate.Format "02.01.2006"}} - {{.EndDate.Format "02.01.2006"}}
+                            </div>
+                            <div class="detail">
+                                <strong>Финальные траты:</strong> {{.SpentFormatted}} ₽ из {{.AmountFormatted}} ₽
+                            </div>
+                            {{if .CategoryName}}
+                            <div class="detail">
+                                <strong>Категория:</strong> {{.CategoryName}}
+                            </div>
+                            {{end}}
+                        </div>
+                    </div>
+                    
+                    <footer>
+                        <div class="button-group">
+                            <a href="/budgets/{{.ID}}" role="button" class="secondary outline">Посмотреть</a>
+                            <button hx-post="/budgets/{{.ID}}/archive" 
+                                    hx-target="closest article" 
+                                    hx-swap="outerHTML"
+                                    class="secondary outline">
+                                Архивировать
+                            </button>
+                        </div>
+                    </footer>
+                </article>
+                {{end}}
+            </div>
+        </section>
+        {{end}}
+
+        <!-- No Alerts State -->
+        {{if and (not .OverBudgetAlerts) (not .WarningAlerts) (not .ExpiredAlerts)}}
+        <section class="empty-alerts">
+            <div class="empty-state">
+                <h3>✅ Все бюджеты в порядке!</h3>
+                <p>В данный момент нет критических уведомлений или предупреждений.</p>
+                <a href="/budgets" role="button" class="primary">Вернуться к бюджетам</a>
+            </div>
+        </section>
+        {{end}}
+
+        <!-- Alert Settings -->
+        <section class="alert-settings">
+            <details>
+                <summary>⚙️ Настройки уведомлений</summary>
+                <div class="settings-content">
+                    <h4>Пороговые значения</h4>
+                    <form method="POST" action="/budgets/alerts/settings">
+                        <input type="hidden" name="_token" value="{{.CSRFToken}}">
+                        
+                        <div class="grid">
+                            <div>
+                                <label for="warning_threshold">Порог предупреждения (%)</label>
+                                <input type="number" 
+                                       id="warning_threshold" 
+                                       name="warning_threshold" 
+                                       min="50" 
+                                       max="95" 
+                                       value="{{.Settings.WarningThreshold}}"
+                                       step="5">
+                                <small>При каком проценте использования показывать предупреждение</small>
+                            </div>
+                            
+                            <div>
+                                <label>
+                                    <input type="checkbox" 
+                                           name="email_notifications" 
+                                           {{if .Settings.EmailNotifications}}checked{{end}}>
+                                    Email уведомления
+                                </label>
+                                <small>Получать уведомления на email</small>
+                            </div>
+                        </div>
+                        
+                        <div class="button-group">
+                            <button type="submit" class="primary">Сохранить настройки</button>
+                        </div>
+                    </form>
+                </div>
+            </details>
+        </section>
+    </main>
+    
+    <!-- Footer -->
+    <footer class="container">
+        <hr>
+        <div class="grid">
+            <div>
+                <small>© 2025 Семейный бюджет</small>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- Custom JavaScript -->
+    <script src="/static/js/app.js"></script>
+
+<style>
+    .alert-summary {
+        margin: 2rem 0;
+    }
+    
+    .summary-card {
+        text-align: center;
+        padding: 1.5rem;
+        border-radius: var(--pico-border-radius);
+        border: 2px solid var(--pico-muted-border-color);
+        background: var(--pico-card-background-color);
+    }
+    
+    .summary-card.critical {
+        border-color: #dc3545;
+        background: #fdf2f2;
+    }
+    
+    .summary-card.warning {
+        border-color: #ffc107;
+        background: #fffef0;
+    }
+    
+    .summary-card.success {
+        border-color: #28a745;
+        background: #f0f9f0;
+    }
+    
+    .summary-card header {
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: var(--pico-muted-color);
+    }
+    
+    .summary-card h3 {
+        margin: 0;
+        font-size: 2rem;
+    }
+
+    .alerts-section {
+        margin: 3rem 0;
+    }
+    
+    .section-description {
+        color: var(--pico-muted-color);
+        margin-bottom: 1.5rem;
+    }
+
+    .alerts-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+        gap: 1.5rem;
+    }
+
+    .alert-card {
+        border-radius: var(--pico-border-radius);
+        padding: 1.5rem;
+        border: 2px solid;
+        background: var(--pico-card-background-color);
+    }
+    
+    .alert-card.critical {
+        border-color: #dc3545;
+        background: #fdf2f2;
+    }
+    
+    .alert-card.warning {
+        border-color: #ffc107;
+        background: #fffef0;
+    }
+    
+    .alert-card.expired {
+        border-color: #6c757d;
+        background: #f8f9fa;
+    }
+
+    .alert-card header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    
+    .alert-card h4 {
+        margin: 0;
+    }
+
+    .alert-badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .alert-badge.critical {
+        background: #dc3545;
+        color: white;
+    }
+    
+    .alert-badge.warning {
+        background: #ffc107;
+        color: #856404;
+    }
+    
+    .alert-badge.expired {
+        background: #6c757d;
+        color: white;
+    }
+
+    .progress-mini {
+        height: 8px;
+        background: var(--pico-muted-border-color);
+        border-radius: 4px;
+        overflow: hidden;
+        margin: 1rem 0;
+    }
+    
+    .progress-mini .progress-bar {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+    
+    .progress-mini.critical .progress-bar {
+        background: #dc3545;
+    }
+    
+    .progress-mini.warning .progress-bar {
+        background: #ffc107;
+    }
+
+    .alert-details {
+        margin: 1rem 0;
+    }
+    
+    .alert-details .detail {
+        margin-bottom: 0.5rem;
+        font-size: 0.875rem;
+    }
+
+    .button-group {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+    }
+    
+    .button-group > * {
+        margin: 0;
+    }
+
+    .empty-alerts {
+        margin: 3rem 0;
+        text-align: center;
+    }
+    
+    .empty-state {
+        padding: 3rem 1rem;
+    }
+    
+    .empty-state h3 {
+        color: #28a745;
+    }
+
+    .alert-settings {
+        margin: 3rem 0;
+    }
+    
+    .settings-content {
+        margin-top: 1rem;
+        padding: 1.5rem;
+        background: var(--pico-background-color);
+        border-radius: var(--pico-border-radius);
+        border: 1px solid var(--pico-muted-border-color);
+    }
+
+    @media (max-width: 768px) {
+        .alerts-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .alert-card header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+        
+        .button-group {
+            justify-content: stretch;
+        }
+        
+        .button-group > * {
+            flex: 1;
+        }
+    }
+</style>
+</body>
+</html>
+{{end}}

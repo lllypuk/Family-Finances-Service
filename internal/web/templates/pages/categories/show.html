@@ -1,0 +1,658 @@
+{{define "pages/categories/show"}}
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Category.Name}} - Семейный бюджет</title>
+    
+    <!-- PicoCSS -->
+    <link rel="stylesheet" href="/static/css/pico.min.css">
+    <link rel="stylesheet" href="/static/css/custom.css">
+    
+    <!-- HTMX -->
+    <script src="/static/js/htmx.min.js"></script>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="container-fluid">
+        <ul>
+            <li>
+                <a href="/" class="brand">
+                    <strong>💰 Семейный бюджет</strong>
+                </a>
+            </li>
+        </ul>
+        <ul>
+            {{if .CurrentUser}}
+            <li><a href="/">Главная</a></li>
+            <li><a href="/transactions">Транзакции</a></li>
+            <li><a href="/categories" class="current">Категории</a></li>
+            <li><a href="/budgets">Бюджеты</a></li>
+            <li><a href="/reports">Отчеты</a></li>
+            <li>
+                <details class="dropdown">
+                    <summary role="button" class="secondary">
+                        {{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}
+                    </summary>
+                    <ul>
+                        <li><a href="/profile">Профиль</a></li>
+                        {{if eq .CurrentUser.Role "admin"}}
+                        <li><a href="/users">Пользователи</a></li>
+                        <li><a href="/family/settings">Настройки семьи</a></li>
+                        {{end}}
+                        <li>
+                            <form method="POST" action="/logout" style="margin: 0;">
+                                <input type="hidden" name="_token" value="{{.CSRFToken}}">
+                                <button type="submit" class="outline">Выход</button>
+                            </form>
+                        </li>
+                    </ul>
+                </details>
+            </li>
+            {{end}}
+        </ul>
+    </nav>
+    
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Page Header -->
+        <div class="page-header">
+            <div class="grid">
+                <div>
+                    <h1>
+                        {{if .Category.Icon}}{{.Category.Icon}}{{else}}{{if eq .Category.Type "income"}}💰{{else}}💸{{end}}{{end}}
+                        {{.Category.Name}}
+                    </h1>
+                    <p>Детализация категории и связанных транзакций</p>
+                </div>
+                <div>
+                    <a href="/categories" role="button" class="secondary outline">
+                        ← Назад к категориям
+                    </a>
+                    <a href="/categories/{{.Category.ID}}/edit" role="button" class="secondary outline">
+                        ✏️ Редактировать
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Category Info Card -->
+        <section class="category-info">
+            <div class="info-card category-{{.Category.Type}}">
+                <div class="info-header">
+                    <div class="category-details">
+                        <div class="category-type-badge {{.Category.Type}}">
+                            {{if eq .Category.Type "income"}}💰 Доходы{{else}}💸 Расходы{{end}}
+                        </div>
+                        
+                        {{if .Category.Description}}
+                        <p class="category-description">{{.Category.Description}}</p>
+                        {{end}}
+                        
+                        {{if .Category.ParentCategory}}
+                        <div class="parent-category">
+                            <small>
+                                <strong>Подкатегория:</strong>
+                                <a href="/categories/{{.Category.ParentCategory.ID}}">
+                                    {{.Category.ParentCategory.Name}}
+                                </a>
+                            </small>
+                        </div>
+                        {{end}}
+                    </div>
+                    
+                    <div class="category-visual">
+                        <div class="category-color-circle" style="background-color: {{.Category.Color}}"></div>
+                        <div class="category-status">
+                            {{if .Category.IsActive}}
+                                <span class="status-badge active">✅ Активна</span>
+                            {{else}}
+                                <span class="status-badge inactive">❌ Неактивна</span>
+                            {{end}}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Statistics Cards -->
+        <section class="category-stats">
+            <div class="grid">
+                <article class="stat-card">
+                    <header>Транзакций</header>
+                    <h2>{{.Category.TransactionCount}}</h2>
+                    <small>
+                        {{if .Category.LastUsed}}
+                            Последняя: {{.Category.LastUsed.Format "02.01.2006"}}
+                        {{else}}
+                            Еще не использовалась
+                        {{end}}
+                    </small>
+                </article>
+                
+                <article class="stat-card">
+                    <header>Общая сумма</header>
+                    <h2 class="amount-{{.Category.Type}}">{{.Category.TotalAmount}} ₽</h2>
+                    <small>
+                        {{if gt .Category.TransactionCount 0}}
+                            В среднем: {{.Category.AverageAmount}} ₽
+                        {{else}}
+                            Нет транзакций
+                        {{end}}
+                    </small>
+                </article>
+                
+                <article class="stat-card">
+                    <header>Этот месяц</header>
+                    <h2 class="amount-{{.Category.Type}}">{{.Category.CurrentMonthAmount}} ₽</h2>
+                    <small>
+                        {{if .Category.BudgetLimit}}
+                            Лимит: {{.Category.BudgetLimit}} ₽
+                        {{else}}
+                            Лимит не установлен
+                        {{end}}
+                    </small>
+                </article>
+                
+                <article class="stat-card">
+                    <header>Подкатегории</header>
+                    <h2>{{len .Category.Subcategories}}</h2>
+                    <small>
+                        {{if .Category.Subcategories}}
+                            Детализация доступна
+                        {{else}}
+                            Основная категория
+                        {{end}}
+                    </small>
+                </article>
+            </div>
+        </section>
+
+        <!-- Budget Progress (if applicable) -->
+        {{if and .Category.BudgetLimit (gt .Category.BudgetLimit 0)}}
+        <section class="budget-progress">
+            <h3>Прогресс по месячному лимиту</h3>
+            <div class="progress-card">
+                <div class="progress {{.Category.BudgetProgressClass}}" 
+                     hx-get="/categories/{{.Category.ID}}/progress" 
+                     hx-trigger="load, every 60s"
+                     hx-swap="outerHTML">
+                    <div class="progress-bar" style="width: {{if gt .Category.BudgetPercentage 100}}100{{else}}{{printf "%.1f" .Category.BudgetPercentage}}{{end}}%">
+                        <span class="progress-text">{{printf "%.1f" .Category.BudgetPercentage}}%</span>
+                    </div>
+                </div>
+                
+                <div class="progress-details">
+                    <div class="progress-amounts">
+                        <span>Потрачено: {{.Category.CurrentMonthAmount}} ₽</span>
+                        <span>Лимит: {{.Category.BudgetLimit}} ₽</span>
+                    </div>
+                    <div class="progress-remaining {{if gt .Category.BudgetPercentage 100}}over-budget{{else}}within-budget{{end}}">
+                        {{if gt .Category.BudgetPercentage 100}}
+                            Превышение: {{.Category.BudgetOverspent}} ₽
+                        {{else}}
+                            Остается: {{.Category.BudgetRemaining}} ₽
+                        {{end}}
+                    </div>
+                </div>
+            </div>
+        </section>
+        {{end}}
+
+        <!-- Subcategories -->
+        {{if .Category.Subcategories}}
+        <section class="subcategories-section">
+            <h3>Подкатегории ({{len .Category.Subcategories}})</h3>
+            <div class="subcategories-grid">
+                {{range .Category.Subcategories}}
+                <div class="subcategory-card">
+                    <div class="subcategory-header">
+                        <h4>
+                            <a href="/categories/{{.ID}}">{{.Name}}</a>
+                        </h4>
+                        {{if .IsActive}}
+                            <span class="status-badge active">Активна</span>
+                        {{else}}
+                            <span class="status-badge inactive">Неактивна</span>
+                        {{end}}
+                    </div>
+                    
+                    <div class="subcategory-stats">
+                        <span>{{.TransactionCount}} тр.</span>
+                        <span class="amount-{{.Type}}">{{.TotalAmount}} ₽</span>
+                    </div>
+                    
+                    {{if .Description}}
+                    <p class="subcategory-description">{{.Description}}</p>
+                    {{end}}
+                </div>
+                {{end}}
+            </div>
+            
+            <div style="margin-top: 1rem;">
+                <a href="/categories/new?parent_id={{.Category.ID}}" role="button" class="secondary outline">
+                    ➕ Добавить подкатегорию
+                </a>
+            </div>
+        </section>
+        {{end}}
+
+        <!-- Recent Transactions -->
+        {{if .Transactions}}
+        <section class="recent-transactions">
+            <h3>Недавние транзакции</h3>
+            <div class="overflow-auto">
+                <table role="table">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Описание</th>
+                            <th>Пользователь</th>
+                            <th>Сумма</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .Transactions}}
+                        <tr>
+                            <td>
+                                <time datetime="{{.Date.Format "2006-01-02"}}">
+                                    {{.FormattedDate}}
+                                </time>
+                            </td>
+                            <td>
+                                <strong>{{.Description}}</strong>
+                                {{if .Tags}}
+                                <br>
+                                <div class="tags">
+                                    {{range .Tags}}
+                                    <span class="tag">{{.}}</span>
+                                    {{end}}
+                                </div>
+                                {{end}}
+                            </td>
+                            <td>
+                                {{if .UserName}}
+                                <small>{{.UserName}}</small>
+                                {{else}}
+                                <small class="text-muted">—</small>
+                                {{end}}
+                            </td>
+                            <td>
+                                <strong class="amount-{{.Type}}">
+                                    {{.FormattedAmount}} ₽
+                                </strong>
+                            </td>
+                            <td>
+                                <a href="/transactions/{{.ID}}/edit" 
+                                   class="secondary outline"
+                                   title="Редактировать">
+                                    ✏️
+                                </a>
+                            </td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div style="margin-top: 1rem;">
+                <a href="/transactions?category_id={{.Category.ID}}" role="button" class="secondary outline">
+                    📋 Все транзакции категории
+                </a>
+                <a href="/transactions/new?category_id={{.Category.ID}}" role="button" class="primary">
+                    ➕ Добавить транзакцию
+                </a>
+            </div>
+        </section>
+        {{else}}
+        <section class="empty-transactions">
+            <div class="empty-state">
+                <h3>Нет транзакций</h3>
+                <p>В этой категории еще нет зафиксированных транзакций.</p>
+                <a href="/transactions/new?category_id={{.Category.ID}}" role="button" class="primary">
+                    ➕ Добавить первую транзакцию
+                </a>
+            </div>
+        </section>
+        {{end}}
+    </main>
+    
+    <!-- Footer -->
+    <footer class="container">
+        <hr>
+        <div class="grid">
+            <div>
+                <small>© 2025 Семейный бюджет</small>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- Custom JavaScript -->
+    <script src="/static/js/app.js"></script>
+    
+    <style>
+        .category-info {
+            margin: 2rem 0;
+        }
+        
+        .info-card {
+            padding: 2rem;
+            border-radius: var(--pico-border-radius);
+            border: 1px solid var(--pico-muted-border-color);
+            background: var(--pico-card-background-color);
+        }
+        
+        .info-card.category-income {
+            border-left: 4px solid #28a745;
+            background: #f8fff9;
+        }
+        
+        .info-card.category-expense {
+            border-left: 4px solid #dc3545;
+            background: #fff8f8;
+        }
+        
+        .info-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 2rem;
+        }
+        
+        .category-details {
+            flex: 1;
+        }
+        
+        .category-type-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+            display: inline-block;
+            margin-bottom: 1rem;
+        }
+        
+        .category-type-badge.income {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .category-type-badge.expense {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .category-description {
+            margin: 0.5rem 0 1rem 0;
+            color: var(--pico-muted-color);
+            line-height: 1.6;
+        }
+        
+        .parent-category {
+            margin-top: 0.5rem;
+        }
+        
+        .parent-category a {
+            color: var(--pico-primary);
+            text-decoration: none;
+        }
+        
+        .parent-category a:hover {
+            text-decoration: underline;
+        }
+        
+        .category-visual {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .category-color-circle {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .status-badge.active {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-badge.inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .category-stats {
+            margin: 2rem 0;
+        }
+        
+        .stat-card {
+            text-align: center;
+            padding: 1.5rem;
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: var(--pico-border-radius);
+            background: var(--pico-card-background-color);
+        }
+        
+        .stat-card header {
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--pico-muted-color);
+        }
+        
+        .stat-card h2 {
+            margin: 0.5rem 0;
+            font-size: 1.75rem;
+        }
+        
+        .stat-card small {
+            color: var(--pico-muted-color);
+        }
+
+        .budget-progress {
+            margin: 2rem 0;
+        }
+        
+        .progress-card {
+            padding: 1.5rem;
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: var(--pico-border-radius);
+            background: var(--pico-card-background-color);
+        }
+        
+        .progress {
+            width: 100%;
+            height: 24px;
+            background-color: var(--pico-muted-border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+            margin-bottom: 1rem;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background-color: var(--pico-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-text {
+            color: white;
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-shadow: 0 0 3px rgba(0,0,0,0.5);
+        }
+        
+        .progress.progress-success .progress-bar { background-color: #28a745; }
+        .progress.progress-warning .progress-bar { background-color: #ffc107; }
+        .progress.progress-danger .progress-bar { background-color: #dc3545; }
+        
+        .progress-details {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .progress-amounts {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.875rem;
+        }
+        
+        .progress-remaining {
+            font-weight: 600;
+        }
+        
+        .progress-remaining.within-budget {
+            color: #28a745;
+        }
+        
+        .progress-remaining.over-budget {
+            color: #dc3545;
+        }
+
+        .subcategories-section {
+            margin: 2rem 0;
+        }
+        
+        .subcategories-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .subcategory-card {
+            padding: 1rem;
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: var(--pico-border-radius);
+            background: var(--pico-card-background-color);
+        }
+        
+        .subcategory-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        
+        .subcategory-header h4 {
+            margin: 0;
+        }
+        
+        .subcategory-header a {
+            color: var(--pico-primary);
+            text-decoration: none;
+        }
+        
+        .subcategory-header a:hover {
+            text-decoration: underline;
+        }
+        
+        .subcategory-stats {
+            display: flex;
+            gap: 1rem;
+            margin: 0.5rem 0;
+            font-size: 0.875rem;
+        }
+        
+        .subcategory-description {
+            margin: 0.5rem 0 0 0;
+            color: var(--pico-muted-color);
+            font-size: 0.875rem;
+        }
+
+        .recent-transactions {
+            margin: 2rem 0;
+        }
+        
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.25rem;
+            margin-top: 0.25rem;
+        }
+        
+        .tag {
+            padding: 0.125rem 0.375rem;
+            background: var(--pico-muted-border-color);
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+        }
+
+        .empty-transactions {
+            margin: 2rem 0;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+        }
+        
+        .empty-state h3 {
+            color: var(--pico-muted-color);
+        }
+
+        .amount-income {
+            color: #28a745;
+        }
+        
+        .amount-expense {
+            color: #dc3545;
+        }
+        
+        .text-muted {
+            color: var(--pico-muted-color);
+        }
+
+        @media (max-width: 768px) {
+            .info-header {
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+            }
+            
+            .category-visual {
+                order: -1;
+            }
+            
+            .progress-details {
+                flex-direction: column;
+                gap: 0.5rem;
+                text-align: center;
+            }
+            
+            .progress-amounts {
+                flex-direction: column;
+                gap: 0.25rem;
+            }
+            
+            .subcategories-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</body>
+</html>
+{{end}}

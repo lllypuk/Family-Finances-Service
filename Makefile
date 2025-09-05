@@ -21,8 +21,8 @@ run-local:
 	@echo "Running $(APP_NAME) with local config..."
 	@SERVER_PORT=8080 \
 	 SERVER_HOST=localhost \
-	 MONGODB_URI=mongodb://admin:password123@localhost:27017/family_budget_local?authSource=admin \
-	 MONGODB_DATABASE=family_budget_local \
+	 MONGODB_URI=mongodb://admin:password123@localhost:27017/family_budget?authSource=admin \
+	 MONGODB_DATABASE=family_budget \
 	 SESSION_SECRET=your-super-secret-session-key-for-local-dev \
 	 REDIS_URL=redis://:redis123@localhost:6379 \
 	 LOG_LEVEL=debug \

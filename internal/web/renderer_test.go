@@ -228,3 +228,152 @@ func TestTemplateRenderer_EmptyDirectories(t *testing.T) {
 	_, err = web.NewTemplateRenderer(tempDir)
 	require.Error(t, err)
 }
+
+func TestTemplateRenderer_RecursiveTemplateLoading(t *testing.T) {
+	// Create temporary directory with nested template structure
+	tempDir := t.TempDir()
+
+	// Create directory structure
+	layoutsDir := filepath.Join(tempDir, "layouts")
+	pagesDir := filepath.Join(tempDir, "pages")
+	componentsDir := filepath.Join(tempDir, "components")
+
+	// Create nested directories in pages
+	transactionsDir := filepath.Join(pagesDir, "transactions")
+	reportsDir := filepath.Join(pagesDir, "reports")
+
+	err := os.MkdirAll(layoutsDir, 0755)
+	require.NoError(t, err)
+	err = os.MkdirAll(pagesDir, 0755)
+	require.NoError(t, err)
+	err = os.MkdirAll(componentsDir, 0755)
+	require.NoError(t, err)
+	err = os.MkdirAll(transactionsDir, 0755)
+	require.NoError(t, err)
+	err = os.MkdirAll(reportsDir, 0755)
+	require.NoError(t, err)
+
+	// Create minimal required templates
+	layoutTemplate := `{{define "base"}}<!DOCTYPE html><html><body>{{template "content" .}}</body></html>{{end}}`
+	err = os.WriteFile(filepath.Join(layoutsDir, "base.html"), []byte(layoutTemplate), 0644)
+	require.NoError(t, err)
+
+	componentTemplate := `{{define "nav"}}<nav>Navigation</nav>{{end}}`
+	err = os.WriteFile(filepath.Join(componentsDir, "nav.html"), []byte(componentTemplate), 0644)
+	require.NoError(t, err)
+
+	// Create root page template
+	rootPageTemplate := `{{define "home"}}Welcome to the home page{{end}}`
+	err = os.WriteFile(filepath.Join(pagesDir, "home.html"), []byte(rootPageTemplate), 0644)
+	require.NoError(t, err)
+
+	// Create nested page templates
+	transactionIndexTemplate := `{{define "pages/transactions/index"}}Transaction index page{{end}}`
+	err = os.WriteFile(filepath.Join(transactionsDir, "index.html"), []byte(transactionIndexTemplate), 0644)
+	require.NoError(t, err)
+
+	transactionNewTemplate := `{{define "pages/transactions/new"}}New transaction page{{end}}`
+	err = os.WriteFile(filepath.Join(transactionsDir, "new.html"), []byte(transactionNewTemplate), 0644)
+	require.NoError(t, err)
+
+	reportsIndexTemplate := `{{define "pages/reports/index"}}Reports index page{{end}}`
+	err = os.WriteFile(filepath.Join(reportsDir, "index.html"), []byte(reportsIndexTemplate), 0644)
+	require.NoError(t, err)
+
+	// Create renderer
+	renderer, err := web.NewTemplateRenderer(tempDir)
+	require.NoError(t, err)
+	assert.NotNil(t, renderer)
+
+	// Test rendering root template
+	var output strings.Builder
+	err = renderer.Render(&output, "home", nil, nil)
+	require.NoError(t, err)
+	assert.Contains(t, output.String(), "Welcome to the home page")
+
+	// Test rendering nested templates
+	output.Reset()
+	err = renderer.Render(&output, "pages/transactions/index", nil, nil)
+	require.NoError(t, err)
+	assert.Contains(t, output.String(), "Transaction index page")
+
+	output.Reset()
+	err = renderer.Render(&output, "pages/transactions/new", nil, nil)
+	require.NoError(t, err)
+	assert.Contains(t, output.String(), "New transaction page")
+
+	output.Reset()
+	err = renderer.Render(&output, "pages/reports/index", nil, nil)
+	require.NoError(t, err)
+	assert.Contains(t, output.String(), "Reports index page")
+}
+
+func TestTemplateRenderer_DerefFunction(t *testing.T) {
+	// Create temporary directory with test templates
+	tempDir := t.TempDir()
+
+	// Create directory structure
+	layoutsDir := filepath.Join(tempDir, "layouts")
+	pagesDir := filepath.Join(tempDir, "pages")
+	componentsDir := filepath.Join(tempDir, "components")
+
+	err := os.MkdirAll(layoutsDir, 0755)
+	require.NoError(t, err)
+	err = os.MkdirAll(pagesDir, 0755)
+	require.NoError(t, err)
+	err = os.MkdirAll(componentsDir, 0755)
+	require.NoError(t, err)
+
+	// Create minimal required templates
+	layoutTemplate := `{{define "base"}}<!DOCTYPE html><html><body>{{template "content" .}}</body></html>{{end}}`
+	err = os.WriteFile(filepath.Join(layoutsDir, "base.html"), []byte(layoutTemplate), 0644)
+	require.NoError(t, err)
+
+	componentTemplate := `{{define "nav"}}<nav>Navigation</nav>{{end}}`
+	err = os.WriteFile(filepath.Join(componentsDir, "nav.html"), []byte(componentTemplate), 0644)
+	require.NoError(t, err)
+
+	// Create template that uses deref function
+	testTemplate := `{{define "deref-test"}}Active: {{deref .IsActive}} | Enabled: {{deref .IsEnabled}}{{end}}`
+	err = os.WriteFile(filepath.Join(pagesDir, "deref-test.html"), []byte(testTemplate), 0644)
+	require.NoError(t, err)
+
+	// Create renderer
+	renderer, err := web.NewTemplateRenderer(tempDir)
+	require.NoError(t, err)
+
+	// Test data with boolean pointers
+	trueVal := true
+	falseVal := false
+	data := map[string]any{
+		"IsActive":  &trueVal,
+		"IsEnabled": &falseVal,
+	}
+
+	// Create a buffer to capture output
+	var output strings.Builder
+
+	// Test rendering with deref function
+	err = renderer.Render(&output, "deref-test", data, nil)
+	require.NoError(t, err)
+
+	// Verify output
+	result := output.String()
+	assert.Contains(t, result, "Active: true")
+	assert.Contains(t, result, "Enabled: false")
+
+	// Test with nil pointers
+	output.Reset()
+	dataNil := map[string]any{
+		"IsActive":  (*bool)(nil),
+		"IsEnabled": (*bool)(nil),
+	}
+
+	err = renderer.Render(&output, "deref-test", dataNil, nil)
+	require.NoError(t, err)
+
+	// Verify output with nil values (should render as false)
+	result = output.String()
+	assert.Contains(t, result, "Active: false")
+	assert.Contains(t, result, "Enabled: false")
+}

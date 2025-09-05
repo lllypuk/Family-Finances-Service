@@ -1,0 +1,390 @@
+{{define "pages/budgets/show"}}
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Budget.Name}} - Семейный бюджет</title>
+    
+    <!-- PicoCSS -->
+    <link rel="stylesheet" href="/static/css/pico.min.css">
+    <link rel="stylesheet" href="/static/css/custom.css">
+    
+    <!-- HTMX -->
+    <script src="/static/js/htmx.min.js"></script>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="container-fluid">
+        <ul>
+            <li>
+                <a href="/" class="brand">
+                    <strong>💰 Семейный бюджет</strong>
+                </a>
+            </li>
+        </ul>
+        <ul>
+            {{if .CurrentUser}}
+            <li><a href="/">Главная</a></li>
+            <li><a href="/transactions">Транзакции</a></li>
+            <li><a href="/categories">Категории</a></li>
+            <li><a href="/budgets" class="current">Бюджеты</a></li>
+            <li><a href="/reports">Отчеты</a></li>
+            <li>
+                <details class="dropdown">
+                    <summary role="button" class="secondary">
+                        {{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}
+                    </summary>
+                    <ul>
+                        <li><a href="/profile">Профиль</a></li>
+                        {{if eq .CurrentUser.Role "admin"}}
+                        <li><a href="/users">Пользователи</a></li>
+                        <li><a href="/family/settings">Настройки семьи</a></li>
+                        {{end}}
+                        <li>
+                            <form method="POST" action="/logout" style="margin: 0;">
+                                <input type="hidden" name="_token" value="{{.CSRFToken}}">
+                                <button type="submit" class="outline">Выход</button>
+                            </form>
+                        </li>
+                    </ul>
+                </details>
+            </li>
+            {{end}}
+        </ul>
+    </nav>
+    
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Page Header -->
+        <div class="page-header">
+            <div class="grid">
+                <div>
+                    <h1>💰 {{.Budget.Name}}</h1>
+                    <p>Детализация бюджета и отслеживание трат</p>
+                </div>
+                <div>
+                    <a href="/budgets" role="button" class="secondary outline">
+                        ← Назад к бюджетам
+                    </a>
+                    <a href="/budgets/{{.Budget.ID}}/edit" role="button" class="secondary outline">
+                        ✏️ Редактировать
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Budget Status Cards -->
+        <section class="budget-overview">
+            <div class="grid">
+                <article class="status-card">
+                    <header>Общий бюджет</header>
+                    <h2>{{.Budget.FormattedAmount}} ₽</h2>
+                </article>
+                
+                <article class="status-card">
+                    <header>Потрачено</header>
+                    <h2 class="{{if .Budget.IsOverBudget}}text-danger{{else}}text-success{{end}}">
+                        {{.Budget.FormattedSpent}} ₽
+                    </h2>
+                </article>
+                
+                <article class="status-card">
+                    <header>Остается</header>
+                    <h2 class="{{if .Budget.IsOverBudget}}text-danger{{else}}text-success{{end}}">
+                        {{.Budget.FormattedRemaining}} ₽
+                    </h2>
+                </article>
+                
+                <article class="status-card">
+                    <header>Процент использования</header>
+                    <h2 class="{{if .Budget.IsOverBudget}}text-danger{{else if gt .Budget.Percentage 80}}text-warning{{else}}text-success{{end}}">
+                        {{printf "%.1f" .Budget.Percentage}}%
+                    </h2>
+                </article>
+            </div>
+        </section>
+
+        <!-- Progress Bar -->
+        <section class="progress-section">
+            <h3>Прогресс расходов</h3>
+            <div class="progress {{.Budget.ProgressBarClass}}" 
+                 hx-get="/budgets/{{.Budget.ID}}/progress" 
+                 hx-trigger="load, every 30s"
+                 hx-swap="outerHTML">
+                <div class="progress-bar" style="width: {{if gt .Budget.Percentage 100}}100{{else}}{{printf "%.1f" .Budget.Percentage}}{{end}}%">
+                    <span class="progress-text">{{printf "%.1f" .Budget.Percentage}}%</span>
+                </div>
+            </div>
+            
+            {{if .Budget.IsOverBudget}}
+            <div class="alert alert-danger" style="margin-top: 1rem;">
+                <h4>⚠️ Бюджет превышен!</h4>
+                <p>Вы потратили на {{.Budget.FormattedOverspent}} ₽ больше запланированного.</p>
+            </div>
+            {{else if gt .Budget.Percentage 80}}
+            <div class="alert alert-warning" style="margin-top: 1rem;">
+                <h4>🚨 Внимание!</h4>
+                <p>Вы использовали более 80% бюджета. Осталось {{.Budget.FormattedRemaining}} ₽.</p>
+            </div>
+            {{end}}
+        </section>
+
+        <!-- Budget Details -->
+        <section class="budget-details">
+            <h3>Информация о бюджете</h3>
+            <div class="grid">
+                <div>
+                    <h4>Период</h4>
+                    <p>{{.Budget.Period}}</p>
+                    <small>{{.Budget.StartDate.Format "02.01.2006"}} - {{.Budget.EndDate.Format "02.01.2006"}}</small>
+                </div>
+                
+                <div>
+                    <h4>Категория</h4>
+                    {{if .Budget.CategoryName}}
+                    <p>
+                        <span class="category-color" style="background-color: {{.Budget.CategoryColor}}"></span>
+                        {{.Budget.CategoryName}}
+                    </p>
+                    {{else}}
+                    <p>Все категории</p>
+                    {{end}}
+                </div>
+                
+                <div>
+                    <h4>Статус</h4>
+                    {{if .Budget.IsActive}}
+                        {{if gt .Budget.DaysLeft 0}}
+                            <p class="text-success">✅ Активен ({{.Budget.DaysLeft}} дней осталось)</p>
+                        {{else}}
+                            <p class="text-warning">⏰ Просрочен</p>
+                        {{end}}
+                    {{else}}
+                        <p class="text-muted">❌ Неактивен</p>
+                    {{end}}
+                </div>
+            </div>
+        </section>
+
+        <!-- Related Transactions -->
+        {{if .Transactions}}
+        <section class="related-transactions">
+            <h3>Связанные транзакции</h3>
+            <div class="overflow-auto">
+                <table role="table">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Описание</th>
+                            <th>Категория</th>
+                            <th>Сумма</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .Transactions}}
+                        <tr>
+                            <td>
+                                <time datetime="{{.Date.Format "2006-01-02"}}">
+                                    {{.FormattedDate}}
+                                </time>
+                            </td>
+                            <td>
+                                <strong>{{.Description}}</strong>
+                                {{if .UserName}}
+                                <br><small>от {{.UserName}}</small>
+                                {{end}}
+                            </td>
+                            <td>
+                                <span class="category-badge category-{{.Type}}">
+                                    {{if eq .Type "income"}}💰{{else}}💸{{end}}
+                                    {{.CategoryName}}
+                                </span>
+                            </td>
+                            <td>
+                                <strong class="amount-{{.Type}}">
+                                    {{.FormattedAmount}} ₽
+                                </strong>
+                            </td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {{else}}
+        <section class="empty-transactions">
+            <div class="empty-state">
+                <h3>Нет связанных транзакций</h3>
+                <p>Транзакции в этом бюджете еще не зафиксированы.</p>
+                <a href="/transactions/new" role="button" class="primary">
+                    ➕ Добавить транзакцию
+                </a>
+            </div>
+        </section>
+        {{end}}
+    </main>
+    
+    <!-- Footer -->
+    <footer class="container">
+        <hr>
+        <div class="grid">
+            <div>
+                <small>© 2025 Семейный бюджет</small>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- Custom JavaScript -->
+    <script src="/static/js/app.js"></script>
+
+<style>
+    .budget-overview {
+        margin: 2rem 0;
+    }
+    
+    .status-card {
+        text-align: center;
+        padding: 1.5rem;
+        border: 1px solid var(--pico-muted-border-color);
+        border-radius: var(--pico-border-radius);
+    }
+    
+    .status-card header {
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: var(--pico-muted-color);
+    }
+    
+    .status-card h2 {
+        margin: 0;
+        font-size: 1.75rem;
+    }
+
+    .progress-section {
+        margin: 2rem 0;
+    }
+    
+    .progress {
+        width: 100%;
+        height: 24px;
+        background-color: var(--pico-muted-border-color);
+        border-radius: 12px;
+        overflow: hidden;
+        position: relative;
+        margin: 1rem 0;
+    }
+    
+    .progress-bar {
+        height: 100%;
+        background-color: var(--pico-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 12px;
+        transition: width 0.3s ease;
+        position: relative;
+    }
+    
+    .progress-text {
+        color: white;
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-shadow: 0 0 3px rgba(0,0,0,0.5);
+    }
+    
+    .progress.progress-success .progress-bar { background-color: #28a745; }
+    .progress.progress-info .progress-bar { background-color: #17a2b8; }
+    .progress.progress-warning .progress-bar { background-color: #ffc107; }
+    .progress.progress-danger .progress-bar { background-color: #dc3545; }
+
+    .budget-details {
+        margin: 2rem 0;
+        padding: 1.5rem;
+        background: var(--pico-background-color);
+        border-radius: var(--pico-border-radius);
+        border: 1px solid var(--pico-muted-border-color);
+    }
+    
+    .budget-details h4 {
+        margin-bottom: 0.5rem;
+        color: var(--pico-primary);
+    }
+    
+    .budget-details p {
+        margin: 0 0 0.25rem 0;
+    }
+
+    .category-color {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 0.5rem;
+    }
+
+    .related-transactions {
+        margin: 2rem 0;
+    }
+    
+    .empty-transactions {
+        margin: 2rem 0;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+    }
+    
+    .empty-state h3 {
+        color: var(--pico-muted-color);
+    }
+
+    .text-success { color: #28a745; }
+    .text-warning { color: #ffc107; }
+    .text-danger { color: #dc3545; }
+    .text-muted { color: var(--pico-muted-color); }
+
+    .alert {
+        padding: 1rem;
+        border-radius: var(--pico-border-radius);
+        margin-bottom: 1rem;
+    }
+    
+    .alert.alert-danger {
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+    }
+    
+    .alert.alert-warning {
+        background-color: #fff3cd;
+        border: 1px solid #ffeaa7;
+        color: #856404;
+    }
+    
+    .alert h4 {
+        margin: 0 0 0.5rem 0;
+    }
+    
+    .alert p {
+        margin: 0;
+    }
+
+    @media (max-width: 768px) {
+        .status-card {
+            padding: 1rem;
+        }
+        
+        .status-card h2 {
+            font-size: 1.5rem;
+        }
+    }
+</style>
+</body>
+</html>
+{{end}}
