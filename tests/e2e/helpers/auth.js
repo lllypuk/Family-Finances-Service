@@ -132,7 +132,12 @@ export class AuthHelper {
     const familyData = this.userFactory.createTestFamily(familyOptions);
     const admin = familyData.admin;
 
-    await this.registerUser("admin", admin);
+    await this.registerUser("admin", {
+      name: admin.name,
+      family_name: admin.family_name,
+      email: admin.email,
+      password: admin.password,
+    });
 
     this.currentFamily = familyData;
     return admin;

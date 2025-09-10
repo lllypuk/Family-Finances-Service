@@ -115,10 +115,9 @@ func TestConcurrentDomainOperations(t *testing.T) {
 						}
 					}()
 
-					startOp := (goroutineID * tc.operations) / tc.goroutines
-					endOp := ((goroutineID + 1) * tc.operations) / tc.goroutines
-					for j := startOp; j < endOp; j++ {
-						tc.operation(j)
+					operationsPerGoroutine := tc.operations / tc.goroutines
+					for j := range operationsPerGoroutine {
+						tc.operation(goroutineID*operationsPerGoroutine + j)
 						atomic.AddInt64(&completed, 1)
 					}
 				}(i)
@@ -161,15 +160,13 @@ func TestConcurrentDomainOperations(t *testing.T) {
 
 // TestConcurrentHTTPRequests tests HTTP server under concurrent load
 func TestConcurrentHTTPRequests(t *testing.T) {
-	// Create a simple test server for /health endpoint
-	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/health" {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"status":"ok"}`))
-		} else {
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
+	config := &application.Config{
+		Host: "localhost",
+		Port: "8080",
+	}
+
+	server := application.NewHTTPServer(nil, nil, config)
+	testServer := httptest.NewServer(server.Echo())
 	defer testServer.Close()
 
 	tests := []struct {
@@ -211,6 +208,7 @@ func TestConcurrentHTTPRequests(t *testing.T) {
 				totalLatency int64
 			)
 
+			requestsPerGoroutine := tc.requests / tc.concurrency
 			start := time.Now()
 
 			// Launch concurrent goroutines
@@ -223,9 +221,7 @@ func TestConcurrentHTTPRequests(t *testing.T) {
 						Timeout: 5 * time.Second,
 					}
 
-					startReq := (goroutineID * tc.requests) / tc.concurrency
-					endReq := ((goroutineID + 1) * tc.requests) / tc.concurrency
-					for j := startReq; j < endReq; j++ {
+					for range requestsPerGoroutine {
 						select {
 						case <-ctx.Done():
 							atomic.AddInt64(&timeoutCount, 1)
@@ -442,16 +438,15 @@ func TestGoroutineLeaks(t *testing.T) {
 
 	// Run operations that might leak goroutines
 	t.Run("HTTPServerOperations", func(t *testing.T) {
-		// Create and close multiple simple test servers
+		config := &application.Config{
+			Host: "localhost",
+			Port: "8080",
+		}
+
+		// Create and close multiple servers
 		for range 5 {
-			testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path == "/health" {
-					w.WriteHeader(http.StatusOK)
-					w.Write([]byte(`{"status":"ok"}`))
-				} else {
-					w.WriteHeader(http.StatusNotFound)
-				}
-			}))
+			server := application.NewHTTPServer(nil, nil, config)
+			testServer := httptest.NewServer(server.Echo())
 
 			// Make some requests
 			for range 10 {
@@ -544,14 +539,13 @@ func TestChannelPerformance(t *testing.T) {
 			}
 
 			// Start producers
+			messagesPerProducer := tc.messages / tc.producers
 			for i := range tc.producers {
 				wg.Add(1)
 				go func(id int) {
 					defer wg.Done()
-					startMsg := (id * tc.messages) / tc.producers
-					endMsg := ((id + 1) * tc.messages) / tc.producers
-					for j := startMsg; j < endMsg; j++ {
-						ch <- j
+					for j := range messagesPerProducer {
+						ch <- id*messagesPerProducer + j
 					}
 				}(i)
 			}

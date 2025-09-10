@@ -45,7 +45,7 @@ npm run test:e2e:report       # Show HTML report
 
 ### Makefile Commands
 ```bash
-make test-e2e                    # Run Playwright tests
+make test-e2e-playwright         # Run Playwright tests
 make test-e2e-playwright-ui      # Run with UI
 make test-e2e-playwright-debug   # Run in debug mode
 ```

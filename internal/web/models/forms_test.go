@@ -40,24 +40,20 @@ func TestLoginForm_StructFields(t *testing.T) {
 
 func TestRegisterForm_StructFields(t *testing.T) {
 	form := models.RegisterForm{
-		FamilyName:      "Test Family",
-		Currency:        "USD",
-		Name:            "John Doe",
-		FirstName:       "John",
-		LastName:        "Doe",
-		Email:           "john@example.com",
-		Password:        "securepass123",
-		ConfirmPassword: "securepass123",
+		FamilyName: "Test Family",
+		Currency:   "USD",
+		FirstName:  "John",
+		LastName:   "Doe",
+		Email:      "john@example.com",
+		Password:   "securepass123",
 	}
 
 	assert.Equal(t, "Test Family", form.FamilyName)
 	assert.Equal(t, "USD", form.Currency)
-	assert.Equal(t, "John Doe", form.Name)
 	assert.Equal(t, "John", form.FirstName)
 	assert.Equal(t, "Doe", form.LastName)
 	assert.Equal(t, "john@example.com", form.Email)
 	assert.Equal(t, "securepass123", form.Password)
-	assert.Equal(t, "securepass123", form.ConfirmPassword)
 
 	// Проверяем теги валидации для всех полей
 	formType := reflect.TypeOf(form)
@@ -71,11 +67,6 @@ func TestRegisterForm_StructFields(t *testing.T) {
 	require.True(t, found)
 	assert.Equal(t, "currency", currencyField.Tag.Get("form"))
 	assert.Equal(t, "required,len=3", currencyField.Tag.Get("validate"))
-
-	nameField, found := formType.FieldByName("Name")
-	require.True(t, found)
-	assert.Equal(t, "name", nameField.Tag.Get("form"))
-	assert.Equal(t, "required,min=2,max=100", nameField.Tag.Get("validate"))
 
 	firstNameField, found := formType.FieldByName("FirstName")
 	require.True(t, found)
@@ -95,27 +86,11 @@ func TestRegisterForm_StructFields(t *testing.T) {
 	passwordField, found := formType.FieldByName("Password")
 	require.True(t, found)
 	assert.Equal(t, "password", passwordField.Tag.Get("form"))
-	assert.Equal(t, "required,min=6,strong_password", passwordField.Tag.Get("validate"))
-
-	confirmPasswordField, found := formType.FieldByName("ConfirmPassword")
-	require.True(t, found)
-	assert.Equal(t, "confirm_password", confirmPasswordField.Tag.Get("form"))
-	assert.Equal(t, "required,eqfield=Password", confirmPasswordField.Tag.Get("validate"))
+	assert.Equal(t, "required,min=6", passwordField.Tag.Get("validate"))
 }
 
 func TestGetValidationErrors_RequiredFields(t *testing.T) {
 	v := validator.New()
-	v.RegisterValidation("strong_password", func(fl validator.FieldLevel) bool {
-		password := fl.Field().String()
-		if len(password) < 6 {
-			return false
-		}
-		if password == "123" || password == "12" || password == "1234" ||
-			password == "abc" || password == "password" || password == "123456" {
-			return false
-		}
-		return true
-	})
 
 	tests := []struct {
 		name          string
@@ -141,13 +116,11 @@ func TestGetValidationErrors_RequiredFields(t *testing.T) {
 		{
 			name: "RegisterForm - missing family name",
 			form: models.RegisterForm{
-				Currency:        "USD",
-				Name:            "John Doe",
-				FirstName:       "John",
-				LastName:        "Doe",
-				Email:           "john@example.com",
-				Password:        "password123",
-				ConfirmPassword: "password123",
+				Currency:  "USD",
+				FirstName: "John",
+				LastName:  "Doe",
+				Email:     "john@example.com",
+				Password:  "password123",
 			},
 			expectedCount: 1,
 			expectedField: "family_name",
@@ -156,7 +129,7 @@ func TestGetValidationErrors_RequiredFields(t *testing.T) {
 		{
 			name:          "RegisterForm - all fields missing",
 			form:          models.RegisterForm{},
-			expectedCount: 8,
+			expectedCount: 6,
 			expectedField: "",
 			expectedMsg:   "This field is required",
 		},
@@ -180,9 +153,6 @@ func TestGetValidationErrors_RequiredFields(t *testing.T) {
 				for _, msg := range validationErrors {
 					assert.Equal(t, "This field is required", msg)
 				}
-			} else if tt.expectedCount == 1 && tt.expectedField != "" {
-				assert.Contains(t, validationErrors, tt.expectedField)
-				assert.Equal(t, tt.expectedMsg, validationErrors[tt.expectedField])
 			}
 		})
 	}
@@ -249,17 +219,6 @@ func TestGetValidationErrors_EmailValidation(t *testing.T) {
 
 func TestGetValidationErrors_LengthValidation(t *testing.T) {
 	v := validator.New()
-	v.RegisterValidation("strong_password", func(fl validator.FieldLevel) bool {
-		password := fl.Field().String()
-		if len(password) < 6 {
-			return false
-		}
-		if password == "123" || password == "12" || password == "1234" ||
-			password == "abc" || password == "password" || password == "123456" {
-			return false
-		}
-		return true
-	})
 
 	tests := []struct {
 		name          string
@@ -318,14 +277,12 @@ func TestGetValidationErrors_LengthValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			form := models.RegisterForm{
-				FamilyName:      tt.familyName,
-				Currency:        tt.currency,
-				Name:            "John Doe",
-				FirstName:       "John",
-				LastName:        "Doe",
-				Email:           "john@example.com",
-				Password:        tt.password,
-				ConfirmPassword: tt.password,
+				FamilyName: tt.familyName,
+				Currency:   tt.currency,
+				FirstName:  "John",
+				LastName:   "Doe",
+				Email:      "john@example.com",
+				Password:   tt.password,
 			}
 
 			err := v.Struct(form)
@@ -343,17 +300,6 @@ func TestGetValidationErrors_LengthValidation(t *testing.T) {
 
 func TestGetValidationErrors_MaxLengthValidation(t *testing.T) {
 	v := validator.New()
-	v.RegisterValidation("strong_password", func(fl validator.FieldLevel) bool {
-		password := fl.Field().String()
-		if len(password) < 6 {
-			return false
-		}
-		if password == "123" || password == "12" || password == "1234" ||
-			password == "abc" || password == "password" || password == "123456" {
-			return false
-		}
-		return true
-	})
 
 	tests := []struct {
 		name          string
@@ -395,14 +341,12 @@ func TestGetValidationErrors_MaxLengthValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			form := models.RegisterForm{
-				FamilyName:      "Valid Family",
-				Currency:        "USD",
-				Name:            "John Doe",
-				FirstName:       "John",
-				LastName:        "Doe",
-				Email:           "john@example.com",
-				Password:        "password123",
-				ConfirmPassword: "password123",
+				FamilyName: "Valid Family",
+				Currency:   "USD",
+				FirstName:  "John",
+				LastName:   "Doe",
+				Email:      "john@example.com",
+				Password:   "password123",
 			}
 
 			// Устанавливаем длинное значение для нужного поля
@@ -411,8 +355,6 @@ func TestGetValidationErrors_MaxLengthValidation(t *testing.T) {
 				form.Email = tt.value
 			case "family_name":
 				form.FamilyName = tt.value
-			case "name":
-				form.Name = tt.value
 			case "first_name":
 				form.FirstName = tt.value
 			case "last_name":
@@ -432,28 +374,15 @@ func TestGetValidationErrors_MaxLengthValidation(t *testing.T) {
 func TestGetFieldName_CamelCaseConversion(t *testing.T) {
 	// Создаем mock FieldError для тестирования
 	v := validator.New()
-	v.RegisterValidation("strong_password", func(fl validator.FieldLevel) bool {
-		password := fl.Field().String()
-		if len(password) < 6 {
-			return false
-		}
-		if password == "123" || password == "12" || password == "1234" ||
-			password == "abc" || password == "password" || password == "123456" {
-			return false
-		}
-		return true
-	})
 
 	// Тестируем через реальную валидацию
 	form := models.RegisterForm{
 		// Оставляем FirstName пустым для получения ошибки валидации
-		FamilyName:      "Test",
-		Currency:        "USD",
-		Name:            "John Doe",
-		LastName:        "Doe",
-		Email:           "test@example.com",
-		Password:        "password123",
-		ConfirmPassword: "password123",
+		FamilyName: "Test",
+		Currency:   "USD",
+		LastName:   "Doe",
+		Email:      "test@example.com",
+		Password:   "password123",
 	}
 
 	err := v.Struct(form)
@@ -502,29 +431,16 @@ func TestGetValidationErrors_NilError(t *testing.T) {
 
 func TestGetValidationErrors_MultipleErrors(t *testing.T) {
 	v := validator.New()
-	v.RegisterValidation("strong_password", func(fl validator.FieldLevel) bool {
-		password := fl.Field().String()
-		if len(password) < 6 {
-			return false
-		}
-		if password == "123" || password == "12" || password == "1234" ||
-			password == "abc" || password == "password" || password == "123456" {
-			return false
-		}
-		return true
-	})
 
 	// Создаем форму с множественными ошибками
 	form := models.RegisterForm{
 		// Все поля пустые или невалидные
-		FamilyName:      "",
-		Currency:        "",
-		Name:            "",
-		FirstName:       "",
-		LastName:        "",
-		Email:           "",
-		Password:        "",
-		ConfirmPassword: "",
+		FamilyName: "",
+		Currency:   "",
+		FirstName:  "",
+		LastName:   "",
+		Email:      "",
+		Password:   "",
 	}
 
 	err := v.Struct(form)
@@ -532,19 +448,10 @@ func TestGetValidationErrors_MultipleErrors(t *testing.T) {
 
 	validationErrors := models.GetValidationErrors(err)
 
-	// Должно быть 8 ошибок - по одной на каждое обязательное поле
-	assert.Len(t, validationErrors, 8)
+	// Должно быть 6 ошибок - по одной на каждое обязательное поле
+	assert.Len(t, validationErrors, 6)
 
-	expectedFields := []string{
-		"family_name",
-		"currency",
-		"name",
-		"first_name",
-		"last_name",
-		"email",
-		"password",
-		"confirm_password",
-	}
+	expectedFields := []string{"family_name", "currency", "first_name", "last_name", "email", "password"}
 	for _, field := range expectedFields {
 		assert.Contains(t, validationErrors, field)
 		assert.Equal(t, "This field is required", validationErrors[field])
@@ -554,27 +461,14 @@ func TestGetValidationErrors_MultipleErrors(t *testing.T) {
 // Benchmark тесты для production performance
 func BenchmarkGetValidationErrors(b *testing.B) {
 	v := validator.New()
-	v.RegisterValidation("strong_password", func(fl validator.FieldLevel) bool {
-		password := fl.Field().String()
-		if len(password) < 6 {
-			return false
-		}
-		if password == "123" || password == "12" || password == "1234" ||
-			password == "abc" || password == "password" || password == "123456" {
-			return false
-		}
-		return true
-	})
 
 	form := models.RegisterForm{
-		FamilyName:      "Test Family",
-		Currency:        "USD",
-		Name:            "John Doe",
-		FirstName:       "John",
-		LastName:        "Doe",
-		Email:           "invalid-email", // Невалидный email для создания ошибки
-		Password:        "12345",         // Слишком короткий пароль
-		ConfirmPassword: "12345",
+		FamilyName: "Test Family",
+		Currency:   "USD",
+		FirstName:  "John",
+		LastName:   "Doe",
+		Email:      "invalid-email", // Невалидный email для создания ошибки
+		Password:   "12345",         // Слишком короткий пароль
 	}
 
 	err := v.Struct(form)

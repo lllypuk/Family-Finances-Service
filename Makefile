@@ -1,4 +1,4 @@
-.PHONY: build run test test-all test-unit test-integration test-e2e test-e2e-playwright-ui test-e2e-playwright-debug test-performance test-coverage test-ci clean docker-build docker-up docker-up-d docker-down docker-logs deps lint fmt pre-commit dev-up full-up observability-up observability-down observability-logs
+.PHONY: build run test test-all test-unit test-integration test-e2e test-e2e-fast test-e2e-playwright test-e2e-playwright-ui test-e2e-playwright-debug test-performance test-coverage test-ci clean docker-build docker-up docker-up-d docker-down docker-logs deps lint fmt pre-commit dev-up full-up observability-up observability-down observability-logs
 
 # Переменные
 APP_NAME=family-budget-service
@@ -31,8 +31,18 @@ test-integration:
 	@echo "Running integration tests with shared container..."
 	@REUSE_MONGO_CONTAINER=true go test -v ./tests/integration/...
 
-# E2E тесты (Playwright)
+# E2E тесты (Go)
 test-e2e:
+	@echo "Running e2e tests..."
+	@go test -v ./tests/e2e/...
+
+# E2E тесты с переиспользованием контейнера (Go)
+test-e2e-fast:
+	@echo "Running e2e tests with shared container..."
+	@REUSE_MONGO_CONTAINER=true go test -v ./tests/e2e/...
+
+# Playwright E2E тесты
+test-e2e-playwright:
 	@echo "Running Playwright E2E tests..."
 	@npm run test:e2e
 
@@ -91,7 +101,6 @@ pre-commit:
 	@go fmt ./...
 	@go test -v $$(go list ./... | grep -v '/tests/performance')
 	@golangci-lint run --fix
-	@npm run test:e2e
 
 # Очистка
 clean:
