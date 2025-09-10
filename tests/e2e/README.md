@@ -133,7 +133,7 @@ npm run test:e2e:debug
 
 ### Makefile Commands
 ```bash
-make test-e2e-playwright         # Run all Playwright tests
+make test-e2e                    # Run all Playwright tests
 make test-e2e-playwright-ui      # Interactive mode
 make test-e2e-playwright-debug   # Debug mode
 ```

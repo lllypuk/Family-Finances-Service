@@ -20,6 +20,8 @@ import (
 const (
 	// HTTPRequestTimeout timeout for HTTP requests
 	HTTPRequestTimeout = 30 * time.Second
+	// minPasswordLength minimum password length
+	minPasswordLength = 6
 )
 
 type HTTPServer struct {
@@ -64,7 +66,9 @@ func NewHTTPServerWithObservability(
 
 	// Настройка валидации
 	v := validator.New()
-	v.RegisterValidation("strong_password", strongPasswordValidator)
+	if err := v.RegisterValidation("strong_password", strongPasswordValidator); err != nil {
+		panic(fmt.Sprintf("failed to register password validator: %v", err))
+	}
 	e.Validator = &CustomValidator{validator: v}
 
 	// Базовые middleware
@@ -216,18 +220,18 @@ func (s *HTTPServer) healthCheck(c echo.Context) error {
 // strongPasswordValidator validates password strength requirements
 func strongPasswordValidator(fl validator.FieldLevel) bool {
 	password := fl.Field().String()
-	
-	// Minimum length is already handled by min=6, so we add additional checks
-	if len(password) < 6 {
+
+	// Minimum length is already handled by min=minPasswordLength, so we add additional checks
+	if len(password) < minPasswordLength {
 		return false
 	}
-	
+
 	// For very simple passwords like "123", "abc", etc - reject them
-	if password == "123" || password == "12" || password == "1234" || 
-	   password == "abc" || password == "password" || password == "123456" {
+	if password == "123" || password == "12" || password == "1234" ||
+		password == "abc" || password == "password" || password == "123456" {
 		return false
 	}
-	
+
 	return true
 }
 

@@ -16,14 +16,14 @@ type LoginForm struct {
 
 // RegisterForm представляет форму регистрации семьи
 type RegisterForm struct {
-	FamilyName      string `form:"family_name"      validate:"required,min=2,max=100" json:"family_name"`
-	Currency        string `form:"currency"         validate:"required,len=3"         json:"currency"`
-	Name            string `form:"name"             validate:"required,min=2,max=100" json:"name"`
-	FirstName       string `form:"first_name"       validate:"required,min=2,max=50"  json:"first_name"`
-	LastName        string `form:"last_name"        validate:"required,min=2,max=50"  json:"last_name"`
-	Email           string `form:"email"            validate:"required,email,max=254" json:"email"`
+	FamilyName      string `form:"family_name"      validate:"required,min=2,max=100"         json:"family_name"`
+	Currency        string `form:"currency"         validate:"required,len=3"                 json:"currency"`
+	Name            string `form:"name"             validate:"required,min=2,max=100"         json:"name"`
+	FirstName       string `form:"first_name"       validate:"required,min=2,max=50"          json:"first_name"`
+	LastName        string `form:"last_name"        validate:"required,min=2,max=50"          json:"last_name"`
+	Email           string `form:"email"            validate:"required,email,max=254"         json:"email"`
 	Password        string `form:"password"         validate:"required,min=6,strong_password" json:"password"`
-	ConfirmPassword string `form:"confirm_password" validate:"required,eqfield=Password" json:"confirm_password"`
+	ConfirmPassword string `form:"confirm_password" validate:"required,eqfield=Password"      json:"confirm_password"`
 }
 
 // CreateUserForm представляет форму создания пользователя в семье
