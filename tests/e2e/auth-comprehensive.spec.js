@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { AuthHelper } from "./helpers/auth.js";
 import { UserFactory, INVALID_USER_DATA } from "./fixtures/users.js";
-import { LoginPage } from "./pages/LoginPage.js";
-import { RegisterPage } from "./pages/RegisterPage.js";
+import { LoginPage } from "./pages/login-page.js";
+import { RegisterPage } from "./pages/register-page.js";
 
 test.describe("Comprehensive Authentication Tests", () => {
   let authHelper;

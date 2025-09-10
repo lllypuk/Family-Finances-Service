@@ -56,7 +56,7 @@ export default defineConfig({
   ],
 
   /* Global setup and teardown */
-  globalSetup: "./tests/e2e/setup.js",
+  globalSetup: "./tests/e2e/setup.spec.js",
 
   /* Run your local dev server before starting the tests */
   webServer: {

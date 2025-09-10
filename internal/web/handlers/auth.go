@@ -225,7 +225,7 @@ func (h *AuthHandler) loginError(c echo.Context, message string, fieldErrors map
 
 	// Если это HTMX запрос, возвращаем только форму
 	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
-		return c.Render(http.StatusUnprocessableEntity, "login_form.html", data)
+		return c.Render(http.StatusUnprocessableEntity, "login_form", data)
 	}
 
 	return c.Render(http.StatusUnprocessableEntity, "login.html", data)

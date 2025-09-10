@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { AuthHelper } from "./helpers/auth.js";
-import { DashboardPage } from "./pages/DashboardPage.js";
+import { DashboardPage } from "./pages/dashboard-page.js";
 
 test.describe("Dashboard - Unauthenticated", () => {
   let dashboardPage;

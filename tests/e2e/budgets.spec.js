@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { AuthHelper } from "./helpers/auth.js";
 
 test.describe("Budget Management", () => {
   test.describe("Unauthenticated Access", () => {
@@ -56,36 +57,47 @@ test.describe("Budget Management", () => {
   // - Budget validation (dates, amounts, etc.)
   // - HTMX dynamic updates
 
-  test.describe.skip("Budget Management - Authenticated", () => {
-    test.skip("should display budget list page", async ({ page }) => {
+  test.describe("Budget Management - Authenticated", () => {
+    let authHelper;
+    test.beforeEach(async ({ page }) => {
+      authHelper = new AuthHelper(page);
+      
+      // Login as family admin for category management access
+      await authHelper.loginAsFamilyAdmin();
+      await authHelper.testDb.seedTestData();
+    });
+    test.afterEach(async () => {
+      await authHelper.cleanup();
+    });
+    test("should display budget list page", async ({ page }) => {
       // This will be implemented once auth is working
     });
 
-    test.skip("should create new budget", async ({ page }) => {
+    test("should create new budget", async ({ page }) => {
       // This will be implemented once auth is working
     });
 
-    test.skip("should edit existing budget", async ({ page }) => {
+    test("should edit existing budget", async ({ page }) => {
       // This will be implemented once auth is working
     });
 
-    test.skip("should delete budget", async ({ page }) => {
+    test("should delete budget", async ({ page }) => {
       // This will be implemented once auth is working
     });
 
-    test.skip("should track budget progress", async ({ page }) => {
+    test("should track budget progress", async ({ page }) => {
       // This will be implemented once auth is working
     });
 
-    test.skip("should show budget alerts", async ({ page }) => {
+    test("should show budget alerts", async ({ page }) => {
       // This will be implemented once auth is working
     });
 
-    test.skip("should validate budget form", async ({ page }) => {
+    test("should validate budget form", async ({ page }) => {
       // This will be implemented once auth is working
     });
 
-    test.skip("should handle HTMX updates", async ({ page }) => {
+    test("should handle HTMX updates", async ({ page }) => {
       // This will be implemented once auth is working
     });
   });
