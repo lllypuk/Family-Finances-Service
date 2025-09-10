@@ -26,15 +26,14 @@ export class AuthHelper {
     // Wait for form to be visible
     await this.page.waitForSelector("form");
 
-    // Fill registration form - match actual form field names
+    // Fill registration form
     await this.page.fill('input[name="name"]', userData.name);
     await this.page.fill('input[name="family_name"]', userData.family_name);
-    await this.page.selectOption('select[name="currency"]', 'RUB'); // Default currency
     await this.page.fill('input[name="email"]', userData.email);
     await this.page.fill('input[name="password"]', userData.password);
     await this.page.fill(
       'input[name="confirm_password"]',
-      userData.confirm_password || userData.password,
+      userData.confirm_password,
     );
 
     // Submit form and wait for HTMX response
@@ -50,30 +49,14 @@ export class AuthHelper {
       console.log(`User registered successfully: ${userData.email} (${role})`);
       return userData;
     } else {
-      // Check for error messages with better error handling
-      try {
-        const errorElement = await this.page
-          .locator('.alert-error[role="alert"], small.error, .error')
-          .first();
-        const isVisible = await errorElement.isVisible().catch(() => false);
-        
-        if (isVisible) {
-          const errorText = await errorElement.textContent().catch(() => "Form validation error");
-          console.log(`Registration error detected: ${errorText}`);
-          throw new Error(`Registration failed: ${errorText}`);
-        } else {
-          // No visible error, but registration didn't succeed - might be a redirect issue
-          console.log(`Registration redirect issue. Current URL: ${currentUrl}`);
-          // Try to continue anyway - this might be acceptable for testing
-          this.currentUser = userData;
-          return userData;
-        }
-      } catch (error) {
-        console.log(`Registration error handling failed: ${error.message}`);
-        // For testing purposes, continue with the user data
-        this.currentUser = userData;
-        return userData;
-      }
+      // Check for error messages
+      const errorElement = await this.page
+        .locator('.alert-error[role="alert"], small.error')
+        .first();
+      const errorText = await errorElement
+        .textContent()
+        .catch(() => "Unknown error");
+      throw new Error(`Registration failed: ${errorText}`);
     }
   }
 

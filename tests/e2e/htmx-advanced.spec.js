@@ -1,5 +1,4 @@
 import { test, expect } from "@playwright/test";
-import { AuthHelper } from "./helpers/auth.js";
 
 /**
  * Advanced HTMX Testing Framework
@@ -183,11 +182,8 @@ test.describe("Advanced HTMX Integration", () => {
       });
 
       expect(htmxConfig).toBeTruthy();
-      console.log("HTMX Config:", htmxConfig);
-      
-      // More flexible checks - some properties might be null in default config
-      expect(htmxConfig.timeout).toBeGreaterThanOrEqual(0);
-      expect(htmxConfig.historyEnabled !== undefined).toBe(true);
+      expect(htmxConfig.timeout).toBeGreaterThan(0);
+      expect(typeof htmxConfig.historyEnabled).toBe("boolean");
     });
 
     test("should have HTMX extensions loaded", async ({ page }) => {
@@ -447,56 +443,45 @@ test.describe("Advanced HTMX Integration", () => {
   });
 
   // TODO: Add authenticated HTMX tests once auth issues are resolved
-  test.describe("HTMX Advanced Features - Authenticated", () => {
-    let authHelper;
-    test.beforeEach(async ({ page }) => {
-      authHelper = new AuthHelper(page);
-      
-      // Login as family admin for category management access
-      await authHelper.loginAsFamilyAdmin();
-      await authHelper.testDb.seedTestData();
-    });
-    test.afterEach(async () => {
-      await authHelper.cleanup();
-    });
-    test("should handle partial page updates", async ({ page }) => {
+  test.describe.skip("HTMX Advanced Features - Authenticated", () => {
+    test.skip("should handle partial page updates", async ({ page }) => {
       // Test HTMX updating specific sections without full page reload
       // Requires authentication to access dynamic content
     });
 
-    test("should handle form submissions without page reload", async ({
+    test.skip("should handle form submissions without page reload", async ({
       page,
     }) => {
       // Test HTMX form submissions with various swap strategies
       // Requires authentication to test actual forms
     });
 
-    test("should handle real-time updates", async ({ page }) => {
+    test.skip("should handle real-time updates", async ({ page }) => {
       // Test HTMX polling or server-sent events
       // Requires authenticated session and real-time endpoints
     });
 
-    test("should handle infinite scroll patterns", async ({ page }) => {
+    test.skip("should handle infinite scroll patterns", async ({ page }) => {
       // Test HTMX infinite scroll for transaction lists, etc.
       // Requires authenticated session with data
     });
 
-    test("should handle modal interactions", async ({ page }) => {
+    test.skip("should handle modal interactions", async ({ page }) => {
       // Test HTMX-powered modals and overlays
       // Requires authenticated session to access modal triggers
     });
 
-    test("should handle search and filtering", async ({ page }) => {
+    test.skip("should handle search and filtering", async ({ page }) => {
       // Test HTMX-powered search functionality
       // Requires authenticated session with searchable data
     });
 
-    test("should handle file uploads with progress", async ({ page }) => {
+    test.skip("should handle file uploads with progress", async ({ page }) => {
       // Test HTMX file upload with progress indicators
       // Requires authenticated session and upload endpoints
     });
 
-    test("should handle dependency loading", async ({ page }) => {
+    test.skip("should handle dependency loading", async ({ page }) => {
       // Test HTMX loading dependent content (e.g., categories -> subcategories)
       // Requires authenticated session with hierarchical data
     });

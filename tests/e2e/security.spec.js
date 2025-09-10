@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { AuthHelper } from "./helpers/auth.js";
-import { LoginPage } from "./pages/login-page.js";
+import { LoginPage } from "./pages/LoginPage.js";
 
 test.describe("Security and CSRF Protection Tests", () => {
   let authHelper;
