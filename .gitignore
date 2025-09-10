@@ -4,17 +4,3 @@ coverage**
 cookies.txt
 .env
 .zed/
-
-# Node.js (for Playwright)
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-package-lock.json
-
-# Playwright
-test-results/
-playwright-report/
-playwright/.cache/
-
-server.log

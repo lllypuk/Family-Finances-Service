@@ -38,9 +38,7 @@
                 {{end}}
                 
                 <!-- Auth Content -->
-                {{if .IsLogin}}
-                {{template "login_content" .}}
-                {{else if .IsRegister}}
+                {{if .AuthType}}
                 {{template "register_content" .}}
                 {{else}}
                 <div class="alert alert-warning" role="alert">

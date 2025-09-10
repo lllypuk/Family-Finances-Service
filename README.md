@@ -70,7 +70,7 @@ This project is **fully implemented and ready for production deployment** with:
 
 2. **Run the application**:
    ```bash
-   make run  # Runs on localhost:8080
+   make run-local  # Runs on localhost:8080
    ```
 
 3. **Access the services**:
@@ -84,7 +84,7 @@ This project is **fully implemented and ready for production deployment** with:
 ```bash
 # Development environment
 make dev-up           # Start MongoDB, Redis, Mongo Express
-make run              # Run with development config
+make run-local        # Run with development config
 make docker-down      # Stop all containers
 
 # Testing and Quality
@@ -107,7 +107,7 @@ This project follows **Clean Architecture** principles with production-ready imp
 
 ### Layer Structure
 - **Domain Layer** (`internal/domain/`): Business entities with comprehensive validation
-- **Application Layer** (`internal/application/`): HTTP server and handler orchestration
+- **Application Layer** (`internal/application/`): HTTP server and handler orchestration  
 - **Web Layer** (`internal/web/`): HTMX templates, middleware, authentication
 - **Infrastructure Layer** (`internal/infrastructure/`): MongoDB repositories and data persistence
 - **Observability Layer** (`internal/observability/`): Metrics, logging, tracing, health checks
@@ -138,7 +138,7 @@ This project follows **Clean Architecture** principles with production-ready imp
 
 ### Production Components
 - **Authentication & Authorization**: Role-based access with session management
-- **Data Validation**: Comprehensive input validation with go-playground/validator
+- **Data Validation**: Comprehensive input validation with go-playground/validator  
 - **Error Handling**: Structured error responses with proper HTTP status codes
 - **Security**: CSRF protection, password hashing, input sanitization
 - **Testing**: 450+ tests with 59.5% coverage across all layers
@@ -187,7 +187,7 @@ This project maintains **high quality standards** with comprehensive testing:
 ### Test Coverage: 59.5%
 - **450+ tests** across all application layers
 - **Unit tests**: Domain models, repositories, handlers with mocking
-- **Integration tests**: End-to-end workflows with testcontainers
+- **Integration tests**: End-to-end workflows with testcontainers  
 - **Performance tests**: Load testing, memory profiling, benchmark testing
 - **Security tests**: Authentication, authorization, CSRF, input validation
 - **E2E tests**: Complete user journeys from registration to reporting
@@ -202,7 +202,7 @@ This project maintains **high quality standards** with comprehensive testing:
 ```bash
 # Run comprehensive test suite
 make test              # All tests
-make test-coverage    # With coverage report
+make test-coverage    # With coverage report  
 make lint             # Code quality checks
 ```
 
@@ -218,7 +218,7 @@ make lint             # Code quality checks
 ### Monitoring & Observability
 - ✅ **Prometheus metrics** - HTTP, database, business metrics
 - ✅ **Grafana dashboards** - Application overview, business metrics, SLI/SLO
-- ✅ **Jaeger tracing** - Request flow and performance analysis
+- ✅ **Jaeger tracing** - Request flow and performance analysis  
 - ✅ **Health checks** - Liveness and readiness probes
 - ✅ **Structured logging** - JSON format with correlation IDs
 

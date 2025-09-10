@@ -1,4 +1,4 @@
-.PHONY: build run test test-all test-unit test-integration test-e2e test-e2e-fast test-e2e-playwright test-e2e-playwright-ui test-e2e-playwright-debug test-performance test-coverage test-ci clean docker-build docker-up docker-up-d docker-down docker-logs deps lint fmt pre-commit dev-up full-up observability-up observability-down observability-logs
+.PHONY: build run test test-all test-unit test-integration test-e2e test-performance clean docker-up docker-down deps lint fmt pre-commit lint-fix observability-up observability-down observability-logs
 
 # Переменные
 APP_NAME=family-budget-service
@@ -16,8 +16,26 @@ run:
 	@echo "Running $(APP_NAME)..."
 	@go run ./cmd/server/main.go
 
-# Быстрые тесты с переиспользованием MongoDB контейнера
+# Запуск с локальными переменными окружения
+run-local:
+	@echo "Running $(APP_NAME) with local config..."
+	@SERVER_PORT=8080 \
+	 SERVER_HOST=localhost \
+	 MONGODB_URI=mongodb://admin:password123@localhost:27017/family_budget?authSource=admin \
+	 MONGODB_DATABASE=family_budget \
+	 SESSION_SECRET=your-super-secret-session-key-for-local-dev \
+	 REDIS_URL=redis://:redis123@localhost:6379 \
+	 LOG_LEVEL=debug \
+	 ENVIRONMENT=development \
+	 go run ./cmd/server/main.go
+
+# Основные тесты (исключая производительность)
 test:
+	@echo "Running tests (excluding performance)..."
+	@go test -v $$(go list ./... | grep -v '/tests/performance')
+
+# Быстрые тесты с переиспользованием MongoDB контейнера
+test-fast:
 	@echo "Running fast tests with shared MongoDB container..."
 	@REUSE_MONGO_CONTAINER=true go test -v $$(go list ./... | grep -v '/tests/performance')
 
@@ -26,35 +44,30 @@ test-unit:
 	@echo "Running unit tests without containers..."
 	@go test -v $$(go list ./internal/... | grep -v 'infrastructure')
 
+# Юнит тесты с быстрыми контейнерами
+test-unit-fast:
+	@echo "Running unit tests with fast containers..."
+	@REUSE_MONGO_CONTAINER=true go test -v ./internal/...
+
 # Интеграционные тесты
 test-integration:
+	@echo "Running integration tests..."
+	@go test -v ./tests/integration/...
+
+# Интеграционные тесты с переиспользованием контейнера
+test-integration-fast:
 	@echo "Running integration tests with shared container..."
 	@REUSE_MONGO_CONTAINER=true go test -v ./tests/integration/...
 
-# E2E тесты (Go)
+# E2E тесты
 test-e2e:
 	@echo "Running e2e tests..."
 	@go test -v ./tests/e2e/...
 
-# E2E тесты с переиспользованием контейнера (Go)
+# E2E тесты с переиспользованием контейнера
 test-e2e-fast:
 	@echo "Running e2e tests with shared container..."
 	@REUSE_MONGO_CONTAINER=true go test -v ./tests/e2e/...
-
-# Playwright E2E тесты
-test-e2e-playwright:
-	@echo "Running Playwright E2E tests..."
-	@npm run test:e2e
-
-# Playwright E2E тесты с UI
-test-e2e-playwright-ui:
-	@echo "Running Playwright E2E tests with UI..."
-	@npm run test:e2e:ui
-
-# Playwright E2E тесты с отладкой
-test-e2e-playwright-debug:
-	@echo "Running Playwright E2E tests in debug mode..."
-	@npm run test:e2e:debug
 
 # Тесты производительности
 test-performance:
@@ -66,8 +79,15 @@ test-all:
 	@echo "Running all tests including performance..."
 	@go test -v ./...
 
-# Быстрые тесты с покрытием и переиспользованием контейнера
+# Тесты с покрытием (исключая производительность)
 test-coverage:
+	@echo "Running tests with coverage (excluding performance)..."
+	@go test -coverprofile=coverage.out $$(go list ./... | grep -v '/tests/performance')
+	@go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
+
+# Быстрые тесты с покрытием и переиспользованием контейнера
+test-coverage-fast:
 	@echo "Running fast tests with coverage and shared MongoDB container..."
 	@REUSE_MONGO_CONTAINER=true go test -coverprofile=coverage.out $$(go list ./... | grep -v '/tests/performance')
 	@go tool cover -html=coverage.out -o coverage.html
@@ -88,6 +108,11 @@ deps:
 # Линтер
 lint:
 	@echo "Running linter..."
+	@golangci-lint run
+
+# Автоматическое исправление ошибок линтера
+lint-fix:
+	@echo "Running linter with auto-fix..."
 	@golangci-lint run --fix
 
 # Форматирование кода
@@ -150,3 +175,51 @@ dev-up:
 full-up:
 	@echo "Starting full stack (app + observability)..."
 	@docker-compose -f $(DOCKER_COMPOSE_FILE) --profile production --profile observability up -d
+
+# Генерация OpenAPI кода
+generate:
+	@echo "Generating OpenAPI code..."
+	@go generate ./...
+
+# Справка
+help:
+	@echo "Available commands:"
+	@echo "  build            - Build the application"
+	@echo "  run              - Run the application"
+	@echo "  run-local        - Run with local environment variables"
+	@echo "  test             - Run tests (excluding performance)"
+	@echo "  test-fast        - Run fast tests with shared MongoDB container"
+	@echo "  test-all         - Run all tests including performance"
+	@echo "  test-unit        - Run unit tests without containers"
+	@echo "  test-unit-fast   - Run unit tests with fast containers"
+	@echo "  test-integration - Run integration tests"
+	@echo "  test-integration-fast - Run integration tests with shared container"
+	@echo "  test-e2e         - Run e2e tests"
+	@echo "  test-e2e-fast    - Run e2e tests with shared container"
+	@echo "  test-performance - Run performance tests"
+	@echo "  test-coverage    - Run tests with coverage report"
+	@echo "  test-coverage-fast - Run fast tests with coverage"
+	@echo "  test-ci          - Run CI-optimized tests (parallel + fast)"
+	@echo "  deps             - Install dependencies"
+	@echo "  lint             - Run linter"
+	@echo "  lint-fix         - Run linter with auto-fix"
+	@echo "  fmt              - Format code"
+	@echo "  clean            - Clean build artifacts"
+	@echo ""
+	@echo "Docker commands:"
+	@echo "  docker-build      - Build Docker images"
+	@echo "  docker-up        - Start Docker containers"
+	@echo "  docker-up-d      - Start Docker containers in detached mode"
+	@echo "  docker-down      - Stop Docker containers"
+	@echo "  docker-logs      - Show Docker logs"
+	@echo "  dev-up           - Start development environment"
+	@echo "  full-up          - Start full stack (app + observability)"
+	@echo ""
+	@echo "Observability commands:"
+	@echo "  observability-up - Start observability stack (Prometheus, Grafana, etc.)"
+	@echo "  observability-down - Stop observability stack"
+	@echo "  observability-logs - Show observability logs"
+	@echo ""
+	@echo "Other commands:"
+	@echo "  generate         - Generate OpenAPI code"
+	@echo "  help             - Show this help"
