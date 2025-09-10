@@ -6,17 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Building and Running
 - `make build` - Build the application (outputs to ./build/family-budget-service)
-- `make run` - Run the application directly with go run
-- `make run-local` - Run with local development environment variables (requires `make dev-up` first)
+- `make run` - Run with local development environment variables (requires `make dev-up` first)
 
 #### Local Development Setup
-**Prerequisites**: Before running `make run-local`, you must start the required services:
+**Prerequisites**: Before running `make run`, you must start the required services:
 ```bash
 make dev-up  # Starts MongoDB and Redis containers
-make run-local  # Runs the application on localhost:8083
+make run  # Runs the application on localhost:8083
 ```
 
-The `run-local` command sets up the following environment:
+The `run` command sets up the following environment:
 - **Server**: localhost:8080 (port 8080 to avoid conflicts)
 - **MongoDB**: mongodb://admin:password123@localhost:27017 with authentication
 - **Database**: family_budget (separate from production)

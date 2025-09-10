@@ -63,7 +63,9 @@ func NewHTTPServerWithObservability(
 	e := echo.New()
 
 	// Настройка валидации
-	e.Validator = &CustomValidator{validator: validator.New()}
+	v := validator.New()
+	v.RegisterValidation("strong_password", strongPasswordValidator)
+	e.Validator = &CustomValidator{validator: v}
 
 	// Базовые middleware
 	e.Use(middleware.Recover())
@@ -209,6 +211,24 @@ func (s *HTTPServer) healthCheck(c echo.Context) error {
 		"status": "ok",
 		"time":   time.Now().Format(time.RFC3339),
 	})
+}
+
+// strongPasswordValidator validates password strength requirements
+func strongPasswordValidator(fl validator.FieldLevel) bool {
+	password := fl.Field().String()
+	
+	// Minimum length is already handled by min=6, so we add additional checks
+	if len(password) < 6 {
+		return false
+	}
+	
+	// For very simple passwords like "123", "abc", etc - reject them
+	if password == "123" || password == "12" || password == "1234" || 
+	   password == "abc" || password == "password" || password == "123456" {
+		return false
+	}
+	
+	return true
 }
 
 // CustomValidator wraps go-playground/validator for Echo

@@ -56,6 +56,19 @@
     <fieldset>
         <legend>Ваши данные</legend>
         
+        <label for="name">Полное имя</label>
+        <input 
+            type="text" 
+            id="name" 
+            name="name" 
+            value="{{.Name}}" 
+            placeholder="Иван Иванов"
+            {{if .FieldErrors.name}}aria-invalid="true"{{end}}
+            required>
+        {{if .FieldErrors.name}}
+        <small class="error">{{.FieldErrors.name}}</small>
+        {{end}}
+        
         <div class="grid">
             <div>
                 <label for="first_name">Имя</label>
@@ -65,8 +78,7 @@
                     name="first_name" 
                     value="{{.FirstName}}" 
                     placeholder="Иван"
-                    {{if .FieldErrors.first_name}}aria-invalid="true"{{end}}
-                    required>
+                    {{if .FieldErrors.first_name}}aria-invalid="true"{{end}}>
                 {{if .FieldErrors.first_name}}
                 <small class="error">{{.FieldErrors.first_name}}</small>
                 {{end}}
@@ -80,8 +92,7 @@
                     name="last_name" 
                     value="{{.LastName}}" 
                     placeholder="Иванов"
-                    {{if .FieldErrors.last_name}}aria-invalid="true"{{end}}
-                    required>
+                    {{if .FieldErrors.last_name}}aria-invalid="true"{{end}}>
                 {{if .FieldErrors.last_name}}
                 <small class="error">{{.FieldErrors.last_name}}</small>
                 {{end}}
@@ -111,6 +122,18 @@
             required>
         {{if .FieldErrors.password}}
         <small class="error">{{.FieldErrors.password}}</small>
+        {{end}}
+        
+        <label for="confirm_password">Подтвердите пароль</label>
+        <input 
+            type="password" 
+            id="confirm_password" 
+            name="confirm_password" 
+            placeholder="Повторите пароль"
+            {{if .FieldErrors.confirm_password}}aria-invalid="true"{{end}}
+            required>
+        {{if .FieldErrors.confirm_password}}
+        <small class="error">{{.FieldErrors.confirm_password}}</small>
         {{end}}
         <small>Пароль должен содержать минимум 6 символов</small>
     </fieldset>

@@ -143,7 +143,7 @@ reports        // Сгенерированные отчеты
 make docker-up
 
 # Запуск приложения локально
-make run-local
+make run
 
 # Форматирование и линтинг
 make fmt && make lint

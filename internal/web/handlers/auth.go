@@ -250,7 +250,7 @@ func (h *AuthHandler) registerError(c echo.Context, message string, fieldErrors 
 
 	// Если это HTMX запрос, возвращаем только форму
 	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
-		return c.Render(http.StatusUnprocessableEntity, "register_form.html", data)
+		return c.Render(http.StatusUnprocessableEntity, "register_form", data)
 	}
 
 	return c.Render(http.StatusUnprocessableEntity, "register.html", data)

@@ -2,7 +2,7 @@
 
 ## Problem Description
 
-**Date**: 2025-08-16  
+**Date**: 2025-08-16
 **Issue**: Semgrep security scanner detected that session cookies were configured without the `Secure` flag, creating a security vulnerability.
 
 **Original Code**:
@@ -48,7 +48,7 @@ Modified the session middleware to accept a production flag:
 // SessionStore настраивает хранилище сессий
 func SessionStore(secretKey string, isProduction bool) echo.MiddlewareFunc {
     // ... existing code ...
-    
+
     store.Options = &sessions.Options{
         Path:     "/",
         MaxAge:   int(SessionTimeout.Seconds()),
@@ -56,7 +56,7 @@ func SessionStore(secretKey string, isProduction bool) echo.MiddlewareFunc {
         Secure:   isProduction, // Dynamic based on environment
         SameSite: http.SameSiteLaxMode,
     }
-    
+
     return session.Middleware(store)
 }
 ```
@@ -83,7 +83,7 @@ The fix uses the `ENVIRONMENT` environment variable:
 Added comprehensive tests in `internal/web/middleware/session_test.go`:
 
 - ✅ Production environment sets secure cookies
-- ✅ Development environment allows insecure cookies  
+- ✅ Development environment allows insecure cookies
 - ✅ Basic configuration works correctly
 - ✅ Handles edge cases (empty secret key)
 - ✅ Validates session constants and structure
@@ -112,9 +112,9 @@ Added comprehensive tests in `internal/web/middleware/session_test.go`:
 
 ```bash
 # Development (allows HTTP)
-ENVIRONMENT=development make run-local
+ENVIRONMENT=development make run
 
-# Production (requires HTTPS)  
+# Production (requires HTTPS)
 ENVIRONMENT=production make build
 
 # Check security scanning
