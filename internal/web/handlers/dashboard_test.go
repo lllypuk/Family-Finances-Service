@@ -395,7 +395,7 @@ func BenchmarkDashboardHandler_Creation(b *testing.B) {
 	// Benchmark dashboard handler creation
 	repos := NewMockRepositories()
 
-	for range b.N {
+	for b.Loop() {
 		handler := webHandlers.NewDashboardHandler(&repos.Repositories, nil)
 		_ = handler
 	}
@@ -403,7 +403,7 @@ func BenchmarkDashboardHandler_Creation(b *testing.B) {
 
 func BenchmarkMockSessionData_Creation(b *testing.B) {
 	// Benchmark mock session data creation
-	for range b.N {
+	for b.Loop() {
 		sessionData := createMockSessionData()
 		_ = sessionData
 	}

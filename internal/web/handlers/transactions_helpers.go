@@ -384,7 +384,7 @@ func (h *TransactionHandler) renderTransactionFormWithErrors(
 		},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"PageData":        pageData,
 		"Form":            form,
 		"CategoryOptions": categoryOptions,

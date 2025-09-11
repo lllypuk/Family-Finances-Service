@@ -416,7 +416,7 @@ func (s *reportService) GenerateCategoryBreakdownReport(
 // SaveReport saves a generated report to the database
 func (s *reportService) SaveReport(
 	ctx context.Context,
-	reportData interface{},
+	reportData any,
 	reportType report.Type,
 	req dto.ReportRequestDTO,
 ) (*report.Report, error) {
@@ -481,7 +481,7 @@ func (s *reportService) ExportReport(
 // ExportReportData exports report data in the specified format
 func (s *reportService) ExportReportData(
 	_ context.Context,
-	reportData interface{},
+	reportData any,
 	format string,
 	options dto.ExportOptionsDTO,
 ) ([]byte, error) {
@@ -909,22 +909,22 @@ func (s *reportService) generateCategoryComparisons(
 	return dto.CategoryComparisonsDTO{}, nil
 }
 
-func (s *reportService) convertToReportData(_ interface{}, _ report.Type) (report.Data, error) {
+func (s *reportService) convertToReportData(_ any, _ report.Type) (report.Data, error) {
 	// TODO: Implement conversion from specific report DTOs to generic report.Data
 	return report.Data{}, nil
 }
 
-func (s *reportService) exportToCSV(_ interface{}, _ dto.ExportOptionsDTO) ([]byte, error) {
+func (s *reportService) exportToCSV(_ any, _ dto.ExportOptionsDTO) ([]byte, error) {
 	// TODO: Implement CSV export
 	return []byte{}, nil
 }
 
-func (s *reportService) exportToExcel(_ interface{}, _ dto.ExportOptionsDTO) ([]byte, error) {
+func (s *reportService) exportToExcel(_ any, _ dto.ExportOptionsDTO) ([]byte, error) {
 	// TODO: Implement Excel export
 	return []byte{}, nil
 }
 
-func (s *reportService) exportToPDF(_ interface{}, _ dto.ExportOptionsDTO) ([]byte, error) {
+func (s *reportService) exportToPDF(_ any, _ dto.ExportOptionsDTO) ([]byte, error) {
 	// TODO: Implement PDF export
 	return []byte{}, nil
 }

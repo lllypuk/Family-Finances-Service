@@ -81,7 +81,7 @@ func (h *ReportHandler) Index(c echo.Context) error {
 		Title: "Reports",
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"PageData":          pageData,
 		"Reports":           reportVMs,
 		"ReportTypeOptions": reportTypeOptions,
@@ -142,7 +142,7 @@ func (h *ReportHandler) parseAndValidateReportForm(c echo.Context) (*webModels.R
 		validationErrors := webModels.GetValidationErrors(validationErr)
 
 		if h.isHTMXRequest(c) {
-			return nil, h.renderPartial(c, "components/form_errors", map[string]interface{}{
+			return nil, h.renderPartial(c, "components/form_errors", map[string]any{
 				"Errors": validationErrors,
 			})
 		}
@@ -264,7 +264,7 @@ func (h *ReportHandler) generateCategoryReport(c echo.Context, createDTO dto.Rep
 func (h *ReportHandler) handleUnsupportedReportType(c echo.Context) (*report.Report, error) {
 	errorMsg := "Unsupported report type"
 	if h.isHTMXRequest(c) {
-		return nil, h.renderPartial(c, "components/form_errors", map[string]interface{}{
+		return nil, h.renderPartial(c, "components/form_errors", map[string]any{
 			"Errors": map[string]string{"form": errorMsg},
 		})
 	}
@@ -275,7 +275,7 @@ func (h *ReportHandler) handleUnsupportedReportType(c echo.Context) (*report.Rep
 func (h *ReportHandler) handleReportGenerationError(c echo.Context, err error) error {
 	errorMsg := h.getReportServiceErrorMessage(err)
 	if h.isHTMXRequest(c) {
-		return h.renderPartial(c, "components/form_errors", map[string]interface{}{
+		return h.renderPartial(c, "components/form_errors", map[string]any{
 			"Errors": map[string]string{"form": errorMsg},
 		})
 	}
@@ -316,7 +316,7 @@ func (h *ReportHandler) Show(c echo.Context) error {
 		Title: "Report: " + report.Name,
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"PageData": pageData,
 		"Report":   reportVM,
 	}
@@ -328,7 +328,7 @@ func (h *ReportHandler) Show(c echo.Context) error {
 func (h *ReportHandler) Delete(c echo.Context) error {
 	return h.handleDelete(c, DeleteEntityParams{
 		EntityName: "report",
-		GetEntityFunc: func(ctx echo.Context, entityID uuid.UUID) (interface{}, error) {
+		GetEntityFunc: func(ctx echo.Context, entityID uuid.UUID) (any, error) {
 			return h.services.Report.GetReportByID(ctx.Request().Context(), entityID)
 		},
 		DeleteEntityFunc: func(ctx echo.Context, entityID uuid.UUID) error {
@@ -391,7 +391,7 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 	// Валидируем форму
 	if validationErr := h.validator.Struct(form); validationErr != nil {
 		validationErrors := webModels.GetValidationErrors(validationErr)
-		return h.renderPartial(c, "components/form_errors", map[string]interface{}{
+		return h.renderPartial(c, "components/form_errors", map[string]any{
 			"Errors": validationErrors,
 		})
 	}
@@ -419,7 +419,7 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 	}
 
 	// Генерация отчета через сервис
-	var reportData interface{}
+	var reportData any
 	var generateErr error
 
 	switch generateDTO.Type {
@@ -447,7 +447,7 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 			generateDTO.Period,
 		)
 	default:
-		return h.renderPartial(c, "components/form_errors", map[string]interface{}{
+		return h.renderPartial(c, "components/form_errors", map[string]any{
 			"Errors": map[string]string{"form": "Unsupported report type"},
 		})
 	}
@@ -475,7 +475,7 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 	reportVM := webModels.ReportDataVM{}
 	reportVM.FromDomain(tempReport)
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"Report": reportVM,
 	}
 
@@ -602,7 +602,7 @@ func (h *ReportHandler) renderReportFormWithErrors(
 		},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"PageData":          pageData,
 		"Form":              form,
 		"ReportTypeOptions": reportTypeOptions,
@@ -617,7 +617,7 @@ func (h *ReportHandler) renderReportFormWithErrors(
 }
 
 // convertReportDataToStandard конвертирует специфичные DTO в стандартный report.Data формат
-func (h *ReportHandler) convertReportDataToStandard(reportData interface{}, reportType report.Type) report.Data {
+func (h *ReportHandler) convertReportDataToStandard(reportData any, reportType report.Type) report.Data {
 	switch reportType {
 	case report.TypeExpenses:
 		return h.convertExpenseReportData(reportData)
@@ -635,7 +635,7 @@ func (h *ReportHandler) convertReportDataToStandard(reportData interface{}, repo
 }
 
 // convertExpenseReportData конвертирует данные отчета по расходам
-func (h *ReportHandler) convertExpenseReportData(reportData interface{}) report.Data {
+func (h *ReportHandler) convertExpenseReportData(reportData any) report.Data {
 	expenseReport, ok := reportData.(*dto.ExpenseReportDTO)
 	if !ok {
 		return report.Data{}
@@ -652,7 +652,7 @@ func (h *ReportHandler) convertExpenseReportData(reportData interface{}) report.
 }
 
 // convertIncomeReportData конвертирует данные отчета по доходам
-func (h *ReportHandler) convertIncomeReportData(reportData interface{}) report.Data {
+func (h *ReportHandler) convertIncomeReportData(reportData any) report.Data {
 	incomeReport, ok := reportData.(*dto.IncomeReportDTO)
 	if !ok {
 		return report.Data{}
@@ -667,7 +667,7 @@ func (h *ReportHandler) convertIncomeReportData(reportData interface{}) report.D
 }
 
 // convertBudgetReportData конвертирует данные отчета по бюджету
-func (h *ReportHandler) convertBudgetReportData(reportData interface{}) report.Data {
+func (h *ReportHandler) convertBudgetReportData(reportData any) report.Data {
 	budgetReport, ok := reportData.(*dto.BudgetComparisonDTO)
 	if !ok {
 		return report.Data{}
@@ -692,7 +692,7 @@ func (h *ReportHandler) convertBudgetReportData(reportData interface{}) report.D
 }
 
 // convertCashFlowReportData конвертирует данные отчета по денежному потоку
-func (h *ReportHandler) convertCashFlowReportData(reportData interface{}) report.Data {
+func (h *ReportHandler) convertCashFlowReportData(reportData any) report.Data {
 	cashFlowReport, ok := reportData.(*dto.CashFlowReportDTO)
 	if !ok {
 		return report.Data{}
@@ -717,7 +717,7 @@ func (h *ReportHandler) convertCashFlowReportData(reportData interface{}) report
 }
 
 // convertCategoryReportData конвертирует данные отчета по категориям
-func (h *ReportHandler) convertCategoryReportData(reportData interface{}) report.Data {
+func (h *ReportHandler) convertCategoryReportData(reportData any) report.Data {
 	categoryReport, ok := reportData.(*dto.CategoryBreakdownDTO)
 	if !ok {
 		return report.Data{}

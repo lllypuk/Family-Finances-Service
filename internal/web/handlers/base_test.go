@@ -422,7 +422,7 @@ func TestFormErrors_ConcurrentAccess(t *testing.T) {
 
 // Benchmark tests
 func BenchmarkMessage_Creation(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		_ = webHandlers.Message{
 			Type: "info",
 			Text: "Benchmark message",
@@ -446,7 +446,7 @@ func BenchmarkSessionData_Creation(b *testing.B) {
 	familyID := uuid.New()
 	expiresAt := time.Now().Add(time.Hour)
 
-	for range b.N {
+	for b.Loop() {
 		sessionData := &webHandlers.SessionData{
 			UserID:    userID,
 			FamilyID:  familyID,

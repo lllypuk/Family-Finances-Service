@@ -79,19 +79,19 @@ func (h *BaseHandler) getFlashMessages(_ echo.Context) []Message {
 }
 
 // renderPage рендерит полную страницу
-func (h *BaseHandler) renderPage(c echo.Context, templateName string, data interface{}) error {
+func (h *BaseHandler) renderPage(c echo.Context, templateName string, data any) error {
 	return c.Render(http.StatusOK, templateName, data)
 }
 
 // renderPartial рендерит частичный шаблон (для HTMX)
-func (h *BaseHandler) renderPartial(c echo.Context, templateName string, data interface{}) error {
+func (h *BaseHandler) renderPartial(c echo.Context, templateName string, data any) error {
 	return c.Render(http.StatusOK, templateName, data)
 }
 
 // handleError обрабатывает ошибки и возвращает соответствующий ответ
 func (h *BaseHandler) handleError(c echo.Context, _ error, message string) error {
 	if h.isHTMXRequest(c) {
-		return h.renderPartial(c, "components/alert", map[string]interface{}{
+		return h.renderPartial(c, "components/alert", map[string]any{
 			"Type":    "error",
 			"Message": message,
 		})
@@ -113,12 +113,12 @@ func (h *BaseHandler) isHTMXRequest(c echo.Context) bool {
 
 // DeleteEntityParams содержит параметры для общего метода удаления
 type DeleteEntityParams struct {
-	EntityName       string                                                          // Название сущности для сообщений об ошибках
-	IDParamName      string                                                          // Имя параметра ID в URL (по умолчанию "id")
-	GetEntityFunc    func(ctx echo.Context, entityID uuid.UUID) (interface{}, error) // Функция получения сущности
-	DeleteEntityFunc func(ctx echo.Context, entityID uuid.UUID) error                // Функция удаления сущности
-	GetErrorMsgFunc  func(err error) string                                          // Функция получения сообщения об ошибке
-	RedirectURL      string                                                          // URL для редиректа после успешного удаления
+	EntityName       string                                                  // Название сущности для сообщений об ошибках
+	IDParamName      string                                                  // Имя параметра ID в URL (по умолчанию "id")
+	GetEntityFunc    func(ctx echo.Context, entityID uuid.UUID) (any, error) // Функция получения сущности
+	DeleteEntityFunc func(ctx echo.Context, entityID uuid.UUID) error        // Функция удаления сущности
+	GetErrorMsgFunc  func(err error) string                                  // Функция получения сообщения об ошибке
+	RedirectURL      string                                                  // URL для редиректа после успешного удаления
 }
 
 // EntityWithFamilyID интерфейс для сущностей с FamilyID
@@ -164,7 +164,7 @@ func (h *BaseHandler) handleDelete(c echo.Context, params DeleteEntityParams) er
 		errorMsg := params.GetErrorMsgFunc(err)
 
 		if h.isHTMXRequest(c) {
-			return h.renderPartial(c, "components/alert", map[string]interface{}{
+			return h.renderPartial(c, "components/alert", map[string]any{
 				"Type":    "error",
 				"Message": errorMsg,
 			})

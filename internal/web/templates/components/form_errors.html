@@ -1,11 +1,9 @@
-{{define "components/form_errors"}}
-{{if .Errors}}
-<div class="alert alert-danger" role="alert" id="form-errors">
-    <ul style="margin: 0; padding-left: 1rem;">
+{{define "components/form_errors"}} {{if .Errors}}
+<div class="alert alert-error" role="alert" id="form-errors">
+    <ul style="margin: 0; padding-left: 1rem">
         {{range $field, $error := .Errors}}
         <li>{{$error}}</li>
         {{end}}
     </ul>
 </div>
-{{end}}
-{{end}}
+{{end}} {{end}}

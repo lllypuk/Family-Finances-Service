@@ -140,10 +140,9 @@ func (vm *BudgetProgressVM) FromDomain(b *budget.Budget) {
 
 	if now.After(b.StartDate) {
 		elapsed := now.Sub(b.StartDate)
-		vm.DaysElapsed = int(elapsed.Hours() / HoursInDay)
-		if vm.DaysElapsed < 1 {
-			vm.DaysElapsed = 1 // Минимум 1 день для расчетов
-		}
+		vm.DaysElapsed = max(int(elapsed.Hours()/HoursInDay),
+			// Минимум 1 день для расчетов
+			1)
 	} else {
 		vm.DaysElapsed = 0
 	}

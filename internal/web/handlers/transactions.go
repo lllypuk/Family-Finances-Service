@@ -99,7 +99,7 @@ func (h *TransactionHandler) Index(c echo.Context) error {
 		Title: "Transactions",
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"PageData":        pageData,
 		"Transactions":    transactionVMs,
 		"Filters":         filters,
@@ -136,7 +136,7 @@ func (h *TransactionHandler) New(c echo.Context) error {
 		Title: "New Transaction",
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"PageData":        pageData,
 		"Form":            form,
 		"CategoryOptions": categoryOptions,
@@ -166,7 +166,7 @@ func (h *TransactionHandler) Create(c echo.Context) error {
 
 		if h.isHTMXRequest(c) {
 			// Для HTMX возвращаем только errors partial
-			return h.renderPartial(c, "components/form_errors", map[string]interface{}{
+			return h.renderPartial(c, "components/form_errors", map[string]any{
 				"Errors": validationErrors,
 			})
 		}
@@ -188,7 +188,7 @@ func (h *TransactionHandler) Create(c echo.Context) error {
 		errorMsg := h.getTransactionServiceErrorMessage(err)
 
 		if h.isHTMXRequest(c) {
-			return h.renderPartial(c, "components/form_errors", map[string]interface{}{
+			return h.renderPartial(c, "components/form_errors", map[string]any{
 				"Errors": map[string]string{"form": errorMsg},
 			})
 		}
@@ -248,7 +248,7 @@ func (h *TransactionHandler) Edit(c echo.Context) error {
 		Title: "Edit Transaction",
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"PageData":        pageData,
 		"Form":            form,
 		"Transaction":     transaction,
@@ -297,7 +297,7 @@ func (h *TransactionHandler) Update(c echo.Context) error {
 
 		if h.isHTMXRequest(c) {
 			// Для HTMX возвращаем только errors partial
-			return h.renderPartial(c, "components/form_errors", map[string]interface{}{
+			return h.renderPartial(c, "components/form_errors", map[string]any{
 				"Errors": validationErrors,
 			})
 		}
@@ -319,7 +319,7 @@ func (h *TransactionHandler) Update(c echo.Context) error {
 		errorMsg := h.getTransactionServiceErrorMessage(err)
 
 		if h.isHTMXRequest(c) {
-			return h.renderPartial(c, "components/form_errors", map[string]interface{}{
+			return h.renderPartial(c, "components/form_errors", map[string]any{
 				"Errors": map[string]string{"form": errorMsg},
 			})
 		}
@@ -335,7 +335,7 @@ func (h *TransactionHandler) Update(c echo.Context) error {
 func (h *TransactionHandler) Delete(c echo.Context) error {
 	return h.handleDelete(c, DeleteEntityParams{
 		EntityName: "transaction",
-		GetEntityFunc: func(ctx echo.Context, entityID uuid.UUID) (interface{}, error) {
+		GetEntityFunc: func(ctx echo.Context, entityID uuid.UUID) (any, error) {
 			return h.services.Transaction.GetTransactionByID(ctx.Request().Context(), entityID)
 		},
 		DeleteEntityFunc: func(ctx echo.Context, entityID uuid.UUID) error {
@@ -410,7 +410,7 @@ func (h *TransactionHandler) BulkDelete(c echo.Context) error {
 			alertType = "warning"
 		}
 
-		return h.renderPartial(c, "components/alert", map[string]interface{}{
+		return h.renderPartial(c, "components/alert", map[string]any{
 			"Type":    alertType,
 			"Message": message,
 		})
@@ -464,7 +464,7 @@ func (h *TransactionHandler) Filter(c echo.Context) error {
 	// Рассчитываем пагинацию
 	pagination := h.calculatePagination(len(transactionVMs), filters.Page, filters.PageSize)
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"Transactions": transactionVMs,
 		"Pagination":   pagination,
 		"Filters":      filters,
@@ -526,7 +526,7 @@ func (h *TransactionHandler) List(c echo.Context) error {
 		return h.handleError(c, err, "Failed to prepare transaction data")
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"Transactions": transactionVMs,
 	}
 

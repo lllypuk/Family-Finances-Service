@@ -166,7 +166,7 @@ func (h *DashboardHandler) DashboardStats(c echo.Context) error {
 		return h.handleError(c, err, "Failed to load monthly summary")
 	}
 
-	return h.renderPartial(c, "components/dashboard-stats", map[string]interface{}{
+	return h.renderPartial(c, "components/dashboard-stats", map[string]any{
 		"MonthlySummary": monthlySummary,
 	})
 }
@@ -185,7 +185,7 @@ func (h *DashboardHandler) RecentTransactions(c echo.Context) error {
 		return h.handleError(c, err, "Failed to load recent transactions")
 	}
 
-	return h.renderPartial(c, "components/recent-transactions", map[string]interface{}{
+	return h.renderPartial(c, "components/recent-transactions", map[string]any{
 		"RecentActivity": recentActivity,
 	})
 }
@@ -204,7 +204,7 @@ func (h *DashboardHandler) BudgetOverview(c echo.Context) error {
 		return h.handleError(c, err, "Failed to load budget overview")
 	}
 
-	return h.renderPartial(c, "components/budget-overview", map[string]interface{}{
+	return h.renderPartial(c, "components/budget-overview", map[string]any{
 		"BudgetOverview": budgetOverview,
 	})
 }
@@ -411,10 +411,7 @@ func (h *DashboardHandler) createBudgetItem(
 	}
 
 	remaining := b.Amount - b.Spent
-	daysRemaining := int(b.EndDate.Sub(now).Hours() / webModels.HoursInDay)
-	if daysRemaining < 0 {
-		daysRemaining = 0
-	}
+	daysRemaining := max(int(b.EndDate.Sub(now).Hours()/webModels.HoursInDay), 0)
 
 	isOverBudget := percentage >= webModels.BudgetOverLimitThreshold
 	isNearLimit := percentage >= webModels.BudgetNearLimitThreshold && !isOverBudget

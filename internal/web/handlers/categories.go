@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -74,7 +75,7 @@ func (h *CategoryHandler) Index(c echo.Context) error {
 		Title: "Categories",
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"PageData":   pageData,
 		"Categories": categoryTree,
 		"Filters":    filters,
@@ -120,7 +121,7 @@ func (h *CategoryHandler) New(c echo.Context) error {
 		Title: "New Category",
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"PageData":      pageData,
 		"CSRFToken":     csrfToken,
 		"ParentOptions": parentOptions,
@@ -152,14 +153,15 @@ func (h *CategoryHandler) Create(c echo.Context) error {
 
 		if h.isHTMXRequest(c) {
 			// Для HTMX возвращаем только errors partial
-			return h.renderPartial(c, "components/form_errors", map[string]interface{}{
+			return h.renderPartial(c, "components/form_errors", map[string]any{
 				"Errors": validationErrors,
 			})
 		}
 
 		// Для обычных запросов возвращаем форму заново
 		pageData := &PageData{
-			Title: "New Category",
+			Title:  "New Category",
+			Errors: validationErrors,
 			Messages: []Message{
 				{Type: "error", Text: "Проверьте правильность заполнения формы"},
 			},
@@ -182,9 +184,12 @@ func (h *CategoryHandler) Create(c echo.Context) error {
 			}
 		}
 
-		data := map[string]interface{}{
+		csrfToken, _ := middleware.GetCSRFToken(c)
+
+		data := map[string]any{
 			"PageData":      pageData,
 			"Form":          form,
+			"CSRFToken":     csrfToken,
 			"ParentOptions": parentOptions,
 			"DefaultColors": getDefaultCategoryColors(),
 			"DefaultIcons":  getDefaultCategoryIcons(),
@@ -222,7 +227,7 @@ func (h *CategoryHandler) Create(c echo.Context) error {
 		}
 
 		if h.isHTMXRequest(c) {
-			return h.renderPartial(c, "components/form_errors", map[string]interface{}{
+			return h.renderPartial(c, "components/form_errors", map[string]any{
 				"Errors": map[string]string{"form": errorMsg},
 			})
 		}
@@ -302,7 +307,7 @@ func (h *CategoryHandler) Edit(c echo.Context) error {
 		Title: "Edit Category",
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"PageData":      pageData,
 		"CSRFToken":     csrfToken,
 		"Form":          form,
@@ -317,28 +322,9 @@ func (h *CategoryHandler) Edit(c echo.Context) error {
 
 // Update обновляет существующую категорию
 func (h *CategoryHandler) Update(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	sessionData, categoryID, existingCategory, err := h.validateUpdateRequest(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
-	}
-
-	// Парсим ID категории
-	id := c.Param("id")
-	categoryID, err := uuid.Parse(id)
-	if err != nil {
-		return h.handleError(c, err, "Invalid category ID")
-	}
-
-	// Проверяем, что категория существует и принадлежит семье
-	existingCategory, err := h.services.Category.GetCategoryByID(c.Request().Context(), categoryID)
-	if err != nil {
-		return h.handleError(c, err, "Category not found")
-	}
-
-	// Проверяем, что категория принадлежит семье пользователя
-	if existingCategory.FamilyID != sessionData.FamilyID {
-		return h.handleError(c, echo.ErrForbidden, "Access denied")
+		return err
 	}
 
 	// Парсим данные формы
@@ -349,52 +335,7 @@ func (h *CategoryHandler) Update(c echo.Context) error {
 
 	// Валидируем форму
 	if validationErr := h.validator.Struct(form); validationErr != nil {
-		// Возвращаем форму с ошибками валидации
-		validationErrors := webModels.GetValidationErrors(validationErr)
-
-		if h.isHTMXRequest(c) {
-			// Для HTMX возвращаем только errors partial
-			return h.renderPartial(c, "components/form_errors", map[string]interface{}{
-				"Errors": validationErrors,
-			})
-		}
-
-		// Для обычных запросов возвращаем форму заново
-		pageData := &PageData{
-			Title: "Edit Category",
-			Messages: []Message{
-				{Type: "error", Text: "Проверьте правильность заполнения формы"},
-			},
-		}
-
-		// Получаем родительские категории снова
-		parentCategories, _ := h.services.Category.GetCategoriesByFamily(
-			c.Request().Context(),
-			sessionData.FamilyID,
-			nil,
-		)
-		var parentOptions []webModels.CategorySelectOption
-		for _, cat := range parentCategories {
-			if cat.ID != categoryID && cat.ParentID == nil && cat.Type == existingCategory.Type {
-				option := webModels.CategorySelectOption{
-					ID:   cat.ID,
-					Name: cat.Name,
-					Type: string(cat.Type),
-				}
-				parentOptions = append(parentOptions, option)
-			}
-		}
-
-		data := map[string]interface{}{
-			"PageData":      pageData,
-			"Form":          form,
-			"Category":      existingCategory,
-			"ParentOptions": parentOptions,
-			"DefaultColors": getDefaultCategoryColors(),
-			"DefaultIcons":  getDefaultCategoryIcons(),
-		}
-
-		return h.renderPage(c, "pages/categories/edit", data)
+		return h.handleUpdateValidationError(c, validationErr, form, sessionData, categoryID, existingCategory)
 	}
 
 	// Создаем DTO для обновления
@@ -407,28 +348,135 @@ func (h *CategoryHandler) Update(c echo.Context) error {
 	// Обновляем категорию через сервис
 	_, err = h.services.Category.UpdateCategory(c.Request().Context(), categoryID, updateDTO)
 	if err != nil {
-		// Обрабатываем специфичные ошибки сервиса
-		var errorMsg string
-		switch {
-		case strings.Contains(err.Error(), "category with this name already exists"):
-			errorMsg = "Category with this name already exists"
-		case strings.Contains(err.Error(), "category not found"):
-			errorMsg = "Category not found"
-		default:
-			errorMsg = "Failed to update category"
-		}
-
-		if h.isHTMXRequest(c) {
-			return h.renderPartial(c, "components/form_errors", map[string]interface{}{
-				"Errors": map[string]string{"form": errorMsg},
-			})
-		}
-
-		return h.handleError(c, err, errorMsg)
+		return h.handleUpdateServiceError(c, err)
 	}
 
 	// Успешное обновление - редирект
 	return h.redirect(c, "/categories")
+}
+
+// validateUpdateRequest проверяет права доступа и возвращает необходимые данные
+func (h *CategoryHandler) validateUpdateRequest(c echo.Context) (
+	*middleware.SessionData,
+	uuid.UUID,
+	*category.Category,
+	error,
+) {
+	// Получаем данные пользователя из сессии
+	sessionData, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		return nil, uuid.Nil, nil, h.handleError(c, err, "Unable to get user session")
+	}
+
+	// Парсим ID категории
+	id := c.Param("id")
+	categoryID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, uuid.Nil, nil, h.handleError(c, err, "Invalid category ID")
+	}
+
+	// Проверяем, что категория существует и принадлежит семье
+	existingCategory, err := h.services.Category.GetCategoryByID(c.Request().Context(), categoryID)
+	if err != nil {
+		return nil, uuid.Nil, nil, h.handleError(c, err, "Category not found")
+	}
+
+	// Проверяем, что категория принадлежит семье пользователя
+	if existingCategory.FamilyID != sessionData.FamilyID {
+		return nil, uuid.Nil, nil, h.handleError(c, echo.ErrForbidden, "Access denied")
+	}
+
+	return sessionData, categoryID, existingCategory, nil
+}
+
+// handleUpdateValidationError обрабатывает ошибки валидации при обновлении
+func (h *CategoryHandler) handleUpdateValidationError(
+	c echo.Context,
+	validationErr error,
+	form webModels.CategoryForm,
+	sessionData *middleware.SessionData,
+	categoryID uuid.UUID,
+	existingCategory *category.Category,
+) error {
+	validationErrors := webModels.GetValidationErrors(validationErr)
+
+	if h.isHTMXRequest(c) {
+		return h.renderPartial(c, "components/form_errors", map[string]any{
+			"Errors": validationErrors,
+		})
+	}
+
+	// Для обычных запросов возвращаем форму заново
+	pageData := &PageData{
+		Title:  "Edit Category",
+		Errors: validationErrors,
+		Messages: []Message{
+			{Type: "error", Text: "Проверьте правильность заполнения формы"},
+		},
+	}
+
+	parentOptions := h.getParentOptionsForUpdate(
+		c.Request().Context(),
+		sessionData.FamilyID,
+		categoryID,
+		existingCategory,
+	)
+	csrfToken, _ := middleware.GetCSRFToken(c)
+
+	data := map[string]any{
+		"PageData":      pageData,
+		"Form":          form,
+		"CSRFToken":     csrfToken,
+		"Category":      existingCategory,
+		"ParentOptions": parentOptions,
+		"DefaultColors": getDefaultCategoryColors(),
+		"DefaultIcons":  getDefaultCategoryIcons(),
+	}
+
+	return h.renderPage(c, "pages/categories/edit", data)
+}
+
+// getParentOptionsForUpdate получает список родительских категорий для формы редактирования
+func (h *CategoryHandler) getParentOptionsForUpdate(
+	ctx context.Context,
+	familyID uuid.UUID,
+	categoryID uuid.UUID,
+	existingCategory *category.Category,
+) []webModels.CategorySelectOption {
+	parentCategories, _ := h.services.Category.GetCategoriesByFamily(ctx, familyID, nil)
+	var parentOptions []webModels.CategorySelectOption
+	for _, cat := range parentCategories {
+		if cat.ID != categoryID && cat.ParentID == nil && cat.Type == existingCategory.Type {
+			option := webModels.CategorySelectOption{
+				ID:   cat.ID,
+				Name: cat.Name,
+				Type: string(cat.Type),
+			}
+			parentOptions = append(parentOptions, option)
+		}
+	}
+	return parentOptions
+}
+
+// handleUpdateServiceError обрабатывает ошибки сервиса при обновлении
+func (h *CategoryHandler) handleUpdateServiceError(c echo.Context, err error) error {
+	var errorMsg string
+	switch {
+	case strings.Contains(err.Error(), "category with this name already exists"):
+		errorMsg = "Category with this name already exists"
+	case strings.Contains(err.Error(), "category not found"):
+		errorMsg = "Category not found"
+	default:
+		errorMsg = "Failed to update category"
+	}
+
+	if h.isHTMXRequest(c) {
+		return h.renderPartial(c, "components/form_errors", map[string]any{
+			"Errors": map[string]string{"form": errorMsg},
+		})
+	}
+
+	return h.handleError(c, err, errorMsg)
 }
 
 // Show отображает детали конкретной категории
@@ -488,9 +536,9 @@ func (h *CategoryHandler) Show(c echo.Context) error {
 	}
 
 	// Получаем последние транзакции для этой категории (если есть Transaction сервис)
-	var recentTransactions []interface{} // TODO: заменить на Transaction модель когда будет доступна
+	var recentTransactions []any // TODO: заменить на Transaction модель когда будет доступна
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"Category":      categoryVM,
 		"Subcategories": subcategoryVMs,
 		"Transactions":  recentTransactions,
@@ -542,7 +590,7 @@ func (h *CategoryHandler) Delete(c echo.Context) error {
 		}
 
 		if h.isHTMXRequest(c) {
-			return h.renderPartial(c, "components/alert", map[string]interface{}{
+			return h.renderPartial(c, "components/alert", map[string]any{
 				"Type":    "error",
 				"Message": errorMsg,
 			})
@@ -590,14 +638,14 @@ func (h *CategoryHandler) Search(c echo.Context) error {
 
 	// Строим дерево если не только родительские
 	if parentOnly {
-		data := map[string]interface{}{
+		data := map[string]any{
 			"Categories": categoryViewModels,
 		}
 		return h.renderPartial(c, "components/category_list", data)
 	}
 
 	categoryTree := webModels.BuildCategoryTree(categoryViewModels)
-	data := map[string]interface{}{
+	data := map[string]any{
 		"Categories": categoryTree,
 	}
 
@@ -641,7 +689,7 @@ func (h *CategoryHandler) Select(c echo.Context) error {
 	// Конвертируем в select опции
 	options := buildSelectOptions(categories, parentOnly, excludeUUID)
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"Options": options,
 	}
 

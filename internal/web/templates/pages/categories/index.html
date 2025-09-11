@@ -1,496 +1,545 @@
 {{define "pages/categories/index"}}
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru" data-theme="light">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{.PageData.Title}} - Семейный бюджет</title>
-    
-    <!-- PicoCSS -->
-    <link rel="stylesheet" href="/static/css/pico.min.css">
-    <link rel="stylesheet" href="/static/css/custom.css">
-    
-    <!-- HTMX -->
-    <script src="/static/js/htmx.min.js"></script>
-    
-    <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
-</head>
-<body>
-    <!-- Navigation -->
-    <nav class="container-fluid">
-        <ul>
-            <li>
-                <a href="/" class="brand">
-                    <strong>💰 Семейный бюджет</strong>
-                </a>
-            </li>
-        </ul>
-        <ul>
-            {{if .CurrentUser}}
-            <li><a href="/">Главная</a></li>
-            <li><a href="/transactions">Транзакции</a></li>
-            <li><a href="/categories" class="current">Категории</a></li>
-            <li><a href="/budgets">Бюджеты</a></li>
-            <li><a href="/reports">Отчеты</a></li>
-            <li>
-                <details class="dropdown">
-                    <summary role="button" class="secondary">
-                        {{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}
-                    </summary>
-                    <ul>
-                        <li><a href="/profile">Профиль</a></li>
-                        {{if eq .CurrentUser.Role "admin"}}
-                        <li><a href="/users">Пользователи</a></li>
-                        <li><a href="/family/settings">Настройки семьи</a></li>
-                        {{end}}
-                        <li>
-                            <form method="POST" action="/logout" style="margin: 0;">
-                                <input type="hidden" name="_token" value="{{.CSRFToken}}">
-                                <button type="submit" class="outline">Выход</button>
-                            </form>
-                        </li>
-                    </ul>
-                </details>
-            </li>
-            {{end}}
-        </ul>
-    </nav>
-    
-    <!-- Main Content -->
-    <main class="container">
-        <!-- Page Header -->
-        <div class="page-header">
-            <div class="grid">
-                <div>
-                    <h1>📂 {{.PageData.Title}}</h1>
-                    <p>Управление категориями доходов и расходов</p>
-                </div>
-                <div>
-                    <a href="/categories/new" role="button" class="primary">
-                        ➕ Добавить категорию
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>{{.PageData.Title}} - Семейный бюджет</title>
+
+        <!-- PicoCSS -->
+        <link rel="stylesheet" href="/static/css/pico.min.css" />
+        <link rel="stylesheet" href="/static/css/custom.css" />
+
+        <!-- HTMX -->
+        <script src="/static/js/htmx.min.js"></script>
+
+        <!-- Favicon -->
+        <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico" />
+    </head>
+    <body>
+        <!-- Navigation -->
+        <nav class="container-fluid">
+            <ul>
+                <li>
+                    <a href="/" class="brand">
+                        <strong>💰 Семейный бюджет</strong>
                     </a>
+                </li>
+            </ul>
+            <ul>
+                {{if .CurrentUser}}
+                <li><a href="/">Главная</a></li>
+                <li><a href="/transactions">Транзакции</a></li>
+                <li><a href="/categories" class="current">Категории</a></li>
+                <li><a href="/budgets">Бюджеты</a></li>
+                <li><a href="/reports">Отчеты</a></li>
+                <li>
+                    <details class="dropdown">
+                        <summary role="button" class="secondary">
+                            {{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}
+                        </summary>
+                        <ul>
+                            <li><a href="/profile">Профиль</a></li>
+                            {{if eq .CurrentUser.Role "admin"}}
+                            <li><a href="/users">Пользователи</a></li>
+                            <li>
+                                <a href="/family/settings">Настройки семьи</a>
+                            </li>
+                            {{end}}
+                            <li>
+                                <form
+                                    method="POST"
+                                    action="/logout"
+                                    style="margin: 0"
+                                >
+                                    <input
+                                        type="hidden"
+                                        name="_token"
+                                        value="{{.CSRFToken}}"
+                                    />
+                                    <button type="submit" class="outline">
+                                        Выход
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </details>
+                </li>
+                {{end}}
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="container">
+            <!-- Page Header -->
+            <div class="page-header">
+                <div class="grid">
+                    <div>
+                        <h1>📂 {{.PageData.Title}}</h1>
+                        <p>Управление категориями доходов и расходов</p>
+                    </div>
+                    <div>
+                        <a href="/categories/new" role="button" class="primary">
+                            ➕ Добавить категорию
+                        </a>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Filters Section -->
-        <section class="filters-section" style="margin-bottom: 2rem;">
-            <details>
-                <summary role="button" class="secondary outline">
-                    🔍 Фильтры
-                </summary>
-                
-                <form method="GET" 
-                      action="/categories"
-                      hx-get="/htmx/categories/filter"
-                      hx-target="#categories-list"
-                      hx-swap="innerHTML"
-                      hx-trigger="input delay:500ms from:input, change from:select"
-                      style="margin-top: 1rem;">
-                    
-                    <div class="grid">
-                        <!-- Тип -->
-                        <div>
-                            <label for="type">
-                                Тип категории
-                                <select id="type" name="type">
-                                    <option value="">Все типы</option>
-                                    <option value="income">
-                                        💰 Доходы
-                                    </option>
-                                    <option value="expense">
-                                        💸 Расходы
-                                    </option>
-                                </select>
-                            </label>
-                        </div>
-                        
-                        <!-- Поиск по названию -->
-                        <div>
-                            <label for="search">
-                                Поиск по названию
-                                <input type="text" 
-                                       id="search" 
-                                       name="search" 
-                                       value=""
-                                       placeholder="Введите название категории">
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div class="grid">
-                        <a href="/categories" role="button" class="secondary outline">
-                            🗑️ Очистить фильтры
-                        </a>
-                        <button type="submit" class="primary">
-                            🔍 Применить фильтры
-                        </button>
-                    </div>
-                </form>
-            </details>
-        </section>
+            <!-- Filters Section -->
+            <section class="filters-section" style="margin-bottom: 2rem">
+                <details>
+                    <summary role="button" class="secondary outline">
+                        🔍 Фильтры
+                    </summary>
 
-        <!-- Categories Summary -->
-        {{if .Categories}}
-        <section class="categories-summary" style="margin-bottom: 2rem;">
-            <div class="grid">
-                <article class="summary-card">
-                    <header>Всего категорий</header>
-                    <h3>{{len .Categories}}</h3>
-                </article>
-                
-                <article class="summary-card income">
-                    <header>Доходы</header>
-                    <h3>{{.IncomeCount}}</h3>
-                </article>
-                
-                <article class="summary-card expense">
-                    <header>Расходы</header>
-                    <h3>{{.ExpenseCount}}</h3>
-                </article>
-                
-                <article class="summary-card">
-                    <header>С подкатегориями</header>
-                    <h3>{{.WithSubcategoriesCount}}</h3>
-                </article>
-            </div>
-        </section>
-        {{end}}
-        
-        <!-- Categories List -->
-        <section id="categories-list">
+                    <form
+                        method="GET"
+                        action="/categories"
+                        hx-get="/htmx/categories/filter"
+                        hx-target="#categories-list"
+                        hx-swap="innerHTML"
+                        hx-trigger="input delay:500ms from:input, change from:select"
+                        style="margin-top: 1rem"
+                    >
+                        <div class="grid">
+                            <!-- Тип -->
+                            <div>
+                                <label for="type">
+                                    Тип категории
+                                    <select id="type" name="type">
+                                        <option value="">Все типы</option>
+                                        <option value="income">
+                                            💰 Доходы
+                                        </option>
+                                        <option value="expense">
+                                            💸 Расходы
+                                        </option>
+                                    </select>
+                                </label>
+                            </div>
+
+                            <!-- Поиск по названию -->
+                            <div>
+                                <label for="search">
+                                    Поиск по названию
+                                    <input
+                                        type="text"
+                                        id="search"
+                                        name="search"
+                                        value=""
+                                        placeholder="Введите название категории"
+                                    />
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="grid">
+                            <a
+                                href="/categories"
+                                role="button"
+                                class="secondary outline"
+                            >
+                                🗑️ Очистить фильтры
+                            </a>
+                            <button type="submit" class="primary">
+                                🔍 Применить фильтры
+                            </button>
+                        </div>
+                    </form>
+                </details>
+            </section>
+
+            <!-- Categories Summary -->
             {{if .Categories}}
-            <div class="categories-grid">
-                {{range .Categories}}
-                <article class="category-card category-{{.Type}}">
-                    <header>
-                        <div class="category-header">
-                            <h4>
-                                <span class="category-icon">{{if eq .Type "income"}}💰{{else}}💸{{end}}</span>
-                                {{.Name}}
-                            </h4>
-                            <span class="category-type {{.Type}}">
-                                {{if eq .Type "income"}}Доход{{else}}Расход{{end}}
-                            </span>
-                        </div>
-                        
-                        {{if .Description}}
-                        <p class="category-description">{{.Description}}</p>
-                        {{end}}
-                    </header>
+            <section class="categories-summary" style="margin-bottom: 2rem">
+                <div class="grid">
+                    <article class="summary-card">
+                        <header>Всего категорий</header>
+                        <h3>{{len .Categories}}</h3>
+                    </article>
 
-                    <!-- Category Stats -->
-                    <div class="category-stats">
-                        <div class="stats-grid">
-                            <div class="stat">
-                                <span class="stat-label">Транзакций</span>
-                                <span class="stat-value">{{.TransactionCount}}</span>
-                            </div>
-                            <div class="stat">
-                                <span class="stat-label">Общая сумма</span>
-                                <span class="stat-value">{{.TotalAmount}} ₽</span>
-                            </div>
-                            {{if .LastUsed}}
-                            <div class="stat">
-                                <span class="stat-label">Последнее использование</span>
-                                <span class="stat-value">{{.LastUsed.Format "02.01.2006"}}</span>
-                            </div>
-                            {{end}}
-                        </div>
-                    </div>
+                    <article class="summary-card income">
+                        <header>Доходы</header>
+                        <h3>{{.IncomeCount}}</h3>
+                    </article>
 
-                    <!-- Subcategories -->
-                    {{if .Subcategories}}
-                    <div class="subcategories">
-                        <h5>Подкатегории ({{len .Subcategories}})</h5>
-                        <div class="subcategories-list">
-                            {{range .Subcategories}}
-                            <span class="subcategory-tag">
-                                {{.Name}}
-                                {{if .TransactionCount}}
-                                <small>({{.TransactionCount}})</small>
+                    <article class="summary-card expense">
+                        <header>Расходы</header>
+                        <h3>{{.ExpenseCount}}</h3>
+                    </article>
+
+                    <article class="summary-card">
+                        <header>С подкатегориями</header>
+                        <h3>{{.WithSubcategoriesCount}}</h3>
+                    </article>
+                </div>
+            </section>
+            {{end}}
+
+            <!-- Categories List -->
+            <section id="categories-list">
+                {{if .Categories}}
+                <div class="categories-grid">
+                    {{range .Categories}}
+                    <article class="category-card category-{{.Type}}">
+                        <header>
+                            <div class="category-header">
+                                <h4>
+                                    <span class="category-icon"
+                                        >{{if eq .Type
+                                        "income"}}💰{{else}}💸{{end}}</span
+                                    >
+                                    {{.Name}}
+                                </h4>
+                                <span class="category-type {{.Type}}">
+                                    {{if eq .Type
+                                    "income"}}Доход{{else}}Расход{{end}}
+                                </span>
+                            </div>
+                        </header>
+
+                        <!-- Category Stats -->
+                        <div class="category-stats">
+                            <div class="stats-grid">
+                                <div class="stat">
+                                    <span class="stat-label">Транзакций</span>
+                                    <span class="stat-value"
+                                        >{{.TransactionCount}}</span
+                                    >
+                                </div>
+                                <div class="stat">
+                                    <span class="stat-label">Общая сумма</span>
+                                    <span class="stat-value"
+                                        >{{.TotalAmount}} ₽</span
+                                    >
+                                </div>
+                                {{if .LastUsed}}
+                                <div class="stat">
+                                    <span class="stat-label"
+                                        >Последнее использование</span
+                                    >
+                                    <span class="stat-value"
+                                        >{{.LastUsed.Format "02.01.2006"}}</span
+                                    >
+                                </div>
                                 {{end}}
-                            </span>
-                            {{end}}
+                            </div>
                         </div>
-                    </div>
-                    {{end}}
 
-                    <!-- Actions -->
-                    <footer>
-                        <div class="button-group">
-                            <a href="/categories/{{.ID}}" role="button" class="secondary outline">
-                                👁️ Просмотр
-                            </a>
-                            <a href="/categories/{{.ID}}/edit" role="button" class="secondary outline">
-                                ✏️ Редактировать
-                            </a>
-                            <button hx-delete="/categories/{{.ID}}" 
+                        <!-- Subcategories -->
+                        {{if .Subcategories}}
+                        <div class="subcategories">
+                            <h5>Подкатегории ({{len .Subcategories}})</h5>
+                            <div class="subcategories-list">
+                                {{range .Subcategories}}
+                                <span class="subcategory-tag">
+                                    {{.Name}} {{if .TransactionCount}}
+                                    <small>({{.TransactionCount}})</small>
+                                    {{end}}
+                                </span>
+                                {{end}}
+                            </div>
+                        </div>
+                        {{end}}
+
+                        <!-- Actions -->
+                        <footer>
+                            <div class="button-group">
+                                <a
+                                    href="/categories/{{.ID}}"
+                                    role="button"
+                                    class="secondary outline"
+                                >
+                                    👁️ Просмотр
+                                </a>
+                                <a
+                                    href="/categories/{{.ID}}/edit"
+                                    role="button"
+                                    class="secondary outline"
+                                >
+                                    ✏️ Редактировать
+                                </a>
+                                <button
+                                    hx-delete="/categories/{{.ID}}"
                                     hx-confirm="Вы уверены, что хотите удалить категорию '{{.Name}}'? Это действие нельзя отменить."
                                     hx-target="closest article"
                                     hx-swap="outerHTML"
-                                    class="danger outline">
-                                🗑️ Удалить
-                            </button>
-                        </div>
-                    </footer>
-                </article>
-                {{end}}
-            </div>
-            
-            <!-- Pagination -->
-            {{if .Pagination}}
-            <nav class="pagination" style="margin-top: 2rem;">
-                <div class="grid">
-                    <div>
-                        <small>
-                            Показано {{len .Categories}} из {{.Pagination.Total}}
-                        </small>
-                    </div>
-                    <div>
-                        {{if .Pagination.HasPrev}}
-                        <a href="?page=1" 
-                           class="secondary outline">← Предыдущая</a>
-                        {{end}}
-                        
-                        <span class="current-page">
-                            Страница {{.Pagination.Page}} из {{.Pagination.TotalPages}}
-                        </span>
-                        
-                        {{if .Pagination.HasNext}}
-                        <a href="?page={{.Pagination.TotalPages}}" 
-                           class="secondary outline">Следующая →</a>
-                        {{end}}
-                    </div>
+                                    class="danger outline"
+                                >
+                                    🗑️ Удалить
+                                </button>
+                            </div>
+                        </footer>
+                    </article>
+                    {{end}}
                 </div>
-            </nav>
-            {{end}}
-            {{else}}
-            <!-- Empty State -->
-            <div class="empty-state" style="text-align: center; padding: 3rem;">
-                <p style="font-size: 3rem;">📂</p>
-                <h3>Пока нет категорий</h3>
-                <p>Создайте первую категорию для организации ваших доходов и расходов</p>
-                <a href="/categories/new" role="button" class="primary">
-                    ➕ Добавить первую категорию
-                </a>
+
+                <!-- Pagination -->
+                {{if .Pagination}}
+                <nav class="pagination" style="margin-top: 2rem">
+                    <div class="grid">
+                        <div>
+                            <small>
+                                Показано {{len .Categories}} из
+                                {{.Pagination.Total}}
+                            </small>
+                        </div>
+                        <div>
+                            {{if .Pagination.HasPrev}}
+                            <a href="?page=1" class="secondary outline"
+                                >← Предыдущая</a
+                            >
+                            {{end}}
+
+                            <span class="current-page">
+                                Страница {{.Pagination.Page}} из
+                                {{.Pagination.TotalPages}}
+                            </span>
+
+                            {{if .Pagination.HasNext}}
+                            <a
+                                href="?page={{.Pagination.TotalPages}}"
+                                class="secondary outline"
+                                >Следующая →</a
+                            >
+                            {{end}}
+                        </div>
+                    </div>
+                </nav>
+                {{end}} {{else}}
+                <!-- Empty State -->
+                <div
+                    class="empty-state"
+                    style="text-align: center; padding: 3rem"
+                >
+                    <p style="font-size: 3rem">📂</p>
+                    <h3>Пока нет категорий</h3>
+                    <p>
+                        Создайте первую категорию для организации ваших доходов
+                        и расходов
+                    </p>
+                    <a href="/categories/new" role="button" class="primary">
+                        ➕ Добавить первую категорию
+                    </a>
+                </div>
+                {{end}}
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="container">
+            <hr />
+            <div class="grid">
+                <div>
+                    <small>© 2025 Семейный бюджет</small>
+                </div>
             </div>
-            {{end}}
-        </section>
-    </main>
-    
-    <!-- Footer -->
-    <footer class="container">
-        <hr>
-        <div class="grid">
-            <div>
-                <small>© 2025 Семейный бюджет</small>
-            </div>
-        </div>
-    </footer>
-    
-    <!-- Custom JavaScript -->
-    <script src="/static/js/app.js"></script>
-    
-    <style>
-        .categories-summary {
-            margin: 2rem 0;
-        }
-        
-        .summary-card {
-            text-align: center;
-            padding: 1.5rem;
-            border: 1px solid var(--pico-muted-border-color);
-            border-radius: var(--pico-border-radius);
-            background: var(--pico-card-background-color);
-        }
-        
-        .summary-card.income {
-            border-left: 4px solid #28a745;
-        }
-        
-        .summary-card.expense {
-            border-left: 4px solid #dc3545;
-        }
-        
-        .summary-card header {
-            font-size: 0.875rem;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-            color: var(--pico-muted-color);
-        }
-        
-        .summary-card h3 {
-            margin: 0;
-            font-size: 1.75rem;
-        }
+        </footer>
 
-        .categories-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-            gap: 1.5rem;
-            margin: 2rem 0;
-        }
+        <!-- Custom JavaScript -->
+        <script src="/static/js/app.js"></script>
 
-        .category-card {
-            border: 1px solid var(--pico-muted-border-color);
-            border-radius: var(--pico-border-radius);
-            padding: 1.5rem;
-            background: var(--pico-card-background-color);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        
-        .category-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        
-        .category-card.category-income {
-            border-left: 4px solid #28a745;
-        }
-        
-        .category-card.category-expense {
-            border-left: 4px solid #dc3545;
-        }
-
-        .category-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.5rem;
-        }
-        
-        .category-header h4 {
-            margin: 0;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        .category-icon {
-            font-size: 1.2rem;
-        }
-
-        .category-type {
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.25rem;
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-        
-        .category-type.income {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .category-type.expense {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .category-description {
-            margin: 0.5rem 0 1rem 0;
-            color: var(--pico-muted-color);
-            font-size: 0.875rem;
-        }
-
-        .category-stats {
-            margin: 1rem 0;
-            padding: 1rem;
-            background: var(--pico-background-color);
-            border-radius: var(--pico-border-radius);
-            border: 1px solid var(--pico-muted-border-color);
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 1rem;
-        }
-
-        .stat {
-            text-align: center;
-        }
-
-        .stat-label {
-            display: block;
-            font-size: 0.75rem;
-            color: var(--pico-muted-color);
-            margin-bottom: 0.25rem;
-        }
-
-        .stat-value {
-            font-weight: 600;
-            font-size: 0.875rem;
-        }
-
-        .subcategories {
-            margin: 1rem 0;
-        }
-
-        .subcategories h5 {
-            margin: 0 0 0.5rem 0;
-            font-size: 0.875rem;
-            color: var(--pico-muted-color);
-        }
-
-        .subcategories-list {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-        }
-
-        .subcategory-tag {
-            padding: 0.25rem 0.5rem;
-            background: var(--pico-muted-border-color);
-            border-radius: 0.25rem;
-            font-size: 0.75rem;
-            color: var(--pico-color);
-        }
-
-        .button-group {
-            display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-            margin-top: 1rem;
-        }
-        
-        .button-group > * {
-            margin: 0;
-            flex: 1;
-            min-width: 80px;
-        }
-
-        .empty-state h3 {
-            color: var(--pico-muted-color);
-        }
-
-        @media (max-width: 768px) {
-            .categories-grid {
-                grid-template-columns: 1fr;
+        <style>
+            .categories-summary {
+                margin: 2rem 0;
             }
-            
+
+            .summary-card {
+                text-align: center;
+                padding: 1.5rem;
+                border: 1px solid var(--pico-muted-border-color);
+                border-radius: var(--pico-border-radius);
+                background: var(--pico-card-background-color);
+            }
+
+            .summary-card.income {
+                border-left: 4px solid #28a745;
+            }
+
+            .summary-card.expense {
+                border-left: 4px solid #dc3545;
+            }
+
+            .summary-card header {
+                font-size: 0.875rem;
+                font-weight: 600;
+                margin-bottom: 0.5rem;
+                color: var(--pico-muted-color);
+            }
+
+            .summary-card h3 {
+                margin: 0;
+                font-size: 1.75rem;
+            }
+
+            .categories-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+                gap: 1.5rem;
+                margin: 2rem 0;
+            }
+
+            .category-card {
+                border: 1px solid var(--pico-muted-border-color);
+                border-radius: var(--pico-border-radius);
+                padding: 1.5rem;
+                background: var(--pico-card-background-color);
+                transition:
+                    transform 0.2s ease,
+                    box-shadow 0.2s ease;
+            }
+
+            .category-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            }
+
+            .category-card.category-income {
+                border-left: 4px solid #28a745;
+            }
+
+            .category-card.category-expense {
+                border-left: 4px solid #dc3545;
+            }
+
             .category-header {
-                flex-direction: column;
-                align-items: flex-start;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 0.5rem;
+            }
+
+            .category-header h4 {
+                margin: 0;
+                display: flex;
+                align-items: center;
                 gap: 0.5rem;
             }
-            
+
+            .category-icon {
+                font-size: 1.2rem;
+            }
+
+            .category-type {
+                padding: 0.25rem 0.5rem;
+                border-radius: 0.25rem;
+                font-size: 0.75rem;
+                font-weight: 600;
+                text-transform: uppercase;
+            }
+
+            .category-type.income {
+                background: #d4edda;
+                color: #155724;
+            }
+
+            .category-type.expense {
+                background: #f8d7da;
+                color: #721c24;
+            }
+
+            .category-description {
+                margin: 0.5rem 0 1rem 0;
+                color: var(--pico-muted-color);
+                font-size: 0.875rem;
+            }
+
+            .category-stats {
+                margin: 1rem 0;
+                padding: 1rem;
+                background: var(--pico-background-color);
+                border-radius: var(--pico-border-radius);
+                border: 1px solid var(--pico-muted-border-color);
+            }
+
             .stats-grid {
-                grid-template-columns: 1fr;
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+                gap: 1rem;
             }
-            
+
+            .stat {
+                text-align: center;
+            }
+
+            .stat-label {
+                display: block;
+                font-size: 0.75rem;
+                color: var(--pico-muted-color);
+                margin-bottom: 0.25rem;
+            }
+
+            .stat-value {
+                font-weight: 600;
+                font-size: 0.875rem;
+            }
+
+            .subcategories {
+                margin: 1rem 0;
+            }
+
+            .subcategories h5 {
+                margin: 0 0 0.5rem 0;
+                font-size: 0.875rem;
+                color: var(--pico-muted-color);
+            }
+
+            .subcategories-list {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+
+            .subcategory-tag {
+                padding: 0.25rem 0.5rem;
+                background: var(--pico-muted-border-color);
+                border-radius: 0.25rem;
+                font-size: 0.75rem;
+                color: var(--pico-color);
+            }
+
             .button-group {
-                justify-content: stretch;
+                display: flex;
+                gap: 0.5rem;
+                flex-wrap: wrap;
+                margin-top: 1rem;
             }
-            
+
             .button-group > * {
+                margin: 0;
                 flex: 1;
+                min-width: 80px;
             }
-        }
-    </style>
-</body>
+
+            .empty-state h3 {
+                color: var(--pico-muted-color);
+            }
+
+            @media (max-width: 768px) {
+                .categories-grid {
+                    grid-template-columns: 1fr;
+                }
+
+                .category-header {
+                    flex-direction: column;
+                    align-items: flex-start;
+                    gap: 0.5rem;
+                }
+
+                .stats-grid {
+                    grid-template-columns: 1fr;
+                }
+
+                .button-group {
+                    justify-content: stretch;
+                }
+
+                .button-group > * {
+                    flex: 1;
+                }
+            }
+        </style>
+    </body>
 </html>
 {{end}}

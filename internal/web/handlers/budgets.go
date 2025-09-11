@@ -120,7 +120,7 @@ func (h *BudgetHandler) Index(c echo.Context) error {
 		Title: "Budgets",
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"PageData": pageData,
 		"Budgets":  budgetVMs,
 		"Filter":   filterForm,
@@ -148,13 +148,13 @@ func (h *BudgetHandler) New(c echo.Context) error {
 	}
 
 	// Подготавливаем опции категорий
-	categoryOptions := make([]map[string]interface{}, len(categories)+1)
-	categoryOptions[0] = map[string]interface{}{
+	categoryOptions := make([]map[string]any, len(categories)+1)
+	categoryOptions[0] = map[string]any{
 		"ID":   "",
 		"Name": "All Categories",
 	}
 	for i, cat := range categories {
-		categoryOptions[i+1] = map[string]interface{}{
+		categoryOptions[i+1] = map[string]any{
 			"ID":   cat.ID.String(),
 			"Name": cat.Name,
 		}
@@ -176,7 +176,7 @@ func (h *BudgetHandler) New(c echo.Context) error {
 		Title: "New Budget",
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"PageData":        pageData,
 		"CategoryOptions": categoryOptions,
 		"DefaultForm":     defaultForm,
@@ -204,7 +204,7 @@ func (h *BudgetHandler) Create(c echo.Context) error {
 		validationErrors := webModels.GetValidationErrors(validationErr)
 
 		if h.isHTMXRequest(c) {
-			return h.renderPartial(c, "components/form_errors", map[string]interface{}{
+			return h.renderPartial(c, "components/form_errors", map[string]any{
 				"Errors": validationErrors,
 			})
 		}
@@ -246,7 +246,7 @@ func (h *BudgetHandler) Create(c echo.Context) error {
 		errorMsg := h.getBudgetServiceErrorMessage(err)
 
 		if h.isHTMXRequest(c) {
-			return h.renderPartial(c, "components/form_errors", map[string]interface{}{
+			return h.renderPartial(c, "components/form_errors", map[string]any{
 				"Errors": map[string]string{"form": errorMsg},
 			})
 		}
@@ -295,13 +295,13 @@ func (h *BudgetHandler) Edit(c echo.Context) error {
 	}
 
 	// Подготавливаем опции категорий
-	categoryOptions := make([]map[string]interface{}, len(categories)+1)
-	categoryOptions[0] = map[string]interface{}{
+	categoryOptions := make([]map[string]any, len(categories)+1)
+	categoryOptions[0] = map[string]any{
 		"ID":   "",
 		"Name": "All Categories",
 	}
 	for i, cat := range categories {
-		categoryOptions[i+1] = map[string]interface{}{
+		categoryOptions[i+1] = map[string]any{
 			"ID":   cat.ID.String(),
 			"Name": cat.Name,
 		}
@@ -325,7 +325,7 @@ func (h *BudgetHandler) Edit(c echo.Context) error {
 		Title: "Edit Budget: " + budgetEntity.Name,
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"PageData":        pageData,
 		"Form":            form,
 		"CategoryOptions": categoryOptions,
@@ -371,7 +371,7 @@ func (h *BudgetHandler) Update(c echo.Context) error {
 		validationErrors := webModels.GetValidationErrors(validationErr)
 
 		if h.isHTMXRequest(c) {
-			return h.renderPartial(c, "components/form_errors", map[string]interface{}{
+			return h.renderPartial(c, "components/form_errors", map[string]any{
 				"Errors": validationErrors,
 			})
 		}
@@ -410,7 +410,7 @@ func (h *BudgetHandler) Update(c echo.Context) error {
 		errorMsg := h.getBudgetServiceErrorMessage(err)
 
 		if h.isHTMXRequest(c) {
-			return h.renderPartial(c, "components/form_errors", map[string]interface{}{
+			return h.renderPartial(c, "components/form_errors", map[string]any{
 				"Errors": map[string]string{"form": errorMsg},
 			})
 		}
@@ -426,7 +426,7 @@ func (h *BudgetHandler) Update(c echo.Context) error {
 func (h *BudgetHandler) Delete(c echo.Context) error {
 	return h.handleDelete(c, DeleteEntityParams{
 		EntityName: "budget",
-		GetEntityFunc: func(ctx echo.Context, entityID uuid.UUID) (interface{}, error) {
+		GetEntityFunc: func(ctx echo.Context, entityID uuid.UUID) (any, error) {
 			return h.services.Budget.GetBudgetByID(ctx.Request().Context(), entityID)
 		},
 		DeleteEntityFunc: func(ctx echo.Context, entityID uuid.UUID) error {
@@ -476,7 +476,7 @@ func (h *BudgetHandler) Progress(c echo.Context) error {
 		}
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"Progress": progressVM,
 	}
 
@@ -566,7 +566,7 @@ func (h *BudgetHandler) Show(c echo.Context) error {
 		Title: "Budget: " + budgetEntity.Name,
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"PageData":           pageData,
 		"Budget":             budgetVM,
 		"SpendingData":       spendingData,
@@ -599,13 +599,13 @@ func (h *BudgetHandler) renderBudgetFormWithErrors(
 	}
 
 	// Подготавливаем опции категорий
-	categoryOptions := make([]map[string]interface{}, len(categories)+1)
-	categoryOptions[0] = map[string]interface{}{
+	categoryOptions := make([]map[string]any, len(categories)+1)
+	categoryOptions[0] = map[string]any{
 		"ID":   "",
 		"Name": "All Categories",
 	}
 	for i, cat := range categories {
-		categoryOptions[i+1] = map[string]interface{}{
+		categoryOptions[i+1] = map[string]any{
 			"ID":   cat.ID.String(),
 			"Name": cat.Name,
 		}
@@ -618,7 +618,7 @@ func (h *BudgetHandler) renderBudgetFormWithErrors(
 		},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"PageData":        pageData,
 		"Form":            form,
 		"CategoryOptions": categoryOptions,
@@ -760,7 +760,7 @@ func (h *BudgetHandler) Alerts(c echo.Context) error {
 		Title: "Budget Alerts",
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"PageData":       pageData,
 		"Alerts":         alerts,
 		"TotalCount":     totalCount,

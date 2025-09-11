@@ -388,9 +388,9 @@ type RecommendationDTO struct {
 // Export DTOs
 
 type ExportRequestDTO struct {
-	ReportID uuid.UUID        `json:"report_id"         validate:"required"`
-	Format   string           `json:"format"            validate:"required,oneof=pdf csv excel json"`
-	Options  ExportOptionsDTO `json:"options,omitempty"`
+	ReportID uuid.UUID        `json:"report_id" validate:"required"`
+	Format   string           `json:"format"    validate:"required,oneof=pdf csv excel json"`
+	Options  ExportOptionsDTO `json:"options"`
 }
 
 type ExportOptionsDTO struct {

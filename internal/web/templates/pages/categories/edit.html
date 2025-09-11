@@ -5,14 +5,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.PageData.Title}} - Семейный бюджет</title>
-    
+
     <!-- PicoCSS -->
     <link rel="stylesheet" href="/static/css/pico.min.css">
     <link rel="stylesheet" href="/static/css/custom.css">
-    
+
     <!-- HTMX -->
     <script src="/static/js/htmx.min.js"></script>
-    
+
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
 </head>
@@ -56,7 +56,7 @@
             {{end}}
         </ul>
     </nav>
-    
+
     <!-- Main Content -->
     <main class="container">
         <!-- Page Header -->
@@ -78,36 +78,39 @@
         </div>
 
         <article>
-            <form method="POST" action="/categories/{{.CategoryID}}">
+            <form method="POST" action="/categories/{{.Category.ID}}" hx-put="/categories/{{.Category.ID}}" hx-target="#form-errors" hx-swap="innerHTML">
                 <input type="hidden" name="_method" value="PUT">
-                
-                <!-- Form Errors -->
-                {{if .PageData.Errors}}
-                    <div class="alert alert-error" style="margin-bottom: 1.5rem;">
-                        <h4>Ошибки в форме:</h4>
-                        <ul style="margin: 0.5rem 0 0 0;">
-                            {{range $field, $error := .PageData.Errors}}
-                            <li>{{$error}}</li>
-                            {{end}}
-                        </ul>
-                    </div>
-                {{end}}
-                
+
+                <!-- HTMX Error Container -->
+                <div id="form-errors">
+                    <!-- Form Errors -->
+                    {{if .PageData.Errors}}
+                        <div class="alert alert-error" style="margin-bottom: 1.5rem;">
+                            <h4>Ошибки в форме:</h4>
+                            <ul style="margin: 0.5rem 0 0 0;">
+                                {{range $field, $error := .PageData.Errors}}
+                                <li>{{$error}}</li>
+                                {{end}}
+                            </ul>
+                        </div>
+                    {{end}}
+                </div>
+
                 <!-- CSRF Token -->
                 <input type="hidden" name="_token" value="{{.CSRFToken}}">
 
                 <div class="grid">
                     <div>
                         <label for="name">Название категории</label>
-                        <input type="text" 
-                               id="name" 
-                               name="name" 
-                               placeholder="Продукты питания" 
+                        <input type="text"
+                               id="name"
+                               name="name"
+                               placeholder="Продукты питания"
                                value="{{.Form.Name}}"
                                required>
                         <small>Краткое и понятное название категории</small>
                     </div>
-                    
+
                     <div>
                         <label for="type">Тип категории</label>
                         <select id="type" name="type" required>
@@ -123,21 +126,14 @@
                     </div>
                 </div>
 
-                <div>
-                    <label for="description">Описание (необязательно)</label>
-                    <textarea id="description" 
-                              name="description" 
-                              rows="3" 
-                              placeholder="Подробное описание категории и того, что в неё включать">{{.Form.Description}}</textarea>
-                    <small>Помогает другим членам семьи понимать назначение категории</small>
-                </div>
+
 
                 <div class="grid">
                     <div>
                         <label for="parent_id">Родительская категория (необязательно)</label>
                         <select id="parent_id" name="parent_id">
                             <option value="">Основная категория</option>
-                            {{range .ParentCategories}}
+                            {{range .ParentOptions}}
                             <option value="{{.ID}}" {{if eq .ID.String $.Form.ParentID}}selected{{end}}>
                                 {{if eq .Type "income"}}💰{{else}}💸{{end}} {{.Name}}
                             </option>
@@ -145,12 +141,12 @@
                         </select>
                         <small>Выберите для создания подкатегории</small>
                     </div>
-                    
+
                     <div>
                         <label for="color">Цвет категории</label>
-                        <input type="color" 
-                               id="color" 
-                               name="color" 
+                        <input type="color"
+                               id="color"
+                               name="color"
                                value="{{.Form.Color}}">
                         <small>Цвет для визуальной идентификации в отчетах</small>
                     </div>
@@ -159,42 +155,23 @@
                 <div class="grid">
                     <div>
                         <label for="icon">Эмодзи-иконка (необязательно)</label>
-                        <input type="text" 
-                               id="icon" 
-                               name="icon" 
+                        <input type="text"
+                               id="icon"
+                               name="icon"
                                maxlength="2"
-                               placeholder="🛒" 
+                               placeholder="🛒"
                                value="{{.Form.Icon}}">
                         <small>Эмодзи для быстрого распознавания категории</small>
                     </div>
-                    
-                    <div>
-                        <label for="budget_limit">Ограничение бюджета (необязательно)</label>
-                        <input type="number" 
-                               id="budget_limit" 
-                               name="budget_limit" 
-                               step="0.01" 
-                               min="0"
-                               placeholder="50000.00" 
-                               value="{{.Form.BudgetLimit}}">
-                        <small>Рекомендуемый лимит трат в месяц</small>
-                    </div>
+
+
                 </div>
 
-                <div>
-                    <label>
-                        <input type="checkbox" 
-                               name="is_active" 
-                               value="true" 
-                               {{if .Form.IsActive}}checked{{end}}>
-                        Активная категория
-                    </label>
-                    <small>Неактивные категории скрыты из выбора при создании транзакций</small>
-                </div>
+
 
                 <div class="button-group">
                     <button type="submit" class="primary">Сохранить изменения</button>
-                    <a href="/categories/{{.CategoryID}}" role="button" class="secondary">Отмена</a>
+                    <a href="/categories/{{.Category.ID}}" role="button" class="secondary">Отмена</a>
                 </div>
             </form>
         </article>
@@ -221,7 +198,7 @@
                     {{end}}
                 </div>
             </div>
-            
+
             {{if .Category.Subcategories}}
             <div class="subcategories-info">
                 <h4>Подкатегории ({{len .Category.Subcategories}})</h4>
@@ -235,7 +212,7 @@
                 </div>
             </div>
             {{end}}
-            
+
             <div class="warning-note">
                 <small>
                     ⚠️ <strong>Внимание:</strong> Изменение типа категории (доходы/расходы) может повлиять на существующие транзакции и отчеты.
@@ -244,7 +221,7 @@
         </aside>
         {{end}}
     </main>
-    
+
     <!-- Footer -->
     <footer class="container">
         <hr>
@@ -254,10 +231,10 @@
             </div>
         </div>
     </footer>
-    
+
     <!-- Custom JavaScript -->
     <script src="/static/js/app.js"></script>
-    
+
     <style>
         .button-group {
             display: flex;
@@ -265,7 +242,7 @@
             flex-wrap: wrap;
             margin-top: 1.5rem;
         }
-        
+
         .button-group > * {
             margin: 0;
         }
@@ -277,7 +254,7 @@
             border-radius: var(--pico-border-radius);
             border: 1px solid var(--pico-muted-border-color);
         }
-        
+
         .usage-info h3 {
             margin-top: 0;
             color: var(--pico-primary);
@@ -342,17 +319,17 @@
             border-radius: var(--pico-border-radius);
             margin-bottom: 1rem;
         }
-        
+
         .alert.alert-error {
             background-color: #f8d7da;
             border: 1px solid #f5c6cb;
             color: #721c24;
         }
-        
+
         .alert h4 {
             margin: 0 0 0.5rem 0;
         }
-        
+
         .alert ul {
             margin: 0.5rem 0 0 1rem;
         }
@@ -361,31 +338,31 @@
             .button-group {
                 justify-content: stretch;
             }
-            
+
             .button-group > * {
                 flex: 1;
             }
-            
+
             .usage-stats .grid {
                 grid-template-columns: 1fr;
             }
         }
     </style>
-    
+
     <script>
         // Update parent category options when type changes
         document.getElementById('type').addEventListener('change', function() {
             const parentSelect = document.getElementById('parent_id');
             const selectedType = this.value;
-            
+
             // Hide/show options based on type
             Array.from(parentSelect.options).forEach(option => {
                 if (option.value === '') return; // Keep the empty option
-                
+
                 const optionText = option.textContent;
                 const isIncomeOption = optionText.includes('💰');
                 const isExpenseOption = optionText.includes('💸');
-                
+
                 if (selectedType === 'income') {
                     option.style.display = isIncomeOption ? '' : 'none';
                 } else if (selectedType === 'expense') {
@@ -394,13 +371,13 @@
                     option.style.display = '';
                 }
             });
-            
+
             // Reset parent selection if current selection is now hidden
             if (parentSelect.value && parentSelect.options[parentSelect.selectedIndex].style.display === 'none') {
                 parentSelect.value = '';
             }
         });
-        
+
         // Trigger type change on page load to set initial state
         document.getElementById('type').dispatchEvent(new Event('change'));
     </script>
