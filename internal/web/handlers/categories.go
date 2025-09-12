@@ -24,6 +24,15 @@ const (
 
 	// TransactionLimitForStats ограничивает количество транзакций для расчета статистики
 	TransactionLimitForStats = 1000
+
+	// BudgetPercentageOverspent порог для превышения бюджета (100%)
+	BudgetPercentageOverspent = 100
+
+	// BudgetPercentageWarning порог для предупреждения о приближении к лимиту (80%)
+	BudgetPercentageWarning = 80
+
+	// BudgetPercentageToMultiplier множитель для преобразования в проценты
+	BudgetPercentageToMultiplier = 100
 )
 
 // CategoryHandler обрабатывает HTTP запросы для категорий
@@ -829,6 +838,11 @@ func populateCategoryStats(
 	}
 
 	vm.TotalAmount = totalAmount
+	if vm.TransactionCount > 0 {
+		vm.AverageAmount = totalAmount / float64(vm.TransactionCount)
+	} else {
+		vm.AverageAmount = 0
+	}
 	vm.CurrentMonthAmount = currentMonthAmount
 	vm.LastUsed = lastUsed
 
@@ -844,7 +858,37 @@ func populateCategoryStats(
 		}
 	}
 
+	// Рассчитываем прогресс бюджета
+	calculateBudgetProgress(vm)
+
 	return nil
+}
+
+// calculateBudgetProgress рассчитывает прогресс бюджета и устанавливает соответствующие поля
+func calculateBudgetProgress(vm *webModels.CategoryViewModel) {
+	if vm.BudgetLimit != nil && *vm.BudgetLimit > 0 {
+		vm.BudgetPercentage = (vm.CurrentMonthAmount / *vm.BudgetLimit) * BudgetPercentageToMultiplier
+
+		switch {
+		case vm.BudgetPercentage >= BudgetPercentageOverspent:
+			vm.BudgetProgressClass = "progress-danger"
+			vm.BudgetOverspent = vm.CurrentMonthAmount - *vm.BudgetLimit
+			vm.BudgetRemaining = 0
+		case vm.BudgetPercentage >= BudgetPercentageWarning:
+			vm.BudgetProgressClass = "progress-warning"
+			vm.BudgetRemaining = *vm.BudgetLimit - vm.CurrentMonthAmount
+			vm.BudgetOverspent = 0
+		default:
+			vm.BudgetProgressClass = "progress-success"
+			vm.BudgetRemaining = *vm.BudgetLimit - vm.CurrentMonthAmount
+			vm.BudgetOverspent = 0
+		}
+	} else {
+		vm.BudgetPercentage = 0
+		vm.BudgetProgressClass = "progress-success"
+		vm.BudgetRemaining = 0
+		vm.BudgetOverspent = 0
+	}
 }
 
 // applyNameFilter фильтрует категории по имени

@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"family-budget-service/internal"
-
-	"github.com/joho/godotenv"
 )
 
 const (
@@ -18,9 +16,6 @@ const (
 )
 
 func main() {
-	// Загружаем .env файл, если он существует
-	_ = godotenv.Load()
-
 	// Проверка флага healthcheck
 	if len(os.Args) > 1 && os.Args[1] == "-health-check" {
 		healthCheck()

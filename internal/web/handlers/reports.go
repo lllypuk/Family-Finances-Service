@@ -93,12 +93,20 @@ func (h *ReportHandler) Index(c echo.Context) error {
 
 // New отображает форму создания нового отчета
 func (h *ReportHandler) New(c echo.Context) error {
+	// Получаем CSRF токен
+	csrfToken, _ := middleware.GetCSRFToken(c)
+
 	// TODO: Реализовать отображение формы создания отчета
 	pageData := &PageData{
 		Title: "New Report",
 	}
 
-	return h.renderPage(c, "pages/reports/new", pageData)
+	data := map[string]any{
+		"PageData":  pageData,
+		"CSRFToken": csrfToken,
+	}
+
+	return h.renderPage(c, "pages/reports/new", data)
 }
 
 // Create создает и генерирует новый отчет
@@ -128,7 +136,15 @@ func (h *ReportHandler) Create(c echo.Context) error {
 	}
 
 	// Успешное создание - редирект на просмотр отчета
-	return h.redirect(c, fmt.Sprintf("/reports/%s", reportEntity.ID))
+	reportURL := fmt.Sprintf("/reports/%s", reportEntity.ID)
+	if h.isHTMXRequest(c) {
+		// Для HTMX запросов используем Hx-Redirect
+		c.Response().Header().Set("Hx-Redirect", reportURL)
+		return c.NoContent(http.StatusOK)
+	}
+
+	// Для обычных запросов - стандартный редирект
+	return h.redirect(c, reportURL)
 }
 
 // parseAndValidateReportForm парсит и валидирует форму отчета

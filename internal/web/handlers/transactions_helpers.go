@@ -277,11 +277,14 @@ func (h *TransactionHandler) buildCreateTransactionDTO(
 	}
 
 	// Парсим теги
-	var tags []string
+	tags := make([]string, 0) // Всегда инициализируем как пустой массив, а не nil
 	if form.Tags != "" {
-		tags = strings.Split(form.Tags, ",")
-		for i, tag := range tags {
-			tags[i] = strings.TrimSpace(tag)
+		splitTags := strings.Split(form.Tags, ",")
+		for _, tag := range splitTags {
+			trimmed := strings.TrimSpace(tag)
+			if trimmed != "" { // Добавляем только непустые теги
+				tags = append(tags, trimmed)
+			}
 		}
 	}
 
@@ -404,14 +407,14 @@ func (h *TransactionHandler) getTransactionServiceErrorMessage(err error) string
 	errMsg := err.Error()
 	switch {
 	case strings.Contains(errMsg, "category not found"):
-		return "Selected category not found"
+		return "Selected category not found" + errMsg
 	case strings.Contains(errMsg, "insufficient balance"):
-		return "Insufficient budget balance for this category"
+		return "Insufficient budget balance for this category" + errMsg
 	case strings.Contains(errMsg, "invalid date"):
-		return "Invalid transaction date"
+		return "Invalid transaction date" + errMsg
 	case strings.Contains(errMsg, "invalid amount"):
-		return "Invalid transaction amount"
+		return "Invalid transaction amount" + errMsg
 	default:
-		return "Failed to process transaction"
+		return "Failed to process transaction" + errMsg
 	}
 }

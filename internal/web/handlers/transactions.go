@@ -132,6 +132,9 @@ func (h *TransactionHandler) New(c echo.Context) error {
 		Type: TransactionTypeExpense, // По умолчанию расход
 	}
 
+	// Получаем CSRF токен
+	csrfToken, _ := middleware.GetCSRFToken(c)
+
 	pageData := &PageData{
 		Title: "New Transaction",
 	}
@@ -140,6 +143,7 @@ func (h *TransactionHandler) New(c echo.Context) error {
 		"PageData":        pageData,
 		"Form":            form,
 		"CategoryOptions": categoryOptions,
+		"CSRFToken":       csrfToken,
 	}
 
 	return h.renderPage(c, "pages/transactions/new", data)
@@ -184,19 +188,23 @@ func (h *TransactionHandler) Create(c echo.Context) error {
 	// Создаем транзакцию через сервис
 	_, err = h.services.Transaction.CreateTransaction(c.Request().Context(), createDTO)
 	if err != nil {
-		// Обрабатываем специфичные ошибки сервиса
-		errorMsg := h.getTransactionServiceErrorMessage(err)
-
-		if h.isHTMXRequest(c) {
-			return h.renderPartial(c, "components/form_errors", map[string]any{
-				"Errors": map[string]string{"form": errorMsg},
-			})
-		}
-
+		errorMsg := fmt.Sprintf(
+			"Failed to create transaction: %s (UserID: %s, FamilyID: %s)",
+			err.Error(),
+			sessionData.UserID,
+			sessionData.FamilyID,
+		)
 		return echo.NewHTTPError(http.StatusInternalServerError, errorMsg)
 	}
 
 	// Успешное создание - редирект
+	if h.isHTMXRequest(c) {
+		// Для HTMX запросов используем Hx-Redirect
+		c.Response().Header().Set("Hx-Redirect", "/transactions")
+		return c.NoContent(http.StatusOK)
+	}
+
+	// Для обычных запросов - стандартный редирект
 	return h.redirect(c, "/transactions")
 }
 
@@ -244,6 +252,9 @@ func (h *TransactionHandler) Edit(c echo.Context) error {
 		Tags:        strings.Join(transaction.Tags, ", "),
 	}
 
+	// Получаем CSRF токен
+	csrfToken, _ := middleware.GetCSRFToken(c)
+
 	pageData := &PageData{
 		Title: "Edit Transaction",
 	}
@@ -253,6 +264,7 @@ func (h *TransactionHandler) Edit(c echo.Context) error {
 		"Form":            form,
 		"Transaction":     transaction,
 		"CategoryOptions": categoryOptions,
+		"CSRFToken":       csrfToken,
 	}
 
 	return h.renderPage(c, "pages/transactions/edit", data)
@@ -315,19 +327,17 @@ func (h *TransactionHandler) Update(c echo.Context) error {
 	// Обновляем транзакцию через сервис
 	_, err = h.services.Transaction.UpdateTransaction(c.Request().Context(), transactionID, updateDTO)
 	if err != nil {
-		// Обрабатываем специфичные ошибки сервиса
-		errorMsg := h.getTransactionServiceErrorMessage(err)
-
-		if h.isHTMXRequest(c) {
-			return h.renderPartial(c, "components/form_errors", map[string]any{
-				"Errors": map[string]string{"form": errorMsg},
-			})
-		}
-
-		return echo.NewHTTPError(http.StatusInternalServerError, errorMsg)
+		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
 
 	// Успешное обновление - редирект
+	if h.isHTMXRequest(c) {
+		// Для HTMX запросов используем Hx-Redirect
+		c.Response().Header().Set("Hx-Redirect", "/transactions")
+		return c.NoContent(http.StatusOK)
+	}
+
+	// Для обычных запросов - стандартный редирект
 	return h.redirect(c, "/transactions")
 }
 

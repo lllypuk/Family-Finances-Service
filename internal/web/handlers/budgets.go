@@ -172,6 +172,9 @@ func (h *BudgetHandler) New(c echo.Context) error {
 		IsActive:  true,
 	}
 
+	// Получаем CSRF токен
+	csrfToken, _ := middleware.GetCSRFToken(c)
+
 	pageData := &PageData{
 		Title: "New Budget",
 	}
@@ -180,6 +183,7 @@ func (h *BudgetHandler) New(c echo.Context) error {
 		"PageData":        pageData,
 		"CategoryOptions": categoryOptions,
 		"DefaultForm":     defaultForm,
+		"CSRFToken":       csrfToken,
 	}
 
 	return h.renderPage(c, "pages/budgets/new", data)
@@ -255,7 +259,15 @@ func (h *BudgetHandler) Create(c echo.Context) error {
 	}
 
 	// Успешное создание - редирект на просмотр бюджета
-	return h.redirect(c, fmt.Sprintf("/budgets/%s", createdBudget.ID))
+	budgetURL := fmt.Sprintf("/budgets/%s", createdBudget.ID)
+	if h.isHTMXRequest(c) {
+		// Для HTMX запросов используем Hx-Redirect
+		c.Response().Header().Set("Hx-Redirect", budgetURL)
+		return c.NoContent(http.StatusOK)
+	}
+
+	// Для обычных запросов - стандартный редирект
+	return h.redirect(c, budgetURL)
 }
 
 // Edit отображает форму редактирования бюджета
@@ -321,6 +333,9 @@ func (h *BudgetHandler) Edit(c echo.Context) error {
 		form.CategoryID = budgetEntity.CategoryID.String()
 	}
 
+	// Получаем CSRF токен
+	csrfToken, _ := middleware.GetCSRFToken(c)
+
 	pageData := &PageData{
 		Title: "Edit Budget: " + budgetEntity.Name,
 	}
@@ -330,6 +345,7 @@ func (h *BudgetHandler) Edit(c echo.Context) error {
 		"Form":            form,
 		"CategoryOptions": categoryOptions,
 		"BudgetID":        budgetID.String(),
+		"CSRFToken":       csrfToken,
 	}
 
 	return h.renderPage(c, "pages/budgets/edit", data)
@@ -419,7 +435,15 @@ func (h *BudgetHandler) Update(c echo.Context) error {
 	}
 
 	// Успешное обновление - редирект на просмотр
-	return h.redirect(c, fmt.Sprintf("/budgets/%s", updatedBudget.ID))
+	budgetURL := fmt.Sprintf("/budgets/%s", updatedBudget.ID)
+	if h.isHTMXRequest(c) {
+		// Для HTMX запросов используем Hx-Redirect
+		c.Response().Header().Set("Hx-Redirect", budgetURL)
+		return c.NoContent(http.StatusOK)
+	}
+
+	// Для обычных запросов - стандартный редирект
+	return h.redirect(c, budgetURL)
 }
 
 // Delete удаляет бюджет
@@ -756,6 +780,9 @@ func (h *BudgetHandler) Alerts(c echo.Context) error {
 	totalCount := len(alerts)
 	healthyCount := totalCount - triggeredCount
 
+	// Получаем CSRF токен
+	csrfToken, _ := middleware.GetCSRFToken(c)
+
 	pageData := &PageData{
 		Title: "Budget Alerts",
 	}
@@ -766,6 +793,7 @@ func (h *BudgetHandler) Alerts(c echo.Context) error {
 		"TotalCount":     totalCount,
 		"TriggeredCount": triggeredCount,
 		"HealthyCount":   healthyCount,
+		"CSRFToken":      csrfToken,
 	}
 
 	return h.renderPage(c, "pages/budgets/alerts", data)
