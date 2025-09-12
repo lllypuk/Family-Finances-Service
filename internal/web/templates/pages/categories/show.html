@@ -158,9 +158,9 @@
 
                 <article class="stat-card">
                     <header>Подкатегории</header>
-                    <h2>{{len .Category.Subcategories}}</h2>
+                    <h2>{{len .Category.SubCategories}}</h2>
                     <small>
-                        {{if .Category.Subcategories}}
+                        {{if .Category.SubCategories}}
                             Детализация доступна
                         {{else}}
                             Основная категория
@@ -201,12 +201,12 @@
         </section>
         {{end}}
 
-        <!-- Subcategories -->
-        {{if .Category.Subcategories}}
+        <!-- SubCategories -->
+        {{if .Category.SubCategories}}
         <section class="subcategories-section">
-            <h3>Подкатегории ({{len .Category.Subcategories}})</h3>
+            <h3>Подкатегории ({{len .Category.SubCategories}})</h3>
             <div class="subcategories-grid">
-                {{range .Category.Subcategories}}
+                {{range .Category.SubCategories}}
                 <div class="subcategory-card">
                     <div class="subcategory-header">
                         <h4>
@@ -223,8 +223,6 @@
                         <span>{{.TransactionCount}} тр.</span>
                         <span class="amount-{{.Type}}">{{.TotalAmount}} ₽</span>
                     </div>
-
-
                 </div>
                 {{end}}
             </div>

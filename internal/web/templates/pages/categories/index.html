@@ -227,12 +227,12 @@
                             </div>
                         </div>
 
-                        <!-- Subcategories -->
-                        {{if .Subcategories}}
+                        <!-- SubCategories -->
+                        {{if .SubCategories}}
                         <div class="subcategories">
-                            <h5>Подкатегории ({{len .Subcategories}})</h5>
+                            <h5>Подкатегории ({{len .SubCategories}})</h5>
                             <div class="subcategories-list">
-                                {{range .Subcategories}}
+                                {{range .SubCategories}}
                                 <span class="subcategory-tag">
                                     {{.Name}} {{if .TransactionCount}}
                                     <small>({{.TransactionCount}})</small>
@@ -309,10 +309,7 @@
                 </nav>
                 {{end}} {{else}}
                 <!-- Empty State -->
-                <div
-                    class="empty-state"
-                    style="text-align: center; padding: 3rem"
-                >
+                <div class="empty-state">
                     <p style="font-size: 3rem">📂</p>
                     <h3>Пока нет категорий</h3>
                     <p>
@@ -453,12 +450,6 @@
                 border: 1px solid var(--pico-muted-border-color);
             }
 
-            .stats-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-                gap: 1rem;
-            }
-
             .stat {
                 text-align: center;
             }
@@ -485,20 +476,6 @@
                 color: var(--pico-muted-color);
             }
 
-            .subcategories-list {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 0.5rem;
-            }
-
-            .subcategory-tag {
-                padding: 0.25rem 0.5rem;
-                background: var(--pico-muted-border-color);
-                border-radius: 0.25rem;
-                font-size: 0.75rem;
-                color: var(--pico-color);
-            }
-
             .button-group {
                 display: flex;
                 gap: 0.5rem;
@@ -510,10 +487,6 @@
                 margin: 0;
                 flex: 1;
                 min-width: 80px;
-            }
-
-            .empty-state h3 {
-                color: var(--pico-muted-color);
             }
 
             @media (max-width: 768px) {

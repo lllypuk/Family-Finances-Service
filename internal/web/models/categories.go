@@ -1,6 +1,8 @@
 package models
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 
 	"family-budget-service/internal/domain/category"
@@ -37,17 +39,22 @@ type CategorySelectOption struct {
 
 // CategoryViewModel представляет категорию для отображения в списках
 type CategoryViewModel struct {
-	ID               uuid.UUID           `json:"id"`
-	Name             string              `json:"name"`
-	Type             category.Type       `json:"type"`
-	Color            string              `json:"color"`
-	Icon             string              `json:"icon"`
-	ParentID         *uuid.UUID          `json:"parent_id,omitempty"`
-	ParentName       string              `json:"parent_name,omitempty"`
-	IsActive         bool                `json:"is_active"`
-	SubCategories    []CategoryViewModel `json:"subcategories,omitempty"`
-	TransactionCount int                 `json:"transaction_count,omitempty"`
-	CanDelete        bool                `json:"can_delete"`
+	ID                 uuid.UUID           `json:"id"`
+	Name               string              `json:"name"`
+	Type               category.Type       `json:"type"`
+	Color              string              `json:"color"`
+	Icon               string              `json:"icon"`
+	ParentID           *uuid.UUID          `json:"parent_id,omitempty"`
+	ParentName         string              `json:"parent_name,omitempty"`
+	ParentCategory     *CategoryViewModel  `json:"parent_category,omitempty"`
+	IsActive           bool                `json:"is_active"`
+	SubCategories      []CategoryViewModel `json:"subcategories,omitempty"`
+	TransactionCount   int                 `json:"transaction_count,omitempty"`
+	TotalAmount        float64             `json:"total_amount,omitempty"`
+	CurrentMonthAmount float64             `json:"current_month_amount,omitempty"`
+	BudgetLimit        *float64            `json:"budget_limit,omitempty"`
+	LastUsed           *time.Time          `json:"last_used,omitempty"`
+	CanDelete          bool                `json:"can_delete"`
 }
 
 // FromDomain создает CategoryViewModel из domain модели

@@ -1,9 +1,5 @@
 {{define "dashboard-stats"}}
-<section class="stats-grid"
-         hx-get="/htmx/dashboard/stats"
-         hx-trigger="load, every 30s"
-         hx-target="this"
-         hx-swap="outerHTML">
+<section class="stats-grid">
 
     <div class="grid">
         <!-- Total Income Card -->

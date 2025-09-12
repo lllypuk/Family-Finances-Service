@@ -199,11 +199,11 @@
                 </div>
             </div>
 
-            {{if .Category.Subcategories}}
+            {{if .Category.SubCategories}}
             <div class="subcategories-info">
-                <h4>Подкатегории ({{len .Category.Subcategories}})</h4>
+                <h4>Подкатегории ({{len .Category.SubCategories}})</h4>
                 <div class="subcategories-list">
-                    {{range .Category.Subcategories}}
+                    {{range .Category.SubCategories}}
                     <span class="subcategory-tag">
                         {{.Name}}
                         {{if .TransactionCount}}<small>({{.TransactionCount}} тр.)</small>{{end}}

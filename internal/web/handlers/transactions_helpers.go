@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -371,7 +372,7 @@ func (h *TransactionHandler) renderTransactionFormWithErrors(
 	// Получаем категории для селекта
 	categories, err := h.services.Category.GetCategoriesByFamily(c.Request().Context(), familyID, nil)
 	if err != nil {
-		return h.handleError(c, err, "Failed to get categories")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get categories")
 	}
 
 	categoryOptions := h.buildCategorySelectOptions(categories)

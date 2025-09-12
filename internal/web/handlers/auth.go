@@ -85,7 +85,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	}
 
 	if sessionErr := middleware.SetSessionData(c, sessionData); sessionErr != nil {
-		return c.String(http.StatusInternalServerError, "Failed to create session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create session")
 	}
 
 	// Определяем куда перенаправить после входа
@@ -183,7 +183,7 @@ func (h *AuthHandler) Register(c echo.Context) error {
 	}
 
 	if sessionErr := middleware.SetSessionData(c, sessionData); sessionErr != nil {
-		return c.String(http.StatusInternalServerError, "Failed to create session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create session")
 	}
 
 	// Если это HTMX запрос

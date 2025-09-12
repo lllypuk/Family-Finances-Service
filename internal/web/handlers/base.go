@@ -88,19 +88,6 @@ func (h *BaseHandler) renderPartial(c echo.Context, templateName string, data an
 	return c.Render(http.StatusOK, templateName, data)
 }
 
-// handleError обрабатывает ошибки и возвращает соответствующий ответ
-func (h *BaseHandler) handleError(c echo.Context, _ error, message string) error {
-	if h.isHTMXRequest(c) {
-		return h.renderPartial(c, "components/alert", map[string]any{
-			"Type":    "error",
-			"Message": message,
-		})
-	}
-	return c.JSON(http.StatusInternalServerError, map[string]string{
-		"error": message,
-	})
-}
-
 // redirect выполняет редирект
 func (h *BaseHandler) redirect(c echo.Context, url string) error {
 	return c.Redirect(http.StatusFound, url)
@@ -131,7 +118,7 @@ func (h *BaseHandler) handleDelete(c echo.Context, params DeleteEntityParams) er
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Парсим ID
@@ -142,19 +129,19 @@ func (h *BaseHandler) handleDelete(c echo.Context, params DeleteEntityParams) er
 	id := c.Param(paramName)
 	entityID, err := uuid.Parse(id)
 	if err != nil {
-		return h.handleError(c, err, "Invalid "+params.EntityName+" ID")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid "+params.EntityName+" ID")
 	}
 
 	// Получаем сущность для проверки прав доступа
 	entity, err := params.GetEntityFunc(c, entityID)
 	if err != nil {
-		return h.handleError(c, err, params.EntityName+" not found")
+		return echo.NewHTTPError(http.StatusNotFound, params.EntityName+" not found")
 	}
 
 	// Проверяем права доступа
 	if entityWithFamily, ok := entity.(EntityWithFamilyID); ok {
 		if entityWithFamily.GetFamilyID() != sessionData.FamilyID {
-			return h.handleError(c, echo.ErrForbidden, "Access denied")
+			return echo.NewHTTPError(http.StatusForbidden, "Access denied")
 		}
 	}
 
@@ -170,7 +157,7 @@ func (h *BaseHandler) handleDelete(c echo.Context, params DeleteEntityParams) er
 			})
 		}
 
-		return h.handleError(c, err, errorMsg)
+		return echo.NewHTTPError(http.StatusInternalServerError, errorMsg)
 	}
 
 	if h.isHTMXRequest(c) {

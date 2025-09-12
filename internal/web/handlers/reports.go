@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"encoding/csv"
-	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -47,13 +47,13 @@ func (h *ReportHandler) Index(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Получаем список существующих отчетов семьи
 	reports, err := h.services.Report.GetReportsByFamily(c.Request().Context(), sessionData.FamilyID, nil)
 	if err != nil {
-		return h.handleError(c, err, "Failed to get reports")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get reports")
 	}
 
 	// Конвертируем в view модели
@@ -106,7 +106,7 @@ func (h *ReportHandler) Create(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Парсим и валидируем форму
@@ -135,7 +135,7 @@ func (h *ReportHandler) Create(c echo.Context) error {
 func (h *ReportHandler) parseAndValidateReportForm(c echo.Context) (*webModels.ReportForm, error) {
 	var form webModels.ReportForm
 	if bindErr := c.Bind(&form); bindErr != nil {
-		return nil, h.handleError(c, bindErr, "Invalid form data")
+		return nil, echo.NewHTTPError(http.StatusBadRequest, "Invalid form data")
 	}
 
 	if validationErr := h.validator.Struct(form); validationErr != nil {
@@ -268,7 +268,7 @@ func (h *ReportHandler) handleUnsupportedReportType(c echo.Context) (*report.Rep
 			"Errors": map[string]string{"form": errorMsg},
 		})
 	}
-	return nil, h.handleError(c, errors.New("unsupported report type"), errorMsg)
+	return nil, echo.NewHTTPError(http.StatusBadRequest, errorMsg)
 }
 
 // handleReportGenerationError обрабатывает ошибки генерации отчетов
@@ -279,7 +279,7 @@ func (h *ReportHandler) handleReportGenerationError(c echo.Context, err error) e
 			"Errors": map[string]string{"form": errorMsg},
 		})
 	}
-	return h.handleError(c, err, errorMsg)
+	return echo.NewHTTPError(http.StatusInternalServerError, errorMsg)
 }
 
 // Show отображает сгенерированный отчет
@@ -287,25 +287,25 @@ func (h *ReportHandler) Show(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Парсим ID отчета
 	id := c.Param("id")
 	reportID, err := uuid.Parse(id)
 	if err != nil {
-		return h.handleError(c, err, "Invalid report ID")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid report ID")
 	}
 
 	// Получаем отчет
 	report, err := h.services.Report.GetReportByID(c.Request().Context(), reportID)
 	if err != nil {
-		return h.handleError(c, err, "Report not found")
+		return echo.NewHTTPError(http.StatusNotFound, "Report not found")
 	}
 
 	// Проверяем, что отчет принадлежит семье пользователя
 	if report.FamilyID != sessionData.FamilyID {
-		return h.handleError(c, echo.ErrForbidden, "Access denied")
+		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
 	}
 
 	// Конвертируем в view модель
@@ -344,30 +344,30 @@ func (h *ReportHandler) Export(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Парсим ID отчета
 	id := c.Param("id")
 	reportID, err := uuid.Parse(id)
 	if err != nil {
-		return h.handleError(c, err, "Invalid report ID")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid report ID")
 	}
 
 	format := c.QueryParam("format")
 	if format != "csv" {
-		return h.handleError(c, errors.New("unsupported format"), "Unsupported export format")
+		return echo.NewHTTPError(http.StatusBadRequest, "Unsupported export format")
 	}
 
 	// Получаем отчет
 	report, err := h.services.Report.GetReportByID(c.Request().Context(), reportID)
 	if err != nil {
-		return h.handleError(c, err, "Report not found")
+		return echo.NewHTTPError(http.StatusNotFound, "Report not found")
 	}
 
 	// Проверяем, что отчет принадлежит семье пользователя
 	if report.FamilyID != sessionData.FamilyID {
-		return h.handleError(c, echo.ErrForbidden, "Access denied")
+		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
 	}
 
 	// Экспортируем в CSV
@@ -379,13 +379,13 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Парсим данные формы
 	var form webModels.ReportForm
 	if bindErr := c.Bind(&form); bindErr != nil {
-		return h.handleError(c, bindErr, "Invalid form data")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid form data")
 	}
 
 	// Валидируем форму
@@ -399,12 +399,12 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 	// Парсим даты
 	startDate, err := form.GetStartDate()
 	if err != nil {
-		return h.handleError(c, err, "Invalid start date")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid start date")
 	}
 
 	endDate, err := form.GetEndDate()
 	if err != nil {
-		return h.handleError(c, err, "Invalid end date")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid end date")
 	}
 
 	// Создание DTO для генерации отчета
@@ -452,7 +452,7 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 		})
 	}
 	if generateErr != nil {
-		return h.handleError(c, generateErr, "Failed to generate report")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to generate report")
 	}
 
 	// Создаем временный отчет для отображения

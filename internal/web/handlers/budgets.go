@@ -62,7 +62,7 @@ func (h *BudgetHandler) Index(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Парсим параметры фильтрации
@@ -90,7 +90,7 @@ func (h *BudgetHandler) Index(c echo.Context) error {
 	// Получаем список бюджетов
 	budgets, err := h.services.Budget.GetBudgetsByFamily(c.Request().Context(), sessionData.FamilyID, filter)
 	if err != nil {
-		return h.handleError(c, err, "Failed to get budgets")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get budgets")
 	}
 
 	// Конвертируем в view модели
@@ -134,7 +134,7 @@ func (h *BudgetHandler) New(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Получаем список категорий для селектора
@@ -144,7 +144,7 @@ func (h *BudgetHandler) New(c echo.Context) error {
 		nil, // Все типы категорий
 	)
 	if err != nil {
-		return h.handleError(c, err, "Failed to get categories")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get categories")
 	}
 
 	// Подготавливаем опции категорий
@@ -190,13 +190,13 @@ func (h *BudgetHandler) Create(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Парсим данные формы
 	var form webModels.BudgetForm
 	if bindErr := c.Bind(&form); bindErr != nil {
-		return h.handleError(c, bindErr, "Invalid form data")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid form data")
 	}
 
 	// Валидируем форму
@@ -215,18 +215,18 @@ func (h *BudgetHandler) Create(c echo.Context) error {
 	// Парсим сумму
 	amount, err := form.GetAmount()
 	if err != nil {
-		return h.handleError(c, err, "Invalid amount")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid amount")
 	}
 
 	// Парсим даты
 	startDate, err := form.GetStartDate()
 	if err != nil {
-		return h.handleError(c, err, "Invalid start date")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid start date")
 	}
 
 	endDate, err := form.GetEndDate()
 	if err != nil {
-		return h.handleError(c, err, "Invalid end date")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid end date")
 	}
 
 	// Создаем DTO для создания бюджета
@@ -251,7 +251,7 @@ func (h *BudgetHandler) Create(c echo.Context) error {
 			})
 		}
 
-		return h.handleError(c, err, errorMsg)
+		return echo.NewHTTPError(http.StatusInternalServerError, errorMsg)
 	}
 
 	// Успешное создание - редирект на просмотр бюджета
@@ -263,25 +263,25 @@ func (h *BudgetHandler) Edit(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Парсим ID бюджета
 	id := c.Param("id")
 	budgetID, err := uuid.Parse(id)
 	if err != nil {
-		return h.handleError(c, err, "Invalid budget ID")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid budget ID")
 	}
 
 	// Получаем бюджет
 	budgetEntity, err := h.services.Budget.GetBudgetByID(c.Request().Context(), budgetID)
 	if err != nil {
-		return h.handleError(c, err, "Budget not found")
+		return echo.NewHTTPError(http.StatusNotFound, "Budget not found")
 	}
 
 	// Проверяем, что бюджет принадлежит семье пользователя
 	if budgetEntity.FamilyID != sessionData.FamilyID {
-		return h.handleError(c, echo.ErrForbidden, "Access denied")
+		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
 	}
 
 	// Получаем список категорий
@@ -291,7 +291,7 @@ func (h *BudgetHandler) Edit(c echo.Context) error {
 		nil,
 	)
 	if err != nil {
-		return h.handleError(c, err, "Failed to get categories")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get categories")
 	}
 
 	// Подготавливаем опции категорий
@@ -340,30 +340,30 @@ func (h *BudgetHandler) Update(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Парсим ID бюджета
 	id := c.Param("id")
 	budgetID, err := uuid.Parse(id)
 	if err != nil {
-		return h.handleError(c, err, "Invalid budget ID")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid budget ID")
 	}
 
 	// Проверяем, что бюджет существует и принадлежит семье
 	budgetEntity, err := h.services.Budget.GetBudgetByID(c.Request().Context(), budgetID)
 	if err != nil {
-		return h.handleError(c, err, "Budget not found")
+		return echo.NewHTTPError(http.StatusNotFound, "Budget not found")
 	}
 
 	if budgetEntity.FamilyID != sessionData.FamilyID {
-		return h.handleError(c, echo.ErrForbidden, "Access denied")
+		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
 	}
 
 	// Парсим данные формы
 	var form webModels.BudgetForm
 	if bindErr := c.Bind(&form); bindErr != nil {
-		return h.handleError(c, bindErr, "Invalid form data")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid form data")
 	}
 
 	// Валидируем форму
@@ -382,17 +382,17 @@ func (h *BudgetHandler) Update(c echo.Context) error {
 	// Парсим новые значения
 	amount, err := form.GetAmount()
 	if err != nil {
-		return h.handleError(c, err, "Invalid amount")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid amount")
 	}
 
 	startDate, err := form.GetStartDate()
 	if err != nil {
-		return h.handleError(c, err, "Invalid start date")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid start date")
 	}
 
 	endDate, err := form.GetEndDate()
 	if err != nil {
-		return h.handleError(c, err, "Invalid end date")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid end date")
 	}
 
 	// Создаем DTO для обновления
@@ -415,7 +415,7 @@ func (h *BudgetHandler) Update(c echo.Context) error {
 			})
 		}
 
-		return h.handleError(c, err, errorMsg)
+		return echo.NewHTTPError(http.StatusInternalServerError, errorMsg)
 	}
 
 	// Успешное обновление - редирект на просмотр
@@ -442,25 +442,25 @@ func (h *BudgetHandler) Progress(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Парсим ID бюджета
 	id := c.Param("id")
 	budgetID, err := uuid.Parse(id)
 	if err != nil {
-		return h.handleError(c, err, "Invalid budget ID")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid budget ID")
 	}
 
 	// Получаем бюджет
 	budgetEntity, err := h.services.Budget.GetBudgetByID(c.Request().Context(), budgetID)
 	if err != nil {
-		return h.handleError(c, err, "Budget not found")
+		return echo.NewHTTPError(http.StatusNotFound, "Budget not found")
 	}
 
 	// Проверяем права доступа
 	if budgetEntity.FamilyID != sessionData.FamilyID {
-		return h.handleError(c, echo.ErrForbidden, "Access denied")
+		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
 	}
 
 	// Конвертируем в view модель
@@ -488,25 +488,25 @@ func (h *BudgetHandler) Show(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Парсим ID бюджета
 	id := c.Param("id")
 	budgetID, err := uuid.Parse(id)
 	if err != nil {
-		return h.handleError(c, err, "Invalid budget ID")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid budget ID")
 	}
 
 	// Получаем бюджет
 	budgetEntity, err := h.services.Budget.GetBudgetByID(c.Request().Context(), budgetID)
 	if err != nil {
-		return h.handleError(c, err, "Budget not found")
+		return echo.NewHTTPError(http.StatusNotFound, "Budget not found")
 	}
 
 	// Проверяем права доступа
 	if budgetEntity.FamilyID != sessionData.FamilyID {
-		return h.handleError(c, echo.ErrForbidden, "Access denied")
+		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
 	}
 
 	// Конвертируем в view модель
@@ -585,7 +585,7 @@ func (h *BudgetHandler) renderBudgetFormWithErrors(
 	// Получаем данные пользователя из сессии для категорий
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Получаем список категорий
@@ -637,25 +637,25 @@ func (h *BudgetHandler) handleBudgetActivation(c echo.Context, isActive bool) er
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Парсим ID бюджета
 	id := c.Param("id")
 	budgetID, err := uuid.Parse(id)
 	if err != nil {
-		return h.handleError(c, err, "Invalid budget ID")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid budget ID")
 	}
 
 	// Получаем бюджет для проверки прав доступа
 	budgetEntity, err := h.services.Budget.GetBudgetByID(c.Request().Context(), budgetID)
 	if err != nil {
-		return h.handleError(c, err, "Budget not found")
+		return echo.NewHTTPError(http.StatusNotFound, "Budget not found")
 	}
 
 	// Проверяем права доступа
 	if budgetEntity.FamilyID != sessionData.FamilyID {
-		return h.handleError(c, echo.ErrForbidden, "Access denied")
+		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
 	}
 
 	// Создаем DTO для обновления
@@ -666,7 +666,7 @@ func (h *BudgetHandler) handleBudgetActivation(c echo.Context, isActive bool) er
 	// Обновляем бюджет
 	_, err = h.services.Budget.UpdateBudget(c.Request().Context(), budgetID, *updateDTO)
 	if err != nil {
-		return h.handleError(c, err, h.getBudgetServiceErrorMessage(err))
+		return echo.NewHTTPError(http.StatusInternalServerError, h.getBudgetServiceErrorMessage(err))
 	}
 
 	// Для HTMX запросов возвращаем обновленную страницу
@@ -693,7 +693,7 @@ func (h *BudgetHandler) Alerts(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Получаем все активные бюджеты семьи
@@ -704,7 +704,7 @@ func (h *BudgetHandler) Alerts(c echo.Context) error {
 
 	budgets, err := h.services.Budget.GetBudgetsByFamily(c.Request().Context(), sessionData.FamilyID, filter)
 	if err != nil {
-		return h.handleError(c, err, "Failed to load budgets")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load budgets")
 	}
 
 	// Создаем алерты для каждого бюджета
@@ -776,34 +776,34 @@ func (h *BudgetHandler) CreateAlert(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Парсим форму
 	var form webModels.BudgetAlertForm
 	if bindErr := c.Bind(&form); bindErr != nil {
-		return h.handleError(c, bindErr, "Invalid form data")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid form data")
 	}
 
 	// Валидируем форму
 	if validationErr := h.validator.Struct(form); validationErr != nil {
-		return h.handleError(c, validationErr, "Form validation failed")
+		return echo.NewHTTPError(http.StatusBadRequest, "Form validation failed")
 	}
 
 	// Парсим ID бюджета
 	budgetID, err := form.GetBudgetID()
 	if err != nil {
-		return h.handleError(c, err, "Invalid budget ID")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid budget ID")
 	}
 
 	// Проверяем, что бюджет принадлежит семье пользователя
 	budgetEntity, err := h.services.Budget.GetBudgetByID(c.Request().Context(), budgetID)
 	if err != nil {
-		return h.handleError(c, err, "Budget not found")
+		return echo.NewHTTPError(http.StatusNotFound, "Budget not found")
 	}
 
 	if budgetEntity.FamilyID != sessionData.FamilyID {
-		return h.handleError(c, echo.ErrForbidden, "Access denied")
+		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
 	}
 
 	// В реальном приложении здесь был бы вызов сервиса для создания алерта
@@ -823,14 +823,14 @@ func (h *BudgetHandler) DeleteAlert(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Парсим ID алерта
 	id := c.Param("alert_id")
 	alertID, err := uuid.Parse(id)
 	if err != nil {
-		return h.handleError(c, err, "Invalid alert ID")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid alert ID")
 	}
 
 	// В реальном приложении здесь был бы вызов сервиса для удаления алерта

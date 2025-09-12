@@ -36,19 +36,19 @@ func (h *UserHandler) Index(c echo.Context) error {
 	// Получаем всех пользователей семьи через сервис
 	users, err := h.services.User.GetUsersByFamily(c.Request().Context(), session.FamilyID)
 	if err != nil {
-		return h.handleError(c, err, "Failed to load users")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load users")
 	}
 
 	// Получаем семью для отображения названия через сервис
 	family, err := h.services.Family.GetFamilyByID(c.Request().Context(), session.FamilyID)
 	if err != nil {
-		return h.handleError(c, err, "Failed to load family")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load family")
 	}
 
 	// Получаем текущего пользователя для проверки прав через сервис
 	currentUser, err := h.services.User.GetUserByID(c.Request().Context(), session.UserID)
 	if err != nil {
-		return h.handleError(c, err, "Failed to load current user")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load current user")
 	}
 
 	csrfToken, err := middleware.GetCSRFToken(c)
@@ -78,7 +78,7 @@ func (h *UserHandler) New(c echo.Context) error {
 	// Проверяем права доступа через сервис - только админ может добавлять пользователей
 	currentUser, err := h.services.User.GetUserByID(c.Request().Context(), session.UserID)
 	if err != nil {
-		return h.handleError(c, err, "Failed to load current user")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load current user")
 	}
 
 	if currentUser.Role != user.RoleAdmin {
@@ -167,7 +167,7 @@ func (h *UserHandler) handleServiceError(c echo.Context, err error, form *models
 			"role": "Invalid role selected",
 		}, form)
 	default:
-		return h.handleError(c, err, "Failed to create user")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create user")
 	}
 }
 

@@ -110,9 +110,12 @@
                 </section>
 
                 <!-- Stats Cards -->
-                {{if .DashboardViewModel.MonthlySummary}} {{template
-                "dashboard-stats" .}} {{else}}
-                <section class="stats-grid">
+                {{if .DashboardViewModel.MonthlySummary}} {{template "dashboard-stats" .}} {{else}}
+                <section class="stats-grid"
+                         hx-get="/htmx/dashboard/stats"
+                         hx-trigger="load"
+                         hx-target="this"
+                         hx-swap="outerHTML">
                     <p aria-busy="true">Загрузка статистики...</p>
                 </section>
                 {{end}}
@@ -146,9 +149,8 @@
                         <!-- Recent Activity -->
                         <section class="recent-activity">
                             <h2>Последние транзакции</h2>
-                            {{if .DashboardViewModel.RecentActivity}} {{template
-                            "recent-transactions" .}} {{else}}
-                            <div
+                            {{if .DashboardViewModel.RecentActivity}} {{template "recent-transactions" .}} {{else}}
+                            <div class="recent-transactions"
                                 hx-get="/htmx/transactions/recent"
                                 hx-trigger="load"
                                 hx-target="this"
@@ -162,9 +164,8 @@
                         <!-- Budget Overview -->
                         <section class="budget-overview-section">
                             <h2>Состояние бюджетов</h2>
-                            {{if .DashboardViewModel.BudgetOverview}} {{template
-                            "budget-overview" .}} {{else}}
-                            <div
+                            {{if .DashboardViewModel.BudgetOverview}} {{template "budget-overview" .}} {{else}}
+                            <div class="budget-overview"
                                 hx-get="/htmx/budgets/overview"
                                 hx-trigger="load"
                                 hx-target="this"
