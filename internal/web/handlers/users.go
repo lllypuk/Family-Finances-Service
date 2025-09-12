@@ -139,7 +139,7 @@ func (h *UserHandler) Create(c echo.Context) error {
 	_ = createdUser // Use the created user if needed for response
 
 	// Если это HTMX запрос
-	if h.isHTMXRequest(c) {
+	if h.IsHTMXRequest(c) {
 		c.Response().Header().Set("Hx-Redirect", "/users")
 		return c.NoContent(http.StatusOK)
 	}
@@ -197,7 +197,7 @@ func (h *UserHandler) userError(c echo.Context, message string, fieldErrors map[
 	}
 
 	// Если это HTMX запрос, возвращаем только форму
-	if h.isHTMXRequest(c) {
+	if h.IsHTMXRequest(c) {
 		return c.Render(http.StatusUnprocessableEntity, "users/new_form.html", data)
 	}
 

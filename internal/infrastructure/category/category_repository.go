@@ -72,7 +72,7 @@ func (r *Repository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*
 		{Key: "is_active", Value: true},
 	}
 
-	opts := options.Find().SetSort(bson.M{"name": 1})
+	opts := options.Find().SetSort(bson.D{{Key: "name", Value: 1}})
 	cursor, err := r.collection.Find(ctx, filter, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get categories by family id: %w", err)

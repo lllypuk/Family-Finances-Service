@@ -179,7 +179,7 @@
                      hx-get="/categories/{{.Category.ID}}/progress"
                      hx-trigger="load, every 60s"
                      hx-swap="outerHTML">
-                    <div class="progress-bar" style="width: {{if gt .Category.BudgetPercentage 100}}100{{else}}{{printf "%.1f" .Category.BudgetPercentage}}{{end}}%">
+                    <div class="progress-bar" style="width: {{if gt .Category.BudgetPercentage 100.0}}100{{else}}{{printf "%.1f" .Category.BudgetPercentage}}{{end}}%">
                         <span class="progress-text">{{printf "%.1f" .Category.BudgetPercentage}}%</span>
                     </div>
                 </div>
@@ -189,8 +189,8 @@
                         <span>Потрачено: {{.Category.CurrentMonthAmount}} ₽</span>
                         <span>Лимит: {{.Category.BudgetLimit}} ₽</span>
                     </div>
-                    <div class="progress-remaining {{if gt .Category.BudgetPercentage 100}}over-budget{{else}}within-budget{{end}}">
-                        {{if gt .Category.BudgetPercentage 100}}
+                    <div class="progress-remaining {{if gt .Category.BudgetPercentage 100.0}}over-budget{{else}}within-budget{{end}}">
+                        {{if gt .Category.BudgetPercentage 100.0}}
                             Превышение: {{.Category.BudgetOverspent}} ₽
                         {{else}}
                             Остается: {{.Category.BudgetRemaining}} ₽

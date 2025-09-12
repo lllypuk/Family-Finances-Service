@@ -168,7 +168,7 @@ func (h *TransactionHandler) Create(c echo.Context) error {
 		// Возвращаем форму с ошибками валидации
 		validationErrors := webModels.GetValidationErrors(validationErr)
 
-		if h.isHTMXRequest(c) {
+		if h.IsHTMXRequest(c) {
 			// Для HTMX возвращаем только errors partial
 			return h.renderPartial(c, "components/form_errors", map[string]any{
 				"Errors": validationErrors,
@@ -198,7 +198,7 @@ func (h *TransactionHandler) Create(c echo.Context) error {
 	}
 
 	// Успешное создание - редирект
-	if h.isHTMXRequest(c) {
+	if h.IsHTMXRequest(c) {
 		// Для HTMX запросов используем Hx-Redirect
 		c.Response().Header().Set("Hx-Redirect", "/transactions")
 		return c.NoContent(http.StatusOK)
@@ -307,7 +307,7 @@ func (h *TransactionHandler) Update(c echo.Context) error {
 		// Возвращаем форму с ошибками валидации
 		validationErrors := webModels.GetValidationErrors(validationErr)
 
-		if h.isHTMXRequest(c) {
+		if h.IsHTMXRequest(c) {
 			// Для HTMX возвращаем только errors partial
 			return h.renderPartial(c, "components/form_errors", map[string]any{
 				"Errors": validationErrors,
@@ -331,7 +331,7 @@ func (h *TransactionHandler) Update(c echo.Context) error {
 	}
 
 	// Успешное обновление - редирект
-	if h.isHTMXRequest(c) {
+	if h.IsHTMXRequest(c) {
 		// Для HTMX запросов используем Hx-Redirect
 		c.Response().Header().Set("Hx-Redirect", "/transactions")
 		return c.NoContent(http.StatusOK)
@@ -408,7 +408,7 @@ func (h *TransactionHandler) BulkDelete(c echo.Context) error {
 		deleted++
 	}
 
-	if h.isHTMXRequest(c) {
+	if h.IsHTMXRequest(c) {
 		// Возвращаем сообщение о результате
 		message := fmt.Sprintf("Successfully deleted %d transactions", deleted)
 		if len(errors) > 0 {

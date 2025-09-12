@@ -5,17 +5,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.PageData.Title}} - Семейный бюджет</title>
-    
+
     <!-- PicoCSS -->
     <link rel="stylesheet" href="/static/css/pico.min.css">
     <link rel="stylesheet" href="/static/css/custom.css">
-    
+
     <!-- HTMX -->
     <script src="/static/js/htmx.min.js"></script>
-    
+
     <!-- CSRF Token for HTMX -->
     {{if .CSRFToken}}<meta name="csrf-token" content="{{.CSRFToken}}">{{end}}
-    
+
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
 </head>
@@ -59,7 +59,7 @@
             {{end}}
         </ul>
     </nav>
-    
+
     <!-- Main Content -->
     <main class="container">
         <!-- Page Header -->
@@ -81,11 +81,11 @@
         <section>
             <details>
                 <summary>🔍 Фильтры бюджетов</summary>
-            <form hx-get="/budgets" 
-                  hx-target="#budgets-list" 
+            <form hx-get="/budgets"
+                  hx-target="#budgets-list"
                   hx-trigger="change"
                   hx-include="this">
-                
+
                 <div class="grid">
                     <div>
                         <label for="period">Период</label>
@@ -97,7 +97,7 @@
                             <option value="custom" {{if eq .Filter.Period "custom"}}selected{{end}}>Произвольно</option>
                         </select>
                     </div>
-                    
+
                     <div>
                         <label for="is_active">Статус</label>
                         <select id="is_active" name="is_active">
@@ -117,23 +117,23 @@
             <h2>Обзор бюджетов</h2>
         <div class="budget-summary">
             <!-- Statistics should be calculated in backend -->
-            
+
             <div class="grid">
                 <article class="summary-card">
                     <header>Активных бюджетов</header>
                     <h3>{{len .Budgets}}</h3>
                 </article>
-                
+
                 <article class="summary-card">
                     <header>Общий бюджет</header>
                     <h3>0.00 ₽</h3>
                 </article>
-                
+
                 <article class="summary-card">
                     <header>Потрачено всего</header>
                     <h3>0.00 ₽</h3>
                 </article>
-                
+
                 <article class="summary-card">
                     <header>Превышений</header>
                     <h3>0</h3>
@@ -162,7 +162,7 @@
                             <span class="badge success">{{printf "%.0f" .Percentage}}%</span>
                         {{end}}
                     </div>
-                    
+
                     {{if .CategoryName}}
                     <small class="category-info">
                         <span class="category-color" style="background-color: {{.CategoryColor}}"></span>
@@ -175,15 +175,15 @@
 
                 <!-- Progress Bar -->
                 <div class="progress-section">
-                    <div class="progress {{.ProgressBarClass}}" 
-                         hx-get="/budgets/{{.ID}}/progress" 
+                    <div class="progress {{.ProgressBarClass}}"
+                         hx-get="/budgets/{{.ID}}/progress"
                          hx-trigger="load, every 30s"
                          hx-swap="outerHTML">
-                        <div class="progress-bar" style="width: {{if gt .Percentage 100}}100{{else}}{{printf "%.1f" .Percentage}}{{end}}%">
+                        <div class="progress-bar" style="width: {{if gt .Percentage 100.0}}100{{else}}{{printf "%.1f" .Percentage}}{{end}}%">
                             <span class="progress-text">{{printf "%.1f" .Percentage}}%</span>
                         </div>
                     </div>
-                    
+
                     <div class="progress-details">
                         <div class="amount-info">
                             <span class="spent">Потрачено: {{.FormattedSpent}}</span>
@@ -221,7 +221,7 @@
                     <div class="button-group">
                         <a href="/budgets/{{.ID}}" role="button" class="secondary outline">Посмотреть</a>
                         <a href="/budgets/{{.ID}}/edit" role="button" class="secondary outline">Редактировать</a>
-                        <button hx-delete="/budgets/{{.ID}}" 
+                        <button hx-delete="/budgets/{{.ID}}"
                                 hx-confirm="Вы уверены, что хотите удалить этот бюджет?"
                                 hx-target="closest article"
                                 hx-swap="outerHTML"
@@ -244,7 +244,7 @@
         {{end}}
         </section>
     </main>
-    
+
     <!-- Footer -->
     <footer class="container">
         <hr>
@@ -254,7 +254,7 @@
             </div>
         </div>
     </footer>
-    
+
     <!-- Custom JavaScript -->
     <script src="/static/js/app.js"></script>
 </body>
@@ -267,7 +267,7 @@
         flex-wrap: wrap;
         margin-top: 1rem;
     }
-    
+
     .button-group > * {
         margin: 0;
     }
@@ -275,19 +275,19 @@
     .budget-summary {
         margin: 1.5rem 0;
     }
-    
+
     .summary-card {
         text-align: center;
         padding: 1rem;
     }
-    
+
     .summary-card header {
         font-size: 0.875rem;
         font-weight: 600;
         margin-bottom: 0.5rem;
         color: var(--pico-muted-color);
     }
-    
+
     .summary-card h3 {
         margin: 0;
         font-size: 1.5rem;
@@ -306,7 +306,7 @@
         padding: 1.5rem;
         background: var(--pico-card-background-color);
     }
-    
+
     .budget-card.inactive {
         opacity: 0.6;
         border-style: dashed;
@@ -318,7 +318,7 @@
         align-items: center;
         margin-bottom: 0.5rem;
     }
-    
+
     .budget-header h4 {
         margin: 0;
     }
@@ -329,7 +329,7 @@
         gap: 0.5rem;
         margin-bottom: 1rem;
     }
-    
+
     .category-color {
         width: 12px;
         height: 12px;
@@ -340,7 +340,7 @@
     .progress-section {
         margin: 1rem 0;
     }
-    
+
     .progress {
         width: 100%;
         height: 20px;
@@ -350,7 +350,7 @@
         position: relative;
         margin-bottom: 0.5rem;
     }
-    
+
     .progress-bar {
         height: 100%;
         background-color: var(--pico-primary);
@@ -361,14 +361,14 @@
         transition: width 0.3s ease;
         position: relative;
     }
-    
+
     .progress-text {
         color: white;
         font-size: 0.75rem;
         font-weight: 600;
         text-shadow: 0 0 3px rgba(0,0,0,0.5);
     }
-    
+
     .progress.progress-success .progress-bar { background-color: #28a745; }
     .progress.progress-info .progress-bar { background-color: #17a2b8; }
     .progress.progress-warning .progress-bar { background-color: #ffc107; }
@@ -380,12 +380,12 @@
         align-items: center;
         font-size: 0.875rem;
     }
-    
+
     .amount-info {
         display: flex;
         gap: 0.5rem;
     }
-    
+
     .spent {
         font-weight: 600;
     }
@@ -406,7 +406,7 @@
         text-transform: uppercase;
         letter-spacing: 0.05em;
     }
-    
+
     .badge.success { background-color: #d4edda; color: #155724; }
     .badge.warning { background-color: #fff3cd; color: #856404; }
     .badge.danger { background-color: #f8d7da; color: #721c24; }
@@ -421,7 +421,7 @@
         text-align: center;
         padding: 3rem 1rem;
     }
-    
+
     .empty-state h3 {
         color: var(--pico-muted-color);
     }
@@ -430,15 +430,15 @@
         .budget-grid {
             grid-template-columns: 1fr;
         }
-        
+
         .button-group {
             justify-content: stretch;
         }
-        
+
         .button-group > * {
             flex: 1;
         }
-        
+
         .progress-details {
             flex-direction: column;
             align-items: flex-start;

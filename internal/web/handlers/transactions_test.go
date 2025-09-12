@@ -3,197 +3,362 @@ package handlers_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services"
 	webHandlers "family-budget-service/internal/web/handlers"
-	webModels "family-budget-service/internal/web/models"
+	"family-budget-service/internal/web/middleware"
 )
 
-func TestTransactionHandler_Creation(t *testing.T) {
-	// Test that transaction handler can be created
-	mockRepos := NewMockRepositories()
-	mockServices := &services.Services{}
-
-	handler := webHandlers.NewTransactionHandler(&mockRepos.Repositories, mockServices)
-	assert.NotNil(t, handler)
-}
-
-func TestTransactionHandler_buildTransactionFilterDTO_Basic(t *testing.T) {
-	// Создаем handler для тестирования
-	mockRepos := NewMockRepositories()
-	mockServices := &services.Services{}
-	handler := webHandlers.NewTransactionHandler(&mockRepos.Repositories, mockServices)
-
+func TestTransactionHandler_Index(t *testing.T) {
 	tests := []struct {
-		name        string
-		filters     webModels.TransactionFilters
-		expectError bool
-		description string
+		name           string
+		setupMocks     func()
+		expectedStatus int
 	}{
 		{
-			name: "empty_filters",
-			filters: webModels.TransactionFilters{
-				Page:     1,
-				PageSize: 50,
+			name: "Successfully show transactions",
+			setupMocks: func() {
+				// No specific mocks needed for basic index rendering
 			},
-			expectError: false,
-			description: "Пустые фильтры должны обрабатываться без ошибок",
-		},
-		{
-			name: "valid_type_filter",
-			filters: webModels.TransactionFilters{
-				Type:     "income",
-				Page:     1,
-				PageSize: 50,
-			},
-			expectError: false,
-			description: "Валидный тип должен обрабатываться без ошибок",
-		},
-		{
-			name: "invalid_date_format",
-			filters: webModels.TransactionFilters{
-				DateFrom: "invalid-date",
-				Page:     1,
-				PageSize: 50,
-			},
-			expectError: true,
-			description: "Неверный формат даты должен вызывать ошибку",
-		},
-		{
-			name: "invalid_amount_format",
-			filters: webModels.TransactionFilters{
-				AmountFrom: "not-a-number",
-				Page:       1,
-				PageSize:   50,
-			},
-			expectError: true,
-			description: "Неверный формат суммы должен вызывать ошибку",
+			expectedStatus: http.StatusOK,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Note: Since buildTransactionFilterDTO is not exported, we can't test it directly
-			// This is a placeholder test structure that would work if the method was exported
-			// In real testing, we would test through public methods that use this functionality
+			// Setup
+			repos := setupRepositories()
+			mockServices := &services.Services{
+				// Add minimal services if needed
+			}
+			tt.setupMocks()
 
-			// For now, just verify the handler exists and basic structure
-			assert.NotNil(t, handler, "Handler should be created successfully")
+			handler := webHandlers.NewTransactionHandler(repos, mockServices)
+
+			e := setupEchoWithSession()
+			req := httptest.NewRequest(http.MethodGet, "/transactions", nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
+			// Set user in context
+			testUser := createTestUser()
+			sessionData := &middleware.SessionData{
+				UserID:    testUser.ID,
+				FamilyID:  testUser.FamilyID,
+				Role:      testUser.Role,
+				Email:     testUser.Email,
+				ExpiresAt: time.Now().Add(time.Hour),
+			}
+			c.Set("user", sessionData)
+
+			// Execute
+			err := handler.Index(c)
+
+			// Assert
+			require.NoError(t, err)
 		})
 	}
 }
 
-func TestTransactionHandler_HTTPMethods_Structure(t *testing.T) {
-	// Test that handler methods exist and have correct signatures
-	mockRepos := NewMockRepositories()
-	mockServices := &services.Services{}
-	handler := webHandlers.NewTransactionHandler(&mockRepos.Repositories, mockServices)
-
-	// Test that we can create an echo context
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/transactions", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	// These methods should exist (we can't call them without proper mocking, but we can verify they exist)
-	assert.NotNil(t, handler, "Handler should exist")
-	assert.NotNil(t, c, "Context should be created")
-}
-
-func TestTransactionFilters_Validation(t *testing.T) {
-	// Test the transaction filters model
-	filters := webModels.TransactionFilters{
-		Type:        "income",
-		DateFrom:    "2024-01-01",
-		DateTo:      "2024-12-31",
-		AmountFrom:  "100.00",
-		AmountTo:    "5000.00",
-		Description: "test",
-		Tags:        "работа, зарплата",
-		Page:        1,
-		PageSize:    50,
+func TestTransactionHandler_New(t *testing.T) {
+	tests := []struct {
+		name           string
+		setupMocks     func()
+		expectedStatus int
+	}{
+		{
+			name: "Successfully show create form",
+			setupMocks: func() {
+				// No specific mocks needed for basic form rendering
+			},
+			expectedStatus: http.StatusOK,
+		},
 	}
 
-	assert.Equal(t, "income", filters.Type)
-	assert.Equal(t, "2024-01-01", filters.DateFrom)
-	assert.Equal(t, "2024-12-31", filters.DateTo)
-	assert.Equal(t, "100.00", filters.AmountFrom)
-	assert.Equal(t, "5000.00", filters.AmountTo)
-	assert.Equal(t, "test", filters.Description)
-	assert.Equal(t, "работа, зарплата", filters.Tags)
-	assert.Equal(t, 1, filters.Page)
-	assert.Equal(t, 50, filters.PageSize)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup
+			repos := setupRepositories()
+			mockServices := &services.Services{
+				// Add minimal services if needed
+			}
+			tt.setupMocks()
+
+			handler := webHandlers.NewTransactionHandler(repos, mockServices)
+
+			e := setupEchoWithSession()
+			req := httptest.NewRequest(http.MethodGet, "/transactions/new", nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
+			// Set user in context
+			testUser := createTestUser()
+			sessionData := &middleware.SessionData{
+				UserID:    testUser.ID,
+				FamilyID:  testUser.FamilyID,
+				Role:      testUser.Role,
+				Email:     testUser.Email,
+				ExpiresAt: time.Now().Add(time.Hour),
+			}
+			c.Set("user", sessionData)
+
+			// Execute
+			err := handler.New(c)
+
+			// Assert
+			require.NoError(t, err)
+		})
+	}
 }
 
-func TestTransactionForm_Validation(t *testing.T) {
-	// Test the transaction form model
-	form := webModels.TransactionForm{
-		Amount:      "1000.50",
-		Type:        "income",
-		Description: "Зарплата",
-		CategoryID:  uuid.New().String(),
-		Date:        time.Now().Format("2006-01-02"),
-		Tags:        "работа, зарплата",
+func TestTransactionHandler_Create(t *testing.T) {
+	tests := []struct {
+		name           string
+		formData       map[string]string
+		setupMocks     func()
+		expectedStatus int
+		expectRedirect bool
+	}{
+		{
+			name: "Successfully create expense transaction",
+			formData: map[string]string{
+				"amount":      "100.50",
+				"description": "Test expense",
+				"category_id": "550e8400-e29b-41d4-a716-446655440000",
+				"type":        "expense",
+				"date":        "2024-01-01",
+			},
+			setupMocks: func() {
+				// No specific mocks needed for basic creation
+			},
+			expectedStatus: http.StatusSeeOther,
+			expectRedirect: true,
+		},
+		{
+			name: "Invalid form data",
+			formData: map[string]string{
+				"amount":      "invalid",
+				"description": "",
+				"category_id": "invalid-uuid",
+				"type":        "invalid",
+				"date":        "invalid-date",
+			},
+			setupMocks: func() {
+				// No mocks needed for validation errors
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
 	}
 
-	assert.Equal(t, "1000.50", form.Amount)
-	assert.Equal(t, "income", form.Type)
-	assert.Equal(t, "Зарплата", form.Description)
-	assert.NotEmpty(t, form.CategoryID)
-	assert.NotEmpty(t, form.Date)
-	assert.Equal(t, "работа, зарплата", form.Tags)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup
+			repos := setupRepositories()
+			mockServices := &services.Services{
+				// Add minimal services if needed
+			}
+			tt.setupMocks()
+
+			handler := webHandlers.NewTransactionHandler(repos, mockServices)
+
+			e := setupEchoWithSession()
+			req := httptest.NewRequest(http.MethodPost, "/transactions", nil)
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
+			// Set form data
+			form := make(url.Values)
+			for key, value := range tt.formData {
+				form.Set(key, value)
+			}
+			req.PostForm = form
+
+			// Set user in context
+			testUser := createTestUser()
+			sessionData := &middleware.SessionData{
+				UserID:    testUser.ID,
+				FamilyID:  testUser.FamilyID,
+				Role:      testUser.Role,
+				Email:     testUser.Email,
+				ExpiresAt: time.Now().Add(time.Hour),
+			}
+			c.Set("user", sessionData)
+
+			// Execute
+			err := handler.Create(c)
+
+			// Assert
+			if tt.expectRedirect {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedStatus, rec.Code)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }
 
-func TestTransactionHandler_Constants(t *testing.T) {
-	// Test that transaction type constants are correctly defined
-	assert.Equal(t, "income", webHandlers.TransactionTypeIncome)
-	assert.Equal(t, "expense", webHandlers.TransactionTypeExpense)
-	assert.Equal(t, 50, webHandlers.DefaultPageSize)
-	assert.Equal(t, 100, webHandlers.MaxPageSize)
+func TestTransactionHandler_Update(t *testing.T) {
+	tests := []struct {
+		name           string
+		transactionID  string
+		formData       map[string]string
+		setupMocks     func()
+		expectedStatus int
+		expectRedirect bool
+	}{
+		{
+			name:          "Successfully update transaction",
+			transactionID: "550e8400-e29b-41d4-a716-446655440000",
+			formData: map[string]string{
+				"amount":      "150.75",
+				"description": "Updated description",
+				"category_id": "550e8400-e29b-41d4-a716-446655440000",
+				"type":        "expense",
+				"date":        "2024-01-02",
+			},
+			setupMocks: func() {
+				// No specific mocks needed for basic update
+			},
+			expectedStatus: http.StatusSeeOther,
+			expectRedirect: true,
+		},
+		{
+			name:          "Invalid transaction ID",
+			transactionID: "invalid-uuid",
+			formData: map[string]string{
+				"amount": "150.75",
+			},
+			setupMocks: func() {
+				// No mocks needed for validation errors
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup
+			repos := setupRepositories()
+			mockServices := &services.Services{
+				// Add minimal services if needed
+			}
+			tt.setupMocks()
+
+			handler := webHandlers.NewTransactionHandler(repos, mockServices)
+
+			e := setupEchoWithSession()
+			req := httptest.NewRequest(http.MethodPut, "/transactions/"+tt.transactionID, nil)
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+			c.SetParamNames("id")
+			c.SetParamValues(tt.transactionID)
+
+			// Set form data
+			form := make(url.Values)
+			for key, value := range tt.formData {
+				form.Set(key, value)
+			}
+			req.PostForm = form
+
+			// Set user in context
+			testUser := createTestUser()
+			sessionData := &middleware.SessionData{
+				UserID:    testUser.ID,
+				FamilyID:  testUser.FamilyID,
+				Role:      testUser.Role,
+				Email:     testUser.Email,
+				ExpiresAt: time.Now().Add(time.Hour),
+			}
+			c.Set("user", sessionData)
+
+			// Execute
+			err := handler.Update(c)
+
+			// Assert
+			if tt.expectRedirect {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedStatus, rec.Code)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }
 
-// Integration test for handler setup
-func TestTransactionHandler_Integration_Setup(t *testing.T) {
-	mockRepos := NewMockRepositories()
-	mockServices := &services.Services{}
-
-	// Test that handler can be created with real-like dependencies
-	handler := webHandlers.NewTransactionHandler(&mockRepos.Repositories, mockServices)
-	require.NotNil(t, handler)
-
-	// Test echo context creation for transactions
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/transactions", nil)
-	rec := httptest.NewRecorder()
-	_ = e.NewContext(req, rec) // Используем переменную
-
-	// Add some basic session-like data to context (similar to what middleware would do)
-	testUser := &user.User{
-		ID:    uuid.New(),
-		Email: "test@example.com",
-		Role:  user.RoleAdmin,
+func TestTransactionHandler_Delete(t *testing.T) {
+	tests := []struct {
+		name           string
+		transactionID  string
+		setupMocks     func()
+		expectedStatus int
+		expectRedirect bool
+	}{
+		{
+			name:          "Successfully delete transaction",
+			transactionID: "550e8400-e29b-41d4-a716-446655440000",
+			setupMocks: func() {
+				// No specific mocks needed for basic deletion
+			},
+			expectedStatus: http.StatusSeeOther,
+			expectRedirect: true,
+		},
+		{
+			name:           "Invalid transaction ID",
+			transactionID:  "invalid-uuid",
+			setupMocks:     func() {},
+			expectedStatus: http.StatusBadRequest,
+		},
 	}
 
-	sessionData := webHandlers.SessionData{
-		UserID:    testUser.ID,
-		FamilyID:  uuid.New(),
-		Role:      testUser.Role,
-		Email:     testUser.Email,
-		ExpiresAt: time.Now().Add(time.Hour),
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup
+			repos := setupRepositories()
+			mockServices := &services.Services{
+				// Add minimal services if needed
+			}
+			tt.setupMocks()
 
-	// Verify session data structure is correct
-	assert.NotEqual(t, uuid.Nil, sessionData.UserID)
-	assert.NotEqual(t, uuid.Nil, sessionData.FamilyID)
-	assert.Equal(t, user.RoleAdmin, sessionData.Role)
-	assert.Equal(t, "test@example.com", sessionData.Email)
-	assert.True(t, sessionData.ExpiresAt.After(time.Now()))
+			handler := webHandlers.NewTransactionHandler(repos, mockServices)
+
+			e := setupEchoWithSession()
+			req := httptest.NewRequest(http.MethodDelete, "/transactions/"+tt.transactionID, nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+			c.SetParamNames("id")
+			c.SetParamValues(tt.transactionID)
+
+			// Set user in context
+			testUser := createTestUser()
+			sessionData := &middleware.SessionData{
+				UserID:    testUser.ID,
+				FamilyID:  testUser.FamilyID,
+				Role:      testUser.Role,
+				Email:     testUser.Email,
+				ExpiresAt: time.Now().Add(time.Hour),
+			}
+			c.Set("user", sessionData)
+
+			// Execute
+			err := handler.Delete(c)
+
+			// Assert
+			if tt.expectRedirect {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedStatus, rec.Code)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }

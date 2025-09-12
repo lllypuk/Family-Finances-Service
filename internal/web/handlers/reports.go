@@ -137,7 +137,7 @@ func (h *ReportHandler) Create(c echo.Context) error {
 
 	// Успешное создание - редирект на просмотр отчета
 	reportURL := fmt.Sprintf("/reports/%s", reportEntity.ID)
-	if h.isHTMXRequest(c) {
+	if h.IsHTMXRequest(c) {
 		// Для HTMX запросов используем Hx-Redirect
 		c.Response().Header().Set("Hx-Redirect", reportURL)
 		return c.NoContent(http.StatusOK)
@@ -157,7 +157,7 @@ func (h *ReportHandler) parseAndValidateReportForm(c echo.Context) (*webModels.R
 	if validationErr := h.validator.Struct(form); validationErr != nil {
 		validationErrors := webModels.GetValidationErrors(validationErr)
 
-		if h.isHTMXRequest(c) {
+		if h.IsHTMXRequest(c) {
 			return nil, h.renderPartial(c, "components/form_errors", map[string]any{
 				"Errors": validationErrors,
 			})
@@ -279,7 +279,7 @@ func (h *ReportHandler) generateCategoryReport(c echo.Context, createDTO dto.Rep
 // handleUnsupportedReportType обрабатывает неподдерживаемый тип отчета
 func (h *ReportHandler) handleUnsupportedReportType(c echo.Context) (*report.Report, error) {
 	errorMsg := "Unsupported report type"
-	if h.isHTMXRequest(c) {
+	if h.IsHTMXRequest(c) {
 		return nil, h.renderPartial(c, "components/form_errors", map[string]any{
 			"Errors": map[string]string{"form": errorMsg},
 		})
@@ -290,7 +290,7 @@ func (h *ReportHandler) handleUnsupportedReportType(c echo.Context) (*report.Rep
 // handleReportGenerationError обрабатывает ошибки генерации отчетов
 func (h *ReportHandler) handleReportGenerationError(c echo.Context, err error) error {
 	errorMsg := h.getReportServiceErrorMessage(err)
-	if h.isHTMXRequest(c) {
+	if h.IsHTMXRequest(c) {
 		return h.renderPartial(c, "components/form_errors", map[string]any{
 			"Errors": map[string]string{"form": errorMsg},
 		})

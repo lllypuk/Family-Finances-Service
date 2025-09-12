@@ -170,7 +170,7 @@ func (h *CategoryHandler) Create(c echo.Context) error {
 		// Возвращаем форму с ошибками валидации
 		validationErrors := webModels.GetValidationErrors(validationErr)
 
-		if h.isHTMXRequest(c) {
+		if h.IsHTMXRequest(c) {
 			// Для HTMX возвращаем только errors partial
 			return h.renderPartial(c, "components/form_errors", map[string]any{
 				"Errors": validationErrors,
@@ -245,7 +245,7 @@ func (h *CategoryHandler) Create(c echo.Context) error {
 			errorMsg = "Failed to create category"
 		}
 
-		if h.isHTMXRequest(c) {
+		if h.IsHTMXRequest(c) {
 			return h.renderPartial(c, "components/form_errors", map[string]any{
 				"Errors": map[string]string{"form": errorMsg},
 			})
@@ -419,7 +419,7 @@ func (h *CategoryHandler) handleUpdateValidationError(
 ) error {
 	validationErrors := webModels.GetValidationErrors(validationErr)
 
-	if h.isHTMXRequest(c) {
+	if h.IsHTMXRequest(c) {
 		return h.renderPartial(c, "components/form_errors", map[string]any{
 			"Errors": validationErrors,
 		})
@@ -489,7 +489,7 @@ func (h *CategoryHandler) handleUpdateServiceError(c echo.Context, err error) er
 		errorMsg = "Failed to update category"
 	}
 
-	if h.isHTMXRequest(c) {
+	if h.IsHTMXRequest(c) {
 		return h.renderPartial(c, "components/form_errors", map[string]any{
 			"Errors": map[string]string{"form": errorMsg},
 		})
@@ -622,7 +622,7 @@ func (h *CategoryHandler) Delete(c echo.Context) error {
 			errorMsg = "Failed to delete category"
 		}
 
-		if h.isHTMXRequest(c) {
+		if h.IsHTMXRequest(c) {
 			return h.renderPartial(c, "components/alert", map[string]any{
 				"Type":    "error",
 				"Message": errorMsg,
@@ -632,7 +632,7 @@ func (h *CategoryHandler) Delete(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, errorMsg)
 	}
 
-	if h.isHTMXRequest(c) {
+	if h.IsHTMXRequest(c) {
 		// Для HTMX возвращаем пустой ответ для удаления строки
 		return c.NoContent(http.StatusOK)
 	}

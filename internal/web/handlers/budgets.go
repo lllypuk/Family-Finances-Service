@@ -207,7 +207,7 @@ func (h *BudgetHandler) Create(c echo.Context) error {
 	if validationErr := h.validator.Struct(form); validationErr != nil {
 		validationErrors := webModels.GetValidationErrors(validationErr)
 
-		if h.isHTMXRequest(c) {
+		if h.IsHTMXRequest(c) {
 			return h.renderPartial(c, "components/form_errors", map[string]any{
 				"Errors": validationErrors,
 			})
@@ -248,22 +248,14 @@ func (h *BudgetHandler) Create(c echo.Context) error {
 	createdBudget, err := h.services.Budget.CreateBudget(c.Request().Context(), createDTO)
 	if err != nil {
 		errorMsg := h.getBudgetServiceErrorMessage(err)
-
-		if h.isHTMXRequest(c) {
-			return h.renderPartial(c, "components/form_errors", map[string]any{
-				"Errors": map[string]string{"form": errorMsg},
-			})
-		}
-
 		return echo.NewHTTPError(http.StatusInternalServerError, errorMsg)
 	}
 
 	// Успешное создание - редирект на просмотр бюджета
 	budgetURL := fmt.Sprintf("/budgets/%s", createdBudget.ID)
-	if h.isHTMXRequest(c) {
+	if h.IsHTMXRequest(c) {
 		// Для HTMX запросов используем Hx-Redirect
 		c.Response().Header().Set("Hx-Redirect", budgetURL)
-		return c.NoContent(http.StatusOK)
 	}
 
 	// Для обычных запросов - стандартный редирект
@@ -386,7 +378,7 @@ func (h *BudgetHandler) Update(c echo.Context) error {
 	if validationErr := h.validator.Struct(form); validationErr != nil {
 		validationErrors := webModels.GetValidationErrors(validationErr)
 
-		if h.isHTMXRequest(c) {
+		if h.IsHTMXRequest(c) {
 			return h.renderPartial(c, "components/form_errors", map[string]any{
 				"Errors": validationErrors,
 			})
@@ -424,19 +416,12 @@ func (h *BudgetHandler) Update(c echo.Context) error {
 	updatedBudget, err := h.services.Budget.UpdateBudget(c.Request().Context(), budgetID, updateDTO)
 	if err != nil {
 		errorMsg := h.getBudgetServiceErrorMessage(err)
-
-		if h.isHTMXRequest(c) {
-			return h.renderPartial(c, "components/form_errors", map[string]any{
-				"Errors": map[string]string{"form": errorMsg},
-			})
-		}
-
 		return echo.NewHTTPError(http.StatusInternalServerError, errorMsg)
 	}
 
 	// Успешное обновление - редирект на просмотр
 	budgetURL := fmt.Sprintf("/budgets/%s", updatedBudget.ID)
-	if h.isHTMXRequest(c) {
+	if h.IsHTMXRequest(c) {
 		// Для HTMX запросов используем Hx-Redirect
 		c.Response().Header().Set("Hx-Redirect", budgetURL)
 		return c.NoContent(http.StatusOK)
@@ -879,16 +864,16 @@ func (h *BudgetHandler) getBudgetServiceErrorMessage(err error) string {
 	errMsg := err.Error()
 	switch errMsg {
 	case "budget not found":
-		return "Budget not found"
+		return "Budget not found" + errMsg
 	case "invalid budget period":
-		return "Invalid budget period - end date must be after start date"
+		return "Invalid budget period - end date must be after start date" + errMsg
 	case "budget period overlap":
-		return "Budget period overlaps with existing budget for this category"
+		return "Budget period overlaps with existing budget for this category" + errMsg
 	case "budget already exceeded":
-		return "Budget amount is less than already spent amount"
+		return "Budget amount is less than already spent amount" + errMsg
 	case "invalid budget amount":
-		return "Budget amount must be greater than 0"
+		return "Budget amount must be greater than 0" + errMsg
 	default:
-		return "Failed to process budget"
+		return "Failed to process budget" + errMsg
 	}
 }

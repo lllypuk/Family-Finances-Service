@@ -90,11 +90,11 @@ func (h *BaseHandler) renderPartial(c echo.Context, templateName string, data an
 
 // redirect выполняет редирект
 func (h *BaseHandler) redirect(c echo.Context, url string) error {
-	return c.Redirect(http.StatusFound, url)
+	return c.Redirect(http.StatusSeeOther, url)
 }
 
-// isHTMXRequest проверяет, является ли запрос HTMX запросом
-func (h *BaseHandler) isHTMXRequest(c echo.Context) bool {
+// IsHTMXRequest проверяет, является ли запрос HTMX запросом
+func (h *BaseHandler) IsHTMXRequest(c echo.Context) bool {
 	return c.Request().Header.Get("Hx-Request") == HTMXRequestHeader
 }
 
@@ -150,7 +150,7 @@ func (h *BaseHandler) handleDelete(c echo.Context, params DeleteEntityParams) er
 	if err != nil {
 		errorMsg := params.GetErrorMsgFunc(err)
 
-		if h.isHTMXRequest(c) {
+		if h.IsHTMXRequest(c) {
 			return h.renderPartial(c, "components/alert", map[string]any{
 				"Type":    "error",
 				"Message": errorMsg,
@@ -160,7 +160,7 @@ func (h *BaseHandler) handleDelete(c echo.Context, params DeleteEntityParams) er
 		return echo.NewHTTPError(http.StatusInternalServerError, errorMsg)
 	}
 
-	if h.isHTMXRequest(c) {
+	if h.IsHTMXRequest(c) {
 		// Для HTMX возвращаем пустой ответ для удаления строки
 		return c.NoContent(http.StatusOK)
 	}

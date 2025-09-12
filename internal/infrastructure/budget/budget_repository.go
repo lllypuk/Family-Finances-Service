@@ -109,7 +109,7 @@ func (r *Repository) GetActiveBudgets(ctx context.Context, familyID uuid.UUID) (
 		"end_date":   bson.M{"$gte": now},
 	}
 
-	opts := options.Find().SetSort(bson.M{"created_at": -1})
+	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
 	cursor, err := r.collection.Find(ctx, filter, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active budgets: %w", err)
@@ -266,7 +266,7 @@ func (r *Repository) GetByPeriod(
 		},
 	}
 
-	opts := options.Find().SetSort(bson.M{"start_date": 1, "created_at": -1})
+	opts := options.Find().SetSort(bson.D{{Key: "start_date", Value: 1}, {Key: "created_at", Value: -1}})
 	cursor, err := r.collection.Find(ctx, filter, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get budgets by period: %w", err)
