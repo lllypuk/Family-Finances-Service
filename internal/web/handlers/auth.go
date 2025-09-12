@@ -198,7 +198,7 @@ func (h *AuthHandler) Register(c echo.Context) error {
 // Logout обрабатывает выход из системы
 func (h *AuthHandler) Logout(c echo.Context) error {
 	if err := middleware.ClearSession(c); err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to logout")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to logout")
 	}
 
 	// Если это HTMX запрос
