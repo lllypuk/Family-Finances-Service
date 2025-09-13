@@ -123,6 +123,11 @@ func (h *ReportHandler) Create(c echo.Context) error {
 		return err
 	}
 
+	// Проверяем, что форма не nil перед использованием
+	if form == nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Form validation failed")
+	}
+
 	// Создаем DTO для запроса отчета
 	createDTO, err := h.buildReportRequestDTO(*form, sessionData)
 	if err != nil {

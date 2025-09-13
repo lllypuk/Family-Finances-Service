@@ -6,8 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
+	"family-budget-service/internal/domain/budget"
+	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/services"
 	webHandlers "family-budget-service/internal/web/handlers"
 	"family-budget-service/internal/web/middleware"
@@ -16,13 +21,28 @@ import (
 func TestDashboardHandler_Dashboard(t *testing.T) {
 	tests := []struct {
 		name           string
-		setupMocks     func()
+		setupMocks     func(*MockTransactionService, *MockCategoryService, *MockBudgetService)
 		expectedStatus int
 	}{
 		{
 			name: "Successfully show dashboard",
-			setupMocks: func() {
-				// No specific mocks needed for basic dashboard rendering
+			setupMocks: func(transactionService *MockTransactionService, categoryService *MockCategoryService, budgetService *MockBudgetService) {
+				// Mock Transaction service calls
+				transactionService.On("GetTransactionsByFamily", mock.Anything, mock.AnythingOfType("uuid.UUID"), mock.Anything).
+					Return([]*transaction.Transaction{}, nil).
+					Maybe()
+
+				// Mock Category service calls
+				categoryService.On("GetCategoryByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).
+					Return(&category.Category{
+						ID:   uuid.New(),
+						Name: "Test Category",
+						Type: category.TypeExpense,
+					}, nil).Maybe()
+
+				// Mock Budget service calls
+				budgetService.On("GetActiveBudgets", mock.Anything, mock.AnythingOfType("uuid.UUID"), mock.Anything).
+					Return([]*budget.Budget{}, nil).Maybe()
 			},
 			expectedStatus: http.StatusOK,
 		},
@@ -30,13 +50,20 @@ func TestDashboardHandler_Dashboard(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Setup
-			repos := setupRepositories()
-			mockServices := &services.Services{
-				// Add minimal services if needed
-			}
-			tt.setupMocks()
+			// Setup mock services
+			transactionService := &MockTransactionService{}
+			categoryService := &MockCategoryService{}
+			budgetService := &MockBudgetService{}
 
+			tt.setupMocks(transactionService, categoryService, budgetService)
+
+			mockServices := &services.Services{
+				Transaction: transactionService,
+				Category:    categoryService,
+				Budget:      budgetService,
+			}
+
+			repos := setupRepositories()
 			handler := webHandlers.NewDashboardHandler(repos, mockServices)
 
 			e := setupEchoWithSession()
@@ -59,11 +86,12 @@ func TestDashboardHandler_Dashboard(t *testing.T) {
 			err := handler.Dashboard(c)
 
 			// Assert
-			if tt.expectedStatus == http.StatusOK {
-				assert.NoError(t, err)
-			} else {
-				assert.NoError(t, err) // Echo handles HTTP errors differently
-			}
+			require.NoError(t, err)
+
+			// Assert mock expectations
+			transactionService.AssertExpectations(t)
+			categoryService.AssertExpectations(t)
+			budgetService.AssertExpectations(t)
 		})
 	}
 }
@@ -71,13 +99,28 @@ func TestDashboardHandler_Dashboard(t *testing.T) {
 func TestDashboardHandler_DashboardStats(t *testing.T) {
 	tests := []struct {
 		name           string
-		setupMocks     func()
+		setupMocks     func(*MockTransactionService, *MockCategoryService, *MockBudgetService)
 		expectedStatus int
 	}{
 		{
 			name: "Successfully get dashboard stats",
-			setupMocks: func() {
-				// No specific mocks needed for basic stats rendering
+			setupMocks: func(transactionService *MockTransactionService, categoryService *MockCategoryService, budgetService *MockBudgetService) {
+				// Mock Transaction service calls
+				transactionService.On("GetTransactionsByFamily", mock.Anything, mock.AnythingOfType("uuid.UUID"), mock.Anything).
+					Return([]*transaction.Transaction{}, nil).
+					Maybe()
+
+				// Mock Category service calls
+				categoryService.On("GetCategoryByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).
+					Return(&category.Category{
+						ID:   uuid.New(),
+						Name: "Test Category",
+						Type: category.TypeExpense,
+					}, nil).Maybe()
+
+				// Mock Budget service calls
+				budgetService.On("GetActiveBudgets", mock.Anything, mock.AnythingOfType("uuid.UUID"), mock.Anything).
+					Return([]*budget.Budget{}, nil).Maybe()
 			},
 			expectedStatus: http.StatusOK,
 		},
@@ -85,13 +128,20 @@ func TestDashboardHandler_DashboardStats(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Setup
-			repos := setupRepositories()
-			mockServices := &services.Services{
-				// Add minimal services if needed
-			}
-			tt.setupMocks()
+			// Setup mock services
+			transactionService := &MockTransactionService{}
+			categoryService := &MockCategoryService{}
+			budgetService := &MockBudgetService{}
 
+			tt.setupMocks(transactionService, categoryService, budgetService)
+
+			mockServices := &services.Services{
+				Transaction: transactionService,
+				Category:    categoryService,
+				Budget:      budgetService,
+			}
+
+			repos := setupRepositories()
 			handler := webHandlers.NewDashboardHandler(repos, mockServices)
 
 			e := setupEchoWithSession()
@@ -114,11 +164,12 @@ func TestDashboardHandler_DashboardStats(t *testing.T) {
 			err := handler.DashboardStats(c)
 
 			// Assert
-			if tt.expectedStatus == http.StatusOK {
-				assert.NoError(t, err)
-			} else {
-				assert.NoError(t, err) // Echo handles HTTP errors differently
-			}
+			require.NoError(t, err)
+
+			// Assert mock expectations
+			transactionService.AssertExpectations(t)
+			categoryService.AssertExpectations(t)
+			budgetService.AssertExpectations(t)
 		})
 	}
 }
@@ -126,13 +177,28 @@ func TestDashboardHandler_DashboardStats(t *testing.T) {
 func TestDashboardHandler_RecentTransactions(t *testing.T) {
 	tests := []struct {
 		name           string
-		setupMocks     func()
+		setupMocks     func(*MockTransactionService, *MockCategoryService, *MockBudgetService)
 		expectedStatus int
 	}{
 		{
 			name: "Successfully get recent transactions",
-			setupMocks: func() {
-				// No specific mocks needed for basic transactions rendering
+			setupMocks: func(transactionService *MockTransactionService, categoryService *MockCategoryService, budgetService *MockBudgetService) {
+				// Mock Transaction service calls
+				transactionService.On("GetTransactionsByFamily", mock.Anything, mock.AnythingOfType("uuid.UUID"), mock.Anything).
+					Return([]*transaction.Transaction{}, nil).
+					Maybe()
+
+				// Mock Category service calls
+				categoryService.On("GetCategoryByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).
+					Return(&category.Category{
+						ID:   uuid.New(),
+						Name: "Test Category",
+						Type: category.TypeExpense,
+					}, nil).Maybe()
+
+				// Mock Budget service calls
+				budgetService.On("GetActiveBudgets", mock.Anything, mock.AnythingOfType("uuid.UUID"), mock.Anything).
+					Return([]*budget.Budget{}, nil).Maybe()
 			},
 			expectedStatus: http.StatusOK,
 		},
@@ -140,13 +206,20 @@ func TestDashboardHandler_RecentTransactions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Setup
-			repos := setupRepositories()
-			mockServices := &services.Services{
-				// Add minimal services if needed
-			}
-			tt.setupMocks()
+			// Setup mock services
+			transactionService := &MockTransactionService{}
+			categoryService := &MockCategoryService{}
+			budgetService := &MockBudgetService{}
 
+			tt.setupMocks(transactionService, categoryService, budgetService)
+
+			mockServices := &services.Services{
+				Transaction: transactionService,
+				Category:    categoryService,
+				Budget:      budgetService,
+			}
+
+			repos := setupRepositories()
 			handler := webHandlers.NewDashboardHandler(repos, mockServices)
 
 			e := setupEchoWithSession()
@@ -169,11 +242,12 @@ func TestDashboardHandler_RecentTransactions(t *testing.T) {
 			err := handler.RecentTransactions(c)
 
 			// Assert
-			if tt.expectedStatus == http.StatusOK {
-				assert.NoError(t, err)
-			} else {
-				assert.NoError(t, err) // Echo handles HTTP errors differently
-			}
+			require.NoError(t, err)
+
+			// Assert mock expectations
+			transactionService.AssertExpectations(t)
+			categoryService.AssertExpectations(t)
+			budgetService.AssertExpectations(t)
 		})
 	}
 }

@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,6 +13,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
@@ -38,15 +40,18 @@ func TestBudgetHandler_Index(t *testing.T) {
 					createTestCategory(testUser.FamilyID),
 				}
 
-				budgetService.On("GetBudgetsByFamily", mock.Anything, testUser.FamilyID, mock.Anything).Return(testBudgets, nil)
-				categoryService.On("GetCategoryByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(testCategories[0], nil)
+				budgetService.On("GetBudgetsByFamily", mock.Anything, testUser.FamilyID, mock.Anything).
+					Return(testBudgets, nil)
+				categoryService.On("GetCategoryByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).
+					Return(testCategories[0], nil)
 			},
 			expectedStatus: http.StatusOK,
 		},
 		{
 			name: "Budget service error",
-			setupMocks: func(budgetService *MockBudgetService, categoryService *MockCategoryService, testUser *user.User) {
-				budgetService.On("GetBudgetsByFamily", mock.Anything, testUser.FamilyID, mock.Anything).Return(nil, assert.AnError)
+			setupMocks: func(budgetService *MockBudgetService, _ *MockCategoryService, testUser *user.User) {
+				budgetService.On("GetBudgetsByFamily", mock.Anything, testUser.FamilyID, mock.Anything).
+					Return(nil, assert.AnError)
 			},
 			expectedStatus: http.StatusInternalServerError,
 		},
@@ -89,10 +94,11 @@ func TestBudgetHandler_Index(t *testing.T) {
 
 			// Assert
 			if tt.expectedStatus == http.StatusOK {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			} else {
-				assert.Error(t, err)
-				if httpErr, ok := err.(*echo.HTTPError); ok {
+				require.Error(t, err)
+				httpErr := &echo.HTTPError{}
+				if errors.As(err, &httpErr) {
 					assert.Equal(t, tt.expectedStatus, httpErr.Code)
 				}
 			}
@@ -116,14 +122,16 @@ func TestBudgetHandler_New(t *testing.T) {
 					createTestCategory(testUser.FamilyID),
 				}
 
-				categoryService.On("GetCategoriesByFamily", mock.Anything, testUser.FamilyID, mock.AnythingOfType("*category.Type")).Return(testCategories, nil)
+				categoryService.On("GetCategoriesByFamily", mock.Anything, testUser.FamilyID, mock.AnythingOfType("*category.Type")).
+					Return(testCategories, nil)
 			},
 			expectedStatus: http.StatusOK,
 		},
 		{
 			name: "Category service error",
 			setupMocks: func(categoryService *MockCategoryService, testUser *user.User) {
-				categoryService.On("GetCategoriesByFamily", mock.Anything, testUser.FamilyID, mock.AnythingOfType("*category.Type")).Return(nil, assert.AnError)
+				categoryService.On("GetCategoriesByFamily", mock.Anything, testUser.FamilyID, mock.AnythingOfType("*category.Type")).
+					Return(nil, assert.AnError)
 			},
 			expectedStatus: http.StatusInternalServerError,
 		},
@@ -164,10 +172,11 @@ func TestBudgetHandler_New(t *testing.T) {
 
 			// Assert
 			if tt.expectedStatus == http.StatusOK {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			} else {
-				assert.Error(t, err)
-				if httpErr, ok := err.(*echo.HTTPError); ok {
+				require.Error(t, err)
+				httpErr := &echo.HTTPError{}
+				if errors.As(err, &httpErr) {
 					assert.Equal(t, tt.expectedStatus, httpErr.Code)
 				}
 			}
@@ -196,9 +205,10 @@ func TestBudgetHandler_Create(t *testing.T) {
 				"start_date":  {"2024-01-01"},
 				"end_date":    {"2024-12-31"},
 			},
-			setupMocks: func(budgetService *MockBudgetService, categoryService *MockCategoryService, testUser *user.User) {
+			setupMocks: func(budgetService *MockBudgetService, _ *MockCategoryService, testUser *user.User) {
 				testBudget := createTestBudget(testUser.FamilyID, uuid.New())
-				budgetService.On("CreateBudget", mock.Anything, mock.AnythingOfType("dto.CreateBudgetDTO")).Return(testBudget, nil)
+				budgetService.On("CreateBudget", mock.Anything, mock.AnythingOfType("dto.CreateBudgetDTO")).
+					Return(testBudget, nil)
 			},
 			expectedStatus: http.StatusSeeOther,
 			expectRedirect: true,
@@ -214,12 +224,13 @@ func TestBudgetHandler_Create(t *testing.T) {
 				"start_date":  {"invalid-date"},
 				"end_date":    {"invalid-date"},
 			},
-			setupMocks: func(budgetService *MockBudgetService, categoryService *MockCategoryService, testUser *user.User) {
+			setupMocks: func(_ *MockBudgetService, categoryService *MockCategoryService, testUser *user.User) {
 				// Mock GetCategoriesByFamily for renderBudgetFormWithErrors
 				testCategories := []*category.Category{
 					createTestCategory(testUser.FamilyID),
 				}
-				categoryService.On("GetCategoriesByFamily", mock.Anything, testUser.FamilyID, mock.Anything).Return(testCategories, nil)
+				categoryService.On("GetCategoriesByFamily", mock.Anything, testUser.FamilyID, mock.Anything).
+					Return(testCategories, nil)
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectRedirect: false,
@@ -235,8 +246,9 @@ func TestBudgetHandler_Create(t *testing.T) {
 				"start_date":  {"2024-01-01"},
 				"end_date":    {"2024-12-31"},
 			},
-			setupMocks: func(budgetService *MockBudgetService, categoryService *MockCategoryService, testUser *user.User) {
-				budgetService.On("CreateBudget", mock.Anything, mock.AnythingOfType("dto.CreateBudgetDTO")).Return(nil, assert.AnError)
+			setupMocks: func(budgetService *MockBudgetService, _ *MockCategoryService, _ *user.User) {
+				budgetService.On("CreateBudget", mock.Anything, mock.AnythingOfType("dto.CreateBudgetDTO")).
+					Return(nil, assert.AnError)
 			},
 			expectedStatus: http.StatusInternalServerError,
 			expectRedirect: false,
@@ -282,12 +294,13 @@ func TestBudgetHandler_Create(t *testing.T) {
 
 			// Assert
 			if tt.expectError {
-				assert.Error(t, err)
-				if httpErr, ok := err.(*echo.HTTPError); ok {
+				require.Error(t, err)
+				httpErr := &echo.HTTPError{}
+				if errors.As(err, &httpErr) {
 					assert.Equal(t, tt.expectedStatus, httpErr.Code)
 				}
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				if tt.expectRedirect {
 					assert.Equal(t, tt.expectedStatus, rec.Code)
 				}
@@ -315,23 +328,26 @@ func TestBudgetHandler_Edit(t *testing.T) {
 					createTestCategory(testUser.FamilyID),
 				}
 
-				budgetService.On("GetBudgetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(testBudget, nil)
-				categoryService.On("GetCategoriesByFamily", mock.Anything, testUser.FamilyID, mock.AnythingOfType("*category.Type")).Return(testCategories, nil)
+				budgetService.On("GetBudgetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).
+					Return(testBudget, nil)
+				categoryService.On("GetCategoriesByFamily", mock.Anything, testUser.FamilyID, mock.AnythingOfType("*category.Type")).
+					Return(testCategories, nil)
 			},
 			expectedStatus: http.StatusOK,
 		},
 		{
 			name:     "Budget not found",
 			budgetID: uuid.New().String(),
-			setupMocks: func(budgetService *MockBudgetService, categoryService *MockCategoryService, testUser *user.User) {
-				budgetService.On("GetBudgetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(nil, assert.AnError)
+			setupMocks: func(budgetService *MockBudgetService, _ *MockCategoryService, _ *user.User) {
+				budgetService.On("GetBudgetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).
+					Return(nil, assert.AnError)
 			},
 			expectedStatus: http.StatusNotFound,
 		},
 		{
 			name:     "Invalid budget ID",
 			budgetID: "invalid-uuid",
-			setupMocks: func(budgetService *MockBudgetService, categoryService *MockCategoryService, testUser *user.User) {
+			setupMocks: func(_ *MockBudgetService, _ *MockCategoryService, _ *user.User) {
 				// No mocks needed for validation errors
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -377,10 +393,11 @@ func TestBudgetHandler_Edit(t *testing.T) {
 
 			// Assert
 			if tt.expectedStatus == http.StatusOK {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			} else {
-				assert.Error(t, err)
-				if httpErr, ok := err.(*echo.HTTPError); ok {
+				require.Error(t, err)
+				httpErr := &echo.HTTPError{}
+				if errors.As(err, &httpErr) {
 					assert.Equal(t, tt.expectedStatus, httpErr.Code)
 				}
 			}
@@ -413,8 +430,10 @@ func TestBudgetHandler_Update(t *testing.T) {
 			},
 			setupMocks: func(budgetService *MockBudgetService, testUser *user.User) {
 				testBudget := createTestBudget(testUser.FamilyID, uuid.New())
-				budgetService.On("GetBudgetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(testBudget, nil)
-				budgetService.On("UpdateBudget", mock.Anything, mock.AnythingOfType("uuid.UUID"), mock.AnythingOfType("dto.UpdateBudgetDTO")).Return(testBudget, nil)
+				budgetService.On("GetBudgetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).
+					Return(testBudget, nil)
+				budgetService.On("UpdateBudget", mock.Anything, mock.AnythingOfType("uuid.UUID"), mock.AnythingOfType("dto.UpdateBudgetDTO")).
+					Return(testBudget, nil)
 			},
 			expectedStatus: http.StatusSeeOther,
 			expectRedirect: true,
@@ -426,7 +445,7 @@ func TestBudgetHandler_Update(t *testing.T) {
 				"name":   {"Updated Budget"},
 				"amount": {"1500.00"},
 			},
-			setupMocks: func(budgetService *MockBudgetService, testUser *user.User) {
+			setupMocks: func(_ *MockBudgetService, _ *user.User) {
 				// No mocks needed for invalid ID validation
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -444,8 +463,10 @@ func TestBudgetHandler_Update(t *testing.T) {
 			},
 			setupMocks: func(budgetService *MockBudgetService, testUser *user.User) {
 				testBudget := createTestBudget(testUser.FamilyID, uuid.New())
-				budgetService.On("GetBudgetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(testBudget, nil)
-				budgetService.On("UpdateBudget", mock.Anything, mock.AnythingOfType("uuid.UUID"), mock.AnythingOfType("dto.UpdateBudgetDTO")).Return(nil, assert.AnError)
+				budgetService.On("GetBudgetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).
+					Return(testBudget, nil)
+				budgetService.On("UpdateBudget", mock.Anything, mock.AnythingOfType("uuid.UUID"), mock.AnythingOfType("dto.UpdateBudgetDTO")).
+					Return(nil, assert.AnError)
 			},
 			expectedStatus: http.StatusInternalServerError,
 		},
@@ -489,11 +510,12 @@ func TestBudgetHandler_Update(t *testing.T) {
 
 			// Assert
 			if tt.expectRedirect {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tt.expectedStatus, rec.Code)
 			} else {
-				assert.Error(t, err)
-				if httpErr, ok := err.(*echo.HTTPError); ok {
+				require.Error(t, err)
+				httpErr := &echo.HTTPError{}
+				if errors.As(err, &httpErr) {
 					assert.Equal(t, tt.expectedStatus, httpErr.Code)
 				}
 			}
@@ -516,7 +538,8 @@ func TestBudgetHandler_Delete(t *testing.T) {
 			budgetID: uuid.New().String(),
 			setupMocks: func(budgetService *MockBudgetService, testUser *user.User) {
 				testBudget := createTestBudget(testUser.FamilyID, uuid.New())
-				budgetService.On("GetBudgetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(testBudget, nil)
+				budgetService.On("GetBudgetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).
+					Return(testBudget, nil)
 				budgetService.On("DeleteBudget", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(nil)
 			},
 			expectedStatus: http.StatusSeeOther,
@@ -525,7 +548,7 @@ func TestBudgetHandler_Delete(t *testing.T) {
 		{
 			name:     "Invalid budget ID",
 			budgetID: "invalid-uuid",
-			setupMocks: func(budgetService *MockBudgetService, testUser *user.User) {
+			setupMocks: func(_ *MockBudgetService, _ *user.User) {
 				// No setup needed as validation should fail first
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -535,7 +558,8 @@ func TestBudgetHandler_Delete(t *testing.T) {
 			budgetID: uuid.New().String(),
 			setupMocks: func(budgetService *MockBudgetService, testUser *user.User) {
 				testBudget := createTestBudget(testUser.FamilyID, uuid.New())
-				budgetService.On("GetBudgetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(testBudget, nil)
+				budgetService.On("GetBudgetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).
+					Return(testBudget, nil)
 				budgetService.On("DeleteBudget", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(assert.AnError)
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -579,11 +603,12 @@ func TestBudgetHandler_Delete(t *testing.T) {
 
 			// Assert
 			if tt.expectRedirect {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tt.expectedStatus, rec.Code)
 			} else {
-				assert.Error(t, err)
-				if httpErr, ok := err.(*echo.HTTPError); ok {
+				require.Error(t, err)
+				httpErr := &echo.HTTPError{}
+				if errors.As(err, &httpErr) {
 					assert.Equal(t, tt.expectedStatus, httpErr.Code)
 				}
 			}

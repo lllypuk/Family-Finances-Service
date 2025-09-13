@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,8 +13,11 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
+	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/services"
 	webHandlers "family-budget-service/internal/web/handlers"
 	"family-budget-service/internal/web/middleware"
@@ -23,26 +27,32 @@ import (
 func TestCategoryHandler_Index(t *testing.T) {
 	tests := []struct {
 		name           string
-		setupMocks     func(*MockCategoryService)
+		setupMocks     func(*MockCategoryService, *MockTransactionService, *MockBudgetService, uuid.UUID)
 		expectedStatus int
 	}{
 		{
 			name: "Successfully show categories",
-			setupMocks: func(categoryService *MockCategoryService) {
-				testUser := createTestUser()
+			setupMocks: func(categoryService *MockCategoryService, transactionService *MockTransactionService, budgetService *MockBudgetService, familyID uuid.UUID) {
 				testCategories := []*category.Category{
-					createTestCategory(testUser.FamilyID),
+					createTestCategory(familyID),
 				}
 
-				categoryService.On("GetCategoriesByFamily", mock.Anything, testUser.FamilyID, mock.Anything).Return(testCategories, nil)
+				categoryService.On("GetCategoriesByFamily", mock.Anything, familyID, mock.Anything).
+					Return(testCategories, nil)
+				// Mock transaction service calls for populating statistics
+				transactionService.On("GetTransactionsByCategory", mock.Anything, mock.Anything, mock.Anything).
+					Return([]*transaction.Transaction{}, nil)
+				// Mock budget service calls
+				budgetService.On("GetBudgetsByCategory", mock.Anything, familyID, mock.Anything).
+					Return([]*budget.Budget{}, nil)
 			},
 			expectedStatus: http.StatusOK,
 		},
 		{
 			name: "Category service error",
-			setupMocks: func(categoryService *MockCategoryService) {
-				testUser := createTestUser()
-				categoryService.On("GetCategoriesByFamily", mock.Anything, testUser.FamilyID, mock.Anything).Return(nil, assert.AnError)
+			setupMocks: func(categoryService *MockCategoryService, _ *MockTransactionService, _ *MockBudgetService, familyID uuid.UUID) {
+				categoryService.On("GetCategoriesByFamily", mock.Anything, familyID, mock.Anything).
+					Return(nil, assert.AnError)
 			},
 			expectedStatus: http.StatusInternalServerError,
 		},
@@ -50,13 +60,20 @@ func TestCategoryHandler_Index(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Create test user once for the entire test
+			testUser := createTestUser()
+
 			// Setup
 			repos := setupRepositories()
 			categoryService := &MockCategoryService{}
-			tt.setupMocks(categoryService)
+			transactionService := &MockTransactionService{}
+			budgetService := &MockBudgetService{}
+			tt.setupMocks(categoryService, transactionService, budgetService, testUser.FamilyID)
 
 			mockServices := &services.Services{
-				Category: categoryService,
+				Category:    categoryService,
+				Transaction: transactionService,
+				Budget:      budgetService,
 			}
 
 			handler := webHandlers.NewCategoryHandler(repos, mockServices)
@@ -67,7 +84,6 @@ func TestCategoryHandler_Index(t *testing.T) {
 			c := e.NewContext(req, rec)
 
 			// Set user in context
-			testUser := createTestUser()
 			sessionData := &middleware.SessionData{
 				UserID:    testUser.ID,
 				FamilyID:  testUser.FamilyID,
@@ -82,9 +98,13 @@ func TestCategoryHandler_Index(t *testing.T) {
 
 			// Assert
 			if tt.expectedStatus == http.StatusOK {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			} else {
-				assert.NoError(t, err) // Echo handles HTTP errors differently
+				// Expect an HTTP error for non-200 responses
+				require.Error(t, err)
+				var httpError *echo.HTTPError
+				require.ErrorAs(t, err, &httpError)
+				assert.Equal(t, tt.expectedStatus, httpError.Code)
 			}
 
 			categoryService.AssertExpectations(t)
@@ -95,26 +115,32 @@ func TestCategoryHandler_Index(t *testing.T) {
 func TestCategoryHandler_New(t *testing.T) {
 	tests := []struct {
 		name           string
-		setupMocks     func(*MockCategoryService)
+		setupMocks     func(*MockCategoryService, *MockTransactionService, *MockBudgetService, uuid.UUID)
 		expectedStatus int
 	}{
 		{
 			name: "Successfully show create form",
-			setupMocks: func(categoryService *MockCategoryService) {
-				testUser := createTestUser()
+			setupMocks: func(categoryService *MockCategoryService, transactionService *MockTransactionService, budgetService *MockBudgetService, familyID uuid.UUID) {
 				testCategories := []*category.Category{
-					createTestCategory(testUser.FamilyID),
+					createTestCategory(familyID),
 				}
 
-				categoryService.On("GetCategoriesByFamily", mock.Anything, testUser.FamilyID, mock.Anything).Return(testCategories, nil)
+				categoryService.On("GetCategoriesByFamily", mock.Anything, familyID, mock.Anything).
+					Return(testCategories, nil)
+				// Mock transaction service calls for populating statistics
+				transactionService.On("GetTransactionsByCategory", mock.Anything, mock.Anything, mock.Anything).
+					Return([]*transaction.Transaction{}, nil)
+				// Mock budget service calls
+				budgetService.On("GetBudgetsByCategory", mock.Anything, familyID, mock.Anything).
+					Return([]*budget.Budget{}, nil)
 			},
 			expectedStatus: http.StatusOK,
 		},
 		{
 			name: "Category service error",
-			setupMocks: func(categoryService *MockCategoryService) {
-				testUser := createTestUser()
-				categoryService.On("GetCategoriesByFamily", mock.Anything, testUser.FamilyID, mock.Anything).Return(nil, assert.AnError)
+			setupMocks: func(categoryService *MockCategoryService, _ *MockTransactionService, _ *MockBudgetService, familyID uuid.UUID) {
+				categoryService.On("GetCategoriesByFamily", mock.Anything, familyID, mock.Anything).
+					Return(nil, assert.AnError)
 			},
 			expectedStatus: http.StatusInternalServerError,
 		},
@@ -122,13 +148,20 @@ func TestCategoryHandler_New(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Create test user once for the entire test
+			testUser := createTestUser()
+
 			// Setup
 			repos := setupRepositories()
 			categoryService := &MockCategoryService{}
-			tt.setupMocks(categoryService)
+			transactionService := &MockTransactionService{}
+			budgetService := &MockBudgetService{}
+			tt.setupMocks(categoryService, transactionService, budgetService, testUser.FamilyID)
 
 			mockServices := &services.Services{
-				Category: categoryService,
+				Category:    categoryService,
+				Transaction: transactionService,
+				Budget:      budgetService,
 			}
 
 			handler := webHandlers.NewCategoryHandler(repos, mockServices)
@@ -138,8 +171,15 @@ func TestCategoryHandler_New(t *testing.T) {
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
 
+			// Process request through middleware first to set up session and CSRF
+			sessionMiddleware := middleware.SessionStore("test-secret-key-for-testing-that-is-long-enough", false)
+			csrfMiddleware := middleware.CSRFProtection()
+			combinedMiddleware := sessionMiddleware(csrfMiddleware(func(_ echo.Context) error {
+				return nil // Dummy handler
+			}))
+			_ = combinedMiddleware(c) // Process middleware
+
 			// Set user in context
-			testUser := createTestUser()
 			sessionData := &middleware.SessionData{
 				UserID:    testUser.ID,
 				FamilyID:  testUser.FamilyID,
@@ -154,9 +194,13 @@ func TestCategoryHandler_New(t *testing.T) {
 
 			// Assert
 			if tt.expectedStatus == http.StatusOK {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			} else {
-				assert.NoError(t, err) // Echo handles HTTP errors differently
+				// Expect an HTTP error for non-200 responses
+				require.Error(t, err)
+				var httpError *echo.HTTPError
+				require.ErrorAs(t, err, &httpError)
+				assert.Equal(t, tt.expectedStatus, httpError.Code)
 			}
 
 			categoryService.AssertExpectations(t)
@@ -175,11 +219,18 @@ func TestCategoryHandler_Create(t *testing.T) {
 		{
 			name: "Successfully create expense category",
 			formData: url.Values{
-				"name": {"Food"},
-				"type": {"expense"},
+				"name":  {"Food"},
+				"type":  {"expense"},
+				"color": {"#FF5733"},
+				"icon":  {"utensils"},
 			},
 			setupMocks: func(categoryService *MockCategoryService) {
-				categoryService.On("CreateCategory", mock.Anything, mock.AnythingOfType("dto.CreateCategoryDTO")).Return(&category.Category{}, nil)
+				categoryService.On("CreateCategory", mock.Anything, mock.AnythingOfType("dto.CreateCategoryDTO")).
+					Return(&category.Category{}, nil)
+				// Add expectation for GetCategoriesByFamily in case of form re-render on error
+				categoryService.On("GetCategoriesByFamily", mock.Anything, mock.Anything, mock.Anything).
+					Return([]*category.Category{}, nil).
+					Maybe()
 			},
 			expectedStatus: http.StatusSeeOther,
 			expectRedirect: true,
@@ -187,34 +238,49 @@ func TestCategoryHandler_Create(t *testing.T) {
 		{
 			name: "Successfully create income category",
 			formData: url.Values{
-				"name": {"Salary"},
-				"type": {"income"},
+				"name":  {"Salary"},
+				"type":  {"income"},
+				"color": {"#33FF57"},
+				"icon":  {"dollar-sign"},
 			},
 			setupMocks: func(categoryService *MockCategoryService) {
-				categoryService.On("CreateCategory", mock.Anything, mock.AnythingOfType("dto.CreateCategoryDTO")).Return(&category.Category{}, nil)
+				categoryService.On("CreateCategory", mock.Anything, mock.AnythingOfType("dto.CreateCategoryDTO")).
+					Return(&category.Category{}, nil)
+				// Add expectation for GetCategoriesByFamily in case of form re-render on error
+				categoryService.On("GetCategoriesByFamily", mock.Anything, mock.Anything, mock.Anything).
+					Return([]*category.Category{}, nil).
+					Maybe()
 			},
 			expectedStatus: http.StatusSeeOther,
 			expectRedirect: true,
 		},
 		{
-			name: "Invalid form data",
+			name: "Invalid form validation",
 			formData: url.Values{
 				"name": {""},
 				"type": {"invalid"},
 			},
 			setupMocks: func(categoryService *MockCategoryService) {
-				// No mocks needed for validation errors
+				// Mock for GetCategoriesByFamily when re-rendering form with errors
+				categoryService.On("GetCategoriesByFamily", mock.Anything, mock.Anything, mock.Anything).
+					Return([]*category.Category{}, nil)
 			},
-			expectedStatus: http.StatusBadRequest,
+			expectedStatus: http.StatusOK, // Form is re-rendered with errors, not an HTTP error
+			expectRedirect: false,
 		},
 		{
 			name: "Category service error",
 			formData: url.Values{
-				"name": {"Food"},
-				"type": {"expense"},
+				"name":  {"Food"},
+				"type":  {"expense"},
+				"color": {"#FF5733"},
+				"icon":  {"utensils"},
 			},
 			setupMocks: func(categoryService *MockCategoryService) {
-				categoryService.On("CreateCategory", mock.Anything, mock.AnythingOfType("dto.CreateCategoryDTO")).Return(nil, assert.AnError)
+				categoryService.On("CreateCategory", mock.Anything, mock.AnythingOfType("dto.CreateCategoryDTO")).
+					Return(nil, assert.AnError)
+
+				// For service errors, the handler returns HTTP error directly without re-rendering form
 			},
 			expectedStatus: http.StatusInternalServerError,
 		},
@@ -228,7 +294,9 @@ func TestCategoryHandler_Create(t *testing.T) {
 			tt.setupMocks(categoryService)
 
 			mockServices := &services.Services{
-				Category: categoryService,
+				Category:    categoryService,
+				Transaction: &MockTransactionService{},
+				Budget:      &MockBudgetService{},
 			}
 
 			handler := webHandlers.NewCategoryHandler(repos, mockServices)
@@ -254,11 +322,20 @@ func TestCategoryHandler_Create(t *testing.T) {
 			err := handler.Create(c)
 
 			// Assert
-			if tt.expectRedirect {
-				assert.NoError(t, err)
+			switch {
+			case tt.expectRedirect:
+				require.NoError(t, err)
 				assert.Equal(t, tt.expectedStatus, rec.Code)
-			} else {
-				assert.NoError(t, err) // Echo handles HTTP errors differently
+			case tt.expectedStatus == http.StatusOK:
+				// Form re-rendered with validation errors - no error returned
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedStatus, rec.Code)
+			default:
+				// Expect an HTTP error for error responses
+				require.Error(t, err)
+				var httpError *echo.HTTPError
+				require.ErrorAs(t, err, &httpError)
+				assert.Equal(t, tt.expectedStatus, httpError.Code)
 			}
 
 			categoryService.AssertExpectations(t)
@@ -270,31 +347,40 @@ func TestCategoryHandler_Edit(t *testing.T) {
 	tests := []struct {
 		name           string
 		categoryID     string
-		setupMocks     func(*MockCategoryService)
+		setupMocks     func(*MockCategoryService, *MockTransactionService, *MockBudgetService, uuid.UUID)
 		expectedStatus int
 	}{
 		{
 			name:       "Successfully show edit form",
 			categoryID: uuid.New().String(),
-			setupMocks: func(categoryService *MockCategoryService) {
-				testCategory := createTestCategory(uuid.New())
-				categoryService.On("GetCategoryByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(testCategory, nil)
-				categoryService.On("GetCategoriesByFamily", mock.Anything, testCategory.FamilyID, mock.Anything).Return([]*category.Category{}, nil)
+			setupMocks: func(categoryService *MockCategoryService, transactionService *MockTransactionService, budgetService *MockBudgetService, familyID uuid.UUID) {
+				testCategory := createTestCategory(familyID)
+				categoryService.On("GetCategoryByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).
+					Return(testCategory, nil)
+				categoryService.On("GetCategoriesByFamily", mock.Anything, familyID, mock.Anything).
+					Return([]*category.Category{}, nil)
+				// Mock transaction service calls for populating statistics
+				transactionService.On("GetTransactionsByCategory", mock.Anything, mock.Anything, mock.Anything).
+					Return([]*transaction.Transaction{}, nil)
+				// Mock budget service calls
+				budgetService.On("GetBudgetsByCategory", mock.Anything, familyID, mock.Anything).
+					Return([]*budget.Budget{}, nil)
 			},
 			expectedStatus: http.StatusOK,
 		},
 		{
 			name:       "Category not found",
 			categoryID: uuid.New().String(),
-			setupMocks: func(categoryService *MockCategoryService) {
-				categoryService.On("GetCategoryByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(nil, assert.AnError)
+			setupMocks: func(categoryService *MockCategoryService, _ *MockTransactionService, _ *MockBudgetService, _ uuid.UUID) {
+				categoryService.On("GetCategoryByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).
+					Return(nil, assert.AnError)
 			},
 			expectedStatus: http.StatusNotFound,
 		},
 		{
 			name:       "Invalid category ID",
 			categoryID: "invalid-uuid",
-			setupMocks: func(categoryService *MockCategoryService) {
+			setupMocks: func(_ *MockCategoryService, _ *MockTransactionService, _ *MockBudgetService, _ uuid.UUID) {
 				// No mocks needed for validation errors
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -303,13 +389,20 @@ func TestCategoryHandler_Edit(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Create test user once for the entire test
+			testUser := createTestUser()
+
 			// Setup
 			repos := setupRepositories()
 			categoryService := &MockCategoryService{}
-			tt.setupMocks(categoryService)
+			transactionService := &MockTransactionService{}
+			budgetService := &MockBudgetService{}
+			tt.setupMocks(categoryService, transactionService, budgetService, testUser.FamilyID)
 
 			mockServices := &services.Services{
-				Category: categoryService,
+				Category:    categoryService,
+				Transaction: transactionService,
+				Budget:      budgetService,
 			}
 
 			handler := webHandlers.NewCategoryHandler(repos, mockServices)
@@ -321,8 +414,15 @@ func TestCategoryHandler_Edit(t *testing.T) {
 			c.SetParamNames("id")
 			c.SetParamValues(tt.categoryID)
 
+			// Process request through middleware first to set up session and CSRF
+			sessionMiddleware := middleware.SessionStore("test-secret-key-for-testing-that-is-long-enough", false)
+			csrfMiddleware := middleware.CSRFProtection()
+			combinedMiddleware := sessionMiddleware(csrfMiddleware(func(_ echo.Context) error {
+				return nil // Dummy handler
+			}))
+			_ = combinedMiddleware(c) // Process middleware
+
 			// Set user in context
-			testUser := createTestUser()
 			sessionData := &middleware.SessionData{
 				UserID:    testUser.ID,
 				FamilyID:  testUser.FamilyID,
@@ -337,9 +437,13 @@ func TestCategoryHandler_Edit(t *testing.T) {
 
 			// Assert
 			if tt.expectedStatus == http.StatusOK {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			} else {
-				assert.NoError(t, err) // Echo handles HTTP errors differently
+				// Expect an HTTP error for non-200 responses
+				require.Error(t, err)
+				var httpError *echo.HTTPError
+				require.ErrorAs(t, err, &httpError)
+				assert.Equal(t, tt.expectedStatus, httpError.Code)
 			}
 
 			categoryService.AssertExpectations(t)
@@ -352,7 +456,7 @@ func TestCategoryHandler_Update(t *testing.T) {
 		name           string
 		categoryID     string
 		formData       url.Values
-		setupMocks     func(*MockCategoryService)
+		setupMocks     func(*MockCategoryService, *MockTransactionService, *MockBudgetService, uuid.UUID)
 		expectedStatus int
 		expectRedirect bool
 	}{
@@ -360,13 +464,17 @@ func TestCategoryHandler_Update(t *testing.T) {
 			name:       "Successfully update category",
 			categoryID: uuid.New().String(),
 			formData: url.Values{
-				"name": {"Updated Food"},
-				"type": {"expense"},
+				"name":  {"Updated Food"},
+				"type":  {"expense"},
+				"color": {"#FF5733"},
+				"icon":  {"utensils"},
 			},
-			setupMocks: func(categoryService *MockCategoryService) {
-				testCategory := createTestCategory(uuid.New())
-				categoryService.On("GetCategoryByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(testCategory, nil)
-				categoryService.On("UpdateCategory", mock.Anything, mock.AnythingOfType("uuid.UUID"), mock.AnythingOfType("dto.UpdateCategoryDTO")).Return(testCategory, nil)
+			setupMocks: func(categoryService *MockCategoryService, _ *MockTransactionService, _ *MockBudgetService, familyID uuid.UUID) {
+				testCategory := createTestCategory(familyID)
+				categoryService.On("GetCategoryByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).
+					Return(testCategory, nil)
+				categoryService.On("UpdateCategory", mock.Anything, mock.AnythingOfType("uuid.UUID"), mock.AnythingOfType("dto.UpdateCategoryDTO")).
+					Return(testCategory, nil)
 			},
 			expectedStatus: http.StatusSeeOther,
 			expectRedirect: true,
@@ -375,10 +483,12 @@ func TestCategoryHandler_Update(t *testing.T) {
 			name:       "Invalid category ID",
 			categoryID: "invalid-uuid",
 			formData: url.Values{
-				"name": {"Updated Food"},
-				"type": {"expense"},
+				"name":  {"Updated Food"},
+				"type":  {"expense"},
+				"color": {"#FF5733"},
+				"icon":  {"utensils"},
 			},
-			setupMocks: func(categoryService *MockCategoryService) {
+			setupMocks: func(_ *MockCategoryService, _ *MockTransactionService, _ *MockBudgetService, _ uuid.UUID) {
 				// No mocks needed for validation errors
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -387,13 +497,17 @@ func TestCategoryHandler_Update(t *testing.T) {
 			name:       "Category service error",
 			categoryID: uuid.New().String(),
 			formData: url.Values{
-				"name": {"Updated Food"},
-				"type": {"expense"},
+				"name":  {"Updated Food"},
+				"type":  {"expense"},
+				"color": {"#FF5733"},
+				"icon":  {"utensils"},
 			},
-			setupMocks: func(categoryService *MockCategoryService) {
-				testCategory := createTestCategory(uuid.New())
-				categoryService.On("GetCategoryByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(testCategory, nil)
-				categoryService.On("UpdateCategory", mock.Anything, mock.AnythingOfType("uuid.UUID"), mock.AnythingOfType("dto.UpdateCategoryDTO")).Return(nil, assert.AnError)
+			setupMocks: func(categoryService *MockCategoryService, _ *MockTransactionService, _ *MockBudgetService, familyID uuid.UUID) {
+				testCategory := createTestCategory(familyID)
+				categoryService.On("GetCategoryByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).
+					Return(testCategory, nil)
+				categoryService.On("UpdateCategory", mock.Anything, mock.AnythingOfType("uuid.UUID"), mock.AnythingOfType("dto.UpdateCategoryDTO")).
+					Return(nil, assert.AnError)
 			},
 			expectedStatus: http.StatusInternalServerError,
 		},
@@ -401,19 +515,30 @@ func TestCategoryHandler_Update(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Create test user once for the entire test
+			testUser := createTestUser()
+
 			// Setup
 			repos := setupRepositories()
 			categoryService := &MockCategoryService{}
-			tt.setupMocks(categoryService)
+			transactionService := &MockTransactionService{}
+			budgetService := &MockBudgetService{}
+			tt.setupMocks(categoryService, transactionService, budgetService, testUser.FamilyID)
 
 			mockServices := &services.Services{
-				Category: categoryService,
+				Category:    categoryService,
+				Transaction: transactionService,
+				Budget:      budgetService,
 			}
 
 			handler := webHandlers.NewCategoryHandler(repos, mockServices)
 
 			e := setupEchoWithSession()
-			req := httptest.NewRequest(http.MethodPut, "/categories/"+tt.categoryID, strings.NewReader(tt.formData.Encode()))
+			req := httptest.NewRequest(
+				http.MethodPut,
+				"/categories/"+tt.categoryID,
+				strings.NewReader(tt.formData.Encode()),
+			)
 			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
@@ -421,7 +546,6 @@ func TestCategoryHandler_Update(t *testing.T) {
 			c.SetParamValues(tt.categoryID)
 
 			// Set user in context
-			testUser := createTestUser()
 			sessionData := &middleware.SessionData{
 				UserID:    testUser.ID,
 				FamilyID:  testUser.FamilyID,
@@ -436,10 +560,14 @@ func TestCategoryHandler_Update(t *testing.T) {
 
 			// Assert
 			if tt.expectRedirect {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tt.expectedStatus, rec.Code)
 			} else {
-				assert.NoError(t, err) // Echo handles HTTP errors differently
+				// Expect an HTTP error for non-redirect responses
+				require.Error(t, err)
+				var httpError *echo.HTTPError
+				require.ErrorAs(t, err, &httpError)
+				assert.Equal(t, tt.expectedStatus, httpError.Code)
 			}
 
 			categoryService.AssertExpectations(t)
@@ -451,17 +579,29 @@ func TestCategoryHandler_Delete(t *testing.T) {
 	tests := []struct {
 		name           string
 		categoryID     string
-		setupMocks     func(*MockCategoryService)
+		setupMocks     func(*MockCategoryService, *MockTransactionService, *MockBudgetService, uuid.UUID, uuid.UUID)
 		expectedStatus int
 		expectRedirect bool
 	}{
 		{
 			name:       "Successfully delete category",
-			categoryID: uuid.New().String(),
-			setupMocks: func(categoryService *MockCategoryService) {
-				testCategory := createTestCategory(uuid.New())
-				categoryService.On("GetCategoryByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(testCategory, nil)
-				categoryService.On("DeleteCategory", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(nil)
+			categoryID: "test-category-id", // Will be replaced with actual ID
+			setupMocks: func(categoryService *MockCategoryService, _ *MockTransactionService, _ *MockBudgetService, familyID uuid.UUID, categoryID uuid.UUID) {
+				categoryService.On("GetCategoryByID", mock.Anything, categoryID).
+					Return(&category.Category{
+						ID:        categoryID,
+						Name:      "Test Category",
+						Type:      category.TypeExpense,
+						Color:     "#FF5733",
+						Icon:      "💰",
+						FamilyID:  familyID,
+						IsActive:  true,
+						CreatedAt: time.Now(),
+						UpdatedAt: time.Now(),
+					}, nil).Once()
+
+				categoryService.On("DeleteCategory", mock.Anything, categoryID).
+					Return(nil).Once()
 			},
 			expectedStatus: http.StatusSeeOther,
 			expectRedirect: true,
@@ -469,34 +609,72 @@ func TestCategoryHandler_Delete(t *testing.T) {
 		{
 			name:       "Invalid category ID",
 			categoryID: "invalid-uuid",
-			setupMocks: func(categoryService *MockCategoryService) {
+			setupMocks: func(_ *MockCategoryService, _ *MockTransactionService, _ *MockBudgetService, _ uuid.UUID, _ uuid.UUID) {
 				// No setup needed as validation should fail first
 			},
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
-			name:       "Category service error",
-			categoryID: uuid.New().String(),
-			setupMocks: func(categoryService *MockCategoryService) {
-				testCategory := createTestCategory(uuid.New())
-				categoryService.On("GetCategoryByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(testCategory, nil)
-				categoryService.On("DeleteCategory", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(assert.AnError)
+			name:       "Category not found",
+			categoryID: "test-category-id", // Will be replaced with actual ID
+			setupMocks: func(categoryService *MockCategoryService, _ *MockTransactionService, _ *MockBudgetService, _ uuid.UUID, categoryID uuid.UUID) {
+				categoryService.On("GetCategoryByID", mock.Anything, categoryID).
+					Return(nil, errors.New("category not found")).Once()
 			},
-			expectedStatus: http.StatusInternalServerError,
+			expectedStatus: http.StatusNotFound,
+		},
+		{
+			name:       "Access denied - wrong family",
+			categoryID: "test-category-id", // Will be replaced with actual ID
+			setupMocks: func(categoryService *MockCategoryService, _ *MockTransactionService, _ *MockBudgetService, _ uuid.UUID, categoryID uuid.UUID) {
+				categoryService.On("GetCategoryByID", mock.Anything, categoryID).
+					Return(&category.Category{
+						ID:        categoryID,
+						Name:      "Test Category",
+						Type:      category.TypeExpense,
+						Color:     "#FF5733",
+						Icon:      "💰",
+						FamilyID:  uuid.New(), // Different family
+						IsActive:  true,
+						CreatedAt: time.Now(),
+						UpdatedAt: time.Now(),
+					}, nil).Once()
+			},
+			expectedStatus: http.StatusForbidden,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Setup
-			repos := setupRepositories()
-			categoryService := &MockCategoryService{}
-			tt.setupMocks(categoryService)
+			// Create test user first
+			testUser := createTestUser()
 
-			mockServices := &services.Services{
-				Category: categoryService,
+			// Create test category ID that will be consistent
+			var testCategoryID uuid.UUID
+			if tt.categoryID == "test-category-id" {
+				testCategoryID = uuid.New()
+				tt.categoryID = testCategoryID.String()
 			}
 
+			// Setup mocks with familyID and categoryID
+			categoryService := &MockCategoryService{}
+			transactionService := &MockTransactionService{}
+			budgetService := &MockBudgetService{}
+
+			// Only pass categoryID if it's valid
+			if tt.categoryID != "invalid-uuid" {
+				tt.setupMocks(categoryService, transactionService, budgetService, testUser.FamilyID, testCategoryID)
+			} else {
+				tt.setupMocks(categoryService, transactionService, budgetService, testUser.FamilyID, uuid.Nil)
+			}
+
+			mockServices := &services.Services{
+				Category:    categoryService,
+				Transaction: transactionService,
+				Budget:      budgetService,
+			}
+
+			repos := setupRepositories()
 			handler := webHandlers.NewCategoryHandler(repos, mockServices)
 
 			e := setupEchoWithSession()
@@ -507,7 +685,6 @@ func TestCategoryHandler_Delete(t *testing.T) {
 			c.SetParamValues(tt.categoryID)
 
 			// Set user in context
-			testUser := createTestUser()
 			sessionData := &middleware.SessionData{
 				UserID:    testUser.ID,
 				FamilyID:  testUser.FamilyID,
@@ -522,10 +699,14 @@ func TestCategoryHandler_Delete(t *testing.T) {
 
 			// Assert
 			if tt.expectRedirect {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tt.expectedStatus, rec.Code)
 			} else {
-				assert.NoError(t, err) // Echo handles HTTP errors differently
+				// Expect an HTTP error for non-redirect responses
+				require.Error(t, err)
+				var httpError *echo.HTTPError
+				require.ErrorAs(t, err, &httpError)
+				assert.Equal(t, tt.expectedStatus, httpError.Code)
 			}
 
 			categoryService.AssertExpectations(t)
@@ -597,9 +778,9 @@ func TestCategoryFormValidation(t *testing.T) {
 			err := validator.Validate(&tt.form)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 
 			validator.AssertExpectations(t)
