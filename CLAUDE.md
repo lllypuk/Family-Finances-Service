@@ -12,13 +12,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 #### Local Development Setup
 **Prerequisites**: Before running `make run-local`, you must start the required services:
 ```bash
-make dev-up  # Starts MongoDB and Redis containers
-make run-local  # Runs the application on localhost:8083
+make dev-up  # Starts MongoDB, Redis, and Mongo Express containers
+make run-local  # Runs the application on localhost:8080
 ```
 
 The `run-local` command sets up the following environment:
-- **Server**: localhost:8080 (port 8080 to avoid conflicts)
-- **MongoDB**: mongodb://admin:password123@localhost:27017 with authentication
+- **Server**: localhost:8080 (default port)
+- **MongoDB**: mongodb://admin:password123@localhost:27017/family_budget?authSource=admin
 - **Database**: family_budget (separate from production)
 - **Redis**: redis://:redis123@localhost:6379 (optional caching)
 - **Logging**: DEBUG level for development
@@ -38,27 +38,18 @@ curl -s --noproxy '*' 127.0.0.1:8080/login
 ```
 
 ### Testing and Code Quality
-- `make test` - Run tests (excluding performance)
-- `make test-fast` - **FAST**: Run tests with shared MongoDB container (recommended)
+- `make test` - Run tests with shared MongoDB container (fast)
+- `make test-unit` - Unit tests with fast containers
+- `make test-integration` - Integration tests with shared container
 - `make test-coverage` - Run tests with coverage report
-- `make test-coverage-fast` - **FAST**: Coverage with shared container
-- `make test-ci` - CI-optimized tests (parallel + fast + race detection)
-- `make test-unit` - Unit tests without containers
-- `make test-unit-fast` - Unit tests with fast containers
 - `make lint` - Run golangci-lint for comprehensive code quality checks
-- `make lint-fix` - Run golangci-lint with automatic fixing of issues
 - `make fmt` - Format code with go fmt
+- `make pre-commit` - Run pre-commit checks (format, test, lint)
 
 #### 🚀 Performance Optimization for Tests
 The project includes **MongoDB container reuse** to dramatically speed up test execution:
 
-**For fast local development:**
-```bash
-make test-fast           # ~3x faster than regular tests
-make test-coverage-fast  # Fast tests with coverage
-```
-
-**Container reuse strategies:**
+**Fast container reuse strategies:**
 - `REUSE_MONGO_CONTAINER=true` - Reuses MongoDB container across tests
 - Each test gets a unique database (e.g., `testdb_1691234567890`)
 - Automatic cleanup of test databases after each test
@@ -105,14 +96,14 @@ The Docker environment includes:
 
 This is a production-ready family budget management service built with Go, following Clean Architecture principles and comprehensive testing practices.
 
-### Current Status: PRODUCTION READY
+### Current Status: DEVELOPMENT READY
 - ✅ **Complete web interface** with HTMX 2.0.4 + PicoCSS 2.1.1
 - ✅ **Full API implementation** with REST endpoints
 - ✅ **Comprehensive security** with authentication & authorization
-- ✅ **59.5%+ test coverage** with 450+ tests
+- ✅ **36.2% test coverage** with 50+ test files
 - ✅ **CI/CD pipelines** with GitHub Actions
 - ✅ **Observability stack** (Prometheus, Grafana, Jaeger)
-- ✅ **Production deployment** ready
+- ⚠️ **Performance tests need fixes** - some concurrency issues present
 
 ### Domain Structure
 The application is organized into domain modules in `internal/domain/`:
@@ -132,9 +123,11 @@ The application is organized into domain modules in `internal/domain/`:
 - `internal/observability/` - Metrics, logging, tracing, health checks
 
 ### Key Technologies (Production Stack)
-- **Echo v4.13.4+** - HTTP web framework with middleware
-- **MongoDB v1.17.4+** - Primary database with official Go driver
-- **HTMX 2.0.4 + PicoCSS 2.1.1** - Modern web interface without complex JavaScript
+- **Go 1.24** - Latest Go version with enhanced performance
+- **Echo v4.13.4** - HTTP web framework with middleware
+- **MongoDB v1.17.4** - Primary database with official Go driver
+- **HTMX v2.0.4** - Modern web interface without complex JavaScript
+- **PicoCSS v2.1.1** - Minimalist CSS framework for clean UI
 - **Prometheus + Grafana** - Metrics and monitoring
 - **OpenTelemetry + Jaeger** - Distributed tracing
 - **Docker + GitHub Actions** - Multi-platform CI/CD
@@ -164,14 +157,14 @@ Full implementations are available in `internal/infrastructure/` with comprehens
 The project includes a complete web interface built with modern technologies:
 
 **Frontend Stack:**
-- **HTMX 2.0.4** - Dynamic updates without complex JavaScript (MANDATORY: use HTMX 2+ only)
-- **PicoCSS 2.1.1** - Minimalist CSS framework for clean UI (MANDATORY: use PicoCSS 2+ only)
+- **HTMX v2.0.4** - Dynamic updates without complex JavaScript (MANDATORY: use HTMX 2.0.4+ only)
+- **PicoCSS v2.1.1** - Minimalist CSS framework for clean UI (MANDATORY: use PicoCSS 2.1.1+ only)
 - **Go Templates** - Server-side rendering with layout system
 - **Progressive Web App** - Installable with offline capabilities
 
 **🚨 CRITICAL Frontend Development Rules:**
-1. **MANDATORY: Use HTMX 2.0.4+** - Never downgrade to HTMX v1.x
-2. **MANDATORY: Use PicoCSS 2.1.1+** - Leverage class-less approach and modern CSS variables
+1. **MANDATORY: Use HTMX v2.0.4+** - Never downgrade to HTMX v1.x
+2. **MANDATORY: Use PicoCSS v2.1.1+** - Leverage class-less approach and modern CSS variables
 3. **AVOID JavaScript** - Use HTMX for dynamic behavior instead of custom JS
 4. **Server-Side First** - Prefer server rendering over client-side solutions
 5. **HTMX-Only Interactivity** - Use hx-* attributes for all dynamic features
@@ -189,34 +182,34 @@ The project includes a complete web interface built with modern technologies:
 - Form validation with immediate feedback
 - Accessible interface following modern UX principles
 
-### Testing Strategy (59.5% Coverage)
+### Testing Strategy (36.2% Coverage)
 The project has comprehensive testing across all layers:
 
-**Unit Tests (200+ tests):**
-- Domain models with business logic validation
-- Repository implementations with mocking
-- HTTP handlers with table-driven tests
-- Middleware components with edge cases
-- Web form validation and error handling
+**Unit Tests (50+ test files):**
+- Domain models with business logic validation (88.9-100% coverage)
+- Repository implementations with mocking (51.2-78.9% coverage)
+- HTTP handlers with table-driven tests (71.6% coverage)
+- Middleware components with edge cases (77.1% coverage)
+- Web form validation and error handling (6.6-28.4% coverage)
 
-**Integration Tests (100+ tests):**
+**Integration Tests:**
 - End-to-end API workflows with testcontainers
 - Database operations with real MongoDB instances
 - Authentication flows with session management
 - Multi-family data isolation validation
 
-**Performance Tests (50+ tests):**
+**Performance Tests:**
+- ⚠️ **Concurrency tests currently failing** - need investigation
 - Load testing for API endpoints
-- Concurrent access scenarios
 - Memory leak detection
 - Database query optimization benchmarks
 
-**Security Tests (100+ tests):**
-- Authentication bypass attempts
-- Authorization privilege escalation
-- CSRF attack prevention
-- Input validation and sanitization
-- NoSQL injection protection
+**Coverage by Layer:**
+- **Application**: 91.2% (excellent)
+- **Domain**: 77.6% (good)
+- **Infrastructure**: 69.9% (good)
+- **Web**: 28.4% (needs improvement)
+- **Overall**: 36.2%
 
 ### Documentation
 Comprehensive documentation is available in the `.memory_bank/` directory:
@@ -312,10 +305,30 @@ Use `make lint` and `make test` locally to ensure CI pipeline success before pus
 ### Quick Fix Commands:
 ```bash
 make fmt          # Auto-format code
-make lint-fix     # Auto-fix simple issues
-make lint         # Check for remaining issues
+make lint         # Check for issues
+make pre-commit   # Run full check sequence
 ```
 
 **Remember: Clean code is not optional - it's mandatory for project integrity.**
+
+## 🚧 Known Issues & TODO
+
+### Performance Tests
+- **Concurrency tests failing** - TestConcurrentDomainOperations and TestConcurrentHTTPRequests
+- Need investigation of thread-safety issues in domain operations
+- HTTP server initialization panic in test environment
+
+### Test Coverage Improvements Needed
+- **Web handlers**: 0% coverage - needs test implementation
+- **Web models**: 6.6% coverage - needs expanded validation tests
+- **Integration tests**: Missing coverage calculation
+- **Target**: Increase overall coverage from 36.2% to 60%+
+
+### Development Priorities
+1. Fix failing concurrency tests
+2. Implement web handler tests
+3. Improve web models test coverage
+4. Add more integration test scenarios
+5. Performance optimization and benchmarking
 
 - add to memory .memory_bank/

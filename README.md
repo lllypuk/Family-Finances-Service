@@ -1,164 +1,170 @@
 # Family Finances Service
 
-**Production-ready family budget management system** with comprehensive web interface, REST API, and advanced security features.
+**Современная система управления семейным бюджетом** с полнофункциональным веб-интерфейсом, REST API и продвинутыми функциями безопасности.
 
-## 🎯 Project Status: PRODUCTION READY ✅
+## 🎯 Статус проекта: В РАЗРАБОТКЕ 🚧
 
-This project is **fully implemented and ready for production deployment** with:
-- ✅ Complete web interface (HTMX + PicoCSS)
-- ✅ Full REST API with comprehensive endpoints
-- ✅ Advanced security (authentication, authorization, CSRF protection)
-- ✅ **59.5%+ test coverage** with 450+ tests
-- ✅ CI/CD pipelines with GitHub Actions
-- ✅ Observability stack (Prometheus, Grafana, Jaeger)
-- ✅ Multi-platform Docker builds
+Этот проект находится в **активной разработке** со следующими достижениями:
+- ✅ Полный веб-интерфейс (HTMX v2.0.4 + PicoCSS v2.1.1)
+- ✅ Полный REST API с исчерпывающими endpoint'ами
+- ✅ Продвинутая безопасность (аутентификация, авторизация, CSRF защита)
+- ⚠️ **36.2% покрытие тестами** (50+ тестовых файлов)
+- ✅ CI/CD конвейеры с GitHub Actions
+- ✅ Стек наблюдаемости (Prometheus, Grafana, Jaeger)
+- ⚠️ **Тесты производительности требуют исправления** - присутствуют проблемы с многопоточностью
+- ✅ Мультиплатформенные Docker сборки
 
-## 🚀 Features
+## 🚀 Возможности
 
-- 📊 **Complete Web Interface**: Modern HTMX-powered UI with responsive design
-- 👥 **Role-Based Access Control**: Family Admin, Member, Child with different permissions
-- 💰 **Advanced Budget Management**: Category limits, period tracking, overspend alerts
-- 📈 **Real-Time Analytics**: Interactive dashboards with live updates
-- 🎯 **Financial Goals Tracking**: Savings targets with progress visualization
-- 🔐 **Enterprise Security**: Session management, CSRF protection, input validation
-- 📊 **Comprehensive Reporting**: Export capabilities, trend analysis
-- 🌐 **Multi-Platform Ready**: REST API, Web interface, mobile-ready design
+- 📊 **Полный веб-интерфейс**: Современный UI на базе HTMX с адаптивным дизайном
+- 👥 **Ролевой контроль доступа**: Администратор семьи, Участник, Ребенок с разными правами
+- 💰 **Продвинутое управление бюджетом**: Лимиты категорий, отслеживание периодов, оповещения о превышении
+- 📈 **Аналитика в реальном времени**: Интерактивные дашборды с живыми обновлениями
+- 🎯 **Отслеживание финансовых целей**: Цели накоплений с визуализацией прогресса
+- 🔐 **Корпоративная безопасность**: Управление сессиями, CSRF защита, валидация ввода
+- 📊 **Исчерпывающая отчетность**: Возможности экспорта, анализ трендов
+- 🌐 **Готовность к мультиплатформенности**: REST API, веб-интерфейс, мобильно-готовый дизайн
 
-## 🏗️ Architecture & Tech Stack
+## 🏗️ Архитектура и технологический стек
 
-### Backend (Production-Ready)
-- **Go 1.24+** with Echo v4.13.4+ framework
-- **MongoDB 7.0+** with official Go driver v1.17.4+
-- **Clean Architecture** with domain-driven design
-- **Repository pattern** with comprehensive error handling
-- **Structured logging** with slog + observability
+### Backend (Готов к продакшену)
+- **Go 1.24** с фреймворком Echo v4.13.4
+- **MongoDB 7.0+** с официальным Go драйвером v1.17.4
+- **Чистая архитектура** с domain-driven design
+- **Паттерн репозиторий** с исчерпывающей обработкой ошибок
+- **Структурированное логирование** с slog + наблюдаемость
 
-### Frontend (Modern Web Interface)
-- **HTMX v1.9+** for dynamic updates without complex JavaScript
-- **PicoCSS v1.5+** minimalist CSS framework
-- **Go Templates** with layout system and components
-- **Progressive Web App** capabilities
-- **Responsive design** for mobile and desktop
+### Frontend (Современный веб-интерфейс)
+- **HTMX v2.0.4** для динамических обновлений без сложного JavaScript
+- **PicoCSS v2.1.1** минималистичный CSS фреймворк
+- **Go Templates** с системой макетов и компонентов
+- **Progressive Web App** возможности
+- **Адаптивный дизайн** для мобильных устройств и десктопа
 
-### DevOps & Quality
-- **Docker & Docker Compose** for containerization
-- **GitHub Actions** CI/CD with security scanning
-- **Multi-platform builds** (linux/amd64, linux/arm64)
-- **Comprehensive testing** with testcontainers-go
-- **Security scanning** (CodeQL, Semgrep, TruffleHog)
+### DevOps и качество
+- **Docker & Docker Compose** для контейнеризации
+- **GitHub Actions** CI/CD с сканированием безопасности
+- **Мультиплатформенные сборки** (linux/amd64, linux/arm64)
+- **Исчерпывающее тестирование** с testcontainers-go
+- **Сканирование безопасности** (CodeQL, Semgrep, TruffleHog)
 
-### Observability Stack
-- **Prometheus** metrics collection
-- **Grafana** dashboards and visualization
-- **Jaeger** distributed tracing
-- **Health checks** (liveness/readiness probes)
-- **Structured logging** with multiple output formats
+### Стек наблюдаемости
+- **Prometheus** сбор метрик
+- **Grafana** дашборды и визуализация
+- **Jaeger** распределенное трассирование
+- **Проверки здоровья** (liveness/readiness пробы)
+- **Структурированное логирование** с несколькими форматами вывода
 
-## Quick Start
+## Быстрый старт
 
-### Prerequisites
+### Предварительные требования
 - Go 1.24+
 - Docker & Docker Compose
 - Make
 
-### Local Development Setup
+### Настройка локальной разработки
 
-1. **Start required services**:
+1. **Запуск необходимых сервисов**:
    ```bash
-   make dev-up  # Starts MongoDB, Redis, and Mongo Express
+   make dev-up  # Запускает MongoDB, Redis и Mongo Express
    ```
 
-2. **Run the application**:
+2. **Запуск приложения**:
    ```bash
-   make run-local  # Runs on localhost:8080
+   make run-local  # Запускается на localhost:8080
    ```
 
-3. **Access the services**:
-   - **Application**: http://localhost:8080
-   - **Mongo Express** (DB Admin): http://localhost:8081 (admin/admin)
+3. **Доступ к сервисам**:
+   - **Приложение**: http://localhost:8080
+   - **Mongo Express** (админка БД): http://localhost:8081 (admin/admin)
    - **MongoDB**: localhost:27017 (admin/password123)
-   - **Redis**: localhost:6379 (password: redis123)
+   - **Redis**: localhost:6379 (пароль: redis123)
 
-### Development Commands
+### Команды разработки
 
 ```bash
-# Development environment
-make dev-up           # Start MongoDB, Redis, Mongo Express
-make run-local        # Run with development config
-make docker-down      # Stop all containers
+# Среда разработки
+make dev-up           # Запуск MongoDB, Redis, Mongo Express
+make run-local        # Запуск с конфигурацией разработки
+make docker-down      # Остановка всех контейнеров
 
-# Testing and Quality
-make test             # Run tests
-make test-coverage    # Run tests with coverage report
-make lint             # Run linter
-make fmt              # Format code
+# Тестирование и качество
+make test             # Запуск тестов
+make test-coverage    # Запуск тестов с отчетом покрытия
+make test-unit        # Юнит тесты
+make test-integration # Интеграционные тесты
+make lint             # Запуск линтера
+make fmt              # Форматирование кода
+make pre-commit       # Предкоммитные проверки
 
-# Building
-make build            # Build binary
-make clean            # Clean build artifacts
+# Сборка
+make build            # Сборка бинарного файла
+make clean            # Очистка артефактов сборки
 
-# Observability (optional)
-make observability-up # Start Prometheus, Grafana, Jaeger
+# Наблюдаемость (опционально)
+make observability-up # Запуск Prometheus, Grafana, Jaeger
 ```
 
-## 🏛️ Architecture
+## 🏛️ Архитектура
 
-This project follows **Clean Architecture** principles with production-ready implementations:
+Проект следует принципам **Чистой Архитектуры** с готовыми к продакшену реализациями:
 
-### Layer Structure
-- **Domain Layer** (`internal/domain/`): Business entities with comprehensive validation
-- **Application Layer** (`internal/application/`): HTTP server and handler orchestration  
-- **Web Layer** (`internal/web/`): HTMX templates, middleware, authentication
-- **Infrastructure Layer** (`internal/infrastructure/`): MongoDB repositories and data persistence
-- **Observability Layer** (`internal/observability/`): Metrics, logging, tracing, health checks
+### Структура слоев
+- **Слой домена** (`internal/domain/`): Бизнес-сущности с исчерпывающей валидацией
+- **Слой приложения** (`internal/application/`): HTTP сервер и оркестрация обработчиков
+- **Веб-слой** (`internal/web/`): HTMX шаблоны, middleware, аутентификация
+- **Слой инфраструктуры** (`internal/infrastructure/`): MongoDB репозитории и персистентность данных
+- **Слой наблюдаемости** (`internal/observability/`): Метрики, логирование, трассирование, проверки здоровья
 
-### Project Structure
+### Структура проекта
 ```
-├── cmd/server/              # Application entry point with health checks
+├── cmd/server/              # Точка входа приложения с проверками здоровья
 ├── internal/
-│   ├── domain/              # Business entities (User, Family, Transaction, Budget, Report)
-│   ├── application/         # HTTP server, handlers, repository interfaces
-│   ├── web/                 # Complete web interface
-│   │   ├── handlers/        # Authentication, dashboard, HTMX endpoints
-│   │   ├── middleware/      # Session, CSRF, auth guards
-│   │   ├── templates/       # HTML templates with layouts
-│   │   ├── static/          # CSS, JS, images
-│   │   └── models/          # Form validation structures
-│   ├── infrastructure/      # MongoDB repositories and connection management
-│   ├── observability/       # Production monitoring and logging
-│   └── testhelpers/         # Testing utilities and factories
-├── tests/                   # E2E and integration tests
-│   ├── e2e/                # End-to-end workflow tests
-│   ├── integration/        # Cross-component integration tests
-│   └── performance/        # Load testing and benchmarks
-├── .memory_bank/           # Comprehensive project documentation
-├── monitoring/             # Grafana dashboards, Prometheus config, alerting
-└── .github/workflows/      # CI/CD pipelines (ci, docker, security, release)
+│   ├── domain/              # Бизнес-сущности (User, Family, Transaction, Budget, Report)
+│   ├── application/         # HTTP сервер, обработчики, интерфейсы репозиториев
+│   ├── web/                 # Полный веб-интерфейс
+│   │   ├── handlers/        # Аутентификация, дашборд, HTMX endpoints
+│   │   ├── middleware/      # Сессии, CSRF, защита авторизации
+│   │   ├── templates/       # HTML шаблоны с макетами
+│   │   ├── static/          # CSS, JS, изображения
+│   │   └── models/          # Валидация форм и веб-специфичные структуры
+│   ├── infrastructure/      # MongoDB репозитории и управление соединениями
+│   ├── observability/       # Продакшен мониторинг и логирование
+│   ├── services/            # Бизнес-логика и сервисы
+│   └── testhelpers/         # Утилиты тестирования и фабрики
+├── tests/                   # E2E и интеграционные тесты
+│   ├── e2e/                # End-to-end тесты рабочих процессов
+│   ├── integration/        # Межкомпонентные интеграционные тесты
+│   └── performance/        # Нагрузочное тестирование и бенчмарки
+├── .memory_bank/           # Исчерпывающая документация проекта
+├── monitoring/             # Дашборды Grafana, конфигурация Prometheus, оповещения
+├── docker/                 # Docker Compose конфигурации
+└── .github/workflows/      # CI/CD конвейеры (ci, docker, security, release)
 ```
 
-### Production Components
-- **Authentication & Authorization**: Role-based access with session management
-- **Data Validation**: Comprehensive input validation with go-playground/validator  
-- **Error Handling**: Structured error responses with proper HTTP status codes
-- **Security**: CSRF protection, password hashing, input sanitization
-- **Testing**: 450+ tests with 59.5% coverage across all layers
-- **Observability**: Prometheus metrics, structured logging, distributed tracing
-- **Deployment**: Multi-platform Docker builds with GitHub Actions CI/CD
+### Продакшен компоненты
+- **Аутентификация и авторизация**: Ролевой доступ с управлением сессиями
+- **Валидация данных**: Исчерпывающая валидация ввода с go-playground/validator
+- **Обработка ошибок**: Структурированные ответы об ошибках с правильными HTTP статус кодами
+- **Безопасность**: CSRF защита, хеширование паролей, санитизация ввода
+- **Тестирование**: 50+ тестовых файлов с 36.2% покрытием по всем слоям
+- **Наблюдаемость**: Метрики Prometheus, структурированное логирование, распределенное трассирование
+- **Развертывание**: Мультиплатформенные Docker сборки с GitHub Actions CI/CD
 
-## Configuration
+## Конфигурация
 
-The application uses environment variables for configuration. Key variables:
+Приложение использует переменные окружения для конфигурации. Основные переменные:
 
-| Variable           | Default                   | Description                              |
-|--------------------|---------------------------|------------------------------------------|
-| `SERVER_PORT`      | 8080                      | HTTP server port                         |
-| `SERVER_HOST`      | localhost                 | HTTP server host                         |
-| `MONGODB_URI`      | mongodb://localhost:27017 | MongoDB connection string                |
-| `MONGODB_DATABASE` | family_budget             | Database name                            |
-| `SESSION_SECRET`   | (required)                | Session encryption key                   |
-| `REDIS_URL`        | (optional)                | Redis connection string                  |
-| `LOG_LEVEL`        | info                      | Logging level (debug, info, warn, error) |
-| `ENVIRONMENT`      | production                | Application environment                  |
+| Переменная         | По умолчанию              | Описание                                     |
+|--------------------|---------------------------|----------------------------------------------|
+| `SERVER_PORT`      | 8080                      | Порт HTTP сервера                            |
+| `SERVER_HOST`      | localhost                 | Хост HTTP сервера                            |
+| `MONGODB_URI`      | mongodb://localhost:27017 | Строка подключения MongoDB                   |
+| `MONGODB_DATABASE` | family_budget             | Имя базы данных                              |
+| `SESSION_SECRET`   | (обязательно)             | Ключ шифрования сессий                       |
+| `REDIS_URL`        | (опционально)             | Строка подключения Redis                     |
+| `LOG_LEVEL`        | info                      | Уровень логирования (debug, info, warn, error) |
+| `ENVIRONMENT`      | production                | Среда приложения                             |
 
 ## Запуск с Docker
 
@@ -177,73 +183,99 @@ docker-compose -f docker/docker-compose.yml down
 
 ```bash
 # Только база данных для разработки
-docker-compose -f docker/docker-compose.yml up postgres -d
+make dev-up
 ```
 
-## 🧪 Testing & Quality
+## 🧪 Тестирование и качество
 
-This project maintains **high quality standards** with comprehensive testing:
+Проект поддерживает **высокие стандарты качества** с исчерпывающим тестированием:
 
-### Test Coverage: 59.5%
-- **450+ tests** across all application layers
-- **Unit tests**: Domain models, repositories, handlers with mocking
-- **Integration tests**: End-to-end workflows with testcontainers  
-- **Performance tests**: Load testing, memory profiling, benchmark testing
-- **Security tests**: Authentication, authorization, CSRF, input validation
-- **E2E tests**: Complete user journeys from registration to reporting
+### Покрытие тестами: 36.2%
+- **50+ тестовых файлов** по всем слоям приложения
+- **Юнит тесты**: Доменные модели, репозитории, обработчики с моками
+- **Интеграционные тесты**: End-to-end рабочие процессы с testcontainers
+- **Тесты производительности**: ⚠️ Нагрузочное тестирование (требует исправления проблем многопоточности)
+- **E2E тесты**: Полные пользовательские сценарии от регистрации до отчетности
 
-### Quality Assurance
-- **golangci-lint** with 50+ linters for code quality
-- **Comprehensive CI/CD** with GitHub Actions
-- **Security scanning** (CodeQL, Semgrep, TruffleHog, OSV Scanner)
-- **Dependency management** with Dependabot automated updates
-- **Multi-platform testing** (linux/amd64, linux/arm64)
+### Покрытие по слоям
+- **Приложение**: 91.2% (отлично)
+- **Доменные модели**: 77.6% (хорошо) - от 88.9% до 100% по компонентам
+- **Инфраструктура**: 69.9% (хорошо) - от 51.2% до 78.9% по репозиториям
+- **Веб-слой**: 28.4% (требует улучшения) - middleware 77.1%, handlers 0%
+- **Общее**: 36.2%
+
+### Контроль качества
+- **golangci-lint** с 50+ линтерами для качества кода
+- **Исчерпывающий CI/CD** с GitHub Actions
+- **Сканирование безопасности** (CodeQL, Semgrep, TruffleHog, OSV Scanner)
+- **Управление зависимостями** с автоматизированными обновлениями Dependabot
+- **Мультиплатформенное тестирование** (linux/amd64, linux/arm64)
 
 ```bash
-# Run comprehensive test suite
-make test              # All tests
-make test-coverage    # With coverage report  
-make lint             # Code quality checks
+# Запуск исчерпывающего набора тестов
+make test              # Все тесты
+make test-coverage    # С отчетом покрытия
+make lint             # Проверки качества кода
 ```
 
-## 📊 Production Readiness
+## 📊 Готовность к продакшену
 
-### Deployment Ready
-- ✅ **Multi-platform Docker images** published to GitHub Container Registry
-- ✅ **Kubernetes ready** with health checks and graceful shutdown
-- ✅ **Environment configuration** with validation and defaults
-- ✅ **Database migrations** and connection management
-- ✅ **Observability stack** with metrics, logs, and traces
+### Готовность к развертыванию
+- ✅ **Мультиплатформенные Docker образы** опубликованы в GitHub Container Registry
+- ✅ **Готовность к Kubernetes** с проверками здоровья и graceful shutdown
+- ✅ **Конфигурация окружения** с валидацией и значениями по умолчанию
+- ✅ **Управление соединениями с БД** и обработка подключений
+- ✅ **Стек наблюдаемости** с метриками, логами и трассами
 
-### Monitoring & Observability
-- ✅ **Prometheus metrics** - HTTP, database, business metrics
-- ✅ **Grafana dashboards** - Application overview, business metrics, SLI/SLO
-- ✅ **Jaeger tracing** - Request flow and performance analysis  
-- ✅ **Health checks** - Liveness and readiness probes
-- ✅ **Structured logging** - JSON format with correlation IDs
+### Мониторинг и наблюдаемость
+- ✅ **Метрики Prometheus** - HTTP, база данных, бизнес-метрики
+- ✅ **Дашборды Grafana** - обзор приложения, бизнес-метрики, SLI/SLO
+- ✅ **Трассирование Jaeger** - анализ потока запросов и производительности
+- ✅ **Проверки здоровья** - пробы liveness и readiness
+- ✅ **Структурированное логирование** - JSON формат с correlation ID
 
-### Security Features
-- ✅ **Role-based access control** with family isolation
-- ✅ **Session security** with HTTP-only cookies and CSRF protection
-- ✅ **Input validation** and sanitization for all endpoints
-- ✅ **Password security** with bcrypt hashing
-- ✅ **Security headers** and modern security practices
+### Функции безопасности
+- ✅ **Ролевой контроль доступа** с изоляцией по семьям
+- ✅ **Безопасность сессий** с HTTP-only cookies и CSRF защитой
+- ✅ **Валидация и санитизация ввода** для всех endpoints
+- ✅ **Безопасность паролей** с bcrypt хешированием
+- ✅ **Заголовки безопасности** и современные практики безопасности
 
-## 📚 Documentation
+## 🚧 Известные проблемы и TODO
 
-### Developer Resources
-- **[CLAUDE.md](CLAUDE.md)** - Comprehensive development guidelines and architecture
-- **[.memory_bank](.memory_bank)** - Detailed project documentation including:
-  - Product brief and business context
-  - Technical architecture and design decisions
-  - Testing strategy and implementation details
-  - Current project status and roadmap
+### Тесты производительности
+- ⚠️ **Сбои тестов многопоточности** - TestConcurrentDomainOperations и TestConcurrentHTTPRequests
+- Требуется исследование проблем thread-safety в доменных операциях
+- Panic инициализации HTTP сервера в тестовом окружении
 
-### API Documentation
-- **REST API** with comprehensive endpoint coverage
-- **OpenAPI 3.0** specification (available via `/api/docs`)
-- **Postman collection** for API testing and integration
+### Улучшения покрытия тестами
+- **Веб-обработчики**: 0% покрытия - требуется реализация тестов
+- **Веб-модели**: 6.6% покрытия - требуется расширение валидационных тестов
+- **Интеграционные тесты**: Отсутствует расчет покрытия
+- **Цель**: Увеличить общее покрытие с 36.2% до 60%+
 
-## License
+### Приоритеты разработки
+1. Исправить сбойные тесты многопоточности
+2. Реализовать тесты веб-обработчиков
+3. Улучшить покрытие тестами веб-моделей
+4. Добавить больше сценариев интеграционного тестирования
+5. Оптимизация производительности и бенчмаркинг
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## 📚 Документация
+
+### Ресурсы для разработчиков
+- **[CLAUDE.md](CLAUDE.md)** - Исчерпывающие рекомендации по разработке и архитектуре
+- **[.memory_bank](.memory_bank)** - Подробная документация проекта, включая:
+  - Краткий обзор продукта и бизнес-контекст
+  - Техническая архитектура и проектные решения
+  - Стратегия тестирования и детали реализации
+  - Текущий статус проекта и дорожная карта
+
+### Документация API
+- **REST API** с исчерпывающим покрытием endpoints
+- **OpenAPI 3.0** спецификация (доступна через `/api/docs`)
+- **Postman коллекция** для тестирования API и интеграции
+
+## Лицензия
+
+Этот проект лицензирован под лицензией MIT - см. файл [LICENSE](LICENSE) для деталей.
