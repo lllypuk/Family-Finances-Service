@@ -407,14 +407,14 @@ func (h *TransactionHandler) getTransactionServiceErrorMessage(err error) string
 	errMsg := err.Error()
 	switch {
 	case strings.Contains(errMsg, "category not found"):
-		return "Selected category not found" + errMsg
+		return fmt.Sprintf("Selected category not found: %s", errMsg)
 	case strings.Contains(errMsg, "insufficient balance"):
-		return "Insufficient budget balance for this category" + errMsg
+		return fmt.Sprintf("Insufficient budget balance for this category: %s", errMsg)
 	case strings.Contains(errMsg, "invalid date"):
-		return "Invalid transaction date" + errMsg
+		return fmt.Sprintf("Invalid transaction date: %s", errMsg)
 	case strings.Contains(errMsg, "invalid amount"):
-		return "Invalid transaction amount" + errMsg
+		return fmt.Sprintf("Invalid transaction amount: %s", errMsg)
 	default:
-		return "Failed to process transaction" + errMsg
+		return fmt.Sprintf("Failed to process transaction: %s", errMsg)
 	}
 }

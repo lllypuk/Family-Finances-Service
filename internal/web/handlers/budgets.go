@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
 	"family-budget-service/internal/web/middleware"
@@ -20,16 +22,8 @@ import (
 )
 
 const (
-	// MockBudgetPercentage represents demo budget usage percentage
-	MockBudgetPercentage = 65.5
-
 	// DefaultBudgetLimit is the default pagination limit for budget queries
 	DefaultBudgetLimit = 50
-
-	// MockFoodBudgetAmount is a mock amount for food budget transactions in tests
-	MockFoodBudgetAmount = 85.50
-	// MockTransportBudgetAmount is a mock amount for transport budget transactions in tests
-	MockTransportBudgetAmount = 45.20
 
 	// BudgetExceededThreshold is the percentage threshold when budget is considered exceeded (100%)
 	BudgetExceededThreshold = 100
@@ -545,30 +539,16 @@ func (h *BudgetHandler) Show(c echo.Context) error {
 		}
 	}
 
-	// Получаем последние транзакции связанные с бюджетом (mock data для примера)
-	var recentTransactions []*webModels.TransactionSummary
-
-	// В реальном приложении здесь будет запрос к сервису транзакций
-	// Пока добавляем mock данные для демонстрации
-	if budgetEntity.Spent > 0 {
-		recentTransactions = []*webModels.TransactionSummary{
-			{
-				Description:     "Grocery Shopping",
-				Amount:          MockFoodBudgetAmount,
-				FormattedAmount: "85.50",
-				Type:            "expense",
-				CategoryName:    "Groceries",
-				Date:            time.Now().AddDate(0, 0, -1),
-			},
-			{
-				Description:     "Gas Station",
-				Amount:          MockTransportBudgetAmount,
-				FormattedAmount: "45.20",
-				Type:            "expense",
-				CategoryName:    "Transportation",
-				Date:            time.Now().AddDate(0, 0, -2),
-			},
-		}
+	// Получаем последние транзакции связанные с бюджетом
+	recentTransactions, err := h.getRecentTransactionsForBudget(
+		c.Request().Context(),
+		budgetEntity,
+		sessionData.FamilyID,
+	)
+	if err != nil {
+		// В случае ошибки получения транзакций, продолжаем без них
+		c.Logger().Warnf("Failed to get recent transactions for budget %s: %v", budgetEntity.ID, err)
+		recentTransactions = []*webModels.TransactionSummary{}
 	}
 
 	pageData := &PageData{
@@ -864,16 +844,81 @@ func (h *BudgetHandler) getBudgetServiceErrorMessage(err error) string {
 	errMsg := err.Error()
 	switch errMsg {
 	case "budget not found":
-		return "Budget not found" + errMsg
+		return fmt.Sprintf("Budget not found: %s", errMsg)
 	case "invalid budget period":
-		return "Invalid budget period - end date must be after start date" + errMsg
+		return fmt.Sprintf("Invalid budget period - end date must be after start date: %s", errMsg)
 	case "budget period overlap":
-		return "Budget period overlaps with existing budget for this category" + errMsg
+		return fmt.Sprintf("Budget period overlaps with existing budget for this category: %s", errMsg)
 	case "budget already exceeded":
-		return "Budget amount is less than already spent amount" + errMsg
+		return fmt.Sprintf("Budget amount is less than already spent amount: %s", errMsg)
 	case "invalid budget amount":
-		return "Budget amount must be greater than 0" + errMsg
+		return fmt.Sprintf("Budget amount must be greater than 0: %s", errMsg)
 	default:
-		return "Failed to process budget" + errMsg
+		return fmt.Sprintf("Failed to process budget: %s", errMsg)
 	}
+}
+
+// getRecentTransactionsForBudget получает последние транзакции связанные с бюджетом
+func (h *BudgetHandler) getRecentTransactionsForBudget(
+	ctx context.Context,
+	budget *budget.Budget,
+	familyID uuid.UUID,
+) ([]*webModels.TransactionSummary, error) {
+	// Создаем фильтр для получения транзакций
+	filter := dto.NewTransactionFilterDTO()
+	filter.FamilyID = familyID
+	filter.DateFrom = &budget.StartDate
+	filter.DateTo = &budget.EndDate
+	filter.Limit = 5 // Ограничиваем количество последних транзакций
+
+	// Если у бюджета есть категория, фильтруем по ней
+	if budget.CategoryID != nil {
+		filter.CategoryID = budget.CategoryID
+	}
+
+	// Получаем транзакции через сервис
+	transactions, err := h.services.Transaction.GetTransactionsByFamily(ctx, familyID, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get transactions for budget: %w", err)
+	}
+
+	// Конвертируем в web модели
+	result := make([]*webModels.TransactionSummary, 0, len(transactions))
+	for _, tx := range transactions {
+		summary := h.convertTransactionToSummary(ctx, tx)
+		result = append(result, summary)
+	}
+
+	return result, nil
+}
+
+// convertTransactionToSummary конвертирует доменную модель транзакции в TransactionSummary
+func (h *BudgetHandler) convertTransactionToSummary(
+	ctx context.Context,
+	tx *transaction.Transaction,
+) *webModels.TransactionSummary {
+	summary := &webModels.TransactionSummary{
+		Description: tx.Description,
+		Amount:      tx.Amount,
+		Type:        string(tx.Type),
+		Date:        tx.Date,
+	}
+
+	// Форматируем сумму
+	summary.FormattedAmount = fmt.Sprintf("%.2f", tx.Amount)
+
+	// Получаем название категории если есть
+	if tx.CategoryID != uuid.Nil {
+		category, err := h.services.Category.GetCategoryByID(ctx, tx.CategoryID)
+		if err != nil {
+			// Если не удалось получить категорию, используем ID как название
+			summary.CategoryName = tx.CategoryID.String()
+		} else {
+			summary.CategoryName = category.Name
+		}
+	} else {
+		summary.CategoryName = "Uncategorized"
+	}
+
+	return summary
 }

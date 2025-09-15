@@ -797,14 +797,14 @@ func (h *ReportHandler) getReportServiceErrorMessage(err error) string {
 	errMsg := err.Error()
 	switch {
 	case strings.Contains(errMsg, "report not found"):
-		return "Report not found"
+		return fmt.Sprintf("Report not found: %s", errMsg)
 	case strings.Contains(errMsg, "invalid date range"):
-		return "Invalid date range"
+		return fmt.Sprintf("Invalid date range: %s", errMsg)
 	case strings.Contains(errMsg, "no data available"):
-		return "No data available for the specified period"
+		return fmt.Sprintf("No data available for the specified period: %s", errMsg)
 	case strings.Contains(errMsg, "generation failed"):
-		return "Failed to generate report"
+		return fmt.Sprintf("Failed to generate report: %s", errMsg)
 	default:
-		return "Failed to process report"
+		return fmt.Sprintf("Failed to process report: %s", errMsg)
 	}
 }
