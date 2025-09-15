@@ -5,14 +5,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Budget.Name}} - Семейный бюджет</title>
-    
+
     <!-- PicoCSS -->
     <link rel="stylesheet" href="/static/css/pico.min.css">
     <link rel="stylesheet" href="/static/css/custom.css">
-    
+
     <!-- HTMX -->
     <script src="/static/js/htmx.min.js"></script>
-    
+
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
 </head>
@@ -56,7 +56,7 @@
             {{end}}
         </ul>
     </nav>
-    
+
     <!-- Main Content -->
     <main class="container">
         <!-- Page Header -->
@@ -84,24 +84,24 @@
                     <header>Общий бюджет</header>
                     <h2>{{.Budget.FormattedAmount}} ₽</h2>
                 </article>
-                
+
                 <article class="status-card">
                     <header>Потрачено</header>
                     <h2 class="{{if .Budget.IsOverBudget}}text-danger{{else}}text-success{{end}}">
                         {{.Budget.FormattedSpent}} ₽
                     </h2>
                 </article>
-                
+
                 <article class="status-card">
                     <header>Остается</header>
                     <h2 class="{{if .Budget.IsOverBudget}}text-danger{{else}}text-success{{end}}">
                         {{.Budget.FormattedRemaining}} ₽
                     </h2>
                 </article>
-                
+
                 <article class="status-card">
                     <header>Процент использования</header>
-                    <h2 class="{{if .Budget.IsOverBudget}}text-danger{{else if gt .Budget.Percentage 80}}text-warning{{else}}text-success{{end}}">
+                    <h2 class="{{if .Budget.IsOverBudget}}text-danger{{else if gt .Budget.Percentage 80.0}}text-warning{{else}}text-success{{end}}">
                         {{printf "%.1f" .Budget.Percentage}}%
                     </h2>
                 </article>
@@ -111,21 +111,21 @@
         <!-- Progress Bar -->
         <section class="progress-section">
             <h3>Прогресс расходов</h3>
-            <div class="progress {{.Budget.ProgressBarClass}}" 
-                 hx-get="/budgets/{{.Budget.ID}}/progress" 
+            <div class="progress {{.Budget.ProgressBarClass}}"
+                 hx-get="/budgets/{{.Budget.ID}}/progress"
                  hx-trigger="load, every 30s"
                  hx-swap="outerHTML">
-                <div class="progress-bar" style="width: {{if gt .Budget.Percentage 100}}100{{else}}{{printf "%.1f" .Budget.Percentage}}{{end}}%">
+                <div class="progress-bar" style="width: {{if gt .Budget.Percentage 100.0}}100{{else}}{{printf "%.1f" .Budget.Percentage}}{{end}}%">
                     <span class="progress-text">{{printf "%.1f" .Budget.Percentage}}%</span>
                 </div>
             </div>
-            
+
             {{if .Budget.IsOverBudget}}
             <div class="alert alert-danger" style="margin-top: 1rem;">
                 <h4>⚠️ Бюджет превышен!</h4>
                 <p>Вы потратили на {{.Budget.FormattedOverspent}} ₽ больше запланированного.</p>
             </div>
-            {{else if gt .Budget.Percentage 80}}
+            {{else if gt .Budget.Percentage 80.0}}
             <div class="alert alert-warning" style="margin-top: 1rem;">
                 <h4>🚨 Внимание!</h4>
                 <p>Вы использовали более 80% бюджета. Осталось {{.Budget.FormattedRemaining}} ₽.</p>
@@ -142,7 +142,7 @@
                     <p>{{.Budget.Period}}</p>
                     <small>{{.Budget.StartDate.Format "02.01.2006"}} - {{.Budget.EndDate.Format "02.01.2006"}}</small>
                 </div>
-                
+
                 <div>
                     <h4>Категория</h4>
                     {{if .Budget.CategoryName}}
@@ -154,7 +154,7 @@
                     <p>Все категории</p>
                     {{end}}
                 </div>
-                
+
                 <div>
                     <h4>Статус</h4>
                     {{if .Budget.IsActive}}
@@ -227,7 +227,7 @@
         </section>
         {{end}}
     </main>
-    
+
     <!-- Footer -->
     <footer class="container">
         <hr>
@@ -237,7 +237,7 @@
             </div>
         </div>
     </footer>
-    
+
     <!-- Custom JavaScript -->
     <script src="/static/js/app.js"></script>
 
@@ -245,21 +245,21 @@
     .budget-overview {
         margin: 2rem 0;
     }
-    
+
     .status-card {
         text-align: center;
         padding: 1.5rem;
         border: 1px solid var(--pico-muted-border-color);
         border-radius: var(--pico-border-radius);
     }
-    
+
     .status-card header {
         font-size: 0.875rem;
         font-weight: 600;
         margin-bottom: 0.5rem;
         color: var(--pico-muted-color);
     }
-    
+
     .status-card h2 {
         margin: 0;
         font-size: 1.75rem;
@@ -268,7 +268,7 @@
     .progress-section {
         margin: 2rem 0;
     }
-    
+
     .progress {
         width: 100%;
         height: 24px;
@@ -278,7 +278,7 @@
         position: relative;
         margin: 1rem 0;
     }
-    
+
     .progress-bar {
         height: 100%;
         background-color: var(--pico-primary);
@@ -289,14 +289,14 @@
         transition: width 0.3s ease;
         position: relative;
     }
-    
+
     .progress-text {
         color: white;
         font-size: 0.875rem;
         font-weight: 600;
         text-shadow: 0 0 3px rgba(0,0,0,0.5);
     }
-    
+
     .progress.progress-success .progress-bar { background-color: #28a745; }
     .progress.progress-info .progress-bar { background-color: #17a2b8; }
     .progress.progress-warning .progress-bar { background-color: #ffc107; }
@@ -309,12 +309,12 @@
         border-radius: var(--pico-border-radius);
         border: 1px solid var(--pico-muted-border-color);
     }
-    
+
     .budget-details h4 {
         margin-bottom: 0.5rem;
         color: var(--pico-primary);
     }
-    
+
     .budget-details p {
         margin: 0 0 0.25rem 0;
     }
@@ -330,16 +330,16 @@
     .related-transactions {
         margin: 2rem 0;
     }
-    
+
     .empty-transactions {
         margin: 2rem 0;
     }
-    
+
     .empty-state {
         text-align: center;
         padding: 3rem 1rem;
     }
-    
+
     .empty-state h3 {
         color: var(--pico-muted-color);
     }
@@ -354,23 +354,23 @@
         border-radius: var(--pico-border-radius);
         margin-bottom: 1rem;
     }
-    
+
     .alert.alert-danger {
         background-color: #f8d7da;
         border: 1px solid #f5c6cb;
         color: #721c24;
     }
-    
+
     .alert.alert-warning {
         background-color: #fff3cd;
         border: 1px solid #ffeaa7;
         color: #856404;
     }
-    
+
     .alert h4 {
         margin: 0 0 0.5rem 0;
     }
-    
+
     .alert p {
         margin: 0;
     }
@@ -379,7 +379,7 @@
         .status-card {
             padding: 1rem;
         }
-        
+
         .status-card h2 {
             font-size: 1.5rem;
         }

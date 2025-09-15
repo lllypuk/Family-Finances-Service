@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"encoding/csv"
-	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -47,13 +47,13 @@ func (h *ReportHandler) Index(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Получаем список существующих отчетов семьи
 	reports, err := h.services.Report.GetReportsByFamily(c.Request().Context(), sessionData.FamilyID, nil)
 	if err != nil {
-		return h.handleError(c, err, "Failed to get reports")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get reports")
 	}
 
 	// Конвертируем в view модели
@@ -81,7 +81,7 @@ func (h *ReportHandler) Index(c echo.Context) error {
 		Title: "Reports",
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"PageData":          pageData,
 		"Reports":           reportVMs,
 		"ReportTypeOptions": reportTypeOptions,
@@ -93,12 +93,20 @@ func (h *ReportHandler) Index(c echo.Context) error {
 
 // New отображает форму создания нового отчета
 func (h *ReportHandler) New(c echo.Context) error {
+	// Получаем CSRF токен
+	csrfToken, _ := middleware.GetCSRFToken(c)
+
 	// TODO: Реализовать отображение формы создания отчета
 	pageData := &PageData{
 		Title: "New Report",
 	}
 
-	return h.renderPage(c, "pages/reports/new", pageData)
+	data := map[string]any{
+		"PageData":  pageData,
+		"CSRFToken": csrfToken,
+	}
+
+	return h.renderPage(c, "pages/reports/new", data)
 }
 
 // Create создает и генерирует новый отчет
@@ -106,13 +114,18 @@ func (h *ReportHandler) Create(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Парсим и валидируем форму
 	form, err := h.parseAndValidateReportForm(c)
 	if err != nil {
 		return err
+	}
+
+	// Проверяем, что форма не nil перед использованием
+	if form == nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Form validation failed")
 	}
 
 	// Создаем DTO для запроса отчета
@@ -128,21 +141,29 @@ func (h *ReportHandler) Create(c echo.Context) error {
 	}
 
 	// Успешное создание - редирект на просмотр отчета
-	return h.redirect(c, fmt.Sprintf("/reports/%s", reportEntity.ID))
+	reportURL := fmt.Sprintf("/reports/%s", reportEntity.ID)
+	if h.IsHTMXRequest(c) {
+		// Для HTMX запросов используем Hx-Redirect
+		c.Response().Header().Set("Hx-Redirect", reportURL)
+		return c.NoContent(http.StatusOK)
+	}
+
+	// Для обычных запросов - стандартный редирект
+	return h.redirect(c, reportURL)
 }
 
 // parseAndValidateReportForm парсит и валидирует форму отчета
 func (h *ReportHandler) parseAndValidateReportForm(c echo.Context) (*webModels.ReportForm, error) {
 	var form webModels.ReportForm
 	if bindErr := c.Bind(&form); bindErr != nil {
-		return nil, h.handleError(c, bindErr, "Invalid form data")
+		return nil, echo.NewHTTPError(http.StatusBadRequest, "Invalid form data")
 	}
 
 	if validationErr := h.validator.Struct(form); validationErr != nil {
 		validationErrors := webModels.GetValidationErrors(validationErr)
 
-		if h.isHTMXRequest(c) {
-			return nil, h.renderPartial(c, "components/form_errors", map[string]interface{}{
+		if h.IsHTMXRequest(c) {
+			return nil, h.renderPartial(c, "components/form_errors", map[string]any{
 				"Errors": validationErrors,
 			})
 		}
@@ -263,23 +284,23 @@ func (h *ReportHandler) generateCategoryReport(c echo.Context, createDTO dto.Rep
 // handleUnsupportedReportType обрабатывает неподдерживаемый тип отчета
 func (h *ReportHandler) handleUnsupportedReportType(c echo.Context) (*report.Report, error) {
 	errorMsg := "Unsupported report type"
-	if h.isHTMXRequest(c) {
-		return nil, h.renderPartial(c, "components/form_errors", map[string]interface{}{
+	if h.IsHTMXRequest(c) {
+		return nil, h.renderPartial(c, "components/form_errors", map[string]any{
 			"Errors": map[string]string{"form": errorMsg},
 		})
 	}
-	return nil, h.handleError(c, errors.New("unsupported report type"), errorMsg)
+	return nil, echo.NewHTTPError(http.StatusBadRequest, errorMsg)
 }
 
 // handleReportGenerationError обрабатывает ошибки генерации отчетов
 func (h *ReportHandler) handleReportGenerationError(c echo.Context, err error) error {
 	errorMsg := h.getReportServiceErrorMessage(err)
-	if h.isHTMXRequest(c) {
-		return h.renderPartial(c, "components/form_errors", map[string]interface{}{
+	if h.IsHTMXRequest(c) {
+		return h.renderPartial(c, "components/form_errors", map[string]any{
 			"Errors": map[string]string{"form": errorMsg},
 		})
 	}
-	return h.handleError(c, err, errorMsg)
+	return echo.NewHTTPError(http.StatusInternalServerError, errorMsg)
 }
 
 // Show отображает сгенерированный отчет
@@ -287,25 +308,25 @@ func (h *ReportHandler) Show(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Парсим ID отчета
 	id := c.Param("id")
 	reportID, err := uuid.Parse(id)
 	if err != nil {
-		return h.handleError(c, err, "Invalid report ID")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid report ID")
 	}
 
 	// Получаем отчет
 	report, err := h.services.Report.GetReportByID(c.Request().Context(), reportID)
 	if err != nil {
-		return h.handleError(c, err, "Report not found")
+		return echo.NewHTTPError(http.StatusNotFound, "Report not found")
 	}
 
 	// Проверяем, что отчет принадлежит семье пользователя
 	if report.FamilyID != sessionData.FamilyID {
-		return h.handleError(c, echo.ErrForbidden, "Access denied")
+		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
 	}
 
 	// Конвертируем в view модель
@@ -316,7 +337,7 @@ func (h *ReportHandler) Show(c echo.Context) error {
 		Title: "Report: " + report.Name,
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"PageData": pageData,
 		"Report":   reportVM,
 	}
@@ -328,7 +349,7 @@ func (h *ReportHandler) Show(c echo.Context) error {
 func (h *ReportHandler) Delete(c echo.Context) error {
 	return h.handleDelete(c, DeleteEntityParams{
 		EntityName: "report",
-		GetEntityFunc: func(ctx echo.Context, entityID uuid.UUID) (interface{}, error) {
+		GetEntityFunc: func(ctx echo.Context, entityID uuid.UUID) (any, error) {
 			return h.services.Report.GetReportByID(ctx.Request().Context(), entityID)
 		},
 		DeleteEntityFunc: func(ctx echo.Context, entityID uuid.UUID) error {
@@ -344,30 +365,30 @@ func (h *ReportHandler) Export(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Парсим ID отчета
 	id := c.Param("id")
 	reportID, err := uuid.Parse(id)
 	if err != nil {
-		return h.handleError(c, err, "Invalid report ID")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid report ID")
 	}
 
 	format := c.QueryParam("format")
 	if format != "csv" {
-		return h.handleError(c, errors.New("unsupported format"), "Unsupported export format")
+		return echo.NewHTTPError(http.StatusBadRequest, "Unsupported export format")
 	}
 
 	// Получаем отчет
 	report, err := h.services.Report.GetReportByID(c.Request().Context(), reportID)
 	if err != nil {
-		return h.handleError(c, err, "Report not found")
+		return echo.NewHTTPError(http.StatusNotFound, "Report not found")
 	}
 
 	// Проверяем, что отчет принадлежит семье пользователя
 	if report.FamilyID != sessionData.FamilyID {
-		return h.handleError(c, echo.ErrForbidden, "Access denied")
+		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
 	}
 
 	// Экспортируем в CSV
@@ -379,19 +400,19 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Парсим данные формы
 	var form webModels.ReportForm
 	if bindErr := c.Bind(&form); bindErr != nil {
-		return h.handleError(c, bindErr, "Invalid form data")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid form data")
 	}
 
 	// Валидируем форму
 	if validationErr := h.validator.Struct(form); validationErr != nil {
 		validationErrors := webModels.GetValidationErrors(validationErr)
-		return h.renderPartial(c, "components/form_errors", map[string]interface{}{
+		return h.renderPartial(c, "components/form_errors", map[string]any{
 			"Errors": validationErrors,
 		})
 	}
@@ -399,12 +420,12 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 	// Парсим даты
 	startDate, err := form.GetStartDate()
 	if err != nil {
-		return h.handleError(c, err, "Invalid start date")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid start date")
 	}
 
 	endDate, err := form.GetEndDate()
 	if err != nil {
-		return h.handleError(c, err, "Invalid end date")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid end date")
 	}
 
 	// Создание DTO для генерации отчета
@@ -419,7 +440,7 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 	}
 
 	// Генерация отчета через сервис
-	var reportData interface{}
+	var reportData any
 	var generateErr error
 
 	switch generateDTO.Type {
@@ -447,12 +468,12 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 			generateDTO.Period,
 		)
 	default:
-		return h.renderPartial(c, "components/form_errors", map[string]interface{}{
+		return h.renderPartial(c, "components/form_errors", map[string]any{
 			"Errors": map[string]string{"form": "Unsupported report type"},
 		})
 	}
 	if generateErr != nil {
-		return h.handleError(c, generateErr, "Failed to generate report")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to generate report")
 	}
 
 	// Создаем временный отчет для отображения
@@ -475,7 +496,7 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 	reportVM := webModels.ReportDataVM{}
 	reportVM.FromDomain(tempReport)
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"Report": reportVM,
 	}
 
@@ -602,7 +623,7 @@ func (h *ReportHandler) renderReportFormWithErrors(
 		},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"PageData":          pageData,
 		"Form":              form,
 		"ReportTypeOptions": reportTypeOptions,
@@ -617,7 +638,7 @@ func (h *ReportHandler) renderReportFormWithErrors(
 }
 
 // convertReportDataToStandard конвертирует специфичные DTO в стандартный report.Data формат
-func (h *ReportHandler) convertReportDataToStandard(reportData interface{}, reportType report.Type) report.Data {
+func (h *ReportHandler) convertReportDataToStandard(reportData any, reportType report.Type) report.Data {
 	switch reportType {
 	case report.TypeExpenses:
 		return h.convertExpenseReportData(reportData)
@@ -635,7 +656,7 @@ func (h *ReportHandler) convertReportDataToStandard(reportData interface{}, repo
 }
 
 // convertExpenseReportData конвертирует данные отчета по расходам
-func (h *ReportHandler) convertExpenseReportData(reportData interface{}) report.Data {
+func (h *ReportHandler) convertExpenseReportData(reportData any) report.Data {
 	expenseReport, ok := reportData.(*dto.ExpenseReportDTO)
 	if !ok {
 		return report.Data{}
@@ -652,7 +673,7 @@ func (h *ReportHandler) convertExpenseReportData(reportData interface{}) report.
 }
 
 // convertIncomeReportData конвертирует данные отчета по доходам
-func (h *ReportHandler) convertIncomeReportData(reportData interface{}) report.Data {
+func (h *ReportHandler) convertIncomeReportData(reportData any) report.Data {
 	incomeReport, ok := reportData.(*dto.IncomeReportDTO)
 	if !ok {
 		return report.Data{}
@@ -667,7 +688,7 @@ func (h *ReportHandler) convertIncomeReportData(reportData interface{}) report.D
 }
 
 // convertBudgetReportData конвертирует данные отчета по бюджету
-func (h *ReportHandler) convertBudgetReportData(reportData interface{}) report.Data {
+func (h *ReportHandler) convertBudgetReportData(reportData any) report.Data {
 	budgetReport, ok := reportData.(*dto.BudgetComparisonDTO)
 	if !ok {
 		return report.Data{}
@@ -692,7 +713,7 @@ func (h *ReportHandler) convertBudgetReportData(reportData interface{}) report.D
 }
 
 // convertCashFlowReportData конвертирует данные отчета по денежному потоку
-func (h *ReportHandler) convertCashFlowReportData(reportData interface{}) report.Data {
+func (h *ReportHandler) convertCashFlowReportData(reportData any) report.Data {
 	cashFlowReport, ok := reportData.(*dto.CashFlowReportDTO)
 	if !ok {
 		return report.Data{}
@@ -717,7 +738,7 @@ func (h *ReportHandler) convertCashFlowReportData(reportData interface{}) report
 }
 
 // convertCategoryReportData конвертирует данные отчета по категориям
-func (h *ReportHandler) convertCategoryReportData(reportData interface{}) report.Data {
+func (h *ReportHandler) convertCategoryReportData(reportData any) report.Data {
 	categoryReport, ok := reportData.(*dto.CategoryBreakdownDTO)
 	if !ok {
 		return report.Data{}
@@ -776,14 +797,14 @@ func (h *ReportHandler) getReportServiceErrorMessage(err error) string {
 	errMsg := err.Error()
 	switch {
 	case strings.Contains(errMsg, "report not found"):
-		return "Report not found"
+		return fmt.Sprintf("Report not found: %s", errMsg)
 	case strings.Contains(errMsg, "invalid date range"):
-		return "Invalid date range"
+		return fmt.Sprintf("Invalid date range: %s", errMsg)
 	case strings.Contains(errMsg, "no data available"):
-		return "No data available for the specified period"
+		return fmt.Sprintf("No data available for the specified period: %s", errMsg)
 	case strings.Contains(errMsg, "generation failed"):
-		return "Failed to generate report"
+		return fmt.Sprintf("Failed to generate report: %s", errMsg)
 	default:
-		return "Failed to process report"
+		return fmt.Sprintf("Failed to process report: %s", errMsg)
 	}
 }

@@ -79,46 +79,33 @@ func (h *BaseHandler) getFlashMessages(_ echo.Context) []Message {
 }
 
 // renderPage рендерит полную страницу
-func (h *BaseHandler) renderPage(c echo.Context, templateName string, data interface{}) error {
+func (h *BaseHandler) renderPage(c echo.Context, templateName string, data any) error {
 	return c.Render(http.StatusOK, templateName, data)
 }
 
 // renderPartial рендерит частичный шаблон (для HTMX)
-func (h *BaseHandler) renderPartial(c echo.Context, templateName string, data interface{}) error {
+func (h *BaseHandler) renderPartial(c echo.Context, templateName string, data any) error {
 	return c.Render(http.StatusOK, templateName, data)
-}
-
-// handleError обрабатывает ошибки и возвращает соответствующий ответ
-func (h *BaseHandler) handleError(c echo.Context, _ error, message string) error {
-	if h.isHTMXRequest(c) {
-		return h.renderPartial(c, "components/alert", map[string]interface{}{
-			"Type":    "error",
-			"Message": message,
-		})
-	}
-	return c.JSON(http.StatusInternalServerError, map[string]string{
-		"error": message,
-	})
 }
 
 // redirect выполняет редирект
 func (h *BaseHandler) redirect(c echo.Context, url string) error {
-	return c.Redirect(http.StatusFound, url)
+	return c.Redirect(http.StatusSeeOther, url)
 }
 
-// isHTMXRequest проверяет, является ли запрос HTMX запросом
-func (h *BaseHandler) isHTMXRequest(c echo.Context) bool {
+// IsHTMXRequest проверяет, является ли запрос HTMX запросом
+func (h *BaseHandler) IsHTMXRequest(c echo.Context) bool {
 	return c.Request().Header.Get("Hx-Request") == HTMXRequestHeader
 }
 
 // DeleteEntityParams содержит параметры для общего метода удаления
 type DeleteEntityParams struct {
-	EntityName       string                                                          // Название сущности для сообщений об ошибках
-	IDParamName      string                                                          // Имя параметра ID в URL (по умолчанию "id")
-	GetEntityFunc    func(ctx echo.Context, entityID uuid.UUID) (interface{}, error) // Функция получения сущности
-	DeleteEntityFunc func(ctx echo.Context, entityID uuid.UUID) error                // Функция удаления сущности
-	GetErrorMsgFunc  func(err error) string                                          // Функция получения сообщения об ошибке
-	RedirectURL      string                                                          // URL для редиректа после успешного удаления
+	EntityName       string                                                  // Название сущности для сообщений об ошибках
+	IDParamName      string                                                  // Имя параметра ID в URL (по умолчанию "id")
+	GetEntityFunc    func(ctx echo.Context, entityID uuid.UUID) (any, error) // Функция получения сущности
+	DeleteEntityFunc func(ctx echo.Context, entityID uuid.UUID) error        // Функция удаления сущности
+	GetErrorMsgFunc  func(err error) string                                  // Функция получения сообщения об ошибке
+	RedirectURL      string                                                  // URL для редиректа после успешного удаления
 }
 
 // EntityWithFamilyID интерфейс для сущностей с FamilyID
@@ -131,7 +118,7 @@ func (h *BaseHandler) handleDelete(c echo.Context, params DeleteEntityParams) er
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Парсим ID
@@ -142,19 +129,19 @@ func (h *BaseHandler) handleDelete(c echo.Context, params DeleteEntityParams) er
 	id := c.Param(paramName)
 	entityID, err := uuid.Parse(id)
 	if err != nil {
-		return h.handleError(c, err, "Invalid "+params.EntityName+" ID")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid "+params.EntityName+" ID")
 	}
 
 	// Получаем сущность для проверки прав доступа
 	entity, err := params.GetEntityFunc(c, entityID)
 	if err != nil {
-		return h.handleError(c, err, params.EntityName+" not found")
+		return echo.NewHTTPError(http.StatusNotFound, params.EntityName+" not found")
 	}
 
 	// Проверяем права доступа
 	if entityWithFamily, ok := entity.(EntityWithFamilyID); ok {
 		if entityWithFamily.GetFamilyID() != sessionData.FamilyID {
-			return h.handleError(c, echo.ErrForbidden, "Access denied")
+			return echo.NewHTTPError(http.StatusForbidden, "Access denied")
 		}
 	}
 
@@ -163,17 +150,17 @@ func (h *BaseHandler) handleDelete(c echo.Context, params DeleteEntityParams) er
 	if err != nil {
 		errorMsg := params.GetErrorMsgFunc(err)
 
-		if h.isHTMXRequest(c) {
-			return h.renderPartial(c, "components/alert", map[string]interface{}{
+		if h.IsHTMXRequest(c) {
+			return h.renderPartial(c, "components/alert", map[string]any{
 				"Type":    "error",
 				"Message": errorMsg,
 			})
 		}
 
-		return h.handleError(c, err, errorMsg)
+		return echo.NewHTTPError(http.StatusInternalServerError, errorMsg)
 	}
 
-	if h.isHTMXRequest(c) {
+	if h.IsHTMXRequest(c) {
 		// Для HTMX возвращаем пустой ответ для удаления строки
 		return c.NoContent(http.StatusOK)
 	}

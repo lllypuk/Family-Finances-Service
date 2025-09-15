@@ -1,9 +1,5 @@
 {{define "recent-transactions"}}
-<div class="recent-transactions"
-     hx-get="/htmx/transactions/recent"
-     hx-trigger="load, every 30s"
-     hx-target="this"
-     hx-swap="outerHTML">
+<div class="recent-transactions">
 
     {{if .RecentActivity.Transactions}}
     <div class="transactions-list">

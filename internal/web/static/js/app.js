@@ -186,7 +186,7 @@ document.body.addEventListener("htmx:configRequest", function (evt) {
   // Добавление CSRF токена ко всем HTMX запросам
   const csrfToken = document.querySelector('meta[name="csrf-token"]');
   if (csrfToken) {
-    evt.detail.headers["X-CSRF-Token"] = csrfToken.getAttribute("content");
+    evt.detail.headers["X-Csrf-Token"] = csrfToken.getAttribute("content");
   }
 });
 
@@ -214,6 +214,18 @@ document.body.addEventListener("htmx:responseError", function (evt) {
 
   // Показать пользователю сообщение об ошибке
   showNotification("Произошла ошибка при загрузке данных", "error");
+});
+
+document.body.addEventListener("htmx:targetError", function (evt) {
+  // Обработка ошибок целей HTMX
+  console.error("HTMX Target error:", {
+    target: evt.detail.target,
+    pathInfo: evt.detail.pathInfo,
+    xhr: evt.detail.xhr
+  });
+  
+  // Показать подробное сообщение об ошибке
+  showNotification("Ошибка загрузки компонента страницы", "error");
 });
 
 // Утилиты

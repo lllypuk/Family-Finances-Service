@@ -99,6 +99,7 @@ func (ws *Server) setupAuthRoutes() {
 	ws.echo.POST("/login", ws.authHandler.Login, middleware.RedirectIfAuthenticated("/"))
 	ws.echo.GET("/register", ws.authHandler.RegisterPage, middleware.RedirectIfAuthenticated("/"))
 	ws.echo.POST("/register", ws.authHandler.Register, middleware.RedirectIfAuthenticated("/"))
+	ws.echo.GET("/logout", ws.authHandler.Logout)
 	ws.echo.POST("/logout", ws.authHandler.Logout)
 }
 

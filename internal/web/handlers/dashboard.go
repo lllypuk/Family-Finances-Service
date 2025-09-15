@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/google/uuid"
@@ -55,7 +56,7 @@ func (h *DashboardHandler) Dashboard(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return c.JSON(HTTPStatusInternalServerError, map[string]string{"error": "Session error: " + err.Error()})
+		return echo.NewHTTPError(HTTPStatusInternalServerError, "Session error: "+err.Error())
 	}
 
 	// Парсим фильтры
@@ -139,7 +140,7 @@ func (h *DashboardHandler) Dashboard(c echo.Context) error {
 	// Пробуем рендерить
 	err = h.renderPage(c, "dashboard", data)
 	if err != nil {
-		return c.JSON(HTTPStatusInternalServerError, map[string]string{"error": "Render error: " + err.Error()})
+		return echo.NewHTTPError(HTTPStatusInternalServerError, "Render error: "+err.Error())
 	}
 	return nil
 }
@@ -149,7 +150,7 @@ func (h *DashboardHandler) DashboardStats(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Парсим фильтры
@@ -163,10 +164,10 @@ func (h *DashboardHandler) DashboardStats(c echo.Context) error {
 	// Получаем только monthly summary
 	monthlySummary, err := h.buildMonthlySummary(c.Request().Context(), sessionData.FamilyID, filters)
 	if err != nil {
-		return h.handleError(c, err, "Failed to load monthly summary")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load monthly summary")
 	}
 
-	return h.renderPartial(c, "components/dashboard-stats", map[string]interface{}{
+	return h.renderPartial(c, "dashboard-stats", map[string]any{
 		"MonthlySummary": monthlySummary,
 	})
 }
@@ -176,16 +177,16 @@ func (h *DashboardHandler) RecentTransactions(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Получаем последние транзакции
 	recentActivity, err := h.buildRecentActivity(c.Request().Context(), sessionData.FamilyID)
 	if err != nil {
-		return h.handleError(c, err, "Failed to load recent transactions")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load recent transactions")
 	}
 
-	return h.renderPartial(c, "components/recent-transactions", map[string]interface{}{
+	return h.renderPartial(c, "recent-transactions", map[string]any{
 		"RecentActivity": recentActivity,
 	})
 }
@@ -195,16 +196,16 @@ func (h *DashboardHandler) BudgetOverview(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return h.handleError(c, err, "Unable to get user session")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Получаем обзор бюджетов
 	budgetOverview, err := h.buildBudgetOverview(c.Request().Context(), sessionData.FamilyID)
 	if err != nil {
-		return h.handleError(c, err, "Failed to load budget overview")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load budget overview")
 	}
 
-	return h.renderPartial(c, "components/budget-overview", map[string]interface{}{
+	return h.renderPartial(c, "budget-overview", map[string]any{
 		"BudgetOverview": budgetOverview,
 	})
 }
@@ -411,10 +412,7 @@ func (h *DashboardHandler) createBudgetItem(
 	}
 
 	remaining := b.Amount - b.Spent
-	daysRemaining := int(b.EndDate.Sub(now).Hours() / webModels.HoursInDay)
-	if daysRemaining < 0 {
-		daysRemaining = 0
-	}
+	daysRemaining := max(int(b.EndDate.Sub(now).Hours()/webModels.HoursInDay), 0)
 
 	isOverBudget := percentage >= webModels.BudgetOverLimitThreshold
 	isNearLimit := percentage >= webModels.BudgetNearLimitThreshold && !isOverBudget

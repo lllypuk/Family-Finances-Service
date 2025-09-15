@@ -1,9 +1,5 @@
 {{define "budget-overview"}}
-<div class="budget-overview"
-     hx-get="/htmx/budgets/overview"
-     hx-trigger="load, every 120s"
-     hx-target="this"
-     hx-swap="outerHTML">
+<div class="budget-overview">
 
     {{if .BudgetOverview}}
     <!-- Budget Summary Stats -->

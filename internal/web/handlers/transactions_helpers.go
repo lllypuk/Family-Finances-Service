@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -276,11 +277,14 @@ func (h *TransactionHandler) buildCreateTransactionDTO(
 	}
 
 	// Парсим теги
-	var tags []string
+	tags := make([]string, 0) // Всегда инициализируем как пустой массив, а не nil
 	if form.Tags != "" {
-		tags = strings.Split(form.Tags, ",")
-		for i, tag := range tags {
-			tags[i] = strings.TrimSpace(tag)
+		splitTags := strings.Split(form.Tags, ",")
+		for _, tag := range splitTags {
+			trimmed := strings.TrimSpace(tag)
+			if trimmed != "" { // Добавляем только непустые теги
+				tags = append(tags, trimmed)
+			}
 		}
 	}
 
@@ -371,7 +375,7 @@ func (h *TransactionHandler) renderTransactionFormWithErrors(
 	// Получаем категории для селекта
 	categories, err := h.services.Category.GetCategoriesByFamily(c.Request().Context(), familyID, nil)
 	if err != nil {
-		return h.handleError(c, err, "Failed to get categories")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get categories")
 	}
 
 	categoryOptions := h.buildCategorySelectOptions(categories)
@@ -384,7 +388,7 @@ func (h *TransactionHandler) renderTransactionFormWithErrors(
 		},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"PageData":        pageData,
 		"Form":            form,
 		"CategoryOptions": categoryOptions,
@@ -403,14 +407,14 @@ func (h *TransactionHandler) getTransactionServiceErrorMessage(err error) string
 	errMsg := err.Error()
 	switch {
 	case strings.Contains(errMsg, "category not found"):
-		return "Selected category not found"
+		return fmt.Sprintf("Selected category not found: %s", errMsg)
 	case strings.Contains(errMsg, "insufficient balance"):
-		return "Insufficient budget balance for this category"
+		return fmt.Sprintf("Insufficient budget balance for this category: %s", errMsg)
 	case strings.Contains(errMsg, "invalid date"):
-		return "Invalid transaction date"
+		return fmt.Sprintf("Invalid transaction date: %s", errMsg)
 	case strings.Contains(errMsg, "invalid amount"):
-		return "Invalid transaction amount"
+		return fmt.Sprintf("Invalid transaction amount: %s", errMsg)
 	default:
-		return "Failed to process transaction"
+		return fmt.Sprintf("Failed to process transaction: %s", errMsg)
 	}
 }

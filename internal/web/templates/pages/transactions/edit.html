@@ -13,6 +13,9 @@
     <!-- HTMX -->
     <script src="/static/js/htmx.min.js"></script>
     
+    <!-- CSRF Token for HTMX -->
+    {{if .CSRFToken}}<meta name="csrf-token" content="{{.CSRFToken}}">{{end}}
+    
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
 </head>
@@ -61,15 +64,17 @@
         </div>
         
         <!-- Error Messages -->
-        {{if .PageData.Errors}}
-        <div class="alert alert-danger" role="alert" id="form-errors">
-            <ul style="margin: 0; padding-left: 1rem;">
-                {{range $field, $error := .PageData.Errors}}
-                <li>{{$error}}</li>
-                {{end}}
-            </ul>
+        <div id="form-errors">
+            {{if .PageData.Errors}}
+            <div class="alert alert-danger" role="alert">
+                <ul style="margin: 0; padding-left: 1rem;">
+                    {{range $field, $error := .PageData.Errors}}
+                    <li>{{$error}}</li>
+                    {{end}}
+                </ul>
+            </div>
+            {{end}}
         </div>
-        {{end}}
         
         <!-- Edit Transaction Form -->
         <section class="form-section">

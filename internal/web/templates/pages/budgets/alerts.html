@@ -13,6 +13,9 @@
     <!-- HTMX -->
     <script src="/static/js/htmx.min.js"></script>
     
+    <!-- CSRF Token for HTMX -->
+    {{if .CSRFToken}}<meta name="csrf-token" content="{{.CSRFToken}}">{{end}}
+    
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
 </head>

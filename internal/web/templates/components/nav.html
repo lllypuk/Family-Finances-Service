@@ -29,7 +29,7 @@
                     {{end}}
                     <li>
                         <form method="POST" action="/logout" style="margin: 0;">
-                            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                            <input type="hidden" name="_token" value="{{.CSRFToken}}">
                             <button type="submit" class="outline">Выход</button>
                         </form>
                     </li>
