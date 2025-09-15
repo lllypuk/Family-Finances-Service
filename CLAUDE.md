@@ -103,7 +103,6 @@ This is a production-ready family budget management service built with Go, follo
 - ✅ **36.2% test coverage** with 50+ test files
 - ✅ **CI/CD pipelines** with GitHub Actions
 - ✅ **Observability stack** (Prometheus, Grafana, Jaeger)
-- ⚠️ **Performance tests need fixes** - some concurrency issues present
 
 ### Domain Structure
 The application is organized into domain modules in `internal/domain/`:
@@ -197,12 +196,6 @@ The project has comprehensive testing across all layers:
 - Database operations with real MongoDB instances
 - Authentication flows with session management
 - Multi-family data isolation validation
-
-**Performance Tests:**
-- ⚠️ **Concurrency tests currently failing** - need investigation
-- Load testing for API endpoints
-- Memory leak detection
-- Database query optimization benchmarks
 
 **Coverage by Layer:**
 - **Application**: 91.2% (excellent)
@@ -313,11 +306,6 @@ make pre-commit   # Run full check sequence
 
 ## 🚧 Known Issues & TODO
 
-### Performance Tests
-- **Concurrency tests failing** - TestConcurrentDomainOperations and TestConcurrentHTTPRequests
-- Need investigation of thread-safety issues in domain operations
-- HTTP server initialization panic in test environment
-
 ### Test Coverage Improvements Needed
 - **Web handlers**: 0% coverage - needs test implementation
 - **Web models**: 6.6% coverage - needs expanded validation tests
@@ -325,10 +313,9 @@ make pre-commit   # Run full check sequence
 - **Target**: Increase overall coverage from 36.2% to 60%+
 
 ### Development Priorities
-1. Fix failing concurrency tests
-2. Implement web handler tests
-3. Improve web models test coverage
-4. Add more integration test scenarios
-5. Performance optimization and benchmarking
+1. Implement web handler tests
+2. Improve web models test coverage
+3. Add more integration test scenarios
+4. Performance optimization and benchmarking
 
 - add to memory .memory_bank/
