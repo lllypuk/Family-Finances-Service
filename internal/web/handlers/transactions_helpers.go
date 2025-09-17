@@ -279,8 +279,8 @@ func (h *TransactionHandler) buildCreateTransactionDTO(
 	// Парсим теги
 	tags := make([]string, 0) // Всегда инициализируем как пустой массив, а не nil
 	if form.Tags != "" {
-		splitTags := strings.Split(form.Tags, ",")
-		for _, tag := range splitTags {
+		splitTags := strings.SplitSeq(form.Tags, ",")
+		for tag := range splitTags {
 			trimmed := strings.TrimSpace(tag)
 			if trimmed != "" { // Добавляем только непустые теги
 				tags = append(tags, trimmed)

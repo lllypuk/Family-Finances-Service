@@ -167,8 +167,8 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		err = testServer.Repos.User.Create(context.Background(), user)
 		require.NoError(t, err)
 
-		// Test with non-existent category - MongoDB doesn't enforce foreign key constraints
-		// so this should succeed (this is by design in the current system)
+		// Test with non-existent category - PostgreSQL enforces foreign key constraints
+		// so this should fail with validation error
 		request := handlers.CreateTransactionRequest{
 			Amount:      100.0,
 			Type:        "expense",
@@ -188,8 +188,8 @@ func TestTransactionHandler_Integration(t *testing.T) {
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
 
-		// MongoDB doesn't enforce foreign key constraints, so this succeeds
-		assert.Equal(t, http.StatusCreated, rec.Code)
+		// PostgreSQL enforces foreign key constraints, so this should fail
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
 
 		var response handlers.APIResponse[handlers.TransactionResponse]
 		err = json.Unmarshal(rec.Body.Bytes(), &response)

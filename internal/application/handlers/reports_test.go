@@ -452,7 +452,7 @@ func TestReportHandler_GetReportByID_Success(t *testing.T) {
 	assert.Equal(t, expectedReport.ID, response.Data.ID)
 	assert.Equal(t, expectedReport.Name, response.Data.Name)
 	assert.Equal(t, string(expectedReport.Type), response.Data.Type)
-	// Проверяем что данные присутствуют (они имеют тип interface{} в response)
+	// Проверяем что данные присутствуют (они имеют тип any в response)
 	assert.NotNil(t, response.Data.Data)
 
 	mockRepo.AssertExpectations(t)

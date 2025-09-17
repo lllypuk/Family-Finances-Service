@@ -37,7 +37,7 @@ groups:
       # High Response Time
       - alert: HighResponseTime
         expr: |
-          histogram_quantile(0.95, 
+          histogram_quantile(0.95,
             rate(http_request_duration_seconds_bucket[5m])
           ) > 1.0
         for: 3m
@@ -111,34 +111,34 @@ groups:
           summary: "Slow database operations"
           description: "95th percentile database operation time is {{ $value }}s"
 
-  - name: mongodb.rules
+  - name: postgresql.rules
     interval: 30s
     rules:
-      # MongoDB Down
-      - alert: MongoDBDown
-        expr: up{job="mongodb-exporter"} == 0
+      # PostgreSQL Down
+      - alert: PostgreSQLDown
+        expr: up{job="postgres-exporter"} == 0
         for: 1m
         labels:
           severity: critical
-          service: mongodb
+          service: postgresql
         annotations:
-          summary: "MongoDB is down"
-          description: "MongoDB has been down for more than 1 minute"
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL has been down for more than 1 minute"
 
-      # High MongoDB Connection Usage
-      - alert: HighMongoDBConnections
+      # High PostgreSQL Connection Usage
+      - alert: HighPostgreSQLConnections
         expr: |
           (
-            mongodb_connections{state="current"} /
-            mongodb_connections{state="available"}
+            pg_stat_database_numbackends /
+            pg_settings_max_connections
           ) > 0.80
         for: 5m
         labels:
           severity: warning
-          service: mongodb
+          service: postgresql
         annotations:
-          summary: "High MongoDB connection usage"
-          description: "MongoDB connection usage is {{ $value | humanizePercentage }}"
+          summary: "High PostgreSQL connection usage"
+          description: "PostgreSQL connection usage is {{ $value | humanizePercentage }}"
 
   - name: system.rules
     interval: 30s

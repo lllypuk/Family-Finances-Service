@@ -11,6 +11,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/domain/transaction"
+	"family-budget-service/internal/web/middleware"
 )
 
 type TransactionHandler struct {
@@ -478,6 +479,11 @@ func (h *TransactionHandler) updateTransactionFields(tx *transaction.Transaction
 
 func (h *TransactionHandler) DeleteTransaction(c echo.Context) error {
 	return DeleteEntityHelper(c, func(id uuid.UUID) error {
-		return h.repositories.Transaction.Delete(c.Request().Context(), id)
+		// Get family ID from session for security
+		sessionData, err := middleware.GetSessionData(c)
+		if err != nil {
+			return err
+		}
+		return h.repositories.Transaction.Delete(c.Request().Context(), id, sessionData.FamilyID)
 	}, "Transaction")
 }

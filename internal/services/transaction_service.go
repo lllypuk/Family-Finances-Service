@@ -36,7 +36,7 @@ type TransactionRepository interface {
 	GetByFilter(ctx context.Context, filter transaction.Filter) ([]*transaction.Transaction, error)
 	GetByFamilyID(ctx context.Context, familyID uuid.UUID, limit, offset int) ([]*transaction.Transaction, error)
 	Update(ctx context.Context, transaction *transaction.Transaction) error
-	Delete(ctx context.Context, id uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
 	GetTotalByCategory(ctx context.Context, categoryID uuid.UUID, transactionType transaction.Type) (float64, error)
 	GetTotalByFamilyAndDateRange(
 		ctx context.Context,
@@ -268,7 +268,7 @@ func (s *TransactionServiceImpl) UpdateTransaction(
 }
 
 // DeleteTransaction deletes a transaction and adjusts budgets
-func (s *TransactionServiceImpl) DeleteTransaction(ctx context.Context, id uuid.UUID) error {
+func (s *TransactionServiceImpl) DeleteTransaction(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
 	// Get existing transaction for budget adjustment
 	existingTx, err := s.transactionRepo.GetByID(ctx, id)
 	if err != nil {
@@ -276,7 +276,7 @@ func (s *TransactionServiceImpl) DeleteTransaction(ctx context.Context, id uuid.
 	}
 
 	// Delete transaction
-	if deleteErr := s.transactionRepo.Delete(ctx, id); deleteErr != nil {
+	if deleteErr := s.transactionRepo.Delete(ctx, id, familyID); deleteErr != nil {
 		return fmt.Errorf("failed to delete transaction: %w", deleteErr)
 	}
 

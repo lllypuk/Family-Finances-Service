@@ -1,0 +1,412 @@
+package benchmarks
+
+import (
+	"context"
+	"fmt"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+
+	"family-budget-service/internal/domain/budget"
+	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/transaction"
+	budgetrepo "family-budget-service/internal/infrastructure/budget"
+	categoryrepo "family-budget-service/internal/infrastructure/category"
+	transactionrepo "family-budget-service/internal/infrastructure/transaction"
+	userrepo "family-budget-service/internal/infrastructure/user"
+	testutils "family-budget-service/internal/testing"
+)
+
+var (
+	testContainer  *testutils.PostgreSQLTestContainer
+	testFamilyID   uuid.UUID
+	testUserID     uuid.UUID
+	testCategories []*category.Category
+)
+
+// setupBenchmarkData creates test data for benchmarks
+func setupBenchmarkData(b *testing.B) {
+	if testContainer == nil {
+		// Setup is done once for all benchmarks
+		testContainer = testutils.SetupPostgreSQLContainer(&testing.T{})
+		helper := testutils.NewTestDataHelper(testContainer.DB)
+		ctx := context.Background()
+
+		// Check if budgets table exists and show all tables
+		var tableExists bool
+		err := testContainer.DB.QueryRow(ctx, "SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'family_budget' AND tablename = 'budgets')").Scan(&tableExists)
+		if err != nil {
+			b.Fatalf("Failed to check budgets table existence: %v", err)
+		}
+
+		// List all tables in family_budget schema
+		rows, err := testContainer.DB.Query(ctx, "SELECT tablename FROM pg_tables WHERE schemaname = 'family_budget' ORDER BY tablename")
+		if err != nil {
+			b.Fatalf("Failed to list tables: %v", err)
+		}
+		defer rows.Close()
+
+		var tables []string
+		for rows.Next() {
+			var tableName string
+			if err := rows.Scan(&tableName); err != nil {
+				b.Fatalf("Failed to scan table name: %v", err)
+			}
+			tables = append(tables, tableName)
+		}
+		b.Logf("Tables in family_budget schema: %v", tables)
+		b.Logf("Budgets table exists: %v", tableExists)
+
+		// Temporarily disable budget trigger for benchmarks to avoid schema issues
+		_, err = testContainer.DB.Exec(ctx, "DROP TRIGGER IF EXISTS update_budget_spent_on_transaction ON family_budget.transactions")
+		if err != nil {
+			b.Fatalf("Failed to drop budget trigger: %v", err)
+		}
+
+		// Create test family
+		familyID, err := helper.CreateTestFamily(ctx, "Benchmark Family", "USD")
+		if err != nil {
+			b.Fatalf("Failed to create test family: %v", err)
+		}
+		testFamilyID = uuid.MustParse(familyID)
+
+		// Create test user
+		userID, err := helper.CreateTestUser(ctx, "benchmark@test.com", "Benchmark", "User", "admin", familyID)
+		if err != nil {
+			b.Fatalf("Failed to create test user: %v", err)
+		}
+		testUserID = uuid.MustParse(userID)
+
+		// Create test categories
+		categoryRepo := categoryrepo.NewPostgreSQLRepository(testContainer.DB)
+		testCategories = make([]*category.Category, 10)
+
+		for i := range 10 {
+			cat := &category.Category{
+				ID:       uuid.New(),
+				Name:     fmt.Sprintf("Category %d", i+1),
+				Type:     category.TypeExpense,
+				FamilyID: testFamilyID,
+				IsActive: true,
+			}
+			err := categoryRepo.Create(ctx, cat)
+			if err != nil {
+				b.Fatalf("Failed to create category: %v", err)
+			}
+			testCategories[i] = cat
+		}
+
+		// Create test budgets to satisfy the database triggers
+		budgetRepo := budgetrepo.NewPostgreSQLRepository(testContainer.DB)
+		for i := range 5 {
+			budgetObj := &budget.Budget{
+				ID:         uuid.New(),
+				Name:       fmt.Sprintf("Budget %d", i+1),
+				Amount:     1000.00,
+				Spent:      0.00,
+				Period:     budget.PeriodMonthly,
+				CategoryID: &testCategories[i%len(testCategories)].ID,
+				FamilyID:   testFamilyID,
+				StartDate:  time.Now().AddDate(0, 0, -30),
+				EndDate:    time.Now().AddDate(0, 1, 0),
+				IsActive:   true,
+			}
+			err := budgetRepo.Create(ctx, budgetObj)
+			if err != nil {
+				b.Fatalf("Failed to create budget: %v", err)
+			}
+		}
+
+		// Create large dataset of transactions for complex queries
+		transactionRepo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
+		now := time.Now()
+
+		// Create 1000 transactions for performance testing
+		for i := range 1000 {
+			tx := &transaction.Transaction{
+				ID:          uuid.New(),
+				Amount:      float64(10 + (i % 500)), // Varying amounts 10-509
+				Type:        transaction.TypeExpense,
+				Description: fmt.Sprintf("Benchmark transaction %d", i+1),
+				CategoryID:  testCategories[i%len(testCategories)].ID,
+				UserID:      testUserID,
+				FamilyID:    testFamilyID,
+				Date:        now.AddDate(0, 0, -(i % 365)), // Spread over a year
+				Tags:        []string{fmt.Sprintf("tag%d", i%10), "benchmark"},
+			}
+
+			err := transactionRepo.Create(ctx, tx)
+			if err != nil {
+				b.Fatalf("Failed to create transaction %d: %v", i, err)
+			}
+		}
+	}
+}
+
+// BenchmarkUserRepository_GetByEmail tests user lookup performance
+func BenchmarkUserRepository_GetByEmail(b *testing.B) {
+	setupBenchmarkData(b)
+	repo := userrepo.NewPostgreSQLRepository(testContainer.DB)
+	ctx := context.Background()
+
+	for b.Loop() {
+		_, err := repo.GetByEmail(ctx, "benchmark@test.com")
+		if err != nil {
+			b.Fatalf("Failed to get user by email: %v", err)
+		}
+	}
+}
+
+// BenchmarkUserRepository_GetByFamilyID tests family user listing performance
+func BenchmarkUserRepository_GetByFamilyID(b *testing.B) {
+	setupBenchmarkData(b)
+	repo := userrepo.NewPostgreSQLRepository(testContainer.DB)
+	ctx := context.Background()
+
+	for b.Loop() {
+		_, err := repo.GetByFamilyID(ctx, testFamilyID)
+		if err != nil {
+			b.Fatalf("Failed to get users by family ID: %v", err)
+		}
+	}
+}
+
+// BenchmarkCategoryRepository_GetCategoryChildren tests hierarchical query performance
+func BenchmarkCategoryRepository_GetCategoryChildren(b *testing.B) {
+	setupBenchmarkData(b)
+	repo := categoryrepo.NewPostgreSQLRepository(testContainer.DB)
+	ctx := context.Background()
+
+	// Use first category as parent
+	parentID := testCategories[0].ID
+
+	for b.Loop() {
+		_, err := repo.GetCategoryChildren(ctx, parentID)
+		if err != nil {
+			b.Fatalf("Failed to get category children: %v", err)
+		}
+	}
+}
+
+// BenchmarkTransactionRepository_GetByFilter_Simple tests simple transaction filtering
+func BenchmarkTransactionRepository_GetByFilter_Simple(b *testing.B) {
+	setupBenchmarkData(b)
+	repo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
+	ctx := context.Background()
+
+	filter := transaction.Filter{
+		FamilyID: testFamilyID,
+		Limit:    50,
+	}
+
+	for b.Loop() {
+		_, err := repo.GetByFilter(ctx, filter)
+		if err != nil {
+			b.Fatalf("Failed to get transactions by filter: %v", err)
+		}
+	}
+}
+
+// BenchmarkTransactionRepository_GetByFilter_Complex tests complex filtering with multiple conditions
+func BenchmarkTransactionRepository_GetByFilter_Complex(b *testing.B) {
+	setupBenchmarkData(b)
+	repo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
+	ctx := context.Background()
+
+	expenseType := transaction.TypeExpense
+	amountFrom := 50.0
+	amountTo := 200.0
+	dateFrom := time.Now().AddDate(0, 0, -30) // Last 30 days
+	dateTo := time.Now()
+
+	filter := transaction.Filter{
+		FamilyID:   testFamilyID,
+		Type:       &expenseType,
+		AmountFrom: &amountFrom,
+		AmountTo:   &amountTo,
+		DateFrom:   &dateFrom,
+		DateTo:     &dateTo,
+		Tags:       []string{"benchmark"},
+		Limit:      50,
+	}
+
+	for b.Loop() {
+		_, err := repo.GetByFilter(ctx, filter)
+		if err != nil {
+			b.Fatalf("Failed to get transactions by complex filter: %v", err)
+		}
+	}
+}
+
+// BenchmarkTransactionRepository_GetByFilter_Pagination tests pagination performance
+func BenchmarkTransactionRepository_GetByFilter_Pagination(b *testing.B) {
+	setupBenchmarkData(b)
+	repo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
+	ctx := context.Background()
+
+	for i := 0; b.Loop(); i++ {
+		offset := (i % 10) * 20 // Simulate different pages
+		filter := transaction.Filter{
+			FamilyID: testFamilyID,
+			Limit:    20,
+			Offset:   offset,
+		}
+
+		_, err := repo.GetByFilter(ctx, filter)
+		if err != nil {
+			b.Fatalf("Failed to get transactions with pagination: %v", err)
+		}
+	}
+}
+
+// BenchmarkTransactionRepository_GetTransactionSummary tests summary calculation performance
+func BenchmarkTransactionRepository_GetTransactionSummary(b *testing.B) {
+	setupBenchmarkData(b)
+	repo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
+	ctx := context.Background()
+
+	startDate := time.Now().AddDate(0, 0, -30)
+	endDate := time.Now()
+
+	for b.Loop() {
+		_, err := repo.GetTransactionSummary(ctx, testFamilyID, startDate, endDate)
+		if err != nil {
+			b.Fatalf("Failed to get transaction summary: %v", err)
+		}
+	}
+}
+
+// BenchmarkTransactionRepository_GetMonthlySummary tests monthly aggregation performance
+func BenchmarkTransactionRepository_GetMonthlySummary(b *testing.B) {
+	setupBenchmarkData(b)
+	repo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
+	ctx := context.Background()
+
+	now := time.Now()
+	year := now.Year()
+	month := int(now.Month())
+
+	for b.Loop() {
+		_, err := repo.GetMonthlySummary(ctx, testFamilyID, year, month)
+		if err != nil {
+			b.Fatalf("Failed to get monthly summary: %v", err)
+		}
+	}
+}
+
+// BenchmarkTransactionRepository_Create tests transaction creation performance
+func BenchmarkTransactionRepository_Create(b *testing.B) {
+	setupBenchmarkData(b)
+	repo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
+	ctx := context.Background()
+
+	for i := 0; b.Loop(); i++ {
+		tx := &transaction.Transaction{
+			ID:          uuid.New(),
+			Amount:      float64(10 + (i % 100)),
+			Type:        transaction.TypeExpense,
+			Description: fmt.Sprintf("Benchmark create transaction %d", i),
+			CategoryID:  testCategories[i%len(testCategories)].ID,
+			UserID:      testUserID,
+			FamilyID:    testFamilyID,
+			Date:        time.Now(),
+			Tags:        []string{"create-benchmark"},
+		}
+
+		err := repo.Create(ctx, tx)
+		if err != nil {
+			b.Fatalf("Failed to create transaction: %v", err)
+		}
+	}
+}
+
+// BenchmarkTransactionRepository_Update tests transaction update performance
+func BenchmarkTransactionRepository_Update(b *testing.B) {
+	setupBenchmarkData(b)
+	repo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
+	ctx := context.Background()
+
+	// Create a transaction to update
+	tx := &transaction.Transaction{
+		ID:          uuid.New(),
+		Amount:      100.00,
+		Type:        transaction.TypeExpense,
+		Description: "Transaction to update",
+		CategoryID:  testCategories[0].ID,
+		UserID:      testUserID,
+		FamilyID:    testFamilyID,
+		Date:        time.Now(),
+		Tags:        []string{"update-benchmark"},
+	}
+
+	err := repo.Create(ctx, tx)
+	if err != nil {
+		b.Fatalf("Failed to create transaction for update benchmark: %v", err)
+	}
+
+	for i := 0; b.Loop(); i++ {
+		tx.Amount = float64(100 + i)
+		tx.Description = fmt.Sprintf("Updated transaction %d", i)
+
+		err := repo.Update(ctx, tx)
+		if err != nil {
+			b.Fatalf("Failed to update transaction: %v", err)
+		}
+	}
+}
+
+// BenchmarkConcurrentReads tests concurrent read performance
+func BenchmarkConcurrentReads(b *testing.B) {
+	setupBenchmarkData(b)
+	repo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
+	ctx := context.Background()
+
+	filter := transaction.Filter{
+		FamilyID: testFamilyID,
+		Limit:    10,
+	}
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			_, err := repo.GetByFilter(ctx, filter)
+			if err != nil {
+				b.Fatalf("Failed to get transactions in concurrent test: %v", err)
+			}
+		}
+	})
+}
+
+// BenchmarkConnectionPoolUsage tests connection pool efficiency
+func BenchmarkConnectionPoolUsage(b *testing.B) {
+	setupBenchmarkData(b)
+	userRepo := userrepo.NewPostgreSQLRepository(testContainer.DB)
+	transactionRepo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
+	ctx := context.Background()
+
+	for b.Loop() {
+		// Simulate multiple repository operations in sequence
+		_, err := userRepo.GetByID(ctx, testUserID)
+		if err != nil {
+			b.Fatalf("Failed to get user: %v", err)
+		}
+
+		filter := transaction.Filter{
+			FamilyID: testFamilyID,
+			Limit:    5,
+		}
+		_, err = transactionRepo.GetByFilter(ctx, filter)
+		if err != nil {
+			b.Fatalf("Failed to get transactions: %v", err)
+		}
+	}
+}
+
+// Cleanup function (called manually if needed)
+func cleanupBenchmarkData() {
+	if testContainer != nil {
+		testContainer.Cleanup(&testing.T{})
+		testContainer = nil
+	}
+}

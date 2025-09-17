@@ -1,0 +1,448 @@
+# PostgreSQL queries for prometheus postgres_exporter
+# Family Budget Service - Custom metrics configuration
+
+# Database connection and basic metrics
+pg_database:
+  query: "SELECT pg_database.datname, pg_database_size(pg_database.datname) as size_bytes FROM pg_database"
+  master: true
+  metrics:
+    - datname:
+        usage: "LABEL"
+        description: "Name of the database"
+    - size_bytes:
+        usage: "GAUGE"
+        description: "Disk space used by the database in bytes"
+
+# Table sizes and row counts for Family Budget tables
+pg_table_size:
+  query: |
+    SELECT
+      schemaname,
+      tablename,
+      pg_total_relation_size(schemaname||'.'||tablename) as size_bytes,
+      pg_relation_size(schemaname||'.'||tablename) as table_size_bytes,
+      CASE WHEN schemaname = 'family_budget' THEN pg_stat_get_tuples_returned(c.oid) ELSE 0 END as rows_fetched,
+      CASE WHEN schemaname = 'family_budget' THEN pg_stat_get_tuples_inserted(c.oid) ELSE 0 END as rows_inserted,
+      CASE WHEN schemaname = 'family_budget' THEN pg_stat_get_tuples_updated(c.oid) ELSE 0 END as rows_updated,
+      CASE WHEN schemaname = 'family_budget' THEN pg_stat_get_tuples_deleted(c.oid) ELSE 0 END as rows_deleted
+    FROM pg_tables
+    LEFT JOIN pg_class c ON c.relname = tablename
+    WHERE schemaname IN ('family_budget', 'public')
+  master: true
+  metrics:
+    - schemaname:
+        usage: "LABEL"
+        description: "Name of the schema"
+    - tablename:
+        usage: "LABEL"
+        description: "Name of the table"
+    - size_bytes:
+        usage: "GAUGE"
+        description: "Total size of the table including indexes"
+    - table_size_bytes:
+        usage: "GAUGE"
+        description: "Size of the table excluding indexes"
+    - rows_fetched:
+        usage: "COUNTER"
+        description: "Number of rows fetched from the table"
+    - rows_inserted:
+        usage: "COUNTER"
+        description: "Number of rows inserted into the table"
+    - rows_updated:
+        usage: "COUNTER"
+        description: "Number of rows updated in the table"
+    - rows_deleted:
+        usage: "COUNTER"
+        description: "Number of rows deleted from the table"
+
+# Family Budget specific business metrics
+family_budget_stats:
+  query: |
+    SELECT
+      'families' as metric_type,
+      COUNT(*) as total_count,
+      0 as active_count
+    FROM family_budget.families
+    UNION ALL
+    SELECT
+      'users' as metric_type,
+      COUNT(*) as total_count,
+      COUNT(*) FILTER (WHERE is_active = true) as active_count
+    FROM family_budget.users
+    UNION ALL
+    SELECT
+      'categories' as metric_type,
+      COUNT(*) as total_count,
+      COUNT(*) FILTER (WHERE is_active = true) as active_count
+    FROM family_budget.categories
+    UNION ALL
+    SELECT
+      'transactions' as metric_type,
+      COUNT(*) as total_count,
+      COUNT(*) FILTER (WHERE date >= CURRENT_DATE - INTERVAL '30 days') as active_count
+    FROM family_budget.transactions
+    UNION ALL
+    SELECT
+      'budgets' as metric_type,
+      COUNT(*) as total_count,
+      COUNT(*) FILTER (WHERE is_active = true AND CURRENT_DATE BETWEEN start_date AND end_date) as active_count
+    FROM family_budget.budgets
+  master: true
+  metrics:
+    - metric_type:
+        usage: "LABEL"
+        description: "Type of Family Budget entity"
+    - total_count:
+        usage: "GAUGE"
+        description: "Total count of entities"
+    - active_count:
+        usage: "GAUGE"
+        description: "Count of active entities"
+
+# Transaction volume metrics
+transaction_volume:
+  query: |
+    SELECT
+      type,
+      COUNT(*) as transaction_count,
+      SUM(amount) as total_amount,
+      AVG(amount) as avg_amount
+    FROM family_budget.transactions
+    WHERE date >= CURRENT_DATE - INTERVAL '24 hours'
+    GROUP BY type
+  master: true
+  metrics:
+    - type:
+        usage: "LABEL"
+        description: "Transaction type (income/expense)"
+    - transaction_count:
+        usage: "GAUGE"
+        description: "Number of transactions in last 24 hours"
+    - total_amount:
+        usage: "GAUGE"
+        description: "Total amount of transactions in last 24 hours"
+    - avg_amount:
+        usage: "GAUGE"
+        description: "Average transaction amount in last 24 hours"
+
+# Budget health metrics
+budget_health:
+  query: |
+    SELECT
+      'total' as budget_type,
+      COUNT(*) as budget_count,
+      COUNT(*) FILTER (WHERE spent > amount) as over_budget_count,
+      COUNT(*) FILTER (WHERE spent > amount * 0.8) as warning_count,
+      AVG(CASE WHEN amount > 0 THEN (spent / amount * 100) ELSE 0 END) as avg_usage_percentage
+    FROM family_budget.budgets
+    WHERE is_active = true
+    AND CURRENT_DATE BETWEEN start_date AND end_date
+  master: true
+  metrics:
+    - budget_type:
+        usage: "LABEL"
+        description: "Budget category type"
+    - budget_count:
+        usage: "GAUGE"
+        description: "Total active budgets"
+    - over_budget_count:
+        usage: "GAUGE"
+        description: "Number of budgets that are over limit"
+    - warning_count:
+        usage: "GAUGE"
+        description: "Number of budgets approaching limit (>80%)"
+    - avg_usage_percentage:
+        usage: "GAUGE"
+        description: "Average budget usage percentage"
+
+# User activity metrics
+user_activity:
+  query: |
+    SELECT
+      role,
+      COUNT(*) as user_count,
+      COUNT(*) FILTER (WHERE last_login >= CURRENT_DATE - INTERVAL '7 days') as active_last_week,
+      COUNT(*) FILTER (WHERE last_login >= CURRENT_DATE - INTERVAL '30 days') as active_last_month
+    FROM family_budget.users
+    WHERE is_active = true
+    GROUP BY role
+  master: true
+  metrics:
+    - role:
+        usage: "LABEL"
+        description: "User role (admin/member/child)"
+    - user_count:
+        usage: "GAUGE"
+        description: "Total active users by role"
+    - active_last_week:
+        usage: "GAUGE"
+        description: "Users active in last 7 days"
+    - active_last_month:
+        usage: "GAUGE"
+        description: "Users active in last 30 days"
+
+# Session metrics
+session_stats:
+  query: |
+    SELECT
+      'active' as session_type,
+      COUNT(*) as session_count
+    FROM family_budget.user_sessions
+    WHERE expires_at > NOW()
+    UNION ALL
+    SELECT
+      'expired' as session_type,
+      COUNT(*) as session_count
+    FROM family_budget.user_sessions
+    WHERE expires_at <= NOW()
+  master: true
+  metrics:
+    - session_type:
+        usage: "LABEL"
+        description: "Session status (active/expired)"
+    - session_count:
+        usage: "GAUGE"
+        description: "Number of sessions"
+
+# Performance metrics - slow queries with enhanced filtering
+pg_slow_queries:
+  query: |
+    SELECT
+      LEFT(query, 100) as query_truncated,
+      calls,
+      total_exec_time,
+      mean_exec_time,
+      max_exec_time,
+      CASE
+        WHEN query LIKE '%transactions%' AND query LIKE '%GROUP BY%' THEN 'monthly_summary'
+        WHEN query LIKE '%transactions%' AND query LIKE '%WHERE%' THEN 'transaction_filter'
+        WHEN query LIKE '%categories%' AND query LIKE '%WITH RECURSIVE%' THEN 'category_hierarchy'
+        WHEN query LIKE '%budgets%' THEN 'budget_operations'
+        ELSE 'other'
+      END as query_type
+    FROM pg_stat_statements
+    WHERE mean_exec_time > 50
+    AND query NOT LIKE '%pg_stat_%'
+    ORDER BY mean_exec_time DESC
+    LIMIT 20
+  master: true
+  metrics:
+    - query_truncated:
+        usage: "LABEL"
+        description: "SQL query text (truncated)"
+    - query_type:
+        usage: "LABEL"
+        description: "Categorized query type for grouping"
+    - calls:
+        usage: "COUNTER"
+        description: "Number of times the query was executed"
+    - total_exec_time:
+        usage: "COUNTER"
+        description: "Total time spent executing this query"
+    - mean_exec_time:
+        usage: "GAUGE"
+        description: "Mean execution time for this query"
+    - max_exec_time:
+        usage: "GAUGE"
+        description: "Maximum execution time for this query"
+
+# Index usage statistics
+pg_index_usage:
+  query: |
+    SELECT
+      schemaname,
+      tablename,
+      indexname,
+      idx_tup_read,
+      idx_tup_fetch
+    FROM pg_stat_user_indexes
+    WHERE schemaname = 'family_budget'
+    AND idx_tup_read > 0
+  master: true
+  metrics:
+    - schemaname:
+        usage: "LABEL"
+        description: "Schema name"
+    - tablename:
+        usage: "LABEL"
+        description: "Table name"
+    - indexname:
+        usage: "LABEL"
+        description: "Index name"
+    - idx_tup_read:
+        usage: "COUNTER"
+        description: "Number of index entries returned by scans on this index"
+    - idx_tup_fetch:
+        usage: "COUNTER"
+        description: "Number of live table rows fetched by simple index scans"
+
+# Connection metrics
+pg_connections:
+  query: |
+    SELECT
+      state,
+      COUNT(*) as connection_count
+    FROM pg_stat_activity
+    WHERE datname = 'family_budget'
+    GROUP BY state
+  master: true
+  metrics:
+    - state:
+        usage: "LABEL"
+        description: "Connection state"
+    - connection_count:
+        usage: "GAUGE"
+        description: "Number of connections in this state"
+
+# Lock metrics
+pg_locks:
+  query: |
+    SELECT
+      mode,
+      COUNT(*) as lock_count
+    FROM pg_locks l
+    JOIN pg_database d ON l.database = d.oid
+    WHERE d.datname = 'family_budget'
+    GROUP BY mode
+  master: true
+  metrics:
+    - mode:
+        usage: "LABEL"
+        description: "Lock mode"
+    - lock_count:
+        usage: "GAUGE"
+        description: "Number of locks in this mode"
+
+# Cache hit ratio
+pg_cache_hit_ratio:
+  query: |
+    SELECT
+      'heap_blocks' as block_type,
+      CASE
+        WHEN (heap_blks_hit + heap_blks_read) > 0
+        THEN (heap_blks_hit::float / (heap_blks_hit + heap_blks_read)) * 100
+        ELSE 0
+      END as hit_ratio
+    FROM pg_statio_user_tables
+    WHERE schemaname = 'family_budget'
+    UNION ALL
+    SELECT
+      'index_blocks' as block_type,
+      CASE
+        WHEN (idx_blks_hit + idx_blks_read) > 0
+        THEN (idx_blks_hit::float / (idx_blks_hit + idx_blks_read)) * 100
+        ELSE 0
+      END as hit_ratio
+    FROM pg_statio_user_tables
+    WHERE schemaname = 'family_budget'
+  master: true
+  metrics:
+    - block_type:
+        usage: "LABEL"
+        description: "Type of blocks (heap/index)"
+    - hit_ratio:
+        usage: "GAUGE"
+        description: "Cache hit ratio percentage"
+
+# Connection pool performance metrics
+pg_connection_pool_performance:
+  query: |
+    SELECT
+      'pool_stats' as metric_type,
+      COUNT(*) as total_connections,
+      COUNT(*) FILTER (WHERE state = 'active') as active_connections,
+      COUNT(*) FILTER (WHERE state = 'idle') as idle_connections,
+      COUNT(*) FILTER (WHERE state = 'idle in transaction') as idle_in_transaction,
+      COUNT(*) FILTER (WHERE wait_event IS NOT NULL) as waiting_connections,
+      AVG(EXTRACT(EPOCH FROM (now() - backend_start))) as avg_connection_age_seconds
+    FROM pg_stat_activity
+    WHERE datname = 'family_budget'
+    AND pid != pg_backend_pid()
+  master: true
+  metrics:
+    - metric_type:
+        usage: "LABEL"
+        description: "Type of pool metric"
+    - total_connections:
+        usage: "GAUGE"
+        description: "Total number of connections to family_budget database"
+    - active_connections:
+        usage: "GAUGE"
+        description: "Number of active connections"
+    - idle_connections:
+        usage: "GAUGE"
+        description: "Number of idle connections"
+    - idle_in_transaction:
+        usage: "GAUGE"
+        description: "Number of connections idle in transaction"
+    - waiting_connections:
+        usage: "GAUGE"
+        description: "Number of connections waiting for resources"
+    - avg_connection_age_seconds:
+        usage: "GAUGE"
+        description: "Average age of connections in seconds"
+
+# Query performance by operation type (based on benchmark findings)
+pg_query_performance_by_type:
+  query: |
+    SELECT
+      CASE
+        WHEN query LIKE '%GetByEmail%' OR query LIKE '%users%email%' THEN 'user_email_lookup'
+        WHEN query LIKE '%GetByFamilyID%' OR (query LIKE '%users%' AND query LIKE '%family_id%') THEN 'user_family_lookup'
+        WHEN query LIKE '%GetCategoryChildren%' OR query LIKE '%WITH RECURSIVE%' THEN 'category_hierarchy'
+        WHEN query LIKE '%GetByFilter%' AND query LIKE '%transactions%' THEN 'transaction_filter'
+        WHEN query LIKE '%GetTransactionSummary%' THEN 'transaction_summary'
+        WHEN query LIKE '%GetMonthlySummary%' THEN 'monthly_summary'
+        WHEN query LIKE '%INSERT%transactions%' THEN 'transaction_create'
+        WHEN query LIKE '%UPDATE%transactions%' THEN 'transaction_update'
+        ELSE 'other'
+      END as operation_type,
+      COUNT(*) as query_count,
+      AVG(mean_exec_time) as avg_execution_time,
+      MAX(max_exec_time) as max_execution_time,
+      SUM(calls) as total_calls
+    FROM pg_stat_statements
+    WHERE query NOT LIKE '%pg_stat_%'
+    AND mean_exec_time > 10
+    GROUP BY operation_type
+  master: true
+  metrics:
+    - operation_type:
+        usage: "LABEL"
+        description: "Type of database operation"
+    - query_count:
+        usage: "GAUGE"
+        description: "Number of different queries for this operation type"
+    - avg_execution_time:
+        usage: "GAUGE"
+        description: "Average execution time for this operation type"
+    - max_execution_time:
+        usage: "GAUGE"
+        description: "Maximum execution time for this operation type"
+    - total_calls:
+        usage: "COUNTER"
+        description: "Total number of calls for this operation type"
+
+# Replication lag (if applicable)
+pg_replication_lag:
+  query: |
+    SELECT
+      client_addr,
+      state,
+      EXTRACT(EPOCH FROM (now() - backend_start)) as seconds_since_start,
+      EXTRACT(EPOCH FROM (now() - state_change)) as seconds_since_state_change
+    FROM pg_stat_replication
+  master: true
+  metrics:
+    - client_addr:
+        usage: "LABEL"
+        description: "Client IP address"
+    - state:
+        usage: "LABEL"
+        description: "Replication state"
+    - seconds_since_start:
+        usage: "GAUGE"
+        description: "Seconds since backend start"
+    - seconds_since_state_change:
+        usage: "GAUGE"
+        description: "Seconds since last state change"

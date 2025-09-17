@@ -11,6 +11,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/domain/report"
+	"family-budget-service/internal/web/middleware"
 )
 
 type ReportHandler struct {
@@ -283,7 +284,12 @@ func (h *ReportHandler) GetReportByID(c echo.Context) error {
 
 func (h *ReportHandler) DeleteReport(c echo.Context) error {
 	return DeleteEntityHelper(c, func(id uuid.UUID) error {
-		return h.repositories.Report.Delete(c.Request().Context(), id)
+		// Get family ID from session for security
+		sessionData, err := middleware.GetSessionData(c)
+		if err != nil {
+			return err
+		}
+		return h.repositories.Report.Delete(c.Request().Context(), id, sessionData.FamilyID)
 	}, "Report")
 }
 

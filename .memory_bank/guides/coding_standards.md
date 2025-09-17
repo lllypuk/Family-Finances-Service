@@ -83,7 +83,7 @@ type FamilyRepository interface {
 }
 
 type Validator interface {
-    Validate(data interface{}) error
+    Validate(data any) error
 }
 
 // ❌ Плохо
@@ -410,43 +410,6 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, req CreateTr
 
 ### Работа с базой данных
 
-#### Использование GORM
-```go
-// ✅ Хорошо
-type FamilyRepository struct {
-    db *gorm.DB
-}
-
-func (r *FamilyRepository) GetByID(ctx context.Context, id string) (*Family, error) {
-    var family Family
-
-    err := r.db.WithContext(ctx).
-        Preload("Members").
-        Preload("Settings").
-        First(&family, "id = ?", id).Error
-
-    if err != nil {
-        if errors.Is(err, gorm.ErrRecordNotFound) {
-            return nil, errors.NotFoundError("family", id)
-        }
-        return nil, errors.InternalError("Failed to get family", err)
-    }
-
-    return &family, nil
-}
-
-func (r *FamilyRepository) Create(ctx context.Context, family *Family) error {
-    return r.db.WithContext(ctx).Create(family).Error
-}
-
-// ❌ Плохо
-func (r *FamilyRepository) GetByID(ctx context.Context, id string) (*Family, error) {
-    var family Family
-    r.db.First(&family, id) // Нет контекста и обработки ошибок
-    return &family, nil
-}
-```
-
 #### SQL запросы
 ```go
 // ✅ Хорошо - используем параметризованные запросы
@@ -693,7 +656,7 @@ func (s *TransactionService) ProcessTransactions(transactions []Transaction) []P
 
 // ✅ Хорошо - пулы объектов для часто создаваемых структур
 var transactionPool = sync.Pool{
-    New: func() interface{} {
+    New: func() any {
         return &Transaction{}
     },
 }

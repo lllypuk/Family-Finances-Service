@@ -19,8 +19,8 @@
 ### Backend
 - **Язык**: Go 1.24+
 - **Framework**: Echo Web Framework v4.13.4+
-- **База данных**: MongoDB 7.0+
-- **Driver**: Official MongoDB Go Driver v1.17.4+
+- **База данных**: PostgreSQL 17.6+
+- **Driver**: pgx/v5 PostgreSQL driver v5.0+
 - **Валидация**: go-playground/validator v10.27.0
 - **UUID**: google/uuid v1.6.0 для идентификаторов
 - **Sessions**: gorilla/sessions v1.4.0
@@ -28,8 +28,8 @@
 - **Testing**: testify v1.10.0 + testcontainers-go v0.38.0
 
 ### Frontend (Web Interface)
-- **Framework**: HTMX v1.9+ для dynamic updates
-- **CSS**: PicoCSS v1.5+ minimalist framework
+- **Framework**: HTMX v2.0.4+ для dynamic updates
+- **CSS**: PicoCSS v2.1.1+ minimalist framework
 - **Templates**: Go Templates с layout system
 - **Static Assets**: Echo static middleware
 - **PWA**: Service Worker ready
@@ -56,7 +56,7 @@ Family-Finances-Service/
 ├── internal/              # Приватный код приложения
 │   ├── domain/           # Domain entities и бизнес-логика
 │   ├── application/      # Application layer с интерфейсами
-│   ├── infrastructure/   # Реализация репозиториев (MongoDB)
+│   ├── infrastructure/   # Реализация репозиториев (PostgreSQL)
 │   ├── config.go         # Конфигурация приложения
 │   └── run.go           # Bootstrap приложения
 ├── generated/             # Автогенерированный код (OpenAPI)
@@ -88,33 +88,33 @@ Family-Finances-Service/
 
 ## 🗄️ База данных
 
-### MongoDB конфигурация
-- **Версия**: 7.0+
-- **Driver**: Official MongoDB Go Driver v1.13+
-- **Connection Pool**: Встроенное управление соединениями
-- **Миграции**: Программные миграции или скрипты
+### PostgreSQL конфигурация
+- **Версия**: 17.6+
+- **Driver**: pgx/v5 PostgreSQL driver
+- **Connection Pool**: pgxpool для управления соединениями
+- **Миграции**: golang-migrate для версионирования схемы
 
 ### Дизайн БД
-- **Подход**: Document-oriented
-- **Schema**: Flexible schema с validation
-- **Индексы**: Составные индексы для оптимизации запросов
-- **Aggregation Pipeline**: Для сложной аналитики
+- **Подход**: Relational database
+- **Schema**: Строгая типизация с foreign keys
+- **Индексы**: B-tree и составные индексы для оптимизации
+- **Views**: Для сложной аналитики и отчетов
 
-### Основные коллекции
-```javascript
-families       // Семейные профили
-users          // Пользователи (члены семей)
-transactions   // Финансовые транзакции
-categories     // Категории доходов/расходов
-budgets        // Бюджеты и планы
-reports        // Сгенерированные отчеты
+### Основные таблицы
+```sql
+families       -- Семейные профили
+users          -- Пользователи (члены семей)
+transactions   -- Финансовые транзакции
+categories     -- Категории доходов/расходов
+budgets        -- Бюджеты и планы
+reports        -- Сгенерированные отчеты
 ```
 
-### Особенности MongoDB
-- **BSON типы**: ObjectId, UUID для идентификаторов
-- **Embedded documents**: Для связанных данных
-- **Array fields**: Для списков и коллекций
-- **Multi-tenancy**: Фильтрация по family_id
+### Особенности PostgreSQL
+- **UUID типы**: uuid-ossp расширение для идентификаторов
+- **JSONB**: Для flexible data в structured format
+- **Foreign Keys**: Для referential integrity
+- **Multi-tenancy**: Row Level Security по family_id
 
 ## 🌐 API Design
 
@@ -168,7 +168,7 @@ make test
 ### Основные Go модули
 ```go
 github.com/labstack/echo/v4        # Web framework
-go.mongodb.org/mongo-driver        # MongoDB driver
+github.com/jackc/pgx/v5           # PostgreSQL driver
 github.com/google/uuid             # UUID generation
 github.com/golang-jwt/jwt          # JWT tokens (indirect)
 ```
@@ -188,7 +188,7 @@ github.com/golang/mock            # Mocking (планируется)
 - **Input Validation**: Валидация всех входных данных
 
 ### Реализация
-- **NoSQL Injection**: Валидация и санитизация входных данных
+- **SQL Injection**: Параметризованные запросы и валидация данных
 - **XSS**: Content Security Policy
 - **CORS**: Настроенные CORS политики Echo
 - **Rate Limiting**: Middleware для ограничения запросов
@@ -202,15 +202,13 @@ github.com/golang/mock            # Mocking (планируется)
 - **Recovery Time**: < 1 минута
 
 ### Оптимизации
-- **MongoDB**: Индексы, connection pooling, aggregation pipeline
-- **Caching**: Redis (в docker-compose.yml)
+- **PostgreSQL**: Индексы, connection pooling, query optimization
 - **Compression**: gzip middleware Echo
 - **Profiling**: pprof интеграция
 
 ## 🔄 Планы развития
 
 ### Ближайшие обновления (1-3 месяца)
-- [ ] Интеграция с Redis для кеширования
 - [ ] Prometheus метрики
 - [ ] CI/CD pipeline
 - [ ] Docker многоэтапная сборка
@@ -232,8 +230,8 @@ github.com/golang/mock            # Mocking (планируется)
 ### Документация
 - [Go Documentation](https://golang.org/doc/)
 - [Echo Framework](https://echo.labstack.com/guide/)
-- [MongoDB Go Driver](https://www.mongodb.com/docs/drivers/go/current/)
-- [MongoDB Docs](https://www.mongodb.com/docs/)
+- [pgx PostgreSQL Driver](https://github.com/jackc/pgx)
+- [PostgreSQL Docs](https://www.postgresql.org/docs/)
 
 ### Лучшие практики
 - [Effective Go](https://golang.org/doc/effective_go.html)

@@ -24,7 +24,7 @@
 ### ✅ Core Application
 - **Clean Architecture** реализована
 - **Domain models** с полным business logic
-- **Repository pattern** с MongoDB интеграцией
+- **Repository pattern** с PostgreSQL интеграцией
 - **HTTP server** с Echo framework
 - **Configuration management** через переменные окружения
 

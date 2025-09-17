@@ -21,7 +21,7 @@ type UserService interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (*user.User, error)
 	GetUsersByFamily(ctx context.Context, familyID uuid.UUID) ([]*user.User, error)
 	UpdateUser(ctx context.Context, id uuid.UUID, req dto.UpdateUserDTO) (*user.User, error)
-	DeleteUser(ctx context.Context, id uuid.UUID) error
+	DeleteUser(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
 
 	// Business Operations
 	ChangeUserRole(ctx context.Context, userID uuid.UUID, role user.Role) error
@@ -48,7 +48,7 @@ type CategoryService interface {
 		typeFilter *category.Type,
 	) ([]*category.Category, error)
 	UpdateCategory(ctx context.Context, id uuid.UUID, req dto.UpdateCategoryDTO) (*category.Category, error)
-	DeleteCategory(ctx context.Context, id uuid.UUID) error
+	DeleteCategory(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
 
 	// Business Operations
 	GetCategoryHierarchy(ctx context.Context, familyID uuid.UUID) ([]*category.Category, error)
@@ -68,7 +68,7 @@ type TransactionService interface {
 		filter dto.TransactionFilterDTO,
 	) ([]*transaction.Transaction, error)
 	UpdateTransaction(ctx context.Context, id uuid.UUID, req dto.UpdateTransactionDTO) (*transaction.Transaction, error)
-	DeleteTransaction(ctx context.Context, id uuid.UUID) error
+	DeleteTransaction(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
 
 	// Business Operations
 	GetTransactionsByCategory(
@@ -102,7 +102,7 @@ type BudgetService interface {
 	GetBudgetByID(ctx context.Context, id uuid.UUID) (*budget.Budget, error)
 	GetBudgetsByFamily(ctx context.Context, familyID uuid.UUID, filter dto.BudgetFilterDTO) ([]*budget.Budget, error)
 	UpdateBudget(ctx context.Context, id uuid.UUID, req dto.UpdateBudgetDTO) (*budget.Budget, error)
-	DeleteBudget(ctx context.Context, id uuid.UUID) error
+	DeleteBudget(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
 
 	// Business Operations
 	GetActiveBudgets(ctx context.Context, familyID uuid.UUID, date time.Time) ([]*budget.Budget, error)
@@ -146,7 +146,7 @@ type ReportService interface {
 	) (*report.Report, error)
 	GetReportByID(ctx context.Context, id uuid.UUID) (*report.Report, error)
 	GetReportsByFamily(ctx context.Context, familyID uuid.UUID, typeFilter *report.Type) ([]*report.Report, error)
-	DeleteReport(ctx context.Context, id uuid.UUID) error
+	DeleteReport(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
 
 	// Export Operations
 	ExportReport(ctx context.Context, reportID uuid.UUID, format string, options dto.ExportOptionsDTO) ([]byte, error)
@@ -156,7 +156,7 @@ type ReportService interface {
 	ScheduleReport(ctx context.Context, req dto.ScheduleReportDTO) (*dto.ScheduledReportDTO, error)
 	GetScheduledReports(ctx context.Context, familyID uuid.UUID) ([]*dto.ScheduledReportDTO, error)
 	UpdateScheduledReport(ctx context.Context, id uuid.UUID, req dto.ScheduleReportDTO) (*dto.ScheduledReportDTO, error)
-	DeleteScheduledReport(ctx context.Context, id uuid.UUID) error
+	DeleteScheduledReport(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
 	ExecuteScheduledReport(ctx context.Context, scheduledReportID uuid.UUID) error
 
 	// Analytics & Insights

@@ -109,7 +109,7 @@ func TestSanitizeEmail(t *testing.T) {
 
 func TestRepository_GetByEmail_SecurityValidation(t *testing.T) {
 	// This is a unit test focusing on security validation
-	// We don't need actual MongoDB connection for this
+	// We don't need actual database connection for this
 	repo := &userRepo.Repository{}
 
 	injectionAttempts := []string{

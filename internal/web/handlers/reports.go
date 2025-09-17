@@ -353,7 +353,11 @@ func (h *ReportHandler) Delete(c echo.Context) error {
 			return h.services.Report.GetReportByID(ctx.Request().Context(), entityID)
 		},
 		DeleteEntityFunc: func(ctx echo.Context, entityID uuid.UUID) error {
-			return h.services.Report.DeleteReport(ctx.Request().Context(), entityID)
+			sessionData, err := middleware.GetUserFromContext(ctx)
+			if err != nil {
+				return err
+			}
+			return h.services.Report.DeleteReport(ctx.Request().Context(), entityID, sessionData.FamilyID)
 		},
 		GetErrorMsgFunc: h.getReportServiceErrorMessage,
 		RedirectURL:     "/reports",

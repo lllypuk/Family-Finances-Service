@@ -30,7 +30,7 @@ type UserRepository interface {
 	GetByEmail(ctx context.Context, email string) (*user.User, error)
 	GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*user.User, error)
 	Update(ctx context.Context, user *user.User) error
-	Delete(ctx context.Context, id uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
 }
 
 // FamilyRepository defines the data access operations for families
@@ -38,7 +38,7 @@ type FamilyRepository interface {
 	Create(ctx context.Context, family *user.Family) error
 	GetByID(ctx context.Context, id uuid.UUID) (*user.Family, error)
 	Update(ctx context.Context, family *user.Family) error
-	Delete(ctx context.Context, id uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
 }
 
 // userService implements UserService interface
@@ -171,14 +171,14 @@ func (s *userService) UpdateUser(ctx context.Context, id uuid.UUID, req dto.Upda
 }
 
 // DeleteUser deletes a user by ID
-func (s *userService) DeleteUser(ctx context.Context, id uuid.UUID) error {
+func (s *userService) DeleteUser(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
 	// Check if user exists
 	if _, err := s.GetUserByID(ctx, id); err != nil {
 		return err
 	}
 
 	// Delete user
-	if err := s.userRepo.Delete(ctx, id); err != nil {
+	if err := s.userRepo.Delete(ctx, id, familyID); err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
 

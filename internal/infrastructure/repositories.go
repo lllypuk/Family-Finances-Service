@@ -1,6 +1,8 @@
 package infrastructure
 
 import (
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/infrastructure/budget"
 	"family-budget-service/internal/infrastructure/category"
@@ -9,14 +11,14 @@ import (
 	"family-budget-service/internal/infrastructure/user"
 )
 
-// NewRepositories создает и возвращает все репозитории с MongoDB подключениями
-func NewRepositories(mongodb *MongoDB) *handlers.Repositories {
+// NewRepositories создает и возвращает все репозитории с PostgreSQL подключениями
+func NewRepositories(db *pgxpool.Pool) *handlers.Repositories {
 	return &handlers.Repositories{
-		User:        user.NewRepository(mongodb.Database),
-		Family:      user.NewFamilyRepository(mongodb.Database),
-		Category:    category.NewRepository(mongodb.Database),
-		Transaction: transaction.NewRepository(mongodb.Database),
-		Budget:      budget.NewRepository(mongodb.Database),
-		Report:      report.NewRepository(mongodb.Database),
+		User:        user.NewPostgreSQLRepository(db),
+		Family:      user.NewPostgreSQLFamilyRepository(db),
+		Category:    category.NewPostgreSQLRepository(db),
+		Transaction: transaction.NewPostgreSQLRepository(db),
+		Budget:      budget.NewPostgreSQLRepository(db),
+		Report:      report.NewPostgreSQLRepository(db),
 	}
 }

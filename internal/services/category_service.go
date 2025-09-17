@@ -32,7 +32,7 @@ type CategoryRepository interface {
 	GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*category.Category, error)
 	GetByType(ctx context.Context, familyID uuid.UUID, categoryType category.Type) ([]*category.Category, error)
 	Update(ctx context.Context, category *category.Category) error
-	Delete(ctx context.Context, id uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
 }
 
 // CategoryUsageChecker defines operations needed for category usage checks
@@ -226,7 +226,7 @@ func (s *categoryService) UpdateCategory(
 }
 
 // DeleteCategory performs soft delete of a category
-func (s *categoryService) DeleteCategory(ctx context.Context, id uuid.UUID) error {
+func (s *categoryService) DeleteCategory(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
 	// Get existing category
 	existingCategory, err := s.categoryRepo.GetByID(ctx, id)
 	if err != nil {
@@ -249,7 +249,7 @@ func (s *categoryService) DeleteCategory(ctx context.Context, id uuid.UUID) erro
 		}
 	} else {
 		// Hard delete if not used
-		if deleteErr := s.categoryRepo.Delete(ctx, id); deleteErr != nil {
+		if deleteErr := s.categoryRepo.Delete(ctx, id, familyID); deleteErr != nil {
 			return fmt.Errorf("failed to hard delete category: %w", deleteErr)
 		}
 	}
@@ -261,7 +261,7 @@ func (s *categoryService) DeleteCategory(ctx context.Context, id uuid.UUID) erro
 	}
 
 	for _, subcat := range subcategories {
-		if deleteErr := s.DeleteCategory(ctx, subcat.ID); deleteErr != nil {
+		if deleteErr := s.DeleteCategory(ctx, subcat.ID, familyID); deleteErr != nil {
 			return fmt.Errorf("failed to delete subcategory %s: %w", subcat.ID, deleteErr)
 		}
 	}

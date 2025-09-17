@@ -28,7 +28,7 @@ type Application struct {
 	repositories         *handlers.Repositories
 	services             *services.Services
 	httpServer           *application.HTTPServer
-	mongodb              *infrastructure.MongoDB
+	postgresql           *infrastructure.PostgreSQLDriver
 	observabilityService *observability.Service
 }
 
@@ -53,18 +53,29 @@ func NewApplication() (*Application, error) {
 		observabilityService: observabilityService,
 	}
 
-	// Подключение к MongoDB
-	mongodb, err := infrastructure.NewMongoDB(config.Database.URI, config.Database.Name)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to MongoDB: %w", err)
+	// Подключение к PostgreSQL
+	pgConfig := &infrastructure.PostgreSQLConfig{
+		URI:             config.Database.URI,
+		Database:        config.Database.Name,
+		MaxOpenConns:    config.Database.MaxOpenConns,
+		MaxIdleConns:    config.Database.MaxIdleConns,
+		ConnMaxLifetime: config.Database.ConnMaxLifetime,
+		ConnMaxIdleTime: config.Database.ConnMaxIdleTime,
+		SSLMode:         config.Database.SSLMode,
+		Schema:          config.Database.Schema,
 	}
-	app.mongodb = mongodb
 
-	// Добавляем health check для MongoDB
-	app.observabilityService.AddMongoHealthCheck(mongodb.Client)
+	postgresql := infrastructure.NewPostgreSQLDriver(pgConfig)
+	if err := postgresql.Connect(context.Background()); err != nil {
+		return nil, fmt.Errorf("failed to connect to PostgreSQL: %w", err)
+	}
+	app.postgresql = postgresql
+
+	// Добавляем health check для PostgreSQL
+	app.observabilityService.AddPostgreSQLHealthCheck(postgresql)
 
 	// Инициализация репозиториев
-	app.repositories = infrastructure.NewRepositories(mongodb)
+	app.repositories = infrastructure.NewRepositories(postgresql.Pool())
 
 	// Инициализация сервисов
 	app.services = services.NewServices(
@@ -72,8 +83,8 @@ func NewApplication() (*Application, error) {
 		app.repositories.Family,
 		app.repositories.Category,
 		app.repositories.Transaction,
-		app.repositories.Budget,
-		app.repositories.Budget,
+		app.repositories.Budget, // BudgetRepositoryForTransactions
+		app.repositories.Budget, // BudgetRepository
 		app.repositories.Report,
 	)
 
@@ -139,17 +150,10 @@ func (a *Application) shutdown() error {
 		a.observabilityService.Logger.InfoContext(ctx, "HTTP server stopped")
 	}
 
-	// Закрытие подключения к MongoDB
-	if a.mongodb != nil {
-		if err := a.mongodb.Close(ctx); err != nil {
-			a.observabilityService.Logger.ErrorContext(
-				ctx,
-				"MongoDB disconnect error",
-				slog.String("error", err.Error()),
-			)
-		} else {
-			a.observabilityService.Logger.InfoContext(ctx, "MongoDB disconnected")
-		}
+	// Закрытие подключения к PostgreSQL
+	if a.postgresql != nil {
+		a.postgresql.Close()
+		a.observabilityService.Logger.InfoContext(ctx, "PostgreSQL disconnected")
 	}
 
 	// Логируем завершение работы приложения перед остановкой observability сервиса
