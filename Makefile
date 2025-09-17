@@ -43,12 +43,6 @@ test-unit:
 	@echo "Running unit tests with fast containers..."
 	@REUSE_POSTGRES_CONTAINER=true go test -v ./internal/...
 
-# PostgreSQL тесты репозиториев
-.PHONY: test-postgres
-test-postgres:
-	@echo "Running PostgreSQL repository tests..."
-	@go test -v ./internal/infrastructure/*/
-
 # Интеграционные тесты с переиспользованием контейнера
 .PHONY: test-integration
 test-integration:

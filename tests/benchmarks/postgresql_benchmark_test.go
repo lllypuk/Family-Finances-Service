@@ -18,6 +18,14 @@ import (
 	testutils "family-budget-service/internal/testing"
 )
 
+// Benchmark constants
+const (
+	benchmarkBudgetStartOffsetDays = 30
+	benchmarkBudgetEndOffsetMonths = 1
+	benchmarkTransactionSpreadDays = 365
+	benchmarkDateRangeDays         = 30
+)
+
 var (
 	testContainer  *testutils.PostgreSQLTestContainer
 	testFamilyID   uuid.UUID
@@ -30,123 +38,156 @@ func setupBenchmarkData(b *testing.B) {
 	if testContainer == nil {
 		// Setup is done once for all benchmarks
 		testContainer = testutils.SetupPostgreSQLContainer(&testing.T{})
-		helper := testutils.NewTestDataHelper(testContainer.DB)
-		ctx := context.Background()
+		initializeBenchmarkData(b)
+	}
+}
 
-		// Check if budgets table exists and show all tables
-		var tableExists bool
-		err := testContainer.DB.QueryRow(ctx, "SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'family_budget' AND tablename = 'budgets')").
-			Scan(&tableExists)
+// initializeBenchmarkData initializes the benchmark test data
+func initializeBenchmarkData(b *testing.B) {
+	helper := testutils.NewTestDataHelper(testContainer.DB)
+	ctx := context.Background()
+
+	checkDatabaseSchema(b, ctx)
+	disableBudgetTriggers(b, ctx)
+
+	// Create test family and user
+	testFamilyID = createTestFamilyAndUser(b, helper, ctx)
+
+	// Create test categories
+	testCategories = createTestCategories(b, ctx)
+
+	// Create test budgets
+	createTestBudgets(b, ctx)
+
+	// Create test transactions
+	createTestTransactions(b, ctx)
+}
+
+// checkDatabaseSchema checks and logs database schema information
+func checkDatabaseSchema(b *testing.B, ctx context.Context) {
+	var tableExists bool
+	err := testContainer.DB.QueryRow(ctx, "SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'family_budget' AND tablename = 'budgets')").
+		Scan(&tableExists)
+	if err != nil {
+		b.Fatalf("Failed to check budgets table existence: %v", err)
+	}
+
+	rows, err := testContainer.DB.Query(
+		ctx,
+		"SELECT tablename FROM pg_tables WHERE schemaname = 'family_budget' ORDER BY tablename",
+	)
+	if err != nil {
+		b.Fatalf("Failed to list tables: %v", err)
+	}
+	defer rows.Close()
+
+	var tables []string
+	for rows.Next() {
+		var tableName string
+		if err := rows.Scan(&tableName); err != nil {
+			b.Fatalf("Failed to scan table name: %v", err)
+		}
+		tables = append(tables, tableName)
+	}
+	b.Logf("Tables in family_budget schema: %v", tables)
+	b.Logf("Budgets table exists: %v", tableExists)
+}
+
+// disableBudgetTriggers disables budget triggers for benchmarks
+func disableBudgetTriggers(b *testing.B, ctx context.Context) {
+	_, err := testContainer.DB.Exec(
+		ctx,
+		"DROP TRIGGER IF EXISTS update_budget_spent_on_transaction ON family_budget.transactions",
+	)
+	if err != nil {
+		b.Fatalf("Failed to drop budget trigger: %v", err)
+	}
+}
+
+// createTestFamilyAndUser creates test family and user
+func createTestFamilyAndUser(b *testing.B, helper *testutils.TestDataHelper, ctx context.Context) uuid.UUID {
+	familyID, err := helper.CreateTestFamily(ctx, "Benchmark Family", "USD")
+	if err != nil {
+		b.Fatalf("Failed to create test family: %v", err)
+	}
+	testFamilyID := uuid.MustParse(familyID)
+
+	userID, err := helper.CreateTestUser(ctx, "benchmark@test.com", "Benchmark", "User", "admin", familyID)
+	if err != nil {
+		b.Fatalf("Failed to create test user: %v", err)
+	}
+	testUserID = uuid.MustParse(userID)
+
+	return testFamilyID
+}
+
+// createTestCategories creates test categories
+func createTestCategories(b *testing.B, ctx context.Context) []*category.Category {
+	categoryRepo := categoryrepo.NewPostgreSQLRepository(testContainer.DB)
+	categories := make([]*category.Category, 10)
+
+	for i := range 10 {
+		cat := &category.Category{
+			ID:       uuid.New(),
+			Name:     fmt.Sprintf("Category %d", i+1),
+			Type:     category.TypeExpense,
+			FamilyID: testFamilyID,
+			IsActive: true,
+		}
+		err := categoryRepo.Create(ctx, cat)
 		if err != nil {
-			b.Fatalf("Failed to check budgets table existence: %v", err)
+			b.Fatalf("Failed to create category: %v", err)
 		}
+		categories[i] = cat
+	}
 
-		// List all tables in family_budget schema
-		rows, err := testContainer.DB.Query(
-			ctx,
-			"SELECT tablename FROM pg_tables WHERE schemaname = 'family_budget' ORDER BY tablename",
-		)
+	return categories
+}
+
+// createTestBudgets creates test budgets
+func createTestBudgets(b *testing.B, ctx context.Context) {
+	budgetRepo := budgetrepo.NewPostgreSQLRepository(testContainer.DB)
+	for i := range 5 {
+		budgetObj := &budget.Budget{
+			ID:         uuid.New(),
+			Name:       fmt.Sprintf("Budget %d", i+1),
+			Amount:     1000.00,
+			Spent:      0.00,
+			Period:     budget.PeriodMonthly,
+			CategoryID: &testCategories[i%len(testCategories)].ID,
+			FamilyID:   testFamilyID,
+			StartDate:  time.Now().AddDate(0, 0, -benchmarkBudgetStartOffsetDays),
+			EndDate:    time.Now().AddDate(0, benchmarkBudgetEndOffsetMonths, 0),
+			IsActive:   true,
+		}
+		err := budgetRepo.Create(ctx, budgetObj)
 		if err != nil {
-			b.Fatalf("Failed to list tables: %v", err)
+			b.Fatalf("Failed to create budget: %v", err)
 		}
-		defer rows.Close()
+	}
+}
 
-		var tables []string
-		for rows.Next() {
-			var tableName string
-			if err := rows.Scan(&tableName); err != nil {
-				b.Fatalf("Failed to scan table name: %v", err)
-			}
-			tables = append(tables, tableName)
+// createTestTransactions creates test transactions
+func createTestTransactions(b *testing.B, ctx context.Context) {
+	transactionRepo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
+	now := time.Now()
+
+	for i := range 1000 {
+		tx := &transaction.Transaction{
+			ID:          uuid.New(),
+			Amount:      float64(10 + (i % 500)),
+			Type:        transaction.TypeExpense,
+			Description: fmt.Sprintf("Benchmark transaction %d", i+1),
+			CategoryID:  testCategories[i%len(testCategories)].ID,
+			UserID:      testUserID,
+			FamilyID:    testFamilyID,
+			Date:        now.AddDate(0, 0, -(i % benchmarkTransactionSpreadDays)),
+			Tags:        []string{fmt.Sprintf("tag%d", i%10), "benchmark"},
 		}
-		b.Logf("Tables in family_budget schema: %v", tables)
-		b.Logf("Budgets table exists: %v", tableExists)
 
-		// Temporarily disable budget trigger for benchmarks to avoid schema issues
-		_, err = testContainer.DB.Exec(
-			ctx,
-			"DROP TRIGGER IF EXISTS update_budget_spent_on_transaction ON family_budget.transactions",
-		)
+		err := transactionRepo.Create(ctx, tx)
 		if err != nil {
-			b.Fatalf("Failed to drop budget trigger: %v", err)
-		}
-
-		// Create test family
-		familyID, err := helper.CreateTestFamily(ctx, "Benchmark Family", "USD")
-		if err != nil {
-			b.Fatalf("Failed to create test family: %v", err)
-		}
-		testFamilyID = uuid.MustParse(familyID)
-
-		// Create test user
-		userID, err := helper.CreateTestUser(ctx, "benchmark@test.com", "Benchmark", "User", "admin", familyID)
-		if err != nil {
-			b.Fatalf("Failed to create test user: %v", err)
-		}
-		testUserID = uuid.MustParse(userID)
-
-		// Create test categories
-		categoryRepo := categoryrepo.NewPostgreSQLRepository(testContainer.DB)
-		testCategories = make([]*category.Category, 10)
-
-		for i := range 10 {
-			cat := &category.Category{
-				ID:       uuid.New(),
-				Name:     fmt.Sprintf("Category %d", i+1),
-				Type:     category.TypeExpense,
-				FamilyID: testFamilyID,
-				IsActive: true,
-			}
-			err := categoryRepo.Create(ctx, cat)
-			if err != nil {
-				b.Fatalf("Failed to create category: %v", err)
-			}
-			testCategories[i] = cat
-		}
-
-		// Create test budgets to satisfy the database triggers
-		budgetRepo := budgetrepo.NewPostgreSQLRepository(testContainer.DB)
-		for i := range 5 {
-			budgetObj := &budget.Budget{
-				ID:         uuid.New(),
-				Name:       fmt.Sprintf("Budget %d", i+1),
-				Amount:     1000.00,
-				Spent:      0.00,
-				Period:     budget.PeriodMonthly,
-				CategoryID: &testCategories[i%len(testCategories)].ID,
-				FamilyID:   testFamilyID,
-				StartDate:  time.Now().AddDate(0, 0, -30),
-				EndDate:    time.Now().AddDate(0, 1, 0),
-				IsActive:   true,
-			}
-			err := budgetRepo.Create(ctx, budgetObj)
-			if err != nil {
-				b.Fatalf("Failed to create budget: %v", err)
-			}
-		}
-
-		// Create large dataset of transactions for complex queries
-		transactionRepo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
-		now := time.Now()
-
-		// Create 1000 transactions for performance testing
-		for i := range 1000 {
-			tx := &transaction.Transaction{
-				ID:          uuid.New(),
-				Amount:      float64(10 + (i % 500)), // Varying amounts 10-509
-				Type:        transaction.TypeExpense,
-				Description: fmt.Sprintf("Benchmark transaction %d", i+1),
-				CategoryID:  testCategories[i%len(testCategories)].ID,
-				UserID:      testUserID,
-				FamilyID:    testFamilyID,
-				Date:        now.AddDate(0, 0, -(i % 365)), // Spread over a year
-				Tags:        []string{fmt.Sprintf("tag%d", i%10), "benchmark"},
-			}
-
-			err := transactionRepo.Create(ctx, tx)
-			if err != nil {
-				b.Fatalf("Failed to create transaction %d: %v", i, err)
-			}
+			b.Fatalf("Failed to create transaction %d: %v", i, err)
 		}
 	}
 }
@@ -224,7 +265,7 @@ func BenchmarkTransactionRepository_GetByFilter_Complex(b *testing.B) {
 	expenseType := transaction.TypeExpense
 	amountFrom := 50.0
 	amountTo := 200.0
-	dateFrom := time.Now().AddDate(0, 0, -30) // Last 30 days
+	dateFrom := time.Now().AddDate(0, 0, -benchmarkDateRangeDays) // Last 30 days
 	dateTo := time.Now()
 
 	filter := transaction.Filter{
@@ -273,11 +314,11 @@ func BenchmarkTransactionRepository_GetTransactionSummary(b *testing.B) {
 	repo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
 	ctx := context.Background()
 
-	startDate := time.Now().AddDate(0, 0, -30)
+	startDate := time.Now().AddDate(0, 0, -benchmarkDateRangeDays)
 	endDate := time.Now()
 
 	for b.Loop() {
-		_, err := repo.GetTransactionSummary(ctx, testFamilyID, startDate, endDate)
+		_, err := repo.GetSummary(ctx, testFamilyID, startDate, endDate)
 		if err != nil {
 			b.Fatalf("Failed to get transaction summary: %v", err)
 		}
@@ -407,13 +448,5 @@ func BenchmarkConnectionPoolUsage(b *testing.B) {
 		if err != nil {
 			b.Fatalf("Failed to get transactions: %v", err)
 		}
-	}
-}
-
-// Cleanup function (called manually if needed)
-func cleanupBenchmarkData() {
-	if testContainer != nil {
-		testContainer.Cleanup(&testing.T{})
-		testContainer = nil
 	}
 }

@@ -15,6 +15,11 @@ import (
 	"family-budget-service/internal/infrastructure/validation"
 )
 
+// Currency validation constants
+const (
+	currencyCodeLength = 3
+)
+
 // PostgreSQLFamilyRepository implements family repository using PostgreSQL
 type PostgreSQLFamilyRepository struct {
 	db *pgxpool.Pool
@@ -37,7 +42,7 @@ func ValidateCurrency(currency string) error {
 	currency = strings.ToUpper(strings.TrimSpace(currency))
 
 	// Must be exactly 3 characters (ISO 4217)
-	if len(currency) != 3 {
+	if len(currency) != currencyCodeLength {
 		return errors.New("currency must be exactly 3 characters")
 	}
 

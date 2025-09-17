@@ -16,6 +16,12 @@ import (
 	"family-budget-service/internal/infrastructure/validation"
 )
 
+// Report validation constants
+const (
+	maxReportNameLength  = 255
+	percentageMultiplier = 100
+)
+
 // PostgreSQLRepository implements report repository using PostgreSQL
 type PostgreSQLRepository struct {
 	db *pgxpool.Pool
@@ -54,7 +60,7 @@ func ValidateReportName(name string) error {
 	if name == "" {
 		return errors.New("report name cannot be empty")
 	}
-	if len(name) > 255 {
+	if len(name) > maxReportNameLength {
 		return errors.New("report name too long")
 	}
 	return nil
@@ -149,7 +155,7 @@ func (r *PostgreSQLRepository) GetByID(ctx context.Context, id uuid.UUID) (*repo
 	rep.Period = report.Period(periodStr)
 
 	// Parse data from JSONB
-	if err := json.Unmarshal(dataJSON, &rep.Data); err != nil {
+	if err = json.Unmarshal(dataJSON, &rep.Data); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal report data: %w", err)
 	}
 
@@ -200,7 +206,7 @@ func (r *PostgreSQLRepository) GetByFamilyID(ctx context.Context, familyID uuid.
 		rep.Period = report.Period(periodStr)
 
 		// Parse data from JSONB
-		if err := json.Unmarshal(dataJSON, &rep.Data); err != nil {
+		if err = json.Unmarshal(dataJSON, &rep.Data); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal report data: %w", err)
 		}
 
@@ -251,7 +257,7 @@ func (r *PostgreSQLRepository) GetByFamilyIDWithPagination(
 		var dataJSON []byte
 		var periodStr string
 
-		err := rows.Scan(
+		err = rows.Scan(
 			&rep.ID,
 			&rep.Name,
 			&rep.Type,
@@ -271,7 +277,7 @@ func (r *PostgreSQLRepository) GetByFamilyIDWithPagination(
 		rep.Period = report.Period(periodStr)
 
 		// Parse data from JSONB
-		if err := json.Unmarshal(dataJSON, &rep.Data); err != nil {
+		if err = json.Unmarshal(dataJSON, &rep.Data); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal report data: %w", err)
 		}
 
@@ -310,7 +316,7 @@ func (r *PostgreSQLRepository) GetByUserID(ctx context.Context, userID uuid.UUID
 		var dataJSON []byte
 		var periodStr string
 
-		err := rows.Scan(
+		err = rows.Scan(
 			&rep.ID,
 			&rep.Name,
 			&rep.Type,
@@ -330,7 +336,7 @@ func (r *PostgreSQLRepository) GetByUserID(ctx context.Context, userID uuid.UUID
 		rep.Period = report.Period(periodStr)
 
 		// Parse data from JSONB
-		if err := json.Unmarshal(dataJSON, &rep.Data); err != nil {
+		if err = json.Unmarshal(dataJSON, &rep.Data); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal report data: %w", err)
 		}
 
@@ -400,7 +406,7 @@ func (r *PostgreSQLRepository) GenerateExpenseReport(
 
 		// Calculate percentage
 		if data.TotalExpenses > 0 {
-			item.Percentage = (item.Amount / data.TotalExpenses) * 100
+			item.Percentage = (item.Amount / data.TotalExpenses) * percentageMultiplier
 		}
 
 		categoryBreakdown = append(categoryBreakdown, item)
@@ -493,7 +499,7 @@ func (r *PostgreSQLRepository) GenerateIncomeReport(
 
 		// Calculate percentage
 		if data.TotalIncome > 0 {
-			item.Percentage = (item.Amount / data.TotalIncome) * 100
+			item.Percentage = (item.Amount / data.TotalIncome) * percentageMultiplier
 		}
 
 		categoryBreakdown = append(categoryBreakdown, item)
@@ -608,7 +614,7 @@ func (r *PostgreSQLRepository) GenerateBudgetComparisonReport(
 
 		item.Difference = item.Actual - item.Planned
 		if item.Planned > 0 {
-			item.Percentage = (item.Actual / item.Planned) * 100
+			item.Percentage = (item.Actual / item.Planned) * percentageMultiplier
 		}
 
 		budgetComparison = append(budgetComparison, item)
@@ -642,8 +648,8 @@ func (r *PostgreSQLRepository) Delete(ctx context.Context, id uuid.UUID, familyI
 	return nil
 }
 
-// GetReportSummary returns summary statistics for reports
-func (r *PostgreSQLRepository) GetReportSummary(ctx context.Context, familyID uuid.UUID) (*ReportSummary, error) {
+// GetSummary returns summary statistics for reports
+func (r *PostgreSQLRepository) GetSummary(ctx context.Context, familyID uuid.UUID) (*Summary, error) {
 	// Validate UUID parameter
 	if err := validation.ValidateUUID(familyID); err != nil {
 		return nil, fmt.Errorf("invalid family ID: %w", err)
@@ -660,7 +666,7 @@ func (r *PostgreSQLRepository) GetReportSummary(ctx context.Context, familyID uu
 		FROM family_budget.reports
 		WHERE family_id = $1`
 
-	var summary ReportSummary
+	var summary Summary
 	err := r.db.QueryRow(ctx, query, familyID).Scan(
 		&summary.TotalReports, &summary.ExpenseReports, &summary.IncomeReports,
 		&summary.BudgetReports, &summary.CashFlowReports, &summary.LastGenerated,
@@ -674,8 +680,8 @@ func (r *PostgreSQLRepository) GetReportSummary(ctx context.Context, familyID uu
 	return &summary, nil
 }
 
-// ReportSummary holds report summary statistics
-type ReportSummary struct {
+// Summary holds report summary statistics
+type Summary struct {
 	FamilyID        uuid.UUID  `json:"family_id"`
 	TotalReports    int        `json:"total_reports"`
 	ExpenseReports  int        `json:"expense_reports"`

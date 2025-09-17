@@ -10,14 +10,23 @@ import (
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres" // Register PostgreSQL driver for migrations
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"family-budget-service/internal/infrastructure"
+)
+
+// Test configuration constants
+const (
+	testContainerLogOccurrence  = 2
+	testContainerStartupTimeout = 30 * time.Second
+	testContainerReadyWait      = 2 * time.Second
+	testMaxOpenConns            = 5
+	testMaxIdleConns            = 1
+	testMaxConnIdleTime         = 30 * time.Minute
 )
 
 // PostgreSQLTestContainer manages PostgreSQL container for testing
@@ -40,8 +49,8 @@ func SetupPostgreSQLContainer(t *testing.T) *PostgreSQLTestContainer {
 		postgres.WithPassword("test_password"),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(30*time.Second)),
+				WithOccurrence(testContainerLogOccurrence).
+				WithStartupTimeout(testContainerStartupTimeout)),
 	)
 	if err != nil {
 		t.Fatalf("Failed to start PostgreSQL container: %v", err)
@@ -54,10 +63,10 @@ func SetupPostgreSQLContainer(t *testing.T) *PostgreSQLTestContainer {
 	}
 
 	// Wait a bit more for container to be fully ready
-	time.Sleep(2 * time.Second)
+	time.Sleep(testContainerReadyWait)
 
 	// Run migrations
-	if err := runMigrations(connStr); err != nil {
+	if err = runMigrations(connStr); err != nil {
 		_ = postgresContainer.Terminate(ctx)
 		t.Fatalf("Failed to run migrations: %v", err)
 	}
@@ -70,10 +79,10 @@ func SetupPostgreSQLContainer(t *testing.T) *PostgreSQLTestContainer {
 	}
 
 	// Configure for tests
-	poolConfig.MaxConns = 5
-	poolConfig.MinConns = 1
+	poolConfig.MaxConns = testMaxOpenConns
+	poolConfig.MinConns = testMaxIdleConns
 	poolConfig.MaxConnLifetime = 1 * time.Hour
-	poolConfig.MaxConnIdleTime = 30 * time.Minute
+	poolConfig.MaxConnIdleTime = testMaxConnIdleTime
 
 	db, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
@@ -82,7 +91,7 @@ func SetupPostgreSQLContainer(t *testing.T) *PostgreSQLTestContainer {
 	}
 
 	// Test connection
-	if err := db.Ping(ctx); err != nil {
+	if err = db.Ping(ctx); err != nil {
 		db.Close()
 		_ = postgresContainer.Terminate(ctx)
 		t.Fatalf("Failed to ping database: %v", err)
@@ -92,15 +101,15 @@ func SetupPostgreSQLContainer(t *testing.T) *PostgreSQLTestContainer {
 	config := &infrastructure.PostgreSQLConfig{
 		URI:             connStr,
 		Database:        "family_budget_test",
-		MaxOpenConns:    5,
-		MaxIdleConns:    1,
+		MaxOpenConns:    testMaxOpenConns,
+		MaxIdleConns:    testMaxIdleConns,
 		ConnMaxLifetime: 1 * time.Hour,
 		SSLMode:         "disable",
 		Schema:          "family_budget",
 	}
 
 	driver := infrastructure.NewPostgreSQLDriver(config)
-	if err := driver.Connect(ctx); err != nil {
+	if err = driver.Connect(ctx); err != nil {
 		db.Close()
 		_ = postgresContainer.Terminate(ctx)
 		t.Fatalf("Failed to connect driver: %v", err)
@@ -191,7 +200,7 @@ func runMigrations(databaseURL string) error {
 	defer m.Close()
 
 	// Run migrations
-	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+	if err = m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 

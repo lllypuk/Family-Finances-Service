@@ -15,6 +15,11 @@ import (
 	"family-budget-service/internal/infrastructure/validation"
 )
 
+// Category validation constants
+const (
+	maxCategoryNameLength = 255
+)
+
 // PostgreSQLRepository implements category repository using PostgreSQL
 type PostgreSQLRepository struct {
 	db *pgxpool.Pool
@@ -33,7 +38,7 @@ func ValidateCategoryName(name string) error {
 	if name == "" {
 		return errors.New("category name cannot be empty")
 	}
-	if len(name) > 255 {
+	if len(name) > maxCategoryNameLength {
 		return errors.New("category name too long")
 	}
 	return nil
@@ -133,6 +138,33 @@ func (r *PostgreSQLRepository) GetByID(ctx context.Context, id uuid.UUID) (*cate
 	return &c, nil
 }
 
+// scanCategories is a helper method to scan multiple categories from query results
+func (r *PostgreSQLRepository) scanCategories(rows pgx.Rows, errorContext string) ([]*category.Category, error) {
+	var categories []*category.Category
+	for rows.Next() {
+		var c category.Category
+		var typeStr string
+		var description *string
+
+		err := rows.Scan(
+			&c.ID, &c.Name, &typeStr, &description, &c.ParentID, &c.FamilyID,
+			&c.IsActive, &c.CreatedAt, &c.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan category: %w", err)
+		}
+
+		c.Type = category.Type(typeStr)
+		categories = append(categories, &c)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("%s rows iteration error: %w", errorContext, err)
+	}
+
+	return categories, nil
+}
+
 // GetByFamilyID retrieves all categories belonging to a specific family
 func (r *PostgreSQLRepository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*category.Category, error) {
 	// Validate UUID parameter to prevent injection attacks
@@ -152,29 +184,7 @@ func (r *PostgreSQLRepository) GetByFamilyID(ctx context.Context, familyID uuid.
 	}
 	defer rows.Close()
 
-	var categories []*category.Category
-	for rows.Next() {
-		var c category.Category
-		var typeStr string
-		var description *string
-
-		err = rows.Scan(
-			&c.ID, &c.Name, &typeStr, &description, &c.ParentID, &c.FamilyID,
-			&c.IsActive, &c.CreatedAt, &c.UpdatedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan category: %w", err)
-		}
-
-		c.Type = category.Type(typeStr)
-		categories = append(categories, &c)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration error: %w", err)
-	}
-
-	return categories, nil
+	return r.scanCategories(rows, "get categories by family id")
 }
 
 // GetByFamilyIDAndType retrieves categories by family ID and type
@@ -203,33 +213,34 @@ func (r *PostgreSQLRepository) GetByFamilyIDAndType(
 	}
 	defer rows.Close()
 
-	var categories []*category.Category
-	for rows.Next() {
-		var c category.Category
-		var typeStr string
-		var description *string
-
-		err = rows.Scan(
-			&c.ID, &c.Name, &typeStr, &description, &c.ParentID, &c.FamilyID,
-			&c.IsActive, &c.CreatedAt, &c.UpdatedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan category: %w", err)
-		}
-
-		c.Type = category.Type(typeStr)
-		categories = append(categories, &c)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration error: %w", err)
-	}
-
-	return categories, nil
+	return r.scanCategories(rows, "get categories by family and type")
 }
 
 // GetCategoryChildren returns all children of a category using recursive CTE
-func (r *PostgreSQLRepository) GetCategoryChildren(ctx context.Context, parentID uuid.UUID) ([]*CategoryNode, error) {
+// scanNodes scans rows into Node slice
+func scanNodes(rows pgx.Rows) ([]*Node, error) {
+	var nodes []*Node
+	for rows.Next() {
+		var node Node
+		var typeStr string
+
+		err := rows.Scan(&node.ID, &node.Name, &typeStr, &node.Level)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan category node: %w", err)
+		}
+
+		node.Type = category.Type(typeStr)
+		nodes = append(nodes, &node)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
+	return nodes, nil
+}
+
+func (r *PostgreSQLRepository) GetCategoryChildren(ctx context.Context, parentID uuid.UUID) ([]*Node, error) {
 	// Validate UUID parameter
 	if err := validation.ValidateUUID(parentID); err != nil {
 		return nil, fmt.Errorf("invalid parentID parameter: %w", err)
@@ -260,29 +271,11 @@ func (r *PostgreSQLRepository) GetCategoryChildren(ctx context.Context, parentID
 	}
 	defer rows.Close()
 
-	var nodes []*CategoryNode
-	for rows.Next() {
-		var node CategoryNode
-		var typeStr string
-
-		err = rows.Scan(&node.ID, &node.Name, &typeStr, &node.Level)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan category node: %w", err)
-		}
-
-		node.Type = category.Type(typeStr)
-		nodes = append(nodes, &node)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration error: %w", err)
-	}
-
-	return nodes, nil
+	return scanNodes(rows)
 }
 
 // GetCategoryPath returns the path from root to a specific category
-func (r *PostgreSQLRepository) GetCategoryPath(ctx context.Context, categoryID uuid.UUID) ([]*CategoryNode, error) {
+func (r *PostgreSQLRepository) GetCategoryPath(ctx context.Context, categoryID uuid.UUID) ([]*Node, error) {
 	// Validate UUID parameter
 	if err := validation.ValidateUUID(categoryID); err != nil {
 		return nil, fmt.Errorf("invalid categoryID parameter: %w", err)
@@ -313,25 +306,7 @@ func (r *PostgreSQLRepository) GetCategoryPath(ctx context.Context, categoryID u
 	}
 	defer rows.Close()
 
-	var nodes []*CategoryNode
-	for rows.Next() {
-		var node CategoryNode
-		var typeStr string
-
-		err = rows.Scan(&node.ID, &node.Name, &typeStr, &node.Level)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan category node: %w", err)
-		}
-
-		node.Type = category.Type(typeStr)
-		nodes = append(nodes, &node)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration error: %w", err)
-	}
-
-	return nodes, nil
+	return scanNodes(rows)
 }
 
 // Update updates an existing category
@@ -515,8 +490,8 @@ func (r *PostgreSQLRepository) hasChildren(ctx context.Context, categoryID uuid.
 	return exists, nil
 }
 
-// CategoryNode represents a category in a hierarchical structure
-type CategoryNode struct {
+// Node represents a category in a hierarchical structure
+type Node struct {
 	ID    uuid.UUID     `json:"id"`
 	Name  string        `json:"name"`
 	Type  category.Type `json:"type"`

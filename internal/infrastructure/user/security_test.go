@@ -30,7 +30,7 @@ func TestValidateEmail_WithSanitization(t *testing.T) {
 	emailWithSpaces := "  test@example.com  "
 	sanitized := validation.SanitizeEmail(emailWithSpaces)
 	err := validation.ValidateEmail(sanitized)
-	assert.NoError(t, err, "Sanitized email should be valid")
+	require.NoError(t, err, "Sanitized email should be valid")
 	assert.Equal(t, "test@example.com", sanitized)
 }
 
@@ -151,7 +151,7 @@ func TestEmailValidation_EdgeCases(t *testing.T) {
 			if tc.shouldErr {
 				require.Error(t, err, "Should be invalid: %s", tc.email)
 			} else {
-				assert.NoError(t, err, "Should be valid: %s", tc.email)
+				require.NoError(t, err, "Should be valid: %s", tc.email)
 			}
 		})
 	}

@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 
 	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres" // Register PostgreSQL driver for migrations
+	_ "github.com/golang-migrate/migrate/v4/source/file"       // Register file source driver for migrations
 )
 
 // MigrationManager handles database schema migrations
@@ -33,7 +33,7 @@ func (m *MigrationManager) Up() error {
 	}
 	defer migration.Close()
 
-	if err := migration.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+	if err = migration.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("failed to run up migrations: %w", err)
 	}
 
@@ -48,7 +48,7 @@ func (m *MigrationManager) Down() error {
 	}
 	defer migration.Close()
 
-	if err := migration.Down(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+	if err = migration.Down(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("failed to run down migrations: %w", err)
 	}
 
@@ -63,7 +63,7 @@ func (m *MigrationManager) Steps(steps int) error {
 	}
 	defer migration.Close()
 
-	if err := migration.Steps(steps); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+	if err = migration.Steps(steps); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("failed to run migration steps: %w", err)
 	}
 
@@ -78,7 +78,7 @@ func (m *MigrationManager) Migrate(version uint) error {
 	}
 	defer migration.Close()
 
-	if err := migration.Migrate(version); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+	if err = migration.Migrate(version); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("failed to migrate to version %d: %w", version, err)
 	}
 
@@ -93,7 +93,7 @@ func (m *MigrationManager) Force(version int) error {
 	}
 	defer migration.Close()
 
-	if err := migration.Force(version); err != nil {
+	if err = migration.Force(version); err != nil {
 		return fmt.Errorf("failed to force migration version to %d: %w", version, err)
 	}
 
@@ -124,7 +124,7 @@ func (m *MigrationManager) Drop() error {
 	}
 	defer migration.Close()
 
-	if err := migration.Drop(); err != nil {
+	if err = migration.Drop(); err != nil {
 		return fmt.Errorf("failed to drop database: %w", err)
 	}
 
@@ -164,7 +164,7 @@ func (m *MigrationManager) GetMigrationInfo() (*MigrationInfo, error) {
 }
 
 // ValidateMigrations validates that migrations can be applied
-func (m *MigrationManager) ValidateMigrations(ctx context.Context) error {
+func (m *MigrationManager) ValidateMigrations(_ context.Context) error {
 	migration, err := m.createMigration()
 	if err != nil {
 		return err
@@ -185,7 +185,7 @@ func (m *MigrationManager) ValidateMigrations(ctx context.Context) error {
 }
 
 // CreateInitialMigration creates the initial migration files if they don't exist
-func CreateInitialMigration(migrationsPath string) error {
+func CreateInitialMigration(_ string) error {
 	// This would create the migration files - for now, we'll use the existing pg-init.sql
 	// In a real implementation, you would create numbered migration files
 	// like 001_initial_schema.up.sql and 001_initial_schema.down.sql

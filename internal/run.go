@@ -66,7 +66,7 @@ func NewApplication() (*Application, error) {
 	}
 
 	postgresql := infrastructure.NewPostgreSQLDriver(pgConfig)
-	if err := postgresql.Connect(context.Background()); err != nil {
+	if err = postgresql.Connect(context.Background()); err != nil {
 		return nil, fmt.Errorf("failed to connect to PostgreSQL: %w", err)
 	}
 	app.postgresql = postgresql

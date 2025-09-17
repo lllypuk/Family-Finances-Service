@@ -10,6 +10,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// PostgreSQL connection constants
+const (
+	defaultMaxOpenConns   = 25
+	defaultMaxIdleConns   = 5
+	defaultConnectTimeout = 5 * time.Second
+)
+
 // PostgreSQLDriver provides PostgreSQL database connection and management
 type PostgreSQLDriver struct {
 	pool   *pgxpool.Pool
@@ -43,17 +50,24 @@ func (d *PostgreSQLDriver) Connect(ctx context.Context) error {
 		return fmt.Errorf("failed to parse connection config: %w", err)
 	}
 
-	// Set optimized connection pool parameters
-	poolConfig.MaxConns = int32(d.config.MaxOpenConns)
-	poolConfig.MinConns = int32(d.config.MaxIdleConns)
+	// Set optimized connection pool parameters with bounds checking
+	const maxInt32 = 2147483647
+	if d.config.MaxOpenConns > maxInt32 {
+		return fmt.Errorf("MaxOpenConns value %d exceeds maximum allowed value %d", d.config.MaxOpenConns, maxInt32)
+	}
+	if d.config.MaxIdleConns > maxInt32 {
+		return fmt.Errorf("MaxIdleConns value %d exceeds maximum allowed value %d", d.config.MaxIdleConns, maxInt32)
+	}
+	poolConfig.MaxConns = int32(d.config.MaxOpenConns) // #nosec G115
+	poolConfig.MinConns = int32(d.config.MaxIdleConns) // #nosec G115
 	poolConfig.MaxConnLifetime = d.config.ConnMaxLifetime
-	poolConfig.MaxConnIdleTime = time.Duration(d.config.ConnMaxIdleTime)
+	poolConfig.MaxConnIdleTime = d.config.ConnMaxIdleTime
 
 	// Set health check interval for better connection management
 	poolConfig.HealthCheckPeriod = 1 * time.Minute
 
 	// Optimize connection acquisition
-	poolConfig.ConnConfig.ConnectTimeout = 5 * time.Second
+	poolConfig.ConnConfig.ConnectTimeout = defaultConnectTimeout
 
 	// Create connection pool
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
@@ -62,7 +76,7 @@ func (d *PostgreSQLDriver) Connect(ctx context.Context) error {
 	}
 
 	// Test connection
-	if err := pool.Ping(ctx); err != nil {
+	if err = pool.Ping(ctx); err != nil {
 		pool.Close()
 		return fmt.Errorf("failed to ping database: %w", err)
 	}
@@ -125,10 +139,8 @@ func (d *PostgreSQLDriver) WithTransaction(ctx context.Context, fn func(tx pgx.T
 
 	defer func() {
 		if err != nil {
-			if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
-				// Log rollback error but don't override the original error
-				// In a real application, you would use your logging system here
-			}
+			// Attempt rollback, ignoring rollback errors to avoid masking the original error
+			_ = tx.Rollback(ctx)
 		}
 	}()
 
@@ -161,8 +173,8 @@ func (d *PostgreSQLDriver) ExecuteQueryRow(ctx context.Context, query string, ar
 // DefaultPostgreSQLConfig returns default PostgreSQL configuration
 func DefaultPostgreSQLConfig() *PostgreSQLConfig {
 	return &PostgreSQLConfig{
-		MaxOpenConns:    25,
-		MaxIdleConns:    5,
+		MaxOpenConns:    defaultMaxOpenConns,
+		MaxIdleConns:    defaultMaxIdleConns,
 		ConnMaxLifetime: 1 * time.Hour,
 		SSLMode:         "prefer",
 		Schema:          "family_budget",

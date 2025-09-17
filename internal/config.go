@@ -9,6 +9,27 @@ import (
 	"time"
 )
 
+// Configuration constants
+const (
+	// Server timeout defaults
+	defaultServerReadTimeout  = 15 * time.Second
+	defaultServerWriteTimeout = 15 * time.Second
+	defaultServerIdleTimeout  = 60 * time.Second
+
+	// Database connection defaults
+	defaultMaxOpenConns    = 50
+	defaultMaxIdleConns    = 10
+	defaultConnMaxLifetime = 1 * time.Hour
+	defaultConnMaxIdleTime = 5 * time.Minute
+
+	// Web session defaults
+	defaultSessionTimeout = 24 * time.Hour
+
+	// Test environment defaults
+	testMaxOpenConns = 5
+	testMaxIdleConns = 2
+)
+
 type Config struct {
 	Server      ServerConfig
 	Database    DatabaseConfig
@@ -71,9 +92,9 @@ func LoadConfig() *Config {
 		Server: ServerConfig{
 			Port:         getEnv("SERVER_PORT", "8080"),
 			Host:         getEnv("SERVER_HOST", "localhost"),
-			ReadTimeout:  getDurationEnv("SERVER_READ_TIMEOUT", 15*time.Second),
-			WriteTimeout: getDurationEnv("SERVER_WRITE_TIMEOUT", 15*time.Second),
-			IdleTimeout:  getDurationEnv("SERVER_IDLE_TIMEOUT", 60*time.Second),
+			ReadTimeout:  getDurationEnv("SERVER_READ_TIMEOUT", defaultServerReadTimeout),
+			WriteTimeout: getDurationEnv("SERVER_WRITE_TIMEOUT", defaultServerWriteTimeout),
+			IdleTimeout:  getDurationEnv("SERVER_IDLE_TIMEOUT", defaultServerIdleTimeout),
 		},
 		Database: DatabaseConfig{
 			URI: getEnv(
@@ -83,23 +104,26 @@ func LoadConfig() *Config {
 			Name: getEnv("POSTGRESQL_DATABASE", "family_budget"),
 			MaxOpenConns: getIntEnv(
 				"POSTGRESQL_MAX_OPEN_CONNS",
-				50,
+				defaultMaxOpenConns,
 			), // Increased for better concurrency
 			MaxIdleConns: getIntEnv(
 				"POSTGRESQL_MAX_IDLE_CONNS",
-				10,
+				defaultMaxIdleConns,
 			), // Increased to maintain warm connections
 			ConnMaxLifetime: getDurationEnv(
 				"POSTGRESQL_CONN_MAX_LIFETIME",
-				1*time.Hour,
+				defaultConnMaxLifetime,
 			), // Extended to reduce reconnections
-			ConnMaxIdleTime: getDurationEnv("POSTGRESQL_CONN_MAX_IDLE_TIME", 5*time.Minute), // Optimized idle time
-			SSLMode:         getEnv("POSTGRESQL_SSL_MODE", "prefer"),
-			Schema:          getEnv("POSTGRESQL_SCHEMA", "family_budget"),
+			ConnMaxIdleTime: getDurationEnv(
+				"POSTGRESQL_CONN_MAX_IDLE_TIME",
+				defaultConnMaxIdleTime,
+			), // Optimized idle time
+			SSLMode: getEnv("POSTGRESQL_SSL_MODE", "prefer"),
+			Schema:  getEnv("POSTGRESQL_SCHEMA", "family_budget"),
 		},
 		Web: WebConfig{
 			SessionSecret:  getEnv("SESSION_SECRET", "your-super-secret-session-key-change-in-production"),
-			SessionTimeout: getDurationEnv("SESSION_TIMEOUT", 24*time.Hour),
+			SessionTimeout: getDurationEnv("SESSION_TIMEOUT", defaultSessionTimeout),
 			CSRFSecret:     getEnv("CSRF_SECRET", "your-csrf-secret-key-change-in-production"),
 			CookieSecure:   getBoolEnv("COOKIE_SECURE", false),
 			CookieHTTPOnly: getBoolEnv("COOKIE_HTTP_ONLY", true),
@@ -134,8 +158,8 @@ func LoadConfig() *Config {
 		config.Database.SSLMode = "disable"
 		config.Web.CookieSecure = false
 		config.Logging.Level = "warn"
-		config.Database.MaxOpenConns = 5
-		config.Database.MaxIdleConns = 2
+		config.Database.MaxOpenConns = testMaxOpenConns
+		config.Database.MaxIdleConns = testMaxIdleConns
 	}
 
 	return config

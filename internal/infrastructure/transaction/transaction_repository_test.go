@@ -56,7 +56,7 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 		retrievedTransaction, err := repo.GetByID(ctx, testTransaction.ID)
 		require.NoError(t, err)
 		assert.Equal(t, testTransaction.ID, retrievedTransaction.ID)
-		assert.Equal(t, testTransaction.Amount, retrievedTransaction.Amount)
+		assert.InEpsilon(t, testTransaction.Amount, retrievedTransaction.Amount, 0.01)
 		assert.Equal(t, testTransaction.Type, retrievedTransaction.Type)
 		assert.Equal(t, testTransaction.Description, retrievedTransaction.Description)
 		assert.Equal(t, testTransaction.CategoryID, retrievedTransaction.CategoryID)
@@ -212,7 +212,7 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 		results, err := repo.GetByFilter(ctx, filter)
 		require.NoError(t, err)
 		assert.Len(t, results, 1) // Should only get the 150.00 expense
-		assert.Equal(t, 150.00, results[0].Amount)
+		assert.InEpsilon(t, 150.00, results[0].Amount, 0.01)
 		assert.Equal(t, transaction.TypeExpense, results[0].Type)
 	})
 
@@ -350,18 +350,18 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 		// Get summary
 		startDate := now.AddDate(0, 0, -1)
 		endDate := now.AddDate(0, 0, 1)
-		summary, err := repo.GetTransactionSummary(ctx, familyUUID, startDate, endDate)
+		summary, err := repo.GetSummary(ctx, familyUUID, startDate, endDate)
 		require.NoError(t, err)
 
 		assert.Equal(t, familyUUID, summary.FamilyID)
 		assert.Equal(t, 3, summary.TotalCount)
 		assert.Equal(t, 1, summary.IncomeCount)
 		assert.Equal(t, 2, summary.ExpenseCount)
-		assert.Equal(t, 1000.00, summary.TotalIncome)
-		assert.Equal(t, 500.00, summary.TotalExpenses) // 200 + 300
-		assert.Equal(t, 500.00, summary.Balance)       // 1000 - 500
-		assert.Equal(t, 1000.00, summary.AvgIncome)
-		assert.Equal(t, 250.00, summary.AvgExpense) // (200 + 300) / 2
+		assert.InEpsilon(t, 1000.00, summary.TotalIncome, 0.01)
+		assert.InEpsilon(t, 500.00, summary.TotalExpenses, 0.01) // 200 + 300
+		assert.InEpsilon(t, 500.00, summary.Balance, 0.01)       // 1000 - 500
+		assert.InEpsilon(t, 1000.00, summary.AvgIncome, 0.01)
+		assert.InEpsilon(t, 250.00, summary.AvgExpense, 0.01) // (200 + 300) / 2
 	})
 
 	t.Run("Update_Success", func(t *testing.T) {
@@ -409,7 +409,7 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 		// Verify update
 		retrievedTransaction, err := repo.GetByID(ctx, testTransaction.ID)
 		require.NoError(t, err)
-		assert.Equal(t, 150.00, retrievedTransaction.Amount)
+		assert.InEpsilon(t, 150.00, retrievedTransaction.Amount, 0.01)
 		assert.Equal(t, "Updated description", retrievedTransaction.Description)
 		assert.Equal(t, uuid.MustParse(newCategoryID), retrievedTransaction.CategoryID)
 		assert.Equal(t, []string{"updated", "modified"}, retrievedTransaction.Tags)

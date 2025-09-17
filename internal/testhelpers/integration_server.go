@@ -80,10 +80,8 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 
 // Cleanup cleans up the test server resources
 func (ts *TestServer) Cleanup() {
-	if ts.container != nil {
-		// Container cleanup is handled by testcontainers automatically
-		// but we can add explicit cleanup if needed
-	}
+	// Container cleanup is handled by testcontainers automatically
+	// No explicit cleanup needed as testcontainers handles it
 }
 
 // CheckTableExists checks if a table exists in the database (for debugging)

@@ -267,8 +267,8 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 		}
 
 		// Create all categories
-		allCategories := append(expenseCategories, incomeCategories...)
-		for _, cat := range allCategories {
+		expenseCategories = append(expenseCategories, incomeCategories...)
+		for _, cat := range expenseCategories {
 			err = repo.Create(ctx, cat)
 			require.NoError(t, err)
 		}

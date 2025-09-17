@@ -11,6 +11,11 @@ import (
 	"family-budget-service/internal/domain/transaction"
 )
 
+// Email validation constants
+const (
+	maxEmailLength = 254
+)
+
 // ValidateUUID validates UUID parameter to prevent injection attacks
 func ValidateUUID(id uuid.UUID) error {
 	if id == uuid.Nil {
@@ -42,7 +47,7 @@ func ValidateEmail(email string) error {
 	}
 
 	// Check for maximum length
-	if len(email) > 254 {
+	if len(email) > maxEmailLength {
 		return errors.New("email too long")
 	}
 

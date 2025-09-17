@@ -15,6 +15,13 @@ import (
 	"family-budget-service/internal/infrastructure/validation"
 )
 
+// Transaction validation constants
+const (
+	maxTransactionAmount = 999999999.99
+	maxDescriptionLength = 1000
+	maxQueryLimit        = 1000
+)
+
 // PostgreSQLRepository implements transaction repository using PostgreSQL
 type PostgreSQLRepository struct {
 	db *pgxpool.Pool
@@ -40,7 +47,7 @@ func ValidateAmount(amount float64) error {
 	if amount <= 0 {
 		return errors.New("amount must be positive")
 	}
-	if amount > 999999999.99 {
+	if amount > maxTransactionAmount {
 		return errors.New("amount too large")
 	}
 	return nil
@@ -52,7 +59,7 @@ func ValidateDescription(description string) error {
 	if description == "" {
 		return errors.New("description cannot be empty")
 	}
-	if len(description) > 1000 {
+	if len(description) > maxDescriptionLength {
 		return errors.New("description too long")
 	}
 	return nil
@@ -158,35 +165,30 @@ func (r *PostgreSQLRepository) GetByID(ctx context.Context, id uuid.UUID) (*tran
 	t.Type = transaction.Type(typeStr)
 
 	// Parse tags from JSONB
-	if err := r.parseTags(tagsJSON, &t.Tags); err != nil {
-		return nil, fmt.Errorf("failed to parse tags: %w", err)
-	}
+	r.parseTags(tagsJSON, &t.Tags)
 
 	return &t, nil
 }
 
 // GetByFilter retrieves transactions based on filter criteria
+//
+//nolint:gocognit,funlen // Complex function due to multiple optional filter conditions - necessary for comprehensive filtering
 func (r *PostgreSQLRepository) GetByFilter(
 	ctx context.Context,
 	filter transaction.Filter,
 ) ([]*transaction.Transaction, error) {
-	// Validate family ID
+	// Validate family ID (required parameter)
 	if err := validation.ValidateUUID(filter.FamilyID); err != nil {
 		return nil, fmt.Errorf("invalid family ID: %w", err)
 	}
 
-	// Build dynamic query
-	query := `
-		SELECT t.id, t.amount, t.description, t.date, t.type, t.category_id, t.user_id, t.family_id,
-			   t.tags, t.created_at, t.updated_at
-		FROM family_budget.transactions t`
-
+	// Build dynamic query parts
 	var conditions []string
 	var args []any
 	argIndex := 1
 
 	// Family ID is always required
-	conditions = append(conditions, fmt.Sprintf("t.family_id = $%d", argIndex))
+	conditions = append(conditions, fmt.Sprintf("family_id = $%d", argIndex))
 	args = append(args, filter.FamilyID)
 	argIndex++
 
@@ -195,7 +197,7 @@ func (r *PostgreSQLRepository) GetByFilter(
 		if err := validation.ValidateUUID(*filter.UserID); err != nil {
 			return nil, fmt.Errorf("invalid user ID: %w", err)
 		}
-		conditions = append(conditions, fmt.Sprintf("t.user_id = $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("user_id = $%d", argIndex))
 		args = append(args, *filter.UserID)
 		argIndex++
 	}
@@ -204,67 +206,61 @@ func (r *PostgreSQLRepository) GetByFilter(
 		if err := validation.ValidateUUID(*filter.CategoryID); err != nil {
 			return nil, fmt.Errorf("invalid category ID: %w", err)
 		}
-		conditions = append(conditions, fmt.Sprintf("t.category_id = $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("category_id = $%d", argIndex))
 		args = append(args, *filter.CategoryID)
 		argIndex++
 	}
 
 	if filter.Type != nil {
-		if err := ValidateTransactionType(*filter.Type); err != nil {
-			return nil, fmt.Errorf("invalid transaction type: %w", err)
-		}
-		conditions = append(conditions, fmt.Sprintf("t.type = $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("type = $%d", argIndex))
 		args = append(args, string(*filter.Type))
 		argIndex++
 	}
 
 	if filter.DateFrom != nil {
-		conditions = append(conditions, fmt.Sprintf("t.date >= $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("date >= $%d", argIndex))
 		args = append(args, *filter.DateFrom)
 		argIndex++
 	}
 
 	if filter.DateTo != nil {
-		conditions = append(conditions, fmt.Sprintf("t.date <= $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("date <= $%d", argIndex))
 		args = append(args, *filter.DateTo)
 		argIndex++
 	}
 
 	if filter.AmountFrom != nil {
-		conditions = append(conditions, fmt.Sprintf("t.amount >= $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("amount >= $%d", argIndex))
 		args = append(args, *filter.AmountFrom)
 		argIndex++
 	}
 
 	if filter.AmountTo != nil {
-		conditions = append(conditions, fmt.Sprintf("t.amount <= $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("amount <= $%d", argIndex))
 		args = append(args, *filter.AmountTo)
 		argIndex++
 	}
 
 	if filter.Description != "" {
-		conditions = append(conditions, fmt.Sprintf("t.description ILIKE $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("description ILIKE $%d", argIndex))
 		args = append(args, "%"+filter.Description+"%")
 		argIndex++
 	}
 
-	// Tags filter using JSONB operations
 	if len(filter.Tags) > 0 {
-		var tagConditions []string
-		for _, tag := range filter.Tags {
-			tagConditions = append(tagConditions, fmt.Sprintf("t.tags @> $%d", argIndex))
-			args = append(args, fmt.Sprintf(`["%s"]`, tag))
-			argIndex++
-		}
-		conditions = append(conditions, "("+strings.Join(tagConditions, " OR ")+")")
+		// Use PostgreSQL JSONB array contains operator to check if any of the specified tags exist
+		conditions = append(conditions, fmt.Sprintf("tags ?| $%d", argIndex))
+		args = append(args, filter.Tags)
+		argIndex++
 	}
 
-	// Build final query
-	if len(conditions) > 0 {
-		query += " WHERE " + strings.Join(conditions, " AND ")
-	}
-
-	query += " ORDER BY t.date DESC, t.created_at DESC"
+	// Build final query using the same SELECT pattern as GetByFamilyID
+	query := `
+		SELECT id, amount, type, description, category_id, user_id, family_id,
+			   date, tags, created_at, updated_at
+		FROM family_budget.transactions
+		WHERE ` + strings.Join(conditions, " AND ") + `
+		ORDER BY date DESC, created_at DESC`
 
 	// Add pagination
 	if filter.Limit > 0 {
@@ -276,36 +272,40 @@ func (r *PostgreSQLRepository) GetByFilter(
 	if filter.Offset > 0 {
 		query += fmt.Sprintf(" OFFSET $%d", argIndex)
 		args = append(args, filter.Offset)
-		argIndex++
 	}
 
+	// Execute query
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get transactions by filter: %w", err)
 	}
 	defer rows.Close()
 
+	// Scan results using the same pattern as GetByFamilyID
 	var transactions []*transaction.Transaction
 	for rows.Next() {
 		var t transaction.Transaction
-		var typeStr string
 		var tagsJSON []byte
 
 		err = rows.Scan(
-			&t.ID, &t.Amount, &t.Description, &t.Date, &typeStr,
-			&t.CategoryID, &t.UserID, &t.FamilyID, &tagsJSON, &t.CreatedAt, &t.UpdatedAt,
+			&t.ID,
+			&t.Amount,
+			&t.Type,
+			&t.Description,
+			&t.CategoryID,
+			&t.UserID,
+			&t.FamilyID,
+			&t.Date,
+			&tagsJSON,
+			&t.CreatedAt,
+			&t.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan transaction: %w", err)
 		}
 
-		t.Type = transaction.Type(typeStr)
-
 		// Parse tags from JSONB
-		if err := r.parseTags(tagsJSON, &t.Tags); err != nil {
-			return nil, fmt.Errorf("failed to parse tags: %w", err)
-		}
-
+		r.parseTags(tagsJSON, &t.Tags)
 		transactions = append(transactions, &t)
 	}
 
@@ -402,12 +402,12 @@ func (r *PostgreSQLRepository) Delete(ctx context.Context, id uuid.UUID, familyI
 	return nil
 }
 
-// GetTransactionSummary returns transaction summary for a family
-func (r *PostgreSQLRepository) GetTransactionSummary(
+// GetSummary returns transaction summary for a family
+func (r *PostgreSQLRepository) GetSummary(
 	ctx context.Context,
 	familyID uuid.UUID,
 	startDate, endDate time.Time,
-) (*TransactionSummary, error) {
+) (*Summary, error) {
 	// Validate parameters
 	if err := validation.ValidateUUID(familyID); err != nil {
 		return nil, fmt.Errorf("invalid family ID: %w", err)
@@ -425,7 +425,7 @@ func (r *PostgreSQLRepository) GetTransactionSummary(
 		FROM family_budget.transactions
 		WHERE family_id = $1 AND date BETWEEN $2 AND $3`
 
-	var summary TransactionSummary
+	var summary Summary
 	err := r.db.QueryRow(ctx, query, familyID, startDate, endDate).Scan(
 		&summary.TotalCount, &summary.IncomeCount, &summary.ExpenseCount,
 		&summary.TotalIncome, &summary.TotalExpenses, &summary.AvgIncome, &summary.AvgExpense,
@@ -511,8 +511,8 @@ func (r *PostgreSQLRepository) GetByFamilyID(
 	if limit <= 0 {
 		limit = 50 // Default limit
 	}
-	if limit > 1000 {
-		limit = 1000 // Maximum limit
+	if limit > maxQueryLimit {
+		limit = maxQueryLimit // Maximum limit
 	}
 	if offset < 0 {
 		offset = 0
@@ -536,7 +536,7 @@ func (r *PostgreSQLRepository) GetByFamilyID(
 		var t transaction.Transaction
 		var tagsJSON []byte
 
-		err := rows.Scan(
+		err = rows.Scan(
 			&t.ID,
 			&t.Amount,
 			&t.Type,
@@ -554,9 +554,7 @@ func (r *PostgreSQLRepository) GetByFamilyID(
 		}
 
 		// Parse tags from JSONB
-		if err := r.parseTags(tagsJSON, &t.Tags); err != nil {
-			return nil, fmt.Errorf("failed to parse tags: %w", err)
-		}
+		r.parseTags(tagsJSON, &t.Tags)
 
 		transactions = append(transactions, &t)
 	}
@@ -655,20 +653,18 @@ func (r *PostgreSQLRepository) GetTotalByCategoryAndDateRange(
 }
 
 // parseTags parses tags from JSONB format
-func (r *PostgreSQLRepository) parseTags(tagsJSON []byte, tags *[]string) error {
+func (r *PostgreSQLRepository) parseTags(tagsJSON []byte, tags *[]string) {
 	// Simple JSON array parsing for tags
 	// In production, you might want to use a proper JSON library
 	jsonStr := string(tagsJSON)
 	if jsonStr == "[]" || jsonStr == "" {
 		*tags = []string{}
-		return nil
 	}
 
 	// Remove brackets and split by comma
 	jsonStr = strings.Trim(jsonStr, "[]")
 	if jsonStr == "" {
 		*tags = []string{}
-		return nil
 	}
 
 	parts := strings.Split(jsonStr, ",")
@@ -681,12 +677,10 @@ func (r *PostgreSQLRepository) parseTags(tagsJSON []byte, tags *[]string) error 
 			*tags = append(*tags, tag)
 		}
 	}
-
-	return nil
 }
 
-// TransactionSummary holds transaction summary data
-type TransactionSummary struct {
+// Summary holds transaction summary data
+type Summary struct {
 	FamilyID      uuid.UUID `json:"family_id"`
 	StartDate     time.Time `json:"start_date"`
 	EndDate       time.Time `json:"end_date"`

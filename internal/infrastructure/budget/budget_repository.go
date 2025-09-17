@@ -15,6 +15,12 @@ import (
 	"family-budget-service/internal/infrastructure/validation"
 )
 
+// Budget validation constants
+const (
+	maxBudgetAmount     = 999999999.99
+	maxBudgetNameLength = 255
+)
+
 // PostgreSQLRepository implements budget repository using PostgreSQL
 type PostgreSQLRepository struct {
 	db *pgxpool.Pool
@@ -42,7 +48,7 @@ func ValidateBudgetAmount(amount float64) error {
 	if amount <= 0 {
 		return errors.New("budget amount must be positive")
 	}
-	if amount > 999999999.99 {
+	if amount > maxBudgetAmount {
 		return errors.New("budget amount too large")
 	}
 	return nil
@@ -54,7 +60,7 @@ func ValidateBudgetName(name string) error {
 	if name == "" {
 		return errors.New("budget name cannot be empty")
 	}
-	if len(name) > 255 {
+	if len(name) > maxBudgetNameLength {
 		return errors.New("budget name too long")
 	}
 	return nil
@@ -244,11 +250,11 @@ func (r *PostgreSQLRepository) GetActiveBudgets(ctx context.Context, familyID uu
 	return budgets, nil
 }
 
-// GetBudgetUsageStats returns comprehensive budget usage statistics
-func (r *PostgreSQLRepository) GetBudgetUsageStats(
+// GetUsageStats returns comprehensive budget usage statistics
+func (r *PostgreSQLRepository) GetUsageStats(
 	ctx context.Context,
 	familyID uuid.UUID,
-) ([]*BudgetUsageStats, error) {
+) ([]*UsageStats, error) {
 	// Validate UUID parameter
 	if err := validation.ValidateUUID(familyID); err != nil {
 		return nil, fmt.Errorf("invalid familyID parameter: %w", err)
@@ -288,9 +294,9 @@ func (r *PostgreSQLRepository) GetBudgetUsageStats(
 	}
 	defer rows.Close()
 
-	var stats []*BudgetUsageStats
+	var stats []*UsageStats
 	for rows.Next() {
-		var stat BudgetUsageStats
+		var stat UsageStats
 		var periodStr string
 		var categoryName *string
 
@@ -427,8 +433,8 @@ func (r *PostgreSQLRepository) Delete(ctx context.Context, id uuid.UUID, familyI
 	return nil
 }
 
-// GetBudgetAlerts retrieves all alerts for a budget
-func (r *PostgreSQLRepository) GetBudgetAlerts(ctx context.Context, budgetID uuid.UUID) ([]*BudgetAlert, error) {
+// GetAlerts retrieves all alerts for a budget
+func (r *PostgreSQLRepository) GetAlerts(ctx context.Context, budgetID uuid.UUID) ([]*Alert, error) {
 	// Validate UUID parameter
 	if err := validation.ValidateUUID(budgetID); err != nil {
 		return nil, fmt.Errorf("invalid budget ID parameter: %w", err)
@@ -446,9 +452,9 @@ func (r *PostgreSQLRepository) GetBudgetAlerts(ctx context.Context, budgetID uui
 	}
 	defer rows.Close()
 
-	var alerts []*BudgetAlert
+	var alerts []*Alert
 	for rows.Next() {
-		var alert BudgetAlert
+		var alert Alert
 
 		err = rows.Scan(
 			&alert.ID, &alert.BudgetID, &alert.ThresholdPercentage,
@@ -468,8 +474,8 @@ func (r *PostgreSQLRepository) GetBudgetAlerts(ctx context.Context, budgetID uui
 	return alerts, nil
 }
 
-// CreateBudgetAlert creates a new budget alert
-func (r *PostgreSQLRepository) CreateBudgetAlert(ctx context.Context, alert *BudgetAlert) error {
+// CreateAlert creates a new budget alert
+func (r *PostgreSQLRepository) CreateAlert(ctx context.Context, alert *Alert) error {
 	// Validate parameters
 	if err := validation.ValidateUUID(alert.ID); err != nil {
 		return fmt.Errorf("invalid alert ID: %w", err)
@@ -551,7 +557,7 @@ func (r *PostgreSQLRepository) GetByFamilyAndCategory(
 		var b budget.Budget
 		var categoryIDPtr *uuid.UUID
 
-		err := rows.Scan(
+		err = rows.Scan(
 			&b.ID,
 			&b.Name,
 			&b.Amount,
@@ -618,7 +624,7 @@ func (r *PostgreSQLRepository) GetByPeriod(
 		var b budget.Budget
 		var categoryIDPtr *uuid.UUID
 
-		err := rows.Scan(
+		err = rows.Scan(
 			&b.ID,
 			&b.Name,
 			&b.Amount,
@@ -651,8 +657,8 @@ func (r *PostgreSQLRepository) GetByPeriod(
 	return budgets, nil
 }
 
-// BudgetUsageStats holds comprehensive budget usage statistics
-type BudgetUsageStats struct {
+// UsageStats holds comprehensive budget usage statistics
+type UsageStats struct {
 	BudgetID        uuid.UUID     `json:"budget_id"`
 	BudgetName      string        `json:"budget_name"`
 	BudgetAmount    float64       `json:"budget_amount"`
@@ -667,8 +673,8 @@ type BudgetUsageStats struct {
 	CategoryName    string        `json:"category_name,omitempty"`
 }
 
-// BudgetAlert represents a budget alert
-type BudgetAlert struct {
+// Alert represents a budget alert
+type Alert struct {
 	ID                  uuid.UUID  `json:"id"`
 	BudgetID            uuid.UUID  `json:"budget_id"`
 	ThresholdPercentage int        `json:"threshold_percentage"`

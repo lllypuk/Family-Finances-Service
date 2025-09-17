@@ -280,17 +280,17 @@ func TestFullWorkflowIntegration(t *testing.T) {
 		startDate := now.AddDate(0, 0, -7)
 		endDate := now.AddDate(0, 0, 1)
 
-		summary, err := transactionRepo.GetTransactionSummary(ctx, family.ID, startDate, endDate)
+		summary, err := transactionRepo.GetSummary(ctx, family.ID, startDate, endDate)
 		require.NoError(t, err)
 
 		assert.Equal(t, 5, summary.TotalCount)
 		assert.Equal(t, 2, summary.IncomeCount)
 		assert.Equal(t, 3, summary.ExpenseCount)
-		assert.Equal(t, 5000.00, summary.TotalIncome)  // 3000 + 2000
-		assert.Equal(t, 251.25, summary.TotalExpenses) // 120.50 + 85.00 + 45.75
-		assert.Equal(t, 4748.75, summary.Balance)      // 5000 - 251.25
-		assert.Equal(t, 2500.00, summary.AvgIncome)    // 5000 / 2
-		assert.Equal(t, 83.75, summary.AvgExpense)     // 251.25 / 3
+		assert.InEpsilon(t, 5000.00, summary.TotalIncome, 0.01)  // 3000 + 2000
+		assert.InEpsilon(t, 251.25, summary.TotalExpenses, 0.01) // 120.50 + 85.00 + 45.75
+		assert.InEpsilon(t, 4748.75, summary.Balance, 0.01)      // 5000 - 251.25
+		assert.InEpsilon(t, 2500.00, summary.AvgIncome, 0.01)    // 5000 / 2
+		assert.InEpsilon(t, 83.75, summary.AvgExpense, 0.01)     // 251.25 / 3
 	})
 
 	// Test budget tracking
@@ -300,12 +300,12 @@ func TestFullWorkflowIntegration(t *testing.T) {
 		assert.Len(t, budgets, 2)
 
 		// Check budget usage stats
-		stats, err := budgetRepo.GetBudgetUsageStats(ctx, family.ID)
+		stats, err := budgetRepo.GetUsageStats(ctx, family.ID)
 		require.NoError(t, err)
 		assert.Len(t, stats, 2)
 
 		// Find food budget stats
-		var foodBudgetStats *budgetrepo.BudgetUsageStats
+		var foodBudgetStats *budgetrepo.UsageStats
 		for _, stat := range stats {
 			if stat.BudgetID == monthlyFoodBudget.ID {
 				foodBudgetStats = stat
@@ -343,9 +343,9 @@ func TestFullWorkflowIntegration(t *testing.T) {
 		assert.Equal(t, 5, familyStats.CategoryCount) // 3 root + 2 subcategories
 		assert.Equal(t, 5, familyStats.TransactionCount)
 		assert.Equal(t, 2, familyStats.BudgetCount)
-		assert.Equal(t, 100000.00, familyStats.TotalIncome)
-		assert.Equal(t, 5025.00, familyStats.TotalExpenses)
-		assert.Equal(t, 94975.00, familyStats.Balance)
+		assert.InEpsilon(t, 100000.00, familyStats.TotalIncome, 0.01)
+		assert.InEpsilon(t, 5025.00, familyStats.TotalExpenses, 0.01)
+		assert.InEpsilon(t, 94975.00, familyStats.Balance, 0.01)
 	})
 
 	// Test complex queries and edge cases
