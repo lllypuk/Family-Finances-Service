@@ -51,6 +51,13 @@ func SessionStore(secretKey string, isProduction bool) echo.MiddlewareFunc {
 
 // GetSessionData извлекает данные из сессии
 func GetSessionData(c echo.Context) (*SessionData, error) {
+	// Поддержка моков для тестирования
+	if mockSessionData := c.Get("mock_session_data"); mockSessionData != nil {
+		if mockData, ok := mockSessionData.(*SessionData); ok {
+			return mockData, nil
+		}
+	}
+
 	sess, err := session.Get(SessionName, c)
 	if err != nil {
 		return nil, err

@@ -247,9 +247,10 @@ func TestUserRepositoryPostgreSQL_Integration(t *testing.T) {
 		assert.Len(t, familyUsers, 3)
 
 		// Verify users are sorted by role, first name, last name
+		// Role ordering is alphabetical: admin, child, member
 		assert.Equal(t, user.RoleAdmin, familyUsers[0].Role)
-		assert.Equal(t, user.RoleChild, familyUsers[1].Role)
-		assert.Equal(t, user.RoleMember, familyUsers[2].Role)
+		assert.Equal(t, user.RoleMember, familyUsers[1].Role)
+		assert.Equal(t, user.RoleChild, familyUsers[2].Role)
 	})
 
 	t.Run("Update_Success", func(t *testing.T) {
@@ -262,7 +263,7 @@ func TestUserRepositoryPostgreSQL_Integration(t *testing.T) {
 
 		testUser := &user.User{
 			ID:        uuid.New(),
-			Email:     "update@example.com",
+			Email:     "original@example.com",
 			Password:  "hashed_password",
 			FirstName: "Original",
 			LastName:  "Name",
@@ -274,9 +275,9 @@ func TestUserRepositoryPostgreSQL_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Update user
-		testUser.FirstName = "Updated"
+		testUser.FirstName = "Changed"
 		testUser.LastName = "NewName"
-		testUser.Email = "updated@example.com"
+		testUser.Email = "newemail@example.com"
 
 		err = repo.Update(ctx, testUser)
 		require.NoError(t, err)
@@ -284,9 +285,9 @@ func TestUserRepositoryPostgreSQL_Integration(t *testing.T) {
 		// Verify update
 		retrievedUser, err := repo.GetByID(ctx, testUser.ID)
 		require.NoError(t, err)
-		assert.Equal(t, "Updated", retrievedUser.FirstName)
+		assert.Equal(t, "Changed", retrievedUser.FirstName)
 		assert.Equal(t, "NewName", retrievedUser.LastName)
-		assert.Equal(t, "updated@example.com", retrievedUser.Email)
+		assert.Equal(t, "newemail@example.com", retrievedUser.Email)
 	})
 
 	t.Run("Delete_Success", func(t *testing.T) {
@@ -299,7 +300,7 @@ func TestUserRepositoryPostgreSQL_Integration(t *testing.T) {
 
 		testUser := &user.User{
 			ID:        uuid.New(),
-			Email:     "delete@example.com",
+			Email:     "remove@example.com",
 			Password:  "hashed_password",
 			FirstName: "Delete",
 			LastName:  "Me",

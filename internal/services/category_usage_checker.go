@@ -27,14 +27,20 @@ func NewCategoryUsageChecker(transactionRepo TransactionRepositoryForUsage) Cate
 
 // IsCategoryUsed checks if a category is used in any transactions
 func (c *CategoryUsageCheckerImpl) IsCategoryUsed(ctx context.Context, categoryID uuid.UUID) (bool, error) {
-	// Check if category is used in transactions by trying to get total for any transaction type
-	// We use empty transaction.Type which should match any type
-	total, err := c.transactionRepo.GetTotalByCategory(ctx, categoryID, "")
+	// Check if category is used in income transactions
+	incomeTotal, err := c.transactionRepo.GetTotalByCategory(ctx, categoryID, transaction.TypeIncome)
 	if err != nil {
-		// If error is "not found" or similar, category is not used
+		// If error is not "not found", return the error
 		return false, err
 	}
 
-	// If we got a result without error, category is used
-	return total >= 0, nil
+	// Check if category is used in expense transactions
+	expenseTotal, err := c.transactionRepo.GetTotalByCategory(ctx, categoryID, transaction.TypeExpense)
+	if err != nil {
+		// If error is not "not found", return the error
+		return false, err
+	}
+
+	// Category is used if there are any transactions of either type
+	return incomeTotal > 0 || expenseTotal > 0, nil
 }

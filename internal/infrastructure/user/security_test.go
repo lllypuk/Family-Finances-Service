@@ -111,43 +111,6 @@ func TestSanitizeEmail(t *testing.T) {
 	}
 }
 
-func TestRepository_GetByEmail_SecurityValidation(t *testing.T) {
-	// This is a unit test focusing on security validation
-	// We don't need actual database connection for this
-	// This test should use actual repository with validation
-	// For security testing, we skip actual database operations
-	if testing.Short() {
-		t.Skip("Skipping security validation test in short mode")
-	}
-	return // Skip for now
-
-	// Skip these tests - they require actual repository integration
-}
-
-func TestRepository_Create_SecurityValidation(t *testing.T) {
-	// This test should use actual repository with validation
-	// For security testing, we skip actual database operations
-	if testing.Short() {
-		t.Skip("Skipping security validation test in short mode")
-	}
-	return // Skip for now
-
-	// Skip repository test
-
-}
-
-func TestRepository_Update_SecurityValidation(t *testing.T) {
-	// This test should use actual repository with validation
-	// For security testing, we skip actual database operations
-	if testing.Short() {
-		t.Skip("Skipping security validation test in short mode")
-	}
-	return // Skip for now
-
-	// Skip repository test
-
-}
-
 func TestEmailSanitization_ConsistentBehavior(t *testing.T) {
 	// Test that email sanitization is consistent across operations
 	originalEmail := "  TEST@EXAMPLE.COM  "

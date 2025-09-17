@@ -522,8 +522,7 @@ func (r *PostgreSQLRepository) GetByFamilyID(
 		SELECT id, amount, type, description, category_id, user_id, family_id,
 			   date, tags, created_at, updated_at
 		FROM family_budget.transactions
-		WHERE family_id = $1 AND deleted_at IS NULL
-		ORDER BY date DESC, created_at DESC
+		WHERE family_id = $1 		ORDER BY date DESC, created_at DESC
 		LIMIT $2 OFFSET $3`
 
 	rows, err := r.db.Query(ctx, query, familyID, limit, offset)
@@ -586,7 +585,7 @@ func (r *PostgreSQLRepository) GetTotalByCategory(
 	query := `
 		SELECT COALESCE(SUM(amount), 0)
 		FROM family_budget.transactions
-		WHERE category_id = $1 AND type = $2 AND deleted_at IS NULL`
+		WHERE category_id = $1 AND type = $2`
 
 	var total float64
 	err := r.db.QueryRow(ctx, query, categoryID, transactionType).Scan(&total)

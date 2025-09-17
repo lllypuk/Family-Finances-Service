@@ -174,7 +174,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Delete category (soft delete)
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/categories/"+category.ID.String(), nil)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/categories/"+category.ID.String()+"?family_id="+family.ID.String(), nil)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)

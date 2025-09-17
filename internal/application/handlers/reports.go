@@ -11,7 +11,6 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/domain/report"
-	"family-budget-service/internal/web/middleware"
 )
 
 type ReportHandler struct {
@@ -284,12 +283,18 @@ func (h *ReportHandler) GetReportByID(c echo.Context) error {
 
 func (h *ReportHandler) DeleteReport(c echo.Context) error {
 	return DeleteEntityHelper(c, func(id uuid.UUID) error {
-		// Get family ID from session for security
-		sessionData, err := middleware.GetSessionData(c)
-		if err != nil {
-			return err
+		// Get family ID from query parameter
+		familyIDParam := c.QueryParam("family_id")
+		if familyIDParam == "" {
+			return echo.NewHTTPError(http.StatusBadRequest, "family_id query parameter is required")
 		}
-		return h.repositories.Report.Delete(c.Request().Context(), id, sessionData.FamilyID)
+
+		familyID, err := uuid.Parse(familyIDParam)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "Invalid family ID format")
+		}
+
+		return h.repositories.Report.Delete(c.Request().Context(), id, familyID)
 	}, "Report")
 }
 

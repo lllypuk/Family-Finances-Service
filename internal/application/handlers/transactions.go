@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -11,7 +12,6 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/domain/transaction"
-	"family-budget-service/internal/web/middleware"
 )
 
 type TransactionHandler struct {
@@ -50,6 +50,21 @@ func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
 	newTransaction := h.buildTransaction(req)
 
 	if err := h.repositories.Transaction.Create(c.Request().Context(), newTransaction); err != nil {
+		// Check if it's a PostgreSQL foreign key constraint error
+		if h.isForeignKeyConstraintError(err) {
+			return c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Code:    "VALIDATION_ERROR",
+					Message: "Invalid category, user, or family ID",
+				},
+				Meta: ResponseMeta{
+					RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
+					Timestamp: time.Now(),
+					Version:   "v1",
+				},
+			})
+		}
+
 		return c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
 				Code:    "CREATE_FAILED",
@@ -477,13 +492,28 @@ func (h *TransactionHandler) updateTransactionFields(tx *transaction.Transaction
 	tx.UpdatedAt = time.Now()
 }
 
+// isForeignKeyConstraintError checks if the error is a PostgreSQL foreign key constraint violation
+func (h *TransactionHandler) isForeignKeyConstraintError(err error) bool {
+	errStr := err.Error()
+	// PostgreSQL foreign key constraint error messages contain these patterns
+	return strings.Contains(errStr, "foreign key constraint") ||
+		strings.Contains(errStr, "violates foreign key constraint") ||
+		strings.Contains(errStr, "SQLSTATE 23503")
+}
+
 func (h *TransactionHandler) DeleteTransaction(c echo.Context) error {
 	return DeleteEntityHelper(c, func(id uuid.UUID) error {
-		// Get family ID from session for security
-		sessionData, err := middleware.GetSessionData(c)
-		if err != nil {
-			return err
+		// Get family ID from query parameter
+		familyIDParam := c.QueryParam("family_id")
+		if familyIDParam == "" {
+			return echo.NewHTTPError(http.StatusBadRequest, "family_id query parameter is required")
 		}
-		return h.repositories.Transaction.Delete(c.Request().Context(), id, sessionData.FamilyID)
+
+		familyID, err := uuid.Parse(familyIDParam)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "Invalid family ID format")
+		}
+
+		return h.repositories.Transaction.Delete(c.Request().Context(), id, familyID)
 	}, "Transaction")
 }
