@@ -2,6 +2,7 @@ package testing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"runtime"
@@ -57,14 +58,14 @@ func SetupPostgreSQLContainer(t *testing.T) *PostgreSQLTestContainer {
 
 	// Run migrations
 	if err := runMigrations(connStr); err != nil {
-		postgresContainer.Terminate(ctx)
+		_ = postgresContainer.Terminate(ctx)
 		t.Fatalf("Failed to run migrations: %v", err)
 	}
 
 	// Create connection pool
 	poolConfig, err := pgxpool.ParseConfig(connStr)
 	if err != nil {
-		postgresContainer.Terminate(ctx)
+		_ = postgresContainer.Terminate(ctx)
 		t.Fatalf("Failed to parse connection config: %v", err)
 	}
 
@@ -76,14 +77,14 @@ func SetupPostgreSQLContainer(t *testing.T) *PostgreSQLTestContainer {
 
 	db, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
-		postgresContainer.Terminate(ctx)
+		_ = postgresContainer.Terminate(ctx)
 		t.Fatalf("Failed to create connection pool: %v", err)
 	}
 
 	// Test connection
 	if err := db.Ping(ctx); err != nil {
 		db.Close()
-		postgresContainer.Terminate(ctx)
+		_ = postgresContainer.Terminate(ctx)
 		t.Fatalf("Failed to ping database: %v", err)
 	}
 
@@ -101,7 +102,7 @@ func SetupPostgreSQLContainer(t *testing.T) *PostgreSQLTestContainer {
 	driver := infrastructure.NewPostgreSQLDriver(config)
 	if err := driver.Connect(ctx); err != nil {
 		db.Close()
-		postgresContainer.Terminate(ctx)
+		_ = postgresContainer.Terminate(ctx)
 		t.Fatalf("Failed to connect driver: %v", err)
 	}
 
@@ -190,7 +191,7 @@ func runMigrations(databaseURL string) error {
 	defer m.Close()
 
 	// Run migrations
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
@@ -220,7 +221,10 @@ func (h *TestDataHelper) CreateTestFamily(ctx context.Context, name, currency st
 }
 
 // CreateTestUser creates a test user and returns its ID
-func (h *TestDataHelper) CreateTestUser(ctx context.Context, email, firstName, lastName, role, familyID string) (string, error) {
+func (h *TestDataHelper) CreateTestUser(
+	ctx context.Context,
+	email, firstName, lastName, role, familyID string,
+) (string, error) {
 	var id string
 	query := `
 		INSERT INTO family_budget.users (email, password_hash, first_name, last_name, role, family_id, is_active, created_at, updated_at)
@@ -232,7 +236,11 @@ func (h *TestDataHelper) CreateTestUser(ctx context.Context, email, firstName, l
 }
 
 // CreateTestCategory creates a test category and returns its ID
-func (h *TestDataHelper) CreateTestCategory(ctx context.Context, name, categoryType, familyID string, parentID *string) (string, error) {
+func (h *TestDataHelper) CreateTestCategory(
+	ctx context.Context,
+	name, categoryType, familyID string,
+	parentID *string,
+) (string, error) {
 	var id string
 	query := `
 		INSERT INTO family_budget.categories (name, type, parent_id, family_id, is_active, created_at, updated_at)
@@ -244,7 +252,11 @@ func (h *TestDataHelper) CreateTestCategory(ctx context.Context, name, categoryT
 }
 
 // CreateTestTransaction creates a test transaction and returns its ID
-func (h *TestDataHelper) CreateTestTransaction(ctx context.Context, amount float64, description, transactionType, categoryID, userID, familyID string) (string, error) {
+func (h *TestDataHelper) CreateTestTransaction(
+	ctx context.Context,
+	amount float64,
+	description, transactionType, categoryID, userID, familyID string,
+) (string, error) {
 	var id string
 	query := `
 		INSERT INTO family_budget.transactions (amount, description, type, category_id, user_id, family_id, date, tags, created_at, updated_at)
@@ -256,7 +268,13 @@ func (h *TestDataHelper) CreateTestTransaction(ctx context.Context, amount float
 }
 
 // CreateTestBudget creates a test budget and returns its ID
-func (h *TestDataHelper) CreateTestBudget(ctx context.Context, name string, amount float64, period, familyID string, categoryID *string) (string, error) {
+func (h *TestDataHelper) CreateTestBudget(
+	ctx context.Context,
+	name string,
+	amount float64,
+	period, familyID string,
+	categoryID *string,
+) (string, error) {
 	var id string
 	query := `
 		INSERT INTO family_budget.budgets (name, amount, spent, period, start_date, end_date, category_id, family_id, is_active, created_at, updated_at)

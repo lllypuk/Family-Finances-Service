@@ -166,7 +166,10 @@ func (r *PostgreSQLRepository) GetByID(ctx context.Context, id uuid.UUID) (*tran
 }
 
 // GetByFilter retrieves transactions based on filter criteria
-func (r *PostgreSQLRepository) GetByFilter(ctx context.Context, filter transaction.Filter) ([]*transaction.Transaction, error) {
+func (r *PostgreSQLRepository) GetByFilter(
+	ctx context.Context,
+	filter transaction.Filter,
+) ([]*transaction.Transaction, error) {
 	// Validate family ID
 	if err := validation.ValidateUUID(filter.FamilyID); err != nil {
 		return nil, fmt.Errorf("invalid family ID: %w", err)
@@ -400,7 +403,11 @@ func (r *PostgreSQLRepository) Delete(ctx context.Context, id uuid.UUID, familyI
 }
 
 // GetTransactionSummary returns transaction summary for a family
-func (r *PostgreSQLRepository) GetTransactionSummary(ctx context.Context, familyID uuid.UUID, startDate, endDate time.Time) (*TransactionSummary, error) {
+func (r *PostgreSQLRepository) GetTransactionSummary(
+	ctx context.Context,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+) (*TransactionSummary, error) {
 	// Validate parameters
 	if err := validation.ValidateUUID(familyID); err != nil {
 		return nil, fmt.Errorf("invalid family ID: %w", err)
@@ -437,7 +444,11 @@ func (r *PostgreSQLRepository) GetTransactionSummary(ctx context.Context, family
 }
 
 // GetMonthlySummary returns monthly transaction summary
-func (r *PostgreSQLRepository) GetMonthlySummary(ctx context.Context, familyID uuid.UUID, year, month int) ([]*MonthlySummaryItem, error) {
+func (r *PostgreSQLRepository) GetMonthlySummary(
+	ctx context.Context,
+	familyID uuid.UUID,
+	year, month int,
+) ([]*MonthlySummaryItem, error) {
 	// Validate parameters
 	if err := validation.ValidateUUID(familyID); err != nil {
 		return nil, fmt.Errorf("invalid family ID: %w", err)
@@ -486,7 +497,11 @@ func (r *PostgreSQLRepository) GetMonthlySummary(ctx context.Context, familyID u
 }
 
 // GetByFamilyID retrieves transactions by family ID with pagination
-func (r *PostgreSQLRepository) GetByFamilyID(ctx context.Context, familyID uuid.UUID, limit, offset int) ([]*transaction.Transaction, error) {
+func (r *PostgreSQLRepository) GetByFamilyID(
+	ctx context.Context,
+	familyID uuid.UUID,
+	limit, offset int,
+) ([]*transaction.Transaction, error) {
 	// Validate UUID parameter to prevent injection attacks
 	if err := validation.ValidateUUID(familyID); err != nil {
 		return nil, fmt.Errorf("invalid family ID: %w", err)
@@ -555,7 +570,11 @@ func (r *PostgreSQLRepository) GetByFamilyID(ctx context.Context, familyID uuid.
 }
 
 // GetTotalByCategory calculates total amount for transactions by category and type
-func (r *PostgreSQLRepository) GetTotalByCategory(ctx context.Context, categoryID uuid.UUID, transactionType transaction.Type) (float64, error) {
+func (r *PostgreSQLRepository) GetTotalByCategory(
+	ctx context.Context,
+	categoryID uuid.UUID,
+	transactionType transaction.Type,
+) (float64, error) {
 	// Validate parameters
 	if err := validation.ValidateUUID(categoryID); err != nil {
 		return 0, fmt.Errorf("invalid category ID: %w", err)
@@ -579,7 +598,12 @@ func (r *PostgreSQLRepository) GetTotalByCategory(ctx context.Context, categoryI
 }
 
 // GetTotalByFamilyAndDateRange calculates total amount for transactions by family and date range
-func (r *PostgreSQLRepository) GetTotalByFamilyAndDateRange(ctx context.Context, familyID uuid.UUID, startDate, endDate time.Time, transactionType transaction.Type) (float64, error) {
+func (r *PostgreSQLRepository) GetTotalByFamilyAndDateRange(
+	ctx context.Context,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+	transactionType transaction.Type,
+) (float64, error) {
 	// Validate parameters
 	if err := validation.ValidateUUID(familyID); err != nil {
 		return 0, fmt.Errorf("invalid family ID: %w", err)
@@ -603,7 +627,12 @@ func (r *PostgreSQLRepository) GetTotalByFamilyAndDateRange(ctx context.Context,
 }
 
 // GetTotalByCategoryAndDateRange calculates total amount for transactions by category and date range
-func (r *PostgreSQLRepository) GetTotalByCategoryAndDateRange(ctx context.Context, categoryID uuid.UUID, startDate, endDate time.Time, transactionType transaction.Type) (float64, error) {
+func (r *PostgreSQLRepository) GetTotalByCategoryAndDateRange(
+	ctx context.Context,
+	categoryID uuid.UUID,
+	startDate, endDate time.Time,
+	transactionType transaction.Type,
+) (float64, error) {
 	// Validate parameters
 	if err := validation.ValidateUUID(categoryID); err != nil {
 		return 0, fmt.Errorf("invalid category ID: %w", err)

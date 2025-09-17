@@ -185,7 +185,7 @@ func (r *PostgreSQLFamilyRepository) Delete(ctx context.Context, id uuid.UUID, f
 
 	// For family deletion, id and familyID should be the same
 	if id != familyID {
-		return fmt.Errorf("family id and familyID must be the same when deleting a family")
+		return errors.New("family id and familyID must be the same when deleting a family")
 	}
 
 	query := `DELETE FROM family_budget.families WHERE id = $1`
@@ -203,7 +203,10 @@ func (r *PostgreSQLFamilyRepository) Delete(ctx context.Context, id uuid.UUID, f
 }
 
 // GetFamilyStatistics returns statistics about the family
-func (r *PostgreSQLFamilyRepository) GetFamilyStatistics(ctx context.Context, familyID uuid.UUID) (*FamilyStatistics, error) {
+func (r *PostgreSQLFamilyRepository) GetFamilyStatistics(
+	ctx context.Context,
+	familyID uuid.UUID,
+) (*FamilyStatistics, error) {
 	// Validate UUID parameter to prevent injection attacks
 	if err := validation.ValidateUUID(familyID); err != nil {
 		return nil, fmt.Errorf("invalid familyID parameter: %w", err)

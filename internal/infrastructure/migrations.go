@@ -2,6 +2,7 @@ package infrastructure
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -32,7 +33,7 @@ func (m *MigrationManager) Up() error {
 	}
 	defer migration.Close()
 
-	if err := migration.Up(); err != nil && err != migrate.ErrNoChange {
+	if err := migration.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("failed to run up migrations: %w", err)
 	}
 
@@ -47,7 +48,7 @@ func (m *MigrationManager) Down() error {
 	}
 	defer migration.Close()
 
-	if err := migration.Down(); err != nil && err != migrate.ErrNoChange {
+	if err := migration.Down(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("failed to run down migrations: %w", err)
 	}
 
@@ -62,7 +63,7 @@ func (m *MigrationManager) Steps(steps int) error {
 	}
 	defer migration.Close()
 
-	if err := migration.Steps(steps); err != nil && err != migrate.ErrNoChange {
+	if err := migration.Steps(steps); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("failed to run migration steps: %w", err)
 	}
 
@@ -77,7 +78,7 @@ func (m *MigrationManager) Migrate(version uint) error {
 	}
 	defer migration.Close()
 
-	if err := migration.Migrate(version); err != nil && err != migrate.ErrNoChange {
+	if err := migration.Migrate(version); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("failed to migrate to version %d: %w", version, err)
 	}
 
@@ -172,7 +173,7 @@ func (m *MigrationManager) ValidateMigrations(ctx context.Context) error {
 
 	// Get current version
 	currentVersion, dirty, err := migration.Version()
-	if err != nil && err != migrate.ErrNilVersion {
+	if err != nil && !errors.Is(err, migrate.ErrNilVersion) {
 		return fmt.Errorf("failed to get current version: %w", err)
 	}
 
@@ -188,5 +189,5 @@ func CreateInitialMigration(migrationsPath string) error {
 	// This would create the migration files - for now, we'll use the existing pg-init.sql
 	// In a real implementation, you would create numbered migration files
 	// like 001_initial_schema.up.sql and 001_initial_schema.down.sql
-	return fmt.Errorf("manual migration creation required - convert scripts/pg-init.sql to migration format")
+	return errors.New("manual migration creation required - convert scripts/pg-init.sql to migration format")
 }

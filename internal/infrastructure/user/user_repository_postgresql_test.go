@@ -311,7 +311,7 @@ func TestUserRepositoryPostgreSQL_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Delete user (soft delete)
-		err = repo.Delete(ctx, testUser.ID)
+		err = repo.Delete(ctx, testUser.ID, testUser.FamilyID)
 		require.NoError(t, err)
 
 		// Verify user is not found (soft deleted)
@@ -370,7 +370,7 @@ func TestUserRepositoryPostgreSQL_Integration(t *testing.T) {
 		// Get child users (should be empty)
 		childUsers, err := repo.GetUsersByRole(ctx, familyUUID, user.RoleChild)
 		require.NoError(t, err)
-		assert.Len(t, childUsers, 0)
+		assert.Empty(t, childUsers)
 	})
 
 	t.Run("UpdateLastLogin_Success", func(t *testing.T) {

@@ -2,6 +2,7 @@ package infrastructure
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -85,7 +86,7 @@ func (d *PostgreSQLDriver) Pool() *pgxpool.Pool {
 // HealthCheck performs a health check on the database connection
 func (d *PostgreSQLDriver) HealthCheck(ctx context.Context) error {
 	if d.pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return errors.New("database connection not initialized")
 	}
 
 	// Ping the database
@@ -96,7 +97,7 @@ func (d *PostgreSQLDriver) HealthCheck(ctx context.Context) error {
 	// Check connection pool stats
 	stats := d.pool.Stat()
 	if stats.TotalConns() == 0 {
-		return fmt.Errorf("no database connections available")
+		return errors.New("no database connections available")
 	}
 
 	return nil
@@ -114,7 +115,7 @@ func (d *PostgreSQLDriver) Stats() *pgxpool.Stat {
 // WithTransaction executes a function within a database transaction
 func (d *PostgreSQLDriver) WithTransaction(ctx context.Context, fn func(tx pgx.Tx) error) error {
 	if d.pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return errors.New("database connection not initialized")
 	}
 
 	tx, err := d.pool.Begin(ctx)
@@ -146,7 +147,7 @@ func (d *PostgreSQLDriver) WithTransaction(ctx context.Context, fn func(tx pgx.T
 // ExecuteQuery executes a query and returns the result
 func (d *PostgreSQLDriver) ExecuteQuery(ctx context.Context, query string, args ...any) (pgx.Rows, error) {
 	if d.pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, errors.New("database connection not initialized")
 	}
 
 	return d.pool.Query(ctx, query, args...)

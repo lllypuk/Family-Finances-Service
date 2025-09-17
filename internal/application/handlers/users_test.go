@@ -61,8 +61,8 @@ func (m *MockUserRepository) Update(ctx context.Context, u *user.User) error {
 	return args.Error(0)
 }
 
-func (m *MockUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockUserRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+	args := m.Called(ctx, id, familyID)
 	return args.Error(0)
 }
 
@@ -103,8 +103,8 @@ func (m *MockUserService) UpdateUser(ctx context.Context, id uuid.UUID, req dto.
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
-func (m *MockUserService) DeleteUser(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockUserService) DeleteUser(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+	args := m.Called(ctx, id, familyID)
 	return args.Error(0)
 }
 
@@ -130,7 +130,7 @@ func TestUserHandler_CreateUser(t *testing.T) {
 	tests := []struct {
 		name           string
 		requestBody    any
-		mockSetup      func(*MockUserService)
+		mockSetup      func(*MockUserService, uuid.UUID)
 		expectedStatus int
 		expectedBody   func(t *testing.T, body string)
 	}{
@@ -144,7 +144,7 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				FamilyID:  uuid.New(),
 				Role:      "member",
 			},
-			mockSetup: func(service *MockUserService) {
+			mockSetup: func(service *MockUserService, familyID uuid.UUID) {
 				testUser := &user.User{
 					ID:        uuid.New(),
 					Email:     "test@example.com",
@@ -179,7 +179,7 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				FamilyID:  uuid.New(),
 				Role:      "member",
 			},
-			mockSetup: func(service *MockUserService) {
+			mockSetup: func(service *MockUserService, familyID uuid.UUID) {
 				service.On("CreateUser", mock.Anything, mock.AnythingOfType("dto.CreateUserDTO")).
 					Return(nil, services.ErrValidationFailed)
 			},
@@ -197,7 +197,7 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				Email: "test@example.com",
 				// Missing password, name, etc.
 			},
-			mockSetup: func(service *MockUserService) {
+			mockSetup: func(service *MockUserService, familyID uuid.UUID) {
 				service.On("CreateUser", mock.Anything, mock.AnythingOfType("dto.CreateUserDTO")).
 					Return(nil, services.ErrValidationFailed)
 			},
@@ -219,7 +219,7 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				FamilyID:  uuid.New(),
 				Role:      "member",
 			},
-			mockSetup: func(service *MockUserService) {
+			mockSetup: func(service *MockUserService, familyID uuid.UUID) {
 				service.On("CreateUser", mock.Anything, mock.AnythingOfType("dto.CreateUserDTO")).
 					Return(nil, services.ErrValidationFailed)
 			},
@@ -241,7 +241,7 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				FamilyID:  uuid.New(),
 				Role:      "member",
 			},
-			mockSetup: func(service *MockUserService) {
+			mockSetup: func(service *MockUserService, familyID uuid.UUID) {
 				service.On("CreateUser", mock.Anything, mock.AnythingOfType("dto.CreateUserDTO")).
 					Return(nil, errors.New("database error"))
 			},
@@ -260,7 +260,7 @@ func TestUserHandler_CreateUser(t *testing.T) {
 			// Setup
 			e := echo.New()
 			mockService := &MockUserService{}
-			tt.mockSetup(mockService)
+			tt.mockSetup(mockService, uuid.New())
 
 			repositories := &handlers.Repositories{}
 			handler := handlers.NewUserHandler(repositories, mockService)
@@ -291,19 +291,18 @@ func TestUserHandler_CreateUser(t *testing.T) {
 
 func TestUserHandler_GetUserByID(t *testing.T) {
 	userID := uuid.New()
-	familyID := uuid.New()
 
 	tests := []struct {
 		name           string
 		userID         string
-		mockSetup      func(*MockUserService)
+		mockSetup      func(*MockUserService, uuid.UUID)
 		expectedStatus int
 		expectedBody   func(t *testing.T, body string)
 	}{
 		{
 			name:   "Success - User found",
 			userID: userID.String(),
-			mockSetup: func(service *MockUserService) {
+			mockSetup: func(service *MockUserService, familyID uuid.UUID) {
 				user := &user.User{
 					ID:        userID,
 					Email:     "test@example.com",
@@ -328,7 +327,7 @@ func TestUserHandler_GetUserByID(t *testing.T) {
 		{
 			name:   "Error - Invalid UUID format",
 			userID: "invalid-uuid",
-			mockSetup: func(_ *MockUserService) {
+			mockSetup: func(_ *MockUserService, _ uuid.UUID) {
 				// No mock setup needed for UUID validation error
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -342,7 +341,7 @@ func TestUserHandler_GetUserByID(t *testing.T) {
 		{
 			name:   "Error - User not found",
 			userID: userID.String(),
-			mockSetup: func(service *MockUserService) {
+			mockSetup: func(service *MockUserService, familyID uuid.UUID) {
 				service.On("GetUserByID", mock.Anything, userID).Return(nil, services.ErrUserNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
@@ -360,7 +359,7 @@ func TestUserHandler_GetUserByID(t *testing.T) {
 			// Setup
 			e := echo.New()
 			mockService := &MockUserService{}
-			tt.mockSetup(mockService)
+			tt.mockSetup(mockService, uuid.New())
 
 			repositories := &handlers.Repositories{}
 			handler := handlers.NewUserHandler(repositories, mockService)
@@ -386,13 +385,12 @@ func TestUserHandler_GetUserByID(t *testing.T) {
 
 func TestUserHandler_UpdateUser(t *testing.T) {
 	userID := uuid.New()
-	familyID := uuid.New()
 
 	tests := []struct {
 		name           string
 		userID         string
 		requestBody    any
-		mockSetup      func(*MockUserService)
+		mockSetup      func(*MockUserService, uuid.UUID)
 		expectedStatus int
 		expectedBody   func(t *testing.T, body string)
 	}{
@@ -403,7 +401,7 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 				FirstName: stringPtr("UpdatedName"),
 				LastName:  stringPtr("UpdatedLastName"),
 			},
-			mockSetup: func(service *MockUserService) {
+			mockSetup: func(service *MockUserService, familyID uuid.UUID) {
 				updatedUser := &user.User{
 					ID:        userID,
 					Email:     "test@example.com",
@@ -432,7 +430,7 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 			requestBody: handlers.UpdateUserRequest{
 				FirstName: stringPtr("UpdatedName"),
 			},
-			mockSetup: func(_ *MockUserService) {
+			mockSetup: func(_ *MockUserService, _ uuid.UUID) {
 				// No mock needed for UUID validation error
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -449,7 +447,7 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 			requestBody: handlers.UpdateUserRequest{
 				FirstName: stringPtr("UpdatedName"),
 			},
-			mockSetup: func(service *MockUserService) {
+			mockSetup: func(service *MockUserService, familyID uuid.UUID) {
 				service.On("UpdateUser", mock.Anything, userID, mock.AnythingOfType("dto.UpdateUserDTO")).
 					Return(nil, services.ErrUserNotFound)
 			},
@@ -468,7 +466,7 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 			// Setup
 			e := echo.New()
 			mockService := &MockUserService{}
-			tt.mockSetup(mockService)
+			tt.mockSetup(mockService, uuid.New())
 
 			repositories := &handlers.Repositories{}
 			handler := handlers.NewUserHandler(repositories, mockService)
@@ -500,15 +498,15 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 	tests := []struct {
 		name           string
 		userID         string
-		mockSetup      func(*MockUserService)
+		mockSetup      func(*MockUserService, uuid.UUID)
 		expectedStatus int
 		expectedBody   func(t *testing.T, body string)
 	}{
 		{
 			name:   "Success - User deleted",
 			userID: userID.String(),
-			mockSetup: func(service *MockUserService) {
-				service.On("DeleteUser", mock.Anything, userID).Return(nil)
+			mockSetup: func(service *MockUserService, familyID uuid.UUID) {
+				service.On("DeleteUser", mock.Anything, userID, familyID).Return(nil)
 			},
 			expectedStatus: http.StatusNoContent,
 			expectedBody: func(t *testing.T, body string) {
@@ -519,7 +517,7 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 		{
 			name:   "Error - Invalid UUID",
 			userID: "invalid-uuid",
-			mockSetup: func(_ *MockUserService) {
+			mockSetup: func(_ *MockUserService, _ uuid.UUID) {
 				// No mock needed for UUID validation error
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -533,8 +531,8 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 		{
 			name:   "Error - User not found",
 			userID: userID.String(),
-			mockSetup: func(service *MockUserService) {
-				service.On("DeleteUser", mock.Anything, userID).Return(errors.New("database error"))
+			mockSetup: func(service *MockUserService, familyID uuid.UUID) {
+				service.On("DeleteUser", mock.Anything, userID, familyID).Return(errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody: func(t *testing.T, body string) {
@@ -549,15 +547,16 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
+			familyUUID := uuid.New()
 			e := echo.New()
 			mockService := &MockUserService{}
-			tt.mockSetup(mockService)
+			tt.mockSetup(mockService, familyUUID)
 
 			repositories := &handlers.Repositories{}
 			handler := handlers.NewUserHandler(repositories, mockService)
 
 			// Create request
-			req := httptest.NewRequest(http.MethodDelete, "/users/"+tt.userID, nil)
+			req := httptest.NewRequest(http.MethodDelete, "/users/"+tt.userID+"?family_id="+familyUUID.String(), nil)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
 			c.SetParamNames("id")

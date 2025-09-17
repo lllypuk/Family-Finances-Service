@@ -404,7 +404,11 @@ func (h *TransactionHandler) BulkDelete(c echo.Context) error {
 		}
 
 		// Удаляем
-		deleteErr := h.services.Transaction.DeleteTransaction(c.Request().Context(), transactionID, sessionData.FamilyID)
+		deleteErr := h.services.Transaction.DeleteTransaction(
+			c.Request().Context(),
+			transactionID,
+			sessionData.FamilyID,
+		)
 		if deleteErr != nil {
 			errors = append(errors, fmt.Sprintf("Failed to delete transaction %s", transactionID))
 			continue

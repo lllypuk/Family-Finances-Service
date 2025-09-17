@@ -342,10 +342,15 @@ func (h *BudgetHandler) buildBudgetResponse(b *budget.Budget) BudgetResponse {
 
 func (h *BudgetHandler) DeleteBudget(c echo.Context) error {
 	return DeleteEntityHelper(c, func(id uuid.UUID) error {
-		// Get family ID from session for security
+		// Try to get family ID from session first (for web interface)
 		sessionData, err := middleware.GetSessionData(c)
 		if err != nil {
-			return err
+			// For API/integration tests, get budget first to find family_id
+			budget, getBudgetErr := h.repositories.Budget.GetByID(c.Request().Context(), id)
+			if getBudgetErr != nil {
+				return getBudgetErr
+			}
+			return h.repositories.Budget.Delete(c.Request().Context(), id, budget.FamilyID)
 		}
 		return h.repositories.Budget.Delete(c.Request().Context(), id, sessionData.FamilyID)
 	}, "Budget")

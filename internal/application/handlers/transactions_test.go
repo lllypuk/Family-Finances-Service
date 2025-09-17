@@ -55,8 +55,8 @@ func (m *MockTransactionRepository) Update(ctx context.Context, tx *transaction.
 	return args.Error(0)
 }
 
-func (m *MockTransactionRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockTransactionRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+	args := m.Called(ctx, id, familyID)
 	return args.Error(0)
 }
 
@@ -605,10 +605,15 @@ func TestTransactionHandler_DeleteTransaction_Success(t *testing.T) {
 
 	// Arrange
 	transactionID := uuid.New()
-	mockRepo.On("Delete", mock.Anything, transactionID).Return(nil)
+	familyID := uuid.New()
+	mockRepo.On("Delete", mock.Anything, transactionID, familyID).Return(nil)
 
 	e := echo.New()
-	httpReq := httptest.NewRequest(http.MethodDelete, "/transactions/"+transactionID.String(), nil)
+	httpReq := httptest.NewRequest(
+		http.MethodDelete,
+		"/transactions/"+transactionID.String()+"?family_id="+familyID.String(),
+		nil,
+	)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(httpReq, rec)
 	c.SetParamNames("id")
@@ -647,10 +652,15 @@ func TestTransactionHandler_DeleteTransaction_RepositoryError(t *testing.T) {
 
 	// Arrange
 	transactionID := uuid.New()
-	mockRepo.On("Delete", mock.Anything, transactionID).Return(errors.New("database error"))
+	familyID := uuid.New()
+	mockRepo.On("Delete", mock.Anything, transactionID, familyID).Return(errors.New("database error"))
 
 	e := echo.New()
-	httpReq := httptest.NewRequest(http.MethodDelete, "/transactions/"+transactionID.String(), nil)
+	httpReq := httptest.NewRequest(
+		http.MethodDelete,
+		"/transactions/"+transactionID.String()+"?family_id="+familyID.String(),
+		nil,
+	)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(httpReq, rec)
 	c.SetParamNames("id")

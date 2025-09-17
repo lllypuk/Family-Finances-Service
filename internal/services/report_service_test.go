@@ -444,12 +444,13 @@ func TestReportService_DeleteReport(t *testing.T) {
 	ctx := context.Background()
 
 	reportID := uuid.New()
+	familyID := uuid.New()
 
 	// Setup mock expectations
-	mockReportRepo.On("Delete", ctx, reportID).Return(nil)
+	mockReportRepo.On("Delete", ctx, reportID, familyID).Return(nil)
 
 	// Execute
-	err := service.DeleteReport(ctx, reportID)
+	err := service.DeleteReport(ctx, reportID, familyID)
 
 	// Assert
 	require.NoError(t, err)

@@ -44,8 +44,8 @@ func (m *MockFamilyRepository) Update(ctx context.Context, family *user.Family) 
 	return args.Error(0)
 }
 
-func (m *MockFamilyRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockFamilyRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+	args := m.Called(ctx, id, familyID)
 	return args.Error(0)
 }
 
@@ -88,8 +88,8 @@ func (m *MockUserRepositoryFamily) Update(ctx context.Context, user *user.User) 
 	return args.Error(0)
 }
 
-func (m *MockUserRepositoryFamily) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockUserRepositoryFamily) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+	args := m.Called(ctx, id, familyID)
 	return args.Error(0)
 }
 

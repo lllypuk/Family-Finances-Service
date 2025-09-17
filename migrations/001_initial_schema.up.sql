@@ -254,11 +254,11 @@ BEGIN
 
         -- Check all alerts for this budget
         FOR alert_record IN
-            SELECT * FROM budget_alerts
+            SELECT * FROM family_budget.budget_alerts
             WHERE budget_id = NEW.id AND NOT is_triggered
         LOOP
             IF usage_percentage >= alert_record.threshold_percentage THEN
-                UPDATE budget_alerts
+                UPDATE family_budget.budget_alerts
                 SET is_triggered = true, triggered_at = NOW()
                 WHERE id = alert_record.id;
             END IF;

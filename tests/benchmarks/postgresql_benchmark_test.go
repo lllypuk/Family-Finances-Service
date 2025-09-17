@@ -35,13 +35,17 @@ func setupBenchmarkData(b *testing.B) {
 
 		// Check if budgets table exists and show all tables
 		var tableExists bool
-		err := testContainer.DB.QueryRow(ctx, "SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'family_budget' AND tablename = 'budgets')").Scan(&tableExists)
+		err := testContainer.DB.QueryRow(ctx, "SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'family_budget' AND tablename = 'budgets')").
+			Scan(&tableExists)
 		if err != nil {
 			b.Fatalf("Failed to check budgets table existence: %v", err)
 		}
 
 		// List all tables in family_budget schema
-		rows, err := testContainer.DB.Query(ctx, "SELECT tablename FROM pg_tables WHERE schemaname = 'family_budget' ORDER BY tablename")
+		rows, err := testContainer.DB.Query(
+			ctx,
+			"SELECT tablename FROM pg_tables WHERE schemaname = 'family_budget' ORDER BY tablename",
+		)
 		if err != nil {
 			b.Fatalf("Failed to list tables: %v", err)
 		}
@@ -59,7 +63,10 @@ func setupBenchmarkData(b *testing.B) {
 		b.Logf("Budgets table exists: %v", tableExists)
 
 		// Temporarily disable budget trigger for benchmarks to avoid schema issues
-		_, err = testContainer.DB.Exec(ctx, "DROP TRIGGER IF EXISTS update_budget_spent_on_transaction ON family_budget.transactions")
+		_, err = testContainer.DB.Exec(
+			ctx,
+			"DROP TRIGGER IF EXISTS update_budget_spent_on_transaction ON family_budget.transactions",
+		)
 		if err != nil {
 			b.Fatalf("Failed to drop budget trigger: %v", err)
 		}

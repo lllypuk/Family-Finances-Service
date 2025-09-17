@@ -353,7 +353,7 @@ func TestUserService_DeleteUser(t *testing.T) {
 			userID: existingUser.ID,
 			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
 				userRepo.On("GetByID", mock.Anything, existingUser.ID).Return(existingUser, nil)
-				userRepo.On("Delete", mock.Anything, existingUser.ID).Return(nil)
+				userRepo.On("Delete", mock.Anything, existingUser.ID, existingUser.FamilyID).Return(nil)
 			},
 			wantError: false,
 		},
@@ -379,7 +379,7 @@ func TestUserService_DeleteUser(t *testing.T) {
 			service := services.NewUserService(userRepo, familyRepo)
 
 			// Execute
-			err := service.DeleteUser(context.Background(), tt.userID)
+			err := service.DeleteUser(context.Background(), tt.userID, existingUser.FamilyID)
 
 			// Assert
 			if tt.wantError {

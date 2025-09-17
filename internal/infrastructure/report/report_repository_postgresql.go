@@ -215,7 +215,11 @@ func (r *PostgreSQLRepository) GetByFamilyID(ctx context.Context, familyID uuid.
 }
 
 // GetByFamilyIDWithPagination retrieves reports by family ID with custom pagination
-func (r *PostgreSQLRepository) GetByFamilyIDWithPagination(ctx context.Context, familyID uuid.UUID, limit, offset int) ([]*report.Report, error) {
+func (r *PostgreSQLRepository) GetByFamilyIDWithPagination(
+	ctx context.Context,
+	familyID uuid.UUID,
+	limit, offset int,
+) ([]*report.Report, error) {
 	// Validate UUID parameter
 	if err := validation.ValidateUUID(familyID); err != nil {
 		return nil, fmt.Errorf("invalid familyID parameter: %w", err)
@@ -343,7 +347,11 @@ func (r *PostgreSQLRepository) GetByUserID(ctx context.Context, userID uuid.UUID
 }
 
 // GenerateExpenseReport generates a comprehensive expense report
-func (r *PostgreSQLRepository) GenerateExpenseReport(ctx context.Context, familyID uuid.UUID, startDate, endDate time.Time) (*report.Data, error) {
+func (r *PostgreSQLRepository) GenerateExpenseReport(
+	ctx context.Context,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+) (*report.Data, error) {
 	// Validate parameters
 	if err := validation.ValidateUUID(familyID); err != nil {
 		return nil, fmt.Errorf("invalid family ID: %w", err)
@@ -432,7 +440,11 @@ func (r *PostgreSQLRepository) GenerateExpenseReport(ctx context.Context, family
 }
 
 // GenerateIncomeReport generates a comprehensive income report
-func (r *PostgreSQLRepository) GenerateIncomeReport(ctx context.Context, familyID uuid.UUID, startDate, endDate time.Time) (*report.Data, error) {
+func (r *PostgreSQLRepository) GenerateIncomeReport(
+	ctx context.Context,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+) (*report.Data, error) {
 	// Validate parameters
 	if err := validation.ValidateUUID(familyID); err != nil {
 		return nil, fmt.Errorf("invalid family ID: %w", err)
@@ -494,7 +506,11 @@ func (r *PostgreSQLRepository) GenerateIncomeReport(ctx context.Context, familyI
 }
 
 // GenerateCashFlowReport generates a cash flow report with daily breakdown
-func (r *PostgreSQLRepository) GenerateCashFlowReport(ctx context.Context, familyID uuid.UUID, startDate, endDate time.Time) (*report.Data, error) {
+func (r *PostgreSQLRepository) GenerateCashFlowReport(
+	ctx context.Context,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+) (*report.Data, error) {
 	// Validate parameters
 	if err := validation.ValidateUUID(familyID); err != nil {
 		return nil, fmt.Errorf("invalid family ID: %w", err)
@@ -550,7 +566,11 @@ func (r *PostgreSQLRepository) GenerateCashFlowReport(ctx context.Context, famil
 }
 
 // GenerateBudgetComparisonReport generates budget vs actual spending comparison
-func (r *PostgreSQLRepository) GenerateBudgetComparisonReport(ctx context.Context, familyID uuid.UUID, startDate, endDate time.Time) (*report.Data, error) {
+func (r *PostgreSQLRepository) GenerateBudgetComparisonReport(
+	ctx context.Context,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+) (*report.Data, error) {
 	// Validate parameters
 	if err := validation.ValidateUUID(familyID); err != nil {
 		return nil, fmt.Errorf("invalid family ID: %w", err)

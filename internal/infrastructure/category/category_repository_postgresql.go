@@ -178,7 +178,11 @@ func (r *PostgreSQLRepository) GetByFamilyID(ctx context.Context, familyID uuid.
 }
 
 // GetByFamilyIDAndType retrieves categories by family ID and type
-func (r *PostgreSQLRepository) GetByFamilyIDAndType(ctx context.Context, familyID uuid.UUID, categoryType category.Type) ([]*category.Category, error) {
+func (r *PostgreSQLRepository) GetByFamilyIDAndType(
+	ctx context.Context,
+	familyID uuid.UUID,
+	categoryType category.Type,
+) ([]*category.Category, error) {
 	// Validate parameters
 	if err := validation.ValidateUUID(familyID); err != nil {
 		return nil, fmt.Errorf("invalid familyID parameter: %w", err)
@@ -427,7 +431,11 @@ func (r *PostgreSQLRepository) Delete(ctx context.Context, id uuid.UUID, familyI
 }
 
 // validateParentCategory validates that parent category exists and is compatible
-func (r *PostgreSQLRepository) validateParentCategory(ctx context.Context, parentID, familyID uuid.UUID, categoryType category.Type) error {
+func (r *PostgreSQLRepository) validateParentCategory(
+	ctx context.Context,
+	parentID, familyID uuid.UUID,
+	categoryType category.Type,
+) error {
 	query := `
 		SELECT type, family_id, is_active
 		FROM family_budget.categories
@@ -516,6 +524,10 @@ type CategoryNode struct {
 }
 
 // GetByType возвращает категории по типу для совместимости с интерфейсом
-func (r *PostgreSQLRepository) GetByType(ctx context.Context, familyID uuid.UUID, categoryType category.Type) ([]*category.Category, error) {
+func (r *PostgreSQLRepository) GetByType(
+	ctx context.Context,
+	familyID uuid.UUID,
+	categoryType category.Type,
+) ([]*category.Category, error) {
 	return r.GetByFamilyIDAndType(ctx, familyID, categoryType)
 }

@@ -285,7 +285,11 @@ func (r *PostgreSQLRepository) UpdateLastLogin(ctx context.Context, id uuid.UUID
 }
 
 // GetUsersByRole retrieves all users with a specific role in a family
-func (r *PostgreSQLRepository) GetUsersByRole(ctx context.Context, familyID uuid.UUID, role user.Role) ([]*user.User, error) {
+func (r *PostgreSQLRepository) GetUsersByRole(
+	ctx context.Context,
+	familyID uuid.UUID,
+	role user.Role,
+) ([]*user.User, error) {
 	// Validate UUID parameter to prevent injection attacks
 	if err := validation.ValidateUUID(familyID); err != nil {
 		return nil, fmt.Errorf("invalid familyID parameter: %w", err)

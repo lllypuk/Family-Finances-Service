@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -75,11 +76,23 @@ func LoadConfig() *Config {
 			IdleTimeout:  getDurationEnv("SERVER_IDLE_TIMEOUT", 60*time.Second),
 		},
 		Database: DatabaseConfig{
-			URI:             getEnv("POSTGRESQL_URI", "postgres://postgres:postgres123@localhost:5432/family_budget?sslmode=disable"),
-			Name:            getEnv("POSTGRESQL_DATABASE", "family_budget"),
-			MaxOpenConns:    getIntEnv("POSTGRESQL_MAX_OPEN_CONNS", 50),                     // Increased for better concurrency
-			MaxIdleConns:    getIntEnv("POSTGRESQL_MAX_IDLE_CONNS", 10),                     // Increased to maintain warm connections
-			ConnMaxLifetime: getDurationEnv("POSTGRESQL_CONN_MAX_LIFETIME", 1*time.Hour),    // Extended to reduce reconnections
+			URI: getEnv(
+				"POSTGRESQL_URI",
+				"postgres://postgres:postgres123@localhost:5432/family_budget?sslmode=disable",
+			),
+			Name: getEnv("POSTGRESQL_DATABASE", "family_budget"),
+			MaxOpenConns: getIntEnv(
+				"POSTGRESQL_MAX_OPEN_CONNS",
+				50,
+			), // Increased for better concurrency
+			MaxIdleConns: getIntEnv(
+				"POSTGRESQL_MAX_IDLE_CONNS",
+				10,
+			), // Increased to maintain warm connections
+			ConnMaxLifetime: getDurationEnv(
+				"POSTGRESQL_CONN_MAX_LIFETIME",
+				1*time.Hour,
+			), // Extended to reduce reconnections
 			ConnMaxIdleTime: getDurationEnv("POSTGRESQL_CONN_MAX_IDLE_TIME", 5*time.Minute), // Optimized idle time
 			SSLMode:         getEnv("POSTGRESQL_SSL_MODE", "prefer"),
 			Schema:          getEnv("POSTGRESQL_SCHEMA", "family_budget"),
@@ -132,15 +145,15 @@ func LoadConfig() *Config {
 func (c *Config) Validate() error {
 	// Add validation logic here
 	if c.Web.SessionSecret == "your-super-secret-session-key-change-in-production" && c.IsProduction() {
-		return fmt.Errorf("session secret must be changed in production")
+		return errors.New("session secret must be changed in production")
 	}
 
 	if c.Web.CSRFSecret == "your-csrf-secret-key-change-in-production" && c.IsProduction() {
-		return fmt.Errorf("CSRF secret must be changed in production")
+		return errors.New("CSRF secret must be changed in production")
 	}
 
 	if c.Database.URI == "" {
-		return fmt.Errorf("database URI is required")
+		return errors.New("database URI is required")
 	}
 
 	return nil

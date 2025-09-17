@@ -245,7 +245,10 @@ func (r *PostgreSQLRepository) GetActiveBudgets(ctx context.Context, familyID uu
 }
 
 // GetBudgetUsageStats returns comprehensive budget usage statistics
-func (r *PostgreSQLRepository) GetBudgetUsageStats(ctx context.Context, familyID uuid.UUID) ([]*BudgetUsageStats, error) {
+func (r *PostgreSQLRepository) GetBudgetUsageStats(
+	ctx context.Context,
+	familyID uuid.UUID,
+) ([]*BudgetUsageStats, error) {
 	// Validate UUID parameter
 	if err := validation.ValidateUUID(familyID); err != nil {
 		return nil, fmt.Errorf("invalid familyID parameter: %w", err)
@@ -347,12 +350,12 @@ func (r *PostgreSQLRepository) Update(ctx context.Context, b *budget.Budget) err
 	query := `
 		UPDATE family_budget.budgets
 		SET name = $2, amount = $3, spent = $4, period = $5,
-			start_date = $6, end_date = $7, category_id = $8, updated_at = $9
-		WHERE id = $1 AND family_id = $10`
+			start_date = $6, end_date = $7, category_id = $8, is_active = $9, updated_at = $10
+		WHERE id = $1 AND family_id = $11`
 
 	result, err := r.db.Exec(ctx, query,
 		b.ID, b.Name, b.Amount, b.Spent, string(b.Period),
-		b.StartDate, b.EndDate, b.CategoryID, b.UpdatedAt, b.FamilyID,
+		b.StartDate, b.EndDate, b.CategoryID, b.IsActive, b.UpdatedAt, b.FamilyID,
 	)
 
 	if err != nil {
@@ -502,7 +505,11 @@ func (r *PostgreSQLRepository) CreateBudgetAlert(ctx context.Context, alert *Bud
 }
 
 // GetByFamilyAndCategory retrieves budgets by family ID and optionally by category ID
-func (r *PostgreSQLRepository) GetByFamilyAndCategory(ctx context.Context, familyID uuid.UUID, categoryID *uuid.UUID) ([]*budget.Budget, error) {
+func (r *PostgreSQLRepository) GetByFamilyAndCategory(
+	ctx context.Context,
+	familyID uuid.UUID,
+	categoryID *uuid.UUID,
+) ([]*budget.Budget, error) {
 	// Validate UUID parameters
 	if err := validation.ValidateUUID(familyID); err != nil {
 		return nil, fmt.Errorf("invalid family ID: %w", err)
@@ -578,7 +585,11 @@ func (r *PostgreSQLRepository) GetByFamilyAndCategory(ctx context.Context, famil
 }
 
 // GetByPeriod retrieves budgets by family ID and date range
-func (r *PostgreSQLRepository) GetByPeriod(ctx context.Context, familyID uuid.UUID, startDate, endDate time.Time) ([]*budget.Budget, error) {
+func (r *PostgreSQLRepository) GetByPeriod(
+	ctx context.Context,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+) ([]*budget.Budget, error) {
 	// Validate UUID parameter
 	if err := validation.ValidateUUID(familyID); err != nil {
 		return nil, fmt.Errorf("invalid family ID: %w", err)

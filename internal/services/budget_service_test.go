@@ -62,8 +62,8 @@ func (m *MockBudgetRepositoryForService) Update(ctx context.Context, b *budget.B
 	return args.Error(0)
 }
 
-func (m *MockBudgetRepositoryForService) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockBudgetRepositoryForService) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+	args := m.Called(ctx, id, familyID)
 	return args.Error(0)
 }
 
@@ -612,10 +612,10 @@ func TestBudgetService_DeleteBudget_Success(t *testing.T) {
 
 	// Setup expectations
 	budgetRepo.On("GetByID", ctx, testBudget.ID).Return(testBudget, nil)
-	budgetRepo.On("Delete", ctx, testBudget.ID).Return(nil)
+	budgetRepo.On("Delete", ctx, testBudget.ID, testBudget.FamilyID).Return(nil)
 
 	// Execute
-	err := service.DeleteBudget(ctx, testBudget.ID)
+	err := service.DeleteBudget(ctx, testBudget.ID, testBudget.FamilyID)
 
 	// Assert
 	require.NoError(t, err)
