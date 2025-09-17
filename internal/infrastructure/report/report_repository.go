@@ -99,7 +99,7 @@ func (r *PostgreSQLRepository) Create(ctx context.Context, rep *report.Report) e
 	query := `
 		INSERT INTO family_budget.reports (
 			id, name, type, period, start_date, end_date, data,
-			family_id, user_id, generated_at
+			family_id, generated_by, generated_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 
 	_, err = r.db.Exec(ctx, query,
@@ -124,7 +124,7 @@ func (r *PostgreSQLRepository) GetByID(ctx context.Context, id uuid.UUID) (*repo
 
 	query := `
 		SELECT id, name, type, period, start_date, end_date, data,
-			   family_id, user_id, generated_at
+			   family_id, generated_by, generated_at
 		FROM family_budget.reports
 		WHERE id = $1`
 
@@ -169,7 +169,7 @@ func (r *PostgreSQLRepository) GetByFamilyID(ctx context.Context, familyID uuid.
 
 	query := `
 		SELECT id, name, type, period, start_date, end_date, data,
-			   family_id, user_id, generated_at
+			   family_id, generated_by, generated_at
 		FROM family_budget.reports
 		WHERE family_id = $1
 		ORDER BY generated_at DESC
@@ -234,10 +234,9 @@ func (r *PostgreSQLRepository) GetByFamilyIDWithPagination(
 
 	query := `
 		SELECT id, name, type, period, start_date, end_date, data,
-			   family_id, user_id, generated_at
+			   family_id, generated_by, generated_at
 		FROM family_budget.reports
-		WHERE family_id = $1 AND deleted_at IS NULL
-		ORDER BY generated_at DESC
+		WHERE family_id = $1		ORDER BY generated_at DESC
 		LIMIT $2 OFFSET $3`
 
 	rows, err := r.db.Query(ctx, query, familyID, limit, offset)
@@ -295,10 +294,9 @@ func (r *PostgreSQLRepository) GetByUserID(ctx context.Context, userID uuid.UUID
 
 	query := `
 		SELECT id, name, type, period, start_date, end_date, data,
-			   family_id, user_id, generated_at
+			   family_id, generated_by, generated_at
 		FROM family_budget.reports
-		WHERE user_id = $1 AND deleted_at IS NULL
-		ORDER BY generated_at DESC`
+		WHERE generated_by = $1		ORDER BY generated_at DESC`
 
 	rows, err := r.db.Query(ctx, query, userID)
 	if err != nil {

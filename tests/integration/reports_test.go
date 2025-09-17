@@ -325,7 +325,7 @@ func TestReportHandler_Integration(t *testing.T) {
 		err = testServer.Repos.Report.Create(context.Background(), testReport)
 		require.NoError(t, err)
 
-		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/reports/%s", testReport.ID), nil)
+		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/reports/%s?family_id=%s", testReport.ID, family.ID), nil)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -351,7 +351,7 @@ func TestReportHandler_Integration(t *testing.T) {
 		err = testServer.Repos.User.Create(context.Background(), user)
 		require.NoError(t, err)
 
-		reportTypes := []string{"expenses", "income", "budget", "cash_flow", "category_break"}
+		reportTypes := []string{"expenses", "income", "budget", "cash_flow", "category_breakdown"}
 
 		for _, reportType := range reportTypes {
 			t.Run(fmt.Sprintf("type_%s", reportType), func(t *testing.T) {

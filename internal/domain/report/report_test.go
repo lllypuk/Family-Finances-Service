@@ -53,7 +53,7 @@ func TestReportType_Constants(t *testing.T) {
 	assert.Equal(t, report.TypeIncome, report.Type("income"))
 	assert.Equal(t, report.TypeBudget, report.Type("budget"))
 	assert.Equal(t, report.TypeCashFlow, report.Type("cash_flow"))
-	assert.Equal(t, report.TypeCategoryBreak, report.Type("category_break"))
+	assert.Equal(t, report.TypeCategoryBreak, report.Type("category_breakdown"))
 }
 
 func TestReportPeriod_Constants(t *testing.T) {

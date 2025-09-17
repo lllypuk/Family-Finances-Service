@@ -198,7 +198,7 @@ type BudgetResponse struct {
 // CreateReportRequest represents the request payload for creating a new report
 type CreateReportRequest struct {
 	Name      string    `json:"name"       validate:"required,min=2,max=100"`
-	Type      string    `json:"type"       validate:"required,oneof=expenses income budget cash_flow category_break"`
+	Type      string    `json:"type"       validate:"required,oneof=expenses income budget cash_flow category_breakdown"`
 	Period    string    `json:"period"     validate:"required,oneof=daily weekly monthly yearly custom"`
 	FamilyID  uuid.UUID `json:"family_id"  validate:"required"`
 	UserID    uuid.UUID `json:"user_id"    validate:"required"`

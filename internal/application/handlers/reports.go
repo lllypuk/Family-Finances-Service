@@ -82,7 +82,7 @@ func (h *ReportHandler) CreateReport(c echo.Context) error {
 	}
 
 	// TODO: Здесь должна быть логика генерации данных отчета
-	// в зависимости от типа отчета (expenses, income, budget, cash_flow, category_break)
+	// в зависимости от типа отчета (expenses, income, budget, cash_flow, category_breakdown)
 	newReport.Data = h.generateReportData(
 		c.Request().Context(),
 		report.Type(req.Type),

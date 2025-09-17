@@ -26,7 +26,7 @@ const (
 	TypeIncome        Type = "income"         // Отчет по доходам
 	TypeBudget        Type = "budget"         // Отчет по бюджету
 	TypeCashFlow      Type = "cash_flow"      // Отчет по денежному потоку
-	TypeCategoryBreak Type = "category_break" // Разбивка по категориям
+	TypeCategoryBreak Type = "category_breakdown" // Разбивка по категориям
 )
 
 type Period string

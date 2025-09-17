@@ -594,7 +594,7 @@ func TestReportHandler_DeleteReport_RepositoryError(t *testing.T) {
 func TestReportHandler_ReportTypes_Validation(t *testing.T) {
 	handler, mockRepo := setupReportHandler()
 
-	validTypes := []string{"expenses", "income", "budget", "cash_flow", "category_break"}
+	validTypes := []string{"expenses", "income", "budget", "cash_flow", "category_breakdown"}
 
 	for _, reportType := range validTypes {
 		t.Run(fmt.Sprintf("Valid type: %s", reportType), func(t *testing.T) {
