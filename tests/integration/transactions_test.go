@@ -437,7 +437,11 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		err = testServer.Repos.Transaction.Create(context.Background(), testTransaction)
 		require.NoError(t, err)
 
-		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/transactions/%s?family_id=%s", testTransaction.ID, family.ID), nil)
+		req := httptest.NewRequest(
+			http.MethodDelete,
+			fmt.Sprintf("/api/v1/transactions/%s?family_id=%s", testTransaction.ID, family.ID),
+			nil,
+		)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)

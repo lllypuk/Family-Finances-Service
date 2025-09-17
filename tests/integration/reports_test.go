@@ -325,7 +325,11 @@ func TestReportHandler_Integration(t *testing.T) {
 		err = testServer.Repos.Report.Create(context.Background(), testReport)
 		require.NoError(t, err)
 
-		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/reports/%s?family_id=%s", testReport.ID, family.ID), nil)
+		req := httptest.NewRequest(
+			http.MethodDelete,
+			fmt.Sprintf("/api/v1/reports/%s?family_id=%s", testReport.ID, family.ID),
+			nil,
+		)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)

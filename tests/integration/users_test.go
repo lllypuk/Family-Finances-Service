@@ -187,7 +187,11 @@ func TestUserHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Delete user
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/users/"+user.ID.String()+"?family_id="+family.ID.String(), nil)
+		req := httptest.NewRequest(
+			http.MethodDelete,
+			"/api/v1/users/"+user.ID.String()+"?family_id="+family.ID.String(),
+			nil,
+		)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
