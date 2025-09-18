@@ -158,13 +158,21 @@ postgres-restore:
 # Миграции базы данных
 .PHONY: migrate-up
 migrate-up:
-	@echo "Running database migrations..."
-	@migrate -path ./migrations -database "postgres://postgres:postgres123@localhost:5432/family_budget?sslmode=disable" up
+	@echo "Running database migrations (docker)..."
+	@docker run --rm \
+	 -v "$(shell pwd)/migrations:/migrations" \
+	 --network host \
+	 migrate/migrate:latest \
+	 -path=/migrations -database "postgres://postgres:postgres123@localhost:5432/family_budget?sslmode=disable" up
 
 .PHONY: migrate-down
 migrate-down:
-	@echo "Rolling back database migrations..."
-	@migrate -path ./migrations -database "postgres://postgres:postgres123@localhost:5432/family_budget?sslmode=disable" down
+	@echo "Rolling back database migrations (docker)..."
+	@docker run --rm \
+	 -v "$(shell pwd)/migrations:/migrations" \
+	 --network host \
+	 migrate/migrate:latest \
+	 -path=/migrations -database "postgres://postgres:postgres123@localhost:5432/family_budget?sslmode=disable" down
 
 .PHONY: migrate-create
 migrate-create:
@@ -173,7 +181,10 @@ migrate-create:
 		echo "Usage: make migrate-create NAME=migration_name"; \
 		exit 1; \
 	fi
-	@migrate create -ext sql -dir ./migrations $(NAME)
+	@docker run --rm \
+	 -v "$(shell pwd)/migrations:/migrations" \
+	 migrate/migrate:latest \
+	 create -ext sql -dir /migrations $(NAME)
 
 .PHONY: migrate-force
 migrate-force:
