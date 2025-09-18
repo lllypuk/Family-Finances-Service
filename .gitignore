@@ -4,3 +4,5 @@ coverage**
 cookies.txt
 .env
 .zed/
+/.osv-scanner.toml
+/osv-results.sarif
