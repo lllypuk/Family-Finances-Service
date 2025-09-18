@@ -139,7 +139,7 @@ The application is organized into domain modules in `internal/domain/`:
 - `internal/observability/` - Metrics, logging, tracing, health checks
 
 ### Key Technologies (Production Stack)
-- **Go 1.24** - Latest Go version with enhanced performance
+- **Go 1.25** - Latest Go version with enhanced performance
 - **Echo v4.13.4** - HTTP web framework with middleware
 - **PostgreSQL v17.6** - Primary database with pgx/v5 driver
 - **HTMX v2.0.4** - Modern web interface without complex JavaScript
@@ -233,7 +233,7 @@ The project uses GitHub Actions for continuous integration and deployment with t
 
 ### CI Pipeline (`.github/workflows/ci.yml`)
 Runs on every push and pull request to main/develop branches:
-- **Environment Setup**: Go 1.24, PostgreSQL service for integration tests
+- **Environment Setup**: Go 1.25, PostgreSQL service for integration tests
 - **Quality Checks**:
   - Code formatting verification with `make fmt`
   - Comprehensive linting with golangci-lint (50+ rules)
