@@ -23,7 +23,7 @@ type AppError interface {
     Error() string
     Code() string
     StatusCode() int
-    Details() map[string]interface{}
+    Details() map[string]any
     Cause() error
 }
 
@@ -31,7 +31,7 @@ type BaseError struct {
     code       string
     message    string
     statusCode int
-    details    map[string]interface{}
+    details    map[string]any
     cause      error
 }
 ```
@@ -126,7 +126,7 @@ type AppError struct {
     code       string
     message    string
     statusCode int
-    details    map[string]interface{}
+    details    map[string]any
     cause      error
 }
 
@@ -142,7 +142,7 @@ func (e *AppError) StatusCode() int {
     return e.statusCode
 }
 
-func (e *AppError) Details() map[string]interface{} {
+func (e *AppError) Details() map[string]any {
     return e.details
 }
 
@@ -150,7 +150,7 @@ func (e *AppError) Cause() error {
     return e.cause
 }
 
-func (e *AppError) WithDetails(details map[string]interface{}) *AppError {
+func (e *AppError) WithDetails(details map[string]any) *AppError {
     e.details = details
     return e
 }
@@ -169,7 +169,7 @@ func ValidationError(message string, field string) *AppError {
         code:       "VALIDATION_ERROR",
         message:    message,
         statusCode: http.StatusBadRequest,
-        details:    map[string]interface{}{"field": field},
+        details:    map[string]any{"field": field},
     }
 }
 
@@ -179,7 +179,7 @@ func NotFoundError(resource string, id string) *AppError {
         code:       "RESOURCE_NOT_FOUND",
         message:    fmt.Sprintf("%s with id %s not found", resource, id),
         statusCode: http.StatusNotFound,
-        details:    map[string]interface{}{"resource": resource, "id": id},
+        details:    map[string]any{"resource": resource, "id": id},
     }
 }
 
@@ -198,7 +198,7 @@ func ForbiddenError(resource string, operation string) *AppError {
         code:       "AUTHZ_INSUFFICIENT_PERMISSIONS",
         message:    fmt.Sprintf("Access denied to %s for operation %s", resource, operation),
         statusCode: http.StatusForbidden,
-        details:    map[string]interface{}{"resource": resource, "operation": operation},
+        details:    map[string]any{"resource": resource, "operation": operation},
     }
 }
 
@@ -218,7 +218,7 @@ func InternalError(message string, cause error) *AppError {
         message:    "Internal server error",
         statusCode: http.StatusInternalServerError,
         cause:      cause,
-        details:    map[string]interface{}{"internal_message": message},
+        details:    map[string]any{"internal_message": message},
     }
 }
 ```
@@ -276,8 +276,8 @@ func HandleError(c echo.Context, err error) error {
     return c.JSON(appErr.StatusCode(), response)
 }
 
-func buildErrorResponse(err *errors.AppError, c echo.Context) map[string]interface{} {
-    errorResponse := map[string]interface{}{
+func buildErrorResponse(err *errors.AppError, c echo.Context) map[string]any {
+    errorResponse := map[string]any{
         "code":    err.Code(),
         "message": err.Message(),
     }
@@ -288,19 +288,19 @@ func buildErrorResponse(err *errors.AppError, c echo.Context) map[string]interfa
 
     // В debug режиме добавляем stack trace
     if c.Echo().Debug && err.Cause() != nil {
-        errorResponse["debug"] = map[string]interface{}{
+        errorResponse["debug"] = map[string]any{
             "cause": err.Cause().Error(),
         }
     }
 
-    return map[string]interface{}{
+    return map[string]any{
         "error": errorResponse,
         "meta":  buildMeta(c),
     }
 }
 
-func buildMeta(c echo.Context) map[string]interface{} {
-    return map[string]interface{}{
+func buildMeta(c echo.Context) map[string]any {
+    return map[string]any{
         "timestamp":  time.Now().UTC().Format(time.RFC3339),
         "request_id": c.Response().Header().Get(echo.HeaderXRequestID),
         "path":       c.Request().URL.Path,
@@ -381,7 +381,7 @@ func NewValidator() *Validator {
     }
 }
 
-func (v *Validator) ValidateStruct(s interface{}) error {
+func (v *Validator) ValidateStruct(s any) error {
     if err := v.validate.Struct(s); err != nil {
         return v.convertValidationError(err)
     }
@@ -389,10 +389,10 @@ func (v *Validator) ValidateStruct(s interface{}) error {
 }
 
 func (v *Validator) convertValidationError(err error) *errors.AppError {
-    var fieldErrors []map[string]interface{}
+    var fieldErrors []map[string]any
 
     for _, err := range err.(validator.ValidationErrors) {
-        fieldError := map[string]interface{}{
+        fieldError := map[string]any{
             "field":   err.Field(),
             "message": v.getErrorMessage(err),
             "code":    v.getErrorCode(err.Tag()),
@@ -405,7 +405,7 @@ func (v *Validator) convertValidationError(err error) *errors.AppError {
         Code:       "VALIDATION_ERROR",
         Message:    "Validation failed",
         StatusCode: http.StatusBadRequest,
-        Details:    map[string]interface{}{"fields": fieldErrors},
+        Details:    map[string]any{"fields": fieldErrors},
     }
 }
 
@@ -446,7 +446,7 @@ func NewLogger() *Logger {
     return &Logger{logger: logger}
 }
 
-func (l *Logger) LogError(err *errors.AppError, context map[string]interface{}) {
+func (l *Logger) LogError(err *errors.AppError, context map[string]any) {
     entry := l.logger.WithFields(logrus.Fields{
         "error_code":    err.Code(),
         "status_code":   err.StatusCode(),
@@ -505,7 +505,7 @@ func (l *Logger) LogError(err *errors.AppError, context map[string]interface{}) 
 func (s *FamilyService) GetFamily(ctx context.Context, id string) (*Family, error) {
     family, err := s.repo.GetByID(ctx, id)
     if err != nil {
-        if errors.Is(err, mongo.ErrNoDocuments) {
+        if errors.Is(err, pgx.ErrNoRows) {
             return nil, errors.NotFoundError("family", id)
         }
         return nil, errors.InternalError("Failed to get family", err)
@@ -533,7 +533,7 @@ func TestFamilyService_GetFamily_NotFound(t *testing.T) {
     service := NewFamilyService(mockRepo)
 
     mockRepo.On("GetByID", mock.Anything, "invalid-id").
-        Return(nil, mongo.ErrNoDocuments)
+        Return(nil, pgx.ErrNoRows)
 
     // Act
     family, err := service.GetFamily(context.Background(), "invalid-id")

@@ -421,7 +421,7 @@ func TestCategoryService_DeleteCategory_SoftDelete(t *testing.T) {
 	mockCategoryRepo.On("Update", mock.Anything, mock.AnythingOfType("*category.Category")).Return(nil)
 
 	// Execute
-	err := service.DeleteCategory(context.Background(), categoryID)
+	err := service.DeleteCategory(context.Background(), categoryID, existingCategory.FamilyID)
 
 	// Assert
 	require.NoError(t, err)
@@ -446,10 +446,10 @@ func TestCategoryService_DeleteCategory_HardDelete(t *testing.T) {
 	mockCategoryRepo.On("GetByID", mock.Anything, categoryID).Return(existingCategory, nil)
 	mockUsageChecker.On("IsCategoryUsed", mock.Anything, categoryID).Return(false, nil)
 	mockCategoryRepo.On("GetByFamilyID", mock.Anything, existingCategory.FamilyID).Return([]*category.Category{}, nil)
-	mockCategoryRepo.On("Delete", mock.Anything, categoryID).Return(nil)
+	mockCategoryRepo.On("Delete", mock.Anything, categoryID, existingCategory.FamilyID).Return(nil)
 
 	// Execute
-	err := service.DeleteCategory(context.Background(), categoryID)
+	err := service.DeleteCategory(context.Background(), categoryID, existingCategory.FamilyID)
 
 	// Assert
 	require.NoError(t, err)

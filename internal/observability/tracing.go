@@ -131,7 +131,7 @@ func (t *Tracer) TraceRepository(ctx context.Context, operation, collection stri
 		trace.WithAttributes(
 			attribute.String("db.operation", operation),
 			attribute.String("db.collection.name", collection),
-			attribute.String("db.system", "mongodb"),
+			attribute.String("db.system", "postgresql"),
 		),
 	)
 

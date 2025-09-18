@@ -459,8 +459,8 @@ func (s *reportService) GetReportsByFamily(
 }
 
 // DeleteReport deletes a report by its ID
-func (s *reportService) DeleteReport(ctx context.Context, id uuid.UUID) error {
-	return s.reportRepo.Delete(ctx, id)
+func (s *reportService) DeleteReport(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+	return s.reportRepo.Delete(ctx, id, familyID)
 }
 
 // ExportReport exports a saved report in the specified format
@@ -950,7 +950,7 @@ func (s *reportService) UpdateScheduledReport(
 	return nil, errors.New("scheduled reports not implemented yet")
 }
 
-func (s *reportService) DeleteScheduledReport(_ context.Context, _ uuid.UUID) error {
+func (s *reportService) DeleteScheduledReport(_ context.Context, _ uuid.UUID, _ uuid.UUID) error {
 	// TODO: Implement scheduled report deletion
 	return errors.New("scheduled reports not implemented yet")
 }

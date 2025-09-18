@@ -41,6 +41,7 @@ func CreateTestUser(familyID uuid.UUID) *user.User {
 		FirstName: "John",
 		LastName:  "Doe",
 		Email:     fmt.Sprintf("john.doe+%s@example.com", uuid.New().String()),
+		Password:  "hashed_password_for_testing", // Required for database constraint
 		Role:      user.RoleAdmin,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),

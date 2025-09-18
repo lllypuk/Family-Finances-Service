@@ -10,7 +10,7 @@ import (
 
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/user"
-	userRepo "family-budget-service/internal/infrastructure/user"
+	"family-budget-service/internal/infrastructure/validation"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/web/middleware"
 	"family-budget-service/internal/web/models"
@@ -59,7 +59,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	}
 
 	// Дополнительная валидация email на уровне репозитория для предотвращения инъекций
-	if err := userRepo.ValidateEmail(form.Email); err != nil {
+	if err := validation.ValidateEmail(form.Email); err != nil {
 		return h.loginError(c, "Invalid email format", map[string]string{
 			"email": "Please enter a valid email address",
 		})
@@ -140,7 +140,7 @@ func (h *AuthHandler) Register(c echo.Context) error {
 	}
 
 	// Дополнительная валидация email на уровне репозитория для предотвращения инъекций
-	if err := userRepo.ValidateEmail(form.Email); err != nil {
+	if err := validation.ValidateEmail(form.Email); err != nil {
 		return h.registerError(c, "Invalid email format", map[string]string{
 			"email": "Please enter a valid email address",
 		})

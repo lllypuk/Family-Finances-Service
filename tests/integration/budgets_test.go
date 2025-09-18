@@ -182,8 +182,19 @@ func TestBudgetHandler_Integration(t *testing.T) {
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
 
-		// Since date validation isn't implemented, this should succeed
-		assert.Equal(t, http.StatusCreated, rec.Code)
+		// Date validation is implemented at repository level, so this should fail
+		if rec.Code != http.StatusInternalServerError {
+			t.Logf("Date validation test failed with status %d, response: %s", rec.Code, rec.Body.String())
+		}
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+
+		var response handlers.ErrorResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Should have CREATE_FAILED error for invalid date range
+		assert.Equal(t, "CREATE_FAILED", response.Error.Code)
+		assert.Equal(t, "Failed to create budget", response.Error.Message)
 	})
 
 	t.Run("GetBudgetByID_Success", func(t *testing.T) {
@@ -370,6 +381,9 @@ func TestBudgetHandler_Integration(t *testing.T) {
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
 
+		if rec.Code != http.StatusOK {
+			t.Logf("Update budget failed with status %d, response: %s", rec.Code, rec.Body.String())
+		}
 		assert.Equal(t, http.StatusOK, rec.Code)
 
 		var response handlers.APIResponse[handlers.BudgetResponse]
@@ -416,6 +430,9 @@ func TestBudgetHandler_Integration(t *testing.T) {
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
 
+		if rec.Code != http.StatusOK {
+			t.Logf("Partial update budget failed with status %d, response: %s", rec.Code, rec.Body.String())
+		}
 		assert.Equal(t, http.StatusOK, rec.Code)
 
 		var response handlers.APIResponse[handlers.BudgetResponse]
@@ -462,6 +479,9 @@ func TestBudgetHandler_Integration(t *testing.T) {
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
 
+		if rec.Code != http.StatusOK {
+			t.Logf("Toggle active budget failed with status %d, response: %s", rec.Code, rec.Body.String())
+		}
 		assert.Equal(t, http.StatusOK, rec.Code)
 
 		var response handlers.APIResponse[handlers.BudgetResponse]
@@ -493,14 +513,24 @@ func TestBudgetHandler_Integration(t *testing.T) {
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
 
+		if rec.Code != http.StatusNoContent {
+			t.Logf("Delete budget failed with status %d, response: %s", rec.Code, rec.Body.String())
+		}
 		assert.Equal(t, http.StatusNoContent, rec.Code)
 
-		// Verify budget is deleted by trying to get it
+		// Verify budget is soft deleted (is_active = false) by getting it and checking status
 		getReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/budgets/%s", testBudget.ID), nil)
 		getRec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(getRec, getReq)
 
-		assert.Equal(t, http.StatusNotFound, getRec.Code)
+		assert.Equal(t, http.StatusOK, getRec.Code)
+
+		var response handlers.APIResponse[handlers.BudgetResponse]
+		err = json.Unmarshal(getRec.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Budget should be marked as inactive after soft delete
+		assert.False(t, response.Data.IsActive)
 	})
 }

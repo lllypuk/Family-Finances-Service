@@ -433,7 +433,11 @@ func (h *BudgetHandler) Delete(c echo.Context) error {
 			return h.services.Budget.GetBudgetByID(ctx.Request().Context(), entityID)
 		},
 		DeleteEntityFunc: func(ctx echo.Context, entityID uuid.UUID) error {
-			return h.services.Budget.DeleteBudget(ctx.Request().Context(), entityID)
+			sessionData, err := middleware.GetUserFromContext(ctx)
+			if err != nil {
+				return err
+			}
+			return h.services.Budget.DeleteBudget(ctx.Request().Context(), entityID, sessionData.FamilyID)
 		},
 		GetErrorMsgFunc: h.getBudgetServiceErrorMessage,
 		RedirectURL:     "/budgets",

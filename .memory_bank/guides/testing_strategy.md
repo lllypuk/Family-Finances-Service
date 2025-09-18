@@ -206,68 +206,51 @@ func TestFamilyRepository_Integration(t *testing.T) {
         assert.Equal(t, "RESOURCE_NOT_FOUND", appErr.Code())
     })
 }
-
-func setupTestDB(t *testing.T) *mongo.Client {
-    // Используем testcontainers для MongoDB или in-memory решение
-    ctx := context.Background()
-    client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
-    require.NoError(t, err)
-
-    // Проверяем подключение
-    err = client.Ping(ctx, nil)
-    require.NoError(t, err)
-
-    return client
-}
-
-func cleanupTestDB(t *testing.T, client *mongo.Client) {
-    ctx := context.Background()
-    err := client.Disconnect(ctx)
-    require.NoError(t, err)
-}
 ```
 
 ### Testcontainers для реальной БД
 ```go
-func TestFamilyRepository_WithMongoDB(t *testing.T) {
+func TestFamilyRepository_WithPostgreSQL(t *testing.T) {
     if testing.Short() {
         t.Skip("Skipping integration test in short mode")
     }
 
-    // Запуск MongoDB в контейнере
+    // Запуск PostgreSQL в контейнере
     ctx := context.Background()
-    container, err := mongodb.RunContainer(ctx,
-        testcontainers.WithImage("mongo:7.0"),
-        mongodb.WithUsername("testuser"),
-        mongodb.WithPassword("testpass"),
+    container, err := postgres.RunContainer(ctx,
+        testcontainers.WithImage("postgres:17.6-alpine"),
+        postgres.WithDatabase("testdb"),
+        postgres.WithUsername("testuser"),
+        postgres.WithPassword("testpass"),
         testcontainers.WithWaitStrategy(
-            wait.ForLog("Waiting for connections").
+            wait.ForLog("database system is ready to accept connections").
                 WithStartupTimeout(60*time.Second)),
     )
     require.NoError(t, err)
     defer container.Terminate(ctx)
 
     // Получение connection string
-    connStr, err := container.ConnectionString(ctx)
+    connStr, err := container.ConnectionString(ctx, "sslmode=disable")
     require.NoError(t, err)
 
     // Подключение к БД
-    client, err := mongo.Connect(ctx, options.Client().ApplyURI(connStr))
+    db, err := pgxpool.New(ctx, connStr)
     require.NoError(t, err)
-    defer client.Disconnect(ctx)
+    defer db.Close()
 
     // Проверка подключения
-    err = client.Ping(ctx, nil)
+    err = db.Ping(ctx)
     require.NoError(t, err)
 
-    // Получение базы данных
-    database := client.Database("testdb")
+    // Выполнение миграций
+    err = runMigrations(ctx, db)
+    require.NoError(t, err)
 
     // Тесты
-    repo := NewFamilyRepository(database)
+    repo := NewFamilyRepository(db)
 
-    t.Run("ComplexAggregation", func(t *testing.T) {
-        // Тестирование сложных MongoDB aggregation pipeline
+    t.Run("ComplexQueries", func(t *testing.T) {
+        // Тестирование сложных PostgreSQL запросов с JOIN
     })
 }
 ```
@@ -308,11 +291,11 @@ func TestFamilyHandler_CreateFamily(t *testing.T) {
     // Assert
     assert.Equal(t, http.StatusCreated, w.Code)
 
-    var response map[string]interface{}
+    var response map[string]any
     err := json.Unmarshal(w.Body.Bytes(), &response)
     assert.NoError(t, err)
 
-    data := response["data"].(map[string]interface{})
+    data := response["data"].(map[string]any)
     assert.Equal(t, expectedFamily.ID, data["id"])
     assert.Equal(t, expectedFamily.Name, data["name"])
 
@@ -333,7 +316,7 @@ func TestAPI_ContractCompliance(t *testing.T) {
 
     t.Run("CreateFamily_MatchesSchema", func(t *testing.T) {
         // Prepare request
-        reqBody := map[string]interface{}{
+        reqBody := map[string]any{
             "name": "Test Family",
         }
 
@@ -667,17 +650,19 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
-      mongodb:
-        image: mongo:7.0
+      postgresql:
+        image: postgres:17.6-alpine
         env:
-          MONGO_INITDB_ROOT_USERNAME: admin
-          MONGO_INITDB_ROOT_PASSWORD: password123
-          MONGO_INITDB_DATABASE: testdb
+          POSTGRES_USER: admin
+          POSTGRES_PASSWORD: password123
+          POSTGRES_DB: testdb
         options: >-
-          --health-cmd "echo 'db.runCommand(\"ping\").ok' | mongosh localhost:27017/test --quiet"
+          --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+        ports:
+          - 5432:5432
 
     steps:
     - uses: actions/checkout@v3
@@ -702,8 +687,8 @@ jobs:
     - name: Run integration tests
       run: make test-integration
       env:
-        MONGODB_URI: mongodb://admin:password123@localhost:27017/testdb?authSource=admin
-        MONGODB_DATABASE: testdb
+        POSTGRESQL_URI: postgres://admin:password123@localhost:5432/testdb?sslmode=disable
+        POSTGRESQL_DATABASE: testdb
 
     - name: Generate coverage
       run: make test-coverage

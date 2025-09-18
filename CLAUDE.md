@@ -12,15 +12,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 #### Local Development Setup
 **Prerequisites**: Before running `make run-local`, you must start the required services:
 ```bash
-make dev-up  # Starts MongoDB, Redis, and Mongo Express containers
+make dev-up  # Starts PostgreSQL and observability containers
 make run-local  # Runs the application on localhost:8080
 ```
 
 The `run-local` command sets up the following environment:
 - **Server**: localhost:8080 (default port)
-- **MongoDB**: mongodb://admin:password123@localhost:27017/family_budget?authSource=admin
+- **PostgreSQL**: postgres://postgres:postgres123@localhost:5432/family_budget?sslmode=disable
 - **Database**: family_budget (separate from production)
-- **Redis**: redis://:redis123@localhost:6379 (optional caching)
 - **Logging**: DEBUG level for development
 - **Session Secret**: Development-specific secret key
 
@@ -38,7 +37,7 @@ curl -s --noproxy '*' 127.0.0.1:8080/login
 ```
 
 ### Testing and Code Quality
-- `make test` - Run tests with shared MongoDB container (fast)
+- `make test` - Run tests with shared PostgreSQL container (fast)
 - `make test-unit` - Unit tests with fast containers
 - `make test-integration` - Integration tests with shared container
 - `make test-coverage` - Run tests with coverage report
@@ -47,10 +46,10 @@ curl -s --noproxy '*' 127.0.0.1:8080/login
 - `make pre-commit` - Run pre-commit checks (format, test, lint)
 
 #### 🚀 Performance Optimization for Tests
-The project includes **MongoDB container reuse** to dramatically speed up test execution:
+The project includes **PostgreSQL container reuse** to dramatically speed up test execution:
 
 **Fast container reuse strategies:**
-- `REUSE_MONGO_CONTAINER=true` - Reuses MongoDB container across tests
+- `REUSE_POSTGRES_CONTAINER=true` - Reuses PostgreSQL container across tests
 - Each test gets a unique database (e.g., `testdb_1691234567890`)
 - Automatic cleanup of test databases after each test
 - Shared container cleanup on test suite completion
@@ -79,18 +78,36 @@ The project uses **golangci-lint** with a comprehensive configuration (`.golangc
 - `make generate` - Generate OpenAPI code
 
 ### Docker Environment
-- `make dev-up` - Start development environment (MongoDB + Redis + Mongo Express)
-- `make docker-up` - Start basic Docker containers (MongoDB, Redis)
+- `make dev-up` - Start development environment (PostgreSQL + Observability)
+- `make docker-up` - Start basic Docker containers (PostgreSQL)
 - `make docker-down` - Stop Docker containers
 - `make docker-logs` - View Docker container logs
 - `make observability-up` - Start observability stack (Prometheus, Grafana, Jaeger)
 - `make full-up` - Start complete stack (app + observability)
 
 The Docker environment includes:
-- **MongoDB** (port 27017) with admin/password123 credentials
-- **Mongo Express** web UI (port 8081) for database administration
-- **Redis** (port 6379) for caching with password "redis123"
+- **PostgreSQL** (port 5432) with postgres/postgres123 credentials
+- **PostgreSQL Exporter** (port 9187) for database metrics
 - **Observability Stack**: Prometheus (9090), Grafana (3000), Jaeger (16686)
+
+### PostgreSQL Commands
+- `make postgres-up` - Start PostgreSQL container only
+- `make postgres-down` - Stop PostgreSQL container
+- `make postgres-logs` - View PostgreSQL container logs
+- `make postgres-shell` - Connect to PostgreSQL shell (psql)
+- `make postgres-backup` - Create PostgreSQL backup
+- `make postgres-restore BACKUP_FILE=./backups/file.sql` - Restore from backup
+
+### Database Migrations
+- `make migrate-up` - Run database migrations
+- `make migrate-down` - Rollback database migrations
+- `make migrate-create NAME=migration_name` - Create new migration
+- `make migrate-force VERSION=number` - Force migration version
+
+### PostgreSQL Monitoring
+- `make postgres-stats` - Show PostgreSQL table statistics
+- `make postgres-indexes` - Show index usage statistics
+- `make postgres-slow-queries` - Show slow query analysis
 
 ## Architecture Overview
 
@@ -118,13 +135,13 @@ The application is organized into domain modules in `internal/domain/`:
 - `internal/application/` - HTTP server and handler layer
 - `internal/web/` - Web interface (HTMX templates, middleware, static files)
 - `internal/domain/` - Domain entities and business logic
-- `internal/infrastructure/` - MongoDB repositories and data persistence
+- `internal/infrastructure/` - PostgreSQL repositories and data persistence
 - `internal/observability/` - Metrics, logging, tracing, health checks
 
 ### Key Technologies (Production Stack)
 - **Go 1.24** - Latest Go version with enhanced performance
 - **Echo v4.13.4** - HTTP web framework with middleware
-- **MongoDB v1.17.4** - Primary database with official Go driver
+- **PostgreSQL v17.6** - Primary database with pgx/v5 driver
 - **HTMX v2.0.4** - Modern web interface without complex JavaScript
 - **PicoCSS v2.1.1** - Minimalist CSS framework for clean UI
 - **Prometheus + Grafana** - Metrics and monitoring
@@ -135,9 +152,8 @@ The application is organized into domain modules in `internal/domain/`:
 ### Configuration
 Environment variables are managed in `internal/config.go`. Key variables:
 - `SERVER_PORT` / `SERVER_HOST` - Server configuration (default: localhost:8080)
-- `MONGODB_URI` / `MONGODB_DATABASE` - Database connection
+- `POSTGRESQL_URI` / `POSTGRESQL_DATABASE` - Database connection
 - `SESSION_SECRET` - Secret key for session management (required for web interface)
-- `REDIS_URL` - Cache configuration (optional)
 - `LOG_LEVEL` - Logging level (debug, info, warn, error)
 - `ENVIRONMENT` - Application environment (development, production)
 
@@ -193,7 +209,7 @@ The project has comprehensive testing across all layers:
 
 **Integration Tests:**
 - End-to-end API workflows with testcontainers
-- Database operations with real MongoDB instances
+- Database operations with real PostgreSQL instances
 - Authentication flows with session management
 - Multi-family data isolation validation
 
@@ -217,7 +233,7 @@ The project uses GitHub Actions for continuous integration and deployment with t
 
 ### CI Pipeline (`.github/workflows/ci.yml`)
 Runs on every push and pull request to main/develop branches:
-- **Environment Setup**: Go 1.24, MongoDB service for integration tests
+- **Environment Setup**: Go 1.24, PostgreSQL service for integration tests
 - **Quality Checks**:
   - Code formatting verification with `make fmt`
   - Comprehensive linting with golangci-lint (50+ rules)

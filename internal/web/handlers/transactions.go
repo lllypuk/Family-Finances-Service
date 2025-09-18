@@ -349,7 +349,11 @@ func (h *TransactionHandler) Delete(c echo.Context) error {
 			return h.services.Transaction.GetTransactionByID(ctx.Request().Context(), entityID)
 		},
 		DeleteEntityFunc: func(ctx echo.Context, entityID uuid.UUID) error {
-			return h.services.Transaction.DeleteTransaction(ctx.Request().Context(), entityID)
+			sessionData, err := middleware.GetUserFromContext(ctx)
+			if err != nil {
+				return err
+			}
+			return h.services.Transaction.DeleteTransaction(ctx.Request().Context(), entityID, sessionData.FamilyID)
 		},
 		GetErrorMsgFunc: h.getTransactionServiceErrorMessage,
 		RedirectURL:     "/transactions",
@@ -400,7 +404,11 @@ func (h *TransactionHandler) BulkDelete(c echo.Context) error {
 		}
 
 		// Удаляем
-		deleteErr := h.services.Transaction.DeleteTransaction(c.Request().Context(), transactionID)
+		deleteErr := h.services.Transaction.DeleteTransaction(
+			c.Request().Context(),
+			transactionID,
+			sessionData.FamilyID,
+		)
 		if deleteErr != nil {
 			errors = append(errors, fmt.Sprintf("Failed to delete transaction %s", transactionID))
 			continue

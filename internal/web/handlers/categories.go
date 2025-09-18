@@ -607,7 +607,7 @@ func (h *CategoryHandler) Delete(c echo.Context) error {
 	}
 
 	// Удаляем категорию через сервис
-	err = h.services.Category.DeleteCategory(c.Request().Context(), categoryID)
+	err = h.services.Category.DeleteCategory(c.Request().Context(), categoryID, sessionData.FamilyID)
 	if err != nil {
 		// Обрабатываем специфичные ошибки сервиса
 		var errorMsg string

@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 const (
@@ -42,49 +40,6 @@ type CheckResult struct {
 type HealthChecker interface {
 	CheckHealth(ctx context.Context) CheckResult
 	Name() string
-}
-
-// MongoHealthChecker проверяет состояние MongoDB
-type MongoHealthChecker struct {
-	client *mongo.Client
-}
-
-// NewMongoHealthChecker создает новый checker для MongoDB
-func NewMongoHealthChecker(client *mongo.Client) *MongoHealthChecker {
-	return &MongoHealthChecker{client: client}
-}
-
-// Name возвращает имя checker'а
-func (m *MongoHealthChecker) Name() string {
-	return "mongodb"
-}
-
-// CheckHealth проверяет состояние MongoDB
-func (m *MongoHealthChecker) CheckHealth(ctx context.Context) CheckResult {
-	start := time.Now()
-
-	// Создаем контекст с таймаутом для проверки
-	checkCtx, cancel := context.WithTimeout(ctx, HealthCheckTimeout)
-	defer cancel()
-
-	// Пингуем MongoDB
-	err := m.client.Ping(checkCtx, readpref.Primary())
-	duration := time.Since(start)
-
-	if err != nil {
-		return CheckResult{
-			Status:    "unhealthy",
-			Message:   err.Error(),
-			Duration:  duration,
-			Timestamp: time.Now(),
-		}
-	}
-
-	return CheckResult{
-		Status:    HealthStatusHealthy,
-		Duration:  duration,
-		Timestamp: time.Now(),
-	}
 }
 
 // HealthService управляет health checks
@@ -158,8 +113,8 @@ func (hs *HealthService) ReadinessHandler() echo.HandlerFunc {
 		// Для readiness проверяем только критичные компоненты
 		ready := true
 		for name, check := range health.Checks {
-			// MongoDB критичен для готовности
-			if name == "mongodb" && check.Status != HealthStatusHealthy {
+			// PostgreSQL критичен для готовности
+			if name == "postgresql" && check.Status != HealthStatusHealthy {
 				ready = false
 				break
 			}
@@ -217,6 +172,49 @@ func (c *CustomHealthChecker) CheckHealth(ctx context.Context) CheckResult {
 	start := time.Now()
 
 	err := c.checkFunc(ctx)
+	duration := time.Since(start)
+
+	if err != nil {
+		return CheckResult{
+			Status:    "unhealthy",
+			Message:   err.Error(),
+			Duration:  duration,
+			Timestamp: time.Now(),
+		}
+	}
+
+	return CheckResult{
+		Status:    HealthStatusHealthy,
+		Duration:  duration,
+		Timestamp: time.Now(),
+	}
+}
+
+// PostgreSQLChecker checker для PostgreSQL
+type PostgreSQLChecker struct {
+	checker PostgreSQLHealthChecker
+}
+
+// NewPostgreSQLHealthChecker создает новый checker для PostgreSQL
+func NewPostgreSQLHealthChecker(checker PostgreSQLHealthChecker) *PostgreSQLChecker {
+	return &PostgreSQLChecker{checker: checker}
+}
+
+// Name возвращает имя checker'а
+func (p *PostgreSQLChecker) Name() string {
+	return "postgresql"
+}
+
+// CheckHealth проверяет состояние PostgreSQL
+func (p *PostgreSQLChecker) CheckHealth(ctx context.Context) CheckResult {
+	start := time.Now()
+
+	// Создаем контекст с таймаутом для проверки
+	checkCtx, cancel := context.WithTimeout(ctx, HealthCheckTimeout)
+	defer cancel()
+
+	// Проверяем PostgreSQL через интерфейс
+	err := p.checker.HealthCheck(checkCtx)
 	duration := time.Since(start)
 
 	if err != nil {

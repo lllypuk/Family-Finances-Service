@@ -344,12 +344,12 @@ func TestTransactionService_DeleteTransaction_Success(t *testing.T) {
 
 	// Setup expectations
 	txRepo.On("GetByID", ctx, existingTx.ID).Return(existingTx, nil)
-	txRepo.On("Delete", ctx, existingTx.ID).Return(nil)
+	txRepo.On("Delete", ctx, existingTx.ID, existingTx.FamilyID).Return(nil)
 	budgetRepo.On("GetActiveBudgets", ctx, existingTx.FamilyID).Return([]*budget.Budget{testBudget}, nil)
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
 
 	// Execute
-	err := service.DeleteTransaction(ctx, existingTx.ID)
+	err := service.DeleteTransaction(ctx, existingTx.ID, existingTx.FamilyID)
 
 	// Assert
 	require.NoError(t, err)

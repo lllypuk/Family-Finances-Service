@@ -32,7 +32,7 @@ type BudgetRepository interface {
 	GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*budget.Budget, error)
 	GetActiveBudgets(ctx context.Context, familyID uuid.UUID) ([]*budget.Budget, error)
 	Update(ctx context.Context, budget *budget.Budget) error
-	Delete(ctx context.Context, id uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
 	GetByFamilyAndCategory(ctx context.Context, familyID uuid.UUID, categoryID *uuid.UUID) ([]*budget.Budget, error)
 	GetByPeriod(ctx context.Context, familyID uuid.UUID, startDate, endDate time.Time) ([]*budget.Budget, error)
 }
@@ -247,7 +247,7 @@ func (s *BudgetServiceImpl) UpdateBudget(
 }
 
 // DeleteBudget deletes a budget
-func (s *BudgetServiceImpl) DeleteBudget(ctx context.Context, id uuid.UUID) error {
+func (s *BudgetServiceImpl) DeleteBudget(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
 	// Verify budget exists
 	_, err := s.budgetRepo.GetByID(ctx, id)
 	if err != nil {
@@ -255,7 +255,7 @@ func (s *BudgetServiceImpl) DeleteBudget(ctx context.Context, id uuid.UUID) erro
 	}
 
 	// Delete budget
-	if deleteErr := s.budgetRepo.Delete(ctx, id); deleteErr != nil {
+	if deleteErr := s.budgetRepo.Delete(ctx, id, familyID); deleteErr != nil {
 		return fmt.Errorf("failed to delete budget: %w", deleteErr)
 	}
 

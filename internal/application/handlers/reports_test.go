@@ -55,8 +55,8 @@ func (m *MockReportRepository) GetByUserID(ctx context.Context, userID uuid.UUID
 	return args.Get(0).([]*report.Report), args.Error(1)
 }
 
-func (m *MockReportRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockReportRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+	args := m.Called(ctx, id, familyID)
 	return args.Error(0)
 }
 
@@ -452,7 +452,7 @@ func TestReportHandler_GetReportByID_Success(t *testing.T) {
 	assert.Equal(t, expectedReport.ID, response.Data.ID)
 	assert.Equal(t, expectedReport.Name, response.Data.Name)
 	assert.Equal(t, string(expectedReport.Type), response.Data.Type)
-	// Проверяем что данные присутствуют (они имеют тип interface{} в response)
+	// Проверяем что данные присутствуют (они имеют тип any в response)
 	assert.NotNil(t, response.Data.Data)
 
 	mockRepo.AssertExpectations(t)
@@ -515,10 +515,15 @@ func TestReportHandler_DeleteReport_Success(t *testing.T) {
 
 	// Arrange
 	reportID := uuid.New()
-	mockRepo.On("Delete", mock.Anything, reportID).Return(nil)
+	familyID := uuid.New()
+	mockRepo.On("Delete", mock.Anything, reportID, familyID).Return(nil)
 
 	e := echo.New()
-	httpReq := httptest.NewRequest(http.MethodDelete, "/reports/"+reportID.String(), nil)
+	httpReq := httptest.NewRequest(
+		http.MethodDelete,
+		"/reports/"+reportID.String()+"?family_id="+familyID.String(),
+		nil,
+	)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(httpReq, rec)
 	c.SetParamNames("id")
@@ -557,10 +562,15 @@ func TestReportHandler_DeleteReport_RepositoryError(t *testing.T) {
 
 	// Arrange
 	reportID := uuid.New()
-	mockRepo.On("Delete", mock.Anything, reportID).Return(errors.New("database error"))
+	familyID := uuid.New()
+	mockRepo.On("Delete", mock.Anything, reportID, familyID).Return(errors.New("database error"))
 
 	e := echo.New()
-	httpReq := httptest.NewRequest(http.MethodDelete, "/reports/"+reportID.String(), nil)
+	httpReq := httptest.NewRequest(
+		http.MethodDelete,
+		"/reports/"+reportID.String()+"?family_id="+familyID.String(),
+		nil,
+	)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(httpReq, rec)
 	c.SetParamNames("id")
@@ -584,7 +594,7 @@ func TestReportHandler_DeleteReport_RepositoryError(t *testing.T) {
 func TestReportHandler_ReportTypes_Validation(t *testing.T) {
 	handler, mockRepo := setupReportHandler()
 
-	validTypes := []string{"expenses", "income", "budget", "cash_flow", "category_break"}
+	validTypes := []string{"expenses", "income", "budget", "cash_flow", "category_breakdown"}
 
 	for _, reportType := range validTypes {
 		t.Run(fmt.Sprintf("Valid type: %s", reportType), func(t *testing.T) {

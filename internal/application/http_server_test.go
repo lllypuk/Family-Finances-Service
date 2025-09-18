@@ -67,8 +67,8 @@ func (m *MockUserService) UpdateUser(ctx context.Context, id uuid.UUID, req dto.
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
-func (m *MockUserService) DeleteUser(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockUserService) DeleteUser(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+	args := m.Called(ctx, id, familyID)
 	return args.Error(0)
 }
 

@@ -82,7 +82,7 @@ func (h *ReportHandler) CreateReport(c echo.Context) error {
 	}
 
 	// TODO: Здесь должна быть логика генерации данных отчета
-	// в зависимости от типа отчета (expenses, income, budget, cash_flow, category_break)
+	// в зависимости от типа отчета (expenses, income, budget, cash_flow, category_breakdown)
 	newReport.Data = h.generateReportData(
 		c.Request().Context(),
 		report.Type(req.Type),
@@ -283,7 +283,18 @@ func (h *ReportHandler) GetReportByID(c echo.Context) error {
 
 func (h *ReportHandler) DeleteReport(c echo.Context) error {
 	return DeleteEntityHelper(c, func(id uuid.UUID) error {
-		return h.repositories.Report.Delete(c.Request().Context(), id)
+		// Get family ID from query parameter
+		familyIDParam := c.QueryParam("family_id")
+		if familyIDParam == "" {
+			return echo.NewHTTPError(http.StatusBadRequest, "family_id query parameter is required")
+		}
+
+		familyID, err := uuid.Parse(familyIDParam)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "Invalid family ID format")
+		}
+
+		return h.repositories.Report.Delete(c.Request().Context(), id, familyID)
 	}, "Report")
 }
 

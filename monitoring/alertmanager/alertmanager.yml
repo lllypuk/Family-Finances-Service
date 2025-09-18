@@ -58,7 +58,7 @@ route:
       receiver: 'app-team'
       
     - match:
-        service: mongodb
+        service: postgresql
       receiver: 'db-team'
       
     - match:

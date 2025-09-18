@@ -1,65 +1,45 @@
 version: "3.8"
 
 services:
-  # MongoDB база данных
-  mongodb:
-    image: mongodb/mongodb-community-server:8.0-ubi8
-    container_name: family-budget-mongodb
+  # PostgreSQL база данных
+  postgresql:
+    image: postgres:17.6-alpine
+    container_name: family-budget-postgresql
     restart: unless-stopped
     ports:
-      - "${MONGODB_PORT:-27017}:27017"
+      - "${POSTGRESQL_PORT:-5432}:5432"
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-password123}
-      MONGO_INITDB_DATABASE: ${MONGODB_DATABASE:-family_budget}
+      POSTGRES_DB: ${POSTGRESQL_DATABASE:-family_budget}
+      POSTGRES_USER: ${POSTGRESQL_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRESQL_PASSWORD:-postgres123}
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
-      - mongodb_data:/data/db
-      - ../scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+      - postgresql_data:/var/lib/postgresql/data
     networks:
       - family-budget-network
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRESQL_USER:-postgres} -d ${POSTGRESQL_DATABASE:-family_budget}",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-
-  # Mongo Express для администрирования БД
-  mongo-express:
-    image: mongo-express:1.0.0
-    container_name: family-budget-mongo-express
-    restart: unless-stopped
-    ports:
-      - "${MONGO_EXPRESS_PORT:-8081}:8081"
-    environment:
-      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_ROOT_USERNAME:-admin}
-      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_ROOT_PASSWORD:-password123}
-      ME_CONFIG_MONGODB_URL: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-password123}@mongodb:27017/
-      ME_CONFIG_BASICAUTH_USERNAME: ${MONGO_EXPRESS_USERNAME:-admin}
-      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGO_EXPRESS_PASSWORD:-admin}
-    depends_on:
-      mongodb:
-        condition: service_healthy
-    networks:
-      - family-budget-network
-
-  # Redis для кэширования (опционально)
-  redis:
-    image: redis:7.2-alpine
-    container_name: family-budget-redis
-    restart: unless-stopped
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    command: redis-server --appendonly yes --requirepass "${REDIS_PASSWORD:-redis123}"
-    volumes:
-      - redis_data:/data
-    networks:
-      - family-budget-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
+    command: >
+      postgres
+      -c shared_preload_libraries=pg_stat_statements
+      -c pg_stat_statements.track=all
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
 
   # Приложение (для продакшн сборки)
   app:
@@ -73,15 +53,13 @@ services:
     environment:
       SERVER_PORT: ${SERVER_PORT:-8080}
       SERVER_HOST: ${SERVER_HOST:-0.0.0.0}
-      MONGODB_URI: ${MONGODB_URI:-mongodb://admin:password123@mongodb:27017/family_budget?authSource=admin}
-      MONGODB_DATABASE: ${MONGODB_DATABASE:-family_budget}
-      REDIS_URL: ${REDIS_URL:-redis://:redis123@redis:6379}
+      POSTGRESQL_URI: ${POSTGRESQL_URI:-postgres://postgres:postgres123@postgresql:5432/family_budget?sslmode=disable}
+      POSTGRESQL_DATABASE: ${POSTGRESQL_DATABASE:-family_budget}
       ENVIRONMENT: ${ENVIRONMENT:-production}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      SESSION_SECRET: ${SESSION_SECRET:-your-secret-key-here}
     depends_on:
-      mongodb:
-        condition: service_healthy
-      redis:
+      postgresql:
         condition: service_healthy
     networks:
       - family-budget-network
@@ -203,39 +181,22 @@ services:
     profiles:
       - observability
 
-  # MongoDB Exporter для метрик базы данных
-  mongodb-exporter:
-    image: percona/mongodb_exporter:0.40
-    container_name: family-budget-mongodb-exporter
+  # PostgreSQL Exporter для метрик базы данных
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: family-budget-postgres-exporter
     restart: unless-stopped
     ports:
-      - "${MONGODB_EXPORTER_PORT:-9216}:9216"
+      - "${POSTGRES_EXPORTER_PORT:-9187}:9187"
     environment:
-      MONGODB_URI: ${MONGODB_URI:-mongodb://admin:password123@mongodb:27017/family_budget?authSource=admin}
+      DATA_SOURCE_NAME: ${POSTGRESQL_URI:-postgres://postgres:postgres123@postgresql:5432/family_budget?sslmode=disable}
+      PG_EXPORTER_EXTEND_QUERY_PATH: /etc/postgres_exporter/queries.yaml
+    volumes:
+      - ../monitoring/postgres_exporter/queries.yaml:/etc/postgres_exporter/queries.yaml:ro
     security_opt:
       - no-new-privileges:true
     depends_on:
-      mongodb:
-        condition: service_healthy
-    networks:
-      - family-budget-network
-    profiles:
-      - observability
-
-  # Redis Exporter для метрик кэша
-  redis-exporter:
-    image: oliver006/redis_exporter:v1.53.0
-    container_name: family-budget-redis-exporter
-    restart: unless-stopped
-    ports:
-      - "${REDIS_EXPORTER_PORT:-9121}:9121"
-    environment:
-      REDIS_ADDR: redis://redis:6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
-    security_opt:
-      - no-new-privileges:true
-    depends_on:
-      redis:
+      postgresql:
         condition: service_healthy
     networks:
       - family-budget-network
@@ -243,9 +204,7 @@ services:
       - observability
 
 volumes:
-  mongodb_data:
-    driver: local
-  redis_data:
+  postgresql_data:
     driver: local
   prometheus_data:
     driver: local

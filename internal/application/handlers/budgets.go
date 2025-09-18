@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"family-budget-service/internal/domain/budget"
+	"family-budget-service/internal/web/middleware"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
@@ -341,6 +342,16 @@ func (h *BudgetHandler) buildBudgetResponse(b *budget.Budget) BudgetResponse {
 
 func (h *BudgetHandler) DeleteBudget(c echo.Context) error {
 	return DeleteEntityHelper(c, func(id uuid.UUID) error {
-		return h.repositories.Budget.Delete(c.Request().Context(), id)
+		// Try to get family ID from session first (for web interface)
+		sessionData, err := middleware.GetSessionData(c)
+		if err != nil {
+			// For API/integration tests, get budget first to find family_id
+			budget, getBudgetErr := h.repositories.Budget.GetByID(c.Request().Context(), id)
+			if getBudgetErr != nil {
+				return getBudgetErr
+			}
+			return h.repositories.Budget.Delete(c.Request().Context(), id, budget.FamilyID)
+		}
+		return h.repositories.Budget.Delete(c.Request().Context(), id, sessionData.FamilyID)
 	}, "Budget")
 }

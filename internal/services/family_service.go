@@ -113,7 +113,7 @@ func (s *familyService) DeleteFamily(ctx context.Context, id uuid.UUID) error {
 	}
 
 	// Delete family
-	if err := s.familyRepo.Delete(ctx, id); err != nil {
+	if err := s.familyRepo.Delete(ctx, id, id); err != nil {
 		return fmt.Errorf("failed to delete family: %w", err)
 	}
 

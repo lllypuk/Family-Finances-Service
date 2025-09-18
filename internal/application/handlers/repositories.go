@@ -29,7 +29,7 @@ type UserRepository interface {
 	GetByEmail(ctx context.Context, email string) (*user.User, error)
 	GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*user.User, error)
 	Update(ctx context.Context, user *user.User) error
-	Delete(ctx context.Context, id uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
 }
 
 // FamilyRepository определяет операции с семьями
@@ -37,7 +37,7 @@ type FamilyRepository interface {
 	Create(ctx context.Context, family *user.Family) error
 	GetByID(ctx context.Context, id uuid.UUID) (*user.Family, error)
 	Update(ctx context.Context, family *user.Family) error
-	Delete(ctx context.Context, id uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
 }
 
 // CategoryRepository определяет операции с категориями
@@ -47,7 +47,7 @@ type CategoryRepository interface {
 	GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*category.Category, error)
 	GetByType(ctx context.Context, familyID uuid.UUID, categoryType category.Type) ([]*category.Category, error)
 	Update(ctx context.Context, category *category.Category) error
-	Delete(ctx context.Context, id uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
 }
 
 // TransactionRepository определяет операции с транзакциями
@@ -57,7 +57,7 @@ type TransactionRepository interface {
 	GetByFilter(ctx context.Context, filter transaction.Filter) ([]*transaction.Transaction, error)
 	GetByFamilyID(ctx context.Context, familyID uuid.UUID, limit, offset int) ([]*transaction.Transaction, error)
 	Update(ctx context.Context, transaction *transaction.Transaction) error
-	Delete(ctx context.Context, id uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
 	GetTotalByCategory(
 		ctx context.Context,
 		categoryID uuid.UUID,
@@ -84,7 +84,7 @@ type BudgetRepository interface {
 	GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*budget.Budget, error)
 	GetActiveBudgets(ctx context.Context, familyID uuid.UUID) ([]*budget.Budget, error)
 	Update(ctx context.Context, budget *budget.Budget) error
-	Delete(ctx context.Context, id uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
 	GetByFamilyAndCategory(
 		ctx context.Context,
 		familyID uuid.UUID,
@@ -103,5 +103,5 @@ type ReportRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*report.Report, error)
 	GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*report.Report, error)
 	GetByUserID(ctx context.Context, userID uuid.UUID) ([]*report.Report, error)
-	Delete(ctx context.Context, id uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
 }

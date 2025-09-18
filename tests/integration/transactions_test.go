@@ -167,8 +167,8 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		err = testServer.Repos.User.Create(context.Background(), user)
 		require.NoError(t, err)
 
-		// Test with non-existent category - MongoDB doesn't enforce foreign key constraints
-		// so this should succeed (this is by design in the current system)
+		// Test with non-existent category - PostgreSQL enforces foreign key constraints
+		// so this should fail with validation error
 		request := handlers.CreateTransactionRequest{
 			Amount:      100.0,
 			Type:        "expense",
@@ -188,16 +188,15 @@ func TestTransactionHandler_Integration(t *testing.T) {
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
 
-		// MongoDB doesn't enforce foreign key constraints, so this succeeds
-		assert.Equal(t, http.StatusCreated, rec.Code)
+		// PostgreSQL enforces foreign key constraints, so this should fail
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
 
-		var response handlers.APIResponse[handlers.TransactionResponse]
+		var response handlers.ErrorResponse
 		err = json.Unmarshal(rec.Body.Bytes(), &response)
 		require.NoError(t, err)
 
-		assert.Equal(t, request.CategoryID, response.Data.CategoryID)
-		assert.Equal(t, request.UserID, response.Data.UserID)
-		assert.Equal(t, request.FamilyID, response.Data.FamilyID)
+		assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
+		assert.Contains(t, response.Error.Message, "Invalid category")
 	})
 
 	t.Run("GetTransactionByID_Success", func(t *testing.T) {
@@ -438,7 +437,11 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		err = testServer.Repos.Transaction.Create(context.Background(), testTransaction)
 		require.NoError(t, err)
 
-		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/transactions/%s", testTransaction.ID), nil)
+		req := httptest.NewRequest(
+			http.MethodDelete,
+			fmt.Sprintf("/api/v1/transactions/%s?family_id=%s", testTransaction.ID, family.ID),
+			nil,
+		)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)

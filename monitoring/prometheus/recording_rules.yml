@@ -97,24 +97,24 @@ groups:
             node_filesystem_size_bytes{fstype!="tmpfs"} * 100
           )
 
-  - name: mongodb.recording
+  - name: postgresql.recording
     interval: 30s
     rules:
-      # MongoDB Connection Usage
-      - record: mongodb:connection_usage
+      # PostgreSQL Connection Usage
+      - record: postgresql:connection_usage
         expr: |
-          mongodb_connections{state="current"} /
-          mongodb_connections{state="available"} * 100
+          pg_stat_database_numbackends /
+          pg_settings_max_connections * 100
 
-      # MongoDB Operation Rate
-      - record: mongodb:operation_rate
+      # PostgreSQL Transaction Rate
+      - record: postgresql:transaction_rate
         expr: |
-          rate(mongodb_op_counters_total[5m])
+          rate(pg_stat_database_xact_commit[5m]) + rate(pg_stat_database_xact_rollback[5m])
 
-      # MongoDB Document Counts
-      - record: mongodb:document_count_total
+      # PostgreSQL Row Counts
+      - record: postgresql:row_count_total
         expr: |
-          sum(mongodb_collection_documents_total)
+          sum(pg_stat_user_tables_n_tup_ins + pg_stat_user_tables_n_tup_upd + pg_stat_user_tables_n_tup_del)
 
   - name: aggregated_metrics.recording
     interval: 1m
@@ -126,7 +126,7 @@ groups:
             (1 - family_budget:http_error_rate) * 0.3 +
             (family_budget:http_request_duration_95p < 0.5) * 0.3 +
             (up{job="family-budget-service"}) * 0.2 +
-            (up{job="mongodb-exporter"}) * 0.2
+            (up{job="postgres-exporter"}) * 0.2
           ) * 100
 
       # SLI: Availability (last 5 minutes)

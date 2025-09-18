@@ -3,8 +3,6 @@ package observability
 import (
 	"context"
 	"log/slog"
-
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // Config общая конфигурация для observability
@@ -60,11 +58,16 @@ func NewService(config Config, version string) (*Service, error) {
 	return service, nil
 }
 
-// AddMongoHealthCheck добавляет health check для MongoDB
-func (s *Service) AddMongoHealthCheck(client *mongo.Client) {
-	checker := NewMongoHealthChecker(client)
+// PostgreSQLHealthChecker интерфейс для PostgreSQL health check
+type PostgreSQLHealthChecker interface {
+	HealthCheck(ctx context.Context) error
+}
+
+// AddPostgreSQLHealthCheck добавляет health check для PostgreSQL
+func (s *Service) AddPostgreSQLHealthCheck(pg PostgreSQLHealthChecker) {
+	checker := NewPostgreSQLHealthChecker(pg)
 	s.HealthService.AddChecker(checker)
-	s.Logger.InfoContext(context.Background(), "MongoDB health check added")
+	s.Logger.InfoContext(context.Background(), "PostgreSQL health check added")
 }
 
 // AddCustomHealthCheck добавляет пользовательский health check

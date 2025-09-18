@@ -22,11 +22,11 @@ type Report struct {
 type Type string
 
 const (
-	TypeExpenses      Type = "expenses"       // Отчет по расходам
-	TypeIncome        Type = "income"         // Отчет по доходам
-	TypeBudget        Type = "budget"         // Отчет по бюджету
-	TypeCashFlow      Type = "cash_flow"      // Отчет по денежному потоку
-	TypeCategoryBreak Type = "category_break" // Разбивка по категориям
+	TypeExpenses      Type = "expenses"           // Отчет по расходам
+	TypeIncome        Type = "income"             // Отчет по доходам
+	TypeBudget        Type = "budget"             // Отчет по бюджету
+	TypeCashFlow      Type = "cash_flow"          // Отчет по денежному потоку
+	TypeCategoryBreak Type = "category_breakdown" // Разбивка по категориям
 )
 
 type Period string

@@ -45,8 +45,8 @@ func (m *MockFamilyRepository) Update(ctx context.Context, family *user.Family) 
 	return args.Error(0)
 }
 
-func (m *MockFamilyRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockFamilyRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+	args := m.Called(ctx, id, familyID)
 	return args.Error(0)
 }
 
@@ -95,8 +95,8 @@ func (m *MockUserRepository) Update(ctx context.Context, user *user.User) error 
 	return args.Error(0)
 }
 
-func (m *MockUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockUserRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+	args := m.Called(ctx, id, familyID)
 	return args.Error(0)
 }
 
@@ -142,8 +142,8 @@ func (m *MockBudgetRepository) Update(ctx context.Context, budget *budget.Budget
 	return args.Error(0)
 }
 
-func (m *MockBudgetRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockBudgetRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+	args := m.Called(ctx, id, familyID)
 	return args.Error(0)
 }
 
@@ -217,8 +217,8 @@ func (m *MockCategoryRepository) Update(ctx context.Context, category *category.
 	return args.Error(0)
 }
 
-func (m *MockCategoryRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockCategoryRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+	args := m.Called(ctx, id, familyID)
 	return args.Error(0)
 }
 
@@ -268,8 +268,8 @@ func (m *MockTransactionRepository) Update(ctx context.Context, tx *transaction.
 	return args.Error(0)
 }
 
-func (m *MockTransactionRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockTransactionRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+	args := m.Called(ctx, id, familyID)
 	return args.Error(0)
 }
 
@@ -349,8 +349,8 @@ func (m *MockReportRepository) Update(ctx context.Context, report *report.Report
 	return args.Error(0)
 }
 
-func (m *MockReportRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockReportRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+	args := m.Called(ctx, id, familyID)
 	return args.Error(0)
 }
 
@@ -407,8 +407,8 @@ func (m *MockTransactionService) UpdateTransaction(
 	return args.Get(0).(*transaction.Transaction), args.Error(1)
 }
 
-func (m *MockTransactionService) DeleteTransaction(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockTransactionService) DeleteTransaction(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+	args := m.Called(ctx, id, familyID)
 	return args.Error(0)
 }
 
@@ -501,8 +501,8 @@ func (m *MockBudgetService) UpdateBudget(
 	return args.Get(0).(*budget.Budget), args.Error(1)
 }
 
-func (m *MockBudgetService) DeleteBudget(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockBudgetService) DeleteBudget(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+	args := m.Called(ctx, id, familyID)
 	return args.Error(0)
 }
 
@@ -627,8 +627,8 @@ func (m *MockCategoryService) UpdateCategory(
 	return args.Get(0).(*category.Category), args.Error(1)
 }
 
-func (m *MockCategoryService) DeleteCategory(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockCategoryService) DeleteCategory(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+	args := m.Called(ctx, id, familyID)
 	return args.Error(0)
 }
 
