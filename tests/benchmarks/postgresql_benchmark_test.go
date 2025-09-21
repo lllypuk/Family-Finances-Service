@@ -15,7 +15,7 @@ import (
 	categoryrepo "family-budget-service/internal/infrastructure/category"
 	transactionrepo "family-budget-service/internal/infrastructure/transaction"
 	userrepo "family-budget-service/internal/infrastructure/user"
-	testutils "family-budget-service/internal/testing"
+	testutils "family-budget-service/internal/testhelpers"
 )
 
 // Benchmark constants

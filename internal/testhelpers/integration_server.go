@@ -12,7 +12,6 @@ import (
 	transactionrepo "family-budget-service/internal/infrastructure/transaction"
 	userrepo "family-budget-service/internal/infrastructure/user"
 	"family-budget-service/internal/services"
-	dbhelper "family-budget-service/internal/testing"
 )
 
 // TestServer represents a test HTTP server setup
@@ -20,13 +19,13 @@ type TestServer struct {
 	Repos     *handlers.Repositories
 	Services  *services.Services
 	Server    *application.HTTPServer
-	container *dbhelper.PostgreSQLTestContainer
+	container *PostgreSQLTestContainer
 }
 
 // SetupHTTPServer creates a test HTTP server with real database connections
 func SetupHTTPServer(t *testing.T) *TestServer {
 	// Setup PostgreSQL testcontainer
-	container := dbhelper.SetupPostgreSQLContainer(t)
+	container := SetupPostgreSQLContainer(t)
 
 	// Get test database
 	db := container.DB

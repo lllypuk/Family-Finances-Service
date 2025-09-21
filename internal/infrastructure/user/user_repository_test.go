@@ -4,13 +4,14 @@ import (
 	"context"
 	"testing"
 
+	testutils "family-budget-service/internal/testhelpers"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/domain/user"
 	userrepo "family-budget-service/internal/infrastructure/user"
-	testutils "family-budget-service/internal/testing"
 )
 
 func TestUserRepositoryPostgreSQL_Integration(t *testing.T) {

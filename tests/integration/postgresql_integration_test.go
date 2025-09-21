@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	testutils "family-budget-service/internal/testhelpers"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,7 +19,6 @@ import (
 	categoryrepo "family-budget-service/internal/infrastructure/category"
 	transactionrepo "family-budget-service/internal/infrastructure/transaction"
 	userrepo "family-budget-service/internal/infrastructure/user"
-	testutils "family-budget-service/internal/testing"
 )
 
 // TestFullWorkflowIntegration tests complete application workflow with PostgreSQL
