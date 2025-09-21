@@ -95,7 +95,7 @@
                     ⚠️ Превышение: {{printf "%.2f" (sub .Spent .Amount)}} ₽
                 </small>
             </div>
-            {{else if gt .Remaining 0}}
+            {{else if gt .Remaining 0.0}}
             <div class="budget-remaining">
                 <small class="text-success">
                     💰 Осталось: {{printf "%.2f" .Remaining}} ₽
