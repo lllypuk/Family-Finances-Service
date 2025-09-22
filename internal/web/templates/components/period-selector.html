@@ -189,7 +189,8 @@
     font-weight: bold;
 }
 
-.period-option:has(input[type="radio"]:checked) {
+/* Checked state styling - applied via JavaScript for better browser compatibility */
+.period-option.checked {
     border-color: var(--pico-primary);
     background: var(--pico-primary-background);
 }
@@ -291,6 +292,19 @@ document.addEventListener('DOMContentLoaded', function() {
     const periodInputs = document.querySelectorAll('input[name="period"]');
     const customRange = document.getElementById('custom-range');
 
+    function updateCheckedStyles() {
+        // Remove checked class from all period options
+        document.querySelectorAll('.period-option').forEach(option => {
+            option.classList.remove('checked');
+        });
+
+        // Add checked class to the selected option
+        const selectedPeriod = document.querySelector('input[name="period"]:checked');
+        if (selectedPeriod) {
+            selectedPeriod.closest('.period-option').classList.add('checked');
+        }
+    }
+
     function toggleCustomRange() {
         const selectedPeriod = document.querySelector('input[name="period"]:checked');
         if (selectedPeriod && selectedPeriod.value === 'custom') {
@@ -301,8 +315,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     periodInputs.forEach(input => {
-        input.addEventListener('change', toggleCustomRange);
+        input.addEventListener('change', function() {
+            toggleCustomRange();
+            updateCheckedStyles();
+        });
     });
+
+    // Initialize styles on page load
+    updateCheckedStyles();
+    toggleCustomRange();
 
     // Validate date range
     const startDate = document.getElementById('start_date');

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 
@@ -55,7 +56,7 @@ func (h *DashboardHandler) Dashboard(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return echo.NewHTTPError(HTTPStatusInternalServerError, "Session error: "+err.Error())
+		return echo.NewHTTPError(HTTPStatusInternalServerError, "Session error occurred")
 	}
 
 	// Парсим фильтры
@@ -70,7 +71,7 @@ func (h *DashboardHandler) Dashboard(c echo.Context) error {
 	// Получаем реальные данные для всех компонентов
 	monthlySummary, err := h.buildMonthlySummary(c.Request().Context(), sessionData.FamilyID, filters)
 	if err != nil {
-		return echo.NewHTTPError(HTTPStatusInternalServerError, "Failed to load monthly summary: "+err.Error())
+		return echo.NewHTTPError(HTTPStatusInternalServerError, "Failed to load monthly summary")
 	}
 
 	// Получаем расширенную статистику
@@ -122,7 +123,7 @@ func (h *DashboardHandler) Dashboard(c echo.Context) error {
 	// Пробуем рендерить
 	err = h.renderPage(c, "dashboard", data)
 	if err != nil {
-		return echo.NewHTTPError(HTTPStatusInternalServerError, "Render error: "+err.Error())
+		return echo.NewHTTPError(HTTPStatusInternalServerError, "Render error occurred")
 	}
 	return nil
 }
@@ -145,7 +146,7 @@ func (h *DashboardHandler) DashboardFilter(c echo.Context) error {
 
 	// Валидируем пользовательский диапазон дат
 	if validationErr := filters.ValidateCustomDateRange(); validationErr != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid date range: "+validationErr.Error())
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid date range provided")
 	}
 
 	// Получаем все данные dashboard с новыми фильтрами
@@ -518,7 +519,7 @@ func (h *DashboardHandler) getBudgetCategoryName(ctx context.Context, categoryID
 		return "Общий бюджет"
 	}
 
-	if category, err := h.services.Category.GetCategoryByID(ctx, *categoryID); err == nil {
+	if category, err := h.services.Category.GetCategoryByID(ctx, *categoryID); err == nil && category != nil {
 		return category.Name
 	}
 
@@ -531,14 +532,10 @@ func (h *DashboardHandler) sortAndLimitBudgets(topBudgets *[]*webModels.BudgetPr
 		return
 	}
 
-	// Простая сортировка по percentage
-	for i := range len(*topBudgets) - 1 {
-		for j := i + 1; j < len(*topBudgets); j++ {
-			if (*topBudgets)[j].Percentage > (*topBudgets)[i].Percentage {
-				(*topBudgets)[i], (*topBudgets)[j] = (*topBudgets)[j], (*topBudgets)[i]
-			}
-		}
-	}
+	// Сортировка по percentage в убывающем порядке
+	sort.Slice(*topBudgets, func(i, j int) bool {
+		return (*topBudgets)[i].Percentage > (*topBudgets)[j].Percentage
+	})
 
 	// Ограничиваем до MaxTopBudgets элементов
 	*topBudgets = (*topBudgets)[:webModels.MaxTopBudgets]

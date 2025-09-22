@@ -1,0 +1,97 @@
+/*
+ * Custom Color Variables for Dashboard Components
+ * Provides fallbacks for PicoCSS 2.1.1+ compatibility
+ * Uses standard PicoCSS variables when available, custom values as fallbacks
+ */
+
+:root {
+    /* Success/Green colors */
+    --pico-color-green-400: var(--pico-primary-background, #22c55e);
+    --pico-color-green-500: var(--pico-icon-valid, #22c55e);
+    --pico-color-green-100: rgba(34, 197, 94, 0.1);
+    --pico-color-green-800: #166534;
+    --pico-color-green-50: rgba(34, 197, 94, 0.05);
+
+    /* Warning/Amber colors */
+    --pico-color-amber-400: #f59e0b;
+    --pico-color-amber-500: #f59e0b;
+    --pico-color-amber-100: rgba(245, 158, 11, 0.1);
+    --pico-color-amber-200: rgba(245, 158, 11, 0.2);
+    --pico-color-amber-800: #92400e;
+    --pico-color-amber-50: rgba(245, 158, 11, 0.05);
+
+    /* Error/Red colors */
+    --pico-color-red-400: var(--pico-icon-invalid, #dc2626);
+    --pico-color-red-500: var(--pico-icon-invalid, #dc2626);
+    --pico-color-red-100: rgba(220, 38, 38, 0.1);
+    --pico-color-red-200: rgba(220, 38, 38, 0.2);
+    --pico-color-red-800: #991b1b;
+    --pico-color-red-50: rgba(220, 38, 38, 0.05);
+
+    /* Info/Blue colors */
+    --pico-color-blue-500: var(--pico-primary-background, #2563eb);
+    --pico-color-blue-100: rgba(37, 99, 235, 0.1);
+    --pico-color-blue-800: #1e40af;
+
+    /* Purple colors */
+    --pico-color-purple-500: #8b5cf6;
+    --pico-color-purple-100: rgba(139, 92, 246, 0.1);
+    --pico-color-purple-800: #5b21b6;
+
+    /* Gray colors */
+    --pico-color-gray-100: var(--pico-muted-border-color, #e5e7eb);
+    --pico-color-gray-600: var(--pico-muted-color, #6b7280);
+    --pico-color-gray-800: var(--pico-color, #374151);
+
+    /* RGB values for rgba usage */
+    --pico-color-rgb: var(--pico-primary-background, 37, 99, 235);
+}
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) {
+        --pico-color-green-400: #34d399;
+        --pico-color-green-500: var(--pico-icon-valid, #34d399);
+        --pico-color-green-100: rgba(52, 211, 153, 0.1);
+        --pico-color-green-800: #065f46;
+
+        --pico-color-red-400: #f87171;
+        --pico-color-red-500: var(--pico-icon-invalid, #f87171);
+        --pico-color-red-100: rgba(248, 113, 113, 0.1);
+        --pico-color-red-200: rgba(248, 113, 113, 0.2);
+        --pico-color-red-800: #7f1d1d;
+
+        --pico-color-blue-500: var(--pico-primary-background, #7dd3fc);
+        --pico-color-blue-100: rgba(125, 211, 252, 0.1);
+        --pico-color-blue-800: #075985;
+
+        --pico-color-gray-100: var(--pico-border-color, #1f2d33);
+        --pico-color-gray-600: var(--pico-muted-color, #81898d);
+        --pico-color-gray-800: var(--pico-color, #c2c8cc);
+
+        --pico-color-rgb: var(--pico-primary-background, 125, 211, 252);
+    }
+}
+
+[data-theme="dark"] {
+    --pico-color-green-400: #34d399;
+    --pico-color-green-500: var(--pico-icon-valid, #34d399);
+    --pico-color-green-100: rgba(52, 211, 153, 0.1);
+    --pico-color-green-800: #065f46;
+
+    --pico-color-red-400: #f87171;
+    --pico-color-red-500: var(--pico-icon-invalid, #f87171);
+    --pico-color-red-100: rgba(248, 113, 113, 0.1);
+    --pico-color-red-200: rgba(248, 113, 113, 0.2);
+    --pico-color-red-800: #7f1d1d;
+
+    --pico-color-blue-500: var(--pico-primary-background, #7dd3fc);
+    --pico-color-blue-100: rgba(125, 211, 252, 0.1);
+    --pico-color-blue-800: #075985;
+
+    --pico-color-gray-100: var(--pico-border-color, #1f2d33);
+    --pico-color-gray-600: var(--pico-muted-color, #81898d);
+    --pico-color-gray-800: var(--pico-color, #c2c8cc);
+
+    --pico-color-rgb: var(--pico-primary-background, 125, 211, 252);
+}
