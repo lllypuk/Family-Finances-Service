@@ -267,11 +267,6 @@ const (
 	BudgetNearLimitThreshold = 80.0  // 80% от бюджета
 	BudgetOverLimitThreshold = 100.0 // 100% от бюджета
 
-	// Периоды обновления (в секундах)
-	StatsRefreshInterval    = 60  // 1 минута
-	ActivityRefreshInterval = 30  // 30 секунд
-	BudgetRefreshInterval   = 120 // 2 минуты
-
 	// Пороги для категорий
 	CategoryHighPercentage   = 30.0 // 30% - высокий процент
 	CategoryMediumPercentage = 15.0 // 15% - средний процент

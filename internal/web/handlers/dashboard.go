@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -187,21 +186,6 @@ func (h *DashboardHandler) DashboardFilter(c echo.Context) error {
 		"DashboardViewModel": dashboardData,
 		"Filters":            filters,
 	})
-}
-
-// ToggleAutoRefresh переключает автообновление (HTMX endpoint)
-func (h *DashboardHandler) ToggleAutoRefresh(c echo.Context) error {
-	const autoRefreshParam = "true"
-	autoRefresh := c.FormValue("auto_refresh") == autoRefreshParam
-
-	// В реальном приложении здесь можно сохранить настройку в профиле пользователя
-	// Пока просто возвращаем статус
-
-	interval := 60 // секунды
-	if autoRefresh {
-		return c.HTML(http.StatusOK, `<small class="text-success">✓ Включено (`+strconv.Itoa(interval)+`с)</small>`)
-	}
-	return c.HTML(http.StatusOK, `<small class="text-muted">Отключено</small>`)
 }
 
 // DashboardStats возвращает обновленную статистику (HTMX endpoint)
@@ -905,18 +889,13 @@ func (h *DashboardHandler) buildEnhancedStats(
 	// Прогноз (если это текущий месяц)
 	forecast := h.buildForecast(ctx, familyID, startDate, endDate, avgIncomePerDay, avgExpensePerDay)
 
-	// Получаем цели и бюджеты (упрощенная версия)
-	incomeGoal := 50000.0 // Можно получить из настроек пользователя
-	incomeGoalProgress := 0.0
-	if incomeGoal > 0 {
-		incomeGoalProgress = (totalIncomeAmount / incomeGoal) * webModels.PercentageMultiplier
-	}
+	// TODO: Implement user preferences system for financial goals
+	// For now, goals are disabled to avoid misleading hardcoded values
+	var incomeGoal float64
+	var incomeGoalProgress float64
 
-	expenseBudget := 40000.0 // Можно получить из активных бюджетов
-	expenseBudgetProgress := 0.0
-	if expenseBudget > 0 {
-		expenseBudgetProgress = (totalExpenseAmount / expenseBudget) * webModels.PercentageMultiplier
-	}
+	var expenseBudget float64
+	var expenseBudgetProgress float64
 
 	return &webModels.EnhancedStatsCard{
 		AvgIncomePerDay:          avgIncomePerDay,

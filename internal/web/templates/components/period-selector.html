@@ -77,30 +77,6 @@
             </div>
         </fieldset>
 
-        <!-- Auto-refresh Settings -->
-        <fieldset class="auto-refresh">
-            <legend>Обновление</legend>
-            <div class="refresh-controls">
-                <label class="refresh-toggle">
-                    <input type="checkbox"
-                           name="auto_refresh"
-                           value="true"
-                           {{if .AutoRefreshEnabled}}checked{{end}}
-                           hx-trigger="change"
-                           hx-get="/htmx/dashboard/toggle-refresh"
-                           hx-target="#refresh-status"
-                           hx-swap="innerHTML">
-                    <span>Автообновление</span>
-                </label>
-                <div id="refresh-status" class="refresh-status">
-                    {{if .AutoRefreshEnabled}}
-                    <small class="text-success">✓ Включено ({{.RefreshInterval}}с)</small>
-                    {{else}}
-                    <small class="text-muted">Отключено</small>
-                    {{end}}
-                </div>
-            </div>
-        </fieldset>
 
         <!-- Loading Indicator -->
         <div id="period-loading" class="htmx-indicator">
@@ -213,28 +189,6 @@
     font-weight: 500;
 }
 
-.auto-refresh {
-    margin-bottom: 1rem;
-}
-
-.refresh-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 0.75rem;
-}
-
-.refresh-toggle {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin: 0;
-}
-
-.refresh-status {
-    text-align: right;
-}
-
 .loading-spinner {
     text-align: center;
     padding: 1rem;
@@ -264,15 +218,6 @@
         grid-template-columns: 1fr;
     }
 
-    .refresh-controls {
-        flex-direction: column;
-        gap: 0.5rem;
-        align-items: flex-start;
-    }
-
-    .refresh-status {
-        text-align: left;
-    }
 }
 
 @media (max-width: 480px) {

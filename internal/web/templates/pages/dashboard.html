@@ -109,13 +109,7 @@
                 </div>
 
                 <!-- Period Selector -->
-                {{template "period-selector" map
-                    "Filters" .Filters
-                    "CurrentPeriodLabel" (or .DashboardViewModel.MonthlySummary.CurrentMonth "Текущий период")
-                    "PeriodDescription" "Выберите период для анализа финансовых данных"
-                    "AutoRefreshEnabled" false
-                    "RefreshInterval" 60
-                    "Today" now}}
+                {{template "period-selector" map "Filters" .Filters "CurrentPeriodLabel" (or .DashboardViewModel.MonthlySummary.CurrentMonth "Текущий период") "PeriodDescription" "Выберите период для анализа финансовых данных" "Today" now}}
 
                 <!-- Dashboard Content Container -->
                 {{template "dashboard-content" .}}
@@ -147,25 +141,26 @@
 
         <!-- Compact Mode Script -->
         <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                const compactToggle = document.getElementById('compact-mode');
+            document.addEventListener("DOMContentLoaded", function () {
+                const compactToggle = document.getElementById("compact-mode");
                 const body = document.body;
 
                 // Загружаем сохраненное состояние
-                const isCompact = localStorage.getItem('compact-mode') === 'true';
+                const isCompact =
+                    localStorage.getItem("compact-mode") === "true";
                 if (isCompact) {
-                    body.classList.add('compact-mode');
+                    body.classList.add("compact-mode");
                     compactToggle.checked = true;
                 }
 
                 // Обработчик переключения
-                compactToggle.addEventListener('change', function() {
+                compactToggle.addEventListener("change", function () {
                     if (this.checked) {
-                        body.classList.add('compact-mode');
-                        localStorage.setItem('compact-mode', 'true');
+                        body.classList.add("compact-mode");
+                        localStorage.setItem("compact-mode", "true");
                     } else {
-                        body.classList.remove('compact-mode');
-                        localStorage.setItem('compact-mode', 'false');
+                        body.classList.remove("compact-mode");
+                        localStorage.setItem("compact-mode", "false");
                     }
                 });
             });
