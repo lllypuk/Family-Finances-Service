@@ -1,51 +1,54 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru" data-theme="light">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{.Title}} - Семейный бюджет</title>
-    
-    <!-- CSRF Token -->
-    {{if .CSRFToken}}<meta name="csrf-token" content="{{.CSRFToken}}">{{end}}
-    
-    <!-- PicoCSS -->
-    <link rel="stylesheet" href="/static/css/pico.min.css">
-    <link rel="stylesheet" href="/static/css/custom.css">
-    
-    <!-- HTMX -->
-    <script src="/static/js/htmx.min.js"></script>
-    
-    <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
-</head>
-<body>
-    <!-- Navigation -->
-    {{template "nav" .}}
-    
-    <!-- Main Content -->
-    <main class="container">
-        <!-- Flash Messages -->
-        {{if .Messages}}
-        <div id="flash-messages">
-            {{range .Messages}}
-            <div class="alert alert-{{.Type}}" role="alert">
-                {{.Text}}
-                <button type="button" class="close" aria-label="Закрыть">
-                    <span aria-hidden="true">&times;</span>
-                </button>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>{{.Title}} - Семейный бюджет</title>
+
+        <!-- CSRF Token -->
+        {{if .CSRFToken}}
+        <meta name="csrf-token" content="{{.CSRFToken}}" />
+        {{end}}
+
+        <!-- PicoCSS -->
+        <link rel="stylesheet" href="/static/css/pico.min.css" />
+        <link rel="stylesheet" href="/static/css/dashboard-colors.css" />
+        <link rel="stylesheet" href="/static/css/custom.css" />
+
+        <!-- HTMX -->
+        <script src="/static/js/htmx.min.js"></script>
+
+        <!-- Favicon -->
+        <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico" />
+    </head>
+    <body>
+        <!-- Navigation -->
+        {{template "nav" .}}
+
+        <!-- Main Content -->
+        <main class="container">
+            <!-- Flash Messages -->
+            {{if .Messages}}
+            <div id="flash-messages">
+                {{range .Messages}}
+                <div class="alert alert-{{.Type}}" role="alert">
+                    {{.Text}}
+                    <button type="button" class="close" aria-label="Закрыть">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                {{end}}
             </div>
             {{end}}
-        </div>
-        {{end}}
-        
-        <!-- Page Content -->
-        {{template "content" .}}
-    </main>
-    
-    <!-- Footer -->
-    {{template "footer" .}}
-    
-    <!-- Custom JavaScript -->
-    <script src="/static/js/app.js"></script>
-</body>
+
+            <!-- Page Content -->
+            {{template "content" .}}
+        </main>
+
+        <!-- Footer -->
+        {{template "footer" .}}
+
+        <!-- Custom JavaScript -->
+        <script src="/static/js/app.js"></script>
+    </body>
 </html>

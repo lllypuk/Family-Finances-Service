@@ -1,0 +1,533 @@
+{{define "category-insights-enhanced"}}
+<section class="category-insights-enhanced">
+    <header class="insights-header">
+        <div class="insights-title">
+            <h2>📊 Аналитика по категориям</h2>
+            <p class="insights-period">
+                {{if .CategoryInsights}}{{.CategoryInsights.PeriodStart.Format "02.01"}} - {{.CategoryInsights.PeriodEnd.Format "02.01.2006"}}{{else}}Нет данных{{end}}
+            </p>
+        </div>
+
+        <!-- Category Type Filter -->
+        <div class="category-filters">
+            <div class="filter-tabs"
+                 hx-target="#category-insights-content"
+                 hx-swap="innerHTML">
+                <button class="filter-tab active"
+                        hx-get="/htmx/dashboard/category-insights?type=all"
+                        data-filter="all">
+                    Все
+                </button>
+                <button class="filter-tab"
+                        hx-get="/htmx/dashboard/category-insights?type=expense"
+                        data-filter="expense">
+                    💸 Расходы
+                </button>
+                <button class="filter-tab"
+                        hx-get="/htmx/dashboard/category-insights?type=income"
+                        data-filter="income">
+                    💰 Доходы
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div id="category-insights-content">
+        <!-- Summary Stats -->
+        <div class="insights-summary">
+            <div class="summary-stats">
+                <div class="stat-card mini">
+                    <div class="stat-icon">📈</div>
+                    <div class="stat-info">
+                        <span class="stat-label">Всего категорий</span>
+                        <span class="stat-value">{{if .CategoryInsights}}{{add (len .CategoryInsights.TopExpenseCategories) (len .CategoryInsights.TopIncomeCategories)}}{{else}}0{{end}}</span>
+                    </div>
+                </div>
+                <div class="stat-card mini">
+                    <div class="stat-icon">💸</div>
+                    <div class="stat-info">
+                        <span class="stat-label">Общие расходы</span>
+                        <span class="stat-value">{{if .CategoryInsights}}{{printf "%.0f" .CategoryInsights.TotalExpenses}}{{else}}0{{end}} ₽</span>
+                    </div>
+                </div>
+                <div class="stat-card mini">
+                    <div class="stat-icon">💰</div>
+                    <div class="stat-info">
+                        <span class="stat-label">Общие доходы</span>
+                        <span class="stat-value">{{if .CategoryInsights}}{{printf "%.0f" .CategoryInsights.TotalIncome}}{{else}}0{{end}} ₽</span>
+                    </div>
+                </div>
+                <div class="stat-card mini">
+                    <div class="stat-icon">⚖️</div>
+                    <div class="stat-info">
+                        <span class="stat-label">Баланс</span>
+                        <span class="stat-value {{if and .CategoryInsights (gt (sub .CategoryInsights.TotalIncome .CategoryInsights.TotalExpenses) 0.0)}}text-success{{else}}text-danger{{end}}">
+                            {{if .CategoryInsights}}{{printf "%.0f" (sub .CategoryInsights.TotalIncome .CategoryInsights.TotalExpenses)}}{{else}}0{{end}} ₽
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Category Charts -->
+        <div class="insights-content">
+            <!-- Expense Categories -->
+            {{if .CategoryInsights.TopExpenseCategories}}
+            <div class="category-section expenses">
+                <div class="section-header">
+                    <h3>💸 Расходы по категориям</h3>
+                    <div class="section-total">
+                        {{if .CategoryInsights}}{{printf "%.2f" .CategoryInsights.TotalExpenses}}{{else}}0{{end}} ₽
+                    </div>
+                </div>
+
+                <div class="category-charts">
+                    {{range $index, $category := .CategoryInsights.TopExpenseCategories}}
+                    <div class="category-chart-item">
+                        <div class="category-info">
+                            <div class="category-header">
+                                <div class="category-icon-name">
+                                    {{if .CategoryIcon}}
+                                    <span class="category-icon">{{.CategoryIcon}}</span>
+                                    {{end}}
+                                    <span class="category-name">{{.CategoryName}}</span>
+                                </div>
+                                <div class="category-amount text-danger">
+                                    {{printf "%.2f" .Amount}} ₽
+                                </div>
+                            </div>
+
+                            <!-- Mini Bar Chart -->
+                            <div class="category-chart">
+                                <div class="chart-bar-container">
+                                    <div class="chart-bar expense-bar"
+                                         style="width: {{printf "%.1f" .Percentage}}%"
+                                         title="{{printf "%.1f%%" .Percentage}}">
+                                    </div>
+                                </div>
+                                <div class="chart-labels">
+                                    <span class="percentage">{{printf "%.1f%%" .Percentage}}</span>
+                                    <span class="transaction-count">{{.TransactionCount}} транз.</span>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+            {{end}}
+
+            <!-- Income Categories -->
+            {{if .CategoryInsights.TopIncomeCategories}}
+            <div class="category-section incomes">
+                <div class="section-header">
+                    <h3>💰 Доходы по категориям</h3>
+                    <div class="section-total">
+                        {{if .CategoryInsights}}{{printf "%.2f" .CategoryInsights.TotalIncome}}{{else}}0{{end}} ₽
+                    </div>
+                </div>
+
+                <div class="category-charts">
+                    {{range $index, $category := .CategoryInsights.TopIncomeCategories}}
+                    <div class="category-chart-item">
+                        <div class="category-info">
+                            <div class="category-header">
+                                <div class="category-icon-name">
+                                    {{if .CategoryIcon}}
+                                    <span class="category-icon">{{.CategoryIcon}}</span>
+                                    {{end}}
+                                    <span class="category-name">{{.CategoryName}}</span>
+                                </div>
+                                <div class="category-amount text-success">
+                                    {{printf "%.2f" .Amount}} ₽
+                                </div>
+                            </div>
+
+                            <!-- Mini Bar Chart -->
+                            <div class="category-chart">
+                                <div class="chart-bar-container">
+                                    <div class="chart-bar income-bar"
+                                         style="width: {{printf "%.1f" .Percentage}}%"
+                                         title="{{printf "%.1f%%" .Percentage}}">
+                                    </div>
+                                </div>
+                                <div class="chart-labels">
+                                    <span class="percentage">{{printf "%.1f%%" .Percentage}}</span>
+                                    <span class="transaction-count">{{.TransactionCount}} транз.</span>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+            {{end}}
+        </div>
+
+        <!-- Quick Actions for Categories -->
+        <div class="insights-actions">
+            <div class="action-buttons">
+                <a href="/categories" class="action-btn secondary">
+                    🏷️ Управление категориями
+                </a>
+                <a href="/transactions?category=top" class="action-btn secondary">
+                    📋 Подробные транзакции
+                </a>
+                <button class="action-btn secondary"
+                        hx-get="/htmx/dashboard/category-insights/export"
+                        hx-target="#insights-export"
+                        hx-swap="innerHTML">
+                    📊 Экспорт данных
+                </button>
+            </div>
+            <div id="insights-export"></div>
+        </div>
+    </div>
+</section>
+
+<style>
+.category-insights-enhanced {
+    background: var(--pico-card-background-color);
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: var(--pico-border-radius);
+    padding: 1.5rem;
+    margin-top: 2rem;
+}
+
+.insights-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--pico-muted-border-color);
+    padding-bottom: 1rem;
+}
+
+.insights-title h2 {
+    margin: 0 0 0.25rem 0;
+    color: var(--pico-color);
+}
+
+.insights-period {
+    margin: 0;
+    color: var(--pico-muted-color);
+    font-size: 0.875rem;
+}
+
+.category-filters {
+    display: flex;
+    gap: 1rem;
+}
+
+.filter-tabs {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.filter-tab {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--pico-muted-border-color);
+    background: var(--pico-background-color);
+    color: var(--pico-color);
+    border-radius: var(--pico-border-radius);
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+}
+
+.filter-tab:hover {
+    background: var(--pico-primary-background);
+    border-color: var(--pico-primary);
+}
+
+.filter-tab.active {
+    background: var(--pico-primary);
+    color: var(--pico-primary-inverse);
+    border-color: var(--pico-primary);
+}
+
+.insights-summary {
+    margin-bottom: 2rem;
+}
+
+.summary-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.stat-card.mini {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: var(--pico-background-color);
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: var(--pico-border-radius);
+}
+
+.stat-icon {
+    font-size: 1.5rem;
+    opacity: 0.8;
+}
+
+.stat-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: var(--pico-muted-color);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stat-value {
+    font-weight: bold;
+    color: var(--pico-color);
+}
+
+.insights-content {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2rem;
+}
+
+.category-section {
+    background: var(--pico-background-color);
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: var(--pico-border-radius);
+    padding: 1.5rem;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--pico-muted-border-color);
+    padding-bottom: 1rem;
+}
+
+.section-header h3 {
+    margin: 0;
+    color: var(--pico-color);
+}
+
+.section-total {
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+.category-charts {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.category-chart-item {
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: var(--pico-border-radius);
+    padding: 1rem;
+    transition: all 0.2s ease;
+}
+
+.category-chart-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.category-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.category-icon-name {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.category-icon {
+    font-size: 1.25rem;
+}
+
+.category-name {
+    font-weight: 500;
+    color: var(--pico-color);
+}
+
+.category-amount {
+    font-weight: bold;
+    font-size: 1rem;
+}
+
+.category-chart {
+    margin-bottom: 0.75rem;
+}
+
+.chart-bar-container {
+    width: 100%;
+    height: 8px;
+    background: var(--pico-muted-border-color);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.chart-bar {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+.expense-bar {
+    background: linear-gradient(90deg, var(--pico-color-red-500), var(--pico-color-red-400));
+}
+
+.income-bar {
+    background: linear-gradient(90deg, var(--pico-color-green-500), var(--pico-color-green-400));
+}
+
+.chart-labels {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+}
+
+.percentage {
+    font-weight: bold;
+    color: var(--pico-color);
+}
+
+.transaction-count {
+    color: var(--pico-muted-color);
+}
+
+.category-trend {
+    text-align: right;
+}
+
+.trend-indicator {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-weight: 500;
+}
+
+.trend-indicator.up {
+    background: var(--pico-color-green-100);
+    color: var(--pico-color-green-800);
+}
+
+.trend-indicator.down {
+    background: var(--pico-color-red-100);
+    color: var(--pico-color-red-800);
+}
+
+.trend-indicator.neutral {
+    background: var(--pico-color-gray-100);
+    color: var(--pico-color-gray-600);
+}
+
+.insights-actions {
+    margin-top: 2rem;
+    border-top: 1px solid var(--pico-muted-border-color);
+    padding-top: 1.5rem;
+}
+
+.action-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    text-decoration: none;
+    border-radius: var(--pico-border-radius);
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+}
+
+.action-btn.secondary {
+    background: var(--pico-secondary-background);
+    color: var(--pico-secondary);
+    border: 1px solid var(--pico-secondary);
+}
+
+.action-btn.secondary:hover {
+    background: var(--pico-secondary);
+    color: var(--pico-secondary-inverse);
+}
+
+/* Responsive Design */
+@media (min-width: 768px) {
+    .insights-content {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .insights-header {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: stretch;
+    }
+
+    .summary-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .category-header {
+        flex-direction: column;
+        gap: 0.5rem;
+        align-items: flex-start;
+    }
+
+    .action-buttons {
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 480px) {
+    .filter-tabs {
+        flex-direction: column;
+    }
+
+    .summary-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .category-insights-enhanced {
+        padding: 1rem;
+    }
+}
+</style>
+
+<script>
+// Filter tabs interaction
+document.addEventListener('DOMContentLoaded', function() {
+    const filterTabs = document.querySelectorAll('.filter-tab');
+
+    filterTabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            // Remove active class from all tabs
+            filterTabs.forEach(t => t.classList.remove('active'));
+            // Add active class to clicked tab
+            this.classList.add('active');
+        });
+    });
+});
+</script>
+{{end}}

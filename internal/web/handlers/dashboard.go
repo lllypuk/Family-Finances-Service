@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -30,10 +31,8 @@ const (
 	// HTTP status codes
 	HTTPStatusInternalServerError = 500
 
-	// Mock data for dashboard
-	MockTotalIncome   = 1000.0
-	MockTotalExpenses = 500.0
-	MockNetIncome     = 500.0
+	// Default values for dashboard data loading
+	DefaultPeriod = "current_month"
 
 	// Query limits for data fetching
 	DefaultQueryLimit = 1000
@@ -56,59 +55,42 @@ func (h *DashboardHandler) Dashboard(c echo.Context) error {
 	// Получаем данные пользователя из сессии
 	sessionData, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		return echo.NewHTTPError(HTTPStatusInternalServerError, "Session error: "+err.Error())
+		return echo.NewHTTPError(HTTPStatusInternalServerError, "Session error occurred")
 	}
 
 	// Парсим фильтры
 	filters := &webModels.DashboardFilters{
-		Period: "current_month",
+		Period: DefaultPeriod,
 	}
 	if bindErr := c.Bind(filters); bindErr != nil {
 		// Игнорируем ошибки привязки и используем значения по умолчанию
-		filters.Period = "current_month"
+		filters.Period = DefaultPeriod
 	}
 
-	// Создаем минимальные данные для тестирования
-	dashboardData := &webModels.DashboardViewModel{
-		MonthlySummary: &webModels.MonthlySummaryCard{
-			TotalIncome:     MockTotalIncome,
-			TotalExpenses:   MockTotalExpenses,
-			NetIncome:       MockNetIncome,
-			CurrentMonth:    "Декабрь 2024",
-			HasPreviousData: false,
-		},
-		BudgetOverview: &webModels.BudgetOverviewCard{
-			TotalBudgets:  0,
-			ActiveBudgets: 0,
-			OverBudget:    0,
-			NearLimit:     0,
-			TopBudgets:    []*webModels.BudgetProgressItem{},
-			AlertsSummary: &webModels.BudgetAlertsSummary{
-				CriticalAlerts: 0,
-				WarningAlerts:  0,
-				TotalAlerts:    0,
-			},
-		},
-		RecentActivity: &webModels.RecentActivityCard{
-			Transactions: []*webModels.RecentTransactionItem{},
-			TotalCount:   0,
-			ShowingCount: 0,
-			HasMoreData:  false,
-			LastUpdated:  time.Now(),
-		},
-		CategoryInsights: func() *webModels.CategoryInsightsCard {
-			insights, insightsErr := h.buildCategoryInsights(c.Request().Context(), sessionData.FamilyID, filters)
-			if insightsErr != nil {
-				return &webModels.CategoryInsightsCard{
-					TopExpenseCategories: []*webModels.CategoryInsightItem{},
-					TopIncomeCategories:  []*webModels.CategoryInsightItem{},
-					PeriodStart:          time.Now().AddDate(0, -1, 0),
-					PeriodEnd:            time.Now(),
-					TotalExpenses:        0.0,
-				}
-			}
-			return insights
-		}(),
+	// Получаем реальные данные для всех компонентов
+	monthlySummary, err := h.buildMonthlySummary(c.Request().Context(), sessionData.FamilyID, filters)
+	if err != nil {
+		return echo.NewHTTPError(HTTPStatusInternalServerError, "Failed to load monthly summary")
+	}
+
+	// Получаем расширенную статистику
+	enhancedStats, _ := h.buildEnhancedStats(c.Request().Context(), sessionData.FamilyID, filters, monthlySummary)
+
+	// Создаем полные данные dashboard
+	dashboardData := h.buildDashboardViewModel(
+		c.Request().Context(),
+		sessionData.FamilyID,
+		monthlySummary,
+		enhancedStats,
+		filters,
+	)
+
+	// Получаем данные пользователя для персонализации
+	currentUser, userErr := h.services.User.GetUserByID(c.Request().Context(), sessionData.UserID)
+	var firstName, lastName string
+	if userErr == nil && currentUser != nil {
+		firstName = currentUser.FirstName
+		lastName = currentUser.LastName
 	}
 
 	// Подготавливаем данные для страницы
@@ -120,8 +102,8 @@ func (h *DashboardHandler) Dashboard(c echo.Context) error {
 			FamilyID:  sessionData.FamilyID,
 			Role:      sessionData.Role,
 			Email:     sessionData.Email,
-			FirstName: "", // Заполним позже если нужно
-			LastName:  "", // Заполним позже если нужно
+			FirstName: firstName,
+			LastName:  lastName,
 		},
 	}
 
@@ -140,9 +122,70 @@ func (h *DashboardHandler) Dashboard(c echo.Context) error {
 	// Пробуем рендерить
 	err = h.renderPage(c, "dashboard", data)
 	if err != nil {
-		return echo.NewHTTPError(HTTPStatusInternalServerError, "Render error: "+err.Error())
+		return echo.NewHTTPError(HTTPStatusInternalServerError, "Render error occurred")
 	}
 	return nil
+}
+
+// DashboardFilter обновляет весь dashboard с новыми фильтрами (HTMX endpoint)
+func (h *DashboardHandler) DashboardFilter(c echo.Context) error {
+	// Получаем данные пользователя из сессии
+	sessionData, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
+	}
+
+	// Парсим фильтры
+	filters := &webModels.DashboardFilters{
+		Period: DefaultPeriod,
+	}
+	if bindErr := c.Bind(filters); bindErr != nil {
+		filters.Period = DefaultPeriod
+	}
+
+	// Валидируем пользовательский диапазон дат
+	if validationErr := filters.ValidateCustomDateRange(); validationErr != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid date range provided")
+	}
+
+	// Получаем все данные dashboard с новыми фильтрами
+	monthlySummary, err := h.buildMonthlySummary(c.Request().Context(), sessionData.FamilyID, filters)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load monthly summary")
+	}
+
+	budgetOverview, err := h.buildBudgetOverview(c.Request().Context(), sessionData.FamilyID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load budget overview")
+	}
+
+	recentActivity, err := h.buildRecentActivity(c.Request().Context(), sessionData.FamilyID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load recent activity")
+	}
+
+	categoryInsights, err := h.buildCategoryInsights(c.Request().Context(), sessionData.FamilyID, filters)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load category insights")
+	}
+
+	enhancedStats, err := h.buildEnhancedStats(c.Request().Context(), sessionData.FamilyID, filters, monthlySummary)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load enhanced stats")
+	}
+
+	dashboardData := &webModels.DashboardViewModel{
+		MonthlySummary:   monthlySummary,
+		BudgetOverview:   budgetOverview,
+		RecentActivity:   recentActivity,
+		CategoryInsights: categoryInsights,
+		EnhancedStats:    enhancedStats,
+	}
+
+	return h.renderPartial(c, "dashboard-content", map[string]any{
+		"DashboardViewModel": dashboardData,
+		"Filters":            filters,
+	})
 }
 
 // DashboardStats возвращает обновленную статистику (HTMX endpoint)
@@ -460,7 +503,7 @@ func (h *DashboardHandler) getBudgetCategoryName(ctx context.Context, categoryID
 		return "Общий бюджет"
 	}
 
-	if category, err := h.services.Category.GetCategoryByID(ctx, *categoryID); err == nil {
+	if category, err := h.services.Category.GetCategoryByID(ctx, *categoryID); err == nil && category != nil {
 		return category.Name
 	}
 
@@ -473,14 +516,10 @@ func (h *DashboardHandler) sortAndLimitBudgets(topBudgets *[]*webModels.BudgetPr
 		return
 	}
 
-	// Простая сортировка по percentage
-	for i := range len(*topBudgets) - 1 {
-		for j := i + 1; j < len(*topBudgets); j++ {
-			if (*topBudgets)[j].Percentage > (*topBudgets)[i].Percentage {
-				(*topBudgets)[i], (*topBudgets)[j] = (*topBudgets)[j], (*topBudgets)[i]
-			}
-		}
-	}
+	// Сортировка по percentage в убывающем порядке
+	sort.Slice(*topBudgets, func(i, j int) bool {
+		return (*topBudgets)[i].Percentage > (*topBudgets)[j].Percentage
+	})
 
 	// Ограничиваем до MaxTopBudgets элементов
 	*topBudgets = (*topBudgets)[:webModels.MaxTopBudgets]
@@ -791,5 +830,266 @@ func sortCategoryInsights(insights []*webModels.CategoryInsightItem) {
 				insights[i], insights[j] = insights[j], insights[i]
 			}
 		}
+	}
+}
+
+// buildEnhancedStats создает расширенную статистику
+func (h *DashboardHandler) buildEnhancedStats(
+	ctx context.Context,
+	familyID uuid.UUID,
+	filters *webModels.DashboardFilters,
+	_ *webModels.MonthlySummaryCard,
+) (*webModels.EnhancedStatsCard, error) {
+	startDate, endDate := filters.GetPeriodDates()
+
+	// Получаем транзакции за период
+	transactions, err := h.getTransactionsForPeriod(ctx, familyID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	// Подсчитываем базовую статистику
+	var incomeTransactions, expenseTransactions int
+	var totalIncomeAmount, totalExpenseAmount float64
+
+	for _, tx := range transactions {
+		switch tx.Type {
+		case transaction.TypeIncome:
+			incomeTransactions++
+			totalIncomeAmount += tx.Amount
+		case transaction.TypeExpense:
+			expenseTransactions++
+			totalExpenseAmount += tx.Amount
+		}
+	}
+
+	// Вычисляем период в днях
+	const hoursInDay = 24
+	periodDays := int(endDate.Sub(startDate).Hours()/hoursInDay) + 1
+	if periodDays <= 0 {
+		periodDays = 1
+	}
+
+	// Средние значения за день
+	avgIncomePerDay := totalIncomeAmount / float64(periodDays)
+	avgExpensePerDay := totalExpenseAmount / float64(periodDays)
+
+	// Средний размер транзакции
+	avgTransactionAmount := 0.0
+	if len(transactions) > 0 {
+		avgTransactionAmount = (totalIncomeAmount + totalExpenseAmount) / float64(len(transactions))
+	}
+
+	// Норма сбережений (% от доходов)
+	savingsRate := 0.0
+	if totalIncomeAmount > 0 {
+		savingsRate = ((totalIncomeAmount - totalExpenseAmount) / totalIncomeAmount) * webModels.PercentageMultiplier
+	}
+
+	// Прогноз (если это текущий месяц)
+	forecast := h.buildForecast(ctx, familyID, startDate, endDate, avgIncomePerDay, avgExpensePerDay)
+
+	// TODO: Implement user preferences system for financial goals
+	// For now, goals are disabled to avoid misleading hardcoded values
+	var incomeGoal float64
+	var incomeGoalProgress float64
+
+	var expenseBudget float64
+	var expenseBudgetProgress float64
+
+	return &webModels.EnhancedStatsCard{
+		AvgIncomePerDay:          avgIncomePerDay,
+		IncomeTransactionsCount:  incomeTransactions,
+		IncomeGoal:               incomeGoal,
+		IncomeGoalProgress:       incomeGoalProgress,
+		AvgExpensePerDay:         avgExpensePerDay,
+		ExpenseTransactionsCount: expenseTransactions,
+		ExpenseBudget:            expenseBudget,
+		ExpenseBudgetProgress:    expenseBudgetProgress,
+		AvgTransactionAmount:     avgTransactionAmount,
+		SavingsRate:              savingsRate,
+		Forecast:                 forecast,
+	}, nil
+}
+
+// buildForecast создает прогноз на основе текущих трендов
+func (h *DashboardHandler) buildForecast(
+	_ context.Context,
+	_ uuid.UUID,
+	startDate, endDate time.Time,
+	avgIncomePerDay, avgExpensePerDay float64,
+) *webModels.ForecastData {
+	now := time.Now()
+
+	// Проверяем, является ли это текущим месяцем
+	if now.Before(startDate) || now.After(endDate) {
+		return nil
+	}
+
+	// Дни до конца периода
+	const hoursInDay = 24
+	daysRemaining := int(endDate.Sub(now).Hours() / hoursInDay)
+	if daysRemaining <= 0 {
+		return nil
+	}
+
+	// Прогнозируемые доходы и расходы до конца месяца
+	expectedIncome := avgIncomePerDay * float64(daysRemaining)
+	expectedExpenses := avgExpensePerDay * float64(daysRemaining)
+	monthEndBalance := expectedIncome - expectedExpenses
+
+	return &webModels.ForecastData{
+		ExpectedIncome:   expectedIncome,
+		ExpectedExpenses: expectedExpenses,
+		MonthEndBalance:  monthEndBalance,
+		DaysRemaining:    daysRemaining,
+	}
+}
+
+// CategoryInsights возвращает аналитику по категориям с фильтрацией (HTMX endpoint)
+func (h *DashboardHandler) CategoryInsights(c echo.Context) error {
+	// Получаем данные пользователя из сессии
+	sessionData, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
+	}
+
+	// Парсим фильтры
+	filters := &webModels.DashboardFilters{
+		Period: "current_month",
+	}
+	if bindErr := c.Bind(filters); bindErr != nil {
+		filters.Period = "current_month"
+	}
+
+	// Получаем тип фильтра из query параметра
+	filterType := c.QueryParam("type")
+	if filterType == "" {
+		filterType = "all"
+	}
+
+	// Получаем даты периода
+	startDate, endDate := filters.GetPeriodDates()
+	if filters.StartDate != nil && filters.EndDate != nil {
+		startDate = *filters.StartDate
+		endDate = *filters.EndDate
+	}
+
+	// Получаем аналитику по категориям
+	categoryInsights, err := h.buildCategoryInsightsWithFilter(
+		c.Request().Context(),
+		sessionData.FamilyID,
+		startDate,
+		endDate,
+		filterType,
+	)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load category insights")
+	}
+
+	return h.renderPartial(c, "category-insights-enhanced", map[string]any{
+		"CategoryInsights": categoryInsights,
+	})
+}
+
+// buildCategoryInsightsWithFilter создает аналитику по категориям с поддержкой фильтрации
+func (h *DashboardHandler) buildCategoryInsightsWithFilter(
+	ctx context.Context,
+	familyID uuid.UUID,
+	startDate, endDate time.Time,
+	filterType string,
+) (*webModels.CategoryInsightsCard, error) {
+	// Создаем фильтры для базового метода
+	filters := &webModels.DashboardFilters{
+		StartDate: &startDate,
+		EndDate:   &endDate,
+	}
+
+	// Базовый buildCategoryInsights для получения всех данных
+	baseInsights, err := h.buildCategoryInsights(ctx, familyID, filters)
+	if err != nil {
+		return nil, err
+	}
+
+	// Фильтруем данные в зависимости от типа
+	switch filterType {
+	case "expense":
+		return &webModels.CategoryInsightsCard{
+			TopExpenseCategories: baseInsights.TopExpenseCategories,
+			TopIncomeCategories:  nil,
+			PeriodStart:          baseInsights.PeriodStart,
+			PeriodEnd:            baseInsights.PeriodEnd,
+			TotalExpenses:        baseInsights.TotalExpenses,
+			TotalIncome:          0,
+		}, nil
+	case "income":
+		return &webModels.CategoryInsightsCard{
+			TopExpenseCategories: nil,
+			TopIncomeCategories:  baseInsights.TopIncomeCategories,
+			PeriodStart:          baseInsights.PeriodStart,
+			PeriodEnd:            baseInsights.PeriodEnd,
+			TotalExpenses:        0,
+			TotalIncome:          baseInsights.TotalIncome,
+		}, nil
+	default: // "all"
+		return baseInsights, nil
+	}
+}
+
+// buildDashboardViewModel создает полную модель данных для dashboard
+func (h *DashboardHandler) buildDashboardViewModel(
+	ctx context.Context,
+	familyID uuid.UUID,
+	monthlySummary *webModels.MonthlySummaryCard,
+	enhancedStats *webModels.EnhancedStatsCard,
+	filters *webModels.DashboardFilters,
+) *webModels.DashboardViewModel {
+	return &webModels.DashboardViewModel{
+		MonthlySummary: monthlySummary,
+		EnhancedStats:  enhancedStats,
+		BudgetOverview: func() *webModels.BudgetOverviewCard {
+			budgetOverview, budgetErr := h.buildBudgetOverview(ctx, familyID)
+			if budgetErr != nil {
+				return &webModels.BudgetOverviewCard{
+					TotalBudgets:  0,
+					ActiveBudgets: 0,
+					OverBudget:    0,
+					NearLimit:     0,
+					TopBudgets:    []*webModels.BudgetProgressItem{},
+					AlertsSummary: &webModels.BudgetAlertsSummary{
+						CriticalAlerts: 0,
+						WarningAlerts:  0,
+						TotalAlerts:    0,
+					},
+				}
+			}
+			return budgetOverview
+		}(),
+		RecentActivity: func() *webModels.RecentActivityCard {
+			recentActivity, activityErr := h.buildRecentActivity(ctx, familyID)
+			if activityErr != nil {
+				return &webModels.RecentActivityCard{
+					Transactions: []*webModels.RecentTransactionItem{},
+					TotalCount:   0,
+					ShowingCount: 0,
+					HasMoreData:  false,
+					LastUpdated:  time.Now(),
+				}
+			}
+			return recentActivity
+		}(),
+		CategoryInsights: func() *webModels.CategoryInsightsCard {
+			insights, insightsErr := h.buildCategoryInsights(ctx, familyID, filters)
+			if insightsErr != nil {
+				return &webModels.CategoryInsightsCard{
+					TopExpenseCategories: []*webModels.CategoryInsightItem{},
+					TopIncomeCategories:  []*webModels.CategoryInsightItem{},
+					PeriodStart:          time.Now().AddDate(0, -1, 0),
+					PeriodEnd:            time.Now(),
+					TotalExpenses:        0.0,
+				}
+			}
+			return insights
+		}(),
 	}
 }

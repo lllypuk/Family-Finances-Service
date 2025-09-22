@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 )
@@ -49,8 +50,11 @@ func createTemplateFuncMap() template.FuncMap {
 		"formatDate":     formatDate,
 		"safe":           templateSafe,
 		"dict":           createDict,
+		"map":            createDict, // Alias for dict
 		"title":          titleCase,
 		"deref":          derefBool,
+		"now":            templateNow,
+		"or":             templateOr,
 	}
 }
 
@@ -236,4 +240,37 @@ func derefBool(ptr *bool) bool {
 		return false
 	}
 	return *ptr
+}
+
+// templateNow возвращает текущее время
+func templateNow() time.Time {
+	return time.Now()
+}
+
+// templateOr возвращает первое непустое значение
+func templateOr(args ...any) any {
+	for _, arg := range args {
+		if arg != nil {
+			switch v := arg.(type) {
+			case string:
+				if v != "" {
+					return v
+				}
+			case int, int8, int16, int32, int64:
+				return v
+			case float32, float64:
+				return v
+			case bool:
+				if v {
+					return v
+				}
+			default:
+				return v
+			}
+		}
+	}
+	if len(args) > 0 {
+		return args[len(args)-1]
+	}
+	return nil
 }

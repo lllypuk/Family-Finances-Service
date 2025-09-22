@@ -1,0 +1,464 @@
+{{define "enhanced-stats"}}
+<section class="enhanced-stats">
+    <div class="stats-grid-enhanced">
+        <!-- Income Statistics -->
+        <article class="stat-card stat-card-enhanced income-card">
+            <header class="stat-header">
+                <div class="stat-icon">💵</div>
+                <div class="stat-title">
+                    <h3>Доходы</h3>
+                    <span class="stat-period">{{.MonthlySummary.CurrentMonth}}</span>
+                </div>
+                {{if .MonthlySummary.HasPreviousData}}
+                <div class="stat-trend {{.MonthlySummary.GetIncomeChangeClass}}">
+                    {{if gt .MonthlySummary.IncomeChange 0.0}}
+                    <span class="trend-icon">↗️</span>
+                    {{else if lt .MonthlySummary.IncomeChange 0.0}}
+                    <span class="trend-icon">↘️</span>
+                    {{else}}
+                    <span class="trend-icon">➡️</span>
+                    {{end}}
+                    <span class="trend-value">{{printf "%.1f%%" (abs .MonthlySummary.IncomeChange)}}</span>
+                </div>
+                {{end}}
+            </header>
+
+            <main class="stat-content">
+                <div class="stat-amount">{{printf "%.2f" .MonthlySummary.TotalIncome}} ₽</div>
+                {{if .MonthlySummary.HasPreviousData}}
+                <div class="stat-comparison">
+                    <small class="text-muted">
+                        Было: {{printf "%.2f" .MonthlySummary.PreviousIncome}} ₽
+                    </small>
+                </div>
+                {{end}}
+
+                <!-- Average per day -->
+                {{if .EnhancedStats}}
+                <div class="stat-metrics">
+                    <div class="metric">
+                        <span class="metric-label">Средний день</span>
+                        <span class="metric-value">{{printf "%.0f" .EnhancedStats.AvgIncomePerDay}} ₽</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Транзакций</span>
+                        <span class="metric-value">{{.EnhancedStats.IncomeTransactionsCount}}</span>
+                    </div>
+                </div>
+                {{end}}
+            </main>
+
+            <!-- Progress bar for goal achievement -->
+            {{if .EnhancedStats.IncomeGoal}}
+            <footer class="stat-progress">
+                <div class="progress-info">
+                    <span>Цель: {{printf "%.0f" .EnhancedStats.IncomeGoal}} ₽</span>
+                    <span>{{printf "%.1f%%" .EnhancedStats.IncomeGoalProgress}}%</span>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar progress-income"
+                         style="width: {{if gt .EnhancedStats.IncomeGoalProgress 100.0}}100{{else}}{{printf "%.1f" .EnhancedStats.IncomeGoalProgress}}{{end}}%">
+                    </div>
+                </div>
+            </footer>
+            {{end}}
+        </article>
+
+        <!-- Expense Statistics -->
+        <article class="stat-card stat-card-enhanced expense-card">
+            <header class="stat-header">
+                <div class="stat-icon">💸</div>
+                <div class="stat-title">
+                    <h3>Расходы</h3>
+                    <span class="stat-period">{{.MonthlySummary.CurrentMonth}}</span>
+                </div>
+                {{if .MonthlySummary.HasPreviousData}}
+                <div class="stat-trend {{.MonthlySummary.GetExpensesChangeClass}}">
+                    {{if gt .MonthlySummary.ExpensesChange 0.0}}
+                    <span class="trend-icon">↗️</span>
+                    {{else if lt .MonthlySummary.ExpensesChange 0.0}}
+                    <span class="trend-icon">↘️</span>
+                    {{else}}
+                    <span class="trend-icon">➡️</span>
+                    {{end}}
+                    <span class="trend-value">{{printf "%.1f%%" (abs .MonthlySummary.ExpensesChange)}}</span>
+                </div>
+                {{end}}
+            </header>
+
+            <main class="stat-content">
+                <div class="stat-amount">{{printf "%.2f" .MonthlySummary.TotalExpenses}} ₽</div>
+                {{if .MonthlySummary.HasPreviousData}}
+                <div class="stat-comparison">
+                    <small class="text-muted">
+                        Было: {{printf "%.2f" .MonthlySummary.PreviousExpenses}} ₽
+                    </small>
+                </div>
+                {{end}}
+
+                <!-- Average per day -->
+                {{if .EnhancedStats}}
+                <div class="stat-metrics">
+                    <div class="metric">
+                        <span class="metric-label">Средний день</span>
+                        <span class="metric-value">{{printf "%.0f" .EnhancedStats.AvgExpensePerDay}} ₽</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Транзакций</span>
+                        <span class="metric-value">{{.EnhancedStats.ExpenseTransactionsCount}}</span>
+                    </div>
+                </div>
+                {{end}}
+            </main>
+
+            <!-- Budget comparison -->
+            {{if .EnhancedStats.ExpenseBudget}}
+            <footer class="stat-progress">
+                <div class="progress-info">
+                    <span>Бюджет: {{printf "%.0f" .EnhancedStats.ExpenseBudget}} ₽</span>
+                    <span class="{{if gt .EnhancedStats.ExpenseBudgetProgress 100.0}}text-danger{{else if gt .EnhancedStats.ExpenseBudgetProgress 80.0}}text-warning{{else}}text-success{{end}}">
+                        {{printf "%.1f%%" .EnhancedStats.ExpenseBudgetProgress}}%
+                    </span>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar {{if gt .EnhancedStats.ExpenseBudgetProgress 100.0}}progress-danger{{else if gt .EnhancedStats.ExpenseBudgetProgress 80.0}}progress-warning{{else}}progress-success{{end}}"
+                         style="width: {{if gt .EnhancedStats.ExpenseBudgetProgress 100.0}}100{{else}}{{printf "%.1f" .EnhancedStats.ExpenseBudgetProgress}}{{end}}%">
+                    </div>
+                </div>
+            </footer>
+            {{end}}
+        </article>
+
+        <!-- Net Income -->
+        <article class="stat-card stat-card-enhanced net-card">
+            <header class="stat-header">
+                <div class="stat-icon">💰</div>
+                <div class="stat-title">
+                    <h3>Остаток</h3>
+                    <span class="stat-period">Доходы - Расходы</span>
+                </div>
+            </header>
+
+            <main class="stat-content">
+                <div class="stat-amount {{.MonthlySummary.GetNetIncomeClass}}">
+                    {{printf "%.2f" .MonthlySummary.NetIncome}} ₽
+                </div>
+
+                {{if .EnhancedStats}}
+                <div class="stat-metrics">
+                    <div class="metric">
+                        <span class="metric-label">Всего транзакций</span>
+                        <span class="metric-value">{{.MonthlySummary.TransactionCount}}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Средний чек</span>
+                        <span class="metric-value">{{printf "%.0f" .EnhancedStats.AvgTransactionAmount}} ₽</span>
+                    </div>
+                </div>
+                {{end}}
+            </main>
+
+            <!-- Savings Rate -->
+            {{if .EnhancedStats}}
+            <footer class="stat-info">
+                <div class="savings-rate">
+                    <span class="metric-label">Норма сбережений:</span>
+                    <span class="metric-value {{if gt .EnhancedStats.SavingsRate 20.0}}text-success{{else if gt .EnhancedStats.SavingsRate 10.0}}text-warning{{else}}text-danger{{end}}">
+                        {{printf "%.1f%%" .EnhancedStats.SavingsRate}}
+                    </span>
+                </div>
+                <small class="text-muted">
+                    {{if gt .EnhancedStats.SavingsRate 20.0}}
+                    Отличная норма сбережений! 💪
+                    {{else if gt .EnhancedStats.SavingsRate 10.0}}
+                    Неплохо, но можно лучше 👍
+                    {{else if gt .EnhancedStats.SavingsRate 0.0}}
+                    Стоит поработать над экономией 💡
+                    {{else}}
+                    Расходы превышают доходы ⚠️
+                    {{end}}
+                </small>
+            </footer>
+            {{end}}
+        </article>
+
+        <!-- Forecast Card -->
+        {{if .EnhancedStats.Forecast}}
+        <article class="stat-card stat-card-enhanced forecast-card">
+            <header class="stat-header">
+                <div class="stat-icon">📈</div>
+                <div class="stat-title">
+                    <h3>Прогноз</h3>
+                    <span class="stat-period">До конца месяца</span>
+                </div>
+            </header>
+
+            <main class="stat-content">
+                <div class="forecast-metrics">
+                    <div class="forecast-item">
+                        <span class="forecast-label">Ожидаемые доходы</span>
+                        <span class="forecast-value text-success">+{{printf "%.0f" .EnhancedStats.Forecast.ExpectedIncome}} ₽</span>
+                    </div>
+                    <div class="forecast-item">
+                        <span class="forecast-label">Ожидаемые расходы</span>
+                        <span class="forecast-value text-danger">-{{printf "%.0f" .EnhancedStats.Forecast.ExpectedExpenses}} ₽</span>
+                    </div>
+                    <div class="forecast-item forecast-total">
+                        <span class="forecast-label">Прогноз на месяц</span>
+                        <span class="forecast-value {{if gt .EnhancedStats.Forecast.MonthEndBalance 0.0}}text-success{{else}}text-danger{{end}}">
+                            {{printf "%.0f" .EnhancedStats.Forecast.MonthEndBalance}} ₽
+                        </span>
+                    </div>
+                </div>
+            </main>
+
+            <footer class="stat-info">
+                <small class="text-muted">
+                    {{if gt .EnhancedStats.Forecast.DaysRemaining 0}}
+                    Осталось {{.EnhancedStats.Forecast.DaysRemaining}} дней в месяце
+                    {{else}}
+                    Месяц завершен
+                    {{end}}
+                </small>
+            </footer>
+        </article>
+        {{end}}
+    </div>
+</section>
+
+<style>
+.enhanced-stats {
+    margin-bottom: 1.25rem;
+}
+
+.stats-grid-enhanced {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+.stat-card-enhanced {
+    background: var(--pico-card-background-color);
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: var(--pico-border-radius);
+    padding: 1rem;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.stat-card-enhanced:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.stat-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+}
+
+.stat-icon {
+    font-size: 2rem;
+    opacity: 0.8;
+}
+
+.stat-title h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--pico-color);
+}
+
+.stat-period {
+    font-size: 0.75rem;
+    color: var(--pico-muted-color);
+}
+
+.stat-trend {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: bold;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    background: rgba(var(--pico-color-rgb), 0.1);
+}
+
+.stat-content {
+    margin-bottom: 1rem;
+}
+
+.stat-amount {
+    font-size: 1.75rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+    color: var(--pico-color);
+}
+
+.stat-comparison {
+    margin-bottom: 0.75rem;
+}
+
+.stat-metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+}
+
+.metric {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.metric-label {
+    font-size: 0.75rem;
+    color: var(--pico-muted-color);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.metric-value {
+    font-weight: 600;
+    color: var(--pico-color);
+}
+
+.stat-progress, .stat-info {
+    border-top: 1px solid var(--pico-muted-border-color);
+    padding-top: 1rem;
+    margin-top: 1rem;
+}
+
+.progress-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.progress-bar-container {
+    width: 100%;
+    height: 6px;
+    background: var(--pico-muted-border-color);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    transition: width 0.3s ease;
+    border-radius: 3px;
+}
+
+.progress-income {
+    background: linear-gradient(90deg, var(--pico-color-green-500), var(--pico-color-green-400));
+}
+
+.progress-success {
+    background: var(--pico-color-green-500);
+}
+
+.progress-warning {
+    background: var(--pico-color-amber-500);
+}
+
+.progress-danger {
+    background: var(--pico-color-red-500);
+}
+
+.savings-rate {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.forecast-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.forecast-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.forecast-total {
+    border-top: 1px solid var(--pico-muted-border-color);
+    padding-top: 0.75rem;
+    margin-top: 0.5rem;
+    font-weight: bold;
+}
+
+.forecast-label {
+    font-size: 0.875rem;
+    color: var(--pico-muted-color);
+}
+
+.forecast-value {
+    font-weight: 600;
+}
+
+/* Card-specific styling */
+.income-card {
+    border-left: 4px solid var(--pico-color-green-500);
+}
+
+.expense-card {
+    border-left: 4px solid var(--pico-color-red-500);
+}
+
+.net-card {
+    border-left: 4px solid var(--pico-color-blue-500);
+}
+
+.forecast-card {
+    border-left: 4px solid var(--pico-color-purple-500);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .stats-grid-enhanced {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .stat-card-enhanced {
+        padding: 1rem;
+    }
+
+    .stat-amount {
+        font-size: 1.5rem;
+    }
+
+    .stat-metrics {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .stat-header {
+        flex-direction: column;
+        gap: 0.5rem;
+        align-items: flex-start;
+    }
+
+    .forecast-metrics {
+        gap: 0.5rem;
+    }
+
+    .forecast-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+}
+</style>
+{{end}}

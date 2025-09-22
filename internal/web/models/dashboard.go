@@ -22,6 +22,7 @@ type DashboardViewModel struct {
 	BudgetOverview   *BudgetOverviewCard   `json:"budget_overview"`
 	RecentActivity   *RecentActivityCard   `json:"recent_activity"`
 	CategoryInsights *CategoryInsightsCard `json:"category_insights"`
+	EnhancedStats    *EnhancedStatsCard    `json:"enhanced_stats,omitempty"`
 }
 
 // MonthlySummaryCard содержит финансовую сводку за месяц
@@ -266,11 +267,6 @@ const (
 	BudgetNearLimitThreshold = 80.0  // 80% от бюджета
 	BudgetOverLimitThreshold = 100.0 // 100% от бюджета
 
-	// Периоды обновления (в секундах)
-	StatsRefreshInterval    = 60  // 1 минута
-	ActivityRefreshInterval = 30  // 30 секунд
-	BudgetRefreshInterval   = 120 // 2 минуты
-
 	// Пороги для категорий
 	CategoryHighPercentage   = 30.0 // 30% - высокий процент
 	CategoryMediumPercentage = 15.0 // 15% - средний процент
@@ -286,7 +282,34 @@ const (
 	PercentageMultiplier = 100.0
 )
 
-// Error constants
+// EnhancedStatsCard содержит расширенную статистику
+type EnhancedStatsCard struct {
+	// Income metrics
+	AvgIncomePerDay         float64 `json:"avg_income_per_day"`
+	IncomeTransactionsCount int     `json:"income_transactions_count"`
+	IncomeGoal              float64 `json:"income_goal,omitempty"`
+	IncomeGoalProgress      float64 `json:"income_goal_progress,omitempty"`
+
+	// Expense metrics
+	AvgExpensePerDay         float64 `json:"avg_expense_per_day"`
+	ExpenseTransactionsCount int     `json:"expense_transactions_count"`
+	ExpenseBudget            float64 `json:"expense_budget,omitempty"`
+	ExpenseBudgetProgress    float64 `json:"expense_budget_progress,omitempty"`
+
+	// General metrics
+	AvgTransactionAmount float64       `json:"avg_transaction_amount"`
+	SavingsRate          float64       `json:"savings_rate"` // Percentage
+	Forecast             *ForecastData `json:"forecast,omitempty"`
+}
+
+// ForecastData содержит прогнозные данные
+type ForecastData struct {
+	ExpectedIncome   float64 `json:"expected_income"`
+	ExpectedExpenses float64 `json:"expected_expenses"`
+	MonthEndBalance  float64 `json:"month_end_balance"`
+	DaysRemaining    int     `json:"days_remaining"`
+}
+
 var (
 	ErrInvalidDateRange  = NewValidationError("End date must be after start date")
 	ErrDateRangeTooLarge = NewValidationError("Date range cannot exceed 2 years")

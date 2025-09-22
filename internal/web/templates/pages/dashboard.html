@@ -9,6 +9,7 @@
         <!-- PicoCSS -->
         <link rel="stylesheet" href="/static/css/pico.min.css" />
         <link rel="stylesheet" href="/static/css/custom.css" />
+        <link rel="stylesheet" href="/static/css/compact.css" />
 
         <!-- HTMX -->
         <script src="/static/js/htmx.min.js"></script>
@@ -97,138 +98,21 @@
                         Вот обзор финансов {{if .Family}}семьи
                         "{{.Family.Name}}"{{else}}вашей семьи{{end}}
                     </p>
-                    {{if .Filters}}
-                    <div class="period-selector">
-                        <small class="text-muted">
-                            Период: {{.Filters.Period}} {{if
-                            .DashboardViewModel.MonthlySummary}}
-                            ({{.DashboardViewModel.MonthlySummary.CurrentMonth}})
-                            {{end}}
-                        </small>
-                    </div>
-                    {{end}}
                 </section>
 
-                <!-- Stats Cards -->
-                {{if .DashboardViewModel.MonthlySummary}} {{template "dashboard-stats" .}} {{else}}
-                <section class="stats-grid"
-                         hx-get="/htmx/dashboard/stats"
-                         hx-trigger="load"
-                         hx-target="this"
-                         hx-swap="outerHTML">
-                    <p aria-busy="true">Загрузка статистики...</p>
-                </section>
-                {{end}}
-
-                <!-- Quick Actions -->
-                <section class="quick-actions">
-                    <h2>Быстрые действия</h2>
-                    <div class="grid">
-                        <a
-                            href="/transactions/new"
-                            role="button"
-                            class="secondary"
-                        >
-                            ➕ Добавить транзакцию
-                        </a>
-                        <a href="/budgets/new" role="button" class="secondary">
-                            📊 Создать бюджет
-                        </a>
-                        <a href="/reports" role="button" class="secondary">
-                            📈 Просмотреть отчеты
-                        </a>
-                        <a href="/categories" role="button" class="secondary">
-                            🏷️ Управление категориями
-                        </a>
-                    </div>
-                </section>
-
-                <!-- Main Dashboard Content -->
-                <div class="dashboard-content">
-                    <div class="grid">
-                        <!-- Recent Activity -->
-                        <section class="recent-activity">
-                            <h2>Последние транзакции</h2>
-                            {{if .DashboardViewModel.RecentActivity}} {{template "recent-transactions" .}} {{else}}
-                            <div class="recent-transactions"
-                                hx-get="/htmx/transactions/recent"
-                                hx-trigger="load"
-                                hx-target="this"
-                                hx-swap="outerHTML"
-                            >
-                                <p aria-busy="true">Загрузка транзакций...</p>
-                            </div>
-                            {{end}}
-                        </section>
-
-                        <!-- Budget Overview -->
-                        <section class="budget-overview-section">
-                            <h2>Состояние бюджетов</h2>
-                            {{if .DashboardViewModel.BudgetOverview}} {{template "budget-overview" .}} {{else}}
-                            <div class="budget-overview"
-                                hx-get="/htmx/budgets/overview"
-                                hx-trigger="load"
-                                hx-target="this"
-                                hx-swap="outerHTML"
-                            >
-                                <p aria-busy="true">Загрузка бюджетов...</p>
-                            </div>
-                            {{end}}
-                        </section>
-                    </div>
-
-                    <!-- Category Insights -->
-                    {{if .DashboardViewModel.CategoryInsights}}
-                    <section class="category-insights">
-                        <h2>Аналитика по категориям</h2>
-                        <div class="insights-content">
-                            {{if
-                            .DashboardViewModel.CategoryInsights.TopExpenseCategories}}
-                            <div class="expense-categories">
-                                <h3>Топ расходов</h3>
-                                {{range
-                                .DashboardViewModel.CategoryInsights.TopExpenseCategories}}
-                                <div class="category-item">
-                                    <div class="category-info">
-                                        {{if
-                                        .CategoryIcon}}{{.CategoryIcon}}{{end}}
-                                        <span class="category-name"
-                                            >{{.CategoryName}}</span
-                                        >
-                                    </div>
-                                    <div class="category-amount text-danger">
-                                        {{printf "%.2f" .Amount}} ₽ ({{printf
-                                        "%.1f" .Percentage}}%)
-                                    </div>
-                                </div>
-                                {{end}}
-                            </div>
-                            {{end}} {{if
-                            .DashboardViewModel.CategoryInsights.TopIncomeCategories}}
-                            <div class="income-categories">
-                                <h3>Топ доходов</h3>
-                                {{range
-                                .DashboardViewModel.CategoryInsights.TopIncomeCategories}}
-                                <div class="category-item">
-                                    <div class="category-info">
-                                        {{if
-                                        .CategoryIcon}}{{.CategoryIcon}}{{end}}
-                                        <span class="category-name"
-                                            >{{.CategoryName}}</span
-                                        >
-                                    </div>
-                                    <div class="category-amount text-success">
-                                        {{printf "%.2f" .Amount}} ₽ ({{printf
-                                        "%.1f" .Percentage}}%)
-                                    </div>
-                                </div>
-                                {{end}}
-                            </div>
-                            {{end}}
-                        </div>
-                    </section>
-                    {{end}}
+                <!-- Compact Mode Toggle -->
+                <div class="compact-mode-toggle">
+                    <label class="compact-toggle">
+                        <input type="checkbox" id="compact-mode" />
+                        <span>Компактный режим</span>
+                    </label>
                 </div>
+
+                <!-- Period Selector -->
+                {{template "period-selector" map "Filters" .Filters "CurrentPeriodLabel" (or .DashboardViewModel.MonthlySummary.CurrentMonth "Текущий период") "PeriodDescription" "Выберите период для анализа финансовых данных" "Today" now}}
+
+                <!-- Dashboard Content Container -->
+                {{template "dashboard-content" .}}
             </div>
         </main>
 
@@ -255,49 +139,109 @@
         <!-- Custom JavaScript -->
         <script src="/static/js/app.js"></script>
 
-        <!-- Dashboard Styles -->
+        <!-- Compact Mode Script -->
+        <script>
+            document.addEventListener("DOMContentLoaded", function () {
+                const compactToggle = document.getElementById("compact-mode");
+                const body = document.body;
+
+                // Загружаем сохраненное состояние
+                const isCompact =
+                    localStorage.getItem("compact-mode") === "true";
+                if (isCompact) {
+                    body.classList.add("compact-mode");
+                    compactToggle.checked = true;
+                }
+
+                // Обработчик переключения
+                compactToggle.addEventListener("change", function () {
+                    if (this.checked) {
+                        body.classList.add("compact-mode");
+                        localStorage.setItem("compact-mode", "true");
+                    } else {
+                        body.classList.remove("compact-mode");
+                        localStorage.setItem("compact-mode", "false");
+                    }
+                });
+            });
+        </script>
+
+        <!-- Compact Dashboard Styles -->
         <style>
             .dashboard {
-                max-width: 1200px;
+                max-width: 1400px;
                 margin: 0 auto;
             }
 
+            /* Компактное приветствие */
             .welcome {
                 text-align: center;
-                margin-bottom: 2rem;
+                margin-bottom: 1rem;
+                padding: 0.75rem;
+                background: var(--pico-primary-background);
+                border-radius: var(--pico-border-radius);
             }
 
+            .welcome h1 {
+                margin: 0 0 0.25rem 0;
+                font-size: 1.5rem;
+            }
+
+            .welcome p {
+                margin: 0;
+                font-size: 0.9rem;
+                opacity: 0.8;
+            }
+
+            /* Компактный селектор периода */
             .period-selector {
-                margin-top: 0.5rem;
+                margin: 0.5rem 0;
+            }
+
+            /* Уменьшенные отступы для быстрых действий */
+            .quick-actions {
+                margin-bottom: 1.25rem;
+            }
+
+            .quick-actions h2 {
+                margin: 0 0 0.75rem 0;
+                font-size: 1.1rem;
             }
 
             .quick-actions .grid {
-                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                gap: 1rem;
-                margin-bottom: 2rem;
+                grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                gap: 0.75rem;
             }
 
+            .quick-actions a[role="button"] {
+                padding: 0.5rem 0.75rem;
+                font-size: 0.85rem;
+                text-align: center;
+            }
+
+            /* Компактная сетка контента */
             .dashboard-content .grid {
                 grid-template-columns: 1fr 1fr;
-                gap: 2rem;
-                margin-bottom: 2rem;
+                gap: 1.25rem;
+                margin-bottom: 1.25rem;
             }
 
             .category-insights {
-                margin-top: 2rem;
+                margin-top: 1.25rem;
             }
 
             .insights-content {
                 display: grid;
                 grid-template-columns: 1fr 1fr;
-                gap: 2rem;
+                gap: 1.25rem;
             }
 
+            /* Компактные элементы категорий */
             .category-item {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                padding: 0.5rem 0;
+                padding: 0.375rem 0;
                 border-bottom: 1px solid var(--pico-muted-border-color);
             }
 
@@ -308,34 +252,146 @@
             .category-info {
                 display: flex;
                 align-items: center;
-                gap: 0.5rem;
+                gap: 0.375rem;
             }
 
             .category-amount {
                 font-weight: bold;
+                font-size: 0.9rem;
             }
 
             .stats-grid {
-                margin-bottom: 2rem;
+                margin-bottom: 1.25rem;
             }
 
+            /* Компактные секции */
             .recent-activity,
             .budget-overview-section {
                 background: var(--pico-card-background-color);
                 border: 1px solid var(--pico-muted-border-color);
                 border-radius: var(--pico-border-radius);
-                padding: 1.5rem;
+                padding: 1rem;
             }
 
             .recent-activity h2,
             .budget-overview-section h2 {
-                margin-top: 0;
+                margin: 0 0 0.75rem 0;
+                font-size: 1.1rem;
+            }
+
+            /* Переключатель компактного режима */
+            .compact-mode-toggle {
+                display: flex;
+                justify-content: flex-end;
+                margin-bottom: 0.75rem;
+                padding: 0.5rem;
+                background: var(--pico-background-color);
+                border-radius: var(--pico-border-radius);
+                border: 1px solid var(--pico-muted-border-color);
+            }
+
+            .compact-toggle {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                margin: 0;
+                font-size: 0.9rem;
+                cursor: pointer;
+            }
+
+            .compact-toggle input[type="checkbox"] {
+                margin: 0;
+            }
+
+            /* Компактная навигация */
+            nav.container-fluid {
+                padding: 0.5rem 1rem;
+            }
+
+            nav ul li a {
+                padding: 0.375rem 0.75rem;
+                font-size: 0.9rem;
+            }
+
+            nav .brand strong {
+                font-size: 1.1rem;
+            }
+
+            /* Компактный режим активен */
+            body.compact-mode .dashboard {
+                max-width: 1600px;
+            }
+
+            body.compact-mode .welcome {
+                padding: 0.5rem;
+                margin-bottom: 0.75rem;
+            }
+
+            body.compact-mode .welcome h1 {
+                font-size: 1.3rem;
+            }
+
+            body.compact-mode .welcome p {
+                font-size: 0.8rem;
+            }
+
+            body.compact-mode .period-selector {
+                padding: 0.75rem;
                 margin-bottom: 1rem;
             }
 
+            body.compact-mode .quick-actions .grid {
+                grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+                gap: 0.5rem;
+            }
+
+            body.compact-mode .quick-actions a[role="button"] {
+                padding: 0.375rem 0.5rem;
+                font-size: 0.8rem;
+            }
+
+            body.compact-mode .dashboard-content .grid {
+                gap: 1rem;
+            }
+
+            body.compact-mode .stats-grid-enhanced {
+                grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+                gap: 0.75rem;
+            }
+
+            body.compact-mode .stat-card-enhanced {
+                padding: 0.75rem;
+            }
+
+            body.compact-mode .recent-activity,
+            body.compact-mode .budget-overview-section {
+                padding: 0.75rem;
+            }
+
+            /* Компактный футер */
+            footer.container {
+                margin-top: 1.5rem;
+                padding: 1rem 0;
+            }
+
+            footer small {
+                font-size: 0.8rem;
+            }
+
+            /* Мобильная адаптация */
             @media (max-width: 768px) {
+                .welcome h1 {
+                    font-size: 1.3rem;
+                }
+
                 .quick-actions .grid {
                     grid-template-columns: repeat(2, 1fr);
+                    gap: 0.5rem;
+                }
+
+                .quick-actions a[role="button"] {
+                    padding: 0.4rem 0.5rem;
+                    font-size: 0.8rem;
                 }
 
                 .dashboard-content .grid {
@@ -346,6 +402,27 @@
                 .insights-content {
                     grid-template-columns: 1fr;
                     gap: 1rem;
+                }
+
+                .recent-activity,
+                .budget-overview-section {
+                    padding: 0.75rem;
+                }
+            }
+
+            @media (max-width: 480px) {
+                .welcome {
+                    margin-bottom: 0.75rem;
+                    padding: 0.5rem;
+                }
+
+                .quick-actions .grid {
+                    grid-template-columns: 1fr;
+                }
+
+                nav ul li a {
+                    padding: 0.25rem 0.5rem;
+                    font-size: 0.85rem;
                 }
             }
         </style>

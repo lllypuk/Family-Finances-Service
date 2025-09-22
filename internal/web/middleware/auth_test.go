@@ -85,7 +85,6 @@ func TestRequireAuth_UnauthenticatedUser_RegularRequest(t *testing.T) {
 	err := handler(c)
 
 	// Проверяем результат - должен быть редирект
-	assert.IsType(t, &echo.HTTPError{}, err)
 	var httpErr *echo.HTTPError
 	require.ErrorAs(t, err, &httpErr)
 	assert.Equal(t, http.StatusFound, httpErr.Code)
@@ -272,7 +271,6 @@ func TestRequireRole_NoUserInContext(t *testing.T) {
 	err := handler(c)
 
 	// Должен быть ошибка авторизации с редиректом
-	assert.IsType(t, &echo.HTTPError{}, err)
 	var httpErr *echo.HTTPError
 	require.ErrorAs(t, err, &httpErr)
 	assert.Equal(t, http.StatusFound, httpErr.Code)
@@ -431,7 +429,6 @@ func TestRedirectIfAuthenticated_AuthenticatedUser(t *testing.T) {
 
 	// Должен быть редирект на dashboard
 	if err != nil {
-		assert.IsType(t, &echo.HTTPError{}, err)
 		var httpErr *echo.HTTPError
 		require.ErrorAs(t, err, &httpErr)
 		assert.Equal(t, http.StatusFound, httpErr.Code)

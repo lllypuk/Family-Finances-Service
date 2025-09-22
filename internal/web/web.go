@@ -180,6 +180,8 @@ func (ws *Server) setupHTMXRoutes(protected *echo.Group) {
 
 	// HTMX для dashboard
 	htmx.GET("/dashboard/stats", ws.dashboardHandler.DashboardStats)
+	htmx.GET("/dashboard/filter", ws.dashboardHandler.DashboardFilter)
+	htmx.GET("/dashboard/category-insights", ws.dashboardHandler.CategoryInsights, middleware.RequireAdminOrMember())
 	htmx.GET("/transactions/recent", ws.dashboardHandler.RecentTransactions, middleware.RequireAdminOrMember())
 	htmx.GET("/budgets/overview", ws.dashboardHandler.BudgetOverview, middleware.RequireAdminOrMember())
 

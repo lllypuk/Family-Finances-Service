@@ -1,0 +1,258 @@
+/* Компактные стили для интерфейса семейного бюджета */
+
+/* Глобальные компактные переменные */
+:root {
+    --compact-spacing-xs: 0.25rem;
+    --compact-spacing-sm: 0.5rem;
+    --compact-spacing-md: 0.75rem;
+    --compact-spacing-lg: 1rem;
+    --compact-spacing-xl: 1.25rem;
+
+    --compact-font-xs: 0.75rem;
+    --compact-font-sm: 0.85rem;
+    --compact-font-md: 0.9rem;
+    --compact-font-lg: 1rem;
+    --compact-font-xl: 1.1rem;
+}
+
+/* Компактная типографика */
+.compact-title {
+    font-size: var(--compact-font-xl);
+    margin: 0 0 var(--compact-spacing-sm) 0;
+    font-weight: 600;
+}
+
+.compact-subtitle {
+    font-size: var(--compact-font-md);
+    margin: 0 0 var(--compact-spacing-xs) 0;
+    opacity: 0.8;
+}
+
+.compact-text {
+    font-size: var(--compact-font-sm);
+}
+
+.compact-text-xs {
+    font-size: var(--compact-font-xs);
+}
+
+/* Компактные карточки */
+.compact-card {
+    background: var(--pico-card-background-color);
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: var(--pico-border-radius);
+    padding: var(--compact-spacing-md);
+    margin-bottom: var(--compact-spacing-md);
+}
+
+.compact-card-sm {
+    padding: var(--compact-spacing-sm);
+    margin-bottom: var(--compact-spacing-sm);
+}
+
+.compact-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--compact-spacing-sm);
+    padding-bottom: var(--compact-spacing-sm);
+    border-bottom: 1px solid var(--pico-muted-border-color);
+}
+
+/* Компактные сетки */
+.compact-grid {
+    display: grid;
+    gap: var(--compact-spacing-md);
+}
+
+.compact-grid-2 {
+    grid-template-columns: 1fr 1fr;
+}
+
+.compact-grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.compact-grid-4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.compact-grid-auto {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.compact-grid-auto-sm {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+/* Компактные кнопки */
+.compact-btn {
+    padding: var(--compact-spacing-sm) var(--compact-spacing-md);
+    font-size: var(--compact-font-sm);
+    border-radius: calc(var(--pico-border-radius) * 0.75);
+}
+
+.compact-btn-sm {
+    padding: var(--compact-spacing-xs) var(--compact-spacing-sm);
+    font-size: var(--compact-font-xs);
+}
+
+/* Компактные метрики */
+.compact-metric {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--compact-spacing-xs) 0;
+}
+
+.compact-metric:not(:last-child) {
+    border-bottom: 1px solid var(--pico-muted-border-color);
+    margin-bottom: var(--compact-spacing-xs);
+    padding-bottom: var(--compact-spacing-xs);
+}
+
+.compact-metric-label {
+    font-size: var(--compact-font-sm);
+    color: var(--pico-muted-color);
+}
+
+.compact-metric-value {
+    font-size: var(--compact-font-sm);
+    font-weight: 600;
+}
+
+/* Компактные списки */
+.compact-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.compact-list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--compact-spacing-sm) 0;
+    border-bottom: 1px solid var(--pico-muted-border-color);
+}
+
+.compact-list-item:last-child {
+    border-bottom: none;
+}
+
+/* Компактные badge */
+.compact-badge {
+    padding: var(--compact-spacing-xs) var(--compact-spacing-sm);
+    border-radius: calc(var(--pico-border-radius) * 0.5);
+    font-size: var(--compact-font-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+/* Компактные индикаторы прогресса */
+.compact-progress {
+    width: 100%;
+    height: 6px;
+    background: var(--pico-muted-border-color);
+    border-radius: 3px;
+    overflow: hidden;
+    margin: var(--compact-spacing-xs) 0;
+}
+
+.compact-progress-bar {
+    height: 100%;
+    transition: width 0.3s ease;
+    border-radius: 3px;
+}
+
+/* Компактные иконки */
+.compact-icon {
+    font-size: 1.25rem;
+    opacity: 0.8;
+}
+
+.compact-icon-sm {
+    font-size: 1rem;
+}
+
+.compact-icon-lg {
+    font-size: 1.5rem;
+}
+
+/* Компактные отступы */
+.compact-mt-0 { margin-top: 0; }
+.compact-mt-xs { margin-top: var(--compact-spacing-xs); }
+.compact-mt-sm { margin-top: var(--compact-spacing-sm); }
+.compact-mt-md { margin-top: var(--compact-spacing-md); }
+.compact-mt-lg { margin-top: var(--compact-spacing-lg); }
+
+.compact-mb-0 { margin-bottom: 0; }
+.compact-mb-xs { margin-bottom: var(--compact-spacing-xs); }
+.compact-mb-sm { margin-bottom: var(--compact-spacing-sm); }
+.compact-mb-md { margin-bottom: var(--compact-spacing-md); }
+.compact-mb-lg { margin-bottom: var(--compact-spacing-lg); }
+
+.compact-p-0 { padding: 0; }
+.compact-p-xs { padding: var(--compact-spacing-xs); }
+.compact-p-sm { padding: var(--compact-spacing-sm); }
+.compact-p-md { padding: var(--compact-spacing-md); }
+.compact-p-lg { padding: var(--compact-spacing-lg); }
+
+/* Адаптивность для компактного режима */
+@media (max-width: 768px) {
+    .compact-grid-4 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .compact-grid-3 {
+        grid-template-columns: 1fr;
+    }
+
+    .compact-grid-2 {
+        grid-template-columns: 1fr;
+    }
+
+    .compact-card {
+        padding: var(--compact-spacing-sm);
+    }
+}
+
+@media (max-width: 480px) {
+    .compact-grid-auto,
+    .compact-grid-auto-sm {
+        grid-template-columns: 1fr;
+    }
+
+    .compact-card-header {
+        flex-direction: column;
+        gap: var(--compact-spacing-xs);
+        align-items: flex-start;
+    }
+}
+
+/* Utility классы для скрытия элементов на мобильных */
+@media (max-width: 768px) {
+    .compact-hide-mobile {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .compact-hide-small {
+        display: none;
+    }
+}
+
+/* Компактный режим для печати */
+@media print {
+    .compact-card {
+        border: 1px solid #ccc;
+        margin-bottom: var(--compact-spacing-sm);
+        break-inside: avoid;
+    }
+
+    .compact-grid {
+        gap: var(--compact-spacing-sm);
+    }
+}
