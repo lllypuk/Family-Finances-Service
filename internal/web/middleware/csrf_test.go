@@ -1,7 +1,6 @@
 package middleware_test
 
 import (
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -147,12 +146,8 @@ func TestCSRFProtection_POST_WithoutToken_Forbidden(t *testing.T) {
 	err := handler(c)
 
 	if err != nil {
-		assert.IsType(t, &echo.HTTPError{}, err)
-		httpErr := func() *echo.HTTPError {
-			target := &echo.HTTPError{}
-			_ = errors.As(err, &target)
-			return target
-		}()
+		var httpErr *echo.HTTPError
+		require.ErrorAs(t, err, &httpErr)
 		assert.Equal(t, http.StatusForbidden, httpErr.Code)
 		assert.Contains(t, httpErr.Message, "CSRF token not provided")
 	} else {
@@ -193,12 +188,8 @@ func TestCSRFProtection_POST_WithInvalidToken_Forbidden(t *testing.T) {
 
 	err = handler(postCtx)
 	if err != nil {
-		assert.IsType(t, &echo.HTTPError{}, err)
-		httpErr := func() *echo.HTTPError {
-			target := &echo.HTTPError{}
-			_ = errors.As(err, &target)
-			return target
-		}()
+		var httpErr *echo.HTTPError
+		require.ErrorAs(t, err, &httpErr)
 		assert.Equal(t, http.StatusForbidden, httpErr.Code)
 		assert.Contains(t, httpErr.Message, "CSRF token mismatch")
 	} else {
@@ -242,12 +233,8 @@ func TestCSRFProtection_PUT_Request_RequiresToken(t *testing.T) {
 	err := handler(c)
 
 	if err != nil {
-		assert.IsType(t, &echo.HTTPError{}, err)
-		httpErr := func() *echo.HTTPError {
-			target := &echo.HTTPError{}
-			_ = errors.As(err, &target)
-			return target
-		}()
+		var httpErr *echo.HTTPError
+		require.ErrorAs(t, err, &httpErr)
 		assert.Equal(t, http.StatusForbidden, httpErr.Code)
 	} else {
 		assert.Equal(t, http.StatusForbidden, rec.Code)
@@ -269,12 +256,8 @@ func TestCSRFProtection_DELETE_Request_RequiresToken(t *testing.T) {
 	err := handler(c)
 
 	if err != nil {
-		assert.IsType(t, &echo.HTTPError{}, err)
-		httpErr := func() *echo.HTTPError {
-			target := &echo.HTTPError{}
-			_ = errors.As(err, &target)
-			return target
-		}()
+		var httpErr *echo.HTTPError
+		require.ErrorAs(t, err, &httpErr)
 		assert.Equal(t, http.StatusForbidden, httpErr.Code)
 	} else {
 		assert.Equal(t, http.StatusForbidden, rec.Code)
