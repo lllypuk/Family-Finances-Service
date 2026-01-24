@@ -195,32 +195,16 @@ migrate-force:
 	fi
 	@migrate -path ./migrations -database "postgres://postgres:postgres123@localhost:5432/family_budget?sslmode=disable" force $(VERSION)
 
-# Observability команды
-.PHONY: observability-up
-observability-up:
-	@echo "Starting observability stack..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) --profile observability up -d
-
-.PHONY: observability-down
-observability-down:
-	@echo "Stopping observability stack..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) --profile observability down
-
-.PHONY: observability-logs
-observability-logs:
-	@echo "Showing observability logs..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) --profile observability logs -f
-
 # Комбинированные команды
 .PHONY: dev-up
 dev-up:
-	@echo "Starting development environment with PostgreSQL and observability..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) --profile observability up -d postgresql jaeger prometheus grafana postgres-exporter
+	@echo "Starting development environment with PostgreSQL..."
+	@docker-compose -f $(DOCKER_COMPOSE_FILE) up -d postgresql
 
 .PHONY: full-up
 full-up:
-	@echo "Starting full stack (app + observability)..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) --profile production --profile observability up -d
+	@echo "Starting full stack (app + database)..."
+	@docker-compose -f $(DOCKER_COMPOSE_FILE) --profile production up -d
 
 # Мониторинг и производительность
 .PHONY: postgres-stats
@@ -324,12 +308,11 @@ help:
 	@echo "  migrate-force    - Force migration version (VERSION=number required)"
 	@echo ""
 	@echo "Docker Environment:"
-	@echo "  dev-up           - Start development environment (PostgreSQL + Observability)"
+	@echo "  dev-up           - Start development environment (PostgreSQL)"
 	@echo "  docker-up        - Start basic Docker containers"
 	@echo "  docker-down      - Stop Docker containers"
 	@echo "  docker-logs      - View Docker container logs"
-	@echo "  observability-up - Start observability stack (Prometheus, Grafana, Jaeger)"
-	@echo "  full-up          - Start complete stack (app + observability)"
+	@echo "  full-up          - Start complete stack (app + database)"
 	@echo ""
 	@echo "Monitoring and Performance:"
 	@echo "  postgres-stats   - Show PostgreSQL table statistics"

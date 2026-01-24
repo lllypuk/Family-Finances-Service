@@ -72,7 +72,10 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	}
 
 	// Проверка пароля
-	if passwordErr := bcrypt.CompareHashAndPassword([]byte(foundUser.Password), []byte(form.Password)); passwordErr != nil {
+	if passwordErr := bcrypt.CompareHashAndPassword(
+		[]byte(foundUser.Password),
+		[]byte(form.Password),
+	); passwordErr != nil {
 		return h.loginError(c, "Invalid email or password", nil)
 	}
 

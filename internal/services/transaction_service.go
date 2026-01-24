@@ -248,7 +248,13 @@ func (s *TransactionServiceImpl) UpdateTransaction(
 
 	// Validate budget limits for new values if it's an expense
 	if existingTx.Type == transaction.TypeExpense {
-		if limitErr := s.ValidateTransactionLimits(ctx, existingTx.FamilyID, existingTx.CategoryID, existingTx.Amount, existingTx.Type); limitErr != nil {
+		if limitErr := s.ValidateTransactionLimits(
+			ctx,
+			existingTx.FamilyID,
+			existingTx.CategoryID,
+			existingTx.Amount,
+			existingTx.Type,
+		); limitErr != nil {
 			return nil, limitErr
 		}
 	}
@@ -259,7 +265,14 @@ func (s *TransactionServiceImpl) UpdateTransaction(
 	}
 
 	// Adjust budgets for the changes
-	if budgetErr := s.adjustBudgetsForUpdate(ctx, existingTx.FamilyID, originalAmount, originalType, originalCategoryID, existingTx); budgetErr != nil {
+	if budgetErr := s.adjustBudgetsForUpdate(
+		ctx,
+		existingTx.FamilyID,
+		originalAmount,
+		originalType,
+		originalCategoryID,
+		existingTx,
+	); budgetErr != nil {
 		// TODO: Replace with proper logging system
 		_ = budgetErr // Ignore budget adjustment errors for now
 	}
@@ -282,7 +295,12 @@ func (s *TransactionServiceImpl) DeleteTransaction(ctx context.Context, id uuid.
 
 	// Reverse budget impact if it was an expense
 	if existingTx.Type == transaction.TypeExpense {
-		if budgetErr := s.updateBudgetSpent(ctx, existingTx.FamilyID, existingTx.CategoryID, -existingTx.Amount); budgetErr != nil {
+		if budgetErr := s.updateBudgetSpent(
+			ctx,
+			existingTx.FamilyID,
+			existingTx.CategoryID,
+			-existingTx.Amount,
+		); budgetErr != nil {
 			// TODO: Replace with proper logging system
 			_ = budgetErr // Ignore budget reversal errors for now
 		}

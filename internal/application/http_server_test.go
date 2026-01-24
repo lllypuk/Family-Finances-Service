@@ -294,9 +294,8 @@ func TestHTTPServer_WithObservabilityRoutes(t *testing.T) {
 		routePaths[route.Method+" "+route.Path] = true
 	}
 
-	// Check for observability endpoints
+	// Check for health check endpoints
 	assert.True(t, routePaths["GET /health"])
-	assert.True(t, routePaths["GET /metrics"])
 	assert.True(t, routePaths["GET /ready"])
 	assert.True(t, routePaths["GET /live"])
 }
