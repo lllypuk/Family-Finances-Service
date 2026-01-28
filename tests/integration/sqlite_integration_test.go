@@ -21,21 +21,20 @@ import (
 	userrepo "family-budget-service/internal/infrastructure/user"
 )
 
-// TestFullWorkflowIntegration tests complete application workflow with PostgreSQL
+// TestFullWorkflowIntegration tests complete application workflow with SQLite
 func TestFullWorkflowIntegration(t *testing.T) {
-	// Setup PostgreSQL testcontainer
-	container := testutils.SetupPostgreSQLContainer(t)
-	defer container.Cleanup(t)
+	// Setup SQLite in-memory database
+	container := testutils.SetupSQLiteTestDB(t)
 
 	db := container.GetTestDatabase(t)
 	ctx := context.Background()
 
 	// Initialize repositories
-	userRepo := userrepo.NewPostgreSQLRepository(db)
-	familyRepo := userrepo.NewPostgreSQLFamilyRepository(db)
-	categoryRepo := categoryrepo.NewPostgreSQLRepository(db)
-	transactionRepo := transactionrepo.NewPostgreSQLRepository(db)
-	budgetRepo := budgetrepo.NewPostgreSQLRepository(db)
+	userRepo := userrepo.NewSQLiteRepository(db)
+	familyRepo := userrepo.NewSQLiteFamilyRepository(db)
+	categoryRepo := categoryrepo.NewSQLiteRepository(db)
+	transactionRepo := transactionrepo.NewSQLiteRepository(db)
+	budgetRepo := budgetrepo.NewSQLiteRepository(db)
 
 	// Step 1: Create family
 	family := &user.Family{

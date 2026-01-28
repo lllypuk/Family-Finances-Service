@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 
 	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/postgres" // Register PostgreSQL driver for migrations
-	_ "github.com/golang-migrate/migrate/v4/source/file"       // Register file source driver for migrations
+	_ "github.com/golang-migrate/migrate/v4/database/sqlite3" // Register SQLite driver for migrations
+	_ "github.com/golang-migrate/migrate/v4/source/file"      // Register file source driver for migrations
 )
 
 // MigrationManager handles database schema migrations

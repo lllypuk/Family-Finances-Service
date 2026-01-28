@@ -113,8 +113,8 @@ func (hs *HealthService) ReadinessHandler() echo.HandlerFunc {
 		// Для readiness проверяем только критичные компоненты
 		ready := true
 		for name, check := range health.Checks {
-			// PostgreSQL критичен для готовности
-			if name == "postgresql" && check.Status != HealthStatusHealthy {
+			// База данных критична для готовности
+			if name == "database" && check.Status != HealthStatusHealthy {
 				ready = false
 				break
 			}
@@ -190,31 +190,31 @@ func (c *CustomHealthChecker) CheckHealth(ctx context.Context) CheckResult {
 	}
 }
 
-// PostgreSQLChecker checker для PostgreSQL
-type PostgreSQLChecker struct {
-	checker PostgreSQLHealthChecker
+// DatabaseChecker checker для базы данных
+type DatabaseChecker struct {
+	checker DatabaseHealthChecker
 }
 
-// NewPostgreSQLHealthChecker создает новый checker для PostgreSQL
-func NewPostgreSQLHealthChecker(checker PostgreSQLHealthChecker) *PostgreSQLChecker {
-	return &PostgreSQLChecker{checker: checker}
+// NewDatabaseHealthChecker создает новый checker для базы данных
+func NewDatabaseHealthChecker(checker DatabaseHealthChecker) *DatabaseChecker {
+	return &DatabaseChecker{checker: checker}
 }
 
 // Name возвращает имя checker'а
-func (p *PostgreSQLChecker) Name() string {
-	return "postgresql"
+func (d *DatabaseChecker) Name() string {
+	return "database"
 }
 
-// CheckHealth проверяет состояние PostgreSQL
-func (p *PostgreSQLChecker) CheckHealth(ctx context.Context) CheckResult {
+// CheckHealth проверяет состояние базы данных
+func (d *DatabaseChecker) CheckHealth(ctx context.Context) CheckResult {
 	start := time.Now()
 
 	// Создаем контекст с таймаутом для проверки
 	checkCtx, cancel := context.WithTimeout(ctx, HealthCheckTimeout)
 	defer cancel()
 
-	// Проверяем PostgreSQL через интерфейс
-	err := p.checker.HealthCheck(checkCtx)
+	// Проверяем базу данных через интерфейс
+	err := d.checker.HealthCheck(checkCtx)
 	duration := time.Since(start)
 
 	if err != nil {

@@ -2,71 +2,96 @@ package transaction
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"family-budget-service/internal/domain/transaction"
+	"family-budget-service/internal/infrastructure/sqlitehelpers"
 	"family-budget-service/internal/infrastructure/validation"
 )
 
-// Transaction validation constants
-const (
-	maxTransactionAmount = 999999999.99
-	maxDescriptionLength = 1000
-	maxQueryLimit        = 1000
-)
-
-// PostgreSQLRepository implements transaction repository using PostgreSQL
-type PostgreSQLRepository struct {
-	db *pgxpool.Pool
+// SQLiteRepository implements transaction repository using SQLite
+type SQLiteRepository struct {
+	db *sql.DB
 }
 
-// NewPostgreSQLRepository creates a new PostgreSQL transaction repository
-func NewPostgreSQLRepository(db *pgxpool.Pool) *PostgreSQLRepository {
-	return &PostgreSQLRepository{
+// Summary holds transaction summary statistics
+type Summary struct {
+	FamilyID      uuid.UUID `json:"family_id"`
+	StartDate     time.Time `json:"start_date"`
+	EndDate       time.Time `json:"end_date"`
+	TotalCount    int       `json:"total_count"`
+	IncomeCount   int       `json:"income_count"`
+	ExpenseCount  int       `json:"expense_count"`
+	TotalIncome   float64   `json:"total_income"`
+	TotalExpenses float64   `json:"total_expenses"`
+	Balance       float64   `json:"balance"`
+	AvgIncome     float64   `json:"avg_income"`
+	AvgExpense    float64   `json:"avg_expense"`
+}
+
+// MonthlySummaryItem holds monthly summary by category
+type MonthlySummaryItem struct {
+	CategoryName     string           `json:"category_name"`
+	Type             transaction.Type `json:"type"`
+	TransactionCount int              `json:"transaction_count"`
+	TotalAmount      float64          `json:"total_amount"`
+	AvgAmount        float64          `json:"avg_amount"`
+}
+
+// NewSQLiteRepository creates a new SQLite transaction repository
+func NewSQLiteRepository(db *sql.DB) *SQLiteRepository {
+	return &SQLiteRepository{
 		db: db,
 	}
 }
 
-// ValidateTransactionType validates transaction type
-func ValidateTransactionType(transactionType transaction.Type) error {
-	if transactionType != transaction.TypeIncome && transactionType != transaction.TypeExpense {
-		return errors.New("invalid transaction type")
-	}
-	return nil
-}
+// scanTransactionRow scans a single row from SQL query into a Transaction struct
+func scanTransactionRow(rows *sql.Rows) (*transaction.Transaction, error) {
+	var t transaction.Transaction
+	var idStr, typeStr, categoryIDStr, userIDStr, familyIDStr string
+	var tagsJSON string
 
-// ValidateAmount validates transaction amount
-func ValidateAmount(amount float64) error {
-	if amount <= 0 {
-		return errors.New("amount must be positive")
+	err := rows.Scan(
+		&idStr,
+		&t.Amount,
+		&typeStr,
+		&t.Description,
+		&categoryIDStr,
+		&userIDStr,
+		&familyIDStr,
+		&t.Date,
+		&tagsJSON,
+		&t.CreatedAt,
+		&t.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan transaction: %w", err)
 	}
-	if amount > maxTransactionAmount {
-		return errors.New("amount too large")
-	}
-	return nil
-}
 
-// ValidateDescription validates transaction description
-func ValidateDescription(description string) error {
-	description = strings.TrimSpace(description)
-	if description == "" {
-		return errors.New("description cannot be empty")
+	// Parse UUID fields
+	t.ID, _ = uuid.Parse(idStr)
+	t.CategoryID, _ = uuid.Parse(categoryIDStr)
+	t.UserID, _ = uuid.Parse(userIDStr)
+	t.FamilyID, _ = uuid.Parse(familyIDStr)
+	t.Type = transaction.Type(typeStr)
+
+	// Parse tags from JSON
+	if jsonErr := json.Unmarshal([]byte(tagsJSON), &t.Tags); jsonErr != nil {
+		t.Tags = []string{}
 	}
-	if len(description) > maxDescriptionLength {
-		return errors.New("description too long")
-	}
-	return nil
+
+	return &t, nil
 }
 
 // Create creates a new transaction in the database
-func (r *PostgreSQLRepository) Create(ctx context.Context, t *transaction.Transaction) error {
+func (r *SQLiteRepository) Create(ctx context.Context, t *transaction.Transaction) error {
 	// Validate transaction parameters
 	if err := validation.ValidateUUID(t.ID); err != nil {
 		return fmt.Errorf("invalid transaction ID: %w", err)
@@ -80,13 +105,13 @@ func (r *PostgreSQLRepository) Create(ctx context.Context, t *transaction.Transa
 	if err := validation.ValidateUUID(t.UserID); err != nil {
 		return fmt.Errorf("invalid user ID: %w", err)
 	}
-	if err := ValidateTransactionType(t.Type); err != nil {
+	if err := validation.ValidateTransactionType(t.Type); err != nil {
 		return fmt.Errorf("invalid transaction type: %w", err)
 	}
-	if err := ValidateAmount(t.Amount); err != nil {
+	if err := validation.ValidateAmount(t.Amount); err != nil {
 		return fmt.Errorf("invalid amount: %w", err)
 	}
-	if err := ValidateDescription(t.Description); err != nil {
+	if err := validation.ValidateDescription(t.Description); err != nil {
 		return fmt.Errorf("invalid description: %w", err)
 	}
 
@@ -103,27 +128,30 @@ func (r *PostgreSQLRepository) Create(ctx context.Context, t *transaction.Transa
 	t.CreatedAt = now
 	t.UpdatedAt = now
 
-	// Convert tags to JSONB
-	tagsJSON := "[]"
-	if len(t.Tags) > 0 {
-		var tagParts []string
-		for _, tag := range t.Tags {
-			// Escape quotes in tags
-			escapedTag := strings.ReplaceAll(tag, `"`, `\"`)
-			tagParts = append(tagParts, fmt.Sprintf(`"%s"`, escapedTag))
-		}
-		tagsJSON = "[" + strings.Join(tagParts, ",") + "]"
+	// Convert tags to JSON
+	tagsJSON, err := json.Marshal(t.Tags)
+	if err != nil {
+		return fmt.Errorf("failed to marshal tags: %w", err)
 	}
 
 	query := `
-		INSERT INTO family_budget.transactions (
+		INSERT INTO transactions (
 			id, amount, description, date, type, category_id, user_id, family_id,
 			tags, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	_, err := r.db.Exec(ctx, query,
-		t.ID, t.Amount, t.Description, t.Date, string(t.Type),
-		t.CategoryID, t.UserID, t.FamilyID, tagsJSON, t.CreatedAt, t.UpdatedAt,
+	_, err = r.db.ExecContext(ctx, query,
+		sqlitehelpers.UUIDToString(t.ID),
+		t.Amount,
+		t.Description,
+		t.Date,
+		string(t.Type),
+		sqlitehelpers.UUIDToString(t.CategoryID),
+		sqlitehelpers.UUIDToString(t.UserID),
+		sqlitehelpers.UUIDToString(t.FamilyID),
+		string(tagsJSON),
+		t.CreatedAt,
+		t.UpdatedAt,
 	)
 
 	if err != nil {
@@ -134,7 +162,7 @@ func (r *PostgreSQLRepository) Create(ctx context.Context, t *transaction.Transa
 }
 
 // GetByID retrieves a transaction by their ID
-func (r *PostgreSQLRepository) GetByID(ctx context.Context, id uuid.UUID) (*transaction.Transaction, error) {
+func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*transaction.Transaction, error) {
 	// Validate UUID parameter
 	if err := validation.ValidateUUID(id); err != nil {
 		return nil, fmt.Errorf("invalid id parameter: %w", err)
@@ -143,29 +171,37 @@ func (r *PostgreSQLRepository) GetByID(ctx context.Context, id uuid.UUID) (*tran
 	query := `
 		SELECT id, amount, description, date, type, category_id, user_id, family_id,
 			   tags, created_at, updated_at
-		FROM family_budget.transactions
-		WHERE id = $1`
+		FROM transactions
+		WHERE id = ?`
 
 	var t transaction.Transaction
-	var typeStr string
-	var tagsJSON []byte
+	var idStr, typeStr, categoryIDStr, userIDStr, familyIDStr string
+	var tagsJSON string
 
-	err := r.db.QueryRow(ctx, query, id).Scan(
-		&t.ID, &t.Amount, &t.Description, &t.Date, &typeStr,
-		&t.CategoryID, &t.UserID, &t.FamilyID, &tagsJSON, &t.CreatedAt, &t.UpdatedAt,
+	err := r.db.QueryRowContext(ctx, query, sqlitehelpers.UUIDToString(id)).Scan(
+		&idStr, &t.Amount, &t.Description, &t.Date, &typeStr,
+		&categoryIDStr, &userIDStr, &familyIDStr, &tagsJSON, &t.CreatedAt, &t.UpdatedAt,
 	)
 
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("transaction with id %s not found", id)
 		}
 		return nil, fmt.Errorf("failed to get transaction by id: %w", err)
 	}
 
+	// Parse UUID fields
+	t.ID, _ = uuid.Parse(idStr)
+	t.CategoryID, _ = uuid.Parse(categoryIDStr)
+	t.UserID, _ = uuid.Parse(userIDStr)
+	t.FamilyID, _ = uuid.Parse(familyIDStr)
 	t.Type = transaction.Type(typeStr)
 
-	// Parse tags from JSONB
-	r.parseTags(tagsJSON, &t.Tags)
+	// Parse tags from JSON
+	if jsonErr := json.Unmarshal([]byte(tagsJSON), &t.Tags); jsonErr != nil {
+		// If unmarshaling fails, set empty tags
+		t.Tags = []string{}
+	}
 
 	return &t, nil
 }
@@ -173,7 +209,7 @@ func (r *PostgreSQLRepository) GetByID(ctx context.Context, id uuid.UUID) (*tran
 // GetByFilter retrieves transactions based on filter criteria
 //
 //nolint:gocognit,funlen // Complex function due to multiple optional filter conditions - necessary for comprehensive filtering
-func (r *PostgreSQLRepository) GetByFilter(
+func (r *SQLiteRepository) GetByFilter(
 	ctx context.Context,
 	filter transaction.Filter,
 ) ([]*transaction.Transaction, error) {
@@ -185,128 +221,106 @@ func (r *PostgreSQLRepository) GetByFilter(
 	// Build dynamic query parts
 	var conditions []string
 	var args []any
-	argIndex := 1
 
 	// Family ID is always required
-	conditions = append(conditions, fmt.Sprintf("family_id = $%d", argIndex))
-	args = append(args, filter.FamilyID)
-	argIndex++
+	conditions = append(conditions, "family_id = ?")
+	args = append(args, sqlitehelpers.UUIDToString(filter.FamilyID))
 
 	// Optional filters
 	if filter.UserID != nil {
 		if err := validation.ValidateUUID(*filter.UserID); err != nil {
 			return nil, fmt.Errorf("invalid user ID: %w", err)
 		}
-		conditions = append(conditions, fmt.Sprintf("user_id = $%d", argIndex))
-		args = append(args, *filter.UserID)
-		argIndex++
+		conditions = append(conditions, "user_id = ?")
+		args = append(args, sqlitehelpers.UUIDToString(*filter.UserID))
 	}
 
 	if filter.CategoryID != nil {
 		if err := validation.ValidateUUID(*filter.CategoryID); err != nil {
 			return nil, fmt.Errorf("invalid category ID: %w", err)
 		}
-		conditions = append(conditions, fmt.Sprintf("category_id = $%d", argIndex))
-		args = append(args, *filter.CategoryID)
-		argIndex++
+		conditions = append(conditions, "category_id = ?")
+		args = append(args, sqlitehelpers.UUIDToString(*filter.CategoryID))
 	}
 
 	if filter.Type != nil {
-		conditions = append(conditions, fmt.Sprintf("type = $%d", argIndex))
+		conditions = append(conditions, "type = ?")
 		args = append(args, string(*filter.Type))
-		argIndex++
 	}
 
 	if filter.DateFrom != nil {
-		conditions = append(conditions, fmt.Sprintf("date >= $%d", argIndex))
+		conditions = append(conditions, "date >= ?")
 		args = append(args, *filter.DateFrom)
-		argIndex++
 	}
 
 	if filter.DateTo != nil {
-		conditions = append(conditions, fmt.Sprintf("date <= $%d", argIndex))
+		conditions = append(conditions, "date <= ?")
 		args = append(args, *filter.DateTo)
-		argIndex++
 	}
 
 	if filter.AmountFrom != nil {
-		conditions = append(conditions, fmt.Sprintf("amount >= $%d", argIndex))
+		conditions = append(conditions, "amount >= ?")
 		args = append(args, *filter.AmountFrom)
-		argIndex++
 	}
 
 	if filter.AmountTo != nil {
-		conditions = append(conditions, fmt.Sprintf("amount <= $%d", argIndex))
+		conditions = append(conditions, "amount <= ?")
 		args = append(args, *filter.AmountTo)
-		argIndex++
 	}
 
 	if filter.Description != "" {
-		conditions = append(conditions, fmt.Sprintf("description ILIKE $%d", argIndex))
+		conditions = append(conditions, "description LIKE ?")
 		args = append(args, "%"+filter.Description+"%")
-		argIndex++
 	}
 
+	// Tag filtering - SQLite doesn't have JSONB operators like PostgreSQL
+	// We need to check if any tag in the JSON array matches
 	if len(filter.Tags) > 0 {
-		// Use PostgreSQL JSONB array contains operator to check if any of the specified tags exist
-		conditions = append(conditions, fmt.Sprintf("tags ?| $%d", argIndex))
-		args = append(args, filter.Tags)
-		argIndex++
+		tagConditions := make([]string, len(filter.Tags))
+		for i, tag := range filter.Tags {
+			// Check if the tag exists in the JSON array using SQLite json_each
+			tagConditions[i] = "EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ?)"
+			args = append(args, tag)
+		}
+		conditions = append(conditions, "("+strings.Join(tagConditions, " OR ")+")")
 	}
 
-	// Build final query using the same SELECT pattern as GetByFamilyID
+	// Build final query
+	//nolint:gosec // SQL concatenation is safe here - conditions are built from validated inputs
 	query := `
 		SELECT id, amount, type, description, category_id, user_id, family_id,
 			   date, tags, created_at, updated_at
-		FROM family_budget.transactions
+		FROM transactions
 		WHERE ` + strings.Join(conditions, " AND ") + `
 		ORDER BY date DESC, created_at DESC`
 
 	// Add pagination
 	if filter.Limit > 0 {
-		query += fmt.Sprintf(" LIMIT $%d", argIndex)
+		query += " LIMIT ?"
 		args = append(args, filter.Limit)
-		argIndex++
 	}
 
 	if filter.Offset > 0 {
-		query += fmt.Sprintf(" OFFSET $%d", argIndex)
+		query += " OFFSET ?"
 		args = append(args, filter.Offset)
 	}
 
 	// Execute query
-	rows, err := r.db.Query(ctx, query, args...)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get transactions by filter: %w", err)
 	}
 	defer rows.Close()
 
-	// Scan results using the same pattern as GetByFamilyID
+	// Scan results
 	var transactions []*transaction.Transaction
 	for rows.Next() {
-		var t transaction.Transaction
-		var tagsJSON []byte
-
-		err = rows.Scan(
-			&t.ID,
-			&t.Amount,
-			&t.Type,
-			&t.Description,
-			&t.CategoryID,
-			&t.UserID,
-			&t.FamilyID,
-			&t.Date,
-			&tagsJSON,
-			&t.CreatedAt,
-			&t.UpdatedAt,
-		)
+		var t *transaction.Transaction
+		t, err = scanTransactionRow(rows)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan transaction: %w", err)
+			return nil, err
 		}
-
-		// Parse tags from JSONB
-		r.parseTags(tagsJSON, &t.Tags)
-		transactions = append(transactions, &t)
+		transactions = append(transactions, t)
 	}
 
 	if err = rows.Err(); err != nil {
@@ -317,7 +331,7 @@ func (r *PostgreSQLRepository) GetByFilter(
 }
 
 // Update updates an existing transaction
-func (r *PostgreSQLRepository) Update(ctx context.Context, t *transaction.Transaction) error {
+func (r *SQLiteRepository) Update(ctx context.Context, t *transaction.Transaction) error {
 	// Validate transaction parameters
 	if err := validation.ValidateUUID(t.ID); err != nil {
 		return fmt.Errorf("invalid transaction ID: %w", err)
@@ -331,47 +345,54 @@ func (r *PostgreSQLRepository) Update(ctx context.Context, t *transaction.Transa
 	if err := validation.ValidateUUID(t.UserID); err != nil {
 		return fmt.Errorf("invalid user ID: %w", err)
 	}
-	if err := ValidateTransactionType(t.Type); err != nil {
+	if err := validation.ValidateTransactionType(t.Type); err != nil {
 		return fmt.Errorf("invalid transaction type: %w", err)
 	}
-	if err := ValidateAmount(t.Amount); err != nil {
+	if err := validation.ValidateAmount(t.Amount); err != nil {
 		return fmt.Errorf("invalid amount: %w", err)
 	}
-	if err := ValidateDescription(t.Description); err != nil {
+	if err := validation.ValidateDescription(t.Description); err != nil {
 		return fmt.Errorf("invalid description: %w", err)
 	}
 
 	// Update timestamp
 	t.UpdatedAt = time.Now()
 
-	// Convert tags to JSONB
-	tagsJSON := "[]"
-	if len(t.Tags) > 0 {
-		var tagParts []string
-		for _, tag := range t.Tags {
-			// Escape quotes in tags
-			escapedTag := strings.ReplaceAll(tag, `"`, `\"`)
-			tagParts = append(tagParts, fmt.Sprintf(`"%s"`, escapedTag))
-		}
-		tagsJSON = "[" + strings.Join(tagParts, ",") + "]"
+	// Convert tags to JSON
+	tagsJSON, err := json.Marshal(t.Tags)
+	if err != nil {
+		return fmt.Errorf("failed to marshal tags: %w", err)
 	}
 
 	query := `
-		UPDATE family_budget.transactions
-		SET amount = $2, description = $3, date = $4, type = $5, category_id = $6,
-			user_id = $7, tags = $8, updated_at = $9
-		WHERE id = $1 AND family_id = $10`
+		UPDATE transactions
+		SET amount = ?, description = ?, date = ?, type = ?, category_id = ?,
+			user_id = ?, tags = ?, updated_at = ?
+		WHERE id = ? AND family_id = ?`
 
-	result, err := r.db.Exec(ctx, query,
-		t.ID, t.Amount, t.Description, t.Date, string(t.Type),
-		t.CategoryID, t.UserID, tagsJSON, t.UpdatedAt, t.FamilyID,
+	result, err := r.db.ExecContext(ctx, query,
+		t.Amount,
+		t.Description,
+		t.Date,
+		string(t.Type),
+		sqlitehelpers.UUIDToString(t.CategoryID),
+		sqlitehelpers.UUIDToString(t.UserID),
+		string(tagsJSON),
+		t.UpdatedAt,
+		sqlitehelpers.UUIDToString(t.ID),
+		sqlitehelpers.UUIDToString(t.FamilyID),
 	)
 
 	if err != nil {
 		return fmt.Errorf("failed to update transaction: %w", err)
 	}
 
-	if result.RowsAffected() == 0 {
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
 		return fmt.Errorf("transaction with id %s not found", t.ID)
 	}
 
@@ -379,7 +400,7 @@ func (r *PostgreSQLRepository) Update(ctx context.Context, t *transaction.Transa
 }
 
 // Delete deletes a transaction
-func (r *PostgreSQLRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+func (r *SQLiteRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
 	// Validate UUID parameters
 	if err := validation.ValidateUUID(id); err != nil {
 		return fmt.Errorf("invalid id parameter: %w", err)
@@ -388,14 +409,19 @@ func (r *PostgreSQLRepository) Delete(ctx context.Context, id uuid.UUID, familyI
 		return fmt.Errorf("invalid family ID parameter: %w", err)
 	}
 
-	query := `DELETE FROM family_budget.transactions WHERE id = $1 AND family_id = $2`
+	query := `DELETE FROM transactions WHERE id = ? AND family_id = ?`
 
-	result, err := r.db.Exec(ctx, query, id, familyID)
+	result, err := r.db.ExecContext(ctx, query, sqlitehelpers.UUIDToString(id), sqlitehelpers.UUIDToString(familyID))
 	if err != nil {
 		return fmt.Errorf("failed to delete transaction: %w", err)
 	}
 
-	if result.RowsAffected() == 0 {
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
 		return fmt.Errorf("transaction with id %s not found", id)
 	}
 
@@ -403,7 +429,7 @@ func (r *PostgreSQLRepository) Delete(ctx context.Context, id uuid.UUID, familyI
 }
 
 // GetSummary returns transaction summary for a family
-func (r *PostgreSQLRepository) GetSummary(
+func (r *SQLiteRepository) GetSummary(
 	ctx context.Context,
 	familyID uuid.UUID,
 	startDate, endDate time.Time,
@@ -422,11 +448,11 @@ func (r *PostgreSQLRepository) GetSummary(
 			COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as total_expenses,
 			COALESCE(AVG(CASE WHEN type = 'income' THEN amount END), 0) as avg_income,
 			COALESCE(AVG(CASE WHEN type = 'expense' THEN amount END), 0) as avg_expense
-		FROM family_budget.transactions
-		WHERE family_id = $1 AND date BETWEEN $2 AND $3`
+		FROM transactions
+		WHERE family_id = ? AND date BETWEEN ? AND ?`
 
 	var summary Summary
-	err := r.db.QueryRow(ctx, query, familyID, startDate, endDate).Scan(
+	err := r.db.QueryRowContext(ctx, query, sqlitehelpers.UUIDToString(familyID), startDate, endDate).Scan(
 		&summary.TotalCount, &summary.IncomeCount, &summary.ExpenseCount,
 		&summary.TotalIncome, &summary.TotalExpenses, &summary.AvgIncome, &summary.AvgExpense,
 	)
@@ -444,7 +470,7 @@ func (r *PostgreSQLRepository) GetSummary(
 }
 
 // GetMonthlySummary returns monthly transaction summary
-func (r *PostgreSQLRepository) GetMonthlySummary(
+func (r *SQLiteRepository) GetMonthlySummary(
 	ctx context.Context,
 	familyID uuid.UUID,
 	year, month int,
@@ -454,6 +480,8 @@ func (r *PostgreSQLRepository) GetMonthlySummary(
 		return nil, fmt.Errorf("invalid family ID: %w", err)
 	}
 
+	// SQLite date extraction using substr for dates with timezones
+	// substr extracts date components directly from ISO 8601 format (YYYY-MM-DD...)
 	query := `
 		SELECT
 			c.name as category_name,
@@ -461,15 +489,15 @@ func (r *PostgreSQLRepository) GetMonthlySummary(
 			COUNT(*) as transaction_count,
 			SUM(t.amount) as total_amount,
 			AVG(t.amount) as avg_amount
-		FROM family_budget.transactions t
-		JOIN family_budget.categories c ON t.category_id = c.id
-		WHERE t.family_id = $1
-		AND EXTRACT(YEAR FROM t.date) = $2
-		AND EXTRACT(MONTH FROM t.date) = $3
+		FROM transactions t
+		JOIN categories c ON t.category_id = c.id
+		WHERE t.family_id = ?
+		AND CAST(substr(t.date, 1, 4) AS INTEGER) = ?
+		AND CAST(substr(t.date, 6, 2) AS INTEGER) = ?
 		GROUP BY c.id, c.name, t.type
 		ORDER BY total_amount DESC`
 
-	rows, err := r.db.Query(ctx, query, familyID, year, month)
+	rows, err := r.db.QueryContext(ctx, query, sqlitehelpers.UUIDToString(familyID), year, month)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get monthly summary: %w", err)
 	}
@@ -497,7 +525,7 @@ func (r *PostgreSQLRepository) GetMonthlySummary(
 }
 
 // GetByFamilyID retrieves transactions by family ID with pagination
-func (r *PostgreSQLRepository) GetByFamilyID(
+func (r *SQLiteRepository) GetByFamilyID(
 	ctx context.Context,
 	familyID uuid.UUID,
 	limit, offset int,
@@ -511,8 +539,8 @@ func (r *PostgreSQLRepository) GetByFamilyID(
 	if limit <= 0 {
 		limit = 50 // Default limit
 	}
-	if limit > maxQueryLimit {
-		limit = maxQueryLimit // Maximum limit
+	if limit > validation.MaxQueryLimit {
+		limit = validation.MaxQueryLimit // Maximum limit
 	}
 	if offset < 0 {
 		offset = 0
@@ -521,11 +549,11 @@ func (r *PostgreSQLRepository) GetByFamilyID(
 	query := `
 		SELECT id, amount, type, description, category_id, user_id, family_id,
 			   date, tags, created_at, updated_at
-		FROM family_budget.transactions
-		WHERE family_id = $1 		ORDER BY date DESC, created_at DESC
-		LIMIT $2 OFFSET $3`
+		FROM transactions
+		WHERE family_id = ? 		ORDER BY date DESC, created_at DESC
+		LIMIT ? OFFSET ?`
 
-	rows, err := r.db.Query(ctx, query, familyID, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, sqlitehelpers.UUIDToString(familyID), limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query transactions by family: %w", err)
 	}
@@ -533,30 +561,12 @@ func (r *PostgreSQLRepository) GetByFamilyID(
 
 	var transactions []*transaction.Transaction
 	for rows.Next() {
-		var t transaction.Transaction
-		var tagsJSON []byte
-
-		err = rows.Scan(
-			&t.ID,
-			&t.Amount,
-			&t.Type,
-			&t.Description,
-			&t.CategoryID,
-			&t.UserID,
-			&t.FamilyID,
-			&t.Date,
-			&tagsJSON,
-			&t.CreatedAt,
-			&t.UpdatedAt,
-		)
+		var t *transaction.Transaction
+		t, err = scanTransactionRow(rows)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan transaction: %w", err)
+			return nil, err
 		}
-
-		// Parse tags from JSONB
-		r.parseTags(tagsJSON, &t.Tags)
-
-		transactions = append(transactions, &t)
+		transactions = append(transactions, t)
 	}
 
 	if err = rows.Err(); err != nil {
@@ -567,7 +577,7 @@ func (r *PostgreSQLRepository) GetByFamilyID(
 }
 
 // GetTotalByCategory calculates total amount for transactions by category and type
-func (r *PostgreSQLRepository) GetTotalByCategory(
+func (r *SQLiteRepository) GetTotalByCategory(
 	ctx context.Context,
 	categoryID uuid.UUID,
 	transactionType transaction.Type,
@@ -582,11 +592,11 @@ func (r *PostgreSQLRepository) GetTotalByCategory(
 
 	query := `
 		SELECT COALESCE(SUM(amount), 0)
-		FROM family_budget.transactions
-		WHERE category_id = $1 AND type = $2`
+		FROM transactions
+		WHERE category_id = ? AND type = ?`
 
 	var total float64
-	err := r.db.QueryRow(ctx, query, categoryID, transactionType).Scan(&total)
+	err := r.db.QueryRowContext(ctx, query, sqlitehelpers.UUIDToString(categoryID), transactionType).Scan(&total)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get total by category: %w", err)
 	}
@@ -595,7 +605,7 @@ func (r *PostgreSQLRepository) GetTotalByCategory(
 }
 
 // GetTotalByFamilyAndDateRange calculates total amount for transactions by family and date range
-func (r *PostgreSQLRepository) GetTotalByFamilyAndDateRange(
+func (r *SQLiteRepository) GetTotalByFamilyAndDateRange(
 	ctx context.Context,
 	familyID uuid.UUID,
 	startDate, endDate time.Time,
@@ -609,13 +619,15 @@ func (r *PostgreSQLRepository) GetTotalByFamilyAndDateRange(
 		return 0, fmt.Errorf("invalid transaction type: %w", err)
 	}
 
+	// SQLite doesn't have deleted_at column in the current schema
 	query := `
 		SELECT COALESCE(SUM(amount), 0)
-		FROM family_budget.transactions
-		WHERE family_id = $1 AND type = $2 AND date >= $3 AND date <= $4 AND deleted_at IS NULL`
+		FROM transactions
+		WHERE family_id = ? AND type = ? AND date >= ? AND date <= ?`
 
 	var total float64
-	err := r.db.QueryRow(ctx, query, familyID, transactionType, startDate, endDate).Scan(&total)
+	err := r.db.QueryRowContext(ctx, query, sqlitehelpers.UUIDToString(familyID), transactionType, startDate, endDate).
+		Scan(&total)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get total by family and date range: %w", err)
 	}
@@ -624,7 +636,7 @@ func (r *PostgreSQLRepository) GetTotalByFamilyAndDateRange(
 }
 
 // GetTotalByCategoryAndDateRange calculates total amount for transactions by category and date range
-func (r *PostgreSQLRepository) GetTotalByCategoryAndDateRange(
+func (r *SQLiteRepository) GetTotalByCategoryAndDateRange(
 	ctx context.Context,
 	categoryID uuid.UUID,
 	startDate, endDate time.Time,
@@ -638,67 +650,18 @@ func (r *PostgreSQLRepository) GetTotalByCategoryAndDateRange(
 		return 0, fmt.Errorf("invalid transaction type: %w", err)
 	}
 
+	// SQLite doesn't have deleted_at column in the current schema
 	query := `
 		SELECT COALESCE(SUM(amount), 0)
-		FROM family_budget.transactions
-		WHERE category_id = $1 AND type = $2 AND date >= $3 AND date <= $4 AND deleted_at IS NULL`
+		FROM transactions
+		WHERE category_id = ? AND type = ? AND date >= ? AND date <= ?`
 
 	var total float64
-	err := r.db.QueryRow(ctx, query, categoryID, transactionType, startDate, endDate).Scan(&total)
+	err := r.db.QueryRowContext(ctx, query, sqlitehelpers.UUIDToString(categoryID), transactionType, startDate, endDate).
+		Scan(&total)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get total by category and date range: %w", err)
 	}
 
 	return total, nil
-}
-
-// parseTags parses tags from JSONB format
-func (r *PostgreSQLRepository) parseTags(tagsJSON []byte, tags *[]string) {
-	// Simple JSON array parsing for tags
-	// In production, you might want to use a proper JSON library
-	jsonStr := string(tagsJSON)
-	if jsonStr == "[]" || jsonStr == "" {
-		*tags = []string{}
-	}
-
-	// Remove brackets and split by comma
-	jsonStr = strings.Trim(jsonStr, "[]")
-	if jsonStr == "" {
-		*tags = []string{}
-	}
-
-	parts := strings.Split(jsonStr, ",")
-	*tags = make([]string, 0, len(parts))
-
-	for _, part := range parts {
-		// Remove quotes and whitespace
-		tag := strings.Trim(strings.TrimSpace(part), `"`)
-		if tag != "" {
-			*tags = append(*tags, tag)
-		}
-	}
-}
-
-// Summary holds transaction summary data
-type Summary struct {
-	FamilyID      uuid.UUID `json:"family_id"`
-	StartDate     time.Time `json:"start_date"`
-	EndDate       time.Time `json:"end_date"`
-	TotalCount    int       `json:"total_count"`
-	IncomeCount   int       `json:"income_count"`
-	ExpenseCount  int       `json:"expense_count"`
-	TotalIncome   float64   `json:"total_income"`
-	TotalExpenses float64   `json:"total_expenses"`
-	Balance       float64   `json:"balance"`
-	AvgIncome     float64   `json:"avg_income"`
-	AvgExpense    float64   `json:"avg_expense"`
-}
-
-// MonthlySummaryItem holds monthly summary data by category
-type MonthlySummaryItem struct {
-	CategoryName     string           `json:"category_name"`
-	Type             transaction.Type `json:"type"`
-	TransactionCount int              `json:"transaction_count"`
-	TotalAmount      float64          `json:"total_amount"`
-	AvgAmount        float64          `json:"avg_amount"`
 }

@@ -2,33 +2,63 @@ package user
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/infrastructure/validation"
 )
 
-// PostgreSQLRepository implements user repository using PostgreSQL
-type PostgreSQLRepository struct {
-	db *pgxpool.Pool
+// SQLiteRepository implements user repository using SQLite
+type SQLiteRepository struct {
+	db *sql.DB
 }
 
-// NewPostgreSQLRepository creates a new PostgreSQL user repository
-func NewPostgreSQLRepository(db *pgxpool.Pool) *PostgreSQLRepository {
-	return &PostgreSQLRepository{
+// NewSQLiteRepository creates a new SQLite user repository
+func NewSQLiteRepository(db *sql.DB) *SQLiteRepository {
+	return &SQLiteRepository{
 		db: db,
 	}
 }
 
+// scanUser is a helper function to scan user from rows and handle UUID parsing
+func scanUser(rows *sql.Rows) (*user.User, error) {
+	var u user.User
+	var idStr, familyIDStr string
+	var roleStr string
+	var isActive int
+	var lastLogin sql.NullTime
+
+	err := rows.Scan(
+		&idStr, &u.Email, &u.Password, &u.FirstName, &u.LastName,
+		&roleStr, &familyIDStr, &isActive, &lastLogin, &u.CreatedAt, &u.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan user: %w", err)
+	}
+
+	// Parse UUIDs
+	u.ID, err = uuid.Parse(idStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse user ID: %w", err)
+	}
+
+	u.FamilyID, err = uuid.Parse(familyIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse family ID: %w", err)
+	}
+
+	u.Role = user.Role(roleStr)
+	return &u, nil
+}
+
 // Create creates a new user in the database
-func (r *PostgreSQLRepository) Create(ctx context.Context, u *user.User) error {
+func (r *SQLiteRepository) Create(ctx context.Context, u *user.User) error {
 	// Validate UUID parameters to prevent injection attacks
 	if err := validation.ValidateUUID(u.ID); err != nil {
 		return fmt.Errorf("invalid user ID: %w", err)
@@ -51,19 +81,19 @@ func (r *PostgreSQLRepository) Create(ctx context.Context, u *user.User) error {
 	u.UpdatedAt = now
 
 	query := `
-		INSERT INTO family_budget.users (
+		INSERT INTO users (
 			id, email, password_hash, first_name, last_name, role, family_id,
 			is_active, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	_, err := r.db.Exec(ctx, query,
-		u.ID, u.Email, u.Password, u.FirstName, u.LastName,
-		string(u.Role), u.FamilyID, true, u.CreatedAt, u.UpdatedAt,
+	_, err := r.db.ExecContext(ctx, query,
+		u.ID.String(), u.Email, u.Password, u.FirstName, u.LastName,
+		string(u.Role), u.FamilyID.String(), 1, u.CreatedAt, u.UpdatedAt,
 	)
 
 	if err != nil {
 		// Check for unique constraint violation (email already exists)
-		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			return fmt.Errorf("user with email %s already exists", u.Email)
 		}
 		return fmt.Errorf("failed to create user: %w", err)
@@ -73,7 +103,7 @@ func (r *PostgreSQLRepository) Create(ctx context.Context, u *user.User) error {
 }
 
 // GetByID retrieves a user by their ID
-func (r *PostgreSQLRepository) GetByID(ctx context.Context, id uuid.UUID) (*user.User, error) {
+func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*user.User, error) {
 	// Validate UUID parameter to prevent injection attacks
 	if err := validation.ValidateUUID(id); err != nil {
 		return nil, fmt.Errorf("invalid id parameter: %w", err)
@@ -82,23 +112,36 @@ func (r *PostgreSQLRepository) GetByID(ctx context.Context, id uuid.UUID) (*user
 	query := `
 		SELECT id, email, password_hash, first_name, last_name, role, family_id,
 			   is_active, last_login, created_at, updated_at
-		FROM family_budget.users
-		WHERE id = $1 AND is_active = true`
+		FROM users
+		WHERE id = ? AND is_active = 1`
 
 	var u user.User
+	var idStr, familyIDStr string
 	var roleStr string
-	var lastLogin *time.Time
+	var isActive int
+	var lastLogin sql.NullTime
 
-	err := r.db.QueryRow(ctx, query, id).Scan(
-		&u.ID, &u.Email, &u.Password, &u.FirstName, &u.LastName,
-		&roleStr, &u.FamilyID, new(bool), &lastLogin, &u.CreatedAt, &u.UpdatedAt,
+	err := r.db.QueryRowContext(ctx, query, id.String()).Scan(
+		&idStr, &u.Email, &u.Password, &u.FirstName, &u.LastName,
+		&roleStr, &familyIDStr, &isActive, &lastLogin, &u.CreatedAt, &u.UpdatedAt,
 	)
 
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("user with id %s not found", id)
 		}
 		return nil, fmt.Errorf("failed to get user by id: %w", err)
+	}
+
+	// Parse UUIDs
+	u.ID, err = uuid.Parse(idStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse user ID: %w", err)
+	}
+
+	u.FamilyID, err = uuid.Parse(familyIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse family ID: %w", err)
 	}
 
 	u.Role = user.Role(roleStr)
@@ -106,7 +149,7 @@ func (r *PostgreSQLRepository) GetByID(ctx context.Context, id uuid.UUID) (*user
 }
 
 // GetByEmail retrieves a user by their email address
-func (r *PostgreSQLRepository) GetByEmail(ctx context.Context, email string) (*user.User, error) {
+func (r *SQLiteRepository) GetByEmail(ctx context.Context, email string) (*user.User, error) {
 	// Validate email to prevent injection attacks
 	if err := validation.ValidateEmail(email); err != nil {
 		return nil, fmt.Errorf("invalid email parameter: %w", err)
@@ -118,23 +161,36 @@ func (r *PostgreSQLRepository) GetByEmail(ctx context.Context, email string) (*u
 	query := `
 		SELECT id, email, password_hash, first_name, last_name, role, family_id,
 			   is_active, last_login, created_at, updated_at
-		FROM family_budget.users
-		WHERE email = $1 AND is_active = true`
+		FROM users
+		WHERE email = ? AND is_active = 1`
 
 	var u user.User
+	var idStr, familyIDStr string
 	var roleStr string
-	var lastLogin *time.Time
+	var isActive int
+	var lastLogin sql.NullTime
 
-	err := r.db.QueryRow(ctx, query, sanitizedEmail).Scan(
-		&u.ID, &u.Email, &u.Password, &u.FirstName, &u.LastName,
-		&roleStr, &u.FamilyID, new(bool), &lastLogin, &u.CreatedAt, &u.UpdatedAt,
+	err := r.db.QueryRowContext(ctx, query, sanitizedEmail).Scan(
+		&idStr, &u.Email, &u.Password, &u.FirstName, &u.LastName,
+		&roleStr, &familyIDStr, &isActive, &lastLogin, &u.CreatedAt, &u.UpdatedAt,
 	)
 
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("user with email %s not found", sanitizedEmail)
 		}
 		return nil, fmt.Errorf("failed to get user by email: %w", err)
+	}
+
+	// Parse UUIDs
+	u.ID, err = uuid.Parse(idStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse user ID: %w", err)
+	}
+
+	u.FamilyID, err = uuid.Parse(familyIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse family ID: %w", err)
 	}
 
 	u.Role = user.Role(roleStr)
@@ -142,7 +198,7 @@ func (r *PostgreSQLRepository) GetByEmail(ctx context.Context, email string) (*u
 }
 
 // GetByFamilyID retrieves all users belonging to a specific family
-func (r *PostgreSQLRepository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*user.User, error) {
+func (r *SQLiteRepository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*user.User, error) {
 	// Validate UUID parameter to prevent injection attacks
 	if err := validation.ValidateUUID(familyID); err != nil {
 		return nil, fmt.Errorf("invalid familyID parameter: %w", err)
@@ -151,11 +207,11 @@ func (r *PostgreSQLRepository) GetByFamilyID(ctx context.Context, familyID uuid.
 	query := `
 		SELECT id, email, password_hash, first_name, last_name, role, family_id,
 			   is_active, last_login, created_at, updated_at
-		FROM family_budget.users
-		WHERE family_id = $1 AND is_active = true
+		FROM users
+		WHERE family_id = ? AND is_active = 1
 		ORDER BY role, first_name, last_name`
 
-	rows, err := r.db.Query(ctx, query, familyID)
+	rows, err := r.db.QueryContext(ctx, query, familyID.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get users by family id: %w", err)
 	}
@@ -163,20 +219,11 @@ func (r *PostgreSQLRepository) GetByFamilyID(ctx context.Context, familyID uuid.
 
 	var users []*user.User
 	for rows.Next() {
-		var u user.User
-		var roleStr string
-		var lastLogin *time.Time
-
-		err = rows.Scan(
-			&u.ID, &u.Email, &u.Password, &u.FirstName, &u.LastName,
-			&roleStr, &u.FamilyID, new(bool), &lastLogin, &u.CreatedAt, &u.UpdatedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan user: %w", err)
+		u, scanErr := scanUser(rows)
+		if scanErr != nil {
+			return nil, scanErr
 		}
-
-		u.Role = user.Role(roleStr)
-		users = append(users, &u)
+		users = append(users, u)
 	}
 
 	if err = rows.Err(); err != nil {
@@ -187,7 +234,7 @@ func (r *PostgreSQLRepository) GetByFamilyID(ctx context.Context, familyID uuid.
 }
 
 // Update updates an existing user
-func (r *PostgreSQLRepository) Update(ctx context.Context, u *user.User) error {
+func (r *SQLiteRepository) Update(ctx context.Context, u *user.User) error {
 	// Validate UUID parameters to prevent injection attacks
 	if err := validation.ValidateUUID(u.ID); err != nil {
 		return fmt.Errorf("invalid user ID: %w", err)
@@ -208,25 +255,30 @@ func (r *PostgreSQLRepository) Update(ctx context.Context, u *user.User) error {
 	u.UpdatedAt = time.Now()
 
 	query := `
-		UPDATE family_budget.users
-		SET email = $2, password_hash = $3, first_name = $4, last_name = $5,
-			role = $6, family_id = $7, updated_at = $8
-		WHERE id = $1 AND is_active = true`
+		UPDATE users
+		SET email = ?, password_hash = ?, first_name = ?, last_name = ?,
+			role = ?, family_id = ?, updated_at = ?
+		WHERE id = ? AND is_active = 1`
 
-	result, err := r.db.Exec(ctx, query,
-		u.ID, u.Email, u.Password, u.FirstName, u.LastName,
-		string(u.Role), u.FamilyID, u.UpdatedAt,
+	result, err := r.db.ExecContext(ctx, query,
+		u.Email, u.Password, u.FirstName, u.LastName,
+		string(u.Role), u.FamilyID.String(), u.UpdatedAt, u.ID.String(),
 	)
 
 	if err != nil {
 		// Check for unique constraint violation (email already exists)
-		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			return fmt.Errorf("user with email %s already exists", u.Email)
 		}
 		return fmt.Errorf("failed to update user: %w", err)
 	}
 
-	if result.RowsAffected() == 0 {
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
 		return fmt.Errorf("user with id %s not found", u.ID)
 	}
 
@@ -234,7 +286,7 @@ func (r *PostgreSQLRepository) Update(ctx context.Context, u *user.User) error {
 }
 
 // Delete soft deletes a user (sets is_active to false)
-func (r *PostgreSQLRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+func (r *SQLiteRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
 	// Validate UUID parameters to prevent injection attacks
 	if err := validation.ValidateUUID(id); err != nil {
 		return fmt.Errorf("invalid id parameter: %w", err)
@@ -244,16 +296,21 @@ func (r *PostgreSQLRepository) Delete(ctx context.Context, id uuid.UUID, familyI
 	}
 
 	query := `
-		UPDATE family_budget.users
-		SET is_active = false, updated_at = NOW()
-		WHERE id = $1 AND family_id = $2 AND is_active = true`
+		UPDATE users
+		SET is_active = 0, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ? AND family_id = ? AND is_active = 1`
 
-	result, err := r.db.Exec(ctx, query, id, familyID)
+	result, err := r.db.ExecContext(ctx, query, id.String(), familyID.String())
 	if err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
 
-	if result.RowsAffected() == 0 {
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
 		return fmt.Errorf("user with id %s not found", id)
 	}
 
@@ -261,23 +318,28 @@ func (r *PostgreSQLRepository) Delete(ctx context.Context, id uuid.UUID, familyI
 }
 
 // UpdateLastLogin updates the last login timestamp for a user
-func (r *PostgreSQLRepository) UpdateLastLogin(ctx context.Context, id uuid.UUID) error {
+func (r *SQLiteRepository) UpdateLastLogin(ctx context.Context, id uuid.UUID) error {
 	// Validate UUID parameter to prevent injection attacks
 	if err := validation.ValidateUUID(id); err != nil {
 		return fmt.Errorf("invalid id parameter: %w", err)
 	}
 
 	query := `
-		UPDATE family_budget.users
-		SET last_login = NOW(), updated_at = NOW()
-		WHERE id = $1 AND is_active = true`
+		UPDATE users
+		SET last_login = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ? AND is_active = 1`
 
-	result, err := r.db.Exec(ctx, query, id)
+	result, err := r.db.ExecContext(ctx, query, id.String())
 	if err != nil {
 		return fmt.Errorf("failed to update last login: %w", err)
 	}
 
-	if result.RowsAffected() == 0 {
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
 		return fmt.Errorf("user with id %s not found", id)
 	}
 
@@ -285,7 +347,7 @@ func (r *PostgreSQLRepository) UpdateLastLogin(ctx context.Context, id uuid.UUID
 }
 
 // GetUsersByRole retrieves all users with a specific role in a family
-func (r *PostgreSQLRepository) GetUsersByRole(
+func (r *SQLiteRepository) GetUsersByRole(
 	ctx context.Context,
 	familyID uuid.UUID,
 	role user.Role,
@@ -298,11 +360,11 @@ func (r *PostgreSQLRepository) GetUsersByRole(
 	query := `
 		SELECT id, email, password_hash, first_name, last_name, role, family_id,
 			   is_active, last_login, created_at, updated_at
-		FROM family_budget.users
-		WHERE family_id = $1 AND role = $2 AND is_active = true
+		FROM users
+		WHERE family_id = ? AND role = ? AND is_active = 1
 		ORDER BY first_name, last_name`
 
-	rows, err := r.db.Query(ctx, query, familyID, string(role))
+	rows, err := r.db.QueryContext(ctx, query, familyID.String(), string(role))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get users by role: %w", err)
 	}
@@ -310,20 +372,11 @@ func (r *PostgreSQLRepository) GetUsersByRole(
 
 	var users []*user.User
 	for rows.Next() {
-		var u user.User
-		var roleStr string
-		var lastLogin *time.Time
-
-		err = rows.Scan(
-			&u.ID, &u.Email, &u.Password, &u.FirstName, &u.LastName,
-			&roleStr, &u.FamilyID, new(bool), &lastLogin, &u.CreatedAt, &u.UpdatedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan user: %w", err)
+		u, scanErr := scanUser(rows)
+		if scanErr != nil {
+			return nil, scanErr
 		}
-
-		u.Role = user.Role(roleStr)
-		users = append(users, &u)
+		users = append(users, u)
 	}
 
 	if err = rows.Err(); err != nil {
@@ -334,7 +387,7 @@ func (r *PostgreSQLRepository) GetUsersByRole(
 }
 
 // CreateWithTransaction creates a user within a database transaction
-func (r *PostgreSQLRepository) CreateWithTransaction(ctx context.Context, tx pgx.Tx, u *user.User) error {
+func (r *SQLiteRepository) CreateWithTransaction(ctx context.Context, tx *sql.Tx, u *user.User) error {
 	// Validate UUID parameters to prevent injection attacks
 	if err := validation.ValidateUUID(u.ID); err != nil {
 		return fmt.Errorf("invalid user ID: %w", err)
@@ -357,19 +410,19 @@ func (r *PostgreSQLRepository) CreateWithTransaction(ctx context.Context, tx pgx
 	u.UpdatedAt = now
 
 	query := `
-		INSERT INTO family_budget.users (
+		INSERT INTO users (
 			id, email, password_hash, first_name, last_name, role, family_id,
 			is_active, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	_, err := tx.Exec(ctx, query,
-		u.ID, u.Email, u.Password, u.FirstName, u.LastName,
-		string(u.Role), u.FamilyID, true, u.CreatedAt, u.UpdatedAt,
+	_, err := tx.ExecContext(ctx, query,
+		u.ID.String(), u.Email, u.Password, u.FirstName, u.LastName,
+		string(u.Role), u.FamilyID.String(), 1, u.CreatedAt, u.UpdatedAt,
 	)
 
 	if err != nil {
 		// Check for unique constraint violation (email already exists)
-		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			return fmt.Errorf("user with email %s already exists", u.Email)
 		}
 		return fmt.Errorf("failed to create user: %w", err)

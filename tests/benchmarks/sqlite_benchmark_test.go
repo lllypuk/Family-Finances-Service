@@ -27,7 +27,7 @@ const (
 )
 
 var (
-	testContainer  *testutils.PostgreSQLTestContainer
+	testContainer  *testutils.SQLiteTestDB
 	testFamilyID   uuid.UUID
 	testUserID     uuid.UUID
 	testCategories []*category.Category
@@ -37,7 +37,7 @@ var (
 func setupBenchmarkData(b *testing.B) {
 	if testContainer == nil {
 		// Setup is done once for all benchmarks
-		testContainer = testutils.SetupPostgreSQLContainer(&testing.T{})
+		testContainer = testutils.SetupSQLiteTestDB(&testing.T{})
 		initializeBenchmarkData(b)
 	}
 }
@@ -65,16 +65,16 @@ func initializeBenchmarkData(b *testing.B) {
 
 // checkDatabaseSchema checks and logs database schema information
 func checkDatabaseSchema(b *testing.B, ctx context.Context) {
-	var tableExists bool
-	err := testContainer.DB.QueryRow(ctx, "SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'family_budget' AND tablename = 'budgets')").
+	var tableExists int
+	err := testContainer.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='budgets'").
 		Scan(&tableExists)
 	if err != nil {
 		b.Fatalf("Failed to check budgets table existence: %v", err)
 	}
 
-	rows, err := testContainer.DB.Query(
+	rows, err := testContainer.DB.QueryContext(
 		ctx,
-		"SELECT tablename FROM pg_tables WHERE schemaname = 'family_budget' ORDER BY tablename",
+		"SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
 	)
 	if err != nil {
 		b.Fatalf("Failed to list tables: %v", err)
@@ -89,18 +89,19 @@ func checkDatabaseSchema(b *testing.B, ctx context.Context) {
 		}
 		tables = append(tables, tableName)
 	}
-	b.Logf("Tables in family_budget schema: %v", tables)
-	b.Logf("Budgets table exists: %v", tableExists)
+	b.Logf("SQLite tables: %v", tables)
+	b.Logf("Budgets table exists: %v", tableExists > 0)
 }
 
 // disableBudgetTriggers disables budget triggers for benchmarks
 func disableBudgetTriggers(b *testing.B, ctx context.Context) {
-	_, err := testContainer.DB.Exec(
+	// SQLite triggers are named differently and don't use ON syntax
+	_, err := testContainer.DB.ExecContext(
 		ctx,
-		"DROP TRIGGER IF EXISTS update_budget_spent_on_transaction ON family_budget.transactions",
+		"DROP TRIGGER IF EXISTS update_budget_spent_on_transaction",
 	)
 	if err != nil {
-		b.Fatalf("Failed to drop budget trigger: %v", err)
+		b.Logf("Note: Failed to drop budget trigger (may not exist): %v", err)
 	}
 }
 
@@ -123,7 +124,7 @@ func createTestFamilyAndUser(b *testing.B, helper *testutils.TestDataHelper, ctx
 
 // createTestCategories creates test categories
 func createTestCategories(b *testing.B, ctx context.Context) []*category.Category {
-	categoryRepo := categoryrepo.NewPostgreSQLRepository(testContainer.DB)
+	categoryRepo := categoryrepo.NewSQLiteRepository(testContainer.DB)
 	categories := make([]*category.Category, 10)
 
 	for i := range 10 {
@@ -146,7 +147,7 @@ func createTestCategories(b *testing.B, ctx context.Context) []*category.Categor
 
 // createTestBudgets creates test budgets
 func createTestBudgets(b *testing.B, ctx context.Context) {
-	budgetRepo := budgetrepo.NewPostgreSQLRepository(testContainer.DB)
+	budgetRepo := budgetrepo.NewSQLiteRepository(testContainer.DB)
 	for i := range 5 {
 		budgetObj := &budget.Budget{
 			ID:         uuid.New(),
@@ -169,7 +170,7 @@ func createTestBudgets(b *testing.B, ctx context.Context) {
 
 // createTestTransactions creates test transactions
 func createTestTransactions(b *testing.B, ctx context.Context) {
-	transactionRepo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
+	transactionRepo := transactionrepo.NewSQLiteRepository(testContainer.DB)
 	now := time.Now()
 
 	for i := range 1000 {
@@ -195,7 +196,7 @@ func createTestTransactions(b *testing.B, ctx context.Context) {
 // BenchmarkUserRepository_GetByEmail tests user lookup performance
 func BenchmarkUserRepository_GetByEmail(b *testing.B) {
 	setupBenchmarkData(b)
-	repo := userrepo.NewPostgreSQLRepository(testContainer.DB)
+	repo := userrepo.NewSQLiteRepository(testContainer.DB)
 	ctx := context.Background()
 
 	for b.Loop() {
@@ -209,7 +210,7 @@ func BenchmarkUserRepository_GetByEmail(b *testing.B) {
 // BenchmarkUserRepository_GetByFamilyID tests family user listing performance
 func BenchmarkUserRepository_GetByFamilyID(b *testing.B) {
 	setupBenchmarkData(b)
-	repo := userrepo.NewPostgreSQLRepository(testContainer.DB)
+	repo := userrepo.NewSQLiteRepository(testContainer.DB)
 	ctx := context.Background()
 
 	for b.Loop() {
@@ -223,7 +224,7 @@ func BenchmarkUserRepository_GetByFamilyID(b *testing.B) {
 // BenchmarkCategoryRepository_GetCategoryChildren tests hierarchical query performance
 func BenchmarkCategoryRepository_GetCategoryChildren(b *testing.B) {
 	setupBenchmarkData(b)
-	repo := categoryrepo.NewPostgreSQLRepository(testContainer.DB)
+	repo := categoryrepo.NewSQLiteRepository(testContainer.DB)
 	ctx := context.Background()
 
 	// Use first category as parent
@@ -240,7 +241,7 @@ func BenchmarkCategoryRepository_GetCategoryChildren(b *testing.B) {
 // BenchmarkTransactionRepository_GetByFilter_Simple tests simple transaction filtering
 func BenchmarkTransactionRepository_GetByFilter_Simple(b *testing.B) {
 	setupBenchmarkData(b)
-	repo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
+	repo := transactionrepo.NewSQLiteRepository(testContainer.DB)
 	ctx := context.Background()
 
 	filter := transaction.Filter{
@@ -259,7 +260,7 @@ func BenchmarkTransactionRepository_GetByFilter_Simple(b *testing.B) {
 // BenchmarkTransactionRepository_GetByFilter_Complex tests complex filtering with multiple conditions
 func BenchmarkTransactionRepository_GetByFilter_Complex(b *testing.B) {
 	setupBenchmarkData(b)
-	repo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
+	repo := transactionrepo.NewSQLiteRepository(testContainer.DB)
 	ctx := context.Background()
 
 	expenseType := transaction.TypeExpense
@@ -290,7 +291,7 @@ func BenchmarkTransactionRepository_GetByFilter_Complex(b *testing.B) {
 // BenchmarkTransactionRepository_GetByFilter_Pagination tests pagination performance
 func BenchmarkTransactionRepository_GetByFilter_Pagination(b *testing.B) {
 	setupBenchmarkData(b)
-	repo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
+	repo := transactionrepo.NewSQLiteRepository(testContainer.DB)
 	ctx := context.Background()
 
 	for i := 0; b.Loop(); i++ {
@@ -311,7 +312,7 @@ func BenchmarkTransactionRepository_GetByFilter_Pagination(b *testing.B) {
 // BenchmarkTransactionRepository_GetTransactionSummary tests summary calculation performance
 func BenchmarkTransactionRepository_GetTransactionSummary(b *testing.B) {
 	setupBenchmarkData(b)
-	repo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
+	repo := transactionrepo.NewSQLiteRepository(testContainer.DB)
 	ctx := context.Background()
 
 	startDate := time.Now().AddDate(0, 0, -benchmarkDateRangeDays)
@@ -328,7 +329,7 @@ func BenchmarkTransactionRepository_GetTransactionSummary(b *testing.B) {
 // BenchmarkTransactionRepository_GetMonthlySummary tests monthly aggregation performance
 func BenchmarkTransactionRepository_GetMonthlySummary(b *testing.B) {
 	setupBenchmarkData(b)
-	repo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
+	repo := transactionrepo.NewSQLiteRepository(testContainer.DB)
 	ctx := context.Background()
 
 	now := time.Now()
@@ -346,7 +347,7 @@ func BenchmarkTransactionRepository_GetMonthlySummary(b *testing.B) {
 // BenchmarkTransactionRepository_Create tests transaction creation performance
 func BenchmarkTransactionRepository_Create(b *testing.B) {
 	setupBenchmarkData(b)
-	repo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
+	repo := transactionrepo.NewSQLiteRepository(testContainer.DB)
 	ctx := context.Background()
 
 	for i := 0; b.Loop(); i++ {
@@ -372,7 +373,7 @@ func BenchmarkTransactionRepository_Create(b *testing.B) {
 // BenchmarkTransactionRepository_Update tests transaction update performance
 func BenchmarkTransactionRepository_Update(b *testing.B) {
 	setupBenchmarkData(b)
-	repo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
+	repo := transactionrepo.NewSQLiteRepository(testContainer.DB)
 	ctx := context.Background()
 
 	// Create a transaction to update
@@ -407,7 +408,7 @@ func BenchmarkTransactionRepository_Update(b *testing.B) {
 // BenchmarkConcurrentReads tests concurrent read performance
 func BenchmarkConcurrentReads(b *testing.B) {
 	setupBenchmarkData(b)
-	repo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
+	repo := transactionrepo.NewSQLiteRepository(testContainer.DB)
 	ctx := context.Background()
 
 	filter := transaction.Filter{
@@ -429,8 +430,8 @@ func BenchmarkConcurrentReads(b *testing.B) {
 // BenchmarkConnectionPoolUsage tests connection pool efficiency
 func BenchmarkConnectionPoolUsage(b *testing.B) {
 	setupBenchmarkData(b)
-	userRepo := userrepo.NewPostgreSQLRepository(testContainer.DB)
-	transactionRepo := transactionrepo.NewPostgreSQLRepository(testContainer.DB)
+	userRepo := userrepo.NewSQLiteRepository(testContainer.DB)
+	transactionRepo := transactionrepo.NewSQLiteRepository(testContainer.DB)
 	ctx := context.Background()
 
 	for b.Loop() {

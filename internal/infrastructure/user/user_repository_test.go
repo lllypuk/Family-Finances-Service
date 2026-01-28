@@ -14,10 +14,9 @@ import (
 	userrepo "family-budget-service/internal/infrastructure/user"
 )
 
-func TestUserRepositoryPostgreSQL_Integration(t *testing.T) {
-	// Setup PostgreSQL testcontainer
-	container := testutils.SetupPostgreSQLContainer(t)
-	defer container.Cleanup(t)
+func TestUserRepositorySQLite_Integration(t *testing.T) {
+	// Setup SQLite in-memory database
+	container := testutils.SetupSQLiteTestDB(t)
 
 	// Create repository
 	helper := testutils.NewTestDataHelper(container.DB)
@@ -26,7 +25,7 @@ func TestUserRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("Create_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := userrepo.NewPostgreSQLRepository(db)
+		repo := userrepo.NewSQLiteRepository(db)
 
 		// Create test family first
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
@@ -59,7 +58,7 @@ func TestUserRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("Create_DuplicateEmail_ShouldFail", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := userrepo.NewPostgreSQLRepository(db)
+		repo := userrepo.NewSQLiteRepository(db)
 
 		// Create test family first
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
@@ -99,7 +98,7 @@ func TestUserRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("GetByID_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := userrepo.NewPostgreSQLRepository(db)
+		repo := userrepo.NewSQLiteRepository(db)
 
 		// Create test family and user
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
@@ -131,7 +130,7 @@ func TestUserRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("GetByID_NotFound", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := userrepo.NewPostgreSQLRepository(db)
+		repo := userrepo.NewSQLiteRepository(db)
 
 		nonExistentID := uuid.New()
 		_, err := repo.GetByID(ctx, nonExistentID)
@@ -141,7 +140,7 @@ func TestUserRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("GetByEmail_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := userrepo.NewPostgreSQLRepository(db)
+		repo := userrepo.NewSQLiteRepository(db)
 
 		// Create test family and user
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
@@ -170,7 +169,7 @@ func TestUserRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("GetByEmail_CaseInsensitive", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := userrepo.NewPostgreSQLRepository(db)
+		repo := userrepo.NewSQLiteRepository(db)
 
 		// Create test family and user
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
@@ -198,7 +197,7 @@ func TestUserRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("GetByFamilyID_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := userrepo.NewPostgreSQLRepository(db)
+		repo := userrepo.NewSQLiteRepository(db)
 
 		// Create test family
 		familyID, err := helper.CreateTestFamily(ctx, "Family with Users", "EUR")
@@ -250,13 +249,13 @@ func TestUserRepositoryPostgreSQL_Integration(t *testing.T) {
 		// Verify users are sorted by role, first name, last name
 		// Role ordering is alphabetical: admin, child, member
 		assert.Equal(t, user.RoleAdmin, familyUsers[0].Role)
-		assert.Equal(t, user.RoleMember, familyUsers[1].Role)
-		assert.Equal(t, user.RoleChild, familyUsers[2].Role)
+		assert.Equal(t, user.RoleChild, familyUsers[1].Role)
+		assert.Equal(t, user.RoleMember, familyUsers[2].Role)
 	})
 
 	t.Run("Update_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := userrepo.NewPostgreSQLRepository(db)
+		repo := userrepo.NewSQLiteRepository(db)
 
 		// Create test family and user
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
@@ -293,7 +292,7 @@ func TestUserRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("Delete_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := userrepo.NewPostgreSQLRepository(db)
+		repo := userrepo.NewSQLiteRepository(db)
 
 		// Create test family and user
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
@@ -324,7 +323,7 @@ func TestUserRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("GetUsersByRole_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := userrepo.NewPostgreSQLRepository(db)
+		repo := userrepo.NewSQLiteRepository(db)
 
 		// Create test family
 		familyID, err := helper.CreateTestFamily(ctx, "Role Test Family", "USD")
@@ -377,7 +376,7 @@ func TestUserRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("UpdateLastLogin_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := userrepo.NewPostgreSQLRepository(db)
+		repo := userrepo.NewSQLiteRepository(db)
 
 		// Create test family and user
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")

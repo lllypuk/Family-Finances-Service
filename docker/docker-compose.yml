@@ -1,74 +1,47 @@
 version: "3.8"
 
 services:
-  # PostgreSQL база данных
-  postgresql:
-    image: postgres:17.6-alpine
-    container_name: family-budget-postgresql
-    restart: unless-stopped
-    ports:
-      - "${POSTGRESQL_PORT:-5432}:5432"
-    environment:
-      POSTGRES_DB: ${POSTGRESQL_DATABASE:-family_budget}
-      POSTGRES_USER: ${POSTGRESQL_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRESQL_PASSWORD:-postgres123}
-      PGDATA: /var/lib/postgresql/data/pgdata
-    volumes:
-      - postgresql_data:/var/lib/postgresql/data
-    networks:
-      - family-budget-network
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${POSTGRESQL_USER:-postgres} -d ${POSTGRESQL_DATABASE:-family_budget}",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    command: >
-      postgres
-      -c shared_preload_libraries=pg_stat_statements
-      -c pg_stat_statements.track=all
-      -c max_connections=200
-      -c shared_buffers=256MB
-      -c effective_cache_size=1GB
-      -c maintenance_work_mem=64MB
-      -c checkpoint_completion_target=0.9
-      -c wal_buffers=16MB
-      -c default_statistics_target=100
-      -c random_page_cost=1.1
-      -c effective_io_concurrency=200
-
-  # Приложение (для продакшн сборки)
-  app:
+  # Family Budget Service - единый контейнер с SQLite
+  family-budget:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: family-budget-app
+    container_name: family-budget-service
     restart: unless-stopped
     ports:
       - "${SERVER_PORT:-8080}:8080"
     environment:
+      # Server Configuration
       SERVER_PORT: ${SERVER_PORT:-8080}
       SERVER_HOST: ${SERVER_HOST:-0.0.0.0}
-      POSTGRESQL_URI: ${POSTGRESQL_URI:-postgres://postgres:postgres123@postgresql:5432/family_budget?sslmode=disable}
-      POSTGRESQL_DATABASE: ${POSTGRESQL_DATABASE:-family_budget}
+
+      # Database Configuration (SQLite)
+      DATABASE_PATH: ${DATABASE_PATH:-/data/budget.db}
+
+      # Application Configuration
       ENVIRONMENT: ${ENVIRONMENT:-production}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      SESSION_SECRET: ${SESSION_SECRET:-your-secret-key-here}
-    depends_on:
-      postgresql:
-        condition: service_healthy
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
+
+    volumes:
+      # Persistent volume for SQLite database
+      - budget_data:/data
     networks:
       - family-budget-network
-    profiles:
-      - production
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
 
 volumes:
-  postgresql_data:
+  budget_data:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_DIR:-.}/data
 
 networks:
   family-budget-network:

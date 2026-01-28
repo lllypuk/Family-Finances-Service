@@ -2,10 +2,8 @@ package internal
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -16,18 +14,8 @@ const (
 	defaultServerWriteTimeout = 15 * time.Second
 	defaultServerIdleTimeout  = 60 * time.Second
 
-	// Database connection defaults
-	defaultMaxOpenConns    = 50
-	defaultMaxIdleConns    = 10
-	defaultConnMaxLifetime = 1 * time.Hour
-	defaultConnMaxIdleTime = 5 * time.Minute
-
 	// Web session defaults
 	defaultSessionTimeout = 24 * time.Hour
-
-	// Test environment defaults
-	testMaxOpenConns = 5
-	testMaxIdleConns = 2
 )
 
 type Config struct {
@@ -47,14 +35,8 @@ type ServerConfig struct {
 }
 
 type DatabaseConfig struct {
-	URI             string
-	Name            string
-	MaxOpenConns    int
-	MaxIdleConns    int
-	ConnMaxLifetime time.Duration
-	ConnMaxIdleTime time.Duration
-	SSLMode         string
-	Schema          string
+	// SQLite configuration
+	Path string
 }
 
 type WebConfig struct {
@@ -97,29 +79,7 @@ func LoadConfig() *Config {
 			IdleTimeout:  getDurationEnv("SERVER_IDLE_TIMEOUT", defaultServerIdleTimeout),
 		},
 		Database: DatabaseConfig{
-			URI: getEnv(
-				"POSTGRESQL_URI",
-				"postgres://postgres:postgres123@localhost:5432/family_budget?sslmode=disable",
-			),
-			Name: getEnv("POSTGRESQL_DATABASE", "family_budget"),
-			MaxOpenConns: getIntEnv(
-				"POSTGRESQL_MAX_OPEN_CONNS",
-				defaultMaxOpenConns,
-			), // Increased for better concurrency
-			MaxIdleConns: getIntEnv(
-				"POSTGRESQL_MAX_IDLE_CONNS",
-				defaultMaxIdleConns,
-			), // Increased to maintain warm connections
-			ConnMaxLifetime: getDurationEnv(
-				"POSTGRESQL_CONN_MAX_LIFETIME",
-				defaultConnMaxLifetime,
-			), // Extended to reduce reconnections
-			ConnMaxIdleTime: getDurationEnv(
-				"POSTGRESQL_CONN_MAX_IDLE_TIME",
-				defaultConnMaxIdleTime,
-			), // Optimized idle time
-			SSLMode: getEnv("POSTGRESQL_SSL_MODE", "prefer"),
-			Schema:  getEnv("POSTGRESQL_SCHEMA", "family_budget"),
+			Path: getEnv("DATABASE_PATH", "./data/budget.db"),
 		},
 		Web: WebConfig{
 			SessionSecret:  getEnv("SESSION_SECRET", "your-super-secret-session-key-change-in-production"),
@@ -140,14 +100,12 @@ func LoadConfig() *Config {
 	// Adjust settings based on environment
 	if config.IsProduction() {
 		config.Web.CookieSecure = true
-		config.Database.SSLMode = "require"
 		if config.Logging.Level == "debug" {
 			config.Logging.Level = "info"
 		}
 	}
 
 	if config.IsDevelopment() {
-		config.Database.SSLMode = "disable"
 		config.Web.CookieSecure = false
 		if config.Logging.Level == "" {
 			config.Logging.Level = "debug"
@@ -155,11 +113,8 @@ func LoadConfig() *Config {
 	}
 
 	if config.IsTest() {
-		config.Database.SSLMode = "disable"
 		config.Web.CookieSecure = false
 		config.Logging.Level = "warn"
-		config.Database.MaxOpenConns = testMaxOpenConns
-		config.Database.MaxIdleConns = testMaxIdleConns
 	}
 
 	return config
@@ -176,47 +131,21 @@ func (c *Config) Validate() error {
 		return errors.New("CSRF secret must be changed in production")
 	}
 
-	if c.Database.URI == "" {
-		return errors.New("database URI is required")
+	if c.Database.Path == "" {
+		return errors.New("database path is required")
 	}
 
 	return nil
 }
 
-// GetConnectionString returns the database connection string with additional parameters
-func (c *Config) GetConnectionString() string {
-	if c.Database.URI == "" {
-		return ""
-	}
-
-	// If URI already contains query parameters, append to them
-	separator := "?"
-	if strings.Contains(c.Database.URI, "?") {
-		separator = "&"
-	}
-
-	params := []string{
-		fmt.Sprintf("sslmode=%s", c.Database.SSLMode),
-		"connect_timeout=10",
-		"statement_timeout=30000",                   // 30 seconds
-		"idle_in_transaction_session_timeout=60000", // 1 minute
-	}
-
-	return c.Database.URI + separator + strings.Join(params, "&")
+// GetDatabasePath returns the database file path
+func (c *Config) GetDatabasePath() string {
+	return c.Database.Path
 }
 
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
-	}
-	return defaultValue
-}
-
-func getIntEnv(key string, defaultValue int) int {
-	if value := os.Getenv(key); value != "" {
-		if intValue, err := strconv.Atoi(value); err == nil {
-			return intValue
-		}
 	}
 	return defaultValue
 }

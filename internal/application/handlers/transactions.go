@@ -50,7 +50,7 @@ func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
 	newTransaction := h.buildTransaction(req)
 
 	if err := h.repositories.Transaction.Create(c.Request().Context(), newTransaction); err != nil {
-		// Check if it's a PostgreSQL foreign key constraint error
+		// Check if it's a foreign key constraint error
 		if h.isForeignKeyConstraintError(err) {
 			return c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
@@ -492,13 +492,13 @@ func (h *TransactionHandler) updateTransactionFields(tx *transaction.Transaction
 	tx.UpdatedAt = time.Now()
 }
 
-// isForeignKeyConstraintError checks if the error is a PostgreSQL foreign key constraint violation
+// isForeignKeyConstraintError checks if the error is a foreign key constraint violation
 func (h *TransactionHandler) isForeignKeyConstraintError(err error) bool {
 	errStr := err.Error()
-	// PostgreSQL foreign key constraint error messages contain these patterns
+	// Database foreign key constraint error messages contain these patterns
 	return strings.Contains(errStr, "foreign key constraint") ||
 		strings.Contains(errStr, "violates foreign key constraint") ||
-		strings.Contains(errStr, "SQLSTATE 23503")
+		strings.Contains(errStr, "FOREIGN KEY constraint failed")
 }
 
 func (h *TransactionHandler) DeleteTransaction(c echo.Context) error {

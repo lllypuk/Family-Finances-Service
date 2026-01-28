@@ -167,7 +167,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		err = testServer.Repos.User.Create(context.Background(), user)
 		require.NoError(t, err)
 
-		// Test with non-existent category - PostgreSQL enforces foreign key constraints
+		// Test with non-existent category - database enforces foreign key constraints
 		// so this should fail with validation error
 		request := handlers.CreateTransactionRequest{
 			Amount:      100.0,
@@ -188,7 +188,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
 
-		// PostgreSQL enforces foreign key constraints, so this should fail
+		// Database enforces foreign key constraints, so this should fail
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 
 		var response handlers.ErrorResponse

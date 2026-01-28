@@ -28,7 +28,7 @@ type Application struct {
 	repositories         *handlers.Repositories
 	services             *services.Services
 	httpServer           *application.HTTPServer
-	postgresql           *infrastructure.PostgreSQLDriver
+	sqliteConn           *infrastructure.SQLiteConnection
 	observabilityService *observability.Service
 }
 
@@ -53,29 +53,25 @@ func NewApplication() (*Application, error) {
 		observabilityService: observabilityService,
 	}
 
-	// Подключение к PostgreSQL
-	pgConfig := &infrastructure.PostgreSQLConfig{
-		URI:             config.Database.URI,
-		Database:        config.Database.Name,
-		MaxOpenConns:    config.Database.MaxOpenConns,
-		MaxIdleConns:    config.Database.MaxIdleConns,
-		ConnMaxLifetime: config.Database.ConnMaxLifetime,
-		ConnMaxIdleTime: config.Database.ConnMaxIdleTime,
-		SSLMode:         config.Database.SSLMode,
-		Schema:          config.Database.Schema,
+	// Подключение к SQLite
+	sqliteConn, err := infrastructure.NewSQLiteConnection(config.Database.Path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to SQLite: %w", err)
+	}
+	app.sqliteConn = sqliteConn
+
+	// Запуск миграций
+	dbURL := fmt.Sprintf("sqlite3://%s", config.Database.Path)
+	migrationManager := infrastructure.NewMigrationManager(dbURL, "./migrations")
+	if err = migrationManager.Up(); err != nil {
+		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
-	postgresql := infrastructure.NewPostgreSQLDriver(pgConfig)
-	if err = postgresql.Connect(context.Background()); err != nil {
-		return nil, fmt.Errorf("failed to connect to PostgreSQL: %w", err)
-	}
-	app.postgresql = postgresql
-
-	// Добавляем health check для PostgreSQL
-	app.observabilityService.AddPostgreSQLHealthCheck(postgresql)
+	// Добавляем health check для SQLite
+	app.observabilityService.AddCustomHealthCheck("sqlite", sqliteConn.HealthCheck)
 
 	// Инициализация репозиториев
-	app.repositories = infrastructure.NewRepositories(postgresql.Pool())
+	app.repositories = infrastructure.NewRepositoriesSQLite(sqliteConn.DB())
 
 	// Инициализация сервисов
 	app.services = services.NewServices(
@@ -150,10 +146,17 @@ func (a *Application) shutdown() error {
 		a.observabilityService.Logger.InfoContext(ctx, "HTTP server stopped")
 	}
 
-	// Закрытие подключения к PostgreSQL
-	if a.postgresql != nil {
-		a.postgresql.Close()
-		a.observabilityService.Logger.InfoContext(ctx, "PostgreSQL disconnected")
+	// Закрытие подключения к SQLite
+	if a.sqliteConn != nil {
+		if closeErr := a.sqliteConn.Close(); closeErr != nil {
+			a.observabilityService.Logger.ErrorContext(
+				ctx,
+				"SQLite close error",
+				slog.String("error", closeErr.Error()),
+			)
+		} else {
+			a.observabilityService.Logger.InfoContext(ctx, "SQLite disconnected")
+		}
 	}
 
 	// Логируем завершение работы приложения перед остановкой observability сервиса

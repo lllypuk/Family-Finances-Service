@@ -2,91 +2,60 @@ package user
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/infrastructure/validation"
 )
 
-// Currency validation constants
-const (
-	currencyCodeLength = 3
-)
-
-// PostgreSQLFamilyRepository implements family repository using PostgreSQL
-type PostgreSQLFamilyRepository struct {
-	db *pgxpool.Pool
+// SQLiteFamilyRepository implements family repository using SQLite
+type SQLiteFamilyRepository struct {
+	db *sql.DB
 }
 
-// NewPostgreSQLFamilyRepository creates a new PostgreSQL family repository
-func NewPostgreSQLFamilyRepository(db *pgxpool.Pool) *PostgreSQLFamilyRepository {
-	return &PostgreSQLFamilyRepository{
+// FamilyStatistics holds family statistics
+type FamilyStatistics struct {
+	ID               uuid.UUID `json:"id"`
+	Name             string    `json:"name"`
+	Currency         string    `json:"currency"`
+	CreatedAt        time.Time `json:"created_at"`
+	UserCount        int       `json:"user_count"`
+	CategoryCount    int       `json:"category_count"`
+	TransactionCount int       `json:"transaction_count"`
+	BudgetCount      int       `json:"budget_count"`
+	TotalIncome      float64   `json:"total_income"`
+	TotalExpenses    float64   `json:"total_expenses"`
+	Balance          float64   `json:"balance"`
+}
+
+// NewSQLiteFamilyRepository creates a new SQLite family repository
+func NewSQLiteFamilyRepository(db *sql.DB) *SQLiteFamilyRepository {
+	return &SQLiteFamilyRepository{
 		db: db,
 	}
 }
 
-// ValidateCurrency validates currency code format
-func ValidateCurrency(currency string) error {
-	if currency == "" {
-		return errors.New("currency cannot be empty")
-	}
-
-	// Convert to uppercase for consistency
-	currency = strings.ToUpper(strings.TrimSpace(currency))
-
-	// Must be exactly 3 characters (ISO 4217)
-	if len(currency) != currencyCodeLength {
-		return errors.New("currency must be exactly 3 characters")
-	}
-
-	// Check for valid characters (A-Z only)
-	for _, char := range currency {
-		if char < 'A' || char > 'Z' {
-			return errors.New("currency must contain only uppercase letters")
-		}
-	}
-
-	// Common currency codes validation (extend as needed)
-	validCurrencies := map[string]bool{
-		"USD": true, "EUR": true, "GBP": true, "JPY": true, "RUB": true,
-		"CNY": true, "CAD": true, "AUD": true, "CHF": true, "SEK": true,
-		"NOK": true, "DKK": true, "PLN": true, "CZK": true, "HUF": true,
-	}
-
-	if !validCurrencies[currency] {
-		return fmt.Errorf("unsupported currency: %s", currency)
-	}
-
-	return nil
-}
-
-// SanitizeFamilyName sanitizes family name for safe storage
-func SanitizeFamilyName(name string) string {
-	return strings.TrimSpace(name)
-}
-
 // Create creates a new family in the database
-func (r *PostgreSQLFamilyRepository) Create(ctx context.Context, family *user.Family) error {
+func (r *SQLiteFamilyRepository) Create(ctx context.Context, family *user.Family) error {
 	// Validate family ID parameter before creating
 	if err := validation.ValidateUUID(family.ID); err != nil {
 		return fmt.Errorf("invalid family ID: %w", err)
 	}
 
 	// Validate and sanitize family name
-	family.Name = SanitizeFamilyName(family.Name)
+	family.Name = validation.SanitizeFamilyName(family.Name)
 	if family.Name == "" {
 		return errors.New("family name cannot be empty")
 	}
 
 	// Validate currency
-	if err := ValidateCurrency(family.Currency); err != nil {
+	if err := validation.ValidateCurrency(family.Currency); err != nil {
 		return fmt.Errorf("invalid currency: %w", err)
 	}
 
@@ -99,10 +68,12 @@ func (r *PostgreSQLFamilyRepository) Create(ctx context.Context, family *user.Fa
 	family.UpdatedAt = now
 
 	query := `
-		INSERT INTO family_budget.families (id, name, currency, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5)`
+		INSERT INTO families (id, name, currency, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?)`
 
-	_, err := r.db.Exec(ctx, query, family.ID, family.Name, family.Currency, family.CreatedAt, family.UpdatedAt)
+	_, err := r.db.ExecContext(ctx, query,
+		family.ID.String(), family.Name, family.Currency, family.CreatedAt, family.UpdatedAt,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to create family: %w", err)
 	}
@@ -111,7 +82,7 @@ func (r *PostgreSQLFamilyRepository) Create(ctx context.Context, family *user.Fa
 }
 
 // GetByID retrieves a family by their ID
-func (r *PostgreSQLFamilyRepository) GetByID(ctx context.Context, id uuid.UUID) (*user.Family, error) {
+func (r *SQLiteFamilyRepository) GetByID(ctx context.Context, id uuid.UUID) (*user.Family, error) {
 	// Validate UUID parameter to prevent injection attacks
 	if err := validation.ValidateUUID(id); err != nil {
 		return nil, fmt.Errorf("invalid id parameter: %w", err)
@@ -119,39 +90,47 @@ func (r *PostgreSQLFamilyRepository) GetByID(ctx context.Context, id uuid.UUID) 
 
 	query := `
 		SELECT id, name, currency, created_at, updated_at
-		FROM family_budget.families
-		WHERE id = $1`
+		FROM families
+		WHERE id = ?`
 
 	var family user.Family
-	err := r.db.QueryRow(ctx, query, id).Scan(
-		&family.ID, &family.Name, &family.Currency, &family.CreatedAt, &family.UpdatedAt,
+	var idStr string
+
+	err := r.db.QueryRowContext(ctx, query, id.String()).Scan(
+		&idStr, &family.Name, &family.Currency, &family.CreatedAt, &family.UpdatedAt,
 	)
 
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("family with id %s not found", id)
 		}
 		return nil, fmt.Errorf("failed to get family by id: %w", err)
+	}
+
+	// Parse UUID
+	family.ID, err = uuid.Parse(idStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse family ID: %w", err)
 	}
 
 	return &family, nil
 }
 
 // Update updates an existing family
-func (r *PostgreSQLFamilyRepository) Update(ctx context.Context, family *user.Family) error {
+func (r *SQLiteFamilyRepository) Update(ctx context.Context, family *user.Family) error {
 	// Validate family ID parameter before updating
 	if err := validation.ValidateUUID(family.ID); err != nil {
 		return fmt.Errorf("invalid family ID: %w", err)
 	}
 
 	// Validate and sanitize family name
-	family.Name = SanitizeFamilyName(family.Name)
+	family.Name = validation.SanitizeFamilyName(family.Name)
 	if family.Name == "" {
 		return errors.New("family name cannot be empty")
 	}
 
 	// Validate currency
-	if err := ValidateCurrency(family.Currency); err != nil {
+	if err := validation.ValidateCurrency(family.Currency); err != nil {
 		return fmt.Errorf("invalid currency: %w", err)
 	}
 
@@ -162,16 +141,23 @@ func (r *PostgreSQLFamilyRepository) Update(ctx context.Context, family *user.Fa
 	family.UpdatedAt = time.Now()
 
 	query := `
-		UPDATE family_budget.families
-		SET name = $2, currency = $3, updated_at = $4
-		WHERE id = $1`
+		UPDATE families
+		SET name = ?, currency = ?, updated_at = ?
+		WHERE id = ?`
 
-	result, err := r.db.Exec(ctx, query, family.ID, family.Name, family.Currency, family.UpdatedAt)
+	result, err := r.db.ExecContext(ctx, query,
+		family.Name, family.Currency, family.UpdatedAt, family.ID.String(),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to update family: %w", err)
 	}
 
-	if result.RowsAffected() == 0 {
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
 		return fmt.Errorf("family with id %s not found", family.ID)
 	}
 
@@ -179,7 +165,7 @@ func (r *PostgreSQLFamilyRepository) Update(ctx context.Context, family *user.Fa
 }
 
 // Delete deletes a family (this will cascade to all related data due to FK constraints)
-func (r *PostgreSQLFamilyRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+func (r *SQLiteFamilyRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
 	// Validate UUID parameters to prevent injection attacks
 	if err := validation.ValidateUUID(id); err != nil {
 		return fmt.Errorf("invalid id parameter: %w", err)
@@ -193,14 +179,19 @@ func (r *PostgreSQLFamilyRepository) Delete(ctx context.Context, id uuid.UUID, f
 		return errors.New("family id and familyID must be the same when deleting a family")
 	}
 
-	query := `DELETE FROM family_budget.families WHERE id = $1`
+	query := `DELETE FROM families WHERE id = ?`
 
-	result, err := r.db.Exec(ctx, query, id)
+	result, err := r.db.ExecContext(ctx, query, id.String())
 	if err != nil {
 		return fmt.Errorf("failed to delete family: %w", err)
 	}
 
-	if result.RowsAffected() == 0 {
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
 		return fmt.Errorf("family with id %s not found", id)
 	}
 
@@ -208,7 +199,7 @@ func (r *PostgreSQLFamilyRepository) Delete(ctx context.Context, id uuid.UUID, f
 }
 
 // GetFamilyStatistics returns statistics about the family
-func (r *PostgreSQLFamilyRepository) GetFamilyStatistics(
+func (r *SQLiteFamilyRepository) GetFamilyStatistics(
 	ctx context.Context,
 	familyID uuid.UUID,
 ) (*FamilyStatistics, error) {
@@ -229,26 +220,34 @@ func (r *PostgreSQLFamilyRepository) GetFamilyStatistics(
 			COUNT(DISTINCT b.id) as budget_count,
 			COALESCE(SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END), 0) as total_income,
 			COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END), 0) as total_expenses
-		FROM family_budget.families f
-		LEFT JOIN family_budget.users u ON f.id = u.family_id AND u.is_active = true
-		LEFT JOIN family_budget.categories c ON f.id = c.family_id AND c.is_active = true
-		LEFT JOIN family_budget.transactions t ON f.id = t.family_id
-		LEFT JOIN family_budget.budgets b ON f.id = b.family_id AND b.is_active = true
-		WHERE f.id = $1
+		FROM families f
+		LEFT JOIN users u ON f.id = u.family_id AND u.is_active = 1
+		LEFT JOIN categories c ON f.id = c.family_id AND c.is_active = 1
+		LEFT JOIN transactions t ON f.id = t.family_id
+		LEFT JOIN budgets b ON f.id = b.family_id AND b.is_active = 1
+		WHERE f.id = ?
 		GROUP BY f.id, f.name, f.currency, f.created_at`
 
 	var stats FamilyStatistics
-	err := r.db.QueryRow(ctx, query, familyID).Scan(
-		&stats.ID, &stats.Name, &stats.Currency, &stats.CreatedAt,
+	var idStr string
+
+	err := r.db.QueryRowContext(ctx, query, familyID.String()).Scan(
+		&idStr, &stats.Name, &stats.Currency, &stats.CreatedAt,
 		&stats.UserCount, &stats.CategoryCount, &stats.TransactionCount,
 		&stats.BudgetCount, &stats.TotalIncome, &stats.TotalExpenses,
 	)
 
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("family with id %s not found", familyID)
 		}
 		return nil, fmt.Errorf("failed to get family statistics: %w", err)
+	}
+
+	// Parse UUID
+	stats.ID, err = uuid.Parse(idStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse family ID: %w", err)
 	}
 
 	stats.Balance = stats.TotalIncome - stats.TotalExpenses
@@ -257,20 +256,20 @@ func (r *PostgreSQLFamilyRepository) GetFamilyStatistics(
 }
 
 // CreateWithTransaction creates a family within a database transaction
-func (r *PostgreSQLFamilyRepository) CreateWithTransaction(ctx context.Context, tx pgx.Tx, family *user.Family) error {
+func (r *SQLiteFamilyRepository) CreateWithTransaction(ctx context.Context, tx *sql.Tx, family *user.Family) error {
 	// Validate family ID parameter before creating
 	if err := validation.ValidateUUID(family.ID); err != nil {
 		return fmt.Errorf("invalid family ID: %w", err)
 	}
 
 	// Validate and sanitize family name
-	family.Name = SanitizeFamilyName(family.Name)
+	family.Name = validation.SanitizeFamilyName(family.Name)
 	if family.Name == "" {
 		return errors.New("family name cannot be empty")
 	}
 
 	// Validate currency
-	if err := ValidateCurrency(family.Currency); err != nil {
+	if err := validation.ValidateCurrency(family.Currency); err != nil {
 		return fmt.Errorf("invalid currency: %w", err)
 	}
 
@@ -283,10 +282,12 @@ func (r *PostgreSQLFamilyRepository) CreateWithTransaction(ctx context.Context, 
 	family.UpdatedAt = now
 
 	query := `
-		INSERT INTO family_budget.families (id, name, currency, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5)`
+		INSERT INTO families (id, name, currency, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?)`
 
-	_, err := tx.Exec(ctx, query, family.ID, family.Name, family.Currency, family.CreatedAt, family.UpdatedAt)
+	_, err := tx.ExecContext(ctx, query,
+		family.ID.String(), family.Name, family.Currency, family.CreatedAt, family.UpdatedAt,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to create family: %w", err)
 	}
@@ -294,23 +295,8 @@ func (r *PostgreSQLFamilyRepository) CreateWithTransaction(ctx context.Context, 
 	return nil
 }
 
-// FamilyStatistics holds family statistics
-type FamilyStatistics struct {
-	ID               uuid.UUID `json:"id"`
-	Name             string    `json:"name"`
-	Currency         string    `json:"currency"`
-	CreatedAt        time.Time `json:"created_at"`
-	UserCount        int       `json:"user_count"`
-	CategoryCount    int       `json:"category_count"`
-	TransactionCount int       `json:"transaction_count"`
-	BudgetCount      int       `json:"budget_count"`
-	TotalIncome      float64   `json:"total_income"`
-	TotalExpenses    float64   `json:"total_expenses"`
-	Balance          float64   `json:"balance"`
-}
-
 // GetAllFamilies retrieves all families (admin function)
-func (r *PostgreSQLFamilyRepository) GetAllFamilies(ctx context.Context, limit, offset int) ([]*user.Family, error) {
+func (r *SQLiteFamilyRepository) GetAllFamilies(ctx context.Context, limit, offset int) ([]*user.Family, error) {
 	if limit <= 0 {
 		limit = 50 // Default limit
 	}
@@ -320,11 +306,11 @@ func (r *PostgreSQLFamilyRepository) GetAllFamilies(ctx context.Context, limit, 
 
 	query := `
 		SELECT id, name, currency, created_at, updated_at
-		FROM family_budget.families
+		FROM families
 		ORDER BY created_at DESC
-		LIMIT $1 OFFSET $2`
+		LIMIT ? OFFSET ?`
 
-	rows, err := r.db.Query(ctx, query, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get families: %w", err)
 	}
@@ -333,10 +319,19 @@ func (r *PostgreSQLFamilyRepository) GetAllFamilies(ctx context.Context, limit, 
 	var families []*user.Family
 	for rows.Next() {
 		var family user.Family
-		err = rows.Scan(&family.ID, &family.Name, &family.Currency, &family.CreatedAt, &family.UpdatedAt)
+		var idStr string
+
+		err = rows.Scan(&idStr, &family.Name, &family.Currency, &family.CreatedAt, &family.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan family: %w", err)
 		}
+
+		// Parse UUID
+		family.ID, err = uuid.Parse(idStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse family ID: %w", err)
+		}
+
 		families = append(families, &family)
 	}
 

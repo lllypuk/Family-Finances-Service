@@ -15,17 +15,16 @@ import (
 	transactionrepo "family-budget-service/internal/infrastructure/transaction"
 )
 
-func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
-	// Setup PostgreSQL testcontainer
-	container := testutils.SetupPostgreSQLContainer(t)
-	defer container.Cleanup(t)
+func TestTransactionRepositorySQLite_Integration(t *testing.T) {
+	// Setup SQLite in-memory database
+	container := testutils.SetupSQLiteTestDB(t)
 
 	helper := testutils.NewTestDataHelper(container.DB)
 	ctx := context.Background()
 
 	t.Run("Create_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := transactionrepo.NewPostgreSQLRepository(db)
+		repo := transactionrepo.NewSQLiteRepository(db)
 
 		// Create test data
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
@@ -68,7 +67,7 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("GetByFilter_DateRange", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := transactionrepo.NewPostgreSQLRepository(db)
+		repo := transactionrepo.NewSQLiteRepository(db)
 
 		// Create test data
 		familyID, err := helper.CreateTestFamily(ctx, "Filter Test Family", "USD")
@@ -145,7 +144,7 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("GetByFilter_TypeAndAmount", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := transactionrepo.NewPostgreSQLRepository(db)
+		repo := transactionrepo.NewSQLiteRepository(db)
 
 		// Create test data
 		familyID, err := helper.CreateTestFamily(ctx, "Amount Filter Family", "USD")
@@ -219,7 +218,7 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("GetByFilter_Tags", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := transactionrepo.NewPostgreSQLRepository(db)
+		repo := transactionrepo.NewSQLiteRepository(db)
 
 		// Create test data
 		familyID, err := helper.CreateTestFamily(ctx, "Tags Test Family", "USD")
@@ -294,7 +293,7 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("GetTransactionSummary", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := transactionrepo.NewPostgreSQLRepository(db)
+		repo := transactionrepo.NewSQLiteRepository(db)
 
 		// Create test data
 		familyID, err := helper.CreateTestFamily(ctx, "Summary Test Family", "USD")
@@ -367,7 +366,7 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("Update_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := transactionrepo.NewPostgreSQLRepository(db)
+		repo := transactionrepo.NewSQLiteRepository(db)
 
 		// Create test data
 		familyID, err := helper.CreateTestFamily(ctx, "Update Test Family", "USD")
@@ -418,7 +417,7 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("Delete_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := transactionrepo.NewPostgreSQLRepository(db)
+		repo := transactionrepo.NewSQLiteRepository(db)
 
 		// Create test data
 		familyID, err := helper.CreateTestFamily(ctx, "Delete Test Family", "USD")

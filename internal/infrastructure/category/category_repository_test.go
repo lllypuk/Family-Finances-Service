@@ -14,17 +14,16 @@ import (
 	categoryrepo "family-budget-service/internal/infrastructure/category"
 )
 
-func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
-	// Setup PostgreSQL testcontainer
-	container := testutils.SetupPostgreSQLContainer(t)
-	defer container.Cleanup(t)
+func TestCategoryRepositorySQLite_Integration(t *testing.T) {
+	// Setup SQLite in-memory database
+	container := testutils.SetupSQLiteTestDB(t)
 
 	helper := testutils.NewTestDataHelper(container.DB)
 	ctx := context.Background()
 
 	t.Run("Create_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := categoryrepo.NewPostgreSQLRepository(db)
+		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
@@ -54,7 +53,7 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("Create_WithParent_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := categoryrepo.NewPostgreSQLRepository(db)
+		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
 		familyID, err := helper.CreateTestFamily(ctx, "Hierarchy Test Family", "USD")
@@ -95,7 +94,7 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("GetCategoryChildren_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := categoryrepo.NewPostgreSQLRepository(db)
+		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
 		familyID, err := helper.CreateTestFamily(ctx, "Children Test Family", "USD")
@@ -170,7 +169,7 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("GetCategoryPath_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := categoryrepo.NewPostgreSQLRepository(db)
+		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
 		familyID, err := helper.CreateTestFamily(ctx, "Path Test Family", "USD")
@@ -225,7 +224,7 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("GetByFamilyIDAndType_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := categoryrepo.NewPostgreSQLRepository(db)
+		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
 		familyID, err := helper.CreateTestFamily(ctx, "Type Filter Family", "USD")
@@ -293,7 +292,7 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("Update_PreventCircularReference", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := categoryrepo.NewPostgreSQLRepository(db)
+		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
 		familyID, err := helper.CreateTestFamily(ctx, "Circular Test Family", "USD")
@@ -333,7 +332,7 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("Delete_WithChildren_ShouldFail", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := categoryrepo.NewPostgreSQLRepository(db)
+		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
 		familyID, err := helper.CreateTestFamily(ctx, "Delete Test Family", "USD")
@@ -373,7 +372,7 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("Delete_LeafCategory_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := categoryrepo.NewPostgreSQLRepository(db)
+		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
 		familyID, err := helper.CreateTestFamily(ctx, "Delete Leaf Family", "USD")

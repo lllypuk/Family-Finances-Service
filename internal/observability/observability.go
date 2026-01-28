@@ -45,16 +45,16 @@ func NewService(config Config, version string) (*Service, error) {
 	return service, nil
 }
 
-// PostgreSQLHealthChecker интерфейс для PostgreSQL health check
-type PostgreSQLHealthChecker interface {
+// DatabaseHealthChecker интерфейс для database health check
+type DatabaseHealthChecker interface {
 	HealthCheck(ctx context.Context) error
 }
 
-// AddPostgreSQLHealthCheck добавляет health check для PostgreSQL
-func (s *Service) AddPostgreSQLHealthCheck(pg PostgreSQLHealthChecker) {
-	checker := NewPostgreSQLHealthChecker(pg)
+// AddDatabaseHealthCheck добавляет health check для базы данных
+func (s *Service) AddDatabaseHealthCheck(db DatabaseHealthChecker) {
+	checker := NewDatabaseHealthChecker(db)
 	s.HealthService.AddChecker(checker)
-	s.Logger.InfoContext(context.Background(), "PostgreSQL health check added")
+	s.Logger.InfoContext(context.Background(), "Database health check added")
 }
 
 // AddCustomHealthCheck добавляет пользовательский health check
