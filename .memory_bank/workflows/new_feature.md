@@ -503,14 +503,11 @@ make rollback-production
 - **Resource Usage**: CPU, Memory, DB connections
 - **Business Metrics**: Feature adoption, usage patterns
 
-#### Monitoring Dashboard
+#### Monitoring
 ```yaml
-# Grafana dashboard queries
-- Response Time:
-    query: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
-
-- Error Rate:
-    query: rate(http_requests_total{status=~"4..|5.."}[5m]) / rate(http_requests_total[5m])
+# Мониторинг через логи и health check
+- Health Check: GET /health
+- Logs: structured logging (slog) с уровнями debug/info/warn/error
 
 - Feature Usage:
     query: rate(budget_creation_total[5m])
@@ -618,9 +615,9 @@ go test -v ./internal/usecases/budget/...
 go test -v -run TestCreateBudget
 go test -bench=. ./internal/usecases/budget/
 
-# Database operations
-migrate -path migrations -database postgres://... up
-migrate -path migrations -database postgres://... down 1
+# Database operations (миграции запускаются автоматически при старте)
+make sqlite-shell    # Открыть SQLite shell
+make sqlite-backup   # Создать бэкап базы данных
 
 # API testing
 curl -X POST http://localhost:8080/api/v1/families/123/budgets \

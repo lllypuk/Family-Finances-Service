@@ -109,7 +109,6 @@ This is a production-ready family budget management service built with Go, follo
 - ✅ **Comprehensive security** with authentication & authorization
 - ✅ **36.2% test coverage** with 50+ test files
 - ✅ **CI/CD pipelines** with GitHub Actions
-- ✅ **Observability stack** (Prometheus, Grafana, Jaeger)
 
 ### Domain Structure
 The application is organized into domain modules in `internal/domain/`:
@@ -126,7 +125,7 @@ The application is organized into domain modules in `internal/domain/`:
 - `internal/web/` - Web interface (HTMX templates, middleware, static files)
 - `internal/domain/` - Domain entities and business logic
 - `internal/infrastructure/` - SQLite repositories and data persistence
-- `internal/observability/` - Metrics, logging, tracing, health checks
+- `internal/observability/` - Logging and health checks
 
 ### Key Technologies (Production Stack)
 - **Go 1.25** - Latest Go version with enhanced performance
@@ -149,8 +148,7 @@ Environment variables are managed in `internal/config.go`. Key variables:
 All data access is abstracted through repository interfaces in `internal/application/handlers/repositories.go`.
 Full implementations are available in `internal/infrastructure/` with comprehensive error handling.
 
-### Multi-tenancy & Security
-- **Family-based isolation**: Data is strictly isolated by family ID
+### Security
 - **Role-based access control**: Admin, Member, Child roles with different permissions
 - **Session management**: Secure HTTP-only cookies with CSRF protection
 - **Input validation**: Comprehensive validation with go-playground/validator
@@ -199,7 +197,7 @@ The project has comprehensive testing across all layers:
 - End-to-end API workflows with in-memory database
 - Database operations with SQLite
 - Authentication flows with session management
-- Multi-family data isolation validation
+- Data integrity validation
 
 **Coverage by Layer:**
 - **Application**: 91.2% (excellent)
@@ -264,10 +262,10 @@ Automated releases on version tags:
 - **Branch Protection**: Required status checks and reviews
 - **Quality Gates**: All CI checks must pass before merge
 
-### Monitoring and Observability
+### Monitoring
+- **Health Check**: `/health` endpoint for container orchestration
+- **Structured Logging**: slog-based logging with configurable levels
 - **Coverage Reports**: Integrated with Codecov for test coverage tracking
-- **Security Dashboard**: Centralized vulnerability and compliance reporting
-- **Build Metrics**: Automated tracking of build times and success rates
 
 Use `make lint` and `make test` locally to ensure CI pipeline success before pushing changes.
 

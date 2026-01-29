@@ -307,8 +307,8 @@ Key takeaways for the future.
 - **Components**: `api`, `database`, `auth`, `transactions`
 
 ### Monitoring and Alerts
-- **Logs**: ELK Stack для анализа логов
-- **Metrics**: Prometheus + Grafana
+- **Logs**: Structured logging (slog)
+- **Health**: /health эндпоинт
 - **APM**: Application Performance Monitoring
 - **Uptime**: External monitoring service
 
