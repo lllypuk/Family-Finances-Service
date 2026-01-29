@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services/dto"
@@ -20,51 +21,79 @@ var (
 // familyService implements FamilyService interface
 type familyService struct {
 	familyRepo      FamilyRepository
+	userRepo        UserRepository
 	categoryService CategoryService
 	validator       *validator.Validate
 }
 
 // NewFamilyService creates a new FamilyService instance
-func NewFamilyService(familyRepo FamilyRepository, categoryService CategoryService) FamilyService {
+func NewFamilyService(
+	familyRepo FamilyRepository,
+	userRepo UserRepository,
+	categoryService CategoryService,
+) FamilyService {
 	return &familyService{
 		familyRepo:      familyRepo,
+		userRepo:        userRepo,
 		categoryService: categoryService,
 		validator:       validator.New(),
 	}
 }
 
-// CreateFamily creates a new family with validation
-func (s *familyService) CreateFamily(ctx context.Context, req dto.CreateFamilyDTO) (*user.Family, error) {
+// SetupFamily creates the initial family with admin user (bootstrap only)
+func (s *familyService) SetupFamily(ctx context.Context, req dto.SetupFamilyDTO) (*user.Family, error) {
 	// Validate input
 	if err := s.validator.Struct(req); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrValidationFailed, err)
 	}
 
+	// Check if family already exists
+	exists, err := s.familyRepo.Exists(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check family existence: %w", err)
+	}
+	if exists {
+		return nil, ErrFamilyAlreadyExists
+	}
+
 	// Create family entity
 	newFamily := &user.Family{
 		ID:        uuid.New(),
-		Name:      req.Name,
+		Name:      req.FamilyName,
 		Currency:  req.Currency,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
 
-	// Save to database
-	if err := s.familyRepo.Create(ctx, newFamily); err != nil {
+	// Save family to database
+	if err = s.familyRepo.Create(ctx, newFamily); err != nil {
 		return nil, fmt.Errorf("failed to create family: %w", err)
 	}
 
 	// Create default categories for the new family
-	if err := s.categoryService.CreateDefaultCategories(ctx, newFamily.ID); err != nil {
+	if err = s.categoryService.CreateDefaultCategories(ctx, newFamily.ID); err != nil {
 		return nil, fmt.Errorf("failed to create default categories: %w", err)
+	}
+
+	// Create admin user
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	adminUser := user.NewUser(req.Email, req.FirstName, req.LastName, newFamily.ID, user.RoleAdmin)
+	adminUser.Password = string(hashedPassword)
+
+	if err = s.userRepo.Create(ctx, adminUser); err != nil {
+		return nil, fmt.Errorf("failed to create admin user: %w", err)
 	}
 
 	return newFamily, nil
 }
 
-// GetFamilyByID retrieves a family by ID
-func (s *familyService) GetFamilyByID(ctx context.Context, id uuid.UUID) (*user.Family, error) {
-	family, err := s.familyRepo.GetByID(ctx, id)
+// GetFamily retrieves the single family
+func (s *familyService) GetFamily(ctx context.Context) (*user.Family, error) {
+	family, err := s.familyRepo.Get(ctx)
 	if err != nil {
 		return nil, ErrFamilyNotFound
 	}
@@ -75,15 +104,15 @@ func (s *familyService) GetFamilyByID(ctx context.Context, id uuid.UUID) (*user.
 	return family, nil
 }
 
-// UpdateFamily updates an existing family
-func (s *familyService) UpdateFamily(ctx context.Context, id uuid.UUID, req dto.UpdateFamilyDTO) (*user.Family, error) {
+// UpdateFamily updates the single family settings
+func (s *familyService) UpdateFamily(ctx context.Context, req dto.UpdateFamilyDTO) (*user.Family, error) {
 	// Validate input
 	if err := s.validator.Struct(req); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrValidationFailed, err)
 	}
 
 	// Get existing family
-	existingFamily, err := s.GetFamilyByID(ctx, id)
+	existingFamily, err := s.GetFamily(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -105,17 +134,7 @@ func (s *familyService) UpdateFamily(ctx context.Context, id uuid.UUID, req dto.
 	return existingFamily, nil
 }
 
-// DeleteFamily deletes a family by ID
-func (s *familyService) DeleteFamily(ctx context.Context, id uuid.UUID) error {
-	// Check if family exists
-	if _, err := s.GetFamilyByID(ctx, id); err != nil {
-		return err
-	}
-
-	// Delete family
-	if err := s.familyRepo.Delete(ctx, id, id); err != nil {
-		return fmt.Errorf("failed to delete family: %w", err)
-	}
-
-	return nil
+// IsSetupComplete checks if the initial setup has been done
+func (s *familyService) IsSetupComplete(ctx context.Context) (bool, error) {
+	return s.familyRepo.Exists(ctx)
 }

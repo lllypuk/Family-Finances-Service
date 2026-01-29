@@ -70,7 +70,7 @@ func (s *categoryService) CreateCategory(ctx context.Context, req dto.CreateCate
 	}
 
 	// Validate family exists
-	if _, err := s.familyRepo.GetByID(ctx, req.FamilyID); err != nil {
+	if _, err := s.familyRepo.Get(ctx); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrFamilyNotFound, err)
 	}
 
@@ -147,7 +147,7 @@ func (s *categoryService) GetCategoriesByFamily(
 	typeFilter *category.Type,
 ) ([]*category.Category, error) {
 	// Validate family exists
-	if _, err := s.familyRepo.GetByID(ctx, familyID); err != nil {
+	if _, err := s.familyRepo.Get(ctx); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrFamilyNotFound, err)
 	}
 

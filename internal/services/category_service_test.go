@@ -54,7 +54,7 @@ func TestCategoryService_CreateCategory_Success(t *testing.T) {
 	}
 
 	// Setup mocks
-	mockFamilyRepo.On("GetByID", mock.Anything, familyID).Return(family, nil)
+	mockFamilyRepo.On("Get", mock.Anything).Return(family, nil)
 	mockCategoryRepo.On("GetByType", mock.Anything, familyID, category.TypeExpense).Return([]*category.Category{}, nil)
 	mockCategoryRepo.On("Create", mock.Anything, mock.AnythingOfType("*category.Category")).Return(nil)
 
@@ -89,7 +89,7 @@ func TestCategoryService_CreateCategory_FamilyNotFound(t *testing.T) {
 	}
 
 	// Setup mocks
-	mockFamilyRepo.On("GetByID", mock.Anything, familyID).Return(nil, errors.New("family not found"))
+	mockFamilyRepo.On("Get", mock.Anything).Return(nil, errors.New("family not found"))
 
 	// Execute
 	result, err := service.CreateCategory(context.Background(), req)
@@ -129,7 +129,7 @@ func TestCategoryService_CreateCategory_DuplicateName(t *testing.T) {
 	}
 
 	// Setup mocks
-	mockFamilyRepo.On("GetByID", mock.Anything, familyID).Return(family, nil)
+	mockFamilyRepo.On("Get", mock.Anything).Return(family, nil)
 	mockCategoryRepo.On("GetByType", mock.Anything, familyID, category.TypeExpense).
 		Return([]*category.Category{existingCategory}, nil)
 
@@ -175,7 +175,7 @@ func TestCategoryService_CreateCategory_WithParent_Success(t *testing.T) {
 	}
 
 	// Setup mocks
-	mockFamilyRepo.On("GetByID", mock.Anything, familyID).Return(family, nil)
+	mockFamilyRepo.On("Get", mock.Anything).Return(family, nil)
 	mockCategoryRepo.On("GetByID", mock.Anything, parentID).Return(parentCategory, nil)
 	mockCategoryRepo.On("GetByType", mock.Anything, familyID, category.TypeExpense).Return([]*category.Category{}, nil)
 	mockCategoryRepo.On("Create", mock.Anything, mock.AnythingOfType("*category.Category")).Return(nil)
@@ -223,7 +223,7 @@ func TestCategoryService_CreateCategory_WithParent_WrongFamily(t *testing.T) {
 	}
 
 	// Setup mocks
-	mockFamilyRepo.On("GetByID", mock.Anything, familyID).Return(family, nil)
+	mockFamilyRepo.On("Get", mock.Anything).Return(family, nil)
 	mockCategoryRepo.On("GetByID", mock.Anything, parentID).Return(parentCategory, nil)
 
 	// Execute
@@ -310,7 +310,7 @@ func TestCategoryService_GetCategoriesByFamily_Success(t *testing.T) {
 	}
 
 	// Setup mocks
-	mockFamilyRepo.On("GetByID", mock.Anything, familyID).Return(family, nil)
+	mockFamilyRepo.On("Get", mock.Anything).Return(family, nil)
 	mockCategoryRepo.On("GetByFamilyID", mock.Anything, familyID).Return(expectedCategories, nil)
 
 	// Execute
@@ -346,7 +346,7 @@ func TestCategoryService_GetCategoriesByFamily_WithTypeFilter(t *testing.T) {
 	}
 
 	// Setup mocks
-	mockFamilyRepo.On("GetByID", mock.Anything, familyID).Return(family, nil)
+	mockFamilyRepo.On("Get", mock.Anything).Return(family, nil)
 	mockCategoryRepo.On("GetByType", mock.Anything, familyID, typeFilter).Return(expectedCategories, nil)
 
 	// Execute
@@ -488,7 +488,7 @@ func TestCategoryService_GetCategoryHierarchy_Success(t *testing.T) {
 	allCategories := []*category.Category{parentCategory, childCategory}
 
 	// Setup mocks
-	mockFamilyRepo.On("GetByID", mock.Anything, familyID).Return(family, nil)
+	mockFamilyRepo.On("Get", mock.Anything).Return(family, nil)
 	mockCategoryRepo.On("GetByFamilyID", mock.Anything, familyID).Return(allCategories, nil)
 
 	// Execute

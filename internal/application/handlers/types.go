@@ -63,12 +63,6 @@ type UserResponse struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// CreateFamilyRequest represents the request payload for creating a new family
-type CreateFamilyRequest struct {
-	Name     string `json:"name"     validate:"required,min=2,max=100"`
-	Currency string `json:"currency" validate:"required,len=3"`
-}
-
 type UpdateFamilyRequest struct {
 	Name     *string `json:"name,omitempty"     validate:"omitempty,min=2,max=100"`
 	Currency *string `json:"currency,omitempty" validate:"omitempty,len=3"`

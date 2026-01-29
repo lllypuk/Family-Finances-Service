@@ -1,8 +1,6 @@
 package dto
 
 import (
-	"github.com/google/uuid"
-
 	"family-budget-service/internal/domain/user"
 )
 
@@ -16,13 +14,12 @@ type CreateUserWebRequest struct {
 }
 
 // FromCreateUserWebRequest converts web form CreateUserRequest to CreateUserDTO
-func FromCreateUserWebRequest(req CreateUserWebRequest, familyID uuid.UUID) CreateUserDTO {
+func FromCreateUserWebRequest(req CreateUserWebRequest) CreateUserDTO {
 	return CreateUserDTO{
 		Email:     req.Email,
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
 		Password:  req.Password,
 		Role:      user.Role(req.Role),
-		FamilyID:  familyID,
 	}
 }

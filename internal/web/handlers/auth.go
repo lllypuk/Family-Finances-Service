@@ -9,9 +9,9 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"family-budget-service/internal/application/handlers"
-	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/infrastructure/validation"
 	"family-budget-service/internal/services"
+	"family-budget-service/internal/services/dto"
 	"family-budget-service/internal/web/middleware"
 	"family-budget-service/internal/web/models"
 )
@@ -114,88 +114,63 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	return c.Redirect(http.StatusFound, redirectTo)
 }
 
-// RegisterPage отображает страницу регистрации
-func (h *AuthHandler) RegisterPage(c echo.Context) error {
+// SetupPage отображает страницу первоначальной настройки
+func (h *AuthHandler) SetupPage(c echo.Context) error {
 	csrfToken, err := middleware.GetCSRFToken(c)
 	if err != nil {
 		return err
 	}
 
 	data := map[string]any{
-		"CSRFToken":  csrfToken,
-		"Title":      "Create Family Account",
-		"IsRegister": true,
+		"CSRFToken": csrfToken,
+		"Title":     "Первоначальная настройка",
+		"IsSetup":   true,
 	}
 
-	return c.Render(http.StatusOK, "register.html", data)
+	return c.Render(http.StatusOK, "setup.html", data)
 }
 
-// Register обрабатывает регистрацию новой семьи
-func (h *AuthHandler) Register(c echo.Context) error {
-	var form models.RegisterForm
+// Setup обрабатывает первоначальную настройку семьи
+func (h *AuthHandler) Setup(c echo.Context) error {
+	var form models.SetupForm
 	if err := c.Bind(&form); err != nil {
-		return h.registerError(c, "Invalid form data", nil)
+		return h.setupError(c, "Invalid form data", nil)
 	}
 
 	// Валидация
 	if err := c.Validate(&form); err != nil {
-		return h.registerError(c, "Please check your input", models.GetValidationErrors(err))
+		return h.setupError(c, "Please check your input", models.GetValidationErrors(err))
 	}
 
-	// Дополнительная валидация email на уровне репозитория для предотвращения инъекций
+	// Дополнительная валидация email
 	if err := validation.ValidateEmail(form.Email); err != nil {
-		return h.registerError(c, "Invalid email format", map[string]string{
+		return h.setupError(c, "Invalid email format", map[string]string{
 			"email": "Please enter a valid email address",
 		})
 	}
 
-	// Проверяем, что пользователь с таким email не существует
-	existingUser, _ := h.repos.User.GetByEmail(c.Request().Context(), form.Email)
-	if existingUser != nil {
-		return h.registerError(c, "", map[string]string{
-			"email": "User with this email already exists",
-		})
+	// Вызываем сервис для создания семьи и первого пользователя
+	setupDTO := dto.SetupFamilyDTO{
+		FamilyName: form.FamilyName,
+		Currency:   form.Currency,
+		Email:      form.Email,
+		FirstName:  form.FirstName,
+		LastName:   form.LastName,
+		Password:   form.Password,
 	}
 
-	// Хешируем пароль
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(form.Password), bcrypt.DefaultCost)
+	_, err := h.services.Family.SetupFamily(c.Request().Context(), setupDTO)
 	if err != nil {
-		return c.String(http.StatusInternalServerError, "Failed to process password")
-	}
-
-	// Создаем семью
-	family := user.NewFamily(form.FamilyName, form.Currency)
-	if familyErr := h.repos.Family.Create(c.Request().Context(), family); familyErr != nil {
-		return c.String(http.StatusInternalServerError, "Failed to create family")
-	}
-
-	// Создаем пользователя (первый пользователь в семье - всегда админ)
-	newUser := user.NewUser(form.Email, form.FirstName, form.LastName, family.ID, user.RoleAdmin)
-	newUser.Password = string(hashedPassword)
-
-	if userErr := h.repos.User.Create(c.Request().Context(), newUser); userErr != nil {
-		return c.String(http.StatusInternalServerError, "Failed to create user")
-	}
-
-	// Создание сессии для нового пользователя
-	sessionData := &middleware.SessionData{
-		UserID:   newUser.ID,
-		FamilyID: newUser.FamilyID,
-		Role:     newUser.Role,
-		Email:    newUser.Email,
-	}
-
-	if sessionErr := middleware.SetSessionData(c, sessionData); sessionErr != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create session")
+		return h.setupError(c, "Failed to create family: "+err.Error(), nil)
 	}
 
 	// Если это HTMX запрос
 	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
-		c.Response().Header().Set("Hx-Redirect", "/")
+		c.Response().Header().Set("Hx-Redirect", "/login")
 		return c.NoContent(http.StatusOK)
 	}
 
-	return c.Redirect(http.StatusFound, "/")
+	return c.Redirect(http.StatusFound, "/login")
 }
 
 // Logout обрабатывает выход из системы
@@ -234,13 +209,13 @@ func (h *AuthHandler) loginError(c echo.Context, message string, fieldErrors map
 	return c.Render(http.StatusUnprocessableEntity, "login.html", data)
 }
 
-// registerError возвращает ошибку регистрации
-func (h *AuthHandler) registerError(c echo.Context, message string, fieldErrors map[string]string) error {
+// setupError возвращает ошибку настройки
+func (h *AuthHandler) setupError(c echo.Context, message string, fieldErrors map[string]string) error {
 	csrfToken, _ := middleware.GetCSRFToken(c)
 
 	data := map[string]any{
 		"CSRFToken":   csrfToken,
-		"Title":       "Create Family Account",
+		"Title":       "Первоначальная настройка",
 		"Error":       message,
 		"FieldErrors": fieldErrors,
 		"FirstName":   c.FormValue("first_name"),
@@ -248,13 +223,13 @@ func (h *AuthHandler) registerError(c echo.Context, message string, fieldErrors 
 		"Email":       c.FormValue("email"),
 		"FamilyName":  c.FormValue("family_name"),
 		"Currency":    c.FormValue("currency"),
-		"IsRegister":  true,
+		"IsSetup":     true,
 	}
 
 	// Если это HTMX запрос, возвращаем только форму
 	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
-		return c.Render(http.StatusUnprocessableEntity, "register_form.html", data)
+		return c.Render(http.StatusUnprocessableEntity, "setup_form.html", data)
 	}
 
-	return c.Render(http.StatusUnprocessableEntity, "register.html", data)
+	return c.Render(http.StatusUnprocessableEntity, "setup.html", data)
 }

@@ -38,8 +38,8 @@ func TestLoginForm_StructFields(t *testing.T) {
 	assert.Equal(t, "password", passwordField.Tag.Get("json"))
 }
 
-func TestRegisterForm_StructFields(t *testing.T) {
-	form := models.RegisterForm{
+func TestSetupForm_StructFields(t *testing.T) {
+	form := models.SetupForm{
 		FamilyName: "Test Family",
 		Currency:   "USD",
 		FirstName:  "John",
@@ -115,7 +115,7 @@ func TestGetValidationErrors_RequiredFields(t *testing.T) {
 		},
 		{
 			name: "RegisterForm - missing family name",
-			form: models.RegisterForm{
+			form: models.SetupForm{
 				Currency:  "USD",
 				FirstName: "John",
 				LastName:  "Doe",
@@ -128,7 +128,7 @@ func TestGetValidationErrors_RequiredFields(t *testing.T) {
 		},
 		{
 			name:          "RegisterForm - all fields missing",
-			form:          models.RegisterForm{},
+			form:          models.SetupForm{},
 			expectedCount: 6,
 			expectedField: "",
 			expectedMsg:   "This field is required",
@@ -276,7 +276,7 @@ func TestGetValidationErrors_LengthValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			form := models.RegisterForm{
+			form := models.SetupForm{
 				FamilyName: tt.familyName,
 				Currency:   tt.currency,
 				FirstName:  "John",
@@ -340,7 +340,7 @@ func TestGetValidationErrors_MaxLengthValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			form := models.RegisterForm{
+			form := models.SetupForm{
 				FamilyName: "Valid Family",
 				Currency:   "USD",
 				FirstName:  "John",
@@ -376,7 +376,7 @@ func TestGetFieldName_CamelCaseConversion(t *testing.T) {
 	v := validator.New()
 
 	// Тестируем через реальную валидацию
-	form := models.RegisterForm{
+	form := models.SetupForm{
 		// Оставляем FirstName пустым для получения ошибки валидации
 		FamilyName: "Test",
 		Currency:   "USD",
@@ -433,7 +433,7 @@ func TestGetValidationErrors_MultipleErrors(t *testing.T) {
 	v := validator.New()
 
 	// Создаем форму с множественными ошибками
-	form := models.RegisterForm{
+	form := models.SetupForm{
 		// Все поля пустые или невалидные
 		FamilyName: "",
 		Currency:   "",
@@ -462,7 +462,7 @@ func TestGetValidationErrors_MultipleErrors(t *testing.T) {
 func BenchmarkGetValidationErrors(b *testing.B) {
 	v := validator.New()
 
-	form := models.RegisterForm{
+	form := models.SetupForm{
 		FamilyName: "Test Family",
 		Currency:   "USD",
 		FirstName:  "John",

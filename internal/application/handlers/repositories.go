@@ -32,12 +32,12 @@ type UserRepository interface {
 	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
 }
 
-// FamilyRepository определяет операции с семьями
+// FamilyRepository определяет операции с единственной семьёй
 type FamilyRepository interface {
 	Create(ctx context.Context, family *user.Family) error
-	GetByID(ctx context.Context, id uuid.UUID) (*user.Family, error)
+	Get(ctx context.Context) (*user.Family, error)
 	Update(ctx context.Context, family *user.Family) error
-	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
+	Exists(ctx context.Context) (bool, error)
 }
 
 // CategoryRepository определяет операции с категориями

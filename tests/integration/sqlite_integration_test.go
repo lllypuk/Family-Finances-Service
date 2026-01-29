@@ -336,7 +336,7 @@ func TestFullWorkflowIntegration(t *testing.T) {
 		assert.Equal(t, adminUser.ID, adminUsers[0].ID)
 
 		// Get family statistics
-		familyStats, err := familyRepo.GetFamilyStatistics(ctx, family.ID)
+		familyStats, err := familyRepo.GetFamilyStatistics(ctx)
 		require.NoError(t, err)
 		assert.Equal(t, family.ID, familyStats.ID)
 		assert.Equal(t, 2, familyStats.UserCount)

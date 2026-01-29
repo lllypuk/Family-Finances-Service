@@ -51,8 +51,8 @@ func (m *MockUserService) GetUserByID(ctx context.Context, id uuid.UUID) (*user.
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
-func (m *MockUserService) GetUsersByFamily(ctx context.Context, familyID uuid.UUID) ([]*user.User, error) {
-	args := m.Called(ctx, familyID)
+func (m *MockUserService) GetUsers(ctx context.Context) ([]*user.User, error) {
+	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -67,8 +67,8 @@ func (m *MockUserService) UpdateUser(ctx context.Context, id uuid.UUID, req dto.
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
-func (m *MockUserService) DeleteUser(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
-	args := m.Called(ctx, id, familyID)
+func (m *MockUserService) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
@@ -95,7 +95,7 @@ type MockFamilyService struct {
 	mock.Mock
 }
 
-func (m *MockFamilyService) CreateFamily(ctx context.Context, req dto.CreateFamilyDTO) (*user.Family, error) {
+func (m *MockFamilyService) SetupFamily(ctx context.Context, req dto.SetupFamilyDTO) (*user.Family, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -103,37 +103,25 @@ func (m *MockFamilyService) CreateFamily(ctx context.Context, req dto.CreateFami
 	return args.Get(0).(*user.Family), args.Error(1)
 }
 
-func (m *MockFamilyService) GetFamilyByID(ctx context.Context, id uuid.UUID) (*user.Family, error) {
-	args := m.Called(ctx, id)
+func (m *MockFamilyService) GetFamily(ctx context.Context) (*user.Family, error) {
+	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*user.Family), args.Error(1)
 }
 
-func (m *MockFamilyService) UpdateFamily(
-	ctx context.Context,
-	id uuid.UUID,
-	req dto.UpdateFamilyDTO,
-) (*user.Family, error) {
-	args := m.Called(ctx, id, req)
+func (m *MockFamilyService) UpdateFamily(ctx context.Context, req dto.UpdateFamilyDTO) (*user.Family, error) {
+	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*user.Family), args.Error(1)
 }
 
-func (m *MockFamilyService) DeleteFamily(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
-}
-
-func (m *MockFamilyService) GetFamilyMembers(ctx context.Context, familyID uuid.UUID) ([]*user.User, error) {
-	args := m.Called(ctx, familyID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*user.User), args.Error(1)
+func (m *MockFamilyService) IsSetupComplete(ctx context.Context) (bool, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(bool), args.Error(1)
 }
 
 // Create a services struct that satisfies the services.Services interface
@@ -246,7 +234,6 @@ func TestHTTPServer_RoutesSetup(t *testing.T) {
 	// API endpoints - check for some key endpoints
 	assert.True(t, routePaths["POST /api/v1/users"])
 	assert.True(t, routePaths["GET /api/v1/users/:id"])
-	assert.True(t, routePaths["POST /api/v1/families"])
 	assert.True(t, routePaths["POST /api/v1/categories"])
 	assert.True(t, routePaths["GET /api/v1/categories"])
 	assert.True(t, routePaths["POST /api/v1/transactions"])

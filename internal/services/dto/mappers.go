@@ -1,8 +1,6 @@
 package dto
 
 import (
-	"github.com/google/uuid"
-
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/web/models"
 )
@@ -33,32 +31,24 @@ func ToFamilyResponseDTO(f *user.Family) FamilyResponseDTO {
 }
 
 // FromCreateUserForm converts web CreateUserForm to CreateUserDTO
-func FromCreateUserForm(form *models.CreateUserForm, familyID uuid.UUID) CreateUserDTO {
+func FromCreateUserForm(form *models.CreateUserForm) CreateUserDTO {
 	return CreateUserDTO{
 		Email:     form.Email,
 		FirstName: form.FirstName,
 		LastName:  form.LastName,
 		Password:  form.Password,
 		Role:      user.Role(form.Role),
-		FamilyID:  familyID,
 	}
 }
 
-// FromRegisterForm converts web RegisterForm to CreateFamilyDTO and CreateUserDTO
-func FromRegisterForm(form *models.RegisterForm) (CreateFamilyDTO, CreateUserDTO) {
-	familyDTO := CreateFamilyDTO{
-		Name:     form.FamilyName,
-		Currency: form.Currency,
+// FromSetupForm converts web SetupForm to SetupFamilyDTO
+func FromSetupForm(form *models.SetupForm) SetupFamilyDTO {
+	return SetupFamilyDTO{
+		FamilyName: form.FamilyName,
+		Currency:   form.Currency,
+		Email:      form.Email,
+		FirstName:  form.FirstName,
+		LastName:   form.LastName,
+		Password:   form.Password,
 	}
-
-	userDTO := CreateUserDTO{
-		Email:     form.Email,
-		FirstName: form.FirstName,
-		LastName:  form.LastName,
-		Password:  form.Password,
-		Role:      user.RoleAdmin, // Registration creates admin user
-		// FamilyID will be set after family creation
-	}
-
-	return familyDTO, userDTO
 }

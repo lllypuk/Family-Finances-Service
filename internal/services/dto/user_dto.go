@@ -15,7 +15,6 @@ type CreateUserDTO struct {
 	LastName  string    `validate:"required,min=2,max=50"`
 	Password  string    `validate:"required,min=6"`
 	Role      user.Role `validate:"required"`
-	FamilyID  uuid.UUID `validate:"required"`
 }
 
 // UpdateUserDTO represents the data transfer object for updating a user
@@ -27,9 +26,8 @@ type UpdateUserDTO struct {
 
 // UserFilterDTO represents the data transfer object for filtering users
 type UserFilterDTO struct {
-	FamilyID uuid.UUID
-	Role     *user.Role
-	Email    *string
+	Role  *user.Role
+	Email *string
 }
 
 // UserResponseDTO represents the data transfer object for user responses
@@ -44,10 +42,16 @@ type UserResponseDTO struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// CreateFamilyDTO represents the data transfer object for creating a family
-type CreateFamilyDTO struct {
-	Name     string `validate:"required,min=2,max=100"`
-	Currency string `validate:"required,len=3"`
+// SetupFamilyDTO represents the data for initial family setup (bootstrap)
+type SetupFamilyDTO struct {
+	// Family data
+	FamilyName string `validate:"required,min=2,max=100"`
+	Currency   string `validate:"required,len=3"`
+	// First user (admin) data
+	Email     string `validate:"required,email,max=254"`
+	FirstName string `validate:"required,min=2,max=50"`
+	LastName  string `validate:"required,min=2,max=50"`
+	Password  string `validate:"required,min=6"`
 }
 
 // UpdateFamilyDTO represents the data transfer object for updating a family

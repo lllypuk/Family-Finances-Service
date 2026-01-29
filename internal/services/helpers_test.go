@@ -28,8 +28,8 @@ func (m *MockFamilyRepository) Create(ctx context.Context, family *user.Family) 
 	return args.Error(0)
 }
 
-func (m *MockFamilyRepository) GetByID(ctx context.Context, id uuid.UUID) (*user.Family, error) {
-	args := m.Called(ctx, id)
+func (m *MockFamilyRepository) Get(ctx context.Context) (*user.Family, error) {
+	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -45,9 +45,9 @@ func (m *MockFamilyRepository) Update(ctx context.Context, family *user.Family) 
 	return args.Error(0)
 }
 
-func (m *MockFamilyRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
-	args := m.Called(ctx, id, familyID)
-	return args.Error(0)
+func (m *MockFamilyRepository) Exists(ctx context.Context) (bool, error) {
+	args := m.Called(ctx)
+	return args.Bool(0), args.Error(1)
 }
 
 // MockUserRepository is a mock implementation of UserRepository

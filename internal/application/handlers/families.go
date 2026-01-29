@@ -1,15 +1,11 @@
 package handlers
 
 import (
-	"errors"
 	"net/http"
 	"time"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
-
-	"family-budget-service/internal/domain/user"
 )
 
 type FamilyHandler struct {
@@ -24,107 +20,8 @@ func NewFamilyHandler(repositories *Repositories) *FamilyHandler {
 	}
 }
 
-func (h *FamilyHandler) CreateFamily(c echo.Context) error {
-	var req CreateFamilyRequest
-	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_REQUEST",
-				Message: "Invalid request body",
-				Details: err.Error(),
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
-	if err := h.validator.Struct(req); err != nil {
-		var validationErrors []ValidationError
-		for _, err := range func() validator.ValidationErrors {
-			var target validator.ValidationErrors
-			_ = errors.As(err, &target)
-			return target
-		}() {
-			validationErrors = append(validationErrors, ValidationError{
-				Field:   err.Field(),
-				Message: err.Tag(),
-				Code:    "VALIDATION_ERROR",
-			})
-		}
-
-		return c.JSON(http.StatusBadRequest, APIResponse[any]{
-			Data: nil,
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-			Errors: validationErrors,
-		})
-	}
-
-	// Создаем новую семью
-	newFamily := &user.Family{
-		ID:        uuid.New(),
-		Name:      req.Name,
-		Currency:  req.Currency,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-
-	if err := h.repositories.Family.Create(c.Request().Context(), newFamily); err != nil {
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "CREATE_FAILED",
-				Message: "Failed to create family",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
-	response := FamilyResponse{
-		ID:        newFamily.ID,
-		Name:      newFamily.Name,
-		Currency:  newFamily.Currency,
-		CreatedAt: newFamily.CreatedAt,
-		UpdatedAt: newFamily.UpdatedAt,
-	}
-
-	return c.JSON(http.StatusCreated, APIResponse[FamilyResponse]{
-		Data: response,
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
-}
-
-func (h *FamilyHandler) GetFamilyByID(c echo.Context) error {
-	idParam := c.Param("id")
-	id, err := uuid.Parse(idParam)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_ID",
-				Message: "Invalid family ID format",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
-	foundFamily, err := h.repositories.Family.GetByID(c.Request().Context(), id)
+func (h *FamilyHandler) GetFamily(c echo.Context) error {
+	foundFamily, err := h.repositories.Family.Get(c.Request().Context())
 	if err != nil {
 		return c.JSON(http.StatusNotFound, ErrorResponse{
 			Error: ErrorDetail{
@@ -158,13 +55,13 @@ func (h *FamilyHandler) GetFamilyByID(c echo.Context) error {
 }
 
 func (h *FamilyHandler) GetFamilyMembers(c echo.Context) error {
-	idParam := c.Param("id")
-	familyID, err := uuid.Parse(idParam)
+	// Get the single family
+	family, err := h.repositories.Family.Get(c.Request().Context())
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
+		return c.JSON(http.StatusNotFound, ErrorResponse{
 			Error: ErrorDetail{
-				Code:    "INVALID_ID",
-				Message: "Invalid family ID format",
+				Code:    "FAMILY_NOT_FOUND",
+				Message: "Family not found",
 			},
 			Meta: ResponseMeta{
 				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
@@ -174,7 +71,7 @@ func (h *FamilyHandler) GetFamilyMembers(c echo.Context) error {
 		})
 	}
 
-	members, err := h.repositories.User.GetByFamilyID(c.Request().Context(), familyID)
+	members, err := h.repositories.User.GetByFamilyID(c.Request().Context(), family.ID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{

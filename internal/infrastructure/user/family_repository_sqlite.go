@@ -81,30 +81,25 @@ func (r *SQLiteFamilyRepository) Create(ctx context.Context, family *user.Family
 	return nil
 }
 
-// GetByID retrieves a family by their ID
-func (r *SQLiteFamilyRepository) GetByID(ctx context.Context, id uuid.UUID) (*user.Family, error) {
-	// Validate UUID parameter to prevent injection attacks
-	if err := validation.ValidateUUID(id); err != nil {
-		return nil, fmt.Errorf("invalid id parameter: %w", err)
-	}
-
+// Get retrieves the single family from the database
+func (r *SQLiteFamilyRepository) Get(ctx context.Context) (*user.Family, error) {
 	query := `
 		SELECT id, name, currency, created_at, updated_at
 		FROM families
-		WHERE id = ?`
+		LIMIT 1`
 
 	var family user.Family
 	var idStr string
 
-	err := r.db.QueryRowContext(ctx, query, id.String()).Scan(
+	err := r.db.QueryRowContext(ctx, query).Scan(
 		&idStr, &family.Name, &family.Currency, &family.CreatedAt, &family.UpdatedAt,
 	)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("family with id %s not found", id)
+			return nil, errors.New("family not found")
 		}
-		return nil, fmt.Errorf("failed to get family by id: %w", err)
+		return nil, fmt.Errorf("failed to get family: %w", err)
 	}
 
 	// Parse UUID
@@ -164,50 +159,21 @@ func (r *SQLiteFamilyRepository) Update(ctx context.Context, family *user.Family
 	return nil
 }
 
-// Delete deletes a family (this will cascade to all related data due to FK constraints)
-func (r *SQLiteFamilyRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
-	// Validate UUID parameters to prevent injection attacks
-	if err := validation.ValidateUUID(id); err != nil {
-		return fmt.Errorf("invalid id parameter: %w", err)
-	}
-	if err := validation.ValidateUUID(familyID); err != nil {
-		return fmt.Errorf("invalid familyID parameter: %w", err)
-	}
+// Exists checks if a family exists in the database
+func (r *SQLiteFamilyRepository) Exists(ctx context.Context) (bool, error) {
+	query := `SELECT COUNT(*) FROM families`
 
-	// For family deletion, id and familyID should be the same
-	if id != familyID {
-		return errors.New("family id and familyID must be the same when deleting a family")
-	}
-
-	query := `DELETE FROM families WHERE id = ?`
-
-	result, err := r.db.ExecContext(ctx, query, id.String())
+	var count int
+	err := r.db.QueryRowContext(ctx, query).Scan(&count)
 	if err != nil {
-		return fmt.Errorf("failed to delete family: %w", err)
+		return false, fmt.Errorf("failed to check family existence: %w", err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("family with id %s not found", id)
-	}
-
-	return nil
+	return count > 0, nil
 }
 
-// GetFamilyStatistics returns statistics about the family
-func (r *SQLiteFamilyRepository) GetFamilyStatistics(
-	ctx context.Context,
-	familyID uuid.UUID,
-) (*FamilyStatistics, error) {
-	// Validate UUID parameter to prevent injection attacks
-	if err := validation.ValidateUUID(familyID); err != nil {
-		return nil, fmt.Errorf("invalid familyID parameter: %w", err)
-	}
-
+// GetFamilyStatistics returns statistics about the single family
+func (r *SQLiteFamilyRepository) GetFamilyStatistics(ctx context.Context) (*FamilyStatistics, error) {
 	query := `
 		SELECT
 			f.id,
@@ -225,13 +191,13 @@ func (r *SQLiteFamilyRepository) GetFamilyStatistics(
 		LEFT JOIN categories c ON f.id = c.family_id AND c.is_active = 1
 		LEFT JOIN transactions t ON f.id = t.family_id
 		LEFT JOIN budgets b ON f.id = b.family_id AND b.is_active = 1
-		WHERE f.id = ?
-		GROUP BY f.id, f.name, f.currency, f.created_at`
+		GROUP BY f.id, f.name, f.currency, f.created_at
+		LIMIT 1`
 
 	var stats FamilyStatistics
 	var idStr string
 
-	err := r.db.QueryRowContext(ctx, query, familyID.String()).Scan(
+	err := r.db.QueryRowContext(ctx, query).Scan(
 		&idStr, &stats.Name, &stats.Currency, &stats.CreatedAt,
 		&stats.UserCount, &stats.CategoryCount, &stats.TransactionCount,
 		&stats.BudgetCount, &stats.TotalIncome, &stats.TotalExpenses,
@@ -239,7 +205,7 @@ func (r *SQLiteFamilyRepository) GetFamilyStatistics(
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("family with id %s not found", familyID)
+			return nil, errors.New("family not found")
 		}
 		return nil, fmt.Errorf("failed to get family statistics: %w", err)
 	}
@@ -293,51 +259,4 @@ func (r *SQLiteFamilyRepository) CreateWithTransaction(ctx context.Context, tx *
 	}
 
 	return nil
-}
-
-// GetAllFamilies retrieves all families (admin function)
-func (r *SQLiteFamilyRepository) GetAllFamilies(ctx context.Context, limit, offset int) ([]*user.Family, error) {
-	if limit <= 0 {
-		limit = 50 // Default limit
-	}
-	if offset < 0 {
-		offset = 0
-	}
-
-	query := `
-		SELECT id, name, currency, created_at, updated_at
-		FROM families
-		ORDER BY created_at DESC
-		LIMIT ? OFFSET ?`
-
-	rows, err := r.db.QueryContext(ctx, query, limit, offset)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get families: %w", err)
-	}
-	defer rows.Close()
-
-	var families []*user.Family
-	for rows.Next() {
-		var family user.Family
-		var idStr string
-
-		err = rows.Scan(&idStr, &family.Name, &family.Currency, &family.CreatedAt, &family.UpdatedAt)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan family: %w", err)
-		}
-
-		// Parse UUID
-		family.ID, err = uuid.Parse(idStr)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse family ID: %w", err)
-		}
-
-		families = append(families, &family)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration error: %w", err)
-	}
-
-	return families, nil
 }
