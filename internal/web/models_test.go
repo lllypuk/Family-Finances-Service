@@ -40,7 +40,7 @@ func TestDashboardData_StructFields(t *testing.T) {
 		FirstName: "John",
 		LastName:  "Doe",
 		Role:      user.RoleAdmin,
-		FamilyID:  uuid.New(),
+
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -124,7 +124,7 @@ func TestPageData_StructFields(t *testing.T) {
 		FirstName: "Jane",
 		LastName:  "Doe",
 		Role:      user.RoleMember,
-		FamilyID:  uuid.New(),
+
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}

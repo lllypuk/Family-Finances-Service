@@ -53,7 +53,6 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		assert.Equal(t, testUser.FirstName, retrievedUser.FirstName)
 		assert.Equal(t, testUser.LastName, retrievedUser.LastName)
 		assert.Equal(t, testUser.Role, retrievedUser.Role)
-		assert.Equal(t, testUser.FamilyID, retrievedUser.FamilyID)
 	})
 
 	t.Run("Create_DuplicateEmail_ShouldFail", func(t *testing.T) {
@@ -125,7 +124,6 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		assert.Equal(t, testUser.FirstName, retrievedUser.FirstName)
 		assert.Equal(t, testUser.LastName, retrievedUser.LastName)
 		assert.Equal(t, testUser.Role, retrievedUser.Role)
-		assert.Equal(t, testUser.FamilyID, retrievedUser.FamilyID)
 	})
 
 	t.Run("GetByID_NotFound", func(t *testing.T) {

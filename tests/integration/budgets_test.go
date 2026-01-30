@@ -64,7 +64,6 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		assert.InEpsilon(t, request.Amount, response.Data.Amount, 0.001)
 		assert.Equal(t, request.Period, response.Data.Period)
 		assert.Equal(t, *request.CategoryID, *response.Data.CategoryID)
-		assert.Equal(t, request.FamilyID, response.Data.FamilyID)
 		assert.Zero(t, response.Data.Spent)
 		assert.InEpsilon(t, request.Amount, response.Data.Remaining, 0.001)
 		assert.True(t, response.Data.IsActive)
@@ -87,10 +86,10 @@ func TestBudgetHandler_Integration(t *testing.T) {
 			{
 				name: "negative_amount",
 				request: handlers.CreateBudgetRequest{
-					Name:      "Test Budget",
-					Amount:    -100.0,
-					Period:    "monthly",
-					FamilyID:  family.ID,
+					Name:   "Test Budget",
+					Amount: -100.0,
+					Period: "monthly",
+
 					StartDate: time.Now(),
 					EndDate:   time.Now().AddDate(0, 1, 0),
 				},
@@ -99,10 +98,10 @@ func TestBudgetHandler_Integration(t *testing.T) {
 			{
 				name: "invalid_period",
 				request: handlers.CreateBudgetRequest{
-					Name:      "Test Budget",
-					Amount:    100.0,
-					Period:    "invalid_period",
-					FamilyID:  family.ID,
+					Name:   "Test Budget",
+					Amount: 100.0,
+					Period: "invalid_period",
+
 					StartDate: time.Now(),
 					EndDate:   time.Now().AddDate(0, 1, 0),
 				},
@@ -111,10 +110,10 @@ func TestBudgetHandler_Integration(t *testing.T) {
 			{
 				name: "empty_name",
 				request: handlers.CreateBudgetRequest{
-					Name:      "",
-					Amount:    100.0,
-					Period:    "monthly",
-					FamilyID:  family.ID,
+					Name:   "",
+					Amount: 100.0,
+					Period: "monthly",
+
 					StartDate: time.Now(),
 					EndDate:   time.Now().AddDate(0, 1, 0),
 				},
@@ -165,10 +164,10 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		endDate := startDate.AddDate(0, -1, 0) // one month earlier
 
 		request := handlers.CreateBudgetRequest{
-			Name:      "Date Test Budget",
-			Amount:    100.0,
-			Period:    "monthly",
-			FamilyID:  family.ID,
+			Name:   "Date Test Budget",
+			Amount: 100.0,
+			Period: "monthly",
+
 			StartDate: startDate,
 			EndDate:   endDate,
 		}
@@ -227,7 +226,6 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		assert.InEpsilon(t, testBudget.Amount, response.Data.Amount, 0.001)
 		assert.Equal(t, string(testBudget.Period), response.Data.Period)
 		assert.Equal(t, testBudget.CategoryID, response.Data.CategoryID)
-		assert.Equal(t, testBudget.FamilyID, response.Data.FamilyID)
 		assert.Equal(t, testBudget.IsActive, response.Data.IsActive)
 	})
 

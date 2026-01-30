@@ -129,10 +129,10 @@ func createTestCategories(b *testing.B, ctx context.Context) []*category.Categor
 
 	for i := range 10 {
 		cat := &category.Category{
-			ID:       uuid.New(),
-			Name:     fmt.Sprintf("Category %d", i+1),
-			Type:     category.TypeExpense,
-			FamilyID: testFamilyID,
+			ID:   uuid.New(),
+			Name: fmt.Sprintf("Category %d", i+1),
+			Type: category.TypeExpense,
+
 			IsActive: true,
 		}
 		err := categoryRepo.Create(ctx, cat)
@@ -156,10 +156,10 @@ func createTestBudgets(b *testing.B, ctx context.Context) {
 			Spent:      0.00,
 			Period:     budget.PeriodMonthly,
 			CategoryID: &testCategories[i%len(testCategories)].ID,
-			FamilyID:   testFamilyID,
-			StartDate:  time.Now().AddDate(0, 0, -benchmarkBudgetStartOffsetDays),
-			EndDate:    time.Now().AddDate(0, benchmarkBudgetEndOffsetMonths, 0),
-			IsActive:   true,
+
+			StartDate: time.Now().AddDate(0, 0, -benchmarkBudgetStartOffsetDays),
+			EndDate:   time.Now().AddDate(0, benchmarkBudgetEndOffsetMonths, 0),
+			IsActive:  true,
 		}
 		err := budgetRepo.Create(ctx, budgetObj)
 		if err != nil {
@@ -181,9 +181,9 @@ func createTestTransactions(b *testing.B, ctx context.Context) {
 			Description: fmt.Sprintf("Benchmark transaction %d", i+1),
 			CategoryID:  testCategories[i%len(testCategories)].ID,
 			UserID:      testUserID,
-			FamilyID:    testFamilyID,
-			Date:        now.AddDate(0, 0, -(i % benchmarkTransactionSpreadDays)),
-			Tags:        []string{fmt.Sprintf("tag%d", i%10), "benchmark"},
+
+			Date: now.AddDate(0, 0, -(i % benchmarkTransactionSpreadDays)),
+			Tags: []string{fmt.Sprintf("tag%d", i%10), "benchmark"},
 		}
 
 		err := transactionRepo.Create(ctx, tx)
@@ -214,9 +214,10 @@ func BenchmarkUserRepository_GetByFamilyID(b *testing.B) {
 	ctx := context.Background()
 
 	for b.Loop() {
-		_, err := repo.GetByFamilyID(ctx, testFamilyID)
+		// Get all users since family ID is no longer used for filtering
+		_, err := repo.GetByEmail(ctx, "test@example.com")
 		if err != nil {
-			b.Fatalf("Failed to get users by family ID: %v", err)
+			b.Fatalf("Failed to get users by email: %v", err)
 		}
 	}
 }
@@ -245,8 +246,8 @@ func BenchmarkTransactionRepository_GetByFilter_Simple(b *testing.B) {
 	ctx := context.Background()
 
 	filter := transaction.Filter{
-		FamilyID: testFamilyID,
-		Limit:    50,
+
+		Limit: 50,
 	}
 
 	for b.Loop() {
@@ -270,7 +271,7 @@ func BenchmarkTransactionRepository_GetByFilter_Complex(b *testing.B) {
 	dateTo := time.Now()
 
 	filter := transaction.Filter{
-		FamilyID:   testFamilyID,
+
 		Type:       &expenseType,
 		AmountFrom: &amountFrom,
 		AmountTo:   &amountTo,
@@ -297,9 +298,9 @@ func BenchmarkTransactionRepository_GetByFilter_Pagination(b *testing.B) {
 	for i := 0; b.Loop(); i++ {
 		offset := (i % 10) * 20 // Simulate different pages
 		filter := transaction.Filter{
-			FamilyID: testFamilyID,
-			Limit:    20,
-			Offset:   offset,
+
+			Limit:  20,
+			Offset: offset,
 		}
 
 		_, err := repo.GetByFilter(ctx, filter)
@@ -358,9 +359,9 @@ func BenchmarkTransactionRepository_Create(b *testing.B) {
 			Description: fmt.Sprintf("Benchmark create transaction %d", i),
 			CategoryID:  testCategories[i%len(testCategories)].ID,
 			UserID:      testUserID,
-			FamilyID:    testFamilyID,
-			Date:        time.Now(),
-			Tags:        []string{"create-benchmark"},
+
+			Date: time.Now(),
+			Tags: []string{"create-benchmark"},
 		}
 
 		err := repo.Create(ctx, tx)
@@ -384,9 +385,9 @@ func BenchmarkTransactionRepository_Update(b *testing.B) {
 		Description: "Transaction to update",
 		CategoryID:  testCategories[0].ID,
 		UserID:      testUserID,
-		FamilyID:    testFamilyID,
-		Date:        time.Now(),
-		Tags:        []string{"update-benchmark"},
+
+		Date: time.Now(),
+		Tags: []string{"update-benchmark"},
 	}
 
 	err := repo.Create(ctx, tx)
@@ -412,8 +413,8 @@ func BenchmarkConcurrentReads(b *testing.B) {
 	ctx := context.Background()
 
 	filter := transaction.Filter{
-		FamilyID: testFamilyID,
-		Limit:    10,
+
+		Limit: 10,
 	}
 
 	b.ResetTimer()
@@ -442,8 +443,8 @@ func BenchmarkConnectionPoolUsage(b *testing.B) {
 		}
 
 		filter := transaction.Filter{
-			FamilyID: testFamilyID,
-			Limit:    5,
+
+			Limit: 5,
 		}
 		_, err = transactionRepo.GetByFilter(ctx, filter)
 		if err != nil {

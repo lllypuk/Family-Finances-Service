@@ -54,7 +54,6 @@ func TestFullWorkflowIntegration(t *testing.T) {
 		FirstName: "John",
 		LastName:  "Smith",
 		Role:      user.RoleAdmin,
-		FamilyID:  family.ID,
 	}
 
 	memberUser := &user.User{
@@ -64,7 +63,6 @@ func TestFullWorkflowIntegration(t *testing.T) {
 		FirstName: "Jane",
 		LastName:  "Smith",
 		Role:      user.RoleMember,
-		FamilyID:  family.ID,
 	}
 
 	err = userRepo.Create(ctx, adminUser)
@@ -75,26 +73,26 @@ func TestFullWorkflowIntegration(t *testing.T) {
 	// Step 3: Create category hierarchy
 	// Root categories
 	foodCategory := &category.Category{
-		ID:       uuid.New(),
-		Name:     "Food & Beverages",
-		Type:     category.TypeExpense,
-		FamilyID: family.ID,
+		ID:   uuid.New(),
+		Name: "Food & Beverages",
+		Type: category.TypeExpense,
+
 		IsActive: true,
 	}
 
 	transportCategory := &category.Category{
-		ID:       uuid.New(),
-		Name:     "Transportation",
-		Type:     category.TypeExpense,
-		FamilyID: family.ID,
+		ID:   uuid.New(),
+		Name: "Transportation",
+		Type: category.TypeExpense,
+
 		IsActive: true,
 	}
 
 	salaryCategory := &category.Category{
-		ID:       uuid.New(),
-		Name:     "Salary",
-		Type:     category.TypeIncome,
-		FamilyID: family.ID,
+		ID:   uuid.New(),
+		Name: "Salary",
+		Type: category.TypeIncome,
+
 		IsActive: true,
 	}
 
@@ -111,7 +109,7 @@ func TestFullWorkflowIntegration(t *testing.T) {
 		Name:     "Groceries",
 		Type:     category.TypeExpense,
 		ParentID: &foodCategory.ID,
-		FamilyID: family.ID,
+
 		IsActive: true,
 	}
 
@@ -120,7 +118,7 @@ func TestFullWorkflowIntegration(t *testing.T) {
 		Name:     "Gas",
 		Type:     category.TypeExpense,
 		ParentID: &transportCategory.ID,
-		FamilyID: family.ID,
+
 		IsActive: true,
 	}
 
@@ -243,8 +241,8 @@ func TestFullWorkflowIntegration(t *testing.T) {
 	t.Run("VerifyTransactionFiltering", func(t *testing.T) {
 		// Get all family transactions
 		filter := transaction.Filter{
-			FamilyID: family.ID,
-			Limit:    10,
+
+			Limit: 10,
 		}
 		allTransactions, err := transactionRepo.GetByFilter(ctx, filter)
 		require.NoError(t, err)
@@ -367,9 +365,9 @@ func TestFullWorkflowIntegration(t *testing.T) {
 
 		// Test pagination
 		filter := transaction.Filter{
-			FamilyID: family.ID,
-			Limit:    2,
-			Offset:   0,
+
+			Limit:  2,
+			Offset: 0,
 		}
 		page1, err := transactionRepo.GetByFilter(ctx, filter)
 		require.NoError(t, err)

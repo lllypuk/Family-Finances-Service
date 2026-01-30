@@ -86,8 +86,8 @@ func (m *MockUserRepositoryFamily) Update(ctx context.Context, user *user.User) 
 	return args.Error(0)
 }
 
-func (m *MockUserRepositoryFamily) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
-	args := m.Called(ctx, id, familyID)
+func (m *MockUserRepositoryFamily) Delete(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
@@ -185,7 +185,7 @@ func TestFamilyHandler_GetFamilyMembers_Success(t *testing.T) {
 			FirstName: "John",
 			LastName:  "Doe",
 			Role:      user.RoleAdmin,
-			FamilyID:  familyID,
+
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		},
@@ -195,7 +195,7 @@ func TestFamilyHandler_GetFamilyMembers_Success(t *testing.T) {
 			FirstName: "Jane",
 			LastName:  "Doe",
 			Role:      user.RoleMember,
-			FamilyID:  familyID,
+
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		},
@@ -205,7 +205,7 @@ func TestFamilyHandler_GetFamilyMembers_Success(t *testing.T) {
 			FirstName: "Little",
 			LastName:  "Doe",
 			Role:      user.RoleChild,
-			FamilyID:  familyID,
+
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		},
@@ -238,7 +238,6 @@ func TestFamilyHandler_GetFamilyMembers_Success(t *testing.T) {
 	assert.Equal(t, expectedMembers[0].FirstName, response.Data[0].FirstName)
 	assert.Equal(t, expectedMembers[0].LastName, response.Data[0].LastName)
 	assert.Equal(t, string(expectedMembers[0].Role), response.Data[0].Role)
-	assert.Equal(t, expectedMembers[0].FamilyID, response.Data[0].FamilyID)
 
 	// Check member user
 	assert.Equal(t, expectedMembers[1].ID, response.Data[1].ID)
@@ -364,7 +363,7 @@ func TestFamilyHandler_RoleHierarchy_InMembersList(t *testing.T) {
 			FirstName: "Admin",
 			LastName:  "User",
 			Role:      user.RoleAdmin,
-			FamilyID:  familyID,
+
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		},
@@ -374,7 +373,7 @@ func TestFamilyHandler_RoleHierarchy_InMembersList(t *testing.T) {
 			FirstName: "Member",
 			LastName:  "User",
 			Role:      user.RoleMember,
-			FamilyID:  familyID,
+
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		},
@@ -384,7 +383,7 @@ func TestFamilyHandler_RoleHierarchy_InMembersList(t *testing.T) {
 			FirstName: "Child",
 			LastName:  "User",
 			Role:      user.RoleChild,
-			FamilyID:  familyID,
+
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		},

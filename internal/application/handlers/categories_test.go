@@ -51,6 +51,17 @@ func (m *MockCategoryService) GetCategoryByID(ctx context.Context, id uuid.UUID)
 	return args.Get(0).(*category.Category), args.Error(1)
 }
 
+func (m *MockCategoryService) GetCategories(
+	ctx context.Context,
+	typeFilter *category.Type,
+) ([]*category.Category, error) {
+	args := m.Called(ctx, typeFilter)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*category.Category), args.Error(1)
+}
+
 func (m *MockCategoryService) GetCategoriesByFamily(
 	ctx context.Context,
 	familyID uuid.UUID,
@@ -75,16 +86,15 @@ func (m *MockCategoryService) UpdateCategory(
 	return args.Get(0).(*category.Category), args.Error(1)
 }
 
-func (m *MockCategoryService) DeleteCategory(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
-	args := m.Called(ctx, id, familyID)
+func (m *MockCategoryService) DeleteCategory(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
 func (m *MockCategoryService) GetCategoryHierarchy(
 	ctx context.Context,
-	familyID uuid.UUID,
 ) ([]*category.Category, error) {
-	args := m.Called(ctx, familyID)
+	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -120,11 +130,10 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 		{
 			name: "Success - Valid category creation",
 			requestBody: handlers.CreateCategoryRequest{
-				Name:     "Food",
-				Type:     "expense",
-				Color:    "#FF5733",
-				Icon:     "food",
-				FamilyID: testFamilyID,
+				Name:  "Food",
+				Type:  "expense",
+				Color: "#FF5733",
+				Icon:  "food",
 			},
 			mockSetup: func(service *MockCategoryService, _ uuid.UUID) {
 				expectedCategory := &category.Category{
@@ -133,7 +142,6 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 					Type:      category.TypeExpense,
 					Color:     "#FF5733",
 					Icon:      "food",
-					FamilyID:  testFamilyID,
 					IsActive:  true,
 					CreatedAt: time.Now(),
 					UpdatedAt: time.Now(),
@@ -150,7 +158,6 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 				assert.Equal(t, "expense", response.Data.Type)
 				assert.Equal(t, "#FF5733", response.Data.Color)
 				assert.Equal(t, "food", response.Data.Icon)
-				assert.Equal(t, testFamilyID, response.Data.FamilyID)
 				assert.True(t, response.Data.IsActive)
 			},
 		},
@@ -177,9 +184,8 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 		{
 			name: "Error - Validation failure",
 			requestBody: handlers.CreateCategoryRequest{
-				Name:     "",
-				Type:     "expense",
-				FamilyID: testFamilyID,
+				Name: "",
+				Type: "expense",
 			},
 			mockSetup: func(_ *MockCategoryService, _ uuid.UUID) {
 				// No service call expected since validation fails at handler level
@@ -196,11 +202,10 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 		{
 			name: "Error - Service error",
 			requestBody: handlers.CreateCategoryRequest{
-				Name:     "Food",
-				Type:     "expense",
-				Color:    "#FF5733",
-				Icon:     "food",
-				FamilyID: testFamilyID,
+				Name:  "Food",
+				Type:  "expense",
+				Color: "#FF5733",
+				Icon:  "food",
 			},
 			mockSetup: func(service *MockCategoryService, _ uuid.UUID) {
 				service.On("CreateCategory", mock.Anything, mock.AnythingOfType("dto.CreateCategoryDTO")).
@@ -276,7 +281,6 @@ func TestCategoryHandler_GetCategories(t *testing.T) {
 						Type:     category.TypeExpense,
 						Color:    "#FF5733",
 						Icon:     "food",
-						FamilyID: testFamilyID,
 						IsActive: true,
 					},
 					{
@@ -285,7 +289,6 @@ func TestCategoryHandler_GetCategories(t *testing.T) {
 						Type:     category.TypeIncome,
 						Color:    "#28A745",
 						Icon:     "money",
-						FamilyID: testFamilyID,
 						IsActive: true,
 					},
 				}
@@ -392,7 +395,6 @@ func TestCategoryHandler_GetCategoryByID(t *testing.T) {
 					Type:     category.TypeExpense,
 					Color:    "#FF5733",
 					Icon:     "food",
-					FamilyID: testFamilyID,
 					IsActive: true,
 				}
 				service.On("GetCategoryByID", mock.Anything, categoryID).Return(cat, nil)
@@ -494,7 +496,6 @@ func TestCategoryHandler_UpdateCategory(t *testing.T) {
 					Type:     category.TypeExpense,
 					Color:    "#FF6666",
 					Icon:     "updated-food",
-					FamilyID: testFamilyID,
 					IsActive: true,
 				}
 				service.On("UpdateCategory", mock.Anything, categoryID, mock.AnythingOfType("dto.UpdateCategoryDTO")).
@@ -595,7 +596,7 @@ func TestCategoryHandler_DeleteCategory(t *testing.T) {
 			name:       "Success - Delete category",
 			categoryID: categoryID.String(),
 			mockSetup: func(service *MockCategoryService, _ uuid.UUID) {
-				service.On("DeleteCategory", mock.Anything, categoryID, testFamilyID).Return(nil)
+				service.On("DeleteCategory", mock.Anything, categoryID).Return(nil)
 			},
 			expectedStatus: http.StatusNoContent,
 			expectedBody: func(t *testing.T, body string) {
@@ -626,7 +627,7 @@ func TestCategoryHandler_DeleteCategory(t *testing.T) {
 			name:       "Error - Category not found",
 			categoryID: categoryID.String(),
 			mockSetup: func(service *MockCategoryService, _ uuid.UUID) {
-				service.On("DeleteCategory", mock.Anything, categoryID, testFamilyID).
+				service.On("DeleteCategory", mock.Anything, categoryID).
 					Return(services.ErrCategoryNotFound)
 			},
 			expectedStatus: http.StatusNotFound,

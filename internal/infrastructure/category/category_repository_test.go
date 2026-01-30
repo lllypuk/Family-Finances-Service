@@ -31,10 +31,10 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 
 		// Create category
 		testCategory := &category.Category{
-			ID:       uuid.New(),
-			Name:     "Groceries",
-			Type:     category.TypeExpense,
-			FamilyID: uuid.MustParse(familyID),
+			ID:   uuid.New(),
+			Name: "Groceries",
+			Type: category.TypeExpense,
+
 			IsActive: true,
 		}
 
@@ -47,7 +47,6 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 		assert.Equal(t, testCategory.ID, retrievedCategory.ID)
 		assert.Equal(t, testCategory.Name, retrievedCategory.Name)
 		assert.Equal(t, testCategory.Type, retrievedCategory.Type)
-		assert.Equal(t, testCategory.FamilyID, retrievedCategory.FamilyID)
 		assert.Equal(t, testCategory.IsActive, retrievedCategory.IsActive)
 	})
 
@@ -62,10 +61,10 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 
 		// Create parent category
 		parentCategory := &category.Category{
-			ID:       uuid.New(),
-			Name:     "Food & Beverages",
-			Type:     category.TypeExpense,
-			FamilyID: familyUUID,
+			ID:   uuid.New(),
+			Name: "Food & Beverages",
+			Type: category.TypeExpense,
+
 			IsActive: true,
 		}
 
@@ -78,7 +77,7 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 			Name:     "Groceries",
 			Type:     category.TypeExpense,
 			ParentID: &parentCategory.ID,
-			FamilyID: familyUUID,
+
 			IsActive: true,
 		}
 
@@ -103,10 +102,10 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 
 		// Create parent category
 		parentCategory := &category.Category{
-			ID:       uuid.New(),
-			Name:     "Transportation",
-			Type:     category.TypeExpense,
-			FamilyID: familyUUID,
+			ID:   uuid.New(),
+			Name: "Transportation",
+			Type: category.TypeExpense,
+
 			IsActive: true,
 		}
 
@@ -120,7 +119,7 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 				Name:     "Public Transport",
 				Type:     category.TypeExpense,
 				ParentID: &parentCategory.ID,
-				FamilyID: familyUUID,
+
 				IsActive: true,
 			},
 			{
@@ -128,7 +127,7 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 				Name:     "Car Expenses",
 				Type:     category.TypeExpense,
 				ParentID: &parentCategory.ID,
-				FamilyID: familyUUID,
+
 				IsActive: true,
 			},
 		}
@@ -144,7 +143,7 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 			Name:     "Gas",
 			Type:     category.TypeExpense,
 			ParentID: &childCategories[1].ID, // Under "Car Expenses"
-			FamilyID: familyUUID,
+
 			IsActive: true,
 		}
 
@@ -178,10 +177,10 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 
 		// Create category hierarchy: Root -> Level1 -> Level2
 		rootCategory := &category.Category{
-			ID:       uuid.New(),
-			Name:     "Housing",
-			Type:     category.TypeExpense,
-			FamilyID: familyUUID,
+			ID:   uuid.New(),
+			Name: "Housing",
+			Type: category.TypeExpense,
+
 			IsActive: true,
 		}
 
@@ -190,7 +189,7 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 			Name:     "Utilities",
 			Type:     category.TypeExpense,
 			ParentID: &rootCategory.ID,
-			FamilyID: familyUUID,
+
 			IsActive: true,
 		}
 
@@ -199,7 +198,7 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 			Name:     "Electricity",
 			Type:     category.TypeExpense,
 			ParentID: &level1Category.ID,
-			FamilyID: familyUUID,
+
 			IsActive: true,
 		}
 
@@ -234,34 +233,34 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 		// Create categories of different types
 		expenseCategories := []*category.Category{
 			{
-				ID:       uuid.New(),
-				Name:     "Food",
-				Type:     category.TypeExpense,
-				FamilyID: familyUUID,
+				ID:   uuid.New(),
+				Name: "Food",
+				Type: category.TypeExpense,
+
 				IsActive: true,
 			},
 			{
-				ID:       uuid.New(),
-				Name:     "Transport",
-				Type:     category.TypeExpense,
-				FamilyID: familyUUID,
+				ID:   uuid.New(),
+				Name: "Transport",
+				Type: category.TypeExpense,
+
 				IsActive: true,
 			},
 		}
 
 		incomeCategories := []*category.Category{
 			{
-				ID:       uuid.New(),
-				Name:     "Salary",
-				Type:     category.TypeIncome,
-				FamilyID: familyUUID,
+				ID:   uuid.New(),
+				Name: "Salary",
+				Type: category.TypeIncome,
+
 				IsActive: true,
 			},
 			{
-				ID:       uuid.New(),
-				Name:     "Freelance",
-				Type:     category.TypeIncome,
-				FamilyID: familyUUID,
+				ID:   uuid.New(),
+				Name: "Freelance",
+				Type: category.TypeIncome,
+
 				IsActive: true,
 			},
 		}
@@ -301,10 +300,10 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 
 		// Create parent and child categories
 		parentCategory := &category.Category{
-			ID:       uuid.New(),
-			Name:     "Parent",
-			Type:     category.TypeExpense,
-			FamilyID: familyUUID,
+			ID:   uuid.New(),
+			Name: "Parent",
+			Type: category.TypeExpense,
+
 			IsActive: true,
 		}
 
@@ -313,7 +312,7 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 			Name:     "Child",
 			Type:     category.TypeExpense,
 			ParentID: &parentCategory.ID,
-			FamilyID: familyUUID,
+
 			IsActive: true,
 		}
 
@@ -341,10 +340,10 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 
 		// Create parent category
 		parentCategory := &category.Category{
-			ID:       uuid.New(),
-			Name:     "Parent with Children",
-			Type:     category.TypeExpense,
-			FamilyID: familyUUID,
+			ID:   uuid.New(),
+			Name: "Parent with Children",
+			Type: category.TypeExpense,
+
 			IsActive: true,
 		}
 
@@ -357,7 +356,7 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 			Name:     "Child",
 			Type:     category.TypeExpense,
 			ParentID: &parentCategory.ID,
-			FamilyID: familyUUID,
+
 			IsActive: true,
 		}
 
@@ -380,10 +379,10 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 
 		// Create leaf category (no children)
 		leafCategory := &category.Category{
-			ID:       uuid.New(),
-			Name:     "Leaf Category",
-			Type:     category.TypeExpense,
-			FamilyID: uuid.MustParse(familyID),
+			ID:   uuid.New(),
+			Name: "Leaf Category",
+			Type: category.TypeExpense,
+
 			IsActive: true,
 		}
 

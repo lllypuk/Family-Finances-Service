@@ -61,7 +61,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		assert.Equal(t, testTransaction.Description, retrievedTransaction.Description)
 		assert.Equal(t, testTransaction.CategoryID, retrievedTransaction.CategoryID)
 		assert.Equal(t, testTransaction.UserID, retrievedTransaction.UserID)
-		assert.Equal(t, testTransaction.FamilyID, retrievedTransaction.FamilyID)
 		assert.Equal(t, testTransaction.Tags, retrievedTransaction.Tags)
 	})
 
@@ -128,7 +127,7 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		dateFrom := now.AddDate(0, 0, -5)
 		dateTo := now.AddDate(0, 0, 1) // Include today
 		filter := transaction.Filter{
-			FamilyID: familyUUID,
+
 			DateFrom: &dateFrom,
 			DateTo:   &dateTo,
 			Limit:    10,
@@ -276,9 +275,9 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 
 		// Filter by tag "grocery"
 		filter := transaction.Filter{
-			FamilyID: familyUUID,
-			Tags:     []string{"grocery"},
-			Limit:    10,
+
+			Tags:  []string{"grocery"},
+			Limit: 10,
 		}
 
 		results, err := repo.GetByFilter(ctx, filter)
