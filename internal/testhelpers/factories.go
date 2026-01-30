@@ -37,7 +37,6 @@ func CreateTestFamily() *user.Family {
 func CreateTestUser(familyID uuid.UUID) *user.User {
 	return &user.User{
 		ID:        uuid.New(),
-		FamilyID:  familyID,
 		FirstName: "John",
 		LastName:  "Doe",
 		Email:     fmt.Sprintf("john.doe+%s@example.com", uuid.New().String()),
@@ -52,7 +51,6 @@ func CreateTestUser(familyID uuid.UUID) *user.User {
 func CreateTestCategory(familyID uuid.UUID, categoryType category.Type) *category.Category {
 	return &category.Category{
 		ID:        uuid.New(),
-		FamilyID:  familyID,
 		Name:      "Test Category",
 		Type:      categoryType,
 		IsActive:  true,
@@ -68,7 +66,6 @@ func CreateTestTransaction(
 ) *transaction.Transaction {
 	return &transaction.Transaction{
 		ID:          uuid.New(),
-		FamilyID:    familyID,
 		UserID:      userID,
 		CategoryID:  categoryID,
 		Amount:      TestTransactionAmount,
@@ -85,7 +82,6 @@ func CreateTestTransaction(
 func CreateTestBudget(familyID, categoryID uuid.UUID) *budget.Budget {
 	return &budget.Budget{
 		ID:         uuid.New(),
-		FamilyID:   familyID,
 		CategoryID: &categoryID,
 		Name:       "Test Budget",
 		Amount:     TestBudgetAmount,
@@ -103,7 +99,6 @@ func CreateTestBudget(familyID, categoryID uuid.UUID) *budget.Budget {
 func CreateTestReport(familyID, userID uuid.UUID) *report.Report {
 	return &report.Report{
 		ID:          uuid.New(),
-		FamilyID:    familyID,
 		UserID:      userID,
 		Name:        "Test Report",
 		Type:        report.TypeExpenses,

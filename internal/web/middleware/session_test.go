@@ -145,10 +145,8 @@ func TestSetSessionData_Success(t *testing.T) {
 
 	// Создаем тестовые данные сессии
 	userID := uuid.New()
-	familyID := uuid.New()
 	sessionData := &middleware.SessionData{
 		UserID:    userID,
-		FamilyID:  familyID,
 		Role:      user.RoleAdmin,
 		Email:     "admin@example.com",
 		ExpiresAt: time.Now().Add(24 * time.Hour),
@@ -162,7 +160,6 @@ func TestSetSessionData_Success(t *testing.T) {
 	retrievedData, err := middleware.GetSessionData(c)
 	require.NoError(t, err)
 	assert.Equal(t, userID, retrievedData.UserID)
-	assert.Equal(t, familyID, retrievedData.FamilyID)
 	assert.Equal(t, user.RoleAdmin, retrievedData.Role)
 	assert.Equal(t, "admin@example.com", retrievedData.Email)
 }
@@ -204,10 +201,9 @@ func TestClearSession_Success(t *testing.T) {
 
 	// Сначала устанавливаем данные сессии
 	sessionData := &middleware.SessionData{
-		UserID:   uuid.New(),
-		FamilyID: uuid.New(),
-		Role:     user.RoleMember,
-		Email:    "member@example.com",
+		UserID: uuid.New(),
+		Role:   user.RoleMember,
+		Email:  "member@example.com",
 	}
 
 	err := middleware.SetSessionData(c, sessionData)
@@ -234,10 +230,9 @@ func TestIsAuthenticated_WithValidSession_ReturnsTrue(t *testing.T) {
 
 	// Устанавливаем валидную сессию
 	sessionData := &middleware.SessionData{
-		UserID:   uuid.New(),
-		FamilyID: uuid.New(),
-		Role:     user.RoleChild,
-		Email:    "child@example.com",
+		UserID: uuid.New(),
+		Role:   user.RoleChild,
+		Email:  "child@example.com",
 	}
 
 	err := middleware.SetSessionData(c, sessionData)
@@ -273,11 +268,9 @@ func TestIsAuthenticated_MockSupport_WorksCorrectly(t *testing.T) {
 
 func TestSessionData_SecurityFields_ValidUUIDs(t *testing.T) {
 	userID := uuid.New()
-	familyID := uuid.New()
 
 	sessionData := &middleware.SessionData{
 		UserID:    userID,
-		FamilyID:  familyID,
 		Role:      user.RoleAdmin,
 		Email:     "security@example.com",
 		ExpiresAt: time.Now().Add(time.Hour),
@@ -285,9 +278,7 @@ func TestSessionData_SecurityFields_ValidUUIDs(t *testing.T) {
 
 	// Проверяем что UUID корректные
 	assert.NotEqual(t, uuid.Nil, sessionData.UserID)
-	assert.NotEqual(t, uuid.Nil, sessionData.FamilyID)
 	assert.Equal(t, userID, sessionData.UserID)
-	assert.Equal(t, familyID, sessionData.FamilyID)
 
 	// Проверяем корректность роли
 	assert.Contains(t, []user.Role{user.RoleAdmin, user.RoleMember, user.RoleChild}, sessionData.Role)
@@ -316,10 +307,9 @@ func TestSessionData_RoleValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sessionData := &middleware.SessionData{
-				UserID:   uuid.New(), //nolint:govet // Used for role validation test
-				FamilyID: uuid.New(), //nolint:govet // Used for role validation test
-				Role:     tt.role,
-				Email:    "test@example.com", //nolint:govet // Used for role validation test
+				UserID: uuid.New(), //nolint:govet // Used for role validation test
+				Role:   tt.role,
+				Email:  "test@example.com", //nolint:govet // Used for role validation test
 			}
 
 			if tt.valid {
@@ -340,10 +330,9 @@ func TestSession_DataPersistence_AcrossRequests(t *testing.T) {
 	c1 := e.NewContext(req1, rec1)
 
 	sessionData := &middleware.SessionData{
-		UserID:   uuid.New(),
-		FamilyID: uuid.New(),
-		Role:     user.RoleAdmin,
-		Email:    "persistent@example.com",
+		UserID: uuid.New(),
+		Role:   user.RoleAdmin,
+		Email:  "persistent@example.com",
 	}
 
 	// Выполняем полный цикл через middleware
@@ -385,7 +374,6 @@ func TestSession_DataPersistence_AcrossRequests(t *testing.T) {
 	retrievedData, err := middleware.GetSessionData(c2)
 	require.NoError(t, err)
 	assert.Equal(t, sessionData.UserID, retrievedData.UserID)
-	assert.Equal(t, sessionData.FamilyID, retrievedData.FamilyID)
 	assert.Equal(t, sessionData.Role, retrievedData.Role)
 	assert.Equal(t, sessionData.Email, retrievedData.Email)
 }
@@ -398,10 +386,9 @@ func TestSession_Security_HTTPOnlyAndSameSite(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	sessionData := &middleware.SessionData{
-		UserID:   uuid.New(),
-		FamilyID: uuid.New(),
-		Role:     user.RoleMember,
-		Email:    "security@example.com",
+		UserID: uuid.New(),
+		Role:   user.RoleMember,
+		Email:  "security@example.com",
 	}
 
 	// Выполняем полный цикл через middleware
@@ -433,7 +420,6 @@ func TestSession_ExpiresAt_ReasonableTimeout(t *testing.T) {
 
 	sessionData := &middleware.SessionData{
 		UserID:    uuid.New(),            //nolint:govet // Used in timeout calculation test
-		FamilyID:  uuid.New(),            //nolint:govet // Used in timeout calculation test
 		Role:      user.RoleAdmin,        //nolint:govet // Used in timeout calculation test
 		Email:     "timeout@example.com", //nolint:govet // Used in timeout calculation test
 		ExpiresAt: expiresAt,
@@ -451,10 +437,9 @@ func BenchmarkSetSessionData(b *testing.B) {
 	e, sessionMiddleware := setupSessionTest()
 
 	sessionData := &middleware.SessionData{
-		UserID:   uuid.New(),
-		FamilyID: uuid.New(),
-		Role:     user.RoleMember,
-		Email:    "benchmark@example.com",
+		UserID: uuid.New(),
+		Role:   user.RoleMember,
+		Email:  "benchmark@example.com",
 	}
 
 	c, _ := setupSessionContext(e, sessionMiddleware)
@@ -471,10 +456,9 @@ func BenchmarkGetSessionData(b *testing.B) {
 	c, rec := setupSessionContext(e, sessionMiddleware)
 
 	sessionData := &middleware.SessionData{
-		UserID:   uuid.New(),
-		FamilyID: uuid.New(),
-		Role:     user.RoleMember,
-		Email:    "benchmark@example.com",
+		UserID: uuid.New(),
+		Role:   user.RoleMember,
+		Email:  "benchmark@example.com",
 	}
 
 	middleware.SetSessionData(c, sessionData)
@@ -507,10 +491,9 @@ func BenchmarkIsAuthenticated(b *testing.B) {
 	c, rec := setupSessionContext(e, sessionMiddleware)
 
 	sessionData := &middleware.SessionData{
-		UserID:   uuid.New(),
-		FamilyID: uuid.New(),
-		Role:     user.RoleMember,
-		Email:    "benchmark@example.com",
+		UserID: uuid.New(),
+		Role:   user.RoleMember,
+		Email:  "benchmark@example.com",
 	}
 
 	middleware.SetSessionData(c, sessionData)

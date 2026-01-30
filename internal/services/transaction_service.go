@@ -34,18 +34,11 @@ type TransactionRepository interface {
 	Create(ctx context.Context, transaction *transaction.Transaction) error
 	GetByID(ctx context.Context, id uuid.UUID) (*transaction.Transaction, error)
 	GetByFilter(ctx context.Context, filter transaction.Filter) ([]*transaction.Transaction, error)
-	GetByFamilyID(ctx context.Context, familyID uuid.UUID, limit, offset int) ([]*transaction.Transaction, error)
 	Update(ctx context.Context, transaction *transaction.Transaction) error
-	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID) error
 	GetTotalByCategory(ctx context.Context, categoryID uuid.UUID, transactionType transaction.Type) (float64, error)
 	GetTotalByDateRange(
 		ctx context.Context,
-		startDate, endDate time.Time,
-		transactionType transaction.Type,
-	) (float64, error)
-	GetTotalByFamilyAndDateRange(
-		ctx context.Context,
-		familyID uuid.UUID,
 		startDate, endDate time.Time,
 		transactionType transaction.Type,
 	) (float64, error)
@@ -61,7 +54,7 @@ type TransactionRepository interface {
 
 // BudgetRepositoryForTransactions defines the budget operations needed for transaction service
 type BudgetRepositoryForTransactions interface {
-	GetActiveBudgets(ctx context.Context, familyID uuid.UUID) ([]*budget.Budget, error)
+	GetActiveBudgets(ctx context.Context) ([]*budget.Budget, error)
 	Update(ctx context.Context, budget *budget.Budget) error
 	// Note: GetByCategoryAndFamily may need to be added to budget repository
 	// For now, we'll iterate through active budgets to find the right one
@@ -287,7 +280,7 @@ func (s *TransactionServiceImpl) DeleteTransaction(ctx context.Context, id uuid.
 	}
 
 	// Delete transaction - familyID is obtained internally by repository
-	if deleteErr := s.transactionRepo.Delete(ctx, id, uuid.Nil); deleteErr != nil {
+	if deleteErr := s.transactionRepo.Delete(ctx, id); deleteErr != nil {
 		return fmt.Errorf("failed to delete transaction: %w", deleteErr)
 	}
 
@@ -537,10 +530,8 @@ func (s *TransactionServiceImpl) findBudgetByCategory(
 	ctx context.Context,
 	categoryID uuid.UUID,
 ) (*budget.Budget, error) {
-	// Get family ID from user repository (single family model)
-	// Since we're in a single-family model, we need to get the family ID
-	// We'll use uuid.Nil as a placeholder since the repository will fetch the single family
-	budgets, err := s.budgetRepo.GetActiveBudgets(ctx, uuid.Nil)
+	// Get active budgets (single family model - repository handles family ID internally)
+	budgets, err := s.budgetRepo.GetActiveBudgets(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -770,12 +770,12 @@ func (r *SQLiteRepository) GetByCategory(
 // GetByPeriod retrieves budgets by family ID and date range
 func (r *SQLiteRepository) GetByPeriod(
 	ctx context.Context,
-	familyID uuid.UUID,
 	startDate, endDate time.Time,
 ) ([]*budget.Budget, error) {
-	// Validate UUID parameter
-	if err := validation.ValidateUUID(familyID); err != nil {
-		return nil, fmt.Errorf("invalid family ID: %w", err)
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	query := `

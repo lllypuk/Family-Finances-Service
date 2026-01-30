@@ -12,9 +12,9 @@ import (
 type ReportRepository interface {
 	Create(ctx context.Context, report *report.Report) error
 	GetByID(ctx context.Context, id uuid.UUID) (*report.Report, error)
-	GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*report.Report, error)
+	GetAll(ctx context.Context) ([]*report.Report, error)
 	GetByUserID(ctx context.Context, userID uuid.UUID) ([]*report.Report, error)
-	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 // Services contains all business services

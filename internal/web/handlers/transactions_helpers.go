@@ -170,7 +170,7 @@ func (h *TransactionHandler) convertTransactionsToViewModels(
 	familyID uuid.UUID,
 ) ([]webModels.TransactionViewModel, error) {
 	// Получаем категории для заполнения имен
-	categories, err := h.services.Category.GetCategoriesByFamily(ctx, familyID, nil)
+	categories, err := h.services.Category.GetCategories(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get categories: %w", err)
 	}
@@ -373,7 +373,7 @@ func (h *TransactionHandler) renderTransactionFormWithErrors(
 	title string,
 ) error {
 	// Получаем категории для селекта
-	categories, err := h.services.Category.GetCategoriesByFamily(c.Request().Context(), familyID, nil)
+	categories, err := h.services.Category.GetCategories(c.Request().Context(), nil)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get categories")
 	}

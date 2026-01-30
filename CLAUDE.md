@@ -71,6 +71,39 @@ The project uses **golangci-lint** with a comprehensive configuration (`.golangc
 4. **Run `make lint` and fix ALL errors** - this is mandatory
 5. Commit changes only after lint passes with 0 issues
 
+### Frontend Testing with Agent-Browser
+The project includes **agent-browser** for interactive frontend testing and browser automation.
+
+**What it is:**
+- Headless browser automation CLI optimized for AI agents
+- Provides accessibility tree snapshots with element references
+- Enables testing of HTMX dynamic updates and web interactions
+
+**Quick usage:**
+```bash
+# Start local server first
+make run-local
+
+# In another terminal, test the frontend
+agent-browser open "http://127.0.0.1:8080"
+agent-browser snapshot  # Get page structure with element refs
+agent-browser click @e5  # Interact with elements
+agent-browser screenshot /tmp/page.png  # Capture visuals
+agent-browser close
+```
+
+**Common testing scenarios:**
+- Login flow validation
+- HTMX dynamic update verification
+- Form submission and validation
+- Session management testing
+- Responsive design checks
+- Screenshot generation for documentation
+
+**Available as skill:** Use `/test-frontend` to launch interactive frontend testing with step-by-step guidance.
+
+**Documentation:** Full command reference at https://github.com/vercel-labs/agent-browser
+
 ### Dependencies and Maintenance
 - `make deps` - Download and tidy Go modules
 - `make clean` - Remove build artifacts and coverage reports

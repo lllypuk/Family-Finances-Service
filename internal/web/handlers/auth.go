@@ -81,10 +81,9 @@ func (h *AuthHandler) Login(c echo.Context) error {
 
 	// Создание сессии
 	sessionData := &middleware.SessionData{
-		UserID:   foundUser.ID,
-		FamilyID: foundUser.FamilyID,
-		Role:     foundUser.Role,
-		Email:    foundUser.Email,
+		UserID: foundUser.ID,
+		Role:   foundUser.Role,
+		Email:  foundUser.Email,
 	}
 
 	if sessionErr := middleware.SetSessionData(c, sessionData); sessionErr != nil {

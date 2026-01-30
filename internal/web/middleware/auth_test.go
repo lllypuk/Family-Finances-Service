@@ -33,12 +33,10 @@ func TestRequireAuth_AuthenticatedUser(t *testing.T) {
 			"test@example.com",
 			"Test",
 			"User",
-			user.NewFamily("Test Family", "USD").ID,
 			user.RoleMember,
 		).ID,
-		FamilyID: user.NewFamily("Test Family", "USD").ID,
-		Role:     user.RoleMember,
-		Email:    "test@example.com",
+		Role:  user.RoleMember,
+		Email: "test@example.com",
 	}
 
 	// Мокируем успешное получение сессии
@@ -181,12 +179,10 @@ func TestRequireRole_ValidRole(t *testing.T) {
 					"test@example.com",
 					"Test",
 					"User",
-					user.NewFamily("Test Family", "USD").ID,
 					tt.userRole,
 				).ID,
-				FamilyID: user.NewFamily("Test Family", "USD").ID,
-				Role:     tt.userRole,
-				Email:    "test@example.com",
+				Role:  tt.userRole,
+				Email: "test@example.com",
 			}
 			c.Set("user", sessionData)
 

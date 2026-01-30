@@ -6,3 +6,4 @@ cookies.txt
 .zed/
 /.osv-scanner.toml
 /osv-results.sarif
+/server

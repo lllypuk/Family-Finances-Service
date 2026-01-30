@@ -58,6 +58,12 @@ func (h *DashboardHandler) Dashboard(c echo.Context) error {
 		return echo.NewHTTPError(HTTPStatusInternalServerError, "Session error occurred")
 	}
 
+	// Получаем единственную семью в single-family модели
+	family, err := h.services.Family.GetFamily(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(HTTPStatusInternalServerError, "Failed to get family")
+	}
+
 	// Парсим фильтры
 	filters := &webModels.DashboardFilters{
 		Period: DefaultPeriod,
@@ -68,18 +74,18 @@ func (h *DashboardHandler) Dashboard(c echo.Context) error {
 	}
 
 	// Получаем реальные данные для всех компонентов
-	monthlySummary, err := h.buildMonthlySummary(c.Request().Context(), sessionData.FamilyID, filters)
+	monthlySummary, err := h.buildMonthlySummary(c.Request().Context(), family.ID, filters)
 	if err != nil {
 		return echo.NewHTTPError(HTTPStatusInternalServerError, "Failed to load monthly summary")
 	}
 
 	// Получаем расширенную статистику
-	enhancedStats, _ := h.buildEnhancedStats(c.Request().Context(), sessionData.FamilyID, filters, monthlySummary)
+	enhancedStats, _ := h.buildEnhancedStats(c.Request().Context(), family.ID, filters, monthlySummary)
 
 	// Создаем полные данные dashboard
 	dashboardData := h.buildDashboardViewModel(
 		c.Request().Context(),
-		sessionData.FamilyID,
+		family.ID,
 		monthlySummary,
 		enhancedStats,
 		filters,
@@ -99,7 +105,6 @@ func (h *DashboardHandler) Dashboard(c echo.Context) error {
 		Messages: h.getFlashMessages(c),
 		CurrentUser: &SessionData{
 			UserID:    sessionData.UserID,
-			FamilyID:  sessionData.FamilyID,
 			Role:      sessionData.Role,
 			Email:     sessionData.Email,
 			FirstName: firstName,
@@ -129,10 +134,16 @@ func (h *DashboardHandler) Dashboard(c echo.Context) error {
 
 // DashboardFilter обновляет весь dashboard с новыми фильтрами (HTMX endpoint)
 func (h *DashboardHandler) DashboardFilter(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	// Проверяем авторизацию пользователя
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
+	}
+
+	// Получаем единственную семью в single-family модели
+	family, err := h.services.Family.GetFamily(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get family")
 	}
 
 	// Парсим фильтры
@@ -149,27 +160,27 @@ func (h *DashboardHandler) DashboardFilter(c echo.Context) error {
 	}
 
 	// Получаем все данные dashboard с новыми фильтрами
-	monthlySummary, err := h.buildMonthlySummary(c.Request().Context(), sessionData.FamilyID, filters)
+	monthlySummary, err := h.buildMonthlySummary(c.Request().Context(), family.ID, filters)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load monthly summary")
 	}
 
-	budgetOverview, err := h.buildBudgetOverview(c.Request().Context(), sessionData.FamilyID)
+	budgetOverview, err := h.buildBudgetOverview(c.Request().Context(), family.ID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load budget overview")
 	}
 
-	recentActivity, err := h.buildRecentActivity(c.Request().Context(), sessionData.FamilyID)
+	recentActivity, err := h.buildRecentActivity(c.Request().Context(), family.ID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load recent activity")
 	}
 
-	categoryInsights, err := h.buildCategoryInsights(c.Request().Context(), sessionData.FamilyID, filters)
+	categoryInsights, err := h.buildCategoryInsights(c.Request().Context(), family.ID, filters)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load category insights")
 	}
 
-	enhancedStats, err := h.buildEnhancedStats(c.Request().Context(), sessionData.FamilyID, filters, monthlySummary)
+	enhancedStats, err := h.buildEnhancedStats(c.Request().Context(), family.ID, filters, monthlySummary)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load enhanced stats")
 	}
@@ -190,10 +201,16 @@ func (h *DashboardHandler) DashboardFilter(c echo.Context) error {
 
 // DashboardStats возвращает обновленную статистику (HTMX endpoint)
 func (h *DashboardHandler) DashboardStats(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	// Проверяем авторизацию пользователя
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
+	}
+
+	// Получаем единственную семью в single-family модели
+	family, err := h.services.Family.GetFamily(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get family")
 	}
 
 	// Парсим фильтры
@@ -205,7 +222,7 @@ func (h *DashboardHandler) DashboardStats(c echo.Context) error {
 	}
 
 	// Получаем только monthly summary
-	monthlySummary, err := h.buildMonthlySummary(c.Request().Context(), sessionData.FamilyID, filters)
+	monthlySummary, err := h.buildMonthlySummary(c.Request().Context(), family.ID, filters)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load monthly summary")
 	}
@@ -217,14 +234,20 @@ func (h *DashboardHandler) DashboardStats(c echo.Context) error {
 
 // RecentTransactions возвращает последние транзакции (HTMX endpoint)
 func (h *DashboardHandler) RecentTransactions(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	// Проверяем авторизацию пользователя
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
+	// Получаем единственную семью в single-family модели
+	family, err := h.services.Family.GetFamily(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get family")
+	}
+
 	// Получаем последние транзакции
-	recentActivity, err := h.buildRecentActivity(c.Request().Context(), sessionData.FamilyID)
+	recentActivity, err := h.buildRecentActivity(c.Request().Context(), family.ID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load recent transactions")
 	}
@@ -236,14 +259,20 @@ func (h *DashboardHandler) RecentTransactions(c echo.Context) error {
 
 // BudgetOverview возвращает обзор бюджетов (HTMX endpoint)
 func (h *DashboardHandler) BudgetOverview(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	// Проверяем авторизацию пользователя
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
+	// Получаем единственную семью в single-family модели
+	family, err := h.services.Family.GetFamily(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get family")
+	}
+
 	// Получаем обзор бюджетов
-	budgetOverview, err := h.buildBudgetOverview(c.Request().Context(), sessionData.FamilyID)
+	budgetOverview, err := h.buildBudgetOverview(c.Request().Context(), family.ID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load budget overview")
 	}
@@ -382,7 +411,7 @@ func (h *DashboardHandler) buildBudgetOverview(
 	now := time.Now()
 
 	// Получаем все активные бюджеты
-	activeBudgets, err := h.services.Budget.GetActiveBudgets(ctx, familyID, now)
+	activeBudgets, err := h.services.Budget.GetActiveBudgets(ctx, now)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active budgets: %w", err)
 	}
@@ -948,10 +977,16 @@ func (h *DashboardHandler) buildForecast(
 
 // CategoryInsights возвращает аналитику по категориям с фильтрацией (HTMX endpoint)
 func (h *DashboardHandler) CategoryInsights(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	// Проверяем авторизацию пользователя
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
+	}
+
+	// Получаем единственную семью в single-family модели
+	family, err := h.services.Family.GetFamily(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get family")
 	}
 
 	// Парсим фильтры
@@ -978,7 +1013,7 @@ func (h *DashboardHandler) CategoryInsights(c echo.Context) error {
 	// Получаем аналитику по категориям
 	categoryInsights, err := h.buildCategoryInsightsWithFilter(
 		c.Request().Context(),
-		sessionData.FamilyID,
+		family.ID,
 		startDate,
 		endDate,
 		filterType,

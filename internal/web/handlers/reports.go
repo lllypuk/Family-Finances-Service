@@ -44,14 +44,20 @@ func NewReportHandler(repositories *handlers.Repositories, services *services.Se
 
 // Index отображает список отчетов и форму создания
 func (h *ReportHandler) Index(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	// Проверяем авторизацию пользователя
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
+	// Получаем единственную семью в single-family модели
+	family, err := h.services.Family.GetFamily(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get family")
+	}
+
 	// Получаем список существующих отчетов семьи
-	reports, err := h.services.Report.GetReportsByFamily(c.Request().Context(), sessionData.FamilyID, nil)
+	reports, err := h.services.Report.GetReportsByFamily(c.Request().Context(), family.ID, nil)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get reports")
 	}
@@ -117,6 +123,12 @@ func (h *ReportHandler) Create(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
+	// Получаем единственную семью в single-family модели
+	family, err := h.services.Family.GetFamily(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get family")
+	}
+
 	// Парсим и валидируем форму
 	form, err := h.parseAndValidateReportForm(c)
 	if err != nil {
@@ -129,7 +141,7 @@ func (h *ReportHandler) Create(c echo.Context) error {
 	}
 
 	// Создаем DTO для запроса отчета
-	createDTO, err := h.buildReportRequestDTO(*form, sessionData)
+	createDTO, err := h.buildReportRequestDTO(*form, sessionData, family.ID)
 	if err != nil {
 		return err
 	}
@@ -178,6 +190,7 @@ func (h *ReportHandler) parseAndValidateReportForm(c echo.Context) (*webModels.R
 func (h *ReportHandler) buildReportRequestDTO(
 	form webModels.ReportForm,
 	sessionData *middleware.SessionData,
+	familyID uuid.UUID,
 ) (dto.ReportRequestDTO, error) {
 	startDate, err := form.GetStartDate()
 	if err != nil {
@@ -193,7 +206,7 @@ func (h *ReportHandler) buildReportRequestDTO(
 		Name:      form.Name,
 		Type:      form.ToReportType(),
 		Period:    form.ToReportPeriod(),
-		FamilyID:  sessionData.FamilyID,
+		FamilyID:  familyID,
 		UserID:    sessionData.UserID,
 		StartDate: startDate,
 		EndDate:   endDate,
@@ -305,8 +318,8 @@ func (h *ReportHandler) handleReportGenerationError(c echo.Context, err error) e
 
 // Show отображает сгенерированный отчет
 func (h *ReportHandler) Show(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	// Проверяем авторизацию пользователя
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
@@ -351,8 +364,12 @@ func (h *ReportHandler) Delete(c echo.Context) error {
 			return h.services.Report.GetReportByID(ctx.Request().Context(), entityID)
 		},
 		DeleteEntityFunc: func(ctx echo.Context, entityID uuid.UUID) error {
-			// In single-family model, repository handles family ID internally
-			return h.services.Report.DeleteReport(ctx.Request().Context(), entityID)
+			// Получаем единственную семью в single-family модели
+			family, err := h.services.Family.GetFamily(ctx.Request().Context())
+			if err != nil {
+				return err
+			}
+			return h.services.Report.DeleteReport(ctx.Request().Context(), entityID, family.ID)
 		},
 		GetErrorMsgFunc: h.getReportServiceErrorMessage,
 		RedirectURL:     "/reports",
@@ -361,8 +378,8 @@ func (h *ReportHandler) Delete(c echo.Context) error {
 
 // Export экспортирует отчет в указанном формате (CSV)
 func (h *ReportHandler) Export(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	// Проверяем авторизацию пользователя
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
@@ -400,6 +417,12 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
+	// Получаем единственную семью в single-family модели
+	family, err := h.services.Family.GetFamily(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get family")
+	}
+
 	// Парсим данные формы
 	var form webModels.ReportForm
 	if bindErr := c.Bind(&form); bindErr != nil {
@@ -430,7 +453,7 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 		Name:      form.Name,
 		Type:      form.ToReportType(),
 		Period:    form.ToReportPeriod(),
-		FamilyID:  sessionData.FamilyID,
+		FamilyID:  family.ID,
 		UserID:    sessionData.UserID,
 		StartDate: startDate,
 		EndDate:   endDate,
@@ -479,7 +502,6 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 		Name:        form.Name,
 		Type:        generateDTO.Type,
 		Period:      generateDTO.Period,
-		FamilyID:    generateDTO.FamilyID,
 		UserID:      generateDTO.UserID,
 		StartDate:   generateDTO.StartDate,
 		EndDate:     generateDTO.EndDate,

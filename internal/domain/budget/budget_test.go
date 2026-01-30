@@ -287,7 +287,6 @@ func TestUpdateSpent_MultipleOperations(t *testing.T) {
 		"Monthly Budget",
 		1000.0,
 		budget.PeriodMonthly,
-		uuid.New(),
 		time.Now(),
 		time.Now().Add(30*24*time.Hour),
 	)

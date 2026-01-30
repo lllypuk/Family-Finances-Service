@@ -454,12 +454,13 @@ func (s *reportService) GetReportsByFamily(
 	familyID uuid.UUID,
 	_ *report.Type,
 ) ([]*report.Report, error) {
-	return s.reportRepo.GetByFamilyID(ctx, familyID)
+	// In single-family model, GetAll returns all reports for the single family
+	return s.reportRepo.GetAll(ctx)
 }
 
 // DeleteReport deletes a report by its ID
 func (s *reportService) DeleteReport(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
-	return s.reportRepo.Delete(ctx, id, familyID)
+	return s.reportRepo.Delete(ctx, id)
 }
 
 // ExportReport exports a saved report in the specified format

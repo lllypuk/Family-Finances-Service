@@ -41,7 +41,6 @@ func NewBaseHandler(repositories *handlers.Repositories, services *services.Serv
 // SessionData содержит данные пользовательской сессии
 type SessionData struct {
 	UserID    uuid.UUID `json:"user_id"`
-	FamilyID  uuid.UUID `json:"family_id"`
 	Role      user.Role `json:"role"`
 	Email     string    `json:"email"`
 	FirstName string    `json:"first_name"`
@@ -108,15 +107,10 @@ type DeleteEntityParams struct {
 	RedirectURL      string                                                  // URL для редиректа после успешного удаления
 }
 
-// EntityWithFamilyID интерфейс для сущностей с FamilyID
-type EntityWithFamilyID interface {
-	GetFamilyID() uuid.UUID
-}
-
 // handleDelete общий метод для удаления сущностей
 func (h *BaseHandler) handleDelete(c echo.Context, params DeleteEntityParams) error {
 	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
@@ -132,18 +126,13 @@ func (h *BaseHandler) handleDelete(c echo.Context, params DeleteEntityParams) er
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid "+params.EntityName+" ID")
 	}
 
-	// Получаем сущность для проверки прав доступа
-	entity, err := params.GetEntityFunc(c, entityID)
+	// Получаем сущность для проверки существования
+	_, err = params.GetEntityFunc(c, entityID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, params.EntityName+" not found")
 	}
 
-	// Проверяем права доступа
-	if entityWithFamily, ok := entity.(EntityWithFamilyID); ok {
-		if entityWithFamily.GetFamilyID() != sessionData.FamilyID {
-			return echo.NewHTTPError(http.StatusForbidden, "Access denied")
-		}
-	}
+	// Single family model - no family access check needed
 
 	// Удаляем сущность
 	err = params.DeleteEntityFunc(c, entityID)

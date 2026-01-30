@@ -25,7 +25,6 @@ const (
 // SessionData представляет данные, хранящиеся в сессии
 type SessionData struct {
 	UserID    uuid.UUID `json:"user_id"`
-	FamilyID  uuid.UUID `json:"family_id"`
 	Role      user.Role `json:"role"`
 	Email     string    `json:"email"`
 	ExpiresAt time.Time `json:"expires_at"`
@@ -69,11 +68,6 @@ func GetSessionData(c echo.Context) (*SessionData, error) {
 		return nil, echo.ErrUnauthorized
 	}
 
-	familyID, ok := sess.Values[SessionFamilyKey]
-	if !ok {
-		return nil, echo.ErrUnauthorized
-	}
-
 	role, ok := sess.Values[SessionRoleKey]
 	if !ok {
 		return nil, echo.ErrUnauthorized
@@ -90,11 +84,6 @@ func GetSessionData(c echo.Context) (*SessionData, error) {
 		return nil, echo.ErrUnauthorized
 	}
 
-	familyUUID, ok := familyID.(uuid.UUID)
-	if !ok {
-		return nil, echo.ErrUnauthorized
-	}
-
 	userRole, ok := role.(user.Role)
 	if !ok {
 		return nil, echo.ErrUnauthorized
@@ -107,7 +96,6 @@ func GetSessionData(c echo.Context) (*SessionData, error) {
 
 	return &SessionData{
 		UserID:    userUUID,
-		FamilyID:  familyUUID,
 		Role:      userRole,
 		Email:     userEmail,
 		ExpiresAt: time.Now().Add(SessionTimeout),
@@ -122,7 +110,6 @@ func SetSessionData(c echo.Context, data *SessionData) error {
 	}
 
 	sess.Values[SessionUserKey] = data.UserID
-	sess.Values[SessionFamilyKey] = data.FamilyID
 	sess.Values[SessionRoleKey] = data.Role
 	sess.Values[SessionEmailKey] = data.Email
 
