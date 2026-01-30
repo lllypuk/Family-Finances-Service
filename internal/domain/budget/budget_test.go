@@ -16,12 +16,11 @@ func TestNewBudget_Success(t *testing.T) {
 	name := "Monthly Groceries"
 	amount := 1000.0
 	period := budget.PeriodMonthly
-	familyID := uuid.New()
 	startDate := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	endDate := time.Date(2025, 1, 31, 23, 59, 59, 0, time.UTC)
 
 	// Act
-	budgetItem := budget.NewBudget(name, amount, period, familyID, startDate, endDate)
+	budgetItem := budget.NewBudget(name, amount, period, startDate, endDate)
 
 	// Assert
 	require.NotNil(t, budgetItem)
@@ -30,7 +29,6 @@ func TestNewBudget_Success(t *testing.T) {
 	assert.InDelta(t, amount, budgetItem.Amount, 0.01)
 	assert.InDelta(t, 0.0, budgetItem.Spent, 0.01)
 	assert.Equal(t, period, budgetItem.Period)
-	assert.Equal(t, familyID, budgetItem.FamilyID)
 	assert.Equal(t, startDate, budgetItem.StartDate)
 	assert.Equal(t, endDate, budgetItem.EndDate)
 	assert.False(t, budgetItem.CreatedAt.IsZero())
@@ -76,13 +74,12 @@ func TestNewBudget_ValidationScenarios(t *testing.T) {
 		},
 	}
 
-	familyID := uuid.New()
 	startDate := time.Now()
 	endDate := startDate.AddDate(0, 1, 0)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			budgetItem := budget.NewBudget(tt.budgetName, tt.amount, tt.period, familyID, startDate, endDate)
+			budgetItem := budget.NewBudget(tt.budgetName, tt.amount, tt.period, startDate, endDate)
 
 			assert.NotNil(t, budgetItem)
 			if tt.valid {
@@ -321,12 +318,11 @@ func TestPeriod_Constants(t *testing.T) {
 
 func TestBudget_RealWorldScenarios(t *testing.T) {
 	t.Run("Monthly grocery budget workflow", func(t *testing.T) {
-		familyID := uuid.New()
 		startDate := time.Date(2025, 8, 1, 0, 0, 0, 0, time.UTC)
 		endDate := time.Date(2025, 8, 31, 23, 59, 59, 0, time.UTC)
 
 		// Создаем месячный бюджет на продукты
-		groceryBudget := budget.NewBudget("Grocery Budget", 800.0, budget.PeriodMonthly, familyID, startDate, endDate)
+		groceryBudget := budget.NewBudget("Grocery Budget", 800.0, budget.PeriodMonthly, startDate, endDate)
 
 		// Первая покупка
 		groceryBudget.UpdateSpent(120.50)
@@ -353,7 +349,6 @@ func TestBudget_RealWorldScenarios(t *testing.T) {
 	})
 
 	t.Run("Weekly entertainment budget", func(t *testing.T) {
-		familyID := uuid.New()
 		startDate := time.Date(2025, 8, 11, 0, 0, 0, 0, time.UTC)  // Понедельник
 		endDate := time.Date(2025, 8, 17, 23, 59, 59, 0, time.UTC) // Воскресенье
 
@@ -361,7 +356,6 @@ func TestBudget_RealWorldScenarios(t *testing.T) {
 			"Entertainment",
 			200.0,
 			budget.PeriodWeekly,
-			familyID,
 			startDate,
 			endDate,
 		)
@@ -380,14 +374,12 @@ func TestBudget_RealWorldScenarios(t *testing.T) {
 
 func TestBudget_EdgeCases(t *testing.T) {
 	t.Run("Very small amounts", func(t *testing.T) {
-		familyID := uuid.New()
 		smallAmount := 0.01
 
 		budgetItem := budget.NewBudget(
 			"Micro Budget",
 			smallAmount,
 			budget.PeriodCustom,
-			familyID,
 			time.Now(),
 			time.Now().AddDate(0, 0, 1),
 		)

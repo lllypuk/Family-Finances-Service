@@ -38,12 +38,11 @@ type ErrorDetail struct {
 
 // CreateUserRequest represents the request payload for creating a new user
 type CreateUserRequest struct {
-	Email     string    `json:"email"      validate:"required,email"`
-	Password  string    `json:"password"   validate:"required,min=6"`
-	FirstName string    `json:"first_name" validate:"required"`
-	LastName  string    `json:"last_name"  validate:"required"`
-	FamilyID  uuid.UUID `json:"family_id"  validate:"required"`
-	Role      string    `json:"role"       validate:"required,oneof=admin member child"`
+	Email     string `json:"email"      validate:"required,email"`
+	Password  string `json:"password"   validate:"required,min=6"`
+	FirstName string `json:"first_name" validate:"required"`
+	LastName  string `json:"last_name"  validate:"required"`
+	Role      string `json:"role"       validate:"required,oneof=admin member child"`
 }
 
 type UpdateUserRequest struct {
@@ -58,7 +57,6 @@ type UserResponse struct {
 	FirstName string    `json:"first_name"`
 	LastName  string    `json:"last_name"`
 	Role      string    `json:"role"`
-	FamilyID  uuid.UUID `json:"family_id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -83,7 +81,6 @@ type CreateCategoryRequest struct {
 	Color    string     `json:"color"               validate:"required,hexcolor"`
 	Icon     string     `json:"icon"                validate:"required"`
 	ParentID *uuid.UUID `json:"parent_id,omitempty"`
-	FamilyID uuid.UUID  `json:"family_id"           validate:"required"`
 }
 
 type UpdateCategoryRequest struct {
@@ -99,7 +96,6 @@ type CategoryResponse struct {
 	Color     string     `json:"color"`
 	Icon      string     `json:"icon"`
 	ParentID  *uuid.UUID `json:"parent_id,omitempty"`
-	FamilyID  uuid.UUID  `json:"family_id"`
 	IsActive  bool       `json:"is_active"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
@@ -112,7 +108,6 @@ type CreateTransactionRequest struct {
 	Description string    `json:"description"    validate:"required,min=2,max=200"`
 	CategoryID  uuid.UUID `json:"category_id"    validate:"required"`
 	UserID      uuid.UUID `json:"user_id"        validate:"required"`
-	FamilyID    uuid.UUID `json:"family_id"      validate:"required"`
 	Date        time.Time `json:"date"           validate:"required"`
 	Tags        []string  `json:"tags,omitempty"`
 }
@@ -133,7 +128,6 @@ type TransactionResponse struct {
 	Description string    `json:"description"`
 	CategoryID  uuid.UUID `json:"category_id"`
 	UserID      uuid.UUID `json:"user_id"`
-	FamilyID    uuid.UUID `json:"family_id"`
 	Date        time.Time `json:"date"`
 	Tags        []string  `json:"tags"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -141,7 +135,6 @@ type TransactionResponse struct {
 }
 
 type TransactionFilterParams struct {
-	FamilyID    uuid.UUID  `query:"family_id"`
 	UserID      *uuid.UUID `query:"user_id"`
 	CategoryID  *uuid.UUID `query:"category_id"`
 	Type        *string    `query:"type"`
@@ -160,7 +153,6 @@ type CreateBudgetRequest struct {
 	Amount     float64    `json:"amount"                validate:"required,gt=0"`
 	Period     string     `json:"period"                validate:"required,oneof=weekly monthly yearly custom"`
 	CategoryID *uuid.UUID `json:"category_id,omitempty"`
-	FamilyID   uuid.UUID  `json:"family_id"             validate:"required"`
 	StartDate  time.Time  `json:"start_date"            validate:"required"`
 	EndDate    time.Time  `json:"end_date"              validate:"required"`
 }
@@ -181,7 +173,6 @@ type BudgetResponse struct {
 	Remaining  float64    `json:"remaining"`
 	Period     string     `json:"period"`
 	CategoryID *uuid.UUID `json:"category_id,omitempty"`
-	FamilyID   uuid.UUID  `json:"family_id"`
 	StartDate  time.Time  `json:"start_date"`
 	EndDate    time.Time  `json:"end_date"`
 	IsActive   bool       `json:"is_active"`
@@ -194,7 +185,6 @@ type CreateReportRequest struct {
 	Name      string    `json:"name"       validate:"required,min=2,max=100"`
 	Type      string    `json:"type"       validate:"required,oneof=expenses income budget cash_flow category_breakdown"`
 	Period    string    `json:"period"     validate:"required,oneof=daily weekly monthly yearly custom"`
-	FamilyID  uuid.UUID `json:"family_id"  validate:"required"`
 	UserID    uuid.UUID `json:"user_id"    validate:"required"`
 	StartDate time.Time `json:"start_date" validate:"required"`
 	EndDate   time.Time `json:"end_date"   validate:"required"`
@@ -205,7 +195,6 @@ type ReportResponse struct {
 	Name        string    `json:"name"`
 	Type        string    `json:"type"`
 	Period      string    `json:"period"`
-	FamilyID    uuid.UUID `json:"family_id"`
 	UserID      uuid.UUID `json:"user_id"`
 	StartDate   time.Time `json:"start_date"`
 	EndDate     time.Time `json:"end_date"`

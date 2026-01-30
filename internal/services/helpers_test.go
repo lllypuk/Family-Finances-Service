@@ -407,8 +407,8 @@ func (m *MockTransactionService) UpdateTransaction(
 	return args.Get(0).(*transaction.Transaction), args.Error(1)
 }
 
-func (m *MockTransactionService) DeleteTransaction(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
-	args := m.Called(ctx, id, familyID)
+func (m *MockTransactionService) DeleteTransaction(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
@@ -447,12 +447,11 @@ func (m *MockTransactionService) BulkCategorizeTransactions(
 
 func (m *MockTransactionService) ValidateTransactionLimits(
 	ctx context.Context,
-	familyID uuid.UUID,
 	categoryID uuid.UUID,
 	amount float64,
 	transactionType transaction.Type,
 ) error {
-	args := m.Called(ctx, familyID, categoryID, amount, transactionType)
+	args := m.Called(ctx, categoryID, amount, transactionType)
 	return args.Error(0)
 }
 
@@ -663,7 +662,7 @@ func (m *MockCategoryService) CreateDefaultCategories(ctx context.Context, famil
 // createTestTransaction creates a test transaction with all required parameters
 func createTestTransaction(
 	id uuid.UUID,
-	familyID uuid.UUID,
+	familyID uuid.UUID, // familyID parameter kept for backwards compatibility but unused in single-family model
 	amount float64,
 	transactionType transaction.Type,
 	date time.Time,
@@ -675,12 +674,13 @@ func createTestTransaction(
 // createTestTransactionWithCategory creates a test transaction with specific category
 func createTestTransactionWithCategory(
 	id uuid.UUID,
-	familyID uuid.UUID,
+	familyID uuid.UUID, // familyID parameter kept for backwards compatibility but unused in single-family model
 	categoryID uuid.UUID,
 	amount float64,
 	transactionType transaction.Type,
 	date time.Time,
 ) *transaction.Transaction {
+	// Note: FamilyID removed from Transaction model for single-family architecture
 	return &transaction.Transaction{
 		ID:          id,
 		Amount:      amount,
@@ -688,7 +688,6 @@ func createTestTransactionWithCategory(
 		Type:        transactionType,
 		CategoryID:  categoryID,
 		UserID:      uuid.New(),
-		FamilyID:    familyID,
 		Date:        date,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),

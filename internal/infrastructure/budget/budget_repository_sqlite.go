@@ -53,6 +53,21 @@ func NewSQLiteRepository(db *sql.DB) *SQLiteRepository {
 	}
 }
 
+// getSingleFamilyID retrieves the ID of the single family from the database
+func (r *SQLiteRepository) getSingleFamilyID(ctx context.Context) (uuid.UUID, error) {
+	query := `SELECT id FROM families LIMIT 1`
+	var idStr string
+	err := r.db.QueryRowContext(ctx, query).Scan(&idStr)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to get family ID: %w", err)
+	}
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to parse family ID: %w", err)
+	}
+	return id, nil
+}
+
 // scanBudgetRow scans a single row from SQL query into a Budget struct
 func scanBudgetRow(rows *sql.Rows) (*budget.Budget, error) {
 	var b budget.Budget
@@ -71,7 +86,7 @@ func scanBudgetRow(rows *sql.Rows) (*budget.Budget, error) {
 
 	// Parse UUID fields
 	b.ID, _ = uuid.Parse(idStr)
-	b.FamilyID, _ = uuid.Parse(familyIDStr)
+	// familyIDStr unused - single family model
 	if categoryIDStr != nil && *categoryIDStr != "" {
 		categoryID, _ := uuid.Parse(*categoryIDStr)
 		b.CategoryID = &categoryID
@@ -89,8 +104,11 @@ func (r *SQLiteRepository) Create(ctx context.Context, b *budget.Budget) error {
 	if err := validation.ValidateUUID(b.ID); err != nil {
 		return fmt.Errorf("invalid budget ID: %w", err)
 	}
-	if err := validation.ValidateUUID(b.FamilyID); err != nil {
-		return fmt.Errorf("invalid family ID: %w", err)
+
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get family ID: %w", err)
 	}
 	if err := validation.ValidateBudgetPeriod(b.Period); err != nil {
 		return fmt.Errorf("invalid period: %w", err)
@@ -125,7 +143,7 @@ func (r *SQLiteRepository) Create(ctx context.Context, b *budget.Budget) error {
 			category_id, family_id, is_active, created_at, updated_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	_, err := r.db.ExecContext(ctx, query,
+	_, err = r.db.ExecContext(ctx, query,
 		sqlitehelpers.UUIDToString(b.ID),
 		b.Name,
 		b.Amount,
@@ -134,7 +152,7 @@ func (r *SQLiteRepository) Create(ctx context.Context, b *budget.Budget) error {
 		b.StartDate,
 		b.EndDate,
 		sqlitehelpers.UUIDPtrToString(b.CategoryID),
-		sqlitehelpers.UUIDToString(b.FamilyID),
+		familyID.String(),
 		sqlitehelpers.BoolToInt(b.IsActive),
 		b.CreatedAt,
 		b.UpdatedAt,
@@ -184,7 +202,7 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*budget.B
 
 	// Parse UUID fields
 	b.ID, _ = uuid.Parse(idStr)
-	b.FamilyID, _ = uuid.Parse(familyIDStr)
+	// familyIDStr unused - single family model
 	if categoryIDStr != nil && *categoryIDStr != "" {
 		categoryID, _ := uuid.Parse(*categoryIDStr)
 		b.CategoryID = &categoryID
@@ -197,10 +215,11 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*budget.B
 }
 
 // GetByFamilyID retrieves all budgets belonging to a specific family
-func (r *SQLiteRepository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*budget.Budget, error) {
-	// Validate UUID parameter
-	if err := validation.ValidateUUID(familyID); err != nil {
-		return nil, fmt.Errorf("invalid familyID parameter: %w", err)
+func (r *SQLiteRepository) GetAll(ctx context.Context) ([]*budget.Budget, error) {
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	query := `
@@ -233,10 +252,11 @@ func (r *SQLiteRepository) GetByFamilyID(ctx context.Context, familyID uuid.UUID
 	return budgets, nil
 }
 
-// GetActiveBudgets retrieves all active budgets for a family
-func (r *SQLiteRepository) GetActiveBudgets(ctx context.Context, familyID uuid.UUID) ([]*budget.Budget, error) {
-	// Validate UUID parameter
-	if err := validation.ValidateUUID(familyID); err != nil {
+// GetActiveBudgets retrieves all active budgets for the single family
+func (r *SQLiteRepository) GetActiveBudgets(ctx context.Context) ([]*budget.Budget, error) {
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("invalid familyID parameter: %w", err)
 	}
 
@@ -368,8 +388,11 @@ func (r *SQLiteRepository) Update(ctx context.Context, b *budget.Budget) error {
 	if err := validation.ValidateUUID(b.ID); err != nil {
 		return fmt.Errorf("invalid budget ID: %w", err)
 	}
-	if err := validation.ValidateUUID(b.FamilyID); err != nil {
-		return fmt.Errorf("invalid family ID: %w", err)
+
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get family ID: %w", err)
 	}
 	if err := validation.ValidateBudgetPeriod(b.Period); err != nil {
 		return fmt.Errorf("invalid period: %w", err)
@@ -408,7 +431,7 @@ func (r *SQLiteRepository) Update(ctx context.Context, b *budget.Budget) error {
 		sqlitehelpers.BoolToInt(b.IsActive),
 		b.UpdatedAt,
 		sqlitehelpers.UUIDToString(b.ID),
-		sqlitehelpers.UUIDToString(b.FamilyID),
+		familyID.String(),
 	)
 
 	if err != nil {
@@ -556,13 +579,16 @@ func (r *SQLiteRepository) FindBudgetsAffectedByTransaction(
 }
 
 // Delete soft deletes a budget (sets is_active to false)
-func (r *SQLiteRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+func (r *SQLiteRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	// Validate UUID parameters
 	if err := validation.ValidateUUID(id); err != nil {
 		return fmt.Errorf("invalid id parameter: %w", err)
 	}
-	if err := validation.ValidateUUID(familyID); err != nil {
-		return fmt.Errorf("invalid family ID parameter: %w", err)
+
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	query := `
@@ -570,7 +596,7 @@ func (r *SQLiteRepository) Delete(ctx context.Context, id uuid.UUID, familyID uu
 		SET is_active = 0, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ? AND family_id = ? AND is_active = 1`
 
-	result, err := r.db.ExecContext(ctx, query, sqlitehelpers.UUIDToString(id), sqlitehelpers.UUIDToString(familyID))
+	result, err := r.db.ExecContext(ctx, query, sqlitehelpers.UUIDToString(id), familyID.String())
 	if err != nil {
 		return fmt.Errorf("failed to delete budget: %w", err)
 	}
@@ -683,14 +709,14 @@ func (r *SQLiteRepository) CreateAlert(ctx context.Context, alert *Alert) error 
 }
 
 // GetByFamilyAndCategory retrieves budgets by family ID and optionally by category ID
-func (r *SQLiteRepository) GetByFamilyAndCategory(
+func (r *SQLiteRepository) GetByCategory(
 	ctx context.Context,
-	familyID uuid.UUID,
 	categoryID *uuid.UUID,
 ) ([]*budget.Budget, error) {
-	// Validate UUID parameters
-	if err := validation.ValidateUUID(familyID); err != nil {
-		return nil, fmt.Errorf("invalid family ID: %w", err)
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	var query string

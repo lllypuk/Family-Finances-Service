@@ -279,10 +279,8 @@ func (h *CategoryHandler) Edit(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Category not found")
 	}
 
-	// Проверяем, что категория принадлежит семье пользователя
-	if category.FamilyID != sessionData.FamilyID {
-		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
-	}
+	// In single-family model, all categories belong to the family
+	// No additional access check needed
 
 	// Получаем родительские категории для select (исключая текущую)
 	parentCategories, err := h.services.Category.GetCategoriesByFamily(c.Request().Context(), sessionData.FamilyID, nil)
@@ -519,10 +517,8 @@ func (h *CategoryHandler) Show(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Category not found")
 	}
 
-	// Проверяем, что категория принадлежит семье пользователя
-	if category.FamilyID != sessionData.FamilyID {
-		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
-	}
+	// In single-family model, all categories belong to the family
+	// No additional access check needed
 
 	// Получаем подкатегории
 	allCategories, err := h.services.Category.GetCategoriesByFamily(c.Request().Context(), sessionData.FamilyID, nil)
@@ -601,10 +597,8 @@ func (h *CategoryHandler) Delete(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Category not found")
 	}
 
-	// Проверяем, что категория принадлежит семье пользователя
-	if category.FamilyID != sessionData.FamilyID {
-		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
-	}
+	// In single-family model, all categories belong to the family
+	// No additional access check needed
 
 	// Удаляем категорию через сервис
 	err = h.services.Category.DeleteCategory(c.Request().Context(), categoryID, sessionData.FamilyID)

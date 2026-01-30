@@ -56,7 +56,7 @@ func (h *FamilyHandler) GetFamily(c echo.Context) error {
 
 func (h *FamilyHandler) GetFamilyMembers(c echo.Context) error {
 	// Get the single family
-	family, err := h.repositories.Family.Get(c.Request().Context())
+	_, err := h.repositories.Family.Get(c.Request().Context())
 	if err != nil {
 		return c.JSON(http.StatusNotFound, ErrorResponse{
 			Error: ErrorDetail{
@@ -71,7 +71,7 @@ func (h *FamilyHandler) GetFamilyMembers(c echo.Context) error {
 		})
 	}
 
-	members, err := h.repositories.User.GetByFamilyID(c.Request().Context(), family.ID)
+	members, err := h.repositories.User.GetAll(c.Request().Context())
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
@@ -94,7 +94,6 @@ func (h *FamilyHandler) GetFamilyMembers(c echo.Context) error {
 			FirstName: member.FirstName,
 			LastName:  member.LastName,
 			Role:      string(member.Role),
-			FamilyID:  member.FamilyID,
 			CreatedAt: member.CreatedAt,
 			UpdatedAt: member.UpdatedAt,
 		})

@@ -14,16 +14,14 @@ func TestNewCategory(t *testing.T) {
 	// Test data
 	name := "Groceries"
 	categoryType := category.TypeExpense
-	familyID := uuid.New()
 
 	// Execute
-	cat := category.NewCategory(name, categoryType, familyID)
+	cat := category.NewCategory(name, categoryType)
 
 	// Assert
 	assert.NotEqual(t, uuid.Nil, cat.ID)
 	assert.Equal(t, name, cat.Name)
 	assert.Equal(t, categoryType, cat.Type)
-	assert.Equal(t, familyID, cat.FamilyID)
 	assert.Equal(t, "#007BFF", cat.Color)
 	assert.Equal(t, "default", cat.Icon)
 	assert.True(t, cat.IsActive)
@@ -41,7 +39,6 @@ func TestCategoryType_Constants(t *testing.T) {
 }
 
 func TestCategory_IsSubcategory(t *testing.T) {
-	familyID := uuid.New()
 	parentID := uuid.New()
 
 	tests := []struct {
@@ -67,7 +64,6 @@ func TestCategory_IsSubcategory(t *testing.T) {
 				ID:        uuid.New(),
 				Name:      "Test Category",
 				Type:      category.TypeExpense,
-				FamilyID:  familyID,
 				ParentID:  tt.parentID,
 				IsActive:  true,
 				CreatedAt: time.Now(),
@@ -110,8 +106,6 @@ func TestDefaultIncomeCategories(t *testing.T) {
 }
 
 func TestNewCategory_DifferentTypes(t *testing.T) {
-	familyID := uuid.New()
-
 	tests := []struct {
 		name         string
 		categoryType category.Type
@@ -122,7 +116,7 @@ func TestNewCategory_DifferentTypes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cat := category.NewCategory("Test", tt.categoryType, familyID)
+			cat := category.NewCategory("Test", tt.categoryType)
 			assert.Equal(t, tt.categoryType, cat.Type)
 		})
 	}
@@ -130,7 +124,6 @@ func TestNewCategory_DifferentTypes(t *testing.T) {
 
 func TestCategory_StructFields(t *testing.T) {
 	// Test that Category struct has all required fields
-	familyID := uuid.New()
 	parentID := uuid.New()
 
 	cat := &category.Category{
@@ -140,7 +133,6 @@ func TestCategory_StructFields(t *testing.T) {
 		Color:     "#FF5733",
 		Icon:      "food",
 		ParentID:  &parentID,
-		FamilyID:  familyID,
 		IsActive:  true,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
@@ -153,7 +145,6 @@ func TestCategory_StructFields(t *testing.T) {
 	assert.NotEmpty(t, cat.Color)
 	assert.NotEmpty(t, cat.Icon)
 	assert.NotNil(t, cat.ParentID)
-	assert.Equal(t, familyID, cat.FamilyID)
 	assert.True(t, cat.IsActive)
 	assert.False(t, cat.CreatedAt.IsZero())
 	assert.False(t, cat.UpdatedAt.IsZero())
@@ -164,7 +155,7 @@ func TestCategory_TimestampGeneration(t *testing.T) {
 	beforeTime := time.Now()
 
 	// Create category
-	cat := category.NewCategory("Test Category", category.TypeExpense, uuid.New())
+	cat := category.NewCategory("Test Category", category.TypeExpense)
 
 	// Record time after creating category
 	afterTime := time.Now()

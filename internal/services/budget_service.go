@@ -29,19 +29,18 @@ var (
 type BudgetRepository interface {
 	Create(ctx context.Context, budget *budget.Budget) error
 	GetByID(ctx context.Context, id uuid.UUID) (*budget.Budget, error)
-	GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*budget.Budget, error)
-	GetActiveBudgets(ctx context.Context, familyID uuid.UUID) ([]*budget.Budget, error)
+	GetAll(ctx context.Context) ([]*budget.Budget, error)
+	GetActiveBudgets(ctx context.Context) ([]*budget.Budget, error)
 	Update(ctx context.Context, budget *budget.Budget) error
-	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
-	GetByFamilyAndCategory(ctx context.Context, familyID uuid.UUID, categoryID *uuid.UUID) ([]*budget.Budget, error)
-	GetByPeriod(ctx context.Context, familyID uuid.UUID, startDate, endDate time.Time) ([]*budget.Budget, error)
+	Delete(ctx context.Context, id uuid.UUID) error
+	GetByCategory(ctx context.Context, categoryID *uuid.UUID) ([]*budget.Budget, error)
+	GetByPeriod(ctx context.Context, startDate, endDate time.Time) ([]*budget.Budget, error)
 }
 
 type TransactionRepositoryForBudgets interface {
 	GetTotalByCategory(ctx context.Context, categoryID uuid.UUID, transactionType transaction.Type) (float64, error)
-	GetTotalByFamilyAndDateRange(
+	GetTotalByDateRange(
 		ctx context.Context,
-		familyID uuid.UUID,
 		startDate, endDate time.Time,
 		transactionType transaction.Type,
 	) (float64, error)
@@ -83,8 +82,8 @@ func (s *BudgetServiceImpl) CreateBudget(ctx context.Context, req dto.CreateBudg
 		return nil, err
 	}
 
-	// Check for overlapping budgets in the same category and family
-	if err := s.ValidateBudgetPeriod(ctx, req.FamilyID, req.CategoryID, req.StartDate, req.EndDate); err != nil {
+	// Check for overlapping budgets in the same category
+	if err := s.ValidateBudgetPeriod(ctx, req.CategoryID, req.StartDate, req.EndDate); err != nil {
 		return nil, err
 	}
 
@@ -96,7 +95,6 @@ func (s *BudgetServiceImpl) CreateBudget(ctx context.Context, req dto.CreateBudg
 		Spent:      0.0, // Always starts with 0
 		Period:     req.Period,
 		CategoryID: req.CategoryID,
-		FamilyID:   req.FamilyID,
 		StartDate:  req.StartDate,
 		EndDate:    req.EndDate,
 		IsActive:   true,
@@ -136,9 +134,8 @@ func (s *BudgetServiceImpl) GetBudgetByID(ctx context.Context, id uuid.UUID) (*b
 }
 
 // GetBudgetsByFamily retrieves budgets for a family with filtering
-func (s *BudgetServiceImpl) GetBudgetsByFamily(
+func (s *BudgetServiceImpl) GetAllBudgets(
 	ctx context.Context,
-	familyID uuid.UUID,
 	filter dto.BudgetFilterDTO,
 ) ([]*budget.Budget, error) {
 	if err := s.validator.Struct(filter); err != nil {
@@ -152,9 +149,6 @@ func (s *BudgetServiceImpl) GetBudgetsByFamily(
 	if err := filter.ValidateAmountRange(); err != nil {
 		return nil, err
 	}
-
-	// Set family ID from parameter to ensure consistency
-	filter.FamilyID = familyID
 
 	// Get budgets based on filter criteria
 	budgets, err := s.getBudgetsWithFilter(ctx, filter)
@@ -247,7 +241,7 @@ func (s *BudgetServiceImpl) UpdateBudget(
 }
 
 // DeleteBudget deletes a budget
-func (s *BudgetServiceImpl) DeleteBudget(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+func (s *BudgetServiceImpl) DeleteBudget(ctx context.Context, id uuid.UUID) error {
 	// Verify budget exists
 	_, err := s.budgetRepo.GetByID(ctx, id)
 	if err != nil {
@@ -255,20 +249,19 @@ func (s *BudgetServiceImpl) DeleteBudget(ctx context.Context, id uuid.UUID, fami
 	}
 
 	// Delete budget
-	if deleteErr := s.budgetRepo.Delete(ctx, id, familyID); deleteErr != nil {
+	if deleteErr := s.budgetRepo.Delete(ctx, id); deleteErr != nil {
 		return fmt.Errorf("failed to delete budget: %w", deleteErr)
 	}
 
 	return nil
 }
 
-// GetActiveBudgets retrieves active budgets for a family on a specific date
+// GetActiveBudgets retrieves active budgets on a specific date
 func (s *BudgetServiceImpl) GetActiveBudgets(
 	ctx context.Context,
-	familyID uuid.UUID,
 	date time.Time,
 ) ([]*budget.Budget, error) {
-	allBudgets, err := s.budgetRepo.GetActiveBudgets(ctx, familyID)
+	allBudgets, err := s.budgetRepo.GetActiveBudgets(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active budgets: %w", err)
 	}
@@ -306,11 +299,10 @@ func (s *BudgetServiceImpl) UpdateBudgetSpent(ctx context.Context, budgetID uuid
 // CheckBudgetLimits checks if a transaction would exceed budget limits
 func (s *BudgetServiceImpl) CheckBudgetLimits(
 	ctx context.Context,
-	familyID uuid.UUID,
 	categoryID uuid.UUID,
 	amount float64,
 ) error {
-	budgets, err := s.GetBudgetsByCategory(ctx, familyID, categoryID)
+	budgets, err := s.GetBudgetsByCategory(ctx, categoryID)
 	if err != nil {
 		// No budgets found is acceptable
 		return nil //nolint:nilerr // No budgets found is acceptable
@@ -379,10 +371,9 @@ func (s *BudgetServiceImpl) CalculateBudgetUtilization(
 // GetBudgetsByCategory retrieves budgets for a specific category
 func (s *BudgetServiceImpl) GetBudgetsByCategory(
 	ctx context.Context,
-	familyID uuid.UUID,
 	categoryID uuid.UUID,
 ) ([]*budget.Budget, error) {
-	budgets, err := s.budgetRepo.GetByFamilyAndCategory(ctx, familyID, &categoryID)
+	budgets, err := s.budgetRepo.GetByCategory(ctx, &categoryID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get budgets by category: %w", err)
 	}
@@ -402,11 +393,10 @@ func (s *BudgetServiceImpl) GetBudgetsByCategory(
 // ValidateBudgetPeriod validates that budget period doesn't overlap with existing budgets
 func (s *BudgetServiceImpl) ValidateBudgetPeriod(
 	ctx context.Context,
-	familyID uuid.UUID,
 	categoryID *uuid.UUID,
 	startDate, endDate time.Time,
 ) error {
-	existingBudgets, err := s.budgetRepo.GetByPeriod(ctx, familyID, startDate, endDate)
+	existingBudgets, err := s.budgetRepo.GetByPeriod(ctx, startDate, endDate)
 	if err != nil {
 		return fmt.Errorf("failed to validate budget period: %w", err)
 	}
@@ -437,15 +427,15 @@ func (s *BudgetServiceImpl) getBudgetsWithFilter(
 	filter dto.BudgetFilterDTO,
 ) ([]*budget.Budget, error) {
 	if filter.ActiveOn != nil {
-		return s.GetActiveBudgets(ctx, filter.FamilyID, *filter.ActiveOn)
+		return s.GetActiveBudgets(ctx, *filter.ActiveOn)
 	}
 
 	if filter.CategoryID != nil {
-		return s.GetBudgetsByCategory(ctx, filter.FamilyID, *filter.CategoryID)
+		return s.GetBudgetsByCategory(ctx, *filter.CategoryID)
 	}
 
-	// Default: get all budgets for family
-	return s.budgetRepo.GetByFamilyID(ctx, filter.FamilyID)
+	// Default: get all budgets for single family
+	return s.budgetRepo.GetAll(ctx)
 }
 
 func (s *BudgetServiceImpl) applyBudgetFilters(budgets []*budget.Budget, filter dto.BudgetFilterDTO) []*budget.Budget {
@@ -525,8 +515,8 @@ func (s *BudgetServiceImpl) recalculateAndUpdateSpent(ctx context.Context, b *bu
 			ctx, *b.CategoryID, b.StartDate, b.EndDate, transaction.TypeExpense)
 	} else {
 		// Calculate spent for entire family within budget period
-		spent, err = s.transactionRepo.GetTotalByFamilyAndDateRange(
-			ctx, b.FamilyID, b.StartDate, b.EndDate, transaction.TypeExpense)
+		spent, err = s.transactionRepo.GetTotalByDateRange(
+			ctx, b.StartDate, b.EndDate, transaction.TypeExpense)
 	}
 
 	if err != nil {
@@ -578,7 +568,7 @@ func (s *BudgetServiceImpl) sameBudgetScope(existingCategoryID, newCategoryID *u
 }
 
 func (s *BudgetServiceImpl) validateBudgetPeriodForUpdate(ctx context.Context, budget *budget.Budget) error {
-	existingBudgets, err := s.budgetRepo.GetByPeriod(ctx, budget.FamilyID, budget.StartDate, budget.EndDate)
+	existingBudgets, err := s.budgetRepo.GetByPeriod(ctx, budget.StartDate, budget.EndDate)
 	if err != nil {
 		return fmt.Errorf("failed to validate budget period: %w", err)
 	}

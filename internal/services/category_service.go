@@ -29,10 +29,10 @@ var (
 type CategoryRepository interface {
 	Create(ctx context.Context, category *category.Category) error
 	GetByID(ctx context.Context, id uuid.UUID) (*category.Category, error)
-	GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*category.Category, error)
-	GetByType(ctx context.Context, familyID uuid.UUID, categoryType category.Type) ([]*category.Category, error)
+	GetAll(ctx context.Context) ([]*category.Category, error)
+	GetByType(ctx context.Context, categoryType category.Type) ([]*category.Category, error)
 	Update(ctx context.Context, category *category.Category) error
-	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 // CategoryUsageChecker defines operations needed for category usage checks
@@ -81,11 +81,6 @@ func (s *categoryService) CreateCategory(ctx context.Context, req dto.CreateCate
 			return nil, fmt.Errorf("%w: %w", ErrParentCategoryNotFound, err)
 		}
 
-		// Parent must belong to the same family
-		if parentCategory.FamilyID != req.FamilyID {
-			return nil, ErrParentCategoryWrongFamily
-		}
-
 		// Parent must be of the same type
 		if parentCategory.Type != req.Type {
 			return nil, ErrParentCategoryWrongType
@@ -97,8 +92,8 @@ func (s *categoryService) CreateCategory(ctx context.Context, req dto.CreateCate
 		}
 	}
 
-	// Check for duplicate category name within family and type
-	existingCategories, err := s.categoryRepo.GetByType(ctx, req.FamilyID, req.Type)
+	// Check for duplicate category name within type
+	existingCategories, err := s.categoryRepo.GetByType(ctx, req.Type)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check existing categories: %w", err)
 	}
@@ -117,7 +112,6 @@ func (s *categoryService) CreateCategory(ctx context.Context, req dto.CreateCate
 		Color:     req.Color,
 		Icon:      req.Icon,
 		ParentID:  req.ParentID,
-		FamilyID:  req.FamilyID,
 		IsActive:  true,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
@@ -140,10 +134,9 @@ func (s *categoryService) GetCategoryByID(ctx context.Context, id uuid.UUID) (*c
 	return cat, nil
 }
 
-// GetCategoriesByFamily retrieves categories for a family with optional type filter
-func (s *categoryService) GetCategoriesByFamily(
+// GetCategories retrieves categories with optional type filter
+func (s *categoryService) GetCategories(
 	ctx context.Context,
-	familyID uuid.UUID,
 	typeFilter *category.Type,
 ) ([]*category.Category, error) {
 	// Validate family exists
@@ -155,9 +148,9 @@ func (s *categoryService) GetCategoriesByFamily(
 	var err error
 
 	if typeFilter != nil {
-		categories, err = s.categoryRepo.GetByType(ctx, familyID, *typeFilter)
+		categories, err = s.categoryRepo.GetByType(ctx, *typeFilter)
 	} else {
-		categories, err = s.categoryRepo.GetByFamilyID(ctx, familyID)
+		categories, err = s.categoryRepo.GetAll(ctx)
 	}
 
 	if err != nil {
@@ -194,7 +187,7 @@ func (s *categoryService) UpdateCategory(
 
 	// Check if category name already exists (if name is being updated)
 	if req.Name != nil && *req.Name != existingCategory.Name {
-		existingCategories, checkErr := s.categoryRepo.GetByType(ctx, existingCategory.FamilyID, existingCategory.Type)
+		existingCategories, checkErr := s.categoryRepo.GetByType(ctx, existingCategory.Type)
 		if checkErr != nil {
 			return nil, fmt.Errorf("failed to check existing categories: %w", checkErr)
 		}
@@ -226,7 +219,7 @@ func (s *categoryService) UpdateCategory(
 }
 
 // DeleteCategory performs soft delete of a category
-func (s *categoryService) DeleteCategory(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+func (s *categoryService) DeleteCategory(ctx context.Context, id uuid.UUID) error {
 	// Get existing category
 	existingCategory, err := s.categoryRepo.GetByID(ctx, id)
 	if err != nil {
@@ -249,7 +242,7 @@ func (s *categoryService) DeleteCategory(ctx context.Context, id uuid.UUID, fami
 		}
 	} else {
 		// Hard delete if not used
-		if deleteErr := s.categoryRepo.Delete(ctx, id, familyID); deleteErr != nil {
+		if deleteErr := s.categoryRepo.Delete(ctx, id); deleteErr != nil {
 			return fmt.Errorf("failed to hard delete category: %w", deleteErr)
 		}
 	}
@@ -261,7 +254,7 @@ func (s *categoryService) DeleteCategory(ctx context.Context, id uuid.UUID, fami
 	}
 
 	for _, subcat := range subcategories {
-		if deleteErr := s.DeleteCategory(ctx, subcat.ID, familyID); deleteErr != nil {
+		if deleteErr := s.DeleteCategory(ctx, subcat.ID); deleteErr != nil {
 			return fmt.Errorf("failed to delete subcategory %s: %w", subcat.ID, deleteErr)
 		}
 	}
@@ -270,9 +263,9 @@ func (s *categoryService) DeleteCategory(ctx context.Context, id uuid.UUID, fami
 }
 
 // GetCategoryHierarchy returns categories organized in a hierarchical structure
-func (s *categoryService) GetCategoryHierarchy(ctx context.Context, familyID uuid.UUID) ([]*category.Category, error) {
-	// Get all categories for the family
-	categories, err := s.GetCategoriesByFamily(ctx, familyID, nil)
+func (s *categoryService) GetCategoryHierarchy(ctx context.Context) ([]*category.Category, error) {
+	// Get all categories
+	categories, err := s.GetCategories(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get categories: %w", err)
 	}
@@ -316,11 +309,6 @@ func (s *categoryService) ValidateCategoryHierarchy(ctx context.Context, categor
 		return ErrCategoriesDifferentTypes
 	}
 
-	// Categories must belong to the same family
-	if cat.FamilyID != parentCategory.FamilyID {
-		return ErrCategoriesDifferentFamilies
-	}
-
 	return nil
 }
 
@@ -331,13 +319,7 @@ func (s *categoryService) CheckCategoryUsage(ctx context.Context, categoryID uui
 
 // getSubcategories is a helper method to get all subcategories of a parent category
 func (s *categoryService) getSubcategories(ctx context.Context, parentID uuid.UUID) ([]*category.Category, error) {
-	// Get parent category to know family and type
-	parent, err := s.categoryRepo.GetByID(ctx, parentID)
-	if err != nil {
-		return nil, err
-	}
-
-	allCategories, err := s.categoryRepo.GetByFamilyID(ctx, parent.FamilyID)
+	allCategories, err := s.categoryRepo.GetAll(ctx)
 	if err != nil {
 		return nil, err
 	}

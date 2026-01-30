@@ -102,7 +102,6 @@ func (h *CategoryHandler) CreateCategory(c echo.Context) error {
 		Color:    req.Color,
 		Icon:     req.Icon,
 		ParentID: req.ParentID,
-		FamilyID: req.FamilyID,
 	}
 
 	// Use service to create category
@@ -137,37 +136,7 @@ func (h *CategoryHandler) CreateCategory(c echo.Context) error {
 
 func (h *CategoryHandler) GetCategories(c echo.Context) error {
 	// Получаем параметры запроса
-	familyIDParam := c.QueryParam("family_id")
 	typeParam := c.QueryParam("type")
-
-	if familyIDParam == "" {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "MISSING_FAMILY_ID",
-				Message: "family_id query parameter is required",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
-	familyID, err := uuid.Parse(familyIDParam)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_FAMILY_ID",
-				Message: "Invalid family ID format",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
 
 	var typeFilter *category.Type
 	if typeParam != "" {
@@ -175,8 +144,8 @@ func (h *CategoryHandler) GetCategories(c echo.Context) error {
 		typeFilter = &categoryType
 	}
 
-	// Use service to get categories
-	categories, err := h.categoryService.GetCategoriesByFamily(c.Request().Context(), familyID, typeFilter)
+	// Use service to get categories (single-family model)
+	categories, err := h.categoryService.GetCategories(c.Request().Context(), typeFilter)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
@@ -349,38 +318,8 @@ func (h *CategoryHandler) DeleteCategory(c echo.Context) error {
 		})
 	}
 
-	familyIDParam := c.QueryParam("family_id")
-	if familyIDParam == "" {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "MISSING_FAMILY_ID",
-				Message: "family_id query parameter is required",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
-	familyID, err := uuid.Parse(familyIDParam)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_FAMILY_ID",
-				Message: "Invalid family_id format",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
-	// Use service to delete category
-	err = h.categoryService.DeleteCategory(c.Request().Context(), id, familyID)
+	// Use service to delete category (single-family model)
+	err = h.categoryService.DeleteCategory(c.Request().Context(), id)
 	if err != nil {
 		statusCode := http.StatusInternalServerError
 		errorCode := "DELETE_FAILED"

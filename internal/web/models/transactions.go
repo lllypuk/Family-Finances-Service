@@ -154,11 +154,10 @@ func (f *TransactionForm) GetTags() []string {
 }
 
 // ToDomainFilter конвертирует веб-фильтры в domain фильтр
-func (f *TransactionFilters) ToDomainFilter(familyID uuid.UUID) *transaction.Filter {
+func (f *TransactionFilters) ToDomainFilter() *transaction.Filter {
 	filter := &transaction.Filter{
-		FamilyID: familyID,
-		Limit:    DefaultPageSize, // По умолчанию
-		Offset:   0,
+		Limit:  DefaultPageSize, // По умолчанию
+		Offset: 0,
 	}
 
 	f.setPaginationParams(filter)

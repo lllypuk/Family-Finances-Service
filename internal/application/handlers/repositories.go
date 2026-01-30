@@ -27,9 +27,9 @@ type UserRepository interface {
 	Create(ctx context.Context, user *user.User) error
 	GetByID(ctx context.Context, id uuid.UUID) (*user.User, error)
 	GetByEmail(ctx context.Context, email string) (*user.User, error)
-	GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*user.User, error)
+	GetAll(ctx context.Context) ([]*user.User, error) // Single family - get all users
 	Update(ctx context.Context, user *user.User) error
-	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 // FamilyRepository определяет операции с единственной семьёй
@@ -44,10 +44,10 @@ type FamilyRepository interface {
 type CategoryRepository interface {
 	Create(ctx context.Context, category *category.Category) error
 	GetByID(ctx context.Context, id uuid.UUID) (*category.Category, error)
-	GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*category.Category, error)
-	GetByType(ctx context.Context, familyID uuid.UUID, categoryType category.Type) ([]*category.Category, error)
+	GetAll(ctx context.Context) ([]*category.Category, error) // Single family - get all categories
+	GetByType(ctx context.Context, categoryType category.Type) ([]*category.Category, error)
 	Update(ctx context.Context, category *category.Category) error
-	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 // TransactionRepository определяет операции с транзакциями
@@ -55,17 +55,16 @@ type TransactionRepository interface {
 	Create(ctx context.Context, transaction *transaction.Transaction) error
 	GetByID(ctx context.Context, id uuid.UUID) (*transaction.Transaction, error)
 	GetByFilter(ctx context.Context, filter transaction.Filter) ([]*transaction.Transaction, error)
-	GetByFamilyID(ctx context.Context, familyID uuid.UUID, limit, offset int) ([]*transaction.Transaction, error)
+	GetAll(ctx context.Context, limit, offset int) ([]*transaction.Transaction, error) // Single family - get all transactions
 	Update(ctx context.Context, transaction *transaction.Transaction) error
-	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID) error
 	GetTotalByCategory(
 		ctx context.Context,
 		categoryID uuid.UUID,
 		transactionType transaction.Type,
 	) (float64, error)
-	GetTotalByFamilyAndDateRange(
+	GetTotalByDateRange(
 		ctx context.Context,
-		familyID uuid.UUID,
 		startDate, endDate time.Time,
 		transactionType transaction.Type,
 	) (float64, error)
@@ -81,18 +80,16 @@ type TransactionRepository interface {
 type BudgetRepository interface {
 	Create(ctx context.Context, budget *budget.Budget) error
 	GetByID(ctx context.Context, id uuid.UUID) (*budget.Budget, error)
-	GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*budget.Budget, error)
-	GetActiveBudgets(ctx context.Context, familyID uuid.UUID) ([]*budget.Budget, error)
+	GetAll(ctx context.Context) ([]*budget.Budget, error)           // Single family - get all budgets
+	GetActiveBudgets(ctx context.Context) ([]*budget.Budget, error) // Single family - get active budgets
 	Update(ctx context.Context, budget *budget.Budget) error
-	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
-	GetByFamilyAndCategory(
+	Delete(ctx context.Context, id uuid.UUID) error
+	GetByCategory(
 		ctx context.Context,
-		familyID uuid.UUID,
 		categoryID *uuid.UUID,
 	) ([]*budget.Budget, error)
 	GetByPeriod(
 		ctx context.Context,
-		familyID uuid.UUID,
 		startDate, endDate time.Time,
 	) ([]*budget.Budget, error)
 }
@@ -101,7 +98,7 @@ type BudgetRepository interface {
 type ReportRepository interface {
 	Create(ctx context.Context, report *report.Report) error
 	GetByID(ctx context.Context, id uuid.UUID) (*report.Report, error)
-	GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*report.Report, error)
+	GetAll(ctx context.Context) ([]*report.Report, error) // Single family - get all reports
 	GetByUserID(ctx context.Context, userID uuid.UUID) ([]*report.Report, error)
-	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }

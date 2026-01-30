@@ -42,6 +42,21 @@ func NewSQLiteRepository(db *sql.DB) *SQLiteRepository {
 	}
 }
 
+// getSingleFamilyID retrieves the ID of the single family from the database
+func (r *SQLiteRepository) getSingleFamilyID(ctx context.Context) (uuid.UUID, error) {
+	query := `SELECT id FROM families LIMIT 1`
+	var idStr string
+	err := r.db.QueryRowContext(ctx, query).Scan(&idStr)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to get family ID: %w", err)
+	}
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to parse family ID: %w", err)
+	}
+	return id, nil
+}
+
 // scanReportRow scans a single row from SQL query into a Report struct
 func scanReportRow(rows *sql.Rows) (*report.Report, error) {
 	var rep report.Report
@@ -59,7 +74,7 @@ func scanReportRow(rows *sql.Rows) (*report.Report, error) {
 
 	// Parse UUID fields
 	rep.ID, _ = uuid.Parse(idStr)
-	rep.FamilyID, _ = uuid.Parse(familyIDStr)
+	// familyIDStr unused - single family model
 	rep.UserID, _ = uuid.Parse(userIDStr)
 
 	rep.Type = report.Type(typeStr)
@@ -79,9 +94,13 @@ func (r *SQLiteRepository) Create(ctx context.Context, rep *report.Report) error
 	if err := validation.ValidateUUID(rep.ID); err != nil {
 		return fmt.Errorf("invalid report ID: %w", err)
 	}
-	if err := validation.ValidateUUID(rep.FamilyID); err != nil {
-		return fmt.Errorf("invalid family ID: %w", err)
+
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get family ID: %w", err)
 	}
+
 	if err := validation.ValidateUUID(rep.UserID); err != nil {
 		return fmt.Errorf("invalid user ID: %w", err)
 	}
@@ -123,7 +142,7 @@ func (r *SQLiteRepository) Create(ctx context.Context, rep *report.Report) error
 		rep.StartDate,
 		rep.EndDate,
 		string(dataJSON),
-		sqlitehelpers.UUIDToString(rep.FamilyID),
+		familyID.String(),
 		sqlitehelpers.UUIDToString(rep.UserID),
 		rep.GeneratedAt,
 	)
@@ -167,7 +186,7 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*report.R
 
 	// Parse UUID fields
 	rep.ID, _ = uuid.Parse(idStr)
-	rep.FamilyID, _ = uuid.Parse(familyIDStr)
+	// familyIDStr unused - single family model
 	rep.UserID, _ = uuid.Parse(userIDStr)
 
 	rep.Type = report.Type(typeStr)
@@ -182,10 +201,11 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*report.R
 }
 
 // GetByFamilyID retrieves reports by family ID with pagination
-func (r *SQLiteRepository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*report.Report, error) {
-	// Validate UUID parameter
-	if err := validation.ValidateUUID(familyID); err != nil {
-		return nil, fmt.Errorf("invalid familyID parameter: %w", err)
+func (r *SQLiteRepository) GetAll(ctx context.Context) ([]*report.Report, error) {
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	// Set default pagination values
@@ -646,18 +666,21 @@ func (r *SQLiteRepository) GenerateBudgetComparisonReport(
 }
 
 // Delete deletes a report
-func (r *SQLiteRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+func (r *SQLiteRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	// Validate UUID parameters
 	if err := validation.ValidateUUID(id); err != nil {
 		return fmt.Errorf("invalid id parameter: %w", err)
 	}
-	if err := validation.ValidateUUID(familyID); err != nil {
-		return fmt.Errorf("invalid family ID parameter: %w", err)
+
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	query := `DELETE FROM reports WHERE id = ? AND family_id = ?`
 
-	result, err := r.db.ExecContext(ctx, query, sqlitehelpers.UUIDToString(id), sqlitehelpers.UUIDToString(familyID))
+	result, err := r.db.ExecContext(ctx, query, sqlitehelpers.UUIDToString(id), familyID.String())
 	if err != nil {
 		return fmt.Errorf("failed to delete report: %w", err)
 	}

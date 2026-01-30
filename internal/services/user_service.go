@@ -28,9 +28,9 @@ type UserRepository interface {
 	Create(ctx context.Context, user *user.User) error
 	GetByID(ctx context.Context, id uuid.UUID) (*user.User, error)
 	GetByEmail(ctx context.Context, email string) (*user.User, error)
-	GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*user.User, error)
+	GetAll(ctx context.Context) ([]*user.User, error)
 	Update(ctx context.Context, user *user.User) error
-	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 // FamilyRepository defines the data access operations for the single family
@@ -64,8 +64,8 @@ func (s *userService) CreateUser(ctx context.Context, req dto.CreateUserDTO) (*u
 		return nil, fmt.Errorf("%w: %w", ErrValidationFailed, err)
 	}
 
-	// Get the single family
-	family, err := s.familyRepo.Get(ctx)
+	// Verify the single family exists
+	_, err := s.familyRepo.Get(ctx)
 	if err != nil {
 		return nil, ErrFamilyNotFound
 	}
@@ -90,7 +90,6 @@ func (s *userService) CreateUser(ctx context.Context, req dto.CreateUserDTO) (*u
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
 		Role:      req.Role,
-		FamilyID:  family.ID,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -118,13 +117,14 @@ func (s *userService) GetUserByID(ctx context.Context, id uuid.UUID) (*user.User
 
 // GetUsers retrieves all users of the single family
 func (s *userService) GetUsers(ctx context.Context) ([]*user.User, error) {
-	// Get the single family
-	family, err := s.familyRepo.Get(ctx)
+	// Verify the single family exists
+	_, err := s.familyRepo.Get(ctx)
 	if err != nil {
 		return nil, ErrFamilyNotFound
 	}
 
-	users, err := s.userRepo.GetByFamilyID(ctx, family.ID)
+	// Get all users (single family model)
+	users, err := s.userRepo.GetAll(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get users: %w", err)
 	}
@@ -175,13 +175,13 @@ func (s *userService) UpdateUser(ctx context.Context, id uuid.UUID, req dto.Upda
 // DeleteUser deletes a user by ID
 func (s *userService) DeleteUser(ctx context.Context, id uuid.UUID) error {
 	// Check if user exists
-	existingUser, err := s.GetUserByID(ctx, id)
+	_, err := s.GetUserByID(ctx, id)
 	if err != nil {
 		return err
 	}
 
 	// Delete user
-	if err = s.userRepo.Delete(ctx, id, existingUser.FamilyID); err != nil {
+	if err = s.userRepo.Delete(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
 
@@ -215,22 +215,19 @@ func (s *userService) ChangeUserRole(ctx context.Context, userID uuid.UUID, role
 
 // ValidateUserAccess validates if a user has access to a resource
 func (s *userService) ValidateUserAccess(ctx context.Context, userID, resourceOwnerID uuid.UUID) error {
-	requestingUser, err := s.GetUserByID(ctx, userID)
+	// Verify both users exist
+	_, err := s.GetUserByID(ctx, userID)
 	if err != nil {
 		return err
 	}
 
-	resourceOwner, err := s.GetUserByID(ctx, resourceOwnerID)
+	_, err = s.GetUserByID(ctx, resourceOwnerID)
 	if err != nil {
 		return err
 	}
 
-	// Users can access resources in their own family
-	if requestingUser.FamilyID == resourceOwner.FamilyID {
-		return nil
-	}
-
-	return ErrUnauthorized
+	// Single family model - all users are in the same family
+	return nil
 }
 
 // GetUserByEmail retrieves a user by email

@@ -277,10 +277,8 @@ func (h *BudgetHandler) Edit(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Budget not found")
 	}
 
-	// Проверяем, что бюджет принадлежит семье пользователя
-	if budgetEntity.FamilyID != sessionData.FamilyID {
-		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
-	}
+	// In single-family model, all budgets belong to the family
+	// No additional access check needed
 
 	// Получаем список категорий
 	categories, err := h.services.Category.GetCategoriesByFamily(

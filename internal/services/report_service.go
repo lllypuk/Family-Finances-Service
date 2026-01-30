@@ -220,7 +220,7 @@ func (s *reportService) GenerateBudgetComparisonReport(
 	startDate, endDate := s.calculatePeriodDates(period)
 
 	// Get active budgets for the period
-	budgets, err := s.budgetService.GetActiveBudgets(ctx, familyID, startDate)
+	budgets, err := s.budgetService.GetActiveBudgets(ctx, startDate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active budgets: %w", err)
 	}
@@ -372,7 +372,7 @@ func (s *reportService) GenerateCategoryBreakdownReport(
 	}
 
 	// Get category hierarchy
-	categories, err := s.categoryService.GetCategoryHierarchy(ctx, familyID)
+	categories, err := s.categoryService.GetCategoryHierarchy(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get category hierarchy: %w", err)
 	}
@@ -430,7 +430,6 @@ func (s *reportService) SaveReport(
 		req.Name,
 		reportType,
 		req.Period,
-		req.FamilyID,
 		req.UserID,
 		req.StartDate,
 		req.EndDate,

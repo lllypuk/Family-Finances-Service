@@ -229,10 +229,8 @@ func (h *TransactionHandler) Edit(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Transaction not found")
 	}
 
-	// Проверяем, что транзакция принадлежит семье пользователя
-	if transaction.FamilyID != sessionData.FamilyID {
-		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
-	}
+	// In single-family model, all transactions belong to the family
+	// No additional access check needed
 
 	// Получаем категории для селекта
 	categories, err := h.services.Category.GetCategoriesByFamily(c.Request().Context(), sessionData.FamilyID, nil)
@@ -349,11 +347,7 @@ func (h *TransactionHandler) Delete(c echo.Context) error {
 			return h.services.Transaction.GetTransactionByID(ctx.Request().Context(), entityID)
 		},
 		DeleteEntityFunc: func(ctx echo.Context, entityID uuid.UUID) error {
-			sessionData, err := middleware.GetUserFromContext(ctx)
-			if err != nil {
-				return err
-			}
-			return h.services.Transaction.DeleteTransaction(ctx.Request().Context(), entityID, sessionData.FamilyID)
+			return h.services.Transaction.DeleteTransaction(ctx.Request().Context(), entityID)
 		},
 		GetErrorMsgFunc: h.getTransactionServiceErrorMessage,
 		RedirectURL:     "/transactions",
@@ -407,7 +401,6 @@ func (h *TransactionHandler) BulkDelete(c echo.Context) error {
 		deleteErr := h.services.Transaction.DeleteTransaction(
 			c.Request().Context(),
 			transactionID,
-			sessionData.FamilyID,
 		)
 		if deleteErr != nil {
 			errors = append(errors, fmt.Sprintf("Failed to delete transaction %s", transactionID))

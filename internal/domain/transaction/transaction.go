@@ -14,9 +14,8 @@ type Transaction struct {
 	Description string    `json:"description" bson:"description"`
 	CategoryID  uuid.UUID `json:"category_id" bson:"category_id"`
 	UserID      uuid.UUID `json:"user_id"     bson:"user_id"` // Кто создал транзакцию
-	FamilyID    uuid.UUID `json:"family_id"   bson:"family_id"`
-	Date        time.Time `json:"date"        bson:"date"` // Дата транзакции
-	Tags        []string  `json:"tags"        bson:"tags"` // Теги для поиска
+	Date        time.Time `json:"date"        bson:"date"`    // Дата транзакции
+	Tags        []string  `json:"tags"        bson:"tags"`    // Теги для поиска
 	CreatedAt   time.Time `json:"created_at"  bson:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"  bson:"updated_at"`
 }
@@ -29,7 +28,6 @@ const (
 )
 
 type Filter struct {
-	FamilyID    uuid.UUID
 	UserID      *uuid.UUID
 	CategoryID  *uuid.UUID
 	Type        *Type
@@ -47,7 +45,7 @@ func NewTransaction(
 	amount float64,
 	transactionType Type,
 	description string,
-	categoryID, userID, familyID uuid.UUID,
+	categoryID, userID uuid.UUID,
 	date time.Time,
 ) *Transaction {
 	return &Transaction{
@@ -57,7 +55,6 @@ func NewTransaction(
 		Description: description,
 		CategoryID:  categoryID,
 		UserID:      userID,
-		FamilyID:    familyID,
 		Date:        date,
 		Tags:        []string{},
 		CreatedAt:   time.Now(),
@@ -81,9 +78,4 @@ func (t *Transaction) RemoveTag(tag string) {
 			return
 		}
 	}
-}
-
-// GetFamilyID returns the family ID of the transaction
-func (t *Transaction) GetFamilyID() uuid.UUID {
-	return t.FamilyID
 }

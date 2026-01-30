@@ -35,20 +35,38 @@ func NewSQLiteRepository(db *sql.DB) *SQLiteRepository {
 	}
 }
 
+// getSingleFamilyID retrieves the ID of the single family from the database
+func (r *SQLiteRepository) getSingleFamilyID(ctx context.Context) (uuid.UUID, error) {
+	query := `SELECT id FROM families LIMIT 1`
+	var idStr string
+	err := r.db.QueryRowContext(ctx, query).Scan(&idStr)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to get family ID: %w", err)
+	}
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to parse family ID: %w", err)
+	}
+	return id, nil
+}
+
 // Create creates a new category in the database
 func (r *SQLiteRepository) Create(ctx context.Context, c *category.Category) error {
 	// Validate category parameters before creating
 	if err := validation.ValidateUUID(c.ID); err != nil {
 		return fmt.Errorf("invalid category ID: %w", err)
 	}
-	if err := validation.ValidateUUID(c.FamilyID); err != nil {
-		return fmt.Errorf("invalid category familyID: %w", err)
-	}
 	if err := validation.ValidateCategoryType(c.Type); err != nil {
 		return fmt.Errorf("invalid category type: %w", err)
 	}
 	if err := validation.ValidateCategoryName(c.Name); err != nil {
 		return fmt.Errorf("invalid category name: %w", err)
+	}
+
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	// Validate parent ID if provided
@@ -58,7 +76,7 @@ func (r *SQLiteRepository) Create(ctx context.Context, c *category.Category) err
 		}
 
 		// Check that parent exists and belongs to the same family
-		if err := r.validateParentCategory(ctx, *c.ParentID, c.FamilyID, c.Type); err != nil {
+		if err := r.validateParentCategory(ctx, *c.ParentID, familyID, c.Type); err != nil {
 			return fmt.Errorf("invalid parent category: %w", err)
 		}
 	}
@@ -73,13 +91,13 @@ func (r *SQLiteRepository) Create(ctx context.Context, c *category.Category) err
 			id, name, type, description, parent_id, family_id, is_active, created_at, updated_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	_, err := r.db.ExecContext(ctx, query,
+	_, err = r.db.ExecContext(ctx, query,
 		sqlitehelpers.UUIDToString(c.ID),
 		c.Name,
 		string(c.Type),
 		"",
 		sqlitehelpers.UUIDPtrToString(c.ParentID),
-		sqlitehelpers.UUIDToString(c.FamilyID),
+		familyID.String(),
 		sqlitehelpers.BoolToInt(c.IsActive),
 		c.CreatedAt,
 		c.UpdatedAt,
@@ -109,7 +127,7 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*category
 		WHERE id = ?`
 
 	var c category.Category
-	var idStr, typeStr, familyIDStr string
+	var idStr, typeStr, familyIDStr string // familyIDStr unused - single family model
 	var description, parentIDStr *string
 	var isActiveInt int
 
@@ -127,7 +145,6 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*category
 
 	// Parse UUID fields
 	c.ID, _ = uuid.Parse(idStr)
-	c.FamilyID, _ = uuid.Parse(familyIDStr)
 	if parentIDStr != nil && *parentIDStr != "" {
 		parentID, _ := uuid.Parse(*parentIDStr)
 		c.ParentID = &parentID
@@ -144,7 +161,7 @@ func (r *SQLiteRepository) scanCategories(rows *sql.Rows, errorContext string) (
 	var categories []*category.Category
 	for rows.Next() {
 		var c category.Category
-		var idStr, typeStr, familyIDStr string
+		var idStr, typeStr, familyIDStr string // familyIDStr unused - single family model
 		var description, parentIDStr *string
 		var isActiveInt int
 
@@ -158,7 +175,6 @@ func (r *SQLiteRepository) scanCategories(rows *sql.Rows, errorContext string) (
 
 		// Parse UUID fields
 		c.ID, _ = uuid.Parse(idStr)
-		c.FamilyID, _ = uuid.Parse(familyIDStr)
 		if parentIDStr != nil && *parentIDStr != "" {
 			parentID, _ := uuid.Parse(*parentIDStr)
 			c.ParentID = &parentID
@@ -177,10 +193,11 @@ func (r *SQLiteRepository) scanCategories(rows *sql.Rows, errorContext string) (
 }
 
 // GetByFamilyID retrieves all categories belonging to a specific family
-func (r *SQLiteRepository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*category.Category, error) {
-	// Validate UUID parameter to prevent injection attacks
-	if err := validation.ValidateUUID(familyID); err != nil {
-		return nil, fmt.Errorf("invalid familyID parameter: %w", err)
+func (r *SQLiteRepository) GetAll(ctx context.Context) ([]*category.Category, error) {
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	query := `
@@ -328,14 +345,17 @@ func (r *SQLiteRepository) Update(ctx context.Context, c *category.Category) err
 	if err := validation.ValidateUUID(c.ID); err != nil {
 		return fmt.Errorf("invalid category ID: %w", err)
 	}
-	if err := validation.ValidateUUID(c.FamilyID); err != nil {
-		return fmt.Errorf("invalid category familyID: %w", err)
-	}
 	if err := validation.ValidateCategoryType(c.Type); err != nil {
 		return fmt.Errorf("invalid category type: %w", err)
 	}
 	if err := validation.ValidateCategoryName(c.Name); err != nil {
 		return fmt.Errorf("invalid category name: %w", err)
+	}
+
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	// Validate parent ID if provided and prevent circular references
@@ -369,7 +389,7 @@ func (r *SQLiteRepository) Update(ctx context.Context, c *category.Category) err
 		sqlitehelpers.UUIDPtrToString(c.ParentID),
 		c.UpdatedAt,
 		sqlitehelpers.UUIDToString(c.ID),
-		sqlitehelpers.UUIDToString(c.FamilyID),
+		familyID.String(),
 	)
 
 	if err != nil {
@@ -393,13 +413,16 @@ func (r *SQLiteRepository) Update(ctx context.Context, c *category.Category) err
 }
 
 // Delete soft deletes a category (sets is_active to false)
-func (r *SQLiteRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+func (r *SQLiteRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	// Validate UUID parameters
 	if err := validation.ValidateUUID(id); err != nil {
 		return fmt.Errorf("invalid id parameter: %w", err)
 	}
-	if err := validation.ValidateUUID(familyID); err != nil {
-		return fmt.Errorf("invalid familyID parameter: %w", err)
+
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	// Check if category has children
@@ -416,7 +439,7 @@ func (r *SQLiteRepository) Delete(ctx context.Context, id uuid.UUID, familyID uu
 		SET is_active = 0, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ? AND family_id = ? AND is_active = 1`
 
-	result, err := r.db.ExecContext(ctx, query, sqlitehelpers.UUIDToString(id), sqlitehelpers.UUIDToString(familyID))
+	result, err := r.db.ExecContext(ctx, query, sqlitehelpers.UUIDToString(id), familyID.String())
 	if err != nil {
 		return fmt.Errorf("failed to delete category: %w", err)
 	}
@@ -521,11 +544,14 @@ func (r *SQLiteRepository) hasChildren(ctx context.Context, categoryID uuid.UUID
 	return exists, nil
 }
 
-// GetByType возвращает категории по типу для совместимости с интерфейсом
+// GetByType возвращает категории по типу
 func (r *SQLiteRepository) GetByType(
 	ctx context.Context,
-	familyID uuid.UUID,
 	categoryType category.Type,
 ) ([]*category.Category, error) {
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	return r.GetByFamilyIDAndType(ctx, familyID, categoryType)
 }

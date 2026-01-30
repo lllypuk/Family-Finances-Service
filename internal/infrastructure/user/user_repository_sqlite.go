@@ -26,10 +26,40 @@ func NewSQLiteRepository(db *sql.DB) *SQLiteRepository {
 	}
 }
 
+// getSingleFamilyID retrieves the ID of the single family from the database
+func (r *SQLiteRepository) getSingleFamilyID(ctx context.Context) (uuid.UUID, error) {
+	query := `SELECT id FROM families LIMIT 1`
+	var idStr string
+	err := r.db.QueryRowContext(ctx, query).Scan(&idStr)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to get family ID: %w", err)
+	}
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to parse family ID: %w", err)
+	}
+	return id, nil
+}
+
+// getSingleFamilyIDWithTx retrieves the ID of the single family using a transaction
+func (r *SQLiteRepository) getSingleFamilyIDWithTx(ctx context.Context, tx *sql.Tx) (uuid.UUID, error) {
+	query := `SELECT id FROM families LIMIT 1`
+	var idStr string
+	err := tx.QueryRowContext(ctx, query).Scan(&idStr)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to get family ID: %w", err)
+	}
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to parse family ID: %w", err)
+	}
+	return id, nil
+}
+
 // scanUser is a helper function to scan user from rows and handle UUID parsing
 func scanUser(rows *sql.Rows) (*user.User, error) {
 	var u user.User
-	var idStr, familyIDStr string
+	var idStr, familyIDStr string // familyIDStr unused - single family model
 	var roleStr string
 	var isActive int
 	var lastLogin sql.NullTime
@@ -42,15 +72,10 @@ func scanUser(rows *sql.Rows) (*user.User, error) {
 		return nil, fmt.Errorf("failed to scan user: %w", err)
 	}
 
-	// Parse UUIDs
+	// Parse UUID
 	u.ID, err = uuid.Parse(idStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse user ID: %w", err)
-	}
-
-	u.FamilyID, err = uuid.Parse(familyIDStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse family ID: %w", err)
 	}
 
 	u.Role = user.Role(roleStr)
@@ -63,8 +88,11 @@ func (r *SQLiteRepository) Create(ctx context.Context, u *user.User) error {
 	if err := validation.ValidateUUID(u.ID); err != nil {
 		return fmt.Errorf("invalid user ID: %w", err)
 	}
-	if err := validation.ValidateUUID(u.FamilyID); err != nil {
-		return fmt.Errorf("invalid user familyID: %w", err)
+
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	// Validate email to prevent injection attacks
@@ -86,9 +114,9 @@ func (r *SQLiteRepository) Create(ctx context.Context, u *user.User) error {
 			is_active, created_at, updated_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	_, err := r.db.ExecContext(ctx, query,
+	_, err = r.db.ExecContext(ctx, query,
 		u.ID.String(), u.Email, u.Password, u.FirstName, u.LastName,
-		string(u.Role), u.FamilyID.String(), 1, u.CreatedAt, u.UpdatedAt,
+		string(u.Role), familyID.String(), 1, u.CreatedAt, u.UpdatedAt,
 	)
 
 	if err != nil {
@@ -116,7 +144,7 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*user.Use
 		WHERE id = ? AND is_active = 1`
 
 	var u user.User
-	var idStr, familyIDStr string
+	var idStr, familyIDStr string // familyIDStr unused - single family model
 	var roleStr string
 	var isActive int
 	var lastLogin sql.NullTime
@@ -133,15 +161,10 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*user.Use
 		return nil, fmt.Errorf("failed to get user by id: %w", err)
 	}
 
-	// Parse UUIDs
+	// Parse UUID
 	u.ID, err = uuid.Parse(idStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse user ID: %w", err)
-	}
-
-	u.FamilyID, err = uuid.Parse(familyIDStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse family ID: %w", err)
 	}
 
 	u.Role = user.Role(roleStr)
@@ -165,7 +188,7 @@ func (r *SQLiteRepository) GetByEmail(ctx context.Context, email string) (*user.
 		WHERE email = ? AND is_active = 1`
 
 	var u user.User
-	var idStr, familyIDStr string
+	var idStr, familyIDStr string // familyIDStr unused - single family model
 	var roleStr string
 	var isActive int
 	var lastLogin sql.NullTime
@@ -182,23 +205,23 @@ func (r *SQLiteRepository) GetByEmail(ctx context.Context, email string) (*user.
 		return nil, fmt.Errorf("failed to get user by email: %w", err)
 	}
 
-	// Parse UUIDs
+	// Parse UUID
 	u.ID, err = uuid.Parse(idStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse user ID: %w", err)
-	}
-
-	u.FamilyID, err = uuid.Parse(familyIDStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse family ID: %w", err)
 	}
 
 	u.Role = user.Role(roleStr)
 	return &u, nil
 }
 
-// GetByFamilyID retrieves all users belonging to a specific family
-func (r *SQLiteRepository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*user.User, error) {
+// GetAll retrieves all users in the single family
+func (r *SQLiteRepository) GetAll(ctx context.Context) ([]*user.User, error) {
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get family ID: %w", err)
+	}
 	// Validate UUID parameter to prevent injection attacks
 	if err := validation.ValidateUUID(familyID); err != nil {
 		return nil, fmt.Errorf("invalid familyID parameter: %w", err)
@@ -239,8 +262,11 @@ func (r *SQLiteRepository) Update(ctx context.Context, u *user.User) error {
 	if err := validation.ValidateUUID(u.ID); err != nil {
 		return fmt.Errorf("invalid user ID: %w", err)
 	}
-	if err := validation.ValidateUUID(u.FamilyID); err != nil {
-		return fmt.Errorf("invalid user familyID: %w", err)
+
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	// Validate email to prevent injection attacks
@@ -262,7 +288,7 @@ func (r *SQLiteRepository) Update(ctx context.Context, u *user.User) error {
 
 	result, err := r.db.ExecContext(ctx, query,
 		u.Email, u.Password, u.FirstName, u.LastName,
-		string(u.Role), u.FamilyID.String(), u.UpdatedAt, u.ID.String(),
+		string(u.Role), familyID.String(), u.UpdatedAt, u.ID.String(),
 	)
 
 	if err != nil {
@@ -286,13 +312,16 @@ func (r *SQLiteRepository) Update(ctx context.Context, u *user.User) error {
 }
 
 // Delete soft deletes a user (sets is_active to false)
-func (r *SQLiteRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+func (r *SQLiteRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	// Validate UUID parameters to prevent injection attacks
 	if err := validation.ValidateUUID(id); err != nil {
 		return fmt.Errorf("invalid id parameter: %w", err)
 	}
-	if err := validation.ValidateUUID(familyID); err != nil {
-		return fmt.Errorf("invalid familyID parameter: %w", err)
+
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	query := `
@@ -392,8 +421,11 @@ func (r *SQLiteRepository) CreateWithTransaction(ctx context.Context, tx *sql.Tx
 	if err := validation.ValidateUUID(u.ID); err != nil {
 		return fmt.Errorf("invalid user ID: %w", err)
 	}
-	if err := validation.ValidateUUID(u.FamilyID); err != nil {
-		return fmt.Errorf("invalid user familyID: %w", err)
+
+	// Get single family ID using transaction
+	familyID, err := r.getSingleFamilyIDWithTx(ctx, tx)
+	if err != nil {
+		return fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	// Validate email to prevent injection attacks
@@ -415,9 +447,9 @@ func (r *SQLiteRepository) CreateWithTransaction(ctx context.Context, tx *sql.Tx
 			is_active, created_at, updated_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	_, err := tx.ExecContext(ctx, query,
+	_, err = tx.ExecContext(ctx, query,
 		u.ID.String(), u.Email, u.Password, u.FirstName, u.LastName,
-		string(u.Role), u.FamilyID.String(), 1, u.CreatedAt, u.UpdatedAt,
+		string(u.Role), familyID.String(), 1, u.CreatedAt, u.UpdatedAt,
 	)
 
 	if err != nil {

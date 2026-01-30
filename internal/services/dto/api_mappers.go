@@ -60,7 +60,7 @@ func ToUserAPIResponse(u *user.User) UserAPIResponse {
 		FirstName: u.FirstName,
 		LastName:  u.LastName,
 		Role:      string(u.Role),
-		FamilyID:  u.FamilyID,
+		FamilyID:  uuid.Nil, // Single family model - FamilyID no longer stored in User
 		CreatedAt: u.CreatedAt,
 		UpdatedAt: u.UpdatedAt,
 	}
@@ -121,7 +121,7 @@ func ToCategoryAPIResponse(c *category.Category) CategoryAPIResponse {
 		Color:     c.Color,
 		Icon:      c.Icon,
 		ParentID:  c.ParentID,
-		FamilyID:  c.FamilyID,
+		FamilyID:  uuid.Nil, // Single family model - FamilyID no longer stored in Category
 		IsActive:  c.IsActive,
 		CreatedAt: c.CreatedAt,
 		UpdatedAt: c.UpdatedAt,
@@ -208,7 +208,7 @@ func ToTransactionAPIResponse(tx *transaction.Transaction) TransactionAPIRespons
 		Description: tx.Description,
 		CategoryID:  tx.CategoryID,
 		UserID:      tx.UserID,
-		FamilyID:    tx.FamilyID,
+		FamilyID:    uuid.Nil, // Single family model - FamilyID no longer stored in Transaction
 		Date:        tx.Date,
 		Tags:        tx.Tags,
 		CreatedAt:   tx.CreatedAt,

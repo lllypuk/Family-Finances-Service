@@ -52,10 +52,25 @@ func NewSQLiteRepository(db *sql.DB) *SQLiteRepository {
 	}
 }
 
+// getSingleFamilyID retrieves the ID of the single family from the database
+func (r *SQLiteRepository) getSingleFamilyID(ctx context.Context) (uuid.UUID, error) {
+	query := `SELECT id FROM families LIMIT 1`
+	var idStr string
+	err := r.db.QueryRowContext(ctx, query).Scan(&idStr)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to get family ID: %w", err)
+	}
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to parse family ID: %w", err)
+	}
+	return id, nil
+}
+
 // scanTransactionRow scans a single row from SQL query into a Transaction struct
 func scanTransactionRow(rows *sql.Rows) (*transaction.Transaction, error) {
 	var t transaction.Transaction
-	var idStr, typeStr, categoryIDStr, userIDStr, familyIDStr string
+	var idStr, typeStr, categoryIDStr, userIDStr, familyIDStr string // familyIDStr unused - single family model
 	var tagsJSON string
 
 	err := rows.Scan(
@@ -79,7 +94,6 @@ func scanTransactionRow(rows *sql.Rows) (*transaction.Transaction, error) {
 	t.ID, _ = uuid.Parse(idStr)
 	t.CategoryID, _ = uuid.Parse(categoryIDStr)
 	t.UserID, _ = uuid.Parse(userIDStr)
-	t.FamilyID, _ = uuid.Parse(familyIDStr)
 	t.Type = transaction.Type(typeStr)
 
 	// Parse tags from JSON
@@ -96,9 +110,6 @@ func (r *SQLiteRepository) Create(ctx context.Context, t *transaction.Transactio
 	if err := validation.ValidateUUID(t.ID); err != nil {
 		return fmt.Errorf("invalid transaction ID: %w", err)
 	}
-	if err := validation.ValidateUUID(t.FamilyID); err != nil {
-		return fmt.Errorf("invalid family ID: %w", err)
-	}
 	if err := validation.ValidateUUID(t.CategoryID); err != nil {
 		return fmt.Errorf("invalid category ID: %w", err)
 	}
@@ -113,6 +124,12 @@ func (r *SQLiteRepository) Create(ctx context.Context, t *transaction.Transactio
 	}
 	if err := validation.ValidateDescription(t.Description); err != nil {
 		return fmt.Errorf("invalid description: %w", err)
+	}
+
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	// Validate date
@@ -148,7 +165,7 @@ func (r *SQLiteRepository) Create(ctx context.Context, t *transaction.Transactio
 		string(t.Type),
 		sqlitehelpers.UUIDToString(t.CategoryID),
 		sqlitehelpers.UUIDToString(t.UserID),
-		sqlitehelpers.UUIDToString(t.FamilyID),
+		familyID.String(),
 		string(tagsJSON),
 		t.CreatedAt,
 		t.UpdatedAt,
@@ -175,7 +192,7 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*transact
 		WHERE id = ?`
 
 	var t transaction.Transaction
-	var idStr, typeStr, categoryIDStr, userIDStr, familyIDStr string
+	var idStr, typeStr, categoryIDStr, userIDStr, familyIDStr string // familyIDStr unused - single family model
 	var tagsJSON string
 
 	err := r.db.QueryRowContext(ctx, query, sqlitehelpers.UUIDToString(id)).Scan(
@@ -194,7 +211,6 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*transact
 	t.ID, _ = uuid.Parse(idStr)
 	t.CategoryID, _ = uuid.Parse(categoryIDStr)
 	t.UserID, _ = uuid.Parse(userIDStr)
-	t.FamilyID, _ = uuid.Parse(familyIDStr)
 	t.Type = transaction.Type(typeStr)
 
 	// Parse tags from JSON
@@ -213,9 +229,10 @@ func (r *SQLiteRepository) GetByFilter(
 	ctx context.Context,
 	filter transaction.Filter,
 ) ([]*transaction.Transaction, error) {
-	// Validate family ID (required parameter)
-	if err := validation.ValidateUUID(filter.FamilyID); err != nil {
-		return nil, fmt.Errorf("invalid family ID: %w", err)
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	// Build dynamic query parts
@@ -224,7 +241,7 @@ func (r *SQLiteRepository) GetByFilter(
 
 	// Family ID is always required
 	conditions = append(conditions, "family_id = ?")
-	args = append(args, sqlitehelpers.UUIDToString(filter.FamilyID))
+	args = append(args, familyID.String())
 
 	// Optional filters
 	if filter.UserID != nil {
@@ -336,9 +353,6 @@ func (r *SQLiteRepository) Update(ctx context.Context, t *transaction.Transactio
 	if err := validation.ValidateUUID(t.ID); err != nil {
 		return fmt.Errorf("invalid transaction ID: %w", err)
 	}
-	if err := validation.ValidateUUID(t.FamilyID); err != nil {
-		return fmt.Errorf("invalid family ID: %w", err)
-	}
 	if err := validation.ValidateUUID(t.CategoryID); err != nil {
 		return fmt.Errorf("invalid category ID: %w", err)
 	}
@@ -353,6 +367,12 @@ func (r *SQLiteRepository) Update(ctx context.Context, t *transaction.Transactio
 	}
 	if err := validation.ValidateDescription(t.Description); err != nil {
 		return fmt.Errorf("invalid description: %w", err)
+	}
+
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	// Update timestamp
@@ -380,7 +400,7 @@ func (r *SQLiteRepository) Update(ctx context.Context, t *transaction.Transactio
 		string(tagsJSON),
 		t.UpdatedAt,
 		sqlitehelpers.UUIDToString(t.ID),
-		sqlitehelpers.UUIDToString(t.FamilyID),
+		familyID.String(),
 	)
 
 	if err != nil {
@@ -400,18 +420,21 @@ func (r *SQLiteRepository) Update(ctx context.Context, t *transaction.Transactio
 }
 
 // Delete deletes a transaction
-func (r *SQLiteRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+func (r *SQLiteRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	// Validate UUID parameters
 	if err := validation.ValidateUUID(id); err != nil {
 		return fmt.Errorf("invalid id parameter: %w", err)
 	}
-	if err := validation.ValidateUUID(familyID); err != nil {
-		return fmt.Errorf("invalid family ID parameter: %w", err)
+
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	query := `DELETE FROM transactions WHERE id = ? AND family_id = ?`
 
-	result, err := r.db.ExecContext(ctx, query, sqlitehelpers.UUIDToString(id), sqlitehelpers.UUIDToString(familyID))
+	result, err := r.db.ExecContext(ctx, query, sqlitehelpers.UUIDToString(id), familyID.String())
 	if err != nil {
 		return fmt.Errorf("failed to delete transaction: %w", err)
 	}
@@ -525,14 +548,14 @@ func (r *SQLiteRepository) GetMonthlySummary(
 }
 
 // GetByFamilyID retrieves transactions by family ID with pagination
-func (r *SQLiteRepository) GetByFamilyID(
+func (r *SQLiteRepository) GetAll(
 	ctx context.Context,
-	familyID uuid.UUID,
 	limit, offset int,
 ) ([]*transaction.Transaction, error) {
-	// Validate UUID parameter to prevent injection attacks
-	if err := validation.ValidateUUID(familyID); err != nil {
-		return nil, fmt.Errorf("invalid family ID: %w", err)
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	// Validate pagination parameters
@@ -633,6 +656,19 @@ func (r *SQLiteRepository) GetTotalByFamilyAndDateRange(
 	}
 
 	return total, nil
+}
+
+// GetTotalByDateRange calculates total amount for transactions by date range (single family model)
+func (r *SQLiteRepository) GetTotalByDateRange(
+	ctx context.Context,
+	startDate, endDate time.Time,
+	transactionType transaction.Type,
+) (float64, error) {
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return r.GetTotalByFamilyAndDateRange(ctx, familyID, startDate, endDate, transactionType)
 }
 
 // GetTotalByCategoryAndDateRange calculates total amount for transactions by category and date range

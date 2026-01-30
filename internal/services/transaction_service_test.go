@@ -344,12 +344,13 @@ func TestTransactionService_DeleteTransaction_Success(t *testing.T) {
 
 	// Setup expectations
 	txRepo.On("GetByID", ctx, existingTx.ID).Return(existingTx, nil)
-	txRepo.On("Delete", ctx, existingTx.ID, existingTx.FamilyID).Return(nil)
-	budgetRepo.On("GetActiveBudgets", ctx, existingTx.FamilyID).Return([]*budget.Budget{testBudget}, nil)
+	// Use uuid.Nil for single-family model - repository will fetch the single family ID
+	txRepo.On("Delete", ctx, existingTx.ID, uuid.Nil).Return(nil)
+	budgetRepo.On("GetActiveBudgets", ctx, uuid.Nil).Return([]*budget.Budget{testBudget}, nil)
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
 
 	// Execute
-	err := service.DeleteTransaction(ctx, existingTx.ID, existingTx.FamilyID)
+	err := service.DeleteTransaction(ctx, existingTx.ID)
 
 	// Assert
 	require.NoError(t, err)
@@ -470,11 +471,11 @@ func TestTransactionService_ValidateTransactionLimits_WithinBudget(t *testing.T)
 	testBudget := createTestBudget(uuid.New(), familyID, 500.00, categoryID)
 	testBudget.Spent = 100.0
 
-	// Setup expectations
-	budgetRepo.On("GetActiveBudgets", ctx, familyID).Return([]*budget.Budget{testBudget}, nil)
+	// Setup expectations - use uuid.Nil for single-family model
+	budgetRepo.On("GetActiveBudgets", ctx, uuid.Nil).Return([]*budget.Budget{testBudget}, nil)
 
 	// Execute
-	err := service.ValidateTransactionLimits(ctx, familyID, categoryID, amount, transaction.TypeExpense)
+	err := service.ValidateTransactionLimits(ctx, categoryID, amount, transaction.TypeExpense)
 
 	// Assert
 	require.NoError(t, err)
@@ -493,11 +494,11 @@ func TestTransactionService_ValidateTransactionLimits_ExceedsBudget(t *testing.T
 	testBudget := createTestBudget(uuid.New(), familyID, 500.00, categoryID)
 	testBudget.Spent = 100.0
 
-	// Setup expectations
-	budgetRepo.On("GetActiveBudgets", ctx, familyID).Return([]*budget.Budget{testBudget}, nil)
+	// Setup expectations - use uuid.Nil for single-family model
+	budgetRepo.On("GetActiveBudgets", ctx, uuid.Nil).Return([]*budget.Budget{testBudget}, nil)
 
 	// Execute
-	err := service.ValidateTransactionLimits(ctx, familyID, categoryID, amount, transaction.TypeExpense)
+	err := service.ValidateTransactionLimits(ctx, categoryID, amount, transaction.TypeExpense)
 
 	// Assert
 	require.Error(t, err)
@@ -515,7 +516,7 @@ func TestTransactionService_ValidateTransactionLimits_IncomeTransaction(t *testi
 	amount := 1000.0
 
 	// Execute - income transactions should not check budget limits
-	err := service.ValidateTransactionLimits(ctx, familyID, categoryID, amount, transaction.TypeIncome)
+	err := service.ValidateTransactionLimits(ctx, categoryID, amount, transaction.TypeIncome)
 
 	// Assert
 	require.NoError(t, err)
@@ -529,11 +530,11 @@ func TestTransactionService_ValidateTransactionLimits_NoBudget(t *testing.T) {
 	categoryID := uuid.New()
 	amount := 1000.0
 
-	// Setup expectations - no budget found
-	budgetRepo.On("GetActiveBudgets", ctx, familyID).Return([]*budget.Budget{}, nil)
+	// Setup expectations - no budget found, use uuid.Nil for single-family model
+	budgetRepo.On("GetActiveBudgets", ctx, uuid.Nil).Return([]*budget.Budget{}, nil)
 
 	// Execute
-	err := service.ValidateTransactionLimits(ctx, familyID, categoryID, amount, transaction.TypeExpense)
+	err := service.ValidateTransactionLimits(ctx, categoryID, amount, transaction.TypeExpense)
 
 	// Assert
 	require.NoError(t, err) // No budget means no limit

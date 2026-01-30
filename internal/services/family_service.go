@@ -81,7 +81,7 @@ func (s *familyService) SetupFamily(ctx context.Context, req dto.SetupFamilyDTO)
 		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	adminUser := user.NewUser(req.Email, req.FirstName, req.LastName, newFamily.ID, user.RoleAdmin)
+	adminUser := user.NewUser(req.Email, req.FirstName, req.LastName, user.RoleAdmin)
 	adminUser.Password = string(hashedPassword)
 
 	if err = s.userRepo.Create(ctx, adminUser); err != nil {

@@ -324,10 +324,8 @@ func (h *ReportHandler) Show(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Report not found")
 	}
 
-	// Проверяем, что отчет принадлежит семье пользователя
-	if report.FamilyID != sessionData.FamilyID {
-		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
-	}
+	// In single-family model, all reports belong to the family
+	// No additional access check needed
 
 	// Конвертируем в view модель
 	reportVM := webModels.ReportDataVM{}
@@ -353,11 +351,8 @@ func (h *ReportHandler) Delete(c echo.Context) error {
 			return h.services.Report.GetReportByID(ctx.Request().Context(), entityID)
 		},
 		DeleteEntityFunc: func(ctx echo.Context, entityID uuid.UUID) error {
-			sessionData, err := middleware.GetUserFromContext(ctx)
-			if err != nil {
-				return err
-			}
-			return h.services.Report.DeleteReport(ctx.Request().Context(), entityID, sessionData.FamilyID)
+			// In single-family model, repository handles family ID internally
+			return h.services.Report.DeleteReport(ctx.Request().Context(), entityID)
 		},
 		GetErrorMsgFunc: h.getReportServiceErrorMessage,
 		RedirectURL:     "/reports",
@@ -390,10 +385,8 @@ func (h *ReportHandler) Export(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Report not found")
 	}
 
-	// Проверяем, что отчет принадлежит семье пользователя
-	if report.FamilyID != sessionData.FamilyID {
-		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
-	}
+	// In single-family model, all reports belong to the family
+	// No additional access check needed
 
 	// Экспортируем в CSV
 	return h.exportReportAsCSV(c, report)

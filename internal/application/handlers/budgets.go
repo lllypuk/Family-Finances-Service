@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"family-budget-service/internal/domain/budget"
-	"family-budget-service/internal/web/middleware"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
@@ -75,7 +74,6 @@ func (h *BudgetHandler) CreateBudget(c echo.Context) error {
 		Spent:      0.0, // Начальная потраченная сумма
 		Period:     budget.Period(req.Period),
 		CategoryID: req.CategoryID,
-		FamilyID:   req.FamilyID,
 		StartDate:  req.StartDate,
 		EndDate:    req.EndDate,
 		IsActive:   true,
@@ -105,7 +103,6 @@ func (h *BudgetHandler) CreateBudget(c echo.Context) error {
 		Remaining:  newBudget.Amount - newBudget.Spent,
 		Period:     string(newBudget.Period),
 		CategoryID: newBudget.CategoryID,
-		FamilyID:   newBudget.FamilyID,
 		StartDate:  newBudget.StartDate,
 		EndDate:    newBudget.EndDate,
 		IsActive:   newBudget.IsActive,
@@ -125,45 +122,16 @@ func (h *BudgetHandler) CreateBudget(c echo.Context) error {
 
 func (h *BudgetHandler) GetBudgets(c echo.Context) error {
 	// Получаем параметры запроса
-	familyIDParam := c.QueryParam("family_id")
 	activeOnlyParam := c.QueryParam("active_only")
 
-	if familyIDParam == "" {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "MISSING_FAMILY_ID",
-				Message: "family_id query parameter is required",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
-	familyID, err := uuid.Parse(familyIDParam)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_FAMILY_ID",
-				Message: "Invalid family ID format",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
 	var budgets []*budget.Budget
+	var err error
 
 	// Если запрашиваются только активные бюджеты
 	if activeOnlyParam == "true" {
-		budgets, err = h.repositories.Budget.GetActiveBudgets(c.Request().Context(), familyID)
+		budgets, err = h.repositories.Budget.GetActiveBudgets(c.Request().Context())
 	} else {
-		budgets, err = h.repositories.Budget.GetByFamilyID(c.Request().Context(), familyID)
+		budgets, err = h.repositories.Budget.GetAll(c.Request().Context())
 	}
 
 	if err != nil {
@@ -190,7 +158,6 @@ func (h *BudgetHandler) GetBudgets(c echo.Context) error {
 			Remaining:  b.Amount - b.Spent,
 			Period:     string(b.Period),
 			CategoryID: b.CategoryID,
-			FamilyID:   b.FamilyID,
 			StartDate:  b.StartDate,
 			EndDate:    b.EndDate,
 			IsActive:   b.IsActive,
@@ -267,7 +234,6 @@ func (h *BudgetHandler) GetBudgetByID(c echo.Context) error {
 		Remaining:  foundBudget.Amount - spent,
 		Period:     string(foundBudget.Period),
 		CategoryID: foundBudget.CategoryID,
-		FamilyID:   foundBudget.FamilyID,
 		StartDate:  foundBudget.StartDate,
 		EndDate:    foundBudget.EndDate,
 		IsActive:   foundBudget.IsActive,
@@ -331,7 +297,6 @@ func (h *BudgetHandler) buildBudgetResponse(b *budget.Budget) BudgetResponse {
 		Remaining:  b.Amount - b.Spent,
 		Period:     string(b.Period),
 		CategoryID: b.CategoryID,
-		FamilyID:   b.FamilyID,
 		StartDate:  b.StartDate,
 		EndDate:    b.EndDate,
 		IsActive:   b.IsActive,
@@ -342,16 +307,7 @@ func (h *BudgetHandler) buildBudgetResponse(b *budget.Budget) BudgetResponse {
 
 func (h *BudgetHandler) DeleteBudget(c echo.Context) error {
 	return DeleteEntityHelper(c, func(id uuid.UUID) error {
-		// Try to get family ID from session first (for web interface)
-		sessionData, err := middleware.GetSessionData(c)
-		if err != nil {
-			// For API/integration tests, get budget first to find family_id
-			budget, getBudgetErr := h.repositories.Budget.GetByID(c.Request().Context(), id)
-			if getBudgetErr != nil {
-				return getBudgetErr
-			}
-			return h.repositories.Budget.Delete(c.Request().Context(), id, budget.FamilyID)
-		}
-		return h.repositories.Budget.Delete(c.Request().Context(), id, sessionData.FamilyID)
+		// In single-family model, repository will handle family ID internally
+		return h.repositories.Budget.Delete(c.Request().Context(), id)
 	}, "Budget")
 }

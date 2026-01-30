@@ -124,7 +124,6 @@ func (h *TransactionHandler) buildTransaction(req CreateTransactionRequest) *tra
 		Description: req.Description,
 		CategoryID:  req.CategoryID,
 		UserID:      req.UserID,
-		FamilyID:    req.FamilyID,
 		Date:        req.Date,
 		Tags:        req.Tags,
 		CreatedAt:   time.Now(),
@@ -142,7 +141,7 @@ func (h *TransactionHandler) updateBudgetIfNeeded(c echo.Context, tx *transactio
 		return
 	}
 
-	budgets, err := h.repositories.Budget.GetActiveBudgets(c.Request().Context(), tx.FamilyID)
+	budgets, err := h.repositories.Budget.GetActiveBudgets(c.Request().Context())
 	if err != nil {
 		return
 	}
@@ -165,7 +164,6 @@ func (h *TransactionHandler) buildTransactionResponse(tx *transaction.Transactio
 		Description: tx.Description,
 		CategoryID:  tx.CategoryID,
 		UserID:      tx.UserID,
-		FamilyID:    tx.FamilyID,
 		Date:        tx.Date,
 		Tags:        tx.Tags,
 		CreatedAt:   tx.CreatedAt,
@@ -216,39 +214,8 @@ func (h *TransactionHandler) GetTransactions(c echo.Context) error {
 func (h *TransactionHandler) parseTransactionFilters(c echo.Context) (TransactionFilterParams, error) {
 	var filters TransactionFilterParams
 
-	// Обязательный параметр family_id
-	familyIDParam := c.QueryParam("family_id")
-	if familyIDParam == "" {
-		_ = c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "MISSING_FAMILY_ID",
-				Message: "family_id query parameter is required",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-		return filters, errors.New("missing family_id")
-	}
-
-	familyID, err := uuid.Parse(familyIDParam)
-	if err != nil {
-		_ = c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_FAMILY_ID",
-				Message: "Invalid family ID format",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-		return filters, errors.New("invalid family_id")
-	}
-	filters.FamilyID = familyID
+	// In single-family model, FamilyID is not needed in filters
+	// Repository will handle it internally
 
 	h.parseOptionalFilters(c, &filters)
 	h.parsePaginationParams(c, &filters)
@@ -355,7 +322,6 @@ func (h *TransactionHandler) buildRepositoryFilter(filters TransactionFilterPara
 	}
 
 	return transaction.Filter{
-		FamilyID:   filters.FamilyID,
 		UserID:     filters.UserID,
 		CategoryID: filters.CategoryID,
 		Type:       typeFilter,
@@ -386,7 +352,6 @@ func (h *TransactionHandler) buildTransactionListResponse(
 			Description: tx.Description,
 			CategoryID:  tx.CategoryID,
 			UserID:      tx.UserID,
-			FamilyID:    tx.FamilyID,
 			Date:        tx.Date,
 			Tags:        tx.Tags,
 			CreatedAt:   tx.CreatedAt,
@@ -435,7 +400,6 @@ func (h *TransactionHandler) GetTransactionByID(c echo.Context) error {
 		Description: foundTransaction.Description,
 		CategoryID:  foundTransaction.CategoryID,
 		UserID:      foundTransaction.UserID,
-		FamilyID:    foundTransaction.FamilyID,
 		Date:        foundTransaction.Date,
 		Tags:        foundTransaction.Tags,
 		CreatedAt:   foundTransaction.CreatedAt,
@@ -503,17 +467,7 @@ func (h *TransactionHandler) isForeignKeyConstraintError(err error) bool {
 
 func (h *TransactionHandler) DeleteTransaction(c echo.Context) error {
 	return DeleteEntityHelper(c, func(id uuid.UUID) error {
-		// Get family ID from query parameter
-		familyIDParam := c.QueryParam("family_id")
-		if familyIDParam == "" {
-			return echo.NewHTTPError(http.StatusBadRequest, "family_id query parameter is required")
-		}
-
-		familyID, err := uuid.Parse(familyIDParam)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, "Invalid family ID format")
-		}
-
-		return h.repositories.Transaction.Delete(c.Request().Context(), id, familyID)
+		// In single-family model, repository handles family ID internally
+		return h.repositories.Transaction.Delete(c.Request().Context(), id)
 	}, "Transaction")
 }

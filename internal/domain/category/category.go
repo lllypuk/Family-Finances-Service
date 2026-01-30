@@ -13,7 +13,6 @@ type Category struct {
 	Color     string     `json:"color"      bson:"color"`               // Цвет для UI (#FF5733)
 	Icon      string     `json:"icon"       bson:"icon"`                // Иконка для UI
 	ParentID  *uuid.UUID `json:"parent_id"  bson:"parent_id,omitempty"` // Для подкатегорий
-	FamilyID  uuid.UUID  `json:"family_id"  bson:"family_id"`
 	IsActive  bool       `json:"is_active"  bson:"is_active"`
 	CreatedAt time.Time  `json:"created_at" bson:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at" bson:"updated_at"`
@@ -55,14 +54,13 @@ func GetDefaultIncomeCategories() []string {
 	}
 }
 
-func NewCategory(name string, categoryType Type, familyID uuid.UUID) *Category {
+func NewCategory(name string, categoryType Type) *Category {
 	return &Category{
 		ID:        uuid.New(),
 		Name:      name,
 		Type:      categoryType,
 		Color:     "#007BFF", // Дефолтный синий цвет
 		Icon:      "default",
-		FamilyID:  familyID,
 		IsActive:  true,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),

@@ -439,7 +439,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 
 		req := httptest.NewRequest(
 			http.MethodDelete,
-			fmt.Sprintf("/api/v1/transactions/%s?family_id=%s", testTransaction.ID, family.ID),
+			fmt.Sprintf("/api/v1/transactions/%s", testTransaction.ID),
 			nil,
 		)
 		rec := httptest.NewRecorder()

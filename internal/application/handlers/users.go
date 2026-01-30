@@ -169,7 +169,6 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 		FirstName: createdUser.FirstName,
 		LastName:  createdUser.LastName,
 		Role:      string(createdUser.Role),
-		FamilyID:  createdUser.FamilyID,
 		CreatedAt: createdUser.CreatedAt,
 		UpdatedAt: createdUser.UpdatedAt,
 	}
@@ -214,7 +213,6 @@ func (h *UserHandler) GetUserByID(c echo.Context) error {
 		FirstName: foundUser.FirstName,
 		LastName:  foundUser.LastName,
 		Role:      string(foundUser.Role),
-		FamilyID:  foundUser.FamilyID,
 		CreatedAt: foundUser.CreatedAt,
 		UpdatedAt: foundUser.UpdatedAt,
 	}
@@ -282,7 +280,6 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 		FirstName: updatedUser.FirstName,
 		LastName:  updatedUser.LastName,
 		Role:      string(updatedUser.Role),
-		FamilyID:  updatedUser.FamilyID,
 		CreatedAt: updatedUser.CreatedAt,
 		UpdatedAt: updatedUser.UpdatedAt,
 	}

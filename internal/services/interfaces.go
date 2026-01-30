@@ -42,16 +42,15 @@ type CategoryService interface {
 	// CRUD Operations
 	CreateCategory(ctx context.Context, req dto.CreateCategoryDTO) (*category.Category, error)
 	GetCategoryByID(ctx context.Context, id uuid.UUID) (*category.Category, error)
-	GetCategoriesByFamily(
+	GetCategories(
 		ctx context.Context,
-		familyID uuid.UUID,
 		typeFilter *category.Type,
 	) ([]*category.Category, error)
 	UpdateCategory(ctx context.Context, id uuid.UUID, req dto.UpdateCategoryDTO) (*category.Category, error)
-	DeleteCategory(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
+	DeleteCategory(ctx context.Context, id uuid.UUID) error
 
 	// Business Operations
-	GetCategoryHierarchy(ctx context.Context, familyID uuid.UUID) ([]*category.Category, error)
+	GetCategoryHierarchy(ctx context.Context) ([]*category.Category, error)
 	ValidateCategoryHierarchy(ctx context.Context, categoryID, parentID uuid.UUID) error
 	CheckCategoryUsage(ctx context.Context, categoryID uuid.UUID) (bool, error)
 	CreateDefaultCategories(ctx context.Context, familyID uuid.UUID) error
@@ -68,7 +67,7 @@ type TransactionService interface {
 		filter dto.TransactionFilterDTO,
 	) ([]*transaction.Transaction, error)
 	UpdateTransaction(ctx context.Context, id uuid.UUID, req dto.UpdateTransactionDTO) (*transaction.Transaction, error)
-	DeleteTransaction(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
+	DeleteTransaction(ctx context.Context, id uuid.UUID) error
 
 	// Business Operations
 	GetTransactionsByCategory(
@@ -88,7 +87,6 @@ type TransactionService interface {
 	) error
 	ValidateTransactionLimits(
 		ctx context.Context,
-		familyID uuid.UUID,
 		categoryID uuid.UUID,
 		amount float64,
 		transactionType transaction.Type,
@@ -100,20 +98,19 @@ type BudgetService interface {
 	// CRUD Operations
 	CreateBudget(ctx context.Context, req dto.CreateBudgetDTO) (*budget.Budget, error)
 	GetBudgetByID(ctx context.Context, id uuid.UUID) (*budget.Budget, error)
-	GetBudgetsByFamily(ctx context.Context, familyID uuid.UUID, filter dto.BudgetFilterDTO) ([]*budget.Budget, error)
+	GetAllBudgets(ctx context.Context, filter dto.BudgetFilterDTO) ([]*budget.Budget, error) // Single family
 	UpdateBudget(ctx context.Context, id uuid.UUID, req dto.UpdateBudgetDTO) (*budget.Budget, error)
-	DeleteBudget(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
+	DeleteBudget(ctx context.Context, id uuid.UUID) error
 
 	// Business Operations
-	GetActiveBudgets(ctx context.Context, familyID uuid.UUID, date time.Time) ([]*budget.Budget, error)
+	GetActiveBudgets(ctx context.Context, date time.Time) ([]*budget.Budget, error) // Single family
 	UpdateBudgetSpent(ctx context.Context, budgetID uuid.UUID, amount float64) error
-	CheckBudgetLimits(ctx context.Context, familyID uuid.UUID, categoryID uuid.UUID, amount float64) error
+	CheckBudgetLimits(ctx context.Context, categoryID uuid.UUID, amount float64) error // Single family
 	GetBudgetStatus(ctx context.Context, budgetID uuid.UUID) (*dto.BudgetStatusDTO, error)
 	CalculateBudgetUtilization(ctx context.Context, budgetID uuid.UUID) (*dto.BudgetUtilizationDTO, error)
-	GetBudgetsByCategory(ctx context.Context, familyID uuid.UUID, categoryID uuid.UUID) ([]*budget.Budget, error)
+	GetBudgetsByCategory(ctx context.Context, categoryID uuid.UUID) ([]*budget.Budget, error) // Single family
 	ValidateBudgetPeriod(
 		ctx context.Context,
-		familyID uuid.UUID,
 		categoryID *uuid.UUID,
 		startDate, endDate time.Time,
 	) error
