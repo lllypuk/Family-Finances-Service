@@ -55,17 +55,41 @@ func (m *MockTransactionRepository) Update(ctx context.Context, tx *transaction.
 	return args.Error(0)
 }
 
-func (m *MockTransactionRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
-	args := m.Called(ctx, id, familyID)
+func (m *MockTransactionRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
-func (m *MockTransactionRepository) GetByFamilyID(
+func (m *MockTransactionRepository) GetTotalByDateRange(
 	ctx context.Context,
-	familyID uuid.UUID,
-	limit, offset int,
-) ([]*transaction.Transaction, error) {
-	args := m.Called(ctx, familyID, limit, offset)
+	startDate, endDate time.Time,
+	transactionType transaction.Type,
+) (float64, error) {
+	args := m.Called(ctx, startDate, endDate, transactionType)
+	return args.Get(0).(float64), args.Error(1)
+}
+
+func (m *MockTransactionRepository) GetTotalByCategory(
+	ctx context.Context,
+	categoryID uuid.UUID,
+	transactionType transaction.Type,
+) (float64, error) {
+	args := m.Called(ctx, categoryID, transactionType)
+	return args.Get(0).(float64), args.Error(1)
+}
+
+func (m *MockTransactionRepository) GetTotalByCategoryAndDateRange(
+	ctx context.Context,
+	categoryID uuid.UUID,
+	startDate, endDate time.Time,
+	transactionType transaction.Type,
+) (float64, error) {
+	args := m.Called(ctx, categoryID, startDate, endDate, transactionType)
+	return args.Get(0).(float64), args.Error(1)
+}
+
+func (m *MockTransactionRepository) GetAll(ctx context.Context, limit, offset int) ([]*transaction.Transaction, error) {
+	args := m.Called(ctx, limit, offset)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -82,47 +106,6 @@ func (m *MockTransactionRepository) GetTotalsByCategory(
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(map[uuid.UUID]float64), args.Error(1)
-}
-
-func (m *MockTransactionRepository) GetMonthlyTotals(
-	ctx context.Context,
-	familyID uuid.UUID,
-	year int,
-) (map[time.Month]float64, error) {
-	args := m.Called(ctx, familyID, year)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(map[time.Month]float64), args.Error(1)
-}
-
-func (m *MockTransactionRepository) GetTotalByCategory(
-	ctx context.Context,
-	categoryID uuid.UUID,
-	txType transaction.Type,
-) (float64, error) {
-	args := m.Called(ctx, categoryID, txType)
-	return args.Get(0).(float64), args.Error(1)
-}
-
-func (m *MockTransactionRepository) GetTotalByFamilyAndDateRange(
-	ctx context.Context,
-	familyID uuid.UUID,
-	startDate, endDate time.Time,
-	transactionType transaction.Type,
-) (float64, error) {
-	args := m.Called(ctx, familyID, startDate, endDate, transactionType)
-	return args.Get(0).(float64), args.Error(1)
-}
-
-func (m *MockTransactionRepository) GetTotalByCategoryAndDateRange(
-	ctx context.Context,
-	categoryID uuid.UUID,
-	startDate, endDate time.Time,
-	transactionType transaction.Type,
-) (float64, error) {
-	args := m.Called(ctx, categoryID, startDate, endDate, transactionType)
-	return args.Get(0).(float64), args.Error(1)
 }
 
 // setupTransactionHandler creates a new transaction handler with mock repositories
@@ -143,7 +126,6 @@ func createValidTransactionRequest() handlers.CreateTransactionRequest {
 		Description: "Test transaction",
 		CategoryID:  uuid.New(),
 		UserID:      uuid.New(),
-		FamilyID:    uuid.New(),
 		Date:        time.Now(),
 		Tags:        []string{"test", "expense"},
 	}
@@ -182,7 +164,6 @@ func TestTransactionHandler_CreateTransaction_Success(t *testing.T) {
 	assert.Equal(t, req.Description, response.Data.Description)
 	assert.Equal(t, req.CategoryID, response.Data.CategoryID)
 	assert.Equal(t, req.UserID, response.Data.UserID)
-	assert.Equal(t, req.FamilyID, response.Data.FamilyID)
 	assert.Equal(t, req.Tags, response.Data.Tags)
 
 	mockRepo.AssertExpectations(t)
@@ -313,7 +294,6 @@ func TestTransactionHandler_GetTransactions_Success(t *testing.T) {
 			Description: "Test transaction 1",
 			CategoryID:  uuid.New(),
 			UserID:      uuid.New(),
-			FamilyID:    familyID,
 			Date:        time.Now(),
 			Tags:        []string{"test"},
 			CreatedAt:   time.Now(),
@@ -326,7 +306,6 @@ func TestTransactionHandler_GetTransactions_Success(t *testing.T) {
 			Description: "Test transaction 2",
 			CategoryID:  uuid.New(),
 			UserID:      uuid.New(),
-			FamilyID:    familyID,
 			Date:        time.Now(),
 			Tags:        []string{"test"},
 			CreatedAt:   time.Now(),
@@ -360,6 +339,8 @@ func TestTransactionHandler_GetTransactions_Success(t *testing.T) {
 	mockRepo.AssertExpectations(t)
 }
 
+// TestTransactionHandler_GetTransactions_MissingFamilyID is deprecated in single-family model
+/*
 func TestTransactionHandler_GetTransactions_MissingFamilyID(t *testing.T) {
 	handler, _ := setupTransactionHandler()
 
@@ -380,7 +361,10 @@ func TestTransactionHandler_GetTransactions_MissingFamilyID(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "MISSING_FAMILY_ID", response.Error.Code)
 }
+*/
 
+// TestTransactionHandler_GetTransactions_InvalidFamilyID is deprecated in single-family model
+/*
 func TestTransactionHandler_GetTransactions_InvalidFamilyID(t *testing.T) {
 	handler, _ := setupTransactionHandler()
 
@@ -401,6 +385,7 @@ func TestTransactionHandler_GetTransactions_InvalidFamilyID(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "INVALID_FAMILY_ID", response.Error.Code)
 }
+*/
 
 func TestTransactionHandler_GetTransactions_WithFilters(t *testing.T) {
 	handler, mockRepo := setupTransactionHandler()
@@ -449,7 +434,6 @@ func TestTransactionHandler_GetTransactionByID_Success(t *testing.T) {
 		Description: "Test transaction",
 		CategoryID:  uuid.New(),
 		UserID:      uuid.New(),
-		FamilyID:    uuid.New(),
 		Date:        time.Now(),
 		Tags:        []string{"test"},
 		CreatedAt:   time.Now(),
@@ -547,7 +531,6 @@ func TestTransactionHandler_UpdateTransaction_Success(t *testing.T) {
 		Description: "Old description",
 		CategoryID:  uuid.New(),
 		UserID:      uuid.New(),
-		FamilyID:    uuid.New(),
 		Date:        time.Now(),
 		Tags:        []string{"old"},
 		CreatedAt:   time.Now(),
@@ -605,13 +588,12 @@ func TestTransactionHandler_DeleteTransaction_Success(t *testing.T) {
 
 	// Arrange
 	transactionID := uuid.New()
-	familyID := uuid.New()
-	mockRepo.On("Delete", mock.Anything, transactionID, familyID).Return(nil)
+	mockRepo.On("Delete", mock.Anything, transactionID).Return(nil)
 
 	e := echo.New()
 	httpReq := httptest.NewRequest(
 		http.MethodDelete,
-		"/transactions/"+transactionID.String()+"?family_id="+familyID.String(),
+		"/transactions/"+transactionID.String(),
 		nil,
 	)
 	rec := httptest.NewRecorder()
@@ -652,13 +634,12 @@ func TestTransactionHandler_DeleteTransaction_RepositoryError(t *testing.T) {
 
 	// Arrange
 	transactionID := uuid.New()
-	familyID := uuid.New()
-	mockRepo.On("Delete", mock.Anything, transactionID, familyID).Return(errors.New("database error"))
+	mockRepo.On("Delete", mock.Anything, transactionID).Return(errors.New("database error"))
 
 	e := echo.New()
 	httpReq := httptest.NewRequest(
 		http.MethodDelete,
-		"/transactions/"+transactionID.String()+"?family_id="+familyID.String(),
+		"/transactions/"+transactionID.String(),
 		nil,
 	)
 	rec := httptest.NewRecorder()

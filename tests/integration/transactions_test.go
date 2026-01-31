@@ -21,9 +21,9 @@ import (
 )
 
 func TestTransactionHandler_Integration(t *testing.T) {
-	testServer := testhelpers.SetupHTTPServer(t)
-
 	t.Run("CreateTransaction_Success", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -43,7 +43,6 @@ func TestTransactionHandler_Integration(t *testing.T) {
 			Description: "Grocery shopping",
 			CategoryID:  testCategory.ID,
 			UserID:      user.ID,
-			FamilyID:    family.ID,
 			Date:        time.Now(),
 			Tags:        []string{"food", "essentials"},
 		}
@@ -68,7 +67,6 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		assert.Equal(t, request.Description, response.Data.Description)
 		assert.Equal(t, request.CategoryID, response.Data.CategoryID)
 		assert.Equal(t, request.UserID, response.Data.UserID)
-		assert.Equal(t, request.FamilyID, response.Data.FamilyID)
 		assert.Equal(t, request.Tags, response.Data.Tags)
 		assert.NotZero(t, response.Data.ID)
 		assert.NotZero(t, response.Data.CreatedAt)
@@ -76,6 +74,8 @@ func TestTransactionHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("CreateTransaction_ValidationError", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -94,7 +94,6 @@ func TestTransactionHandler_Integration(t *testing.T) {
 					Description: "Test transaction",
 					CategoryID:  uuid.New(),
 					UserID:      uuid.New(),
-					FamilyID:    family.ID,
 					Date:        time.Now(),
 				},
 				field: "Amount",
@@ -107,7 +106,6 @@ func TestTransactionHandler_Integration(t *testing.T) {
 					Description: "Test transaction",
 					CategoryID:  uuid.New(),
 					UserID:      uuid.New(),
-					FamilyID:    family.ID,
 					Date:        time.Now(),
 				},
 				field: "Type",
@@ -120,7 +118,6 @@ func TestTransactionHandler_Integration(t *testing.T) {
 					Description: "",
 					CategoryID:  uuid.New(),
 					UserID:      uuid.New(),
-					FamilyID:    family.ID,
 					Date:        time.Now(),
 				},
 				field: "Description",
@@ -158,6 +155,8 @@ func TestTransactionHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("CreateTransaction_WithNonExistentCategory", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -175,7 +174,6 @@ func TestTransactionHandler_Integration(t *testing.T) {
 			Description: "Test transaction",
 			CategoryID:  uuid.New(), // non-existent category
 			UserID:      user.ID,
-			FamilyID:    family.ID,
 			Date:        time.Now(),
 		}
 
@@ -200,6 +198,8 @@ func TestTransactionHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("GetTransactionByID_Success", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -236,10 +236,11 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		assert.Equal(t, testTransaction.Description, response.Data.Description)
 		assert.Equal(t, testTransaction.CategoryID, response.Data.CategoryID)
 		assert.Equal(t, testTransaction.UserID, response.Data.UserID)
-		assert.Equal(t, testTransaction.FamilyID, response.Data.FamilyID)
 	})
 
 	t.Run("GetTransactionByID_NotFound", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		nonExistentID := uuid.New()
 
 		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/transactions/%s", nonExistentID), nil)
@@ -251,6 +252,8 @@ func TestTransactionHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("GetTransactionByID_InvalidUUID", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions/invalid-uuid", nil)
 		rec := httptest.NewRecorder()
 
@@ -260,6 +263,8 @@ func TestTransactionHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("GetTransactions_ByFamily", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -282,7 +287,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		err = testServer.Repos.Transaction.Create(context.Background(), transaction2)
 		require.NoError(t, err)
 
-		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/transactions?family_id=%s", family.ID), nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions", nil)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -298,22 +303,13 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		transactionIDs := []uuid.UUID{response.Data[0].ID, response.Data[1].ID}
 		assert.Contains(t, transactionIDs, transaction1.ID)
 		assert.Contains(t, transactionIDs, transaction2.ID)
-
-		for _, txn := range response.Data {
-			assert.Equal(t, family.ID, txn.FamilyID)
-		}
 	})
 
-	t.Run("GetTransactions_MissingFamilyID", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions", nil)
-		rec := httptest.NewRecorder()
-
-		testServer.Server.Echo().ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-	})
+	// Test removed: GetTransactions_MissingFamilyID - no longer relevant in single-family model
 
 	t.Run("UpdateTransaction_Success", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -367,6 +363,8 @@ func TestTransactionHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("UpdateTransaction_PartialUpdate", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -418,6 +416,8 @@ func TestTransactionHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("DeleteTransaction_Success", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)

@@ -53,7 +53,7 @@ type CategoryService interface {
 	GetCategoryHierarchy(ctx context.Context) ([]*category.Category, error)
 	ValidateCategoryHierarchy(ctx context.Context, categoryID, parentID uuid.UUID) error
 	CheckCategoryUsage(ctx context.Context, categoryID uuid.UUID) (bool, error)
-	CreateDefaultCategories(ctx context.Context, familyID uuid.UUID) error
+	CreateDefaultCategories(ctx context.Context) error
 }
 
 // TransactionService defines business operations for transaction management
@@ -61,9 +61,8 @@ type TransactionService interface {
 	// CRUD Operations
 	CreateTransaction(ctx context.Context, req dto.CreateTransactionDTO) (*transaction.Transaction, error)
 	GetTransactionByID(ctx context.Context, id uuid.UUID) (*transaction.Transaction, error)
-	GetTransactionsByFamily(
+	GetAllTransactions(
 		ctx context.Context,
-		familyID uuid.UUID,
 		filter dto.TransactionFilterDTO,
 	) ([]*transaction.Transaction, error)
 	UpdateTransaction(ctx context.Context, id uuid.UUID, req dto.UpdateTransactionDTO) (*transaction.Transaction, error)
@@ -77,7 +76,6 @@ type TransactionService interface {
 	) ([]*transaction.Transaction, error)
 	GetTransactionsByDateRange(
 		ctx context.Context,
-		familyID uuid.UUID,
 		from, to time.Time,
 	) ([]*transaction.Transaction, error)
 	BulkCategorizeTransactions(
@@ -124,13 +122,11 @@ type ReportService interface {
 	GenerateIncomeReport(ctx context.Context, req dto.ReportRequestDTO) (*dto.IncomeReportDTO, error)
 	GenerateBudgetComparisonReport(
 		ctx context.Context,
-		familyID uuid.UUID,
 		period report.Period,
 	) (*dto.BudgetComparisonDTO, error)
-	GenerateCashFlowReport(ctx context.Context, familyID uuid.UUID, from, to time.Time) (*dto.CashFlowReportDTO, error)
+	GenerateCashFlowReport(ctx context.Context, from, to time.Time) (*dto.CashFlowReportDTO, error)
 	GenerateCategoryBreakdownReport(
 		ctx context.Context,
-		familyID uuid.UUID,
 		period report.Period,
 	) (*dto.CategoryBreakdownDTO, error)
 
@@ -142,8 +138,8 @@ type ReportService interface {
 		req dto.ReportRequestDTO,
 	) (*report.Report, error)
 	GetReportByID(ctx context.Context, id uuid.UUID) (*report.Report, error)
-	GetReportsByFamily(ctx context.Context, familyID uuid.UUID, typeFilter *report.Type) ([]*report.Report, error)
-	DeleteReport(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
+	GetReports(ctx context.Context, typeFilter *report.Type) ([]*report.Report, error)
+	DeleteReport(ctx context.Context, id uuid.UUID) error
 
 	// Export Operations
 	ExportReport(ctx context.Context, reportID uuid.UUID, format string, options dto.ExportOptionsDTO) ([]byte, error)
@@ -151,19 +147,18 @@ type ReportService interface {
 
 	// Scheduled Reports
 	ScheduleReport(ctx context.Context, req dto.ScheduleReportDTO) (*dto.ScheduledReportDTO, error)
-	GetScheduledReports(ctx context.Context, familyID uuid.UUID) ([]*dto.ScheduledReportDTO, error)
+	GetScheduledReports(ctx context.Context) ([]*dto.ScheduledReportDTO, error)
 	UpdateScheduledReport(ctx context.Context, id uuid.UUID, req dto.ScheduleReportDTO) (*dto.ScheduledReportDTO, error)
-	DeleteScheduledReport(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
+	DeleteScheduledReport(ctx context.Context, id uuid.UUID) error
 	ExecuteScheduledReport(ctx context.Context, scheduledReportID uuid.UUID) error
 
 	// Analytics & Insights
 	GenerateTrendAnalysis(
 		ctx context.Context,
-		familyID uuid.UUID,
 		categoryID *uuid.UUID,
 		period report.Period,
 	) (*dto.TrendAnalysisDTO, error)
-	GenerateSpendingForecast(ctx context.Context, familyID uuid.UUID, months int) ([]dto.ForecastDTO, error)
-	GenerateFinancialInsights(ctx context.Context, familyID uuid.UUID) ([]dto.RecommendationDTO, error)
-	CalculateBenchmarks(ctx context.Context, familyID uuid.UUID) (*dto.BenchmarkComparisonDTO, error)
+	GenerateSpendingForecast(ctx context.Context, months int) ([]dto.ForecastDTO, error)
+	GenerateFinancialInsights(ctx context.Context) ([]dto.RecommendationDTO, error)
+	CalculateBenchmarks(ctx context.Context) (*dto.BenchmarkComparisonDTO, error)
 }

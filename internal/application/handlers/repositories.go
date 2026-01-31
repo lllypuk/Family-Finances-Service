@@ -55,7 +55,10 @@ type TransactionRepository interface {
 	Create(ctx context.Context, transaction *transaction.Transaction) error
 	GetByID(ctx context.Context, id uuid.UUID) (*transaction.Transaction, error)
 	GetByFilter(ctx context.Context, filter transaction.Filter) ([]*transaction.Transaction, error)
-	GetAll(ctx context.Context, limit, offset int) ([]*transaction.Transaction, error) // Single family - get all transactions
+	GetAll(
+		ctx context.Context,
+		limit, offset int,
+	) ([]*transaction.Transaction, error) // Single family - get all transactions
 	Update(ctx context.Context, transaction *transaction.Transaction) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetTotalByCategory(

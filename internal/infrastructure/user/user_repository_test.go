@@ -28,7 +28,7 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		repo := userrepo.NewSQLiteRepository(db)
 
 		// Create test family first
-		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
 		// Create test user
@@ -39,7 +39,6 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 			FirstName: "John",
 			LastName:  "Doe",
 			Role:      user.RoleAdmin,
-			FamilyID:  uuid.MustParse(familyID),
 		}
 
 		err = repo.Create(ctx, testUser)
@@ -60,7 +59,7 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		repo := userrepo.NewSQLiteRepository(db)
 
 		// Create test family first
-		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
 		email := "duplicate@example.com"
@@ -73,7 +72,6 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 			FirstName: "John",
 			LastName:  "Doe",
 			Role:      user.RoleAdmin,
-			FamilyID:  uuid.MustParse(familyID),
 		}
 
 		err = repo.Create(ctx, testUser1)
@@ -87,7 +85,6 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 			FirstName: "Jane",
 			LastName:  "Doe",
 			Role:      user.RoleMember,
-			FamilyID:  uuid.MustParse(familyID),
 		}
 
 		err = repo.Create(ctx, testUser2)
@@ -100,7 +97,7 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		repo := userrepo.NewSQLiteRepository(db)
 
 		// Create test family and user
-		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
 		testUser := &user.User{
@@ -110,7 +107,6 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 			FirstName: "Get",
 			LastName:  "ByID",
 			Role:      user.RoleMember,
-			FamilyID:  uuid.MustParse(familyID),
 		}
 
 		err = repo.Create(ctx, testUser)
@@ -141,7 +137,7 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		repo := userrepo.NewSQLiteRepository(db)
 
 		// Create test family and user
-		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
 		email := "getbyemail@example.com"
@@ -152,7 +148,6 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 			FirstName: "Get",
 			LastName:  "ByEmail",
 			Role:      user.RoleMember,
-			FamilyID:  uuid.MustParse(familyID),
 		}
 
 		err = repo.Create(ctx, testUser)
@@ -170,7 +165,7 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		repo := userrepo.NewSQLiteRepository(db)
 
 		// Create test family and user
-		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
 		email := "CaseTest@Example.Com"
@@ -181,7 +176,6 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 			FirstName: "Case",
 			LastName:  "Test",
 			Role:      user.RoleMember,
-			FamilyID:  uuid.MustParse(familyID),
 		}
 
 		err = repo.Create(ctx, testUser)
@@ -193,14 +187,13 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		assert.Equal(t, testUser.ID, retrievedUser.ID)
 	})
 
-	t.Run("GetByFamilyID_Success", func(t *testing.T) {
+	t.Run("GetAll_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
 		repo := userrepo.NewSQLiteRepository(db)
 
 		// Create test family
-		familyID, err := helper.CreateTestFamily(ctx, "Family with Users", "EUR")
+		_, err := helper.CreateTestFamily(ctx, "Family with Users", "EUR")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		// Create multiple users for the family
 		users := []*user.User{
@@ -211,7 +204,6 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 				FirstName: "Admin",
 				LastName:  "User",
 				Role:      user.RoleAdmin,
-				FamilyID:  familyUUID,
 			},
 			{
 				ID:        uuid.New(),
@@ -220,7 +212,6 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 				FirstName: "Member",
 				LastName:  "User",
 				Role:      user.RoleMember,
-				FamilyID:  familyUUID,
 			},
 			{
 				ID:        uuid.New(),
@@ -229,7 +220,6 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 				FirstName: "Child",
 				LastName:  "User",
 				Role:      user.RoleChild,
-				FamilyID:  familyUUID,
 			},
 		}
 
@@ -239,16 +229,16 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		// Retrieve users by family ID
-		familyUsers, err := repo.GetByFamilyID(ctx, familyUUID)
+		// Retrieve all users (single family model)
+		allUsers, err := repo.GetAll(ctx)
 		require.NoError(t, err)
-		assert.Len(t, familyUsers, 3)
+		assert.Len(t, allUsers, 3)
 
 		// Verify users are sorted by role, first name, last name
 		// Role ordering is alphabetical: admin, child, member
-		assert.Equal(t, user.RoleAdmin, familyUsers[0].Role)
-		assert.Equal(t, user.RoleChild, familyUsers[1].Role)
-		assert.Equal(t, user.RoleMember, familyUsers[2].Role)
+		assert.Equal(t, user.RoleAdmin, allUsers[0].Role)
+		assert.Equal(t, user.RoleChild, allUsers[1].Role)
+		assert.Equal(t, user.RoleMember, allUsers[2].Role)
 	})
 
 	t.Run("Update_Success", func(t *testing.T) {
@@ -256,7 +246,7 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		repo := userrepo.NewSQLiteRepository(db)
 
 		// Create test family and user
-		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
 		testUser := &user.User{
@@ -266,7 +256,6 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 			FirstName: "Original",
 			LastName:  "Name",
 			Role:      user.RoleMember,
-			FamilyID:  uuid.MustParse(familyID),
 		}
 
 		err = repo.Create(ctx, testUser)
@@ -293,7 +282,7 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		repo := userrepo.NewSQLiteRepository(db)
 
 		// Create test family and user
-		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
 		testUser := &user.User{
@@ -303,14 +292,13 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 			FirstName: "Delete",
 			LastName:  "Me",
 			Role:      user.RoleMember,
-			FamilyID:  uuid.MustParse(familyID),
 		}
 
 		err = repo.Create(ctx, testUser)
 		require.NoError(t, err)
 
 		// Delete user (soft delete)
-		err = repo.Delete(ctx, testUser.ID, testUser.FamilyID)
+		err = repo.Delete(ctx, testUser.ID)
 		require.NoError(t, err)
 
 		// Verify user is not found (soft deleted)
@@ -324,9 +312,8 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		repo := userrepo.NewSQLiteRepository(db)
 
 		// Create test family
-		familyID, err := helper.CreateTestFamily(ctx, "Role Test Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Role Test Family", "USD")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		// Create users with different roles
 		adminUser := &user.User{
@@ -336,7 +323,6 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 			FirstName: "Admin",
 			LastName:  "User",
 			Role:      user.RoleAdmin,
-			FamilyID:  familyUUID,
 		}
 
 		memberUser := &user.User{
@@ -346,7 +332,6 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 			FirstName: "Member",
 			LastName:  "User",
 			Role:      user.RoleMember,
-			FamilyID:  familyUUID,
 		}
 
 		err = repo.Create(ctx, adminUser)
@@ -355,19 +340,19 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Get admin users
-		adminUsers, err := repo.GetUsersByRole(ctx, familyUUID, user.RoleAdmin)
+		adminUsers, err := repo.GetUsersByRole(ctx, user.RoleAdmin)
 		require.NoError(t, err)
 		assert.Len(t, adminUsers, 1)
 		assert.Equal(t, user.RoleAdmin, adminUsers[0].Role)
 
 		// Get member users
-		memberUsers, err := repo.GetUsersByRole(ctx, familyUUID, user.RoleMember)
+		memberUsers, err := repo.GetUsersByRole(ctx, user.RoleMember)
 		require.NoError(t, err)
 		assert.Len(t, memberUsers, 1)
 		assert.Equal(t, user.RoleMember, memberUsers[0].Role)
 
 		// Get child users (should be empty)
-		childUsers, err := repo.GetUsersByRole(ctx, familyUUID, user.RoleChild)
+		childUsers, err := repo.GetUsersByRole(ctx, user.RoleChild)
 		require.NoError(t, err)
 		assert.Empty(t, childUsers)
 	})
@@ -377,7 +362,7 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		repo := userrepo.NewSQLiteRepository(db)
 
 		// Create test family and user
-		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
 		testUser := &user.User{
@@ -387,7 +372,6 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 			FirstName: "Last",
 			LastName:  "Login",
 			Role:      user.RoleMember,
-			FamilyID:  uuid.MustParse(familyID),
 		}
 
 		err = repo.Create(ctx, testUser)

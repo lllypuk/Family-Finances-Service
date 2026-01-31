@@ -91,6 +91,14 @@ func (m *MockUserRepositoryFamily) Delete(ctx context.Context, id uuid.UUID) err
 	return args.Error(0)
 }
 
+func (m *MockUserRepositoryFamily) GetAll(ctx context.Context) ([]*user.User, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*user.User), args.Error(1)
+}
+
 // setupFamilyHandler creates a new family handler with mock repositories
 func setupFamilyHandler() (*handlers.FamilyHandler, *MockFamilyRepository, *MockUserRepositoryFamily) {
 	mockFamilyRepo := &MockFamilyRepository{}
@@ -212,7 +220,7 @@ func TestFamilyHandler_GetFamilyMembers_Success(t *testing.T) {
 	}
 
 	mockFamilyRepo.On("Get", mock.Anything).Return(family, nil)
-	mockUserRepo.On("GetByFamilyID", mock.Anything, familyID).Return(expectedMembers, nil)
+	mockUserRepo.On("GetAll", mock.Anything).Return(expectedMembers, nil)
 
 	e := echo.New()
 	httpReq := httptest.NewRequest(http.MethodGet, "/api/v1/family/members", nil)
@@ -288,7 +296,7 @@ func TestFamilyHandler_GetFamilyMembers_RepositoryError(t *testing.T) {
 		Currency: "USD",
 	}
 	mockFamilyRepo.On("Get", mock.Anything).Return(family, nil)
-	mockUserRepo.On("GetByFamilyID", mock.Anything, familyID).Return(nil, errors.New("database error"))
+	mockUserRepo.On("GetAll", mock.Anything).Return(nil, errors.New("database error"))
 
 	e := echo.New()
 	httpReq := httptest.NewRequest(http.MethodGet, "/api/v1/family/members", nil)
@@ -322,7 +330,7 @@ func TestFamilyHandler_GetFamilyMembers_EmptyFamily(t *testing.T) {
 		Currency: "USD",
 	}
 	mockFamilyRepo.On("Get", mock.Anything).Return(family, nil)
-	mockUserRepo.On("GetByFamilyID", mock.Anything, familyID).Return([]*user.User{}, nil)
+	mockUserRepo.On("GetAll", mock.Anything).Return([]*user.User{}, nil)
 
 	e := echo.New()
 	httpReq := httptest.NewRequest(http.MethodGet, "/api/v1/family/members", nil)
@@ -390,7 +398,7 @@ func TestFamilyHandler_RoleHierarchy_InMembersList(t *testing.T) {
 	}
 
 	mockFamilyRepo.On("Get", mock.Anything).Return(family, nil)
-	mockUserRepo.On("GetByFamilyID", mock.Anything, familyID).Return(expectedMembers, nil)
+	mockUserRepo.On("GetAll", mock.Anything).Return(expectedMembers, nil)
 
 	e := echo.New()
 	httpReq := httptest.NewRequest(http.MethodGet, "/api/v1/family/members", nil)
@@ -437,7 +445,7 @@ func BenchmarkFamilyHandler_GetFamilyMembers(b *testing.B) {
 
 	// Setup mocks
 	mockFamilyRepo.On("Get", mock.Anything).Return(family, nil)
-	mockUserRepo.On("GetByFamilyID", mock.Anything, familyID).Return([]*user.User{}, nil)
+	mockUserRepo.On("GetAll", mock.Anything).Return([]*user.User{}, nil)
 
 	for b.Loop() {
 		e := echo.New()

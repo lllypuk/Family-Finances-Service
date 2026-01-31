@@ -135,7 +135,6 @@ func TestFullWorkflowIntegration(t *testing.T) {
 		Spent:      0.00,
 		Period:     budget.PeriodMonthly,
 		CategoryID: &foodCategory.ID,
-		FamilyID:   family.ID,
 		StartDate:  time.Now().Truncate(24 * time.Hour),
 		EndDate:    time.Now().AddDate(0, 1, 0).Truncate(24 * time.Hour),
 		IsActive:   true,
@@ -148,7 +147,6 @@ func TestFullWorkflowIntegration(t *testing.T) {
 		Spent:      0.00,
 		Period:     budget.PeriodMonthly,
 		CategoryID: &transportCategory.ID,
-		FamilyID:   family.ID,
 		StartDate:  time.Now().Truncate(24 * time.Hour),
 		EndDate:    time.Now().AddDate(0, 1, 0).Truncate(24 * time.Hour),
 		IsActive:   true,
@@ -169,7 +167,6 @@ func TestFullWorkflowIntegration(t *testing.T) {
 			Description: "Monthly salary",
 			CategoryID:  salaryCategory.ID,
 			UserID:      adminUser.ID,
-			FamilyID:    family.ID,
 			Date:        now.AddDate(0, 0, -1),
 			Tags:        []string{"salary", "monthly"},
 		},
@@ -180,7 +177,6 @@ func TestFullWorkflowIntegration(t *testing.T) {
 			Description: "Spouse salary",
 			CategoryID:  salaryCategory.ID,
 			UserID:      memberUser.ID,
-			FamilyID:    family.ID,
 			Date:        now.AddDate(0, 0, -1),
 			Tags:        []string{"salary", "monthly"},
 		},
@@ -191,7 +187,6 @@ func TestFullWorkflowIntegration(t *testing.T) {
 			Description: "Weekly groceries",
 			CategoryID:  groceryCategory.ID,
 			UserID:      memberUser.ID,
-			FamilyID:    family.ID,
 			Date:        now.AddDate(0, 0, -2),
 			Tags:        []string{"grocery", "weekly", "food"},
 		},
@@ -202,7 +197,6 @@ func TestFullWorkflowIntegration(t *testing.T) {
 			Description: "Gas station",
 			CategoryID:  gasCategory.ID,
 			UserID:      adminUser.ID,
-			FamilyID:    family.ID,
 			Date:        now.AddDate(0, 0, -3),
 			Tags:        []string{"gas", "car", "transport"},
 		},
@@ -213,7 +207,6 @@ func TestFullWorkflowIntegration(t *testing.T) {
 			Description: "Coffee and snacks",
 			CategoryID:  foodCategory.ID,
 			UserID:      adminUser.ID,
-			FamilyID:    family.ID,
 			Date:        now,
 			Tags:        []string{"coffee", "snacks"},
 		},
@@ -278,7 +271,7 @@ func TestFullWorkflowIntegration(t *testing.T) {
 		startDate := now.AddDate(0, 0, -7)
 		endDate := now.AddDate(0, 0, 1)
 
-		summary, err := transactionRepo.GetSummary(ctx, family.ID, startDate, endDate)
+		summary, err := transactionRepo.GetSummary(ctx, startDate, endDate)
 		require.NoError(t, err)
 
 		assert.Equal(t, 5, summary.TotalCount)
@@ -293,7 +286,7 @@ func TestFullWorkflowIntegration(t *testing.T) {
 
 	// Test budget tracking
 	t.Run("VerifyBudgetTracking", func(t *testing.T) {
-		budgets, err := budgetRepo.GetActiveBudgets(ctx, family.ID)
+		budgets, err := budgetRepo.GetActiveBudgets(ctx)
 		require.NoError(t, err)
 		assert.Len(t, budgets, 2)
 
@@ -322,13 +315,13 @@ func TestFullWorkflowIntegration(t *testing.T) {
 
 	// Test user permissions and family isolation
 	t.Run("VerifyUserAndFamilyIsolation", func(t *testing.T) {
-		// Get users by family
-		familyUsers, err := userRepo.GetByFamilyID(ctx, family.ID)
+		// Get all users
+		familyUsers, err := userRepo.GetAll(ctx)
 		require.NoError(t, err)
 		assert.Len(t, familyUsers, 2)
 
 		// Get admin users
-		adminUsers, err := userRepo.GetUsersByRole(ctx, family.ID, user.RoleAdmin)
+		adminUsers, err := userRepo.GetUsersByRole(ctx, user.RoleAdmin)
 		require.NoError(t, err)
 		assert.Len(t, adminUsers, 1)
 		assert.Equal(t, adminUser.ID, adminUsers[0].ID)
@@ -350,16 +343,16 @@ func TestFullWorkflowIntegration(t *testing.T) {
 	t.Run("VerifyComplexQueries", func(t *testing.T) {
 		// Test monthly summary
 		now := time.Now()
-		monthlySummary, err := transactionRepo.GetMonthlySummary(ctx, family.ID, now.Year(), int(now.Month()))
+		monthlySummary, err := transactionRepo.GetMonthlySummary(ctx, now.Year(), int(now.Month()))
 		require.NoError(t, err)
 		assert.NotEmpty(t, monthlySummary)
 
 		// Test categories by type
-		expenseCategories, err := categoryRepo.GetByFamilyIDAndType(ctx, family.ID, category.TypeExpense)
+		expenseCategories, err := categoryRepo.GetByType(ctx, category.TypeExpense)
 		require.NoError(t, err)
 		assert.Len(t, expenseCategories, 4) // Food, Transport, Groceries, Gas
 
-		incomeCategories, err := categoryRepo.GetByFamilyIDAndType(ctx, family.ID, category.TypeIncome)
+		incomeCategories, err := categoryRepo.GetByType(ctx, category.TypeIncome)
 		require.NoError(t, err)
 		assert.Len(t, incomeCategories, 1) // Salary
 

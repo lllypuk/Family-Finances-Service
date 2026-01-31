@@ -46,7 +46,7 @@ func TestDashboardData_StructFields(t *testing.T) {
 	}
 
 	testFamily := &user.Family{
-		ID:        testUser.FamilyID,
+		ID:        uuid.New(),
 		Name:      "Test Family",
 		Currency:  "USD",
 		CreatedAt: time.Now(),
@@ -130,7 +130,7 @@ func TestPageData_StructFields(t *testing.T) {
 	}
 
 	testFamily := &user.Family{
-		ID:        testUser.FamilyID,
+		ID:        uuid.New(),
 		Name:      "Test Family",
 		Currency:  "EUR",
 		CreatedAt: time.Now(),

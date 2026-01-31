@@ -14,15 +14,13 @@ import (
 )
 
 var (
-	ErrCategoryNotFound            = errors.New("category not found")
-	ErrCategoryNameExists          = errors.New("category with this name already exists in the same scope")
-	ErrParentCategoryNotFound      = errors.New("parent category not found")
-	ErrParentCategoryWrongFamily   = errors.New("parent category must belong to the same family")
-	ErrParentCategoryWrongType     = errors.New("parent category must be of the same type")
-	ErrMaxHierarchyLevels          = errors.New("cannot create more than 2 levels of category hierarchy")
-	ErrCategorySelfParent          = errors.New("category cannot be its own parent")
-	ErrCategoriesDifferentTypes    = errors.New("parent and child categories must be of the same type")
-	ErrCategoriesDifferentFamilies = errors.New("parent and child categories must belong to the same family")
+	ErrCategoryNotFound         = errors.New("category not found")
+	ErrCategoryNameExists       = errors.New("category with this name already exists in the same scope")
+	ErrParentCategoryNotFound   = errors.New("parent category not found")
+	ErrParentCategoryWrongType  = errors.New("parent category must be of the same type")
+	ErrMaxHierarchyLevels       = errors.New("cannot create more than 2 levels of category hierarchy")
+	ErrCategorySelfParent       = errors.New("category cannot be its own parent")
+	ErrCategoriesDifferentTypes = errors.New("parent and child categories must be of the same type")
 )
 
 // CategoryRepository defines the data access operations for categories
@@ -335,7 +333,7 @@ func (s *categoryService) getSubcategories(ctx context.Context, parentID uuid.UU
 }
 
 // CreateDefaultCategories creates default categories for a newly created family
-func (s *categoryService) CreateDefaultCategories(ctx context.Context, familyID uuid.UUID) error {
+func (s *categoryService) CreateDefaultCategories(ctx context.Context) error {
 	// Default expense categories
 	expenseCategories := []struct {
 		name  string
@@ -368,11 +366,10 @@ func (s *categoryService) CreateDefaultCategories(ctx context.Context, familyID 
 	// Create expense categories
 	for _, cat := range expenseCategories {
 		categoryDTO := dto.CreateCategoryDTO{
-			Name:     cat.name,
-			Type:     category.TypeExpense,
-			Color:    cat.color,
-			Icon:     cat.icon,
-			FamilyID: familyID,
+			Name:  cat.name,
+			Type:  category.TypeExpense,
+			Color: cat.color,
+			Icon:  cat.icon,
 		}
 
 		_, err := s.CreateCategory(ctx, categoryDTO)
@@ -384,11 +381,10 @@ func (s *categoryService) CreateDefaultCategories(ctx context.Context, familyID 
 	// Create income categories
 	for _, cat := range incomeCategories {
 		categoryDTO := dto.CreateCategoryDTO{
-			Name:     cat.name,
-			Type:     category.TypeIncome,
-			Color:    cat.color,
-			Icon:     cat.icon,
-			FamilyID: familyID,
+			Name:  cat.name,
+			Type:  category.TypeIncome,
+			Color: cat.color,
+			Icon:  cat.icon,
 		}
 
 		_, err := s.CreateCategory(ctx, categoryDTO)

@@ -71,7 +71,7 @@ func (s *familyService) SetupFamily(ctx context.Context, req dto.SetupFamilyDTO)
 	}
 
 	// Create default categories for the new family
-	if err = s.categoryService.CreateDefaultCategories(ctx, newFamily.ID); err != nil {
+	if err = s.categoryService.CreateDefaultCategories(ctx); err != nil {
 		return nil, fmt.Errorf("failed to create default categories: %w", err)
 	}
 

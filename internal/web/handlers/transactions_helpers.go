@@ -21,13 +21,11 @@ import (
 
 // buildTransactionFilterDTO конвертирует web фильтры в DTO для сервиса
 func (h *TransactionHandler) buildTransactionFilterDTO(
-	familyID uuid.UUID,
 	filters webModels.TransactionFilters,
 ) (dto.TransactionFilterDTO, error) {
 	filterDTO := dto.TransactionFilterDTO{
-		FamilyID: familyID,
-		Offset:   (filters.Page - 1) * filters.PageSize,
-		Limit:    filters.PageSize,
+		Offset: (filters.Page - 1) * filters.PageSize,
+		Limit:  filters.PageSize,
 	}
 
 	// Обрабатываем UUID фильтры
@@ -167,7 +165,6 @@ func (h *TransactionHandler) setTextFilters(filterDTO *dto.TransactionFilterDTO,
 func (h *TransactionHandler) convertTransactionsToViewModels(
 	ctx context.Context,
 	transactions []*transaction.Transaction,
-	familyID uuid.UUID,
 ) ([]webModels.TransactionViewModel, error) {
 	// Получаем категории для заполнения имен
 	categories, err := h.services.Category.GetCategories(ctx, nil)
@@ -245,7 +242,7 @@ func (h *TransactionHandler) calculatePagination(totalItems, page, pageSize int)
 // buildCreateTransactionDTO создает DTO для создания транзакции
 func (h *TransactionHandler) buildCreateTransactionDTO(
 	form webModels.TransactionForm,
-	userID, familyID uuid.UUID,
+	userID uuid.UUID,
 ) (dto.CreateTransactionDTO, error) {
 	// Парсим сумму
 	amount, err := strconv.ParseFloat(form.Amount, 64)
@@ -294,7 +291,6 @@ func (h *TransactionHandler) buildCreateTransactionDTO(
 		Description: form.Description,
 		CategoryID:  categoryID,
 		UserID:      userID,
-		FamilyID:    familyID,
 		Date:        date,
 		Tags:        tags,
 	}, nil
@@ -369,7 +365,6 @@ func (h *TransactionHandler) renderTransactionFormWithErrors(
 	c echo.Context,
 	form webModels.TransactionForm,
 	errors map[string]string,
-	familyID uuid.UUID,
 	title string,
 ) error {
 	// Получаем категории для селекта

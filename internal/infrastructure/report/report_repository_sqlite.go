@@ -101,17 +101,17 @@ func (r *SQLiteRepository) Create(ctx context.Context, rep *report.Report) error
 		return fmt.Errorf("failed to get family ID: %w", err)
 	}
 
-	if err := validation.ValidateUUID(rep.UserID); err != nil {
-		return fmt.Errorf("invalid user ID: %w", err)
+	if validationErr := validation.ValidateUUID(rep.UserID); validationErr != nil {
+		return fmt.Errorf("invalid user ID: %w", validationErr)
 	}
-	if err := validation.ValidateReportType(rep.Type); err != nil {
-		return fmt.Errorf("invalid report type: %w", err)
+	if validationErr := validation.ValidateReportType(rep.Type); validationErr != nil {
+		return fmt.Errorf("invalid report type: %w", validationErr)
 	}
-	if err := validation.ValidateReportPeriod(rep.Period); err != nil {
-		return fmt.Errorf("invalid report period: %w", err)
+	if validationErr := validation.ValidateReportPeriod(rep.Period); validationErr != nil {
+		return fmt.Errorf("invalid report period: %w", validationErr)
 	}
-	if err := validation.ValidateReportName(rep.Name); err != nil {
-		return fmt.Errorf("invalid report name: %w", err)
+	if validationErr := validation.ValidateReportName(rep.Name); validationErr != nil {
+		return fmt.Errorf("invalid report name: %w", validationErr)
 	}
 
 	// Validate date range
@@ -200,7 +200,7 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*report.R
 	return &rep, nil
 }
 
-// GetByFamilyID retrieves reports by family ID with pagination
+// GetAll retrieves all reports for the family
 func (r *SQLiteRepository) GetAll(ctx context.Context) ([]*report.Report, error) {
 	// Get single family ID
 	familyID, err := r.getSingleFamilyID(ctx)

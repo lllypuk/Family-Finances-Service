@@ -165,10 +165,9 @@ func (s *TransactionServiceImpl) GetTransactionByID(
 	return tx, nil
 }
 
-// GetTransactionsByFamily retrieves transactions for a family with filtering
-func (s *TransactionServiceImpl) GetTransactionsByFamily(
+// GetAllTransactions retrieves transactions with filtering (single family model)
+func (s *TransactionServiceImpl) GetAllTransactions(
 	ctx context.Context,
-	familyID uuid.UUID,
 	filter dto.TransactionFilterDTO,
 ) ([]*transaction.Transaction, error) {
 	if err := s.validator.Struct(filter); err != nil {
@@ -182,9 +181,6 @@ func (s *TransactionServiceImpl) GetTransactionsByFamily(
 	if err := filter.ValidateAmountRange(); err != nil {
 		return nil, err
 	}
-
-	// Set family ID from parameter to ensure consistency
-	filter.FamilyID = familyID
 
 	// Convert DTO filter to domain filter
 	repoFilter := s.convertDTOFilterToRepoFilter(filter)
@@ -331,7 +327,6 @@ const (
 // GetTransactionsByDateRange retrieves transactions within a date range
 func (s *TransactionServiceImpl) GetTransactionsByDateRange(
 	ctx context.Context,
-	familyID uuid.UUID,
 	from, to time.Time,
 ) ([]*transaction.Transaction, error) {
 	if to.Before(from) {
@@ -339,14 +334,13 @@ func (s *TransactionServiceImpl) GetTransactionsByDateRange(
 	}
 
 	filter := dto.TransactionFilterDTO{
-		FamilyID: familyID,
 		DateFrom: &from,
 		DateTo:   &to,
 		Limit:    DateRangeQueryLimit,
 		Offset:   0,
 	}
 
-	return s.GetTransactionsByFamily(ctx, familyID, filter)
+	return s.GetAllTransactions(ctx, filter)
 }
 
 // BulkCategorizeTransactions updates categories for multiple transactions

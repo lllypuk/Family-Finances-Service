@@ -37,7 +37,6 @@ type UserResponseDTO struct {
 	FirstName string    `json:"first_name"`
 	LastName  string    `json:"last_name"`
 	Role      user.Role `json:"role"`
-	FamilyID  uuid.UUID `json:"family_id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

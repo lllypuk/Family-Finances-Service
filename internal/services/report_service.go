@@ -81,7 +81,6 @@ func (s *reportService) generateTransactionReport(
 	// Get transactions for the period
 	transactions, err := s.getTransactionsForPeriod(
 		ctx,
-		req.FamilyID,
 		req.StartDate,
 		req.EndDate,
 		transactionType,
@@ -96,7 +95,7 @@ func (s *reportService) generateTransactionReport(
 	averageDaily := s.calculateAverageDaily(totalAmount, req.StartDate, req.EndDate)
 
 	// Generate category breakdown
-	categoryBreakdown := s.generateCategoryBreakdown(ctx, transactions, req.FamilyID)
+	categoryBreakdown := s.generateCategoryBreakdown(ctx, transactions)
 
 	// Get top transactions
 	topTransactions := s.getTopTransactions(ctx, transactions, topTransactionsLimit)
@@ -165,7 +164,6 @@ func (s *reportService) GenerateExpenseReport(
 	return &dto.ExpenseReportDTO{
 		ID:                uuid.New(),
 		Name:              req.Name,
-		FamilyID:          req.FamilyID,
 		UserID:            req.UserID,
 		Period:            req.Period,
 		StartDate:         req.StartDate,
@@ -194,7 +192,6 @@ func (s *reportService) GenerateIncomeReport(
 	return &dto.IncomeReportDTO{
 		ID:                uuid.New(),
 		Name:              req.Name,
-		FamilyID:          req.FamilyID,
 		UserID:            req.UserID,
 		Period:            req.Period,
 		StartDate:         req.StartDate,
@@ -213,7 +210,6 @@ func (s *reportService) GenerateIncomeReport(
 // GenerateBudgetComparisonReport generates budget vs actual spending comparison
 func (s *reportService) GenerateBudgetComparisonReport(
 	ctx context.Context,
-	familyID uuid.UUID,
 	period report.Period,
 ) (*dto.BudgetComparisonDTO, error) {
 	// Calculate date range based on period
@@ -229,7 +225,6 @@ func (s *reportService) GenerateBudgetComparisonReport(
 		return &dto.BudgetComparisonDTO{
 			ID:            uuid.New(),
 			Name:          fmt.Sprintf("Budget Comparison - %s", period),
-			FamilyID:      familyID,
 			Period:        period,
 			StartDate:     startDate,
 			EndDate:       endDate,
@@ -253,7 +248,6 @@ func (s *reportService) GenerateBudgetComparisonReport(
 	// Get actual spending for the same period
 	expenseTransactions, err := s.getTransactionsForPeriod(
 		ctx,
-		familyID,
 		startDate,
 		endDate,
 		transaction.TypeExpense,
@@ -285,7 +279,6 @@ func (s *reportService) GenerateBudgetComparisonReport(
 	return &dto.BudgetComparisonDTO{
 		ID:            uuid.New(),
 		Name:          fmt.Sprintf("Budget Comparison - %s", period),
-		FamilyID:      familyID,
 		Period:        period,
 		StartDate:     startDate,
 		EndDate:       endDate,
@@ -303,11 +296,10 @@ func (s *reportService) GenerateBudgetComparisonReport(
 // GenerateCashFlowReport generates cash flow analysis report
 func (s *reportService) GenerateCashFlowReport(
 	ctx context.Context,
-	familyID uuid.UUID,
 	from, to time.Time,
 ) (*dto.CashFlowReportDTO, error) {
 	// Get all transactions for the period
-	allTransactions, err := s.getTransactionsForPeriod(ctx, familyID, from, to, "", nil)
+	allTransactions, err := s.getTransactionsForPeriod(ctx, from, to, "", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get transactions: %w", err)
 	}
@@ -332,7 +324,7 @@ func (s *reportService) GenerateCashFlowReport(
 	monthlyFlow := s.generateMonthlyCashFlow(dailyFlow)
 
 	// Generate projections
-	projections, err := s.generateCashFlowProjections(ctx, familyID, allTransactions)
+	projections, err := s.generateCashFlowProjections(ctx, allTransactions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate projections: %w", err)
 	}
@@ -340,7 +332,6 @@ func (s *reportService) GenerateCashFlowReport(
 	return &dto.CashFlowReportDTO{
 		ID:             uuid.New(),
 		Name:           fmt.Sprintf("Cash Flow Report - %s to %s", from.Format("2006-01-02"), to.Format("2006-01-02")),
-		FamilyID:       familyID,
 		Period:         report.PeriodCustom,
 		StartDate:      from,
 		EndDate:        to,
@@ -360,13 +351,12 @@ func (s *reportService) GenerateCashFlowReport(
 // GenerateCategoryBreakdownReport generates detailed category analysis
 func (s *reportService) GenerateCategoryBreakdownReport(
 	ctx context.Context,
-	familyID uuid.UUID,
 	period report.Period,
 ) (*dto.CategoryBreakdownDTO, error) {
 	startDate, endDate := s.calculatePeriodDates(period)
 
 	// Get all transactions for the period
-	transactions, err := s.getTransactionsForPeriod(ctx, familyID, startDate, endDate, "", nil)
+	transactions, err := s.getTransactionsForPeriod(ctx, startDate, endDate, "", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get transactions: %w", err)
 	}
@@ -387,13 +377,13 @@ func (s *reportService) GenerateCategoryBreakdownReport(
 	hierarchy := s.generateCategoryHierarchy(categoryAnalysis, categories)
 
 	// Generate category trends
-	trends, err := s.generateCategoryTrends(ctx, familyID, startDate, endDate)
+	trends, err := s.generateCategoryTrends(ctx, startDate, endDate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate category trends: %w", err)
 	}
 
 	// Generate category comparisons
-	comparisons, err := s.generateCategoryComparisons(ctx, familyID, categoryAnalysis, startDate, endDate)
+	comparisons, err := s.generateCategoryComparisons(ctx, categoryAnalysis, startDate, endDate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate category comparisons: %w", err)
 	}
@@ -401,7 +391,6 @@ func (s *reportService) GenerateCategoryBreakdownReport(
 	return &dto.CategoryBreakdownDTO{
 		ID:          uuid.New(),
 		Name:        fmt.Sprintf("Category Breakdown - %s", period),
-		FamilyID:    familyID,
 		Period:      period,
 		StartDate:   startDate,
 		EndDate:     endDate,
@@ -448,18 +437,16 @@ func (s *reportService) GetReportByID(ctx context.Context, id uuid.UUID) (*repor
 	return s.reportRepo.GetByID(ctx, id)
 }
 
-// GetReportsByFamily retrieves all reports for a family
-func (s *reportService) GetReportsByFamily(
+// GetReports retrieves all reports (single family model)
+func (s *reportService) GetReports(
 	ctx context.Context,
-	familyID uuid.UUID,
 	_ *report.Type,
 ) ([]*report.Report, error) {
-	// In single-family model, GetAll returns all reports for the single family
 	return s.reportRepo.GetAll(ctx)
 }
 
 // DeleteReport deletes a report by its ID
-func (s *reportService) DeleteReport(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+func (s *reportService) DeleteReport(ctx context.Context, id uuid.UUID) error {
 	return s.reportRepo.Delete(ctx, id)
 }
 
@@ -503,7 +490,6 @@ func (s *reportService) ExportReportData(
 
 func (s *reportService) getTransactionsForPeriod(
 	ctx context.Context,
-	familyID uuid.UUID,
 	startDate, endDate time.Time,
 	transactionType transaction.Type,
 	filters *dto.ReportFilters,
@@ -532,7 +518,7 @@ func (s *reportService) getTransactionsForPeriod(
 		}
 	}
 
-	return s.transactionService.GetTransactionsByFamily(ctx, familyID, filter)
+	return s.transactionService.GetAllTransactions(ctx, filter)
 }
 
 func (s *reportService) calculateTotalAmount(transactions []*transaction.Transaction) float64 {
@@ -554,7 +540,6 @@ func (s *reportService) calculateAverageDaily(total float64, startDate, endDate 
 func (s *reportService) generateCategoryBreakdown(
 	ctx context.Context,
 	transactions []*transaction.Transaction,
-	_ uuid.UUID,
 ) []dto.CategoryBreakdownItemDTO {
 	// Group transactions by category
 	categoryTotals := make(map[uuid.UUID]float64)
@@ -785,7 +770,6 @@ func (s *reportService) filterTransactionsByType(
 
 func (s *reportService) generateExpenseTrends(
 	_ context.Context,
-	_ uuid.UUID,
 	_, _ time.Time,
 ) (dto.ExpenseTrendsDTO, error) {
 	// TODO: Implement sophisticated trend analysis
@@ -794,7 +778,6 @@ func (s *reportService) generateExpenseTrends(
 
 func (s *reportService) generateExpenseComparisons(
 	_ context.Context,
-	_ uuid.UUID,
 	_ float64,
 	_, _ time.Time,
 ) (dto.ExpenseComparisonsDTO, error) {
@@ -804,7 +787,6 @@ func (s *reportService) generateExpenseComparisons(
 
 func (s *reportService) generateIncomeTrends(
 	_ context.Context,
-	_ uuid.UUID,
 	_, _ time.Time,
 ) (dto.IncomeTrendsDTO, error) {
 	// TODO: Implement income trend analysis
@@ -813,7 +795,6 @@ func (s *reportService) generateIncomeTrends(
 
 func (s *reportService) generateIncomeComparisons(
 	_ context.Context,
-	_ uuid.UUID,
 	_ float64,
 	_, _ time.Time,
 ) (dto.IncomeComparisonsDTO, error) {
@@ -865,7 +846,6 @@ func (s *reportService) generateMonthlyCashFlow(_ []dto.DailyCashFlowDTO) []dto.
 
 func (s *reportService) generateCashFlowProjections(
 	_ context.Context,
-	_ uuid.UUID,
 	_ []*transaction.Transaction,
 ) (dto.CashFlowProjectionsDTO, error) {
 	// TODO: Implement cash flow projections
@@ -892,7 +872,6 @@ func (s *reportService) generateCategoryHierarchy(
 
 func (s *reportService) generateCategoryTrends(
 	_ context.Context,
-	_ uuid.UUID,
 	_, _ time.Time,
 ) (dto.CategoryTrendsDTO, error) {
 	// TODO: Implement category trend analysis
@@ -901,7 +880,6 @@ func (s *reportService) generateCategoryTrends(
 
 func (s *reportService) generateCategoryComparisons(
 	_ context.Context,
-	_ uuid.UUID,
 	_ []dto.CategoryAnalysisDTO,
 	_, _ time.Time,
 ) (dto.CategoryComparisonsDTO, error) {
@@ -936,7 +914,7 @@ func (s *reportService) ScheduleReport(_ context.Context, _ dto.ScheduleReportDT
 	return nil, errors.New("scheduled reports not implemented yet")
 }
 
-func (s *reportService) GetScheduledReports(_ context.Context, _ uuid.UUID) ([]*dto.ScheduledReportDTO, error) {
+func (s *reportService) GetScheduledReports(_ context.Context) ([]*dto.ScheduledReportDTO, error) {
 	// TODO: Implement scheduled report retrieval
 	return nil, errors.New("scheduled reports not implemented yet")
 }
@@ -950,7 +928,7 @@ func (s *reportService) UpdateScheduledReport(
 	return nil, errors.New("scheduled reports not implemented yet")
 }
 
-func (s *reportService) DeleteScheduledReport(_ context.Context, _ uuid.UUID, _ uuid.UUID) error {
+func (s *reportService) DeleteScheduledReport(_ context.Context, _ uuid.UUID) error {
 	// TODO: Implement scheduled report deletion
 	return errors.New("scheduled reports not implemented yet")
 }
@@ -964,7 +942,6 @@ func (s *reportService) ExecuteScheduledReport(_ context.Context, _ uuid.UUID) e
 
 func (s *reportService) GenerateTrendAnalysis(
 	_ context.Context,
-	_ uuid.UUID,
 	_ *uuid.UUID,
 	_ report.Period,
 ) (*dto.TrendAnalysisDTO, error) {
@@ -972,17 +949,17 @@ func (s *reportService) GenerateTrendAnalysis(
 	return nil, errors.New("trend analysis not implemented yet")
 }
 
-func (s *reportService) GenerateSpendingForecast(_ context.Context, _ uuid.UUID, _ int) ([]dto.ForecastDTO, error) {
+func (s *reportService) GenerateSpendingForecast(_ context.Context, _ int) ([]dto.ForecastDTO, error) {
 	// TODO: Implement spending forecast
 	return nil, errors.New("spending forecast not implemented yet")
 }
 
-func (s *reportService) GenerateFinancialInsights(_ context.Context, _ uuid.UUID) ([]dto.RecommendationDTO, error) {
+func (s *reportService) GenerateFinancialInsights(_ context.Context) ([]dto.RecommendationDTO, error) {
 	// TODO: Implement financial insights
 	return nil, errors.New("financial insights not implemented yet")
 }
 
-func (s *reportService) CalculateBenchmarks(_ context.Context, _ uuid.UUID) (*dto.BenchmarkComparisonDTO, error) {
+func (s *reportService) CalculateBenchmarks(_ context.Context) (*dto.BenchmarkComparisonDTO, error) {
 	// TODO: Implement benchmark calculations
 	return nil, errors.New("benchmark calculations not implemented yet")
 }
@@ -997,14 +974,13 @@ func (s *reportService) generateExpenseSpecificData(
 	result.dailyBreakdownExpense = s.generateDailyExpenseBreakdown(baseData.transactions)
 
 	var err error
-	result.expenseTrends, err = s.generateExpenseTrends(ctx, req.FamilyID, req.StartDate, req.EndDate)
+	result.expenseTrends, err = s.generateExpenseTrends(ctx, req.StartDate, req.EndDate)
 	if err != nil {
 		return fmt.Errorf("failed to generate expense trends: %w", err)
 	}
 
 	result.expenseComparisons, err = s.generateExpenseComparisons(
 		ctx,
-		req.FamilyID,
 		baseData.totalAmount,
 		req.StartDate,
 		req.EndDate,
@@ -1026,14 +1002,13 @@ func (s *reportService) generateIncomeSpecificData(
 	result.dailyBreakdownIncome = s.generateDailyIncomeBreakdown(baseData.transactions)
 
 	var err error
-	result.incomeTrends, err = s.generateIncomeTrends(ctx, req.FamilyID, req.StartDate, req.EndDate)
+	result.incomeTrends, err = s.generateIncomeTrends(ctx, req.StartDate, req.EndDate)
 	if err != nil {
 		return fmt.Errorf("failed to generate income trends: %w", err)
 	}
 
 	result.incomeComparisons, err = s.generateIncomeComparisons(
 		ctx,
-		req.FamilyID,
 		baseData.totalAmount,
 		req.StartDate,
 		req.EndDate,

@@ -44,7 +44,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 			Description: "Weekly groceries",
 			CategoryID:  uuid.MustParse(categoryID),
 			UserID:      uuid.MustParse(userID),
-			FamilyID:    uuid.MustParse(familyID),
 			Date:        time.Now().AddDate(0, 0, -1), // Yesterday
 			Tags:        []string{"grocery", "weekly"},
 		}
@@ -71,7 +70,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		// Create test data
 		familyID, err := helper.CreateTestFamily(ctx, "Filter Test Family", "USD")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		userID, err := helper.CreateTestUser(ctx, "filter@example.com", "Filter", "Test", "admin", familyID)
 		require.NoError(t, err)
@@ -89,7 +87,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 				Description: "Old transaction",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        now.AddDate(0, 0, -10), // 10 days ago
 				Tags:        []string{"old"},
 			},
@@ -100,7 +97,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 				Description: "Recent transaction",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        now.AddDate(0, 0, -2), // 2 days ago
 				Tags:        []string{"recent"},
 			},
@@ -111,7 +107,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 				Description: "Today income",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        now,
 				Tags:        []string{"today"},
 			},
@@ -127,7 +122,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		dateFrom := now.AddDate(0, 0, -5)
 		dateTo := now.AddDate(0, 0, 1) // Include today
 		filter := transaction.Filter{
-
 			DateFrom: &dateFrom,
 			DateTo:   &dateTo,
 			Limit:    10,
@@ -148,7 +142,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		// Create test data
 		familyID, err := helper.CreateTestFamily(ctx, "Amount Filter Family", "USD")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		userID, err := helper.CreateTestUser(ctx, "amount@example.com", "Amount", "Test", "admin", familyID)
 		require.NoError(t, err)
@@ -165,7 +158,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 				Description: "Small expense",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        time.Now(),
 			},
 			{
@@ -175,7 +167,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 				Description: "Medium expense",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        time.Now(),
 			},
 			{
@@ -185,7 +176,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 				Description: "Large income",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        time.Now(),
 			},
 		}
@@ -201,7 +191,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		amountFrom := 100.0
 		amountTo := 200.0
 		filter := transaction.Filter{
-			FamilyID:   familyUUID,
 			Type:       &expenseType,
 			AmountFrom: &amountFrom,
 			AmountTo:   &amountTo,
@@ -222,7 +211,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		// Create test data
 		familyID, err := helper.CreateTestFamily(ctx, "Tags Test Family", "USD")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		userID, err := helper.CreateTestUser(ctx, "tags@example.com", "Tags", "Test", "admin", familyID)
 		require.NoError(t, err)
@@ -239,7 +227,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 				Description: "Grocery shopping",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        time.Now(),
 				Tags:        []string{"grocery", "food", "weekly"},
 			},
@@ -250,7 +237,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 				Description: "Gas station",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        time.Now(),
 				Tags:        []string{"gas", "car", "transport"},
 			},
@@ -261,7 +247,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 				Description: "Weekly grocery",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        time.Now(),
 				Tags:        []string{"grocery", "weekly"},
 			},
@@ -275,7 +260,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 
 		// Filter by tag "grocery"
 		filter := transaction.Filter{
-
 			Tags:  []string{"grocery"},
 			Limit: 10,
 		}
@@ -297,7 +281,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		// Create test data
 		familyID, err := helper.CreateTestFamily(ctx, "Summary Test Family", "USD")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		userID, err := helper.CreateTestUser(ctx, "summary@example.com", "Summary", "Test", "admin", familyID)
 		require.NoError(t, err)
@@ -315,7 +298,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 				Description: "Salary",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        now,
 			},
 			{
@@ -325,7 +307,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 				Description: "Groceries",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        now,
 			},
 			{
@@ -335,7 +316,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 				Description: "Utilities",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        now,
 			},
 		}
@@ -349,10 +329,9 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		// Get summary
 		startDate := now.AddDate(0, 0, -1)
 		endDate := now.AddDate(0, 0, 1)
-		summary, err := repo.GetSummary(ctx, familyUUID, startDate, endDate)
+		summary, err := repo.GetSummary(ctx, startDate, endDate)
 		require.NoError(t, err)
 
-		assert.Equal(t, familyUUID, summary.FamilyID)
 		assert.Equal(t, 3, summary.TotalCount)
 		assert.Equal(t, 1, summary.IncomeCount)
 		assert.Equal(t, 2, summary.ExpenseCount)
@@ -388,7 +367,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 			Description: "Original description",
 			CategoryID:  uuid.MustParse(categoryID),
 			UserID:      uuid.MustParse(userID),
-			FamilyID:    uuid.MustParse(familyID),
 			Date:        time.Now().AddDate(0, 0, -1),
 			Tags:        []string{"original"},
 		}
@@ -436,7 +414,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 			Description: "To be deleted",
 			CategoryID:  uuid.MustParse(categoryID),
 			UserID:      uuid.MustParse(userID),
-			FamilyID:    uuid.MustParse(familyID),
 			Date:        time.Now(),
 		}
 
@@ -444,7 +421,7 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Delete transaction
-		err = repo.Delete(ctx, testTransaction.ID, testTransaction.FamilyID)
+		err = repo.Delete(ctx, testTransaction.ID)
 		require.NoError(t, err)
 
 		// Verify transaction is deleted

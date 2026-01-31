@@ -172,12 +172,9 @@ func (h *TransactionHandler) buildTransactionResponse(tx *transaction.Transactio
 }
 
 func (h *TransactionHandler) GetTransactions(c echo.Context) error {
-	filters, err := h.parseTransactionFilters(c)
-	if err != nil {
-		return err
-	}
+	filters := h.parseTransactionFilters(c)
 
-	err = h.validateTransactionFilters(c, filters)
+	err := h.validateTransactionFilters(c, filters)
 	if err != nil {
 		return err
 	}
@@ -211,7 +208,7 @@ func (h *TransactionHandler) GetTransactions(c echo.Context) error {
 	})
 }
 
-func (h *TransactionHandler) parseTransactionFilters(c echo.Context) (TransactionFilterParams, error) {
+func (h *TransactionHandler) parseTransactionFilters(c echo.Context) TransactionFilterParams {
 	var filters TransactionFilterParams
 
 	// In single-family model, FamilyID is not needed in filters
@@ -220,7 +217,7 @@ func (h *TransactionHandler) parseTransactionFilters(c echo.Context) (Transactio
 	h.parseOptionalFilters(c, &filters)
 	h.parsePaginationParams(c, &filters)
 
-	return filters, nil
+	return filters
 }
 
 func (h *TransactionHandler) parseOptionalFilters(c echo.Context, filters *TransactionFilterParams) {

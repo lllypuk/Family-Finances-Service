@@ -133,7 +133,7 @@ func (s *BudgetServiceImpl) GetBudgetByID(ctx context.Context, id uuid.UUID) (*b
 	return budget, nil
 }
 
-// GetBudgetsByFamily retrieves budgets for a family with filtering
+// GetAllBudgets retrieves budgets with optional filtering
 func (s *BudgetServiceImpl) GetAllBudgets(
 	ctx context.Context,
 	filter dto.BudgetFilterDTO,

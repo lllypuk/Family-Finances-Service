@@ -20,9 +20,9 @@ import (
 )
 
 func TestReportHandler_Integration(t *testing.T) {
-	testServer := testhelpers.SetupHTTPServer(t)
-
 	t.Run("CreateReport_Success", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -39,7 +39,6 @@ func TestReportHandler_Integration(t *testing.T) {
 			Name:      "Monthly Expense Report",
 			Type:      "expenses",
 			Period:    "monthly",
-			FamilyID:  family.ID,
 			UserID:    user.ID,
 			StartDate: startDate,
 			EndDate:   endDate,
@@ -63,7 +62,6 @@ func TestReportHandler_Integration(t *testing.T) {
 		assert.Equal(t, request.Name, response.Data.Name)
 		assert.Equal(t, request.Type, response.Data.Type)
 		assert.Equal(t, request.Period, response.Data.Period)
-		assert.Equal(t, request.FamilyID, response.Data.FamilyID)
 		assert.Equal(t, request.UserID, response.Data.UserID)
 		assert.NotNil(t, response.Data.Data)
 		assert.NotZero(t, response.Data.ID)
@@ -71,6 +69,8 @@ func TestReportHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("CreateReport_ValidationError", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -91,7 +91,6 @@ func TestReportHandler_Integration(t *testing.T) {
 					Name:      "",
 					Type:      "expenses",
 					Period:    "monthly",
-					FamilyID:  family.ID,
 					UserID:    user.ID,
 					StartDate: time.Now().AddDate(0, -1, 0),
 					EndDate:   time.Now(),
@@ -104,7 +103,6 @@ func TestReportHandler_Integration(t *testing.T) {
 					Name:      "Test Report",
 					Type:      "invalid_type",
 					Period:    "monthly",
-					FamilyID:  family.ID,
 					UserID:    user.ID,
 					StartDate: time.Now().AddDate(0, -1, 0),
 					EndDate:   time.Now(),
@@ -117,7 +115,6 @@ func TestReportHandler_Integration(t *testing.T) {
 					Name:      "Test Report",
 					Type:      "expenses",
 					Period:    "invalid_period",
-					FamilyID:  family.ID,
 					UserID:    user.ID,
 					StartDate: time.Now().AddDate(0, -1, 0),
 					EndDate:   time.Now(),
@@ -157,6 +154,8 @@ func TestReportHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("GetReportByID_Success", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -185,12 +184,13 @@ func TestReportHandler_Integration(t *testing.T) {
 		assert.Equal(t, testReport.Name, response.Data.Name)
 		assert.Equal(t, string(testReport.Type), response.Data.Type)
 		assert.Equal(t, string(testReport.Period), response.Data.Period)
-		assert.Equal(t, testReport.FamilyID, response.Data.FamilyID)
 		assert.Equal(t, testReport.UserID, response.Data.UserID)
 		assert.NotNil(t, response.Data.Data)
 	})
 
 	t.Run("GetReportByID_NotFound", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		nonExistentID := uuid.New()
 
 		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/reports/%s", nonExistentID), nil)
@@ -202,6 +202,8 @@ func TestReportHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("GetReportByID_InvalidUUID", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/invalid-uuid", nil)
 		rec := httptest.NewRecorder()
 
@@ -211,6 +213,8 @@ func TestReportHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("GetReports_ByFamily", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -250,13 +254,11 @@ func TestReportHandler_Integration(t *testing.T) {
 		reportIDs := []uuid.UUID{response.Data[0].ID, response.Data[1].ID}
 		assert.Contains(t, reportIDs, report1.ID)
 		assert.Contains(t, reportIDs, report2.ID)
-
-		for _, report := range response.Data {
-			assert.Equal(t, family.ID, report.FamilyID)
-		}
 	})
 
 	t.Run("GetReports_ByUser", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -302,16 +304,11 @@ func TestReportHandler_Integration(t *testing.T) {
 		assert.Equal(t, user1.ID, response.Data[0].UserID)
 	})
 
-	t.Run("GetReports_MissingFamilyID", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/reports", nil)
-		rec := httptest.NewRecorder()
-
-		testServer.Server.Echo().ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-	})
+	// Test removed: GetReports_MissingFamilyID - no longer relevant in single-family model
 
 	t.Run("DeleteReport_Success", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -346,6 +343,8 @@ func TestReportHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("CreateReport_DifferentTypes", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -363,7 +362,6 @@ func TestReportHandler_Integration(t *testing.T) {
 					Name:      fmt.Sprintf("Test %s Report", reportType),
 					Type:      reportType,
 					Period:    "monthly",
-					FamilyID:  family.ID,
 					UserID:    user.ID,
 					StartDate: time.Now().AddDate(0, -1, 0),
 					EndDate:   time.Now(),
@@ -391,6 +389,8 @@ func TestReportHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("CreateReport_DifferentPeriods", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -428,7 +428,6 @@ func TestReportHandler_Integration(t *testing.T) {
 					Name:      fmt.Sprintf("Test %s Report", period),
 					Type:      "expenses",
 					Period:    period,
-					FamilyID:  family.ID,
 					UserID:    user.ID,
 					StartDate: startDate,
 					EndDate:   endDate,

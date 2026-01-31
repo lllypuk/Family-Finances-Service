@@ -320,7 +320,7 @@ func BenchmarkTransactionRepository_GetTransactionSummary(b *testing.B) {
 	endDate := time.Now()
 
 	for b.Loop() {
-		_, err := repo.GetSummary(ctx, testFamilyID, startDate, endDate)
+		_, err := repo.GetSummary(ctx, startDate, endDate)
 		if err != nil {
 			b.Fatalf("Failed to get transaction summary: %v", err)
 		}
@@ -338,7 +338,7 @@ func BenchmarkTransactionRepository_GetMonthlySummary(b *testing.B) {
 	month := int(now.Month())
 
 	for b.Loop() {
-		_, err := repo.GetMonthlySummary(ctx, testFamilyID, year, month)
+		_, err := repo.GetMonthlySummary(ctx, year, month)
 		if err != nil {
 			b.Fatalf("Failed to get monthly summary: %v", err)
 		}

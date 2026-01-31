@@ -245,16 +245,16 @@ func (r *SQLiteRepository) GetByFilter(
 
 	// Optional filters
 	if filter.UserID != nil {
-		if err := validation.ValidateUUID(*filter.UserID); err != nil {
-			return nil, fmt.Errorf("invalid user ID: %w", err)
+		if validationErr := validation.ValidateUUID(*filter.UserID); validationErr != nil {
+			return nil, fmt.Errorf("invalid user ID: %w", validationErr)
 		}
 		conditions = append(conditions, "user_id = ?")
 		args = append(args, sqlitehelpers.UUIDToString(*filter.UserID))
 	}
 
 	if filter.CategoryID != nil {
-		if err := validation.ValidateUUID(*filter.CategoryID); err != nil {
-			return nil, fmt.Errorf("invalid category ID: %w", err)
+		if validationErr := validation.ValidateUUID(*filter.CategoryID); validationErr != nil {
+			return nil, fmt.Errorf("invalid category ID: %w", validationErr)
 		}
 		conditions = append(conditions, "category_id = ?")
 		args = append(args, sqlitehelpers.UUIDToString(*filter.CategoryID))
@@ -454,12 +454,12 @@ func (r *SQLiteRepository) Delete(ctx context.Context, id uuid.UUID) error {
 // GetSummary returns transaction summary for a family
 func (r *SQLiteRepository) GetSummary(
 	ctx context.Context,
-	familyID uuid.UUID,
 	startDate, endDate time.Time,
 ) (*Summary, error) {
-	// Validate parameters
-	if err := validation.ValidateUUID(familyID); err != nil {
-		return nil, fmt.Errorf("invalid family ID: %w", err)
+	// Get the single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	query := `
@@ -475,7 +475,7 @@ func (r *SQLiteRepository) GetSummary(
 		WHERE family_id = ? AND date BETWEEN ? AND ?`
 
 	var summary Summary
-	err := r.db.QueryRowContext(ctx, query, sqlitehelpers.UUIDToString(familyID), startDate, endDate).Scan(
+	err = r.db.QueryRowContext(ctx, query, sqlitehelpers.UUIDToString(familyID), startDate, endDate).Scan(
 		&summary.TotalCount, &summary.IncomeCount, &summary.ExpenseCount,
 		&summary.TotalIncome, &summary.TotalExpenses, &summary.AvgIncome, &summary.AvgExpense,
 	)
@@ -495,12 +495,12 @@ func (r *SQLiteRepository) GetSummary(
 // GetMonthlySummary returns monthly transaction summary
 func (r *SQLiteRepository) GetMonthlySummary(
 	ctx context.Context,
-	familyID uuid.UUID,
 	year, month int,
 ) ([]*MonthlySummaryItem, error) {
-	// Validate parameters
-	if err := validation.ValidateUUID(familyID); err != nil {
-		return nil, fmt.Errorf("invalid family ID: %w", err)
+	// Get single family ID
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	// SQLite date extraction using substr for dates with timezones
@@ -547,7 +547,7 @@ func (r *SQLiteRepository) GetMonthlySummary(
 	return summaries, nil
 }
 
-// GetByFamilyID retrieves transactions by family ID with pagination
+// GetAll retrieves transactions for the family with pagination
 func (r *SQLiteRepository) GetAll(
 	ctx context.Context,
 	limit, offset int,

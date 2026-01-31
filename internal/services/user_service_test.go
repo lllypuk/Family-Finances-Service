@@ -130,7 +130,6 @@ func TestUserService_CreateUser(t *testing.T) {
 				assert.Equal(t, tt.dto.FirstName, result.FirstName)
 				assert.Equal(t, tt.dto.LastName, result.LastName)
 				assert.Equal(t, tt.dto.Role, result.Role)
-				assert.Equal(t, familyID, result.FamilyID)
 
 				// Check password is hashed
 				assert.NotEqual(t, tt.dto.Password, result.Password)
@@ -211,7 +210,6 @@ func TestUserService_UpdateUser(t *testing.T) {
 		FirstName: "OldFirst",
 		LastName:  "OldLast",
 		Role:      user.RoleMember,
-		FamilyID:  uuid.New(),
 	}
 
 	tests := []struct {
@@ -310,7 +308,6 @@ func TestUserService_DeleteUser(t *testing.T) {
 		Email:     "test@example.com",
 		FirstName: "John",
 		LastName:  "Doe",
-		FamilyID:  uuid.New(),
 	}
 
 	tests := []struct {
@@ -325,7 +322,7 @@ func TestUserService_DeleteUser(t *testing.T) {
 			userID: existingUser.ID,
 			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
 				userRepo.On("GetByID", mock.Anything, existingUser.ID).Return(existingUser, nil)
-				userRepo.On("Delete", mock.Anything, existingUser.ID, existingUser.FamilyID).Return(nil)
+				userRepo.On("Delete", mock.Anything, existingUser.ID).Return(nil)
 			},
 			wantError: false,
 		},
@@ -434,10 +431,8 @@ func TestUserService_ChangeUserRole(t *testing.T) {
 }
 
 func TestUserService_ValidateUserAccess(t *testing.T) {
-	familyID := uuid.New()
-	user1 := &user.User{ID: uuid.New(), FamilyID: familyID}
-	user2 := &user.User{ID: uuid.New(), FamilyID: familyID}
-	userFromAnotherFamily := &user.User{ID: uuid.New(), FamilyID: uuid.New()}
+	user1 := &user.User{ID: uuid.New()}
+	user2 := &user.User{ID: uuid.New()}
 
 	tests := []struct {
 		name            string
@@ -456,17 +451,6 @@ func TestUserService_ValidateUserAccess(t *testing.T) {
 				userRepo.On("GetByID", mock.Anything, user2.ID).Return(user2, nil)
 			},
 			wantError: false,
-		},
-		{
-			name:            "Error - Different family access",
-			userID:          user1.ID,
-			resourceOwnerID: userFromAnotherFamily.ID,
-			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
-				userRepo.On("GetByID", mock.Anything, user1.ID).Return(user1, nil)
-				userRepo.On("GetByID", mock.Anything, userFromAnotherFamily.ID).Return(userFromAnotherFamily, nil)
-			},
-			wantError: true,
-			errorType: services.ErrUnauthorized,
 		},
 		{
 			name:            "Error - Requesting user not found",

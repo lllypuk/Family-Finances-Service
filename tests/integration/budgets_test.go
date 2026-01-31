@@ -20,9 +20,9 @@ import (
 )
 
 func TestBudgetHandler_Integration(t *testing.T) {
-	testServer := testhelpers.SetupHTTPServer(t)
-
 	t.Run("CreateBudget_Success", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -40,7 +40,6 @@ func TestBudgetHandler_Integration(t *testing.T) {
 			Amount:     800.00,
 			Period:     "monthly",
 			CategoryID: &testCategory.ID,
-			FamilyID:   family.ID,
 			StartDate:  startDate,
 			EndDate:    endDate,
 		}
@@ -73,6 +72,8 @@ func TestBudgetHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("CreateBudget_ValidationError", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -86,10 +87,9 @@ func TestBudgetHandler_Integration(t *testing.T) {
 			{
 				name: "negative_amount",
 				request: handlers.CreateBudgetRequest{
-					Name:   "Test Budget",
-					Amount: -100.0,
-					Period: "monthly",
-
+					Name:      "Test Budget",
+					Amount:    -100.0,
+					Period:    "monthly",
 					StartDate: time.Now(),
 					EndDate:   time.Now().AddDate(0, 1, 0),
 				},
@@ -98,10 +98,9 @@ func TestBudgetHandler_Integration(t *testing.T) {
 			{
 				name: "invalid_period",
 				request: handlers.CreateBudgetRequest{
-					Name:   "Test Budget",
-					Amount: 100.0,
-					Period: "invalid_period",
-
+					Name:      "Test Budget",
+					Amount:    100.0,
+					Period:    "invalid_period",
 					StartDate: time.Now(),
 					EndDate:   time.Now().AddDate(0, 1, 0),
 				},
@@ -110,10 +109,9 @@ func TestBudgetHandler_Integration(t *testing.T) {
 			{
 				name: "empty_name",
 				request: handlers.CreateBudgetRequest{
-					Name:   "",
-					Amount: 100.0,
-					Period: "monthly",
-
+					Name:      "",
+					Amount:    100.0,
+					Period:    "monthly",
 					StartDate: time.Now(),
 					EndDate:   time.Now().AddDate(0, 1, 0),
 				},
@@ -152,6 +150,8 @@ func TestBudgetHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("CreateBudget_DateValidation", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -164,10 +164,9 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		endDate := startDate.AddDate(0, -1, 0) // one month earlier
 
 		request := handlers.CreateBudgetRequest{
-			Name:   "Date Test Budget",
-			Amount: 100.0,
-			Period: "monthly",
-
+			Name:      "Date Test Budget",
+			Amount:    100.0,
+			Period:    "monthly",
 			StartDate: startDate,
 			EndDate:   endDate,
 		}
@@ -197,6 +196,8 @@ func TestBudgetHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("GetBudgetByID_Success", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -230,6 +231,8 @@ func TestBudgetHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("GetBudgetByID_NotFound", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		nonExistentID := uuid.New()
 
 		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/budgets/%s", nonExistentID), nil)
@@ -241,6 +244,8 @@ func TestBudgetHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("GetBudgetByID_InvalidUUID", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/budgets/invalid-uuid", nil)
 		rec := httptest.NewRecorder()
 
@@ -250,6 +255,8 @@ func TestBudgetHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("GetBudgets_ByFamily", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -286,22 +293,13 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		budgetIDs := []uuid.UUID{response.Data[0].ID, response.Data[1].ID}
 		assert.Contains(t, budgetIDs, budget1.ID)
 		assert.Contains(t, budgetIDs, budget2.ID)
-
-		for _, budget := range response.Data {
-			assert.Equal(t, family.ID, budget.FamilyID)
-		}
 	})
 
-	t.Run("GetBudgets_MissingFamilyID", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/budgets", nil)
-		rec := httptest.NewRecorder()
-
-		testServer.Server.Echo().ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-	})
+	// Test removed: GetBudgets_MissingFamilyID - no longer relevant in single-family model
 
 	t.Run("GetBudgets_ActiveOnly", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -346,6 +344,8 @@ func TestBudgetHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("UpdateBudget_Success", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -396,6 +396,8 @@ func TestBudgetHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("UpdateBudget_PartialUpdate", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -444,6 +446,8 @@ func TestBudgetHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("UpdateBudget_ToggleActive", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -493,6 +497,8 @@ func TestBudgetHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("DeleteBudget_Success", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)

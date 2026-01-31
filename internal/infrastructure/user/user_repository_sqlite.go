@@ -96,8 +96,8 @@ func (r *SQLiteRepository) Create(ctx context.Context, u *user.User) error {
 	}
 
 	// Validate email to prevent injection attacks
-	if err := validation.ValidateEmail(u.Email); err != nil {
-		return fmt.Errorf("invalid user email: %w", err)
+	if validationErr := validation.ValidateEmail(u.Email); validationErr != nil {
+		return fmt.Errorf("invalid user email: %w", validationErr)
 	}
 
 	// Sanitize email before storing
@@ -223,8 +223,8 @@ func (r *SQLiteRepository) GetAll(ctx context.Context) ([]*user.User, error) {
 		return nil, fmt.Errorf("failed to get family ID: %w", err)
 	}
 	// Validate UUID parameter to prevent injection attacks
-	if err := validation.ValidateUUID(familyID); err != nil {
-		return nil, fmt.Errorf("invalid familyID parameter: %w", err)
+	if validationErr := validation.ValidateUUID(familyID); validationErr != nil {
+		return nil, fmt.Errorf("invalid familyID parameter: %w", validationErr)
 	}
 
 	query := `
@@ -270,8 +270,8 @@ func (r *SQLiteRepository) Update(ctx context.Context, u *user.User) error {
 	}
 
 	// Validate email to prevent injection attacks
-	if err := validation.ValidateEmail(u.Email); err != nil {
-		return fmt.Errorf("invalid user email: %w", err)
+	if validationErr := validation.ValidateEmail(u.Email); validationErr != nil {
+		return fmt.Errorf("invalid user email: %w", validationErr)
 	}
 
 	// Sanitize email before updating
@@ -375,25 +375,19 @@ func (r *SQLiteRepository) UpdateLastLogin(ctx context.Context, id uuid.UUID) er
 	return nil
 }
 
-// GetUsersByRole retrieves all users with a specific role in a family
+// GetUsersByRole retrieves all users with a specific role (single family model)
 func (r *SQLiteRepository) GetUsersByRole(
 	ctx context.Context,
-	familyID uuid.UUID,
 	role user.Role,
 ) ([]*user.User, error) {
-	// Validate UUID parameter to prevent injection attacks
-	if err := validation.ValidateUUID(familyID); err != nil {
-		return nil, fmt.Errorf("invalid familyID parameter: %w", err)
-	}
-
 	query := `
 		SELECT id, email, password_hash, first_name, last_name, role, family_id,
 			   is_active, last_login, created_at, updated_at
 		FROM users
-		WHERE family_id = ? AND role = ? AND is_active = 1
+		WHERE role = ? AND is_active = 1
 		ORDER BY first_name, last_name`
 
-	rows, err := r.db.QueryContext(ctx, query, familyID.String(), string(role))
+	rows, err := r.db.QueryContext(ctx, query, string(role))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get users by role: %w", err)
 	}
@@ -429,8 +423,8 @@ func (r *SQLiteRepository) CreateWithTransaction(ctx context.Context, tx *sql.Tx
 	}
 
 	// Validate email to prevent injection attacks
-	if err := validation.ValidateEmail(u.Email); err != nil {
-		return fmt.Errorf("invalid user email: %w", err)
+	if validationErr := validation.ValidateEmail(u.Email); validationErr != nil {
+		return fmt.Errorf("invalid user email: %w", validationErr)
 	}
 
 	// Sanitize email before storing

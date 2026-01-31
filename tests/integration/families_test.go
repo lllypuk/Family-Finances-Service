@@ -51,7 +51,7 @@ func TestFamilyRepository_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Get family members
-		members, err := testServer.Repos.User.GetByFamilyID(context.Background(), family.ID)
+		members, err := testServer.Repos.User.GetAll(context.Background())
 		require.NoError(t, err)
 
 		assert.Len(t, members, 2)

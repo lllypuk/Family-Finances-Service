@@ -47,12 +47,6 @@ func (h *TransactionHandler) Index(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
-	// Получаем единственную семью в single-family модели
-	family, err := h.services.Family.GetFamily(c.Request().Context())
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get family")
-	}
-
 	// Парсим фильтры из query parameters
 	var filters webModels.TransactionFilters
 	if bindErr := c.Bind(&filters); bindErr != nil {
@@ -69,14 +63,13 @@ func (h *TransactionHandler) Index(c echo.Context) error {
 	}
 
 	// Получаем транзакции через сервис
-	filterDTO, err := h.buildTransactionFilterDTO(family.ID, filters)
+	filterDTO, err := h.buildTransactionFilterDTO(filters)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid filter parameters")
 	}
 
-	transactions, err := h.services.Transaction.GetTransactionsByFamily(
+	transactions, err := h.services.Transaction.GetAllTransactions(
 		c.Request().Context(),
-		family.ID,
 		filterDTO,
 	)
 	if err != nil {
@@ -84,7 +77,7 @@ func (h *TransactionHandler) Index(c echo.Context) error {
 	}
 
 	// Конвертируем в view модели
-	transactionVMs, err := h.convertTransactionsToViewModels(c.Request().Context(), transactions, family.ID)
+	transactionVMs, err := h.convertTransactionsToViewModels(c.Request().Context(), transactions)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to prepare transaction data")
 	}
@@ -163,12 +156,6 @@ func (h *TransactionHandler) Create(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
-	// Получаем единственную семью в single-family модели
-	family, err := h.services.Family.GetFamily(c.Request().Context())
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get family")
-	}
-
 	// Парсим данные формы
 	var form webModels.TransactionForm
 	if bindErr := c.Bind(&form); bindErr != nil {
@@ -188,11 +175,11 @@ func (h *TransactionHandler) Create(c echo.Context) error {
 		}
 
 		// Для обычных запросов возвращаем форму заново
-		return h.renderTransactionFormWithErrors(c, form, validationErrors, family.ID, "New Transaction")
+		return h.renderTransactionFormWithErrors(c, form, validationErrors, "New Transaction")
 	}
 
 	// Создаем DTO для сервиса
-	createDTO, err := h.buildCreateTransactionDTO(form, sessionData.UserID, family.ID)
+	createDTO, err := h.buildCreateTransactionDTO(form, sessionData.UserID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid transaction data")
 	}
@@ -201,10 +188,9 @@ func (h *TransactionHandler) Create(c echo.Context) error {
 	_, err = h.services.Transaction.CreateTransaction(c.Request().Context(), createDTO)
 	if err != nil {
 		errorMsg := fmt.Sprintf(
-			"Failed to create transaction: %s (UserID: %s, FamilyID: %s)",
+			"Failed to create transaction: %s (UserID: %s)",
 			err.Error(),
 			sessionData.UserID,
-			family.ID,
 		)
 		return echo.NewHTTPError(http.StatusInternalServerError, errorMsg)
 	}
@@ -288,12 +274,6 @@ func (h *TransactionHandler) Update(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
-	// Получаем единственную семью в single-family модели
-	family, err := h.services.Family.GetFamily(c.Request().Context())
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get family")
-	}
-
 	// Парсим ID транзакции
 	id := c.Param("id")
 	transactionID, err := uuid.Parse(id)
@@ -329,7 +309,7 @@ func (h *TransactionHandler) Update(c echo.Context) error {
 		}
 
 		// Для обычных запросов возвращаем форму заново
-		return h.renderTransactionFormWithErrors(c, form, validationErrors, family.ID, "Edit Transaction")
+		return h.renderTransactionFormWithErrors(c, form, validationErrors, "Edit Transaction")
 	}
 
 	// Создаем DTO для обновления
@@ -452,12 +432,6 @@ func (h *TransactionHandler) Filter(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
-	// Получаем единственную семью в single-family модели
-	family, err := h.services.Family.GetFamily(c.Request().Context())
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get family")
-	}
-
 	var filters webModels.TransactionFilters
 	if bindErr := c.Bind(&filters); bindErr != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid filter data")
@@ -472,14 +446,13 @@ func (h *TransactionHandler) Filter(c echo.Context) error {
 	}
 
 	// Получаем транзакции через сервис
-	filterDTO, err := h.buildTransactionFilterDTO(family.ID, filters)
+	filterDTO, err := h.buildTransactionFilterDTO(filters)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid filter parameters")
 	}
 
-	transactions, err := h.services.Transaction.GetTransactionsByFamily(
+	transactions, err := h.services.Transaction.GetAllTransactions(
 		c.Request().Context(),
-		family.ID,
 		filterDTO,
 	)
 	if err != nil {
@@ -487,7 +460,7 @@ func (h *TransactionHandler) Filter(c echo.Context) error {
 	}
 
 	// Конвертируем в view модели
-	transactionVMs, err := h.convertTransactionsToViewModels(c.Request().Context(), transactions, family.ID)
+	transactionVMs, err := h.convertTransactionsToViewModels(c.Request().Context(), transactions)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to prepare transaction data")
 	}
@@ -510,12 +483,6 @@ func (h *TransactionHandler) List(c echo.Context) error {
 	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
-	}
-
-	// Получаем единственную семью в single-family модели
-	family, err := h.services.Family.GetFamily(c.Request().Context())
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get family")
 	}
 
 	// Парсим параметры пагинации
@@ -543,14 +510,13 @@ func (h *TransactionHandler) List(c echo.Context) error {
 	}
 
 	// Получаем транзакции через сервис
-	filterDTO, err := h.buildTransactionFilterDTO(family.ID, filters)
+	filterDTO, err := h.buildTransactionFilterDTO(filters)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid filter parameters")
 	}
 
-	transactions, err := h.services.Transaction.GetTransactionsByFamily(
+	transactions, err := h.services.Transaction.GetAllTransactions(
 		c.Request().Context(),
-		family.ID,
 		filterDTO,
 	)
 	if err != nil {
@@ -558,7 +524,7 @@ func (h *TransactionHandler) List(c echo.Context) error {
 	}
 
 	// Конвертируем в view модели
-	transactionVMs, err := h.convertTransactionsToViewModels(c.Request().Context(), transactions, family.ID)
+	transactionVMs, err := h.convertTransactionsToViewModels(c.Request().Context(), transactions)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to prepare transaction data")
 	}

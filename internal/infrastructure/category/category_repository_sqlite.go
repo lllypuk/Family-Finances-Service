@@ -71,13 +71,13 @@ func (r *SQLiteRepository) Create(ctx context.Context, c *category.Category) err
 
 	// Validate parent ID if provided
 	if c.ParentID != nil {
-		if err := validation.ValidateUUID(*c.ParentID); err != nil {
-			return fmt.Errorf("invalid parent ID: %w", err)
+		if validationErr := validation.ValidateUUID(*c.ParentID); validationErr != nil {
+			return fmt.Errorf("invalid parent ID: %w", validationErr)
 		}
 
 		// Check that parent exists and belongs to the same family
-		if err := r.validateParentCategory(ctx, *c.ParentID, familyID, c.Type); err != nil {
-			return fmt.Errorf("invalid parent category: %w", err)
+		if validationErr := r.validateParentCategory(ctx, *c.ParentID, familyID, c.Type); validationErr != nil {
+			return fmt.Errorf("invalid parent category: %w", validationErr)
 		}
 	}
 
@@ -192,7 +192,7 @@ func (r *SQLiteRepository) scanCategories(rows *sql.Rows, errorContext string) (
 	return categories, nil
 }
 
-// GetByFamilyID retrieves all categories belonging to a specific family
+// GetAll retrieves all categories belonging to the family
 func (r *SQLiteRepository) GetAll(ctx context.Context) ([]*category.Category, error) {
 	// Get single family ID
 	familyID, err := r.getSingleFamilyID(ctx)
@@ -360,8 +360,8 @@ func (r *SQLiteRepository) Update(ctx context.Context, c *category.Category) err
 
 	// Validate parent ID if provided and prevent circular references
 	if c.ParentID != nil {
-		if err := validation.ValidateUUID(*c.ParentID); err != nil {
-			return fmt.Errorf("invalid parent ID: %w", err)
+		if validationErr := validation.ValidateUUID(*c.ParentID); validationErr != nil {
+			return fmt.Errorf("invalid parent ID: %w", validationErr)
 		}
 
 		// Prevent self-reference
@@ -370,8 +370,8 @@ func (r *SQLiteRepository) Update(ctx context.Context, c *category.Category) err
 		}
 
 		// Check for circular reference
-		if err := r.checkCircularReference(ctx, c.ID, *c.ParentID); err != nil {
-			return fmt.Errorf("circular reference detected: %w", err)
+		if validationErr := r.checkCircularReference(ctx, c.ID, *c.ParentID); validationErr != nil {
+			return fmt.Errorf("circular reference detected: %w", validationErr)
 		}
 	}
 

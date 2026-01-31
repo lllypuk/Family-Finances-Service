@@ -852,21 +852,14 @@ func (h *BudgetHandler) getRecentTransactionsForBudget(
 	filter := dto.NewTransactionFilterDTO()
 	filter.DateFrom = &budget.StartDate
 	filter.DateTo = &budget.EndDate
-	filter.Limit = 5 // Ограничиваем количество последних транзакций
 
 	// Если у бюджета есть категория, фильтруем по ней
 	if budget.CategoryID != nil {
 		filter.CategoryID = budget.CategoryID
 	}
 
-	// Получаем единственную семью в single-family модели
-	family, err := h.services.Family.GetFamily(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get family: %w", err)
-	}
-
 	// Получаем транзакции через сервис
-	transactions, err := h.services.Transaction.GetTransactionsByDateRange(ctx, family.ID, *filter.DateFrom, *filter.DateTo)
+	transactions, err := h.services.Transaction.GetTransactionsByDateRange(ctx, *filter.DateFrom, *filter.DateTo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get transactions for budget: %w", err)
 	}

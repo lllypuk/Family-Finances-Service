@@ -141,7 +141,6 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				Password:  "password123",
 				FirstName: "John",
 				LastName:  "Doe",
-				FamilyID:  uuid.New(),
 				Role:      "member",
 			},
 			mockSetup: func(service *MockUserService, _ uuid.UUID) {
@@ -151,7 +150,6 @@ func TestUserHandler_CreateUser(t *testing.T) {
 					FirstName: "John",
 					LastName:  "Doe",
 					Role:      user.RoleMember,
-					FamilyID:  uuid.New(),
 					CreatedAt: time.Now(),
 					UpdatedAt: time.Now(),
 				}
@@ -165,7 +163,6 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				assert.Equal(t, "test@example.com", response.Data.Email)
 				assert.Equal(t, "John", response.Data.FirstName)
 				assert.Equal(t, "Doe", response.Data.LastName)
-				assert.NotEqual(t, uuid.Nil, response.Data.FamilyID)
 				assert.Equal(t, "member", response.Data.Role)
 			},
 		},
@@ -176,7 +173,6 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				Password:  "123",           // Too short password
 				FirstName: "",              // Empty first name
 				LastName:  "Doe",
-				FamilyID:  uuid.New(),
 				Role:      "member",
 			},
 			mockSetup: func(service *MockUserService, _ uuid.UUID) {
@@ -216,7 +212,6 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				Password:  "password123",
 				FirstName: "John",
 				LastName:  "Doe",
-				FamilyID:  uuid.New(),
 				Role:      "member",
 			},
 			mockSetup: func(service *MockUserService, _ uuid.UUID) {
@@ -238,7 +233,6 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				Password:  "password123",
 				FirstName: "John",
 				LastName:  "Doe",
-				FamilyID:  uuid.New(),
 				Role:      "member",
 			},
 			mockSetup: func(service *MockUserService, _ uuid.UUID) {
@@ -291,7 +285,6 @@ func TestUserHandler_CreateUser(t *testing.T) {
 
 func TestUserHandler_GetUserByID(t *testing.T) {
 	userID := uuid.New()
-	testFamilyID := uuid.New()
 
 	tests := []struct {
 		name           string
@@ -310,7 +303,6 @@ func TestUserHandler_GetUserByID(t *testing.T) {
 					FirstName: "John",
 					LastName:  "Doe",
 					Role:      user.RoleMember,
-					FamilyID:  testFamilyID,
 					CreatedAt: time.Now(),
 					UpdatedAt: time.Now(),
 				}
@@ -386,7 +378,6 @@ func TestUserHandler_GetUserByID(t *testing.T) {
 
 func TestUserHandler_UpdateUser(t *testing.T) {
 	userID := uuid.New()
-	testFamilyID := uuid.New()
 
 	tests := []struct {
 		name           string
@@ -410,7 +401,6 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 					FirstName: "UpdatedName",
 					LastName:  "UpdatedLastName",
 					Role:      user.RoleMember,
-					FamilyID:  testFamilyID,
 					CreatedAt: time.Now(),
 					UpdatedAt: time.Now(),
 				}

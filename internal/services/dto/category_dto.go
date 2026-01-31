@@ -15,7 +15,6 @@ type CreateCategoryDTO struct {
 	Color    string        `validate:"required,hexcolor"`
 	Icon     string        `validate:"required,min=1,max=50"`
 	ParentID *uuid.UUID    `validate:"omitempty"`
-	FamilyID uuid.UUID     `validate:"required"`
 }
 
 // UpdateCategoryDTO represents the data transfer object for updating a category
@@ -27,7 +26,6 @@ type UpdateCategoryDTO struct {
 
 // CategoryFilterDTO represents the data transfer object for filtering categories
 type CategoryFilterDTO struct {
-	FamilyID uuid.UUID
 	Type     *category.Type
 	ParentID *uuid.UUID
 	IsActive *bool
@@ -41,7 +39,6 @@ type CategoryResponseDTO struct {
 	Color     string     `json:"color"`
 	Icon      string     `json:"icon"`
 	ParentID  *uuid.UUID `json:"parent_id,omitempty"`
-	FamilyID  uuid.UUID  `json:"family_id"`
 	IsActive  bool       `json:"is_active"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`

@@ -82,8 +82,8 @@ func (m *MockUserRepository) GetByEmail(ctx context.Context, email string) (*use
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
-func (m *MockUserRepository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*user.User, error) {
-	args := m.Called(ctx, familyID)
+func (m *MockUserRepository) GetAll(ctx context.Context) ([]*user.User, error) {
+	args := m.Called(ctx)
 	if args.Error(1) != nil {
 		return nil, args.Error(1)
 	}
@@ -95,8 +95,8 @@ func (m *MockUserRepository) Update(ctx context.Context, user *user.User) error 
 	return args.Error(0)
 }
 
-func (m *MockUserRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
-	args := m.Called(ctx, id, familyID)
+func (m *MockUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
@@ -121,16 +121,16 @@ func (m *MockBudgetRepository) GetByID(ctx context.Context, id uuid.UUID) (*budg
 	return args.Get(0).(*budget.Budget), args.Error(1)
 }
 
-func (m *MockBudgetRepository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*budget.Budget, error) {
-	args := m.Called(ctx, familyID)
+func (m *MockBudgetRepository) GetAll(ctx context.Context) ([]*budget.Budget, error) {
+	args := m.Called(ctx)
 	if args.Error(1) != nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*budget.Budget), args.Error(1)
 }
 
-func (m *MockBudgetRepository) GetActiveBudgets(ctx context.Context, familyID uuid.UUID) ([]*budget.Budget, error) {
-	args := m.Called(ctx, familyID)
+func (m *MockBudgetRepository) GetActiveBudgets(ctx context.Context) ([]*budget.Budget, error) {
+	args := m.Called(ctx)
 	if args.Error(1) != nil {
 		return nil, args.Error(1)
 	}
@@ -142,17 +142,16 @@ func (m *MockBudgetRepository) Update(ctx context.Context, budget *budget.Budget
 	return args.Error(0)
 }
 
-func (m *MockBudgetRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
-	args := m.Called(ctx, id, familyID)
+func (m *MockBudgetRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
-func (m *MockBudgetRepository) GetByFamilyAndCategory(
+func (m *MockBudgetRepository) GetByCategory(
 	ctx context.Context,
-	familyID uuid.UUID,
 	categoryID *uuid.UUID,
 ) ([]*budget.Budget, error) {
-	args := m.Called(ctx, familyID, categoryID)
+	args := m.Called(ctx, categoryID)
 	if args.Error(1) != nil {
 		return nil, args.Error(1)
 	}
@@ -161,10 +160,9 @@ func (m *MockBudgetRepository) GetByFamilyAndCategory(
 
 func (m *MockBudgetRepository) GetByPeriod(
 	ctx context.Context,
-	familyID uuid.UUID,
 	startDate, endDate time.Time,
 ) ([]*budget.Budget, error) {
-	args := m.Called(ctx, familyID, startDate, endDate)
+	args := m.Called(ctx, startDate, endDate)
 	if args.Error(1) != nil {
 		return nil, args.Error(1)
 	}
@@ -192,8 +190,8 @@ func (m *MockCategoryRepository) GetByID(ctx context.Context, id uuid.UUID) (*ca
 	return args.Get(0).(*category.Category), args.Error(1)
 }
 
-func (m *MockCategoryRepository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*category.Category, error) {
-	args := m.Called(ctx, familyID)
+func (m *MockCategoryRepository) GetAll(ctx context.Context) ([]*category.Category, error) {
+	args := m.Called(ctx)
 	if args.Error(1) != nil {
 		return nil, args.Error(1)
 	}
@@ -202,10 +200,9 @@ func (m *MockCategoryRepository) GetByFamilyID(ctx context.Context, familyID uui
 
 func (m *MockCategoryRepository) GetByType(
 	ctx context.Context,
-	familyID uuid.UUID,
 	categoryType category.Type,
 ) ([]*category.Category, error) {
-	args := m.Called(ctx, familyID, categoryType)
+	args := m.Called(ctx, categoryType)
 	if args.Error(1) != nil {
 		return nil, args.Error(1)
 	}
@@ -217,8 +214,8 @@ func (m *MockCategoryRepository) Update(ctx context.Context, category *category.
 	return args.Error(0)
 }
 
-func (m *MockCategoryRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
-	args := m.Called(ctx, id, familyID)
+func (m *MockCategoryRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
@@ -251,12 +248,12 @@ func (m *MockTransactionRepository) GetByFilter(
 	return args.Get(0).([]*transaction.Transaction), args.Error(1)
 }
 
-func (m *MockTransactionRepository) GetByFamilyID(
+// Updated: GetAll replaces GetByFamilyID (no familyID param)
+func (m *MockTransactionRepository) GetAll(
 	ctx context.Context,
-	familyID uuid.UUID,
 	limit, offset int,
 ) ([]*transaction.Transaction, error) {
-	args := m.Called(ctx, familyID, limit, offset)
+	args := m.Called(ctx, limit, offset)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -268,8 +265,9 @@ func (m *MockTransactionRepository) Update(ctx context.Context, tx *transaction.
 	return args.Error(0)
 }
 
-func (m *MockTransactionRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
-	args := m.Called(ctx, id, familyID)
+// Updated: Delete no longer requires familyID
+func (m *MockTransactionRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
@@ -282,16 +280,7 @@ func (m *MockTransactionRepository) GetTotalByCategory(
 	return args.Get(0).(float64), args.Error(1)
 }
 
-func (m *MockTransactionRepository) GetTotalByFamilyAndDateRange(
-	ctx context.Context,
-	familyID uuid.UUID,
-	startDate, endDate time.Time,
-	txType transaction.Type,
-) (float64, error) {
-	args := m.Called(ctx, familyID, startDate, endDate, txType)
-	return args.Get(0).(float64), args.Error(1)
-}
-
+// Added: GetTotalByCategoryAndDateRange to match TransactionRepository interface
 func (m *MockTransactionRepository) GetTotalByCategoryAndDateRange(
 	ctx context.Context,
 	categoryID uuid.UUID,
@@ -302,18 +291,14 @@ func (m *MockTransactionRepository) GetTotalByCategoryAndDateRange(
 	return args.Get(0).(float64), args.Error(1)
 }
 
-func (m *MockTransactionRepository) GetByDateRange(
+// Updated: GetTotalByDateRange replaces GetTotalByFamilyAndDateRange
+func (m *MockTransactionRepository) GetTotalByDateRange(
 	ctx context.Context,
-	familyID uuid.UUID,
 	startDate, endDate time.Time,
-) ([]*transaction.Transaction, error) {
-	args := m.Called(ctx, familyID, startDate, endDate)
-	return args.Get(0).([]*transaction.Transaction), args.Error(1)
-}
-
-func (m *MockTransactionRepository) BulkUpdate(ctx context.Context, transactions []*transaction.Transaction) error {
-	args := m.Called(ctx, transactions)
-	return args.Error(0)
+	txType transaction.Type,
+) (float64, error) {
+	args := m.Called(ctx, startDate, endDate, txType)
+	return args.Get(0).(float64), args.Error(1)
 }
 
 // MockReportRepository is a mock implementation of ReportRepository
@@ -334,8 +319,9 @@ func (m *MockReportRepository) GetByID(ctx context.Context, id uuid.UUID) (*repo
 	return args.Get(0).(*report.Report), args.Error(1)
 }
 
-func (m *MockReportRepository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*report.Report, error) {
-	args := m.Called(ctx, familyID)
+// Updated: GetAll replaces GetByFamilyID
+func (m *MockReportRepository) GetAll(ctx context.Context) ([]*report.Report, error) {
+	args := m.Called(ctx)
 	return args.Get(0).([]*report.Report), args.Error(1)
 }
 
@@ -349,8 +335,9 @@ func (m *MockReportRepository) Update(ctx context.Context, report *report.Report
 	return args.Error(0)
 }
 
-func (m *MockReportRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
-	args := m.Called(ctx, id, familyID)
+// Updated: Delete no longer requires familyID
+func (m *MockReportRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
@@ -383,12 +370,11 @@ func (m *MockTransactionService) GetTransactionByID(
 	return args.Get(0).(*transaction.Transaction), args.Error(1)
 }
 
-func (m *MockTransactionService) GetTransactionsByFamily(
+func (m *MockTransactionService) GetAllTransactions(
 	ctx context.Context,
-	familyID uuid.UUID,
 	filter dto.TransactionFilterDTO,
 ) ([]*transaction.Transaction, error) {
-	args := m.Called(ctx, familyID, filter)
+	args := m.Called(ctx, filter)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -426,10 +412,9 @@ func (m *MockTransactionService) GetTransactionsByCategory(
 
 func (m *MockTransactionService) GetTransactionsByDateRange(
 	ctx context.Context,
-	familyID uuid.UUID,
 	from, to time.Time,
 ) ([]*transaction.Transaction, error) {
-	args := m.Called(ctx, familyID, from, to)
+	args := m.Called(ctx, from, to)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -476,12 +461,9 @@ func (m *MockBudgetService) GetBudgetByID(ctx context.Context, id uuid.UUID) (*b
 	return args.Get(0).(*budget.Budget), args.Error(1)
 }
 
-func (m *MockBudgetService) GetBudgetsByFamily(
-	ctx context.Context,
-	familyID uuid.UUID,
-	filter dto.BudgetFilterDTO,
-) ([]*budget.Budget, error) {
-	args := m.Called(ctx, familyID, filter)
+// Updated: GetAllBudgets replaces GetBudgetsByFamily (single-family model)
+func (m *MockBudgetService) GetAllBudgets(ctx context.Context, filter dto.BudgetFilterDTO) ([]*budget.Budget, error) {
+	args := m.Called(ctx, filter)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -500,17 +482,18 @@ func (m *MockBudgetService) UpdateBudget(
 	return args.Get(0).(*budget.Budget), args.Error(1)
 }
 
-func (m *MockBudgetService) DeleteBudget(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
-	args := m.Called(ctx, id, familyID)
+// Updated: DeleteBudget no longer requires familyID
+func (m *MockBudgetService) DeleteBudget(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
+// Updated: GetActiveBudgets signature (no familyID)
 func (m *MockBudgetService) GetActiveBudgets(
 	ctx context.Context,
-	familyID uuid.UUID,
 	date time.Time,
 ) ([]*budget.Budget, error) {
-	args := m.Called(ctx, familyID, date)
+	args := m.Called(ctx, date)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -522,16 +505,44 @@ func (m *MockBudgetService) UpdateBudgetSpent(ctx context.Context, budgetID uuid
 	return args.Error(0)
 }
 
+// Updated: CheckBudgetLimits no longer takes familyID
 func (m *MockBudgetService) CheckBudgetLimits(
 	ctx context.Context,
-	familyID uuid.UUID,
 	categoryID uuid.UUID,
 	amount float64,
 ) error {
-	args := m.Called(ctx, familyID, categoryID, amount)
+	args := m.Called(ctx, categoryID, amount)
 	return args.Error(0)
 }
 
+// Updated: GetBudgetsByCategory no longer takes familyID
+func (m *MockBudgetService) GetBudgetsByCategory(
+	ctx context.Context,
+	categoryID uuid.UUID,
+) ([]*budget.Budget, error) {
+	args := m.Called(ctx, categoryID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*budget.Budget), args.Error(1)
+}
+
+// Updated: ValidateBudgetPeriod signature (no familyID)
+func (m *MockBudgetService) ValidateBudgetPeriod(
+	ctx context.Context,
+	categoryID *uuid.UUID,
+	startDate, endDate time.Time,
+) error {
+	args := m.Called(ctx, categoryID, startDate, endDate)
+	return args.Error(0)
+}
+
+func (m *MockBudgetService) RecalculateBudgetSpent(ctx context.Context, budgetID uuid.UUID) error {
+	args := m.Called(ctx, budgetID)
+	return args.Error(0)
+}
+
+// Added: GetBudgetStatus to satisfy BudgetService interface
 func (m *MockBudgetService) GetBudgetStatus(ctx context.Context, budgetID uuid.UUID) (*dto.BudgetStatusDTO, error) {
 	args := m.Called(ctx, budgetID)
 	if args.Get(0) == nil {
@@ -540,6 +551,7 @@ func (m *MockBudgetService) GetBudgetStatus(ctx context.Context, budgetID uuid.U
 	return args.Get(0).(*dto.BudgetStatusDTO), args.Error(1)
 }
 
+// Added: CalculateBudgetUtilization to satisfy BudgetService interface
 func (m *MockBudgetService) CalculateBudgetUtilization(
 	ctx context.Context,
 	budgetID uuid.UUID,
@@ -549,33 +561,6 @@ func (m *MockBudgetService) CalculateBudgetUtilization(
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*dto.BudgetUtilizationDTO), args.Error(1)
-}
-
-func (m *MockBudgetService) GetBudgetsByCategory(
-	ctx context.Context,
-	familyID uuid.UUID,
-	categoryID uuid.UUID,
-) ([]*budget.Budget, error) {
-	args := m.Called(ctx, familyID, categoryID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*budget.Budget), args.Error(1)
-}
-
-func (m *MockBudgetService) ValidateBudgetPeriod(
-	ctx context.Context,
-	familyID uuid.UUID,
-	categoryID *uuid.UUID,
-	startDate, endDate time.Time,
-) error {
-	args := m.Called(ctx, familyID, categoryID, startDate, endDate)
-	return args.Error(0)
-}
-
-func (m *MockBudgetService) RecalculateBudgetSpent(ctx context.Context, budgetID uuid.UUID) error {
-	args := m.Called(ctx, budgetID)
-	return args.Error(0)
 }
 
 // MockCategoryService is a mock implementation of CategoryService
@@ -602,12 +587,11 @@ func (m *MockCategoryService) GetCategoryByID(ctx context.Context, id uuid.UUID)
 	return args.Get(0).(*category.Category), args.Error(1)
 }
 
-func (m *MockCategoryService) GetCategoriesByFamily(
+func (m *MockCategoryService) GetCategories(
 	ctx context.Context,
-	familyID uuid.UUID,
 	typeFilter *category.Type,
 ) ([]*category.Category, error) {
-	args := m.Called(ctx, familyID, typeFilter)
+	args := m.Called(ctx, typeFilter)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -626,16 +610,15 @@ func (m *MockCategoryService) UpdateCategory(
 	return args.Get(0).(*category.Category), args.Error(1)
 }
 
-func (m *MockCategoryService) DeleteCategory(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
-	args := m.Called(ctx, id, familyID)
+func (m *MockCategoryService) DeleteCategory(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
 func (m *MockCategoryService) GetCategoryHierarchy(
 	ctx context.Context,
-	familyID uuid.UUID,
 ) ([]*category.Category, error) {
-	args := m.Called(ctx, familyID)
+	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -652,8 +635,8 @@ func (m *MockCategoryService) CheckCategoryUsage(ctx context.Context, categoryID
 	return args.Get(0).(bool), args.Error(1)
 }
 
-func (m *MockCategoryService) CreateDefaultCategories(ctx context.Context, familyID uuid.UUID) error {
-	args := m.Called(ctx, familyID)
+func (m *MockCategoryService) CreateDefaultCategories(ctx context.Context) error {
+	args := m.Called(ctx)
 	return args.Error(0)
 }
 
@@ -662,25 +645,22 @@ func (m *MockCategoryService) CreateDefaultCategories(ctx context.Context, famil
 // createTestTransaction creates a test transaction with all required parameters
 func createTestTransaction(
 	id uuid.UUID,
-	familyID uuid.UUID, // familyID parameter kept for backwards compatibility but unused in single-family model
 	amount float64,
 	transactionType transaction.Type,
 	date time.Time,
 ) *transaction.Transaction {
 	categoryID := uuid.New()
-	return createTestTransactionWithCategory(id, familyID, categoryID, amount, transactionType, date)
+	return createTestTransactionWithCategory(id, categoryID, amount, transactionType, date)
 }
 
 // createTestTransactionWithCategory creates a test transaction with specific category
 func createTestTransactionWithCategory(
 	id uuid.UUID,
-	familyID uuid.UUID, // familyID parameter kept for backwards compatibility but unused in single-family model
 	categoryID uuid.UUID,
 	amount float64,
 	transactionType transaction.Type,
 	date time.Time,
 ) *transaction.Transaction {
-	// Note: FamilyID removed from Transaction model for single-family architecture
 	return &transaction.Transaction{
 		ID:          id,
 		Amount:      amount,
@@ -695,24 +675,22 @@ func createTestTransactionWithCategory(
 }
 
 // createTestCategory creates a test category with all required parameters
-func createTestCategory(id uuid.UUID, familyID uuid.UUID, name string, categoryType category.Type) *category.Category {
+func createTestCategory(id uuid.UUID, name string, categoryType category.Type) *category.Category {
 	return &category.Category{
 		ID:        id,
 		Name:      name,
 		Type:      categoryType,
-		FamilyID:  familyID,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
 }
 
 // createTestBudget creates a test budget with all required parameters
-func createTestBudget(id uuid.UUID, familyID uuid.UUID, amount float64, categoryID uuid.UUID) *budget.Budget {
+func createTestBudget(id uuid.UUID, amount float64, categoryID uuid.UUID) *budget.Budget {
 	return &budget.Budget{
 		ID:         id,
 		Name:       "Test Budget",
 		Amount:     amount,
-		FamilyID:   familyID,
 		CategoryID: &categoryID,
 		StartDate:  time.Now().AddDate(0, 0, -30),
 		EndDate:    time.Now().AddDate(0, 0, 30),
@@ -723,11 +701,10 @@ func createTestBudget(id uuid.UUID, familyID uuid.UUID, amount float64, category
 }
 
 // createTestUser creates a test user
-func createTestUser(familyID uuid.UUID) *user.User {
+func createTestUser(_ uuid.UUID) *user.User {
 	return &user.User{
 		ID:        uuid.New(),
 		Email:     "test@example.com",
-		FamilyID:  familyID,
 		Role:      user.RoleMember,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),

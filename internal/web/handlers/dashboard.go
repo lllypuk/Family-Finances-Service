@@ -58,12 +58,6 @@ func (h *DashboardHandler) Dashboard(c echo.Context) error {
 		return echo.NewHTTPError(HTTPStatusInternalServerError, "Session error occurred")
 	}
 
-	// Получаем единственную семью в single-family модели
-	family, err := h.services.Family.GetFamily(c.Request().Context())
-	if err != nil {
-		return echo.NewHTTPError(HTTPStatusInternalServerError, "Failed to get family")
-	}
-
 	// Парсим фильтры
 	filters := &webModels.DashboardFilters{
 		Period: DefaultPeriod,
@@ -74,18 +68,17 @@ func (h *DashboardHandler) Dashboard(c echo.Context) error {
 	}
 
 	// Получаем реальные данные для всех компонентов
-	monthlySummary, err := h.buildMonthlySummary(c.Request().Context(), family.ID, filters)
+	monthlySummary, err := h.buildMonthlySummary(c.Request().Context(), filters)
 	if err != nil {
 		return echo.NewHTTPError(HTTPStatusInternalServerError, "Failed to load monthly summary")
 	}
 
 	// Получаем расширенную статистику
-	enhancedStats, _ := h.buildEnhancedStats(c.Request().Context(), family.ID, filters, monthlySummary)
+	enhancedStats, _ := h.buildEnhancedStats(c.Request().Context(), filters, monthlySummary)
 
 	// Создаем полные данные dashboard
 	dashboardData := h.buildDashboardViewModel(
 		c.Request().Context(),
-		family.ID,
 		monthlySummary,
 		enhancedStats,
 		filters,
@@ -140,12 +133,6 @@ func (h *DashboardHandler) DashboardFilter(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
-	// Получаем единственную семью в single-family модели
-	family, err := h.services.Family.GetFamily(c.Request().Context())
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get family")
-	}
-
 	// Парсим фильтры
 	filters := &webModels.DashboardFilters{
 		Period: DefaultPeriod,
@@ -160,27 +147,27 @@ func (h *DashboardHandler) DashboardFilter(c echo.Context) error {
 	}
 
 	// Получаем все данные dashboard с новыми фильтрами
-	monthlySummary, err := h.buildMonthlySummary(c.Request().Context(), family.ID, filters)
+	monthlySummary, err := h.buildMonthlySummary(c.Request().Context(), filters)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load monthly summary")
 	}
 
-	budgetOverview, err := h.buildBudgetOverview(c.Request().Context(), family.ID)
+	budgetOverview, err := h.buildBudgetOverview(c.Request().Context())
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load budget overview")
 	}
 
-	recentActivity, err := h.buildRecentActivity(c.Request().Context(), family.ID)
+	recentActivity, err := h.buildRecentActivity(c.Request().Context())
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load recent activity")
 	}
 
-	categoryInsights, err := h.buildCategoryInsights(c.Request().Context(), family.ID, filters)
+	categoryInsights, err := h.buildCategoryInsights(c.Request().Context(), filters)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load category insights")
 	}
 
-	enhancedStats, err := h.buildEnhancedStats(c.Request().Context(), family.ID, filters, monthlySummary)
+	enhancedStats, err := h.buildEnhancedStats(c.Request().Context(), filters, monthlySummary)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load enhanced stats")
 	}
@@ -207,12 +194,6 @@ func (h *DashboardHandler) DashboardStats(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
-	// Получаем единственную семью в single-family модели
-	family, err := h.services.Family.GetFamily(c.Request().Context())
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get family")
-	}
-
 	// Парсим фильтры
 	filters := &webModels.DashboardFilters{
 		Period: "current_month",
@@ -222,7 +203,7 @@ func (h *DashboardHandler) DashboardStats(c echo.Context) error {
 	}
 
 	// Получаем только monthly summary
-	monthlySummary, err := h.buildMonthlySummary(c.Request().Context(), family.ID, filters)
+	monthlySummary, err := h.buildMonthlySummary(c.Request().Context(), filters)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load monthly summary")
 	}
@@ -240,14 +221,8 @@ func (h *DashboardHandler) RecentTransactions(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
-	// Получаем единственную семью в single-family модели
-	family, err := h.services.Family.GetFamily(c.Request().Context())
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get family")
-	}
-
 	// Получаем последние транзакции
-	recentActivity, err := h.buildRecentActivity(c.Request().Context(), family.ID)
+	recentActivity, err := h.buildRecentActivity(c.Request().Context())
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load recent transactions")
 	}
@@ -265,14 +240,8 @@ func (h *DashboardHandler) BudgetOverview(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
-	// Получаем единственную семью в single-family модели
-	family, err := h.services.Family.GetFamily(c.Request().Context())
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get family")
-	}
-
 	// Получаем обзор бюджетов
-	budgetOverview, err := h.buildBudgetOverview(c.Request().Context(), family.ID)
+	budgetOverview, err := h.buildBudgetOverview(c.Request().Context())
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load budget overview")
 	}
@@ -285,20 +254,18 @@ func (h *DashboardHandler) BudgetOverview(c echo.Context) error {
 // buildMonthlySummary создает сводку за месяц
 func (h *DashboardHandler) buildMonthlySummary(
 	ctx context.Context,
-	familyID uuid.UUID,
 	filters *webModels.DashboardFilters,
 ) (*webModels.MonthlySummaryCard, error) {
 	startDate, endDate := filters.GetPeriodDates()
 
 	// Получаем транзакции за текущий период
 	currentFilter := dto.TransactionFilterDTO{
-		FamilyID: familyID,
 		DateFrom: &startDate,
 		DateTo:   &endDate,
 		Limit:    DefaultQueryLimit, // Достаточно для подсчета
 	}
 
-	transactions, err := h.services.Transaction.GetTransactionsByFamily(ctx, familyID, currentFilter)
+	transactions, err := h.services.Transaction.GetAllTransactions(ctx, currentFilter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current transactions: %w", err)
 	}
@@ -321,7 +288,7 @@ func (h *DashboardHandler) buildMonthlySummary(
 	// Получаем данные за предыдущий период для сравнения
 	previousStart, previousEnd := h.getPreviousPeriodDates(startDate, endDate)
 	previousIncome, previousExpenses, hasPreviousData := h.calculatePreviousData(
-		ctx, familyID, previousStart, previousEnd)
+		ctx, previousStart, previousEnd)
 	incomeChange, expensesChange := h.calculateChanges(
 		totalIncome,
 		totalExpenses,
@@ -348,7 +315,6 @@ func (h *DashboardHandler) buildMonthlySummary(
 // calculatePreviousData получает и вычисляет данные за предыдущий период
 func (h *DashboardHandler) calculatePreviousData(
 	ctx context.Context,
-	familyID uuid.UUID,
 	previousStart, previousEnd time.Time,
 ) (float64, float64, bool) {
 	if previousStart.IsZero() || previousEnd.IsZero() {
@@ -356,13 +322,12 @@ func (h *DashboardHandler) calculatePreviousData(
 	}
 
 	previousFilter := dto.TransactionFilterDTO{
-		FamilyID: familyID,
 		DateFrom: &previousStart,
 		DateTo:   &previousEnd,
 		Limit:    DefaultQueryLimit,
 	}
 
-	previousTransactions, prevErr := h.services.Transaction.GetTransactionsByFamily(ctx, familyID, previousFilter)
+	previousTransactions, prevErr := h.services.Transaction.GetAllTransactions(ctx, previousFilter)
 	if prevErr != nil || len(previousTransactions) == 0 {
 		return 0, 0, false
 	}
@@ -406,7 +371,6 @@ func (h *DashboardHandler) calculateChanges(
 // buildBudgetOverview создает обзор бюджетов
 func (h *DashboardHandler) buildBudgetOverview(
 	ctx context.Context,
-	familyID uuid.UUID,
 ) (*webModels.BudgetOverviewCard, error) {
 	now := time.Now()
 
@@ -557,15 +521,13 @@ func (h *DashboardHandler) sortAndLimitBudgets(topBudgets *[]*webModels.BudgetPr
 // buildRecentActivity создает список последних транзакций
 func (h *DashboardHandler) buildRecentActivity(
 	ctx context.Context,
-	familyID uuid.UUID,
 ) (*webModels.RecentActivityCard, error) {
 	// Получаем последние транзакции
 	filter := dto.TransactionFilterDTO{
-		FamilyID: familyID,
-		Limit:    webModels.MaxRecentTransactions,
+		Limit: webModels.MaxRecentTransactions,
 	}
 
-	transactions, err := h.services.Transaction.GetTransactionsByFamily(ctx, familyID, filter)
+	transactions, err := h.services.Transaction.GetAllTransactions(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get recent transactions: %w", err)
 	}
@@ -598,10 +560,9 @@ func (h *DashboardHandler) buildRecentActivity(
 
 	// Получаем общее количество транзакций для показа статистики
 	totalFilter := dto.TransactionFilterDTO{
-		FamilyID: familyID,
-		Limit:    DefaultQueryLimit, // Достаточно для подсчета
+		Limit: DefaultQueryLimit, // Достаточно для подсчета
 	}
-	allTransactions, totalErr := h.services.Transaction.GetTransactionsByFamily(ctx, familyID, totalFilter)
+	allTransactions, totalErr := h.services.Transaction.GetAllTransactions(ctx, totalFilter)
 	totalCount := 0
 	if totalErr == nil {
 		totalCount = len(allTransactions)
@@ -619,13 +580,12 @@ func (h *DashboardHandler) buildRecentActivity(
 // buildCategoryInsights создает аналитику по категориям
 func (h *DashboardHandler) buildCategoryInsights(
 	ctx context.Context,
-	familyID uuid.UUID,
 	filters *webModels.DashboardFilters,
 ) (*webModels.CategoryInsightsCard, error) {
 	startDate, endDate := filters.GetPeriodDates()
 
 	// Получаем транзакции за период
-	transactions, err := h.getTransactionsForPeriod(ctx, familyID, startDate, endDate)
+	transactions, err := h.getTransactionsForPeriod(ctx, startDate, endDate)
 	if err != nil {
 		return nil, err
 	}
@@ -664,17 +624,15 @@ type categoryStatsData struct {
 // getTransactionsForPeriod получает транзакции за указанный период
 func (h *DashboardHandler) getTransactionsForPeriod(
 	ctx context.Context,
-	familyID uuid.UUID,
 	startDate, endDate time.Time,
 ) ([]*transaction.Transaction, error) {
 	filter := dto.TransactionFilterDTO{
-		FamilyID: familyID,
 		DateFrom: &startDate,
 		DateTo:   &endDate,
 		Limit:    DefaultQueryLimit,
 	}
 
-	transactions, err := h.services.Transaction.GetTransactionsByFamily(ctx, familyID, filter)
+	transactions, err := h.services.Transaction.GetAllTransactions(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get transactions for insights: %w", err)
 	}
@@ -865,14 +823,13 @@ func sortCategoryInsights(insights []*webModels.CategoryInsightItem) {
 // buildEnhancedStats создает расширенную статистику
 func (h *DashboardHandler) buildEnhancedStats(
 	ctx context.Context,
-	familyID uuid.UUID,
 	filters *webModels.DashboardFilters,
 	_ *webModels.MonthlySummaryCard,
 ) (*webModels.EnhancedStatsCard, error) {
 	startDate, endDate := filters.GetPeriodDates()
 
 	// Получаем транзакции за период
-	transactions, err := h.getTransactionsForPeriod(ctx, familyID, startDate, endDate)
+	transactions, err := h.getTransactionsForPeriod(ctx, startDate, endDate)
 	if err != nil {
 		return nil, err
 	}
@@ -916,7 +873,7 @@ func (h *DashboardHandler) buildEnhancedStats(
 	}
 
 	// Прогноз (если это текущий месяц)
-	forecast := h.buildForecast(ctx, familyID, startDate, endDate, avgIncomePerDay, avgExpensePerDay)
+	forecast := h.buildForecast(startDate, endDate, avgIncomePerDay, avgExpensePerDay)
 
 	// TODO: Implement user preferences system for financial goals
 	// For now, goals are disabled to avoid misleading hardcoded values
@@ -943,8 +900,6 @@ func (h *DashboardHandler) buildEnhancedStats(
 
 // buildForecast создает прогноз на основе текущих трендов
 func (h *DashboardHandler) buildForecast(
-	_ context.Context,
-	_ uuid.UUID,
 	startDate, endDate time.Time,
 	avgIncomePerDay, avgExpensePerDay float64,
 ) *webModels.ForecastData {
@@ -983,12 +938,6 @@ func (h *DashboardHandler) CategoryInsights(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
-	// Получаем единственную семью в single-family модели
-	family, err := h.services.Family.GetFamily(c.Request().Context())
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get family")
-	}
-
 	// Парсим фильтры
 	filters := &webModels.DashboardFilters{
 		Period: "current_month",
@@ -1013,7 +962,6 @@ func (h *DashboardHandler) CategoryInsights(c echo.Context) error {
 	// Получаем аналитику по категориям
 	categoryInsights, err := h.buildCategoryInsightsWithFilter(
 		c.Request().Context(),
-		family.ID,
 		startDate,
 		endDate,
 		filterType,
@@ -1030,7 +978,6 @@ func (h *DashboardHandler) CategoryInsights(c echo.Context) error {
 // buildCategoryInsightsWithFilter создает аналитику по категориям с поддержкой фильтрации
 func (h *DashboardHandler) buildCategoryInsightsWithFilter(
 	ctx context.Context,
-	familyID uuid.UUID,
 	startDate, endDate time.Time,
 	filterType string,
 ) (*webModels.CategoryInsightsCard, error) {
@@ -1041,7 +988,7 @@ func (h *DashboardHandler) buildCategoryInsightsWithFilter(
 	}
 
 	// Базовый buildCategoryInsights для получения всех данных
-	baseInsights, err := h.buildCategoryInsights(ctx, familyID, filters)
+	baseInsights, err := h.buildCategoryInsights(ctx, filters)
 	if err != nil {
 		return nil, err
 	}
@@ -1074,7 +1021,6 @@ func (h *DashboardHandler) buildCategoryInsightsWithFilter(
 // buildDashboardViewModel создает полную модель данных для dashboard
 func (h *DashboardHandler) buildDashboardViewModel(
 	ctx context.Context,
-	familyID uuid.UUID,
 	monthlySummary *webModels.MonthlySummaryCard,
 	enhancedStats *webModels.EnhancedStatsCard,
 	filters *webModels.DashboardFilters,
@@ -1083,7 +1029,7 @@ func (h *DashboardHandler) buildDashboardViewModel(
 		MonthlySummary: monthlySummary,
 		EnhancedStats:  enhancedStats,
 		BudgetOverview: func() *webModels.BudgetOverviewCard {
-			budgetOverview, budgetErr := h.buildBudgetOverview(ctx, familyID)
+			budgetOverview, budgetErr := h.buildBudgetOverview(ctx)
 			if budgetErr != nil {
 				return &webModels.BudgetOverviewCard{
 					TotalBudgets:  0,
@@ -1101,7 +1047,7 @@ func (h *DashboardHandler) buildDashboardViewModel(
 			return budgetOverview
 		}(),
 		RecentActivity: func() *webModels.RecentActivityCard {
-			recentActivity, activityErr := h.buildRecentActivity(ctx, familyID)
+			recentActivity, activityErr := h.buildRecentActivity(ctx)
 			if activityErr != nil {
 				return &webModels.RecentActivityCard{
 					Transactions: []*webModels.RecentTransactionItem{},
@@ -1114,7 +1060,7 @@ func (h *DashboardHandler) buildDashboardViewModel(
 			return recentActivity
 		}(),
 		CategoryInsights: func() *webModels.CategoryInsightsCard {
-			insights, insightsErr := h.buildCategoryInsights(ctx, familyID, filters)
+			insights, insightsErr := h.buildCategoryInsights(ctx, filters)
 			if insightsErr != nil {
 				return &webModels.CategoryInsightsCard{
 					TopExpenseCategories: []*webModels.CategoryInsightItem{},

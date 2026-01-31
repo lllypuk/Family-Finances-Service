@@ -69,7 +69,7 @@ func NewHTTPServerWithObservability(
 	e.Use(middleware.RequestID())
 
 	// Timeout для всех запросов
-	e.Use(middleware.TimeoutWithConfig(middleware.TimeoutConfig{
+	e.Use(middleware.ContextTimeoutWithConfig(middleware.ContextTimeoutConfig{
 		Timeout: HTTPRequestTimeout,
 	}))
 
@@ -79,7 +79,19 @@ func NewHTTPServerWithObservability(
 		e.Use(observability.LoggingMiddleware(obsService.Logger))
 	} else {
 		// Fallback к стандартному логированию
-		e.Use(middleware.Logger())
+		e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+			LogStatus: true,
+			LogURI:    true,
+			LogError:  true,
+			LogValuesFunc: func(_ echo.Context, v middleware.RequestLoggerValues) error {
+				e.Logger.Info("request",
+					"uri", v.URI,
+					"status", v.Status,
+					"error", v.Error,
+				)
+				return nil
+			},
+		}))
 	}
 
 	server := &HTTPServer{

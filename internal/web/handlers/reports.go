@@ -50,14 +50,8 @@ func (h *ReportHandler) Index(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
-	// Получаем единственную семью в single-family модели
-	family, err := h.services.Family.GetFamily(c.Request().Context())
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get family")
-	}
-
-	// Получаем список существующих отчетов семьи
-	reports, err := h.services.Report.GetReportsByFamily(c.Request().Context(), family.ID, nil)
+	// Получаем список существующих отчетов
+	reports, err := h.services.Report.GetReports(c.Request().Context(), nil)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get reports")
 	}
@@ -123,12 +117,6 @@ func (h *ReportHandler) Create(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
-	// Получаем единственную семью в single-family модели
-	family, err := h.services.Family.GetFamily(c.Request().Context())
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get family")
-	}
-
 	// Парсим и валидируем форму
 	form, err := h.parseAndValidateReportForm(c)
 	if err != nil {
@@ -141,7 +129,7 @@ func (h *ReportHandler) Create(c echo.Context) error {
 	}
 
 	// Создаем DTO для запроса отчета
-	createDTO, err := h.buildReportRequestDTO(*form, sessionData, family.ID)
+	createDTO, err := h.buildReportRequestDTO(*form, sessionData)
 	if err != nil {
 		return err
 	}
@@ -190,7 +178,6 @@ func (h *ReportHandler) parseAndValidateReportForm(c echo.Context) (*webModels.R
 func (h *ReportHandler) buildReportRequestDTO(
 	form webModels.ReportForm,
 	sessionData *middleware.SessionData,
-	familyID uuid.UUID,
 ) (dto.ReportRequestDTO, error) {
 	startDate, err := form.GetStartDate()
 	if err != nil {
@@ -206,7 +193,6 @@ func (h *ReportHandler) buildReportRequestDTO(
 		Name:      form.Name,
 		Type:      form.ToReportType(),
 		Period:    form.ToReportPeriod(),
-		FamilyID:  familyID,
 		UserID:    sessionData.UserID,
 		StartDate: startDate,
 		EndDate:   endDate,
@@ -255,7 +241,6 @@ func (h *ReportHandler) generateIncomeReport(c echo.Context, createDTO dto.Repor
 func (h *ReportHandler) generateBudgetReport(c echo.Context, createDTO dto.ReportRequestDTO) (*report.Report, error) {
 	budgetReport, err := h.services.Report.GenerateBudgetComparisonReport(
 		c.Request().Context(),
-		createDTO.FamilyID,
 		createDTO.Period,
 	)
 	if err != nil {
@@ -269,7 +254,6 @@ func (h *ReportHandler) generateBudgetReport(c echo.Context, createDTO dto.Repor
 func (h *ReportHandler) generateCashFlowReport(c echo.Context, createDTO dto.ReportRequestDTO) (*report.Report, error) {
 	cashFlowReport, err := h.services.Report.GenerateCashFlowReport(
 		c.Request().Context(),
-		createDTO.FamilyID,
 		createDTO.StartDate,
 		createDTO.EndDate,
 	)
@@ -284,7 +268,6 @@ func (h *ReportHandler) generateCashFlowReport(c echo.Context, createDTO dto.Rep
 func (h *ReportHandler) generateCategoryReport(c echo.Context, createDTO dto.ReportRequestDTO) (*report.Report, error) {
 	categoryReport, err := h.services.Report.GenerateCategoryBreakdownReport(
 		c.Request().Context(),
-		createDTO.FamilyID,
 		createDTO.Period,
 	)
 	if err != nil {
@@ -364,12 +347,7 @@ func (h *ReportHandler) Delete(c echo.Context) error {
 			return h.services.Report.GetReportByID(ctx.Request().Context(), entityID)
 		},
 		DeleteEntityFunc: func(ctx echo.Context, entityID uuid.UUID) error {
-			// Получаем единственную семью в single-family модели
-			family, err := h.services.Family.GetFamily(ctx.Request().Context())
-			if err != nil {
-				return err
-			}
-			return h.services.Report.DeleteReport(ctx.Request().Context(), entityID, family.ID)
+			return h.services.Report.DeleteReport(ctx.Request().Context(), entityID)
 		},
 		GetErrorMsgFunc: h.getReportServiceErrorMessage,
 		RedirectURL:     "/reports",
@@ -417,12 +395,6 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
-	// Получаем единственную семью в single-family модели
-	family, err := h.services.Family.GetFamily(c.Request().Context())
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get family")
-	}
-
 	// Парсим данные формы
 	var form webModels.ReportForm
 	if bindErr := c.Bind(&form); bindErr != nil {
@@ -453,7 +425,6 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 		Name:      form.Name,
 		Type:      form.ToReportType(),
 		Period:    form.ToReportPeriod(),
-		FamilyID:  family.ID,
 		UserID:    sessionData.UserID,
 		StartDate: startDate,
 		EndDate:   endDate,
@@ -471,20 +442,17 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 	case report.TypeBudget:
 		reportData, generateErr = h.services.Report.GenerateBudgetComparisonReport(
 			c.Request().Context(),
-			generateDTO.FamilyID,
 			generateDTO.Period,
 		)
 	case report.TypeCashFlow:
 		reportData, generateErr = h.services.Report.GenerateCashFlowReport(
 			c.Request().Context(),
-			generateDTO.FamilyID,
 			generateDTO.StartDate,
 			generateDTO.EndDate,
 		)
 	case report.TypeCategoryBreak:
 		reportData, generateErr = h.services.Report.GenerateCategoryBreakdownReport(
 			c.Request().Context(),
-			generateDTO.FamilyID,
 			generateDTO.Period,
 		)
 	default:

@@ -110,20 +110,20 @@ func (r *SQLiteRepository) Create(ctx context.Context, b *budget.Budget) error {
 	if err != nil {
 		return fmt.Errorf("failed to get family ID: %w", err)
 	}
-	if err := validation.ValidateBudgetPeriod(b.Period); err != nil {
-		return fmt.Errorf("invalid period: %w", err)
+	if validationErr := validation.ValidateBudgetPeriod(b.Period); validationErr != nil {
+		return fmt.Errorf("invalid period: %w", validationErr)
 	}
-	if err := validation.ValidateBudgetAmount(b.Amount); err != nil {
-		return fmt.Errorf("invalid amount: %w", err)
+	if validationErr := validation.ValidateBudgetAmount(b.Amount); validationErr != nil {
+		return fmt.Errorf("invalid amount: %w", validationErr)
 	}
-	if err := validation.ValidateBudgetName(b.Name); err != nil {
-		return fmt.Errorf("invalid name: %w", err)
+	if validationErr := validation.ValidateBudgetName(b.Name); validationErr != nil {
+		return fmt.Errorf("invalid name: %w", validationErr)
 	}
 
 	// Validate category ID if provided
 	if b.CategoryID != nil {
-		if err := validation.ValidateUUID(*b.CategoryID); err != nil {
-			return fmt.Errorf("invalid category ID: %w", err)
+		if validationErr := validation.ValidateUUID(*b.CategoryID); validationErr != nil {
+			return fmt.Errorf("invalid category ID: %w", validationErr)
 		}
 	}
 
@@ -214,7 +214,7 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*budget.B
 	return &b, nil
 }
 
-// GetByFamilyID retrieves all budgets belonging to a specific family
+// GetAll retrieves all budgets belonging to the family
 func (r *SQLiteRepository) GetAll(ctx context.Context) ([]*budget.Budget, error) {
 	// Get single family ID
 	familyID, err := r.getSingleFamilyID(ctx)
@@ -394,20 +394,20 @@ func (r *SQLiteRepository) Update(ctx context.Context, b *budget.Budget) error {
 	if err != nil {
 		return fmt.Errorf("failed to get family ID: %w", err)
 	}
-	if err := validation.ValidateBudgetPeriod(b.Period); err != nil {
-		return fmt.Errorf("invalid period: %w", err)
+	if validationErr := validation.ValidateBudgetPeriod(b.Period); validationErr != nil {
+		return fmt.Errorf("invalid period: %w", validationErr)
 	}
-	if err := validation.ValidateBudgetAmount(b.Amount); err != nil {
-		return fmt.Errorf("invalid amount: %w", err)
+	if validationErr := validation.ValidateBudgetAmount(b.Amount); validationErr != nil {
+		return fmt.Errorf("invalid amount: %w", validationErr)
 	}
-	if err := validation.ValidateBudgetName(b.Name); err != nil {
-		return fmt.Errorf("invalid name: %w", err)
+	if validationErr := validation.ValidateBudgetName(b.Name); validationErr != nil {
+		return fmt.Errorf("invalid name: %w", validationErr)
 	}
 
 	// Validate category ID if provided
 	if b.CategoryID != nil {
-		if err := validation.ValidateUUID(*b.CategoryID); err != nil {
-			return fmt.Errorf("invalid category ID: %w", err)
+		if validationErr := validation.ValidateUUID(*b.CategoryID); validationErr != nil {
+			return fmt.Errorf("invalid category ID: %w", validationErr)
 		}
 	}
 
@@ -708,7 +708,7 @@ func (r *SQLiteRepository) CreateAlert(ctx context.Context, alert *Alert) error 
 	return nil
 }
 
-// GetByFamilyAndCategory retrieves budgets by family ID and optionally by category ID
+// GetByCategory retrieves budgets optionally filtered by category ID
 func (r *SQLiteRepository) GetByCategory(
 	ctx context.Context,
 	categoryID *uuid.UUID,
@@ -723,8 +723,8 @@ func (r *SQLiteRepository) GetByCategory(
 	var args []interface{}
 
 	if categoryID != nil {
-		if err := validation.ValidateUUID(*categoryID); err != nil {
-			return nil, fmt.Errorf("invalid category ID: %w", err)
+		if validationErr := validation.ValidateUUID(*categoryID); validationErr != nil {
+			return nil, fmt.Errorf("invalid category ID: %w", validationErr)
 		}
 
 		query = `

@@ -26,7 +26,7 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
-		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
 		// Create category
@@ -55,9 +55,8 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
-		familyID, err := helper.CreateTestFamily(ctx, "Hierarchy Test Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Hierarchy Test Family", "USD")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		// Create parent category
 		parentCategory := &category.Category{
@@ -96,9 +95,8 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
-		familyID, err := helper.CreateTestFamily(ctx, "Children Test Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Children Test Family", "USD")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		// Create parent category
 		parentCategory := &category.Category{
@@ -171,9 +169,8 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
-		familyID, err := helper.CreateTestFamily(ctx, "Path Test Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Path Test Family", "USD")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		// Create category hierarchy: Root -> Level1 -> Level2
 		rootCategory := &category.Category{
@@ -226,9 +223,8 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
-		familyID, err := helper.CreateTestFamily(ctx, "Type Filter Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Type Filter Family", "USD")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		// Create categories of different types
 		expenseCategories := []*category.Category{
@@ -272,16 +268,16 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		// Get expense categories only
-		expenseResults, err := repo.GetByFamilyIDAndType(ctx, familyUUID, category.TypeExpense)
+		// Get expense categories only (single family model)
+		expenseResults, err := repo.GetByType(ctx, category.TypeExpense)
 		require.NoError(t, err)
 		assert.Len(t, expenseResults, 2)
 		for _, cat := range expenseResults {
 			assert.Equal(t, category.TypeExpense, cat.Type)
 		}
 
-		// Get income categories only
-		incomeResults, err := repo.GetByFamilyIDAndType(ctx, familyUUID, category.TypeIncome)
+		// Get income categories only (single family model)
+		incomeResults, err := repo.GetByType(ctx, category.TypeIncome)
 		require.NoError(t, err)
 		assert.Len(t, incomeResults, 2)
 		for _, cat := range incomeResults {
@@ -294,9 +290,8 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
-		familyID, err := helper.CreateTestFamily(ctx, "Circular Test Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Circular Test Family", "USD")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		// Create parent and child categories
 		parentCategory := &category.Category{
@@ -334,9 +329,8 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
-		familyID, err := helper.CreateTestFamily(ctx, "Delete Test Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Delete Test Family", "USD")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		// Create parent category
 		parentCategory := &category.Category{
@@ -364,7 +358,7 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Try to delete parent with children - should fail
-		err = repo.Delete(ctx, parentCategory.ID, familyUUID)
+		err = repo.Delete(ctx, parentCategory.ID)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "cannot delete category with subcategories")
 	})
@@ -374,7 +368,7 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
-		familyID, err := helper.CreateTestFamily(ctx, "Delete Leaf Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Delete Leaf Family", "USD")
 		require.NoError(t, err)
 
 		// Create leaf category (no children)
@@ -390,7 +384,7 @@ func TestCategoryRepositorySQLite_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Delete leaf category - should succeed
-		err = repo.Delete(ctx, leafCategory.ID, leafCategory.FamilyID)
+		err = repo.Delete(ctx, leafCategory.ID)
 		require.NoError(t, err)
 
 		// Verify category is soft deleted (should not be found)

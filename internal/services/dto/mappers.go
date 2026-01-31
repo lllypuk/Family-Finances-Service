@@ -3,8 +3,6 @@ package dto
 import (
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/web/models"
-
-	"github.com/google/uuid"
 )
 
 // ToUserResponseDTO converts a domain User to UserResponseDTO
@@ -15,7 +13,6 @@ func ToUserResponseDTO(u *user.User) UserResponseDTO {
 		FirstName: u.FirstName,
 		LastName:  u.LastName,
 		Role:      u.Role,
-		FamilyID:  uuid.Nil, // Single family model - FamilyID no longer stored in User
 		CreatedAt: u.CreatedAt,
 		UpdatedAt: u.UpdatedAt,
 	}

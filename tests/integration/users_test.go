@@ -30,7 +30,6 @@ func TestUserHandler_Integration(t *testing.T) {
 			Password:  "password123",
 			FirstName: "John",
 			LastName:  "Doe",
-			FamilyID:  family.ID,
 			Role:      "admin",
 		}
 
@@ -52,7 +51,6 @@ func TestUserHandler_Integration(t *testing.T) {
 		assert.Equal(t, request.Email, response.Data.Email)
 		assert.Equal(t, request.FirstName, response.Data.FirstName)
 		assert.Equal(t, request.LastName, response.Data.LastName)
-		assert.Equal(t, request.FamilyID, response.Data.FamilyID)
 		assert.Equal(t, request.Role, response.Data.Role)
 		assert.NotEqual(t, uuid.Nil, response.Data.ID)
 	})
@@ -63,7 +61,6 @@ func TestUserHandler_Integration(t *testing.T) {
 			Password:  "123",           // Too short password
 			FirstName: "",              // Empty first name
 			LastName:  "Doe",
-			FamilyID:  uuid.New(),
 			Role:      "admin",
 		}
 
@@ -117,7 +114,6 @@ func TestUserHandler_Integration(t *testing.T) {
 		assert.Equal(t, user.Email, response.Data.Email)
 		assert.Equal(t, user.FirstName, response.Data.FirstName)
 		assert.Equal(t, user.LastName, response.Data.LastName)
-		assert.Equal(t, user.FamilyID, response.Data.FamilyID)
 	})
 
 	t.Run("GetUserByID_NotFound", func(t *testing.T) {
