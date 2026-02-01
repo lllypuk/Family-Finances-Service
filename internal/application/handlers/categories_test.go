@@ -156,7 +156,6 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 				"type": "expense",
 				"color": "#FF5733",
 				"icon": "food",
-				invalid_json_here
 			}`,
 			mockSetup: func(_ *MockCategoryService, _ uuid.UUID) {
 				// No mock calls expected

@@ -174,24 +174,21 @@ func (r *SQLiteFamilyRepository) Exists(ctx context.Context) (bool, error) {
 
 // GetFamilyStatistics returns statistics about the single family
 func (r *SQLiteFamilyRepository) GetFamilyStatistics(ctx context.Context) (*FamilyStatistics, error) {
+	// Single-family model: no family_id in other tables, use subqueries for counts
 	query := `
 		SELECT
 			f.id,
 			f.name,
 			f.currency,
 			f.created_at,
-			COUNT(DISTINCT u.id) as user_count,
-			COUNT(DISTINCT c.id) as category_count,
-			COUNT(DISTINCT t.id) as transaction_count,
-			COUNT(DISTINCT b.id) as budget_count,
-			COALESCE(SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END), 0) as total_income,
-			COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END), 0) as total_expenses
+			(SELECT COUNT(DISTINCT u.id) FROM users u WHERE u.is_active = 1) as user_count,
+			(SELECT COUNT(DISTINCT c.id) FROM categories c WHERE c.is_active = 1) as category_count,
+			(SELECT COUNT(DISTINCT t.id) FROM transactions t) as transaction_count,
+			(SELECT COUNT(DISTINCT b.id) FROM budgets b WHERE b.is_active = 1) as budget_count,
+			COALESCE((SELECT SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END) FROM transactions t), 0) as total_income,
+			COALESCE((SELECT SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END) FROM transactions t), 0) as total_expenses
 		FROM families f
-		LEFT JOIN users u ON f.id = u.family_id AND u.is_active = 1
-		LEFT JOIN categories c ON f.id = c.family_id AND c.is_active = 1
-		LEFT JOIN transactions t ON f.id = t.family_id
-		LEFT JOIN budgets b ON f.id = b.family_id AND b.is_active = 1
-		GROUP BY f.id, f.name, f.currency, f.created_at
+		ORDER BY f.created_at ASC
 		LIMIT 1`
 
 	var stats FamilyStatistics

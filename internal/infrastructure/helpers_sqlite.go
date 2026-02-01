@@ -37,11 +37,11 @@ func UUIDPtrToString(id *uuid.UUID) *string {
 var ErrNilStringValue = errors.New("nil string value provided")
 
 // StringToUUIDPtr converts string to *UUID
+// Returns (nil, ErrNilStringValue) if input is nil to maintain NULL semantics
 // Returns error if string is invalid UUID format
 func StringToUUIDPtr(s *string) (*uuid.UUID, error) {
 	if s == nil {
-		// Return zero UUID instead of nil to avoid nil pointer issues
-		return &uuid.Nil, nil
+		return nil, ErrNilStringValue
 	}
 	id, err := uuid.Parse(*s)
 	if err != nil {

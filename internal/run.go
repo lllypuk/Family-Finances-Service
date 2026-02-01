@@ -36,6 +36,11 @@ func NewApplication() (*Application, error) {
 	// Загрузка конфигурации
 	config := LoadConfig()
 
+	// Валидация конфигурации (включая проверку production secrets)
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %w", err)
+	}
+
 	// Настройка observability
 	obsConfig := observability.DefaultConfig()
 	// Настраиваем уровень логирования из переменной окружения

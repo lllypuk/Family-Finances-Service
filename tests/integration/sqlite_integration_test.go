@@ -334,9 +334,10 @@ func TestFullWorkflowIntegration(t *testing.T) {
 		assert.Equal(t, 5, familyStats.CategoryCount) // 3 root + 2 subcategories
 		assert.Equal(t, 5, familyStats.TransactionCount)
 		assert.Equal(t, 2, familyStats.BudgetCount)
-		assert.InEpsilon(t, 100000.00, familyStats.TotalIncome, 0.01)
-		assert.InEpsilon(t, 5025.00, familyStats.TotalExpenses, 0.01)
-		assert.InEpsilon(t, 94975.00, familyStats.Balance, 0.01)
+		// Expected values: 2 income transactions (3000 + 2000) and 3 expense transactions (120.50 + 85.00 + 45.75)
+		assert.InEpsilon(t, 5000.00, familyStats.TotalIncome, 0.01)
+		assert.InEpsilon(t, 251.25, familyStats.TotalExpenses, 0.01)
+		assert.InEpsilon(t, 4748.75, familyStats.Balance, 0.01)
 	})
 
 	// Test complex queries and edge cases

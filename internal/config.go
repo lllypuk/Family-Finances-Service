@@ -2,6 +2,7 @@ package internal
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -109,6 +110,14 @@ func LoadConfig() *Config {
 		config.Web.CookieSecure = false
 		if config.Logging.Level == "" {
 			config.Logging.Level = "debug"
+		}
+		// Warn about default secrets in development
+		if config.Web.SessionSecret == "your-super-secret-session-key-change-in-production" ||
+			config.Web.CSRFSecret == "your-csrf-secret-key-change-in-production" {
+			fmt.Fprintln(
+				os.Stderr,
+				"WARNING: Using default secrets in development mode - ensure these are changed before deploying to production",
+			)
 		}
 	}
 

@@ -16,7 +16,8 @@ RUN go mod download
 # Копирование исходного кода
 COPY . .
 
-# Сборка приложения с оптимизацией (CGO_ENABLED=0 для pure Go + SQLite)
+# Сборка приложения с оптимизацией
+# CGO_ENABLED=0 правильно для modernc.org/sqlite (pure Go драйвер, не требует CGO)
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -a -installsuffix cgo \
     -ldflags='-w -s -extldflags "-static"' \
