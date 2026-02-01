@@ -66,7 +66,7 @@ func NewApplication() (*Application, error) {
 	app.sqliteConn = sqliteConn
 
 	// Запуск миграций
-	dbURL := fmt.Sprintf("sqlite3://%s", config.Database.Path)
+	dbURL := fmt.Sprintf("sqlite://%s", config.Database.Path)
 	migrationManager := infrastructure.NewMigrationManager(dbURL, "./migrations")
 	if err = migrationManager.Up(); err != nil {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
