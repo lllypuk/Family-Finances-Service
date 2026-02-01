@@ -50,6 +50,12 @@ func (h *ReportHandler) Index(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
+	// Получаем CSRF токен
+	csrfToken, err := middleware.GetCSRFToken(c)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get CSRF token")
+	}
+
 	// Получаем список существующих отчетов
 	reports, err := h.services.Report.GetReports(c.Request().Context(), nil)
 	if err != nil {
@@ -86,6 +92,7 @@ func (h *ReportHandler) Index(c echo.Context) error {
 		"Reports":           reportVMs,
 		"ReportTypeOptions": reportTypeOptions,
 		"DefaultForm":       defaultForm,
+		"CSRFToken":         csrfToken,
 	}
 
 	return h.renderPage(c, "pages/reports/index", data)

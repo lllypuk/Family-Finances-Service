@@ -54,6 +54,8 @@
               hx-indicator="#loading-indicator"
               hx-swap="innerHTML">
 
+            <!-- CSRF Token -->
+            <input type="hidden" name="_token" value="{{.CSRFToken}}">
             <div class="grid">
                 <div>
                     <label for="name">Report Name</label>
