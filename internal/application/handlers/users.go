@@ -154,7 +154,6 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 		LastName:  req.LastName,
 		Password:  req.Password,
 		Role:      user.Role(req.Role),
-		FamilyID:  req.FamilyID,
 	}
 
 	// Call service
@@ -170,7 +169,6 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 		FirstName: createdUser.FirstName,
 		LastName:  createdUser.LastName,
 		Role:      string(createdUser.Role),
-		FamilyID:  createdUser.FamilyID,
 		CreatedAt: createdUser.CreatedAt,
 		UpdatedAt: createdUser.UpdatedAt,
 	}
@@ -215,7 +213,6 @@ func (h *UserHandler) GetUserByID(c echo.Context) error {
 		FirstName: foundUser.FirstName,
 		LastName:  foundUser.LastName,
 		Role:      string(foundUser.Role),
-		FamilyID:  foundUser.FamilyID,
 		CreatedAt: foundUser.CreatedAt,
 		UpdatedAt: foundUser.UpdatedAt,
 	}
@@ -283,7 +280,6 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 		FirstName: updatedUser.FirstName,
 		LastName:  updatedUser.LastName,
 		Role:      string(updatedUser.Role),
-		FamilyID:  updatedUser.FamilyID,
 		CreatedAt: updatedUser.CreatedAt,
 		UpdatedAt: updatedUser.UpdatedAt,
 	}
@@ -315,38 +311,8 @@ func (h *UserHandler) DeleteUser(c echo.Context) error {
 		})
 	}
 
-	familyIDParam := c.QueryParam("family_id")
-	if familyIDParam == "" {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "MISSING_FAMILY_ID",
-				Message: "family_id query parameter is required",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
-	familyID, err := uuid.Parse(familyIDParam)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_FAMILY_ID",
-				Message: "Invalid family_id format",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
 	// Call service
-	err = h.userService.DeleteUser(c.Request().Context(), id, familyID)
+	err = h.userService.DeleteUser(c.Request().Context(), id)
 	if err != nil {
 		return h.handleServiceError(c, err)
 	}

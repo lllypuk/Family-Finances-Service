@@ -13,7 +13,6 @@ type ReportRequestDTO struct {
 	Name      string         `json:"name"              validate:"required,min=1,max=100"`
 	Type      report.Type    `json:"type"              validate:"required,oneof=expenses income budget cash_flow category_break"`
 	Period    report.Period  `json:"period"            validate:"required,oneof=daily weekly monthly yearly custom"`
-	FamilyID  uuid.UUID      `json:"family_id"         validate:"required"`
 	UserID    uuid.UUID      `json:"user_id"           validate:"required"`
 	StartDate time.Time      `json:"start_date"        validate:"required"`
 	EndDate   time.Time      `json:"end_date"          validate:"required,gtfield=StartDate"`
@@ -34,7 +33,6 @@ type ReportFilters struct {
 type ExpenseReportDTO struct {
 	ID                uuid.UUID                  `json:"id"`
 	Name              string                     `json:"name"`
-	FamilyID          uuid.UUID                  `json:"family_id"`
 	UserID            uuid.UUID                  `json:"user_id"`
 	Period            report.Period              `json:"period"`
 	StartDate         time.Time                  `json:"start_date"`
@@ -53,7 +51,6 @@ type ExpenseReportDTO struct {
 type IncomeReportDTO struct {
 	ID                uuid.UUID                  `json:"id"`
 	Name              string                     `json:"name"`
-	FamilyID          uuid.UUID                  `json:"family_id"`
 	UserID            uuid.UUID                  `json:"user_id"`
 	Period            report.Period              `json:"period"`
 	StartDate         time.Time                  `json:"start_date"`
@@ -72,7 +69,6 @@ type IncomeReportDTO struct {
 type BudgetComparisonDTO struct {
 	ID            uuid.UUID                     `json:"id"`
 	Name          string                        `json:"name"`
-	FamilyID      uuid.UUID                     `json:"family_id"`
 	UserID        uuid.UUID                     `json:"user_id"`
 	Period        report.Period                 `json:"period"`
 	StartDate     time.Time                     `json:"start_date"`
@@ -91,7 +87,6 @@ type BudgetComparisonDTO struct {
 type CashFlowReportDTO struct {
 	ID             uuid.UUID              `json:"id"`
 	Name           string                 `json:"name"`
-	FamilyID       uuid.UUID              `json:"family_id"`
 	UserID         uuid.UUID              `json:"user_id"`
 	Period         report.Period          `json:"period"`
 	StartDate      time.Time              `json:"start_date"`
@@ -112,7 +107,6 @@ type CashFlowReportDTO struct {
 type CategoryBreakdownDTO struct {
 	ID          uuid.UUID                    `json:"id"`
 	Name        string                       `json:"name"`
-	FamilyID    uuid.UUID                    `json:"family_id"`
 	UserID      uuid.UUID                    `json:"user_id"`
 	Period      report.Period                `json:"period"`
 	StartDate   time.Time                    `json:"start_date"`
@@ -407,7 +401,6 @@ type ExportOptionsDTO struct {
 type ScheduleReportDTO struct {
 	Name         string            `json:"name"              validate:"required,min=1,max=100"`
 	Type         report.Type       `json:"type"              validate:"required"`
-	FamilyID     uuid.UUID         `json:"family_id"         validate:"required"`
 	UserID       uuid.UUID         `json:"user_id"           validate:"required"`
 	Schedule     ScheduleConfigDTO `json:"schedule"          validate:"required"`
 	Filters      *ReportFilters    `json:"filters,omitempty"`
@@ -420,7 +413,6 @@ type ScheduledReportDTO struct {
 	ID           uuid.UUID         `json:"id"`
 	Name         string            `json:"name"`
 	Type         report.Type       `json:"type"`
-	FamilyID     uuid.UUID         `json:"family_id"`
 	UserID       uuid.UUID         `json:"user_id"`
 	Schedule     ScheduleConfigDTO `json:"schedule"`
 	Filters      *ReportFilters    `json:"filters,omitempty"`

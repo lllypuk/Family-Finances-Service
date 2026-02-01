@@ -10,18 +10,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `make run-local` - Run with local development environment variables (requires `make dev-up` first)
 
 #### Local Development Setup
-**Prerequisites**: Before running `make run-local`, you must start the required services:
+**No prerequisites** - just run the application:
 ```bash
-make dev-up  # Starts PostgreSQL and observability containers
 make run-local  # Runs the application on localhost:8080
 ```
 
 The `run-local` command sets up the following environment:
 - **Server**: localhost:8080 (default port)
-- **PostgreSQL**: postgres://postgres:postgres123@localhost:5432/family_budget?sslmode=disable
-- **Database**: family_budget (separate from production)
+- **Database**: SQLite at `./data/budget.db` (created automatically)
 - **Logging**: DEBUG level for development
 - **Session Secret**: Development-specific secret key
+- **Auto-migrations**: Database schema created on first run
 
 #### Testing Local Interface
 When testing the web interface locally, use the `--noproxy` flag to bypass proxy settings:
@@ -37,22 +36,22 @@ curl -s --noproxy '*' 127.0.0.1:8080/login
 ```
 
 ### Testing and Code Quality
-- `make test` - Run tests with shared PostgreSQL container (fast)
-- `make test-unit` - Unit tests with fast containers
-- `make test-integration` - Integration tests with shared container
+- `make test` - Run tests with in-memory SQLite (⚡ instant)
+- `make test-unit` - Unit tests only
+- `make test-integration` - Integration tests only
 - `make test-coverage` - Run tests with coverage report
 - `make lint` - Run golangci-lint for comprehensive code quality checks
 - `make fmt` - Format code with go fmt
 - `make pre-commit` - Run pre-commit checks (format, test, lint)
 
 #### 🚀 Performance Optimization for Tests
-The project includes **PostgreSQL container reuse** to dramatically speed up test execution:
+The project uses **in-memory SQLite** for ultra-fast testing:
 
-**Fast container reuse strategies:**
-- `REUSE_POSTGRES_CONTAINER=true` - Reuses PostgreSQL container across tests
-- Each test gets a unique database (e.g., `testdb_1691234567890`)
-- Automatic cleanup of test databases after each test
-- Shared container cleanup on test suite completion
+**Performance benefits:**
+- **No Docker** - Tests start instantly
+- **In-memory database** - Each test gets a fresh database in milliseconds
+- **Automatic cleanup** - Database destroyed after each test
+- **Parallel execution** - Tests can run in parallel safely
 
 #### Code Quality Tools
 The project uses **golangci-lint** with a comprehensive configuration (`.golangci.yml`) that includes:
@@ -72,42 +71,66 @@ The project uses **golangci-lint** with a comprehensive configuration (`.golangc
 4. **Run `make lint` and fix ALL errors** - this is mandatory
 5. Commit changes only after lint passes with 0 issues
 
+### Frontend Testing with Agent-Browser
+The project includes **agent-browser** for interactive frontend testing and browser automation.
+
+**What it is:**
+- Headless browser automation CLI optimized for AI agents
+- Provides accessibility tree snapshots with element references
+- Enables testing of HTMX dynamic updates and web interactions
+
+**Quick usage:**
+```bash
+# Start local server first
+make run-local
+
+# In another terminal, test the frontend
+agent-browser open "http://127.0.0.1:8080"
+agent-browser snapshot  # Get page structure with element refs
+agent-browser click @e5  # Interact with elements
+agent-browser screenshot /tmp/page.png  # Capture visuals
+agent-browser close
+```
+
+**Common testing scenarios:**
+- Login flow validation
+- HTMX dynamic update verification
+- Form submission and validation
+- Session management testing
+- Responsive design checks
+- Screenshot generation for documentation
+
+**Available as skill:** Use `/test-frontend` to launch interactive frontend testing with step-by-step guidance.
+
+**Documentation:** Full command reference at https://github.com/vercel-labs/agent-browser
+
 ### Dependencies and Maintenance
 - `make deps` - Download and tidy Go modules
 - `make clean` - Remove build artifacts and coverage reports
 - `make generate` - Generate OpenAPI code
 
 ### Docker Environment
-- `make dev-up` - Start development environment (PostgreSQL + Observability)
-- `make docker-up` - Start basic Docker containers (PostgreSQL)
+- `make docker-up` - Start application in Docker
+- `make docker-up-d` - Start in detached mode (background)
 - `make docker-down` - Stop Docker containers
-- `make docker-logs` - View Docker container logs
-- `make observability-up` - Start observability stack (Prometheus, Grafana, Jaeger)
-- `make full-up` - Start complete stack (app + observability)
+- `make docker-logs` - View application logs
+- `make docker-build` - Build Docker image
 
-The Docker environment includes:
-- **PostgreSQL** (port 5432) with postgres/postgres123 credentials
-- **PostgreSQL Exporter** (port 9187) for database metrics
-- **Observability Stack**: Prometheus (9090), Grafana (3000), Jaeger (16686)
+The Docker container includes:
+- **Single container** deployment (~50MB Alpine-based image)
+- **SQLite database** persisted in Docker volume (`./data/`)
+- **Health check** endpoint for container orchestration
+- **Automatic migrations** applied on startup
 
-### PostgreSQL Commands
-- `make postgres-up` - Start PostgreSQL container only
-- `make postgres-down` - Stop PostgreSQL container
-- `make postgres-logs` - View PostgreSQL container logs
-- `make postgres-shell` - Connect to PostgreSQL shell (psql)
-- `make postgres-backup` - Create PostgreSQL backup
-- `make postgres-restore BACKUP_FILE=./backups/file.sql` - Restore from backup
+### SQLite Database Commands
+- `make sqlite-backup` - Create database backup
+- `make sqlite-restore BACKUP_FILE=./backups/file.db` - Restore from backup
+- `make sqlite-shell` - Open SQLite interactive shell
+- `make sqlite-stats` - Show database statistics
 
 ### Database Migrations
-- `make migrate-up` - Run database migrations
-- `make migrate-down` - Rollback database migrations
-- `make migrate-create NAME=migration_name` - Create new migration
-- `make migrate-force VERSION=number` - Force migration version
-
-### PostgreSQL Monitoring
-- `make postgres-stats` - Show PostgreSQL table statistics
-- `make postgres-indexes` - Show index usage statistics
-- `make postgres-slow-queries` - Show slow query analysis
+- `make migrate-create NAME=migration_name` - Create new migration files
+- **Note**: Migrations run automatically on application startup
 
 ## Architecture Overview
 
@@ -119,7 +142,6 @@ This is a production-ready family budget management service built with Go, follo
 - ✅ **Comprehensive security** with authentication & authorization
 - ✅ **36.2% test coverage** with 50+ test files
 - ✅ **CI/CD pipelines** with GitHub Actions
-- ✅ **Observability stack** (Prometheus, Grafana, Jaeger)
 
 ### Domain Structure
 The application is organized into domain modules in `internal/domain/`:
@@ -135,24 +157,22 @@ The application is organized into domain modules in `internal/domain/`:
 - `internal/application/` - HTTP server and handler layer
 - `internal/web/` - Web interface (HTMX templates, middleware, static files)
 - `internal/domain/` - Domain entities and business logic
-- `internal/infrastructure/` - PostgreSQL repositories and data persistence
-- `internal/observability/` - Metrics, logging, tracing, health checks
+- `internal/infrastructure/` - SQLite repositories and data persistence
+- `internal/observability/` - Logging and health checks
 
 ### Key Technologies (Production Stack)
 - **Go 1.25** - Latest Go version with enhanced performance
 - **Echo v4.13.4** - HTTP web framework with middleware
-- **PostgreSQL v17.6** - Primary database with pgx/v5 driver
+- **SQLite** (modernc.org/sqlite) - Embedded database, pure Go, no CGO
 - **HTMX v2.0.4** - Modern web interface without complex JavaScript
 - **PicoCSS v2.1.1** - Minimalist CSS framework for clean UI
-- **Prometheus + Grafana** - Metrics and monitoring
-- **OpenTelemetry + Jaeger** - Distributed tracing
 - **Docker + GitHub Actions** - Multi-platform CI/CD
-- **testcontainers-go** - Integration testing with real dependencies
+- **In-memory testing** - Ultra-fast tests with SQLite
 
 ### Configuration
 Environment variables are managed in `internal/config.go`. Key variables:
 - `SERVER_PORT` / `SERVER_HOST` - Server configuration (default: localhost:8080)
-- `POSTGRESQL_URI` / `POSTGRESQL_DATABASE` - Database connection
+- `DATABASE_PATH` - Path to SQLite database file (default: `./data/budget.db`)
 - `SESSION_SECRET` - Secret key for session management (required for web interface)
 - `LOG_LEVEL` - Logging level (debug, info, warn, error)
 - `ENVIRONMENT` - Application environment (development, production)
@@ -161,8 +181,7 @@ Environment variables are managed in `internal/config.go`. Key variables:
 All data access is abstracted through repository interfaces in `internal/application/handlers/repositories.go`.
 Full implementations are available in `internal/infrastructure/` with comprehensive error handling.
 
-### Multi-tenancy & Security
-- **Family-based isolation**: Data is strictly isolated by family ID
+### Security
 - **Role-based access control**: Admin, Member, Child roles with different permissions
 - **Session management**: Secure HTTP-only cookies with CSRF protection
 - **Input validation**: Comprehensive validation with go-playground/validator
@@ -208,10 +227,10 @@ The project has comprehensive testing across all layers:
 - Web form validation and error handling (6.6-28.4% coverage)
 
 **Integration Tests:**
-- End-to-end API workflows with testcontainers
-- Database operations with real PostgreSQL instances
+- End-to-end API workflows with in-memory database
+- Database operations with SQLite
 - Authentication flows with session management
-- Multi-family data isolation validation
+- Data integrity validation
 
 **Coverage by Layer:**
 - **Application**: 91.2% (excellent)
@@ -233,7 +252,7 @@ The project uses GitHub Actions for continuous integration and deployment with t
 
 ### CI Pipeline (`.github/workflows/ci.yml`)
 Runs on every push and pull request to main/develop branches:
-- **Environment Setup**: Go 1.25, PostgreSQL service for integration tests
+- **Environment Setup**: Go 1.25, SQLite for integration tests
 - **Quality Checks**:
   - Code formatting verification with `make fmt`
   - Comprehensive linting with golangci-lint (50+ rules)
@@ -276,10 +295,10 @@ Automated releases on version tags:
 - **Branch Protection**: Required status checks and reviews
 - **Quality Gates**: All CI checks must pass before merge
 
-### Monitoring and Observability
+### Monitoring
+- **Health Check**: `/health` endpoint for container orchestration
+- **Structured Logging**: slog-based logging with configurable levels
 - **Coverage Reports**: Integrated with Codecov for test coverage tracking
-- **Security Dashboard**: Centralized vulnerability and compliance reporting
-- **Build Metrics**: Automated tracking of build times and success rates
 
 Use `make lint` and `make test` locally to ensure CI pipeline success before pushing changes.
 

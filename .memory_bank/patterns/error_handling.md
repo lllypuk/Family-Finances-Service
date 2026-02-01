@@ -505,7 +505,7 @@ func (l *Logger) LogError(err *errors.AppError, context map[string]any) {
 func (s *FamilyService) GetFamily(ctx context.Context, id string) (*Family, error) {
     family, err := s.repo.GetByID(ctx, id)
     if err != nil {
-        if errors.Is(err, pgx.ErrNoRows) {
+        if errors.Is(err, sql.ErrNoRows) {
             return nil, errors.NotFoundError("family", id)
         }
         return nil, errors.InternalError("Failed to get family", err)
@@ -533,7 +533,7 @@ func TestFamilyService_GetFamily_NotFound(t *testing.T) {
     service := NewFamilyService(mockRepo)
 
     mockRepo.On("GetByID", mock.Anything, "invalid-id").
-        Return(nil, pgx.ErrNoRows)
+        Return(nil, sql.ErrNoRows)
 
     // Act
     family, err := service.GetFamily(context.Background(), "invalid-id")

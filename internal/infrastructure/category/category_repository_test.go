@@ -14,28 +14,27 @@ import (
 	categoryrepo "family-budget-service/internal/infrastructure/category"
 )
 
-func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
-	// Setup PostgreSQL testcontainer
-	container := testutils.SetupPostgreSQLContainer(t)
-	defer container.Cleanup(t)
+func TestCategoryRepositorySQLite_Integration(t *testing.T) {
+	// Setup SQLite in-memory database
+	container := testutils.SetupSQLiteTestDB(t)
 
 	helper := testutils.NewTestDataHelper(container.DB)
 	ctx := context.Background()
 
 	t.Run("Create_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := categoryrepo.NewPostgreSQLRepository(db)
+		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
-		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
 		// Create category
 		testCategory := &category.Category{
-			ID:       uuid.New(),
-			Name:     "Groceries",
-			Type:     category.TypeExpense,
-			FamilyID: uuid.MustParse(familyID),
+			ID:   uuid.New(),
+			Name: "Groceries",
+			Type: category.TypeExpense,
+
 			IsActive: true,
 		}
 
@@ -48,25 +47,23 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 		assert.Equal(t, testCategory.ID, retrievedCategory.ID)
 		assert.Equal(t, testCategory.Name, retrievedCategory.Name)
 		assert.Equal(t, testCategory.Type, retrievedCategory.Type)
-		assert.Equal(t, testCategory.FamilyID, retrievedCategory.FamilyID)
 		assert.Equal(t, testCategory.IsActive, retrievedCategory.IsActive)
 	})
 
 	t.Run("Create_WithParent_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := categoryrepo.NewPostgreSQLRepository(db)
+		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
-		familyID, err := helper.CreateTestFamily(ctx, "Hierarchy Test Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Hierarchy Test Family", "USD")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		// Create parent category
 		parentCategory := &category.Category{
-			ID:       uuid.New(),
-			Name:     "Food & Beverages",
-			Type:     category.TypeExpense,
-			FamilyID: familyUUID,
+			ID:   uuid.New(),
+			Name: "Food & Beverages",
+			Type: category.TypeExpense,
+
 			IsActive: true,
 		}
 
@@ -79,7 +76,7 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 			Name:     "Groceries",
 			Type:     category.TypeExpense,
 			ParentID: &parentCategory.ID,
-			FamilyID: familyUUID,
+
 			IsActive: true,
 		}
 
@@ -95,19 +92,18 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("GetCategoryChildren_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := categoryrepo.NewPostgreSQLRepository(db)
+		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
-		familyID, err := helper.CreateTestFamily(ctx, "Children Test Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Children Test Family", "USD")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		// Create parent category
 		parentCategory := &category.Category{
-			ID:       uuid.New(),
-			Name:     "Transportation",
-			Type:     category.TypeExpense,
-			FamilyID: familyUUID,
+			ID:   uuid.New(),
+			Name: "Transportation",
+			Type: category.TypeExpense,
+
 			IsActive: true,
 		}
 
@@ -121,7 +117,7 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 				Name:     "Public Transport",
 				Type:     category.TypeExpense,
 				ParentID: &parentCategory.ID,
-				FamilyID: familyUUID,
+
 				IsActive: true,
 			},
 			{
@@ -129,7 +125,7 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 				Name:     "Car Expenses",
 				Type:     category.TypeExpense,
 				ParentID: &parentCategory.ID,
-				FamilyID: familyUUID,
+
 				IsActive: true,
 			},
 		}
@@ -145,7 +141,7 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 			Name:     "Gas",
 			Type:     category.TypeExpense,
 			ParentID: &childCategories[1].ID, // Under "Car Expenses"
-			FamilyID: familyUUID,
+
 			IsActive: true,
 		}
 
@@ -170,19 +166,18 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("GetCategoryPath_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := categoryrepo.NewPostgreSQLRepository(db)
+		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
-		familyID, err := helper.CreateTestFamily(ctx, "Path Test Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Path Test Family", "USD")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		// Create category hierarchy: Root -> Level1 -> Level2
 		rootCategory := &category.Category{
-			ID:       uuid.New(),
-			Name:     "Housing",
-			Type:     category.TypeExpense,
-			FamilyID: familyUUID,
+			ID:   uuid.New(),
+			Name: "Housing",
+			Type: category.TypeExpense,
+
 			IsActive: true,
 		}
 
@@ -191,7 +186,7 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 			Name:     "Utilities",
 			Type:     category.TypeExpense,
 			ParentID: &rootCategory.ID,
-			FamilyID: familyUUID,
+
 			IsActive: true,
 		}
 
@@ -200,7 +195,7 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 			Name:     "Electricity",
 			Type:     category.TypeExpense,
 			ParentID: &level1Category.ID,
-			FamilyID: familyUUID,
+
 			IsActive: true,
 		}
 
@@ -225,44 +220,43 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("GetByFamilyIDAndType_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := categoryrepo.NewPostgreSQLRepository(db)
+		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
-		familyID, err := helper.CreateTestFamily(ctx, "Type Filter Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Type Filter Family", "USD")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		// Create categories of different types
 		expenseCategories := []*category.Category{
 			{
-				ID:       uuid.New(),
-				Name:     "Food",
-				Type:     category.TypeExpense,
-				FamilyID: familyUUID,
+				ID:   uuid.New(),
+				Name: "Food",
+				Type: category.TypeExpense,
+
 				IsActive: true,
 			},
 			{
-				ID:       uuid.New(),
-				Name:     "Transport",
-				Type:     category.TypeExpense,
-				FamilyID: familyUUID,
+				ID:   uuid.New(),
+				Name: "Transport",
+				Type: category.TypeExpense,
+
 				IsActive: true,
 			},
 		}
 
 		incomeCategories := []*category.Category{
 			{
-				ID:       uuid.New(),
-				Name:     "Salary",
-				Type:     category.TypeIncome,
-				FamilyID: familyUUID,
+				ID:   uuid.New(),
+				Name: "Salary",
+				Type: category.TypeIncome,
+
 				IsActive: true,
 			},
 			{
-				ID:       uuid.New(),
-				Name:     "Freelance",
-				Type:     category.TypeIncome,
-				FamilyID: familyUUID,
+				ID:   uuid.New(),
+				Name: "Freelance",
+				Type: category.TypeIncome,
+
 				IsActive: true,
 			},
 		}
@@ -274,16 +268,16 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		// Get expense categories only
-		expenseResults, err := repo.GetByFamilyIDAndType(ctx, familyUUID, category.TypeExpense)
+		// Get expense categories only (single family model)
+		expenseResults, err := repo.GetByType(ctx, category.TypeExpense)
 		require.NoError(t, err)
 		assert.Len(t, expenseResults, 2)
 		for _, cat := range expenseResults {
 			assert.Equal(t, category.TypeExpense, cat.Type)
 		}
 
-		// Get income categories only
-		incomeResults, err := repo.GetByFamilyIDAndType(ctx, familyUUID, category.TypeIncome)
+		// Get income categories only (single family model)
+		incomeResults, err := repo.GetByType(ctx, category.TypeIncome)
 		require.NoError(t, err)
 		assert.Len(t, incomeResults, 2)
 		for _, cat := range incomeResults {
@@ -293,19 +287,18 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("Update_PreventCircularReference", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := categoryrepo.NewPostgreSQLRepository(db)
+		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
-		familyID, err := helper.CreateTestFamily(ctx, "Circular Test Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Circular Test Family", "USD")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		// Create parent and child categories
 		parentCategory := &category.Category{
-			ID:       uuid.New(),
-			Name:     "Parent",
-			Type:     category.TypeExpense,
-			FamilyID: familyUUID,
+			ID:   uuid.New(),
+			Name: "Parent",
+			Type: category.TypeExpense,
+
 			IsActive: true,
 		}
 
@@ -314,7 +307,7 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 			Name:     "Child",
 			Type:     category.TypeExpense,
 			ParentID: &parentCategory.ID,
-			FamilyID: familyUUID,
+
 			IsActive: true,
 		}
 
@@ -333,19 +326,18 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("Delete_WithChildren_ShouldFail", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := categoryrepo.NewPostgreSQLRepository(db)
+		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
-		familyID, err := helper.CreateTestFamily(ctx, "Delete Test Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Delete Test Family", "USD")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		// Create parent category
 		parentCategory := &category.Category{
-			ID:       uuid.New(),
-			Name:     "Parent with Children",
-			Type:     category.TypeExpense,
-			FamilyID: familyUUID,
+			ID:   uuid.New(),
+			Name: "Parent with Children",
+			Type: category.TypeExpense,
+
 			IsActive: true,
 		}
 
@@ -358,7 +350,7 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 			Name:     "Child",
 			Type:     category.TypeExpense,
 			ParentID: &parentCategory.ID,
-			FamilyID: familyUUID,
+
 			IsActive: true,
 		}
 
@@ -366,25 +358,25 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Try to delete parent with children - should fail
-		err = repo.Delete(ctx, parentCategory.ID, familyUUID)
+		err = repo.Delete(ctx, parentCategory.ID)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "cannot delete category with subcategories")
 	})
 
 	t.Run("Delete_LeafCategory_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := categoryrepo.NewPostgreSQLRepository(db)
+		repo := categoryrepo.NewSQLiteRepository(db)
 
 		// Create test family
-		familyID, err := helper.CreateTestFamily(ctx, "Delete Leaf Family", "USD")
+		_, err := helper.CreateTestFamily(ctx, "Delete Leaf Family", "USD")
 		require.NoError(t, err)
 
 		// Create leaf category (no children)
 		leafCategory := &category.Category{
-			ID:       uuid.New(),
-			Name:     "Leaf Category",
-			Type:     category.TypeExpense,
-			FamilyID: uuid.MustParse(familyID),
+			ID:   uuid.New(),
+			Name: "Leaf Category",
+			Type: category.TypeExpense,
+
 			IsActive: true,
 		}
 
@@ -392,7 +384,7 @@ func TestCategoryRepositoryPostgreSQL_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Delete leaf category - should succeed
-		err = repo.Delete(ctx, leafCategory.ID, leafCategory.FamilyID)
+		err = repo.Delete(ctx, leafCategory.ID)
 		require.NoError(t, err)
 
 		// Verify category is soft deleted (should not be found)

@@ -34,10 +34,9 @@ func CreateTestFamily() *user.Family {
 }
 
 // CreateTestUser creates a test user
-func CreateTestUser(familyID uuid.UUID) *user.User {
+func CreateTestUser(_ uuid.UUID) *user.User {
 	return &user.User{
 		ID:        uuid.New(),
-		FamilyID:  familyID,
 		FirstName: "John",
 		LastName:  "Doe",
 		Email:     fmt.Sprintf("john.doe+%s@example.com", uuid.New().String()),
@@ -49,10 +48,9 @@ func CreateTestUser(familyID uuid.UUID) *user.User {
 }
 
 // CreateTestCategory creates a test category
-func CreateTestCategory(familyID uuid.UUID, categoryType category.Type) *category.Category {
+func CreateTestCategory(_ uuid.UUID, categoryType category.Type) *category.Category {
 	return &category.Category{
 		ID:        uuid.New(),
-		FamilyID:  familyID,
 		Name:      "Test Category",
 		Type:      categoryType,
 		IsActive:  true,
@@ -63,12 +61,11 @@ func CreateTestCategory(familyID uuid.UUID, categoryType category.Type) *categor
 
 // CreateTestTransaction creates a test transaction
 func CreateTestTransaction(
-	familyID, userID, categoryID uuid.UUID,
+	_ uuid.UUID, userID, categoryID uuid.UUID,
 	transactionType transaction.Type,
 ) *transaction.Transaction {
 	return &transaction.Transaction{
 		ID:          uuid.New(),
-		FamilyID:    familyID,
 		UserID:      userID,
 		CategoryID:  categoryID,
 		Amount:      TestTransactionAmount,
@@ -82,10 +79,9 @@ func CreateTestTransaction(
 }
 
 // CreateTestBudget creates a test budget
-func CreateTestBudget(familyID, categoryID uuid.UUID) *budget.Budget {
+func CreateTestBudget(_ uuid.UUID, categoryID uuid.UUID) *budget.Budget {
 	return &budget.Budget{
 		ID:         uuid.New(),
-		FamilyID:   familyID,
 		CategoryID: &categoryID,
 		Name:       "Test Budget",
 		Amount:     TestBudgetAmount,
@@ -100,10 +96,9 @@ func CreateTestBudget(familyID, categoryID uuid.UUID) *budget.Budget {
 }
 
 // CreateTestReport creates a test report
-func CreateTestReport(familyID, userID uuid.UUID) *report.Report {
+func CreateTestReport(_ uuid.UUID, userID uuid.UUID) *report.Report {
 	return &report.Report{
 		ID:          uuid.New(),
-		FamilyID:    familyID,
 		UserID:      userID,
 		Name:        "Test Report",
 		Type:        report.TypeExpenses,

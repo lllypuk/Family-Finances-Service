@@ -20,9 +20,9 @@ import (
 )
 
 func TestBudgetHandler_Integration(t *testing.T) {
-	testServer := testhelpers.SetupHTTPServer(t)
-
 	t.Run("CreateBudget_Success", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -40,7 +40,6 @@ func TestBudgetHandler_Integration(t *testing.T) {
 			Amount:     800.00,
 			Period:     "monthly",
 			CategoryID: &testCategory.ID,
-			FamilyID:   family.ID,
 			StartDate:  startDate,
 			EndDate:    endDate,
 		}
@@ -64,7 +63,6 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		assert.InEpsilon(t, request.Amount, response.Data.Amount, 0.001)
 		assert.Equal(t, request.Period, response.Data.Period)
 		assert.Equal(t, *request.CategoryID, *response.Data.CategoryID)
-		assert.Equal(t, request.FamilyID, response.Data.FamilyID)
 		assert.Zero(t, response.Data.Spent)
 		assert.InEpsilon(t, request.Amount, response.Data.Remaining, 0.001)
 		assert.True(t, response.Data.IsActive)
@@ -74,6 +72,8 @@ func TestBudgetHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("CreateBudget_ValidationError", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -90,7 +90,6 @@ func TestBudgetHandler_Integration(t *testing.T) {
 					Name:      "Test Budget",
 					Amount:    -100.0,
 					Period:    "monthly",
-					FamilyID:  family.ID,
 					StartDate: time.Now(),
 					EndDate:   time.Now().AddDate(0, 1, 0),
 				},
@@ -102,7 +101,6 @@ func TestBudgetHandler_Integration(t *testing.T) {
 					Name:      "Test Budget",
 					Amount:    100.0,
 					Period:    "invalid_period",
-					FamilyID:  family.ID,
 					StartDate: time.Now(),
 					EndDate:   time.Now().AddDate(0, 1, 0),
 				},
@@ -114,7 +112,6 @@ func TestBudgetHandler_Integration(t *testing.T) {
 					Name:      "",
 					Amount:    100.0,
 					Period:    "monthly",
-					FamilyID:  family.ID,
 					StartDate: time.Now(),
 					EndDate:   time.Now().AddDate(0, 1, 0),
 				},
@@ -153,6 +150,8 @@ func TestBudgetHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("CreateBudget_DateValidation", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -168,7 +167,6 @@ func TestBudgetHandler_Integration(t *testing.T) {
 			Name:      "Date Test Budget",
 			Amount:    100.0,
 			Period:    "monthly",
-			FamilyID:  family.ID,
 			StartDate: startDate,
 			EndDate:   endDate,
 		}
@@ -198,6 +196,8 @@ func TestBudgetHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("GetBudgetByID_Success", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -227,11 +227,12 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		assert.InEpsilon(t, testBudget.Amount, response.Data.Amount, 0.001)
 		assert.Equal(t, string(testBudget.Period), response.Data.Period)
 		assert.Equal(t, testBudget.CategoryID, response.Data.CategoryID)
-		assert.Equal(t, testBudget.FamilyID, response.Data.FamilyID)
 		assert.Equal(t, testBudget.IsActive, response.Data.IsActive)
 	})
 
 	t.Run("GetBudgetByID_NotFound", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		nonExistentID := uuid.New()
 
 		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/budgets/%s", nonExistentID), nil)
@@ -243,6 +244,8 @@ func TestBudgetHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("GetBudgetByID_InvalidUUID", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/budgets/invalid-uuid", nil)
 		rec := httptest.NewRecorder()
 
@@ -252,6 +255,8 @@ func TestBudgetHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("GetBudgets_ByFamily", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -288,22 +293,13 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		budgetIDs := []uuid.UUID{response.Data[0].ID, response.Data[1].ID}
 		assert.Contains(t, budgetIDs, budget1.ID)
 		assert.Contains(t, budgetIDs, budget2.ID)
-
-		for _, budget := range response.Data {
-			assert.Equal(t, family.ID, budget.FamilyID)
-		}
 	})
 
-	t.Run("GetBudgets_MissingFamilyID", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/budgets", nil)
-		rec := httptest.NewRecorder()
-
-		testServer.Server.Echo().ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-	})
+	// Test removed: GetBudgets_MissingFamilyID - no longer relevant in single-family model
 
 	t.Run("GetBudgets_ActiveOnly", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -348,6 +344,8 @@ func TestBudgetHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("UpdateBudget_Success", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -398,6 +396,8 @@ func TestBudgetHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("UpdateBudget_PartialUpdate", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -446,6 +446,8 @@ func TestBudgetHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("UpdateBudget_ToggleActive", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -495,6 +497,8 @@ func TestBudgetHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("DeleteBudget_Success", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)

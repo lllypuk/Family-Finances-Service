@@ -15,18 +15,16 @@ func TestNewUser(t *testing.T) {
 	email := "test@example.com"
 	firstName := "John"
 	lastName := "Doe"
-	familyID := uuid.New()
 	role := user.RoleMember
 
 	// Execute
-	u := user.NewUser(email, firstName, lastName, familyID, role)
+	u := user.NewUser(email, firstName, lastName, role)
 
 	// Assert
 	assert.NotEqual(t, uuid.Nil, u.ID)
 	assert.Equal(t, email, u.Email)
 	assert.Equal(t, firstName, u.FirstName)
 	assert.Equal(t, lastName, u.LastName)
-	assert.Equal(t, familyID, u.FamilyID)
 	assert.Equal(t, role, u.Role)
 	assert.False(t, u.CreatedAt.IsZero())
 	assert.False(t, u.UpdatedAt.IsZero())
@@ -61,7 +59,6 @@ func TestRole_Constants(t *testing.T) {
 
 func TestUser_StructFields(t *testing.T) {
 	// Test that User struct has all required fields
-	familyID := uuid.New()
 	u := &user.User{
 		ID:        uuid.New(),
 		Email:     "test@example.com",
@@ -69,7 +66,6 @@ func TestUser_StructFields(t *testing.T) {
 		FirstName: "John",
 		LastName:  "Doe",
 		Role:      user.RoleAdmin,
-		FamilyID:  familyID,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -81,7 +77,6 @@ func TestUser_StructFields(t *testing.T) {
 	assert.NotEmpty(t, u.FirstName)
 	assert.NotEmpty(t, u.LastName)
 	assert.NotEmpty(t, u.Role)
-	assert.Equal(t, familyID, u.FamilyID)
 	assert.False(t, u.CreatedAt.IsZero())
 	assert.False(t, u.UpdatedAt.IsZero())
 }
@@ -105,8 +100,6 @@ func TestFamily_StructFields(t *testing.T) {
 }
 
 func TestNewUser_DifferentRoles(t *testing.T) {
-	familyID := uuid.New()
-
 	tests := []struct {
 		name string
 		role user.Role
@@ -118,7 +111,7 @@ func TestNewUser_DifferentRoles(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			u := user.NewUser("test@example.com", "John", "Doe", familyID, tt.role)
+			u := user.NewUser("test@example.com", "John", "Doe", tt.role)
 			assert.Equal(t, tt.role, u.Role)
 		})
 	}
@@ -140,7 +133,7 @@ func TestUser_TimestampGeneration(t *testing.T) {
 	beforeTime := time.Now()
 
 	// Create user
-	u := user.NewUser("test@example.com", "John", "Doe", uuid.New(), user.RoleMember)
+	u := user.NewUser("test@example.com", "John", "Doe", user.RoleMember)
 
 	// Record time after creating user
 	afterTime := time.Now()

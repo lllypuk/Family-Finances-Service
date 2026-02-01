@@ -2,9 +2,9 @@
 
 Добро пожаловать в центральную систему документации проекта! Этот файл служит главной точкой входа и навигационной картой для всей технической документации.
 
-## 🎯 Текущий статус проекта: READY FOR PRODUCTION
+## 🎯 Текущий статус проекта: SELF-HOSTED READY
 
-**Проект полностью готов к production deployment** с завершенными веб-интерфейсом, API, системами безопасности и comprehensive test coverage (59.5%+).
+**Проект представляет собой self-hosted решение** — один Docker-образ (~50MB) со встроенной SQLite базой данных. Включает веб-интерфейс, REST API и систему безопасности.
 
 ## 🚀 Быстрый старт
 
@@ -24,7 +24,7 @@
 ### ✅ Core Application
 - **Clean Architecture** реализована
 - **Domain models** с полным business logic
-- **Repository pattern** с PostgreSQL интеграцией
+- **Repository pattern** с SQLite интеграцией
 - **HTTP server** с Echo framework
 - **Configuration management** через переменные окружения
 
@@ -43,20 +43,14 @@
 - **Authorization middleware** с role checks
 - **Security headers** и best practices
 
-### ✅ Testing & Quality (59.5% coverage)
-- **450+ comprehensive tests** across all components
+### ✅ Testing & Quality
 - **Unit tests** с mocking и table-driven patterns
-- **Integration tests** с testcontainers
-- **Performance tests** и load testing
-- **E2E tests** для user workflows
-- **Security tests** для vulnerability detection
+- **Integration tests** с in-memory SQLite (мгновенный запуск, без Docker)
+- **Performance tests** и benchmarks
 
 ### ✅ Observability
 - **Structured logging** (slog)
-- **Prometheus metrics** с business и technical metrics
-- **Health checks** (liveness/readiness)
-- **Distributed tracing** (OpenTelemetry)
-- **Grafana dashboards** для monitoring
+- **Health checks** (/health эндпоинт)
 
 ### ✅ CI/CD & DevOps
 - **GitHub Actions** workflows (ci.yml, docker.yml, security.yml, release.yml)

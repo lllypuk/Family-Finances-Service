@@ -87,8 +87,8 @@ func (m *MockUserService) GetUserByID(ctx context.Context, id uuid.UUID) (*user.
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
-func (m *MockUserService) GetUsersByFamily(ctx context.Context, familyID uuid.UUID) ([]*user.User, error) {
-	args := m.Called(ctx, familyID)
+func (m *MockUserService) GetUsers(ctx context.Context) ([]*user.User, error) {
+	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -103,8 +103,8 @@ func (m *MockUserService) UpdateUser(ctx context.Context, id uuid.UUID, req dto.
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
-func (m *MockUserService) DeleteUser(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
-	args := m.Called(ctx, id, familyID)
+func (m *MockUserService) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
@@ -141,7 +141,6 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				Password:  "password123",
 				FirstName: "John",
 				LastName:  "Doe",
-				FamilyID:  uuid.New(),
 				Role:      "member",
 			},
 			mockSetup: func(service *MockUserService, _ uuid.UUID) {
@@ -151,7 +150,6 @@ func TestUserHandler_CreateUser(t *testing.T) {
 					FirstName: "John",
 					LastName:  "Doe",
 					Role:      user.RoleMember,
-					FamilyID:  uuid.New(),
 					CreatedAt: time.Now(),
 					UpdatedAt: time.Now(),
 				}
@@ -165,7 +163,6 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				assert.Equal(t, "test@example.com", response.Data.Email)
 				assert.Equal(t, "John", response.Data.FirstName)
 				assert.Equal(t, "Doe", response.Data.LastName)
-				assert.NotEqual(t, uuid.Nil, response.Data.FamilyID)
 				assert.Equal(t, "member", response.Data.Role)
 			},
 		},
@@ -176,7 +173,6 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				Password:  "123",           // Too short password
 				FirstName: "",              // Empty first name
 				LastName:  "Doe",
-				FamilyID:  uuid.New(),
 				Role:      "member",
 			},
 			mockSetup: func(service *MockUserService, _ uuid.UUID) {
@@ -216,7 +212,6 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				Password:  "password123",
 				FirstName: "John",
 				LastName:  "Doe",
-				FamilyID:  uuid.New(),
 				Role:      "member",
 			},
 			mockSetup: func(service *MockUserService, _ uuid.UUID) {
@@ -238,7 +233,6 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				Password:  "password123",
 				FirstName: "John",
 				LastName:  "Doe",
-				FamilyID:  uuid.New(),
 				Role:      "member",
 			},
 			mockSetup: func(service *MockUserService, _ uuid.UUID) {
@@ -291,7 +285,6 @@ func TestUserHandler_CreateUser(t *testing.T) {
 
 func TestUserHandler_GetUserByID(t *testing.T) {
 	userID := uuid.New()
-	testFamilyID := uuid.New()
 
 	tests := []struct {
 		name           string
@@ -310,7 +303,6 @@ func TestUserHandler_GetUserByID(t *testing.T) {
 					FirstName: "John",
 					LastName:  "Doe",
 					Role:      user.RoleMember,
-					FamilyID:  testFamilyID,
 					CreatedAt: time.Now(),
 					UpdatedAt: time.Now(),
 				}
@@ -386,7 +378,6 @@ func TestUserHandler_GetUserByID(t *testing.T) {
 
 func TestUserHandler_UpdateUser(t *testing.T) {
 	userID := uuid.New()
-	testFamilyID := uuid.New()
 
 	tests := []struct {
 		name           string
@@ -410,7 +401,6 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 					FirstName: "UpdatedName",
 					LastName:  "UpdatedLastName",
 					Role:      user.RoleMember,
-					FamilyID:  testFamilyID,
 					CreatedAt: time.Now(),
 					UpdatedAt: time.Now(),
 				}
@@ -500,15 +490,15 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 	tests := []struct {
 		name           string
 		userID         string
-		mockSetup      func(*MockUserService, uuid.UUID)
+		mockSetup      func(*MockUserService)
 		expectedStatus int
 		expectedBody   func(t *testing.T, body string)
 	}{
 		{
 			name:   "Success - User deleted",
 			userID: userID.String(),
-			mockSetup: func(service *MockUserService, familyUUID uuid.UUID) {
-				service.On("DeleteUser", mock.Anything, userID, familyUUID).Return(nil)
+			mockSetup: func(service *MockUserService) {
+				service.On("DeleteUser", mock.Anything, userID).Return(nil)
 			},
 			expectedStatus: http.StatusNoContent,
 			expectedBody: func(t *testing.T, body string) {
@@ -519,7 +509,7 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 		{
 			name:   "Error - Invalid UUID",
 			userID: "invalid-uuid",
-			mockSetup: func(_ *MockUserService, _ uuid.UUID) {
+			mockSetup: func(_ *MockUserService) {
 				// No mock needed for UUID validation error
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -533,8 +523,8 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 		{
 			name:   "Error - User not found",
 			userID: userID.String(),
-			mockSetup: func(service *MockUserService, familyUUID uuid.UUID) {
-				service.On("DeleteUser", mock.Anything, userID, familyUUID).Return(errors.New("database error"))
+			mockSetup: func(service *MockUserService) {
+				service.On("DeleteUser", mock.Anything, userID).Return(errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody: func(t *testing.T, body string) {
@@ -549,16 +539,15 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
-			familyUUID := uuid.New()
 			e := echo.New()
 			mockService := &MockUserService{}
-			tt.mockSetup(mockService, familyUUID)
+			tt.mockSetup(mockService)
 
 			repositories := &handlers.Repositories{}
 			handler := handlers.NewUserHandler(repositories, mockService)
 
 			// Create request
-			req := httptest.NewRequest(http.MethodDelete, "/users/"+tt.userID+"?family_id="+familyUUID.String(), nil)
+			req := httptest.NewRequest(http.MethodDelete, "/users/"+tt.userID, nil)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
 			c.SetParamNames("id")

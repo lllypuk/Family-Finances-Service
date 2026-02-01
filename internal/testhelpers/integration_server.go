@@ -19,25 +19,25 @@ type TestServer struct {
 	Repos     *handlers.Repositories
 	Services  *services.Services
 	Server    *application.HTTPServer
-	container *PostgreSQLTestContainer
+	container *SQLiteTestDB
 }
 
 // SetupHTTPServer creates a test HTTP server with real database connections
 func SetupHTTPServer(t *testing.T) *TestServer {
-	// Setup PostgreSQL testcontainer
-	container := SetupPostgreSQLContainer(t)
+	// Setup SQLite in-memory database
+	container := SetupSQLiteTestDB(t)
 
 	// Get test database
 	db := container.DB
 
 	// Create repositories
 	repos := &handlers.Repositories{
-		User:        userrepo.NewPostgreSQLRepository(db),
-		Family:      userrepo.NewPostgreSQLFamilyRepository(db),
-		Budget:      budgetrepo.NewPostgreSQLRepository(db),
-		Category:    categoryrepo.NewPostgreSQLRepository(db),
-		Transaction: transactionrepo.NewPostgreSQLRepository(db),
-		Report:      reportrepo.NewPostgreSQLRepository(db),
+		User:        userrepo.NewSQLiteRepository(db),
+		Family:      userrepo.NewSQLiteFamilyRepository(db),
+		Budget:      budgetrepo.NewSQLiteRepository(db),
+		Category:    categoryrepo.NewSQLiteRepository(db),
+		Transaction: transactionrepo.NewSQLiteRepository(db),
+		Report:      reportrepo.NewSQLiteRepository(db),
 	}
 
 	// Create services for testing - use simplified version to avoid circular dependencies
@@ -85,15 +85,15 @@ func (ts *TestServer) Cleanup() {
 
 // CheckTableExists checks if a table exists in the database (for debugging)
 func (ts *TestServer) CheckTableExists(t *testing.T, tableName string) bool {
-	var exists bool
-	err := ts.container.DB.QueryRow(
+	var exists int
+	err := ts.container.DB.QueryRowContext(
 		context.Background(),
-		"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'family_budget' AND table_name = $1)",
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
 		tableName,
 	).Scan(&exists)
 	if err != nil {
 		t.Logf("Error checking table existence: %v", err)
 		return false
 	}
-	return exists
+	return exists > 0
 }

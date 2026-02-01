@@ -77,6 +77,9 @@ func (ws *Server) SetupRoutes() {
 	// Статические файлы
 	ws.echo.Static("/static", "internal/web/static")
 
+	// Setup middleware — redirects to /setup if family doesn't exist
+	ws.echo.Use(middleware.RequireSetup(ws.services.Family))
+
 	// Настраиваем маршруты аутентификации
 	ws.setupAuthRoutes()
 
@@ -97,8 +100,8 @@ func (ws *Server) SetupRoutes() {
 func (ws *Server) setupAuthRoutes() {
 	ws.echo.GET("/login", ws.authHandler.LoginPage, middleware.RedirectIfAuthenticated("/"))
 	ws.echo.POST("/login", ws.authHandler.Login, middleware.RedirectIfAuthenticated("/"))
-	ws.echo.GET("/register", ws.authHandler.RegisterPage, middleware.RedirectIfAuthenticated("/"))
-	ws.echo.POST("/register", ws.authHandler.Register, middleware.RedirectIfAuthenticated("/"))
+	ws.echo.GET("/setup", ws.authHandler.SetupPage)
+	ws.echo.POST("/setup", ws.authHandler.Setup)
 	ws.echo.GET("/logout", ws.authHandler.Logout)
 	ws.echo.POST("/logout", ws.authHandler.Logout)
 }

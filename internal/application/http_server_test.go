@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -14,6 +15,10 @@ import (
 
 	"family-budget-service/internal/application"
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/domain/budget"
+	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/report"
+	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/observability"
 	"family-budget-service/internal/services"
@@ -35,6 +40,7 @@ type MockUserService struct {
 }
 
 // Implement the UserService interface methods
+
 func (m *MockUserService) CreateUser(ctx context.Context, req dto.CreateUserDTO) (*user.User, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
@@ -51,8 +57,8 @@ func (m *MockUserService) GetUserByID(ctx context.Context, id uuid.UUID) (*user.
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
-func (m *MockUserService) GetUsersByFamily(ctx context.Context, familyID uuid.UUID) ([]*user.User, error) {
-	args := m.Called(ctx, familyID)
+func (m *MockUserService) GetUsers(ctx context.Context) ([]*user.User, error) {
+	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -67,8 +73,8 @@ func (m *MockUserService) UpdateUser(ctx context.Context, id uuid.UUID, req dto.
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
-func (m *MockUserService) DeleteUser(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
-	args := m.Called(ctx, id, familyID)
+func (m *MockUserService) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
@@ -95,7 +101,7 @@ type MockFamilyService struct {
 	mock.Mock
 }
 
-func (m *MockFamilyService) CreateFamily(ctx context.Context, req dto.CreateFamilyDTO) (*user.Family, error) {
+func (m *MockFamilyService) SetupFamily(ctx context.Context, req dto.SetupFamilyDTO) (*user.Family, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -103,44 +109,418 @@ func (m *MockFamilyService) CreateFamily(ctx context.Context, req dto.CreateFami
 	return args.Get(0).(*user.Family), args.Error(1)
 }
 
-func (m *MockFamilyService) GetFamilyByID(ctx context.Context, id uuid.UUID) (*user.Family, error) {
-	args := m.Called(ctx, id)
+func (m *MockFamilyService) GetFamily(ctx context.Context) (*user.Family, error) {
+	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*user.Family), args.Error(1)
 }
 
-func (m *MockFamilyService) UpdateFamily(
+func (m *MockFamilyService) UpdateFamily(ctx context.Context, req dto.UpdateFamilyDTO) (*user.Family, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*user.Family), args.Error(1)
+}
+
+func (m *MockFamilyService) IsSetupComplete(ctx context.Context) (bool, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(bool), args.Error(1)
+}
+
+// MockCategoryService is a mock for category service
+type MockCategoryService struct {
+	mock.Mock
+}
+
+//nolint:revive // test mock
+func (m *MockCategoryService) CreateCategory(
+	ctx context.Context,
+	req dto.CreateCategoryDTO,
+) (*category.Category, error) {
+	return nil, nil //nolint:nilnil // test mock
+}
+
+//nolint:revive // test mock
+func (m *MockCategoryService) GetCategoryByID(ctx context.Context, id uuid.UUID) (*category.Category, error) {
+	return nil, nil //nolint:nilnil // test mock
+}
+
+func (m *MockCategoryService) GetCategories(
+	ctx context.Context,
+	typeFilter *category.Type,
+) ([]*category.Category, error) {
+	args := m.Called(ctx, typeFilter)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*category.Category), args.Error(1)
+}
+
+//nolint:revive // test mock
+func (m *MockCategoryService) UpdateCategory(
 	ctx context.Context,
 	id uuid.UUID,
-	req dto.UpdateFamilyDTO,
-) (*user.Family, error) {
-	args := m.Called(ctx, id, req)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*user.Family), args.Error(1)
+	req dto.UpdateCategoryDTO,
+) (*category.Category, error) {
+	return nil, nil //nolint:nilnil // test mock
 }
 
-func (m *MockFamilyService) DeleteFamily(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
+//nolint:revive // test mock
+func (m *MockCategoryService) DeleteCategory(ctx context.Context, id uuid.UUID) error {
+	return nil
 }
 
-func (m *MockFamilyService) GetFamilyMembers(ctx context.Context, familyID uuid.UUID) ([]*user.User, error) {
-	args := m.Called(ctx, familyID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*user.User), args.Error(1)
+//nolint:revive // test mock
+func (m *MockCategoryService) GetCategoryHierarchy(ctx context.Context) ([]*category.Category, error) {
+	return nil, nil
+}
+
+//nolint:revive // test mock
+func (m *MockCategoryService) ValidateCategoryHierarchy(ctx context.Context, categoryID, parentID uuid.UUID) error {
+	return nil
+}
+
+//nolint:revive // test mock
+func (m *MockCategoryService) CheckCategoryUsage(ctx context.Context, categoryID uuid.UUID) (bool, error) {
+	return false, nil
+}
+
+//nolint:revive // test mock
+func (m *MockCategoryService) CreateDefaultCategories(ctx context.Context) error {
+	return nil
+}
+
+// MockTransactionService is a mock for transaction service
+type MockTransactionService struct {
+	mock.Mock
+}
+
+//nolint:revive // test mock
+func (m *MockTransactionService) CreateTransaction(
+	ctx context.Context,
+	req dto.CreateTransactionDTO,
+) (*transaction.Transaction, error) {
+	return nil, nil //nolint:nilnil // test mock
+}
+
+//nolint:revive // test mock
+func (m *MockTransactionService) GetTransactionByID(
+	ctx context.Context,
+	id uuid.UUID,
+) (*transaction.Transaction, error) {
+	return nil, nil //nolint:nilnil // test mock
+}
+
+//nolint:revive // test mock
+func (m *MockTransactionService) GetTransactions(
+	ctx context.Context,
+	filter dto.TransactionFilterDTO,
+) ([]*transaction.Transaction, error) {
+	return nil, nil
+}
+
+//nolint:revive // test mock
+func (m *MockTransactionService) UpdateTransaction(
+	ctx context.Context,
+	id uuid.UUID,
+	req dto.UpdateTransactionDTO,
+) (*transaction.Transaction, error) {
+	return nil, nil //nolint:nilnil // test mock
+}
+
+//nolint:revive // test mock
+func (m *MockTransactionService) DeleteTransaction(ctx context.Context, id uuid.UUID) error {
+	return nil
+}
+
+//nolint:revive // test mock
+func (m *MockTransactionService) BulkCategorizeTransactions(
+	ctx context.Context,
+	transactionIDs []uuid.UUID,
+	categoryID uuid.UUID,
+) error {
+	return nil
+}
+
+//nolint:revive // test mock
+func (m *MockTransactionService) ValidateTransactionLimits(
+	ctx context.Context,
+	categoryID uuid.UUID,
+	amount float64,
+	transactionType transaction.Type,
+) error {
+	return nil
+}
+
+//nolint:revive // test mock
+func (m *MockTransactionService) GetAllTransactions(
+	ctx context.Context,
+	filter dto.TransactionFilterDTO,
+) ([]*transaction.Transaction, error) {
+	return nil, nil
+}
+
+//nolint:revive // test mock
+func (m *MockTransactionService) GetTransactionsByCategory(
+	ctx context.Context,
+	categoryID uuid.UUID,
+	filter dto.TransactionFilterDTO,
+) ([]*transaction.Transaction, error) {
+	return nil, nil
+}
+
+//nolint:revive // test mock
+func (m *MockTransactionService) GetTransactionsByDateRange(
+	ctx context.Context,
+	from, to time.Time,
+) ([]*transaction.Transaction, error) {
+	return nil, nil
+}
+
+// MockBudgetService is a mock for budget service
+type MockBudgetService struct {
+	mock.Mock
+}
+
+//nolint:revive // test mock
+func (m *MockBudgetService) CreateBudget(ctx context.Context, req dto.CreateBudgetDTO) (*budget.Budget, error) {
+	return nil, nil //nolint:nilnil // test mock
+}
+
+//nolint:revive // test mock
+func (m *MockBudgetService) GetBudgetByID(ctx context.Context, id uuid.UUID) (*budget.Budget, error) {
+	return nil, nil //nolint:nilnil // test mock
+}
+
+//nolint:revive // test mock
+func (m *MockBudgetService) GetBudgets(ctx context.Context, filter dto.BudgetFilterDTO) ([]*budget.Budget, error) {
+	return nil, nil
+}
+
+//nolint:revive // test mock
+func (m *MockBudgetService) UpdateBudget(
+	ctx context.Context,
+	id uuid.UUID,
+	req dto.UpdateBudgetDTO,
+) (*budget.Budget, error) {
+	return nil, nil //nolint:nilnil // test mock
+}
+
+//nolint:revive // test mock
+func (m *MockBudgetService) DeleteBudget(ctx context.Context, id uuid.UUID) error {
+	return nil
+}
+
+//nolint:revive // test mock
+func (m *MockBudgetService) CalculateBudgetUtilization(
+	ctx context.Context,
+	budgetID uuid.UUID,
+) (*dto.BudgetUtilizationDTO, error) {
+	return nil, nil //nolint:nilnil // test mock
+}
+
+//nolint:revive // test mock
+func (m *MockBudgetService) GetBudgetsByCategory(ctx context.Context, categoryID uuid.UUID) ([]*budget.Budget, error) {
+	return nil, nil
+}
+
+//nolint:revive // test mock
+func (m *MockBudgetService) ValidateBudgetPeriod(
+	ctx context.Context,
+	categoryID *uuid.UUID,
+	startDate, endDate time.Time,
+) error {
+	return nil
+}
+
+//nolint:revive // test mock
+func (m *MockBudgetService) CheckBudgetLimits(ctx context.Context, categoryID uuid.UUID, amount float64) error {
+	return nil
+}
+
+//nolint:revive // test mock
+func (m *MockBudgetService) GetBudgetStatus(ctx context.Context, budgetID uuid.UUID) (*dto.BudgetStatusDTO, error) {
+	return nil, nil //nolint:nilnil // test mock
+}
+
+//nolint:revive // test mock
+func (m *MockBudgetService) GetActiveBudgets(ctx context.Context, date time.Time) ([]*budget.Budget, error) {
+	return nil, nil
+}
+
+//nolint:revive // test mock
+func (m *MockBudgetService) UpdateBudgetSpent(ctx context.Context, budgetID uuid.UUID, amount float64) error {
+	return nil
+}
+
+//nolint:revive // test mock
+func (m *MockBudgetService) GetAllBudgets(ctx context.Context, filter dto.BudgetFilterDTO) ([]*budget.Budget, error) {
+	return nil, nil
+}
+
+//nolint:revive // test mock
+func (m *MockBudgetService) RecalculateBudgetSpent(ctx context.Context, budgetID uuid.UUID) error {
+	return nil
+}
+
+// MockReportService is a mock for report service
+type MockReportService struct {
+	mock.Mock
+}
+
+//nolint:revive // test mock
+func (m *MockReportService) GenerateExpenseReport(
+	ctx context.Context,
+	req dto.ReportRequestDTO,
+) (*dto.ExpenseReportDTO, error) {
+	return nil, nil //nolint:nilnil // test mock
+}
+
+//nolint:revive // test mock
+func (m *MockReportService) GenerateIncomeReport(
+	ctx context.Context,
+	req dto.ReportRequestDTO,
+) (*dto.IncomeReportDTO, error) {
+	return nil, nil //nolint:nilnil // test mock
+}
+
+//nolint:revive // test mock
+func (m *MockReportService) GenerateBudgetComparisonReport(
+	ctx context.Context,
+	period report.Period,
+) (*dto.BudgetComparisonDTO, error) {
+	return nil, nil //nolint:nilnil // test mock
+}
+
+//nolint:revive // test mock
+func (m *MockReportService) GenerateCashFlowReport(
+	ctx context.Context,
+	from, to time.Time,
+) (*dto.CashFlowReportDTO, error) {
+	return nil, nil //nolint:nilnil // test mock
+}
+
+//nolint:revive // test mock
+func (m *MockReportService) GenerateCategoryBreakdownReport(
+	ctx context.Context,
+	period report.Period,
+) (*dto.CategoryBreakdownDTO, error) {
+	return nil, nil //nolint:nilnil // test mock
+}
+
+//nolint:revive // test mock
+func (m *MockReportService) SaveReport(
+	ctx context.Context,
+	reportData any,
+	reportType report.Type,
+	req dto.ReportRequestDTO,
+) (*report.Report, error) {
+	return nil, nil //nolint:nilnil // test mock
+}
+
+//nolint:revive // test mock
+func (m *MockReportService) GetReportByID(ctx context.Context, id uuid.UUID) (*report.Report, error) {
+	return nil, nil //nolint:nilnil // test mock
+}
+
+//nolint:revive // test mock
+func (m *MockReportService) GetReports(ctx context.Context, typeFilter *report.Type) ([]*report.Report, error) {
+	return nil, nil
+}
+
+//nolint:revive // test mock
+func (m *MockReportService) DeleteReport(ctx context.Context, id uuid.UUID) error {
+	return nil
+}
+
+//nolint:revive // test mock
+func (m *MockReportService) ExportReport(
+	ctx context.Context,
+	reportID uuid.UUID,
+	format string,
+	options dto.ExportOptionsDTO,
+) ([]byte, error) {
+	return nil, nil
+}
+
+//nolint:revive // test mock
+func (m *MockReportService) ExportReportData(
+	ctx context.Context,
+	reportData any,
+	format string,
+	options dto.ExportOptionsDTO,
+) ([]byte, error) {
+	return nil, nil
+}
+
+//nolint:revive // test mock
+func (m *MockReportService) ScheduleReport(
+	ctx context.Context,
+	req dto.ScheduleReportDTO,
+) (*dto.ScheduledReportDTO, error) {
+	return nil, nil //nolint:nilnil // test mock
+}
+
+//nolint:revive // test mock
+func (m *MockReportService) GetScheduledReports(ctx context.Context) ([]*dto.ScheduledReportDTO, error) {
+	return nil, nil
+}
+
+//nolint:revive // test mock
+func (m *MockReportService) UpdateScheduledReport(
+	ctx context.Context,
+	id uuid.UUID,
+	req dto.ScheduleReportDTO,
+) (*dto.ScheduledReportDTO, error) {
+	return nil, nil //nolint:nilnil // test mock
+}
+
+//nolint:revive // test mock
+func (m *MockReportService) DeleteScheduledReport(ctx context.Context, id uuid.UUID) error {
+	return nil
+}
+
+//nolint:revive // test mock
+func (m *MockReportService) ExecuteScheduledReport(ctx context.Context, scheduledReportID uuid.UUID) error {
+	return nil
+}
+
+//nolint:revive // test mock
+func (m *MockReportService) CalculateBenchmarks(ctx context.Context) (*dto.BenchmarkComparisonDTO, error) {
+	return nil, nil //nolint:nilnil // test mock
+}
+
+//nolint:revive // test mock
+func (m *MockReportService) GenerateFinancialInsights(ctx context.Context) ([]dto.RecommendationDTO, error) {
+	return nil, nil
+}
+
+//nolint:revive // test mock
+func (m *MockReportService) GenerateSpendingForecast(ctx context.Context, months int) ([]dto.ForecastDTO, error) {
+	return nil, nil
+}
+
+//nolint:revive // test mock
+func (m *MockReportService) GenerateTrendAnalysis(
+	ctx context.Context,
+	categoryID *uuid.UUID,
+	period report.Period,
+) (*dto.TrendAnalysisDTO, error) {
+	return nil, nil //nolint:nilnil // test mock
 }
 
 // Create a services struct that satisfies the services.Services interface
 func NewMockServices() *services.Services {
 	return &services.Services{
-		User:   &MockUserService{},
-		Family: &MockFamilyService{},
+		User:        &MockUserService{},
+		Family:      &MockFamilyService{},
+		Category:    &MockCategoryService{},
+		Transaction: &MockTransactionService{},
+		Budget:      &MockBudgetService{},
+		Report:      &MockReportService{},
 	}
 }
 
@@ -246,7 +626,6 @@ func TestHTTPServer_RoutesSetup(t *testing.T) {
 	// API endpoints - check for some key endpoints
 	assert.True(t, routePaths["POST /api/v1/users"])
 	assert.True(t, routePaths["GET /api/v1/users/:id"])
-	assert.True(t, routePaths["POST /api/v1/families"])
 	assert.True(t, routePaths["POST /api/v1/categories"])
 	assert.True(t, routePaths["GET /api/v1/categories"])
 	assert.True(t, routePaths["POST /api/v1/transactions"])
@@ -294,9 +673,8 @@ func TestHTTPServer_WithObservabilityRoutes(t *testing.T) {
 		routePaths[route.Method+" "+route.Path] = true
 	}
 
-	// Check for observability endpoints
+	// Check for health check endpoints
 	assert.True(t, routePaths["GET /health"])
-	assert.True(t, routePaths["GET /metrics"])
 	assert.True(t, routePaths["GET /ready"])
 	assert.True(t, routePaths["GET /live"])
 }
@@ -363,7 +741,20 @@ func TestHTTPServer_IntegrationWithRealEndpoints(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
 	config := &application.Config{Port: "8080", Host: "localhost"}
-	mockServices := NewMockServices()
+
+	// Setup mock category service to return empty list
+	mockCategoryService := &MockCategoryService{}
+	mockCategoryService.On("GetCategories", mock.Anything, (*category.Type)(nil)).
+		Return([]*category.Category{}, nil)
+
+	mockServices := &services.Services{
+		User:        &MockUserService{},
+		Family:      &MockFamilyService{},
+		Category:    mockCategoryService,
+		Transaction: &MockTransactionService{},
+		Budget:      &MockBudgetService{},
+		Report:      &MockReportService{},
+	}
 	server := application.NewHTTPServer(&repos.Repositories, mockServices, config)
 
 	// Test that we can make requests to various endpoints
@@ -373,8 +764,8 @@ func TestHTTPServer_IntegrationWithRealEndpoints(t *testing.T) {
 		expected int
 	}{
 		{"GET", "/health", http.StatusOK},
-		{"GET", "/", http.StatusNotFound},                    // Dashboard not available without observability
-		{"GET", "/api/v1/categories", http.StatusBadRequest}, // Missing family_id
+		{"GET", "/", http.StatusNotFound},            // Dashboard not available without observability
+		{"GET", "/api/v1/categories", http.StatusOK}, // Returns empty list in single-family model
 		{"GET", "/api/v1/nonexistent", http.StatusNotFound},
 	}
 

@@ -52,8 +52,8 @@ func NewCategoryHandler(repositories *handlers.Repositories, services *services.
 
 // Index отображает список всех категорий
 func (h *CategoryHandler) Index(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	// Проверяем авторизацию пользователя
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
@@ -67,9 +67,8 @@ func (h *CategoryHandler) Index(c echo.Context) error {
 
 	// Получаем категории через сервис
 	typeFilter := parseTypeFilter(filters.Type)
-	categories, err := h.services.Category.GetCategoriesByFamily(
+	categories, err := h.services.Category.GetCategories(
 		c.Request().Context(),
-		sessionData.FamilyID,
 		typeFilter,
 	)
 	if err != nil {
@@ -82,7 +81,6 @@ func (h *CategoryHandler) Index(c echo.Context) error {
 		categories,
 		h.services.Transaction,
 		h.services.Budget,
-		sessionData.FamilyID,
 	)
 	categoryViewModels = applyNameFilter(categoryViewModels, filters.Name)
 	categoryViewModels = applyParentOnlyFilter(categoryViewModels, filters.ParentOnly)
@@ -105,14 +103,14 @@ func (h *CategoryHandler) Index(c echo.Context) error {
 
 // New отображает форму создания новой категории
 func (h *CategoryHandler) New(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	// Проверяем авторизацию пользователя
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Получаем родительские категории для select
-	parentCategories, err := h.services.Category.GetCategoriesByFamily(c.Request().Context(), sessionData.FamilyID, nil)
+	parentCategories, err := h.services.Category.GetCategories(c.Request().Context(), nil)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get parent categories")
 	}
@@ -153,8 +151,8 @@ func (h *CategoryHandler) New(c echo.Context) error {
 
 // Create создает новую категорию
 func (h *CategoryHandler) Create(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	// Проверяем авторизацию пользователя
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
@@ -186,9 +184,8 @@ func (h *CategoryHandler) Create(c echo.Context) error {
 			},
 		}
 
-		parentCategories, _ := h.services.Category.GetCategoriesByFamily(
+		parentCategories, _ := h.services.Category.GetCategories(
 			c.Request().Context(),
-			sessionData.FamilyID,
 			nil,
 		)
 		var parentOptions []webModels.CategorySelectOption
@@ -224,7 +221,6 @@ func (h *CategoryHandler) Create(c echo.Context) error {
 		Color:    form.Color,
 		Icon:     form.Icon,
 		ParentID: form.GetParentID(),
-		FamilyID: sessionData.FamilyID,
 	}
 
 	// Создаем категорию через сервис
@@ -260,8 +256,8 @@ func (h *CategoryHandler) Create(c echo.Context) error {
 
 // Edit отображает форму редактирования категории
 func (h *CategoryHandler) Edit(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	// Проверяем авторизацию пользователя
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
@@ -279,13 +275,11 @@ func (h *CategoryHandler) Edit(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Category not found")
 	}
 
-	// Проверяем, что категория принадлежит семье пользователя
-	if category.FamilyID != sessionData.FamilyID {
-		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
-	}
+	// In single-family model, all categories belong to the family
+	// No additional access check needed
 
 	// Получаем родительские категории для select (исключая текущую)
-	parentCategories, err := h.services.Category.GetCategoriesByFamily(c.Request().Context(), sessionData.FamilyID, nil)
+	parentCategories, err := h.services.Category.GetCategories(c.Request().Context(), nil)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get parent categories")
 	}
@@ -341,7 +335,7 @@ func (h *CategoryHandler) Edit(c echo.Context) error {
 
 // Update обновляет существующую категорию
 func (h *CategoryHandler) Update(c echo.Context) error {
-	sessionData, categoryID, existingCategory, err := h.validateUpdateRequest(c)
+	_, categoryID, existingCategory, err := h.validateUpdateRequest(c)
 	if err != nil {
 		return err
 	}
@@ -354,7 +348,7 @@ func (h *CategoryHandler) Update(c echo.Context) error {
 
 	// Валидируем форму
 	if validationErr := h.validator.Struct(form); validationErr != nil {
-		return h.handleUpdateValidationError(c, validationErr, form, sessionData, categoryID, existingCategory)
+		return h.handleUpdateValidationError(c, validationErr, form, categoryID, existingCategory)
 	}
 
 	// Создаем DTO для обновления
@@ -394,16 +388,14 @@ func (h *CategoryHandler) validateUpdateRequest(c echo.Context) (
 		return nil, uuid.Nil, nil, echo.NewHTTPError(http.StatusBadRequest, "Invalid category ID")
 	}
 
-	// Проверяем, что категория существует и принадлежит семье
+	// Проверяем, что категория существует
 	existingCategory, err := h.services.Category.GetCategoryByID(c.Request().Context(), categoryID)
 	if err != nil {
 		return nil, uuid.Nil, nil, echo.NewHTTPError(http.StatusNotFound, "Category not found")
 	}
 
-	// Проверяем, что категория принадлежит семье пользователя
-	if existingCategory.FamilyID != sessionData.FamilyID {
-		return nil, uuid.Nil, nil, echo.NewHTTPError(http.StatusForbidden, "Access denied")
-	}
+	// In single-family model, all categories belong to the family
+	// No additional access check needed
 
 	return sessionData, categoryID, existingCategory, nil
 }
@@ -413,7 +405,6 @@ func (h *CategoryHandler) handleUpdateValidationError(
 	c echo.Context,
 	validationErr error,
 	form webModels.CategoryForm,
-	sessionData *middleware.SessionData,
 	categoryID uuid.UUID,
 	existingCategory *category.Category,
 ) error {
@@ -436,7 +427,6 @@ func (h *CategoryHandler) handleUpdateValidationError(
 
 	parentOptions := h.getParentOptionsForUpdate(
 		c.Request().Context(),
-		sessionData.FamilyID,
 		categoryID,
 		existingCategory,
 	)
@@ -458,11 +448,10 @@ func (h *CategoryHandler) handleUpdateValidationError(
 // getParentOptionsForUpdate получает список родительских категорий для формы редактирования
 func (h *CategoryHandler) getParentOptionsForUpdate(
 	ctx context.Context,
-	familyID uuid.UUID,
 	categoryID uuid.UUID,
 	existingCategory *category.Category,
 ) []webModels.CategorySelectOption {
-	parentCategories, _ := h.services.Category.GetCategoriesByFamily(ctx, familyID, nil)
+	parentCategories, _ := h.services.Category.GetCategories(ctx, nil)
 	var parentOptions []webModels.CategorySelectOption
 	for _, cat := range parentCategories {
 		if cat.ID != categoryID && cat.ParentID == nil && cat.Type == existingCategory.Type {
@@ -500,8 +489,8 @@ func (h *CategoryHandler) handleUpdateServiceError(c echo.Context, err error) er
 
 // Show отображает детали конкретной категории
 func (h *CategoryHandler) Show(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	// Проверяем авторизацию пользователя
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
@@ -519,13 +508,11 @@ func (h *CategoryHandler) Show(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Category not found")
 	}
 
-	// Проверяем, что категория принадлежит семье пользователя
-	if category.FamilyID != sessionData.FamilyID {
-		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
-	}
+	// In single-family model, all categories belong to the family
+	// No additional access check needed
 
 	// Получаем подкатегории
-	allCategories, err := h.services.Category.GetCategoriesByFamily(c.Request().Context(), sessionData.FamilyID, nil)
+	allCategories, err := h.services.Category.GetCategories(c.Request().Context(), nil)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get categories")
 	}
@@ -550,7 +537,6 @@ func (h *CategoryHandler) Show(c echo.Context) error {
 		&categoryVM,
 		h.services.Transaction,
 		h.services.Budget,
-		sessionData.FamilyID,
 	)
 
 	// Найдем подкатегории для текущей категории и создадим view models
@@ -560,7 +546,6 @@ func (h *CategoryHandler) Show(c echo.Context) error {
 		allCategories,
 		h.services.Transaction,
 		h.services.Budget,
-		sessionData.FamilyID,
 	)
 	for _, vm := range allCategoryVMs {
 		if vm.ParentID != nil && *vm.ParentID == categoryID {
@@ -582,8 +567,8 @@ func (h *CategoryHandler) Show(c echo.Context) error {
 
 // Delete удаляет категорию
 func (h *CategoryHandler) Delete(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	// Проверяем авторизацию пользователя
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
@@ -595,19 +580,11 @@ func (h *CategoryHandler) Delete(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid category ID")
 	}
 
-	// Проверяем, что категория существует и принадлежит семье
-	category, err := h.services.Category.GetCategoryByID(c.Request().Context(), categoryID)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Category not found")
-	}
-
-	// Проверяем, что категория принадлежит семье пользователя
-	if category.FamilyID != sessionData.FamilyID {
-		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
-	}
+	// In single-family model, no need to check category ownership
+	// All categories belong to the single family
 
 	// Удаляем категорию через сервис
-	err = h.services.Category.DeleteCategory(c.Request().Context(), categoryID, sessionData.FamilyID)
+	err = h.services.Category.DeleteCategory(c.Request().Context(), categoryID)
 	if err != nil {
 		// Обрабатываем специфичные ошибки сервиса
 		var errorMsg string
@@ -642,8 +619,8 @@ func (h *CategoryHandler) Delete(c echo.Context) error {
 
 // Search выполняет поиск категорий (HTMX)
 func (h *CategoryHandler) Search(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	// Проверяем авторизацию пользователя
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
@@ -655,9 +632,8 @@ func (h *CategoryHandler) Search(c echo.Context) error {
 
 	// Получаем все категории семьи
 	typeFilter := parseTypeFilter(categoryType)
-	categories, err := h.services.Category.GetCategoriesByFamily(
+	categories, err := h.services.Category.GetCategories(
 		c.Request().Context(),
-		sessionData.FamilyID,
 		typeFilter,
 	)
 	if err != nil {
@@ -670,7 +646,6 @@ func (h *CategoryHandler) Search(c echo.Context) error {
 		categories,
 		h.services.Transaction,
 		h.services.Budget,
-		sessionData.FamilyID,
 	)
 	categoryViewModels = applyNameFilter(categoryViewModels, query)
 	categoryViewModels = applyParentOnlyFilter(categoryViewModels, parentOnly)
@@ -693,8 +668,8 @@ func (h *CategoryHandler) Search(c echo.Context) error {
 
 // Select возвращает категории для select элементов (HTMX)
 func (h *CategoryHandler) Select(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	// Проверяем авторизацию пользователя
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
@@ -716,9 +691,8 @@ func (h *CategoryHandler) Select(c echo.Context) error {
 	typeFilter := parseTypeFilter(categoryType)
 
 	// Получаем категории
-	categories, err := h.services.Category.GetCategoriesByFamily(
+	categories, err := h.services.Category.GetCategories(
 		c.Request().Context(),
-		sessionData.FamilyID,
 		typeFilter,
 	)
 	if err != nil {
@@ -761,7 +735,6 @@ func convertToViewModels(
 	categories []*category.Category,
 	transactionService services.TransactionService,
 	budgetService services.BudgetService,
-	familyID uuid.UUID,
 ) []webModels.CategoryViewModel {
 	var categoryViewModels []webModels.CategoryViewModel
 	for _, cat := range categories {
@@ -784,7 +757,7 @@ func convertToViewModels(
 		}
 
 		// Получаем статистику транзакций для категории
-		_ = populateCategoryStats(ctx, &vm, transactionService, budgetService, familyID)
+		_ = populateCategoryStats(ctx, &vm, transactionService, budgetService)
 
 		categoryViewModels = append(categoryViewModels, vm)
 	}
@@ -797,11 +770,9 @@ func populateCategoryStats(
 	vm *webModels.CategoryViewModel,
 	transactionService services.TransactionService,
 	budgetService services.BudgetService,
-	familyID uuid.UUID,
 ) error {
 	// Получаем все транзакции для категории
 	filter := dto.TransactionFilterDTO{
-		FamilyID:   familyID,
 		CategoryID: &vm.ID,
 		Limit:      TransactionLimitForStats, // Ограничиваем для производительности
 		Offset:     0,
@@ -847,7 +818,7 @@ func populateCategoryStats(
 	vm.LastUsed = lastUsed
 
 	// Получаем активные бюджеты для данной категории
-	budgets, err := budgetService.GetBudgetsByCategory(ctx, familyID, vm.ID)
+	budgets, err := budgetService.GetBudgetsByCategory(ctx, vm.ID)
 	if err == nil && len(budgets) > 0 {
 		// Берем первый активный бюджет (можно улучшить логику выбора)
 		for _, budget := range budgets {

@@ -1,0 +1,5 @@
+# Ignore local settings that may contain sensitive data
+settings.local.json
+
+# Keep skills and other configuration in version control
+!skills/

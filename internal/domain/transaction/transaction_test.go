@@ -17,11 +17,10 @@ func TestNewTransaction(t *testing.T) {
 	description := "Grocery shopping"
 	categoryID := uuid.New()
 	userID := uuid.New()
-	familyID := uuid.New()
 	date := time.Now()
 
 	// Execute
-	txn := transaction.NewTransaction(amount, transactionType, description, categoryID, userID, familyID, date)
+	txn := transaction.NewTransaction(amount, transactionType, description, categoryID, userID, date)
 
 	// Assert
 	assert.NotEqual(t, uuid.Nil, txn.ID)
@@ -30,7 +29,6 @@ func TestNewTransaction(t *testing.T) {
 	assert.Equal(t, description, txn.Description)
 	assert.Equal(t, categoryID, txn.CategoryID)
 	assert.Equal(t, userID, txn.UserID)
-	assert.Equal(t, familyID, txn.FamilyID)
 	assert.Equal(t, date, txn.Date)
 	assert.NotNil(t, txn.Tags)
 	assert.Empty(t, txn.Tags)
@@ -52,7 +50,6 @@ func TestTransaction_AddTag(t *testing.T) {
 		100.0,
 		transaction.TypeExpense,
 		"Test",
-		uuid.New(),
 		uuid.New(),
 		uuid.New(),
 		time.Now(),
@@ -79,7 +76,6 @@ func TestTransaction_AddTag_Duplicate(t *testing.T) {
 		"Test",
 		uuid.New(),
 		uuid.New(),
-		uuid.New(),
 		time.Now(),
 	)
 	txn.AddTag("food")
@@ -103,7 +99,6 @@ func TestTransaction_RemoveTag(t *testing.T) {
 		100.0,
 		transaction.TypeExpense,
 		"Test",
-		uuid.New(),
 		uuid.New(),
 		uuid.New(),
 		time.Now(),
@@ -133,7 +128,6 @@ func TestTransaction_RemoveTag_NonExistent(t *testing.T) {
 		"Test",
 		uuid.New(),
 		uuid.New(),
-		uuid.New(),
 		time.Now(),
 	)
 	txn.AddTag("food")
@@ -155,7 +149,6 @@ func TestTransaction_StructFields(t *testing.T) {
 	// Test that Transaction struct has all required fields
 	categoryID := uuid.New()
 	userID := uuid.New()
-	familyID := uuid.New()
 	date := time.Now()
 
 	txn := &transaction.Transaction{
@@ -165,7 +158,6 @@ func TestTransaction_StructFields(t *testing.T) {
 		Description: "Salary",
 		CategoryID:  categoryID,
 		UserID:      userID,
-		FamilyID:    familyID,
 		Date:        date,
 		Tags:        []string{"salary", "work"},
 		CreatedAt:   time.Now(),
@@ -179,7 +171,6 @@ func TestTransaction_StructFields(t *testing.T) {
 	assert.Equal(t, "Salary", txn.Description)
 	assert.Equal(t, categoryID, txn.CategoryID)
 	assert.Equal(t, userID, txn.UserID)
-	assert.Equal(t, familyID, txn.FamilyID)
 	assert.Equal(t, date, txn.Date)
 	assert.Equal(t, []string{"salary", "work"}, txn.Tags)
 	assert.False(t, txn.CreatedAt.IsZero())
@@ -188,7 +179,6 @@ func TestTransaction_StructFields(t *testing.T) {
 
 func TestFilter_StructFields(t *testing.T) {
 	// Test that Filter struct has all expected fields
-	familyID := uuid.New()
 	userID := uuid.New()
 	categoryID := uuid.New()
 	transactionType := transaction.TypeExpense
@@ -198,7 +188,6 @@ func TestFilter_StructFields(t *testing.T) {
 	amountTo := 1000.0
 
 	filter := &transaction.Filter{
-		FamilyID:    familyID,
 		UserID:      &userID,
 		CategoryID:  &categoryID,
 		Type:        &transactionType,
@@ -213,7 +202,6 @@ func TestFilter_StructFields(t *testing.T) {
 	}
 
 	// Assert all fields are accessible
-	assert.Equal(t, familyID, filter.FamilyID)
 	assert.Equal(t, userID, *filter.UserID)
 	assert.Equal(t, categoryID, *filter.CategoryID)
 	assert.Equal(t, transactionType, *filter.Type)
@@ -230,7 +218,6 @@ func TestFilter_StructFields(t *testing.T) {
 func TestNewTransaction_DifferentTypes(t *testing.T) {
 	categoryID := uuid.New()
 	userID := uuid.New()
-	familyID := uuid.New()
 	date := time.Now()
 
 	tests := []struct {
@@ -243,7 +230,7 @@ func TestNewTransaction_DifferentTypes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			txn := transaction.NewTransaction(100.0, tt.transactionType, "Test", categoryID, userID, familyID, date)
+			txn := transaction.NewTransaction(100.0, tt.transactionType, "Test", categoryID, userID, date)
 			assert.Equal(t, tt.transactionType, txn.Type)
 		})
 	}
@@ -255,7 +242,6 @@ func TestTransaction_TagOperations_Sequence(t *testing.T) {
 		100.0,
 		transaction.TypeExpense,
 		"Test",
-		uuid.New(),
 		uuid.New(),
 		uuid.New(),
 		time.Now(),
@@ -301,7 +287,6 @@ func TestTransaction_TimestampGeneration(t *testing.T) {
 		100.0,
 		transaction.TypeExpense,
 		"Test",
-		uuid.New(),
 		uuid.New(),
 		uuid.New(),
 		time.Now(),

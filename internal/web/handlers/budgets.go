@@ -54,16 +54,15 @@ func NewBudgetHandler(repositories *handlers.Repositories, services *services.Se
 // Index отображает список бюджетов с прогрессом
 func (h *BudgetHandler) Index(c echo.Context) error {
 	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Парсим параметры фильтрации
 	filter := dto.BudgetFilterDTO{
-		FamilyID: sessionData.FamilyID,
-		Limit:    DefaultBudgetLimit, // По умолчанию
-		Offset:   0,
+		Limit:  DefaultBudgetLimit, // По умолчанию
+		Offset: 0,
 	}
 
 	// Парсим фильтры из query parameters
@@ -82,7 +81,7 @@ func (h *BudgetHandler) Index(c echo.Context) error {
 	}
 
 	// Получаем список бюджетов
-	budgets, err := h.services.Budget.GetBudgetsByFamily(c.Request().Context(), sessionData.FamilyID, filter)
+	budgets, err := h.services.Budget.GetAllBudgets(c.Request().Context(), filter)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get budgets")
 	}
@@ -126,15 +125,14 @@ func (h *BudgetHandler) Index(c echo.Context) error {
 // New отображает форму создания нового бюджета
 func (h *BudgetHandler) New(c echo.Context) error {
 	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Получаем список категорий для селектора
-	categories, err := h.services.Category.GetCategoriesByFamily(
+	categories, err := h.services.Category.GetCategories(
 		c.Request().Context(),
-		sessionData.FamilyID,
 		nil, // Все типы категорий
 	)
 	if err != nil {
@@ -186,7 +184,7 @@ func (h *BudgetHandler) New(c echo.Context) error {
 // Create создает новый бюджет
 func (h *BudgetHandler) Create(c echo.Context) error {
 	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
@@ -233,7 +231,6 @@ func (h *BudgetHandler) Create(c echo.Context) error {
 		Amount:     amount,
 		Period:     form.ToBudgetPeriod(),
 		CategoryID: form.GetCategoryID(),
-		FamilyID:   sessionData.FamilyID,
 		StartDate:  startDate,
 		EndDate:    endDate,
 	}
@@ -259,7 +256,7 @@ func (h *BudgetHandler) Create(c echo.Context) error {
 // Edit отображает форму редактирования бюджета
 func (h *BudgetHandler) Edit(c echo.Context) error {
 	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
@@ -277,15 +274,12 @@ func (h *BudgetHandler) Edit(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Budget not found")
 	}
 
-	// Проверяем, что бюджет принадлежит семье пользователя
-	if budgetEntity.FamilyID != sessionData.FamilyID {
-		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
-	}
+	// In single-family model, all budgets belong to the family
+	// No additional access check needed
 
 	// Получаем список категорий
-	categories, err := h.services.Category.GetCategoriesByFamily(
+	categories, err := h.services.Category.GetCategories(
 		c.Request().Context(),
-		sessionData.FamilyID,
 		nil,
 	)
 	if err != nil {
@@ -340,7 +334,7 @@ func (h *BudgetHandler) Edit(c echo.Context) error {
 // Update обновляет существующий бюджет
 func (h *BudgetHandler) Update(c echo.Context) error {
 	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
@@ -352,15 +346,13 @@ func (h *BudgetHandler) Update(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid budget ID")
 	}
 
-	// Проверяем, что бюджет существует и принадлежит семье
-	budgetEntity, err := h.services.Budget.GetBudgetByID(c.Request().Context(), budgetID)
+	// Проверяем, что бюджет существует
+	_, err = h.services.Budget.GetBudgetByID(c.Request().Context(), budgetID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "Budget not found")
 	}
 
-	if budgetEntity.FamilyID != sessionData.FamilyID {
-		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
-	}
+	// Single family model - no family check needed
 
 	// Парсим данные формы
 	var form webModels.BudgetForm
@@ -433,11 +425,11 @@ func (h *BudgetHandler) Delete(c echo.Context) error {
 			return h.services.Budget.GetBudgetByID(ctx.Request().Context(), entityID)
 		},
 		DeleteEntityFunc: func(ctx echo.Context, entityID uuid.UUID) error {
-			sessionData, err := middleware.GetUserFromContext(ctx)
+			_, err := middleware.GetUserFromContext(ctx)
 			if err != nil {
 				return err
 			}
-			return h.services.Budget.DeleteBudget(ctx.Request().Context(), entityID, sessionData.FamilyID)
+			return h.services.Budget.DeleteBudget(ctx.Request().Context(), entityID)
 		},
 		GetErrorMsgFunc: h.getBudgetServiceErrorMessage,
 		RedirectURL:     "/budgets",
@@ -447,7 +439,7 @@ func (h *BudgetHandler) Delete(c echo.Context) error {
 // Progress возвращает обновленный прогресс бюджета (HTMX)
 func (h *BudgetHandler) Progress(c echo.Context) error {
 	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
@@ -466,9 +458,7 @@ func (h *BudgetHandler) Progress(c echo.Context) error {
 	}
 
 	// Проверяем права доступа
-	if budgetEntity.FamilyID != sessionData.FamilyID {
-		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
-	}
+	// Single family model - no family check needed
 
 	// Конвертируем в view модель
 	progressVM := webModels.BudgetProgressVM{}
@@ -493,7 +483,7 @@ func (h *BudgetHandler) Progress(c echo.Context) error {
 // Show отображает детальную информацию о бюджете
 func (h *BudgetHandler) Show(c echo.Context) error {
 	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
@@ -512,9 +502,7 @@ func (h *BudgetHandler) Show(c echo.Context) error {
 	}
 
 	// Проверяем права доступа
-	if budgetEntity.FamilyID != sessionData.FamilyID {
-		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
-	}
+	// Single family model - no family check needed
 
 	// Конвертируем в view модель
 	budgetVM := webModels.BudgetProgressVM{}
@@ -547,7 +535,6 @@ func (h *BudgetHandler) Show(c echo.Context) error {
 	recentTransactions, err := h.getRecentTransactionsForBudget(
 		c.Request().Context(),
 		budgetEntity,
-		sessionData.FamilyID,
 	)
 	if err != nil {
 		// В случае ошибки получения транзакций, продолжаем без них
@@ -576,15 +563,14 @@ func (h *BudgetHandler) renderBudgetFormWithErrors(
 	title string,
 ) error {
 	// Получаем данные пользователя из сессии для категорий
-	sessionData, err := middleware.GetUserFromContext(c)
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Получаем список категорий
-	categories, err := h.services.Category.GetCategoriesByFamily(
+	categories, err := h.services.Category.GetCategories(
 		c.Request().Context(),
-		sessionData.FamilyID,
 		nil,
 	)
 	if err != nil {
@@ -628,7 +614,7 @@ func (h *BudgetHandler) renderBudgetFormWithErrors(
 // handleBudgetActivation общий метод для изменения статуса бюджета
 func (h *BudgetHandler) handleBudgetActivation(c echo.Context, isActive bool) error {
 	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
@@ -641,15 +627,13 @@ func (h *BudgetHandler) handleBudgetActivation(c echo.Context, isActive bool) er
 	}
 
 	// Получаем бюджет для проверки прав доступа
-	budgetEntity, err := h.services.Budget.GetBudgetByID(c.Request().Context(), budgetID)
+	_, err = h.services.Budget.GetBudgetByID(c.Request().Context(), budgetID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "Budget not found")
 	}
 
 	// Проверяем права доступа
-	if budgetEntity.FamilyID != sessionData.FamilyID {
-		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
-	}
+	// Single family model - no family check needed
 
 	// Создаем DTO для обновления
 	updateDTO := &dto.UpdateBudgetDTO{
@@ -684,18 +668,17 @@ func (h *BudgetHandler) Deactivate(c echo.Context) error {
 // Alerts отображает страницу с алертами для бюджетов
 func (h *BudgetHandler) Alerts(c echo.Context) error {
 	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
 	// Получаем все активные бюджеты семьи
 	filter := dto.NewBudgetFilterDTO()
-	filter.FamilyID = sessionData.FamilyID
 	isActive := true
 	filter.IsActive = &isActive
 
-	budgets, err := h.services.Budget.GetBudgetsByFamily(c.Request().Context(), sessionData.FamilyID, filter)
+	budgets, err := h.services.Budget.GetAllBudgets(c.Request().Context(), filter)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load budgets")
 	}
@@ -771,7 +754,7 @@ func (h *BudgetHandler) Alerts(c echo.Context) error {
 // CreateAlert создает новый алерт для бюджета
 func (h *BudgetHandler) CreateAlert(c echo.Context) error {
 	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
@@ -794,14 +777,12 @@ func (h *BudgetHandler) CreateAlert(c echo.Context) error {
 	}
 
 	// Проверяем, что бюджет принадлежит семье пользователя
-	budgetEntity, err := h.services.Budget.GetBudgetByID(c.Request().Context(), budgetID)
+	_, err = h.services.Budget.GetBudgetByID(c.Request().Context(), budgetID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "Budget not found")
 	}
 
-	if budgetEntity.FamilyID != sessionData.FamilyID {
-		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
-	}
+	// Single family model - no family check needed
 
 	// В реальном приложении здесь был бы вызов сервиса для создания алерта
 	// Сейчас просто возвращаем успех
@@ -866,14 +847,11 @@ func (h *BudgetHandler) getBudgetServiceErrorMessage(err error) string {
 func (h *BudgetHandler) getRecentTransactionsForBudget(
 	ctx context.Context,
 	budget *budget.Budget,
-	familyID uuid.UUID,
 ) ([]*webModels.TransactionSummary, error) {
 	// Создаем фильтр для получения транзакций
 	filter := dto.NewTransactionFilterDTO()
-	filter.FamilyID = familyID
 	filter.DateFrom = &budget.StartDate
 	filter.DateTo = &budget.EndDate
-	filter.Limit = 5 // Ограничиваем количество последних транзакций
 
 	// Если у бюджета есть категория, фильтруем по ней
 	if budget.CategoryID != nil {
@@ -881,9 +859,20 @@ func (h *BudgetHandler) getRecentTransactionsForBudget(
 	}
 
 	// Получаем транзакции через сервис
-	transactions, err := h.services.Transaction.GetTransactionsByFamily(ctx, familyID, filter)
+	transactions, err := h.services.Transaction.GetTransactionsByDateRange(ctx, *filter.DateFrom, *filter.DateTo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get transactions for budget: %w", err)
+	}
+
+	// Фильтруем по категории если нужно (сервис не поддерживает фильтрацию по категории в GetTransactionsByDateRange)
+	if filter.CategoryID != nil {
+		filteredTransactions := make([]*transaction.Transaction, 0)
+		for _, tx := range transactions {
+			if tx.CategoryID == *filter.CategoryID {
+				filteredTransactions = append(filteredTransactions, tx)
+			}
+		}
+		transactions = filteredTransactions
 	}
 
 	// Конвертируем в web модели

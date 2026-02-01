@@ -3,10 +3,10 @@
 ## 🏗️ Архитектурный обзор
 
 ### Общая архитектура
-- **Тип**: Микросервис
+- **Тип**: Self-hosted сервис (один Docker-образ ~50MB)
 - **Стиль**: RESTful API + Clean Architecture
-- **Развертывание**: Docker + Docker Compose
-- **Масштабирование**: Горизонтальное
+- **Развертывание**: Один Docker-контейнер
+- **База данных**: SQLite (встроенная, без внешних зависимостей)
 
 ### Архитектурные принципы
 - **Clean Architecture**: Разделение на слои (Domain, Use Cases, Interface Adapters, Infrastructure)
@@ -17,15 +17,14 @@
 ## 💻 Основной технологический стек
 
 ### Backend
-- **Язык**: Go 1.24+
+- **Язык**: Go 1.25+
 - **Framework**: Echo Web Framework v4.13.4+
-- **База данных**: PostgreSQL 17.6+
-- **Driver**: pgx/v5 PostgreSQL driver v5.0+
+- **База данных**: SQLite (modernc.org/sqlite — pure Go, без CGO)
 - **Валидация**: go-playground/validator v10.27.0
 - **UUID**: google/uuid v1.6.0 для идентификаторов
 - **Sessions**: gorilla/sessions v1.4.0
 - **Password Hashing**: golang.org/x/crypto/bcrypt
-- **Testing**: testify v1.10.0 + testcontainers-go v0.38.0
+- **Testing**: testify v1.10.0 + in-memory SQLite
 
 ### Frontend (Web Interface)
 - **Framework**: HTMX v2.0.4+ для dynamic updates
@@ -56,7 +55,7 @@ Family-Finances-Service/
 ├── internal/              # Приватный код приложения
 │   ├── domain/           # Domain entities и бизнес-логика
 │   ├── application/      # Application layer с интерфейсами
-│   ├── infrastructure/   # Реализация репозиториев (PostgreSQL)
+│   ├── infrastructure/   # Реализация репозиториев (SQLite)
 │   ├── config.go         # Конфигурация приложения
 │   └── run.go           # Bootstrap приложения
 ├── generated/             # Автогенерированный код (OpenAPI)
@@ -75,30 +74,27 @@ Family-Finances-Service/
 
 ### Тестирование
 - **Unit тесты**: testing пакет Go
-- **Mocking**: gomock
-- **Integration тесты**: testcontainers-go
+- **Mocking**: testify/mock
+- **Integration тесты**: in-memory SQLite (без Docker, мгновенный запуск)
 - **Coverage**: go test -cover
 
 ### Observability
 - **Логирование**: slog (structured logging)
-- **Метрики**: Prometheus v1.23.0 с custom metrics
-- **Трейсинг**: OpenTelemetry v1.37.0 с Jaeger
-- **Health checks**: Liveness/Readiness probes
-- **Monitoring**: Grafana dashboards для visualization
+- **Health checks**: /health эндпоинт
 
 ## 🗄️ База данных
 
-### PostgreSQL конфигурация
-- **Версия**: 17.6+
-- **Driver**: pgx/v5 PostgreSQL driver
-- **Connection Pool**: pgxpool для управления соединениями
-- **Миграции**: golang-migrate для версионирования схемы
+### SQLite конфигурация
+- **Driver**: modernc.org/sqlite (pure Go, без CGO)
+- **Хранение**: Один файл `./data/budget.db`
+- **Миграции**: Встроенные, выполняются автоматически при старте
+- **Бэкапы**: Копирование файла базы данных
 
 ### Дизайн БД
-- **Подход**: Relational database
+- **Подход**: Relational database (SQLite)
 - **Schema**: Строгая типизация с foreign keys
-- **Индексы**: B-tree и составные индексы для оптимизации
-- **Views**: Для сложной аналитики и отчетов
+- **Индексы**: B-tree индексы для оптимизации
+- **WAL mode**: Для конкурентного чтения
 
 ### Основные таблицы
 ```sql
@@ -110,11 +106,11 @@ budgets        -- Бюджеты и планы
 reports        -- Сгенерированные отчеты
 ```
 
-### Особенности PostgreSQL
-- **UUID типы**: uuid-ossp расширение для идентификаторов
-- **JSONB**: Для flexible data в structured format
+### Особенности SQLite
+- **Встроенная БД**: Не требует отдельного сервера
+- **Pure Go**: Нет зависимости от CGO/C-компилятора
 - **Foreign Keys**: Для referential integrity
-- **Multi-tenancy**: Row Level Security по family_id
+- **Single-tenant**: Один экземпляр обслуживает одну семью
 
 ## 🌐 API Design
 
@@ -125,15 +121,9 @@ reports        -- Сгенерированные отчеты
 - **Content-Type**: application/json
 
 ### Аутентификация и авторизация
-- **Схема**: JWT Bearer tokens
-- **Refresh tokens**: Да
-- **Роли**: Family Admin, Family Member
-- **Permissions**: RBAC модель
-
-### Версионирование
-- **Подход**: URI versioning (/api/v1/)
-- **Backward compatibility**: Минимум 2 версии
-- **Deprecation**: Уведомления в headers
+- **Схема**: Сессии с HTTP-only cookies
+- **Роли**: Admin, Member, Child
+- **CSRF защита**: Токены в формах
 
 ## 🚀 DevOps и развертывание
 
@@ -153,30 +143,26 @@ make test
 ```
 
 ### Среды
-- **Development**: Docker Compose
-- **Staging**: Планируется (Docker + CI/CD)
-- **Production**: Планируется (Kubernetes)
+- **Development**: `make run-local` (localhost:8080, SQLite)
+- **Production**: Docker-контейнер (~50MB Alpine-based image)
 
 ### Мониторинг
 - **Healthcheck**: /health эндпоинт
-- **Metrics**: /metrics эндпоинт (Prometheus format)
-- **Logging**: Structured JSON logs
-- **Alerting**: Планируется
+- **Logging**: Structured JSON logs (slog)
 
 ## 📦 Зависимости
 
 ### Основные Go модули
 ```go
 github.com/labstack/echo/v4        # Web framework
-github.com/jackc/pgx/v5           # PostgreSQL driver
+modernc.org/sqlite                 # SQLite driver (pure Go)
 github.com/google/uuid             # UUID generation
-github.com/golang-jwt/jwt          # JWT tokens (indirect)
+github.com/gorilla/sessions        # Session management
 ```
 
 ### Dev зависимости
 ```go
-github.com/stretchr/testify       # Testing utilities (планируется)
-github.com/golang/mock            # Mocking (планируется)
+github.com/stretchr/testify       # Testing utilities
 ```
 
 ## 🔒 Безопасность
@@ -202,36 +188,32 @@ github.com/golang/mock            # Mocking (планируется)
 - **Recovery Time**: < 1 минута
 
 ### Оптимизации
-- **PostgreSQL**: Индексы, connection pooling, query optimization
+- **SQLite**: Индексы, WAL mode, prepared statements
 - **Compression**: gzip middleware Echo
 - **Profiling**: pprof интеграция
 
 ## 🔄 Планы развития
 
-### Ближайшие обновления (1-3 месяца)
-- [ ] Prometheus метрики
-- [ ] CI/CD pipeline
-- [ ] Docker многоэтапная сборка
+### Ближайшие обновления
+- [ ] Увеличение тестового покрытия до 60%+
+- [ ] Расширение веб-интерфейса
+- [ ] Улучшение аналитики и отчетов
 
-### Среднесрочные планы (3-6 месяцев)
-- [ ] Kubernetes развертывание
-- [ ] OpenTelemetry трейсинг
-- [ ] GraphQL API
-- [ ] Event-driven архитектура
+### Среднесрочные планы
+- [ ] PWA поддержка (offline mode)
+- [ ] Экспорт/импорт данных (CSV, JSON)
+- [ ] Расширенная система уведомлений
 
-### Долгосрочная перспектива (6-12 месяцев)
-- [ ] Микросервисное разбиение
-- [ ] Message queues (RabbitMQ/Kafka)
-- [ ] Machine Learning интеграция
-- [ ] Multi-region deployment
+### Долгосрочная перспектива
+- [ ] AI-рекомендации по оптимизации трат
 
 ## 📚 Полезные ресурсы
 
 ### Документация
 - [Go Documentation](https://golang.org/doc/)
 - [Echo Framework](https://echo.labstack.com/guide/)
-- [pgx PostgreSQL Driver](https://github.com/jackc/pgx)
-- [PostgreSQL Docs](https://www.postgresql.org/docs/)
+- [SQLite Documentation](https://www.sqlite.org/docs.html)
+- [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite)
 
 ### Лучшие практики
 - [Effective Go](https://golang.org/doc/effective_go.html)

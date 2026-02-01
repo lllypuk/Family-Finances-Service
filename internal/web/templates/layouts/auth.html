@@ -39,7 +39,7 @@
 
                     <!-- Auth Content -->
                     {{if .IsLogin}} {{template "login_content" .}} {{else if
-                    .IsRegister}} {{template "register_content" .}} {{else}}
+                    .IsSetup}} {{template "setup_content" .}} {{else}}
                     <div class="alert alert-warning" role="alert">
                         Не указан тип аутентификации. Пожалуйста, попробуйте
                         снова или обратитесь в поддержку.
@@ -49,8 +49,7 @@
                     <!-- Footer -->
                     <footer class="auth-footer">
                         <small>
-                            <a href="/login">Вход</a> •
-                            <a href="/register">Регистрация</a>
+                            <a href="/login">Вход</a>
                         </small>
                     </footer>
                 </div>

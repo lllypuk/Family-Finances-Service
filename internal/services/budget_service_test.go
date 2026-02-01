@@ -35,22 +35,16 @@ func (m *MockBudgetRepositoryForService) GetByID(ctx context.Context, id uuid.UU
 	return args.Get(0).(*budget.Budget), args.Error(1)
 }
 
-func (m *MockBudgetRepositoryForService) GetByFamilyID(
-	ctx context.Context,
-	familyID uuid.UUID,
-) ([]*budget.Budget, error) {
-	args := m.Called(ctx, familyID)
+func (m *MockBudgetRepositoryForService) GetAll(ctx context.Context) ([]*budget.Budget, error) {
+	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*budget.Budget), args.Error(1)
 }
 
-func (m *MockBudgetRepositoryForService) GetActiveBudgets(
-	ctx context.Context,
-	familyID uuid.UUID,
-) ([]*budget.Budget, error) {
-	args := m.Called(ctx, familyID)
+func (m *MockBudgetRepositoryForService) GetActiveBudgets(ctx context.Context) ([]*budget.Budget, error) {
+	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -62,17 +56,16 @@ func (m *MockBudgetRepositoryForService) Update(ctx context.Context, b *budget.B
 	return args.Error(0)
 }
 
-func (m *MockBudgetRepositoryForService) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
-	args := m.Called(ctx, id, familyID)
+func (m *MockBudgetRepositoryForService) Delete(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
-func (m *MockBudgetRepositoryForService) GetByFamilyAndCategory(
+func (m *MockBudgetRepositoryForService) GetByCategory(
 	ctx context.Context,
-	familyID uuid.UUID,
 	categoryID *uuid.UUID,
 ) ([]*budget.Budget, error) {
-	args := m.Called(ctx, familyID, categoryID)
+	args := m.Called(ctx, categoryID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -81,10 +74,9 @@ func (m *MockBudgetRepositoryForService) GetByFamilyAndCategory(
 
 func (m *MockBudgetRepositoryForService) GetByPeriod(
 	ctx context.Context,
-	familyID uuid.UUID,
 	startDate, endDate time.Time,
 ) ([]*budget.Budget, error) {
-	args := m.Called(ctx, familyID, startDate, endDate)
+	args := m.Called(ctx, startDate, endDate)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -104,13 +96,12 @@ func (m *MockTransactionRepositoryForBudgets) GetTotalByCategory(
 	return args.Get(0).(float64), args.Error(1)
 }
 
-func (m *MockTransactionRepositoryForBudgets) GetTotalByFamilyAndDateRange(
+func (m *MockTransactionRepositoryForBudgets) GetTotalByDateRange(
 	ctx context.Context,
-	familyID uuid.UUID,
 	startDate, endDate time.Time,
 	txType transaction.Type,
 ) (float64, error) {
-	args := m.Called(ctx, familyID, startDate, endDate, txType)
+	args := m.Called(ctx, startDate, endDate, txType)
 	return args.Get(0).(float64), args.Error(1)
 }
 
@@ -148,7 +139,6 @@ func createTestBudgetForService() *budget.Budget {
 		Spent:      300.00,
 		Period:     budget.PeriodMonthly,
 		CategoryID: func() *uuid.UUID { id := uuid.New(); return &id }(),
-		FamilyID:   uuid.New(),
 		StartDate:  time.Now(),
 		EndDate:    time.Now().AddDate(0, 1, 0),
 		IsActive:   true,
@@ -158,14 +148,12 @@ func createTestBudgetForService() *budget.Budget {
 }
 
 func createTestBudgetDTO() dto.CreateBudgetDTO {
-	familyID := uuid.New()
 	categoryID := uuid.New()
 	return dto.CreateBudgetDTO{
 		Name:       "Test Budget",
 		Amount:     1000.00,
 		Period:     budget.PeriodMonthly,
 		CategoryID: &categoryID,
-		FamilyID:   familyID,
 		StartDate:  time.Now(),
 		EndDate:    time.Now().AddDate(0, 1, 0),
 	}
@@ -182,7 +170,6 @@ func TestBudgetService_CreateBudget_Success(t *testing.T) {
 	budgetRepo.On(
 		"GetByPeriod",
 		ctx,
-		req.FamilyID,
 		mock.AnythingOfType("time.Time"),
 		mock.AnythingOfType("time.Time"),
 	).Return([]*budget.Budget{}, nil)
@@ -243,7 +230,6 @@ func TestBudgetService_CreateBudget_PeriodOverlap(t *testing.T) {
 	budgetRepo.On(
 		"GetByPeriod",
 		ctx,
-		req.FamilyID,
 		mock.AnythingOfType("time.Time"),
 		mock.AnythingOfType("time.Time"),
 	).Return([]*budget.Budget{existingBudget}, nil)
@@ -391,23 +377,20 @@ func TestBudgetService_GetActiveBudgets_Success(t *testing.T) {
 	service, budgetRepo, txRepo := setupBudgetService(t)
 	ctx := context.Background()
 
-	familyID := uuid.New()
 	date := time.Now()
 
 	activeBudget := createTestBudgetForService()
-	activeBudget.FamilyID = familyID
 	activeBudget.StartDate = date.AddDate(0, 0, -5)
 	activeBudget.EndDate = date.AddDate(0, 0, 5)
 
 	inactiveBudget := createTestBudgetForService()
-	inactiveBudget.FamilyID = familyID
 	inactiveBudget.StartDate = date.AddDate(0, 0, -20)
 	inactiveBudget.EndDate = date.AddDate(0, 0, -10) // Expired
 
 	allBudgets := []*budget.Budget{activeBudget, inactiveBudget}
 
 	// Setup expectations
-	budgetRepo.On("GetActiveBudgets", ctx, familyID).Return(allBudgets, nil)
+	budgetRepo.On("GetActiveBudgets", ctx).Return(allBudgets, nil)
 	txRepo.On(
 		"GetTotalByCategoryAndDateRange",
 		ctx,
@@ -419,7 +402,7 @@ func TestBudgetService_GetActiveBudgets_Success(t *testing.T) {
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
 
 	// Execute
-	result, err := service.GetActiveBudgets(ctx, familyID, date)
+	result, err := service.GetActiveBudgets(ctx, date)
 
 	// Assert
 	require.NoError(t, err)
@@ -435,18 +418,16 @@ func TestBudgetService_CheckBudgetLimits_WithinLimit(t *testing.T) {
 	service, budgetRepo, txRepo := setupBudgetService(t)
 	ctx := context.Background()
 
-	familyID := uuid.New()
 	categoryID := uuid.New()
 	amount := 100.0
 
 	testBudget := createTestBudgetForService()
-	testBudget.FamilyID = familyID
 	testBudget.CategoryID = &categoryID
 	testBudget.Spent = 300.0
 	testBudget.Amount = 1000.0
 
 	// Setup expectations
-	budgetRepo.On("GetByFamilyAndCategory", ctx, familyID, &categoryID).Return([]*budget.Budget{testBudget}, nil)
+	budgetRepo.On("GetByCategory", ctx, &categoryID).Return([]*budget.Budget{testBudget}, nil)
 	txRepo.On(
 		"GetTotalByCategoryAndDateRange",
 		ctx,
@@ -458,7 +439,7 @@ func TestBudgetService_CheckBudgetLimits_WithinLimit(t *testing.T) {
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
 
 	// Execute
-	err := service.CheckBudgetLimits(ctx, familyID, categoryID, amount)
+	err := service.CheckBudgetLimits(ctx, categoryID, amount)
 
 	// Assert
 	require.NoError(t, err)
@@ -471,18 +452,16 @@ func TestBudgetService_CheckBudgetLimits_ExceedsLimit(t *testing.T) {
 	service, budgetRepo, txRepo := setupBudgetService(t)
 	ctx := context.Background()
 
-	familyID := uuid.New()
 	categoryID := uuid.New()
 	amount := 800.0 // Would exceed limit (300 + 800 > 1000)
 
 	testBudget := createTestBudgetForService()
-	testBudget.FamilyID = familyID
 	testBudget.CategoryID = &categoryID
 	testBudget.Spent = 300.0
 	testBudget.Amount = 1000.0
 
 	// Setup expectations
-	budgetRepo.On("GetByFamilyAndCategory", ctx, familyID, &categoryID).Return([]*budget.Budget{testBudget}, nil)
+	budgetRepo.On("GetByCategory", ctx, &categoryID).Return([]*budget.Budget{testBudget}, nil)
 	txRepo.On(
 		"GetTotalByCategoryAndDateRange",
 		ctx,
@@ -494,7 +473,7 @@ func TestBudgetService_CheckBudgetLimits_ExceedsLimit(t *testing.T) {
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
 
 	// Execute
-	err := service.CheckBudgetLimits(ctx, familyID, categoryID, amount)
+	err := service.CheckBudgetLimits(ctx, categoryID, amount)
 
 	// Assert
 	require.Error(t, err)
@@ -522,7 +501,7 @@ func TestBudgetService_GetBudgetStatus_Success(t *testing.T) {
 		mock.AnythingOfType("time.Time"),
 		mock.AnythingOfType("time.Time"),
 		transaction.TypeExpense,
-	).Return(250.0, nil) // Different from budget.Spent (300.0) to trigger update
+	).Return(250.0, nil)
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
 
 	// Execute
@@ -563,7 +542,7 @@ func TestBudgetService_CalculateBudgetUtilization_Success(t *testing.T) {
 		mock.AnythingOfType("time.Time"),
 		mock.AnythingOfType("time.Time"),
 		transaction.TypeExpense,
-	).Return(250.0, nil) // Different from budget.Spent (800.0) to trigger update
+	).Return(250.0, nil)
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
 
 	// Execute
@@ -612,10 +591,10 @@ func TestBudgetService_DeleteBudget_Success(t *testing.T) {
 
 	// Setup expectations
 	budgetRepo.On("GetByID", ctx, testBudget.ID).Return(testBudget, nil)
-	budgetRepo.On("Delete", ctx, testBudget.ID, testBudget.FamilyID).Return(nil)
+	budgetRepo.On("Delete", ctx, testBudget.ID).Return(nil)
 
 	// Execute
-	err := service.DeleteBudget(ctx, testBudget.ID, testBudget.FamilyID)
+	err := service.DeleteBudget(ctx, testBudget.ID)
 
 	// Assert
 	require.NoError(t, err)
@@ -623,22 +602,17 @@ func TestBudgetService_DeleteBudget_Success(t *testing.T) {
 	budgetRepo.AssertExpectations(t)
 }
 
-// Test GetBudgetsByFamily
-func TestBudgetService_GetBudgetsByFamily_Success(t *testing.T) {
+// Test GetAllBudgets
+func TestBudgetService_GetAllBudgets_Success(t *testing.T) {
 	service, budgetRepo, txRepo := setupBudgetService(t)
 	ctx := context.Background()
 
-	familyID := uuid.New()
 	filter := dto.NewBudgetFilterDTO()
-	filter.FamilyID = familyID
 
 	testBudgets := []*budget.Budget{createTestBudgetForService(), createTestBudgetForService()}
-	for _, b := range testBudgets {
-		b.FamilyID = familyID
-	}
 
 	// Setup expectations
-	budgetRepo.On("GetByFamilyID", ctx, familyID).Return(testBudgets, nil)
+	budgetRepo.On("GetAll", ctx).Return(testBudgets, nil)
 	for _, b := range testBudgets {
 		txRepo.On(
 			"GetTotalByCategoryAndDateRange",
@@ -654,7 +628,7 @@ func TestBudgetService_GetBudgetsByFamily_Success(t *testing.T) {
 	}
 
 	// Execute
-	result, err := service.GetBudgetsByFamily(ctx, familyID, filter)
+	result, err := service.GetAllBudgets(ctx, filter)
 
 	// Assert
 	require.NoError(t, err)
@@ -699,15 +673,14 @@ func TestBudgetService_CheckBudgetLimits_NoBudgets(t *testing.T) {
 	service, budgetRepo, _ := setupBudgetService(t)
 	ctx := context.Background()
 
-	familyID := uuid.New()
 	categoryID := uuid.New()
 	amount := 1000.0
 
 	// Setup expectations - no budgets found
-	budgetRepo.On("GetByFamilyAndCategory", ctx, familyID, &categoryID).Return([]*budget.Budget{}, nil)
+	budgetRepo.On("GetByCategory", ctx, &categoryID).Return([]*budget.Budget{}, nil)
 
 	// Execute
-	err := service.CheckBudgetLimits(ctx, familyID, categoryID, amount)
+	err := service.CheckBudgetLimits(ctx, categoryID, amount)
 
 	// Assert
 	require.NoError(t, err) // No budgets means no limit

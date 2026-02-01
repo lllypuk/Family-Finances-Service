@@ -23,7 +23,6 @@ func TestReportService_GenerateExpenseReport(t *testing.T) {
 	service, _, mockUserRepo, mockTransactionService, _, mockCategoryService := setupReportService()
 	ctx := context.Background()
 
-	familyID := uuid.New()
 	userID := uuid.New()
 	startDate := time.Now().AddDate(0, 0, -30)
 	endDate := time.Now()
@@ -32,7 +31,6 @@ func TestReportService_GenerateExpenseReport(t *testing.T) {
 		Name:      "Test Expense Report",
 		Type:      report.TypeExpenses,
 		Period:    report.PeriodMonthly,
-		FamilyID:  familyID,
 		UserID:    userID,
 		StartDate: startDate,
 		EndDate:   endDate,
@@ -43,7 +41,6 @@ func TestReportService_GenerateExpenseReport(t *testing.T) {
 	transactions := []*transaction.Transaction{
 		createTestTransactionWithCategory(
 			uuid.New(),
-			familyID,
 			categoryID,
 			100.0,
 			transaction.TypeExpense,
@@ -51,7 +48,6 @@ func TestReportService_GenerateExpenseReport(t *testing.T) {
 		),
 		createTestTransactionWithCategory(
 			uuid.New(),
-			familyID,
 			categoryID,
 			200.0,
 			transaction.TypeExpense,
@@ -59,7 +55,6 @@ func TestReportService_GenerateExpenseReport(t *testing.T) {
 		),
 		createTestTransactionWithCategory(
 			uuid.New(),
-			familyID,
 			categoryID,
 			150.0,
 			transaction.TypeExpense,
@@ -68,11 +63,11 @@ func TestReportService_GenerateExpenseReport(t *testing.T) {
 	}
 
 	// Setup mock expectations for transaction service
-	mockTransactionService.On("GetTransactionsByFamily", ctx, familyID, mock.AnythingOfType("dto.TransactionFilterDTO")).
+	mockTransactionService.On("GetAllTransactions", ctx, mock.AnythingOfType("dto.TransactionFilterDTO")).
 		Return(transactions, nil)
 
 	// Mock category lookup (once since all transactions have same category)
-	cat := createTestCategory(categoryID, familyID, "Test Category", category.TypeExpense)
+	cat := createTestCategory(categoryID, "Test Category", category.TypeExpense)
 	mockCategoryService.On("GetCategoryByID", ctx, categoryID).Return(cat, nil)
 
 	// Mock user lookup for getTopTransactions
@@ -93,7 +88,6 @@ func TestReportService_GenerateExpenseReport(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Equal(t, req.Name, result.Name)
-	assert.Equal(t, req.FamilyID, result.FamilyID)
 	assert.Equal(t, req.UserID, result.UserID)
 	assert.Equal(t, req.Period, result.Period)
 	assert.InEpsilon(t, 450.0, result.TotalExpenses, 0.01) // 100 + 200 + 150
@@ -111,7 +105,6 @@ func TestReportService_GenerateExpenseReport_NoTransactions(t *testing.T) {
 	service, _, _, mockTransactionService, _, _ := setupReportService()
 	ctx := context.Background()
 
-	familyID := uuid.New()
 	userID := uuid.New()
 	startDate := time.Now().AddDate(0, 0, -30)
 	endDate := time.Now()
@@ -120,14 +113,13 @@ func TestReportService_GenerateExpenseReport_NoTransactions(t *testing.T) {
 		Name:      "Empty Expense Report",
 		Type:      report.TypeExpenses,
 		Period:    report.PeriodMonthly,
-		FamilyID:  familyID,
 		UserID:    userID,
 		StartDate: startDate,
 		EndDate:   endDate,
 	}
 
 	// Setup mock expectations - no transactions
-	mockTransactionService.On("GetTransactionsByFamily", ctx, familyID, mock.AnythingOfType("dto.TransactionFilterDTO")).
+	mockTransactionService.On("GetAllTransactions", ctx, mock.AnythingOfType("dto.TransactionFilterDTO")).
 		Return([]*transaction.Transaction{}, nil)
 
 	// Execute
@@ -150,7 +142,6 @@ func TestReportService_GenerateIncomeReport(t *testing.T) {
 	service, _, mockUserRepo, mockTransactionService, _, mockCategoryService := setupReportService()
 	ctx := context.Background()
 
-	familyID := uuid.New()
 	userID := uuid.New()
 	startDate := time.Now().AddDate(0, 0, -30)
 	endDate := time.Now()
@@ -159,7 +150,6 @@ func TestReportService_GenerateIncomeReport(t *testing.T) {
 		Name:      "Test Income Report",
 		Type:      report.TypeIncome,
 		Period:    report.PeriodMonthly,
-		FamilyID:  familyID,
 		UserID:    userID,
 		StartDate: startDate,
 		EndDate:   endDate,
@@ -170,7 +160,6 @@ func TestReportService_GenerateIncomeReport(t *testing.T) {
 	transactions := []*transaction.Transaction{
 		createTestTransactionWithCategory(
 			uuid.New(),
-			familyID,
 			categoryID,
 			5000.0,
 			transaction.TypeIncome,
@@ -178,7 +167,6 @@ func TestReportService_GenerateIncomeReport(t *testing.T) {
 		),
 		createTestTransactionWithCategory(
 			uuid.New(),
-			familyID,
 			categoryID,
 			1000.0,
 			transaction.TypeIncome,
@@ -187,11 +175,11 @@ func TestReportService_GenerateIncomeReport(t *testing.T) {
 	}
 
 	// Setup mock expectations
-	mockTransactionService.On("GetTransactionsByFamily", ctx, familyID, mock.AnythingOfType("dto.TransactionFilterDTO")).
+	mockTransactionService.On("GetAllTransactions", ctx, mock.AnythingOfType("dto.TransactionFilterDTO")).
 		Return(transactions, nil)
 
 	// Mock category lookup (once since all transactions have same category)
-	cat := createTestCategory(categoryID, familyID, "Salary", category.TypeIncome)
+	cat := createTestCategory(categoryID, "Salary", category.TypeIncome)
 	mockCategoryService.On("GetCategoryByID", ctx, categoryID).Return(cat, nil)
 
 	// Mock user lookup for getTopTransactions
@@ -225,33 +213,31 @@ func TestReportService_GenerateBudgetComparisonReport(t *testing.T) {
 	service, _, _, mockTransactionService, mockBudgetService, _ := setupReportService()
 	ctx := context.Background()
 
-	familyID := uuid.New()
 	categoryID := uuid.New()
 	period := report.PeriodMonthly
 
 	// Create test budget
 	budgets := []*budget.Budget{
-		createTestBudget(uuid.New(), familyID, 1000.0, categoryID),
+		createTestBudget(uuid.New(), 1000.0, categoryID),
 	}
 
 	// Create test expense transactions
 	transactions := []*transaction.Transaction{
-		createTestTransaction(uuid.New(), familyID, 300.0, transaction.TypeExpense, time.Now().AddDate(0, 0, -10)),
-		createTestTransaction(uuid.New(), familyID, 250.0, transaction.TypeExpense, time.Now().AddDate(0, 0, -5)),
+		createTestTransaction(uuid.New(), 300.0, transaction.TypeExpense, time.Now().AddDate(0, 0, -10)),
+		createTestTransaction(uuid.New(), 250.0, transaction.TypeExpense, time.Now().AddDate(0, 0, -5)),
 	}
 
 	// Setup mock expectations
-	mockBudgetService.On("GetActiveBudgets", ctx, familyID, mock.AnythingOfType("time.Time")).Return(budgets, nil)
-	mockTransactionService.On("GetTransactionsByFamily", ctx, familyID, mock.AnythingOfType("dto.TransactionFilterDTO")).
+	mockBudgetService.On("GetActiveBudgets", ctx, mock.AnythingOfType("time.Time")).Return(budgets, nil)
+	mockTransactionService.On("GetAllTransactions", ctx, mock.AnythingOfType("dto.TransactionFilterDTO")).
 		Return(transactions, nil)
 
 	// Execute
-	result, err := service.GenerateBudgetComparisonReport(ctx, familyID, period)
+	result, err := service.GenerateBudgetComparisonReport(ctx, period)
 
 	// Assert
 	require.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Equal(t, familyID, result.FamilyID)
 	assert.Equal(t, period, result.Period)
 	assert.InEpsilon(t, 1000.0, result.TotalBudget, 0.01)
 	assert.InEpsilon(t, 550.0, result.TotalSpent, 0.01)    // 300 + 250
@@ -266,15 +252,14 @@ func TestReportService_GenerateBudgetComparisonReport_NoBudgets(t *testing.T) {
 	service, _, _, _, mockBudgetService, _ := setupReportService()
 	ctx := context.Background()
 
-	familyID := uuid.New()
 	period := report.PeriodMonthly
 
 	// Setup mock expectations - no budgets
-	mockBudgetService.On("GetActiveBudgets", ctx, familyID, mock.AnythingOfType("time.Time")).
+	mockBudgetService.On("GetActiveBudgets", ctx, mock.AnythingOfType("time.Time")).
 		Return([]*budget.Budget{}, nil)
 
 	// Execute
-	result, err := service.GenerateBudgetComparisonReport(ctx, familyID, period)
+	result, err := service.GenerateBudgetComparisonReport(ctx, period)
 
 	// Assert
 	require.NoError(t, err)
@@ -292,29 +277,27 @@ func TestReportService_GenerateCashFlowReport(t *testing.T) {
 	service, _, _, mockTransactionService, _, _ := setupReportService()
 	ctx := context.Background()
 
-	familyID := uuid.New()
 	from := time.Now().AddDate(0, 0, -30)
 	to := time.Now()
 
 	// Create mixed transactions
 	transactions := []*transaction.Transaction{
-		createTestTransaction(uuid.New(), familyID, 5000.0, transaction.TypeIncome, from.AddDate(0, 0, 1)),
-		createTestTransaction(uuid.New(), familyID, 300.0, transaction.TypeExpense, from.AddDate(0, 0, 2)),
-		createTestTransaction(uuid.New(), familyID, 200.0, transaction.TypeExpense, from.AddDate(0, 0, 3)),
-		createTestTransaction(uuid.New(), familyID, 1000.0, transaction.TypeIncome, from.AddDate(0, 0, 15)),
+		createTestTransaction(uuid.New(), 5000.0, transaction.TypeIncome, from.AddDate(0, 0, 1)),
+		createTestTransaction(uuid.New(), 300.0, transaction.TypeExpense, from.AddDate(0, 0, 2)),
+		createTestTransaction(uuid.New(), 200.0, transaction.TypeExpense, from.AddDate(0, 0, 3)),
+		createTestTransaction(uuid.New(), 1000.0, transaction.TypeIncome, from.AddDate(0, 0, 15)),
 	}
 
 	// Setup mock expectations
-	mockTransactionService.On("GetTransactionsByFamily", ctx, familyID, mock.AnythingOfType("dto.TransactionFilterDTO")).
+	mockTransactionService.On("GetAllTransactions", ctx, mock.AnythingOfType("dto.TransactionFilterDTO")).
 		Return(transactions, nil)
 
 	// Execute
-	result, err := service.GenerateCashFlowReport(ctx, familyID, from, to)
+	result, err := service.GenerateCashFlowReport(ctx, from, to)
 
 	// Assert
 	require.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Equal(t, familyID, result.FamilyID)
 	assert.InEpsilon(t, 6000.0, result.TotalInflows, 0.01) // 5000 + 1000
 	assert.InEpsilon(t, 500.0, result.TotalOutflows, 0.01) // 300 + 200
 	assert.InEpsilon(t, 5500.0, result.NetCashFlow, 0.01)  // 6000 - 500
@@ -327,7 +310,6 @@ func TestReportService_SaveReport(t *testing.T) {
 	service, mockReportRepo, _, _, _, _ := setupReportService()
 	ctx := context.Background()
 
-	familyID := uuid.New()
 	userID := uuid.New()
 	startDate := time.Now().AddDate(0, 0, -30)
 	endDate := time.Now()
@@ -336,7 +318,6 @@ func TestReportService_SaveReport(t *testing.T) {
 		Name:      "Test Report",
 		Type:      report.TypeExpenses,
 		Period:    report.PeriodMonthly,
-		FamilyID:  familyID,
 		UserID:    userID,
 		StartDate: startDate,
 		EndDate:   endDate,
@@ -358,7 +339,6 @@ func TestReportService_SaveReport(t *testing.T) {
 	assert.NotNil(t, result)
 	assert.Equal(t, req.Name, result.Name)
 	assert.Equal(t, req.Type, result.Type)
-	assert.Equal(t, req.FamilyID, result.FamilyID)
 	assert.Equal(t, req.UserID, result.UserID)
 
 	mockReportRepo.AssertExpectations(t)
@@ -370,15 +350,13 @@ func TestReportService_GetReportByID(t *testing.T) {
 	ctx := context.Background()
 
 	reportID := uuid.New()
-	familyID := uuid.New()
 	userID := uuid.New()
 
 	expectedReport := &report.Report{
-		ID:       reportID,
-		Name:     "Test Report",
-		Type:     report.TypeExpenses,
-		FamilyID: familyID,
-		UserID:   userID,
+		ID:     reportID,
+		Name:   "Test Report",
+		Type:   report.TypeExpenses,
+		UserID: userID,
 	}
 
 	// Setup mock expectations
@@ -397,36 +375,33 @@ func TestReportService_GetReportByID(t *testing.T) {
 	mockReportRepo.AssertExpectations(t)
 }
 
-// Tests for GetReportsByFamily
-func TestReportService_GetReportsByFamily(t *testing.T) {
+// Tests for GetReports
+func TestReportService_GetReports(t *testing.T) {
 	service, mockReportRepo, _, _, _, _ := setupReportService()
 	ctx := context.Background()
 
-	familyID := uuid.New()
 	userID := uuid.New()
 
 	expectedReports := []*report.Report{
 		{
-			ID:       uuid.New(),
-			Name:     "Report 1",
-			Type:     report.TypeExpenses,
-			FamilyID: familyID,
-			UserID:   userID,
+			ID:     uuid.New(),
+			Name:   "Report 1",
+			Type:   report.TypeExpenses,
+			UserID: userID,
 		},
 		{
-			ID:       uuid.New(),
-			Name:     "Report 2",
-			Type:     report.TypeIncome,
-			FamilyID: familyID,
-			UserID:   userID,
+			ID:     uuid.New(),
+			Name:   "Report 2",
+			Type:   report.TypeIncome,
+			UserID: userID,
 		},
 	}
 
 	// Setup mock expectations
-	mockReportRepo.On("GetByFamilyID", ctx, familyID).Return(expectedReports, nil)
+	mockReportRepo.On("GetAll", ctx).Return(expectedReports, nil)
 
 	// Execute
-	result, err := service.GetReportsByFamily(ctx, familyID, nil)
+	result, err := service.GetReports(ctx, nil)
 
 	// Assert
 	require.NoError(t, err)
@@ -444,13 +419,12 @@ func TestReportService_DeleteReport(t *testing.T) {
 	ctx := context.Background()
 
 	reportID := uuid.New()
-	familyID := uuid.New()
 
 	// Setup mock expectations
-	mockReportRepo.On("Delete", ctx, reportID, familyID).Return(nil)
+	mockReportRepo.On("Delete", ctx, reportID).Return(nil)
 
 	// Execute
-	err := service.DeleteReport(ctx, reportID, familyID)
+	err := service.DeleteReport(ctx, reportID)
 
 	// Assert
 	require.NoError(t, err)

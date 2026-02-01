@@ -18,20 +18,19 @@ import (
 )
 
 func TestCategoryHandler_Integration(t *testing.T) {
-	testServer := testhelpers.SetupHTTPServer(t)
-
 	t.Run("CreateCategory_Success", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// First create a family
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
 		require.NoError(t, err)
 
 		request := handlers.CreateCategoryRequest{
-			Name:     "Food & Dining",
-			Type:     "expense",
-			Color:    "#FF5733",
-			Icon:     "utensils",
-			FamilyID: family.ID,
+			Name:  "Food & Dining",
+			Type:  "expense",
+			Color: "#FF5733",
+			Icon:  "utensils",
 		}
 
 		requestBodyBytes, err := json.Marshal(request)
@@ -53,12 +52,13 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		assert.Equal(t, request.Type, response.Data.Type)
 		assert.Equal(t, request.Color, response.Data.Color)
 		assert.Equal(t, request.Icon, response.Data.Icon)
-		assert.Equal(t, request.FamilyID, response.Data.FamilyID)
 		assert.NotEqual(t, uuid.Nil, response.Data.ID)
 		assert.True(t, response.Data.IsActive)
 	})
 
 	t.Run("GetCategories_Success", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Create family and categories
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -94,6 +94,8 @@ func TestCategoryHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("GetCategoryByID_Success", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Create family and category
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -118,10 +120,11 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		assert.Equal(t, category.ID, response.Data.ID)
 		assert.Equal(t, category.Name, response.Data.Name)
 		assert.Equal(t, string(category.Type), response.Data.Type)
-		assert.Equal(t, category.FamilyID, response.Data.FamilyID)
 	})
 
 	t.Run("UpdateCategory_Success", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Create family and category
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
@@ -164,6 +167,8 @@ func TestCategoryHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("DeleteCategory_Success", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
 		// Create family and category
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)

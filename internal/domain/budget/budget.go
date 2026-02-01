@@ -18,7 +18,6 @@ type Budget struct {
 	Spent      float64    `json:"spent"       bson:"spent"`  // Потрачено
 	Period     Period     `json:"period"      bson:"period"`
 	CategoryID *uuid.UUID `json:"category_id" bson:"category_id,omitempty"` // Для конкретной категории
-	FamilyID   uuid.UUID  `json:"family_id"   bson:"family_id"`
 	StartDate  time.Time  `json:"start_date"  bson:"start_date"`
 	EndDate    time.Time  `json:"end_date"    bson:"end_date"`
 	IsActive   bool       `json:"is_active"   bson:"is_active"`
@@ -48,7 +47,6 @@ func NewBudget(
 	name string,
 	amount float64,
 	period Period,
-	familyID uuid.UUID,
 	startDate, endDate time.Time,
 ) *Budget {
 	return &Budget{
@@ -57,7 +55,6 @@ func NewBudget(
 		Amount:    amount,
 		Spent:     0,
 		Period:    period,
-		FamilyID:  familyID,
 		StartDate: startDate,
 		EndDate:   endDate,
 		IsActive:  true,
@@ -84,9 +81,4 @@ func (b *Budget) IsOverBudget() bool {
 func (b *Budget) UpdateSpent(amount float64) {
 	b.Spent += amount
 	b.UpdatedAt = time.Now()
-}
-
-// GetFamilyID returns the family ID of the budget
-func (b *Budget) GetFamilyID() uuid.UUID {
-	return b.FamilyID
 }

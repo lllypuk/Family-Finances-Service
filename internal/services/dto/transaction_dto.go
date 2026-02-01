@@ -22,7 +22,6 @@ type CreateTransactionDTO struct {
 	Description string           `validate:"required,min=2,max=200"`
 	CategoryID  uuid.UUID        `validate:"required"`
 	UserID      uuid.UUID        `validate:"required"`
-	FamilyID    uuid.UUID        `validate:"required"`
 	Date        time.Time        `validate:"required"`
 	Tags        []string         `validate:"omitempty,dive,min=1,max=50"`
 }
@@ -40,7 +39,6 @@ type UpdateTransactionDTO struct {
 // TransactionFilterDTO represents filtering and pagination options for transactions
 type TransactionFilterDTO struct {
 	// Core filters
-	FamilyID   uuid.UUID         `validate:"required"`
 	UserID     *uuid.UUID        `validate:"omitempty"`
 	CategoryID *uuid.UUID        `validate:"omitempty"`
 	Type       *transaction.Type `validate:"omitempty,oneof=income expense"`
@@ -74,7 +72,6 @@ type TransactionResponseDTO struct {
 	Description string    `json:"description"`
 	CategoryID  uuid.UUID `json:"category_id"`
 	UserID      uuid.UUID `json:"user_id"`
-	FamilyID    uuid.UUID `json:"family_id"`
 	Date        time.Time `json:"date"`
 	Tags        []string  `json:"tags"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -86,12 +83,10 @@ type BulkCategorizeDTO struct {
 	TransactionIDs []uuid.UUID `validate:"required,min=1,dive,required"`
 	CategoryID     uuid.UUID   `validate:"required"`
 	UserID         uuid.UUID   `validate:"required"` // For authorization
-	FamilyID       uuid.UUID   `validate:"required"` // For authorization
 }
 
 // TransactionStatsDTO represents transaction statistics for a family or category
 type TransactionStatsDTO struct {
-	FamilyID         uuid.UUID  `json:"family_id"`
 	CategoryID       *uuid.UUID `json:"category_id,omitempty"`
 	Period           string     `json:"period"` // "daily", "weekly", "monthly", "yearly"
 	TotalIncome      float64    `json:"total_income"`

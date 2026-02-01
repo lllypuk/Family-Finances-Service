@@ -13,7 +13,6 @@ type User struct {
 	FirstName string    `json:"first_name" bson:"first_name"`
 	LastName  string    `json:"last_name"  bson:"last_name"`
 	Role      Role      `json:"role"       bson:"role"`
-	FamilyID  uuid.UUID `json:"family_id"  bson:"family_id"`
 	CreatedAt time.Time `json:"created_at" bson:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" bson:"updated_at"`
 }
@@ -34,14 +33,13 @@ type Family struct {
 	UpdatedAt time.Time `json:"updated_at" bson:"updated_at"`
 }
 
-func NewUser(email, firstName, lastName string, familyID uuid.UUID, role Role) *User {
+func NewUser(email, firstName, lastName string, role Role) *User {
 	return &User{
 		ID:        uuid.New(),
 		Email:     email,
 		FirstName: firstName,
 		LastName:  lastName,
 		Role:      role,
-		FamilyID:  familyID,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}

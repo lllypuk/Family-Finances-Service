@@ -44,14 +44,14 @@ func NewReportHandler(repositories *handlers.Repositories, services *services.Se
 
 // Index отображает список отчетов и форму создания
 func (h *ReportHandler) Index(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	// Проверяем авторизацию пользователя
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
-	// Получаем список существующих отчетов семьи
-	reports, err := h.services.Report.GetReportsByFamily(c.Request().Context(), sessionData.FamilyID, nil)
+	// Получаем список существующих отчетов
+	reports, err := h.services.Report.GetReports(c.Request().Context(), nil)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get reports")
 	}
@@ -193,7 +193,6 @@ func (h *ReportHandler) buildReportRequestDTO(
 		Name:      form.Name,
 		Type:      form.ToReportType(),
 		Period:    form.ToReportPeriod(),
-		FamilyID:  sessionData.FamilyID,
 		UserID:    sessionData.UserID,
 		StartDate: startDate,
 		EndDate:   endDate,
@@ -242,7 +241,6 @@ func (h *ReportHandler) generateIncomeReport(c echo.Context, createDTO dto.Repor
 func (h *ReportHandler) generateBudgetReport(c echo.Context, createDTO dto.ReportRequestDTO) (*report.Report, error) {
 	budgetReport, err := h.services.Report.GenerateBudgetComparisonReport(
 		c.Request().Context(),
-		createDTO.FamilyID,
 		createDTO.Period,
 	)
 	if err != nil {
@@ -256,7 +254,6 @@ func (h *ReportHandler) generateBudgetReport(c echo.Context, createDTO dto.Repor
 func (h *ReportHandler) generateCashFlowReport(c echo.Context, createDTO dto.ReportRequestDTO) (*report.Report, error) {
 	cashFlowReport, err := h.services.Report.GenerateCashFlowReport(
 		c.Request().Context(),
-		createDTO.FamilyID,
 		createDTO.StartDate,
 		createDTO.EndDate,
 	)
@@ -271,7 +268,6 @@ func (h *ReportHandler) generateCashFlowReport(c echo.Context, createDTO dto.Rep
 func (h *ReportHandler) generateCategoryReport(c echo.Context, createDTO dto.ReportRequestDTO) (*report.Report, error) {
 	categoryReport, err := h.services.Report.GenerateCategoryBreakdownReport(
 		c.Request().Context(),
-		createDTO.FamilyID,
 		createDTO.Period,
 	)
 	if err != nil {
@@ -305,8 +301,8 @@ func (h *ReportHandler) handleReportGenerationError(c echo.Context, err error) e
 
 // Show отображает сгенерированный отчет
 func (h *ReportHandler) Show(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	// Проверяем авторизацию пользователя
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
@@ -324,10 +320,8 @@ func (h *ReportHandler) Show(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Report not found")
 	}
 
-	// Проверяем, что отчет принадлежит семье пользователя
-	if report.FamilyID != sessionData.FamilyID {
-		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
-	}
+	// In single-family model, all reports belong to the family
+	// No additional access check needed
 
 	// Конвертируем в view модель
 	reportVM := webModels.ReportDataVM{}
@@ -353,11 +347,7 @@ func (h *ReportHandler) Delete(c echo.Context) error {
 			return h.services.Report.GetReportByID(ctx.Request().Context(), entityID)
 		},
 		DeleteEntityFunc: func(ctx echo.Context, entityID uuid.UUID) error {
-			sessionData, err := middleware.GetUserFromContext(ctx)
-			if err != nil {
-				return err
-			}
-			return h.services.Report.DeleteReport(ctx.Request().Context(), entityID, sessionData.FamilyID)
+			return h.services.Report.DeleteReport(ctx.Request().Context(), entityID)
 		},
 		GetErrorMsgFunc: h.getReportServiceErrorMessage,
 		RedirectURL:     "/reports",
@@ -366,8 +356,8 @@ func (h *ReportHandler) Delete(c echo.Context) error {
 
 // Export экспортирует отчет в указанном формате (CSV)
 func (h *ReportHandler) Export(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
+	// Проверяем авторизацию пользователя
+	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
@@ -390,10 +380,8 @@ func (h *ReportHandler) Export(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Report not found")
 	}
 
-	// Проверяем, что отчет принадлежит семье пользователя
-	if report.FamilyID != sessionData.FamilyID {
-		return echo.NewHTTPError(http.StatusForbidden, "Access denied")
-	}
+	// In single-family model, all reports belong to the family
+	// No additional access check needed
 
 	// Экспортируем в CSV
 	return h.exportReportAsCSV(c, report)
@@ -437,7 +425,6 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 		Name:      form.Name,
 		Type:      form.ToReportType(),
 		Period:    form.ToReportPeriod(),
-		FamilyID:  sessionData.FamilyID,
 		UserID:    sessionData.UserID,
 		StartDate: startDate,
 		EndDate:   endDate,
@@ -455,20 +442,17 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 	case report.TypeBudget:
 		reportData, generateErr = h.services.Report.GenerateBudgetComparisonReport(
 			c.Request().Context(),
-			generateDTO.FamilyID,
 			generateDTO.Period,
 		)
 	case report.TypeCashFlow:
 		reportData, generateErr = h.services.Report.GenerateCashFlowReport(
 			c.Request().Context(),
-			generateDTO.FamilyID,
 			generateDTO.StartDate,
 			generateDTO.EndDate,
 		)
 	case report.TypeCategoryBreak:
 		reportData, generateErr = h.services.Report.GenerateCategoryBreakdownReport(
 			c.Request().Context(),
-			generateDTO.FamilyID,
 			generateDTO.Period,
 		)
 	default:
@@ -486,7 +470,6 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 		Name:        form.Name,
 		Type:        generateDTO.Type,
 		Period:      generateDTO.Period,
-		FamilyID:    generateDTO.FamilyID,
 		UserID:      generateDTO.UserID,
 		StartDate:   generateDTO.StartDate,
 		EndDate:     generateDTO.EndDate,

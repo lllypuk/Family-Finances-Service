@@ -73,7 +73,6 @@ func (h *ReportHandler) CreateReport(c echo.Context) error {
 		Name:        req.Name,
 		Type:        report.Type(req.Type),
 		Period:      report.Period(req.Period),
-		FamilyID:    req.FamilyID,
 		UserID:      req.UserID,
 		StartDate:   req.StartDate,
 		EndDate:     req.EndDate,
@@ -86,7 +85,6 @@ func (h *ReportHandler) CreateReport(c echo.Context) error {
 	newReport.Data = h.generateReportData(
 		c.Request().Context(),
 		report.Type(req.Type),
-		req.FamilyID,
 		req.StartDate,
 		req.EndDate,
 	)
@@ -110,7 +108,6 @@ func (h *ReportHandler) CreateReport(c echo.Context) error {
 		Name:        newReport.Name,
 		Type:        string(newReport.Type),
 		Period:      string(newReport.Period),
-		FamilyID:    newReport.FamilyID,
 		UserID:      newReport.UserID,
 		StartDate:   newReport.StartDate,
 		EndDate:     newReport.EndDate,
@@ -130,39 +127,10 @@ func (h *ReportHandler) CreateReport(c echo.Context) error {
 
 func (h *ReportHandler) GetReports(c echo.Context) error {
 	// Получаем параметры запроса
-	familyIDParam := c.QueryParam("family_id")
 	userIDParam := c.QueryParam("user_id")
 
-	if familyIDParam == "" {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "MISSING_FAMILY_ID",
-				Message: "family_id query parameter is required",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
-	familyID, err := uuid.Parse(familyIDParam)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_FAMILY_ID",
-				Message: "Invalid family ID format",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
-	}
-
 	var reports []*report.Report
+	var err error
 
 	// Если указан пользователь, получаем отчеты для конкретного пользователя
 	if userIDParam != "" {
@@ -183,7 +151,7 @@ func (h *ReportHandler) GetReports(c echo.Context) error {
 		reports, err = h.repositories.Report.GetByUserID(c.Request().Context(), userID)
 	} else {
 		// Иначе получаем все отчеты семьи
-		reports, err = h.repositories.Report.GetByFamilyID(c.Request().Context(), familyID)
+		reports, err = h.repositories.Report.GetAll(c.Request().Context())
 	}
 
 	if err != nil {
@@ -207,7 +175,6 @@ func (h *ReportHandler) GetReports(c echo.Context) error {
 			Name:        r.Name,
 			Type:        string(r.Type),
 			Period:      string(r.Period),
-			FamilyID:    r.FamilyID,
 			UserID:      r.UserID,
 			StartDate:   r.StartDate,
 			EndDate:     r.EndDate,
@@ -263,7 +230,6 @@ func (h *ReportHandler) GetReportByID(c echo.Context) error {
 		Name:        foundReport.Name,
 		Type:        string(foundReport.Type),
 		Period:      string(foundReport.Period),
-		FamilyID:    foundReport.FamilyID,
 		UserID:      foundReport.UserID,
 		StartDate:   foundReport.StartDate,
 		EndDate:     foundReport.EndDate,
@@ -283,18 +249,8 @@ func (h *ReportHandler) GetReportByID(c echo.Context) error {
 
 func (h *ReportHandler) DeleteReport(c echo.Context) error {
 	return DeleteEntityHelper(c, func(id uuid.UUID) error {
-		// Get family ID from query parameter
-		familyIDParam := c.QueryParam("family_id")
-		if familyIDParam == "" {
-			return echo.NewHTTPError(http.StatusBadRequest, "family_id query parameter is required")
-		}
-
-		familyID, err := uuid.Parse(familyIDParam)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, "Invalid family ID format")
-		}
-
-		return h.repositories.Report.Delete(c.Request().Context(), id, familyID)
+		// In single-family model, repository handles family ID internally
+		return h.repositories.Report.Delete(c.Request().Context(), id)
 	}, "Report")
 }
 
@@ -302,25 +258,24 @@ func (h *ReportHandler) DeleteReport(c echo.Context) error {
 func (h *ReportHandler) generateReportData(
 	ctx context.Context,
 	reportType report.Type,
-	familyID uuid.UUID,
 	startDate, endDate time.Time,
 ) report.Data {
 	data := report.Data{}
 
 	// Получаем базовые данные для всех типов отчетов
-	h.populateBasicReportData(ctx, &data, familyID, startDate, endDate)
+	h.populateBasicReportData(ctx, &data, startDate, endDate)
 
 	switch reportType {
 	case report.TypeExpenses:
-		h.generateExpensesReportData(ctx, &data, familyID, startDate, endDate)
+		h.generateExpensesReportData(ctx, &data, startDate, endDate)
 	case report.TypeIncome:
-		h.generateIncomeReportData(ctx, &data, familyID, startDate, endDate)
+		h.generateIncomeReportData(ctx, &data, startDate, endDate)
 	case report.TypeBudget:
-		h.generateBudgetReportData(ctx, &data, familyID, startDate, endDate)
+		h.generateBudgetReportData(ctx, &data, startDate, endDate)
 	case report.TypeCashFlow:
-		h.generateCashFlowReportData(ctx, &data, familyID, startDate, endDate)
+		h.generateCashFlowReportData(ctx, &data, startDate, endDate)
 	case report.TypeCategoryBreak:
-		h.generateCategoryBreakdownReportData(ctx, &data, familyID, startDate, endDate)
+		h.generateCategoryBreakdownReportData(ctx, &data, startDate, endDate)
 	}
 
 	return data
@@ -330,7 +285,6 @@ func (h *ReportHandler) generateReportData(
 func (h *ReportHandler) populateBasicReportData(
 	_ context.Context,
 	data *report.Data,
-	_ uuid.UUID,
 	_, _ time.Time,
 ) {
 	// Базовые расчеты для всех отчетов
@@ -347,7 +301,6 @@ func (h *ReportHandler) populateBasicReportData(
 func (h *ReportHandler) generateExpensesReportData(
 	_ context.Context,
 	data *report.Data,
-	_ uuid.UUID,
 	_, _ time.Time,
 ) {
 	// TODO: Реализовать получение расходов из транзакций
@@ -359,9 +312,7 @@ func (h *ReportHandler) generateExpensesReportData(
 func (h *ReportHandler) generateIncomeReportData(
 	_ context.Context,
 	data *report.Data,
-	_ uuid.UUID,
-	_ time.Time,
-	_ time.Time,
+	_, _ time.Time,
 ) {
 	// TODO: Реализовать получение доходов из транзакций
 	data.TotalIncome = 0 // Будет рассчитано из транзакций
@@ -371,7 +322,6 @@ func (h *ReportHandler) generateIncomeReportData(
 func (h *ReportHandler) generateBudgetReportData(
 	_ context.Context,
 	_ *report.Data,
-	_ uuid.UUID,
 	_, _ time.Time,
 ) {
 	// TODO: Реализовать сравнение бюджета с фактическими тратами
@@ -382,9 +332,7 @@ func (h *ReportHandler) generateBudgetReportData(
 func (h *ReportHandler) generateCashFlowReportData(
 	_ context.Context,
 	_ *report.Data,
-	_ uuid.UUID,
-	_ time.Time,
-	_ time.Time,
+	_, _ time.Time,
 ) {
 	// TODO: Реализовать расчет денежного потока по дням
 	// Заполнение DailyBreakdown с доходами и расходами по дням
@@ -394,9 +342,7 @@ func (h *ReportHandler) generateCashFlowReportData(
 func (h *ReportHandler) generateCategoryBreakdownReportData(
 	_ context.Context,
 	_ *report.Data,
-	_ uuid.UUID,
-	_ time.Time,
-	_ time.Time,
+	_, _ time.Time,
 ) {
 	// TODO: Реализовать группировку транзакций по категориям
 	// Заполнение CategoryBreakdown с суммами по категориям

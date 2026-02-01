@@ -9,7 +9,6 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/observability"
@@ -31,7 +30,6 @@ type HTTPServer struct {
 
 	// API Handlers
 	userHandler        *handlers.UserHandler
-	familyHandler      *handlers.FamilyHandler
 	categoryHandler    *handlers.CategoryHandler
 	transactionHandler *handlers.TransactionHandler
 	budgetHandler      *handlers.BudgetHandler
@@ -71,26 +69,29 @@ func NewHTTPServerWithObservability(
 	e.Use(middleware.RequestID())
 
 	// Timeout для всех запросов
-	e.Use(middleware.TimeoutWithConfig(middleware.TimeoutConfig{
+	e.Use(middleware.ContextTimeoutWithConfig(middleware.ContextTimeoutConfig{
 		Timeout: HTTPRequestTimeout,
 	}))
 
 	// Добавляем observability middleware если сервис доступен
 	if obsService != nil {
-		// OpenTelemetry tracing
-		e.Use(otelecho.Middleware("family-budget-service"))
-
-		// Prometheus metrics
-		e.Use(observability.PrometheusMiddleware())
-
 		// Structured logging
 		e.Use(observability.LoggingMiddleware(obsService.Logger))
-
-		// Health check middleware (исключает health endpoints из метрик)
-		e.Use(observability.HealthCheckMiddleware())
 	} else {
 		// Fallback к стандартному логированию
-		e.Use(middleware.Logger())
+		e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+			LogStatus: true,
+			LogURI:    true,
+			LogError:  true,
+			LogValuesFunc: func(_ echo.Context, v middleware.RequestLoggerValues) error {
+				e.Logger.Info("request",
+					"uri", v.URI,
+					"status", v.Status,
+					"error", v.Error,
+				)
+				return nil
+			},
+		}))
 	}
 
 	server := &HTTPServer{
@@ -102,7 +103,6 @@ func NewHTTPServerWithObservability(
 
 		// Инициализация API handlers
 		userHandler:        handlers.NewUserHandler(repositories, services.User),
-		familyHandler:      handlers.NewFamilyHandler(repositories),
 		categoryHandler:    handlers.NewCategoryHandler(repositories, services.Category),
 		transactionHandler: handlers.NewTransactionHandler(repositories),
 		budgetHandler:      handlers.NewBudgetHandler(repositories),
@@ -132,9 +132,8 @@ func (s *HTTPServer) Echo() *echo.Echo {
 }
 
 func (s *HTTPServer) setupRoutes() {
-	// Observability endpoints
+	// Health check endpoints
 	if s.observabilityService != nil {
-		s.echo.GET("/metrics", observability.MetricsHandler())
 		s.echo.GET("/health", s.observabilityService.HealthService.HealthHandler())
 		s.echo.GET("/ready", s.observabilityService.HealthService.ReadinessHandler())
 		s.echo.GET("/live", s.observabilityService.HealthService.LivenessHandler())
@@ -151,17 +150,12 @@ func (s *HTTPServer) setupRoutes() {
 	// API версионирование
 	api := s.echo.Group("/api/v1")
 
-	// Маршруты для пользователей и семей
+	// Маршруты для пользователей
 	users := api.Group("/users")
 	users.POST("", s.userHandler.CreateUser)
 	users.GET("/:id", s.userHandler.GetUserByID)
 	users.PUT("/:id", s.userHandler.UpdateUser)
 	users.DELETE("/:id", s.userHandler.DeleteUser)
-
-	families := api.Group("/families")
-	families.POST("", s.familyHandler.CreateFamily)
-	families.GET("/:id", s.familyHandler.GetFamilyByID)
-	families.GET("/:id/members", s.familyHandler.GetFamilyMembers)
 
 	// Маршруты для категорий
 	categories := api.Group("/categories")

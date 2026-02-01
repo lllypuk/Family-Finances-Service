@@ -15,17 +15,16 @@ import (
 	transactionrepo "family-budget-service/internal/infrastructure/transaction"
 )
 
-func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
-	// Setup PostgreSQL testcontainer
-	container := testutils.SetupPostgreSQLContainer(t)
-	defer container.Cleanup(t)
+func TestTransactionRepositorySQLite_Integration(t *testing.T) {
+	// Setup SQLite in-memory database
+	container := testutils.SetupSQLiteTestDB(t)
 
 	helper := testutils.NewTestDataHelper(container.DB)
 	ctx := context.Background()
 
 	t.Run("Create_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := transactionrepo.NewPostgreSQLRepository(db)
+		repo := transactionrepo.NewSQLiteRepository(db)
 
 		// Create test data
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
@@ -45,7 +44,6 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 			Description: "Weekly groceries",
 			CategoryID:  uuid.MustParse(categoryID),
 			UserID:      uuid.MustParse(userID),
-			FamilyID:    uuid.MustParse(familyID),
 			Date:        time.Now().AddDate(0, 0, -1), // Yesterday
 			Tags:        []string{"grocery", "weekly"},
 		}
@@ -62,18 +60,16 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 		assert.Equal(t, testTransaction.Description, retrievedTransaction.Description)
 		assert.Equal(t, testTransaction.CategoryID, retrievedTransaction.CategoryID)
 		assert.Equal(t, testTransaction.UserID, retrievedTransaction.UserID)
-		assert.Equal(t, testTransaction.FamilyID, retrievedTransaction.FamilyID)
 		assert.Equal(t, testTransaction.Tags, retrievedTransaction.Tags)
 	})
 
 	t.Run("GetByFilter_DateRange", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := transactionrepo.NewPostgreSQLRepository(db)
+		repo := transactionrepo.NewSQLiteRepository(db)
 
 		// Create test data
 		familyID, err := helper.CreateTestFamily(ctx, "Filter Test Family", "USD")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		userID, err := helper.CreateTestUser(ctx, "filter@example.com", "Filter", "Test", "admin", familyID)
 		require.NoError(t, err)
@@ -91,7 +87,6 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 				Description: "Old transaction",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        now.AddDate(0, 0, -10), // 10 days ago
 				Tags:        []string{"old"},
 			},
@@ -102,7 +97,6 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 				Description: "Recent transaction",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        now.AddDate(0, 0, -2), // 2 days ago
 				Tags:        []string{"recent"},
 			},
@@ -113,7 +107,6 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 				Description: "Today income",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        now,
 				Tags:        []string{"today"},
 			},
@@ -129,7 +122,6 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 		dateFrom := now.AddDate(0, 0, -5)
 		dateTo := now.AddDate(0, 0, 1) // Include today
 		filter := transaction.Filter{
-			FamilyID: familyUUID,
 			DateFrom: &dateFrom,
 			DateTo:   &dateTo,
 			Limit:    10,
@@ -145,12 +137,11 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("GetByFilter_TypeAndAmount", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := transactionrepo.NewPostgreSQLRepository(db)
+		repo := transactionrepo.NewSQLiteRepository(db)
 
 		// Create test data
 		familyID, err := helper.CreateTestFamily(ctx, "Amount Filter Family", "USD")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		userID, err := helper.CreateTestUser(ctx, "amount@example.com", "Amount", "Test", "admin", familyID)
 		require.NoError(t, err)
@@ -167,7 +158,6 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 				Description: "Small expense",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        time.Now(),
 			},
 			{
@@ -177,7 +167,6 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 				Description: "Medium expense",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        time.Now(),
 			},
 			{
@@ -187,7 +176,6 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 				Description: "Large income",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        time.Now(),
 			},
 		}
@@ -203,7 +191,6 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 		amountFrom := 100.0
 		amountTo := 200.0
 		filter := transaction.Filter{
-			FamilyID:   familyUUID,
 			Type:       &expenseType,
 			AmountFrom: &amountFrom,
 			AmountTo:   &amountTo,
@@ -219,12 +206,11 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("GetByFilter_Tags", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := transactionrepo.NewPostgreSQLRepository(db)
+		repo := transactionrepo.NewSQLiteRepository(db)
 
 		// Create test data
 		familyID, err := helper.CreateTestFamily(ctx, "Tags Test Family", "USD")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		userID, err := helper.CreateTestUser(ctx, "tags@example.com", "Tags", "Test", "admin", familyID)
 		require.NoError(t, err)
@@ -241,7 +227,6 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 				Description: "Grocery shopping",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        time.Now(),
 				Tags:        []string{"grocery", "food", "weekly"},
 			},
@@ -252,7 +237,6 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 				Description: "Gas station",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        time.Now(),
 				Tags:        []string{"gas", "car", "transport"},
 			},
@@ -263,7 +247,6 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 				Description: "Weekly grocery",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        time.Now(),
 				Tags:        []string{"grocery", "weekly"},
 			},
@@ -277,9 +260,8 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 
 		// Filter by tag "grocery"
 		filter := transaction.Filter{
-			FamilyID: familyUUID,
-			Tags:     []string{"grocery"},
-			Limit:    10,
+			Tags:  []string{"grocery"},
+			Limit: 10,
 		}
 
 		results, err := repo.GetByFilter(ctx, filter)
@@ -294,12 +276,11 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("GetTransactionSummary", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := transactionrepo.NewPostgreSQLRepository(db)
+		repo := transactionrepo.NewSQLiteRepository(db)
 
 		// Create test data
 		familyID, err := helper.CreateTestFamily(ctx, "Summary Test Family", "USD")
 		require.NoError(t, err)
-		familyUUID := uuid.MustParse(familyID)
 
 		userID, err := helper.CreateTestUser(ctx, "summary@example.com", "Summary", "Test", "admin", familyID)
 		require.NoError(t, err)
@@ -317,7 +298,6 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 				Description: "Salary",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        now,
 			},
 			{
@@ -327,7 +307,6 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 				Description: "Groceries",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        now,
 			},
 			{
@@ -337,7 +316,6 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 				Description: "Utilities",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				FamilyID:    familyUUID,
 				Date:        now,
 			},
 		}
@@ -351,10 +329,9 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 		// Get summary
 		startDate := now.AddDate(0, 0, -1)
 		endDate := now.AddDate(0, 0, 1)
-		summary, err := repo.GetSummary(ctx, familyUUID, startDate, endDate)
+		summary, err := repo.GetSummary(ctx, startDate, endDate)
 		require.NoError(t, err)
 
-		assert.Equal(t, familyUUID, summary.FamilyID)
 		assert.Equal(t, 3, summary.TotalCount)
 		assert.Equal(t, 1, summary.IncomeCount)
 		assert.Equal(t, 2, summary.ExpenseCount)
@@ -367,7 +344,7 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("Update_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := transactionrepo.NewPostgreSQLRepository(db)
+		repo := transactionrepo.NewSQLiteRepository(db)
 
 		// Create test data
 		familyID, err := helper.CreateTestFamily(ctx, "Update Test Family", "USD")
@@ -390,7 +367,6 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 			Description: "Original description",
 			CategoryID:  uuid.MustParse(categoryID),
 			UserID:      uuid.MustParse(userID),
-			FamilyID:    uuid.MustParse(familyID),
 			Date:        time.Now().AddDate(0, 0, -1),
 			Tags:        []string{"original"},
 		}
@@ -418,7 +394,7 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 
 	t.Run("Delete_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := transactionrepo.NewPostgreSQLRepository(db)
+		repo := transactionrepo.NewSQLiteRepository(db)
 
 		// Create test data
 		familyID, err := helper.CreateTestFamily(ctx, "Delete Test Family", "USD")
@@ -438,7 +414,6 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 			Description: "To be deleted",
 			CategoryID:  uuid.MustParse(categoryID),
 			UserID:      uuid.MustParse(userID),
-			FamilyID:    uuid.MustParse(familyID),
 			Date:        time.Now(),
 		}
 
@@ -446,7 +421,7 @@ func TestTransactionRepositoryPostgreSQL_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Delete transaction
-		err = repo.Delete(ctx, testTransaction.ID, testTransaction.FamilyID)
+		err = repo.Delete(ctx, testTransaction.ID)
 		require.NoError(t, err)
 
 		// Verify transaction is deleted

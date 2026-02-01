@@ -23,7 +23,6 @@ type CreateBudgetDTO struct {
 	Amount     float64       `validate:"required,gt=0"`
 	Period     budget.Period `validate:"required,oneof=weekly monthly yearly custom"`
 	CategoryID *uuid.UUID    `validate:"omitempty"`
-	FamilyID   uuid.UUID     `validate:"required"`
 	StartDate  time.Time     `validate:"required"`
 	EndDate    time.Time     `validate:"required"`
 }
@@ -40,7 +39,6 @@ type UpdateBudgetDTO struct {
 // BudgetFilterDTO represents filtering and pagination options for budgets
 type BudgetFilterDTO struct {
 	// Core filters
-	FamilyID   uuid.UUID      `validate:"required"`
 	CategoryID *uuid.UUID     `validate:"omitempty"`
 	Period     *budget.Period `validate:"omitempty,oneof=weekly monthly yearly custom"`
 	IsActive   *bool          `validate:"omitempty"`
@@ -77,7 +75,6 @@ type BudgetResponseDTO struct {
 	Remaining  float64    `json:"remaining"`
 	Period     string     `json:"period"`
 	CategoryID *uuid.UUID `json:"category_id,omitempty"`
-	FamilyID   uuid.UUID  `json:"family_id"`
 	StartDate  time.Time  `json:"start_date"`
 	EndDate    time.Time  `json:"end_date"`
 	IsActive   bool       `json:"is_active"`
@@ -144,7 +141,6 @@ type CategoryBudgetBreakdown struct {
 type BudgetAlertDTO struct {
 	BudgetID   uuid.UUID `json:"budget_id"`
 	BudgetName string    `json:"budget_name"`
-	FamilyID   uuid.UUID `json:"family_id"`
 	AlertType  string    `json:"alert_type"` // "near_limit", "over_budget", "exceeded"
 	Threshold  float64   `json:"threshold"`  // The threshold that triggered the alert (80%, 100%, etc.)
 	Current    float64   `json:"current"`    // Current utilization percentage

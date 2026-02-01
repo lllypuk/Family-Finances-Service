@@ -208,51 +208,27 @@ func TestFamilyRepository_Integration(t *testing.T) {
 }
 ```
 
-### Testcontainers для реальной БД
+### In-memory SQLite для интеграционных тестов
 ```go
-func TestFamilyRepository_WithPostgreSQL(t *testing.T) {
-    if testing.Short() {
-        t.Skip("Skipping integration test in short mode")
-    }
+func TestFamilyRepository_WithSQLite(t *testing.T) {
+    // Создание in-memory базы данных (мгновенно, без Docker)
+    db := testhelpers.NewTestDB(t)
 
-    // Запуск PostgreSQL в контейнере
-    ctx := context.Background()
-    container, err := postgres.RunContainer(ctx,
-        testcontainers.WithImage("postgres:17.6-alpine"),
-        postgres.WithDatabase("testdb"),
-        postgres.WithUsername("testuser"),
-        postgres.WithPassword("testpass"),
-        testcontainers.WithWaitStrategy(
-            wait.ForLog("database system is ready to accept connections").
-                WithStartupTimeout(60*time.Second)),
-    )
-    require.NoError(t, err)
-    defer container.Terminate(ctx)
-
-    // Получение connection string
-    connStr, err := container.ConnectionString(ctx, "sslmode=disable")
-    require.NoError(t, err)
-
-    // Подключение к БД
-    db, err := pgxpool.New(ctx, connStr)
-    require.NoError(t, err)
-    defer db.Close()
-
-    // Проверка подключения
-    err = db.Ping(ctx)
-    require.NoError(t, err)
-
-    // Выполнение миграций
-    err = runMigrations(ctx, db)
-    require.NoError(t, err)
-
-    // Тесты
+    // Миграции выполняются автоматически
     repo := NewFamilyRepository(db)
 
     t.Run("ComplexQueries", func(t *testing.T) {
-        // Тестирование сложных PostgreSQL запросов с JOIN
+        // Тестирование запросов с JOIN
+        // Каждый тест получает чистую БД
     })
 }
+```
+
+**Преимущества in-memory SQLite:**
+- Не требует Docker — тесты запускаются мгновенно
+- Каждый тест получает изолированную базу данных
+- Автоматическая очистка после завершения теста
+- Параллельное выполнение тестов без конфликтов
 ```
 
 ## 🌐 API Testing
@@ -636,8 +612,8 @@ test-clean:
 
 ### CI/CD Pipeline
 ```yaml
-# .github/workflows/test.yml
-name: Tests
+# .github/workflows/ci.yml
+name: CI
 
 on:
   push:
@@ -649,46 +625,20 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    services:
-      postgresql:
-        image: postgres:17.6-alpine
-        env:
-          POSTGRES_USER: admin
-          POSTGRES_PASSWORD: password123
-          POSTGRES_DB: testdb
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Set up Go
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v6
       with:
-        go-version: 1.25
+        go-version: '1.25'
 
-    - name: Cache Go modules
-      uses: actions/cache@v3
-      with:
-        path: ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+    - name: Run tests
+      run: make test
+      # Тесты используют in-memory SQLite — Docker-сервисы не нужны
 
-    - name: Install dependencies
-      run: go mod download
-
-    - name: Run unit tests
-      run: make test-unit
-
-    - name: Run integration tests
-      run: make test-integration
-      env:
-        POSTGRESQL_URI: postgres://admin:password123@localhost:5432/testdb?sslmode=disable
-        POSTGRESQL_DATABASE: testdb
+    - name: Run linter
+      run: make lint
 
     - name: Generate coverage
       run: make test-coverage

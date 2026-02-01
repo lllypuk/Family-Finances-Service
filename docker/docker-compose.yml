@@ -1,217 +1,47 @@
 version: "3.8"
 
 services:
-  # PostgreSQL база данных
-  postgresql:
-    image: postgres:17.6-alpine
-    container_name: family-budget-postgresql
-    restart: unless-stopped
-    ports:
-      - "${POSTGRESQL_PORT:-5432}:5432"
-    environment:
-      POSTGRES_DB: ${POSTGRESQL_DATABASE:-family_budget}
-      POSTGRES_USER: ${POSTGRESQL_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRESQL_PASSWORD:-postgres123}
-      PGDATA: /var/lib/postgresql/data/pgdata
-    volumes:
-      - postgresql_data:/var/lib/postgresql/data
-    networks:
-      - family-budget-network
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${POSTGRESQL_USER:-postgres} -d ${POSTGRESQL_DATABASE:-family_budget}",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    command: >
-      postgres
-      -c shared_preload_libraries=pg_stat_statements
-      -c pg_stat_statements.track=all
-      -c max_connections=200
-      -c shared_buffers=256MB
-      -c effective_cache_size=1GB
-      -c maintenance_work_mem=64MB
-      -c checkpoint_completion_target=0.9
-      -c wal_buffers=16MB
-      -c default_statistics_target=100
-      -c random_page_cost=1.1
-      -c effective_io_concurrency=200
-
-  # Приложение (для продакшн сборки)
-  app:
+  # Family Budget Service - единый контейнер с SQLite
+  family-budget:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: family-budget-app
+    container_name: family-budget-service
     restart: unless-stopped
     ports:
       - "${SERVER_PORT:-8080}:8080"
     environment:
+      # Server Configuration
       SERVER_PORT: ${SERVER_PORT:-8080}
       SERVER_HOST: ${SERVER_HOST:-0.0.0.0}
-      POSTGRESQL_URI: ${POSTGRESQL_URI:-postgres://postgres:postgres123@postgresql:5432/family_budget?sslmode=disable}
-      POSTGRESQL_DATABASE: ${POSTGRESQL_DATABASE:-family_budget}
+
+      # Database Configuration (SQLite)
+      DATABASE_PATH: ${DATABASE_PATH:-/data/budget.db}
+
+      # Application Configuration
       ENVIRONMENT: ${ENVIRONMENT:-production}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      SESSION_SECRET: ${SESSION_SECRET:-your-secret-key-here}
-    depends_on:
-      postgresql:
-        condition: service_healthy
-    networks:
-      - family-budget-network
-    profiles:
-      - production
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
 
-  # Prometheus для сбора метрик
-  prometheus:
-    image: prom/prometheus:v2.47.0
-    container_name: family-budget-prometheus
-    restart: unless-stopped
-    ports:
-      - "${PROMETHEUS_PORT:-9090}:9090"
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--web.console.libraries=/etc/prometheus/console_libraries"
-      - "--web.console.templates=/etc/prometheus/consoles"
-      - "--storage.tsdb.retention.time=30d"
-      - "--web.enable-lifecycle"
-      - "--web.enable-admin-api"
     volumes:
-      - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ../monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
-      - ../monitoring/prometheus/recording_rules.yml:/etc/prometheus/recording_rules.yml:ro
-      - prometheus_data:/prometheus
-    security_opt:
-      - no-new-privileges:true
+      # Persistent volume for SQLite database
+      - budget_data:/data
     networks:
       - family-budget-network
-    profiles:
-      - observability
-
-  # AlertManager для управления алертами
-  alertmanager:
-    image: prom/alertmanager:v0.26.0
-    container_name: family-budget-alertmanager
-    restart: unless-stopped
-    ports:
-      - "${ALERTMANAGER_PORT:-9093}:9093"
-    volumes:
-      - ../monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      - alertmanager_data:/alertmanager
-    command:
-      - "--config.file=/etc/alertmanager/alertmanager.yml"
-      - "--storage.path=/alertmanager"
-      - "--web.external-url=http://localhost:9093"
-    security_opt:
-      - no-new-privileges:true
-    networks:
-      - family-budget-network
-    profiles:
-      - observability
-
-  # Grafana для визуализации метрик
-  grafana:
-    image: grafana/grafana:10.1.0
-    container_name: family-budget-grafana
-    restart: unless-stopped
-    ports:
-      - "${GRAFANA_PORT:-3000}:3000"
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_USERNAME:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
-      GF_INSTALL_PLUGINS: grafana-piechart-panel
-    volumes:
-      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ../monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - grafana_data:/var/lib/grafana
-    security_opt:
-      - no-new-privileges:true
-    depends_on:
-      - prometheus
-    networks:
-      - family-budget-network
-    profiles:
-      - observability
-
-  # Jaeger для distributed tracing
-  jaeger:
-    image: jaegertracing/all-in-one:1.48
-    container_name: family-budget-jaeger
-    restart: unless-stopped
-    ports:
-      - "${JAEGER_UI_PORT:-16686}:16686"
-      - "${JAEGER_COLLECTOR_PORT:-14268}:14268"
-      - "${JAEGER_OTLP_HTTP_PORT:-4318}:4318"
-      - "${JAEGER_OTLP_GRPC_PORT:-4317}:4317"
-    environment:
-      COLLECTOR_OTLP_ENABLED: "true"
-      SPAN_STORAGE_TYPE: "memory"
-    security_opt:
-      - no-new-privileges:true
-    networks:
-      - family-budget-network
-    profiles:
-      - observability
-
-  # Node Exporter для системных метрик
-  node-exporter:
-    image: prom/node-exporter:v1.6.1
-    container_name: family-budget-node-exporter
-    restart: unless-stopped
-    ports:
-      - "${NODE_EXPORTER_PORT:-9100}:9100"
-    command:
-      - "--path.procfs=/host/proc"
-      - "--path.rootfs=/rootfs"
-      - "--path.sysfs=/host/sys"
-      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/rootfs:ro
-    security_opt:
-      - no-new-privileges:true
-    networks:
-      - family-budget-network
-    profiles:
-      - observability
-
-  # PostgreSQL Exporter для метрик базы данных
-  postgres-exporter:
-    image: prometheuscommunity/postgres-exporter:v0.15.0
-    container_name: family-budget-postgres-exporter
-    restart: unless-stopped
-    ports:
-      - "${POSTGRES_EXPORTER_PORT:-9187}:9187"
-    environment:
-      DATA_SOURCE_NAME: ${POSTGRESQL_URI:-postgres://postgres:postgres123@postgresql:5432/family_budget?sslmode=disable}
-      PG_EXPORTER_EXTEND_QUERY_PATH: /etc/postgres_exporter/queries.yaml
-    volumes:
-      - ../monitoring/postgres_exporter/queries.yaml:/etc/postgres_exporter/queries.yaml:ro
-    security_opt:
-      - no-new-privileges:true
-    depends_on:
-      postgresql:
-        condition: service_healthy
-    networks:
-      - family-budget-network
-    profiles:
-      - observability
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
 
 volumes:
-  postgresql_data:
+  budget_data:
     driver: local
-  prometheus_data:
-    driver: local
-  grafana_data:
-    driver: local
-  alertmanager_data:
-    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_DIR:-.}/data
 
 networks:
   family-budget-network:

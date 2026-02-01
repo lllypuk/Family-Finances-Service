@@ -1,6 +1,7 @@
 # Переменные
 APP_NAME=family-budget-service
 BUILD_DIR=./build
+DATA_DIR=./data
 DOCKER_COMPOSE_FILE=docker/docker-compose.yml
 
 # Сборка приложения
@@ -8,7 +9,7 @@ DOCKER_COMPOSE_FILE=docker/docker-compose.yml
 build:
 	@echo "Building $(APP_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	@go build -o $(BUILD_DIR)/$(APP_NAME) ./cmd/server
+	@CGO_ENABLED=0 go build -ldflags="-w -s" -o $(BUILD_DIR)/$(APP_NAME) ./cmd/server
 
 # Запуск приложения
 .PHONY: run
@@ -16,44 +17,42 @@ run:
 	@echo "Running $(APP_NAME)..."
 	@go run ./cmd/server/main.go
 
-# Запуск с локальными переменными окружения для PostgreSQL
+# Запуск с локальными переменными окружения для SQLite
 .PHONY: run-local
 run-local:
-	@echo "Running $(APP_NAME) with local PostgreSQL config..."
+	@echo "Running $(APP_NAME) with local SQLite config..."
+	@mkdir -p $(DATA_DIR)
 	@SERVER_PORT=8080 \
 	 SERVER_HOST=localhost \
-	 POSTGRESQL_URI=postgres://postgres:postgres123@localhost:5432/family_budget?sslmode=disable \
-	 POSTGRESQL_DATABASE=family_budget \
-	 POSTGRESQL_SCHEMA=family_budget \
+	 DATABASE_PATH=$(DATA_DIR)/budget.db \
 	 SESSION_SECRET=your-super-secret-session-key-for-local-dev \
-	 CSRF_SECRET=your-csrf-secret-key-for-local-dev \
 	 LOG_LEVEL=debug \
 	 ENVIRONMENT=development \
 	 go run ./cmd/server/main.go
 
-# Быстрые тесты с переиспользованием PostgreSQL контейнера
+# Тесты с SQLite (in-memory)
 .PHONY: test
 test:
-	@echo "Running fast tests with shared PostgreSQL container..."
-	@REUSE_POSTGRES_CONTAINER=true go test -v ./...
+	@echo "Running tests with SQLite in-memory..."
+	@go test -v ./...
 
-# Юнит тесты с быстрыми контейнерами
+# Юнит тесты
 .PHONY: test-unit
 test-unit:
-	@echo "Running unit tests with fast containers..."
-	@REUSE_POSTGRES_CONTAINER=true go test -v ./internal/...
+	@echo "Running unit tests..."
+	@go test -v ./internal/...
 
-# Интеграционные тесты с переиспользованием контейнера
+# Интеграционные тесты
 .PHONY: test-integration
 test-integration:
-	@echo "Running integration tests with shared container..."
-	@REUSE_POSTGRES_CONTAINER=true go test -v ./tests/...
+	@echo "Running integration tests..."
+	@go test -v ./tests/...
 
-# Быстрые тесты с покрытием и переиспользованием контейнера
+# Тесты с покрытием
 .PHONY: test-coverage
 test-coverage:
-	@echo "Running fast tests with coverage and shared PostgreSQL container..."
-	@REUSE_POSTGRES_CONTAINER=true go test -coverprofile=coverage.out ./...
+	@echo "Running tests with coverage..."
+	@go test -coverprofile=coverage.out ./...
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
@@ -81,7 +80,7 @@ fmt:
 pre-commit:
 	@echo "Running pre-commit checks..."
 	@go fmt ./...
-	@REUSE_POSTGRES_CONTAINER=true go test -v ./...
+	@go test -v ./...
 	@golangci-lint run --fix
 
 # Очистка
@@ -94,17 +93,19 @@ clean:
 # Docker команды
 .PHONY: docker-build
 docker-build:
-	@echo "Building Docker images..."
+	@echo "Building Docker image..."
 	@docker-compose -f $(DOCKER_COMPOSE_FILE) build
 
 .PHONY: docker-up
 docker-up:
-	@echo "Starting Docker containers..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) up --build
+	@echo "Starting Docker container..."
+	@mkdir -p $(DATA_DIR)
+	@docker-compose -f $(DOCKER_COMPOSE_FILE) up
 
 .PHONY: docker-up-d
 docker-up-d:
-	@echo "Starting Docker containers in detached mode..."
+	@echo "Starting Docker container in detached mode..."
+	@mkdir -p $(DATA_DIR)
 	@docker-compose -f $(DOCKER_COMPOSE_FILE) up -d
 
 .PHONY: docker-down
@@ -117,63 +118,38 @@ docker-logs:
 	@echo "Showing Docker logs..."
 	@docker-compose -f $(DOCKER_COMPOSE_FILE) logs -f
 
-# PostgreSQL специфичные команды
-.PHONY: postgres-up
-postgres-up:
-	@echo "Starting PostgreSQL and related services..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) up -d postgresql
-
-.PHONY: postgres-down
-postgres-down:
-	@echo "Stopping PostgreSQL and related services..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) down postgresql
-
-.PHONY: postgres-logs
-postgres-logs:
-	@echo "Showing PostgreSQL logs..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) logs -f postgresql
-
-.PHONY: postgres-shell
-postgres-shell:
-	@echo "Connecting to PostgreSQL shell..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) exec postgresql psql -U postgres -d family_budget
-
-.PHONY: postgres-backup
-postgres-backup:
-	@echo "Creating PostgreSQL backup..."
+# SQLite специфичные команды
+.PHONY: sqlite-backup
+sqlite-backup:
+	@echo "Creating SQLite backup..."
 	@mkdir -p ./backups
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) exec postgresql pg_dump -U postgres -d family_budget > ./backups/family_budget_$(shell date +%Y%m%d_%H%M%S).sql
+	@cp $(DATA_DIR)/budget.db ./backups/budget_$(shell date +%Y%m%d_%H%M%S).db
 	@echo "Backup created in ./backups/"
 
-.PHONY: postgres-restore
-postgres-restore:
-	@echo "Restoring PostgreSQL from backup..."
-	@echo "Usage: make postgres-restore BACKUP_FILE=./backups/family_budget_YYYYMMDD_HHMMSS.sql"
+.PHONY: sqlite-restore
+sqlite-restore:
+	@echo "Restoring SQLite from backup..."
+	@echo "Usage: make sqlite-restore BACKUP_FILE=./backups/budget_YYYYMMDD_HHMMSS.db"
 	@if [ -z "$(BACKUP_FILE)" ]; then \
 		echo "Error: BACKUP_FILE is required"; \
 		exit 1; \
 	fi
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) exec -T postgresql psql -U postgres -d family_budget < $(BACKUP_FILE)
+	@cp $(BACKUP_FILE) $(DATA_DIR)/budget.db
+	@echo "Database restored from $(BACKUP_FILE)"
 
-# Миграции базы данных
-.PHONY: migrate-up
-migrate-up:
-	@echo "Running database migrations (docker)..."
-	@docker run --rm \
-	 -v "$(shell pwd)/migrations:/migrations" \
-	 --network host \
-	 migrate/migrate:latest \
-	 -path=/migrations -database "postgres://postgres:postgres123@localhost:5432/family_budget?sslmode=disable" up
+.PHONY: sqlite-shell
+sqlite-shell:
+	@echo "Opening SQLite shell..."
+	@sqlite3 $(DATA_DIR)/budget.db
 
-.PHONY: migrate-down
-migrate-down:
-	@echo "Rolling back database migrations (docker)..."
-	@docker run --rm \
-	 -v "$(shell pwd)/migrations:/migrations" \
-	 --network host \
-	 migrate/migrate:latest \
-	 -path=/migrations -database "postgres://postgres:postgres123@localhost:5432/family_budget?sslmode=disable" down
+.PHONY: sqlite-stats
+sqlite-stats:
+	@echo "Showing SQLite database statistics..."
+	@sqlite3 $(DATA_DIR)/budget.db "SELECT name, \
+		(SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND tbl_name=m.name) as indexes \
+		FROM sqlite_master m WHERE type='table' ORDER BY name;"
 
+# Создание новой миграции
 .PHONY: migrate-create
 migrate-create:
 	@echo "Creating new migration..."
@@ -181,78 +157,11 @@ migrate-create:
 		echo "Usage: make migrate-create NAME=migration_name"; \
 		exit 1; \
 	fi
-	@docker run --rm \
-	 -v "$(shell pwd)/migrations:/migrations" \
-	 migrate/migrate:latest \
-	 create -ext sql -dir /migrations $(NAME)
-
-.PHONY: migrate-force
-migrate-force:
-	@echo "Forcing migration version..."
-	@if [ -z "$(VERSION)" ]; then \
-		echo "Usage: make migrate-force VERSION=version_number"; \
-		exit 1; \
-	fi
-	@migrate -path ./migrations -database "postgres://postgres:postgres123@localhost:5432/family_budget?sslmode=disable" force $(VERSION)
-
-# Observability команды
-.PHONY: observability-up
-observability-up:
-	@echo "Starting observability stack..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) --profile observability up -d
-
-.PHONY: observability-down
-observability-down:
-	@echo "Stopping observability stack..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) --profile observability down
-
-.PHONY: observability-logs
-observability-logs:
-	@echo "Showing observability logs..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) --profile observability logs -f
-
-# Комбинированные команды
-.PHONY: dev-up
-dev-up:
-	@echo "Starting development environment with PostgreSQL and observability..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) --profile observability up -d postgresql jaeger prometheus grafana postgres-exporter
-
-.PHONY: full-up
-full-up:
-	@echo "Starting full stack (app + observability)..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) --profile production --profile observability up -d
-
-# Мониторинг и производительность
-.PHONY: postgres-stats
-postgres-stats:
-	@echo "Showing PostgreSQL performance statistics..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) exec postgresql psql -U postgres -d family_budget -c "\
-		SELECT schemaname, tablename, \
-		pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) as size, \
-		pg_stat_get_tuples_returned(c.oid) as rows_fetched, \
-		pg_stat_get_tuples_inserted(c.oid) as rows_inserted, \
-		pg_stat_get_tuples_updated(c.oid) as rows_updated, \
-		pg_stat_get_tuples_deleted(c.oid) as rows_deleted \
-		FROM pg_tables LEFT JOIN pg_class c ON c.relname = tablename \
-		WHERE schemaname = 'family_budget' ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;"
-
-.PHONY: postgres-indexes
-postgres-indexes:
-	@echo "Showing PostgreSQL index usage..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) exec postgresql psql -U postgres -d family_budget -c "\
-		SELECT schemaname, tablename, indexname, idx_tup_read, idx_tup_fetch \
-		FROM pg_stat_user_indexes \
-		WHERE schemaname = 'family_budget' AND idx_tup_read > 0 \
-		ORDER BY idx_tup_read DESC;"
-
-.PHONY: postgres-slow-queries
-postgres-slow-queries:
-	@echo "Showing slow queries..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) exec postgresql psql -U postgres -d family_budget -c "\
-		SELECT query, calls, total_exec_time, mean_exec_time, max_exec_time \
-		FROM pg_stat_statements \
-		WHERE mean_exec_time > 100 \
-		ORDER BY mean_exec_time DESC LIMIT 10;"
+	@TIMESTAMP=$$(date +%s); \
+	touch migrations/$${TIMESTAMP}_$(NAME).up.sql; \
+	touch migrations/$${TIMESTAMP}_$(NAME).down.sql; \
+	echo "Created migrations/$${TIMESTAMP}_$(NAME).up.sql"; \
+	echo "Created migrations/$${TIMESTAMP}_$(NAME).down.sql"
 
 # Безопасность и валидация
 .PHONY: security-check
@@ -260,15 +169,6 @@ security-check:
 	@echo "Running security checks..."
 	@gosec ./...
 	@govulncheck ./...
-
-.PHONY: validate-schema
-validate-schema:
-	@echo "Validating database schema..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) exec postgresql psql -U postgres -d family_budget -c "\
-		SELECT schemaname, tablename, \
-		CASE WHEN c.relchecks > 0 THEN 'Has constraints' ELSE 'No constraints' END as constraints \
-		FROM pg_tables LEFT JOIN pg_class c ON c.relname = tablename \
-		WHERE schemaname = 'family_budget';"
 
 # Генерация OpenAPI кода
 .PHONY: generate
@@ -291,13 +191,13 @@ help:
 	@echo "Building and Running:"
 	@echo "  build            - Build the application (outputs to ./build/family-budget-service)"
 	@echo "  run              - Run the application directly with go run"
-	@echo "  run-local        - Run with local development environment variables (requires make dev-up first)"
+	@echo "  run-local        - Run with local SQLite database (./data/budget.db)"
 	@echo ""
 	@echo "Testing and Code Quality:"
-	@echo "  test             - Run tests with shared PostgreSQL container (fast)"
+	@echo "  test             - Run tests with SQLite in-memory"
 	@echo "  test-coverage    - Run tests with coverage report"
-	@echo "  test-unit        - Unit tests with fast containers"
-	@echo "  test-integration - Integration tests with shared container"
+	@echo "  test-unit        - Unit tests"
+	@echo "  test-integration - Integration tests"
 	@echo "  lint             - Run golangci-lint for comprehensive code quality checks"
 	@echo "  fmt              - Format code with go fmt"
 	@echo "  pre-commit       - Run pre-commit checks (format, test, lint)"
@@ -309,33 +209,21 @@ help:
 	@echo "  generate         - Generate OpenAPI code"
 	@echo "  docs             - Start documentation server"
 	@echo ""
-	@echo "PostgreSQL Environment:"
-	@echo "  postgres-up      - Start PostgreSQL"
-	@echo "  postgres-down    - Stop PostgreSQL and related services"
-	@echo "  postgres-logs    - View PostgreSQL container logs"
-	@echo "  postgres-shell   - Connect to PostgreSQL shell"
-	@echo "  postgres-backup  - Create PostgreSQL backup"
-	@echo "  postgres-restore - Restore from backup (BACKUP_FILE=path required)"
+	@echo "SQLite Database:"
+	@echo "  sqlite-backup    - Create SQLite backup"
+	@echo "  sqlite-restore   - Restore from backup (BACKUP_FILE=path required)"
+	@echo "  sqlite-shell     - Open SQLite interactive shell"
+	@echo "  sqlite-stats     - Show database statistics"
 	@echo ""
 	@echo "Database Migrations:"
-	@echo "  migrate-up       - Run database migrations"
-	@echo "  migrate-down     - Rollback database migrations"
 	@echo "  migrate-create   - Create new migration (NAME=migration_name required)"
-	@echo "  migrate-force    - Force migration version (VERSION=number required)"
 	@echo ""
 	@echo "Docker Environment:"
-	@echo "  dev-up           - Start development environment (PostgreSQL + Observability)"
-	@echo "  docker-up        - Start basic Docker containers"
+	@echo "  docker-build     - Build Docker image"
+	@echo "  docker-up        - Start Docker container"
+	@echo "  docker-up-d      - Start Docker container in detached mode"
 	@echo "  docker-down      - Stop Docker containers"
 	@echo "  docker-logs      - View Docker container logs"
-	@echo "  observability-up - Start observability stack (Prometheus, Grafana, Jaeger)"
-	@echo "  full-up          - Start complete stack (app + observability)"
-	@echo ""
-	@echo "Monitoring and Performance:"
-	@echo "  postgres-stats   - Show PostgreSQL table statistics"
-	@echo "  postgres-indexes - Show index usage statistics"
-	@echo "  postgres-slow-queries - Show slow query analysis"
-	@echo "  validate-schema  - Validate database schema integrity"
 	@echo ""
 	@echo "Other commands:"
 	@echo "  help             - Show this help"

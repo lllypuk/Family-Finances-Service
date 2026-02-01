@@ -11,7 +11,6 @@ type Report struct {
 	Name        string    `json:"name"         bson:"name"`
 	Type        Type      `json:"type"         bson:"type"`
 	Period      Period    `json:"period"       bson:"period"`
-	FamilyID    uuid.UUID `json:"family_id"    bson:"family_id"`
 	UserID      uuid.UUID `json:"user_id"      bson:"user_id"` // Кто создал отчет
 	StartDate   time.Time `json:"start_date"   bson:"start_date"`
 	EndDate     time.Time `json:"end_date"     bson:"end_date"`
@@ -85,7 +84,7 @@ func NewReport(
 	name string,
 	reportType Type,
 	period Period,
-	familyID, userID uuid.UUID,
+	userID uuid.UUID,
 	startDate, endDate time.Time,
 ) *Report {
 	return &Report{
@@ -93,16 +92,10 @@ func NewReport(
 		Name:        name,
 		Type:        reportType,
 		Period:      period,
-		FamilyID:    familyID,
 		UserID:      userID,
 		StartDate:   startDate,
 		EndDate:     endDate,
 		Data:        Data{},
 		GeneratedAt: time.Now(),
 	}
-}
-
-// GetFamilyID returns the family ID of the report
-func (r *Report) GetFamilyID() uuid.UUID {
-	return r.FamilyID
 }

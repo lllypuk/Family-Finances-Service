@@ -39,8 +39,8 @@ func (m *MockReportRepository) GetByID(ctx context.Context, id uuid.UUID) (*repo
 	return args.Get(0).(*report.Report), args.Error(1)
 }
 
-func (m *MockReportRepository) GetByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*report.Report, error) {
-	args := m.Called(ctx, familyID)
+func (m *MockReportRepository) GetAll(ctx context.Context) ([]*report.Report, error) {
+	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -55,8 +55,8 @@ func (m *MockReportRepository) GetByUserID(ctx context.Context, userID uuid.UUID
 	return args.Get(0).([]*report.Report), args.Error(1)
 }
 
-func (m *MockReportRepository) Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
-	args := m.Called(ctx, id, familyID)
+func (m *MockReportRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
@@ -76,7 +76,6 @@ func createValidReportRequest() handlers.CreateReportRequest {
 		Name:      "Monthly Expenses Report",
 		Type:      "expenses",
 		Period:    "monthly",
-		FamilyID:  uuid.New(),
 		UserID:    uuid.New(),
 		StartDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 		EndDate:   time.Date(2025, 1, 31, 23, 59, 59, 0, time.UTC),
@@ -114,7 +113,6 @@ func TestReportHandler_CreateReport_Success(t *testing.T) {
 	assert.Equal(t, req.Name, response.Data.Name)
 	assert.Equal(t, req.Type, response.Data.Type)
 	assert.Equal(t, req.Period, response.Data.Period)
-	assert.Equal(t, req.FamilyID, response.Data.FamilyID)
 	assert.Equal(t, req.UserID, response.Data.UserID)
 	assert.Equal(t, req.StartDate, response.Data.StartDate)
 	assert.Equal(t, req.EndDate, response.Data.EndDate)
@@ -246,7 +244,6 @@ func TestReportHandler_GetReports_ByFamily_Success(t *testing.T) {
 			Name:        "Monthly Expenses",
 			Type:        report.TypeExpenses,
 			Period:      report.PeriodMonthly,
-			FamilyID:    familyID,
 			UserID:      uuid.New(),
 			StartDate:   time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 			EndDate:     time.Date(2025, 1, 31, 23, 59, 59, 0, time.UTC),
@@ -258,7 +255,6 @@ func TestReportHandler_GetReports_ByFamily_Success(t *testing.T) {
 			Name:        "Weekly Income",
 			Type:        report.TypeIncome,
 			Period:      report.PeriodWeekly,
-			FamilyID:    familyID,
 			UserID:      uuid.New(),
 			StartDate:   time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 			EndDate:     time.Date(2025, 1, 7, 23, 59, 59, 0, time.UTC),
@@ -267,7 +263,7 @@ func TestReportHandler_GetReports_ByFamily_Success(t *testing.T) {
 		},
 	}
 
-	mockRepo.On("GetByFamilyID", mock.Anything, familyID).Return(expectedReports, nil)
+	mockRepo.On("GetAll", mock.Anything).Return(expectedReports, nil)
 
 	e := echo.New()
 	httpReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/reports?family_id=%s", familyID), nil)
@@ -306,7 +302,6 @@ func TestReportHandler_GetReports_ByUser_Success(t *testing.T) {
 			Name:        "User Expenses",
 			Type:        report.TypeExpenses,
 			Period:      report.PeriodMonthly,
-			FamilyID:    familyID,
 			UserID:      userID,
 			StartDate:   time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 			EndDate:     time.Date(2025, 1, 31, 23, 59, 59, 0, time.UTC),
@@ -344,6 +339,9 @@ func TestReportHandler_GetReports_ByUser_Success(t *testing.T) {
 	mockRepo.AssertExpectations(t)
 }
 
+// TestReportHandler_GetReports_MissingFamilyID is deprecated in single-family model
+// family_id is no longer required
+/*
 func TestReportHandler_GetReports_MissingFamilyID(t *testing.T) {
 	handler, _ := setupReportHandler()
 
@@ -364,7 +362,11 @@ func TestReportHandler_GetReports_MissingFamilyID(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "MISSING_FAMILY_ID", response.Error.Code)
 }
+*/
 
+// TestReportHandler_GetReports_InvalidFamilyID is deprecated in single-family model
+// family_id is no longer required
+/*
 func TestReportHandler_GetReports_InvalidFamilyID(t *testing.T) {
 	handler, _ := setupReportHandler()
 
@@ -385,6 +387,7 @@ func TestReportHandler_GetReports_InvalidFamilyID(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "INVALID_FAMILY_ID", response.Error.Code)
 }
+*/
 
 func TestReportHandler_GetReports_InvalidUserID(t *testing.T) {
 	handler, _ := setupReportHandler()
@@ -417,7 +420,6 @@ func TestReportHandler_GetReportByID_Success(t *testing.T) {
 		Name:      "Budget Analysis",
 		Type:      report.TypeBudget,
 		Period:    report.PeriodMonthly,
-		FamilyID:  uuid.New(),
 		UserID:    uuid.New(),
 		StartDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 		EndDate:   time.Date(2025, 1, 31, 23, 59, 59, 0, time.UTC),
@@ -515,13 +517,12 @@ func TestReportHandler_DeleteReport_Success(t *testing.T) {
 
 	// Arrange
 	reportID := uuid.New()
-	familyID := uuid.New()
-	mockRepo.On("Delete", mock.Anything, reportID, familyID).Return(nil)
+	mockRepo.On("Delete", mock.Anything, reportID).Return(nil)
 
 	e := echo.New()
 	httpReq := httptest.NewRequest(
 		http.MethodDelete,
-		"/reports/"+reportID.String()+"?family_id="+familyID.String(),
+		"/reports/"+reportID.String(),
 		nil,
 	)
 	rec := httptest.NewRecorder()
@@ -562,13 +563,12 @@ func TestReportHandler_DeleteReport_RepositoryError(t *testing.T) {
 
 	// Arrange
 	reportID := uuid.New()
-	familyID := uuid.New()
-	mockRepo.On("Delete", mock.Anything, reportID, familyID).Return(errors.New("database error"))
+	mockRepo.On("Delete", mock.Anything, reportID).Return(errors.New("database error"))
 
 	e := echo.New()
 	httpReq := httptest.NewRequest(
 		http.MethodDelete,
-		"/reports/"+reportID.String()+"?family_id="+familyID.String(),
+		"/reports/"+reportID.String(),
 		nil,
 	)
 	rec := httptest.NewRecorder()
@@ -731,7 +731,7 @@ func BenchmarkReportHandler_GetReports(b *testing.B) {
 	handler, mockRepo := setupReportHandler()
 
 	// Setup mock to return empty slice for all calls
-	mockRepo.On("GetByFamilyID", mock.Anything, mock.AnythingOfType("uuid.UUID")).
+	mockRepo.On("GetAll", mock.Anything).
 		Return([]*report.Report{}, nil)
 
 	familyID := uuid.New()

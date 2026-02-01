@@ -51,12 +51,11 @@ func (m *MockCategoryService) GetCategoryByID(ctx context.Context, id uuid.UUID)
 	return args.Get(0).(*category.Category), args.Error(1)
 }
 
-func (m *MockCategoryService) GetCategoriesByFamily(
+func (m *MockCategoryService) GetCategories(
 	ctx context.Context,
-	familyID uuid.UUID,
 	typeFilter *category.Type,
 ) ([]*category.Category, error) {
-	args := m.Called(ctx, familyID, typeFilter)
+	args := m.Called(ctx, typeFilter)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -75,16 +74,15 @@ func (m *MockCategoryService) UpdateCategory(
 	return args.Get(0).(*category.Category), args.Error(1)
 }
 
-func (m *MockCategoryService) DeleteCategory(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
-	args := m.Called(ctx, id, familyID)
+func (m *MockCategoryService) DeleteCategory(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
 func (m *MockCategoryService) GetCategoryHierarchy(
 	ctx context.Context,
-	familyID uuid.UUID,
 ) ([]*category.Category, error) {
-	args := m.Called(ctx, familyID)
+	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -101,8 +99,8 @@ func (m *MockCategoryService) CheckCategoryUsage(ctx context.Context, categoryID
 	return args.Get(0).(bool), args.Error(1)
 }
 
-func (m *MockCategoryService) CreateDefaultCategories(ctx context.Context, familyID uuid.UUID) error {
-	args := m.Called(ctx, familyID)
+func (m *MockCategoryService) CreateDefaultCategories(ctx context.Context) error {
+	args := m.Called(ctx)
 	return args.Error(0)
 }
 
@@ -120,11 +118,10 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 		{
 			name: "Success - Valid category creation",
 			requestBody: handlers.CreateCategoryRequest{
-				Name:     "Food",
-				Type:     "expense",
-				Color:    "#FF5733",
-				Icon:     "food",
-				FamilyID: testFamilyID,
+				Name:  "Food",
+				Type:  "expense",
+				Color: "#FF5733",
+				Icon:  "food",
 			},
 			mockSetup: func(service *MockCategoryService, _ uuid.UUID) {
 				expectedCategory := &category.Category{
@@ -133,7 +130,6 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 					Type:      category.TypeExpense,
 					Color:     "#FF5733",
 					Icon:      "food",
-					FamilyID:  testFamilyID,
 					IsActive:  true,
 					CreatedAt: time.Now(),
 					UpdatedAt: time.Now(),
@@ -150,7 +146,6 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 				assert.Equal(t, "expense", response.Data.Type)
 				assert.Equal(t, "#FF5733", response.Data.Color)
 				assert.Equal(t, "food", response.Data.Icon)
-				assert.Equal(t, testFamilyID, response.Data.FamilyID)
 				assert.True(t, response.Data.IsActive)
 			},
 		},
@@ -161,7 +156,6 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 				"type": "expense",
 				"color": "#FF5733",
 				"icon": "food",
-				"family_id": "invalid-uuid"
 			}`,
 			mockSetup: func(_ *MockCategoryService, _ uuid.UUID) {
 				// No mock calls expected
@@ -177,9 +171,8 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 		{
 			name: "Error - Validation failure",
 			requestBody: handlers.CreateCategoryRequest{
-				Name:     "",
-				Type:     "expense",
-				FamilyID: testFamilyID,
+				Name: "",
+				Type: "expense",
 			},
 			mockSetup: func(_ *MockCategoryService, _ uuid.UUID) {
 				// No service call expected since validation fails at handler level
@@ -196,11 +189,10 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 		{
 			name: "Error - Service error",
 			requestBody: handlers.CreateCategoryRequest{
-				Name:     "Food",
-				Type:     "expense",
-				Color:    "#FF5733",
-				Icon:     "food",
-				FamilyID: testFamilyID,
+				Name:  "Food",
+				Type:  "expense",
+				Color: "#FF5733",
+				Icon:  "food",
 			},
 			mockSetup: func(service *MockCategoryService, _ uuid.UUID) {
 				service.On("CreateCategory", mock.Anything, mock.AnythingOfType("dto.CreateCategoryDTO")).
@@ -253,22 +245,17 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 }
 
 func TestCategoryHandler_GetCategories(t *testing.T) {
-	// Define a consistent family ID for all test cases
-	testFamilyID := uuid.New()
-
 	tests := []struct {
 		name           string
 		queryParams    map[string]string
-		mockSetup      func(*MockCategoryService, uuid.UUID)
+		mockSetup      func(*MockCategoryService)
 		expectedStatus int
 		expectedBody   func(t *testing.T, body string)
 	}{
 		{
-			name: "Success - Get all categories",
-			queryParams: map[string]string{
-				"family_id": testFamilyID.String(),
-			},
-			mockSetup: func(service *MockCategoryService, _ uuid.UUID) {
+			name:        "Success - Get all categories",
+			queryParams: map[string]string{},
+			mockSetup: func(service *MockCategoryService) {
 				categories := []*category.Category{
 					{
 						ID:       uuid.New(),
@@ -276,7 +263,6 @@ func TestCategoryHandler_GetCategories(t *testing.T) {
 						Type:     category.TypeExpense,
 						Color:    "#FF5733",
 						Icon:     "food",
-						FamilyID: testFamilyID,
 						IsActive: true,
 					},
 					{
@@ -285,51 +271,20 @@ func TestCategoryHandler_GetCategories(t *testing.T) {
 						Type:     category.TypeIncome,
 						Color:    "#28A745",
 						Icon:     "money",
-						FamilyID: testFamilyID,
 						IsActive: true,
 					},
 				}
-				service.On("GetCategoriesByFamily", mock.Anything, testFamilyID, (*category.Type)(nil)).
+				service.On("GetCategories", mock.Anything, (*category.Type)(nil)).
 					Return(categories, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody: func(t *testing.T, body string) {
-				var response handlers.APIResponse[[]handlers.CategoryResponse]
+				var response handlers.APIResponse[[]dto.CategoryAPIResponse]
 				err := json.Unmarshal([]byte(body), &response)
 				require.NoError(t, err)
 				assert.Len(t, response.Data, 2)
 				assert.Equal(t, "Food", response.Data[0].Name)
 				assert.Equal(t, "Salary", response.Data[1].Name)
-			},
-		},
-		{
-			name:        "Error - Missing family_id",
-			queryParams: map[string]string{},
-			mockSetup: func(_ *MockCategoryService, _ uuid.UUID) {
-				// No mock calls expected
-			},
-			expectedStatus: http.StatusBadRequest,
-			expectedBody: func(t *testing.T, body string) {
-				var response handlers.ErrorResponse
-				err := json.Unmarshal([]byte(body), &response)
-				require.NoError(t, err)
-				assert.Equal(t, "MISSING_FAMILY_ID", response.Error.Code)
-			},
-		},
-		{
-			name: "Error - Invalid family_id",
-			queryParams: map[string]string{
-				"family_id": "invalid-uuid",
-			},
-			mockSetup: func(_ *MockCategoryService, _ uuid.UUID) {
-				// No mock calls expected
-			},
-			expectedStatus: http.StatusBadRequest,
-			expectedBody: func(t *testing.T, body string) {
-				var response handlers.ErrorResponse
-				err := json.Unmarshal([]byte(body), &response)
-				require.NoError(t, err)
-				assert.Equal(t, "INVALID_FAMILY_ID", response.Error.Code)
 			},
 		},
 	}
@@ -338,7 +293,7 @@ func TestCategoryHandler_GetCategories(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
 			mockService := &MockCategoryService{}
-			tt.mockSetup(mockService, testFamilyID)
+			tt.mockSetup(mockService)
 
 			repos := &handlers.Repositories{}
 			handler := handlers.NewCategoryHandler(repos, mockService)
@@ -392,7 +347,6 @@ func TestCategoryHandler_GetCategoryByID(t *testing.T) {
 					Type:     category.TypeExpense,
 					Color:    "#FF5733",
 					Icon:     "food",
-					FamilyID: testFamilyID,
 					IsActive: true,
 				}
 				service.On("GetCategoryByID", mock.Anything, categoryID).Return(cat, nil)
@@ -494,7 +448,6 @@ func TestCategoryHandler_UpdateCategory(t *testing.T) {
 					Type:     category.TypeExpense,
 					Color:    "#FF6666",
 					Icon:     "updated-food",
-					FamilyID: testFamilyID,
 					IsActive: true,
 				}
 				service.On("UpdateCategory", mock.Anything, categoryID, mock.AnythingOfType("dto.UpdateCategoryDTO")).
@@ -595,7 +548,7 @@ func TestCategoryHandler_DeleteCategory(t *testing.T) {
 			name:       "Success - Delete category",
 			categoryID: categoryID.String(),
 			mockSetup: func(service *MockCategoryService, _ uuid.UUID) {
-				service.On("DeleteCategory", mock.Anything, categoryID, testFamilyID).Return(nil)
+				service.On("DeleteCategory", mock.Anything, categoryID).Return(nil)
 			},
 			expectedStatus: http.StatusNoContent,
 			expectedBody: func(t *testing.T, body string) {
@@ -626,7 +579,7 @@ func TestCategoryHandler_DeleteCategory(t *testing.T) {
 			name:       "Error - Category not found",
 			categoryID: categoryID.String(),
 			mockSetup: func(service *MockCategoryService, _ uuid.UUID) {
-				service.On("DeleteCategory", mock.Anything, categoryID, testFamilyID).
+				service.On("DeleteCategory", mock.Anything, categoryID).
 					Return(services.ErrCategoryNotFound)
 			},
 			expectedStatus: http.StatusNotFound,

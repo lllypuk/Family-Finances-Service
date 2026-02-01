@@ -17,6 +17,9 @@ import (
 )
 
 func TestUserService_CreateUser(t *testing.T) {
+	familyID := uuid.New()
+	family := &user.Family{ID: familyID, Name: "Test Family"}
+
 	tests := []struct {
 		name      string
 		dto       dto.CreateUserDTO
@@ -32,14 +35,10 @@ func TestUserService_CreateUser(t *testing.T) {
 				LastName:  "Doe",
 				Password:  "password123",
 				Role:      user.RoleMember,
-				FamilyID:  uuid.New(),
 			},
 			setup: func(userRepo *MockUserRepository, familyRepo *MockFamilyRepository) {
 				// Family exists
-				familyRepo.On("GetByID", mock.Anything, mock.Anything).Return(&user.Family{
-					ID:   uuid.New(),
-					Name: "Test Family",
-				}, nil)
+				familyRepo.On("Get", mock.Anything).Return(family, nil)
 
 				// Email doesn't exist
 				userRepo.On("GetByEmail", mock.Anything, "test@example.com").Return(nil, errors.New("not found"))
@@ -57,7 +56,6 @@ func TestUserService_CreateUser(t *testing.T) {
 				LastName:  "Doe",
 				Password:  "password123",
 				Role:      user.RoleMember,
-				FamilyID:  uuid.New(),
 			},
 			setup:     func(*MockUserRepository, *MockFamilyRepository) {},
 			wantError: true,
@@ -67,10 +65,8 @@ func TestUserService_CreateUser(t *testing.T) {
 			name: "Error - Missing required fields",
 			dto: dto.CreateUserDTO{
 				Email: "test@example.com",
-				// Missing FirstName, LastName, Password, Role, FamilyID
 			},
 			setup: func(_ *MockUserRepository, _ *MockFamilyRepository) {
-				// No setup needed for validation test
 			},
 			wantError: true,
 			errorType: services.ErrValidationFailed,
@@ -83,11 +79,9 @@ func TestUserService_CreateUser(t *testing.T) {
 				LastName:  "Doe",
 				Password:  "password123",
 				Role:      user.RoleMember,
-				FamilyID:  uuid.New(),
 			},
 			setup: func(_ *MockUserRepository, fr *MockFamilyRepository) {
-				// Family doesn't exist
-				fr.On("GetByID", mock.Anything, mock.Anything).Return(nil, errors.New("not found"))
+				fr.On("Get", mock.Anything).Return(nil, errors.New("not found"))
 			},
 			wantError: true,
 			errorType: services.ErrFamilyNotFound,
@@ -100,15 +94,9 @@ func TestUserService_CreateUser(t *testing.T) {
 				LastName:  "Doe",
 				Password:  "password123",
 				Role:      user.RoleMember,
-				FamilyID:  uuid.New(),
 			},
 			setup: func(ur *MockUserRepository, fr *MockFamilyRepository) {
-				// Family exists
-				fr.On("GetByID", mock.Anything, mock.Anything).Return(&user.Family{
-					ID:   uuid.New(),
-					Name: "Test Family",
-				}, nil)
-				// User with same email already exists
+				fr.On("Get", mock.Anything).Return(family, nil)
 				ur.On("GetByEmail", mock.Anything, "existing@example.com").Return(&user.User{
 					ID:    uuid.New(),
 					Email: "existing@example.com",
@@ -121,18 +109,14 @@ func TestUserService_CreateUser(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Setup mocks
 			userRepo := &MockUserRepository{}
 			familyRepo := &MockFamilyRepository{}
 			tt.setup(userRepo, familyRepo)
 
-			// Create service
 			service := services.NewUserService(userRepo, familyRepo)
 
-			// Execute
 			result, err := service.CreateUser(context.Background(), tt.dto)
 
-			// Assert
 			if tt.wantError {
 				require.Error(t, err)
 				assert.Nil(t, result)
@@ -146,7 +130,6 @@ func TestUserService_CreateUser(t *testing.T) {
 				assert.Equal(t, tt.dto.FirstName, result.FirstName)
 				assert.Equal(t, tt.dto.LastName, result.LastName)
 				assert.Equal(t, tt.dto.Role, result.Role)
-				assert.Equal(t, tt.dto.FamilyID, result.FamilyID)
 
 				// Check password is hashed
 				assert.NotEqual(t, tt.dto.Password, result.Password)
@@ -154,7 +137,6 @@ func TestUserService_CreateUser(t *testing.T) {
 				require.NoError(t, err, "Password should be properly hashed")
 			}
 
-			// Verify mocks
 			userRepo.AssertExpectations(t)
 			familyRepo.AssertExpectations(t)
 		})
@@ -197,18 +179,13 @@ func TestUserService_GetUserByID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Setup mocks
 			userRepo := &MockUserRepository{}
 			familyRepo := &MockFamilyRepository{}
 			tt.setup(userRepo, familyRepo)
 
-			// Create service
 			service := services.NewUserService(userRepo, familyRepo)
-
-			// Execute
 			result, err := service.GetUserByID(context.Background(), tt.userID)
 
-			// Assert
 			if tt.wantError {
 				require.Error(t, err)
 				assert.Nil(t, result)
@@ -220,7 +197,6 @@ func TestUserService_GetUserByID(t *testing.T) {
 				assert.NotNil(t, result)
 			}
 
-			// Verify mocks
 			userRepo.AssertExpectations(t)
 			familyRepo.AssertExpectations(t)
 		})
@@ -234,7 +210,6 @@ func TestUserService_UpdateUser(t *testing.T) {
 		FirstName: "OldFirst",
 		LastName:  "OldLast",
 		Role:      user.RoleMember,
-		FamilyID:  uuid.New(),
 	}
 
 	tests := []struct {
@@ -303,18 +278,13 @@ func TestUserService_UpdateUser(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Setup mocks
 			userRepo := &MockUserRepository{}
 			familyRepo := &MockFamilyRepository{}
 			tt.setup(userRepo, familyRepo)
 
-			// Create service
 			service := services.NewUserService(userRepo, familyRepo)
-
-			// Execute
 			result, err := service.UpdateUser(context.Background(), tt.userID, tt.dto)
 
-			// Assert
 			if tt.wantError {
 				require.Error(t, err)
 				assert.Nil(t, result)
@@ -326,7 +296,6 @@ func TestUserService_UpdateUser(t *testing.T) {
 				assert.NotNil(t, result)
 			}
 
-			// Verify mocks
 			userRepo.AssertExpectations(t)
 			familyRepo.AssertExpectations(t)
 		})
@@ -353,7 +322,7 @@ func TestUserService_DeleteUser(t *testing.T) {
 			userID: existingUser.ID,
 			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
 				userRepo.On("GetByID", mock.Anything, existingUser.ID).Return(existingUser, nil)
-				userRepo.On("Delete", mock.Anything, existingUser.ID, existingUser.FamilyID).Return(nil)
+				userRepo.On("Delete", mock.Anything, existingUser.ID).Return(nil)
 			},
 			wantError: false,
 		},
@@ -370,18 +339,13 @@ func TestUserService_DeleteUser(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Setup mocks
 			userRepo := &MockUserRepository{}
 			familyRepo := &MockFamilyRepository{}
 			tt.setup(userRepo, familyRepo)
 
-			// Create service
 			service := services.NewUserService(userRepo, familyRepo)
+			err := service.DeleteUser(context.Background(), tt.userID)
 
-			// Execute
-			err := service.DeleteUser(context.Background(), tt.userID, existingUser.FamilyID)
-
-			// Assert
 			if tt.wantError {
 				require.Error(t, err)
 				if tt.errorType != nil {
@@ -391,7 +355,6 @@ func TestUserService_DeleteUser(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			// Verify mocks
 			userRepo.AssertExpectations(t)
 			familyRepo.AssertExpectations(t)
 		})
@@ -427,7 +390,6 @@ func TestUserService_ChangeUserRole(t *testing.T) {
 			userID: existingUser.ID,
 			role:   user.Role("invalid"),
 			setup: func(_ *MockUserRepository, _ *MockFamilyRepository) {
-				// No expectations since role validation happens first
 			},
 			wantError: true,
 			errorType: services.ErrInvalidRole,
@@ -446,18 +408,13 @@ func TestUserService_ChangeUserRole(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Setup mocks
 			userRepo := &MockUserRepository{}
 			familyRepo := &MockFamilyRepository{}
 			tt.setup(userRepo, familyRepo)
 
-			// Create service
 			service := services.NewUserService(userRepo, familyRepo)
-
-			// Execute
 			err := service.ChangeUserRole(context.Background(), tt.userID, tt.role)
 
-			// Assert
 			if tt.wantError {
 				require.Error(t, err)
 				if tt.errorType != nil {
@@ -467,7 +424,6 @@ func TestUserService_ChangeUserRole(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			// Verify mocks
 			userRepo.AssertExpectations(t)
 			familyRepo.AssertExpectations(t)
 		})
@@ -475,19 +431,8 @@ func TestUserService_ChangeUserRole(t *testing.T) {
 }
 
 func TestUserService_ValidateUserAccess(t *testing.T) {
-	familyID := uuid.New()
-	user1 := &user.User{
-		ID:       uuid.New(),
-		FamilyID: familyID,
-	}
-	user2 := &user.User{
-		ID:       uuid.New(),
-		FamilyID: familyID,
-	}
-	userFromAnotherFamily := &user.User{
-		ID:       uuid.New(),
-		FamilyID: uuid.New(),
-	}
+	user1 := &user.User{ID: uuid.New()}
+	user2 := &user.User{ID: uuid.New()}
 
 	tests := []struct {
 		name            string
@@ -508,17 +453,6 @@ func TestUserService_ValidateUserAccess(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name:            "Error - Different family access",
-			userID:          user1.ID,
-			resourceOwnerID: userFromAnotherFamily.ID,
-			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
-				userRepo.On("GetByID", mock.Anything, user1.ID).Return(user1, nil)
-				userRepo.On("GetByID", mock.Anything, userFromAnotherFamily.ID).Return(userFromAnotherFamily, nil)
-			},
-			wantError: true,
-			errorType: services.ErrUnauthorized,
-		},
-		{
 			name:            "Error - Requesting user not found",
 			userID:          uuid.New(),
 			resourceOwnerID: user2.ID,
@@ -532,18 +466,13 @@ func TestUserService_ValidateUserAccess(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Setup mocks
 			userRepo := &MockUserRepository{}
 			familyRepo := &MockFamilyRepository{}
 			tt.setup(userRepo, familyRepo)
 
-			// Create service
 			service := services.NewUserService(userRepo, familyRepo)
-
-			// Execute
 			err := service.ValidateUserAccess(context.Background(), tt.userID, tt.resourceOwnerID)
 
-			// Assert
 			if tt.wantError {
 				require.Error(t, err)
 				if tt.errorType != nil {
@@ -553,14 +482,12 @@ func TestUserService_ValidateUserAccess(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			// Verify mocks
 			userRepo.AssertExpectations(t)
 			familyRepo.AssertExpectations(t)
 		})
 	}
 }
 
-// Helper function to create string pointers
 func stringPtr(s string) *string {
 	return &s
 }

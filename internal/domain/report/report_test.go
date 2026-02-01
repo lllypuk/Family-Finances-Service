@@ -16,13 +16,12 @@ func TestNewReport_Success(t *testing.T) {
 	name := "Monthly Expenses Report"
 	reportType := report.TypeExpenses
 	period := report.PeriodMonthly
-	familyID := uuid.New()
 	userID := uuid.New()
 	startDate := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	endDate := time.Date(2025, 1, 31, 23, 59, 59, 0, time.UTC)
 
 	// Act
-	reportItem := report.NewReport(name, reportType, period, familyID, userID, startDate, endDate)
+	reportItem := report.NewReport(name, reportType, period, userID, startDate, endDate)
 
 	// Assert
 	require.NotNil(t, reportItem)
@@ -30,7 +29,6 @@ func TestNewReport_Success(t *testing.T) {
 	assert.Equal(t, name, reportItem.Name)
 	assert.Equal(t, reportType, reportItem.Type)
 	assert.Equal(t, period, reportItem.Period)
-	assert.Equal(t, familyID, reportItem.FamilyID)
 	assert.Equal(t, userID, reportItem.UserID)
 	assert.Equal(t, startDate, reportItem.StartDate)
 	assert.Equal(t, endDate, reportItem.EndDate)

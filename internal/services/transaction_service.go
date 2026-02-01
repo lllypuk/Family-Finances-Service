@@ -34,13 +34,11 @@ type TransactionRepository interface {
 	Create(ctx context.Context, transaction *transaction.Transaction) error
 	GetByID(ctx context.Context, id uuid.UUID) (*transaction.Transaction, error)
 	GetByFilter(ctx context.Context, filter transaction.Filter) ([]*transaction.Transaction, error)
-	GetByFamilyID(ctx context.Context, familyID uuid.UUID, limit, offset int) ([]*transaction.Transaction, error)
 	Update(ctx context.Context, transaction *transaction.Transaction) error
-	Delete(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID) error
 	GetTotalByCategory(ctx context.Context, categoryID uuid.UUID, transactionType transaction.Type) (float64, error)
-	GetTotalByFamilyAndDateRange(
+	GetTotalByDateRange(
 		ctx context.Context,
-		familyID uuid.UUID,
 		startDate, endDate time.Time,
 		transactionType transaction.Type,
 	) (float64, error)
@@ -56,7 +54,7 @@ type TransactionRepository interface {
 
 // BudgetRepositoryForTransactions defines the budget operations needed for transaction service
 type BudgetRepositoryForTransactions interface {
-	GetActiveBudgets(ctx context.Context, familyID uuid.UUID) ([]*budget.Budget, error)
+	GetActiveBudgets(ctx context.Context) ([]*budget.Budget, error)
 	Update(ctx context.Context, budget *budget.Budget) error
 	// Note: GetByCategoryAndFamily may need to be added to budget repository
 	// For now, we'll iterate through active budgets to find the right one
@@ -107,19 +105,19 @@ func (s *TransactionServiceImpl) CreateTransaction(
 		return nil, fmt.Errorf("validation failed: %w", err)
 	}
 
-	// Validate user belongs to family
-	if err := s.validateUserInFamily(ctx, req.UserID, req.FamilyID); err != nil {
+	// Validate user exists (single-family model - no family validation needed)
+	if err := s.validateUserExists(ctx, req.UserID); err != nil {
 		return nil, err
 	}
 
-	// Validate category belongs to family
-	if err := s.validateCategoryInFamily(ctx, req.CategoryID, req.FamilyID); err != nil {
+	// Validate category exists (single-family model - no family validation needed)
+	if err := s.validateCategoryExists(ctx, req.CategoryID); err != nil {
 		return nil, err
 	}
 
 	// For expense transactions, check budget limits
 	if req.Type == transaction.TypeExpense {
-		if err := s.ValidateTransactionLimits(ctx, req.FamilyID, req.CategoryID, req.Amount, req.Type); err != nil {
+		if err := s.ValidateTransactionLimits(ctx, req.CategoryID, req.Amount, req.Type); err != nil {
 			return nil, err
 		}
 	}
@@ -132,7 +130,6 @@ func (s *TransactionServiceImpl) CreateTransaction(
 		Description: req.Description,
 		CategoryID:  req.CategoryID,
 		UserID:      req.UserID,
-		FamilyID:    req.FamilyID,
 		Date:        req.Date,
 		Tags:        req.Tags,
 		CreatedAt:   time.Now(),
@@ -145,7 +142,7 @@ func (s *TransactionServiceImpl) CreateTransaction(
 
 	// Update budget if it's an expense transaction
 	if req.Type == transaction.TypeExpense {
-		if budgetErr := s.updateBudgetSpent(ctx, req.FamilyID, req.CategoryID, req.Amount); budgetErr != nil {
+		if budgetErr := s.updateBudgetSpent(ctx, req.CategoryID, req.Amount); budgetErr != nil {
 			// Log the error but don't fail the transaction creation
 			// In a production system, you might want to use a message queue for this
 			// TODO: Replace with proper logging system
@@ -168,10 +165,9 @@ func (s *TransactionServiceImpl) GetTransactionByID(
 	return tx, nil
 }
 
-// GetTransactionsByFamily retrieves transactions for a family with filtering
-func (s *TransactionServiceImpl) GetTransactionsByFamily(
+// GetAllTransactions retrieves transactions with filtering (single family model)
+func (s *TransactionServiceImpl) GetAllTransactions(
 	ctx context.Context,
-	familyID uuid.UUID,
 	filter dto.TransactionFilterDTO,
 ) ([]*transaction.Transaction, error) {
 	if err := s.validator.Struct(filter); err != nil {
@@ -185,9 +181,6 @@ func (s *TransactionServiceImpl) GetTransactionsByFamily(
 	if err := filter.ValidateAmountRange(); err != nil {
 		return nil, err
 	}
-
-	// Set family ID from parameter to ensure consistency
-	filter.FamilyID = familyID
 
 	// Convert DTO filter to domain filter
 	repoFilter := s.convertDTOFilterToRepoFilter(filter)
@@ -232,10 +225,6 @@ func (s *TransactionServiceImpl) UpdateTransaction(
 		existingTx.Description = *req.Description
 	}
 	if req.CategoryID != nil {
-		// Validate new category belongs to family
-		if validateErr := s.validateCategoryInFamily(ctx, *req.CategoryID, existingTx.FamilyID); validateErr != nil {
-			return nil, validateErr
-		}
 		existingTx.CategoryID = *req.CategoryID
 	}
 	if req.Date != nil {
@@ -248,7 +237,12 @@ func (s *TransactionServiceImpl) UpdateTransaction(
 
 	// Validate budget limits for new values if it's an expense
 	if existingTx.Type == transaction.TypeExpense {
-		if limitErr := s.ValidateTransactionLimits(ctx, existingTx.FamilyID, existingTx.CategoryID, existingTx.Amount, existingTx.Type); limitErr != nil {
+		if limitErr := s.ValidateTransactionLimits(
+			ctx,
+			existingTx.CategoryID,
+			existingTx.Amount,
+			existingTx.Type,
+		); limitErr != nil {
 			return nil, limitErr
 		}
 	}
@@ -259,7 +253,13 @@ func (s *TransactionServiceImpl) UpdateTransaction(
 	}
 
 	// Adjust budgets for the changes
-	if budgetErr := s.adjustBudgetsForUpdate(ctx, existingTx.FamilyID, originalAmount, originalType, originalCategoryID, existingTx); budgetErr != nil {
+	if budgetErr := s.adjustBudgetsForUpdate(
+		ctx,
+		originalAmount,
+		originalType,
+		originalCategoryID,
+		existingTx,
+	); budgetErr != nil {
 		// TODO: Replace with proper logging system
 		_ = budgetErr // Ignore budget adjustment errors for now
 	}
@@ -268,21 +268,25 @@ func (s *TransactionServiceImpl) UpdateTransaction(
 }
 
 // DeleteTransaction deletes a transaction and adjusts budgets
-func (s *TransactionServiceImpl) DeleteTransaction(ctx context.Context, id uuid.UUID, familyID uuid.UUID) error {
+func (s *TransactionServiceImpl) DeleteTransaction(ctx context.Context, id uuid.UUID) error {
 	// Get existing transaction for budget adjustment
 	existingTx, err := s.transactionRepo.GetByID(ctx, id)
 	if err != nil {
 		return ErrTransactionNotFound
 	}
 
-	// Delete transaction
-	if deleteErr := s.transactionRepo.Delete(ctx, id, familyID); deleteErr != nil {
+	// Delete transaction - familyID is obtained internally by repository
+	if deleteErr := s.transactionRepo.Delete(ctx, id); deleteErr != nil {
 		return fmt.Errorf("failed to delete transaction: %w", deleteErr)
 	}
 
 	// Reverse budget impact if it was an expense
 	if existingTx.Type == transaction.TypeExpense {
-		if budgetErr := s.updateBudgetSpent(ctx, existingTx.FamilyID, existingTx.CategoryID, -existingTx.Amount); budgetErr != nil {
+		if budgetErr := s.updateBudgetSpent(
+			ctx,
+			existingTx.CategoryID,
+			-existingTx.Amount,
+		); budgetErr != nil {
 			// TODO: Replace with proper logging system
 			_ = budgetErr // Ignore budget reversal errors for now
 		}
@@ -323,7 +327,6 @@ const (
 // GetTransactionsByDateRange retrieves transactions within a date range
 func (s *TransactionServiceImpl) GetTransactionsByDateRange(
 	ctx context.Context,
-	familyID uuid.UUID,
 	from, to time.Time,
 ) ([]*transaction.Transaction, error) {
 	if to.Before(from) {
@@ -331,14 +334,13 @@ func (s *TransactionServiceImpl) GetTransactionsByDateRange(
 	}
 
 	filter := dto.TransactionFilterDTO{
-		FamilyID: familyID,
 		DateFrom: &from,
 		DateTo:   &to,
 		Limit:    DateRangeQueryLimit,
 		Offset:   0,
 	}
 
-	return s.GetTransactionsByFamily(ctx, familyID, filter)
+	return s.GetAllTransactions(ctx, filter)
 }
 
 // BulkCategorizeTransactions updates categories for multiple transactions
@@ -351,8 +353,14 @@ func (s *TransactionServiceImpl) BulkCategorizeTransactions(
 		return errors.New("no transaction IDs provided")
 	}
 
-	// Validate and retrieve all transactions
-	transactions, err := s.validateAndRetrieveTransactions(ctx, transactionIDs, categoryID)
+	// Validate category exists
+	_, err := s.categoryRepo.GetByID(ctx, categoryID)
+	if err != nil {
+		return fmt.Errorf("category not found: %w", err)
+	}
+
+	// Retrieve all transactions
+	transactions, err := s.retrieveTransactions(ctx, transactionIDs)
 	if err != nil {
 		return err
 	}
@@ -368,10 +376,9 @@ func (s *TransactionServiceImpl) BulkCategorizeTransactions(
 	return nil
 }
 
-func (s *TransactionServiceImpl) validateAndRetrieveTransactions(
+func (s *TransactionServiceImpl) retrieveTransactions(
 	ctx context.Context,
 	transactionIDs []uuid.UUID,
-	categoryID uuid.UUID,
 ) (map[uuid.UUID]*transaction.Transaction, error) {
 	transactions := make(map[uuid.UUID]*transaction.Transaction)
 
@@ -379,11 +386,6 @@ func (s *TransactionServiceImpl) validateAndRetrieveTransactions(
 		tx, err := s.transactionRepo.GetByID(ctx, txID)
 		if err != nil {
 			return nil, fmt.Errorf("transaction %s not found: %w", txID, err)
-		}
-
-		// Validate category belongs to the same family
-		if validateErr := s.validateCategoryInFamily(ctx, categoryID, tx.FamilyID); validateErr != nil {
-			return nil, fmt.Errorf("category validation failed for transaction %s: %w", txID, validateErr)
 		}
 
 		transactions[txID] = tx
@@ -429,7 +431,7 @@ func (s *TransactionServiceImpl) updateSingleTransactionCategory(
 
 	// Adjust budgets for category changes (only for expense transactions)
 	if tx.Type == transaction.TypeExpense {
-		s.adjustBudgetsForCategoryChange(ctx, tx.FamilyID, originalCategoryID, newCategoryID, tx.Amount)
+		s.adjustBudgetsForCategoryChange(ctx, originalCategoryID, newCategoryID, tx.Amount)
 	}
 
 	return nil
@@ -437,17 +439,17 @@ func (s *TransactionServiceImpl) updateSingleTransactionCategory(
 
 func (s *TransactionServiceImpl) adjustBudgetsForCategoryChange(
 	ctx context.Context,
-	familyID, oldCategoryID, newCategoryID uuid.UUID,
+	oldCategoryID, newCategoryID uuid.UUID,
 	amount float64,
 ) {
 	// Remove from old category budget
-	if budgetErr := s.updateBudgetSpent(ctx, familyID, oldCategoryID, -amount); budgetErr != nil {
+	if budgetErr := s.updateBudgetSpent(ctx, oldCategoryID, -amount); budgetErr != nil {
 		// TODO: Replace with proper logging system
 		_ = budgetErr // Ignore budget adjustment errors for now
 	}
 
 	// Add to new category budget
-	if budgetErr := s.updateBudgetSpent(ctx, familyID, newCategoryID, amount); budgetErr != nil {
+	if budgetErr := s.updateBudgetSpent(ctx, newCategoryID, amount); budgetErr != nil {
 		// TODO: Replace with proper logging system
 		_ = budgetErr // Ignore budget adjustment errors for now
 	}
@@ -456,7 +458,6 @@ func (s *TransactionServiceImpl) adjustBudgetsForCategoryChange(
 // ValidateTransactionLimits checks if a transaction would exceed budget limits
 func (s *TransactionServiceImpl) ValidateTransactionLimits(
 	ctx context.Context,
-	familyID uuid.UUID,
 	categoryID uuid.UUID,
 	amount float64,
 	transactionType transaction.Type,
@@ -467,7 +468,7 @@ func (s *TransactionServiceImpl) ValidateTransactionLimits(
 	}
 
 	// Get active budget for the category
-	budget, err := s.findBudgetByCategory(ctx, familyID, categoryID)
+	budget, err := s.findBudgetByCategory(ctx, categoryID)
 	if err != nil {
 		// No budget means no limit - allow the transaction
 		return nil //nolint:nilerr // No budget found is acceptable, not an error condition
@@ -484,38 +485,30 @@ func (s *TransactionServiceImpl) ValidateTransactionLimits(
 
 // Helper methods
 
-func (s *TransactionServiceImpl) validateUserInFamily(ctx context.Context, userID, familyID uuid.UUID) error {
-	user, err := s.userRepo.GetByID(ctx, userID)
+// validateUserExists checks if a user exists (simplified for single-family model)
+func (s *TransactionServiceImpl) validateUserExists(ctx context.Context, userID uuid.UUID) error {
+	_, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("user not found: %w", err)
 	}
-
-	if user.FamilyID != familyID {
-		return ErrUserNotInFamily
-	}
-
 	return nil
 }
 
-func (s *TransactionServiceImpl) validateCategoryInFamily(ctx context.Context, categoryID, familyID uuid.UUID) error {
-	category, err := s.categoryRepo.GetByID(ctx, categoryID)
+// validateCategoryExists checks if a category exists (simplified for single-family model)
+func (s *TransactionServiceImpl) validateCategoryExists(ctx context.Context, categoryID uuid.UUID) error {
+	_, err := s.categoryRepo.GetByID(ctx, categoryID)
 	if err != nil {
 		return fmt.Errorf("category not found: %w", err)
 	}
-
-	if category.FamilyID != familyID {
-		return ErrCategoryNotInFamily
-	}
-
 	return nil
 }
 
 func (s *TransactionServiceImpl) updateBudgetSpent(
 	ctx context.Context,
-	familyID, categoryID uuid.UUID,
+	categoryID uuid.UUID,
 	amount float64,
 ) error {
-	budget, err := s.findBudgetByCategory(ctx, familyID, categoryID)
+	budget, err := s.findBudgetByCategory(ctx, categoryID)
 	if err != nil {
 		// No budget found - this is acceptable, not all categories need budgets
 		return nil //nolint:nilerr // No budget found is acceptable, not an error condition
@@ -529,9 +522,10 @@ func (s *TransactionServiceImpl) updateBudgetSpent(
 
 func (s *TransactionServiceImpl) findBudgetByCategory(
 	ctx context.Context,
-	familyID, categoryID uuid.UUID,
+	categoryID uuid.UUID,
 ) (*budget.Budget, error) {
-	budgets, err := s.budgetRepo.GetActiveBudgets(ctx, familyID)
+	// Get active budgets (single family model - repository handles family ID internally)
+	budgets, err := s.budgetRepo.GetActiveBudgets(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -547,7 +541,6 @@ func (s *TransactionServiceImpl) findBudgetByCategory(
 
 func (s *TransactionServiceImpl) adjustBudgetsForUpdate(
 	ctx context.Context,
-	familyID uuid.UUID,
 	originalAmount float64,
 	originalType transaction.Type,
 	originalCategoryID uuid.UUID,
@@ -555,14 +548,14 @@ func (s *TransactionServiceImpl) adjustBudgetsForUpdate(
 ) error {
 	// Reverse original budget impact if it was an expense
 	if originalType == transaction.TypeExpense {
-		if err := s.updateBudgetSpent(ctx, familyID, originalCategoryID, -originalAmount); err != nil {
+		if err := s.updateBudgetSpent(ctx, originalCategoryID, -originalAmount); err != nil {
 			return err
 		}
 	}
 
 	// Apply new budget impact if it's an expense
 	if newTransaction.Type == transaction.TypeExpense {
-		if err := s.updateBudgetSpent(ctx, familyID, newTransaction.CategoryID, newTransaction.Amount); err != nil {
+		if err := s.updateBudgetSpent(ctx, newTransaction.CategoryID, newTransaction.Amount); err != nil {
 			return err
 		}
 	}
@@ -572,7 +565,6 @@ func (s *TransactionServiceImpl) adjustBudgetsForUpdate(
 
 func (s *TransactionServiceImpl) convertDTOFilterToRepoFilter(filter dto.TransactionFilterDTO) transaction.Filter {
 	repoFilter := transaction.Filter{
-		FamilyID:   filter.FamilyID,
 		UserID:     filter.UserID,
 		CategoryID: filter.CategoryID,
 		DateFrom:   filter.DateFrom,

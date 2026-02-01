@@ -34,13 +34,13 @@ func (h *UserHandler) Index(c echo.Context) error {
 	}
 
 	// Получаем всех пользователей семьи через сервис
-	users, err := h.services.User.GetUsersByFamily(c.Request().Context(), session.FamilyID)
+	users, err := h.services.User.GetUsers(c.Request().Context())
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load users")
 	}
 
 	// Получаем семью для отображения названия через сервис
-	family, err := h.services.Family.GetFamilyByID(c.Request().Context(), session.FamilyID)
+	family, err := h.services.Family.GetFamily(c.Request().Context())
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load family")
 	}
@@ -105,7 +105,7 @@ func (h *UserHandler) New(c echo.Context) error {
 
 // Create создает нового пользователя в семье
 func (h *UserHandler) Create(c echo.Context) error {
-	session, sessionErr := middleware.GetSessionData(c)
+	_, sessionErr := middleware.GetSessionData(c)
 	if sessionErr != nil {
 		return h.redirect(c, "/login")
 	}
@@ -128,7 +128,7 @@ func (h *UserHandler) Create(c echo.Context) error {
 		LastName:  form.LastName,
 		Role:      form.Role,
 	}
-	userDTO := dto.FromCreateUserWebRequest(webReq, session.FamilyID)
+	userDTO := dto.FromCreateUserWebRequest(webReq)
 
 	// Вызываем сервис
 	createdUser, err := h.services.User.CreateUser(c.Request().Context(), userDTO)

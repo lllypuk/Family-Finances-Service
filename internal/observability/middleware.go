@@ -1,52 +1,12 @@
 package observability
 
 import (
-	"errors"
 	"log/slog"
 	"strconv"
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
-
-// PrometheusMiddleware создает middleware для сбора Prometheus метрик
-func PrometheusMiddleware() echo.MiddlewareFunc {
-	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			start := time.Now()
-
-			// Выполняем следующий handler
-			err := next(c)
-
-			// Записываем метрики
-			duration := time.Since(start)
-			method := c.Request().Method
-			path := c.Path()
-			status := strconv.Itoa(c.Response().Status)
-
-			// Нормализуем path для метрик (убираем параметры)
-			if path == "" {
-				path = c.Request().URL.Path
-			}
-
-			// Записываем основные HTTP метрики
-			RecordHTTPRequest(method, path, status, duration.Seconds())
-
-			// Записываем ошибки если есть
-			if err != nil {
-				errorType := "unknown"
-				he := &echo.HTTPError{}
-				if errors.As(err, &he) {
-					errorType = strconv.Itoa(he.Code)
-				}
-				RecordHTTPError(method, path, errorType)
-			}
-
-			return err
-		}
-	}
-}
 
 // LoggingMiddleware создает middleware для structured logging
 func LoggingMiddleware(logger *slog.Logger) echo.MiddlewareFunc {
@@ -92,30 +52,9 @@ func LoggingMiddleware(logger *slog.Logger) echo.MiddlewareFunc {
 	}
 }
 
-// MetricsHandler возвращает handler для эндпоинта /metrics
-func MetricsHandler() echo.HandlerFunc {
-	h := promhttp.Handler()
-	return echo.WrapHandler(h)
-}
-
 // generateRequestID генерирует уникальный ID для запроса
 func generateRequestID() string {
 	// Простая генерация ID на основе времени
 	// В production лучше использовать UUID или более надежный метод
 	return strconv.FormatInt(time.Now().UnixNano(), 36)
-}
-
-// HealthCheckMiddleware добавляет базовые health check endpoints
-func HealthCheckMiddleware() echo.MiddlewareFunc {
-	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			// Пропускаем health check endpoints от метрик
-			path := c.Request().URL.Path
-			if path == "/health" || path == "/ready" || path == "/metrics" {
-				return next(c)
-			}
-
-			return next(c)
-		}
-	}
 }

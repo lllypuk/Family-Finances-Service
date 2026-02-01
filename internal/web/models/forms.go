@@ -14,8 +14,8 @@ type LoginForm struct {
 	Password string `form:"password" validate:"required,min=6"         json:"password"`
 }
 
-// RegisterForm представляет форму регистрации семьи
-type RegisterForm struct {
+// SetupForm представляет форму первоначальной настройки семьи
+type SetupForm struct {
 	FamilyName string `form:"family_name" validate:"required,min=2,max=100" json:"family_name"`
 	Currency   string `form:"currency"    validate:"required,len=3"         json:"currency"`
 	FirstName  string `form:"first_name"  validate:"required,min=2,max=50"  json:"first_name"`

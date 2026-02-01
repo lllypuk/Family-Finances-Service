@@ -12,12 +12,11 @@ import (
 
 // CreateUserAPIRequest represents API request for user creation
 type CreateUserAPIRequest struct {
-	Email     string    `json:"email"`
-	Password  string    `json:"password"`
-	FirstName string    `json:"first_name"`
-	LastName  string    `json:"last_name"`
-	FamilyID  uuid.UUID `json:"family_id"`
-	Role      string    `json:"role"`
+	Email     string `json:"email"`
+	Password  string `json:"password"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	Role      string `json:"role"`
 }
 
 type UpdateUserAPIRequest struct {
@@ -32,7 +31,6 @@ type UserAPIResponse struct {
 	FirstName string    `json:"first_name"`
 	LastName  string    `json:"last_name"`
 	Role      string    `json:"role"`
-	FamilyID  uuid.UUID `json:"family_id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -45,7 +43,6 @@ func FromCreateUserAPIRequest(req CreateUserAPIRequest) CreateUserDTO {
 		LastName:  req.LastName,
 		Password:  req.Password,
 		Role:      user.Role(req.Role),
-		FamilyID:  req.FamilyID,
 	}
 }
 
@@ -62,7 +59,6 @@ func ToUserAPIResponse(u *user.User) UserAPIResponse {
 		FirstName: u.FirstName,
 		LastName:  u.LastName,
 		Role:      string(u.Role),
-		FamilyID:  u.FamilyID,
 		CreatedAt: u.CreatedAt,
 		UpdatedAt: u.UpdatedAt,
 	}
@@ -75,7 +71,6 @@ type CreateCategoryAPIRequest struct {
 	Color    string     `json:"color"`
 	Icon     string     `json:"icon"`
 	ParentID *uuid.UUID `json:"parent_id,omitempty"`
-	FamilyID uuid.UUID  `json:"family_id"`
 }
 
 type UpdateCategoryAPIRequest struct {
@@ -91,7 +86,6 @@ type CategoryAPIResponse struct {
 	Color     string     `json:"color"`
 	Icon      string     `json:"icon"`
 	ParentID  *uuid.UUID `json:"parent_id,omitempty"`
-	FamilyID  uuid.UUID  `json:"family_id"`
 	IsActive  bool       `json:"is_active"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
@@ -105,7 +99,6 @@ func FromCreateCategoryAPIRequest(req CreateCategoryAPIRequest) CreateCategoryDT
 		Color:    req.Color,
 		Icon:     req.Icon,
 		ParentID: req.ParentID,
-		FamilyID: req.FamilyID,
 	}
 }
 
@@ -123,7 +116,6 @@ func ToCategoryAPIResponse(c *category.Category) CategoryAPIResponse {
 		Color:     c.Color,
 		Icon:      c.Icon,
 		ParentID:  c.ParentID,
-		FamilyID:  c.FamilyID,
 		IsActive:  c.IsActive,
 		CreatedAt: c.CreatedAt,
 		UpdatedAt: c.UpdatedAt,
@@ -139,7 +131,6 @@ type CreateTransactionAPIRequest struct {
 	Description string    `json:"description"    validate:"required,min=2,max=200"`
 	CategoryID  uuid.UUID `json:"category_id"    validate:"required"`
 	UserID      uuid.UUID `json:"user_id"        validate:"required"`
-	FamilyID    uuid.UUID `json:"family_id"      validate:"required"`
 	Date        time.Time `json:"date"           validate:"required"`
 	Tags        []string  `json:"tags,omitempty"`
 }
@@ -162,7 +153,6 @@ type TransactionAPIResponse struct {
 	Description string    `json:"description"`
 	CategoryID  uuid.UUID `json:"category_id"`
 	UserID      uuid.UUID `json:"user_id"`
-	FamilyID    uuid.UUID `json:"family_id"`
 	Date        time.Time `json:"date"`
 	Tags        []string  `json:"tags"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -177,7 +167,6 @@ func (r CreateTransactionAPIRequest) ToCreateTransactionDTO() CreateTransactionD
 		Description: r.Description,
 		CategoryID:  r.CategoryID,
 		UserID:      r.UserID,
-		FamilyID:    r.FamilyID,
 		Date:        r.Date,
 		Tags:        r.Tags,
 	}
@@ -210,7 +199,6 @@ func ToTransactionAPIResponse(tx *transaction.Transaction) TransactionAPIRespons
 		Description: tx.Description,
 		CategoryID:  tx.CategoryID,
 		UserID:      tx.UserID,
-		FamilyID:    tx.FamilyID,
 		Date:        tx.Date,
 		Tags:        tx.Tags,
 		CreatedAt:   tx.CreatedAt,
