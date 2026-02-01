@@ -129,7 +129,11 @@ The Docker container includes:
 - `make sqlite-stats` - Show database statistics
 
 ### Database Migrations
-- `make migrate-create NAME=migration_name` - Create new migration files
+- `make migrate-create` - Show guide for adding new migrations
+- **Migration Structure**: All migrations are consolidated in two files:
+  - `migrations/001_consolidated.up.sql` - All schema changes
+  - `migrations/001_consolidated.down.sql` - All rollback statements
+- **Adding New Migrations**: Edit the consolidated files directly, adding new changes at the end
 - **Note**: Migrations run automatically on application startup
 
 ## Architecture Overview
