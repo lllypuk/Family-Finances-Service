@@ -38,7 +38,10 @@ func NewSQLiteConnection(dbPath string) (*SQLiteConnection, error) {
 	}
 
 	// SQLite settings for production
-	// SQLite doesn't support multiple concurrent writers, so we set MaxOpenConns to 1
+	// SQLite uses a single-writer concurrency model: writes acquire a database-wide lock, so
+	// having multiple open connections that can write often causes "database is locked" errors,
+	// even when using WAL mode. We therefore force a single shared connection and let database/sql
+	// serialize all access through it.
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 	db.SetConnMaxLifetime(0) // Connections never expire

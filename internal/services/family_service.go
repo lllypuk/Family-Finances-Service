@@ -21,7 +21,7 @@ var (
 // familyService implements FamilyService interface
 type familyService struct {
 	familyRepo      FamilyRepository
-	userRepo        UserRepository
+	userRepo        UserRepository // manages user entities, including creating the bootstrap admin user during initial family setup
 	categoryService CategoryService
 	validator       *validator.Validate
 }

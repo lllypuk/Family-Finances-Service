@@ -206,7 +206,10 @@ func ValidateCurrency(currency string) error {
 		}
 	}
 
-	// Common currency codes validation (extend as needed)
+	// Common currency codes validation
+	// Known limitation: hardcoded whitelist limits extensibility
+	// To add support for additional currencies, update this map
+	// Future improvement: consider loading from configuration or database
 	validCurrencies := map[string]bool{
 		"USD": true, "EUR": true, "GBP": true, "JPY": true, "RUB": true,
 		"CNY": true, "CAD": true, "AUD": true, "CHF": true, "SEK": true,

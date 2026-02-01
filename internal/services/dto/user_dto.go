@@ -45,12 +45,14 @@ type UserResponseDTO struct {
 type SetupFamilyDTO struct {
 	// Family data
 	FamilyName string `validate:"required,min=2,max=100"`
-	Currency   string `validate:"required,len=3"`
+	// Currency is a 3-character ISO currency code, for example "USD"
+	Currency string `validate:"required,len=3"`
 	// First user (admin) data
 	Email     string `validate:"required,email,max=254"`
 	FirstName string `validate:"required,min=2,max=50"`
 	LastName  string `validate:"required,min=2,max=50"`
-	Password  string `validate:"required,min=6"`
+	// Password must be at least 6 characters long
+	Password string `validate:"required,min=6"`
 }
 
 // UpdateFamilyDTO represents the data transfer object for updating a family
