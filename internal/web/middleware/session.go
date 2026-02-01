@@ -14,12 +14,11 @@ import (
 )
 
 const (
-	SessionName      = "family-budget-session"
-	SessionUserKey   = "user_id"
-	SessionFamilyKey = "family_id"
-	SessionRoleKey   = "role"
-	SessionEmailKey  = "email"
-	SessionTimeout   = 24 * time.Hour
+	SessionName     = "family-budget-session"
+	SessionUserKey  = "user_id"
+	SessionRoleKey  = "role"
+	SessionEmailKey = "email"
+	SessionTimeout  = 24 * time.Hour
 )
 
 // SessionData представляет данные, хранящиеся в сессии

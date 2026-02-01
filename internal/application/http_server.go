@@ -135,8 +135,6 @@ func (s *HTTPServer) setupRoutes() {
 	// Health check endpoints
 	if s.observabilityService != nil {
 		s.echo.GET("/health", s.observabilityService.HealthService.HealthHandler())
-		s.echo.GET("/ready", s.observabilityService.HealthService.ReadinessHandler())
-		s.echo.GET("/live", s.observabilityService.HealthService.LivenessHandler())
 	} else {
 		// Fallback health check
 		s.echo.GET("/health", s.healthCheck)

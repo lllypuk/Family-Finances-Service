@@ -11,8 +11,6 @@ import (
 const (
 	// HealthCheckTimeout timeout for individual health checks
 	HealthCheckTimeout = 5 * time.Second
-	// HTTPHealthCheckTimeout timeout for HTTP health check endpoint
-	HTTPHealthCheckTimeout = 3 * time.Second
 	// HealthStatusHealthy represents healthy status
 	HealthStatusHealthy = "healthy"
 	// HealthStatusUnhealthy represents unhealthy status
@@ -98,53 +96,6 @@ func (hs *HealthService) HealthHandler() echo.HandlerFunc {
 		}
 
 		return c.JSON(statusCode, health)
-	}
-}
-
-// ReadinessHandler создает HTTP handler для readiness probe
-func (hs *HealthService) ReadinessHandler() echo.HandlerFunc {
-	return func(c echo.Context) error {
-		// Быстрая проверка готовности - только критичные зависимости
-		ctx, cancel := context.WithTimeout(c.Request().Context(), HTTPHealthCheckTimeout)
-		defer cancel()
-
-		health := hs.CheckHealth(ctx)
-
-		// Для readiness проверяем только критичные компоненты
-		ready := true
-		for name, check := range health.Checks {
-			// База данных критична для готовности
-			if name == "database" && check.Status != HealthStatusHealthy {
-				ready = false
-				break
-			}
-		}
-
-		response := map[string]any{
-			"ready":     ready,
-			"timestamp": time.Now(),
-		}
-
-		statusCode := http.StatusOK
-		if !ready {
-			statusCode = http.StatusServiceUnavailable
-		}
-
-		return c.JSON(statusCode, response)
-	}
-}
-
-// LivenessHandler создает HTTP handler для liveness probe
-func (hs *HealthService) LivenessHandler() echo.HandlerFunc {
-	return func(c echo.Context) error {
-		// Простая проверка жизнеспособности - сервис отвечает
-		response := map[string]any{
-			"alive":     true,
-			"timestamp": time.Now(),
-			"uptime":    time.Since(hs.startTime).Seconds(),
-		}
-
-		return c.JSON(http.StatusOK, response)
 	}
 }
 

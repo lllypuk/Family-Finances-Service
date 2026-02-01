@@ -89,7 +89,7 @@ func TestSessionData_StructFields(t *testing.T) {
 	sessionData := &middleware.SessionData{}
 
 	// Use reflection to verify field existence
-	assert.Contains(t, []string{"UserID", "FamilyID", "Role", "Email", "ExpiresAt"},
+	assert.Contains(t, []string{"UserID", "Role", "Email", "ExpiresAt"},
 		"UserID", "SessionData should have UserID field")
 
 	// Verify the struct can be instantiated
@@ -100,7 +100,6 @@ func TestSessionConstants(t *testing.T) {
 	// Verify session constants are properly defined
 	assert.Equal(t, "family-budget-session", middleware.SessionName)
 	assert.Equal(t, "user_id", middleware.SessionUserKey)
-	assert.Equal(t, "family_id", middleware.SessionFamilyKey)
 	assert.Equal(t, "role", middleware.SessionRoleKey)
 	assert.Equal(t, "email", middleware.SessionEmailKey)
 

@@ -101,32 +101,6 @@ func TestHealthHandlers(t *testing.T) {
 		assert.Contains(t, rec.Body.String(), "healthy")
 		assert.Contains(t, rec.Body.String(), "test-version")
 	})
-
-	t.Run("ReadinessHandler", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/ready", nil)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
-
-		handler := service.HealthService.ReadinessHandler()
-		err := handler(c)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		assert.Contains(t, rec.Body.String(), "ready")
-	})
-
-	t.Run("LivenessHandler", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/live", nil)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
-
-		handler := service.HealthService.LivenessHandler()
-		err := handler(c)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		assert.Contains(t, rec.Body.String(), "alive")
-	})
 }
 
 // TestCustomHealthChecker tests custom health checker functionality

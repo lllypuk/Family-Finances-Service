@@ -11,7 +11,6 @@ import (
 // SessionData содержит данные пользовательской сессии
 type SessionData struct {
 	UserID    uuid.UUID `json:"user_id"`
-	FamilyID  uuid.UUID `json:"family_id"`
 	Role      user.Role `json:"role"`
 	Email     string    `json:"email"`
 	ExpiresAt time.Time `json:"expires_at"`
