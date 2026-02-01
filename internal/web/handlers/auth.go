@@ -263,7 +263,7 @@ func (h *AuthHandler) InviteRegisterPage(c echo.Context) error {
 		"Role":      invite.Role,
 	}
 
-	return c.Render(http.StatusOK, "pages/invite.html", data)
+	return c.Render(http.StatusOK, "invite", data)
 }
 
 // InviteRegister handles invite registration

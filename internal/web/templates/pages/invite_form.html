@@ -1,0 +1,68 @@
+{{define "pages/invite_form.html"}}
+<form
+    id="invite-form"
+    hx-post="/invite/{{.Invite.Token}}"
+    hx-target="#invite-form"
+    hx-swap="outerHTML"
+>
+    <input type="hidden" name="_token" value="{{.CSRFToken}}" />
+
+    <fieldset>
+        <label for="email">Email</label>
+        <input
+            type="email"
+            id="email"
+            name="email"
+            value="{{.Invite.Email}}"
+            placeholder="{{.Invite.Email}}"
+            readonly
+            required
+        />
+        <small>Email указан в приглашении и не может быть изменен</small>
+    </fieldset>
+
+    <fieldset>
+        <label for="name">Полное имя</label>
+        <input
+            type="text"
+            id="name"
+            name="name"
+            value="{{.Name}}"
+            placeholder="Иван Иванов"
+            {{if
+            .FieldErrors.name}}aria-invalid="true"
+            {{end}}
+            required
+        />
+        {{if .FieldErrors.name}}
+        <small class="error">{{.FieldErrors.name}}</small>
+        {{end}}
+    </fieldset>
+
+    <fieldset>
+        <label for="password">Пароль</label>
+        <input
+            type="password"
+            id="password"
+            name="password"
+            placeholder="Минимум 6 символов"
+            {{if
+            .FieldErrors.password}}aria-invalid="true"
+            {{end}}
+            required
+        />
+        {{if .FieldErrors.password}}
+        <small class="error">{{.FieldErrors.password}}</small>
+        {{else}}
+        <small>Создайте надежный пароль (минимум 6 символов)</small>
+        {{end}}
+    </fieldset>
+
+    <button type="submit" class="btn-primary">
+        <span class="htmx-indicator" aria-hidden="true">🔄</span>
+        Принять приглашение и зарегистрироваться
+    </button>
+</form>
+
+<p class="auth-link">Уже есть аккаунт? <a href="/login">Войти</a></p>
+{{end}}

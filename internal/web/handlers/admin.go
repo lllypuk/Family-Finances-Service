@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -14,6 +15,10 @@ import (
 	"family-budget-service/internal/services/dto"
 	"family-budget-service/internal/web/middleware"
 	"family-budget-service/internal/web/models"
+)
+
+const (
+	schemeHTTPS = "https"
 )
 
 // AdminHandler handles admin-only operations
@@ -77,6 +82,13 @@ func (h *AdminHandler) ListUsers(c echo.Context) error {
 		return err
 	}
 
+	// Get base URL for invite links
+	scheme := "http"
+	if c.Request().TLS != nil || c.Request().Header.Get("X-Forwarded-Proto") == schemeHTTPS {
+		scheme = schemeHTTPS
+	}
+	inviteURL := fmt.Sprintf("%s://%s", scheme, c.Request().Host)
+
 	data := map[string]any{
 		"Title":       "User Management",
 		"Users":       users,
@@ -85,9 +97,10 @@ func (h *AdminHandler) ListUsers(c echo.Context) error {
 		"CurrentUser": currentUser,
 		"CSRFToken":   csrfToken,
 		"Roles":       []string{string(user.RoleAdmin), string(user.RoleMember), string(user.RoleChild)},
+		"InviteURL":   inviteURL,
 	}
 
-	return c.Render(http.StatusOK, "admin/users.html", data)
+	return c.Render(http.StatusOK, "users", data)
 }
 
 // CreateInvite creates a new invitation
@@ -126,9 +139,17 @@ func (h *AdminHandler) CreateInvite(c echo.Context) error {
 		return h.htmxError(c, "Failed to create invite: "+err.Error())
 	}
 
+	// Get base URL for invite links
+	scheme := "http"
+	if c.Request().TLS != nil || c.Request().Header.Get("X-Forwarded-Proto") == schemeHTTPS {
+		scheme = schemeHTTPS
+	}
+	inviteURL := fmt.Sprintf("%s://%s", scheme, c.Request().Host)
+
 	// Return HTMX partial with the new invite row
 	data := map[string]any{
-		"Invite": invite,
+		"Invite":    invite,
+		"InviteURL": inviteURL,
 	}
 
 	c.Response().Header().Set("Hx-Trigger", "inviteCreated")

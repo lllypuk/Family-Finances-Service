@@ -1,0 +1,63 @@
+{{define "admin/invite_row.html"}}
+<article class="invite-card" id="invite-{{.Invite.ID}}">
+    <div class="invite-header">
+        <div class="invite-info">
+            <h4>📧 {{.Invite.Email}}</h4>
+            <div class="invite-meta">
+                {{if eq .Invite.Role "admin"}}
+                <span class="role-badge role-admin">Администратор</span>
+                {{else if eq .Invite.Role "member"}}
+                <span class="role-badge role-member">Участник</span>
+                {{else if eq .Invite.Role "child"}}
+                <span class="role-badge role-child">Ребенок</span>
+                {{end}} {{if eq .Invite.Status "pending"}}
+                <span class="status-badge status-pending">Ожидает</span>
+                {{else if eq .Invite.Status "expired"}}
+                <span class="status-badge status-expired">Истек</span>
+                {{else if eq .Invite.Status "revoked"}}
+                <span class="status-badge status-revoked">Отменен</span>
+                {{end}}
+
+                <span
+                    >⏱️ Истекает: {{.Invite.ExpiresAt.Format "02.01.2006 15:04"}}</span
+                >
+            </div>
+
+            {{if eq .Invite.Status "pending"}}
+            <div class="invite-link">
+                <small>Ссылка приглашения:</small><br />
+                <code id="invite-link-{{.Invite.ID}}"
+                    >{{.InviteURL}}/invite/{{.Invite.Token}}</code
+                >
+                <button
+                    type="button"
+                    class="secondary outline"
+                    style="
+                        margin-top: 0.5rem;
+                        padding: 0.25rem 0.5rem;
+                        font-size: 0.8rem;
+                    "
+                    onclick="navigator.clipboard.writeText(document.getElementById('invite-link-{{.Invite.ID}}').textContent)"
+                >
+                    📋 Копировать
+                </button>
+            </div>
+            {{end}}
+        </div>
+
+        <div class="invite-actions">
+            {{if eq .Invite.Status "pending"}}
+            <button
+                class="secondary outline delete-btn"
+                hx-delete="/admin/invites/{{.Invite.ID}}"
+                hx-confirm="Вы уверены, что хотите отменить это приглашение?"
+                hx-target="#invite-{{.Invite.ID}}"
+                hx-swap="outerHTML swap:1s"
+            >
+                Отменить
+            </button>
+            {{end}}
+        </div>
+    </div>
+</article>
+{{end}}

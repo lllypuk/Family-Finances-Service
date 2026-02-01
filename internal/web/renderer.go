@@ -126,6 +126,12 @@ func loadAllTemplates(templatesDir string, funcMap template.FuncMap) (*template.
 		return nil, err
 	}
 
+	// Загружаем admin шаблоны
+	tmpl, err = loadAdminTemplates(tmpl, templatesDir)
+	if err != nil {
+		return nil, err
+	}
+
 	// Загружаем страницы
 	tmpl, err = loadPageTemplates(tmpl, templatesDir)
 	if err != nil {
@@ -145,6 +151,12 @@ func loadLayoutTemplates(tmpl *template.Template, templatesDir string) (*templat
 func loadComponentTemplates(tmpl *template.Template, templatesDir string) (*template.Template, error) {
 	componentPattern := filepath.Join(templatesDir, "components", "*.html")
 	return tmpl.ParseGlob(componentPattern)
+}
+
+// loadAdminTemplates загружает шаблоны администрирования
+func loadAdminTemplates(tmpl *template.Template, templatesDir string) (*template.Template, error) {
+	adminPattern := filepath.Join(templatesDir, "admin", "*.html")
+	return tmpl.ParseGlob(adminPattern)
 }
 
 // loadPageTemplates загружает шаблоны страниц рекурсивно

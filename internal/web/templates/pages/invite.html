@@ -1,0 +1,220 @@
+{{define "invite"}}
+<!doctype html>
+<html lang="ru" data-theme="light">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>{{.Title}} - Семейный бюджет</title>
+
+        <!-- PicoCSS -->
+        <link rel="stylesheet" href="/static/css/pico.min.css" />
+        <link rel="stylesheet" href="/static/css/custom.css" />
+
+        <!-- HTMX -->
+        <script src="/static/js/htmx.min.js"></script>
+
+        <!-- Favicon -->
+        <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico" />
+
+        <style>
+            body {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                background: linear-gradient(
+                    135deg,
+                    var(--pico-primary) 0%,
+                    var(--pico-secondary) 100%
+                );
+            }
+
+            .invite-container {
+                max-width: 500px;
+                width: 100%;
+                margin: 2rem auto;
+                padding: 1rem;
+            }
+
+            .invite-card {
+                background: var(--pico-card-background-color);
+                border-radius: var(--pico-border-radius);
+                padding: 2rem;
+                box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            }
+
+            .invite-header {
+                text-align: center;
+                margin-bottom: 2rem;
+            }
+
+            .invite-header h1 {
+                margin: 0 0 0.5rem 0;
+                font-size: 1.75rem;
+            }
+
+            .invite-icon {
+                font-size: 3rem;
+                margin-bottom: 1rem;
+            }
+
+            .invite-details {
+                background: var(--pico-code-background-color);
+                border-radius: var(--pico-border-radius);
+                padding: 1rem;
+                margin-bottom: 1.5rem;
+            }
+
+            .invite-detail-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 0.5rem 0;
+                border-bottom: 1px solid var(--pico-muted-border-color);
+            }
+
+            .invite-detail-row:last-child {
+                border-bottom: none;
+            }
+
+            .invite-detail-label {
+                font-weight: bold;
+                color: var(--pico-muted-color);
+            }
+
+            .role-badge {
+                display: inline-block;
+                padding: 0.25rem 0.5rem;
+                border-radius: 0.25rem;
+                font-size: 0.75rem;
+                font-weight: bold;
+                text-transform: uppercase;
+            }
+
+            .role-admin {
+                background: var(--pico-primary-background);
+                color: var(--pico-primary-inverse);
+            }
+
+            .role-member {
+                background: var(--pico-secondary-background);
+                color: var(--pico-secondary-inverse);
+            }
+
+            .role-child {
+                background: var(--pico-contrast-background);
+                color: var(--pico-contrast-inverse);
+            }
+
+            .alert {
+                padding: 1rem;
+                border-radius: var(--pico-border-radius);
+                margin-bottom: 1rem;
+            }
+
+            .alert-error {
+                background: var(--pico-del-background-color);
+                color: var(--pico-del-color);
+                border: 1px solid var(--pico-del-color);
+            }
+
+            .alert-warning {
+                background: #fff3cd;
+                color: #856404;
+                border: 1px solid #ffc107;
+            }
+
+            .auth-link {
+                text-align: center;
+                margin-top: 1rem;
+                font-size: 0.9rem;
+            }
+
+            @media (max-width: 576px) {
+                .invite-card {
+                    padding: 1.5rem;
+                }
+
+                .invite-header h1 {
+                    font-size: 1.5rem;
+                }
+
+                .invite-icon {
+                    font-size: 2.5rem;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="invite-container">
+            <div class="invite-card">
+                <div class="invite-header">
+                    <div class="invite-icon">✉️</div>
+                    <h1>Приглашение в семью</h1>
+                    <p>Вы приглашены присоединиться к семейному бюджету</p>
+                </div>
+
+                {{if .Error}}
+                <div class="alert alert-error" role="alert">{{.Error}}</div>
+                {{end}} {{if .Invite}}
+                <!-- Invite Details -->
+                <div class="invite-details">
+                    <div class="invite-detail-row">
+                        <span class="invite-detail-label">Email:</span>
+                        <span>{{.Invite.Email}}</span>
+                    </div>
+                    <div class="invite-detail-row">
+                        <span class="invite-detail-label">Роль:</span>
+                        {{if eq .Invite.Role "admin"}}
+                        <span class="role-badge role-admin">Администратор</span>
+                        {{else if eq .Invite.Role "member"}}
+                        <span class="role-badge role-member">Участник</span>
+                        {{else if eq .Invite.Role "child"}}
+                        <span class="role-badge role-child">Ребенок</span>
+                        {{end}}
+                    </div>
+                    <div class="invite-detail-row">
+                        <span class="invite-detail-label"
+                            >Действительно до:</span
+                        >
+                        <span
+                            >{{.Invite.ExpiresAt.Format "02.01.2006 15:04"}}</span
+                        >
+                    </div>
+                </div>
+
+                <!-- Registration Form -->
+                {{template "pages/invite_form.html" .}} {{else}}
+                <div class="alert alert-warning" role="alert">
+                    <strong>Приглашение недействительно</strong><br />
+                    Возможно, оно истекло или было отменено.
+                </div>
+
+                <p class="auth-link">
+                    <a href="/login">Вернуться на страницу входа</a>
+                </p>
+                {{end}}
+            </div>
+
+            <!-- Footer -->
+            <footer
+                style="
+                    text-align: center;
+                    margin-top: 2rem;
+                    color: rgba(255, 255, 255, 0.8);
+                "
+            >
+                <small>
+                    © 2025 Семейный бюджет •
+                    <a href="/help" style="color: rgba(255, 255, 255, 0.9)"
+                        >Справка</a
+                    >
+                </small>
+            </footer>
+        </div>
+
+        <!-- Custom JavaScript -->
+        <script src="/static/js/app.js"></script>
+    </body>
+</html>
+{{end}}
