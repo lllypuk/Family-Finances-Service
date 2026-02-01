@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 
 	"family-budget-service/internal/domain/report"
+	"family-budget-service/internal/domain/user"
 )
 
 // ReportRepository defines the interface for report data access
@@ -25,6 +26,7 @@ type Services struct {
 	Transaction TransactionService
 	Budget      BudgetService
 	Report      ReportService
+	Invite      InviteService
 }
 
 // NewServices creates a new services container with all dependencies
@@ -36,6 +38,7 @@ func NewServices(
 	budgetRepo BudgetRepositoryForTransactions,
 	fullBudgetRepo BudgetRepository,
 	reportRepo ReportRepository,
+	inviteRepo user.InviteRepository,
 ) *Services {
 	usageChecker := NewCategoryUsageChecker(transactionRepo)
 
@@ -45,6 +48,7 @@ func NewServices(
 	familyService := NewFamilyService(familyRepo, userRepo, categoryService)
 	transactionService := NewTransactionService(transactionRepo, budgetRepo, categoryRepo, userRepo)
 	budgetService := NewBudgetService(fullBudgetRepo, transactionRepo)
+	inviteService := NewInviteService(inviteRepo, userRepo, familyRepo)
 
 	// Create report service with dependencies on other services
 	reportService := NewReportService(
@@ -65,5 +69,6 @@ func NewServices(
 		Transaction: transactionService,
 		Budget:      budgetService,
 		Report:      reportService,
+		Invite:      inviteService,
 	}
 }

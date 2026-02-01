@@ -156,3 +156,15 @@ func (h *BaseHandler) handleDelete(c echo.Context, params DeleteEntityParams) er
 
 	return h.redirect(c, params.RedirectURL)
 }
+
+// htmxError returns an HTMX-compatible error response
+func (h *BaseHandler) htmxError(c echo.Context, message string) error {
+	return c.String(http.StatusBadRequest, message)
+}
+
+// redirectWithError performs a redirect with an error message
+func (h *BaseHandler) redirectWithError(c echo.Context, url, _ string) error {
+	// TODO: Add flash message support for error messages
+	// For now, just redirect
+	return c.Redirect(http.StatusSeeOther, url)
+}

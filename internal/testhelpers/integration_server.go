@@ -38,6 +38,7 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 		Category:    categoryrepo.NewSQLiteRepository(db),
 		Transaction: transactionrepo.NewSQLiteRepository(db),
 		Report:      reportrepo.NewSQLiteRepository(db),
+		Invite:      userrepo.NewInviteSQLiteRepository(db),
 	}
 
 	// Create services for testing - use simplified version to avoid circular dependencies
@@ -49,6 +50,7 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 		repos.Budget,      // budgetRepo for transactions
 		repos.Budget,      // fullBudgetRepo
 		repos.Report,      // reportRepo
+		repos.Invite,      // inviteRepo
 	)
 
 	// Create HTTP server configuration for testing

@@ -33,6 +33,33 @@ type CreateUserForm struct {
 	Role      string `form:"role"       validate:"required"               json:"role"`
 }
 
+// CreateInviteForm представляет форму создания приглашения
+type CreateInviteForm struct {
+	Email string `form:"email" validate:"required,email,max=254"            json:"email"`
+	Role  string `form:"role"  validate:"required,oneof=admin member child" json:"role"`
+}
+
+// Validate validates the create invite form
+func (f *CreateInviteForm) Validate() error {
+	if f.Email == "" {
+		return errors.New("email is required")
+	}
+	if f.Role == "" {
+		return errors.New("role is required")
+	}
+	if f.Role != "admin" && f.Role != "member" && f.Role != "child" {
+		return errors.New("invalid role")
+	}
+	return nil
+}
+
+// InviteRegisterForm представляет форму регистрации по приглашению
+type InviteRegisterForm struct {
+	Email    string `form:"email"    validate:"required,email,max=254" json:"email"`
+	Name     string `form:"name"     validate:"required,min=2,max=100" json:"name"`
+	Password string `form:"password" validate:"required,min=6"         json:"password"`
+}
+
 // GetValidationErrors конвертирует ошибки валидации в карту field->message
 func GetValidationErrors(err error) map[string]string {
 	validationErrorsMap := make(map[string]string)

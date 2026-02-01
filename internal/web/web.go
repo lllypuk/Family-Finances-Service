@@ -23,6 +23,7 @@ type Server struct {
 	dashboardHandler   *webHandlers.DashboardHandler
 	authHandler        *webHandlers.AuthHandler
 	userHandler        *webHandlers.UserHandler
+	adminHandler       *webHandlers.AdminHandler
 	categoryHandler    *webHandlers.CategoryHandler
 	transactionHandler *webHandlers.TransactionHandler
 	budgetHandler      *webHandlers.BudgetHandler
@@ -63,6 +64,7 @@ func NewWebServer(
 		dashboardHandler:   webHandlers.NewDashboardHandler(repositories, services),
 		authHandler:        webHandlers.NewAuthHandler(repositories, services),
 		userHandler:        webHandlers.NewUserHandler(repositories, services),
+		adminHandler:       webHandlers.NewAdminHandler(repositories, services),
 		categoryHandler:    webHandlers.NewCategoryHandler(repositories, services),
 		transactionHandler: webHandlers.NewTransactionHandler(repositories, services),
 		budgetHandler:      webHandlers.NewBudgetHandler(repositories, services),
@@ -104,11 +106,16 @@ func (ws *Server) setupAuthRoutes() {
 	ws.echo.POST("/setup", ws.authHandler.Setup)
 	ws.echo.GET("/logout", ws.authHandler.Logout)
 	ws.echo.POST("/logout", ws.authHandler.Logout)
+
+	// Invite registration routes (public, but token-gated)
+	ws.echo.GET("/invite/:token", ws.authHandler.InviteRegisterPage)
+	ws.echo.POST("/invite/:token", ws.authHandler.InviteRegister)
 }
 
 // setupProtectedRoutes настраивает защищенные маршруты
 func (ws *Server) setupProtectedRoutes(protected *echo.Group) {
 	ws.setupUserRoutes(protected)
+	ws.setupAdminRoutes(protected)
 	ws.setupCategoryRoutes(protected)
 	ws.setupTransactionRoutes(protected)
 	ws.setupBudgetRoutes(protected)
@@ -121,6 +128,17 @@ func (ws *Server) setupUserRoutes(protected *echo.Group) {
 	users.GET("", ws.userHandler.Index)
 	users.GET("/new", ws.userHandler.New)
 	users.POST("", ws.userHandler.Create)
+}
+
+// setupAdminRoutes настраивает маршруты администрирования
+func (ws *Server) setupAdminRoutes(protected *echo.Group) {
+	admin := protected.Group("/admin", middleware.RequireAdmin())
+
+	// User management with invites
+	admin.GET("/users", ws.adminHandler.ListUsers)
+	admin.POST("/users/invite", ws.adminHandler.CreateInvite)
+	admin.DELETE("/users/:id", ws.adminHandler.DeleteUser)
+	admin.DELETE("/invites/:id", ws.adminHandler.RevokeInvite)
 }
 
 // setupCategoryRoutes настраивает маршруты категорий

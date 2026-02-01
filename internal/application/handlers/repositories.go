@@ -4,13 +4,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
+
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
-
-	"github.com/google/uuid"
 )
 
 type Repositories struct {
@@ -20,6 +20,7 @@ type Repositories struct {
 	Transaction TransactionRepository
 	Budget      BudgetRepository
 	Report      ReportRepository
+	Invite      user.InviteRepository
 }
 
 // UserRepository определяет операции с пользователями
