@@ -2,6 +2,7 @@ package testhelpers
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 
 	"family-budget-service/internal/application"
@@ -42,7 +43,7 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 	}
 
 	// Create BackupService for testing with in-memory database
-	backupService := services.NewBackupService(db, ":memory:")
+	backupService := services.NewBackupService(db, ":memory:", slog.Default())
 
 	// Create services for testing - use simplified version to avoid circular dependencies
 	servicesContainer := services.NewServices(
@@ -55,6 +56,7 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 		repos.Report,      // reportRepo
 		repos.Invite,      // inviteRepo
 		backupService,     // backupService
+		slog.Default(),    // logger
 	)
 
 	// Create HTTP server configuration for testing

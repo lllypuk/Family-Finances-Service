@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/google/uuid"
 
@@ -41,6 +42,7 @@ func NewServices(
 	reportRepo ReportRepository,
 	inviteRepo user.InviteRepository,
 	backupService BackupService,
+	logger *slog.Logger,
 ) *Services {
 	usageChecker := NewCategoryUsageChecker(transactionRepo)
 
@@ -50,7 +52,7 @@ func NewServices(
 	familyService := NewFamilyService(familyRepo, userRepo, categoryService)
 	transactionService := NewTransactionService(transactionRepo, budgetRepo, categoryRepo, userRepo)
 	budgetService := NewBudgetService(fullBudgetRepo, transactionRepo)
-	inviteService := NewInviteService(inviteRepo, userRepo, familyRepo)
+	inviteService := NewInviteService(inviteRepo, userRepo, familyRepo, logger)
 
 	// Create report service with dependencies on other services
 	reportService := NewReportService(

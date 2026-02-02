@@ -1,6 +1,6 @@
 # CQ-2: Игнорирование ошибок в invite_service.go
 
-## Статус: TODO
+## Статус: DONE ✅
 
 ## Приоритет: IMPORTANT
 

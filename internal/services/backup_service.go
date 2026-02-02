@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -30,15 +31,17 @@ type backupService struct {
 	db        *sql.DB
 	dbPath    string
 	backupDir string
+	logger    *slog.Logger
 }
 
 // NewBackupService creates a new BackupService instance
-func NewBackupService(db *sql.DB, dbPath string) BackupService {
+func NewBackupService(db *sql.DB, dbPath string, logger *slog.Logger) BackupService {
 	backupDir := filepath.Join(filepath.Dir(dbPath), "backups")
 	return &backupService{
 		db:        db,
 		dbPath:    dbPath,
 		backupDir: backupDir,
+		logger:    logger,
 	}
 }
 
@@ -100,9 +103,9 @@ func (s *backupService) CreateBackup(ctx context.Context) (*BackupInfo, error) {
 
 	// Clean up old backups if limit exceeded
 	if cleanupErr := s.cleanupOldBackups(ctx); cleanupErr != nil {
-		// Log error but don't fail the backup operation
-		// In production, this should be logged properly
-		_ = cleanupErr
+		s.logger.WarnContext(ctx, "failed to cleanup old backups",
+			slog.String("error", cleanupErr.Error()),
+		)
 	}
 
 	return backupInfo, nil

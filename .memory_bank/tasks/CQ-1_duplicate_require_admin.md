@@ -1,6 +1,6 @@
 # CQ-1: Дублирование requireAdmin
 
-## Статус: TODO
+## Статус: DONE ✅
 ## Приоритет: IMPORTANT
 
 ## Проблема

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/google/uuid"
@@ -52,6 +53,7 @@ type inviteService struct {
 	inviteRepo user.InviteRepository
 	userRepo   UserRepository
 	familyRepo FamilyRepository
+	logger     *slog.Logger
 }
 
 // NewInviteService creates a new InviteService instance
@@ -59,11 +61,13 @@ func NewInviteService(
 	inviteRepo user.InviteRepository,
 	userRepo UserRepository,
 	familyRepo FamilyRepository,
+	logger *slog.Logger,
 ) InviteService {
 	return &inviteService{
 		inviteRepo: inviteRepo,
 		userRepo:   userRepo,
 		familyRepo: familyRepo,
+		logger:     logger,
 	}
 }
 
@@ -125,7 +129,7 @@ func (s *inviteService) CreateInvite(
 }
 
 // GetInviteByToken retrieves an invite by its token
-func (s *inviteService) GetInviteByToken(_ context.Context, token string) (*user.Invite, error) {
+func (s *inviteService) GetInviteByToken(ctx context.Context, token string) (*user.Invite, error) {
 	invite, err := s.inviteRepo.GetByToken(token)
 	if err != nil {
 		return nil, ErrInviteNotFound
@@ -135,9 +139,10 @@ func (s *inviteService) GetInviteByToken(_ context.Context, token string) (*user
 	if invite.IsExpired() && invite.Status == user.InviteStatusPending {
 		invite.MarkExpired()
 		if updateErr := s.inviteRepo.Update(invite); updateErr != nil {
-			// Log error but don't fail the request
-			// In production, use proper logging instead of fmt.Printf
-			_ = updateErr // Acknowledge error without printing
+			s.logger.WarnContext(ctx, "failed to update expired invite status",
+				slog.String("invite_id", invite.ID.String()),
+				slog.String("error", updateErr.Error()),
+			)
 		}
 		return nil, ErrInviteExpired
 	}
@@ -198,9 +203,11 @@ func (s *inviteService) AcceptInvite(ctx context.Context, token string, req dto.
 	// Mark invite as accepted
 	invite.Accept(newUser.ID)
 	if updateErr := s.inviteRepo.Update(invite); updateErr != nil {
-		// User is created, log error but don't fail
-		// In production, use proper logging instead of fmt.Printf
-		_ = updateErr // Acknowledge error without printing
+		s.logger.ErrorContext(ctx, "failed to mark invite as accepted",
+			slog.String("invite_id", invite.ID.String()),
+			slog.String("user_id", newUser.ID.String()),
+			slog.String("error", updateErr.Error()),
+		)
 	}
 
 	return newUser, nil
@@ -254,7 +261,7 @@ func (s *inviteService) RevokeInvite(ctx context.Context, inviteID, revokerID uu
 }
 
 // ListFamilyInvites retrieves all invites for the family
-func (s *inviteService) ListFamilyInvites(_ context.Context, familyID uuid.UUID) ([]*user.Invite, error) {
+func (s *inviteService) ListFamilyInvites(ctx context.Context, familyID uuid.UUID) ([]*user.Invite, error) {
 	invites, err := s.inviteRepo.GetByFamily(familyID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get family invites: %w", err)
@@ -265,9 +272,10 @@ func (s *inviteService) ListFamilyInvites(_ context.Context, familyID uuid.UUID)
 		if inv.Status == user.InviteStatusPending && inv.IsExpired() {
 			inv.MarkExpired()
 			if updateErr := s.inviteRepo.Update(inv); updateErr != nil {
-				// Log error but continue
-				// In production, use proper logging instead of fmt.Printf
-				_ = updateErr // Acknowledge error without printing
+				s.logger.WarnContext(ctx, "failed to update expired invite status",
+					slog.String("invite_id", inv.ID.String()),
+					slog.String("error", updateErr.Error()),
+				)
 			}
 		}
 	}

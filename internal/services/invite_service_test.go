@@ -3,6 +3,7 @@ package services_test
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -228,7 +229,7 @@ func TestInviteService_CreateInvite(t *testing.T) {
 
 			tt.setup(inviteRepo, userRepo, familyRepo)
 
-			service := services.NewInviteService(inviteRepo, userRepo, familyRepo)
+			service := services.NewInviteService(inviteRepo, userRepo, familyRepo, slog.Default())
 			invite, err := service.CreateInvite(context.Background(), tt.creatorID, tt.dto)
 
 			if tt.wantError {
@@ -317,7 +318,7 @@ func TestInviteService_GetInviteByToken(t *testing.T) {
 
 			tt.setup(inviteRepo)
 
-			service := services.NewInviteService(inviteRepo, userRepo, familyRepo)
+			service := services.NewInviteService(inviteRepo, userRepo, familyRepo, slog.Default())
 			invite, err := service.GetInviteByToken(context.Background(), tt.token)
 
 			if tt.wantError {
@@ -440,7 +441,7 @@ func TestInviteService_AcceptInvite(t *testing.T) {
 
 			tt.setup(inviteRepo, userRepo)
 
-			service := services.NewInviteService(inviteRepo, userRepo, familyRepo)
+			service := services.NewInviteService(inviteRepo, userRepo, familyRepo, slog.Default())
 			newUser, err := service.AcceptInvite(context.Background(), tt.token, tt.dto)
 
 			if tt.wantError {
@@ -557,7 +558,7 @@ func TestInviteService_RevokeInvite(t *testing.T) {
 
 			tt.setup(inviteRepo, userRepo, familyRepo)
 
-			service := services.NewInviteService(inviteRepo, userRepo, familyRepo)
+			service := services.NewInviteService(inviteRepo, userRepo, familyRepo, slog.Default())
 			err := service.RevokeInvite(context.Background(), tt.inviteID, tt.revokerID)
 
 			if tt.wantError {
@@ -630,7 +631,7 @@ func TestInviteService_ListFamilyInvites(t *testing.T) {
 
 			tt.setup(inviteRepo)
 
-			service := services.NewInviteService(inviteRepo, userRepo, familyRepo)
+			service := services.NewInviteService(inviteRepo, userRepo, familyRepo, slog.Default())
 			result, err := service.ListFamilyInvites(context.Background(), tt.familyID)
 
 			if tt.wantError {
@@ -676,7 +677,7 @@ func TestInviteService_DeleteExpiredInvites(t *testing.T) {
 
 			tt.setup(inviteRepo)
 
-			service := services.NewInviteService(inviteRepo, userRepo, familyRepo)
+			service := services.NewInviteService(inviteRepo, userRepo, familyRepo, slog.Default())
 			err := service.DeleteExpiredInvites(context.Background())
 
 			if tt.wantError {
