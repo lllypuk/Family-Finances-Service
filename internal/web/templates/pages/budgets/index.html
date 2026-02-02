@@ -102,8 +102,8 @@
                         <label for="is_active">Статус</label>
                         <select id="is_active" name="is_active">
                             <option value="">Все бюджеты</option>
-                            <option value="true" {{if eq .Form.IsActive "true"}}selected{{end}}>Только активные</option>
-                            <option value="false" {{if eq .Form.IsActive "false"}}selected{{end}}>Только неактивные</option>
+                            <option value="true" {{if and .Filter.IsActive (deref .Filter.IsActive)}}selected{{end}}>Только активные</option>
+                            <option value="false" {{if and .Filter.IsActive (not (deref .Filter.IsActive))}}selected{{end}}>Только неактивные</option>
                         </select>
                     </div>
                 </div>

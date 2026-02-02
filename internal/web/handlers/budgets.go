@@ -474,7 +474,7 @@ func (h *BudgetHandler) Progress(c echo.Context) error {
 	}
 
 	data := map[string]any{
-		"Progress": progressVM,
+		"Budget": progressVM,
 	}
 
 	return h.renderPartial(c, "components/budget_progress", data)
