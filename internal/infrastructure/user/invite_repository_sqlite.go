@@ -289,6 +289,37 @@ func (r *InviteSQLiteRepository) DeleteExpired(ctx context.Context) error {
 	return nil
 }
 
+// MarkExpiredBulk marks all pending invites past their expiration as expired
+func (r *InviteSQLiteRepository) MarkExpiredBulk(ctx context.Context) (int64, error) {
+	ctx, cancel := context.WithTimeout(ctx, dbTimeout)
+	defer cancel()
+
+	query := `
+		UPDATE invites 
+		SET status = ?, updated_at = ?
+		WHERE status = ? AND expires_at < ?
+	`
+
+	now := time.Now()
+	result, err := r.db.ExecContext(ctx, query,
+		string(user.InviteStatusExpired),
+		now.Format(time.RFC3339),
+		string(user.InviteStatusPending),
+		now.Format(time.RFC3339),
+	)
+
+	if err != nil {
+		return 0, fmt.Errorf("failed to bulk expire invites: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	return rowsAffected, nil
+}
+
 // scanInvite scans a single invite from a row or rows
 func (r *InviteSQLiteRepository) scanInvite(scanner interface {
 	Scan(dest ...interface{}) error

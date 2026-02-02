@@ -262,22 +262,16 @@ func (s *inviteService) RevokeInvite(ctx context.Context, inviteID, revokerID uu
 
 // ListFamilyInvites retrieves all invites for the family
 func (s *inviteService) ListFamilyInvites(ctx context.Context, familyID uuid.UUID) ([]*user.Invite, error) {
+	// Bulk-update expired invites in a single query
+	if _, err := s.inviteRepo.MarkExpiredBulk(ctx); err != nil {
+		s.logger.WarnContext(ctx, "failed to bulk expire invites",
+			slog.String("error", err.Error()),
+		)
+	}
+
 	invites, err := s.inviteRepo.GetByFamily(ctx, familyID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get family invites: %w", err)
-	}
-
-	// Update expired invites
-	for _, inv := range invites {
-		if inv.Status == user.InviteStatusPending && inv.IsExpired() {
-			inv.MarkExpired()
-			if updateErr := s.inviteRepo.Update(ctx, inv); updateErr != nil {
-				s.logger.WarnContext(ctx, "failed to update expired invite status",
-					slog.String("invite_id", inv.ID.String()),
-					slog.String("error", updateErr.Error()),
-				)
-			}
-		}
 	}
 
 	return invites, nil

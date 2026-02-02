@@ -402,4 +402,88 @@ func TestInviteRepositorySQLite_Integration(t *testing.T) {
 		assert.Equal(t, user.InviteStatusPending, invites[0].Status)
 		assert.Equal(t, pendingInvite.ID, invites[0].ID)
 	})
+
+	t.Run("MarkExpiredBulk_Success", func(t *testing.T) {
+		db := container.GetTestDatabase(t)
+		repo := userrepo.NewInviteSQLiteRepository(db)
+
+		// Create test family first
+		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
+		require.NoError(t, err)
+
+		// Create test user (creator)
+		creatorID, err := helper.CreateTestUser(ctx, "admin@example.com", "Admin", "User", "admin", familyID)
+		require.NoError(t, err)
+
+		// Create multiple expired invites
+		expiredInvite1, err := user.NewInvite(
+			uuid.MustParse(familyID),
+			uuid.MustParse(creatorID),
+			"expired1@example.com",
+			user.RoleMember,
+		)
+		require.NoError(t, err)
+		expiredInvite1.ExpiresAt = time.Now().Add(-24 * time.Hour)
+		err = repo.Create(ctx, expiredInvite1)
+		require.NoError(t, err)
+
+		expiredInvite2, err := user.NewInvite(
+			uuid.MustParse(familyID),
+			uuid.MustParse(creatorID),
+			"expired2@example.com",
+			user.RoleMember,
+		)
+		require.NoError(t, err)
+		expiredInvite2.ExpiresAt = time.Now().Add(-48 * time.Hour)
+		err = repo.Create(ctx, expiredInvite2)
+		require.NoError(t, err)
+
+		// Create valid invite
+		validInvite, err := user.NewInvite(
+			uuid.MustParse(familyID),
+			uuid.MustParse(creatorID),
+			"valid@example.com",
+			user.RoleMember,
+		)
+		require.NoError(t, err)
+		err = repo.Create(ctx, validInvite)
+		require.NoError(t, err)
+
+		// Create already expired invite (status already set)
+		alreadyExpiredInvite, err := user.NewInvite(
+			uuid.MustParse(familyID),
+			uuid.MustParse(creatorID),
+			"already-expired@example.com",
+			user.RoleMember,
+		)
+		require.NoError(t, err)
+		alreadyExpiredInvite.ExpiresAt = time.Now().Add(-72 * time.Hour)
+		alreadyExpiredInvite.MarkExpired()
+		err = repo.Create(ctx, alreadyExpiredInvite)
+		require.NoError(t, err)
+
+		// Mark expired invites in bulk
+		rowsAffected, err := repo.MarkExpiredBulk(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), rowsAffected) // Only 2 pending expired invites should be affected
+
+		// Verify expired invites are now marked as expired
+		retrievedInvite1, err := repo.GetByID(ctx, expiredInvite1.ID)
+		require.NoError(t, err)
+		assert.Equal(t, user.InviteStatusExpired, retrievedInvite1.Status)
+
+		retrievedInvite2, err := repo.GetByID(ctx, expiredInvite2.ID)
+		require.NoError(t, err)
+		assert.Equal(t, user.InviteStatusExpired, retrievedInvite2.Status)
+
+		// Verify valid invite is still pending
+		retrievedValidInvite, err := repo.GetByID(ctx, validInvite.ID)
+		require.NoError(t, err)
+		assert.Equal(t, user.InviteStatusPending, retrievedValidInvite.Status)
+
+		// Verify already expired invite is still expired (not counted twice)
+		retrievedAlreadyExpired, err := repo.GetByID(ctx, alreadyExpiredInvite.ID)
+		require.NoError(t, err)
+		assert.Equal(t, user.InviteStatusExpired, retrievedAlreadyExpired.Status)
+	})
 }

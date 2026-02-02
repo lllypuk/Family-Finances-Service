@@ -135,4 +135,7 @@ type InviteRepository interface {
 
 	// DeleteExpired deletes all expired invites
 	DeleteExpired(ctx context.Context) error
+
+	// MarkExpiredBulk marks all pending invites past their expiration as expired
+	MarkExpiredBulk(ctx context.Context) (int64, error)
 }

@@ -74,6 +74,11 @@ func (m *MockInviteRepository) DeleteExpired(ctx context.Context) error {
 	return args.Error(0)
 }
 
+func (m *MockInviteRepository) MarkExpiredBulk(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 func TestInviteService_CreateInvite(t *testing.T) {
 	familyID := uuid.New()
 	creatorID := uuid.New()
@@ -608,16 +613,25 @@ func TestInviteService_ListFamilyInvites(t *testing.T) {
 			name:     "Success - List family invites",
 			familyID: familyID,
 			setup: func(ir *MockInviteRepository) {
+				ir.On("MarkExpiredBulk", mock.Anything).Return(int64(1), nil)
 				ir.On("GetByFamily", mock.Anything, familyID).Return(invites, nil)
-				// Mock update for expired invite
-				ir.On("Update", mock.Anything, mock.AnythingOfType("*user.Invite")).Return(nil).Maybe()
 			},
 			wantError: false,
+		},
+		{
+			name:     "Success - Bulk expire fails but continues",
+			familyID: familyID,
+			setup: func(ir *MockInviteRepository) {
+				ir.On("MarkExpiredBulk", mock.Anything).Return(int64(0), errors.New("bulk update error"))
+				ir.On("GetByFamily", mock.Anything, familyID).Return(invites, nil)
+			},
+			wantError: false, // Should not error, just log warning
 		},
 		{
 			name:     "Error - Repository error",
 			familyID: familyID,
 			setup: func(ir *MockInviteRepository) {
+				ir.On("MarkExpiredBulk", mock.Anything).Return(int64(0), nil)
 				ir.On("GetByFamily", mock.Anything, familyID).Return(nil, errors.New("database error"))
 			},
 			wantError: true,
