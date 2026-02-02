@@ -9,7 +9,7 @@ require (
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/sessions v1.4.0
-	github.com/labstack/echo-contrib v0.17.1
+	github.com/labstack/echo-contrib v0.50.0
 	github.com/labstack/echo/v4 v4.15.0
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.47.0
@@ -25,6 +25,7 @@ require (
 	github.com/gorilla/context v1.1.2 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
+	github.com/labstack/echo/v5 v5.0.0-20260118161441-9500f2745481 // indirect
 	github.com/labstack/gommon v0.4.2 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
