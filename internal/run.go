@@ -78,6 +78,9 @@ func NewApplication() (*Application, error) {
 	// Инициализация репозиториев
 	app.repositories = infrastructure.NewRepositoriesSQLite(sqliteConn.DB())
 
+	// Инициализация BackupService
+	backupService := services.NewBackupService(sqliteConn.DB(), config.Database.Path)
+
 	// Инициализация сервисов
 	app.services = services.NewServices(
 		app.repositories.User,
@@ -88,6 +91,7 @@ func NewApplication() (*Application, error) {
 		app.repositories.Budget, // BudgetRepository
 		app.repositories.Report,
 		app.repositories.Invite,
+		backupService,
 	)
 
 	// Создание HTTP сервера с observability

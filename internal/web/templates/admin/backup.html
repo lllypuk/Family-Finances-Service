@@ -1,0 +1,132 @@
+{{define "admin/backup.html"}}
+<!doctype html>
+<html lang="ru" data-theme="light">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>{{.Title}} - Семейный бюджет</title>
+
+        <!-- PicoCSS -->
+        <link rel="stylesheet" href="/static/css/pico.min.css" />
+        <link rel="stylesheet" href="/static/css/custom.css" />
+
+        <!-- HTMX -->
+        <script src="/static/js/htmx.min.js"></script>
+
+        <!-- Favicon -->
+        <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico" />
+
+        <style>
+            .backup-card {
+                background: var(--pico-card-background-color);
+                border: 1px solid var(--pico-muted-border-color);
+                border-radius: var(--pico-border-radius);
+                padding: 1rem;
+                margin-bottom: 1rem;
+            }
+
+            .backup-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 0.5rem;
+            }
+
+            .backup-info h4 {
+                margin: 0 0 0.25rem 0;
+            }
+
+            .backup-meta {
+                font-size: 0.85rem;
+                color: var(--pico-muted-color);
+            }
+
+            .backup-actions {
+                display: flex;
+                gap: 0.5rem;
+            }
+
+            .backup-actions button,
+            .backup-actions a {
+                padding: 0.5rem 1rem;
+                font-size: 0.9rem;
+            }
+
+            .danger-btn {
+                background: var(--pico-del-color);
+                border-color: var(--pico-del-color);
+            }
+
+            .danger-btn:hover {
+                background: var(--pico-del-hover-background);
+            }
+
+            .info-box {
+                background: var(--pico-primary-background);
+                color: var(--pico-primary-inverse);
+                padding: 1rem;
+                border-radius: var(--pico-border-radius);
+                margin-bottom: 1.5rem;
+            }
+
+            .info-box p {
+                margin: 0.25rem 0;
+            }
+        </style>
+    </head>
+    <body>
+        {{template "nav" .}}
+
+        <main class="container">
+            <header>
+                <h1>💾 Резервные копии</h1>
+                <p>Управление резервными копиями базы данных</p>
+            </header>
+
+            <!-- Info box -->
+            <div class="info-box">
+                <p><strong>ℹ️ Информация о системе</strong></p>
+                <p>База данных: SQLite</p>
+                <p>Максимальное количество бэкапов: 10 (старые удаляются автоматически)</p>
+            </div>
+
+            <!-- Create backup button -->
+            <section>
+                <button
+                    class="primary"
+                    hx-post="/admin/backup/create"
+                    hx-target="#backup-list"
+                    hx-swap="afterbegin"
+                    hx-indicator="#create-indicator"
+                >
+                    <span id="create-indicator" class="htmx-indicator">⏳</span>
+                    ➕ Создать резервную копию
+                </button>
+            </section>
+
+            <!-- Backups list -->
+            <section>
+                <h2>📋 Список резервных копий</h2>
+                
+                {{if .Backups}}
+                <div id="backup-list">
+                    {{range .Backups}}
+                    {{template "admin/backup_row.html" (dict "Backup" . "CSRFToken" $.CSRFToken)}}
+                    {{end}}
+                </div>
+                {{else}}
+                <div id="backup-list">
+                    <article>
+                        <p style="text-align: center; color: var(--pico-muted-color);">
+                            📂 Резервные копии отсутствуют
+                        </p>
+                    </article>
+                </div>
+                {{end}}
+            </section>
+        </main>
+
+        {{template "footer" .}}
+    </body>
+</html>
+{{end}}

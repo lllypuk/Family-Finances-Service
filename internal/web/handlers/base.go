@@ -168,3 +168,10 @@ func (h *BaseHandler) redirectWithError(c echo.Context, url, _ string) error {
 	// For now, just redirect
 	return c.Redirect(http.StatusSeeOther, url)
 }
+
+// redirectWithSuccess performs a redirect with a success message
+func (h *BaseHandler) redirectWithSuccess(c echo.Context, url, _ string) error {
+	// TODO: Add flash message support for success messages
+	// For now, just redirect
+	return c.Redirect(http.StatusSeeOther, url)
+}

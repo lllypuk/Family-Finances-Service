@@ -27,6 +27,7 @@ type Services struct {
 	Budget      BudgetService
 	Report      ReportService
 	Invite      InviteService
+	Backup      BackupService
 }
 
 // NewServices creates a new services container with all dependencies
@@ -39,6 +40,7 @@ func NewServices(
 	fullBudgetRepo BudgetRepository,
 	reportRepo ReportRepository,
 	inviteRepo user.InviteRepository,
+	backupService BackupService,
 ) *Services {
 	usageChecker := NewCategoryUsageChecker(transactionRepo)
 
@@ -70,5 +72,6 @@ func NewServices(
 		Budget:      budgetService,
 		Report:      reportService,
 		Invite:      inviteService,
+		Backup:      backupService,
 	}
 }

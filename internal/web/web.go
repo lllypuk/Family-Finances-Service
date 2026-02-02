@@ -28,6 +28,7 @@ type Server struct {
 	transactionHandler *webHandlers.TransactionHandler
 	budgetHandler      *webHandlers.BudgetHandler
 	reportHandler      *webHandlers.ReportHandler
+	backupHandler      *webHandlers.BackupHandler
 }
 
 // NewWebServer создает новый веб-сервер
@@ -69,6 +70,7 @@ func NewWebServer(
 		transactionHandler: webHandlers.NewTransactionHandler(repositories, services),
 		budgetHandler:      webHandlers.NewBudgetHandler(repositories, services),
 		reportHandler:      webHandlers.NewReportHandler(repositories, services),
+		backupHandler:      webHandlers.NewBackupHandler(repositories, services),
 	}
 
 	return ws, nil
@@ -139,6 +141,13 @@ func (ws *Server) setupAdminRoutes(protected *echo.Group) {
 	admin.POST("/users/invite", ws.adminHandler.CreateInvite)
 	admin.DELETE("/users/:id", ws.adminHandler.DeleteUser)
 	admin.DELETE("/invites/:id", ws.adminHandler.RevokeInvite)
+
+	// Backup management
+	admin.GET("/backup", ws.backupHandler.BackupPage)
+	admin.POST("/backup/create", ws.backupHandler.CreateBackup)
+	admin.GET("/backup/download/:filename", ws.backupHandler.DownloadBackup)
+	admin.DELETE("/backup/:filename", ws.backupHandler.DeleteBackup)
+	admin.POST("/backup/restore/:filename", ws.backupHandler.RestoreBackup)
 }
 
 // setupCategoryRoutes настраивает маршруты категорий

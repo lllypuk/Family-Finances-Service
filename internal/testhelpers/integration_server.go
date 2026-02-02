@@ -41,6 +41,9 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 		Invite:      userrepo.NewInviteSQLiteRepository(db),
 	}
 
+	// Create BackupService for testing with in-memory database
+	backupService := services.NewBackupService(db, ":memory:")
+
 	// Create services for testing - use simplified version to avoid circular dependencies
 	servicesContainer := services.NewServices(
 		repos.User,        // userRepo
@@ -51,6 +54,7 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 		repos.Budget,      // fullBudgetRepo
 		repos.Report,      // reportRepo
 		repos.Invite,      // inviteRepo
+		backupService,     // backupService
 	)
 
 	// Create HTTP server configuration for testing

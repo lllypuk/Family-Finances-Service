@@ -162,3 +162,20 @@ type ReportService interface {
 	GenerateFinancialInsights(ctx context.Context) ([]dto.RecommendationDTO, error)
 	CalculateBenchmarks(ctx context.Context) (*dto.BenchmarkComparisonDTO, error)
 }
+
+// BackupService defines business operations for database backup management
+type BackupService interface {
+	CreateBackup(ctx context.Context) (*BackupInfo, error)
+	ListBackups(ctx context.Context) ([]*BackupInfo, error)
+	GetBackup(ctx context.Context, filename string) (*BackupInfo, error)
+	DeleteBackup(ctx context.Context, filename string) error
+	RestoreBackup(ctx context.Context, filename string) error
+	GetBackupFilePath(filename string) string
+}
+
+// BackupInfo contains information about a backup file
+type BackupInfo struct {
+	Filename  string
+	Size      int64
+	CreatedAt time.Time
+}

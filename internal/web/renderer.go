@@ -48,6 +48,7 @@ func createTemplateFuncMap() template.FuncMap {
 		"abs":            templateAbs,
 		"formatCurrency": formatCurrency,
 		"formatDate":     formatDate,
+		"formatBytes":    formatBytes,
 		"safe":           templateSafe,
 		"dict":           createDict,
 		"map":            createDict, // Alias for dict
@@ -211,6 +212,20 @@ func formatNumber(amount float64) string {
 func formatDate(_ any) string {
 	// TODO: Реализовать форматирование даты
 	return "01.01.2024"
+}
+
+// formatBytes форматирует размер файла в человекочитаемом формате
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 // createDict создает словарь для передачи в шаблон

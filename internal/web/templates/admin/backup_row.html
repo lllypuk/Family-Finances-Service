@@ -1,0 +1,44 @@
+{{define "admin/backup_row.html"}}
+<article class="backup-card" id="backup-{{.Backup.Filename}}">
+    <div class="backup-header">
+        <div class="backup-info">
+            <h4>💾 {{.Backup.Filename}}</h4>
+            <div class="backup-meta">
+                <span>📦 Размер: {{formatBytes .Backup.Size}}</span>
+                <span style="margin-left: 1rem;">📅 Создан: {{.Backup.CreatedAt.Format "02.01.2006 15:04:05"}}</span>
+            </div>
+        </div>
+
+        <div class="backup-actions">
+            <!-- Download button -->
+            <a 
+                href="/admin/backup/download/{{.Backup.Filename}}"
+                class="secondary outline"
+                role="button"
+            >
+                ⬇️ Скачать
+            </a>
+
+            <!-- Restore button -->
+            <button
+                class="contrast outline"
+                hx-post="/admin/backup/restore/{{.Backup.Filename}}"
+                hx-confirm="⚠️ ВНИМАНИЕ: Текущие данные будут заменены данными из резервной копии! Вы уверены?"
+            >
+                ♻️ Восстановить
+            </button>
+
+            <!-- Delete button -->
+            <button
+                class="secondary outline"
+                hx-delete="/admin/backup/{{.Backup.Filename}}"
+                hx-confirm="Вы уверены, что хотите удалить эту резервную копию?"
+                hx-target="#backup-{{.Backup.Filename}}"
+                hx-swap="outerHTML swap:0.5s"
+            >
+                🗑️ Удалить
+            </button>
+        </div>
+    </div>
+</article>
+{{end}}
