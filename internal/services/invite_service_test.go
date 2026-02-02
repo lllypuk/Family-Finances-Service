@@ -22,55 +22,55 @@ type MockInviteRepository struct {
 	mock.Mock
 }
 
-func (m *MockInviteRepository) Create(invite *user.Invite) error {
-	args := m.Called(invite)
+func (m *MockInviteRepository) Create(ctx context.Context, invite *user.Invite) error {
+	args := m.Called(ctx, invite)
 	return args.Error(0)
 }
 
-func (m *MockInviteRepository) GetByToken(token string) (*user.Invite, error) {
-	args := m.Called(token)
+func (m *MockInviteRepository) GetByToken(ctx context.Context, token string) (*user.Invite, error) {
+	args := m.Called(ctx, token)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*user.Invite), args.Error(1)
 }
 
-func (m *MockInviteRepository) GetByID(id uuid.UUID) (*user.Invite, error) {
-	args := m.Called(id)
+func (m *MockInviteRepository) GetByID(ctx context.Context, id uuid.UUID) (*user.Invite, error) {
+	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*user.Invite), args.Error(1)
 }
 
-func (m *MockInviteRepository) GetByFamily(familyID uuid.UUID) ([]*user.Invite, error) {
-	args := m.Called(familyID)
+func (m *MockInviteRepository) GetByFamily(ctx context.Context, familyID uuid.UUID) ([]*user.Invite, error) {
+	args := m.Called(ctx, familyID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*user.Invite), args.Error(1)
 }
 
-func (m *MockInviteRepository) GetPendingByEmail(email string) ([]*user.Invite, error) {
-	args := m.Called(email)
+func (m *MockInviteRepository) GetPendingByEmail(ctx context.Context, email string) ([]*user.Invite, error) {
+	args := m.Called(ctx, email)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*user.Invite), args.Error(1)
 }
 
-func (m *MockInviteRepository) Update(invite *user.Invite) error {
-	args := m.Called(invite)
+func (m *MockInviteRepository) Update(ctx context.Context, invite *user.Invite) error {
+	args := m.Called(ctx, invite)
 	return args.Error(0)
 }
 
-func (m *MockInviteRepository) Delete(id uuid.UUID) error {
-	args := m.Called(id)
+func (m *MockInviteRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
-func (m *MockInviteRepository) DeleteExpired() error {
-	args := m.Called()
+func (m *MockInviteRepository) DeleteExpired(ctx context.Context) error {
+	args := m.Called(ctx)
 	return args.Error(0)
 }
 
@@ -109,9 +109,9 @@ func TestInviteService_CreateInvite(t *testing.T) {
 				// User doesn't exist
 				ur.On("GetByEmail", mock.Anything, "newuser@example.com").Return(nil, errors.New("not found"))
 				// No pending invites
-				ir.On("GetPendingByEmail", "newuser@example.com").Return([]*user.Invite{}, nil)
+				ir.On("GetPendingByEmail", mock.Anything, "newuser@example.com").Return([]*user.Invite{}, nil)
 				// Create succeeds
-				ir.On("Create", mock.AnythingOfType("*user.Invite")).Return(nil)
+				ir.On("Create", mock.Anything, mock.AnythingOfType("*user.Invite")).Return(nil)
 			},
 			wantError: false,
 		},
@@ -199,7 +199,8 @@ func TestInviteService_CreateInvite(t *testing.T) {
 					Status:   user.InviteStatusPending,
 					FamilyID: familyID,
 				}
-				ir.On("GetPendingByEmail", "pending@example.com").Return([]*user.Invite{pendingInvite}, nil)
+				ir.On("GetPendingByEmail", mock.Anything, "pending@example.com").
+					Return([]*user.Invite{pendingInvite}, nil)
 			},
 			wantError: true,
 		},
@@ -214,7 +215,7 @@ func TestInviteService_CreateInvite(t *testing.T) {
 				ur.On("GetByID", mock.Anything, creatorID).Return(creator, nil)
 				fr.On("Get", mock.Anything).Return(family, nil)
 				ur.On("GetByEmail", mock.Anything, "newuser@example.com").Return(nil, errors.New("not found"))
-				ir.On("GetPendingByEmail", "newuser@example.com").Return([]*user.Invite{}, nil)
+				ir.On("GetPendingByEmail", mock.Anything, "newuser@example.com").Return([]*user.Invite{}, nil)
 			},
 			wantError: true,
 			errorType: services.ErrInvalidRole,
@@ -285,7 +286,7 @@ func TestInviteService_GetInviteByToken(t *testing.T) {
 			name:  "Success - Get valid invite",
 			token: validToken,
 			setup: func(ir *MockInviteRepository) {
-				ir.On("GetByToken", validToken).Return(validInvite, nil)
+				ir.On("GetByToken", mock.Anything, validToken).Return(validInvite, nil)
 			},
 			wantError: false,
 		},
@@ -293,7 +294,7 @@ func TestInviteService_GetInviteByToken(t *testing.T) {
 			name:  "Error - Invite not found",
 			token: invalidToken,
 			setup: func(ir *MockInviteRepository) {
-				ir.On("GetByToken", invalidToken).Return(nil, errors.New("not found"))
+				ir.On("GetByToken", mock.Anything, invalidToken).Return(nil, errors.New("not found"))
 			},
 			wantError: true,
 			errorType: services.ErrInviteNotFound,
@@ -302,8 +303,8 @@ func TestInviteService_GetInviteByToken(t *testing.T) {
 			name:  "Error - Invite expired",
 			token: expiredToken,
 			setup: func(ir *MockInviteRepository) {
-				ir.On("GetByToken", expiredToken).Return(expiredInvite, nil)
-				ir.On("Update", mock.AnythingOfType("*user.Invite")).Return(nil)
+				ir.On("GetByToken", mock.Anything, expiredToken).Return(expiredInvite, nil)
+				ir.On("Update", mock.Anything, mock.AnythingOfType("*user.Invite")).Return(nil)
 			},
 			wantError: true,
 			errorType: services.ErrInviteExpired,
@@ -368,10 +369,10 @@ func TestInviteService_AcceptInvite(t *testing.T) {
 				Password: "password123",
 			},
 			setup: func(ir *MockInviteRepository, ur *MockUserRepository) {
-				ir.On("GetByToken", validToken).Return(validInvite, nil)
+				ir.On("GetByToken", mock.Anything, validToken).Return(validInvite, nil)
 				ur.On("GetByEmail", mock.Anything, "user@example.com").Return(nil, errors.New("not found"))
 				ur.On("Create", mock.Anything, mock.AnythingOfType("*user.User")).Return(nil)
-				ir.On("Update", mock.AnythingOfType("*user.Invite")).Return(nil)
+				ir.On("Update", mock.Anything, mock.AnythingOfType("*user.Invite")).Return(nil)
 			},
 			wantError: false,
 		},
@@ -384,7 +385,7 @@ func TestInviteService_AcceptInvite(t *testing.T) {
 				Password: "password123",
 			},
 			setup: func(ir *MockInviteRepository, _ *MockUserRepository) {
-				ir.On("GetByToken", validToken).Return(validInvite, nil)
+				ir.On("GetByToken", mock.Anything, validToken).Return(validInvite, nil)
 			},
 			wantError: true,
 		},
@@ -407,7 +408,7 @@ func TestInviteService_AcceptInvite(t *testing.T) {
 					Status:    user.InviteStatusPending,
 					ExpiresAt: time.Now().Add(24 * time.Hour),
 				}
-				ir.On("GetByToken", validToken).Return(testInvite, nil)
+				ir.On("GetByToken", mock.Anything, validToken).Return(testInvite, nil)
 				existingUser := &user.User{
 					ID:    uuid.New(),
 					Email: "user@example.com",
@@ -426,7 +427,7 @@ func TestInviteService_AcceptInvite(t *testing.T) {
 				Password: "password123",
 			},
 			setup: func(ir *MockInviteRepository, _ *MockUserRepository) {
-				ir.On("GetByToken", "invalid-token").Return(nil, errors.New("not found"))
+				ir.On("GetByToken", mock.Anything, "invalid-token").Return(nil, errors.New("not found"))
 			},
 			wantError: true,
 			errorType: services.ErrInviteNotFound,
@@ -510,8 +511,8 @@ func TestInviteService_RevokeInvite(t *testing.T) {
 			setup: func(ir *MockInviteRepository, ur *MockUserRepository, fr *MockFamilyRepository) {
 				ur.On("GetByID", mock.Anything, revokerID).Return(admin, nil)
 				fr.On("Get", mock.Anything).Return(family, nil)
-				ir.On("GetByID", inviteID).Return(pendingInvite, nil)
-				ir.On("Update", mock.AnythingOfType("*user.Invite")).Return(nil)
+				ir.On("GetByID", mock.Anything, inviteID).Return(pendingInvite, nil)
+				ir.On("Update", mock.Anything, mock.AnythingOfType("*user.Invite")).Return(nil)
 			},
 			wantError: false,
 		},
@@ -532,7 +533,7 @@ func TestInviteService_RevokeInvite(t *testing.T) {
 			setup: func(ir *MockInviteRepository, ur *MockUserRepository, fr *MockFamilyRepository) {
 				ur.On("GetByID", mock.Anything, revokerID).Return(admin, nil)
 				fr.On("Get", mock.Anything).Return(family, nil)
-				ir.On("GetByID", inviteID).Return(acceptedInvite, nil)
+				ir.On("GetByID", mock.Anything, inviteID).Return(acceptedInvite, nil)
 			},
 			wantError: true,
 		},
@@ -543,7 +544,7 @@ func TestInviteService_RevokeInvite(t *testing.T) {
 			setup: func(ir *MockInviteRepository, ur *MockUserRepository, fr *MockFamilyRepository) {
 				ur.On("GetByID", mock.Anything, revokerID).Return(admin, nil)
 				fr.On("Get", mock.Anything).Return(family, nil)
-				ir.On("GetByID", mock.Anything).Return(nil, errors.New("not found"))
+				ir.On("GetByID", mock.Anything, mock.Anything).Return(nil, errors.New("not found"))
 			},
 			wantError: true,
 			errorType: services.ErrInviteNotFound,
@@ -607,9 +608,9 @@ func TestInviteService_ListFamilyInvites(t *testing.T) {
 			name:     "Success - List family invites",
 			familyID: familyID,
 			setup: func(ir *MockInviteRepository) {
-				ir.On("GetByFamily", familyID).Return(invites, nil)
+				ir.On("GetByFamily", mock.Anything, familyID).Return(invites, nil)
 				// Mock update for expired invite
-				ir.On("Update", mock.AnythingOfType("*user.Invite")).Return(nil).Maybe()
+				ir.On("Update", mock.Anything, mock.AnythingOfType("*user.Invite")).Return(nil).Maybe()
 			},
 			wantError: false,
 		},
@@ -617,7 +618,7 @@ func TestInviteService_ListFamilyInvites(t *testing.T) {
 			name:     "Error - Repository error",
 			familyID: familyID,
 			setup: func(ir *MockInviteRepository) {
-				ir.On("GetByFamily", familyID).Return(nil, errors.New("database error"))
+				ir.On("GetByFamily", mock.Anything, familyID).Return(nil, errors.New("database error"))
 			},
 			wantError: true,
 		},
@@ -656,14 +657,14 @@ func TestInviteService_DeleteExpiredInvites(t *testing.T) {
 		{
 			name: "Success - Delete expired invites",
 			setup: func(ir *MockInviteRepository) {
-				ir.On("DeleteExpired").Return(nil)
+				ir.On("DeleteExpired", mock.Anything).Return(nil)
 			},
 			wantError: false,
 		},
 		{
 			name: "Error - Repository error",
 			setup: func(ir *MockInviteRepository) {
-				ir.On("DeleteExpired").Return(errors.New("database error"))
+				ir.On("DeleteExpired", mock.Anything).Return(errors.New("database error"))
 			},
 			wantError: true,
 		},

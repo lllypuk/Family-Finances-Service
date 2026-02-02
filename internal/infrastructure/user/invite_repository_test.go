@@ -44,11 +44,11 @@ func TestInviteRepositorySQLite_Integration(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		err = repo.Create(invite)
+		err = repo.Create(ctx, invite)
 		require.NoError(t, err)
 
 		// Verify invite was created
-		retrievedInvite, err := repo.GetByID(invite.ID)
+		retrievedInvite, err := repo.GetByID(ctx, invite.ID)
 		require.NoError(t, err)
 		assert.Equal(t, invite.ID, retrievedInvite.ID)
 		assert.Equal(t, invite.Email, retrievedInvite.Email)
@@ -78,11 +78,11 @@ func TestInviteRepositorySQLite_Integration(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		err = repo.Create(invite)
+		err = repo.Create(ctx, invite)
 		require.NoError(t, err)
 
 		// Retrieve by token
-		retrievedInvite, err := repo.GetByToken(invite.Token)
+		retrievedInvite, err := repo.GetByToken(ctx, invite.Token)
 		require.NoError(t, err)
 		assert.Equal(t, invite.ID, retrievedInvite.ID)
 		assert.Equal(t, invite.Token, retrievedInvite.Token)
@@ -93,7 +93,7 @@ func TestInviteRepositorySQLite_Integration(t *testing.T) {
 		repo := userrepo.NewInviteSQLiteRepository(db)
 
 		// Try to get non-existent token
-		_, err := repo.GetByToken("nonexistent-token")
+		_, err := repo.GetByToken(ctx, "nonexistent-token")
 		require.Error(t, err)
 	})
 
@@ -117,7 +117,7 @@ func TestInviteRepositorySQLite_Integration(t *testing.T) {
 			user.RoleMember,
 		)
 		require.NoError(t, err)
-		err = repo.Create(invite1)
+		err = repo.Create(ctx, invite1)
 		require.NoError(t, err)
 
 		invite2, err := user.NewInvite(
@@ -127,11 +127,11 @@ func TestInviteRepositorySQLite_Integration(t *testing.T) {
 			user.RoleChild,
 		)
 		require.NoError(t, err)
-		err = repo.Create(invite2)
+		err = repo.Create(ctx, invite2)
 		require.NoError(t, err)
 
 		// Retrieve all family invites
-		invites, err := repo.GetByFamily(uuid.MustParse(familyID))
+		invites, err := repo.GetByFamily(ctx, uuid.MustParse(familyID))
 		require.NoError(t, err)
 		assert.Len(t, invites, 2)
 	})
@@ -153,11 +153,11 @@ func TestInviteRepositorySQLite_Integration(t *testing.T) {
 		// Create pending invite
 		invite, err := user.NewInvite(uuid.MustParse(familyID), uuid.MustParse(creatorID), email, user.RoleMember)
 		require.NoError(t, err)
-		err = repo.Create(invite)
+		err = repo.Create(ctx, invite)
 		require.NoError(t, err)
 
 		// Retrieve pending invites
-		invites, err := repo.GetPendingByEmail(email)
+		invites, err := repo.GetPendingByEmail(ctx, email)
 		require.NoError(t, err)
 		assert.Len(t, invites, 1)
 		assert.Equal(t, user.InviteStatusPending, invites[0].Status)
@@ -183,7 +183,7 @@ func TestInviteRepositorySQLite_Integration(t *testing.T) {
 			user.RoleMember,
 		)
 		require.NoError(t, err)
-		err = repo.Create(invite)
+		err = repo.Create(ctx, invite)
 		require.NoError(t, err)
 
 		// Create accepting user
@@ -201,11 +201,11 @@ func TestInviteRepositorySQLite_Integration(t *testing.T) {
 		invite.Accept(uuid.MustParse(acceptingUserID))
 
 		// Update invite
-		err = repo.Update(invite)
+		err = repo.Update(ctx, invite)
 		require.NoError(t, err)
 
 		// Verify update
-		retrievedInvite, err := repo.GetByID(invite.ID)
+		retrievedInvite, err := repo.GetByID(ctx, invite.ID)
 		require.NoError(t, err)
 		assert.Equal(t, user.InviteStatusAccepted, retrievedInvite.Status)
 		assert.NotNil(t, retrievedInvite.AcceptedBy)
@@ -233,15 +233,15 @@ func TestInviteRepositorySQLite_Integration(t *testing.T) {
 			user.RoleMember,
 		)
 		require.NoError(t, err)
-		err = repo.Create(invite)
+		err = repo.Create(ctx, invite)
 		require.NoError(t, err)
 
 		// Delete invite
-		err = repo.Delete(invite.ID)
+		err = repo.Delete(ctx, invite.ID)
 		require.NoError(t, err)
 
 		// Verify deletion
-		_, err = repo.GetByID(invite.ID)
+		_, err = repo.GetByID(ctx, invite.ID)
 		require.Error(t, err)
 	})
 
@@ -267,7 +267,7 @@ func TestInviteRepositorySQLite_Integration(t *testing.T) {
 		require.NoError(t, err)
 		// Set expiration to past
 		expiredInvite.ExpiresAt = time.Now().Add(-24 * time.Hour)
-		err = repo.Create(expiredInvite)
+		err = repo.Create(ctx, expiredInvite)
 		require.NoError(t, err)
 
 		// Create valid invite
@@ -278,19 +278,19 @@ func TestInviteRepositorySQLite_Integration(t *testing.T) {
 			user.RoleMember,
 		)
 		require.NoError(t, err)
-		err = repo.Create(validInvite)
+		err = repo.Create(ctx, validInvite)
 		require.NoError(t, err)
 
 		// Delete expired invites
-		err = repo.DeleteExpired()
+		err = repo.DeleteExpired(ctx)
 		require.NoError(t, err)
 
 		// Verify expired invite is deleted
-		_, err = repo.GetByID(expiredInvite.ID)
+		_, err = repo.GetByID(ctx, expiredInvite.ID)
 		require.Error(t, err)
 
 		// Verify valid invite still exists
-		_, err = repo.GetByID(validInvite.ID)
+		_, err = repo.GetByID(ctx, validInvite.ID)
 		require.NoError(t, err)
 	})
 
@@ -314,18 +314,18 @@ func TestInviteRepositorySQLite_Integration(t *testing.T) {
 			user.RoleMember,
 		)
 		require.NoError(t, err)
-		err = repo.Create(invite)
+		err = repo.Create(ctx, invite)
 		require.NoError(t, err)
 
 		// Revoke the invite
 		invite.Revoke()
 
 		// Update invite
-		err = repo.Update(invite)
+		err = repo.Update(ctx, invite)
 		require.NoError(t, err)
 
 		// Verify revocation
-		retrievedInvite, err := repo.GetByID(invite.ID)
+		retrievedInvite, err := repo.GetByID(ctx, invite.ID)
 		require.NoError(t, err)
 		assert.Equal(t, user.InviteStatusRevoked, retrievedInvite.Status)
 	})
@@ -339,7 +339,7 @@ func TestInviteRepositorySQLite_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Get invites for family with no invites
-		invites, err := repo.GetByFamily(uuid.MustParse(familyID))
+		invites, err := repo.GetByFamily(ctx, uuid.MustParse(familyID))
 		require.NoError(t, err)
 		assert.Empty(t, invites)
 	})
@@ -366,7 +366,7 @@ func TestInviteRepositorySQLite_Integration(t *testing.T) {
 			user.RoleMember,
 		)
 		require.NoError(t, err)
-		err = repo.Create(pendingInvite)
+		err = repo.Create(ctx, pendingInvite)
 		require.NoError(t, err)
 
 		// Create accepted invite with same email
@@ -377,7 +377,7 @@ func TestInviteRepositorySQLite_Integration(t *testing.T) {
 			user.RoleMember,
 		)
 		require.NoError(t, err)
-		err = repo.Create(acceptedInvite)
+		err = repo.Create(ctx, acceptedInvite)
 		require.NoError(t, err)
 
 		// Create accepting user
@@ -392,11 +392,11 @@ func TestInviteRepositorySQLite_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		acceptedInvite.Accept(uuid.MustParse(acceptingUserID))
-		err = repo.Update(acceptedInvite)
+		err = repo.Update(ctx, acceptedInvite)
 		require.NoError(t, err)
 
 		// Get pending invites
-		invites, err := repo.GetPendingByEmail(email)
+		invites, err := repo.GetPendingByEmail(ctx, email)
 		require.NoError(t, err)
 		assert.Len(t, invites, 1)
 		assert.Equal(t, user.InviteStatusPending, invites[0].Status)

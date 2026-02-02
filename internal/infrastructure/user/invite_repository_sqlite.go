@@ -30,8 +30,8 @@ func NewInviteSQLiteRepository(db *sql.DB) *InviteSQLiteRepository {
 }
 
 // Create creates a new invite
-func (r *InviteSQLiteRepository) Create(invite *user.Invite) error {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+func (r *InviteSQLiteRepository) Create(ctx context.Context, invite *user.Invite) error {
+	ctx, cancel := context.WithTimeout(ctx, dbTimeout)
 	defer cancel()
 
 	query := `
@@ -77,8 +77,8 @@ func (r *InviteSQLiteRepository) Create(invite *user.Invite) error {
 }
 
 // GetByToken retrieves an invite by its token
-func (r *InviteSQLiteRepository) GetByToken(token string) (*user.Invite, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+func (r *InviteSQLiteRepository) GetByToken(ctx context.Context, token string) (*user.Invite, error) {
+	ctx, cancel := context.WithTimeout(ctx, dbTimeout)
 	defer cancel()
 
 	query := `
@@ -101,8 +101,8 @@ func (r *InviteSQLiteRepository) GetByToken(token string) (*user.Invite, error) 
 }
 
 // GetByID retrieves an invite by its ID
-func (r *InviteSQLiteRepository) GetByID(id uuid.UUID) (*user.Invite, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+func (r *InviteSQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*user.Invite, error) {
+	ctx, cancel := context.WithTimeout(ctx, dbTimeout)
 	defer cancel()
 
 	query := `
@@ -125,8 +125,8 @@ func (r *InviteSQLiteRepository) GetByID(id uuid.UUID) (*user.Invite, error) {
 }
 
 // GetByFamily retrieves all invites for a family
-func (r *InviteSQLiteRepository) GetByFamily(familyID uuid.UUID) ([]*user.Invite, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+func (r *InviteSQLiteRepository) GetByFamily(ctx context.Context, familyID uuid.UUID) ([]*user.Invite, error) {
+	ctx, cancel := context.WithTimeout(ctx, dbTimeout)
 	defer cancel()
 
 	query := `
@@ -161,8 +161,8 @@ func (r *InviteSQLiteRepository) GetByFamily(familyID uuid.UUID) ([]*user.Invite
 }
 
 // GetPendingByEmail retrieves pending invites for an email
-func (r *InviteSQLiteRepository) GetPendingByEmail(email string) ([]*user.Invite, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+func (r *InviteSQLiteRepository) GetPendingByEmail(ctx context.Context, email string) ([]*user.Invite, error) {
+	ctx, cancel := context.WithTimeout(ctx, dbTimeout)
 	defer cancel()
 
 	query := `
@@ -197,8 +197,8 @@ func (r *InviteSQLiteRepository) GetPendingByEmail(email string) ([]*user.Invite
 }
 
 // Update updates an invite
-func (r *InviteSQLiteRepository) Update(invite *user.Invite) error {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+func (r *InviteSQLiteRepository) Update(ctx context.Context, invite *user.Invite) error {
+	ctx, cancel := context.WithTimeout(ctx, dbTimeout)
 	defer cancel()
 
 	query := `
@@ -244,8 +244,8 @@ func (r *InviteSQLiteRepository) Update(invite *user.Invite) error {
 }
 
 // Delete deletes an invite
-func (r *InviteSQLiteRepository) Delete(id uuid.UUID) error {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+func (r *InviteSQLiteRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	ctx, cancel := context.WithTimeout(ctx, dbTimeout)
 	defer cancel()
 
 	query := `DELETE FROM invites WHERE id = ?`
@@ -268,8 +268,8 @@ func (r *InviteSQLiteRepository) Delete(id uuid.UUID) error {
 }
 
 // DeleteExpired deletes all expired invites
-func (r *InviteSQLiteRepository) DeleteExpired() error {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+func (r *InviteSQLiteRepository) DeleteExpired(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, dbTimeout)
 	defer cancel()
 
 	query := `

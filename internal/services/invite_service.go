@@ -103,7 +103,7 @@ func (s *inviteService) CreateInvite(
 	}
 
 	// Check for existing pending invites for this email
-	pendingInvites, err := s.inviteRepo.GetPendingByEmail(email)
+	pendingInvites, err := s.inviteRepo.GetPendingByEmail(ctx, email)
 	if err == nil && len(pendingInvites) > 0 {
 		return nil, fmt.Errorf("pending invite already exists for email: %s", email)
 	}
@@ -121,7 +121,7 @@ func (s *inviteService) CreateInvite(
 	}
 
 	// Save to repository
-	if createErr := s.inviteRepo.Create(invite); createErr != nil {
+	if createErr := s.inviteRepo.Create(ctx, invite); createErr != nil {
 		return nil, fmt.Errorf("failed to save invite: %w", createErr)
 	}
 
@@ -130,7 +130,7 @@ func (s *inviteService) CreateInvite(
 
 // GetInviteByToken retrieves an invite by its token
 func (s *inviteService) GetInviteByToken(ctx context.Context, token string) (*user.Invite, error) {
-	invite, err := s.inviteRepo.GetByToken(token)
+	invite, err := s.inviteRepo.GetByToken(ctx, token)
 	if err != nil {
 		return nil, ErrInviteNotFound
 	}
@@ -138,7 +138,7 @@ func (s *inviteService) GetInviteByToken(ctx context.Context, token string) (*us
 	// Check if expired
 	if invite.IsExpired() && invite.Status == user.InviteStatusPending {
 		invite.MarkExpired()
-		if updateErr := s.inviteRepo.Update(invite); updateErr != nil {
+		if updateErr := s.inviteRepo.Update(ctx, invite); updateErr != nil {
 			s.logger.WarnContext(ctx, "failed to update expired invite status",
 				slog.String("invite_id", invite.ID.String()),
 				slog.String("error", updateErr.Error()),
@@ -202,7 +202,7 @@ func (s *inviteService) AcceptInvite(ctx context.Context, token string, req dto.
 
 	// Mark invite as accepted
 	invite.Accept(newUser.ID)
-	if updateErr := s.inviteRepo.Update(invite); updateErr != nil {
+	if updateErr := s.inviteRepo.Update(ctx, invite); updateErr != nil {
 		s.logger.ErrorContext(ctx, "failed to mark invite as accepted",
 			slog.String("invite_id", invite.ID.String()),
 			slog.String("user_id", newUser.ID.String()),
@@ -232,7 +232,7 @@ func (s *inviteService) RevokeInvite(ctx context.Context, inviteID, revokerID uu
 	}
 
 	// Get invite
-	invite, err := s.inviteRepo.GetByID(inviteID)
+	invite, err := s.inviteRepo.GetByID(ctx, inviteID)
 	if err != nil {
 		return ErrInviteNotFound
 	}
@@ -253,7 +253,7 @@ func (s *inviteService) RevokeInvite(ctx context.Context, inviteID, revokerID uu
 
 	// Revoke invite
 	invite.Revoke()
-	if updateErr := s.inviteRepo.Update(invite); updateErr != nil {
+	if updateErr := s.inviteRepo.Update(ctx, invite); updateErr != nil {
 		return fmt.Errorf("failed to revoke invite: %w", updateErr)
 	}
 
@@ -262,7 +262,7 @@ func (s *inviteService) RevokeInvite(ctx context.Context, inviteID, revokerID uu
 
 // ListFamilyInvites retrieves all invites for the family
 func (s *inviteService) ListFamilyInvites(ctx context.Context, familyID uuid.UUID) ([]*user.Invite, error) {
-	invites, err := s.inviteRepo.GetByFamily(familyID)
+	invites, err := s.inviteRepo.GetByFamily(ctx, familyID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get family invites: %w", err)
 	}
@@ -271,7 +271,7 @@ func (s *inviteService) ListFamilyInvites(ctx context.Context, familyID uuid.UUI
 	for _, inv := range invites {
 		if inv.Status == user.InviteStatusPending && inv.IsExpired() {
 			inv.MarkExpired()
-			if updateErr := s.inviteRepo.Update(inv); updateErr != nil {
+			if updateErr := s.inviteRepo.Update(ctx, inv); updateErr != nil {
 				s.logger.WarnContext(ctx, "failed to update expired invite status",
 					slog.String("invite_id", inv.ID.String()),
 					slog.String("error", updateErr.Error()),
@@ -284,8 +284,8 @@ func (s *inviteService) ListFamilyInvites(ctx context.Context, familyID uuid.UUI
 }
 
 // DeleteExpiredInvites removes all expired invites
-func (s *inviteService) DeleteExpiredInvites(_ context.Context) error {
-	if err := s.inviteRepo.DeleteExpired(); err != nil {
+func (s *inviteService) DeleteExpiredInvites(ctx context.Context) error {
+	if err := s.inviteRepo.DeleteExpired(ctx); err != nil {
 		return fmt.Errorf("failed to delete expired invites: %w", err)
 	}
 	return nil

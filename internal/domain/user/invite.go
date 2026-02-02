@@ -1,6 +1,7 @@
 package user
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"time"
@@ -112,26 +113,26 @@ func generateInviteToken() (string, error) {
 // InviteRepository defines the interface for invite persistence
 type InviteRepository interface {
 	// Create creates a new invite
-	Create(invite *Invite) error
+	Create(ctx context.Context, invite *Invite) error
 
 	// GetByToken retrieves an invite by its token
-	GetByToken(token string) (*Invite, error)
+	GetByToken(ctx context.Context, token string) (*Invite, error)
 
 	// GetByID retrieves an invite by its ID
-	GetByID(id uuid.UUID) (*Invite, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*Invite, error)
 
 	// GetByFamily retrieves all invites for a family
-	GetByFamily(familyID uuid.UUID) ([]*Invite, error)
+	GetByFamily(ctx context.Context, familyID uuid.UUID) ([]*Invite, error)
 
 	// GetPendingByEmail retrieves pending invites for an email
-	GetPendingByEmail(email string) ([]*Invite, error)
+	GetPendingByEmail(ctx context.Context, email string) ([]*Invite, error)
 
 	// Update updates an invite
-	Update(invite *Invite) error
+	Update(ctx context.Context, invite *Invite) error
 
 	// Delete deletes an invite
-	Delete(id uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID) error
 
 	// DeleteExpired deletes all expired invites
-	DeleteExpired() error
+	DeleteExpired(ctx context.Context) error
 }
