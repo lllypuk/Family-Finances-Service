@@ -112,7 +112,7 @@
         <section class="progress-section">
             <h3>Прогресс расходов</h3>
             <div class="progress {{.Budget.ProgressBarClass}}"
-                 hx-get="/budgets/{{.Budget.ID}}/progress"
+                 hx-get="/htmx/budgets/{{.Budget.ID}}/progress"
                  hx-trigger="load, every 30s"
                  hx-swap="outerHTML">
                 <div class="progress-bar" style="width: {{if gt .Budget.Percentage 100.0}}100{{else}}{{printf "%.1f" .Budget.Percentage}}{{end}}%">

@@ -176,7 +176,7 @@
                 <!-- Progress Bar -->
                 <div class="progress-section">
                     <div class="progress {{.ProgressBarClass}}"
-                         hx-get="/budgets/{{.ID}}/progress"
+                         hx-get="/htmx/budgets/{{.ID}}/progress"
                          hx-trigger="load, every 30s"
                          hx-swap="outerHTML">
                         <div class="progress-bar" style="width: {{if gt .Percentage 100.0}}100{{else}}{{printf "%.1f" .Percentage}}{{end}}%">
