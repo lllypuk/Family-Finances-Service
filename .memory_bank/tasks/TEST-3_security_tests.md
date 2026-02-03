@@ -1,6 +1,6 @@
 # TEST-3: Security тесты
 
-## Статус: TODO
+## Статус: DONE ✅
 ## Приоритет: IMPORTANT
 
 ## Проблема
@@ -174,11 +174,58 @@ func TestLogin_OpenRedirect(t *testing.T) {
 
 ## Файлы для создания
 
-1. `internal/services/backup_service_security_test.go`
-2. `internal/services/invite_security_test.go`
-3. `internal/web/handlers/auth_security_test.go` (или дополнить существующий auth_test.go)
+1. `internal/services/backup_service_security_test.go` ✅
+2. `internal/services/invite_security_test.go` ✅
+3. `internal/web/handlers/auth_security_test.go` ✅
 
 ## Тестирование
 
-- `make test` — все тесты проходят
-- `make lint` — 0 issues
+- `make test` — все тесты проходят ✅
+- `make lint` — 0 issues ✅
+
+## Реализация (выполнено)
+
+### 1. backup_service_security_test.go
+Создан файл с комплексными тестами защиты от path traversal:
+- **TestBackupService_PathTraversal** - 14 векторов атак (directory traversal, null bytes, SQL injection, XSS, command injection)
+- **TestBackupService_SafePathDirectoryEscape** - проверка невозможности выхода за пределы backup directory
+- **TestBackupService_FilenameValidationEdgeCases** - граничные случаи валидации имен файлов
+- **TestBackupService_PathValidationDefenseInDepth** - defense-in-depth для путей (SQL injection, command injection, wildcards)
+- **TestBackupService_ConcurrentPathTraversalAttempts** - проверка безопасности при конкурентном доступе
+
+**Покрытие:** Path traversal, null byte injection, SQL injection, command injection, XSS attempts
+
+### 2. invite_security_test.go
+Создан файл с тестами безопасности invite tokens:
+- **TestInviteService_InvalidTokens** - 26 векторов атак на токены (SQL injection, XSS, null bytes, Unicode tricks, LDAP/XPath injection)
+- **TestInviteService_ExpiredTokenHandling** - обработка истекших токенов
+- **TestInviteService_TokenValidationEdgeCases** - граничные случаи (Unicode zero-width, RTL override, URL encoding, blind SQL injection)
+- **TestInviteService_AcceptInviteSecurityValidation** - валидация email при принятии invite (SQL injection, XSS, null bytes)
+- **TestInviteService_RevokeWithInvalidInput** - обработка невалидных UUID
+- **TestInviteService_ConcurrentTokenAccess** - безопасность при конкурентном доступе
+- **TestInviteService_MaliciousEmailNormalization** - нормализация email с вредоносными символами
+
+**Покрытие:** Token injection, email validation, SQL injection, XSS, Unicode attacks
+
+### 3. auth_security_test.go
+Создан файл с тестами безопасности аутентификации:
+- **TestSanitizeRedirectURL_SecurityVectors** - 22 вектора атак на open redirect (protocol-relative, absolute URLs, javascript:, data:, CRLF injection)
+- **TestLogin_OpenRedirectProtection** - интеграционные тесты защиты от open redirect
+- **TestLogin_SQLInjectionProtection** - документация SQL injection векторов (10 примеров)
+- **TestLogin_XSSProtection** - документация XSS векторов (12 примеров)
+- **TestLogin_CSRFProtection** - документация требований CSRF защиты
+- **TestSetup_InputValidation** - валидация входных данных при setup
+- **TestSanitizeRedirectURL_EdgeCases** - граничные случаи (Unicode RTL, zero-width, UNC paths, очень длинные URL)
+- **TestLogin_HeaderInjection** - CRLF injection prevention
+- **TestSanitizeRedirectURL_ProtocolVariations** - различные протоколы (http, https, ftp, file, data, javascript, vbscript, mailto, tel)
+- **TestLogin_PasswordTimingAttack** - документация использования bcrypt
+- **TestSetup_RateLimitingConsiderations** - документация rate limiting
+- **TestLogin_SessionFixation** - документация session regeneration
+
+**Покрытие:** Open redirect, CRLF injection, protocol validation, XSS documentation, SQL injection documentation
+
+## Результаты
+- ✅ Все тесты проходят (106 новых тестов)
+- ✅ Линтер: 0 issues
+- ✅ Покрытие всех критических векторов атак
+- ✅ Документированы лучшие практики безопасности
