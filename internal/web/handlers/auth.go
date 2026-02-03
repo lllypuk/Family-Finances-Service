@@ -18,16 +18,71 @@ import (
 
 // AuthHandler обрабатывает запросы аутентификации
 type AuthHandler struct {
-	repos    *handlers.Repositories
-	services *services.Services
+	*BaseHandler
 }
 
 // NewAuthHandler создает новый обработчик аутентификации
 func NewAuthHandler(repos *handlers.Repositories, services *services.Services) *AuthHandler {
 	return &AuthHandler{
-		repos:    repos,
-		services: services,
+		BaseHandler: NewBaseHandler(repos, services),
 	}
+}
+
+// sanitizeRedirectURL validates and sanitizes a redirect URL to prevent open redirect attacks.
+// Only relative paths starting with "/" are allowed. Protocol-relative URLs and absolute URLs are rejected.
+// This function defends against various bypass techniques including:
+// - Protocol-relative URLs (//evil.com)
+// - Backslash bypasses (/\evil.com or /\/evil.com)
+// - Absolute URLs (https://evil.com)
+// - URLs with host, scheme, or userinfo components
+func sanitizeRedirectURL(rawURL string) string {
+	if rawURL == "" {
+		return "/"
+	}
+
+	// Normalize all backslashes to forward slashes
+	rawURL = strings.ReplaceAll(rawURL, "\\", "/")
+
+	// Must start with exactly one slash, not zero and not two or more
+	// This check must happen BEFORE collapsing slashes to catch //evil.com patterns
+	if !strings.HasPrefix(rawURL, "/") {
+		return "/"
+	}
+
+	// Reject protocol-relative URLs (//evil.com) and variants (///evil.com)
+	// This prevents bypasses even after normalization
+	if len(rawURL) >= 2 && rawURL[1] == '/' {
+		return "/"
+	}
+
+	// Parse to catch any remaining edge cases
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host != "" || parsed.Scheme != "" {
+		return "/"
+	}
+
+	// Additional check: ensure no userinfo (user:pass@) component
+	if parsed.User != nil {
+		return "/"
+	}
+
+	// Use only the path + query (strip any fragment or userinfo)
+	result := parsed.Path
+	if parsed.RawQuery != "" {
+		result += "?" + parsed.RawQuery
+	}
+
+	// Final validation: must start with / and not be empty
+	if result == "" || !strings.HasPrefix(result, "/") {
+		return "/"
+	}
+
+	// Final check: after all processing, reject if second character is still /
+	if len(result) >= 2 && result[1] == '/' {
+		return "/"
+	}
+
+	return result
 }
 
 // LoginPage отображает страницу входа
@@ -41,6 +96,7 @@ func (h *AuthHandler) LoginPage(c echo.Context) error {
 		"CSRFToken": csrfToken,
 		"Title":     "Sign In",
 		"IsLogin":   true,
+		"Messages":  h.getFlashMessages(c),
 	}
 
 	return c.Render(http.StatusOK, "login.html", data)
@@ -66,7 +122,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	}
 
 	// Поиск пользователя по email
-	foundUser, err := h.repos.User.GetByEmail(c.Request().Context(), form.Email)
+	foundUser, err := h.repositories.User.GetByEmail(c.Request().Context(), form.Email)
 	if err != nil {
 		return h.loginError(c, "Invalid email or password", nil)
 	}
@@ -91,18 +147,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	}
 
 	// Определяем куда перенаправить после входа
-	redirectTo := c.QueryParam("redirect")
-	if redirectTo == "" {
-		redirectTo = "/"
-	} else {
-		// Replace backslashes with forward slashes to normalize
-		redirectTo = strings.ReplaceAll(redirectTo, "\\", "/")
-		parsed, parsErr := url.Parse(redirectTo)
-		// Only allow local redirects (no host, no scheme)
-		if parsErr != nil || parsed.IsAbs() || parsed.Host != "" {
-			redirectTo = "/"
-		}
-	}
+	redirectTo := sanitizeRedirectURL(c.QueryParam("redirect"))
 
 	// Если это HTMX запрос, возвращаем redirect header
 	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
@@ -124,6 +169,7 @@ func (h *AuthHandler) SetupPage(c echo.Context) error {
 		"CSRFToken": csrfToken,
 		"Title":     "Первоначальная настройка",
 		"IsSetup":   true,
+		"Messages":  h.getFlashMessages(c),
 	}
 
 	return c.Render(http.StatusOK, "setup.html", data)
@@ -202,7 +248,7 @@ func (h *AuthHandler) loginError(c echo.Context, message string, fieldErrors map
 
 	// Если это HTMX запрос, возвращаем только форму
 	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
-		return c.Render(http.StatusUnprocessableEntity, "login_form.html", data)
+		return c.Render(http.StatusUnprocessableEntity, "login_form", data)
 	}
 
 	return c.Render(http.StatusUnprocessableEntity, "login.html", data)
@@ -227,8 +273,144 @@ func (h *AuthHandler) setupError(c echo.Context, message string, fieldErrors map
 
 	// Если это HTMX запрос, возвращаем только форму
 	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
-		return c.Render(http.StatusUnprocessableEntity, "setup_form.html", data)
+		return c.Render(http.StatusUnprocessableEntity, "setup_form", data)
 	}
 
 	return c.Render(http.StatusUnprocessableEntity, "setup.html", data)
+}
+
+// InviteRegisterPage displays the invite registration page
+func (h *AuthHandler) InviteRegisterPage(c echo.Context) error {
+	token := c.Param("token")
+	if token == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid invite token")
+	}
+
+	// Get invite by token
+	invite, err := h.services.Invite.GetInviteByToken(c.Request().Context(), token)
+	if err != nil {
+		if strings.Contains(err.Error(), "expired") {
+			return h.inviteError(c, token, "This invitation has expired", nil)
+		}
+		return h.inviteError(c, token, "Invalid or expired invitation", nil)
+	}
+
+	csrfToken, err := middleware.GetCSRFToken(c)
+	if err != nil {
+		return err
+	}
+
+	data := map[string]any{
+		"CSRFToken": csrfToken,
+		"Title":     "Accept Invitation",
+		"Invite":    invite,
+		"Token":     token,
+		"Email":     invite.Email,
+		"Role":      invite.Role,
+	}
+
+	return c.Render(http.StatusOK, "invite", data)
+}
+
+// InviteRegister handles invite registration
+func (h *AuthHandler) InviteRegister(c echo.Context) error {
+	token := c.Param("token")
+	if token == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid invite token")
+	}
+
+	var form models.InviteRegisterForm
+	if err := c.Bind(&form); err != nil {
+		return h.inviteError(c, token, "Invalid form data", nil)
+	}
+
+	// Validation
+	if err := c.Validate(&form); err != nil {
+		return h.inviteError(c, token, "Please check your input", models.GetValidationErrors(err))
+	}
+
+	// Additional email validation
+	if err := validation.ValidateEmail(form.Email); err != nil {
+		return h.inviteError(c, token, "Invalid email format", map[string]string{
+			"email": "Please enter a valid email address",
+		})
+	}
+
+	// Accept invite via service
+	acceptDTO := dto.AcceptInviteDTO{
+		Email:    form.Email,
+		Name:     form.Name,
+		Password: form.Password,
+	}
+
+	newUser, err := h.services.Invite.AcceptInvite(c.Request().Context(), token, acceptDTO)
+	if err != nil {
+		if strings.Contains(err.Error(), "expired") {
+			return h.inviteError(c, token, "This invitation has expired", nil)
+		}
+		if strings.Contains(err.Error(), "already exists") {
+			return h.inviteError(c, token, "User with this email already exists", nil)
+		}
+		if strings.Contains(err.Error(), "email does not match") {
+			return h.inviteError(c, token, "Email does not match the invitation", map[string]string{
+				"email": "Email must match the invited email address",
+			})
+		}
+		return h.inviteError(c, token, "Failed to register: "+err.Error(), nil)
+	}
+
+	// Create session for the new user
+	sessionData := &middleware.SessionData{
+		UserID: newUser.ID,
+		Role:   newUser.Role,
+		Email:  newUser.Email,
+	}
+
+	if sessionErr := middleware.SetSessionData(c, sessionData); sessionErr != nil {
+		// User is created, but session failed - redirect to login
+		if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
+			c.Response().Header().Set("Hx-Redirect", "/login")
+			return c.NoContent(http.StatusOK)
+		}
+		return c.Redirect(http.StatusFound, "/login")
+	}
+
+	// If HTMX request, redirect to dashboard
+	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
+		c.Response().Header().Set("Hx-Redirect", "/")
+		return c.NoContent(http.StatusOK)
+	}
+
+	return c.Redirect(http.StatusFound, "/")
+}
+
+// inviteError returns invite registration error
+func (h *AuthHandler) inviteError(c echo.Context, token, message string, fieldErrors map[string]string) error {
+	csrfToken, _ := middleware.GetCSRFToken(c)
+
+	// Try to get invite info for display
+	invite, _ := h.services.Invite.GetInviteByToken(c.Request().Context(), token)
+
+	email := c.FormValue("email")
+	if email == "" && invite != nil {
+		email = invite.Email
+	}
+
+	data := map[string]any{
+		"CSRFToken":   csrfToken,
+		"Title":       "Accept Invitation",
+		"Error":       message,
+		"FieldErrors": fieldErrors,
+		"Token":       token,
+		"Email":       email,
+		"Name":        c.FormValue("name"),
+		"Invite":      invite,
+	}
+
+	// If HTMX request, return only the form
+	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
+		return c.Render(http.StatusUnprocessableEntity, "pages/invite_form.html", data)
+	}
+
+	return c.Render(http.StatusUnprocessableEntity, "pages/invite.html", data)
 }

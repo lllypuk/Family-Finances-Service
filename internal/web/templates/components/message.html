@@ -1,0 +1,8 @@
+{{define "components/message.html"}}
+<article style="margin-top: 1rem;">
+    <p>
+        {{if eq .Type "warning"}}⚠️{{else if eq .Type "success"}}✅{{else if eq .Type "error"}}❌{{else}}ℹ️{{end}}
+        {{.Message}}
+    </p>
+</article>
+{{end}}

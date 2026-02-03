@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,6 +18,11 @@ import (
 const (
 	// HTMXRequestHeader is the header value for HTMX requests
 	HTMXRequestHeader = "true"
+	// Flash message cookie names
+	flashCookieName     = "flash_message"
+	flashTypeCookieName = "flash_type"
+	// Flash message cookie expiration in seconds
+	flashCookieMaxAge = 10 // 10 seconds - enough time for redirect
 )
 
 var (
@@ -72,9 +78,17 @@ type Message struct {
 }
 
 // getFlashMessages получает flash сообщения из сессии
-func (h *BaseHandler) getFlashMessages(_ echo.Context) []Message {
-	// Временная заглушка - в реальной реализации будет получать из сессии
-	return []Message{}
+func (h *BaseHandler) getFlashMessages(c echo.Context) []Message {
+	msgType, message := GetFlashMessage(c)
+	if message == "" {
+		return []Message{}
+	}
+	return []Message{
+		{
+			Type: msgType,
+			Text: message,
+		},
+	}
 }
 
 // renderPage рендерит полную страницу
@@ -155,4 +169,62 @@ func (h *BaseHandler) handleDelete(c echo.Context, params DeleteEntityParams) er
 	}
 
 	return h.redirect(c, params.RedirectURL)
+}
+
+// htmxError returns an HTMX-compatible error response
+func (h *BaseHandler) htmxError(c echo.Context, message string) error {
+	return c.String(http.StatusBadRequest, message)
+}
+
+// setFlashMessage sets a flash message in a cookie
+func setFlashMessage(c echo.Context, msgType, message string) {
+	c.SetCookie(&http.Cookie{
+		Name:     flashCookieName,
+		Value:    url.QueryEscape(message),
+		Path:     "/",
+		MaxAge:   flashCookieMaxAge,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	})
+	c.SetCookie(&http.Cookie{
+		Name:     flashTypeCookieName,
+		Value:    msgType,
+		Path:     "/",
+		MaxAge:   flashCookieMaxAge,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+// GetFlashMessage reads and clears the flash message
+func GetFlashMessage(c echo.Context) (string, string) {
+	msgCookie, err := c.Cookie(flashCookieName)
+	if err != nil {
+		return "", ""
+	}
+	typeCookie, _ := c.Cookie(flashTypeCookieName)
+
+	// Clear cookies
+	c.SetCookie(&http.Cookie{Name: flashCookieName, Path: "/", MaxAge: -1})
+	c.SetCookie(&http.Cookie{Name: flashTypeCookieName, Path: "/", MaxAge: -1})
+
+	message, _ := url.QueryUnescape(msgCookie.Value)
+	msgType := "info"
+	if typeCookie != nil {
+		msgType = typeCookie.Value
+	}
+
+	return msgType, message
+}
+
+// redirectWithError performs a redirect with an error message
+func (h *BaseHandler) redirectWithError(c echo.Context, redirectURL, message string) error {
+	setFlashMessage(c, "error", message)
+	return c.Redirect(http.StatusSeeOther, redirectURL)
+}
+
+// redirectWithSuccess performs a redirect with a success message
+func (h *BaseHandler) redirectWithSuccess(c echo.Context, redirectURL, message string) error {
+	setFlashMessage(c, "success", message)
+	return c.Redirect(http.StatusSeeOther, redirectURL)
 }

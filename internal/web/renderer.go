@@ -48,6 +48,7 @@ func createTemplateFuncMap() template.FuncMap {
 		"abs":            templateAbs,
 		"formatCurrency": formatCurrency,
 		"formatDate":     formatDate,
+		"formatBytes":    formatBytes,
 		"safe":           templateSafe,
 		"dict":           createDict,
 		"map":            createDict, // Alias for dict
@@ -126,6 +127,12 @@ func loadAllTemplates(templatesDir string, funcMap template.FuncMap) (*template.
 		return nil, err
 	}
 
+	// Загружаем admin шаблоны
+	tmpl, err = loadAdminTemplates(tmpl, templatesDir)
+	if err != nil {
+		return nil, err
+	}
+
 	// Загружаем страницы
 	tmpl, err = loadPageTemplates(tmpl, templatesDir)
 	if err != nil {
@@ -145,6 +152,12 @@ func loadLayoutTemplates(tmpl *template.Template, templatesDir string) (*templat
 func loadComponentTemplates(tmpl *template.Template, templatesDir string) (*template.Template, error) {
 	componentPattern := filepath.Join(templatesDir, "components", "*.html")
 	return tmpl.ParseGlob(componentPattern)
+}
+
+// loadAdminTemplates загружает шаблоны администрирования
+func loadAdminTemplates(tmpl *template.Template, templatesDir string) (*template.Template, error) {
+	adminPattern := filepath.Join(templatesDir, "admin", "*.html")
+	return tmpl.ParseGlob(adminPattern)
 }
 
 // loadPageTemplates загружает шаблоны страниц рекурсивно
@@ -199,6 +212,20 @@ func formatNumber(amount float64) string {
 func formatDate(_ any) string {
 	// TODO: Реализовать форматирование даты
 	return "01.01.2024"
+}
+
+// formatBytes форматирует размер файла в человекочитаемом формате
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 // createDict создает словарь для передачи в шаблон

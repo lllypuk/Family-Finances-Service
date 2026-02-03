@@ -1,0 +1,21 @@
+{{define "components/flash"}}
+{{if .Messages}}
+<div id="flash-messages" style="margin-bottom: 1rem;">
+    {{range .Messages}}
+    <article class="flash-message {{if eq .Type "error"}}pico-background-red-500{{else if eq .Type "success"}}pico-background-green-500{{else if eq .Type "warning"}}pico-background-yellow-500{{else}}pico-background-blue-500{{end}}" 
+             style="padding: 1rem; margin-bottom: 0.5rem; border-radius: 0.5rem; position: relative;">
+        <p style="margin: 0; color: white;">
+            {{if eq .Type "error"}}❌{{else if eq .Type "success"}}✅{{else if eq .Type "warning"}}⚠️{{else}}ℹ️{{end}}
+            {{.Text}}
+        </p>
+        <button type="button" 
+                style="position: absolute; top: 0.5rem; right: 0.5rem; background: transparent; border: none; color: white; cursor: pointer; font-size: 1.5rem; line-height: 1;"
+                onclick="this.parentElement.remove()"
+                aria-label="Закрыть">
+            &times;
+        </button>
+    </article>
+    {{end}}
+</div>
+{{end}}
+{{end}}

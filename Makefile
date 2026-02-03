@@ -150,18 +150,19 @@ sqlite-stats:
 		FROM sqlite_master m WHERE type='table' ORDER BY name;"
 
 # Создание новой миграции
+# Note: This project uses consolidated migrations (001_consolidated.up/down.sql)
+# New migrations should be added directly to these files
 .PHONY: migrate-create
 migrate-create:
-	@echo "Creating new migration..."
-	@if [ -z "$(NAME)" ]; then \
-		echo "Usage: make migrate-create NAME=migration_name"; \
-		exit 1; \
-	fi
-	@TIMESTAMP=$$(date +%s); \
-	touch migrations/$${TIMESTAMP}_$(NAME).up.sql; \
-	touch migrations/$${TIMESTAMP}_$(NAME).down.sql; \
-	echo "Created migrations/$${TIMESTAMP}_$(NAME).up.sql"; \
-	echo "Created migrations/$${TIMESTAMP}_$(NAME).down.sql"
+	@echo "⚠️  This project uses consolidated migrations approach"
+	@echo "Instead of creating new migration files, add your changes to:"
+	@echo "  - migrations/001_consolidated.up.sql (for schema changes)"
+	@echo "  - migrations/001_consolidated.down.sql (for rollback)"
+	@echo ""
+	@echo "Steps to add a migration:"
+	@echo "  1. Add new tables/indexes/triggers to the UP file"
+	@echo "  2. Add corresponding DROP statements to the DOWN file (in reverse order)"
+	@echo "  3. Test with: make clean && make run-local"
 
 # Безопасность и валидация
 .PHONY: security-check
@@ -216,7 +217,7 @@ help:
 	@echo "  sqlite-stats     - Show database statistics"
 	@echo ""
 	@echo "Database Migrations:"
-	@echo "  migrate-create   - Create new migration (NAME=migration_name required)"
+	@echo "  migrate-create   - Show guide for adding migrations to consolidated files"
 	@echo ""
 	@echo "Docker Environment:"
 	@echo "  docker-build     - Build Docker image"

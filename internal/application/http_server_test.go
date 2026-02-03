@@ -673,10 +673,8 @@ func TestHTTPServer_WithObservabilityRoutes(t *testing.T) {
 		routePaths[route.Method+" "+route.Path] = true
 	}
 
-	// Check for health check endpoints
+	// Check for health check endpoint
 	assert.True(t, routePaths["GET /health"])
-	assert.True(t, routePaths["GET /ready"])
-	assert.True(t, routePaths["GET /live"])
 }
 
 func TestConfig_Fields(t *testing.T) {
@@ -722,18 +720,6 @@ type MockHealthService struct {
 func (m *MockHealthService) HealthHandler() echo.HandlerFunc {
 	return func(c echo.Context) error {
 		return c.JSON(200, map[string]string{"status": "ok"})
-	}
-}
-
-func (m *MockHealthService) ReadinessHandler() echo.HandlerFunc {
-	return func(c echo.Context) error {
-		return c.JSON(200, map[string]string{"status": "ready"})
-	}
-}
-
-func (m *MockHealthService) LivenessHandler() echo.HandlerFunc {
-	return func(c echo.Context) error {
-		return c.JSON(200, map[string]string{"status": "live"})
 	}
 }
 

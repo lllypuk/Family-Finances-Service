@@ -69,3 +69,27 @@ type FamilyResponseDTO struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
+
+// CreateInviteDTO represents the data for creating a new invite
+type CreateInviteDTO struct {
+	Email string `validate:"required,email,max=254"`
+	Role  string `validate:"required,oneof=admin member child"`
+}
+
+// AcceptInviteDTO represents the data for accepting an invite
+type AcceptInviteDTO struct {
+	Email    string `validate:"required,email,max=254"`
+	Name     string `validate:"required,min=2,max=100"`
+	Password string `validate:"required,min=6"`
+}
+
+// InviteResponseDTO represents the data transfer object for invite responses
+type InviteResponseDTO struct {
+	ID         uuid.UUID  `json:"id"`
+	Email      string     `json:"email"`
+	Role       string     `json:"role"`
+	Status     string     `json:"status"`
+	ExpiresAt  time.Time  `json:"expires_at"`
+	CreatedAt  time.Time  `json:"created_at"`
+	AcceptedAt *time.Time `json:"accepted_at,omitempty"`
+}

@@ -28,12 +28,15 @@ func TestNewTemplateRenderer_WithValidTemplates(t *testing.T) {
 	layoutsDir := filepath.Join(tempDir, "layouts")
 	pagesDir := filepath.Join(tempDir, "pages")
 	componentsDir := filepath.Join(tempDir, "components")
+	adminDir := filepath.Join(tempDir, "admin")
 
 	err := os.MkdirAll(layoutsDir, 0755)
 	require.NoError(t, err)
 	err = os.MkdirAll(pagesDir, 0755)
 	require.NoError(t, err)
 	err = os.MkdirAll(componentsDir, 0755)
+	require.NoError(t, err)
+	err = os.MkdirAll(adminDir, 0755)
 	require.NoError(t, err)
 
 	// Create test template files
@@ -47,6 +50,10 @@ func TestNewTemplateRenderer_WithValidTemplates(t *testing.T) {
 
 	componentTemplate := `{{define "nav"}}<nav><a href="/">Home</a></nav>{{end}}`
 	err = os.WriteFile(filepath.Join(componentsDir, "nav.html"), []byte(componentTemplate), 0644)
+	require.NoError(t, err)
+
+	adminTemplate := `{{define "admin/dummy"}}<div>Admin</div>{{end}}`
+	err = os.WriteFile(filepath.Join(adminDir, "dummy.html"), []byte(adminTemplate), 0644)
 	require.NoError(t, err)
 
 	// Test renderer creation
@@ -67,12 +74,15 @@ func TestTemplateRenderer_Render(t *testing.T) {
 	layoutsDir := filepath.Join(tempDir, "layouts")
 	pagesDir := filepath.Join(tempDir, "pages")
 	componentsDir := filepath.Join(tempDir, "components")
+	adminDir := filepath.Join(tempDir, "admin")
 
 	err := os.MkdirAll(layoutsDir, 0755)
 	require.NoError(t, err)
 	err = os.MkdirAll(pagesDir, 0755)
 	require.NoError(t, err)
 	err = os.MkdirAll(componentsDir, 0755)
+	require.NoError(t, err)
+	err = os.MkdirAll(adminDir, 0755)
 	require.NoError(t, err)
 
 	// Create minimal layout template (required by the template renderer)
@@ -83,6 +93,11 @@ func TestTemplateRenderer_Render(t *testing.T) {
 	// Create minimal component template (required by the template renderer)
 	componentTemplate := `{{define "nav"}}<nav>Navigation</nav>{{end}}`
 	err = os.WriteFile(filepath.Join(componentsDir, "nav.html"), []byte(componentTemplate), 0644)
+	require.NoError(t, err)
+
+	// Create minimal admin template (required by the template renderer)
+	adminTemplate := `{{define "admin/dummy"}}<div>Admin</div>{{end}}`
+	err = os.WriteFile(filepath.Join(adminDir, "dummy.html"), []byte(adminTemplate), 0644)
 	require.NoError(t, err)
 
 	// Create simple test template
@@ -126,12 +141,15 @@ func TestTemplateRenderer_RenderWithHelperFunctions(t *testing.T) {
 	layoutsDir := filepath.Join(tempDir, "layouts")
 	pagesDir := filepath.Join(tempDir, "pages")
 	componentsDir := filepath.Join(tempDir, "components")
+	adminDir := filepath.Join(tempDir, "admin")
 
 	err := os.MkdirAll(layoutsDir, 0755)
 	require.NoError(t, err)
 	err = os.MkdirAll(pagesDir, 0755)
 	require.NoError(t, err)
 	err = os.MkdirAll(componentsDir, 0755)
+	require.NoError(t, err)
+	err = os.MkdirAll(adminDir, 0755)
 	require.NoError(t, err)
 
 	// Create minimal layout template (required by the template renderer)
@@ -142,6 +160,11 @@ func TestTemplateRenderer_RenderWithHelperFunctions(t *testing.T) {
 	// Create minimal component template (required by the template renderer)
 	componentTemplate := `{{define "nav"}}<nav>Navigation</nav>{{end}}`
 	err = os.WriteFile(filepath.Join(componentsDir, "nav.html"), []byte(componentTemplate), 0644)
+	require.NoError(t, err)
+
+	// Create minimal admin template (required by the template renderer)
+	adminTemplate := `{{define "admin/dummy"}}<div>Admin</div>{{end}}`
+	err = os.WriteFile(filepath.Join(adminDir, "dummy.html"), []byte(adminTemplate), 0644)
 	require.NoError(t, err)
 
 	// Create template that uses helper functions
@@ -173,12 +196,15 @@ func TestTemplateRenderer_RenderInvalidTemplate(t *testing.T) {
 	layoutsDir := filepath.Join(tempDir, "layouts")
 	pagesDir := filepath.Join(tempDir, "pages")
 	componentsDir := filepath.Join(tempDir, "components")
+	adminDir := filepath.Join(tempDir, "admin")
 
 	err := os.MkdirAll(layoutsDir, 0755)
 	require.NoError(t, err)
 	err = os.MkdirAll(pagesDir, 0755)
 	require.NoError(t, err)
 	err = os.MkdirAll(componentsDir, 0755)
+	require.NoError(t, err)
+	err = os.MkdirAll(adminDir, 0755)
 	require.NoError(t, err)
 
 	// Create minimal required templates
@@ -188,6 +214,11 @@ func TestTemplateRenderer_RenderInvalidTemplate(t *testing.T) {
 
 	componentTemplate := `{{define "nav"}}<nav>Navigation</nav>{{end}}`
 	err = os.WriteFile(filepath.Join(componentsDir, "nav.html"), []byte(componentTemplate), 0644)
+	require.NoError(t, err)
+
+	// Create minimal admin template (required by the template renderer)
+	adminTemplate := `{{define "admin/dummy"}}<div>Admin</div>{{end}}`
+	err = os.WriteFile(filepath.Join(adminDir, "dummy.html"), []byte(adminTemplate), 0644)
 	require.NoError(t, err)
 
 	// Create a dummy template file
@@ -237,6 +268,7 @@ func TestTemplateRenderer_RecursiveTemplateLoading(t *testing.T) {
 	layoutsDir := filepath.Join(tempDir, "layouts")
 	pagesDir := filepath.Join(tempDir, "pages")
 	componentsDir := filepath.Join(tempDir, "components")
+	adminDir := filepath.Join(tempDir, "admin")
 
 	// Create nested directories in pages
 	transactionsDir := filepath.Join(pagesDir, "transactions")
@@ -247,6 +279,8 @@ func TestTemplateRenderer_RecursiveTemplateLoading(t *testing.T) {
 	err = os.MkdirAll(pagesDir, 0755)
 	require.NoError(t, err)
 	err = os.MkdirAll(componentsDir, 0755)
+	require.NoError(t, err)
+	err = os.MkdirAll(adminDir, 0755)
 	require.NoError(t, err)
 	err = os.MkdirAll(transactionsDir, 0755)
 	require.NoError(t, err)
@@ -260,6 +294,11 @@ func TestTemplateRenderer_RecursiveTemplateLoading(t *testing.T) {
 
 	componentTemplate := `{{define "nav"}}<nav>Navigation</nav>{{end}}`
 	err = os.WriteFile(filepath.Join(componentsDir, "nav.html"), []byte(componentTemplate), 0644)
+	require.NoError(t, err)
+
+	// Create minimal admin template (required by the template renderer)
+	adminTemplate := `{{define "admin/dummy"}}<div>Admin</div>{{end}}`
+	err = os.WriteFile(filepath.Join(adminDir, "dummy.html"), []byte(adminTemplate), 0644)
 	require.NoError(t, err)
 
 	// Create root page template
@@ -316,12 +355,15 @@ func TestTemplateRenderer_DerefFunction(t *testing.T) {
 	layoutsDir := filepath.Join(tempDir, "layouts")
 	pagesDir := filepath.Join(tempDir, "pages")
 	componentsDir := filepath.Join(tempDir, "components")
+	adminDir := filepath.Join(tempDir, "admin")
 
 	err := os.MkdirAll(layoutsDir, 0755)
 	require.NoError(t, err)
 	err = os.MkdirAll(pagesDir, 0755)
 	require.NoError(t, err)
 	err = os.MkdirAll(componentsDir, 0755)
+	require.NoError(t, err)
+	err = os.MkdirAll(adminDir, 0755)
 	require.NoError(t, err)
 
 	// Create minimal required templates
@@ -331,6 +373,11 @@ func TestTemplateRenderer_DerefFunction(t *testing.T) {
 
 	componentTemplate := `{{define "nav"}}<nav>Navigation</nav>{{end}}`
 	err = os.WriteFile(filepath.Join(componentsDir, "nav.html"), []byte(componentTemplate), 0644)
+	require.NoError(t, err)
+
+	// Create minimal admin template (required by the template renderer)
+	adminTemplate := `{{define "admin/dummy"}}<div>Admin</div>{{end}}`
+	err = os.WriteFile(filepath.Join(adminDir, "dummy.html"), []byte(adminTemplate), 0644)
 	require.NoError(t, err)
 
 	// Create template that uses deref function

@@ -453,6 +453,10 @@ linters:
           - testpackage
           - govet # Allow shadow variables in test setup
           - revive # Allow unused parameters in test functions
+      # Exclude testpackage for web handlers - they need internal access
+      - path: "internal/web/handlers/"
+        linters:
+          - testpackage
       - source: "TODO"
         linters: [godot]
       - text: "should have a package comment"

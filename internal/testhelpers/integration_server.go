@@ -2,6 +2,7 @@ package testhelpers
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 
 	"family-budget-service/internal/application"
@@ -19,7 +20,7 @@ type TestServer struct {
 	Repos     *handlers.Repositories
 	Services  *services.Services
 	Server    *application.HTTPServer
-	container *SQLiteTestDB
+	Container *SQLiteTestDB
 }
 
 // SetupHTTPServer creates a test HTTP server with real database connections
@@ -38,7 +39,11 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 		Category:    categoryrepo.NewSQLiteRepository(db),
 		Transaction: transactionrepo.NewSQLiteRepository(db),
 		Report:      reportrepo.NewSQLiteRepository(db),
+		Invite:      userrepo.NewInviteSQLiteRepository(db),
 	}
+
+	// Create BackupService for testing with in-memory database
+	backupService := services.NewBackupService(db, ":memory:", slog.Default())
 
 	// Create services for testing - use simplified version to avoid circular dependencies
 	servicesContainer := services.NewServices(
@@ -49,6 +54,9 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 		repos.Budget,      // budgetRepo for transactions
 		repos.Budget,      // fullBudgetRepo
 		repos.Report,      // reportRepo
+		repos.Invite,      // inviteRepo
+		backupService,     // backupService
+		slog.Default(),    // logger
 	)
 
 	// Create HTTP server configuration for testing
@@ -66,7 +74,7 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 		Repos:     repos,
 		Services:  servicesContainer,
 		Server:    httpServer,
-		container: container,
+		Container: container,
 	}
 
 	// Cleanup handler
@@ -86,7 +94,7 @@ func (ts *TestServer) Cleanup() {
 // CheckTableExists checks if a table exists in the database (for debugging)
 func (ts *TestServer) CheckTableExists(t *testing.T, tableName string) bool {
 	var exists int
-	err := ts.container.DB.QueryRowContext(
+	err := ts.Container.DB.QueryRowContext(
 		context.Background(),
 		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
 		tableName,

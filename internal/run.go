@@ -66,7 +66,7 @@ func NewApplication() (*Application, error) {
 	app.sqliteConn = sqliteConn
 
 	// Запуск миграций
-	dbURL := fmt.Sprintf("sqlite3://%s", config.Database.Path)
+	dbURL := fmt.Sprintf("sqlite://%s", config.Database.Path)
 	migrationManager := infrastructure.NewMigrationManager(dbURL, "./migrations")
 	if err = migrationManager.Up(); err != nil {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
@@ -78,6 +78,12 @@ func NewApplication() (*Application, error) {
 	// Инициализация репозиториев
 	app.repositories = infrastructure.NewRepositoriesSQLite(sqliteConn.DB())
 
+	// Получаем logger из observability service
+	logger := app.observabilityService.Logger
+
+	// Инициализация BackupService
+	backupService := services.NewBackupService(sqliteConn.DB(), config.Database.Path, logger)
+
 	// Инициализация сервисов
 	app.services = services.NewServices(
 		app.repositories.User,
@@ -87,6 +93,9 @@ func NewApplication() (*Application, error) {
 		app.repositories.Budget, // BudgetRepositoryForTransactions
 		app.repositories.Budget, // BudgetRepository
 		app.repositories.Report,
+		app.repositories.Invite,
+		backupService,
+		logger,
 	)
 
 	// Создание HTTP сервера с observability

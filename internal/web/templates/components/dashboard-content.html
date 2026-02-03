@@ -4,7 +4,7 @@
     {{if .DashboardViewModel.EnhancedStats}}
     {{template "enhanced-stats" .DashboardViewModel}}
     {{else if .DashboardViewModel.MonthlySummary}}
-    {{template "dashboard-stats" .}}
+    {{template "dashboard-stats" .DashboardViewModel}}
     {{else}}
     <section class="stats-grid"
              hx-get="/htmx/dashboard/stats"

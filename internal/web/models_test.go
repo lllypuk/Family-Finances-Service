@@ -14,19 +14,16 @@ import (
 func TestSessionData_StructFields(t *testing.T) {
 	// Test SessionData struct
 	userID := uuid.New()
-	familyID := uuid.New()
 	expiresAt := time.Now().Add(time.Hour)
 
 	session := &web.SessionData{
 		UserID:    userID,
-		FamilyID:  familyID,
 		Role:      user.RoleAdmin,
 		Email:     "test@example.com",
 		ExpiresAt: expiresAt,
 	}
 
 	assert.Equal(t, userID, session.UserID)
-	assert.Equal(t, familyID, session.FamilyID)
 	assert.Equal(t, user.RoleAdmin, session.Role)
 	assert.Equal(t, "test@example.com", session.Email)
 	assert.Equal(t, expiresAt, session.ExpiresAt)

@@ -129,7 +129,13 @@ The Docker container includes:
 - `make sqlite-stats` - Show database statistics
 
 ### Database Migrations
-- `make migrate-create NAME=migration_name` - Create new migration files
+- `make migrate-create` - Show guide for adding new migrations
+- **Migration Structure**: All migrations are consolidated in two files:
+  - `migrations/001_consolidated.up.sql` - All schema changes (9 tables, 19+ indexes, triggers)
+  - `migrations/001_consolidated.down.sql` - All rollback statements
+- **Tables**: families, users, categories, transactions, budgets, budget_alerts, reports, user_sessions, invites
+- **Adding New Migrations**: Edit the consolidated files directly, adding new changes at the end
+- **Documentation**: See `migrations/README.md` for detailed guide and `migrations/CHANGELOG.md` for history
 - **Note**: Migrations run automatically on application startup
 
 ## Architecture Overview
@@ -140,12 +146,15 @@ This is a production-ready family budget management service built with Go, follo
 - ✅ **Complete web interface** with HTMX 2.0.4 + PicoCSS 2.1.1
 - ✅ **Full API implementation** with REST endpoints
 - ✅ **Comprehensive security** with authentication & authorization
-- ✅ **36.2% test coverage** with 50+ test files
+- ✅ **Invite system** for user onboarding via secure token links
+- ✅ **Backup management** with create, download, restore, and auto-cleanup
+- ✅ **Admin panel** for user and invite management
 - ✅ **CI/CD pipelines** with GitHub Actions
 
 ### Domain Structure
 The application is organized into domain modules in `internal/domain/`:
 - **User/Family**: User management with role-based access (admin, member, child)
+- **Invite**: Invitation system with secure tokens, expiration, and status tracking
 - **Category**: Income and expense category management
 - **Transaction**: Financial transaction tracking
 - **Budget**: Budget planning and monitoring
@@ -157,11 +166,12 @@ The application is organized into domain modules in `internal/domain/`:
 - `internal/application/` - HTTP server and handler layer
 - `internal/web/` - Web interface (HTMX templates, middleware, static files)
 - `internal/domain/` - Domain entities and business logic
+- `internal/services/` - Business logic services (invite, backup, budget, etc.)
 - `internal/infrastructure/` - SQLite repositories and data persistence
 - `internal/observability/` - Logging and health checks
 
 ### Key Technologies (Production Stack)
-- **Go 1.25** - Latest Go version with enhanced performance
+- **Go 1.25.6** - Latest Go version with enhanced performance
 - **Echo v4.13.4** - HTTP web framework with middleware
 - **SQLite** (modernc.org/sqlite) - Embedded database, pure Go, no CGO
 - **HTMX v2.0.4** - Modern web interface without complex JavaScript
@@ -186,6 +196,8 @@ Full implementations are available in `internal/infrastructure/` with comprehens
 - **Session management**: Secure HTTP-only cookies with CSRF protection
 - **Input validation**: Comprehensive validation with go-playground/validator
 - **Password security**: bcrypt hashing with proper salt rounds
+- **Invite tokens**: Cryptographically secure 32-byte tokens with 7-day expiration
+- **Backup security**: Path traversal protection, admin-only access, filename validation
 
 ### Web Interface Architecture
 The project includes a complete web interface built with modern technologies:
@@ -204,9 +216,9 @@ The project includes a complete web interface built with modern technologies:
 5. **HTMX-Only Interactivity** - Use hx-* attributes for all dynamic features
 
 **Web Components:**
-- `internal/web/handlers/` - Authentication, dashboard, and HTMX endpoints
+- `internal/web/handlers/` - Authentication, dashboard, admin, backup, and HTMX endpoints
 - `internal/web/middleware/` - Session management, CSRF protection, auth guards
-- `internal/web/templates/` - HTML templates with layouts and components
+- `internal/web/templates/` - HTML templates with layouts, components, and admin pages
 - `internal/web/static/` - CSS, JS, and image assets
 - `internal/web/models/` - Form validation and web-specific data structures
 
@@ -216,28 +228,24 @@ The project includes a complete web interface built with modern technologies:
 - Form validation with immediate feedback
 - Accessible interface following modern UX principles
 
-### Testing Strategy (36.2% Coverage)
+### Testing Strategy
 The project has comprehensive testing across all layers:
 
-**Unit Tests (50+ test files):**
-- Domain models with business logic validation (88.9-100% coverage)
-- Repository implementations with mocking (51.2-78.9% coverage)
-- HTTP handlers with table-driven tests (71.6% coverage)
-- Middleware components with edge cases (77.1% coverage)
-- Web form validation and error handling (6.6-28.4% coverage)
+**Unit Tests (42+ test files):**
+- Domain models with business logic validation
+- Repository implementations with in-memory SQLite
+- Service layer tests (invite, backup, budget, category, transaction, report, user)
+- HTTP handlers with table-driven tests
+- Middleware components with edge cases
+- Web form validation and error handling
+- Template renderer tests
 
 **Integration Tests:**
 - End-to-end API workflows with in-memory database
 - Database operations with SQLite
 - Authentication flows with session management
+- Invite flow integration
 - Data integrity validation
-
-**Coverage by Layer:**
-- **Application**: 91.2% (excellent)
-- **Domain**: 77.6% (good)
-- **Infrastructure**: 69.9% (good)
-- **Web**: 28.4% (needs improvement)
-- **Overall**: 36.2%
 
 ### Documentation
 Comprehensive documentation is available in the `.memory_bank/` directory:
@@ -252,7 +260,7 @@ The project uses GitHub Actions for continuous integration and deployment with t
 
 ### CI Pipeline (`.github/workflows/ci.yml`)
 Runs on every push and pull request to main/develop branches:
-- **Environment Setup**: Go 1.25, SQLite for integration tests
+- **Environment Setup**: Go 1.25.6, SQLite for integration tests
 - **Quality Checks**:
   - Code formatting verification with `make fmt`
   - Comprehensive linting with golangci-lint (50+ rules)
@@ -342,15 +350,13 @@ make pre-commit   # Run full check sequence
 ## 🚧 Known Issues & TODO
 
 ### Test Coverage Improvements Needed
-- **Web handlers**: 0% coverage - needs test implementation
-- **Web models**: 6.6% coverage - needs expanded validation tests
-- **Integration tests**: Missing coverage calculation
-- **Target**: Increase overall coverage from 36.2% to 60%+
+- **Web handlers**: Low coverage - needs test implementation
+- **Web models**: Low coverage - needs expanded validation tests
+- **Admin/Backup handlers**: New handlers need test coverage
+- **Target**: Increase overall test coverage
 
 ### Development Priorities
-1. Implement web handler tests
+1. Add tests for admin and backup web handlers
 2. Improve web models test coverage
-3. Add more integration test scenarios
+3. Add more integration test scenarios for invite flow
 4. Performance optimization and benchmarking
-
-- add to memory .memory_bank/
