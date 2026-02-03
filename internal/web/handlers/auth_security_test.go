@@ -337,7 +337,7 @@ func TestSanitizeRedirectURL_EdgeCases(t *testing.T) {
 		{
 			name:     "query with redirect attempt",
 			input:    "/page?redirect=//evil.com",
-			expected: "/page?redirect=//evil.com", // Query param is preserved as-is
+			expected: "/page?redirect=//evil.com", // Query params are preserved as-is, app must validate separately
 		},
 	}
 

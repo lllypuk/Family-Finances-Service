@@ -30,16 +30,28 @@ func NewAuthHandler(repos *handlers.Repositories, services *services.Services) *
 
 // sanitizeRedirectURL validates and sanitizes a redirect URL to prevent open redirect attacks.
 // Only relative paths starting with "/" are allowed. Protocol-relative URLs and absolute URLs are rejected.
+// This function defends against various bypass techniques including:
+// - Protocol-relative URLs (//evil.com)
+// - Backslash bypasses (/\evil.com or /\/evil.com)
+// - Absolute URLs (https://evil.com)
+// - URLs with host, scheme, or userinfo components
 func sanitizeRedirectURL(rawURL string) string {
 	if rawURL == "" {
 		return "/"
 	}
 
-	// Normalize backslashes
+	// Normalize all backslashes to forward slashes
 	rawURL = strings.ReplaceAll(rawURL, "\\", "/")
 
-	// Must start with exactly one slash (reject "//evil.com" and "https://evil.com")
-	if !strings.HasPrefix(rawURL, "/") || strings.HasPrefix(rawURL, "//") {
+	// Must start with exactly one slash, not zero and not two or more
+	// This check must happen BEFORE collapsing slashes to catch //evil.com patterns
+	if !strings.HasPrefix(rawURL, "/") {
+		return "/"
+	}
+
+	// Reject protocol-relative URLs (//evil.com) and variants (///evil.com)
+	// This prevents bypasses even after normalization
+	if len(rawURL) >= 2 && rawURL[1] == '/' {
 		return "/"
 	}
 
@@ -49,13 +61,24 @@ func sanitizeRedirectURL(rawURL string) string {
 		return "/"
 	}
 
+	// Additional check: ensure no userinfo (user:pass@) component
+	if parsed.User != nil {
+		return "/"
+	}
+
 	// Use only the path + query (strip any fragment or userinfo)
 	result := parsed.Path
 	if parsed.RawQuery != "" {
 		result += "?" + parsed.RawQuery
 	}
 
-	if result == "" {
+	// Final validation: must start with / and not be empty
+	if result == "" || !strings.HasPrefix(result, "/") {
+		return "/"
+	}
+
+	// Final check: after all processing, reject if second character is still /
+	if len(result) >= 2 && result[1] == '/' {
 		return "/"
 	}
 

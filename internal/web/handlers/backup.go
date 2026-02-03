@@ -129,6 +129,7 @@ func (h *BackupHandler) DownloadBackup(c echo.Context) error {
 	}
 
 	// Send file for download
+	// #nosec G304 -- Filename is validated by backup service safePath() method
 	return c.Attachment(filePath, filename)
 }
 

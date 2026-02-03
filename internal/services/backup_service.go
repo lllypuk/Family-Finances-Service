@@ -216,6 +216,7 @@ func (s *backupService) GetBackup(_ context.Context, filename string) (*BackupIn
 		return nil, err
 	}
 
+	// #nosec G304 -- Path is validated by safePath() to prevent traversal attacks
 	info, err := os.Stat(backupPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -238,6 +239,7 @@ func (s *backupService) DeleteBackup(_ context.Context, filename string) error {
 		return err
 	}
 
+	// #nosec G304 -- Path is validated by safePath() to prevent traversal attacks
 	if removeErr := os.Remove(backupPath); removeErr != nil {
 		if os.IsNotExist(removeErr) {
 			return ErrBackupNotFound
@@ -257,6 +259,7 @@ func (s *backupService) RestoreBackup(_ context.Context, filename string) error 
 	}
 
 	// Check if backup file exists
+	// #nosec G304 -- Path is validated by safePath() to prevent traversal attacks
 	if _, statErr := os.Stat(backupPath); statErr != nil {
 		if os.IsNotExist(statErr) {
 			return ErrBackupNotFound
@@ -267,7 +270,7 @@ func (s *backupService) RestoreBackup(_ context.Context, filename string) error 
 	// Copy backup file to main database location
 	// Note: In production, this should close all database connections first
 	// This implementation assumes the application will be restarted after restore
-	//#nosec G304 -- path validated by safePath
+	// #nosec G304 -- Path is validated by safePath() to prevent traversal attacks
 	data, readErr := os.ReadFile(backupPath)
 	if readErr != nil {
 		return fmt.Errorf("failed to read backup file: %w", readErr)
