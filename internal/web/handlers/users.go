@@ -63,6 +63,7 @@ func (h *UserHandler) Index(c echo.Context) error {
 		"CurrentUser": currentUser,
 		"CSRFToken":   csrfToken,
 		"CanManage":   currentUser.Role == user.RoleAdmin,
+		"Messages":    h.getFlashMessages(c),
 	}
 
 	return c.Render(http.StatusOK, "users/index.html", data)
@@ -98,6 +99,7 @@ func (h *UserHandler) New(c echo.Context) error {
 			{"Value": string(user.RoleMember), "Label": "Member"},
 			{"Value": string(user.RoleChild), "Label": "Child"},
 		},
+		"Messages": h.getFlashMessages(c),
 	}
 
 	return c.Render(http.StatusOK, "users/new.html", data)

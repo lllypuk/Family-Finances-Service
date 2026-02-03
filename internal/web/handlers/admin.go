@@ -98,6 +98,7 @@ func (h *AdminHandler) ListUsers(c echo.Context) error {
 		"CSRFToken":   csrfToken,
 		"Roles":       []string{string(user.RoleAdmin), string(user.RoleMember), string(user.RoleChild)},
 		"InviteURL":   inviteURL,
+		"Messages":    h.getFlashMessages(c),
 	}
 
 	return c.Render(http.StatusOK, "users", data)

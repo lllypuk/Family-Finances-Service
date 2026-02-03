@@ -18,15 +18,13 @@ import (
 
 // AuthHandler обрабатывает запросы аутентификации
 type AuthHandler struct {
-	repos    *handlers.Repositories
-	services *services.Services
+	*BaseHandler
 }
 
 // NewAuthHandler создает новый обработчик аутентификации
 func NewAuthHandler(repos *handlers.Repositories, services *services.Services) *AuthHandler {
 	return &AuthHandler{
-		repos:    repos,
-		services: services,
+		BaseHandler: NewBaseHandler(repos, services),
 	}
 }
 
@@ -41,6 +39,7 @@ func (h *AuthHandler) LoginPage(c echo.Context) error {
 		"CSRFToken": csrfToken,
 		"Title":     "Sign In",
 		"IsLogin":   true,
+		"Messages":  h.getFlashMessages(c),
 	}
 
 	return c.Render(http.StatusOK, "login.html", data)
@@ -66,7 +65,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	}
 
 	// Поиск пользователя по email
-	foundUser, err := h.repos.User.GetByEmail(c.Request().Context(), form.Email)
+	foundUser, err := h.repositories.User.GetByEmail(c.Request().Context(), form.Email)
 	if err != nil {
 		return h.loginError(c, "Invalid email or password", nil)
 	}
@@ -124,6 +123,7 @@ func (h *AuthHandler) SetupPage(c echo.Context) error {
 		"CSRFToken": csrfToken,
 		"Title":     "Первоначальная настройка",
 		"IsSetup":   true,
+		"Messages":  h.getFlashMessages(c),
 	}
 
 	return c.Render(http.StatusOK, "setup.html", data)

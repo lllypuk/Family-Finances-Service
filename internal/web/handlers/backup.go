@@ -66,6 +66,7 @@ func (h *BackupHandler) BackupPage(c echo.Context) error {
 		"Title":     "Резервные копии",
 		"Backups":   backups,
 		"CSRFToken": csrfToken,
+		"Messages":  h.getFlashMessages(c),
 	}
 
 	return c.Render(http.StatusOK, "admin/backup.html", data)

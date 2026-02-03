@@ -28,18 +28,7 @@
         <!-- Main Content -->
         <main class="container">
             <!-- Flash Messages -->
-            {{if .Messages}}
-            <div id="flash-messages">
-                {{range .Messages}}
-                <div class="alert alert-{{.Type}}" role="alert">
-                    {{.Text}}
-                    <button type="button" class="close" aria-label="Закрыть">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>
-                {{end}}
-            </div>
-            {{end}}
+            {{template "components/flash" .}}
 
             <!-- Page Content -->
             {{template "content" .}}
