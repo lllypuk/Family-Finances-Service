@@ -1,7 +1,8 @@
 # SEC-3: Open URL Redirect в auth.go
 
-## Статус: TODO
+## Статус: DONE ✅
 ## Приоритет: CRITICAL (CodeQL alert, severity: medium)
+## Дата завершения: 2026-02-03
 
 ## Проблема
 
@@ -102,36 +103,47 @@ func (h *AuthHandler) Login(c echo.Context) error {
 
 ## Тестирование
 
-Добавить unit-тесты для `sanitizeRedirectURL`:
+- ✅ `make test` — все тесты проходят
+- ✅ `make lint` — 0 issues
+- ✅ Добавлен тест `TestSanitizeRedirectURL` с 24 сценариями
+- ⏳ CodeQL alert должен исчезнуть в следующем CI run
 
-```go
-func TestSanitizeRedirectURL(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{"empty", "", "/"},
-		{"root", "/", "/"},
-		{"valid path", "/dashboard", "/dashboard"},
-		{"valid path with query", "/page?id=1", "/page?id=1"},
-		{"protocol relative", "//evil.com", "/"},
-		{"absolute http", "http://evil.com", "/"},
-		{"absolute https", "https://evil.com/path", "/"},
-		{"backslash", "\\evil.com", "/"},
-		{"double backslash", "\\\\evil.com", "/"},
-		{"no leading slash", "evil.com", "/"},
-		{"javascript scheme", "javascript:alert(1)", "/"},
-		{"data scheme", "data:text/html,<h1>hi</h1>", "/"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := sanitizeRedirectURL(tt.input)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-```
+## Реализованные изменения
 
-- `make test`
-- `make lint`
+### 1. Добавлена функция `sanitizeRedirectURL()`
+- Валидация пустого URL — возвращает "/"
+- Нормализация backslashes в forward slashes
+- Проверка, что URL начинается с `/` (отклоняет относительные без слеша)
+- Проверка, что URL НЕ начинается с `//` (отклоняет protocol-relative)
+- Парсинг через `url.Parse()` с проверкой Host и Scheme
+- Использование только Path + RawQuery (удаление Fragment и Userinfo)
+
+### 2. Обновлен метод `Login()`
+- Удален старый блок валидации (строки 94-105)
+- Вызов `sanitizeRedirectURL()` для валидации redirect параметра
+- Упрощенный код — меньше дублирования логики
+
+### 3. Тестовое покрытие
+- Создан новый файл `internal/web/handlers/auth_test.go`
+- Тест `TestSanitizeRedirectURL` с 24 сценариями:
+  - Валидные пути (root, nested, с query params)
+  - Protocol-relative URLs (`//evil.com`)
+  - Absolute URLs (http, https, ftp, mailto, data, javascript)
+  - Backslash normalization
+  - Fragment и query обработка
+  - Newline injection
+  - Triple slash (`///evil.com`)
+
+### 4. Защита от атак
+- ✅ Open redirect через `//evil.com`
+- ✅ Absolute URLs с любыми схемами
+- ✅ JavaScript injection (`javascript:alert(1)`)
+- ✅ Data URLs
+- ✅ Newline injection в заголовках
+- ✅ Backslash обход (`\\evil.com`)
+
+### 5. Defense in depth
+- Множественные проверки: prefix, parse, Host, Scheme
+- Нормализация входных данных
+- Явное использование только безопасных компонентов URL (Path + Query)
+- Удаление Fragment для предотвращения XSS

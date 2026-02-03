@@ -1,8 +1,9 @@
 # SEC-2: SQL Injection в VACUUM INTO
 
-## Статус: TODO
+## Статус: DONE ✅
 
 ## Приоритет: CRITICAL (Semgrep alert)
+## Дата завершения: 2026-02-03
 
 ## Проблема
 
@@ -106,6 +107,33 @@ query := fmt.Sprintf("VACUUM INTO '%s'", backupPath) // nosemgrep: go.lang.secur
 
 ## Тестирование
 
-- `make test` — все тесты проходят
-- `make lint` — 0 issues
-- Проверить, что Semgrep alert пропадает
+- ✅ `make test` — все тесты проходят
+- ✅ `make lint` — 0 issues
+- ✅ Добавлен тест `TestIsValidBackupPath` с 8 сценариями
+- ⏳ Проверить, что Semgrep alert пропадает (проверится в следующем CI run)
+
+## Реализованные изменения
+
+### 1. Добавлена функция `isValidBackupPath()`
+- Валидирует, что путь содержит только безопасные символы
+- Использует regex `^[a-zA-Z0-9_.\-/\\:]+$`
+- Защита от SQL injection через специальные символы
+
+### 2. Обновлен метод `CreateBackup()`
+- Добавлена валидация сгенерированного filename через `validateFilename()`
+- Применяется `filepath.Base()` для удаления компонентов директорий
+- Валидация полного пути через `isValidBackupPath()`
+- Добавлен детальный комментарий с `//nolint:gosec`
+- SQL query выделен в отдельную переменную для ясности
+
+### 3. Тестовое покрытие
+- Новый тест `TestIsValidBackupPath` с 8 сценариями
+- Проверка валидных путей (Unix, Windows, relative)
+- Проверка защиты от SQL injection (спецсимволы, кавычки, null byte, newline, пробелы)
+- Все существующие тесты проходят
+
+### 4. Defense in depth
+- Filename генерируется из timestamp (контролируемые данные)
+- Двойная валидация: filename + full path
+- Использование `filepath.Base()` для безопасности
+- Подробный комментарий объясняет, почему параметризация невозможна

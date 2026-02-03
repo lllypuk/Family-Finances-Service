@@ -28,6 +28,40 @@ func NewAuthHandler(repos *handlers.Repositories, services *services.Services) *
 	}
 }
 
+// sanitizeRedirectURL validates and sanitizes a redirect URL to prevent open redirect attacks.
+// Only relative paths starting with "/" are allowed. Protocol-relative URLs and absolute URLs are rejected.
+func sanitizeRedirectURL(rawURL string) string {
+	if rawURL == "" {
+		return "/"
+	}
+
+	// Normalize backslashes
+	rawURL = strings.ReplaceAll(rawURL, "\\", "/")
+
+	// Must start with exactly one slash (reject "//evil.com" and "https://evil.com")
+	if !strings.HasPrefix(rawURL, "/") || strings.HasPrefix(rawURL, "//") {
+		return "/"
+	}
+
+	// Parse to catch any remaining edge cases
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host != "" || parsed.Scheme != "" {
+		return "/"
+	}
+
+	// Use only the path + query (strip any fragment or userinfo)
+	result := parsed.Path
+	if parsed.RawQuery != "" {
+		result += "?" + parsed.RawQuery
+	}
+
+	if result == "" {
+		return "/"
+	}
+
+	return result
+}
+
 // LoginPage отображает страницу входа
 func (h *AuthHandler) LoginPage(c echo.Context) error {
 	csrfToken, err := middleware.GetCSRFToken(c)
@@ -90,18 +124,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	}
 
 	// Определяем куда перенаправить после входа
-	redirectTo := c.QueryParam("redirect")
-	if redirectTo == "" {
-		redirectTo = "/"
-	} else {
-		// Replace backslashes with forward slashes to normalize
-		redirectTo = strings.ReplaceAll(redirectTo, "\\", "/")
-		parsed, parsErr := url.Parse(redirectTo)
-		// Only allow local redirects (no host, no scheme)
-		if parsErr != nil || parsed.IsAbs() || parsed.Host != "" {
-			redirectTo = "/"
-		}
-	}
+	redirectTo := sanitizeRedirectURL(c.QueryParam("redirect"))
 
 	// Если это HTMX запрос, возвращаем redirect header
 	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {

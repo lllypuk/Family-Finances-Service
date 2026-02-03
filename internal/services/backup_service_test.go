@@ -241,6 +241,30 @@ func TestFilenameValidation(t *testing.T) {
 	}
 }
 
+func TestIsValidBackupPath(t *testing.T) {
+	testCases := []struct {
+		name  string
+		path  string
+		valid bool
+	}{
+		{"valid unix path", "/tmp/backups/backup_20250202_143022000.db", true},
+		{"valid windows path", "C:\\data\\backups\\backup_20250202_143022000.db", true},
+		{"valid relative path", "./data/backups/backup_20250202_143022000.db", true},
+		{"invalid - special chars", "/tmp/backups/backup;drop table.db", false},
+		{"invalid - quotes", "/tmp/backups/backup'--comment.db", false},
+		{"invalid - null byte", "/tmp/backups/backup\x00.db", false},
+		{"invalid - newline", "/tmp/backups/backup\n.db", false},
+		{"invalid - spaces", "/tmp/backups/backup file.db", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := isValidBackupPath(tc.path)
+			assert.Equal(t, tc.valid, result)
+		})
+	}
+}
+
 func TestRestoreBackup(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
@@ -297,4 +321,65 @@ func TestGetBackupFilePath_InvalidFilename(t *testing.T) {
 
 	// Should return empty string for invalid filename
 	assert.Empty(t, path)
+}
+
+func TestSafePath_PathTraversalProtection(t *testing.T) {
+	db, dbPath, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	service := NewBackupService(db, dbPath, slog.Default()).(*backupService)
+
+	tests := []struct {
+		name        string
+		filename    string
+		expectError bool
+	}{
+		{
+			name:        "Valid filename",
+			filename:    "backup_20240101_120000000.db",
+			expectError: false,
+		},
+		{
+			name:        "Path traversal with ../",
+			filename:    "../../../etc/passwd",
+			expectError: true,
+		},
+		{
+			name:        "Path traversal with absolute path",
+			filename:    "/etc/passwd",
+			expectError: true,
+		},
+		{
+			name:        "Invalid format",
+			filename:    "malicious.db",
+			expectError: true,
+		},
+		{
+			name:        "Directory component",
+			filename:    "subdir/backup_20240101_120000000.db",
+			expectError: true,
+		},
+		{
+			name:        "Empty filename",
+			filename:    "",
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path, err := service.safePath(tt.filename)
+
+			if tt.expectError {
+				require.Error(t, err)
+				assert.Empty(t, path)
+			} else {
+				require.NoError(t, err)
+				assert.NotEmpty(t, path)
+				// Verify path is within backup directory
+				backupDir := filepath.Clean(service.backupDir)
+				assert.Contains(t, path, backupDir)
+			}
+		})
+	}
 }
