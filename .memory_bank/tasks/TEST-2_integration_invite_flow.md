@@ -1,6 +1,6 @@
 # TEST-2: Интеграционные тесты для invite flow
 
-## Статус: TODO
+## Статус: ✅ COMPLETED
 ## Приоритет: IMPORTANT
 
 ## Проблема
@@ -14,122 +14,81 @@
 
 ## Решение
 
-### Создать файл `internal/services/invite_integration_test.go`
+### ✅ Создан файл `tests/integration/invites_test.go`
 
-```go
-//go:build integration
+Реализованы следующие интеграционные тесты:
 
-package services_test
+1. **TestInviteFlow_FullCycle** - полный цикл приглашения:
+   - Создание family и admin user
+   - Создание invite админом
+   - Получение invite по токену
+   - Принятие invite и создание пользователя
+   - Проверка что invite больше нельзя использовать повторно
+   - Проверка что новый пользователь существует в системе
 
-import (
-	"context"
-	"testing"
+2. **TestInviteFlow_ExpiredInvite** - обработка истекшего приглашения:
+   - Создание invite
+   - Установка ExpiresAt в прошлое
+   - Попытка принять истекший invite должна вернуть ошибку
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+3. **TestInviteFlow_RevokedInvite** - отзыв приглашения:
+   - Создание invite
+   - Отзыв invite администратором
+   - Попытка принять отозванный invite должна вернуть ошибку
 
-	"family-budget-service/internal/domain/user"
-	"family-budget-service/internal/services/dto"
-	"family-budget-service/internal/testhelpers"
-)
+4. **TestInviteFlow_DuplicateEmail** - дубликат email:
+   - Попытка создать invite для уже существующего email
+   - Должна вернуть ошибку о существующем email
 
-func TestInviteFlow_FullCycle(t *testing.T) {
-	// Setup: in-memory SQLite + repos + services
-	db := testhelpers.NewTestDB(t)
-	// ... setup repos and services
+5. **TestInviteFlow_EmailMismatch** - несоответствие email:
+   - Создание invite для email A
+   - Попытка принять с email B
+   - Должна вернуть ошибку о несоответствии
 
-	ctx := context.Background()
+6. **TestInviteFlow_DoubleAccept** - двойное принятие:
+   - Принятие invite первый раз (успешно)
+   - Попытка принять повторно
+   - Должна вернуть ошибку о уже использованном invite
 
-	// Step 1: Create family and admin user (via setup)
-	setupDTO := dto.SetupFamilyDTO{
-		FamilyName: "Test Family",
-		Currency:   "USD",
-		Email:      "admin@test.com",
-		FirstName:  "Admin",
-		LastName:   "User",
-		Password:   "securepassword123",
-	}
-	admin, err := familyService.SetupFamily(ctx, setupDTO)
-	require.NoError(t, err)
+7. **TestInviteFlow_ListFamilyInvites** - список приглашений:
+   - Создание нескольких invites
+   - Получение списка всех invites для family
+   - Проверка что все invites присутствуют
 
-	// Step 2: Admin creates invite
-	createDTO := dto.CreateInviteDTO{
-		Email: "newuser@test.com",
-		Role:  "member",
-	}
-	invite, err := inviteService.CreateInvite(ctx, admin.ID, createDTO)
-	require.NoError(t, err)
-	assert.Equal(t, user.InviteStatusPending, invite.Status)
-	assert.NotEmpty(t, invite.Token)
+8. **TestInviteFlow_DeleteExpiredInvites** - удаление истекших:
+   - Создание валидного и истекшего invites
+   - Вызов DeleteExpiredInvites
+   - Проверка что валидный invite остался, истекший удален
 
-	// Step 3: Get invite by token
-	fetchedInvite, err := inviteService.GetInviteByToken(ctx, invite.Token)
-	require.NoError(t, err)
-	assert.Equal(t, "newuser@test.com", fetchedInvite.Email)
+## Файлы
 
-	// Step 4: Accept invite
-	acceptDTO := dto.AcceptInviteDTO{
-		Email:    "newuser@test.com",
-		Name:     "New User",
-		Password: "newpassword123",
-	}
-	newUser, err := inviteService.AcceptInvite(ctx, invite.Token, acceptDTO)
-	require.NoError(t, err)
-	assert.Equal(t, "newuser@test.com", newUser.Email)
-	assert.Equal(t, user.RoleMember, newUser.Role)
+### Созданные:
+1. ✅ `tests/integration/invites_test.go` - интеграционные тесты для invite flow
 
-	// Step 5: Verify invite is now accepted
-	_, err = inviteService.GetInviteByToken(ctx, invite.Token)
-	assert.Error(t, err) // Should fail — invite no longer valid
+### Модифицированные:
+1. ✅ `internal/testhelpers/integration_server.go` - экспортирован Container для доступа к DB в тестах
 
-	// Step 6: Verify user can be found
-	foundUser, err := userService.GetUserByEmail(ctx, "newuser@test.com")
-	require.NoError(t, err)
-	assert.Equal(t, newUser.ID, foundUser.ID)
-}
+## Результаты тестирования
 
-func TestInviteFlow_ExpiredInvite(t *testing.T) {
-	// Setup
-	// Create invite with past expiration
-	// Attempt to accept — should get ErrInviteExpired
-}
+```bash
+make test-integration
+# Все 8 тестов invite flow проходят успешно
+# Общее время: ~0.76s
 
-func TestInviteFlow_RevokedInvite(t *testing.T) {
-	// Setup
-	// Create invite, then revoke
-	// Attempt to accept — should get ErrInviteRevoked
-}
-
-func TestInviteFlow_DuplicateEmail(t *testing.T) {
-	// Setup with existing user
-	// Create invite with same email
-	// Should get ErrEmailAlreadyExists
-}
-
-func TestInviteFlow_EmailMismatch(t *testing.T) {
-	// Create invite for user@a.com
-	// Try to accept with user@b.com
-	// Should fail with email mismatch error
-}
-
-func TestInviteFlow_DoubleAccept(t *testing.T) {
-	// Create and accept invite
-	// Try to accept again
-	// Should get ErrInviteAlreadyUsed
-}
+make lint
+# 0 issues - код соответствует всем стандартам качества
 ```
 
-## Файлы для создания
+## Особенности реализации
 
-1. `internal/services/invite_integration_test.go`
-
-## Зависимости
-
-- Работающий `testhelpers.NewTestDB` для in-memory SQLite
-- Все репозитории и сервисы доступны для инициализации в тесте
+1. **Использование in-memory SQLite** для быстрых тестов
+2. **Прямой SQL для установки ExpiresAt** - метод Update в repository не обновляет ExpiresAt, поэтому для тестов используется прямой SQL запрос
+3. **Comprehensive error checking** - все тесты проверяют не только факт ошибки, но и её содержание
+4. **Isolated test cases** - каждый тест создает свою family и admin user для изоляции
 
 ## Тестирование
 
-- `make test-integration`
-- `make test`
-- `make lint`
+- ✅ `make test-integration` - все тесты проходят
+- ✅ `make test` - все unit и integration тесты проходят
+- ✅ `make lint` - 0 issues, код соответствует стандартам качества
+- ✅ `make fmt` - код отформатирован

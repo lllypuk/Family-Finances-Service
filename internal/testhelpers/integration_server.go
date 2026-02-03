@@ -20,7 +20,7 @@ type TestServer struct {
 	Repos     *handlers.Repositories
 	Services  *services.Services
 	Server    *application.HTTPServer
-	container *SQLiteTestDB
+	Container *SQLiteTestDB
 }
 
 // SetupHTTPServer creates a test HTTP server with real database connections
@@ -74,7 +74,7 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 		Repos:     repos,
 		Services:  servicesContainer,
 		Server:    httpServer,
-		container: container,
+		Container: container,
 	}
 
 	// Cleanup handler
@@ -94,7 +94,7 @@ func (ts *TestServer) Cleanup() {
 // CheckTableExists checks if a table exists in the database (for debugging)
 func (ts *TestServer) CheckTableExists(t *testing.T, tableName string) bool {
 	var exists int
-	err := ts.container.DB.QueryRowContext(
+	err := ts.Container.DB.QueryRowContext(
 		context.Background(),
 		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
 		tableName,
