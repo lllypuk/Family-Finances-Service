@@ -279,7 +279,7 @@ The project includes a complete web interface built with modern technologies:
 
 The project has comprehensive testing across all layers:
 
-**Unit Tests (42+ test files):**
+**Unit Tests (73+ test files):**
 
 - Domain models with business logic validation
 - Repository implementations with in-memory SQLite
@@ -288,6 +288,8 @@ The project has comprehensive testing across all layers:
 - Middleware components with edge cases
 - Web form validation and error handling
 - Template renderer tests
+- Web handlers (admin, auth, backup, budgets, categories, dashboard, reports, transactions, users)
+- Web models (categories, budgets, forms, dashboard, reports, transactions)
 
 **Integration Tests:**
 
@@ -415,16 +417,17 @@ make pre-commit   # Run full check sequence
 
 ## 🚧 Known Issues & TODO
 
-### Test Coverage Improvements Needed
+### Test Coverage Status
 
-- **Web handlers**: Low coverage - needs test implementation
-- **Web models**: Low coverage - needs expanded validation tests
-- **Admin/Backup handlers**: New handlers need test coverage
-- **Target**: Increase overall test coverage
+- ✅ **Web handlers**: Comprehensive coverage implemented (admin, auth, backup, budgets, categories, dashboard, reports,
+  transactions, users)
+- ✅ **Web models**: Expanded validation tests added (categories, budgets, forms, dashboard, reports, transactions)
+- ✅ **Admin/Backup handlers**: Full test coverage implemented
+- ✅ **DTOs**: Comprehensive validation tests added
 
 ### Development Priorities
 
-1. Add tests for admin and backup web handlers
-2. Improve web models test coverage
-3. Add more integration test scenarios for invite flow
-4. Performance optimization and benchmarking
+1. Add more integration test scenarios for invite flow
+2. Performance optimization and benchmarking
+3. End-to-end testing with agent-browser
+4. Load testing and stress testing scenarios
