@@ -431,3 +431,63 @@ func TestReportService_DeleteReport(t *testing.T) {
 
 	mockReportRepo.AssertExpectations(t)
 }
+
+// Test for BUG-002: Validate that TransactionFilterDTO has valid Limit when generating reports
+func TestReportService_GenerateExpenseReport_ValidatesFilterLimit(t *testing.T) {
+	service, _, mockUserRepo, mockTransactionService, _, mockCategoryService := setupReportService()
+	ctx := context.Background()
+
+	userID := uuid.New()
+	startDate := time.Now().AddDate(0, 0, -7)
+	endDate := time.Now()
+
+	req := dto.ReportRequestDTO{
+		Name:      "Test Report - Filter Validation",
+		Type:      report.TypeExpenses,
+		Period:    report.PeriodWeekly,
+		UserID:    userID,
+		StartDate: startDate,
+		EndDate:   endDate,
+	}
+
+	// Create minimal test data
+	categoryID := uuid.New()
+	transactions := []*transaction.Transaction{
+		createTestTransactionWithCategory(
+			uuid.New(),
+			categoryID,
+			50.0,
+			transaction.TypeExpense,
+			startDate.AddDate(0, 0, 1),
+		),
+	}
+
+	// Setup mock - the key assertion is that GetAllTransactions is called with a valid filter
+	mockTransactionService.On("GetAllTransactions", ctx, mock.MatchedBy(func(filter dto.TransactionFilterDTO) bool {
+		// Verify that Limit is set and valid (not 0)
+		return filter.Limit > 0 && filter.Limit <= 1000
+	})).Return(transactions, nil)
+
+	// Mock category and user lookups
+	cat := createTestCategory(categoryID, "Test Category", category.TypeExpense)
+	mockCategoryService.On("GetCategoryByID", ctx, categoryID).Return(cat, nil)
+
+	testUser := &user.User{
+		ID:        transactions[0].UserID,
+		FirstName: "Test",
+		LastName:  "User",
+		Email:     "test@example.com",
+	}
+	mockUserRepo.On("GetByID", ctx, transactions[0].UserID).Return(testUser, nil)
+
+	// Execute - should not fail with validation error
+	result, err := service.GenerateExpenseReport(ctx, req)
+
+	// Assert
+	require.NoError(t, err, "Expected no validation error for TransactionFilterDTO.Limit")
+	assert.NotNil(t, result)
+
+	mockTransactionService.AssertExpectations(t)
+	mockCategoryService.AssertExpectations(t)
+	mockUserRepo.AssertExpectations(t)
+}
