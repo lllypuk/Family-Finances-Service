@@ -63,7 +63,7 @@ func TestExpenseReportDTO_AllFields(t *testing.T) {
 	reportID := uuid.New()
 	userID := uuid.New()
 
-	report := ExpenseReportDTO{
+	reportDTO := ExpenseReportDTO{
 		ID:            reportID,
 		Name:          "January Expenses",
 		UserID:        userID,
@@ -75,10 +75,10 @@ func TestExpenseReportDTO_AllFields(t *testing.T) {
 		GeneratedAt:   now,
 	}
 
-	assert.Equal(t, reportID, report.ID)
-	assert.Equal(t, "January Expenses", report.Name)
-	assert.Equal(t, 5000.00, report.TotalExpenses)
-	assert.Equal(t, 161.29, report.AverageDaily)
+	assert.Equal(t, reportID, reportDTO.ID)
+	assert.Equal(t, "January Expenses", reportDTO.Name)
+	assert.Equal(t, 5000.00, reportDTO.TotalExpenses)
+	assert.Equal(t, 161.29, reportDTO.AverageDaily)
 }
 
 func TestIncomeReportDTO_AllFields(t *testing.T) {
@@ -86,7 +86,7 @@ func TestIncomeReportDTO_AllFields(t *testing.T) {
 	reportID := uuid.New()
 	userID := uuid.New()
 
-	report := IncomeReportDTO{
+	reportDTO := IncomeReportDTO{
 		ID:           reportID,
 		Name:         "January Income",
 		UserID:       userID,
@@ -98,9 +98,9 @@ func TestIncomeReportDTO_AllFields(t *testing.T) {
 		GeneratedAt:  now,
 	}
 
-	assert.Equal(t, reportID, report.ID)
-	assert.Equal(t, "January Income", report.Name)
-	assert.Equal(t, 8000.00, report.TotalIncome)
+	assert.Equal(t, reportID, reportDTO.ID)
+	assert.Equal(t, "January Income", reportDTO.Name)
+	assert.Equal(t, 8000.00, reportDTO.TotalIncome)
 }
 
 func TestBudgetComparisonDTO_AllFields(t *testing.T) {
