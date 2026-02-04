@@ -39,8 +39,12 @@ func withSession(c echo.Context, userID uuid.UUID, role user.Role) {
 	sessionData := &middleware.SessionData{
 		UserID: userID,
 		Role:   role,
+		Email:  "test@example.com",
 	}
-	c.Set("mock_session_data", sessionData)
+	// Set both keys for compatibility with different middleware functions
+	c.Set("user", sessionData)              // For GetUserFromContext
+	c.Set("mock_session_data", sessionData) // For GetSessionData
+	c.Set("csrf_token", "test-csrf-token")  // For GetCSRFToken
 }
 
 // WithHTMX marks the request as an HTMX request

@@ -72,15 +72,41 @@ func TestBackupHandler_BackupPage(t *testing.T) {
 			expectRedirect: true,
 		},
 		{
+			name:     "Success - displays backup page",
+			userID:   adminID,
+			userRole: user.RoleAdmin,
+			mockSetup: func(userSvc *MockUserService, backupSvc *MockBackupService) {
+				adminUser := &user.User{
+					ID:        adminID,
+					Email:     "admin@example.com",
+					FirstName: "Admin",
+					LastName:  "User",
+					Role:      user.RoleAdmin,
+				}
+				// First call in requireAdmin
+				userSvc.On("GetUserByID", mock.Anything, adminID).Return(adminUser, nil).Once()
+				// Second call to get user details for navigation
+				userSvc.On("GetUserByID", mock.Anything, adminID).Return(adminUser, nil).Once()
+				backupSvc.On("ListBackups", mock.Anything).Return([]*services.BackupInfo{}, nil).Once()
+			},
+			expectedStatus: http.StatusOK,
+			expectRedirect: false,
+		},
+		{
 			name:     "Error - failed to list backups",
 			userID:   adminID,
 			userRole: user.RoleAdmin,
 			mockSetup: func(userSvc *MockUserService, backupSvc *MockBackupService) {
 				adminUser := &user.User{
-					ID:    adminID,
-					Email: "admin@example.com",
-					Role:  user.RoleAdmin,
+					ID:        adminID,
+					Email:     "admin@example.com",
+					FirstName: "Admin",
+					LastName:  "User",
+					Role:      user.RoleAdmin,
 				}
+				// First call in requireAdmin
+				userSvc.On("GetUserByID", mock.Anything, adminID).Return(adminUser, nil).Once()
+				// Second call to get user details for navigation
 				userSvc.On("GetUserByID", mock.Anything, adminID).Return(adminUser, nil).Once()
 				backupSvc.On("ListBackups", mock.Anything).Return(nil, errors.New("disk error")).Once()
 			},

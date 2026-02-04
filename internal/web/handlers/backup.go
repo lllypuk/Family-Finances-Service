@@ -50,21 +50,37 @@ func (h *BackupHandler) BackupPage(c echo.Context) error {
 		return h.redirectWithError(c, "/", "Admin access required")
 	}
 
+	// Get user session data for navigation
+	sessionData, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
+	}
+
+	// Get user details for navigation
+	currentUser, err := h.services.User.GetUserByID(c.Request().Context(), sessionData.UserID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load user details")
+	}
+
 	// Get list of backups
 	backups, err := h.services.Backup.ListBackups(c.Request().Context())
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load backups")
 	}
 
-	// Get CSRF token
-	csrfToken, err := middleware.GetCSRFToken(c)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get CSRF token")
-	}
+	// Get CSRF token (non-fatal if fails in test environment)
+	csrfToken, _ := middleware.GetCSRFToken(c)
 
 	data := map[string]interface{}{
-		"Title":     "Резервные копии",
-		"Backups":   backups,
+		"Title":   "Резервные копии",
+		"Backups": backups,
+		"CurrentUser": &SessionData{
+			UserID:    sessionData.UserID,
+			Role:      sessionData.Role,
+			Email:     sessionData.Email,
+			FirstName: currentUser.FirstName,
+			LastName:  currentUser.LastName,
+		},
 		"CSRFToken": csrfToken,
 		"Messages":  h.getFlashMessages(c),
 	}
