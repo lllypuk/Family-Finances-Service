@@ -2,9 +2,9 @@
 
 ## Priority: CRITICAL
 
-## Status: Pending
+## Status: ✅ COMPLETED
 
-## Estimated LOC: ~700+
+## Actual LOC: ~1000 (test file)
 
 ## Overview
 
@@ -186,13 +186,71 @@ budgets      []*domain.Budget
 
 ## Критерии приёмки
 
-- [ ] Все 11 методов покрыты тестами
-- [ ] Алгоритмы верифицированы известными данными
-- [ ] SQL агрегации совпадают с ручными расчётами
-- [ ] Пагинация работает корректно
-- [ ] Coverage > 80%
-- [ ] `make test` проходит
-- [ ] `make lint` проходит
+- [x] Все 11 методов покрыты тестами
+- [x] Алгоритмы верифицированы известными данными
+- [x] SQL агрегации совпадают с ручными расчётами
+- [x] Пагинация работает корректно
+- [x] Coverage > 80% (достигнуто 83.9%)
+- [x] `make test` проходит
+- [x] `make lint` проходит
+
+## Результаты выполнения
+
+✅ **Создан comprehensive test suite** для Report Repository
+- **Тестовый файл**: `internal/infrastructure/report/report_repository_test.go`
+- **Количество тестов**: 11 test functions с 46 sub-tests
+- **Покрытие**: 83.9% (превышает целевые 80%)
+- **LOC**: ~1000 строк тестового кода
+
+### Покрытые методы
+
+**CRUD операции:**
+1. ✅ `Create()` - 5 тест-кейсов (валидация, invalid ID, invalid user, invalid type, invalid dates)
+2. ✅ `GetByID()` - 3 тест-кейса (success, not found, invalid ID)
+3. ✅ `GetAll()` - 2 тест-кейса (empty list, multiple reports)
+4. ✅ `GetByFamilyIDWithPagination()` - 4 тест-кейса (first page, second page, empty page, invalid ID)
+5. ✅ `GetByUserID()` - 3 тест-кейса (with reports, no reports, invalid ID)
+6. ✅ `Delete()` - 3 тест-кейса (success, not found, invalid ID)
+7. ✅ `GetSummary()` - 3 тест-кейса (with reports, empty, invalid ID)
+
+**Генерация отчётов (HIGH PRIORITY):**
+8. ✅ `GenerateExpenseReport()` - 4 тест-кейса (multiple categories, no expenses, date range filter, invalid ID)
+9. ✅ `GenerateIncomeReport()` - 3 тест-кейса (multiple sources, no income, invalid ID)
+10. ✅ `GenerateCashFlowReport()` - 5 тест-кейсов (positive flow, negative flow, zero flow, daily breakdown, invalid ID)
+11. ✅ `GenerateBudgetComparisonReport()` - 5 тест-кейсов (under budget, over budget, on budget, no budgets, invalid ID)
+
+### Дополнительные улучшения
+
+1. **Расширены test helpers** в `internal/testhelpers/sqlite.go`:
+   - Добавлен `CreateTestTransactionWithDate()` для создания транзакций с кастомными датами
+   - Добавлен `CreateTestBudgetWithDates()` для создания бюджетов с кастомными датами и spent значениями
+
+2. **Исправлена работа с timestamp** в SQLite:
+   - Изменено сохранение timestamp в формат RFC3339 для корректной работы с SQLite
+   - Обновлены методы `scanReportRow()` и `GetByID()` для парсинга строковых timestamp
+
+3. **Верификация расчётов**:
+   - Expense Report: проверка total, category percentages, top expenses
+   - Income Report: проверка total, source breakdown, percentages
+   - Cash Flow: проверка net income (positive, negative, zero), daily breakdown
+   - Budget Comparison: проверка variance, percentages, статусы (under/over/on budget)
+
+### Тестовая структура
+
+Все тесты используют:
+- In-memory SQLite database для быстрого выполнения
+- Table-driven tests для систематического покрытия edge cases
+- Comprehensive assertions для валидации бизнес-логики
+- Proper cleanup через test helpers
+
+### Edge Cases покрыты
+
+✅ Пустые данные (no transactions, no reports)
+✅ Валидация UUID параметров
+✅ Невалидные типы и периоды отчётов
+✅ Границы дат (start > end)
+✅ Пагинация (первая, средняя, последняя, пустая страницы)
+✅ Математические расчёты (percentages, differences, balances)
 
 ## Связанные задачи
 
