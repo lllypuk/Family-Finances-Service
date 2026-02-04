@@ -103,6 +103,10 @@ func (h *BaseHandler) renderPartial(c echo.Context, templateName string, data an
 
 // redirect выполняет редирект
 func (h *BaseHandler) redirect(c echo.Context, url string) error {
+	if h.IsHTMXRequest(c) {
+		c.Response().Header().Set("Hx-Redirect", url)
+		return c.NoContent(http.StatusOK)
+	}
 	return c.Redirect(http.StatusSeeOther, url)
 }
 
@@ -220,11 +224,19 @@ func GetFlashMessage(c echo.Context) (string, string) {
 // redirectWithError performs a redirect with an error message
 func (h *BaseHandler) redirectWithError(c echo.Context, redirectURL, message string) error {
 	setFlashMessage(c, "error", message)
+	if h.IsHTMXRequest(c) {
+		c.Response().Header().Set("Hx-Redirect", redirectURL)
+		return c.NoContent(http.StatusOK)
+	}
 	return c.Redirect(http.StatusSeeOther, redirectURL)
 }
 
 // redirectWithSuccess performs a redirect with a success message
 func (h *BaseHandler) redirectWithSuccess(c echo.Context, redirectURL, message string) error {
 	setFlashMessage(c, "success", message)
+	if h.IsHTMXRequest(c) {
+		c.Response().Header().Set("Hx-Redirect", redirectURL)
+		return c.NoContent(http.StatusOK)
+	}
 	return c.Redirect(http.StatusSeeOther, redirectURL)
 }
