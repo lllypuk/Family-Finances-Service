@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -19,6 +20,10 @@ import (
 	"family-budget-service/internal/web/middleware"
 	webModels "family-budget-service/internal/web/models"
 )
+
+// errHTMXResponseSent is a sentinel error indicating that an HTMX response has already been sent.
+// This is used to signal that the handler should return nil to complete the request.
+var errHTMXResponseSent = errors.New("HTMX response already sent")
 
 const (
 	// MockFoodPercentage represents demo food category percentage
@@ -144,7 +149,16 @@ func (h *ReportHandler) Create(c echo.Context) error {
 	// Генерируем отчет
 	reportEntity, err := h.generateReport(c, createDTO)
 	if err != nil {
+		// Если HTMX ответ уже был отправлен, возвращаем nil чтобы завершить обработку
+		if errors.Is(err, errHTMXResponseSent) {
+			return nil
+		}
 		return err
+	}
+
+	// Проверяем, что отчет был создан (дополнительная защита от nil pointer)
+	if reportEntity == nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create report")
 	}
 
 	// Успешное создание - редирект на просмотр отчета
@@ -288,9 +302,12 @@ func (h *ReportHandler) generateCategoryReport(c echo.Context, createDTO dto.Rep
 func (h *ReportHandler) handleUnsupportedReportType(c echo.Context) (*report.Report, error) {
 	errorMsg := "Unsupported report type"
 	if h.IsHTMXRequest(c) {
-		return nil, h.renderPartial(c, "components/form_errors", map[string]any{
+		if renderErr := h.renderPartial(c, "components/form_errors", map[string]any{
 			"Errors": map[string]string{"form": errorMsg},
-		})
+		}); renderErr != nil {
+			return nil, renderErr
+		}
+		return nil, errHTMXResponseSent
 	}
 	return nil, echo.NewHTTPError(http.StatusBadRequest, errorMsg)
 }
@@ -299,9 +316,12 @@ func (h *ReportHandler) handleUnsupportedReportType(c echo.Context) (*report.Rep
 func (h *ReportHandler) handleReportGenerationError(c echo.Context, err error) error {
 	errorMsg := h.getReportServiceErrorMessage(err)
 	if h.IsHTMXRequest(c) {
-		return h.renderPartial(c, "components/form_errors", map[string]any{
+		if renderErr := h.renderPartial(c, "components/form_errors", map[string]any{
 			"Errors": map[string]string{"form": errorMsg},
-		})
+		}); renderErr != nil {
+			return renderErr
+		}
+		return errHTMXResponseSent
 	}
 	return echo.NewHTTPError(http.StatusInternalServerError, errorMsg)
 }

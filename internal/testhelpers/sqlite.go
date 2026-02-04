@@ -204,6 +204,22 @@ func (h *TestDataHelper) CreateTestTransaction(
 	return id, err
 }
 
+// CreateTestTransactionWithDate creates a test transaction with custom date and returns its ID
+func (h *TestDataHelper) CreateTestTransactionWithDate(
+	ctx context.Context,
+	amount float64,
+	description, transactionType, categoryID, userID, familyID string,
+	date string,
+) (string, error) {
+	id := generateUUID()
+	query := `
+		INSERT INTO transactions (id, amount, description, type, category_id, user_id, family_id, date, tags, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+
+	_, err := h.DB.ExecContext(ctx, query, id, amount, description, transactionType, categoryID, userID, familyID, date)
+	return id, err
+}
+
 // CreateTestBudget creates a test budget and returns its ID
 func (h *TestDataHelper) CreateTestBudget(
 	ctx context.Context,
@@ -218,6 +234,23 @@ func (h *TestDataHelper) CreateTestBudget(
 		VALUES (?, ?, ?, 0, ?, DATE('now'), DATE('now', '+1 month'), ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
 
 	_, err := h.DB.ExecContext(ctx, query, id, name, amount, period, categoryID, familyID)
+	return id, err
+}
+
+// CreateTestBudgetWithDates creates a test budget with custom dates and spent amount, returns its ID
+func (h *TestDataHelper) CreateTestBudgetWithDates(
+	ctx context.Context,
+	name string,
+	amount, spent float64,
+	period, familyID, startDate, endDate string,
+	categoryID *string,
+) (string, error) {
+	id := generateUUID()
+	query := `
+		INSERT INTO budgets (id, name, amount, spent, period, start_date, end_date, category_id, family_id, is_active, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+
+	_, err := h.DB.ExecContext(ctx, query, id, name, amount, spent, period, startDate, endDate, categoryID, familyID)
 	return id, err
 }
 

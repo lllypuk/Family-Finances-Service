@@ -457,6 +457,12 @@ linters:
       - path: "internal/web/handlers/"
         linters:
           - testpackage
+      # Exclude linters for DTO tests - they test data structures
+      - path: "internal/services/dto/"
+        linters:
+          - testpackage
+          - govet # Allow unused field writes in test data structures
+          - testifylint # Allow direct float comparisons for test data
       - source: "TODO"
         linters: [godot]
       - text: "should have a package comment"

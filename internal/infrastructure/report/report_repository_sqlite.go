@@ -62,11 +62,12 @@ func scanReportRow(rows *sql.Rows) (*report.Report, error) {
 	var rep report.Report
 	var idStr, typeStr, periodStr, familyIDStr, userIDStr string
 	var dataJSON string
+	var startDateStr, endDateStr, generatedAtStr string
 
 	err := rows.Scan(
 		&idStr, &rep.Name, &typeStr, &periodStr,
-		&rep.StartDate, &rep.EndDate, &dataJSON,
-		&familyIDStr, &userIDStr, &rep.GeneratedAt,
+		&startDateStr, &endDateStr, &dataJSON,
+		&familyIDStr, &userIDStr, &generatedAtStr,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan report: %w", err)
@@ -79,6 +80,11 @@ func scanReportRow(rows *sql.Rows) (*report.Report, error) {
 
 	rep.Type = report.Type(typeStr)
 	rep.Period = report.Period(periodStr)
+
+	// Parse timestamps
+	rep.StartDate, _ = time.Parse(time.RFC3339, startDateStr)
+	rep.EndDate, _ = time.Parse(time.RFC3339, endDateStr)
+	rep.GeneratedAt, _ = time.Parse(time.RFC3339, generatedAtStr)
 
 	// Parse data from JSON
 	if err = json.Unmarshal([]byte(dataJSON), &rep.Data); err != nil {
@@ -139,12 +145,12 @@ func (r *SQLiteRepository) Create(ctx context.Context, rep *report.Report) error
 		rep.Name,
 		string(rep.Type),
 		string(rep.Period),
-		rep.StartDate,
-		rep.EndDate,
+		rep.StartDate.Format(time.RFC3339),
+		rep.EndDate.Format(time.RFC3339),
 		string(dataJSON),
 		familyID.String(),
 		sqlitehelpers.UUIDToString(rep.UserID),
-		rep.GeneratedAt,
+		rep.GeneratedAt.Format(time.RFC3339),
 	)
 
 	if err != nil {
@@ -170,11 +176,12 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*report.R
 	var rep report.Report
 	var idStr, typeStr, periodStr, familyIDStr, userIDStr string
 	var dataJSON string
+	var startDateStr, endDateStr, generatedAtStr string
 
 	err := r.db.QueryRowContext(ctx, query, sqlitehelpers.UUIDToString(id)).Scan(
 		&idStr, &rep.Name, &typeStr, &periodStr,
-		&rep.StartDate, &rep.EndDate, &dataJSON,
-		&familyIDStr, &userIDStr, &rep.GeneratedAt,
+		&startDateStr, &endDateStr, &dataJSON,
+		&familyIDStr, &userIDStr, &generatedAtStr,
 	)
 
 	if err != nil {
@@ -191,6 +198,11 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*report.R
 
 	rep.Type = report.Type(typeStr)
 	rep.Period = report.Period(periodStr)
+
+	// Parse timestamps
+	rep.StartDate, _ = time.Parse(time.RFC3339, startDateStr)
+	rep.EndDate, _ = time.Parse(time.RFC3339, endDateStr)
+	rep.GeneratedAt, _ = time.Parse(time.RFC3339, generatedAtStr)
 
 	// Parse data from JSON
 	if err = json.Unmarshal([]byte(dataJSON), &rep.Data); err != nil {

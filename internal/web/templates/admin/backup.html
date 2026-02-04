@@ -6,6 +6,11 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>{{.Title}} - Семейный бюджет</title>
 
+        <!-- CSRF Token -->
+        {{if .CSRFToken}}
+        <meta name="csrf-token" content="{{.CSRFToken}}" />
+        {{end}}
+
         <!-- PicoCSS -->
         <link rel="stylesheet" href="/static/css/pico.min.css" />
         <link rel="stylesheet" href="/static/css/custom.css" />
@@ -127,6 +132,9 @@
         </main>
 
         {{template "footer" .}}
+
+        <!-- Custom JavaScript -->
+        <script src="/static/js/app.js"></script>
     </body>
 </html>
 {{end}}

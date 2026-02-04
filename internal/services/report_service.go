@@ -21,10 +21,11 @@ import (
 
 // Constants for report generation
 const (
-	topTransactionsLimit = 10
-	percentageMultiplier = 100.0
-	hoursPerDay          = 24
-	daysPerWeek          = 7
+	topTransactionsLimit        = 10
+	percentageMultiplier        = 100.0
+	hoursPerDay                 = 24
+	daysPerWeek                 = 7
+	reportTransactionQueryLimit = 1000 // Maximum transactions to query for reports
 )
 
 type reportService struct {
@@ -498,6 +499,7 @@ func (s *reportService) getTransactionsForPeriod(
 	filter := dto.TransactionFilterDTO{
 		DateFrom: &startDate,
 		DateTo:   &endDate,
+		Limit:    reportTransactionQueryLimit,
 	}
 
 	if transactionType != "" {
