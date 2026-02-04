@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
-	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/web/models"
 )
@@ -290,7 +290,7 @@ func TestDashboardFilters_ValidateCustomDateRange(t *testing.T) {
 			err := filters.ValidateCustomDateRange()
 
 			if tt.expectErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				if tt.errCheck != nil {
 					assert.True(t, tt.errCheck(err))
 				}
@@ -303,12 +303,12 @@ func TestDashboardFilters_ValidateCustomDateRange(t *testing.T) {
 
 func TestValidationError(t *testing.T) {
 	err := models.NewValidationError("test error")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, "test error", err.Error())
 
 	// Test as ValidationError type
 	var validationErr *models.ValidationError
-	assert.ErrorAs(t, err, &validationErr)
+	require.ErrorAs(t, err, &validationErr)
 	assert.Equal(t, "test error", validationErr.Message)
 }
 
@@ -338,34 +338,28 @@ func TestDashboardViewModel_Structure(t *testing.T) {
 	assert.NotNil(t, vm.BudgetOverview)
 	assert.NotNil(t, vm.RecentActivity)
 	assert.NotNil(t, vm.CategoryInsights)
-	assert.Equal(t, 3000.0, vm.MonthlySummary.NetIncome)
+	assert.InEpsilon(t, 3000.0, vm.MonthlySummary.NetIncome, 0.001)
 }
 
 func TestBudgetProgressItem_CompleteFields(t *testing.T) {
-	now := time.Now()
 	item := &models.BudgetProgressItem{
-		ID:            uuid.New(),
-		Name:          "Monthly Budget",
-		CategoryName:  "Food",
-		Amount:        1000.0,
-		Spent:         750.0,
-		Remaining:     250.0,
-		Percentage:    75.0,
-		Period:        budget.PeriodMonthly,
-		StartDate:     now.AddDate(0, 0, -15),
-		EndDate:       now.AddDate(0, 0, 15),
-		DaysRemaining: 15,
-		IsOverBudget:  false,
-		IsNearLimit:   true,
-		AlertLevel:    "warning",
+		ID:           uuid.New(),
+		Name:         "Monthly Budget",
+		Amount:       1000.0,
+		Spent:        750.0,
+		Remaining:    250.0,
+		Percentage:   75.0,
+		IsOverBudget: false,
+		IsNearLimit:  true,
+		AlertLevel:   "warning",
 	}
 
 	assert.NotEqual(t, uuid.Nil, item.ID)
 	assert.Equal(t, "Monthly Budget", item.Name)
-	assert.Equal(t, 1000.0, item.Amount)
-	assert.Equal(t, 750.0, item.Spent)
-	assert.Equal(t, 250.0, item.Remaining)
-	assert.Equal(t, 75.0, item.Percentage)
+	assert.InEpsilon(t, 1000.0, item.Amount, 0.001)
+	assert.InEpsilon(t, 750.0, item.Spent, 0.001)
+	assert.InEpsilon(t, 250.0, item.Remaining, 0.001)
+	assert.InEpsilon(t, 75.0, item.Percentage, 0.001)
 	assert.False(t, item.IsOverBudget)
 	assert.True(t, item.IsNearLimit)
 	assert.Equal(t, "warning", item.AlertLevel)
@@ -389,12 +383,9 @@ func TestRecentActivityCard_Pagination(t *testing.T) {
 
 func TestEnhancedStatsCard(t *testing.T) {
 	card := &models.EnhancedStatsCard{
-		AvgIncomePerDay:          100.0,
-		IncomeTransactionsCount:  10,
-		AvgExpensePerDay:         75.0,
-		ExpenseTransactionsCount: 15,
-		AvgTransactionAmount:     50.0,
-		SavingsRate:              25.0,
+		AvgIncomePerDay:  100.0,
+		AvgExpensePerDay: 75.0,
+		SavingsRate:      25.0,
 		Forecast: &models.ForecastData{
 			ExpectedIncome:   3000.0,
 			ExpectedExpenses: 2250.0,
@@ -403,11 +394,11 @@ func TestEnhancedStatsCard(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, 100.0, card.AvgIncomePerDay)
-	assert.Equal(t, 75.0, card.AvgExpensePerDay)
-	assert.Equal(t, 25.0, card.SavingsRate)
+	assert.InEpsilon(t, 100.0, card.AvgIncomePerDay, 0.001)
+	assert.InEpsilon(t, 75.0, card.AvgExpensePerDay, 0.001)
+	assert.InEpsilon(t, 25.0, card.SavingsRate, 0.001)
 	assert.NotNil(t, card.Forecast)
-	assert.Equal(t, 750.0, card.Forecast.MonthEndBalance)
+	assert.InEpsilon(t, 750.0, card.Forecast.MonthEndBalance, 0.001)
 }
 
 func TestCategoryInsightsCard(t *testing.T) {
@@ -439,8 +430,8 @@ func TestCategoryInsightsCard(t *testing.T) {
 
 	assert.Len(t, card.TopExpenseCategories, 1)
 	assert.Len(t, card.TopIncomeCategories, 1)
-	assert.Equal(t, 1000.0, card.TotalExpenses)
-	assert.Equal(t, 3000.0, card.TotalIncome)
+	assert.InEpsilon(t, 1000.0, card.TotalExpenses, 0.001)
+	assert.InEpsilon(t, 3000.0, card.TotalIncome, 0.001)
 	assert.True(t, card.PeriodStart.Before(card.PeriodEnd))
 }
 
@@ -448,14 +439,14 @@ func TestDashboardConstants(t *testing.T) {
 	assert.Equal(t, 10, models.MaxRecentTransactions)
 	assert.Equal(t, 5, models.MaxTopBudgets)
 	assert.Equal(t, 5, models.MaxTopCategories)
-	assert.Equal(t, 80.0, models.BudgetNearLimitThreshold)
-	assert.Equal(t, 100.0, models.BudgetOverLimitThreshold)
-	assert.Equal(t, 30.0, models.CategoryHighPercentage)
-	assert.Equal(t, 15.0, models.CategoryMediumPercentage)
+	assert.InEpsilon(t, 80.0, models.BudgetNearLimitThreshold, 0.001)
+	assert.InEpsilon(t, 100.0, models.BudgetOverLimitThreshold, 0.001)
+	assert.InEpsilon(t, 30.0, models.CategoryHighPercentage, 0.001)
+	assert.InEpsilon(t, 15.0, models.CategoryMediumPercentage, 0.001)
 	assert.Equal(t, 24, models.HoursInDay)
 	assert.Equal(t, 7, models.DaysInWeek)
 	assert.Equal(t, 30, models.DaysInMonth)
 	assert.Equal(t, 365, models.DaysInYear)
 	assert.Equal(t, 2, models.MaxPeriodYears)
-	assert.Equal(t, 100.0, models.PercentageMultiplier)
+	assert.InEpsilon(t, 100.0, models.PercentageMultiplier, 0.001)
 }

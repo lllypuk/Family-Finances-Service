@@ -635,7 +635,7 @@ func TestCreateInviteForm_Validate(t *testing.T) {
 			err := tt.form.Validate()
 
 			if tt.expectErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				if tt.errMsg != "" {
 					assert.Contains(t, err.Error(), tt.errMsg)
 				}

@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/web/models"
@@ -88,7 +89,7 @@ func TestReportForm_GetStartDate(t *testing.T) {
 			if tt.expectErr {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, 2024, result.Year())
 				assert.Equal(t, time.January, result.Month())
 				assert.Equal(t, 15, result.Day())
@@ -123,7 +124,7 @@ func TestReportForm_GetEndDate(t *testing.T) {
 			if tt.expectErr {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				// Should be end of day
 				assert.Equal(t, 23, result.Hour())
 				assert.Equal(t, 59, result.Minute())
@@ -219,9 +220,9 @@ func TestReportDataVM_FromDomain(t *testing.T) {
 	assert.Equal(t, domainReport.Period, vm.Period)
 	assert.Equal(t, domainReport.StartDate, vm.StartDate)
 	assert.Equal(t, domainReport.EndDate, vm.EndDate)
-	assert.Equal(t, 5000.0, vm.TotalIncome)
-	assert.Equal(t, 3000.0, vm.TotalExpenses)
-	assert.Equal(t, 2000.0, vm.NetIncome)
+	assert.InEpsilon(t, 5000.0, vm.TotalIncome, 0.001)
+	assert.InEpsilon(t, 3000.0, vm.TotalExpenses, 0.001)
+	assert.InEpsilon(t, 2000.0, vm.NetIncome, 0.001)
 	assert.NotEmpty(t, vm.FormattedIncome)
 	assert.NotEmpty(t, vm.FormattedExpenses)
 	assert.NotEmpty(t, vm.FormattedNet)
@@ -261,26 +262,25 @@ func TestReportDataVM_FromDomain_NegativeNetIncome(t *testing.T) {
 	vm := &models.ReportDataVM{}
 	vm.FromDomain(domainReport)
 
-	assert.Equal(t, -1000.0, vm.NetIncome)
+	assert.InEpsilon(t, -1000.0, vm.NetIncome, 0.001)
 	assert.Equal(t, "negative", vm.NetIncomeClass)
 	assert.Contains(t, vm.FormattedNet, "-")
 }
 
 func TestCategoryReportItemVM(t *testing.T) {
 	item := models.CategoryReportItemVM{
-		CategoryID:      uuid.New(),
-		CategoryName:    "Food",
-		Amount:          1500.0,
-		Percentage:      50.0,
-		Count:           25,
-		FormattedAmount: "1500.00",
-		ProgressWidth:   "50.0%",
+		CategoryID:    uuid.New(),
+		CategoryName:  "Food",
+		Amount:        1500.0,
+		Percentage:    50.0,
+		Count:         25,
+		ProgressWidth: "50.0%",
 	}
 
 	assert.NotEqual(t, uuid.Nil, item.CategoryID)
 	assert.Equal(t, "Food", item.CategoryName)
-	assert.Equal(t, 1500.0, item.Amount)
-	assert.Equal(t, 50.0, item.Percentage)
+	assert.InEpsilon(t, 1500.0, item.Amount, 0.001)
+	assert.InEpsilon(t, 50.0, item.Percentage, 0.001)
 	assert.Equal(t, 25, item.Count)
 	assert.Equal(t, "50.0%", item.ProgressWidth)
 }
@@ -289,38 +289,30 @@ func TestDailyReportItemVM(t *testing.T) {
 	date := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
 
 	item := models.DailyReportItemVM{
-		Date:              date,
-		Income:            100.0,
-		Expenses:          50.0,
-		Balance:           50.0,
-		FormattedDate:     "15.01.2024",
-		FormattedIncome:   "100.00",
-		FormattedExpenses: "50.00",
-		FormattedBalance:  "+50.00",
-		BalanceClass:      "positive",
+		Date:         date,
+		Income:       100.0,
+		Expenses:     50.0,
+		Balance:      50.0,
+		BalanceClass: "positive",
 	}
 
 	assert.Equal(t, date, item.Date)
-	assert.Equal(t, 100.0, item.Income)
-	assert.Equal(t, 50.0, item.Expenses)
-	assert.Equal(t, 50.0, item.Balance)
+	assert.InEpsilon(t, 100.0, item.Income, 0.001)
+	assert.InEpsilon(t, 50.0, item.Expenses, 0.001)
+	assert.InEpsilon(t, 50.0, item.Balance, 0.001)
 	assert.Equal(t, "positive", item.BalanceClass)
 }
 
 func TestTransactionReportItemVM(t *testing.T) {
-	now := time.Now()
 	item := models.TransactionReportItemVM{
-		ID:              uuid.New(),
-		Amount:          500.0,
-		Description:     "Groceries",
-		Category:        "Food",
-		Date:            now,
-		FormattedAmount: "500.00",
-		FormattedDate:   now.Format("02.01.2006"),
+		ID:          uuid.New(),
+		Amount:      500.0,
+		Description: "Groceries",
+		Category:    "Food",
 	}
 
 	assert.NotEqual(t, uuid.Nil, item.ID)
-	assert.Equal(t, 500.0, item.Amount)
+	assert.InEpsilon(t, 500.0, item.Amount, 0.001)
 	assert.Equal(t, "Groceries", item.Description)
 	assert.Equal(t, "Food", item.Category)
 }
@@ -376,15 +368,6 @@ func TestBudgetComparisonItemVM(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			item := models.BudgetComparisonItemVM{
-				BudgetID:         uuid.New(),
-				BudgetName:       "Test Budget",
-				Planned:          tt.planned,
-				Actual:           tt.actual,
-				Difference:       tt.difference,
-				Percentage:       tt.percentage,
-				FormattedPlanned: "1000.00",
-				FormattedActual:  "800.00",
-				FormattedDiff:    "-200.00",
 				DifferenceClass:  tt.expectedDiffClass,
 				PerformanceClass: tt.expectedPerfClass,
 			}
@@ -434,9 +417,9 @@ func TestReportDataVM_EmptyData(t *testing.T) {
 	vm := &models.ReportDataVM{}
 	vm.FromDomain(domainReport)
 
-	assert.Equal(t, 0.0, vm.TotalIncome)
-	assert.Equal(t, 0.0, vm.TotalExpenses)
-	assert.Equal(t, 0.0, vm.NetIncome)
+	assert.InDelta(t, 0.0, vm.TotalIncome, 0.001)
+	assert.InDelta(t, 0.0, vm.TotalExpenses, 0.001)
+	assert.InDelta(t, 0.0, vm.NetIncome, 0.001)
 	assert.Equal(t, "zero", vm.NetIncomeClass)
 	assert.Empty(t, vm.CategoryBreakdown)
 	assert.Empty(t, vm.DailyBreakdown)

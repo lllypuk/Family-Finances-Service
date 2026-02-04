@@ -66,7 +66,7 @@ func TestBudgetForm_GetAmount(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
+				assert.InEpsilon(t, tt.expected, result, 0.001)
 			}
 		})
 	}
@@ -293,7 +293,7 @@ func TestBudgetAlertForm_GetThreshold(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
+				assert.InEpsilon(t, tt.expected, result, 0.001)
 			}
 		})
 	}
@@ -324,8 +324,8 @@ func TestBudgetProgressVM_FromDomain(t *testing.T) {
 
 	assert.Equal(t, testBudget.ID, vm.ID)
 	assert.Equal(t, testBudget.Name, vm.Name)
-	assert.Equal(t, testBudget.Amount, vm.Amount)
-	assert.Equal(t, testBudget.Spent, vm.Spent)
+	assert.InEpsilon(t, testBudget.Amount, vm.Amount, 0.001)
+	assert.InEpsilon(t, testBudget.Spent, vm.Spent, 0.001)
 	assert.InDelta(t, 250.0, vm.Remaining, 0.01)
 	assert.InDelta(t, 75.0, vm.Percentage, 0.01)
 	assert.Equal(t, testBudget.Period, vm.Period)
@@ -363,7 +363,7 @@ func TestBudgetProgressVM_FromDomain_OverBudget(t *testing.T) {
 	vm.FromDomain(testBudget)
 
 	assert.True(t, vm.IsOverBudget)
-	assert.Equal(t, -500.0, vm.Remaining)
+	assert.InEpsilon(t, -500.0, vm.Remaining, 0.001)
 	assert.InDelta(t, 150.0, vm.Percentage, 0.01)
 	assert.NotEmpty(t, vm.FormattedOverage)
 	assert.Contains(t, vm.ProgressBarClass, "danger")
@@ -414,7 +414,7 @@ func TestBudgetAlertVM_FromDomainAlert(t *testing.T) {
 	assert.Equal(t, alert.ID, vm.ID)
 	assert.Equal(t, alert.BudgetID, vm.BudgetID)
 	assert.Equal(t, "Test Budget", vm.BudgetName)
-	assert.Equal(t, alert.Threshold, vm.Threshold)
+	assert.InEpsilon(t, alert.Threshold, vm.Threshold, 0.001)
 	assert.Equal(t, alert.IsTriggered, vm.IsTriggered)
 	assert.Equal(t, alert.TriggeredAt, vm.TriggeredAt)
 	assert.NotEmpty(t, vm.Message)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/web/models"
@@ -51,8 +52,8 @@ func TestTransactionForm_GetAmount(t *testing.T) {
 			if tt.expectErr {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
+				require.NoError(t, err)
+				assert.InEpsilon(t, tt.expected, result, 0.001)
 			}
 		})
 	}
@@ -112,7 +113,7 @@ func TestTransactionForm_GetCategoryID(t *testing.T) {
 			if tt.expectErr {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, validUUID, result)
 			}
 		})
@@ -150,7 +151,7 @@ func TestTransactionForm_GetDate(t *testing.T) {
 			if tt.expectErr {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, 2024, result.Year())
 				assert.Equal(t, time.January, result.Month())
 				assert.Equal(t, 15, result.Day())
@@ -229,7 +230,7 @@ func TestTransactionViewModel_FromDomain(t *testing.T) {
 	vm.FromDomain(domainTx)
 
 	assert.Equal(t, txID, vm.ID)
-	assert.Equal(t, 150.0, vm.Amount)
+	assert.InDelta(t, 150.0, vm.Amount, 0.001)
 	assert.Equal(t, transaction.TypeExpense, vm.Type)
 	assert.Equal(t, "Groceries", vm.Description)
 	assert.Equal(t, categoryID, vm.CategoryID)
@@ -294,9 +295,9 @@ func TestTransactionFilters_ToDomainFilter(t *testing.T) {
 	assert.NotNil(t, domainFilter.DateFrom)
 	assert.NotNil(t, domainFilter.DateTo)
 	assert.NotNil(t, domainFilter.AmountFrom)
-	assert.Equal(t, 100.0, *domainFilter.AmountFrom)
+	assert.InDelta(t, 100.0, *domainFilter.AmountFrom, 0.001)
 	assert.NotNil(t, domainFilter.AmountTo)
-	assert.Equal(t, 500.0, *domainFilter.AmountTo)
+	assert.InDelta(t, 500.0, *domainFilter.AmountTo, 0.001)
 	assert.Equal(t, []string{"food", "groceries"}, domainFilter.Tags)
 	assert.Equal(t, "test", domainFilter.Description)
 	assert.Equal(t, 25, domainFilter.Limit)
@@ -451,7 +452,7 @@ func TestBulkOperationForm_GetTransactionIDs(t *testing.T) {
 			if tt.expectErr {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Len(t, result, tt.expectedLen)
 			}
 		})
@@ -460,13 +461,12 @@ func TestBulkOperationForm_GetTransactionIDs(t *testing.T) {
 
 func TestTransactionListResponse(t *testing.T) {
 	response := models.TransactionListResponse{
-		Transactions: []models.TransactionViewModel{},
-		Total:        100,
-		Page:         2,
-		PageSize:     10,
-		TotalPages:   10,
-		HasNext:      true,
-		HasPrev:      true,
+		Total:      100,
+		Page:       2,
+		PageSize:   10,
+		TotalPages: 10,
+		HasNext:    true,
+		HasPrev:    true,
 	}
 
 	assert.Equal(t, 100, response.Total)
@@ -541,7 +541,7 @@ func TestTransactionViewModel_EdgeCases(t *testing.T) {
 		vm := &models.TransactionViewModel{}
 		vm.FromDomain(domainTx)
 
-		assert.Equal(t, 999999.99, vm.Amount)
+		assert.InDelta(t, 999999.99, vm.Amount, 0.001)
 		assert.NotEmpty(t, vm.FormattedAmount)
 	})
 }
@@ -549,8 +549,7 @@ func TestTransactionViewModel_EdgeCases(t *testing.T) {
 func TestBulkOperationForm(t *testing.T) {
 	t.Run("delete action", func(t *testing.T) {
 		form := models.BulkOperationForm{
-			Action:         "delete",
-			TransactionIDs: []string{uuid.New().String()},
+			Action: "delete",
 		}
 
 		assert.Equal(t, "delete", form.Action)
@@ -559,9 +558,8 @@ func TestBulkOperationForm(t *testing.T) {
 	t.Run("update category action", func(t *testing.T) {
 		categoryID := uuid.New()
 		form := models.BulkOperationForm{
-			Action:         "update_category",
-			TransactionIDs: []string{uuid.New().String()},
-			CategoryID:     categoryID.String(),
+			Action:     "update_category",
+			CategoryID: categoryID.String(),
 		}
 
 		assert.Equal(t, "update_category", form.Action)
@@ -570,9 +568,8 @@ func TestBulkOperationForm(t *testing.T) {
 
 	t.Run("update tags action", func(t *testing.T) {
 		form := models.BulkOperationForm{
-			Action:         "update_tags",
-			TransactionIDs: []string{uuid.New().String()},
-			Tags:           "new,tags",
+			Action: "update_tags",
+			Tags:   "new,tags",
 		}
 
 		assert.Equal(t, "update_tags", form.Action)

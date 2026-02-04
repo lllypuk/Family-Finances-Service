@@ -331,7 +331,6 @@ func TestCategoryFilter_EdgeCases(t *testing.T) {
 
 	t.Run("filter with nil is_active", func(t *testing.T) {
 		filter := models.CategoryFilter{
-			Name:     "Test",
 			IsActive: nil,
 		}
 
