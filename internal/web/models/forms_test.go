@@ -518,3 +518,311 @@ func BenchmarkGetErrorMessage(b *testing.B) {
 		_ = models.GetValidationErrors(err)
 	}
 }
+
+func TestCreateUserForm_Validation(t *testing.T) {
+	v := validator.New()
+
+	tests := []struct {
+		name      string
+		form      models.CreateUserForm
+		expectErr bool
+	}{
+		{
+			name: "valid form",
+			form: models.CreateUserForm{
+				FirstName: "John",
+				LastName:  "Doe",
+				Email:     "john@example.com",
+				Password:  "password123",
+				Role:      "member",
+			},
+			expectErr: false,
+		},
+		{
+			name: "missing first name",
+			form: models.CreateUserForm{
+				LastName: "Doe",
+				Email:    "john@example.com",
+				Password: "password123",
+				Role:     "member",
+			},
+			expectErr: true,
+		},
+		{
+			name: "missing email",
+			form: models.CreateUserForm{
+				FirstName: "John",
+				LastName:  "Doe",
+				Password:  "password123",
+				Role:      "member",
+			},
+			expectErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := v.Struct(tt.form)
+			if tt.expectErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestCreateInviteForm_Validate(t *testing.T) {
+	tests := []struct {
+		name      string
+		form      models.CreateInviteForm
+		expectErr bool
+		errMsg    string
+	}{
+		{
+			name: "valid member invite",
+			form: models.CreateInviteForm{
+				Email: "member@test.com",
+				Role:  "member",
+			},
+			expectErr: false,
+		},
+		{
+			name: "valid admin invite",
+			form: models.CreateInviteForm{
+				Email: "admin@test.com",
+				Role:  "admin",
+			},
+			expectErr: false,
+		},
+		{
+			name: "valid child invite",
+			form: models.CreateInviteForm{
+				Email: "child@test.com",
+				Role:  "child",
+			},
+			expectErr: false,
+		},
+		{
+			name: "missing email",
+			form: models.CreateInviteForm{
+				Role: "member",
+			},
+			expectErr: true,
+			errMsg:    "email is required",
+		},
+		{
+			name: "missing role",
+			form: models.CreateInviteForm{
+				Email: "user@test.com",
+			},
+			expectErr: true,
+			errMsg:    "role is required",
+		},
+		{
+			name: "invalid role",
+			form: models.CreateInviteForm{
+				Email: "user@test.com",
+				Role:  "superadmin",
+			},
+			expectErr: true,
+			errMsg:    "invalid role",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.form.Validate()
+
+			if tt.expectErr {
+				assert.Error(t, err)
+				if tt.errMsg != "" {
+					assert.Contains(t, err.Error(), tt.errMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestInviteRegisterForm_Validation(t *testing.T) {
+	v := validator.New()
+
+	tests := []struct {
+		name      string
+		form      models.InviteRegisterForm
+		expectErr bool
+	}{
+		{
+			name: "valid form",
+			form: models.InviteRegisterForm{
+				Email:    "newuser@test.com",
+				Name:     "New User",
+				Password: "password123",
+			},
+			expectErr: false,
+		},
+		{
+			name: "missing email",
+			form: models.InviteRegisterForm{
+				Name:     "New User",
+				Password: "password123",
+			},
+			expectErr: true,
+		},
+		{
+			name: "missing name",
+			form: models.InviteRegisterForm{
+				Email:    "newuser@test.com",
+				Password: "password123",
+			},
+			expectErr: true,
+		},
+		{
+			name: "name too short",
+			form: models.InviteRegisterForm{
+				Email:    "newuser@test.com",
+				Name:     "A",
+				Password: "password123",
+			},
+			expectErr: true,
+		},
+		{
+			name: "password too short",
+			form: models.InviteRegisterForm{
+				Email:    "newuser@test.com",
+				Name:     "New User",
+				Password: "12345",
+			},
+			expectErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := v.Struct(tt.form)
+			if tt.expectErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestSetupForm_EdgeCases(t *testing.T) {
+	v := validator.New()
+
+	tests := []struct {
+		name      string
+		form      models.SetupForm
+		expectErr bool
+	}{
+		{
+			name: "unicode in names",
+			form: models.SetupForm{
+				FamilyName: "Семья Иванов",
+				Currency:   "RUB",
+				FirstName:  "Иван",
+				LastName:   "Иванов",
+				Email:      "ivan@example.com",
+				Password:   "password123",
+			},
+			expectErr: false,
+		},
+		{
+			name: "emoji in family name",
+			form: models.SetupForm{
+				FamilyName: "My Family 👨‍👩‍👧‍👦",
+				Currency:   "USD",
+				FirstName:  "John",
+				LastName:   "Doe",
+				Email:      "john@example.com",
+				Password:   "password123",
+			},
+			expectErr: false,
+		},
+		{
+			name: "whitespace only family name - passes min length but not practical",
+			form: models.SetupForm{
+				FamilyName: "   ",
+				Currency:   "USD",
+				FirstName:  "John",
+				LastName:   "Doe",
+				Email:      "john@example.com",
+				Password:   "password123",
+			},
+			expectErr: false, // Validator only checks length, not trimmed content
+		},
+		{
+			name: "very long family name",
+			form: models.SetupForm{
+				FamilyName: strings.Repeat("A", 101),
+				Currency:   "USD",
+				FirstName:  "John",
+				LastName:   "Doe",
+				Email:      "john@example.com",
+				Password:   "password123",
+			},
+			expectErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := v.Struct(tt.form)
+			if tt.expectErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestLoginForm_EdgeCases(t *testing.T) {
+	v := validator.New()
+
+	tests := []struct {
+		name      string
+		form      models.LoginForm
+		expectErr bool
+	}{
+		{
+			name: "email with plus sign",
+			form: models.LoginForm{
+				Email:    "user+test@example.com",
+				Password: "password123",
+			},
+			expectErr: false,
+		},
+		{
+			name: "email with subdomain",
+			form: models.LoginForm{
+				Email:    "user@mail.example.com",
+				Password: "password123",
+			},
+			expectErr: false,
+		},
+		{
+			name: "whitespace in email",
+			form: models.LoginForm{
+				Email:    " user@example.com ",
+				Password: "password123",
+			},
+			expectErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := v.Struct(tt.form)
+			if tt.expectErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
