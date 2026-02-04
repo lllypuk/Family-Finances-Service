@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/mock"
@@ -24,10 +25,21 @@ func (r *MockRenderer) Render(_ io.Writer, _ string, _ interface{}, _ echo.Conte
 	return nil
 }
 
+// CustomValidator wraps go-playground/validator for Echo
+type CustomValidator struct {
+	validator *validator.Validate
+}
+
+// Validate validates structs using go-playground/validator
+func (cv *CustomValidator) Validate(i any) error {
+	return cv.validator.Struct(i)
+}
+
 // newTestContext creates a test echo context with request and response recorder
 func newTestContext(method, path string, body string) (echo.Context, *httptest.ResponseRecorder) {
 	e := echo.New()
 	e.Renderer = &MockRenderer{}
+	e.Validator = &CustomValidator{validator: validator.New()}
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
 	rec := httptest.NewRecorder()

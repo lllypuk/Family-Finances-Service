@@ -51,10 +51,7 @@ func (h *UserHandler) Index(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load current user")
 	}
 
-	csrfToken, err := middleware.GetCSRFToken(c)
-	if err != nil {
-		return err
-	}
+	csrfToken, _ := middleware.GetCSRFToken(c)
 
 	data := map[string]any{
 		"Title":       "Family Members",
@@ -86,10 +83,7 @@ func (h *UserHandler) New(c echo.Context) error {
 		return c.String(http.StatusForbidden, "Only family admin can add new members")
 	}
 
-	csrfToken, err := middleware.GetCSRFToken(c)
-	if err != nil {
-		return err
-	}
+	csrfToken, _ := middleware.GetCSRFToken(c)
 
 	data := map[string]any{
 		"Title":     "Add Family Member",
