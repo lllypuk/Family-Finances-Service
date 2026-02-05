@@ -301,12 +301,19 @@ The project has comprehensive testing across all layers:
 
 ### Documentation
 
-Comprehensive documentation is available in the `.memory_bank/` directory:
+Comprehensive documentation is available in the following directories:
 
+**Project Documentation** (`.memory_bank/`):
 - **Product Brief** - Business context and goals
 - **Tech Stack** - Architecture and technology choices
 - **Testing Plan** - Detailed testing strategy and coverage
 - **Current Tasks** - Project status and next steps
+
+**Self-Hosted Deployment** (`docs/tasks/`):
+- **Installation Script** - Automated deployment on Linux VMs
+- **Reverse Proxy Config** - Nginx/Caddy with TLS/SSL
+- **Production Docker Compose** - Hardened container deployment
+- **Security Hardening** - Firewall, fail2ban, security headers
 
 ## CI/CD Pipeline
 
@@ -415,6 +422,55 @@ make pre-commit   # Run full check sequence
 
 **Remember: Clean code is not optional - it's mandatory for project integrity.**
 
+## 🚀 Self-Hosted Deployment
+
+The project includes comprehensive self-hosted deployment capabilities for running on dedicated VMs.
+
+### Deployment Documentation
+
+All deployment tasks and specifications are located in `docs/tasks/`:
+
+| Task | Priority | Description |
+|------|----------|-------------|
+| [001-install-script](docs/tasks/001-install-script.md) | HIGH | Automated installation on fresh Linux VM |
+| [002-reverse-proxy-config](docs/tasks/002-reverse-proxy-config.md) | HIGH | Nginx/Caddy with TLS/SSL |
+| [003-docker-compose-production](docs/tasks/003-docker-compose-production.md) | HIGH | Production Docker Compose |
+| [004-systemd-service](docs/tasks/004-systemd-service.md) | MEDIUM | Native deployment without Docker |
+| [005-upgrade-script](docs/tasks/005-upgrade-script.md) | MEDIUM | Safe upgrades with rollback |
+| [006-security-hardening](docs/tasks/006-security-hardening.md) | HIGH | Firewall, fail2ban, security headers |
+| [007-deployment-documentation](docs/tasks/007-deployment-documentation.md) | MEDIUM | User-facing deployment guide |
+| [008-uninstall-script](docs/tasks/008-uninstall-script.md) | LOW | Clean removal script |
+
+### Target Directory Structure
+
+```
+deploy/
+├── scripts/
+│   ├── install.sh           # Automated installation
+│   ├── upgrade.sh           # Safe upgrades with rollback
+│   ├── backup.sh            # Cron-compatible backup script
+│   ├── health-check.sh      # Health monitoring
+│   ├── setup-firewall.sh    # UFW configuration
+│   ├── setup-fail2ban.sh    # Brute-force protection
+│   └── uninstall.sh         # Clean removal
+├── nginx/                   # Nginx reverse proxy configs
+├── caddy/                   # Caddy reverse proxy configs
+├── systemd/                 # Native Linux service files
+├── fail2ban/                # Fail2ban filters and jails
+├── docker-compose.prod.yml  # Production with nginx
+├── docker-compose.caddy.yml # Production with Caddy
+└── .env.production.example  # Production environment template
+```
+
+### Security Features for Self-Hosted
+
+- **TLS/SSL**: Let's Encrypt auto-renewal via Caddy or Certbot
+- **Rate Limiting**: Nginx/Caddy rate limiting for login and API endpoints
+- **Firewall**: UFW configuration blocking direct app port access
+- **Fail2ban**: Automatic IP blocking after failed login attempts
+- **Security Headers**: Full set of modern security headers (CSP, HSTS, etc.)
+- **Container Hardening**: Read-only filesystem, non-root user, resource limits
+
 ## 🚧 Known Issues & TODO
 
 ### Test Coverage Status
@@ -427,7 +483,8 @@ make pre-commit   # Run full check sequence
 
 ### Development Priorities
 
-1. Add more integration test scenarios for invite flow
-2. Performance optimization and benchmarking
-3. End-to-end testing with agent-browser
-4. Load testing and stress testing scenarios
+1. Implement self-hosted deployment scripts (see `docs/tasks/`)
+2. Add more integration test scenarios for invite flow
+3. Performance optimization and benchmarking
+4. End-to-end testing with agent-browser
+5. Load testing and stress testing scenarios

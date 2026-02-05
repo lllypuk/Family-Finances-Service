@@ -77,7 +77,7 @@ The following individual migration files were consolidated:
 
 - See [README.md](./README.md) for detailed migration guide
 - See [../CLAUDE.md](../CLAUDE.md) for development workflow
-- See [../.memory_bank/tech_stack.md](../.memory_bank/tech_stack.md) for architecture details
+- See [../.memory_bank/tech_stack.md](../docs/tech_stack.md) for architecture details
 
 ---
 
