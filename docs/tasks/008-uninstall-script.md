@@ -6,7 +6,118 @@ Create a clean uninstall script that safely removes Family Budget Service while 
 
 ## Priority: LOW
 
-## Status: TODO
+## Status: COMPLETE
+
+## Completed Items
+
+- [x] Created `deploy/scripts/uninstall.sh` - Comprehensive uninstall script with:
+  
+  **Pre-uninstall Features:**
+  - Root privileges verification
+  - Interactive confirmation (can be skipped with `--yes`)
+  - Optional data backup before removal
+  - Multiple removal modes
+
+  **Service Cleanup:**
+  - Stop and remove Docker containers
+  - Stop and disable systemd services
+  - Remove systemd unit files
+  - Reload systemd daemon
+
+  **Data Handling:**
+  - Optional backup creation before uninstall
+  - Database preservation option (`--keep-data`)
+  - Backup directory with timestamp
+  - Docker volume removal (optional)
+  - Docker image removal (optional)
+
+  **System Cleanup:**
+  - Remove installation directory
+  - Remove service user (optional with `--keep-user`)
+  - Remove firewall rules (optional)
+  - Remove fail2ban configuration (optional)
+
+  **User Interface:**
+  - Color-coded output
+  - Progress indicators
+  - Interactive prompts with defaults
+  - Non-interactive mode support
+  - Clear status messages
+
+## Implementation Features
+
+✅ **Safety First:**
+- Confirmation required before any destructive action
+- Optional data backup
+- Keeps user informed of every step
+- Can preserve data for migration
+
+✅ **Flexibility:**
+- Interactive mode (default): asks for confirmation on each step
+- Non-interactive mode (`--yes`): automated uninstall
+- Keep data option (`--keep-data`): preserve files for later
+- Keep user option (`--keep-user`): don't remove system user
+- Selective cleanup: firewall, fail2ban, volumes, images
+
+✅ **Comprehensive:**
+- Handles both Docker and systemd installations
+- Cleans up all created resources
+- Removes firewall rules
+- Removes fail2ban configuration
+- Provides clear feedback
+
+✅ **Backup Support:**
+- Creates timestamped backup directory
+- Backs up database
+- Backs up configuration files
+- Backs up existing backup files
+- Backup location: `~/family-budget-backup-YYYYMMDD_HHMMSS/`
+
+## Usage Examples
+
+### Interactive Uninstall (Recommended):
+```bash
+sudo ./deploy/scripts/uninstall.sh
+```
+
+### Quick Uninstall (keep data):
+```bash
+sudo ./deploy/scripts/uninstall.sh --yes --keep-data
+```
+
+### Complete Removal:
+```bash
+sudo ./deploy/scripts/uninstall.sh --yes
+```
+
+### Uninstall but keep service user:
+```bash
+sudo ./deploy/scripts/uninstall.sh --keep-user
+```
+
+## What Gets Removed
+
+✅ Docker Services:
+- All running containers
+- Optional: Docker volumes
+- Optional: Docker images
+- Optional: Docker networks
+
+✅ Systemd Services:
+- family-budget.service
+- family-budget-backup.service
+- family-budget-backup.timer
+
+✅ Files and Directories:
+- /opt/family-budget/ (unless --keep-data)
+- /etc/systemd/system/family-budget*
+
+✅ System Resources:
+- Service user (unless --keep-user)
+- Firewall rules (optional)
+- Fail2ban configuration (optional)
+
+## Remaining Items
 
 ## Requirements
 

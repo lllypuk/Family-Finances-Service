@@ -7,7 +7,93 @@ automated backup scheduling.
 
 ## Priority: MEDIUM
 
-## Status: TODO
+## Status: COMPLETE
+
+## Completed Items
+
+- [x] Created `deploy/systemd/family-budget.service` - Main systemd service
+  - Runs under dedicated `familybudget` user
+  - Comprehensive security hardening (NoNewPrivileges, ProtectSystem, etc.)
+  - Resource limits (512MB RAM, 100% CPU)
+  - Automatic restart on failure with rate limiting
+  - Journal logging integration
+
+- [x] Created `deploy/systemd/family-budget-backup.service` - Backup service
+  - One-shot service for database backups
+  - Requires main service to be running
+  - Same security hardening as main service
+  - Lower resource limits (256MB RAM, 50% CPU)
+
+- [x] Created `deploy/systemd/family-budget-backup.timer` - Backup scheduler
+  - Runs daily at 3:00 AM
+  - Randomized delay to avoid load spikes
+  - Persistent (runs missed backups after system downtime)
+  - Integrated with systemd timers system
+
+- [x] Created `deploy/scripts/backup.sh` - Database backup script
+  - Safe backup using SQLite `.backup` command (works on live database)
+  - Integrity verification with `PRAGMA integrity_check`
+  - Table count validation
+  - Cleanup by age (30 days default)
+  - Cleanup by count (50 backups default)
+  - Comprehensive error handling and logging
+
+- [x] Created `deploy/scripts/health-check.sh` - Health monitoring
+  - Checks application health endpoint
+  - Configurable timeout and retries
+  - Returns proper exit codes for monitoring systems
+  - Can be used with systemd watchdog or monitoring tools
+
+- [x] Created `deploy/scripts/install-systemd.sh` - Installation script
+  - Creates service user and directories
+  - Copies binary and scripts
+  - Generates secure secrets automatically
+  - Sets proper file permissions
+  - Installs and enables systemd units
+  - Complete installation automation
+
+## Implementation Details
+
+### Security Features
+
+✅ **Systemd Hardening:**
+- `NoNewPrivileges=yes` - Prevents privilege escalation
+- `PrivateTmp=yes` - Private /tmp directory
+- `ProtectSystem=strict` - Read-only root filesystem
+- `ProtectHome=yes` - No access to /home directories
+- `ReadWritePaths` - Explicit whitelist for writable paths
+- `ProtectKernelTunables/Modules=yes` - Kernel protection
+- `MemoryDenyWriteExecute=yes` - W^X memory protection
+- `RestrictNamespaces=yes` - Namespace restrictions
+- `RestrictAddressFamilies` - Limited network protocols
+
+✅ **Resource Management:**
+- Memory limit: 512MB (main), 256MB (backup)
+- CPU quota: 100% (main), 50% (backup)
+- Task limits: 128 (main), 32 (backup)
+- Automatic restart with exponential backoff
+
+✅ **File Permissions:**
+- Config directory: 700 (owner only)
+- Data directory: 700 (owner only)
+- Backups directory: 700 (owner only)
+- Environment file: 600 (owner read/write only)
+
+### Backup Features
+
+✅ **Reliability:**
+- Uses SQLite `.backup` command (safe for live database)
+- Integrity verification after each backup
+- Table count validation
+- Automatic cleanup by age and count
+- Detailed logging to journal
+
+✅ **Retention Policy:**
+- Default: 30 days or 50 backups (whichever is more restrictive)
+- Configurable via environment variables
+- Prevents disk space exhaustion
+
+## Remaining Items
 
 ## Requirements
 

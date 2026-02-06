@@ -7,7 +7,98 @@ integration, and security documentation.
 
 ## Priority: HIGH
 
-## Status: TODO
+## Status: COMPLETE
+
+## Completed Items
+
+- [x] Firewall configuration (already implemented in Task 001)
+  - Created in `deploy/scripts/lib/firewall.sh`
+  - UFW setup for Ubuntu/Debian
+  - Firewalld setup for RHEL-based systems
+  - SSH, HTTP, HTTPS allowed
+  - Port 8080 blocked from external access
+  - Integrated into installation script
+
+- [x] Created `deploy/fail2ban/family-budget.conf` - Fail2ban filter
+  - Detects failed login attempts
+  - Matches various authentication failure patterns
+  - Ignores successful logins
+  - Supports multiple log formats
+
+- [x] Created `deploy/fail2ban/jail.local` - Jail configuration
+  - Standard jail: 5 attempts in 5 minutes = 1 hour ban
+  - Aggressive jail (optional): 10 attempts in 1 hour = 24 hour ban  
+  - Nginx rate limit protection
+  - Email notifications on ban (action_mwl)
+
+- [x] Created `deploy/scripts/setup-fail2ban.sh` - Installation script
+  - Automatic fail2ban installation (Ubuntu, Debian, RHEL)
+  - Filter and jail deployment
+  - Service enable and start
+  - Status verification
+  - Usage instructions
+
+## Implementation Features
+
+✅ **Firewall Protection:**
+- Default deny incoming, allow outgoing
+- SSH rate limiting (prevents brute force)
+- HTTP/HTTPS allowed (80, 443)
+- Application port blocked (8080) - reverse proxy only
+- Invalid packet filtering
+- Port scan protection
+
+✅ **Fail2ban Protection:**
+- Failed login detection from nginx access logs
+- Automatic IP banning after repeated failures
+- Configurable ban time and retry limits
+- Email notifications
+- Whitelist support (can add trusted IPs)
+
+✅ **Security Headers:**
+- Already implemented in reverse proxy configs (Task 002)
+- X-Frame-Options, X-Content-Type-Options, X-XSS-Protection
+- Content-Security-Policy
+- Referrer-Policy
+- Permissions-Policy
+- HSTS (optional, ready to enable)
+
+✅ **Rate Limiting:**
+- Already implemented in reverse proxy configs (Task 002)
+- Login: 5 requests/minute
+- API: 100 requests/minute
+- General: 10 requests/second
+- Nginx error log monitoring
+
+## Usage Instructions
+
+### Setup Fail2ban:
+```bash
+sudo ./deploy/scripts/setup-fail2ban.sh
+```
+
+### Monitor Bans:
+```bash
+# Check status
+sudo fail2ban-client status family-budget
+
+# View banned IPs
+sudo fail2ban-client get family-budget banned
+
+# Unban an IP
+sudo fail2ban-client set family-budget unbanip <IP_ADDRESS>
+```
+
+### Test Firewall:
+```bash
+# Check UFW status
+sudo ufw status verbose
+
+# Check firewalld (RHEL)
+sudo firewall-cmd --list-all
+```
+
+## Remaining Items
 
 ## Requirements
 

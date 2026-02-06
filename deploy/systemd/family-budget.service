@@ -1,0 +1,58 @@
+[Unit]
+Description=Family Budget Service
+Documentation=https://github.com/lllypuk/Family-Finances-Service
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=familybudget
+Group=familybudget
+
+# Working directory
+WorkingDirectory=/opt/family-budget
+
+# Environment file
+EnvironmentFile=/opt/family-budget/config/.env
+
+# Main executable
+ExecStart=/opt/family-budget/bin/family-budget-service
+
+# Graceful shutdown
+ExecStop=/bin/kill -TERM $MAINPID
+TimeoutStopSec=30
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=3
+StartLimitIntervalSec=60
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/family-budget/data /opt/family-budget/backups /opt/family-budget/logs
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+MemoryDenyWriteExecute=yes
+LockPersonality=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=100%
+TasksMax=128
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=family-budget
+
+[Install]
+WantedBy=multi-user.target

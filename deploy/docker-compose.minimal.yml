@@ -1,0 +1,39 @@
+version: '3.8'
+
+# Minimal configuration for testing without SSL
+# Use this for local development or behind an existing reverse proxy
+
+services:
+  app:
+    image: ghcr.io/lllypuk/family-finances-service:${APP_VERSION:-latest}
+    container_name: family-budget-app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      - SERVER_PORT=8080
+      - SERVER_HOST=0.0.0.0
+      - DATABASE_PATH=/data/budget.db
+      - SESSION_SECRET=${SESSION_SECRET:-INSECURE_DEV_SECRET_CHANGE_IN_PRODUCTION}
+      - CSRF_SECRET=${CSRF_SECRET:-INSECURE_DEV_CSRF_SECRET}
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+    volumes:
+      - ./data:/data
+      - ./backups:/backups
+      - ./logs:/logs
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# Usage:
+#   docker compose -f docker-compose.minimal.yml up -d
+#
+# Access at:
+#   http://localhost:8080
+#
+# Stop with:
+#   docker compose -f docker-compose.minimal.yml down

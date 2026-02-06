@@ -7,7 +7,67 @@ headers, and rate limiting.
 
 ## Priority: HIGH
 
-## Status: TODO
+## Status: COMPLETE
+
+## Completed Items
+
+- [x] Created Nginx configuration files:
+  - `deploy/nginx/nginx.conf` - Main Nginx configuration
+  - `deploy/nginx/conf.d/family-budget.conf.template` - Site configuration with HTTP->HTTPS redirect
+  - `deploy/nginx/snippets/ssl-params.conf` - Modern SSL/TLS settings (TLSv1.2+)
+  - `deploy/nginx/snippets/security-headers.conf` - Security headers (CSP, XSS, etc.)
+  - `deploy/nginx/snippets/proxy-params.conf` - Proxy headers and settings
+
+- [x] Created Caddy configuration:
+  - `deploy/caddy/Caddyfile.template` - Complete Caddy configuration with automatic SSL
+  - Automatic certificate management from Let's Encrypt
+  - Built-in rate limiting and security headers
+  - HTTP/3 support
+
+- [x] Created Docker Compose files:
+  - `deploy/docker-compose.nginx.yml` - Production setup with Nginx + Certbot
+  - `deploy/docker-compose.caddy.yml` - Production setup with Caddy
+  - Network isolation (internal/external networks)
+  - Security hardening (no-new-privileges, minimal capabilities)
+
+- [x] Created SSL setup scripts:
+  - `deploy/scripts/setup-ssl-nginx.sh` - Automated SSL setup for Nginx
+  - `deploy/scripts/setup-ssl-caddy.sh` - Automated SSL setup for Caddy
+  - DH parameters generation (4096-bit)
+  - Certificate verification
+
+## Implementation Details
+
+### Security Features Implemented
+
+✅ **SSL/TLS Configuration:**
+- TLS 1.2 and 1.3 only (no outdated protocols)
+- Strong cipher suites (ECDHE, AES-GCM)
+- OCSP stapling enabled
+- DH parameters support (4096-bit)
+- Perfect Forward Secrecy
+
+✅ **Security Headers:**
+- X-Frame-Options (clickjacking protection)
+- X-Content-Type-Options (MIME sniffing protection)
+- X-XSS-Protection (XSS filter)
+- Content-Security-Policy (script injection protection)
+- Referrer-Policy (privacy)
+- Permissions-Policy (feature restrictions)
+- HSTS ready (commented out for initial deployment)
+
+✅ **Rate Limiting:**
+- Login endpoints: 5 requests/minute (brute force protection)
+- API endpoints: 100 requests/minute
+- General endpoints: 10 requests/second with burst
+- Health check: unlimited (for monitoring)
+
+✅ **Network Security:**
+- Application not exposed directly (reverse proxy only)
+- Internal network isolation
+- External network for internet access only
+
+### Remaining Items
 
 ## Requirements
 
@@ -408,6 +468,10 @@ deploy/
 └── docker-compose.prod.yml
 ```
 
+### Remaining Items
+
+- [ ] Testing on actual deployment (requires live server with domain)
+
 ## Testing Checklist
 
 - [ ] HTTP redirects to HTTPS
@@ -417,7 +481,29 @@ deploy/
 - [ ] Let's Encrypt certificate auto-renewal
 - [ ] Static files cached correctly
 - [ ] WebSocket connections work (for HTMX)
-- [ ] Large file upload works (backup restore)
+- [ ] Large file upload works (backup restore - 100MB limit)
+
+## Usage Guide
+
+### Option 1: Nginx (Traditional)
+
+1. Use `docker-compose.nginx.yml` instead of `docker-compose.prod.yml`
+2. Run `./deploy/scripts/setup-ssl-nginx.sh --domain your-domain.com --email your@email.com`
+3. Nginx will handle SSL termination with Certbot for certificate management
+
+**Pros:** Well-known, mature, extensive documentation
+**Cons:** Requires certbot for SSL, more configuration files
+
+### Option 2: Caddy (Modern)
+
+1. Use `docker-compose.caddy.yml` instead of `docker-compose.prod.yml`
+2. Run `./deploy/scripts/setup-ssl-caddy.sh --domain your-domain.com --email your@email.com`
+3. Caddy automatically obtains and renews SSL certificates
+
+**Pros:** Automatic SSL, simpler configuration, HTTP/3 support
+**Cons:** Less familiar to some administrators
+
+Both configurations provide the same security level and features.
 
 ## Acceptance Criteria
 

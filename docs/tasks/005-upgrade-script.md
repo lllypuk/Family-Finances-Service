@@ -7,7 +7,102 @@ capability, and zero-downtime option.
 
 ## Priority: MEDIUM
 
-## Status: TODO
+## Status: COMPLETE
+
+## Completed Items
+
+- [x] Created `deploy/scripts/upgrade.sh` - Comprehensive upgrade script with:
+  - **Pre-upgrade checks:**
+    - Root privileges verification
+    - Installation directory validation
+    - Disk space check (500MB minimum)
+    - Current version detection
+    - Database integrity verification
+  
+  - **Automatic backup:**
+    - Database backup with timestamp
+    - Environment file backup
+    - Version information storage
+    - Container configuration backup
+    - Backup directory: `/opt/family-budget/backups/upgrade_YYYYMMDD_HHMMSS/`
+  
+  - **Safe upgrade process:**
+    - Pull new Docker image
+    - Graceful service stop (with 5s timeout)
+    - Start service with new version
+    - Health check verification (60s timeout)
+    - Support for specific version tags or latest
+  
+  - **Automatic rollback:**
+    - Triggers on health check failure
+    - Restores database from backup
+    - Restores previous version
+    - Verifies rollback success
+    - Can be disabled with `--no-rollback` flag
+  
+  - **Manual rollback:**
+    - Command: `./upgrade.sh rollback`
+    - Finds most recent upgrade backup
+    - Performs complete restoration
+    - Verifies service health
+  
+  - **User interface:**
+    - Color-coded output (info/warning/error/success)
+    - Progress indicators
+    - Clear error messages
+    - Help documentation (`--help`)
+    - Command-line options for automation
+
+## Implementation Features
+
+✅ **Safety Features:**
+- Pre-flight checks prevent upgrades in unsafe conditions
+- Automatic database backup before any changes
+- Integrity verification before and after upgrade
+- Automatic rollback on failure (optional)
+- Preserves configuration files
+
+✅ **Flexibility:**
+- Upgrade to specific version: `--version v1.2.3`
+- Upgrade to latest: default behavior
+- Disable auto-rollback: `--no-rollback`
+- Manual rollback command
+- Works with any Docker Compose file location
+
+✅ **Error Handling:**
+- Comprehensive error messages
+- Exit codes (0=success, 1=failure, 2=rollback failed)
+- Backup preservation on failure
+- Manual recovery instructions
+
+✅ **Zero Downtime Preparation:**
+- Health check verification
+- Graceful shutdown support
+- Can be extended for blue-green deployments
+
+## Usage Examples
+
+### Standard Upgrade:
+```bash
+sudo ./deploy/scripts/upgrade.sh
+```
+
+### Upgrade to Specific Version:
+```bash
+sudo ./deploy/scripts/upgrade.sh --version v1.2.3
+```
+
+### Upgrade Without Auto-Rollback:
+```bash
+sudo ./deploy/scripts/upgrade.sh --no-rollback
+```
+
+### Manual Rollback:
+```bash
+sudo ./deploy/scripts/upgrade.sh rollback
+```
+
+## Remaining Items
 
 ## Requirements
 

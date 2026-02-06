@@ -6,7 +6,117 @@ Create a production-ready Docker Compose configuration that includes the applica
 
 ## Priority: HIGH
 
-## Status: TODO
+## Status: COMPLETE
+
+## Completed Items
+
+- [x] Created `deploy/docker-compose.prod.yml` - Standalone production configuration
+  - Single container deployment for simple setups
+  - Security hardening (no-new-privileges, capabilities, read-only where possible)
+  - Health checks with proper timeouts
+  - Volume mounts for data persistence
+  - Network isolation
+
+- [x] Created `deploy/docker-compose.nginx.yml` - Full production with Nginx
+  - Application container (isolated backend network)
+  - Nginx reverse proxy container
+  - Certbot for automatic SSL renewal
+  - Network segmentation (frontend/internal networks)
+  - Security headers and rate limiting
+  - Logging configuration
+
+- [x] Created `deploy/docker-compose.caddy.yml` - Alternative with Caddy
+  - Application container (isolated backend network)
+  - Caddy reverse proxy with automatic SSL
+  - HTTP/3 support
+  - Simpler configuration than Nginx
+  - Built-in certificate management
+
+- [x] Created `deploy/docker-compose.minimal.yml` - Testing without SSL
+  - Minimal single-container setup
+  - Port 8080 exposed directly
+  - Suitable for local testing or behind existing reverse proxy
+  - Development environment defaults
+
+- [x] Created `deploy/.env.production.example` - Environment template
+  - All configuration variables documented
+  - Security reminders for secrets generation
+  - Domain and SSL configuration
+  - Resource limits and logging settings
+
+## Implementation Notes
+
+### Security Features Implemented
+
+✅ **Container Hardening:**
+- `no-new-privileges:true` - Prevents privilege escalation
+- `cap_drop: ALL` + selective `cap_add` - Minimal capabilities
+- Non-root user execution where possible
+- Read-only filesystem for nginx
+- tmpfs for temporary files (prevents persistence)
+
+✅ **Network Isolation:**
+- Internal network for app (no direct internet access)
+- External network for reverse proxy only
+- Application accessible only through reverse proxy
+
+✅ **Resource Management:**
+- Health checks on all services
+- Automatic restart policies
+- Log rotation (10MB max size, 3-5 files retained)
+
+✅ **Data Persistence:**
+- Named volumes for important data
+- Bind mounts for configuration
+- Backup directory separation
+
+### Deployment Options
+
+1. **Standalone (`docker-compose.prod.yml`):**
+   - No reverse proxy
+   - Port 8080 exposed
+   - For testing or internal networks
+
+2. **Nginx (`docker-compose.nginx.yml`):**
+   - Full reverse proxy with Nginx
+   - Certbot for Let's Encrypt
+   - Manual certificate management
+   - Traditional deployment
+
+3. **Caddy (`docker-compose.caddy.yml`):**
+   - Automatic HTTPS with Caddy
+   - Zero-config SSL
+   - Modern and simple
+   - HTTP/3 support
+
+4. **Minimal (`docker-compose.minimal.yml`):**
+   - Development/testing
+   - Behind existing proxy
+   - No SSL included
+
+## Remaining Items
+
+- [ ] Performance testing under load
+- [ ] Resource limit tuning based on real usage
+
+## Usage Examples
+
+### Production with Nginx:
+```bash
+cd /opt/family-budget
+docker compose -f docker-compose.nginx.yml up -d
+```
+
+### Production with Caddy:
+```bash
+cd /opt/family-budget
+docker compose -f docker-compose.caddy.yml up -d
+```
+
+### Local Testing:
+```bash
+docker compose -f docker-compose.minimal.yml up -d
+```
 
 ## Requirements
 
