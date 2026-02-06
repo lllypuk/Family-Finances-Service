@@ -1,496 +1,495 @@
 # Family Finances Service
 
-**Современная система управления семейным бюджетом** с полнофункциональным веб-интерфейсом, REST API и продвинутыми
-функциями безопасности.
+**Modern family budget management system** with full-featured web interface, REST API, and advanced security features.
 
-## 🎯 Статус проекта: В РАЗРАБОТКЕ 🚧
+## 🎯 Project Status: IN DEVELOPMENT 🚧
 
-Этот проект находится в **активной разработке** со следующими достижениями:
+This project is in **active development** with the following achievements:
 
-- ✅ Полный веб-интерфейс (HTMX v2.0.4 + PicoCSS v2.1.1)
-- ✅ Полный REST API с исчерпывающими endpoint'ами
-- ✅ Продвинутая безопасность (аутентификация, авторизация, CSRF защита)
-- ✅ **Система приглашений** — регистрация новых пользователей по защищённым ссылкам
-- ✅ **Управление бэкапами** — создание, загрузка, восстановление и авто-очистка
-- ✅ **Панель администратора** — управление пользователями и приглашениями
-- ✅ **Легковесная SQLite база данных** для простого развертывания
-- ✅ CI/CD конвейеры с GitHub Actions
-- ✅ **Единый Docker контейнер** — всего 50MB
-- ✅ Мультиплатформенные сборки (linux/amd64, linux/arm64)
+- ✅ Complete web interface (HTMX v2.0.4 + PicoCSS v2.1.1)
+- ✅ Full REST API with comprehensive endpoints
+- ✅ Advanced security (authentication, authorization, CSRF protection)
+- ✅ **Invite system** — user onboarding via secure token links
+- ✅ **Backup management** — create, download, restore, and auto-cleanup
+- ✅ **Admin panel** — user and invite management
+- ✅ **Lightweight SQLite database** for simple deployment
+- ✅ CI/CD pipelines with GitHub Actions
+- ✅ **Single Docker container** — only 50MB
+- ✅ Multi-platform builds (linux/amd64, linux/arm64)
 
-## 🚀 Возможности
+## 🚀 Features
 
-- 📊 **Полный веб-интерфейс**: Современный UI на базе HTMX с адаптивным дизайном
-- 👥 **Ролевой контроль доступа**: Администратор семьи, Участник, Ребенок с разными правами
-- 💰 **Продвинутое управление бюджетом**: Лимиты категорий, отслеживание периодов, оповещения о превышении
-- 📈 **Аналитика в реальном времени**: Интерактивные дашборды с живыми обновлениями
-- 🎯 **Отслеживание финансовых целей**: Цели накоплений с визуализацией прогресса
-- 🔐 **Корпоративная безопасность**: Управление сессиями, CSRF защита, валидация ввода
-- 📊 **Исчерпывающая отчетность**: Возможности экспорта, анализ трендов
-- 📨 **Система приглашений**: Безопасная регистрация по ссылкам с контролем ролей и сроком действия
-- 💾 **Управление бэкапами**: Создание, загрузка, восстановление БД с автоочисткой (до 10 копий)
-- 🛠️ **Панель администратора**: Управление пользователями, приглашениями и бэкапами
-- 🌐 **Готовность к мультиплатформенности**: REST API, веб-интерфейс, мобильно-готовый дизайн
+- 📊 **Complete Web Interface**: Modern UI based on HTMX with responsive design
+- 👥 **Role-Based Access Control**: Family Admin, Member, Child with different permissions
+- 💰 **Advanced Budget Management**: Category limits, period tracking, overspending alerts
+- 📈 **Real-Time Analytics**: Interactive dashboards with live updates
+- 🎯 **Financial Goals Tracking**: Savings goals with progress visualization
+- 🔐 **Enterprise Security**: Session management, CSRF protection, input validation
+- 📊 **Comprehensive Reporting**: Export capabilities, trend analysis
+- 📨 **Invite System**: Secure registration via links with role control and expiration
+- 💾 **Backup Management**: Create, download, restore DB with auto-cleanup (up to 10 backups)
+- 🛠️ **Admin Panel**: User, invite, and backup management
+- 🌐 **Multi-Platform Ready**: REST API, web interface, mobile-ready design
 
-## 🏗️ Архитектура и технологический стек
+## 🏗️ Architecture and Technology Stack
 
-### Backend (Готов к продакшену)
+### Backend (Production Ready)
 
-- **Go 1.25.6** с фреймворком Echo v4.13.4
-- **SQLite** (modernc.org/sqlite) - Pure Go, без CGO зависимостей
-- **Автоматические миграции** при старте приложения
-- **Чистая архитектура** с domain-driven design
-- **Паттерн репозиторий** с исчерпывающей обработкой ошибок
-- **Структурированное логирование** с slog
+- **Go 1.25.6** with Echo v4.13.4 framework
+- **SQLite** (modernc.org/sqlite) - Pure Go, no CGO dependencies
+- **Automatic migrations** on application startup
+- **Clean Architecture** with domain-driven design
+- **Repository pattern** with comprehensive error handling
+- **Structured logging** with slog
 
-### Frontend (Современный веб-интерфейс)
+### Frontend (Modern Web Interface)
 
-- **HTMX v2.0.4** для динамических обновлений без сложного JavaScript
-- **PicoCSS v2.1.1** минималистичный CSS фреймворк
-- **Go Templates** с системой макетов и компонентов
-- **Progressive Web App** возможности
-- **Адаптивный дизайн** для мобильных устройств и десктопа
+- **HTMX v2.0.4** for dynamic updates without complex JavaScript
+- **PicoCSS v2.1.1** minimalist CSS framework
+- **Go Templates** with layout system and components
+- **Progressive Web App** capabilities
+- **Responsive design** for mobile and desktop
 
-### DevOps и качество
+### DevOps and Quality
 
-- **Единый Docker контейнер** (~50MB) для простого развертывания
-- **GitHub Actions** CI/CD с сканированием безопасности
-- **Мультиплатформенные сборки** (linux/amd64, linux/arm64)
-- **Быстрое тестирование** с in-memory SQLite (без Docker)
-- **Сканирование безопасности** (CodeQL, Semgrep, TruffleHog)
+- **Single Docker container** (~50MB) for simple deployment
+- **GitHub Actions** CI/CD with security scanning
+- **Multi-platform builds** (linux/amd64, linux/arm64)
+- **Fast testing** with in-memory SQLite (no Docker)
+- **Security scanning** (CodeQL, Semgrep, TruffleHog)
 
-### Мониторинг и надежность
+### Monitoring and Reliability
 
-- **Health check endpoint** для Docker
-- **Структурированное логирование** (JSON/text форматы)
-- **Graceful shutdown** с обработкой сигналов
-- **Persistent storage** через Docker volumes
+- **Health check endpoint** for Docker
+- **Structured logging** (JSON/text formats)
+- **Graceful shutdown** with signal handling
+- **Persistent storage** via Docker volumes
 
-## 🚀 Быстрый старт
+## 🚀 Quick Start
 
-### Вариант 1: Docker (рекомендуется)
+### Option 1: Docker (Recommended)
 
 ```bash
-# 1. Создайте .env файл
+# 1. Create .env file
 cp .env.example .env
-# Отредактируйте SESSION_SECRET в .env!
+# Edit SESSION_SECRET in .env!
 
-# 2. Запустите контейнер
+# 2. Start container
 docker-compose -f docker/docker-compose.yml up -d
 
-# 3. Откройте в браузере
+# 3. Open in browser
 # http://localhost:8080
 ```
 
-**Готово!** Все данные сохраняются в `./data/budget.db`
+**Done!** All data is saved in `./data/budget.db`
 
-### Вариант 2: Локальная разработка
+### Option 2: Local Development
 
-**Предварительные требования:**
+**Prerequisites:**
 
 - Go 1.25.6+
-- Make (опционально)
+- Make (optional)
 
 ```bash
-# 1. Запустите приложение
-make run-local  # или: go run ./cmd/server/main.go
+# 1. Run application
+make run-local  # or: go run ./cmd/server/main.go
 
-# 2. Откройте в браузере
+# 2. Open in browser
 # http://localhost:8080
 ```
 
-**База данных** создается автоматически в `./data/budget.db`
+**Database** is created automatically in `./data/budget.db`
 
-### 📋 Команды разработки
+### 📋 Development Commands
 
 ```bash
-# Запуск и сборка
-make run-local        # Запуск с локальной SQLite БД
-make build            # Сборка бинарного файла
-make clean            # Очистка артефактов сборки
+# Run and build
+make run-local        # Run with local SQLite DB
+make build            # Build binary
+make clean            # Clean build artifacts
 
-# Тестирование (⚡ быстро с in-memory SQLite)
-make test             # Запуск всех тестов
-make test-coverage    # Тесты с отчетом покрытия
-make test-unit        # Только юнит тесты
-make test-integration # Только интеграционные тесты
+# Testing (⚡ fast with in-memory SQLite)
+make test             # Run all tests
+make test-coverage    # Tests with coverage report
+make test-unit        # Unit tests only
+make test-integration # Integration tests only
 
-# Качество кода
-make lint             # Линтер (golangci-lint)
-make fmt              # Форматирование кода
-make pre-commit       # Полная проверка перед коммитом
+# Code quality
+make lint             # Linter (golangci-lint)
+make fmt              # Format code
+make pre-commit       # Full pre-commit check
 
 # Docker
-make docker-up        # Запуск в Docker
-make docker-down      # Остановка контейнера
-make docker-logs      # Просмотр логов
+make docker-up        # Run in Docker
+make docker-down      # Stop container
+make docker-logs      # View logs
 
-# База данных SQLite
-make sqlite-backup    # Создание бэкапа
-make sqlite-restore   # Восстановление из бэкапа
-make sqlite-shell     # Открыть SQLite shell
-make sqlite-stats     # Статистика БД
+# SQLite database
+make sqlite-backup    # Create backup
+make sqlite-restore   # Restore from backup
+make sqlite-shell     # Open SQLite shell
+make sqlite-stats     # DB statistics
 
-# Разработка
-make migrate-create   # Создать новую миграцию
-make help             # Показать все команды
+# Development
+make migrate-create   # Create new migration
+make help             # Show all commands
 ```
 
-## 🏛️ Архитектура
+## 🏛️ Architecture
 
-Проект следует принципам **Чистой Архитектуры** с готовыми к продакшену реализациями:
+The project follows **Clean Architecture** principles with production-ready implementations:
 
-### Структура слоев
+### Layer Structure
 
-- **Слой домена** (`internal/domain/`): Бизнес-сущности с исчерпывающей валидацией (User, Family, Invite, Transaction,
-  Budget и др.)
-- **Слой сервисов** (`internal/services/`): Бизнес-логика (invite, backup, budget, category, transaction, report, user)
-- **Слой приложения** (`internal/application/`): HTTP сервер и оркестрация обработчиков
-- **Веб-слой** (`internal/web/`): HTMX шаблоны, middleware, аутентификация, админ-панель
-- **Слой инфраструктуры** (`internal/infrastructure/`): SQLite репозитории и персистентность данных
-- **Слой наблюдаемости** (`internal/observability/`): Логирование и проверки здоровья
+- **Domain layer** (`internal/domain/`): Business entities with comprehensive validation (User, Family, Invite,
+  Transaction, Budget, etc.)
+- **Services layer** (`internal/services/`): Business logic (invite, backup, budget, category, transaction, report,
+  user)
+- **Application layer** (`internal/application/`): HTTP server and handler orchestration
+- **Web layer** (`internal/web/`): HTMX templates, middleware, authentication, admin panel
+- **Infrastructure layer** (`internal/infrastructure/`): SQLite repositories and data persistence
+- **Observability layer** (`internal/observability/`): Logging and health checks
 
-### Структура проекта
+### Project Structure
 
 ```
-├── cmd/server/              # Точка входа приложения с проверками здоровья
+├── cmd/server/              # Application entry point with health checks
 ├── internal/
-│   ├── domain/              # Бизнес-сущности (User, Family, Invite, Transaction, Budget, Report)
-│   ├── application/         # HTTP сервер, обработчики, интерфейсы репозиториев
-│   ├── services/            # Бизнес-логика (invite, backup, budget, category, transaction и др.)
-│   ├── web/                 # Полный веб-интерфейс
-│   │   ├── handlers/        # Аутентификация, дашборд, админ, бэкапы, HTMX endpoints
-│   │   ├── middleware/      # Сессии, CSRF, защита авторизации
-│   │   ├── templates/       # HTML шаблоны с макетами и админ-страницами
-│   │   ├── static/          # CSS, JS, изображения
-│   │   └── models/          # Валидация форм и веб-специфичные структуры
-│   ├── infrastructure/      # SQLite репозитории и управление соединениями
-│   ├── observability/       # Продакшен мониторинг и логирование
-│   └── testhelpers/         # Утилиты тестирования и фабрики
-├── tests/                   # Интеграционные тесты и бенчмарки
-│   ├── integration/        # Межкомпонентные интеграционные тесты
-│   └── benchmarks/         # Нагрузочное тестирование и бенчмарки
-├── .memory_bank/           # Исчерпывающая документация проекта
-├── docker/                 # Docker Compose конфигурации
-└── .github/workflows/      # CI/CD конвейеры (ci, docker, security, release)
+│   ├── domain/              # Business entities (User, Family, Invite, Transaction, Budget, Report)
+│   ├── application/         # HTTP server, handlers, repository interfaces
+│   ├── services/            # Business logic (invite, backup, budget, category, transaction, etc.)
+│   ├── web/                 # Complete web interface
+│   │   ├── handlers/        # Authentication, dashboard, admin, backups, HTMX endpoints
+│   │   ├── middleware/      # Sessions, CSRF, authorization guards
+│   │   ├── templates/       # HTML templates with layouts and admin pages
+│   │   ├── static/          # CSS, JS, images
+│   │   └── models/          # Form validation and web-specific structures
+│   ├── infrastructure/      # SQLite repositories and connection management
+│   ├── observability/       # Production monitoring and logging
+│   └── testhelpers/         # Testing utilities and factories
+├── tests/                   # Integration tests and benchmarks
+│   ├── integration/        # Cross-component integration tests
+│   └── benchmarks/         # Load testing and benchmarks
+├── .memory_bank/           # Comprehensive project documentation
+├── docker/                 # Docker Compose configurations
+└── .github/workflows/      # CI/CD pipelines (ci, docker, security, release)
 ```
 
-### Продакшен компоненты
+### Production Components
 
-- **Аутентификация и авторизация**: Ролевой доступ с управлением сессиями
-- **Система приглашений**: Безопасные токены, истечение срока, контроль ролей
-- **Управление бэкапами**: Создание, восстановление, загрузка с автоочисткой
-- **Панель администратора**: Управление пользователями, приглашениями, бэкапами
-- **Валидация данных**: Исчерпывающая валидация ввода с go-playground/validator
-- **Обработка ошибок**: Структурированные ответы об ошибках с правильными HTTP статус кодами
-- **Безопасность**: CSRF защита, хеширование паролей, санитизация ввода, защита от path traversal
-- **Тестирование**: 73+ тестовых файлов по всем слоям
-- **Наблюдаемость**: Структурированное логирование (slog), health check endpoint
-- **Развертывание**: Мультиплатформенные Docker сборки с GitHub Actions CI/CD
+- **Authentication and Authorization**: Role-based access with session management
+- **Invite System**: Secure tokens, expiration, role control
+- **Backup Management**: Create, restore, download with auto-cleanup
+- **Admin Panel**: User, invite, and backup management
+- **Data Validation**: Comprehensive input validation with go-playground/validator
+- **Error Handling**: Structured error responses with proper HTTP status codes
+- **Security**: CSRF protection, password hashing, input sanitization, path traversal protection
+- **Testing**: 73+ test files across all layers
+- **Observability**: Structured logging (slog), health check endpoint
+- **Deployment**: Multi-platform Docker builds with GitHub Actions CI/CD
 
-## Конфигурация
+## Configuration
 
-Приложение использует переменные окружения для конфигурации. Основные переменные:
+The application uses environment variables for configuration. Key variables:
 
-| Переменная       | По умолчанию     | Описание                                       |
-|------------------|------------------|------------------------------------------------|
-| `SERVER_PORT`    | 8080             | Порт HTTP сервера                              |
-| `SERVER_HOST`    | localhost        | Хост HTTP сервера                              |
-| `DATABASE_PATH`  | ./data/budget.db | Путь к файлу базы данных SQLite                |
-| `SESSION_SECRET` | (обязательно)    | Ключ шифрования сессий                         |
-| `LOG_LEVEL`      | info             | Уровень логирования (debug, info, warn, error) |
-| `ENVIRONMENT`    | production       | Среда приложения                               |
+| Variable         | Default          | Description                              |
+|------------------|------------------|------------------------------------------|
+| `SERVER_PORT`    | 8080             | HTTP server port                         |
+| `SERVER_HOST`    | localhost        | HTTP server host                         |
+| `DATABASE_PATH`  | ./data/budget.db | SQLite database file path                |
+| `SESSION_SECRET` | (required)       | Session encryption key                   |
+| `LOG_LEVEL`      | info             | Logging level (debug, info, warn, error) |
+| `ENVIRONMENT`    | production       | Application environment                  |
 
-## Запуск с Docker
+## Running with Docker
 
 ```bash
-# Сборка и запуск всех сервисов
+# Build and start all services
 docker-compose -f docker/docker-compose.yml up --build
 
-# Запуск в фоне
+# Run in background
 docker-compose -f docker/docker-compose.yml up -d
 
-# Остановка сервисов
+# Stop services
 docker-compose -f docker/docker-compose.yml down
 ```
 
-## Разработка
+## Development
 
 ```bash
-# Запуск приложения локально
+# Run application locally
 make run-local
 ```
 
-## 🧪 Тестирование и качество
+## 🧪 Testing and Quality
 
-Проект поддерживает **высокие стандарты качества** с исчерпывающим тестированием:
+The project maintains **high quality standards** with comprehensive testing:
 
-### Тестирование
+### Testing
 
-- **73+ тестовых файлов** по всем слоям приложения
-- **Юнит тесты**: Доменные модели, сервисы (invite, backup и др.), репозитории, middleware
-- **Веб-тесты**: Хендлеры (admin, auth, backup, budgets, categories, dashboard, reports, transactions, users)
-- **Модели**: Валидация форм (categories, budgets, forms, dashboard, reports, transactions)
-- **Интеграционные тесты**: SQLite интеграционные тесты с in-memory базой
-- **Сервисные тесты**: Invite service, backup service, budget, category, transaction, report
+- **73+ test files** across all application layers
+- **Unit tests**: Domain models, services (invite, backup, etc.), repositories, middleware
+- **Web tests**: Handlers (admin, auth, backup, budgets, categories, dashboard, reports, transactions, users)
+- **Models**: Form validation (categories, budgets, forms, dashboard, reports, transactions)
+- **Integration tests**: SQLite integration tests with in-memory database
+- **Service tests**: Invite service, backup service, budget, category, transaction, report
 
-### Контроль качества
+### Quality Control
 
-- **golangci-lint** с 50+ линтерами для качества кода
-- **Исчерпывающий CI/CD** с GitHub Actions
-- **Сканирование безопасности** (CodeQL, Semgrep, TruffleHog, OSV Scanner)
-- **Управление зависимостями** с автоматизированными обновлениями Dependabot
-- **Мультиплатформенное тестирование** (linux/amd64, linux/arm64)
+- **golangci-lint** with 50+ linters for code quality
+- **Comprehensive CI/CD** with GitHub Actions
+- **Security scanning** (CodeQL, Semgrep, TruffleHog, OSV Scanner)
+- **Dependency management** with automated Dependabot updates
+- **Multi-platform testing** (linux/amd64, linux/arm64)
 
 ```bash
-# Запуск исчерпывающего набора тестов
-make test              # Все тесты
-make test-coverage    # С отчетом покрытия
-make lint             # Проверки качества кода
+# Run comprehensive test suite
+make test              # All tests
+make test-coverage    # With coverage report
+make lint             # Code quality checks
 ```
 
-## 📊 Готовность к продакшену
+## 📊 Production Readiness
 
-### Готовность к развертыванию
+### Deployment Readiness
 
-- ✅ **Мультиплатформенные Docker образы** опубликованы в GitHub Container Registry
-- ✅ **Docker-ready** с проверками здоровья и graceful shutdown
-- ✅ **Конфигурация окружения** с валидацией и значениями по умолчанию
-- ✅ **Управление соединениями с БД** и обработка подключений
-- ✅ **Логирование и health check** для мониторинга
+- ✅ **Multi-platform Docker images** published to GitHub Container Registry
+- ✅ **Docker-ready** with health checks and graceful shutdown
+- ✅ **Environment configuration** with validation and defaults
+- ✅ **DB connection management** and connection pooling
+- ✅ **Logging and health check** for monitoring
 
-### Мониторинг и наблюдаемость
+### Monitoring and Observability
 
-- ✅ **Проверки здоровья** - `/health` endpoint для оркестрации контейнеров
-- ✅ **Структурированное логирование** - slog с настраиваемыми уровнями
+- ✅ **Health checks** - `/health` endpoint for container orchestration
+- ✅ **Structured logging** - slog with configurable levels
 
-### Функции безопасности
+### Security Features
 
-- ✅ **Ролевой контроль доступа** (Администратор, Участник, Ребенок)
-- ✅ **Безопасность сессий** с HTTP-only cookies и CSRF защитой
-- ✅ **Валидация и санитизация ввода** для всех endpoints
-- ✅ **Безопасность паролей** с bcrypt хешированием
-- ✅ **Безопасные токены приглашений** (криптографически стойкие, 32 байта, 7 дней действия)
-- ✅ **Защита бэкапов** от path traversal с валидацией имен файлов
-- ✅ **Заголовки безопасности** и современные практики безопасности
+- ✅ **Role-Based Access Control** (Admin, Member, Child)
+- ✅ **Session security** with HTTP-only cookies and CSRF protection
+- ✅ **Input validation and sanitization** for all endpoints
+- ✅ **Password security** with bcrypt hashing
+- ✅ **Secure invite tokens** (cryptographically strong, 32 bytes, 7-day expiration)
+- ✅ **Backup protection** from path traversal with filename validation
+- ✅ **Security headers** and modern security practices
 
-## 🏠 Self-Hosted развертывание
+## 🏠 Self-Hosted Deployment
 
-Проект включает **полную инфраструктуру развертывания** для установки на собственном сервере с автоматизацией,
-безопасностью и мониторингом уровня предприятия.
+The project includes **complete deployment infrastructure** for installation on your own server with enterprise-grade
+automation, security, and monitoring.
 
-### ⚡ Быстрое развертывание (одна команда)
+### ⚡ Quick Deployment (One Command)
 
 ```bash
-# Автоматическая установка на свежей Linux VM
+# Automatic installation on fresh Linux VM
 curl -fsSL https://raw.githubusercontent.com/lllypuk/Family-Finances-Service/main/deploy/scripts/install.sh | sudo bash
 
-# Или клонируйте и запустите
+# Or clone and run
 git clone https://github.com/lllypuk/Family-Finances-Service.git
 cd Family-Finances-Service
 sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@example.com
 ```
 
-### 🖥️ Поддерживаемые операционные системы
+### 🖥️ Supported Operating Systems
 
 - ✅ Ubuntu 22.04 LTS / 24.04 LTS
 - ✅ Debian 11 / 12
 - ✅ Rocky Linux 9 / AlmaLinux 9
 
-### 🎯 Варианты развертывания
+### 🎯 Deployment Options
 
-| Вариант            | Описание           | Особенности                       | Сложность       |
-|--------------------|--------------------|-----------------------------------|-----------------|
-| **Docker + Caddy** | Автоматический SSL | HTTP/3, zero-config SSL           | ⭐ Простой       |
-| **Docker + Nginx** | Традиционный стек  | Гибкая настройка, Certbot         | ⭐⭐ Средний      |
-| **Native Systemd** | Без Docker         | Прямой контроль, минимум ресурсов | ⭐⭐⭐ Продвинутый |
+| Option             | Description       | Features                          | Complexity   |
+|--------------------|-------------------|-----------------------------------|--------------|
+| **Docker + Caddy** | Automatic SSL     | HTTP/3, zero-config SSL           | ⭐ Simple     |
+| **Docker + Nginx** | Traditional stack | Flexible configuration, Certbot   | ⭐⭐ Medium    |
+| **Native Systemd** | Without Docker    | Direct control, minimal resources | ⭐⭐⭐ Advanced |
 
-### 🔒 Функции безопасности
+### 🔒 Security Features
 
-**Автоматически настраивается при установке:**
+**Automatically configured during installation:**
 
-- 🔐 **TLS/SSL** — автоматические сертификаты Let's Encrypt с авто-обновлением
-- 🛡️ **Rate Limiting** — 5 попыток/мин для логина, защита от brute-force
-- 🔥 **Firewall** — UFW/firewalld с блокировкой прямого доступа к порту приложения
-- 🚫 **Fail2ban** — автоматическая блокировка IP после неудачных попыток входа (5 попыток → бан на 1 час)
+- 🔐 **TLS/SSL** — automatic Let's Encrypt certificates with auto-renewal
+- 🛡️ **Rate Limiting** — 5 attempts/min for login, brute-force protection
+- 🔥 **Firewall** — UFW/firewalld with blocked direct app port access
+- 🚫 **Fail2ban** — automatic IP blocking after failed login attempts (5 attempts → 1 hour ban)
 - 🔑 **Security Headers** — CSP, XSS Protection, HSTS, Referrer Policy
-- 📊 **Health Monitoring** — проверки здоровья для мониторинга
+- 📊 **Health Monitoring** — health checks for monitoring
 
-### 🛠️ Скрипты развертывания
+### 🛠️ Deployment Scripts
 
-**Основные операции:**
+**Main operations:**
 
 ```bash
-# Установка (автоматическая)
+# Installation (automatic)
 sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@example.com
 
-# Обновление с автоматическим откатом
+# Upgrade with automatic rollback
 sudo ./deploy/scripts/upgrade.sh
 
-# Обновление до конкретной версии
+# Upgrade to specific version
 sudo ./deploy/scripts/upgrade.sh --version v1.2.3
 
-# Откат к предыдущей версии
+# Rollback to previous version
 sudo ./deploy/scripts/upgrade.sh rollback
 
-# Удаление с сохранением данных
+# Uninstall with data preservation
 sudo ./deploy/scripts/uninstall.sh --keep-data
 
-# Создание резервной копии базы данных
+# Create database backup
 sudo ./deploy/scripts/backup.sh
 
-# Настройка fail2ban защиты
+# Setup fail2ban protection
 sudo ./deploy/scripts/setup-fail2ban.sh
 ```
 
-**Доступные скрипты (deploy/scripts/):**
+**Available scripts (deploy/scripts/):**
 
-- ✅ `install.sh` — полная автоматическая установка
-- ✅ `upgrade.sh` — безопасное обновление с откатом
-- ✅ `uninstall.sh` — чистое удаление
-- ✅ `backup.sh` — резервное копирование БД с проверкой целостности
-- ✅ `health-check.sh` — проверка работоспособности
-- ✅ `setup-ssl-nginx.sh` — SSL для Nginx
-- ✅ `setup-ssl-caddy.sh` — SSL для Caddy (автоматический)
-- ✅ `setup-fail2ban.sh` — защита от brute-force
+- ✅ `install.sh` — complete automatic installation
+- ✅ `upgrade.sh` — safe upgrade with rollback
+- ✅ `uninstall.sh` — clean removal
+- ✅ `backup.sh` — DB backup with integrity verification
+- ✅ `health-check.sh` — health monitoring
+- ✅ `setup-ssl-nginx.sh` — SSL for Nginx
+- ✅ `setup-ssl-caddy.sh` — SSL for Caddy (automatic)
+- ✅ `setup-fail2ban.sh` — brute-force protection
 
-### 📦 Конфигурации развертывания
+### 📦 Deployment Configurations
 
-**Docker Compose файлы:**
+**Docker Compose files:**
 
-- `deploy/docker-compose.prod.yml` — standalone без reverse proxy
-- `deploy/docker-compose.nginx.yml` — с Nginx + Certbot
-- `deploy/docker-compose.caddy.yml` — с Caddy (автоматический SSL)
-- `deploy/docker-compose.minimal.yml` — для тестирования
+- `deploy/docker-compose.prod.yml` — standalone without reverse proxy
+- `deploy/docker-compose.nginx.yml` — with Nginx + Certbot
+- `deploy/docker-compose.caddy.yml` — with Caddy (automatic SSL)
+- `deploy/docker-compose.minimal.yml` — for testing
 
-**Reverse Proxy конфигурации:**
+**Reverse Proxy configurations:**
 
-- `deploy/nginx/*` — 5 конфигурационных файлов Nginx
-- `deploy/caddy/*` — конфигурация Caddy с auto-SSL
+- `deploy/nginx/*` — 5 Nginx configuration files
+- `deploy/caddy/*` — Caddy configuration with auto-SSL
 
-**Systemd интеграция:**
+**Systemd integration:**
 
-- `deploy/systemd/family-budget.service` — основной сервис
-- `deploy/systemd/family-budget-backup.service` — сервис резервного копирования
-- `deploy/systemd/family-budget-backup.timer` — ежедневные бэкапы в 3:00
+- `deploy/systemd/family-budget.service` — main service
+- `deploy/systemd/family-budget-backup.service` — backup service
+- `deploy/systemd/family-budget-backup.timer` — daily backups at 3:00 AM
 
-**Fail2ban защита:**
+**Fail2ban protection:**
 
-- `deploy/fail2ban/family-budget.conf` — фильтр для детекции атак
-- `deploy/fail2ban/jail.local` — конфигурация тюрьмы
+- `deploy/fail2ban/family-budget.conf` — filter for attack detection
+- `deploy/fail2ban/jail.local` — jail configuration
 
-### 🔧 Автоматизация и операции
+### 🔧 Automation and Operations
 
-**Что автоматизировано:**
+**What's automated:**
 
-✅ **Установка:**
+✅ **Installation:**
 
-- Проверка системных требований (2GB RAM, 10GB диск)
-- Установка Docker и зависимостей
-- Настройка firewall (SSH, HTTP, HTTPS разрешены; порт 8080 заблокирован)
-- Генерация криптографически стойких секретов
-- Создание системного пользователя с правильными разрешениями
-- Развертывание приложения
-- Проверка работоспособности
+- System requirements check (2GB RAM, 10GB disk)
+- Docker and dependencies installation
+- Firewall setup (SSH, HTTP, HTTPS allowed; port 8080 blocked)
+- Cryptographically strong secret generation
+- System user creation with proper permissions
+- Application deployment
+- Health check verification
 
-✅ **Резервное копирование:**
+✅ **Backup:**
 
-- Ежедневные автоматические бэкапы в 3:00 (systemd timer)
-- Проверка целостности SQLite после создания
-- Хранение до 50 бэкапов или 30 дней
-- Автоматическая очистка старых копий
+- Daily automatic backups at 3:00 AM (systemd timer)
+- SQLite integrity verification after creation
+- Storage of up to 50 backups or 30 days
+- Automatic old backup cleanup
 
-✅ **Обновление:**
+✅ **Upgrade:**
 
-- Проверка текущей версии
-- Создание резервной копии перед обновлением
-- Остановка сервиса
-- Обновление до новой версии
-- Проверка работоспособности
-- **Автоматический откат** при неудаче
+- Current version check
+- Pre-upgrade backup creation
+- Service stop
+- Upgrade to new version
+- Health check verification
+- **Automatic rollback** on failure
 
-✅ **Безопасность:**
+✅ **Security:**
 
-- TLS 1.2+ only (без устаревших протоколов)
-- Сильные cipher suites (ECDHE, AES-GCM)
+- TLS 1.2+ only (no legacy protocols)
+- Strong cipher suites (ECDHE, AES-GCM)
 - Perfect Forward Secrecy
-- Автоматическое обновление SSL сертификатов
+- Automatic SSL certificate renewal
 
-### 📚 Документация по развертыванию
+### 📚 Deployment Documentation
 
-**Полная документация в директории `deploy/`:**
+**Complete documentation in `deploy/` directory:**
 
-- 📖 **[deploy/README.md](deploy/README.md)** — исчерпывающее руководство (10KB+)
-    - Быстрый старт
-    - Все варианты развертывания
-    - Настройка безопасности
-    - Общие операции
+- 📖 **[deploy/README.md](deploy/README.md)** — comprehensive guide (10KB+)
+    - Quick start
+    - All deployment options
+    - Security configuration
+    - Common operations
     - Troubleshooting
-    - Производительность
+    - Performance
 
-**Спецификации задач в `docs/tasks/`:**
+**Task specifications in `docs/tasks/`:**
 
-- ✅ [001: Скрипт установки](docs/tasks/001-install-script.md) — **ВЫПОЛНЕНО**
-- ✅ [002: Конфигурация reverse proxy](docs/tasks/002-reverse-proxy-config.md) — **ВЫПОЛНЕНО**
-- ✅ [003: Production Docker Compose](docs/tasks/003-docker-compose-production.md) — **ВЫПОЛНЕНО**
-- ✅ [004: Systemd сервисы](docs/tasks/004-systemd-service.md) — **ВЫПОЛНЕНО**
-- ✅ [005: Скрипт обновления](docs/tasks/005-upgrade-script.md) — **ВЫПОЛНЕНО**
-- ✅ [006: Настройка безопасности](docs/tasks/006-security-hardening.md) — **ВЫПОЛНЕНО**
-- ✅ [007: Документация развертывания](docs/tasks/007-deployment-documentation.md) — **ВЫПОЛНЕНО**
-- ✅ [008: Скрипт удаления](docs/tasks/008-uninstall-script.md) — **ВЫПОЛНЕНО**
+- ✅ [001: Install Script](docs/tasks/001-install-script.md) — **COMPLETE**
+- ✅ [002: Reverse Proxy Config](docs/tasks/002-reverse-proxy-config.md) — **COMPLETE**
+- ✅ [003: Production Docker Compose](docs/tasks/003-docker-compose-production.md) — **COMPLETE**
+- ✅ [004: Systemd Services](docs/tasks/004-systemd-service.md) — **COMPLETE**
+- ✅ [005: Upgrade Script](docs/tasks/005-upgrade-script.md) — **COMPLETE**
+- ✅ [006: Security Hardening](docs/tasks/006-security-hardening.md) — **COMPLETE**
+- ✅ [007: Deployment Documentation](docs/tasks/007-deployment-documentation.md) — **COMPLETE**
+- ✅ [008: Uninstall Script](docs/tasks/008-uninstall-script.md) — **COMPLETE**
 
-### 🎯 Статистика развертывания
+### 🎯 Deployment Statistics
 
-- **30+ файлов** для развертывания
-- **10 исполняемых скриптов** bash
-- **13 конфигурационных файлов**
-- **~20,000 строк кода** автоматизации
-- **100% покрытие** задач развертывания
-- **6 поддерживаемых ОС** (Ubuntu, Debian, Rocky/Alma)
-- **3 варианта развертывания** (Docker+Nginx, Docker+Caddy, Native)
+- **30+ files** for deployment
+- **10 executable bash scripts**
+- **13 configuration files**
+- **~20,000 lines** of automation code
+- **100% coverage** of deployment tasks
+- **6 supported OS** (Ubuntu, Debian, Rocky/Alma)
+- **3 deployment options** (Docker+Nginx, Docker+Caddy, Native)
 
-## 🚧 Известные проблемы и TODO
+## 🚧 Known Issues and TODO
 
-### Статус покрытия тестами
+### Test Coverage Status
 
-- ✅ **Веб-обработчики**: Комплексное покрытие реализовано (admin, auth, backup, budgets, categories, dashboard, reports,
+- ✅ **Web handlers**: Comprehensive coverage implemented (admin, auth, backup, budgets, categories, dashboard, reports,
   transactions, users)
-- ✅ **Веб-модели**: Расширенные валидационные тесты добавлены (categories, budgets, forms, dashboard, reports,
-  transactions)
-- ✅ **Admin/Backup хендлеры**: Полное покрытие тестами реализовано
-- ✅ **DTO**: Комплексные валидационные тесты добавлены
+- ✅ **Web models**: Extended validation tests added (categories, budgets, forms, dashboard, reports, transactions)
+- ✅ **Admin/Backup handlers**: Full test coverage implemented
+- ✅ **DTOs**: Comprehensive validation tests added
 
-### Приоритеты разработки
+### Development Priorities
 
-1. ~~Реализовать скрипты self-hosted развертывания~~ ✅ **ВЫПОЛНЕНО** (8/8 задач, 100%)
-2. Тестирование развертывания на реальных VM (Ubuntu 22.04/24.04, Debian 11/12)
-3. Добавить больше сценариев интеграционного тестирования для invite flow
-4. Оптимизация производительности и бенчмаркинг
-5. End-to-end тестирование с agent-browser
-6. Нагрузочное тестирование и стресс-тесты
+1. ~~Implement self-hosted deployment scripts~~ ✅ **COMPLETE** (8/8 tasks, 100%)
+2. Deployment testing on real VMs (Ubuntu 22.04/24.04, Debian 11/12)
+3. Add more integration test scenarios for invite flow
+4. Performance optimization and benchmarking
+5. End-to-end testing with agent-browser
+6. Load testing and stress testing
 
-## 📚 Документация
+## 📚 Documentation
 
-### Ресурсы для разработчиков
+### Developer Resources
 
-- **[CLAUDE.md](CLAUDE.md)** - Исчерпывающие рекомендации по разработке и архитектуре
-- **[.memory_bank](.memory_bank/)** - Подробная документация проекта, включая:
-    - Краткий обзор продукта и бизнес-контекст
-    - Техническая архитектура и проектные решения
-    - Стратегия тестирования и детали реализации
-    - Текущий статус проекта и дорожная карта
-- **[docs/tasks/](docs/tasks/)** - Спецификации задач по self-hosted развертыванию:
-    - Скрипты установки и обновления
-    - Конфигурации Nginx/Caddy для TLS/SSL
-    - Systemd сервисы для native deployment
-    - Настройки безопасности (firewall, fail2ban)
+- **[CLAUDE.md](CLAUDE.md)** - Comprehensive development and architecture guidance
+- **[.memory_bank](.memory_bank/)** - Detailed project documentation including:
+    - Product brief and business context
+    - Technical architecture and design decisions
+    - Testing strategy and implementation details
+    - Current project status and roadmap
+- **[docs/tasks/](docs/tasks/)** - Self-hosted deployment task specifications:
+    - Installation and upgrade scripts
+    - Nginx/Caddy configurations for TLS/SSL
+    - Systemd services for native deployment
+    - Security hardening (firewall, fail2ban)
 
-### Документация API
+### API Documentation
 
-- **REST API** с исчерпывающим покрытием endpoints
-- **OpenAPI 3.0** спецификация (доступна через `/api/docs`)
-- **Postman коллекция** для тестирования API и интеграции
+- **REST API** with comprehensive endpoint coverage
+- **OpenAPI 3.0** specification (available at `/api/docs`)
+- **Postman collection** for API testing and integration
 
-## Лицензия
+## License
 
-Этот проект лицензирован под лицензией MIT - см. файл [LICENSE](LICENSE) для деталей.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
