@@ -152,6 +152,80 @@ The Docker container includes:
 - **Health check** endpoint for container orchestration
 - **Automatic migrations** applied on startup
 
+### Production Deployment
+
+The project includes comprehensive deployment automation for self-hosted installations. See `deploy/` directory for
+complete infrastructure.
+
+#### Quick Deployment
+
+```bash
+# One-command installation on fresh Linux VM
+curl -fsSL https://raw.githubusercontent.com/lllypuk/Family-Finances-Service/main/deploy/scripts/install.sh | sudo bash
+
+# Or clone and run
+git clone https://github.com/lllypuk/Family-Finances-Service.git
+cd Family-Finances-Service
+sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@example.com
+```
+
+#### Deployment Options
+
+1. **Docker + Nginx** (Traditional)
+    - Full reverse proxy with Nginx
+    - Let's Encrypt SSL with Certbot
+    - Manual certificate management
+    - Files: `docker-compose.nginx.yml`
+
+2. **Docker + Caddy** (Modern, Recommended)
+    - Automatic HTTPS with Caddy
+    - Zero-config SSL management
+    - HTTP/3 support
+    - Files: `docker-compose.caddy.yml`
+
+3. **Native Systemd** (No Docker)
+    - Direct Linux service deployment
+    - Systemd integration
+    - Automated backups via timer
+    - Files: `deploy/systemd/*.service`
+
+#### Deployment Scripts
+
+- `deploy/scripts/install.sh` - Automated installation (Ubuntu, Debian, Rocky/Alma Linux)
+- `deploy/scripts/upgrade.sh` - Safe upgrade with automatic rollback
+- `deploy/scripts/uninstall.sh` - Clean removal with data preservation
+- `deploy/scripts/backup.sh` - Database backup with integrity checks
+- `deploy/scripts/setup-ssl-nginx.sh` - SSL setup for Nginx
+- `deploy/scripts/setup-ssl-caddy.sh` - SSL setup for Caddy (automatic)
+- `deploy/scripts/setup-fail2ban.sh` - Brute-force protection
+
+#### Deployment Features
+
+✅ **Security:**
+
+- Firewall configuration (UFW/firewalld)
+- Fail2ban brute-force protection
+- SSL/TLS with strong ciphers (TLS 1.2+)
+- Security headers (CSP, XSS, HSTS)
+- Rate limiting (5/min login, 100/min API)
+
+✅ **Automation:**
+
+- One-command installation
+- Automatic SSL certificate management
+- Daily backups at 3:00 AM
+- Backup integrity verification
+- Automatic rollback on failed upgrades
+
+✅ **Operations:**
+
+- Health check monitoring
+- Upgrade with zero-downtime preparation
+- Database backup/restore
+- Service management (systemctl/docker compose)
+
+For complete deployment documentation, see `deploy/README.md`.
+
 ### SQLite Database Commands
 
 - `make sqlite-backup` - Create database backup
@@ -304,12 +378,14 @@ The project has comprehensive testing across all layers:
 Comprehensive documentation is available in the following directories:
 
 **Project Documentation** (`.memory_bank/`):
+
 - **Product Brief** - Business context and goals
 - **Tech Stack** - Architecture and technology choices
 - **Testing Plan** - Detailed testing strategy and coverage
 - **Current Tasks** - Project status and next steps
 
 **Self-Hosted Deployment** (`docs/tasks/`):
+
 - **Installation Script** - Automated deployment on Linux VMs
 - **Reverse Proxy Config** - Nginx/Caddy with TLS/SSL
 - **Production Docker Compose** - Hardened container deployment
@@ -426,21 +502,6 @@ make pre-commit   # Run full check sequence
 
 The project includes comprehensive self-hosted deployment capabilities for running on dedicated VMs.
 
-### Deployment Documentation
-
-All deployment tasks and specifications are located in `docs/tasks/`:
-
-| Task | Priority | Description |
-|------|----------|-------------|
-| [001-install-script](docs/tasks/001-install-script.md) | HIGH | Automated installation on fresh Linux VM |
-| [002-reverse-proxy-config](docs/tasks/002-reverse-proxy-config.md) | HIGH | Nginx/Caddy with TLS/SSL |
-| [003-docker-compose-production](docs/tasks/003-docker-compose-production.md) | HIGH | Production Docker Compose |
-| [004-systemd-service](docs/tasks/004-systemd-service.md) | MEDIUM | Native deployment without Docker |
-| [005-upgrade-script](docs/tasks/005-upgrade-script.md) | MEDIUM | Safe upgrades with rollback |
-| [006-security-hardening](docs/tasks/006-security-hardening.md) | HIGH | Firewall, fail2ban, security headers |
-| [007-deployment-documentation](docs/tasks/007-deployment-documentation.md) | MEDIUM | User-facing deployment guide |
-| [008-uninstall-script](docs/tasks/008-uninstall-script.md) | LOW | Clean removal script |
-
 ### Target Directory Structure
 
 ```
@@ -481,10 +542,24 @@ deploy/
 - ✅ **Admin/Backup handlers**: Full test coverage implemented
 - ✅ **DTOs**: Comprehensive validation tests added
 
+### Deployment Status
+
+- ✅ **Production deployment scripts**: Complete (see `deploy/` directory)
+    - ✅ Automated installation for Ubuntu, Debian, Rocky/Alma Linux
+    - ✅ Nginx and Caddy reverse proxy configurations
+    - ✅ SSL/TLS automation with Let's Encrypt
+    - ✅ Fail2ban brute-force protection
+    - ✅ Systemd service integration
+    - ✅ Safe upgrade with automatic rollback
+    - ✅ Automated daily backups
+    - ✅ Clean uninstall scripts
+    - ✅ Comprehensive documentation
+
 ### Development Priorities
 
-1. Implement self-hosted deployment scripts (see `docs/tasks/`)
-2. Add more integration test scenarios for invite flow
-3. Performance optimization and benchmarking
-4. End-to-end testing with agent-browser
-5. Load testing and stress testing scenarios
+1. ~~Implement self-hosted deployment scripts~~ ✅ **COMPLETED**
+2. Test deployment on actual VMs (Ubuntu 22.04/24.04, Debian 11/12)
+3. Add more integration test scenarios for invite flow
+4. Performance optimization and benchmarking
+5. End-to-end testing with agent-browser
+6. Load testing and stress testing scenarios

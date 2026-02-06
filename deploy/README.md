@@ -67,17 +67,20 @@ Uses `docker-compose.prod.yml` - application runs on port 8080 without SSL.
 Best for traditional deployments with manual control.
 
 1. Install with Nginx:
+
 ```bash
 sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@example.com
 ```
 
 2. Copy Nginx docker-compose:
+
 ```bash
 cd /opt/family-budget
 sudo cp ~/Family-Finances-Service/deploy/docker-compose.nginx.yml docker-compose.yml
 ```
 
 3. Setup SSL:
+
 ```bash
 sudo ~/Family-Finances-Service/deploy/scripts/setup-ssl-nginx.sh \
   --domain budget.example.com \
@@ -85,6 +88,7 @@ sudo ~/Family-Finances-Service/deploy/scripts/setup-ssl-nginx.sh \
 ```
 
 **Features:**
+
 - HTTP → HTTPS redirect
 - Let's Encrypt SSL certificates (auto-renewal with Certbot)
 - Rate limiting (5 req/min for login, 10 req/sec general)
@@ -96,17 +100,20 @@ sudo ~/Family-Finances-Service/deploy/scripts/setup-ssl-nginx.sh \
 Best for easy setup and automatic certificate management.
 
 1. Install with Caddy:
+
 ```bash
 sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@example.com
 ```
 
 2. Copy Caddy docker-compose:
+
 ```bash
 cd /opt/family-budget
 sudo cp ~/Family-Finances-Service/deploy/docker-compose.caddy.yml docker-compose.yml
 ```
 
 3. Setup SSL (automatic):
+
 ```bash
 sudo ~/Family-Finances-Service/deploy/scripts/setup-ssl-caddy.sh \
   --domain budget.example.com \
@@ -114,6 +121,7 @@ sudo ~/Family-Finances-Service/deploy/scripts/setup-ssl-caddy.sh \
 ```
 
 **Features:**
+
 - Automatic HTTPS (no manual certificate management)
 - HTTP/3 support
 - Automatic certificate renewal
@@ -153,12 +161,12 @@ All configurations include:
 
 ### Rate Limiting
 
-| Endpoint    | Limit          | Purpose               |
-|-------------|----------------|-----------------------|
-| `/login`    | 5 req/min      | Brute force protection|
-| `/api/*`    | 100 req/min    | API abuse prevention  |
-| General     | 10 req/sec     | DDoS protection       |
-| `/health`   | Unlimited      | Monitoring            |
+| Endpoint  | Limit       | Purpose                |
+|-----------|-------------|------------------------|
+| `/login`  | 5 req/min   | Brute force protection |
+| `/api/*`  | 100 req/min | API abuse prevention   |
+| General   | 10 req/sec  | DDoS protection        |
+| `/health` | Unlimited   | Monitoring             |
 
 ## Environment Configuration
 
@@ -363,6 +371,7 @@ SQLite performs well for small to medium installations. For large deployments (>
 ### 1. Enable HSTS (after confirming SSL works)
 
 **Nginx:**
+
 ```bash
 # Edit /opt/family-budget/nginx/snippets/security-headers.conf
 # Uncomment the HSTS header
@@ -370,6 +379,7 @@ sudo docker compose exec nginx nginx -s reload
 ```
 
 **Caddy:**
+
 ```bash
 # Edit /opt/family-budget/caddy/Caddyfile
 # Uncomment the HSTS header
