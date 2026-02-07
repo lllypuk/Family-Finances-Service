@@ -1,6 +1,6 @@
 module family-budget-service
 
-go 1.25.6
+go 1.25.7
 
 // MIT License - see LICENSE file for details
 
