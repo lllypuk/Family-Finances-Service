@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  app:
+    image: ghcr.io/lllypuk/family-finances-service:latest
+    container_name: family-budget
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"  # Only bind to localhost for reverse proxy access
+    environment:
+      - SERVER_PORT=8080
+      - SERVER_HOST=0.0.0.0
+      - DATABASE_PATH=/data/budget.db
+      - SESSION_SECRET=${SESSION_SECRET}
+      - CSRF_SECRET=${CSRF_SECRET:-}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+    volumes:
+      - ./data:/data
+      - ./backups:/backups
+      - ./logs:/logs
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    security_opt:
+      - no-new-privileges:true
+    read_only: false  # SQLite needs write access
+    tmpfs:
+      - /tmp:noexec,nosuid,nodev,size=50M
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    user: "1000:1000"  # Run as non-root user
+    networks:
+      - family-budget-net
+
+networks:
+  family-budget-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

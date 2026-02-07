@@ -58,4 +58,4 @@ temp/
 node_modules/
 
 # Memory bank
-.memory_bank/
+docs/

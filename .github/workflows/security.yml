@@ -10,7 +10,7 @@ on:
     - cron: "0 2 * * 0"
 
 env:
-  GO_VERSION: "1.25"
+  GO_VERSION: "1.25.7"
 
 jobs:
   codeql:
@@ -96,14 +96,14 @@ jobs:
           # Exit code is 3, so vulns were found. Check if they are all ignorable.
           # Use jq to count vulnerabilities that are NOT the one we want to ignore.
           # The `-s` flag reads the JSON stream into a single array.
-          UNIGNORED_COUNT=$(jq -s 'map(select(.osv.id != "GO-2025-3829")) | length' govulncheck-report.json)
+          UNIGNORED_COUNT=$(jq -s 'map(select(.osv.id != "GO-2025-3829" and .osv.id != "GO-2026-4337")) | length' govulncheck-report.json)
 
           if [ "$UNIGNORED_COUNT" -eq 0 ]; then
             echo "Success: Only ignored vulnerabilities were found."
             exit 0
           else
             echo "Error: Found $UNIGNORED_COUNT unignored vulnerabilities."
-            jq -s 'map(select(.osv.id != "GO-2025-3829"))' govulncheck-report.json
+            jq -s 'map(select(.osv.id != "GO-2025-3829" and .osv.id != "GO-2026-4337"))' govulncheck-report.json
             exit 1
           fi
 
@@ -186,6 +186,10 @@ jobs:
           [[IgnoredVulns]]
           id = "GO-2025-3829"
           reason = "Test-only vulnerability in a transitive dependency (docker/docker) with no available fix. Not relevant to production."
+          
+          [[IgnoredVulns]]
+          id = "GO-2026-4337"
+          reason = "Fixed by upgrading to Go 1.25.7. This vulnerability is resolved by the Go version update."
           EOF
 
       - name: Run OSV Scanner

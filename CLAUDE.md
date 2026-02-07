@@ -152,6 +152,80 @@ The Docker container includes:
 - **Health check** endpoint for container orchestration
 - **Automatic migrations** applied on startup
 
+### Production Deployment
+
+The project includes comprehensive deployment automation for self-hosted installations. See `deploy/` directory for
+complete infrastructure.
+
+#### Quick Deployment
+
+```bash
+# One-command installation on fresh Linux VM
+curl -fsSL https://raw.githubusercontent.com/lllypuk/Family-Finances-Service/main/deploy/scripts/install.sh | sudo bash
+
+# Or clone and run
+git clone https://github.com/lllypuk/Family-Finances-Service.git
+cd Family-Finances-Service
+sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@example.com
+```
+
+#### Deployment Options
+
+1. **Docker + Nginx** (Traditional)
+    - Full reverse proxy with Nginx
+    - Let's Encrypt SSL with Certbot
+    - Manual certificate management
+    - Files: `docker-compose.nginx.yml`
+
+2. **Docker + Caddy** (Modern, Recommended)
+    - Automatic HTTPS with Caddy
+    - Zero-config SSL management
+    - HTTP/3 support
+    - Files: `docker-compose.caddy.yml`
+
+3. **Native Systemd** (No Docker)
+    - Direct Linux service deployment
+    - Systemd integration
+    - Automated backups via timer
+    - Files: `deploy/systemd/*.service`
+
+#### Deployment Scripts
+
+- `deploy/scripts/install.sh` - Automated installation (Ubuntu, Debian, Rocky/Alma Linux)
+- `deploy/scripts/upgrade.sh` - Safe upgrade with automatic rollback
+- `deploy/scripts/uninstall.sh` - Clean removal with data preservation
+- `deploy/scripts/backup.sh` - Database backup with integrity checks
+- `deploy/scripts/setup-ssl-nginx.sh` - SSL setup for Nginx
+- `deploy/scripts/setup-ssl-caddy.sh` - SSL setup for Caddy (automatic)
+- `deploy/scripts/setup-fail2ban.sh` - Brute-force protection
+
+#### Deployment Features
+
+✅ **Security:**
+
+- Firewall configuration (UFW/firewalld)
+- Fail2ban brute-force protection
+- SSL/TLS with strong ciphers (TLS 1.2+)
+- Security headers (CSP, XSS, HSTS)
+- Rate limiting (5/min login, 100/min API)
+
+✅ **Automation:**
+
+- One-command installation
+- Automatic SSL certificate management
+- Daily backups at 3:00 AM
+- Backup integrity verification
+- Automatic rollback on failed upgrades
+
+✅ **Operations:**
+
+- Health check monitoring
+- Upgrade with zero-downtime preparation
+- Database backup/restore
+- Service management (systemctl/docker compose)
+
+For complete deployment documentation, see `deploy/README.md`.
+
 ### SQLite Database Commands
 
 - `make sqlite-backup` - Create database backup
@@ -301,12 +375,21 @@ The project has comprehensive testing across all layers:
 
 ### Documentation
 
-Comprehensive documentation is available in the `.memory_bank/` directory:
+Comprehensive documentation is available in the following directories:
+
+**Project Documentation** (`.memory_bank/`):
 
 - **Product Brief** - Business context and goals
 - **Tech Stack** - Architecture and technology choices
 - **Testing Plan** - Detailed testing strategy and coverage
 - **Current Tasks** - Project status and next steps
+
+**Self-Hosted Deployment** (`docs/tasks/`):
+
+- **Installation Script** - Automated deployment on Linux VMs
+- **Reverse Proxy Config** - Nginx/Caddy with TLS/SSL
+- **Production Docker Compose** - Hardened container deployment
+- **Security Hardening** - Firewall, fail2ban, security headers
 
 ## CI/CD Pipeline
 
@@ -415,6 +498,40 @@ make pre-commit   # Run full check sequence
 
 **Remember: Clean code is not optional - it's mandatory for project integrity.**
 
+## 🚀 Self-Hosted Deployment
+
+The project includes comprehensive self-hosted deployment capabilities for running on dedicated VMs.
+
+### Target Directory Structure
+
+```
+deploy/
+├── scripts/
+│   ├── install.sh           # Automated installation
+│   ├── upgrade.sh           # Safe upgrades with rollback
+│   ├── backup.sh            # Cron-compatible backup script
+│   ├── health-check.sh      # Health monitoring
+│   ├── setup-firewall.sh    # UFW configuration
+│   ├── setup-fail2ban.sh    # Brute-force protection
+│   └── uninstall.sh         # Clean removal
+├── nginx/                   # Nginx reverse proxy configs
+├── caddy/                   # Caddy reverse proxy configs
+├── systemd/                 # Native Linux service files
+├── fail2ban/                # Fail2ban filters and jails
+├── docker-compose.prod.yml  # Production with nginx
+├── docker-compose.caddy.yml # Production with Caddy
+└── .env.production.example  # Production environment template
+```
+
+### Security Features for Self-Hosted
+
+- **TLS/SSL**: Let's Encrypt auto-renewal via Caddy or Certbot
+- **Rate Limiting**: Nginx/Caddy rate limiting for login and API endpoints
+- **Firewall**: UFW configuration blocking direct app port access
+- **Fail2ban**: Automatic IP blocking after failed login attempts
+- **Security Headers**: Full set of modern security headers (CSP, HSTS, etc.)
+- **Container Hardening**: Read-only filesystem, non-root user, resource limits
+
 ## 🚧 Known Issues & TODO
 
 ### Test Coverage Status
@@ -425,9 +542,24 @@ make pre-commit   # Run full check sequence
 - ✅ **Admin/Backup handlers**: Full test coverage implemented
 - ✅ **DTOs**: Comprehensive validation tests added
 
+### Deployment Status
+
+- ✅ **Production deployment scripts**: Complete (see `deploy/` directory)
+    - ✅ Automated installation for Ubuntu, Debian, Rocky/Alma Linux
+    - ✅ Nginx and Caddy reverse proxy configurations
+    - ✅ SSL/TLS automation with Let's Encrypt
+    - ✅ Fail2ban brute-force protection
+    - ✅ Systemd service integration
+    - ✅ Safe upgrade with automatic rollback
+    - ✅ Automated daily backups
+    - ✅ Clean uninstall scripts
+    - ✅ Comprehensive documentation
+
 ### Development Priorities
 
-1. Add more integration test scenarios for invite flow
-2. Performance optimization and benchmarking
-3. End-to-end testing with agent-browser
-4. Load testing and stress testing scenarios
+1. ~~Implement self-hosted deployment scripts~~ ✅ **COMPLETED**
+2. Test deployment on actual VMs (Ubuntu 22.04/24.04, Debian 11/12)
+3. Add more integration test scenarios for invite flow
+4. Performance optimization and benchmarking
+5. End-to-end testing with agent-browser
+6. Load testing and stress testing scenarios

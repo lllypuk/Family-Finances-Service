@@ -1,0 +1,19 @@
+[Unit]
+Description=Daily Family Budget Database Backup
+Documentation=https://github.com/lllypuk/Family-Finances-Service
+
+[Timer]
+# Run daily at 3:00 AM
+OnCalendar=*-*-* 03:00:00
+
+# Randomize start time within 15 minutes to avoid load spikes
+RandomizedDelaySec=900
+
+# Run immediately if missed (e.g., system was off)
+Persistent=true
+
+# Run once per day even if system time changes
+AccuracySec=1h
+
+[Install]
+WantedBy=timers.target
