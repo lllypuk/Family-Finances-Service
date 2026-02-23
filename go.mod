@@ -13,7 +13,7 @@ require (
 	github.com/labstack/echo/v4 v4.15.0
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.47.0
-	modernc.org/sqlite v1.44.3
+	modernc.org/sqlite v1.46.1
 )
 
 require (
