@@ -53,15 +53,17 @@
         </div>
 
         <!-- Error Messages -->
-        {{if .PageData.Errors}}
-        <div class="alert alert-danger" role="alert" id="form-errors">
-            <ul style="margin: 0; padding-left: 1rem;">
-                {{range $field, $error := .PageData.Errors}}
-                <li>{{$error}}</li>
-                {{end}}
-            </ul>
+        <div id="form-errors">
+            {{if .PageData.Errors}}
+            <div class="alert alert-danger" role="alert">
+                <ul style="margin: 0; padding-left: 1rem;">
+                    {{range $field, $error := .PageData.Errors}}
+                    <li>{{$error}}</li>
+                    {{end}}
+                </ul>
+            </div>
+            {{end}}
         </div>
-        {{end}}
 
         <!-- Create Report Form -->
         <section class="form-section">
@@ -72,7 +74,7 @@
                           action="/reports"
                           hx-post="/reports"
                           hx-target="#form-errors"
-                          hx-swap="outerHTML">
+                          hx-swap="innerHTML">
 
                         <input type="hidden" name="_token" value="{{.CSRFToken}}">
 
@@ -117,7 +119,7 @@
                                             <option value="cash_flow" {{if eq .Form.Type "cash_flow"}}selected{{end}}>
                                                 💹 Денежный поток
                                             </option>
-                                            <option value="category_breakdown" {{if eq .Form.Type "category_breakdown"}}selected{{end}}>
+                                            <option value="category_break" {{if eq .Form.Type "category_break"}}selected{{end}}>
                                                 📋 Разбивка по категориям
                                             </option>
                                         </select>
@@ -140,7 +142,6 @@
                                             <option value="daily" {{if eq .Form.Period "daily"}}selected{{end}}>Ежедневно</option>
                                             <option value="weekly" {{if eq .Form.Period "weekly"}}selected{{end}}>Еженедельно</option>
                                             <option value="monthly" {{if eq .Form.Period "monthly"}}selected{{end}}>Ежемесячно</option>
-                                            <option value="quarterly" {{if eq .Form.Period "quarterly"}}selected{{end}}>Ежеквартально</option>
                                             <option value="yearly" {{if eq .Form.Period "yearly"}}selected{{end}}>Ежегодно</option>
                                             <option value="custom" {{if eq .Form.Period "custom"}}selected{{end}}>Произвольный период</option>
                                         </select>
@@ -281,11 +282,6 @@
                 case 'monthly':
                     startDate = new Date(today.getFullYear(), today.getMonth(), 1);
                     endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-                    break;
-                case 'quarterly':
-                    const quarter = Math.floor(today.getMonth() / 3);
-                    startDate = new Date(today.getFullYear(), quarter * 3, 1);
-                    endDate = new Date(today.getFullYear(), quarter * 3 + 3, 0);
                     break;
                 case 'yearly':
                     startDate = new Date(today.getFullYear(), 0, 1);

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -401,15 +402,16 @@ func TestTransactionHandler_GetTransactions_WithFilters(t *testing.T) {
 		Return([]*transaction.Transaction{}, nil)
 
 	e := echo.New()
-	url := fmt.Sprintf(
-		"/transactions?family_id=%s&user_id=%s&category_id=%s&type=expense&date_from=%s&date_to=%s&limit=25&offset=10",
-		familyID,
-		userID,
-		categoryID,
-		dateFrom,
-		dateTo,
-	)
-	httpReq := httptest.NewRequest(http.MethodGet, url, nil)
+	query := url.Values{}
+	query.Set("family_id", familyID.String())
+	query.Set("user_id", userID.String())
+	query.Set("category_id", categoryID.String())
+	query.Set("type", "expense")
+	query.Set("date_from", dateFrom)
+	query.Set("date_to", dateTo)
+	query.Set("limit", "25")
+	query.Set("offset", "10")
+	httpReq := httptest.NewRequest(http.MethodGet, "/transactions?"+query.Encode(), nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(httpReq, rec)
 
@@ -420,6 +422,61 @@ func TestTransactionHandler_GetTransactions_WithFilters(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rec.Code)
 	mockRepo.AssertExpectations(t)
+}
+
+func TestTransactionHandler_GetTransactions_InvalidQueryParams(t *testing.T) {
+	tests := []struct {
+		name          string
+		query         string
+		expectedParam string
+	}{
+		{
+			name:          "invalid user_id uuid",
+			query:         "/transactions?user_id=not-a-uuid",
+			expectedParam: "user_id",
+		},
+		{
+			name:          "invalid date_from",
+			query:         "/transactions?date_from=2026-01-01",
+			expectedParam: "date_from",
+		},
+		{
+			name:          "invalid amount_from",
+			query:         "/transactions?amount_from=abc",
+			expectedParam: "amount_from",
+		},
+		{
+			name:          "invalid limit number",
+			query:         "/transactions?limit=0",
+			expectedParam: "limit",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler, mockRepo := setupTransactionHandler()
+
+			e := echo.New()
+			httpReq := httptest.NewRequest(http.MethodGet, "http://example.com"+tt.query, nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(httpReq, rec)
+
+			err := handler.GetTransactions(c)
+
+			require.NoError(t, err)
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+			var response handlers.ErrorResponse
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+			assert.Equal(t, "INVALID_QUERY_PARAM", response.Error.Code)
+
+			details, ok := response.Error.Details.(map[string]any)
+			require.True(t, ok)
+			assert.Equal(t, tt.expectedParam, details["param"])
+
+			mockRepo.AssertNotCalled(t, "GetByFilter", mock.Anything, mock.Anything)
+		})
+	}
 }
 
 func TestTransactionHandler_GetTransactionByID_Success(t *testing.T) {

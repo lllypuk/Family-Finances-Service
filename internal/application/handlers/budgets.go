@@ -3,9 +3,13 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"family-budget-service/internal/domain/budget"
+	"family-budget-service/internal/domain/transaction"
+	"family-budget-service/internal/services"
+	"family-budget-service/internal/services/dto"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
@@ -13,57 +17,39 @@ import (
 )
 
 type BudgetHandler struct {
-	repositories *Repositories
-	validator    *validator.Validate
+	repositories  *Repositories
+	validator     *validator.Validate
+	budgetService services.BudgetService
 }
 
-func NewBudgetHandler(repositories *Repositories) *BudgetHandler {
+func NewBudgetHandler(
+	repositories *Repositories,
+	budgetServices ...services.BudgetService,
+) *BudgetHandler {
+	var budgetService services.BudgetService
+	if len(budgetServices) > 0 {
+		budgetService = budgetServices[0]
+	}
+
 	return &BudgetHandler{
-		repositories: repositories,
-		validator:    validator.New(),
+		repositories:  repositories,
+		validator:     validator.New(),
+		budgetService: budgetService,
 	}
 }
 
 func (h *BudgetHandler) CreateBudget(c echo.Context) error {
 	var req CreateBudgetRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_REQUEST",
-				Message: "Invalid request body",
-				Details: err.Error(),
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body", err.Error())
 	}
 
 	if err := h.validator.Struct(req); err != nil {
-		var validationErrors []ValidationError
-		for _, err := range func() validator.ValidationErrors {
-			var target validator.ValidationErrors
-			_ = errors.As(err, &target)
-			return target
-		}() {
-			validationErrors = append(validationErrors, ValidationError{
-				Field:   err.Field(),
-				Message: err.Tag(),
-				Code:    "VALIDATION_ERROR",
-			})
-		}
+		return HandleValidationError(c, err)
+	}
 
-		return c.JSON(http.StatusBadRequest, APIResponse[any]{
-			Data: nil,
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-			Errors: validationErrors,
-		})
+	if h.budgetService != nil {
+		return h.createBudgetViaService(c, req)
 	}
 
 	// Создаем новый бюджет
@@ -82,17 +68,7 @@ func (h *BudgetHandler) CreateBudget(c echo.Context) error {
 	}
 
 	if err := h.repositories.Budget.Create(c.Request().Context(), newBudget); err != nil {
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "CREATE_FAILED",
-				Message: "Failed to create budget",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create budget")
 	}
 
 	response := BudgetResponse{
@@ -110,17 +86,14 @@ func (h *BudgetHandler) CreateBudget(c echo.Context) error {
 		UpdatedAt:  newBudget.UpdatedAt,
 	}
 
-	return c.JSON(http.StatusCreated, APIResponse[BudgetResponse]{
-		Data: response,
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+	return respondAPI(c, http.StatusCreated, response)
 }
 
 func (h *BudgetHandler) GetBudgets(c echo.Context) error {
+	if h.budgetService != nil {
+		return h.getBudgetsViaService(c)
+	}
+
 	// Получаем параметры запроса
 	activeOnlyParam := c.QueryParam("active_only")
 
@@ -135,17 +108,7 @@ func (h *BudgetHandler) GetBudgets(c echo.Context) error {
 	}
 
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "FETCH_FAILED",
-				Message: "Failed to fetch budgets",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch budgets")
 	}
 
 	var response []BudgetResponse
@@ -166,64 +129,50 @@ func (h *BudgetHandler) GetBudgets(c echo.Context) error {
 		})
 	}
 
-	return c.JSON(http.StatusOK, APIResponse[[]BudgetResponse]{
-		Data: response,
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+	return respondAPI(c, http.StatusOK, response)
 }
 
 func (h *BudgetHandler) GetBudgetByID(c echo.Context) error {
+	if h.budgetService != nil {
+		return h.getBudgetByIDViaService(c)
+	}
+
 	idParam := c.Param("id")
 	id, err := uuid.Parse(idParam)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_ID",
-				Message: "Invalid budget ID format",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return HandleIDParseError(c, "budget")
 	}
 
 	foundBudget, err := h.repositories.Budget.GetByID(c.Request().Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "BUDGET_NOT_FOUND",
-				Message: "Budget not found",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return HandleNotFoundError(c, "Budget")
 	}
 
 	// Вычисляем сумму расходов по бюджету (по категории и семье)
 	var spent float64
 	if foundBudget.CategoryID != nil {
-		// Получаем сумму расходов по категории бюджета
-		spent, err = h.repositories.Transaction.GetTotalByCategory(
+		// Получаем сумму расходов по категории бюджета в пределах периода бюджета
+		spent, err = h.repositories.Transaction.GetTotalByCategoryAndDateRange(
 			c.Request().Context(),
 			*foundBudget.CategoryID,
-			"expense",
+			foundBudget.StartDate,
+			foundBudget.EndDate,
+			transaction.TypeExpense,
 		)
 		if err != nil {
 			spent = 0
 		}
 	} else {
-		// Если категория не указана, считаем все расходы семьи
-		// (можно добавить GetTotalByFamily если потребуется)
-		spent = foundBudget.Spent
+		// Если категория не указана, считаем все расходы семьи в пределах периода бюджета
+		spent, err = h.repositories.Transaction.GetTotalByDateRange(
+			c.Request().Context(),
+			foundBudget.StartDate,
+			foundBudget.EndDate,
+			transaction.TypeExpense,
+		)
+		if err != nil {
+			spent = foundBudget.Spent
+		}
 	}
 
 	response := BudgetResponse{
@@ -241,17 +190,14 @@ func (h *BudgetHandler) GetBudgetByID(c echo.Context) error {
 		UpdatedAt:  foundBudget.UpdatedAt,
 	}
 
-	return c.JSON(http.StatusOK, APIResponse[BudgetResponse]{
-		Data: response,
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+	return respondAPI(c, http.StatusOK, response)
 }
 
 func (h *BudgetHandler) UpdateBudget(c echo.Context) error {
+	if h.budgetService != nil {
+		return h.updateBudgetViaService(c)
+	}
+
 	helper := NewUpdateEntityHelper(
 		UpdateEntityParams[UpdateBudgetRequest, *budget.Budget, BudgetResponse]{
 			Validator: h.validator,
@@ -306,8 +252,154 @@ func (h *BudgetHandler) buildBudgetResponse(b *budget.Budget) BudgetResponse {
 }
 
 func (h *BudgetHandler) DeleteBudget(c echo.Context) error {
+	if h.budgetService != nil {
+		return DeleteEntityHelper(c, func(id uuid.UUID) error {
+			return h.budgetService.DeleteBudget(c.Request().Context(), id)
+		}, "Budget")
+	}
+
 	return DeleteEntityHelper(c, func(id uuid.UUID) error {
 		// In single-family model, repository will handle family ID internally
 		return h.repositories.Budget.Delete(c.Request().Context(), id)
 	}, "Budget")
+}
+
+func (h *BudgetHandler) createBudgetViaService(c echo.Context, req CreateBudgetRequest) error {
+	createdBudget, err := h.budgetService.CreateBudget(c.Request().Context(), dto.CreateBudgetDTO{
+		Name:       req.Name,
+		Amount:     req.Amount,
+		Period:     budget.Period(req.Period),
+		CategoryID: req.CategoryID,
+		StartDate:  req.StartDate,
+		EndDate:    req.EndDate,
+	})
+	if err != nil {
+		return h.handleBudgetServiceError(c, err, "create")
+	}
+
+	return respondAPI(c, http.StatusCreated, h.buildBudgetResponse(createdBudget))
+}
+
+func (h *BudgetHandler) getBudgetsViaService(c echo.Context) error {
+	activeOnlyParam := c.QueryParam("active_only")
+
+	var budgets []*budget.Budget
+	var err error
+
+	if activeOnlyParam == "true" {
+		budgets, err = h.budgetService.GetActiveBudgets(c.Request().Context(), time.Now())
+	} else {
+		budgets, err = h.getAllBudgetsViaService(c)
+	}
+	if err != nil {
+		return h.handleBudgetServiceError(c, err, "fetch")
+	}
+
+	response := make([]BudgetResponse, 0, len(budgets))
+	for _, b := range budgets {
+		response = append(response, h.buildBudgetResponse(b))
+	}
+
+	return respondAPI(c, http.StatusOK, response)
+}
+
+func (h *BudgetHandler) getAllBudgetsViaService(c echo.Context) ([]*budget.Budget, error) {
+	filter := dto.NewBudgetFilterDTO()
+	filter.Limit = 100
+	filter.Offset = 0
+
+	var allBudgets []*budget.Budget
+	for {
+		page, err := h.budgetService.GetAllBudgets(c.Request().Context(), filter)
+		if err != nil {
+			return nil, err
+		}
+
+		allBudgets = append(allBudgets, page...)
+		if len(page) < filter.Limit {
+			break
+		}
+		filter.Offset += filter.Limit
+	}
+
+	return allBudgets, nil
+}
+
+func (h *BudgetHandler) getBudgetByIDViaService(c echo.Context) error {
+	id, err := ParseIDParamWithError(c, "budget")
+	if err != nil {
+		iDParseError := &IDParseError{}
+		if errors.As(err, &iDParseError) {
+			return HandleIDParseError(c, "budget")
+		}
+		return err
+	}
+
+	foundBudget, err := h.budgetService.GetBudgetByID(c.Request().Context(), id)
+	if err != nil {
+		return h.handleBudgetServiceError(c, err, "get_by_id")
+	}
+
+	return respondAPI(c, http.StatusOK, h.buildBudgetResponse(foundBudget))
+}
+
+func (h *BudgetHandler) updateBudgetViaService(c echo.Context) error {
+	id, err := ParseIDParamWithError(c, "budget")
+	if err != nil {
+		iDParseError := &IDParseError{}
+		if errors.As(err, &iDParseError) {
+			return HandleIDParseError(c, "budget")
+		}
+		return err
+	}
+
+	var req UpdateBudgetRequest
+	if bindErr := c.Bind(&req); bindErr != nil {
+		return HandleBindError(c)
+	}
+	if validationErr := h.validator.Struct(req); validationErr != nil {
+		return HandleValidationError(c, validationErr)
+	}
+
+	updatedBudget, err := h.budgetService.UpdateBudget(c.Request().Context(), id, dto.UpdateBudgetDTO{
+		Name:      req.Name,
+		Amount:    req.Amount,
+		StartDate: req.StartDate,
+		EndDate:   req.EndDate,
+		IsActive:  req.IsActive,
+	})
+	if err != nil {
+		return h.handleBudgetServiceError(c, err, "update")
+	}
+
+	return respondAPI(c, http.StatusOK, h.buildBudgetResponse(updatedBudget))
+}
+
+func (h *BudgetHandler) handleBudgetServiceError(c echo.Context, err error, operation string) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, services.ErrBudgetNotFoundService), errors.Is(err, services.ErrBudgetNotFound):
+		return HandleNotFoundError(c, "Budget")
+	case operation == "create" &&
+		(errors.Is(err, dto.ErrInvalidBudgetPeriod) || errors.Is(err, dto.ErrInvalidDateRange)):
+		return respondError(c, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create budget")
+	case errors.Is(err, services.ErrBudgetOverlapExists),
+		errors.Is(err, services.ErrBudgetAlreadyExceeded),
+		errors.Is(err, dto.ErrInvalidBudgetPeriod),
+		errors.Is(err, dto.ErrInvalidBudgetAmount),
+		errors.Is(err, dto.ErrInvalidDateRange),
+		errors.Is(err, dto.ErrInvalidAmountRange),
+		strings.Contains(err.Error(), "validation failed"):
+		return respondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid budget data", err.Error())
+	default:
+		switch operation {
+		case "create":
+			return respondError(c, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create budget")
+		case "update":
+			return respondError(c, http.StatusInternalServerError, "UPDATE_FAILED", "Failed to update budget")
+		default:
+			return respondError(c, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch budgets")
+		}
+	}
 }

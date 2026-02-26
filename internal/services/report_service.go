@@ -28,6 +28,8 @@ const (
 	reportTransactionQueryLimit = 1000 // Maximum transactions to query for reports
 )
 
+var ErrReportFeatureHiddenFromPublicAPI = errors.New("report feature hidden from public API until implemented")
+
 type reportService struct {
 	reportRepo      ReportRepository
 	transactionRepo TransactionRepository
@@ -62,6 +64,10 @@ func NewReportService(
 		budgetService:      budgetService,
 		categoryService:    categoryService,
 	}
+}
+
+func reportFeatureHiddenStubError(feature string) error {
+	return fmt.Errorf("%w: %s", ErrReportFeatureHiddenFromPublicAPI, feature)
 }
 
 // transactionReportData contains common data for transaction reports
@@ -313,8 +319,8 @@ func (s *reportService) GenerateCashFlowReport(
 	totalOutflows := s.calculateTotalAmount(expenseTransactions)
 	netCashFlow := totalInflows - totalOutflows
 
-	// Calculate opening balance (this would need to be stored or calculated from previous periods)
-	openingBalance := 0.0 // TODO: Implement opening balance calculation
+	// ROADMAP: opening balance must be calculated from prior periods or stored snapshots.
+	openingBalance := 0.0
 	closingBalance := openingBalance + netCashFlow
 
 	// Generate daily cash flow
@@ -444,6 +450,11 @@ func (s *reportService) GetReports(
 	_ *report.Type,
 ) ([]*report.Report, error) {
 	return s.reportRepo.GetAll(ctx)
+}
+
+// GetReportsByUserID retrieves reports for a specific user (single family model).
+func (s *reportService) GetReportsByUserID(ctx context.Context, userID uuid.UUID) ([]*report.Report, error) {
+	return s.reportRepo.GetByUserID(ctx, userID)
 }
 
 // DeleteReport deletes a report by its ID
@@ -768,13 +779,15 @@ func (s *reportService) filterTransactionsByType(
 	return result
 }
 
-// Placeholder implementations for complex methods that would require additional logic
+// ROADMAP placeholders for advanced calculations used by implemented report flows.
+// They intentionally return zero-values to keep current report generation stable while
+// signaling missing depth in analytics/report details.
 
 func (s *reportService) generateExpenseTrends(
 	_ context.Context,
 	_, _ time.Time,
 ) (dto.ExpenseTrendsDTO, error) {
-	// TODO: Implement sophisticated trend analysis
+	// ROADMAP: implement sophisticated expense trend analysis.
 	return dto.ExpenseTrendsDTO{}, nil
 }
 
@@ -783,7 +796,7 @@ func (s *reportService) generateExpenseComparisons(
 	_ float64,
 	_, _ time.Time,
 ) (dto.ExpenseComparisonsDTO, error) {
-	// TODO: Implement comparison with previous periods
+	// ROADMAP: compare expenses with previous periods.
 	return dto.ExpenseComparisonsDTO{}, nil
 }
 
@@ -791,7 +804,7 @@ func (s *reportService) generateIncomeTrends(
 	_ context.Context,
 	_, _ time.Time,
 ) (dto.IncomeTrendsDTO, error) {
-	// TODO: Implement income trend analysis
+	// ROADMAP: implement income trend analysis.
 	return dto.IncomeTrendsDTO{}, nil
 }
 
@@ -800,7 +813,7 @@ func (s *reportService) generateIncomeComparisons(
 	_ float64,
 	_, _ time.Time,
 ) (dto.IncomeComparisonsDTO, error) {
-	// TODO: Implement income comparison analysis
+	// ROADMAP: compare income with previous periods.
 	return dto.IncomeComparisonsDTO{}, nil
 }
 
@@ -809,7 +822,7 @@ func (s *reportService) generateBudgetCategoryComparisons(
 	_ []*budget.Budget,
 	_ []*transaction.Transaction,
 ) ([]dto.BudgetCategoryComparisonDTO, error) {
-	// TODO: Implement budget vs actual comparison by category
+	// ROADMAP: budget-vs-actual comparison by category.
 	return []dto.BudgetCategoryComparisonDTO{}, nil
 }
 
@@ -818,12 +831,12 @@ func (s *reportService) generateBudgetTimeline(
 	_ float64,
 	_, _ time.Time,
 ) []dto.BudgetTimelineDTO {
-	// TODO: Implement budget timeline generation
+	// ROADMAP: budget timeline generation.
 	return []dto.BudgetTimelineDTO{}
 }
 
 func (s *reportService) generateBudgetAlerts(_ []dto.BudgetCategoryComparisonDTO) []dto.BudgetAlertReportDTO {
-	// TODO: Implement budget alert generation
+	// ROADMAP: budget alert generation.
 	return []dto.BudgetAlertReportDTO{}
 }
 
@@ -832,17 +845,17 @@ func (s *reportService) generateDailyCashFlow(
 	_ float64,
 	_, _ time.Time,
 ) []dto.DailyCashFlowDTO {
-	// TODO: Implement daily cash flow calculation
+	// ROADMAP: daily cash-flow calculation with running balance.
 	return []dto.DailyCashFlowDTO{}
 }
 
 func (s *reportService) generateWeeklyCashFlow(_ []dto.DailyCashFlowDTO) []dto.WeeklyCashFlowDTO {
-	// TODO: Implement weekly aggregation
+	// ROADMAP: weekly cash-flow aggregation.
 	return []dto.WeeklyCashFlowDTO{}
 }
 
 func (s *reportService) generateMonthlyCashFlow(_ []dto.DailyCashFlowDTO) []dto.MonthlyCashFlowDTO {
-	// TODO: Implement monthly aggregation
+	// ROADMAP: monthly cash-flow aggregation.
 	return []dto.MonthlyCashFlowDTO{}
 }
 
@@ -850,7 +863,7 @@ func (s *reportService) generateCashFlowProjections(
 	_ context.Context,
 	_ []*transaction.Transaction,
 ) (dto.CashFlowProjectionsDTO, error) {
-	// TODO: Implement cash flow projections
+	// ROADMAP: cash-flow projections.
 	return dto.CashFlowProjectionsDTO{}, nil
 }
 
@@ -860,7 +873,7 @@ func (s *reportService) generateDetailedCategoryAnalysis(
 	_ []*category.Category,
 	_, _ time.Time,
 ) ([]dto.CategoryAnalysisDTO, error) {
-	// TODO: Implement detailed category analysis
+	// ROADMAP: detailed category analysis.
 	return []dto.CategoryAnalysisDTO{}, nil
 }
 
@@ -868,7 +881,7 @@ func (s *reportService) generateCategoryHierarchy(
 	_ []dto.CategoryAnalysisDTO,
 	_ []*category.Category,
 ) []dto.CategoryHierarchyReportDTO {
-	// TODO: Implement category hierarchy generation
+	// ROADMAP: category hierarchy report generation.
 	return []dto.CategoryHierarchyReportDTO{}
 }
 
@@ -876,7 +889,7 @@ func (s *reportService) generateCategoryTrends(
 	_ context.Context,
 	_, _ time.Time,
 ) (dto.CategoryTrendsDTO, error) {
-	// TODO: Implement category trend analysis
+	// ROADMAP: category trend analysis.
 	return dto.CategoryTrendsDTO{}, nil
 }
 
@@ -885,40 +898,187 @@ func (s *reportService) generateCategoryComparisons(
 	_ []dto.CategoryAnalysisDTO,
 	_, _ time.Time,
 ) (dto.CategoryComparisonsDTO, error) {
-	// TODO: Implement category comparison analysis
+	// ROADMAP: category comparison analysis.
 	return dto.CategoryComparisonsDTO{}, nil
 }
 
-func (s *reportService) convertToReportData(_ any, _ report.Type) (report.Data, error) {
-	// TODO: Implement conversion from specific report DTOs to generic report.Data
-	return report.Data{}, nil
+func (s *reportService) convertToReportData(reportData any, reportType report.Type) (report.Data, error) {
+	switch reportType {
+	case report.TypeExpenses:
+		expenseReport, ok := reportData.(*dto.ExpenseReportDTO)
+		if !ok {
+			return report.Data{}, fmt.Errorf("expected *dto.ExpenseReportDTO, got %T", reportData)
+		}
+		return report.Data{
+			TotalExpenses:     expenseReport.TotalExpenses,
+			CategoryBreakdown: convertCategoryBreakdownItemsToReportData(expenseReport.CategoryBreakdown),
+			TopExpenses:       convertTransactionSummaryItemsToReportData(expenseReport.TopExpenses),
+		}, nil
+
+	case report.TypeIncome:
+		incomeReport, ok := reportData.(*dto.IncomeReportDTO)
+		if !ok {
+			return report.Data{}, fmt.Errorf("expected *dto.IncomeReportDTO, got %T", reportData)
+		}
+		// Persist top sources in TopExpenses generic field for unified rendering/storage.
+		return report.Data{
+			TotalIncome:       incomeReport.TotalIncome,
+			CategoryBreakdown: convertCategoryBreakdownItemsToReportData(incomeReport.CategoryBreakdown),
+			TopExpenses:       convertTransactionSummaryItemsToReportData(incomeReport.TopSources),
+		}, nil
+
+	case report.TypeBudget:
+		budgetReport, ok := reportData.(*dto.BudgetComparisonDTO)
+		if !ok {
+			return report.Data{}, fmt.Errorf("expected *dto.BudgetComparisonDTO, got %T", reportData)
+		}
+		return report.Data{
+			TotalExpenses:    budgetReport.TotalSpent,
+			BudgetComparison: convertBudgetComparisonItemsToReportData(budgetReport.Categories),
+		}, nil
+
+	case report.TypeCashFlow:
+		cashFlowReport, ok := reportData.(*dto.CashFlowReportDTO)
+		if !ok {
+			return report.Data{}, fmt.Errorf("expected *dto.CashFlowReportDTO, got %T", reportData)
+		}
+		return report.Data{
+			TotalIncome:    cashFlowReport.TotalInflows,
+			TotalExpenses:  cashFlowReport.TotalOutflows,
+			NetIncome:      cashFlowReport.NetCashFlow,
+			DailyBreakdown: convertDailyCashFlowItemsToReportData(cashFlowReport.DailyFlow),
+		}, nil
+
+	case report.TypeCategoryBreak:
+		categoryReport, ok := reportData.(*dto.CategoryBreakdownDTO)
+		if !ok {
+			return report.Data{}, fmt.Errorf("expected *dto.CategoryBreakdownDTO, got %T", reportData)
+		}
+		return report.Data{
+			CategoryBreakdown: convertCategoryAnalysisItemsToReportData(categoryReport.Categories),
+		}, nil
+
+	default:
+		return report.Data{}, fmt.Errorf("unsupported report type: %s", reportType)
+	}
+}
+
+func convertCategoryBreakdownItemsToReportData(items []dto.CategoryBreakdownItemDTO) []report.CategoryReportItem {
+	if len(items) == 0 {
+		return []report.CategoryReportItem{}
+	}
+
+	result := make([]report.CategoryReportItem, len(items))
+	for i, item := range items {
+		result[i] = report.CategoryReportItem{
+			CategoryID:   item.CategoryID,
+			CategoryName: item.CategoryName,
+			Amount:       item.Amount,
+			Percentage:   item.Percentage,
+			Count:        item.Count,
+		}
+	}
+	return result
+}
+
+func convertCategoryAnalysisItemsToReportData(items []dto.CategoryAnalysisDTO) []report.CategoryReportItem {
+	if len(items) == 0 {
+		return []report.CategoryReportItem{}
+	}
+
+	result := make([]report.CategoryReportItem, len(items))
+	for i, item := range items {
+		result[i] = report.CategoryReportItem{
+			CategoryID:   item.CategoryID,
+			CategoryName: item.CategoryName,
+			Amount:       item.TotalAmount,
+			Percentage:   item.Percentage,
+			Count:        item.TransactionCount,
+		}
+	}
+	return result
+}
+
+func convertTransactionSummaryItemsToReportData(items []dto.TransactionSummaryDTO) []report.TransactionReportItem {
+	if len(items) == 0 {
+		return []report.TransactionReportItem{}
+	}
+
+	result := make([]report.TransactionReportItem, len(items))
+	for i, item := range items {
+		result[i] = report.TransactionReportItem{
+			ID:          item.ID,
+			Amount:      item.Amount,
+			Description: item.Description,
+			Category:    item.Category,
+			Date:        item.Date,
+		}
+	}
+	return result
+}
+
+func convertBudgetComparisonItemsToReportData(items []dto.BudgetCategoryComparisonDTO) []report.BudgetComparisonItem {
+	if len(items) == 0 {
+		return []report.BudgetComparisonItem{}
+	}
+
+	result := make([]report.BudgetComparisonItem, len(items))
+	for i, item := range items {
+		result[i] = report.BudgetComparisonItem{
+			BudgetID:   item.CategoryID, // Generic report.Data has no category-specific budget key.
+			BudgetName: item.CategoryName,
+			Planned:    item.BudgetAmount,
+			Actual:     item.ActualAmount,
+			Difference: item.Variance,
+			Percentage: item.Utilization,
+		}
+	}
+	return result
+}
+
+func convertDailyCashFlowItemsToReportData(items []dto.DailyCashFlowDTO) []report.DailyReportItem {
+	if len(items) == 0 {
+		return []report.DailyReportItem{}
+	}
+
+	result := make([]report.DailyReportItem, len(items))
+	for i, item := range items {
+		result[i] = report.DailyReportItem{
+			Date:     item.Date,
+			Income:   item.Inflow,
+			Expenses: item.Outflow,
+			Balance:  item.Balance,
+		}
+	}
+	return result
 }
 
 func (s *reportService) exportToCSV(_ any, _ dto.ExportOptionsDTO) ([]byte, error) {
-	// TODO: Implement CSV export
+	// ROADMAP: CSV export implementation.
 	return []byte{}, nil
 }
 
 func (s *reportService) exportToExcel(_ any, _ dto.ExportOptionsDTO) ([]byte, error) {
-	// TODO: Implement Excel export
+	// ROADMAP: Excel export implementation.
 	return []byte{}, nil
 }
 
 func (s *reportService) exportToPDF(_ any, _ dto.ExportOptionsDTO) ([]byte, error) {
-	// TODO: Implement PDF export
+	// ROADMAP: PDF export implementation.
 	return []byte{}, nil
 }
 
-// Scheduled Reports - placeholder implementations
+// Hidden API stubs: methods remain on ReportService for interface compatibility,
+// but callers must not expose them via public API until implemented.
 
 func (s *reportService) ScheduleReport(_ context.Context, _ dto.ScheduleReportDTO) (*dto.ScheduledReportDTO, error) {
-	// TODO: Implement scheduled report creation
-	return nil, errors.New("scheduled reports not implemented yet")
+	// HIDDEN_API_STUB: scheduled report creation.
+	return nil, reportFeatureHiddenStubError("scheduled report creation")
 }
 
 func (s *reportService) GetScheduledReports(_ context.Context) ([]*dto.ScheduledReportDTO, error) {
-	// TODO: Implement scheduled report retrieval
-	return nil, errors.New("scheduled reports not implemented yet")
+	// HIDDEN_API_STUB: scheduled report retrieval.
+	return nil, reportFeatureHiddenStubError("scheduled report retrieval")
 }
 
 func (s *reportService) UpdateScheduledReport(
@@ -926,44 +1086,44 @@ func (s *reportService) UpdateScheduledReport(
 	_ uuid.UUID,
 	_ dto.ScheduleReportDTO,
 ) (*dto.ScheduledReportDTO, error) {
-	// TODO: Implement scheduled report update
-	return nil, errors.New("scheduled reports not implemented yet")
+	// HIDDEN_API_STUB: scheduled report update.
+	return nil, reportFeatureHiddenStubError("scheduled report update")
 }
 
 func (s *reportService) DeleteScheduledReport(_ context.Context, _ uuid.UUID) error {
-	// TODO: Implement scheduled report deletion
-	return errors.New("scheduled reports not implemented yet")
+	// HIDDEN_API_STUB: scheduled report deletion.
+	return reportFeatureHiddenStubError("scheduled report deletion")
 }
 
 func (s *reportService) ExecuteScheduledReport(_ context.Context, _ uuid.UUID) error {
-	// TODO: Implement scheduled report execution
-	return errors.New("scheduled reports not implemented yet")
+	// HIDDEN_API_STUB: scheduled report execution.
+	return reportFeatureHiddenStubError("scheduled report execution")
 }
 
-// Analytics & Insights - placeholder implementations
+// Hidden API stubs for advanced analytics endpoints.
 
 func (s *reportService) GenerateTrendAnalysis(
 	_ context.Context,
 	_ *uuid.UUID,
 	_ report.Period,
 ) (*dto.TrendAnalysisDTO, error) {
-	// TODO: Implement trend analysis
-	return nil, errors.New("trend analysis not implemented yet")
+	// HIDDEN_API_STUB: trend analysis service entrypoint.
+	return nil, reportFeatureHiddenStubError("trend analysis")
 }
 
 func (s *reportService) GenerateSpendingForecast(_ context.Context, _ int) ([]dto.ForecastDTO, error) {
-	// TODO: Implement spending forecast
-	return nil, errors.New("spending forecast not implemented yet")
+	// HIDDEN_API_STUB: spending forecast service entrypoint.
+	return nil, reportFeatureHiddenStubError("spending forecast")
 }
 
 func (s *reportService) GenerateFinancialInsights(_ context.Context) ([]dto.RecommendationDTO, error) {
-	// TODO: Implement financial insights
-	return nil, errors.New("financial insights not implemented yet")
+	// HIDDEN_API_STUB: financial insights service entrypoint.
+	return nil, reportFeatureHiddenStubError("financial insights")
 }
 
 func (s *reportService) CalculateBenchmarks(_ context.Context) (*dto.BenchmarkComparisonDTO, error) {
-	// TODO: Implement benchmark calculations
-	return nil, errors.New("benchmark calculations not implemented yet")
+	// HIDDEN_API_STUB: benchmarks service entrypoint.
+	return nil, reportFeatureHiddenStubError("benchmark calculations")
 }
 
 // generateExpenseSpecificData generates expense-specific report components

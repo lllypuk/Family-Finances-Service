@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -52,6 +53,12 @@ type TransactionRepository interface {
 	// For now, we'll use individual updates in a transaction
 }
 
+// TransactionRepositoryAtomicCreateWithBudget supports atomic creation of a transaction and budget update.
+// Implementations may no-op budget update when no active budget exists for the transaction category.
+type TransactionRepositoryAtomicCreateWithBudget interface {
+	CreateWithBudgetUpdate(ctx context.Context, tx *transaction.Transaction) error
+}
+
 // BudgetRepositoryForTransactions defines the budget operations needed for transaction service
 type BudgetRepositoryForTransactions interface {
 	GetActiveBudgets(ctx context.Context) ([]*budget.Budget, error)
@@ -78,6 +85,7 @@ type TransactionServiceImpl struct {
 	categoryRepo    CategoryRepositoryForTransactions
 	userRepo        UserRepositoryForTransactions
 	validator       *validator.Validate
+	logger          *slog.Logger
 }
 
 // NewTransactionService creates a new TransactionService instance
@@ -87,12 +95,28 @@ func NewTransactionService(
 	categoryRepo CategoryRepositoryForTransactions,
 	userRepo UserRepositoryForTransactions,
 ) *TransactionServiceImpl {
+	return NewTransactionServiceWithLogger(transactionRepo, budgetRepo, categoryRepo, userRepo, nil)
+}
+
+// NewTransactionServiceWithLogger creates a new TransactionService instance with injected logger.
+func NewTransactionServiceWithLogger(
+	transactionRepo TransactionRepository,
+	budgetRepo BudgetRepositoryForTransactions,
+	categoryRepo CategoryRepositoryForTransactions,
+	userRepo UserRepositoryForTransactions,
+	logger *slog.Logger,
+) *TransactionServiceImpl {
+	if logger == nil {
+		logger = slog.Default()
+	}
+
 	return &TransactionServiceImpl{
 		transactionRepo: transactionRepo,
 		budgetRepo:      budgetRepo,
 		categoryRepo:    categoryRepo,
 		userRepo:        userRepo,
 		validator:       validator.New(),
+		logger:          logger,
 	}
 }
 
@@ -136,17 +160,25 @@ func (s *TransactionServiceImpl) CreateTransaction(
 		UpdatedAt:   time.Now(),
 	}
 
+	// Prefer an atomic create+budget update path when supported by the repository.
+	if req.Type == transaction.TypeExpense {
+		if atomicRepo, ok := s.transactionRepo.(TransactionRepositoryAtomicCreateWithBudget); ok {
+			if err := atomicRepo.CreateWithBudgetUpdate(ctx, newTransaction); err != nil {
+				return nil, fmt.Errorf("failed to create transaction atomically: %w", err)
+			}
+			return newTransaction, nil
+		}
+	}
+
 	if err := s.transactionRepo.Create(ctx, newTransaction); err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
 
-	// Update budget if it's an expense transaction
+	// Fallback non-atomic budget update path for repositories without atomic support.
+	// Return error if budget sync fails to avoid reporting success with inconsistent state.
 	if req.Type == transaction.TypeExpense {
 		if budgetErr := s.updateBudgetSpent(ctx, req.CategoryID, req.Amount); budgetErr != nil {
-			// Log the error but don't fail the transaction creation
-			// In a production system, you might want to use a message queue for this
-			// TODO: Replace with proper logging system
-			_ = budgetErr // Ignore budget update errors for now
+			return nil, fmt.Errorf("failed to update budget after transaction create: %w", budgetErr)
 		}
 	}
 
@@ -260,8 +292,10 @@ func (s *TransactionServiceImpl) UpdateTransaction(
 		originalCategoryID,
 		existingTx,
 	); budgetErr != nil {
-		// TODO: Replace with proper logging system
-		_ = budgetErr // Ignore budget adjustment errors for now
+		s.warnBudgetAdjustment(ctx, "failed to adjust budgets after transaction update",
+			slog.String("transaction_id", existingTx.ID.String()),
+			slog.String("error", budgetErr.Error()),
+		)
 	}
 
 	return existingTx, nil
@@ -287,8 +321,11 @@ func (s *TransactionServiceImpl) DeleteTransaction(ctx context.Context, id uuid.
 			existingTx.CategoryID,
 			-existingTx.Amount,
 		); budgetErr != nil {
-			// TODO: Replace with proper logging system
-			_ = budgetErr // Ignore budget reversal errors for now
+			s.warnBudgetAdjustment(ctx, "failed to reverse budget spent after transaction delete",
+				slog.String("transaction_id", existingTx.ID.String()),
+				slog.String("category_id", existingTx.CategoryID.String()),
+				slog.String("error", budgetErr.Error()),
+			)
 		}
 	}
 
@@ -407,8 +444,11 @@ func (s *TransactionServiceImpl) updateTransactionsCategory(
 		}
 
 		if err := s.updateSingleTransactionCategory(ctx, oldTx, categoryID, transactions[txID].CategoryID); err != nil {
-			// TODO: Replace with proper logging system
-			_ = err // Ignore individual update errors for now
+			s.warnBudgetAdjustment(ctx, "failed to update transaction category in bulk operation",
+				slog.String("transaction_id", txID.String()),
+				slog.String("category_id", categoryID.String()),
+				slog.String("error", err.Error()),
+			)
 			failedUpdates++
 		}
 	}
@@ -444,15 +484,37 @@ func (s *TransactionServiceImpl) adjustBudgetsForCategoryChange(
 ) {
 	// Remove from old category budget
 	if budgetErr := s.updateBudgetSpent(ctx, oldCategoryID, -amount); budgetErr != nil {
-		// TODO: Replace with proper logging system
-		_ = budgetErr // Ignore budget adjustment errors for now
+		s.warnBudgetAdjustment(ctx, "failed to decrease old category budget after recategorization",
+			slog.String("old_category_id", oldCategoryID.String()),
+			slog.Float64("amount", amount),
+			slog.String("error", budgetErr.Error()),
+		)
 	}
 
 	// Add to new category budget
 	if budgetErr := s.updateBudgetSpent(ctx, newCategoryID, amount); budgetErr != nil {
-		// TODO: Replace with proper logging system
-		_ = budgetErr // Ignore budget adjustment errors for now
+		s.warnBudgetAdjustment(ctx, "failed to increase new category budget after recategorization",
+			slog.String("new_category_id", newCategoryID.String()),
+			slog.Float64("amount", amount),
+			slog.String("error", budgetErr.Error()),
+		)
 	}
+}
+
+func (s *TransactionServiceImpl) warnBudgetAdjustment(ctx context.Context, msg string, attrs ...slog.Attr) {
+	if s.logger == nil {
+		return
+	}
+
+	s.logger.WarnContext(ctx, msg, attrsToAny(attrs)...)
+}
+
+func attrsToAny(attrs []slog.Attr) []any {
+	out := make([]any, 0, len(attrs))
+	for _, attr := range attrs {
+		out = append(out, attr)
+	}
+	return out
 }
 
 // ValidateTransactionLimits checks if a transaction would exceed budget limits

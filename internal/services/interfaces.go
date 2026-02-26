@@ -139,6 +139,7 @@ type ReportService interface {
 	) (*report.Report, error)
 	GetReportByID(ctx context.Context, id uuid.UUID) (*report.Report, error)
 	GetReports(ctx context.Context, typeFilter *report.Type) ([]*report.Report, error)
+	GetReportsByUserID(ctx context.Context, userID uuid.UUID) ([]*report.Report, error)
 	DeleteReport(ctx context.Context, id uuid.UUID) error
 
 	// Export Operations

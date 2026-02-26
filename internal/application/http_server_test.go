@@ -432,6 +432,11 @@ func (m *MockReportService) GetReports(ctx context.Context, typeFilter *report.T
 }
 
 //nolint:revive // test mock
+func (m *MockReportService) GetReportsByUserID(ctx context.Context, userID uuid.UUID) ([]*report.Report, error) {
+	return nil, nil
+}
+
+//nolint:revive // test mock
 func (m *MockReportService) DeleteReport(ctx context.Context, id uuid.UUID) error {
 	return nil
 }

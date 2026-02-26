@@ -21,6 +21,10 @@ type SQLiteRepository struct {
 	db *sql.DB
 }
 
+type sqlExecer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
 // Summary holds transaction summary statistics
 type Summary struct {
 	FamilyID      uuid.UUID `json:"family_id"`
@@ -57,6 +61,20 @@ func (r *SQLiteRepository) getSingleFamilyID(ctx context.Context) (uuid.UUID, er
 	query := `SELECT id FROM families LIMIT 1`
 	var idStr string
 	err := r.db.QueryRowContext(ctx, query).Scan(&idStr)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to get family ID: %w", err)
+	}
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to parse family ID: %w", err)
+	}
+	return id, nil
+}
+
+func (r *SQLiteRepository) getSingleFamilyIDWithTx(ctx context.Context, tx *sql.Tx) (uuid.UUID, error) {
+	query := `SELECT id FROM families LIMIT 1`
+	var idStr string
+	err := tx.QueryRowContext(ctx, query).Scan(&idStr)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("failed to get family ID: %w", err)
 	}
@@ -106,7 +124,97 @@ func scanTransactionRow(rows *sql.Rows) (*transaction.Transaction, error) {
 
 // Create creates a new transaction in the database
 func (r *SQLiteRepository) Create(ctx context.Context, t *transaction.Transaction) error {
-	// Validate transaction parameters
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get family ID: %w", err)
+	}
+
+	return r.createWithFamilyID(ctx, r.db, familyID, t)
+}
+
+// CreateWithBudgetUpdate creates a transaction and updates the matching active budget in one DB transaction.
+// If no active budget exists for the category, only the transaction is created.
+func (r *SQLiteRepository) CreateWithBudgetUpdate(ctx context.Context, t *transaction.Transaction) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	rollbackNeeded := true
+	defer func() {
+		if rollbackNeeded {
+			_ = tx.Rollback()
+		}
+	}()
+
+	familyID, err := r.getSingleFamilyIDWithTx(ctx, tx)
+	if err != nil {
+		return fmt.Errorf("failed to get family ID: %w", err)
+	}
+
+	if err = r.createWithFamilyID(ctx, tx, familyID, t); err != nil {
+		return err
+	}
+
+	if t.Type == transaction.TypeExpense {
+		if err = r.updateMatchingActiveBudgetSpentTx(ctx, tx, familyID, t.CategoryID, t.Amount); err != nil {
+			return fmt.Errorf("failed to update budget after transaction create: %w", err)
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	rollbackNeeded = false
+
+	return nil
+}
+
+func (r *SQLiteRepository) createWithFamilyID(
+	ctx context.Context,
+	execer sqlExecer,
+	familyID uuid.UUID,
+	t *transaction.Transaction,
+) error {
+	if err := validateTransactionForCreate(t); err != nil {
+		return err
+	}
+
+	if err := prepareTransactionForCreate(t); err != nil {
+		return err
+	}
+
+	tagsJSON, err := json.Marshal(t.Tags)
+	if err != nil {
+		return fmt.Errorf("failed to marshal tags: %w", err)
+	}
+
+	query := `
+		INSERT INTO transactions (
+			id, amount, description, date, type, category_id, user_id, family_id,
+			tags, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err = execer.ExecContext(ctx, query,
+		sqlitehelpers.UUIDToString(t.ID),
+		t.Amount,
+		t.Description,
+		t.Date,
+		string(t.Type),
+		sqlitehelpers.UUIDToString(t.CategoryID),
+		sqlitehelpers.UUIDToString(t.UserID),
+		familyID.String(),
+		string(tagsJSON),
+		t.CreatedAt,
+		t.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create transaction: %w", err)
+	}
+
+	return nil
+}
+
+func validateTransactionForCreate(t *transaction.Transaction) error {
 	if err := validation.ValidateUUID(t.ID); err != nil {
 		return fmt.Errorf("invalid transaction ID: %w", err)
 	}
@@ -126,13 +234,10 @@ func (r *SQLiteRepository) Create(ctx context.Context, t *transaction.Transactio
 		return fmt.Errorf("invalid description: %w", err)
 	}
 
-	// Get single family ID
-	familyID, err := r.getSingleFamilyID(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get family ID: %w", err)
-	}
+	return nil
+}
 
-	// Validate date
+func prepareTransactionForCreate(t *transaction.Transaction) error {
 	if t.Date.After(time.Now().AddDate(1, 0, 0)) {
 		return errors.New("transaction date cannot be more than 1 year in the future")
 	}
@@ -140,39 +245,58 @@ func (r *SQLiteRepository) Create(ctx context.Context, t *transaction.Transactio
 		return errors.New("transaction date too old")
 	}
 
-	// Set timestamps
 	now := time.Now()
 	t.CreatedAt = now
 	t.UpdatedAt = now
 
-	// Convert tags to JSON
-	tagsJSON, err := json.Marshal(t.Tags)
+	return nil
+}
+
+func (r *SQLiteRepository) updateMatchingActiveBudgetSpentTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	familyID uuid.UUID,
+	categoryID uuid.UUID,
+	amount float64,
+) error {
+	now := time.Now()
+
+	// Match current service semantics: only currently active budgets and first matching category.
+	var budgetID string
+	selectQuery := `
+		SELECT id
+		FROM budgets
+		WHERE family_id = ? AND is_active = 1
+		  AND start_date <= ? AND end_date >= ?
+		  AND category_id = ?
+		ORDER BY start_date DESC, name
+		LIMIT 1`
+
+	err := tx.QueryRowContext(ctx, selectQuery, familyID.String(), now, now, sqlitehelpers.UUIDToString(categoryID)).
+		Scan(&budgetID)
 	if err != nil {
-		return fmt.Errorf("failed to marshal tags: %w", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		return fmt.Errorf("failed to find active budget for category: %w", err)
 	}
 
-	query := `
-		INSERT INTO transactions (
-			id, amount, description, date, type, category_id, user_id, family_id,
-			tags, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	updateQuery := `
+		UPDATE budgets
+		SET spent = spent + ?, updated_at = ?
+		WHERE id = ? AND family_id = ?`
 
-	_, err = r.db.ExecContext(ctx, query,
-		sqlitehelpers.UUIDToString(t.ID),
-		t.Amount,
-		t.Description,
-		t.Date,
-		string(t.Type),
-		sqlitehelpers.UUIDToString(t.CategoryID),
-		sqlitehelpers.UUIDToString(t.UserID),
-		familyID.String(),
-		string(tagsJSON),
-		t.CreatedAt,
-		t.UpdatedAt,
-	)
-
+	result, err := tx.ExecContext(ctx, updateQuery, amount, now, budgetID, familyID.String())
 	if err != nil {
-		return fmt.Errorf("failed to create transaction: %w", err)
+		return fmt.Errorf("failed to update budget spent: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected for budget update: %w", err)
+	}
+	if rowsAffected == 0 {
+		return errors.New("budget update affected no rows")
 	}
 
 	return nil

@@ -41,7 +41,7 @@
     <header>
         <h1>{{.Report.Name}}</h1>
         <p>
-            <span class="badge report-type-{{.Report.Type}}">{{.Report.Type | title}}</span>
+            <span class="badge report-type-{{.Report.Type}}">{{printf "%s" .Report.Type | title}}</span>
             {{.Report.FormattedPeriod}} • Generated on {{.Report.GeneratedAt.Format "02.01.2006 15:04"}}
         </p>
 
@@ -61,21 +61,21 @@
     <!-- Summary Cards -->
     <section class="summary-cards">
         <div class="grid">
-            {{if ne .Report.TotalIncome 0}}
+            {{if ne .Report.TotalIncome 0.0}}
             <article class="summary-card income">
                 <header>Total Income</header>
                 <h2 class="amount positive">{{.Report.FormattedIncome}}</h2>
             </article>
             {{end}}
 
-            {{if ne .Report.TotalExpenses 0}}
+            {{if ne .Report.TotalExpenses 0.0}}
             <article class="summary-card expenses">
                 <header>Total Expenses</header>
                 <h2 class="amount negative">{{.Report.FormattedExpenses}}</h2>
             </article>
             {{end}}
 
-            {{if ne .Report.NetIncome 0}}
+            {{if ne .Report.NetIncome 0.0}}
             <article class="summary-card net">
                 <header>Net Result</header>
                 <h2 class="amount {{.Report.NetIncomeClass}}">{{.Report.FormattedNet}}</h2>

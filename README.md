@@ -7,7 +7,7 @@
 This project is in **active development** with the following achievements:
 
 - ✅ Complete web interface (HTMX v2.0.4 + PicoCSS v2.1.1)
-- ✅ Full REST API with comprehensive endpoints
+- ✅ REST API for core entities (users, categories, transactions, budgets, invites, backups)
 - ✅ Advanced security (authentication, authorization, CSRF protection)
 - ✅ **Invite system** — user onboarding via secure token links
 - ✅ **Backup management** — create, download, restore, and auto-cleanup
@@ -25,17 +25,34 @@ This project is in **active development** with the following achievements:
 - 📈 **Real-Time Analytics**: Interactive dashboards with live updates
 - 🎯 **Financial Goals Tracking**: Savings goals with progress visualization
 - 🔐 **Enterprise Security**: Session management, CSRF protection, input validation
-- 📊 **Comprehensive Reporting**: Export capabilities, trend analysis
+- 📊 **Reporting (mixed readiness)**: Web UI supports preview/save/view/delete and CSV export for reports; public report-generation REST API is still in progress
 - 📨 **Invite System**: Secure registration via links with role control and expiration
 - 💾 **Backup Management**: Create, download, restore DB with auto-cleanup (up to 10 backups)
 - 🛠️ **Admin Panel**: User, invite, and backup management
 - 🌐 **Multi-Platform Ready**: REST API, web interface, mobile-ready design
 
+## API Readiness (Ready / Experimental)
+
+### Ready (current behavior)
+
+- Core REST API for users, categories, transactions, budgets
+- Invite, admin, and backup management APIs/web flows
+- Stored reports API endpoints: list, get by ID, delete
+- Web reports UI: generate preview/save/view/delete/export CSV for expense, income, budget, cash-flow, and category-breakdown reports
+- Web UI for day-to-day finance workflows
+
+### Experimental / In Progress
+
+- `POST /api/v1/reports` currently returns `501 Not Implemented` (report generation API is not exposed yet)
+- Advanced analytics/report-generation features described in roadmap-style text are not fully available via public API
+- Scheduled reports, forecasts, insights, and benchmark analytics remain hidden/placeholder service capabilities
+- Treat "comprehensive reporting" as partial readiness: storage/retrieval is available, generation is pending
+
 ## 🏗️ Architecture and Technology Stack
 
 ### Backend (Production Ready)
 
-- **Go 1.25.6** with Echo v4.13.4 framework
+- **Go 1.25.7** with Echo v4.15.0 framework
 - **SQLite** (modernc.org/sqlite) - Pure Go, no CGO dependencies
 - **Automatic migrations** on application startup
 - **Clean Architecture** with domain-driven design
@@ -87,7 +104,7 @@ docker-compose -f docker/docker-compose.yml up -d
 
 **Prerequisites:**
 
-- Go 1.25.6+
+- Go 1.25.7+
 - Make (optional)
 
 ```bash
@@ -181,6 +198,7 @@ The project follows **Clean Architecture** principles with production-ready impl
 - **Invite System**: Secure tokens, expiration, role control
 - **Backup Management**: Create, restore, download with auto-cleanup
 - **Admin Panel**: User, invite, and backup management
+- **Reports (UI-first)**: interactive preview generation and CSV export for saved reports
 - **Data Validation**: Comprehensive input validation with go-playground/validator
 - **Error Handling**: Structured error responses with proper HTTP status codes
 - **Security**: CSRF protection, password hashing, input sanitization, path traversal protection
@@ -192,14 +210,24 @@ The project follows **Clean Architecture** principles with production-ready impl
 
 The application uses environment variables for configuration. Key variables:
 
-| Variable         | Default          | Description                              |
-|------------------|------------------|------------------------------------------|
-| `SERVER_PORT`    | 8080             | HTTP server port                         |
-| `SERVER_HOST`    | localhost        | HTTP server host                         |
-| `DATABASE_PATH`  | ./data/budget.db | SQLite database file path                |
-| `SESSION_SECRET` | (required)       | Session encryption key                   |
-| `LOG_LEVEL`      | info             | Logging level (debug, info, warn, error) |
-| `ENVIRONMENT`    | production       | Application environment                  |
+| Variable               | Default                                              | Description                                           |
+|------------------------|------------------------------------------------------|-------------------------------------------------------|
+| `SERVER_HOST`          | `localhost`                                          | HTTP server host                                      |
+| `SERVER_PORT`          | `8080`                                               | HTTP server port                                      |
+| `SERVER_READ_TIMEOUT`  | `15s`                                                | HTTP server read timeout                              |
+| `SERVER_WRITE_TIMEOUT` | `15s`                                                | HTTP server write timeout                             |
+| `SERVER_IDLE_TIMEOUT`  | `60s`                                                | HTTP server idle timeout                              |
+| `DATABASE_PATH`        | `./data/budget.db`                                   | SQLite database file path                             |
+| `ENVIRONMENT`          | `development`                                        | App environment (`development`, `production`, `test`) |
+| `LOG_LEVEL`            | `info`                                               | Logging level                                         |
+| `LOG_FORMAT`           | `json`                                               | Log format                                            |
+| `LOG_OUTPUT_PATH`      | `stdout`                                             | Log output destination                                |
+| `SESSION_SECRET`       | insecure dev default (change in production)          | Session encryption key                                |
+| `SESSION_TIMEOUT`      | `24h`                                                | Session lifetime                                      |
+| `CSRF_SECRET`          | insecure dev default (change in production)          | CSRF signing secret                                   |
+| `COOKIE_SECURE`        | `false` (forced `true` in production)                | Secure cookie flag                                    |
+| `COOKIE_HTTP_ONLY`     | `true`                                               | HttpOnly cookie flag                                  |
+| `COOKIE_SAME_SITE`     | `Lax`                                                | SameSite cookie mode                                  |
 
 ## Running with Docker
 

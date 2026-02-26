@@ -42,6 +42,9 @@ type HTTPServer struct {
 type Config struct {
 	Port          string
 	Host          string
+	ReadTimeout   time.Duration
+	WriteTimeout  time.Duration
+	IdleTimeout   time.Duration
 	SessionSecret string
 	IsProduction  bool
 }
@@ -104,9 +107,9 @@ func NewHTTPServerWithObservability(
 		// Инициализация API handlers
 		userHandler:        handlers.NewUserHandler(repositories, services.User),
 		categoryHandler:    handlers.NewCategoryHandler(repositories, services.Category),
-		transactionHandler: handlers.NewTransactionHandler(repositories),
-		budgetHandler:      handlers.NewBudgetHandler(repositories),
-		reportHandler:      handlers.NewReportHandler(repositories),
+		transactionHandler: handlers.NewTransactionHandler(repositories, services.Transaction),
+		budgetHandler:      handlers.NewBudgetHandler(repositories, services.Budget),
+		reportHandler:      handlers.NewReportHandler(repositories, services.Report),
 	}
 
 	// Инициализация веб-интерфейса
@@ -189,11 +192,23 @@ func (s *HTTPServer) setupRoutes() {
 
 func (s *HTTPServer) Start(_ context.Context) error {
 	address := fmt.Sprintf("%s:%s", s.config.Host, s.config.Port)
-	return s.echo.Start(address)
+	server := s.buildNetHTTPServer(address)
+	s.echo.Server = server
+	return s.echo.StartServer(server)
 }
 
 func (s *HTTPServer) Shutdown(ctx context.Context) error {
 	return s.echo.Shutdown(ctx)
+}
+
+func (s *HTTPServer) buildNetHTTPServer(address string) *http.Server {
+	return &http.Server{
+		Addr:         address,
+		Handler:      s.echo,
+		ReadTimeout:  s.config.ReadTimeout,
+		WriteTimeout: s.config.WriteTimeout,
+		IdleTimeout:  s.config.IdleTimeout,
+	}
 }
 
 func (s *HTTPServer) healthCheck(c echo.Context) error {

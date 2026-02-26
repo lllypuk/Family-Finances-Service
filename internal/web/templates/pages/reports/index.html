@@ -170,7 +170,7 @@
                         </td>
                         <td>
                             <span class="badge report-type-{{.Type}}">
-                                {{.Type | title}}
+                                {{printf "%s" .Type | title}}
                             </span>
                         </td>
                         <td>{{.FormattedPeriod}}</td>

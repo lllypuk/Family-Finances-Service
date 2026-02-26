@@ -63,6 +63,47 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		assert.Equal(t, testTransaction.Tags, retrievedTransaction.Tags)
 	})
 
+	t.Run("CreateWithBudgetUpdate_AtomicSuccess", func(t *testing.T) {
+		db := container.GetTestDatabase(t)
+		repo := transactionrepo.NewSQLiteRepository(db)
+
+		familyID, err := helper.CreateTestFamily(ctx, "Atomic Family", "USD")
+		require.NoError(t, err)
+
+		userID, err := helper.CreateTestUser(ctx, "atomic@example.com", "Atomic", "User", "admin", familyID)
+		require.NoError(t, err)
+
+		categoryID, err := helper.CreateTestCategory(ctx, "Food", "expense", familyID, nil)
+		require.NoError(t, err)
+
+		budgetID, err := helper.CreateTestBudget(ctx, "Food Budget", 500, "monthly", familyID, &categoryID)
+		require.NoError(t, err)
+
+		testTransaction := &transaction.Transaction{
+			ID:          uuid.New(),
+			Amount:      125.25,
+			Type:        transaction.TypeExpense,
+			Description: "Atomic create",
+			CategoryID:  uuid.MustParse(categoryID),
+			UserID:      uuid.MustParse(userID),
+			Date:        time.Now(),
+			Tags:        []string{"atomic"},
+		}
+
+		err = repo.CreateWithBudgetUpdate(ctx, testTransaction)
+		require.NoError(t, err)
+
+		createdTx, err := repo.GetByID(ctx, testTransaction.ID)
+		require.NoError(t, err)
+		require.NotNil(t, createdTx)
+		assert.InEpsilon(t, 125.25, createdTx.Amount, 0.01)
+
+		var spent float64
+		err = db.QueryRowContext(ctx, "SELECT spent FROM budgets WHERE id = ?", budgetID).Scan(&spent)
+		require.NoError(t, err)
+		assert.InEpsilon(t, 125.25, spent, 0.01)
+	})
+
 	t.Run("GetByFilter_DateRange", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
 		repo := transactionrepo.NewSQLiteRepository(db)

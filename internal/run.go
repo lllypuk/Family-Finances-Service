@@ -102,6 +102,9 @@ func NewApplication() (*Application, error) {
 	serverConfig := &application.Config{
 		Port:          config.Server.Port,
 		Host:          config.Server.Host,
+		ReadTimeout:   config.Server.ReadTimeout,
+		WriteTimeout:  config.Server.WriteTimeout,
+		IdleTimeout:   config.Server.IdleTimeout,
 		SessionSecret: config.Web.SessionSecret,
 		IsProduction:  config.IsProduction(),
 	}
