@@ -281,7 +281,7 @@ func TestTransactionFilterDTO_ComplexFilter(t *testing.T) {
 
 func TestStringPtr(t *testing.T) {
 	str := "test"
-	ptr := stringPtr(str)
+	ptr := new(str)
 
 	assert.NotNil(t, ptr)
 	assert.Equal(t, "test", *ptr)

@@ -720,7 +720,7 @@ func (r *SQLiteRepository) GetByCategory(
 	}
 
 	var query string
-	var args []interface{}
+	var args []any
 
 	if categoryID != nil {
 		if validationErr := validation.ValidateUUID(*categoryID); validationErr != nil {
@@ -733,7 +733,7 @@ func (r *SQLiteRepository) GetByCategory(
 			FROM budgets
 			WHERE family_id = ? AND category_id = ? AND is_active = 1
 			ORDER BY created_at DESC`
-		args = []interface{}{sqlitehelpers.UUIDToString(familyID), sqlitehelpers.UUIDToString(*categoryID)}
+		args = []any{sqlitehelpers.UUIDToString(familyID), sqlitehelpers.UUIDToString(*categoryID)}
 	} else {
 		query = `
 			SELECT id, name, amount, spent, period, start_date, end_date,
@@ -741,7 +741,7 @@ func (r *SQLiteRepository) GetByCategory(
 			FROM budgets
 			WHERE family_id = ? AND is_active = 1
 			ORDER BY created_at DESC`
-		args = []interface{}{sqlitehelpers.UUIDToString(familyID)}
+		args = []any{sqlitehelpers.UUIDToString(familyID)}
 	}
 
 	rows, err := r.db.QueryContext(ctx, query, args...)

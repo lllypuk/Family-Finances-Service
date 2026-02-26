@@ -180,8 +180,8 @@ func NewBudgetFilterDTO() BudgetFilterDTO {
 	return BudgetFilterDTO{
 		Limit:     DefaultBudgetLimit,
 		Offset:    0,
-		SortBy:    stringPtr("created_at"),
-		SortOrder: stringPtr("desc"),
+		SortBy:    new("created_at"),
+		SortOrder: new("desc"),
 	}
 }
 

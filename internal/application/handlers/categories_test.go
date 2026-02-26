@@ -23,8 +23,10 @@ import (
 )
 
 // Helper function for creating string pointers
+//
+//go:fix inline
 func stringPtr(s string) *string {
-	return &s
+	return new(s)
 }
 
 // MockCategoryService is a mock implementation of CategoryService
@@ -437,9 +439,9 @@ func TestCategoryHandler_UpdateCategory(t *testing.T) {
 			name:       "Success - Update category",
 			categoryID: categoryID.String(),
 			requestBody: handlers.UpdateCategoryRequest{
-				Name:  stringPtr("Updated Food"),
-				Color: stringPtr("#FF6666"),
-				Icon:  stringPtr("updated-food"),
+				Name:  new("Updated Food"),
+				Color: new("#FF6666"),
+				Icon:  new("updated-food"),
 			},
 			mockSetup: func(service *MockCategoryService, _ uuid.UUID) {
 				updatedCategory := &category.Category{
@@ -467,7 +469,7 @@ func TestCategoryHandler_UpdateCategory(t *testing.T) {
 			name:       "Error - Invalid category ID",
 			categoryID: "invalid-uuid",
 			requestBody: handlers.UpdateCategoryRequest{
-				Name: stringPtr("Updated Food"),
+				Name: new("Updated Food"),
 			},
 			mockSetup: func(_ *MockCategoryService, _ uuid.UUID) {
 				// No mock calls expected
@@ -484,7 +486,7 @@ func TestCategoryHandler_UpdateCategory(t *testing.T) {
 			name:       "Error - Category not found",
 			categoryID: categoryID.String(),
 			requestBody: handlers.UpdateCategoryRequest{
-				Name: stringPtr("Updated Food"),
+				Name: new("Updated Food"),
 			},
 			mockSetup: func(service *MockCategoryService, _ uuid.UUID) {
 				service.On("UpdateCategory", mock.Anything, categoryID, mock.AnythingOfType("dto.UpdateCategoryDTO")).

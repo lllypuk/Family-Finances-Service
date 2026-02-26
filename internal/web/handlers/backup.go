@@ -71,7 +71,7 @@ func (h *BackupHandler) BackupPage(c echo.Context) error {
 	// Get CSRF token (non-fatal if fails in test environment)
 	csrfToken, _ := middleware.GetCSRFToken(c)
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"Title":   "Резервные копии",
 		"Backups": backups,
 		"CurrentUser": &SessionData{
@@ -105,7 +105,7 @@ func (h *BackupHandler) CreateBackup(c echo.Context) error {
 
 	// If HTMX request, return partial
 	if IsHTMXRequest(c) {
-		data := map[string]interface{}{
+		data := map[string]any{
 			"Backup": backupInfo,
 		}
 		return c.Render(http.StatusOK, "admin/backup_row.html", data)
@@ -206,7 +206,7 @@ func (h *BackupHandler) RestoreBackup(c echo.Context) error {
 
 	// Return success message
 	if IsHTMXRequest(c) {
-		data := map[string]interface{}{
+		data := map[string]any{
 			"Message": "База данных восстановлена. Перезапустите приложение.",
 			"Type":    "warning",
 		}

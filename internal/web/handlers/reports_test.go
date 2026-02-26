@@ -242,7 +242,7 @@ func (m *MockReportService) CalculateBenchmarks(ctx context.Context) (*dto.Bench
 // mockRenderer is a simple test renderer
 type mockRenderer struct{}
 
-func (r *mockRenderer) Render(_ io.Writer, _ string, _ interface{}, _ echo.Context) error {
+func (r *mockRenderer) Render(_ io.Writer, _ string, _ any, _ echo.Context) error {
 	return nil
 }
 

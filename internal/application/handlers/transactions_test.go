@@ -595,8 +595,8 @@ func TestTransactionHandler_UpdateTransaction_Success(t *testing.T) {
 	}
 
 	updateReq := handlers.UpdateTransactionRequest{
-		Amount:      floatPtr(200.0),
-		Description: stringPtr("Updated description"),
+		Amount:      new(200.0),
+		Description: new("Updated description"),
 		Tags:        []string{"updated", "test"},
 	}
 
@@ -720,8 +720,10 @@ func TestTransactionHandler_DeleteTransaction_RepositoryError(t *testing.T) {
 }
 
 // Helper function for creating float64 pointers
+//
+//go:fix inline
 func floatPtr(f float64) *float64 {
-	return &f
+	return new(f)
 }
 
 // Benchmark tests for performance validation

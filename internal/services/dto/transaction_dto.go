@@ -111,8 +111,8 @@ func NewTransactionFilterDTO() TransactionFilterDTO {
 	return TransactionFilterDTO{
 		Limit:     DefaultTransactionLimit,
 		Offset:    0,
-		SortBy:    stringPtr(DefaultSortByDate),
-		SortOrder: stringPtr(DefaultSortOrderDesc),
+		SortBy:    new(DefaultSortByDate),
+		SortOrder: new(DefaultSortOrderDesc),
 	}
 }
 
@@ -137,6 +137,8 @@ func (f *TransactionFilterDTO) ValidateAmountRange() error {
 }
 
 // Helper function to create string pointer
+//
+//go:fix inline
 func stringPtr(s string) *string {
-	return &s
+	return new(s)
 }
