@@ -52,7 +52,7 @@ This project is in **active development** with the following achievements:
 
 ### Backend (Production Ready)
 
-- **Go 1.25.7** with Echo v4.15.0 framework
+- **Go 1.26.0** with Echo v4.15.0 framework
 - **SQLite** (modernc.org/sqlite) - Pure Go, no CGO dependencies
 - **Automatic migrations** on application startup
 - **Clean Architecture** with domain-driven design
@@ -104,7 +104,7 @@ docker-compose -f docker/docker-compose.yml up -d
 
 **Prerequisites:**
 
-- Go 1.25.7+
+- Go 1.26.0+
 - Make (optional)
 
 ```bash

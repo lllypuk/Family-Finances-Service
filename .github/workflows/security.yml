@@ -10,7 +10,7 @@ on:
     - cron: "0 2 * * 0"
 
 env:
-  GO_VERSION: "1.25.7"
+  GO_VERSION: "1.26.0"
 
 jobs:
   codeql:
@@ -189,7 +189,7 @@ jobs:
           
           [[IgnoredVulns]]
           id = "GO-2026-4337"
-          reason = "Fixed by upgrading to Go 1.25.7. This vulnerability is resolved by the Go version update."
+          reason = "Fixed by upgrading to Go 1.26.0. This vulnerability is resolved by the Go version update."
           EOF
 
       - name: Run OSV Scanner

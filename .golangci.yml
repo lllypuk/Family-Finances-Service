@@ -475,6 +475,16 @@ linters:
       - text: 'comment on exported \S+ \S+ should be of the form ".+"'
         source: "// ?(nolint|TODO)"
         linters: [revive, staticcheck]
+      # G117: gosec flags exported struct fields matching "password"/"secret" patterns.
+      # These are legitimate DTO/form fields, not hardcoded secrets.
+      - text: "G117"
+        linters: [gosec]
+      # G704: SSRF false positive - health check URL is constructed from config, not user input
+      - text: "G704"
+        linters: [gosec]
+      # Package "user" conflicts with os/user but is a valid domain package name
+      - text: "avoid package names that conflict with Go standard library"
+        linters: [revive]
       - path: '_test\.go'
         linters:
           - bodyclose
