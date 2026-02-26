@@ -719,13 +719,6 @@ func TestTransactionHandler_DeleteTransaction_RepositoryError(t *testing.T) {
 	mockRepo.AssertExpectations(t)
 }
 
-// Helper function for creating float64 pointers
-//
-//go:fix inline
-func floatPtr(f float64) *float64 {
-	return new(f)
-}
-
 // Benchmark tests for performance validation
 func BenchmarkTransactionHandler_CreateTransaction(b *testing.B) {
 	handler, mockRepo := setupTransactionHandler()

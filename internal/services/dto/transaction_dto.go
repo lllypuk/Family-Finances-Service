@@ -135,10 +135,3 @@ func (f *TransactionFilterDTO) ValidateAmountRange() error {
 	}
 	return nil
 }
-
-// Helper function to create string pointer
-//
-//go:fix inline
-func stringPtr(s string) *string {
-	return new(s)
-}

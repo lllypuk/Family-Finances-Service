@@ -22,13 +22,6 @@ import (
 	"family-budget-service/internal/services/dto"
 )
 
-// Helper function for creating string pointers
-//
-//go:fix inline
-func stringPtr(s string) *string {
-	return new(s)
-}
-
 // MockCategoryService is a mock implementation of CategoryService
 type MockCategoryService struct {
 	mock.Mock

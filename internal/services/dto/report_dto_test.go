@@ -611,8 +611,3 @@ func TestScheduledReportDTO_AllFields(t *testing.T) {
 	assert.Equal(t, nextRun, scheduled.NextRun)
 	assert.True(t, scheduled.Active)
 }
-
-//go:fix inline
-func intPtr(i int) *int {
-	return new(i)
-}

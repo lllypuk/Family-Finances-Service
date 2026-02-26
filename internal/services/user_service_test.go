@@ -487,8 +487,3 @@ func TestUserService_ValidateUserAccess(t *testing.T) {
 		})
 	}
 }
-
-//go:fix inline
-func stringPtr(s string) *string {
-	return new(s)
-}

@@ -627,12 +627,6 @@ func TestToTransactionAPIResponse(t *testing.T) {
 	}
 }
 
-//go:fix inline
-func float64Ptr(f float64) *float64 {
-	return new(f)
-}
-
-//go:fix inline
 func transactionTypePtr(t transaction.Type) *transaction.Type {
 	return new(t)
 }
