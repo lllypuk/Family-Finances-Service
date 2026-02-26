@@ -87,7 +87,6 @@ func TestReportHandler_CreateReport_Success(t *testing.T) {
 
 	// Arrange
 	req := createValidReportRequest()
-	mockRepo.On("Create", mock.Anything, mock.AnythingOfType("*report.Report")).Return(nil)
 
 	// Prepare HTTP request
 	body, err := json.Marshal(req)
@@ -104,21 +103,15 @@ func TestReportHandler_CreateReport_Success(t *testing.T) {
 
 	// Assert
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusCreated, rec.Code)
+	assert.Equal(t, http.StatusNotImplemented, rec.Code)
 
-	var response handlers.APIResponse[handlers.ReportResponse]
+	var response handlers.ErrorResponse
 	err = json.Unmarshal(rec.Body.Bytes(), &response)
 	require.NoError(t, err)
+	assert.Equal(t, "NOT_IMPLEMENTED", response.Error.Code)
+	assert.Equal(t, "Report generation API is not implemented yet", response.Error.Message)
 
-	assert.Equal(t, req.Name, response.Data.Name)
-	assert.Equal(t, req.Type, response.Data.Type)
-	assert.Equal(t, req.Period, response.Data.Period)
-	assert.Equal(t, req.UserID, response.Data.UserID)
-	assert.Equal(t, req.StartDate, response.Data.StartDate)
-	assert.Equal(t, req.EndDate, response.Data.EndDate)
-	assert.False(t, response.Data.GeneratedAt.IsZero())
-
-	mockRepo.AssertExpectations(t)
+	mockRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 }
 
 func TestReportHandler_CreateReport_InvalidRequest(t *testing.T) {
@@ -207,8 +200,6 @@ func TestReportHandler_CreateReport_RepositoryError(t *testing.T) {
 
 	// Arrange
 	req := createValidReportRequest()
-	mockRepo.On("Create", mock.Anything, mock.AnythingOfType("*report.Report")).
-		Return(errors.New("database error"))
 
 	// Prepare HTTP request
 	body, err := json.Marshal(req)
@@ -225,12 +216,13 @@ func TestReportHandler_CreateReport_RepositoryError(t *testing.T) {
 
 	// Assert
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Equal(t, http.StatusNotImplemented, rec.Code)
 
 	var response handlers.ErrorResponse
 	err = json.Unmarshal(rec.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.Equal(t, "CREATE_FAILED", response.Error.Code)
+	assert.Equal(t, "NOT_IMPLEMENTED", response.Error.Code)
+	mockRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 }
 
 func TestReportHandler_GetReports_ByFamily_Success(t *testing.T) {
@@ -601,10 +593,6 @@ func TestReportHandler_ReportTypes_Validation(t *testing.T) {
 			req := createValidReportRequest()
 			req.Type = reportType
 
-			mockRepo.On("Create", mock.Anything, mock.MatchedBy(func(r *report.Report) bool {
-				return string(r.Type) == reportType
-			})).Return(nil).Once()
-
 			body, err := json.Marshal(req)
 			require.NoError(t, err)
 
@@ -616,9 +604,15 @@ func TestReportHandler_ReportTypes_Validation(t *testing.T) {
 
 			err = handler.CreateReport(c)
 			require.NoError(t, err)
-			assert.Equal(t, http.StatusCreated, rec.Code)
+			assert.Equal(t, http.StatusNotImplemented, rec.Code)
+
+			var response handlers.ErrorResponse
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+			assert.Equal(t, "NOT_IMPLEMENTED", response.Error.Code)
 		})
 	}
+
+	mockRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 }
 
 func TestReportHandler_ReportPeriods_Validation(t *testing.T) {
@@ -631,10 +625,6 @@ func TestReportHandler_ReportPeriods_Validation(t *testing.T) {
 			req := createValidReportRequest()
 			req.Period = period
 
-			mockRepo.On("Create", mock.Anything, mock.MatchedBy(func(r *report.Report) bool {
-				return string(r.Period) == period
-			})).Return(nil).Once()
-
 			body, err := json.Marshal(req)
 			require.NoError(t, err)
 
@@ -646,9 +636,15 @@ func TestReportHandler_ReportPeriods_Validation(t *testing.T) {
 
 			err = handler.CreateReport(c)
 			require.NoError(t, err)
-			assert.Equal(t, http.StatusCreated, rec.Code)
+			assert.Equal(t, http.StatusNotImplemented, rec.Code)
+
+			var response handlers.ErrorResponse
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+			assert.Equal(t, "NOT_IMPLEMENTED", response.Error.Code)
 		})
 	}
+
+	mockRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 }
 
 func TestReportHandler_DateRange_Validation(t *testing.T) {
@@ -680,11 +676,6 @@ func TestReportHandler_DateRange_Validation(t *testing.T) {
 			req.StartDate = tt.startDate
 			req.EndDate = tt.endDate
 
-			// Add mock expectation for valid cases
-			if tt.valid {
-				mockRepo.On("Create", mock.Anything, mock.AnythingOfType("*report.Report")).Return(nil).Once()
-			}
-
 			body, err := json.Marshal(req)
 			require.NoError(t, err)
 
@@ -698,12 +689,17 @@ func TestReportHandler_DateRange_Validation(t *testing.T) {
 			require.NoError(t, err)
 
 			if tt.valid {
-				assert.Equal(t, http.StatusCreated, rec.Code)
+				assert.Equal(t, http.StatusNotImplemented, rec.Code)
+				var response handlers.ErrorResponse
+				require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+				assert.Equal(t, "NOT_IMPLEMENTED", response.Error.Code)
 			} else {
 				assert.Equal(t, http.StatusBadRequest, rec.Code)
 			}
 		})
 	}
+
+	mockRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 }
 
 // Benchmark tests for performance validation

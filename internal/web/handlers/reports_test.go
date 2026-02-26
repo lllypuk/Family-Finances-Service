@@ -115,6 +115,14 @@ func (m *MockReportService) GetReports(
 	return args.Get(0).([]*report.Report), args.Error(1)
 }
 
+func (m *MockReportService) GetReportsByUserID(ctx context.Context, userID uuid.UUID) ([]*report.Report, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*report.Report), args.Error(1)
+}
+
 func (m *MockReportService) DeleteReport(ctx context.Context, id uuid.UUID) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)
@@ -234,7 +242,7 @@ func (m *MockReportService) CalculateBenchmarks(ctx context.Context) (*dto.Bench
 // mockRenderer is a simple test renderer
 type mockRenderer struct{}
 
-func (r *mockRenderer) Render(_ io.Writer, _ string, _ interface{}, _ echo.Context) error {
+func (r *mockRenderer) Render(_ io.Writer, _ string, _ any, _ echo.Context) error {
 	return nil
 }
 

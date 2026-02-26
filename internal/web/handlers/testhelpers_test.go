@@ -20,7 +20,7 @@ import (
 // MockRenderer is a mock template renderer
 type MockRenderer struct{}
 
-func (r *MockRenderer) Render(_ io.Writer, _ string, _ interface{}, _ echo.Context) error {
+func (r *MockRenderer) Render(_ io.Writer, _ string, _ any, _ echo.Context) error {
 	// Simple mock that just returns success
 	return nil
 }

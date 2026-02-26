@@ -50,8 +50,8 @@ func NewServices(
 	userService := NewUserService(userRepo, familyRepo)
 	categoryService := NewCategoryService(categoryRepo, familyRepo, usageChecker)
 	familyService := NewFamilyService(familyRepo, userRepo, categoryService)
-	transactionService := NewTransactionService(transactionRepo, budgetRepo, categoryRepo, userRepo)
-	budgetService := NewBudgetService(fullBudgetRepo, transactionRepo)
+	transactionService := NewTransactionServiceWithLogger(transactionRepo, budgetRepo, categoryRepo, userRepo, logger)
+	budgetService := NewBudgetServiceWithLogger(fullBudgetRepo, transactionRepo, logger)
 	inviteService := NewInviteService(inviteRepo, userRepo, familyRepo, logger)
 
 	// Create report service with dependencies on other services

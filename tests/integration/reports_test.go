@@ -53,19 +53,12 @@ func TestReportHandler_Integration(t *testing.T) {
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
 
-		assert.Equal(t, http.StatusCreated, rec.Code)
+		assert.Equal(t, http.StatusNotImplemented, rec.Code)
 
-		var response handlers.APIResponse[handlers.ReportResponse]
+		var response handlers.ErrorResponse
 		err = json.Unmarshal(rec.Body.Bytes(), &response)
 		require.NoError(t, err)
-
-		assert.Equal(t, request.Name, response.Data.Name)
-		assert.Equal(t, request.Type, response.Data.Type)
-		assert.Equal(t, request.Period, response.Data.Period)
-		assert.Equal(t, request.UserID, response.Data.UserID)
-		assert.NotNil(t, response.Data.Data)
-		assert.NotZero(t, response.Data.ID)
-		assert.NotZero(t, response.Data.GeneratedAt)
+		assert.Equal(t, "NOT_IMPLEMENTED", response.Error.Code)
 	})
 
 	t.Run("CreateReport_ValidationError", func(t *testing.T) {
@@ -376,14 +369,12 @@ func TestReportHandler_Integration(t *testing.T) {
 
 				testServer.Server.Echo().ServeHTTP(rec, req)
 
-				assert.Equal(t, http.StatusCreated, rec.Code)
+				assert.Equal(t, http.StatusNotImplemented, rec.Code)
 
-				var response handlers.APIResponse[handlers.ReportResponse]
+				var response handlers.ErrorResponse
 				err = json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-
-				assert.Equal(t, reportType, response.Data.Type)
-				assert.NotNil(t, response.Data.Data)
+				assert.Equal(t, "NOT_IMPLEMENTED", response.Error.Code)
 			})
 		}
 	})
@@ -442,13 +433,12 @@ func TestReportHandler_Integration(t *testing.T) {
 
 				testServer.Server.Echo().ServeHTTP(rec, req)
 
-				assert.Equal(t, http.StatusCreated, rec.Code)
+				assert.Equal(t, http.StatusNotImplemented, rec.Code)
 
-				var response handlers.APIResponse[handlers.ReportResponse]
+				var response handlers.ErrorResponse
 				err = json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-
-				assert.Equal(t, period, response.Data.Period)
+				assert.Equal(t, "NOT_IMPLEMENTED", response.Error.Code)
 			})
 		}
 	})

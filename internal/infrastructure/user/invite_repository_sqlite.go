@@ -322,7 +322,7 @@ func (r *InviteSQLiteRepository) MarkExpiredBulk(ctx context.Context) (int64, er
 
 // scanInvite scans a single invite from a row or rows
 func (r *InviteSQLiteRepository) scanInvite(scanner interface {
-	Scan(dest ...interface{}) error
+	Scan(dest ...any) error
 }) (*user.Invite, error) {
 	var (
 		id, familyID, createdBy, email, role, token, status string

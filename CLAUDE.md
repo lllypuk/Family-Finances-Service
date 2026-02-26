@@ -283,7 +283,7 @@ The application is organized into domain modules in `internal/domain/`:
 
 ### Key Technologies (Production Stack)
 
-- **Go 1.25.6** - Latest Go version with enhanced performance
+- **Go 1.26.0** - Latest Go version with Green Tea GC and enhanced performance
 - **Echo v4.13.4** - HTTP web framework with middleware
 - **SQLite** (modernc.org/sqlite) - Embedded database, pure Go, no CGO
 - **HTMX v2.0.4** - Modern web interface without complex JavaScript
@@ -399,7 +399,7 @@ The project uses GitHub Actions for continuous integration and deployment with t
 
 Runs on every push and pull request to main/develop branches:
 
-- **Environment Setup**: Go 1.25.6, SQLite for integration tests
+- **Environment Setup**: Go 1.26.0, SQLite for integration tests
 - **Quality Checks**:
     - Code formatting verification with `make fmt`
     - Comprehensive linting with golangci-lint (50+ rules)

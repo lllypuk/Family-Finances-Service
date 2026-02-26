@@ -343,5 +343,5 @@ func (h *CategoryHandler) DeleteCategory(c echo.Context) error {
 		})
 	}
 
-	return c.JSON(http.StatusNoContent, nil)
+	return c.NoContent(http.StatusNoContent)
 }

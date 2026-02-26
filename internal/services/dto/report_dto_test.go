@@ -24,8 +24,8 @@ func TestReportRequestDTO_AllFields(t *testing.T) {
 		EndDate:   endDate,
 		Filters: &ReportFilters{
 			CategoryIDs: []uuid.UUID{uuid.New()},
-			MinAmount:   float64Ptr(10.0),
-			MaxAmount:   float64Ptr(1000.0),
+			MinAmount:   new(10.0),
+			MaxAmount:   new(1000.0),
 		},
 	}
 
@@ -564,7 +564,7 @@ func TestScheduleReportDTO_AllFields(t *testing.T) {
 		UserID: userID,
 		Schedule: ScheduleConfigDTO{
 			Frequency:  "monthly",
-			DayOfMonth: intPtr(1),
+			DayOfMonth: new(1),
 			Time:       "09:00",
 			Timezone:   "UTC",
 		},
@@ -610,8 +610,4 @@ func TestScheduledReportDTO_AllFields(t *testing.T) {
 	assert.NotNil(t, scheduled.LastRun)
 	assert.Equal(t, nextRun, scheduled.NextRun)
 	assert.True(t, scheduled.Active)
-}
-
-func intPtr(i int) *int {
-	return &i
 }

@@ -326,10 +326,33 @@ func TestReportService_SaveReport(t *testing.T) {
 	reportData := &dto.ExpenseReportDTO{
 		Name:          req.Name,
 		TotalExpenses: 1000.0,
+		CategoryBreakdown: []dto.CategoryBreakdownItemDTO{
+			{
+				CategoryID:   uuid.New(),
+				CategoryName: "Groceries",
+				Amount:       1000.0,
+				Percentage:   100.0,
+				Count:        2,
+			},
+		},
+		TopExpenses: []dto.TransactionSummaryDTO{
+			{
+				ID:          uuid.New(),
+				Amount:      700.0,
+				Description: "Weekly grocery run",
+				Category:    "Groceries",
+				Date:        startDate.AddDate(0, 0, 1),
+			},
+		},
 	}
 
+	var createdReport *report.Report
 	// Setup mock expectations
-	mockReportRepo.On("Create", ctx, mock.AnythingOfType("*report.Report")).Return(nil)
+	mockReportRepo.On("Create", ctx, mock.AnythingOfType("*report.Report")).
+		Run(func(args mock.Arguments) {
+			createdReport = args.Get(1).(*report.Report)
+		}).
+		Return(nil)
 
 	// Execute
 	result, err := service.SaveReport(ctx, reportData, report.TypeExpenses, req)
@@ -340,8 +363,151 @@ func TestReportService_SaveReport(t *testing.T) {
 	assert.Equal(t, req.Name, result.Name)
 	assert.Equal(t, req.Type, result.Type)
 	assert.Equal(t, req.UserID, result.UserID)
+	require.NotNil(t, createdReport)
+	assert.InEpsilon(t, 1000.0, createdReport.Data.TotalExpenses, 0.01)
+	require.Len(t, createdReport.Data.CategoryBreakdown, 1)
+	assert.Equal(t, "Groceries", createdReport.Data.CategoryBreakdown[0].CategoryName)
+	assert.Equal(t, 2, createdReport.Data.CategoryBreakdown[0].Count)
+	require.Len(t, createdReport.Data.TopExpenses, 1)
+	assert.Equal(t, "Weekly grocery run", createdReport.Data.TopExpenses[0].Description)
 
 	mockReportRepo.AssertExpectations(t)
+}
+
+func TestReportService_SaveReport_ConvertsSupportedTypes(t *testing.T) {
+	tests := []struct {
+		name       string
+		reportType report.Type
+		reportData any
+		assertData func(t *testing.T, rep *report.Report)
+	}{
+		{
+			name:       "income",
+			reportType: report.TypeIncome,
+			reportData: &dto.IncomeReportDTO{
+				TotalIncome: 2500.0,
+				CategoryBreakdown: []dto.CategoryBreakdownItemDTO{
+					{
+						CategoryID:   uuid.New(),
+						CategoryName: "Salary",
+						Amount:       2500.0,
+						Percentage:   100.0,
+						Count:        1,
+					},
+				},
+				TopSources: []dto.TransactionSummaryDTO{
+					{
+						ID:          uuid.New(),
+						Amount:      2500.0,
+						Description: "January salary",
+						Category:    "Salary",
+						Date:        time.Now(),
+					},
+				},
+			},
+			assertData: func(t *testing.T, rep *report.Report) {
+				assert.InEpsilon(t, 2500.0, rep.Data.TotalIncome, 0.01)
+				require.Len(t, rep.Data.CategoryBreakdown, 1)
+				require.Len(t, rep.Data.TopExpenses, 1)
+			},
+		},
+		{
+			name:       "budget",
+			reportType: report.TypeBudget,
+			reportData: &dto.BudgetComparisonDTO{
+				TotalSpent: 900.0,
+				Categories: []dto.BudgetCategoryComparisonDTO{
+					{
+						CategoryID:   uuid.New(),
+						CategoryName: "Groceries",
+						BudgetAmount: 1000.0,
+						ActualAmount: 900.0,
+						Variance:     100.0,
+						Utilization:  90.0,
+					},
+				},
+			},
+			assertData: func(t *testing.T, rep *report.Report) {
+				assert.InEpsilon(t, 900.0, rep.Data.TotalExpenses, 0.01)
+				require.Len(t, rep.Data.BudgetComparison, 1)
+				assert.Equal(t, "Groceries", rep.Data.BudgetComparison[0].BudgetName)
+			},
+		},
+		{
+			name:       "cash_flow",
+			reportType: report.TypeCashFlow,
+			reportData: &dto.CashFlowReportDTO{
+				TotalInflows:  3000.0,
+				TotalOutflows: 1200.0,
+				NetCashFlow:   1800.0,
+				DailyFlow: []dto.DailyCashFlowDTO{
+					{
+						Date:    time.Now(),
+						Inflow:  1000.0,
+						Outflow: 300.0,
+						Balance: 700.0,
+					},
+				},
+			},
+			assertData: func(t *testing.T, rep *report.Report) {
+				assert.InEpsilon(t, 3000.0, rep.Data.TotalIncome, 0.01)
+				assert.InEpsilon(t, 1200.0, rep.Data.TotalExpenses, 0.01)
+				assert.InEpsilon(t, 1800.0, rep.Data.NetIncome, 0.01)
+				require.Len(t, rep.Data.DailyBreakdown, 1)
+			},
+		},
+		{
+			name:       "category_breakdown",
+			reportType: report.TypeCategoryBreak,
+			reportData: &dto.CategoryBreakdownDTO{
+				Categories: []dto.CategoryAnalysisDTO{
+					{
+						CategoryID:       uuid.New(),
+						CategoryName:     "Transport",
+						TotalAmount:      450.0,
+						Percentage:       45.0,
+						TransactionCount: 3,
+					},
+				},
+			},
+			assertData: func(t *testing.T, rep *report.Report) {
+				require.Len(t, rep.Data.CategoryBreakdown, 1)
+				assert.Equal(t, "Transport", rep.Data.CategoryBreakdown[0].CategoryName)
+				assert.Equal(t, 3, rep.Data.CategoryBreakdown[0].Count)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service, mockReportRepo, _, _, _, _ := setupReportService()
+			ctx := context.Background()
+
+			req := dto.ReportRequestDTO{
+				Name:      "Converted " + tt.name,
+				Type:      tt.reportType,
+				Period:    report.PeriodMonthly,
+				UserID:    uuid.New(),
+				StartDate: time.Now().AddDate(0, 0, -30),
+				EndDate:   time.Now(),
+			}
+
+			var createdReport *report.Report
+			mockReportRepo.On("Create", ctx, mock.AnythingOfType("*report.Report")).
+				Run(func(args mock.Arguments) {
+					createdReport = args.Get(1).(*report.Report)
+				}).
+				Return(nil)
+
+			result, err := service.SaveReport(ctx, tt.reportData, tt.reportType, req)
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.NotNil(t, createdReport)
+			tt.assertData(t, createdReport)
+			mockReportRepo.AssertExpectations(t)
+		})
+	}
 }
 
 // Tests for GetReportByID

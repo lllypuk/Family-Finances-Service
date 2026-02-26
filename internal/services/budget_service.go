@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -57,6 +58,7 @@ type BudgetServiceImpl struct {
 	budgetRepo      BudgetRepository
 	transactionRepo TransactionRepositoryForBudgets
 	validator       *validator.Validate
+	logger          *slog.Logger
 }
 
 // NewBudgetService creates a new BudgetService instance
@@ -64,10 +66,24 @@ func NewBudgetService(
 	budgetRepo BudgetRepository,
 	transactionRepo TransactionRepositoryForBudgets,
 ) *BudgetServiceImpl {
+	return NewBudgetServiceWithLogger(budgetRepo, transactionRepo, nil)
+}
+
+// NewBudgetServiceWithLogger creates a new BudgetService instance with injected logger.
+func NewBudgetServiceWithLogger(
+	budgetRepo BudgetRepository,
+	transactionRepo TransactionRepositoryForBudgets,
+	logger *slog.Logger,
+) *BudgetServiceImpl {
+	if logger == nil {
+		logger = slog.Default()
+	}
+
 	return &BudgetServiceImpl{
 		budgetRepo:      budgetRepo,
 		transactionRepo: transactionRepo,
 		validator:       validator.New(),
+		logger:          logger,
 	}
 }
 
@@ -108,9 +124,7 @@ func (s *BudgetServiceImpl) CreateBudget(ctx context.Context, req dto.CreateBudg
 
 	// Recalculate spent amount based on existing transactions
 	if recalcErr := s.RecalculateBudgetSpent(ctx, newBudget.ID); recalcErr != nil {
-		// Log warning but don't fail budget creation
-		// TODO: Replace with proper logging system
-		_ = recalcErr // Ignore recalculation errors for now
+		s.logRecalculationWarning(ctx, "create_budget", newBudget.ID, recalcErr)
 	}
 
 	return newBudget, nil
@@ -120,14 +134,12 @@ func (s *BudgetServiceImpl) CreateBudget(ctx context.Context, req dto.CreateBudg
 func (s *BudgetServiceImpl) GetBudgetByID(ctx context.Context, id uuid.UUID) (*budget.Budget, error) {
 	budget, err := s.budgetRepo.GetByID(ctx, id)
 	if err != nil {
-		return nil, ErrBudgetNotFound
+		return nil, ErrBudgetNotFoundService
 	}
 
 	// Recalculate spent amount from actual transactions
 	if recalcErr := s.recalculateAndUpdateSpent(ctx, budget); recalcErr != nil {
-		// Log warning but return budget with existing spent value
-		// TODO: Replace with proper logging system
-		_ = recalcErr // Ignore recalculation errors for now
+		s.logRecalculationWarning(ctx, "get_budget_by_id", budget.ID, recalcErr)
 	}
 
 	return budget, nil
@@ -159,9 +171,7 @@ func (s *BudgetServiceImpl) GetAllBudgets(
 	// Recalculate spent amounts for all budgets
 	for _, b := range budgets {
 		if recalcErr := s.recalculateAndUpdateSpent(ctx, b); recalcErr != nil {
-			// Log warning but continue with other budgets
-			// TODO: Replace with proper logging system
-			_ = recalcErr // Ignore individual recalculation errors
+			s.logRecalculationWarning(ctx, "get_all_budgets", b.ID, recalcErr)
 		}
 	}
 
@@ -186,14 +196,12 @@ func (s *BudgetServiceImpl) UpdateBudget(
 	// Get existing budget
 	existingBudget, err := s.budgetRepo.GetByID(ctx, id)
 	if err != nil {
-		return nil, ErrBudgetNotFound
+		return nil, ErrBudgetNotFoundService
 	}
 
 	// Recalculate current spent amount
 	if recalcErr := s.recalculateAndUpdateSpent(ctx, existingBudget); recalcErr != nil {
-		// Log warning but continue with update
-		// TODO: Replace with proper logging system
-		_ = recalcErr // Ignore recalculation errors for now
+		s.logRecalculationWarning(ctx, "update_budget", existingBudget.ID, recalcErr)
 	}
 
 	// Store original values for validation
@@ -245,7 +253,7 @@ func (s *BudgetServiceImpl) DeleteBudget(ctx context.Context, id uuid.UUID) erro
 	// Verify budget exists
 	_, err := s.budgetRepo.GetByID(ctx, id)
 	if err != nil {
-		return ErrBudgetNotFound
+		return ErrBudgetNotFoundService
 	}
 
 	// Delete budget
@@ -272,9 +280,7 @@ func (s *BudgetServiceImpl) GetActiveBudgets(
 		if s.isBudgetActiveOnDate(b, date) {
 			// Recalculate spent amount
 			if recalcErr := s.recalculateAndUpdateSpent(ctx, b); recalcErr != nil {
-				// Log warning but include budget
-				// TODO: Replace with proper logging system
-				_ = recalcErr // Ignore recalculation errors
+				s.logRecalculationWarning(ctx, "get_active_budgets", b.ID, recalcErr)
 			}
 			activeBudgets = append(activeBudgets, b)
 		}
@@ -287,7 +293,7 @@ func (s *BudgetServiceImpl) GetActiveBudgets(
 func (s *BudgetServiceImpl) UpdateBudgetSpent(ctx context.Context, budgetID uuid.UUID, amount float64) error {
 	budget, err := s.budgetRepo.GetByID(ctx, budgetID)
 	if err != nil {
-		return ErrBudgetNotFound
+		return ErrBudgetNotFoundService
 	}
 
 	budget.Spent += amount
@@ -316,9 +322,7 @@ func (s *BudgetServiceImpl) CheckBudgetLimits(
 
 		// Recalculate spent amount to ensure accuracy
 		if recalcErr := s.recalculateAndUpdateSpent(ctx, b); recalcErr != nil {
-			// Log warning but continue checking
-			// TODO: Replace with proper logging system
-			_ = recalcErr // Ignore recalculation errors
+			s.logRecalculationWarning(ctx, "check_budget_limits", b.ID, recalcErr)
 		}
 
 		// Check if adding this amount would exceed the budget
@@ -335,14 +339,12 @@ func (s *BudgetServiceImpl) CheckBudgetLimits(
 func (s *BudgetServiceImpl) GetBudgetStatus(ctx context.Context, budgetID uuid.UUID) (*dto.BudgetStatusDTO, error) {
 	budget, err := s.budgetRepo.GetByID(ctx, budgetID)
 	if err != nil {
-		return nil, ErrBudgetNotFound
+		return nil, ErrBudgetNotFoundService
 	}
 
 	// Recalculate spent amount
 	if recalcErr := s.recalculateAndUpdateSpent(ctx, budget); recalcErr != nil {
-		// Log warning but continue with status calculation
-		// TODO: Replace with proper logging system
-		_ = recalcErr // Ignore recalculation errors
+		s.logRecalculationWarning(ctx, "get_budget_status", budget.ID, recalcErr)
 	}
 
 	return s.calculateBudgetStatus(budget), nil
@@ -355,14 +357,12 @@ func (s *BudgetServiceImpl) CalculateBudgetUtilization(
 ) (*dto.BudgetUtilizationDTO, error) {
 	budget, err := s.budgetRepo.GetByID(ctx, budgetID)
 	if err != nil {
-		return nil, ErrBudgetNotFound
+		return nil, ErrBudgetNotFoundService
 	}
 
 	// Recalculate spent amount
 	if recalcErr := s.recalculateAndUpdateSpent(ctx, budget); recalcErr != nil {
-		// Log warning but continue with utilization calculation
-		// TODO: Replace with proper logging system
-		_ = recalcErr // Ignore recalculation errors
+		s.logRecalculationWarning(ctx, "calculate_budget_utilization", budget.ID, recalcErr)
 	}
 
 	return s.calculateBudgetUtilization(budget), nil
@@ -381,9 +381,7 @@ func (s *BudgetServiceImpl) GetBudgetsByCategory(
 	// Recalculate spent amounts
 	for _, b := range budgets {
 		if recalcErr := s.recalculateAndUpdateSpent(ctx, b); recalcErr != nil {
-			// Log warning but continue
-			// TODO: Replace with proper logging system
-			_ = recalcErr // Ignore individual recalculation errors
+			s.logRecalculationWarning(ctx, "get_budgets_by_category", b.ID, recalcErr)
 		}
 	}
 
@@ -414,7 +412,7 @@ func (s *BudgetServiceImpl) ValidateBudgetPeriod(
 func (s *BudgetServiceImpl) RecalculateBudgetSpent(ctx context.Context, budgetID uuid.UUID) error {
 	budget, err := s.budgetRepo.GetByID(ctx, budgetID)
 	if err != nil {
-		return ErrBudgetNotFound
+		return ErrBudgetNotFoundService
 	}
 
 	return s.recalculateAndUpdateSpent(ctx, budget)
@@ -686,4 +684,21 @@ func (s *BudgetServiceImpl) generateBudgetRecommendations(b *budget.Budget, util
 	}
 
 	return recommendations
+}
+
+func (s *BudgetServiceImpl) logRecalculationWarning(
+	ctx context.Context,
+	operation string,
+	budgetID uuid.UUID,
+	err error,
+) {
+	if s.logger == nil {
+		return
+	}
+
+	s.logger.WarnContext(ctx, "budget spent recalculation failed",
+		slog.String("operation", operation),
+		slog.String("budget_id", budgetID.String()),
+		slog.String("error", err.Error()),
+	)
 }

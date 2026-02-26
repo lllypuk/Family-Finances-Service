@@ -88,23 +88,23 @@ func TestFromUpdateUserAPIRequest(t *testing.T) {
 		{
 			name: "update all fields",
 			request: UpdateUserAPIRequest{
-				FirstName: stringPtr("NewFirst"),
-				LastName:  stringPtr("NewLast"),
-				Email:     stringPtr("new@example.com"),
+				FirstName: new("NewFirst"),
+				LastName:  new("NewLast"),
+				Email:     new("new@example.com"),
 			},
 			expected: UpdateUserDTO{
-				FirstName: stringPtr("NewFirst"),
-				LastName:  stringPtr("NewLast"),
-				Email:     stringPtr("new@example.com"),
+				FirstName: new("NewFirst"),
+				LastName:  new("NewLast"),
+				Email:     new("new@example.com"),
 			},
 		},
 		{
 			name: "update only first name",
 			request: UpdateUserAPIRequest{
-				FirstName: stringPtr("UpdatedFirst"),
+				FirstName: new("UpdatedFirst"),
 			},
 			expected: UpdateUserDTO{
-				FirstName: stringPtr("UpdatedFirst"),
+				FirstName: new("UpdatedFirst"),
 			},
 		},
 		{
@@ -257,23 +257,23 @@ func TestFromUpdateCategoryAPIRequest(t *testing.T) {
 		{
 			name: "update all fields",
 			request: UpdateCategoryAPIRequest{
-				Name:  stringPtr("NewName"),
-				Color: stringPtr("#FFFFFF"),
-				Icon:  stringPtr("new-icon"),
+				Name:  new("NewName"),
+				Color: new("#FFFFFF"),
+				Icon:  new("new-icon"),
 			},
 			expected: UpdateCategoryDTO{
-				Name:  stringPtr("NewName"),
-				Color: stringPtr("#FFFFFF"),
-				Icon:  stringPtr("new-icon"),
+				Name:  new("NewName"),
+				Color: new("#FFFFFF"),
+				Icon:  new("new-icon"),
 			},
 		},
 		{
 			name: "update only name",
 			request: UpdateCategoryAPIRequest{
-				Name: stringPtr("UpdatedName"),
+				Name: new("UpdatedName"),
 			},
 			expected: UpdateCategoryDTO{
-				Name: stringPtr("UpdatedName"),
+				Name: new("UpdatedName"),
 			},
 		},
 		{
@@ -475,17 +475,17 @@ func TestUpdateTransactionAPIRequest_ToUpdateTransactionDTO(t *testing.T) {
 		{
 			name: "update all fields",
 			request: UpdateTransactionAPIRequest{
-				Amount:      float64Ptr(200.00),
-				Type:        stringPtr("expense"),
-				Description: stringPtr("Updated description"),
+				Amount:      new(200.00),
+				Type:        new("expense"),
+				Description: new("Updated description"),
 				CategoryID:  &categoryID,
 				Date:        &date,
 				Tags:        []string{"updated"},
 			},
 			expected: UpdateTransactionDTO{
-				Amount:      float64Ptr(200.00),
+				Amount:      new(200.00),
 				Type:        transactionTypePtr(transaction.TypeExpense),
-				Description: stringPtr("Updated description"),
+				Description: new("Updated description"),
 				CategoryID:  &categoryID,
 				Date:        &date,
 				Tags:        []string{"updated"},
@@ -494,16 +494,16 @@ func TestUpdateTransactionAPIRequest_ToUpdateTransactionDTO(t *testing.T) {
 		{
 			name: "update only amount",
 			request: UpdateTransactionAPIRequest{
-				Amount: float64Ptr(150.00),
+				Amount: new(150.00),
 			},
 			expected: UpdateTransactionDTO{
-				Amount: float64Ptr(150.00),
+				Amount: new(150.00),
 			},
 		},
 		{
 			name: "update type to income",
 			request: UpdateTransactionAPIRequest{
-				Type: stringPtr("income"),
+				Type: new("income"),
 			},
 			expected: UpdateTransactionDTO{
 				Type: transactionTypePtr(transaction.TypeIncome),
@@ -627,10 +627,6 @@ func TestToTransactionAPIResponse(t *testing.T) {
 	}
 }
 
-func float64Ptr(f float64) *float64 {
-	return &f
-}
-
 func transactionTypePtr(t transaction.Type) *transaction.Type {
-	return &t
+	return new(t)
 }

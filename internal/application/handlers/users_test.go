@@ -391,8 +391,8 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 			name:   "Success - User updated",
 			userID: userID.String(),
 			requestBody: handlers.UpdateUserRequest{
-				FirstName: stringPtr("UpdatedName"),
-				LastName:  stringPtr("UpdatedLastName"),
+				FirstName: new("UpdatedName"),
+				LastName:  new("UpdatedLastName"),
 			},
 			mockSetup: func(service *MockUserService, _ uuid.UUID) {
 				updatedUser := &user.User{
@@ -420,7 +420,7 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 			name:   "Error - Invalid UUID",
 			userID: "invalid-uuid",
 			requestBody: handlers.UpdateUserRequest{
-				FirstName: stringPtr("UpdatedName"),
+				FirstName: new("UpdatedName"),
 			},
 			mockSetup: func(_ *MockUserService, _ uuid.UUID) {
 				// No mock needed for UUID validation error
@@ -437,7 +437,7 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 			name:   "Error - User not found",
 			userID: userID.String(),
 			requestBody: handlers.UpdateUserRequest{
-				FirstName: stringPtr("UpdatedName"),
+				FirstName: new("UpdatedName"),
 			},
 			mockSetup: func(service *MockUserService, _ uuid.UUID) {
 				service.On("UpdateUser", mock.Anything, userID, mock.AnythingOfType("dto.UpdateUserDTO")).

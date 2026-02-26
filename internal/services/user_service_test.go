@@ -224,8 +224,8 @@ func TestUserService_UpdateUser(t *testing.T) {
 			name:   "Success - Update user fields",
 			userID: existingUser.ID,
 			dto: dto.UpdateUserDTO{
-				FirstName: stringPtr("NewFirst"),
-				LastName:  stringPtr("NewLast"),
+				FirstName: new("NewFirst"),
+				LastName:  new("NewLast"),
 			},
 			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
 				userRepo.On("GetByID", mock.Anything, existingUser.ID).Return(existingUser, nil)
@@ -237,7 +237,7 @@ func TestUserService_UpdateUser(t *testing.T) {
 			name:   "Success - Update email",
 			userID: existingUser.ID,
 			dto: dto.UpdateUserDTO{
-				Email: stringPtr("new@example.com"),
+				Email: new("new@example.com"),
 			},
 			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
 				userRepo.On("GetByID", mock.Anything, existingUser.ID).Return(existingUser, nil)
@@ -250,7 +250,7 @@ func TestUserService_UpdateUser(t *testing.T) {
 			name:   "Error - User not found",
 			userID: uuid.New(),
 			dto: dto.UpdateUserDTO{
-				FirstName: stringPtr("NewFirst"),
+				FirstName: new("NewFirst"),
 			},
 			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
 				userRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, errors.New("not found"))
@@ -262,7 +262,7 @@ func TestUserService_UpdateUser(t *testing.T) {
 			name:   "Error - Email already exists",
 			userID: existingUser.ID,
 			dto: dto.UpdateUserDTO{
-				Email: stringPtr("existing@example.com"),
+				Email: new("existing@example.com"),
 			},
 			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
 				userRepo.On("GetByID", mock.Anything, existingUser.ID).Return(existingUser, nil)
@@ -486,8 +486,4 @@ func TestUserService_ValidateUserAccess(t *testing.T) {
 			familyRepo.AssertExpectations(t)
 		})
 	}
-}
-
-func stringPtr(s string) *string {
-	return &s
 }

@@ -23,7 +23,7 @@ func TestLoginForm_StructFields(t *testing.T) {
 	assert.Equal(t, "password123", form.Password)
 
 	// Проверяем теги валидации
-	formType := reflect.TypeOf(form)
+	formType := reflect.TypeFor[models.LoginForm]()
 
 	emailField, found := formType.FieldByName("Email")
 	require.True(t, found)
@@ -56,7 +56,7 @@ func TestSetupForm_StructFields(t *testing.T) {
 	assert.Equal(t, "securepass123", form.Password)
 
 	// Проверяем теги валидации для всех полей
-	formType := reflect.TypeOf(form)
+	formType := reflect.TypeFor[models.SetupForm]()
 
 	familyNameField, found := formType.FieldByName("FamilyName")
 	require.True(t, found)

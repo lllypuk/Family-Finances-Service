@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -544,10 +545,14 @@ func TestTransactionHandler_Integration_Filters(t *testing.T) {
 		baseTime := time.Now()
 		dateFrom := baseTime.AddDate(0, 0, -3).Format(time.RFC3339) // 3 days ago
 		dateTo := baseTime.Format(time.RFC3339)                     // now (includes both transactions)
+		query := url.Values{}
+		query.Set("family_id", family.ID.String())
+		query.Set("date_from", dateFrom)
+		query.Set("date_to", dateTo)
 
 		req := httptest.NewRequest(
 			http.MethodGet,
-			fmt.Sprintf("/api/v1/transactions?family_id=%s&date_from=%s&date_to=%s", family.ID, dateFrom, dateTo),
+			"/api/v1/transactions?"+query.Encode(),
 			nil,
 		)
 		rec := httptest.NewRecorder()
