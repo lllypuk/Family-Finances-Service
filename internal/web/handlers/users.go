@@ -54,13 +54,13 @@ func (h *UserHandler) Index(c echo.Context) error {
 	csrfToken, _ := middleware.GetCSRFToken(c)
 
 	data := map[string]any{
-		"Title":       "Family Members",
-		"Users":       users,
-		"Family":      family,
-		"CurrentUser": currentUser,
-		"CSRFToken":   csrfToken,
-		"CanManage":   currentUser.Role == user.RoleAdmin,
-		"Messages":    h.getFlashMessages(c),
+		"Title":           "Family Members",
+		"Users":           users,
+		"Family":          family,
+		tplKeyCurrentUser: currentUser,
+		tplKeyCSRFToken:   csrfToken,
+		"CanManage":       currentUser.Role == user.RoleAdmin,
+		"Messages":        h.getFlashMessages(c),
 	}
 
 	return c.Render(http.StatusOK, "users/index.html", data)
@@ -86,12 +86,12 @@ func (h *UserHandler) New(c echo.Context) error {
 	csrfToken, _ := middleware.GetCSRFToken(c)
 
 	data := map[string]any{
-		"Title":     "Add Family Member",
-		"CSRFToken": csrfToken,
+		"Title":         "Add Family Member",
+		tplKeyCSRFToken: csrfToken,
 		"Roles": []map[string]any{
-			{"Value": string(user.RoleAdmin), "Label": "Admin"},
-			{"Value": string(user.RoleMember), "Label": "Member"},
-			{"Value": string(user.RoleChild), "Label": "Child"},
+			{"Value": string(user.RoleAdmin), tplKeyLabel: "Admin"},
+			{"Value": string(user.RoleMember), tplKeyLabel: "Member"},
+			{"Value": string(user.RoleChild), tplKeyLabel: "Child"},
 		},
 		"Messages": h.getFlashMessages(c),
 	}
@@ -148,11 +148,11 @@ func (h *UserHandler) handleServiceError(c echo.Context, err error, form *models
 	switch {
 	case errors.Is(err, services.ErrValidationFailed):
 		return h.userError(c, "Please check your input", map[string]string{
-			"form": err.Error(),
+			tplKeyForm: err.Error(),
 		}, form)
 	case errors.Is(err, services.ErrEmailAlreadyExists):
 		return h.userError(c, "", map[string]string{
-			"email": "User with this email already exists",
+			tplKeyEmail: "User with this email already exists",
 		}, form)
 	case errors.Is(err, services.ErrFamilyNotFound):
 		return h.userError(c, "Family not found", nil, form)
@@ -173,14 +173,14 @@ func (h *UserHandler) userError(c echo.Context, message string, fieldErrors map[
 	csrfToken, _ := middleware.GetCSRFToken(c)
 
 	data := map[string]any{
-		"Title":       "Add Family Member",
-		"Error":       message,
-		"FieldErrors": fieldErrors,
-		"CSRFToken":   csrfToken,
+		"Title":           "Add Family Member",
+		tplKeyError:       message,
+		tplKeyFieldErrors: fieldErrors,
+		tplKeyCSRFToken:   csrfToken,
 		"Roles": []map[string]any{
-			{"Value": string(user.RoleAdmin), "Label": "Admin"},
-			{"Value": string(user.RoleMember), "Label": "Member"},
-			{"Value": string(user.RoleChild), "Label": "Child"},
+			{"Value": string(user.RoleAdmin), tplKeyLabel: "Admin"},
+			{"Value": string(user.RoleMember), tplKeyLabel: "Member"},
+			{"Value": string(user.RoleChild), tplKeyLabel: "Child"},
 		},
 	}
 
@@ -188,7 +188,7 @@ func (h *UserHandler) userError(c echo.Context, message string, fieldErrors map[
 	if form != nil {
 		data["FirstName"] = form.FirstName
 		data["LastName"] = form.LastName
-		data["Email"] = form.Email
+		data[tplKeyEmail] = form.Email
 		data["Role"] = form.Role
 	}
 

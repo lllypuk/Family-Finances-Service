@@ -90,15 +90,15 @@ func (h *AdminHandler) ListUsers(c echo.Context) error {
 	inviteURL := fmt.Sprintf("%s://%s", scheme, c.Request().Host)
 
 	data := map[string]any{
-		"Title":       "User Management",
-		"Users":       users,
-		"Invites":     invites,
-		"Family":      family,
-		"CurrentUser": currentUser,
-		"CSRFToken":   csrfToken,
-		"Roles":       []string{string(user.RoleAdmin), string(user.RoleMember), string(user.RoleChild)},
-		"InviteURL":   inviteURL,
-		"Messages":    h.getFlashMessages(c),
+		"Title":           "User Management",
+		"Users":           users,
+		"Invites":         invites,
+		tplKeyFamily:      family,
+		tplKeyCurrentUser: currentUser,
+		tplKeyCSRFToken:   csrfToken,
+		"Roles":           []string{string(user.RoleAdmin), string(user.RoleMember), string(user.RoleChild)},
+		"InviteURL":       inviteURL,
+		"Messages":        h.getFlashMessages(c),
 	}
 
 	return c.Render(http.StatusOK, "users", data)

@@ -52,6 +52,9 @@ func NewWebServer(
 	e.Use(middleware.SessionStore(sessionSecret, isProduction))
 	e.Use(middleware.CSRFProtection())
 
+	// Включаем Secure flag на flash-cookie в production.
+	webHandlers.SetCookieSecureForProduction(isProduction)
+
 	// Настраиваем обработчик ошибок
 	e.HTTPErrorHandler = customHTTPErrorHandler(renderer)
 

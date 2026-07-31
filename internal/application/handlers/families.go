@@ -25,8 +25,8 @@ func (h *FamilyHandler) GetFamily(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusNotFound, ErrorResponse{
 			Error: ErrorDetail{
-				Code:    "FAMILY_NOT_FOUND",
-				Message: "Family not found",
+				Code:    ErrCodeFamilyNotFound,
+				Message: ErrMessageFamilyNotFound,
 			},
 			Meta: ResponseMeta{
 				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
@@ -60,8 +60,8 @@ func (h *FamilyHandler) GetFamilyMembers(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusNotFound, ErrorResponse{
 			Error: ErrorDetail{
-				Code:    "FAMILY_NOT_FOUND",
-				Message: "Family not found",
+				Code:    ErrCodeFamilyNotFound,
+				Message: ErrMessageFamilyNotFound,
 			},
 			Meta: ResponseMeta{
 				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),

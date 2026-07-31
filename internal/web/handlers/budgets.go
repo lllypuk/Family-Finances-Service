@@ -143,7 +143,7 @@ func (h *BudgetHandler) New(c echo.Context) error {
 	categoryOptions := make([]map[string]any, len(categories)+1)
 	categoryOptions[0] = map[string]any{
 		"ID":   "",
-		"Name": "All Categories",
+		"Name": allCategoriesOptionName,
 	}
 	for i, cat := range categories {
 		categoryOptions[i+1] = map[string]any{
@@ -172,10 +172,10 @@ func (h *BudgetHandler) New(c echo.Context) error {
 	}
 
 	data := map[string]any{
-		"PageData":        pageData,
-		"CategoryOptions": categoryOptions,
-		"DefaultForm":     defaultForm,
-		"CSRFToken":       csrfToken,
+		"PageData":            pageData,
+		tplKeyCategoryOptions: categoryOptions,
+		"DefaultForm":         defaultForm,
+		tplKeyCSRFToken:       csrfToken,
 	}
 
 	return h.renderPage(c, "pages/budgets/new", data)
@@ -201,7 +201,7 @@ func (h *BudgetHandler) Create(c echo.Context) error {
 
 		if h.IsHTMXRequest(c) {
 			return h.renderPartial(c, "components/form_errors", map[string]any{
-				"Errors": validationErrors,
+				tplKeyErrors: validationErrors,
 			})
 		}
 
@@ -290,7 +290,7 @@ func (h *BudgetHandler) Edit(c echo.Context) error {
 	categoryOptions := make([]map[string]any, len(categories)+1)
 	categoryOptions[0] = map[string]any{
 		"ID":   "",
-		"Name": "All Categories",
+		"Name": allCategoriesOptionName,
 	}
 	for i, cat := range categories {
 		categoryOptions[i+1] = map[string]any{
@@ -321,11 +321,11 @@ func (h *BudgetHandler) Edit(c echo.Context) error {
 	}
 
 	data := map[string]any{
-		"PageData":        pageData,
-		"Form":            form,
-		"CategoryOptions": categoryOptions,
-		"BudgetID":        budgetID.String(),
-		"CSRFToken":       csrfToken,
+		"PageData":            pageData,
+		"Form":                form,
+		tplKeyCategoryOptions: categoryOptions,
+		"BudgetID":            budgetID.String(),
+		tplKeyCSRFToken:       csrfToken,
 	}
 
 	return h.renderPage(c, "pages/budgets/edit", data)
@@ -366,7 +366,7 @@ func (h *BudgetHandler) Update(c echo.Context) error {
 
 		if h.IsHTMXRequest(c) {
 			return h.renderPartial(c, "components/form_errors", map[string]any{
-				"Errors": validationErrors,
+				tplKeyErrors: validationErrors,
 			})
 		}
 
@@ -474,7 +474,7 @@ func (h *BudgetHandler) Progress(c echo.Context) error {
 	}
 
 	data := map[string]any{
-		"Budget": progressVM,
+		tplKeyBudget: progressVM,
 	}
 
 	return h.renderPartial(c, "components/budget_progress", data)
@@ -548,7 +548,7 @@ func (h *BudgetHandler) Show(c echo.Context) error {
 
 	data := map[string]any{
 		"PageData":           pageData,
-		"Budget":             budgetVM,
+		tplKeyBudget:         budgetVM,
 		"SpendingData":       spendingData,
 		"RecentTransactions": recentTransactions,
 	}
@@ -581,7 +581,7 @@ func (h *BudgetHandler) renderBudgetFormWithErrors(
 	categoryOptions := make([]map[string]any, len(categories)+1)
 	categoryOptions[0] = map[string]any{
 		"ID":   "",
-		"Name": "All Categories",
+		"Name": allCategoriesOptionName,
 	}
 	for i, cat := range categories {
 		categoryOptions[i+1] = map[string]any{
@@ -598,9 +598,9 @@ func (h *BudgetHandler) renderBudgetFormWithErrors(
 	}
 
 	data := map[string]any{
-		"PageData":        pageData,
-		"Form":            form,
-		"CategoryOptions": categoryOptions,
+		"PageData":            pageData,
+		"Form":                form,
+		tplKeyCategoryOptions: categoryOptions,
 	}
 
 	template := "pages/budgets/new"
@@ -745,7 +745,7 @@ func (h *BudgetHandler) Alerts(c echo.Context) error {
 		"TotalCount":     totalCount,
 		"TriggeredCount": triggeredCount,
 		"HealthyCount":   healthyCount,
-		"CSRFToken":      csrfToken,
+		tplKeyCSRFToken:  csrfToken,
 	}
 
 	return h.renderPage(c, "pages/budgets/alerts", data)

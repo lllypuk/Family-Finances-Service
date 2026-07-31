@@ -93,10 +93,10 @@ func (h *AuthHandler) LoginPage(c echo.Context) error {
 	}
 
 	data := map[string]any{
-		"CSRFToken": csrfToken,
-		"Title":     "Sign In",
-		"IsLogin":   true,
-		"Messages":  h.getFlashMessages(c),
+		tplKeyCSRFToken: csrfToken,
+		"Title":         "Sign In",
+		"IsLogin":       true,
+		"Messages":      h.getFlashMessages(c),
 	}
 
 	return c.Render(http.StatusOK, "login.html", data)
@@ -166,10 +166,10 @@ func (h *AuthHandler) SetupPage(c echo.Context) error {
 	}
 
 	data := map[string]any{
-		"CSRFToken": csrfToken,
-		"Title":     "Первоначальная настройка",
-		"IsSetup":   true,
-		"Messages":  h.getFlashMessages(c),
+		tplKeyCSRFToken: csrfToken,
+		"Title":         "Первоначальная настройка",
+		"IsSetup":       true,
+		"Messages":      h.getFlashMessages(c),
 	}
 
 	return c.Render(http.StatusOK, "setup.html", data)
@@ -238,12 +238,12 @@ func (h *AuthHandler) loginError(c echo.Context, message string, fieldErrors map
 	csrfToken, _ := middleware.GetCSRFToken(c)
 
 	data := map[string]any{
-		"CSRFToken":   csrfToken,
-		"Title":       "Sign In",
-		"Error":       message,
-		"FieldErrors": fieldErrors,
-		"Email":       c.FormValue("email"), // Сохраняем введенный email
-		"IsLogin":     true,
+		tplKeyCSRFToken:   csrfToken,
+		"Title":           "Sign In",
+		tplKeyError:       message,
+		tplKeyFieldErrors: fieldErrors,
+		tplKeyEmail:       c.FormValue("email"), // Сохраняем введенный email
+		"IsLogin":         true,
 	}
 
 	// Если это HTMX запрос, возвращаем только форму
@@ -259,16 +259,16 @@ func (h *AuthHandler) setupError(c echo.Context, message string, fieldErrors map
 	csrfToken, _ := middleware.GetCSRFToken(c)
 
 	data := map[string]any{
-		"CSRFToken":   csrfToken,
-		"Title":       "Первоначальная настройка",
-		"Error":       message,
-		"FieldErrors": fieldErrors,
-		"FirstName":   c.FormValue("first_name"),
-		"LastName":    c.FormValue("last_name"),
-		"Email":       c.FormValue("email"),
-		"FamilyName":  c.FormValue("family_name"),
-		"Currency":    c.FormValue("currency"),
-		"IsSetup":     true,
+		tplKeyCSRFToken:   csrfToken,
+		"Title":           "Первоначальная настройка",
+		tplKeyError:       message,
+		tplKeyFieldErrors: fieldErrors,
+		"FirstName":       c.FormValue("first_name"),
+		"LastName":        c.FormValue("last_name"),
+		tplKeyEmail:       c.FormValue("email"),
+		"FamilyName":      c.FormValue("family_name"),
+		"Currency":        c.FormValue("currency"),
+		"IsSetup":         true,
 	}
 
 	// Если это HTMX запрос, возвращаем только форму
@@ -301,12 +301,12 @@ func (h *AuthHandler) InviteRegisterPage(c echo.Context) error {
 	}
 
 	data := map[string]any{
-		"CSRFToken": csrfToken,
-		"Title":     "Accept Invitation",
-		"Invite":    invite,
-		"Token":     token,
-		"Email":     invite.Email,
-		"Role":      invite.Role,
+		tplKeyCSRFToken: csrfToken,
+		"Title":         "Accept Invitation",
+		"Invite":        invite,
+		"Token":         token,
+		tplKeyEmail:     invite.Email,
+		"Role":          invite.Role,
 	}
 
 	return c.Render(http.StatusOK, "invite", data)
@@ -397,14 +397,14 @@ func (h *AuthHandler) inviteError(c echo.Context, token, message string, fieldEr
 	}
 
 	data := map[string]any{
-		"CSRFToken":   csrfToken,
-		"Title":       "Accept Invitation",
-		"Error":       message,
-		"FieldErrors": fieldErrors,
-		"Token":       token,
-		"Email":       email,
-		"Name":        c.FormValue("name"),
-		"Invite":      invite,
+		tplKeyCSRFToken:   csrfToken,
+		"Title":           "Accept Invitation",
+		tplKeyError:       message,
+		tplKeyFieldErrors: fieldErrors,
+		"Token":           token,
+		tplKeyEmail:       email,
+		"Name":            c.FormValue("name"),
+		"Invite":          invite,
 	}
 
 	// If HTMX request, return only the form

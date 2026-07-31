@@ -33,8 +33,8 @@ func (h *CategoryHandler) CreateCategory(c echo.Context) error {
 	if bindErr := c.Bind(&req); bindErr != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
-				Code:    "INVALID_REQUEST",
-				Message: "Invalid request body",
+				Code:    ErrCodeInvalidRequest,
+				Message: ErrMessageInvalidRequest,
 				Details: bindErr.Error(),
 			},
 			Meta: ResponseMeta{
@@ -55,7 +55,7 @@ func (h *CategoryHandler) CreateCategory(c echo.Context) error {
 			validationErrors = append(validationErrors, ValidationError{
 				Field:   err.Field(),
 				Message: err.Tag(),
-				Code:    "VALIDATION_ERROR",
+				Code:    ErrCodeValidationError,
 			})
 		}
 
@@ -183,8 +183,8 @@ func (h *CategoryHandler) GetCategoryByID(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
-				Code:    "INVALID_ID",
-				Message: "Invalid category ID format",
+				Code:    ErrCodeInvalidID,
+				Message: ErrMessageInvalidCategoryID,
 			},
 			Meta: ResponseMeta{
 				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
@@ -198,7 +198,7 @@ func (h *CategoryHandler) GetCategoryByID(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusNotFound, ErrorResponse{
 			Error: ErrorDetail{
-				Code:    "CATEGORY_NOT_FOUND",
+				Code:    ErrCodeCategoryNotFound,
 				Message: "Category not found",
 				Details: err.Error(),
 			},
@@ -307,8 +307,8 @@ func (h *CategoryHandler) DeleteCategory(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
-				Code:    "INVALID_ID",
-				Message: "Invalid category ID format",
+				Code:    ErrCodeInvalidID,
+				Message: ErrMessageInvalidCategoryID,
 			},
 			Meta: ResponseMeta{
 				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),

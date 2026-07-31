@@ -99,11 +99,11 @@ func (h *TransactionHandler) Index(c echo.Context) error {
 	}
 
 	data := map[string]any{
-		"PageData":        pageData,
-		"Transactions":    transactionVMs,
-		"Filters":         filters,
-		"CategoryOptions": categoryOptions,
-		"Pagination":      pagination,
+		"PageData":            pageData,
+		"Transactions":        transactionVMs,
+		"Filters":             filters,
+		tplKeyCategoryOptions: categoryOptions,
+		"Pagination":          pagination,
 	}
 
 	return h.renderPage(c, "pages/transactions/index", data)
@@ -139,10 +139,10 @@ func (h *TransactionHandler) New(c echo.Context) error {
 	}
 
 	data := map[string]any{
-		"PageData":        pageData,
-		"Form":            form,
-		"CategoryOptions": categoryOptions,
-		"CSRFToken":       csrfToken,
+		"PageData":            pageData,
+		"Form":                form,
+		tplKeyCategoryOptions: categoryOptions,
+		tplKeyCSRFToken:       csrfToken,
 	}
 
 	return h.renderPage(c, "pages/transactions/new", data)
@@ -170,7 +170,7 @@ func (h *TransactionHandler) Create(c echo.Context) error {
 		if h.IsHTMXRequest(c) {
 			// Для HTMX возвращаем только errors partial
 			return h.renderPartial(c, "components/form_errors", map[string]any{
-				"Errors": validationErrors,
+				tplKeyErrors: validationErrors,
 			})
 		}
 
@@ -256,11 +256,11 @@ func (h *TransactionHandler) Edit(c echo.Context) error {
 	}
 
 	data := map[string]any{
-		"PageData":        pageData,
-		"Form":            form,
-		"Transaction":     transaction,
-		"CategoryOptions": categoryOptions,
-		"CSRFToken":       csrfToken,
+		"PageData":            pageData,
+		"Form":                form,
+		"Transaction":         transaction,
+		tplKeyCategoryOptions: categoryOptions,
+		tplKeyCSRFToken:       csrfToken,
 	}
 
 	return h.renderPage(c, "pages/transactions/edit", data)
@@ -304,7 +304,7 @@ func (h *TransactionHandler) Update(c echo.Context) error {
 		if h.IsHTMXRequest(c) {
 			// Для HTMX возвращаем только errors partial
 			return h.renderPartial(c, "components/form_errors", map[string]any{
-				"Errors": validationErrors,
+				tplKeyErrors: validationErrors,
 			})
 		}
 
