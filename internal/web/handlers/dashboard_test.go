@@ -854,9 +854,12 @@ func TestDashboardFilters_GetPeriodDates(t *testing.T) {
 			name:   "last month",
 			period: "last_month",
 			checkResult: func(t *testing.T, start, _ time.Time) {
-				lastMonth := time.Now().AddDate(0, -1, 0)
-				assert.Equal(t, lastMonth.Year(), start.Year())
-				assert.Equal(t, lastMonth.Month(), start.Month())
+				// "last_month" means the previous full calendar month, not
+				// "today minus one month". Always starts on the 1st.
+				now := time.Now()
+				expectedStart := time.Date(now.Year(), now.Month()-1, 1, 0, 0, 0, 0, now.Location())
+				assert.True(t, expectedStart.Equal(start),
+					"expected start %s, got %s", expectedStart, start)
 			},
 		},
 		{
