@@ -97,7 +97,7 @@ func (h *ReportHandler) Index(c echo.Context) error {
 		"Reports":           reportVMs,
 		"ReportTypeOptions": reportTypeOptions,
 		"DefaultForm":       defaultForm,
-		"CSRFToken":         csrfToken,
+		tplKeyCSRFToken:     csrfToken,
 	}
 
 	return h.renderPage(c, "pages/reports/index", data)
@@ -114,8 +114,8 @@ func (h *ReportHandler) New(c echo.Context) error {
 	}
 
 	data := map[string]any{
-		"PageData":  pageData,
-		"CSRFToken": csrfToken,
+		"PageData":      pageData,
+		tplKeyCSRFToken: csrfToken,
 	}
 
 	return h.renderPage(c, "pages/reports/new", data)
@@ -185,7 +185,7 @@ func (h *ReportHandler) parseAndValidateReportForm(c echo.Context) (*webModels.R
 
 		if h.IsHTMXRequest(c) {
 			return nil, h.renderPartial(c, "components/form_errors", map[string]any{
-				"Errors": validationErrors,
+				tplKeyErrors: validationErrors,
 			})
 		}
 
@@ -303,7 +303,7 @@ func (h *ReportHandler) handleUnsupportedReportType(c echo.Context) (*report.Rep
 	errorMsg := "Unsupported report type"
 	if h.IsHTMXRequest(c) {
 		if renderErr := h.renderPartial(c, "components/form_errors", map[string]any{
-			"Errors": map[string]string{"form": errorMsg},
+			tplKeyErrors: map[string]string{tplKeyForm: errorMsg},
 		}); renderErr != nil {
 			return nil, renderErr
 		}
@@ -317,7 +317,7 @@ func (h *ReportHandler) handleReportGenerationError(c echo.Context, err error) e
 	errorMsg := h.getReportServiceErrorMessage(err)
 	if h.IsHTMXRequest(c) {
 		if renderErr := h.renderPartial(c, "components/form_errors", map[string]any{
-			"Errors": map[string]string{"form": errorMsg},
+			tplKeyErrors: map[string]string{tplKeyForm: errorMsg},
 		}); renderErr != nil {
 			return renderErr
 		}
@@ -432,7 +432,7 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 	if validationErr := h.validator.Struct(form); validationErr != nil {
 		validationErrors := webModels.GetValidationErrors(validationErr)
 		return h.renderPartial(c, "components/form_errors", map[string]any{
-			"Errors": validationErrors,
+			tplKeyErrors: validationErrors,
 		})
 	}
 
@@ -484,7 +484,7 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 		)
 	default:
 		return h.renderPartial(c, "components/form_errors", map[string]any{
-			"Errors": map[string]string{"form": "Unsupported report type"},
+			tplKeyErrors: map[string]string{tplKeyForm: "Unsupported report type"},
 		})
 	}
 	if generateErr != nil {

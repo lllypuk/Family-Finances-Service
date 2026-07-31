@@ -242,7 +242,7 @@ func (f *ReportForm) ToReportType() report.Type {
 	switch f.Type {
 	case "expenses":
 		return report.TypeExpenses
-	case "income":
+	case TypeIncome:
 		return report.TypeIncome
 	case "budget":
 		return report.TypeBudget

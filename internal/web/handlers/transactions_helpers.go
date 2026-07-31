@@ -384,9 +384,9 @@ func (h *TransactionHandler) renderTransactionFormWithErrors(
 	}
 
 	data := map[string]any{
-		"PageData":        pageData,
-		"Form":            form,
-		"CategoryOptions": categoryOptions,
+		"PageData":            pageData,
+		"Form":                form,
+		tplKeyCategoryOptions: categoryOptions,
 	}
 
 	template := "pages/transactions/new"

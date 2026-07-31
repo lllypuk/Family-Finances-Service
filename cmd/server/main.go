@@ -19,9 +19,13 @@ const (
 	HealthCheckTimeout = 2 * time.Second
 )
 
+// healthCheckFlag is the CLI flag that triggers an immediate health check
+// and process exit (used by container orchestrators and CI smoke tests).
+const healthCheckFlag = "-health-check"
+
 func main() {
 	// Проверка флага healthcheck
-	if len(os.Args) > 1 && os.Args[1] == "-health-check" {
+	if len(os.Args) > 1 && os.Args[1] == healthCheckFlag {
 		healthCheck()
 		return
 	}

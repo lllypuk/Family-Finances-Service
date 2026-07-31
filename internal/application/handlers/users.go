@@ -39,7 +39,7 @@ func (h *UserHandler) handleServiceError(c echo.Context, err error) error {
 	case errors.Is(err, services.ErrValidationFailed):
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
-				Code:    "VALIDATION_ERROR",
+				Code:    ErrCodeValidationError,
 				Message: "Validation failed",
 				Details: err.Error(),
 			},
@@ -78,8 +78,8 @@ func (h *UserHandler) handleServiceError(c echo.Context, err error) error {
 	case errors.Is(err, services.ErrFamilyNotFound):
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
-				Code:    "FAMILY_NOT_FOUND",
-				Message: "Family not found",
+				Code:    ErrCodeFamilyNotFound,
+				Message: ErrMessageFamilyNotFound,
 				Details: "The specified family does not exist",
 			},
 			Meta: ResponseMeta{
@@ -135,8 +135,8 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
-				Code:    "INVALID_REQUEST",
-				Message: "Invalid request body",
+				Code:    ErrCodeInvalidRequest,
+				Message: ErrMessageInvalidRequest,
 				Details: err.Error(),
 			},
 			Meta: ResponseMeta{
@@ -189,8 +189,8 @@ func (h *UserHandler) GetUserByID(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
-				Code:    "INVALID_ID",
-				Message: "Invalid user ID format",
+				Code:    ErrCodeInvalidID,
+				Message: ErrMessageInvalidUserID,
 			},
 			Meta: ResponseMeta{
 				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
@@ -233,8 +233,8 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
-				Code:    "INVALID_ID",
-				Message: "Invalid user ID format",
+				Code:    ErrCodeInvalidID,
+				Message: ErrMessageInvalidUserID,
 			},
 			Meta: ResponseMeta{
 				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
@@ -248,8 +248,8 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 	if bindErr := c.Bind(&req); bindErr != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
-				Code:    "INVALID_REQUEST",
-				Message: "Invalid request body",
+				Code:    ErrCodeInvalidRequest,
+				Message: ErrMessageInvalidRequest,
 				Details: bindErr.Error(),
 			},
 			Meta: ResponseMeta{
@@ -300,8 +300,8 @@ func (h *UserHandler) DeleteUser(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
-				Code:    "INVALID_ID",
-				Message: "Invalid user ID format",
+				Code:    ErrCodeInvalidID,
+				Message: ErrMessageInvalidUserID,
 			},
 			Meta: ResponseMeta{
 				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),

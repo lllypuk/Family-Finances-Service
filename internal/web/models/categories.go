@@ -78,7 +78,7 @@ func (vm *CategoryViewModel) FromDomain(c *category.Category) {
 // ToCategoryType конвертирует строку в тип категории
 func (f *CategoryForm) ToCategoryType() category.Type {
 	switch f.Type {
-	case "income":
+	case TypeIncome:
 		return category.TypeIncome
 	case "expense":
 		return category.TypeExpense

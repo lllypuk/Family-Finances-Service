@@ -463,6 +463,16 @@ linters:
           - testpackage
           - govet # Allow unused field writes in test data structures
           - testifylint # Allow direct float comparisons for test data
+      # Exclude goconst for web handlers and models: their code is dominated by
+      # template data maps and HTML option labels where every literal key/value
+      # naturally repeats but extracting them into named constants adds noise
+      # without making the code easier to reason about.
+      - path: "internal/web/handlers/"
+        linters:
+          - goconst
+      - path: "internal/web/models/"
+        linters:
+          - goconst
       - source: "TODO"
         linters: [godot]
       - text: "should have a package comment"

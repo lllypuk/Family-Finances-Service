@@ -93,9 +93,9 @@ func (h *CategoryHandler) Index(c echo.Context) error {
 	}
 
 	data := map[string]any{
-		"PageData":   pageData,
-		"Categories": categoryTree,
-		"Filters":    filters,
+		"PageData":       pageData,
+		tplKeyCategories: categoryTree,
+		tplKeyFilters:    filters,
 	}
 
 	return h.renderPage(c, "pages/categories/index", data)
@@ -139,11 +139,11 @@ func (h *CategoryHandler) New(c echo.Context) error {
 	}
 
 	data := map[string]any{
-		"PageData":      pageData,
-		"CSRFToken":     csrfToken,
-		"ParentOptions": parentOptions,
-		"DefaultColors": getDefaultCategoryColors(),
-		"DefaultIcons":  getDefaultCategoryIcons(),
+		"PageData":          pageData,
+		tplKeyCSRFToken:     csrfToken,
+		"ParentOptions":     parentOptions,
+		tplKeyDefaultColors: getDefaultCategoryColors(),
+		tplKeyDefaultIcons:  getDefaultCategoryIcons(),
 	}
 
 	return h.renderPage(c, "pages/categories/new", data)
@@ -171,7 +171,7 @@ func (h *CategoryHandler) Create(c echo.Context) error {
 		if h.IsHTMXRequest(c) {
 			// Для HTMX возвращаем только errors partial
 			return h.renderPartial(c, "components/form_errors", map[string]any{
-				"Errors": validationErrors,
+				tplKeyErrors: validationErrors,
 			})
 		}
 
@@ -203,12 +203,12 @@ func (h *CategoryHandler) Create(c echo.Context) error {
 		csrfToken, _ := middleware.GetCSRFToken(c)
 
 		data := map[string]any{
-			"PageData":      pageData,
-			"Form":          form,
-			"CSRFToken":     csrfToken,
-			"ParentOptions": parentOptions,
-			"DefaultColors": getDefaultCategoryColors(),
-			"DefaultIcons":  getDefaultCategoryIcons(),
+			"PageData":          pageData,
+			"Form":              form,
+			tplKeyCSRFToken:     csrfToken,
+			"ParentOptions":     parentOptions,
+			tplKeyDefaultColors: getDefaultCategoryColors(),
+			tplKeyDefaultIcons:  getDefaultCategoryIcons(),
 		}
 
 		return h.renderPage(c, "pages/categories/new", data)
@@ -243,7 +243,7 @@ func (h *CategoryHandler) Create(c echo.Context) error {
 
 		if h.IsHTMXRequest(c) {
 			return h.renderPartial(c, "components/form_errors", map[string]any{
-				"Errors": map[string]string{"form": errorMsg},
+				tplKeyErrors: map[string]string{tplKeyForm: errorMsg},
 			})
 		}
 
@@ -321,13 +321,13 @@ func (h *CategoryHandler) Edit(c echo.Context) error {
 	}
 
 	data := map[string]any{
-		"PageData":      pageData,
-		"CSRFToken":     csrfToken,
-		"Form":          form,
-		"Category":      category,
-		"ParentOptions": parentOptions,
-		"DefaultColors": getDefaultCategoryColors(),
-		"DefaultIcons":  getDefaultCategoryIcons(),
+		"PageData":          pageData,
+		tplKeyCSRFToken:     csrfToken,
+		"Form":              form,
+		tplKeyCategory:      category,
+		"ParentOptions":     parentOptions,
+		tplKeyDefaultColors: getDefaultCategoryColors(),
+		tplKeyDefaultIcons:  getDefaultCategoryIcons(),
 	}
 
 	return h.renderPage(c, "pages/categories/edit", data)
@@ -412,7 +412,7 @@ func (h *CategoryHandler) handleUpdateValidationError(
 
 	if h.IsHTMXRequest(c) {
 		return h.renderPartial(c, "components/form_errors", map[string]any{
-			"Errors": validationErrors,
+			tplKeyErrors: validationErrors,
 		})
 	}
 
@@ -433,13 +433,13 @@ func (h *CategoryHandler) handleUpdateValidationError(
 	csrfToken, _ := middleware.GetCSRFToken(c)
 
 	data := map[string]any{
-		"PageData":      pageData,
-		"Form":          form,
-		"CSRFToken":     csrfToken,
-		"Category":      existingCategory,
-		"ParentOptions": parentOptions,
-		"DefaultColors": getDefaultCategoryColors(),
-		"DefaultIcons":  getDefaultCategoryIcons(),
+		"PageData":          pageData,
+		"Form":              form,
+		tplKeyCSRFToken:     csrfToken,
+		tplKeyCategory:      existingCategory,
+		"ParentOptions":     parentOptions,
+		tplKeyDefaultColors: getDefaultCategoryColors(),
+		tplKeyDefaultIcons:  getDefaultCategoryIcons(),
 	}
 
 	return h.renderPage(c, "pages/categories/edit", data)
@@ -480,7 +480,7 @@ func (h *CategoryHandler) handleUpdateServiceError(c echo.Context, err error) er
 
 	if h.IsHTMXRequest(c) {
 		return h.renderPartial(c, "components/form_errors", map[string]any{
-			"Errors": map[string]string{"form": errorMsg},
+			tplKeyErrors: map[string]string{tplKeyForm: errorMsg},
 		})
 	}
 
@@ -557,7 +557,7 @@ func (h *CategoryHandler) Show(c echo.Context) error {
 	var recentTransactions []any // TODO: заменить на Transaction модель когда будет доступна
 
 	data := map[string]any{
-		"Category":      categoryVM,
+		tplKeyCategory:  categoryVM,
 		"Subcategories": subcategoryVMs,
 		"Transactions":  recentTransactions,
 	}

@@ -74,15 +74,15 @@ func (h *BackupHandler) BackupPage(c echo.Context) error {
 	data := map[string]any{
 		"Title":   "Резервные копии",
 		"Backups": backups,
-		"CurrentUser": &SessionData{
+		tplKeyCurrentUser: &SessionData{
 			UserID:    sessionData.UserID,
 			Role:      sessionData.Role,
 			Email:     sessionData.Email,
 			FirstName: currentUser.FirstName,
 			LastName:  currentUser.LastName,
 		},
-		"CSRFToken": csrfToken,
-		"Messages":  h.getFlashMessages(c),
+		tplKeyCSRFToken: csrfToken,
+		"Messages":      h.getFlashMessages(c),
 	}
 
 	return c.Render(http.StatusOK, "admin/backup.html", data)

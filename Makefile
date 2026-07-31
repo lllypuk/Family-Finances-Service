@@ -63,11 +63,14 @@ deps:
 	@go mod download
 	@go mod tidy
 
+# Путь к golangci-lint: ищем в $HOME/go/bin (стандартная установка через `go install`)
+GOLANGCI_LINT := $(shell command -v golangci-lint 2>/dev/null || echo "$$HOME/go/bin/golangci-lint")
+
 # Линтер
 .PHONY: lint
 lint:
 	@echo "Running linter..."
-	@golangci-lint run --fix
+	@$(GOLANGCI_LINT) run --fix
 
 # Форматирование кода
 .PHONY: fmt
@@ -81,7 +84,7 @@ pre-commit:
 	@echo "Running pre-commit checks..."
 	@go fmt ./...
 	@go test -v ./...
-	@golangci-lint run --fix
+	@$(GOLANGCI_LINT) run --fix
 
 # Очистка
 .PHONY: clean

@@ -28,7 +28,18 @@ const (
 var (
 	// ErrNoSession is returned when no session is found
 	ErrNoSession = errors.New("no session found")
+
+	// cookieSecureForProduction is set by SetCookieSecureForProduction in
+	// production-like environments, so flash cookies are emitted with the
+	// Secure flag. Defaults to false for local development over plain HTTP.
+	cookieSecureForProduction = false //nolint:gochecknoglobals // env flag, set once at startup
 )
+
+// SetCookieSecureForProduction toggles the Secure flag for flash cookies.
+// Call once at startup from web.NewWebServer; safe to leave unset in dev.
+func SetCookieSecureForProduction(secure bool) {
+	cookieSecureForProduction = secure
+}
 
 // BaseHandler содержит общие методы для всех веб-обработчиков
 type BaseHandler struct {
@@ -182,20 +193,25 @@ func (h *BaseHandler) htmxError(c echo.Context, message string) error {
 
 // setFlashMessage sets a flash message in a cookie
 func setFlashMessage(c echo.Context, msgType, message string) {
+	// #nosec G124 -- Secure flag is configured at startup via SetCookieSecureForProduction;
+	// HttpOnly and SameSite are always set.
 	c.SetCookie(&http.Cookie{
 		Name:     flashCookieName,
 		Value:    url.QueryEscape(message),
 		Path:     "/",
 		MaxAge:   flashCookieMaxAge,
 		HttpOnly: true,
+		Secure:   cookieSecureForProduction,
 		SameSite: http.SameSiteStrictMode,
 	})
+	// #nosec G124 -- see comment above.
 	c.SetCookie(&http.Cookie{
 		Name:     flashTypeCookieName,
 		Value:    msgType,
 		Path:     "/",
 		MaxAge:   flashCookieMaxAge,
 		HttpOnly: true,
+		Secure:   cookieSecureForProduction,
 		SameSite: http.SameSiteStrictMode,
 	})
 }
@@ -209,8 +225,24 @@ func GetFlashMessage(c echo.Context) (string, string) {
 	typeCookie, _ := c.Cookie(flashTypeCookieName)
 
 	// Clear cookies
-	c.SetCookie(&http.Cookie{Name: flashCookieName, Path: "/", MaxAge: -1})
-	c.SetCookie(&http.Cookie{Name: flashTypeCookieName, Path: "/", MaxAge: -1})
+	// #nosec G124 -- Secure flag is configured at startup via SetCookieSecureForProduction.
+	c.SetCookie(&http.Cookie{
+		Name:     flashCookieName,
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   cookieSecureForProduction,
+		SameSite: http.SameSiteStrictMode,
+	})
+	// #nosec G124 -- see comment above.
+	c.SetCookie(&http.Cookie{
+		Name:     flashTypeCookieName,
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   cookieSecureForProduction,
+		SameSite: http.SameSiteStrictMode,
+	})
 
 	message, _ := url.QueryUnescape(msgCookie.Value)
 	msgType := "info"

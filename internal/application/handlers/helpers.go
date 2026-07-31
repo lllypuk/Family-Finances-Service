@@ -58,7 +58,7 @@ func buildValidationErrors(err error) []ValidationError {
 		validationErrors = append(validationErrors, ValidationError{
 			Field:   fieldErr.Field(),
 			Message: fieldErr.Tag(),
-			Code:    "VALIDATION_ERROR",
+			Code:    ErrCodeValidationError,
 		})
 	}
 
