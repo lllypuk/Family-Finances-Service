@@ -795,15 +795,66 @@ errors)` (`base.go`) — он же подставляет общее сообщ�
 
 ### Task 17: Verify acceptance criteria
 
-- [ ] анонимный GET ко всем `/api/v1/*` → 401
-- [ ] анонимный POST/PUT/DELETE с валидным CSRF-токеном → 401; без токена → 403
-- [ ] подмена `user_id` в теле запроса игнорируется
-- [ ] роль `child` не может удалять пользователей и категории через API → 403
-- [ ] на чистой БД: `/setup` открывается **со стилями**, `/health` → 200 до завершения настройки
-- [ ] навигация присутствует на `/transactions`, `/categories`, `/budgets`, `/reports`; заголовки по-русски
-- [ ] `docker compose -f docker/docker-compose.yml up` поднимается с секретами и падает с внятной ошибкой без них
-- [ ] полный прогон `make test` — все пакеты зелёные; `make lint` — 0 issues
-- [ ] покрытие не ниже исходных 61.9%: `make test-coverage`
+- [x] анонимный GET ко всем `/api/v1/*` → 401
+- [x] анонимный POST/PUT/DELETE с валидным CSRF-токеном → 401; без токена → 403
+- [x] подмена `user_id` в теле запроса игнорируется
+- [x] роль `child` не может удалять пользователей и категории через API → 403
+- [x] на чистой БД: `/setup` открывается **со стилями**, `/health` → 200 до завершения настройки
+- [x] навигация присутствует на `/transactions`, `/categories`, `/budgets`, `/reports`; заголовки по-русски
+- [x] `docker compose -f docker/docker-compose.yml up` поднимается с секретами и падает с внятной ошибкой без них
+- [x] полный прогон `make test` — все пакеты зелёные; `make lint` — 0 issues
+- [x] покрытие не ниже исходных 61.9%: `make test-coverage`
+
+**Как проверялось.** Не по коду, а по живому серверу: собранный `go build ./cmd/server`
+запущен на `127.0.0.1:8091` с одноразовой БД в `/tmp` (`SESSION_SECRET`/`CSRF_SECRET` —
+одноразовые), запросы — `curl --noproxy '*'`. Сессии/роли: setup через форму
+(`Test Family`, `admin@test.com`/`Admin123!`), затем ребёнок `child@test.com` создан
+через API.
+
+1. **Анонимный GET → 401.** Все 9 маршрутов группы (`users/:id`, `categories`,
+   `categories/:id`, `transactions`, `transactions/:id`, `budgets`, `budgets/:id`,
+   `reports`, `reports/:id`) вернули `401` и тело
+   `{"error":{"code":"UNAUTHORIZED","message":"Authentication required"}}`.
+2. **Мутации.** 30 комбинаций POST/PUT/DELETE × 10 путей с валидным CSRF-токеном
+   анонимной сессии — все `401`; те же запросы без заголовка `X-Csrf-Token` — все
+   `403` (`CSRF token validation failed`). То есть CSRF-слой срабатывает раньше
+   аутентификации, а не наоборот.
+3. **Подмена `user_id`.** `POST /api/v1/transactions` от админа с
+   `"user_id":<id ребёнка>` и `"family_id":<чужой uuid>` в теле → `201`, в ответе и
+   в строке БД `user_id` = id админа (`8bdee69b…`), `family_id` = реальная семья.
+   Поля из тела проигнорированы (их нет в `CreateTransactionRequest`).
+4. **Роль `child` → 403.** CSRF-токен ребёнка добыт расшифровкой cookie-сессии
+   (страницы, доступные ребёнку, токен не отдают — см. `[deviation]` ниже).
+   `DELETE /api/v1/users/<admin>`, `DELETE /api/v1/categories/<id>`,
+   `POST /api/v1/users`, `POST /api/v1/transactions`, `GET /api/v1/categories` —
+   все `403` `{"code":"FORBIDDEN","message":"Insufficient permissions"}`; строки в БД
+   на месте (2 пользователя, категория цела).
+5. **Чистая БД.** `/` → `302 /setup`; `/setup` → `200`,
+   `<title>Первоначальная настройка - Семейный бюджет</title>`; статика **до** setup:
+   `pico.min.css` 200 (63 551 B), `custom.css` 200 (8 713 B), `htmx.min.js` 200
+   (50 917 B), `app.js` 200, `favicon.ico` 200; `/health` → `200`
+   `{"status":"healthy",…}`.
+6. **Навигация и заголовки.** `/transactions` 200 «Транзакции», `/categories` 200
+   «Категории», `/budgets` 200 «Бюджеты», `/reports` 200 «Отчёты» — и `<title>`, и
+   `<h1>` по-русски; на каждой странице `<nav>` со всеми пятью ссылками
+   (`/transactions`, `/categories`, `/budgets`, `/reports`, `/users`).
+7. **Docker.** Без секретов `up -d` завершается кодом **1** с
+   `required variable SESSION_SECRET is missing a value: SESSION_SECRET is required -
+   generate one with openssl rand -base64 32` (то же для `CSRF_SECRET`; если задан
+   только `SESSION_SECRET` — ругается на второй). С секретами
+   `docker compose --project-directory . -f docker/docker-compose.yml up -d --build`
+   собрал образ из исходников и поднял контейнер: `Up (healthy)`, `id` внутри —
+   `uid=1000(app) gid=1000(app)`, с хоста `/health` → 200, `/setup` → 200 с русским
+   `<title>`, `pico.min.css` → 200. Контейнер, том и сеть удалены после проверки.
+8. **`make test` / `make lint`.** Все пакеты `ok` (падений нет), линтер — `0 issues.`
+9. **Покрытие.** `make test-coverage` → `total: (statements) 63.1%` (порог 61.9%
+   выдержан, +1.2 п.п.).
+
+ℹ️ Известные и **не входящие в критерии** проблемы подтверждены как всё ещё живые:
+`<title>` страницы входа по-прежнему английский, дашборд `/` не отдаёт `CSRFToken`
+(из-за этого у ребёнка нет ни одной страницы с токеном), `/budgets/alerts` не
+чинился. На критерии Task 17 это не влияет: перечисленные в них четыре страницы
+и `/setup` отвечают 200.
 
 ### Task 18: [Final] Обновить документацию
 
