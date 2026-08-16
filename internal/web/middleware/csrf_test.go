@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gorilla/sessions"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -531,4 +532,49 @@ func BenchmarkGetCSRFToken(b *testing.B) {
 
 		middleware.GetCSRFToken(c)
 	}
+}
+
+// Cookie, подписанная другим (провёрнутым) SESSION_SECRET, не расшифровывается.
+// gorilla CookieStore.New возвращает в этом случае НЕнулевую ошибку вместе с
+// пригодной новой сессией; раньше ensureCSRFToken пробрасывал её наружу, и
+// браузер со старой cookie получал 500 на каждый GET, причём сама cookie не
+// перезаписывалась — выйти из этого состояния можно было только руками.
+func TestCSRFProtection_GET_WithUndecodableCookie_RecoversInsteadOf500(t *testing.T) {
+	// Сессия, подписанная чужим секретом.
+	foreignStore := sessions.NewCookieStore([]byte("some-completely-different-secret-value"))
+	foreignReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	foreignSess, err := foreignStore.New(foreignReq, middleware.SessionName)
+	require.NoError(t, err)
+	foreignSess.Values["csrf_token"] = "stale-token"
+
+	foreignRec := httptest.NewRecorder()
+	require.NoError(t, foreignSess.Save(foreignReq, foreignRec))
+
+	staleCookies := (&http.Response{Header: foreignRec.Header()}).Cookies()
+	require.NotEmpty(t, staleCookies)
+
+	e, csrfMiddleware := setupCSRFTest()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(staleCookies[0])
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	called := false
+	handler := csrfMiddleware(func(ctx echo.Context) error {
+		called = true
+		return ctx.String(http.StatusOK, "ok")
+	})
+
+	require.NoError(t, handler(c))
+	assert.True(t, called, "обработчик не вызван — нечитаемая cookie отдала ошибку вместо новой сессии")
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	token, tokenErr := middleware.GetCSRFToken(c)
+	require.NoError(t, tokenErr)
+	assert.NotEmpty(t, token)
+	assert.NotEqual(t, "stale-token", token, "токен взят из нечитаемой сессии")
+
+	assert.NotEmpty(t, (&http.Response{Header: rec.Header()}).Cookies(),
+		"новая cookie не выдана, браузер продолжит слать нечитаемую")
 }

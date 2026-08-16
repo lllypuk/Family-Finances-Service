@@ -1,9 +1,11 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"slices"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/domain/user"
@@ -36,17 +38,75 @@ func RequireAuth() echo.MiddlewareFunc {
 			// Проверяем аутентификацию
 			sessionData, err := GetSessionData(c)
 			if err != nil {
-				// Если это HTMX запрос, возвращаем специальный заголовок
-				if c.Request().Header.Get("Hx-Request") == HTMXRequestValue {
-					c.Response().Header().Set("Hx-Redirect", "/login")
-					return c.NoContent(http.StatusUnauthorized)
-				}
-				// Для обычных запросов - редирект на страницу входа
-				return c.Redirect(http.StatusFound, "/login")
+				return redirectToLogin(c)
 			}
 
 			// Сохраняем данные пользователя в контексте
 			c.Set("user", sessionData)
+			return next(c)
+		}
+	}
+}
+
+// redirectToLogin отправляет неаутентифицированного клиента на страницу входа.
+// HTMX-запросу редирект нужен заголовком, иначе он подставит страницу входа
+// внутрь фрагмента.
+func redirectToLogin(c echo.Context) error {
+	if c.Request().Header.Get("Hx-Request") == HTMXRequestValue {
+		c.Response().Header().Set("Hx-Redirect", "/login")
+		return c.NoContent(http.StatusUnauthorized)
+	}
+	return c.Redirect(http.StatusFound, "/login")
+}
+
+// SessionUserLookup — минимальный контракт для перепроверки владельца сессии.
+// Ровно один метод, чтобы middleware не тянул за собой пакет services.
+type SessionUserLookup interface {
+	GetUserByID(ctx context.Context, id uuid.UUID) (*user.User, error)
+}
+
+// RevalidateSessionUser перечитывает владельца сессии из БД.
+//
+// Хранилище сессий cookie-based: id и роль приходят из подписанной cookie и до
+// сих пор никем не перепроверялись, поэтому удалённый или пониженный в правах
+// пользователь сохранял доступ все 24 часа SessionTimeout, и отозвать его было
+// нечем. Здесь сессия сверяется с текущим состоянием БД: пользователя нет —
+// доступа нет, роль изменилась — дальше по цепочке идёт актуальная роль.
+//
+// Второе возвращаемое значение false означает «сессию дальше пускать нельзя».
+func RevalidateSessionUser(c echo.Context, lookup SessionUserLookup) (*SessionData, bool) {
+	sessionData, err := GetUserFromContext(c)
+	if err != nil {
+		return nil, false
+	}
+
+	record, lookupErr := lookup.GetUserByID(c.Request().Context(), sessionData.UserID)
+	if lookupErr != nil || record == nil {
+		return nil, false
+	}
+
+	fresh := *sessionData
+	fresh.Role = record.Role
+	fresh.Email = record.Email
+
+	return &fresh, true
+}
+
+// RequireActiveUser middleware перепроверяет владельца сессии в БД.
+// Ставится сразу после RequireAuth: тот кладёт SessionData в контекст, а этот
+// заменяет её на актуальную либо разлогинивает.
+func RequireActiveUser(lookup SessionUserLookup) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			fresh, ok := RevalidateSessionUser(c, lookup)
+			if !ok {
+				// Cookie больше ничего не значит — гасим её, иначе браузер
+				// будет слать её до истечения SessionTimeout.
+				_ = ClearSession(c)
+				return redirectToLogin(c)
+			}
+
+			c.Set("user", fresh)
 			return next(c)
 		}
 	}

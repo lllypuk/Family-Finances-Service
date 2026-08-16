@@ -49,7 +49,7 @@ func NewWebServer(
 	services *services.Services,
 	paths Paths,
 	sessionSecret string,
-	isProduction bool,
+	cookieSecure bool,
 ) (*Server, error) {
 	// Создаем рендерер шаблонов
 	renderer, err := NewTemplateRenderer(paths.TemplatesDir)
@@ -61,11 +61,11 @@ func NewWebServer(
 	e.Renderer = renderer
 
 	// Настраиваем middleware
-	e.Use(middleware.SessionStore(sessionSecret, isProduction))
+	e.Use(middleware.SessionStore(sessionSecret, cookieSecure))
 	e.Use(middleware.CSRFProtection())
 
-	// Включаем Secure flag на flash-cookie в production.
-	webHandlers.SetCookieSecureForProduction(isProduction)
+	// Тот же флаг Secure на flash-cookie.
+	webHandlers.SetCookieSecureForProduction(cookieSecure)
 
 	// Настраиваем обработчик ошибок
 	e.HTTPErrorHandler = customHTTPErrorHandler(renderer)
@@ -103,8 +103,14 @@ func (ws *Server) SetupRoutes() {
 	// Настраиваем маршруты аутентификации
 	ws.setupAuthRoutes()
 
-	// Защищенные маршруты (требуют аутентификации)
-	protected := ws.echo.Group("", middleware.RequireAuth())
+	// Защищенные маршруты (требуют аутентификации).
+	// RequireActiveUser сверяет владельца подписанной cookie с БД: иначе
+	// удалённый или пониженный в правах пользователь работал бы до конца
+	// SessionTimeout (24 часа), и отозвать доступ было бы нечем.
+	protected := ws.echo.Group("",
+		middleware.RequireAuth(),
+		middleware.RequireActiveUser(ws.services.User),
+	)
 
 	// Главная страница
 	protected.GET("/", ws.dashboardHandler.Dashboard)
@@ -262,7 +268,13 @@ func customHTTPErrorHandler(renderer *TemplateRenderer) echo.HTTPErrorHandler {
 			code = he.Code
 			msg = he.Message
 		} else {
-			msg = err.Error()
+			// Текст произвольной ошибки наружу не отдаём: там оказываются имена
+			// шаблонов и полей структур (renderer.go оборачивает ошибку
+			// исполнения) и обёрнутые ошибки репозиториев/сервисов. Клиент
+			// получает обобщённую формулировку, подробности — только в лог.
+			c.Logger().Errorf("unhandled error on %s %s: %v",
+				c.Request().Method, c.Request().URL.Path, err)
+			msg = getErrorTitle(code)
 		}
 
 		// Если ответ уже отправлен, не делаем ничего
@@ -272,7 +284,7 @@ func customHTTPErrorHandler(renderer *TemplateRenderer) echo.HTTPErrorHandler {
 
 		// Для HTMX запросов возвращаем простой текст
 		if c.Request().Header.Get("Hx-Request") == "true" {
-			_ = c.String(code, "Error: "+err.Error())
+			_ = c.String(code, fmt.Sprintf("Error: %v", msg))
 			return
 		}
 

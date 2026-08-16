@@ -34,6 +34,24 @@ func RequireAPIAuth() echo.MiddlewareFunc {
 	}
 }
 
+// RequireAPIActiveUser middleware — аналог middleware.RequireActiveUser для
+// группы /api/v1: владелец сессии перечитывается из БД, удалённый пользователь
+// получает 401, а роль для RequireAPIRole берётся актуальная, а не та, что
+// лежит в подписанной cookie. Ставится сразу после RequireAPIAuth.
+func RequireAPIActiveUser(lookup middleware.SessionUserLookup) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			fresh, ok := middleware.RevalidateSessionUser(c, lookup)
+			if !ok {
+				return respondUnauthorized(c)
+			}
+
+			c.Set(contextUserKey, fresh)
+			return next(c)
+		}
+	}
+}
+
 // RequireAPIRole middleware — аналог middleware.RequireRole для группы /api/v1.
 // Веб-вариант отдаёт HTML «Access denied», программному клиенту нужен JSON,
 // поэтому здесь: нет сессии — 401, роль не подходит — 403, оба раза телом

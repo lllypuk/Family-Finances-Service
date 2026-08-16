@@ -209,7 +209,10 @@ func (h *AuthHandler) Setup(c echo.Context) error {
 
 	_, err := h.services.Family.SetupFamily(c.Request().Context(), setupDTO)
 	if err != nil {
-		return h.setupError(c, "Failed to create family: "+err.Error(), nil)
+		// Текст ошибки сервиса наружу не отдаём (в него попадают детали БД):
+		// пользователю — обобщённая формулировка, подробности — в лог.
+		c.Logger().Errorf("setup family failed: %v", err)
+		return h.setupError(c, "Не удалось создать семью, попробуйте ещё раз", nil)
 	}
 
 	// Если это HTMX запрос
@@ -359,7 +362,8 @@ func (h *AuthHandler) InviteRegister(c echo.Context) error {
 				"email": "Email must match the invited email address",
 			})
 		}
-		return h.inviteError(c, token, "Failed to register: "+err.Error(), nil)
+		c.Logger().Errorf("invite registration failed: %v", err)
+		return h.inviteError(c, token, "Не удалось завершить регистрацию, попробуйте ещё раз", nil)
 	}
 
 	// Create session for the new user

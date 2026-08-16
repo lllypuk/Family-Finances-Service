@@ -53,7 +53,11 @@ type Config struct {
 	WriteTimeout  time.Duration
 	IdleTimeout   time.Duration
 	SessionSecret string
-	IsProduction  bool
+	// CookieSecure — флаг Secure на session-cookie (и на flash-cookie).
+	// Обычно совпадает с production, но управляется отдельно (COOKIE_SECURE):
+	// на http:// origin браузер выбрасывает Secure-cookie, и вход становится
+	// невозможен — см. internal/config.go.
+	CookieSecure bool
 
 	// TemplatesDir — путь к каталогу HTML-шаблонов. Пустое значение означает
 	// DefaultTemplatesDir, который резолвится относительно рабочего каталога процесса.
@@ -140,7 +144,7 @@ func NewHTTPServerWithObservability(
 	webServer, err := web.NewWebServer(
 		e, repositories, services,
 		web.Paths{TemplatesDir: templatesDir, StaticDir: staticDir},
-		config.SessionSecret, config.IsProduction,
+		config.SessionSecret, config.CookieSecure,
 	)
 	if err != nil {
 		// Не прерываем работу сервера, но ошибку обязательно логируем и сохраняем,
@@ -187,7 +191,14 @@ func (s *HTTPServer) setupRoutes() {
 	// API версионирование.
 	// RequireAPIAuth закрывает всю группу: без валидной сессии — 401 и JSON-ошибка
 	// (находка S-01). /health и веб-маршруты регистрируются выше и не задеты.
-	api := s.echo.Group("/api/v1", handlers.RequireAPIAuth())
+	apiAuth := []echo.MiddlewareFunc{handlers.RequireAPIAuth()}
+	// Та же перепроверка сессии по БД, что и в вебе. Сервер на моках (unit-тесты
+	// application) собирается без сервисов — там перепроверять нечем и не по чему.
+	if s.services != nil && s.services.User != nil {
+		apiAuth = append(apiAuth, handlers.RequireAPIActiveUser(s.services.User))
+	}
+
+	api := s.echo.Group("/api/v1", apiAuth...)
 
 	// Ролевая модель API повторяет веб (internal/web/web.go):
 	// управление пользователями — только админ (там RequireAdmin), финансовые

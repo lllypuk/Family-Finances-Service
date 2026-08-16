@@ -137,7 +137,8 @@ func (h *AdminHandler) CreateInvite(c echo.Context) error {
 		if strings.Contains(err.Error(), "pending invite already exists") {
 			return h.htmxError(c, "Pending invite already exists for this email")
 		}
-		return h.htmxError(c, "Failed to create invite: "+err.Error())
+		c.Logger().Errorf("create invite failed: %v", err)
+		return h.htmxError(c, "Не удалось создать приглашение, попробуйте ещё раз")
 	}
 
 	// Get base URL for invite links

@@ -47,10 +47,18 @@ func CSRFProtection() echo.MiddlewareFunc {
 	}
 }
 
-// ensureCSRFToken гарантирует наличие CSRF токена в сессии
+// ensureCSRFToken гарантирует наличие CSRF токена в сессии.
+//
+// gorilla CookieStore.New возвращает НЕнулевую ошибку вместе с пригодной новой
+// сессией, когда пришедшую cookie не удалось расшифровать (чужой или
+// провёрнутый SESSION_SECRET). Раньше эта ошибка пробрасывалась наружу, и
+// браузер со «старой» cookie получал 500 на каждый GET, причём сама cookie не
+// перезаписывалась — выйти из этого состояния можно было только руками.
+// Поэтому нечитаемая сессия трактуется как новая: ниже в неё кладётся свежий
+// токен и sess.Save перезаписывает cookie.
 func ensureCSRFToken(c echo.Context) error {
 	sess, err := getSession(c)
-	if err != nil {
+	if sess == nil {
 		return err
 	}
 
@@ -69,10 +77,13 @@ func ensureCSRFToken(c echo.Context) error {
 	return sess.Save(c.Request(), c.Response())
 }
 
-// validateCSRFToken проверяет CSRF токен
+// validateCSRFToken проверяет CSRF токен.
+//
+// Нерасшифровываемая cookie (см. ensureCSRFToken) — это не 500, а обычный
+// отказ: сессии нет, значит и токена в ней нет.
 func validateCSRFToken(c echo.Context) error {
 	sess, err := getSession(c)
-	if err != nil {
+	if sess == nil {
 		return err
 	}
 
@@ -120,7 +131,7 @@ func validateCSRFToken(c echo.Context) error {
 // токена: полученный до входа токен перестаёт подходить к сессии после входа.
 func RegenerateCSRFToken(c echo.Context) (string, error) {
 	sess, err := getSession(c)
-	if err != nil {
+	if sess == nil {
 		return "", err
 	}
 
@@ -139,8 +150,11 @@ func RegenerateCSRFToken(c echo.Context) (string, error) {
 
 // GetCSRFToken возвращает CSRF токен для использования в шаблонах
 func GetCSRFToken(c echo.Context) (string, error) {
+	// Нечитаемая cookie (чужой/провёрнутый SESSION_SECRET) — не ошибка
+	// рендеринга: gorilla отдаёт вместе с ней пригодную новую сессию,
+	// в которую ниже кладётся свежий токен. См. ensureCSRFToken.
 	sess, err := getSession(c)
-	if err != nil {
+	if sess == nil {
 		return "", err
 	}
 

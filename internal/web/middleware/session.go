@@ -29,8 +29,14 @@ type SessionData struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
-// SessionStore настраивает хранилище сессий
-func SessionStore(secretKey string, isProduction bool) echo.MiddlewareFunc {
+// SessionStore настраивает хранилище сессий.
+//
+// cookieSecure выставляет флаг Secure на cookie сессии. По умолчанию он равен
+// «сборка в production», но управляется переменной COOKIE_SECURE: браузер
+// выбрасывает Secure-cookie на любом http:// origin, и без такого рычага
+// развёртывание без TLS (docker-compose.minimal.yml, первый запуск по IP)
+// зацикливалось бы на входе.
+func SessionStore(secretKey string, cookieSecure bool) echo.MiddlewareFunc {
 	// Регистрируем типы для сессий
 	gob.Register(uuid.UUID{})
 	gob.Register(user.Role(""))
@@ -40,7 +46,7 @@ func SessionStore(secretKey string, isProduction bool) echo.MiddlewareFunc {
 		Path:     "/",
 		MaxAge:   int(SessionTimeout.Seconds()),
 		HttpOnly: true,
-		Secure:   isProduction, // true для production с HTTPS, false для разработки
+		Secure:   cookieSecure, // COOKIE_SECURE; по умолчанию true в production
 		SameSite: http.SameSiteLaxMode,
 	}
 	// NewCookieStore штампует кодеки своим MaxAge по умолчанию (30 дней), и
@@ -108,8 +114,10 @@ func GetSessionData(c echo.Context) (*SessionData, error) {
 
 // SetSessionData сохраняет данные в сессии
 func SetSessionData(c echo.Context, data *SessionData) error {
+	// Нечитаемая cookie не мешает записать сессию заново: gorilla отдаёт
+	// вместе с ошибкой пригодную новую сессию (см. csrf.go, ensureCSRFToken).
 	sess, err := session.Get(SessionName, c)
-	if err != nil {
+	if sess == nil {
 		return err
 	}
 
@@ -137,8 +145,10 @@ func SetSessionData(c echo.Context, data *SessionData) error {
 // вместе с токеном. Вызывать на каждой точке входа в аутентифицированное
 // состояние — вход по паролю и регистрация по приглашению.
 func RotateSession(c echo.Context, data *SessionData) error {
+	// Нечитаемая cookie не мешает записать сессию заново: gorilla отдаёт
+	// вместе с ошибкой пригодную новую сессию (см. csrf.go, ensureCSRFToken).
 	sess, err := session.Get(SessionName, c)
-	if err != nil {
+	if sess == nil {
 		return err
 	}
 
@@ -165,8 +175,10 @@ func RotateSession(c echo.Context, data *SessionData) error {
 
 // ClearSession очищает сессию
 func ClearSession(c echo.Context) error {
+	// Нечитаемая cookie не мешает записать сессию заново: gorilla отдаёт
+	// вместе с ошибкой пригодную новую сессию (см. csrf.go, ensureCSRFToken).
 	sess, err := session.Get(SessionName, c)
-	if err != nil {
+	if sess == nil {
 		return err
 	}
 
