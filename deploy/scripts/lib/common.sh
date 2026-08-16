@@ -44,10 +44,17 @@ check_system_requirements() {
     # Само приложение в работе укладывается в 128-256MB (Go + SQLite, один процесс).
     # Порог держим на 512MB: запас нужен не сервису, а локальной сборке Docker-образа.
     local min_ram_mb=512
+    local recommended_ram_mb=1024
     local total_ram=$(free -m | awk '/^Mem:/{print $2}')
     if [[ $total_ram -lt $min_ram_mb ]]; then
         log_error "Insufficient RAM: ${total_ram}MB (minimum ${min_ram_mb}MB required)"
         exit 1
+    fi
+    if [[ $total_ram -lt $recommended_ram_mb ]]; then
+        log_warning "Only ${total_ram}MB RAM: the local Docker image build compiles Go on this machine"
+        log_warning "and \`go build\` may be OOM-killed below ${recommended_ram_mb}MB."
+        log_warning "Add swap before continuing, e.g.:"
+        log_warning "  fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile"
     fi
     log_success "RAM check passed: ${total_ram}MB"
     

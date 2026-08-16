@@ -7,9 +7,11 @@ This directory contains production-ready deployment configurations and scripts f
 ### Prerequisites
 
 - Linux server (Ubuntu 22.04+, Debian 11+, or Rocky Linux 9)
-- Minimum 512MB RAM, 10GB disk space.
+- Minimum 512MB RAM, 10GB disk space. **1GB is recommended.**
   The running service itself fits in **128-256MB** (a single Go process plus SQLite);
-  the extra headroom is for building the Docker image locally.
+  the extra headroom is for building the Docker image locally. Below 1GB the `go build`
+  inside that image build may be OOM-killed — `install.sh` warns and suggests adding
+  swap, which is enough to make a 512MB box work.
 - Root or sudo access
 - `git` and outbound network access — the image is built from source (see below)
 - Domain name pointed to your server (for SSL)
@@ -121,6 +123,21 @@ All four compose files build the app image from source; validate them all at onc
 from the repository root with `make compose-config`.
 
 ## Deployment Options
+
+### Prepare the bind-mount directories first
+
+`docker-compose.minimal.yml`, `docker-compose.nginx.yml` and `docker-compose.caddy.yml`
+bind-mount `./data`, `./backups` and `./logs` from the host, and the container runs as
+`1000:1000` (`docker/Dockerfile`: `USER 1000:1000`). Docker creates a *missing*
+bind-mount source as **root-owned**, and then SQLite cannot create the database.
+
+`install.sh` does this for you. When you run one of those compose files by hand, create
+and chown the directories first, from the same directory the compose file runs in:
+
+```bash
+mkdir -p data backups logs
+sudo chown -R 1000:1000 data backups logs
+```
 
 ### Option 1: Standalone (No Reverse Proxy)
 

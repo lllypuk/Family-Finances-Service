@@ -125,9 +125,12 @@ docker-logs:
 	@echo "Showing Docker logs..."
 	@$(DOCKER_COMPOSE) logs -f
 
-# Проверка синтаксиса и интерполяции всех compose-файлов.
-# Секреты подставляются фиктивные — цель ловит опечатки в YAML и `${VAR:?…}`,
-# чтобы D-01 («compose не стартует без CSRF_SECRET») не воспроизвёлся молча.
+# Проверка синтаксиса и интерполяции всех compose-файлов — в два прохода:
+#   1) с фиктивными секретами — ловит опечатки в YAML и `${VAR:?…}`;
+#   2) без секретов — проверяет, что `${SESSION_SECRET:?…}` / `${CSRF_SECRET:?…}`
+#      действительно на месте и compose отказывается стартовать (регрессия D-01).
+# `--env-file /dev/null` во втором проходе нужен, чтобы локальный `.env`
+# разработчика не подставил секреты и не сделал проверку бессмысленной.
 # deploy/*.yml запускаются на месте, из `deploy/` — project directory там своя,
 # поэтому `--project-directory .` для них не нужен (в отличие от docker/*.yml).
 DEPLOY_COMPOSE_FILES=deploy/docker-compose.prod.yml \
@@ -144,6 +147,15 @@ compose-config:
 	@for f in $(DEPLOY_COMPOSE_FILES); do \
 		echo "  $$f"; \
 		$(COMPOSE_VALIDATE_ENV) docker compose -f $$f config -q || exit 1; \
+	done
+	@echo "Checking that compose refuses to start without secrets..."
+	@for f in $(DOCKER_COMPOSE_FILE) $(DEPLOY_COMPOSE_FILES); do \
+		echo "  $$f"; \
+		if env -u SESSION_SECRET -u CSRF_SECRET \
+			docker compose --env-file /dev/null -f $$f config -q >/dev/null 2>&1; then \
+			echo "ERROR: $$f validates without SESSION_SECRET/CSRF_SECRET (D-01 regression)"; \
+			exit 1; \
+		fi; \
 	done
 	@echo "All compose files are valid"
 

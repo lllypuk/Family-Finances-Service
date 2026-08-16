@@ -36,7 +36,7 @@ fi
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 UPGRADE_BACKUP_DIR="${BACKUP_DIR}/upgrade_${TIMESTAMP}"
 CURRENT_VERSION=""
-# git-ref, из которого пересобирается образ. `latest` — синоним ветки по умолчанию.
+# git-ref (тег, ветка или коммит), из которого пересобирается образ.
 TARGET_VERSION="main"
 ROLLBACK_ON_FAILURE=true
 
@@ -46,10 +46,6 @@ parse_args() {
         case $1 in
             --version)
                 TARGET_VERSION="$2"
-                # обратная совместимость: раньше это был тег образа
-                if [[ "${TARGET_VERSION}" == "latest" ]]; then
-                    TARGET_VERSION="main"
-                fi
                 shift 2
                 ;;
             --no-rollback)
@@ -80,9 +76,10 @@ Family Budget Service - Upgrade Script
 Usage: sudo ./upgrade.sh [OPTIONS] [COMMAND]
 
 OPTIONS:
-    --version VERSION    Target git ref - tag, branch or commit (default: main).
+    --version GIT_REF    Target git ref - tag, branch or commit (default: main).
                          The image is built from ${SRC_DIR}, there is no
-                         published registry image to pull.
+                         published registry image to pull, so this is never an
+                         image tag.
     --no-rollback        Disable automatic rollback on failure
     --help, -h           Show this help message
 
@@ -90,10 +87,10 @@ COMMANDS:
     rollback             Manually rollback to previous version
 
 EXAMPLES:
-    # Upgrade to latest version
+    # Upgrade to the tip of the default branch
     sudo ./upgrade.sh
 
-    # Upgrade to specific version
+    # Upgrade to a specific git ref
     sudo ./upgrade.sh --version v1.2.3
 
     # Upgrade without auto-rollback
@@ -116,6 +113,15 @@ check_root() {
     fi
 }
 
+# git >= 2.35.2 отказывается работать с репозиторием, принадлежащим другому
+# пользователю ("dubious ownership"): install.sh отдаёт ${SRC_DIR} системному
+# пользователю приложения, а этот скрипт работает из-под root.
+ensure_git_safe_directory() {
+    if ! git config --global --get-all safe.directory 2>/dev/null | grep -qxF "${SRC_DIR}"; then
+        git config --global --add safe.directory "${SRC_DIR}"
+    fi
+}
+
 check_installation() {
     log_info "Checking installation..."
 
@@ -135,6 +141,8 @@ check_installation() {
         log_error "The image is built from source; re-run install.sh to create it"
         exit 1
     fi
+
+    ensure_git_safe_directory
 
     log_success "Installation directory found"
 }
@@ -325,6 +333,31 @@ verify_health() {
 # Rollback Functions
 # ============================================
 
+# Откатить исходники на сохранённый коммит.
+# install.sh клонирует с `--depth 1`, поэтому предыдущего коммита в истории
+# может не быть вовсе — сначала углубляем историю, и только потом checkout.
+restore_source_checkout() {
+    local commit=$1
+
+    if ! git -C "${SRC_DIR}" cat-file -e "${commit}^{commit}" 2>/dev/null; then
+        log_info "Commit ${commit} is not in the local history, deepening the clone..."
+        if [[ "$(git -C "${SRC_DIR}" rev-parse --is-shallow-repository 2>/dev/null)" == "true" ]]; then
+            git -C "${SRC_DIR}" fetch --unshallow origin 2>/dev/null \
+                || git -C "${SRC_DIR}" fetch --deepen=50 origin 2>/dev/null \
+                || true
+        fi
+        # прицельная попытка: часть серверов отдаёт коммит по SHA
+        git -C "${SRC_DIR}" fetch origin "${commit}" 2>/dev/null || true
+    fi
+
+    if ! git -C "${SRC_DIR}" cat-file -e "${commit}^{commit}" 2>/dev/null; then
+        log_error "Commit ${commit} is still unreachable in ${SRC_DIR}"
+        return 1
+    fi
+
+    git -C "${SRC_DIR}" checkout --force --detach "${commit}"
+}
+
 rollback() {
     log_error "Upgrade failed, initiating automatic rollback..."
 
@@ -360,10 +393,14 @@ rollback() {
     local prev_version=$(cat "${UPGRADE_BACKUP_DIR}/version.txt" 2>/dev/null || echo "unknown")
     log_info "Restoring previous version: ${prev_version}"
 
-    if [[ "${prev_version}" != "unknown" ]] && git -C "${SRC_DIR}" checkout --force --detach "${prev_version}"; then
+    if [[ "${prev_version}" == "unknown" ]]; then
+        log_error "Previous commit is unknown; restarting with the image that is already built"
+        log_error "(that image is the FAILED upgrade — verify the service manually)"
+    elif restore_source_checkout "${prev_version}"; then
         docker compose -f "${COMPOSE_FILE}" build app || log_error "Rebuild of previous version failed"
     else
-        log_warning "Previous commit is unknown, restarting with the current image"
+        log_error "Could not restore sources at ${prev_version}; the image is NOT rebuilt"
+        log_error "and still contains the failed upgrade. Restore manually from ${UPGRADE_BACKUP_DIR}"
     fi
 
     docker compose -f "${COMPOSE_FILE}" up -d app
@@ -382,7 +419,9 @@ rollback() {
 
 manual_rollback() {
     log_info "=== Manual Rollback ==="
-    
+
+    ensure_git_safe_directory
+
     # Find most recent upgrade backup
     local latest_backup=$(ls -td "${BACKUP_DIR}"/upgrade_* 2>/dev/null | head -1)
     

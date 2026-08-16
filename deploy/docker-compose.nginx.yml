@@ -5,6 +5,11 @@ version: '3.8'
 # (каталог первого `-f`). По умолчанию `..`, то есть файл запускается на месте,
 # из `deploy/`. `install.sh` кладёт compose в `/opt/family-budget`, клонирует
 # исходники в `/opt/family-budget/src` и выставляет `BUILD_CONTEXT=./src`.
+#
+# ВАЖНО: каталоги bind-mount'ов нужно создать ДО первого `up` и отдать 1000:1000
+# (docker/Dockerfile: `USER 1000:1000`). Недостающие каталоги Docker создаёт от
+# root, и тогда SQLite не сможет создать БД:
+#   mkdir -p data backups logs && sudo chown -R 1000:1000 data backups logs
 
 services:
   app:

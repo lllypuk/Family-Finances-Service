@@ -90,8 +90,10 @@ ENVIRONMENT:
 
 REQUIREMENTS:
     - Ubuntu 22.04/24.04, Debian 11/12, or Rocky Linux 9
-    - Minimum 512MB RAM (the service itself needs ~128-256MB;
-      the rest is headroom for the Docker image build)
+    - Minimum 512MB RAM (the service itself needs ~128-256MB; the rest is headroom
+      for the Docker image build). 1GB is recommended: below that the local
+      `go build` inside the image build may be OOM-killed — add swap if you stay
+      at 512MB
     - Minimum 10GB disk space
     - Root or sudo privileges
     - Outbound network access (the image is built from source, see D-02)
@@ -168,6 +170,13 @@ fetch_sources() {
 
     install_git
 
+    # git >= 2.35.2 отказывается работать с репозиторием, принадлежащим другому
+    # пользователю ("dubious ownership"). set_file_permissions отдаёт $SRC_DIR
+    # пользователю $APP_USER, а install.sh/upgrade.sh работают из-под root.
+    if ! git config --global --get-all safe.directory 2>/dev/null | grep -qxF "$SRC_DIR"; then
+        git config --global --add safe.directory "$SRC_DIR"
+    fi
+
     if [[ -d "$SRC_DIR/.git" ]]; then
         log_info "Existing checkout found, updating..."
         git -C "$SRC_DIR" fetch --depth 1 origin "$REPO_REF"
@@ -186,54 +195,20 @@ download_deployment_files() {
 
     cd "$INSTALL_DIR"
 
-    # docker-compose.prod.yml — сначала из свежего checkout, затем из локального
-    # репозитория (когда скрипт запущен из клона), иначе встроенный fallback.
-    local compose_src=""
-    if [[ -f "$SRC_DIR/deploy/docker-compose.prod.yml" ]]; then
-        compose_src="$SRC_DIR/deploy/docker-compose.prod.yml"
-    elif [[ -f "$SCRIPT_DIR/../docker-compose.prod.yml" ]]; then
-        compose_src="$SCRIPT_DIR/../docker-compose.prod.yml"
+    # Единственный источник compose-файла — свежий checkout в $SRC_DIR
+    # (fetch_sources отработал выше). Встроенной копии здесь нет намеренно:
+    # она неизбежно расходится с deploy/docker-compose.prod.yml.
+    local compose_src="$SRC_DIR/deploy/docker-compose.prod.yml"
+
+    if [[ ! -f "$compose_src" ]]; then
+        log_error "Compose file not found: $compose_src"
+        log_error "The checkout at $SRC_DIR is incomplete (wrong REPO_GIT_URL/REPO_REF?)"
+        exit 1
     fi
 
-    if [[ -n "$compose_src" ]]; then
-        cp "$compose_src" "$INSTALL_DIR/docker-compose.yml"
-        log_info "Copied docker-compose.prod.yml from $compose_src"
-    else
-        log_warning "docker-compose.prod.yml not found, using minimal configuration"
-        cat > "$INSTALL_DIR/docker-compose.yml" <<'EOF'
-version: '3.8'
+    cp "$compose_src" "$INSTALL_DIR/docker-compose.yml"
+    log_info "Copied docker-compose.prod.yml from $compose_src"
 
-services:
-  app:
-    build:
-      context: ${BUILD_CONTEXT:-./src}
-      dockerfile: docker/Dockerfile
-    container_name: family-budget
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    user: "1000:1000"
-    environment:
-      - SERVER_PORT=8080
-      - SERVER_HOST=0.0.0.0
-      - DATABASE_PATH=/data/budget.db
-      - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET is required}
-      - CSRF_SECRET=${CSRF_SECRET:?CSRF_SECRET is required}
-      - LOG_LEVEL=info
-      - ENVIRONMENT=production
-    volumes:
-      - ./data:/data
-      - ./backups:/backups
-      - ./logs:/logs
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "-O", "/dev/null", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-EOF
-    fi
-    
     log_success "Deployment files ready"
 }
 
