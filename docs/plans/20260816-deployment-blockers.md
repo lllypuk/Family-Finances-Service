@@ -441,13 +441,40 @@ group-middleware на catch-all маршрут группы) — так анон
 - Modify: `.env.example`
 - Modify: `deploy/.env.production.example`
 
-- [ ] добавить `CSRF_SECRET: ${CSRF_SECRET:?CSRF_SECRET is required}` в `docker/docker-compose.yml`
-- [ ] заменить `${CSRF_SECRET:-}` на `:?` в prod/nginx/caddy — пустая строка не должна проходить как «задано»
-- [ ] то же для `SESSION_SECRET` в `prod.yml:14` — там тоже нет `:?`
-- [ ] убрать `ENVIRONMENT=development` и значения `INSECURE_*` из `minimal.yml` (S-04)
-- [ ] добавить отсутствующий `CSRF_SECRET` в корневой `.env.example` (сейчас есть только `SESSION_SECRET`, строка 26)
-- [ ] решить вопрос расположения `.env`: compose v2 ищет его рядом с первым `-f`, то есть `docker/.env`, а `README.md:91` учит класть в корень — добавить `env_file` или описать явно
-- [ ] проверить: без секретов `docker compose config` падает с внятным сообщением; с секретами контейнер поднимается и `/health` → 200
+- [x] добавить `CSRF_SECRET: ${CSRF_SECRET:?CSRF_SECRET is required}` в `docker/docker-compose.yml`
+- [x] заменить `${CSRF_SECRET:-}` на `:?` в prod/nginx/caddy — пустая строка не должна проходить как «задано»
+- [x] то же для `SESSION_SECRET` в `prod.yml:14` — там тоже нет `:?`
+- [x] убрать `ENVIRONMENT=development` и значения `INSECURE_*` из `minimal.yml` (S-04)
+- [x] добавить отсутствующий `CSRF_SECRET` в корневой `.env.example` (сейчас есть только `SESSION_SECRET`, строка 26)
+- [x] решить вопрос расположения `.env`: compose v2 ищет его рядом с первым `-f`, то есть `docker/.env`, а `README.md:91` учит класть в корень — добавить `env_file` или описать явно
+- [x] проверить: без секретов `docker compose config` падает с внятным сообщением; с секретами контейнер поднимается и `/health` → 200
+
+ℹ️ **`env_file` не подходит** — он наполняет окружение контейнера, а падает
+*интерполяция* `${VAR:?…}`, которая читает только shell-окружение и `.env` из
+project directory. Поэтому выбран `--project-directory .`: он возвращает project
+directory в корень репозитория, где и лежит `.env` (как учит README), и заодно
+резолвит относительные пути (`DATA_DIR`) от корня. Прописан в `Makefile`
+(переменная `DOCKER_COMPOSE`, заодно `docker-compose` v1 → `docker compose` v2),
+в README и в шапке `docker/docker-compose.yml`. Следствие: `build.context`
+в `docker/docker-compose.yml` пришлось поменять с `..` на `.` — он тоже
+резолвится от project directory.
+
+⚠️ Сообщение об ошибке в `:?` **не может содержать `: `** — compose парсит YAML до
+интерполяции и валится на `mapping values are not allowed`. Формулировка:
+``VAR is required - generate one with `openssl rand -base64 32` ``.
+
+➕ Попутно найдено и починено во всех пяти файлах: healthcheck `wget --spider`
+шлёт **HEAD**, а зарегистрирован только `GET /health` — HEAD проваливается в
+редирект `/login` ⇄ `/setup`, wget выходит с кодом 8 и контейнер **навсегда
+`unhealthy`** (проверено вживую). Заменено на `wget -O /dev/null` (обычный GET);
+после правки контейнер становится `healthy` за ~9 секунд.
+
+Проверено вживую (docker 29.6.2, compose v5.4.0):
+- все 5 файлов без секретов и с пустыми строками → `config -q` даёт rc=1 и
+  «required variable … is missing a value: …»;
+- все 5 файлов с секретами → rc=0;
+- `docker compose --project-directory . -f docker/docker-compose.yml up -d --build`
+  → сборка проходит, `/health` → 200, `/` → 302 `/setup`, healthcheck `healthy`.
 
 ### Task 11: Сборка образа из исходников (D-02, D-03, D-04)
 

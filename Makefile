@@ -3,6 +3,10 @@ APP_NAME=family-budget-service
 BUILD_DIR=./build
 DATA_DIR=./data
 DOCKER_COMPOSE_FILE=docker/docker-compose.yml
+# compose v2 берёт `.env` и относительные пути из project directory, которая по
+# умолчанию равна каталогу первого `-f` (то есть `docker/`). `--project-directory .`
+# возвращает её в корень репозитория — там, где лежит `.env` (см. README).
+DOCKER_COMPOSE=docker compose --project-directory . -f $(DOCKER_COMPOSE_FILE)
 
 # Сборка приложения
 .PHONY: build
@@ -97,29 +101,29 @@ clean:
 .PHONY: docker-build
 docker-build:
 	@echo "Building Docker image..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) build
+	@$(DOCKER_COMPOSE) build
 
 .PHONY: docker-up
 docker-up:
 	@echo "Starting Docker container..."
 	@mkdir -p $(DATA_DIR)
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) up
+	@$(DOCKER_COMPOSE) up
 
 .PHONY: docker-up-d
 docker-up-d:
 	@echo "Starting Docker container in detached mode..."
 	@mkdir -p $(DATA_DIR)
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) up -d
+	@$(DOCKER_COMPOSE) up -d
 
 .PHONY: docker-down
 docker-down:
 	@echo "Stopping Docker containers..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) down
+	@$(DOCKER_COMPOSE) down
 
 .PHONY: docker-logs
 docker-logs:
 	@echo "Showing Docker logs..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) logs -f
+	@$(DOCKER_COMPOSE) logs -f
 
 # SQLite специфичные команды
 .PHONY: sqlite-backup

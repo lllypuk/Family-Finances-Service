@@ -171,7 +171,8 @@ services:
       - SERVER_PORT=8080
       - SERVER_HOST=0.0.0.0
       - DATABASE_PATH=/data/budget.db
-      - SESSION_SECRET=${SESSION_SECRET}
+      - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET is required}
+      - CSRF_SECRET=${CSRF_SECRET:?CSRF_SECRET is required}
       - LOG_LEVEL=info
       - ENVIRONMENT=production
     volumes:
@@ -179,7 +180,7 @@ services:
       - ./backups:/backups
       - ./logs:/logs
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "-O", "/dev/null", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3

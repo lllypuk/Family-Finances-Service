@@ -87,12 +87,13 @@ This project is in **active development** with the following achievements:
 ### Option 1: Docker (Recommended)
 
 ```bash
-# 1. Create .env file
+# 1. Create .env file in the repository root
 cp .env.example .env
-# Edit SESSION_SECRET in .env!
+# Set SESSION_SECRET and CSRF_SECRET — both are required, compose won't start without them:
+#   openssl rand -base64 32
 
-# 2. Start container
-docker-compose -f docker/docker-compose.yml up -d
+# 2. Start container (make docker-up-d does the same)
+docker compose --project-directory . -f docker/docker-compose.yml up -d
 
 # 3. Open in browser
 # http://localhost:8080
@@ -231,15 +232,24 @@ The application uses environment variables for configuration. Key variables:
 
 ## Running with Docker
 
+`SESSION_SECRET` and `CSRF_SECRET` are mandatory: the compose file declares them as
+`${VAR:?...}`, so an unset or empty value aborts the command with an explicit message
+instead of silently booting with a well-known default.
+
+`.env` belongs in the **repository root**. Compose v2 resolves `.env` (and relative
+paths such as `DATA_DIR`) against the *project directory*, which defaults to the
+directory of the first `-f` file — `docker/`. `--project-directory .` moves it back to
+the root, which is why every command below (and every `make docker-*` target) passes it.
+
 ```bash
 # Build and start all services
-docker-compose -f docker/docker-compose.yml up --build
+docker compose --project-directory . -f docker/docker-compose.yml up --build
 
 # Run in background
-docker-compose -f docker/docker-compose.yml up -d
+docker compose --project-directory . -f docker/docker-compose.yml up -d
 
 # Stop services
-docker-compose -f docker/docker-compose.yml down
+docker compose --project-directory . -f docker/docker-compose.yml down
 ```
 
 ## Development

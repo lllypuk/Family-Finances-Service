@@ -16,23 +16,29 @@ services:
       - SERVER_PORT=8080
       - SERVER_HOST=0.0.0.0
       - DATABASE_PATH=/data/budget.db
-      - SESSION_SECRET=${SESSION_SECRET:-INSECURE_DEV_SECRET_CHANGE_IN_PRODUCTION}
-      - CSRF_SECRET=${CSRF_SECRET:-INSECURE_DEV_CSRF_SECRET}
-      - LOG_LEVEL=${LOG_LEVEL:-debug}
-      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET is required - generate one with `openssl rand -base64 32`}
+      - CSRF_SECRET=${CSRF_SECRET:?CSRF_SECRET is required - generate one with `openssl rand -base64 32`}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
     volumes:
       - ./data:/data
       - ./backups:/backups
       - ./logs:/logs
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      # `--spider` шлёт HEAD, а зарегистрирован только GET /health — HEAD уходит
+      # в редирект на /login и healthcheck падает. Поэтому обычный GET в /dev/null.
+      test: ["CMD", "wget", "--quiet", "--tries=1", "-O", "/dev/null", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
 # Usage:
+#   cp .env.production.example .env   # затем заполнить SESSION_SECRET и CSRF_SECRET
 #   docker compose -f docker-compose.minimal.yml up -d
+#
+# Без заданных SESSION_SECRET и CSRF_SECRET compose откажется стартовать —
+# так задумано (S-04): «безопасных» значений по умолчанию для секретов не бывает.
 #
 # Access at:
 #   http://localhost:8080
