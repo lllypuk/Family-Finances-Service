@@ -30,19 +30,24 @@ type TransactionForm struct {
 	Tags        string `form:"tags"        validate:"omitempty,max=500"             json:"tags"` // Comma-separated tags
 }
 
-// TransactionFilters представляет фильтры для поиска транзакций (на базе domain.transaction.Filter)
+// TransactionFilters представляет фильтры для поиска транзакций (на базе domain.transaction.Filter).
+//
+// Теги `query` обязательны: страница и HTMX-партиалы приходят методом GET
+// (форма фильтров с method="GET", ссылки пагинации, hx-get), а echo привязывает
+// query-параметры только по тегу `query` — по одному лишь `form` фильтры и
+// номер страницы молча терялись.
 type TransactionFilters struct {
-	UserID      string `form:"user_id"     validate:"omitempty,uuid"                 json:"user_id,omitempty"`
-	CategoryID  string `form:"category_id" validate:"omitempty,uuid"                 json:"category_id,omitempty"`
-	Type        string `form:"type"        validate:"omitempty,oneof=income expense" json:"type,omitempty"`
-	DateFrom    string `form:"date_from"   validate:"omitempty"                      json:"date_from,omitempty"`
-	DateTo      string `form:"date_to"     validate:"omitempty"                      json:"date_to,omitempty"`
-	AmountFrom  string `form:"amount_from" validate:"omitempty,numeric,gte=0"        json:"amount_from,omitempty"`
-	AmountTo    string `form:"amount_to"   validate:"omitempty,numeric,gte=0"        json:"amount_to,omitempty"`
-	Tags        string `form:"tags"        validate:"omitempty,max=500"              json:"tags,omitempty"`
-	Description string `form:"description" validate:"omitempty,max=100"              json:"description,omitempty"`
-	Page        int    `form:"page"        validate:"omitempty,min=1"                json:"page,omitempty"`
-	PageSize    int    `form:"page_size"   validate:"omitempty,min=1,max=100"        json:"page_size,omitempty"`
+	UserID      string `form:"user_id"     query:"user_id"     validate:"omitempty,uuid"                 json:"user_id,omitempty"`
+	CategoryID  string `form:"category_id" query:"category_id" validate:"omitempty,uuid"                 json:"category_id,omitempty"`
+	Type        string `form:"type"        query:"type"        validate:"omitempty,oneof=income expense" json:"type,omitempty"`
+	DateFrom    string `form:"date_from"   query:"date_from"   validate:"omitempty"                      json:"date_from,omitempty"`
+	DateTo      string `form:"date_to"     query:"date_to"     validate:"omitempty"                      json:"date_to,omitempty"`
+	AmountFrom  string `form:"amount_from" query:"amount_from" validate:"omitempty,numeric,gte=0"        json:"amount_from,omitempty"`
+	AmountTo    string `form:"amount_to"   query:"amount_to"   validate:"omitempty,numeric,gte=0"        json:"amount_to,omitempty"`
+	Tags        string `form:"tags"        query:"tags"        validate:"omitempty,max=500"              json:"tags,omitempty"`
+	Description string `form:"description" query:"description" validate:"omitempty,max=100"              json:"description,omitempty"`
+	Page        int    `form:"page"        query:"page"        validate:"omitempty,min=1"                json:"page,omitempty"`
+	PageSize    int    `form:"page_size"   query:"page_size"   validate:"omitempty,min=1,max=100"        json:"page_size,omitempty"`
 }
 
 // TransactionViewModel представляет транзакцию для отображения
@@ -151,6 +156,46 @@ func (f *TransactionForm) GetTags() []string {
 	}
 
 	return result
+}
+
+// QueryParams возвращает непустые фильтры в виде карты «имя query-параметра →
+// значение». Номер страницы не включается — его шаблон подставляет сам, а вот
+// page_size включается: без него ссылка на соседнюю страницу считала бы offset
+// от размера страницы по умолчанию и просто промахивалась мимо записей.
+//
+// Метод существует ради шаблонов пагинации (pages/transactions/index.html,
+// components/transaction_table.html): они собирали хвост ссылки через
+// `{{range $key, $value := .Filters}}`, но TransactionFilters — структура, а не
+// карта, и text/template падает с «range can't iterate over ...», роняя
+// страницу в 500 на любом `?page=2`.
+//
+// Приёмник — указатель, как у остальных методов типа (recvcheck запрещает
+// смешивать), поэтому хендлеры кладут в данные шаблона *TransactionFilters:
+// у неадресуемого значения метод с указателем из шаблона не вызвать.
+func (f *TransactionFilters) QueryParams() map[string]string {
+	params := map[string]string{
+		"user_id":     f.UserID,
+		"category_id": f.CategoryID,
+		"type":        f.Type,
+		"date_from":   f.DateFrom,
+		"date_to":     f.DateTo,
+		"amount_from": f.AmountFrom,
+		"amount_to":   f.AmountTo,
+		"tags":        f.Tags,
+		"description": f.Description,
+	}
+
+	for key, value := range params {
+		if value == "" {
+			delete(params, key)
+		}
+	}
+
+	if f.PageSize > 0 {
+		params["page_size"] = strconv.Itoa(f.PageSize)
+	}
+
+	return params
 }
 
 // ToDomainFilter конвертирует веб-фильтры в domain фильтр

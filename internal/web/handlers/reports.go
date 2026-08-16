@@ -801,19 +801,23 @@ func (h *ReportHandler) convertTopExpensesItems(items []dto.TransactionSummaryDT
 	return topExpenses
 }
 
-// getReportServiceErrorMessage возвращает пользовательское сообщение об ошибке
+// getReportServiceErrorMessage возвращает пользовательское сообщение об ошибке.
+//
+// Как и у бюджетов, исходный текст ошибки клиенту не показывается: обёрнутая
+// ошибка репозитория раскрывает схему БД. Наружу идёт только распознанная
+// формулировка либо общая.
 func (h *ReportHandler) getReportServiceErrorMessage(err error) string {
 	errMsg := err.Error()
 	switch {
 	case strings.Contains(errMsg, "report not found"):
-		return fmt.Sprintf("Report not found: %s", errMsg)
+		return "Report not found"
 	case strings.Contains(errMsg, "invalid date range"):
-		return fmt.Sprintf("Invalid date range: %s", errMsg)
+		return "Invalid date range"
 	case strings.Contains(errMsg, "no data available"):
-		return fmt.Sprintf("No data available for the specified period: %s", errMsg)
+		return "No data available for the specified period"
 	case strings.Contains(errMsg, "generation failed"):
-		return fmt.Sprintf("Failed to generate report: %s", errMsg)
+		return "Failed to generate report"
 	default:
-		return fmt.Sprintf("Failed to process report: %s", errMsg)
+		return "Failed to process report"
 	}
 }

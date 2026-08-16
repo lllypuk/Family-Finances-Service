@@ -156,6 +156,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          # Тот же дефект, что и в docker.yml: Dockerfile лежит в docker/.
+          file: docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

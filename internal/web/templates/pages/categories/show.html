@@ -174,10 +174,7 @@
         <section class="budget-progress">
             <h3>Прогресс по месячному лимиту</h3>
             <div class="progress-card">
-                <div class="progress {{.Category.BudgetProgressClass}}"
-                     hx-get="/categories/{{.Category.ID}}/progress"
-                     hx-trigger="load, every 60s"
-                     hx-swap="outerHTML">
+                <div class="progress {{.Category.BudgetProgressClass}}">
                     <div class="progress-bar" style="width: {{if gt .Category.BudgetPercentage 100.0}}100{{else}}{{printf "%.1f" .Category.BudgetPercentage}}{{end}}%">
                         <span class="progress-text">{{printf "%.1f" .Category.BudgetPercentage}}%</span>
                     </div>

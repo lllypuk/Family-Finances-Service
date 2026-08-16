@@ -404,19 +404,24 @@ func (h *TransactionHandler) renderTransactionFormWithErrors(
 	return h.renderPage(c, template, data)
 }
 
-// getTransactionServiceErrorMessage возвращает пользовательское сообщение об ошибке
+// getTransactionServiceErrorMessage возвращает пользовательское сообщение об ошибке.
+//
+// Как у бюджетов и отчётов, исходный текст ошибки клиенту не подставляется:
+// сообщение уходит в echo.HTTPError и в components/alert, а в ошибку сервиса
+// завёрнута ошибка репозитория — имена таблиц и колонок SQLite, текст
+// ограничений. Наружу идёт только распознанная формулировка либо общая.
 func (h *TransactionHandler) getTransactionServiceErrorMessage(err error) string {
 	errMsg := err.Error()
 	switch {
 	case strings.Contains(errMsg, "category not found"):
-		return fmt.Sprintf("Selected category not found: %s", errMsg)
+		return "Selected category not found"
 	case strings.Contains(errMsg, "insufficient balance"):
-		return fmt.Sprintf("Insufficient budget balance for this category: %s", errMsg)
+		return "Insufficient budget balance for this category"
 	case strings.Contains(errMsg, "invalid date"):
-		return fmt.Sprintf("Invalid transaction date: %s", errMsg)
+		return "Invalid transaction date"
 	case strings.Contains(errMsg, "invalid amount"):
-		return fmt.Sprintf("Invalid transaction amount: %s", errMsg)
+		return "Invalid transaction amount"
 	default:
-		return fmt.Sprintf("Failed to process transaction: %s", errMsg)
+		return "Failed to process transaction"
 	}
 }

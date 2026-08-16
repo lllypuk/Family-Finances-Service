@@ -273,10 +273,56 @@ download_deployment_files() {
     log_success "Deployment files ready"
 }
 
-# Create environment file
+# Дописать KEY=value в config/.env, если такого ключа там ещё нет.
+# Существующие значения не трогаем: их правит оператор.
+ensure_env_key() {
+    local key=$1
+    local value=$2
+    local env_file="$INSTALL_DIR/config/.env"
+
+    if grep -q "^${key}=" "$env_file"; then
+        return 0
+    fi
+
+    printf '%s=%s\n' "$key" "$value" >> "$env_file"
+    log_info "Added missing $key to config/.env"
+}
+
+# Create environment file.
+#
+# Повторный запуск НЕ перезаписывает существующий config/.env. Раньше здесь был
+# безусловный `cat >`, и второй прогон сбрасывал правки оператора: COOKIE_SECURE
+# возвращался в true (на плайн-HTTP браузер молча выбрасывает Secure-cookie, и
+# вход зацикливается на "CSRF token not found in session"), а DOMAIN, LOG_LEVEL и
+# ENVIRONMENT — к значениям промпта, которые в --non-interactive равны localhost.
+# Файл переписывается только при первой установке и при --reinstall; в остальных
+# случаях лишь дописываются ключи, появившиеся в новых версиях.
 create_env_file() {
+    local env_file="$INSTALL_DIR/config/.env"
+
+    if [[ -f "$env_file" && "$REINSTALL" != "true" ]]; then
+        log_info "Keeping existing environment file $env_file"
+        log_info "Operator settings (COOKIE_SECURE, DOMAIN, LOG_LEVEL, ENVIRONMENT, ...) are preserved"
+
+        ensure_env_key SERVER_PORT 8080
+        ensure_env_key SERVER_HOST 0.0.0.0
+        ensure_env_key DOMAIN "$DOMAIN"
+        ensure_env_key DATABASE_PATH /data/budget.db
+        ensure_env_key BUILD_CONTEXT ./src
+        ensure_env_key SESSION_SECRET "$SESSION_SECRET"
+        ensure_env_key CSRF_SECRET "$CSRF_SECRET"
+        ensure_env_key LOG_LEVEL info
+        ensure_env_key ENVIRONMENT production
+        ensure_env_key COOKIE_SECURE true
+        ensure_env_key ADMIN_EMAIL "$ADMIN_EMAIL"
+
+        chmod 600 "$env_file"
+        log_success "Environment file is up to date"
+        return 0
+    fi
+
     log_info "Creating environment file..."
-    
+
     cat > "$INSTALL_DIR/config/.env" <<EOF
 # Family Budget Service - Production Configuration
 # Generated on $(date)

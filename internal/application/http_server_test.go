@@ -265,6 +265,14 @@ func (m *MockTransactionService) GetAllTransactions(
 }
 
 //nolint:revive // test mock
+func (m *MockTransactionService) CountTransactions(
+	ctx context.Context,
+	filter dto.TransactionFilterDTO,
+) (int, error) {
+	return 0, nil
+}
+
+//nolint:revive // test mock
 func (m *MockTransactionService) GetTransactionsByCategory(
 	ctx context.Context,
 	categoryID uuid.UUID,

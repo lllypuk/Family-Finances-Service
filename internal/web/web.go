@@ -228,7 +228,13 @@ func (ws *Server) setupReportRoutes(protected *echo.Group) {
 
 // setupHTMXRoutes настраивает HTMX endpoints
 func (ws *Server) setupHTMXRoutes(protected *echo.Group) {
-	htmx := protected.Group("/htmx", middleware.RequireAuth())
+	// Никакого повторного middleware.RequireAuth() здесь быть не должно: Echo
+	// склеивает middleware родительской группы с middleware дочерней, поэтому
+	// второй RequireAuth отработал бы ПОСЛЕ RequireActiveUser и перезаписал бы
+	// в контексте свежую (прочитанную из БД) SessionData той, что лежит в
+	// подписанной cookie. Ролевые проверки ниже читали бы устаревшую роль, и
+	// понижение прав не действовало бы до конца SessionTimeout.
+	htmx := protected.Group("/htmx")
 
 	// HTMX для dashboard
 	htmx.GET("/dashboard/stats", ws.dashboardHandler.DashboardStats)

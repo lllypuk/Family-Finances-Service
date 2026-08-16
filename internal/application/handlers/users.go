@@ -12,6 +12,7 @@ import (
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
+	"family-budget-service/internal/web/middleware"
 )
 
 var ErrFamilyNotFound = errors.New("family not found")
@@ -101,6 +102,9 @@ func (h *UserHandler) handleServiceError(c echo.Context, err error) error {
 				Version:   "v1",
 			},
 		})
+	case errors.Is(err, services.ErrLastAdmin):
+		return respondError(c, http.StatusBadRequest, ErrCodeLastAdmin, ErrMessageLastAdmin,
+			"The family must keep at least one administrator")
 	case errors.Is(err, services.ErrInvalidRole):
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -309,6 +313,17 @@ func (h *UserHandler) DeleteUser(c echo.Context) error {
 				Version:   "v1",
 			},
 		})
+	}
+
+	// Ролевая модель API повторяет веб (AdminHandler.DeleteUser): удалить сам
+	// себя нельзя — админ мгновенно теряет и сессию (RequireAPIActiveUser
+	// отзывает её на следующем запросе), и доступ к консоли.
+	sessionData, sessionErr := middleware.GetUserFromContext(c)
+	if sessionErr != nil {
+		return respondUnauthorized(c)
+	}
+	if sessionData.UserID == id {
+		return respondError(c, http.StatusBadRequest, ErrCodeCannotDeleteSelf, ErrMessageCannotDeleteSelf)
 	}
 
 	// Call service

@@ -3,6 +3,9 @@
 # Safely upgrades the application with automatic backup and rollback
 
 set -euo pipefail
+# -E: ловушка ERR наследуется функциями и подоболочками, иначе она не сработает
+# внутри start_service/create_upgrade_backup, ради которых и заведена.
+set -E
 
 # Configuration
 INSTALL_DIR="${INSTALL_DIR:-/opt/family-budget}"
@@ -15,6 +18,10 @@ COMPOSE_FILE="${COMPOSE_FILE:-${INSTALL_DIR}/docker-compose.yml}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8080/health}"
 HEALTH_CHECK_TIMEOUT=60
 HEALTH_CHECK_INTERVAL=2
+# UID/GID пользователя внутри образа (docker/Dockerfile: app = 1000:1000).
+# Файлы на bind-mount ./data должны принадлежать ему, иначе SQLite не откроет БД.
+CONTAINER_UID="${CONTAINER_UID:-1000}"
+CONTAINER_GID="${CONTAINER_GID:-1000}"
 
 # Source common functions if available
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -246,32 +253,36 @@ backup_database_file() {
     return 0
 }
 
+# Снять предобновленческий бэкап. Каждая операция проверяется явно и возвращает
+# 1: сервис на этот момент уже остановлен, а `set -e` внутри функции, вызванной
+# в условии (`if ! create_upgrade_backup`), не работает — без явных проверок
+# частично снятый бэкап считался бы удачным, и откат восстанавливал бы обрывок.
 create_upgrade_backup() {
     log_info "Creating pre-upgrade backup..."
 
-    mkdir -p "${UPGRADE_BACKUP_DIR}"
+    mkdir -p "${UPGRADE_BACKUP_DIR}" || return 1
 
     # Backup database if exists
     local db_file="${DATA_DIR}/budget.db"
     if [[ -f "${db_file}" ]]; then
         log_info "Backing up database..."
-        backup_database_file "${db_file}" "${UPGRADE_BACKUP_DIR}/budget.db"
+        backup_database_file "${db_file}" "${UPGRADE_BACKUP_DIR}/budget.db" || return 1
         log_success "Database backed up"
     fi
 
     # Backup environment file
     if [[ -f "${INSTALL_DIR}/.env" ]]; then
         log_info "Backing up environment file..."
-        cp "${INSTALL_DIR}/.env" "${UPGRADE_BACKUP_DIR}/.env"
+        cp "${INSTALL_DIR}/.env" "${UPGRADE_BACKUP_DIR}/.env" || return 1
     fi
     if [[ -f "${INSTALL_DIR}/config/.env" ]]; then
-        mkdir -p "${UPGRADE_BACKUP_DIR}/config"
-        cp "${INSTALL_DIR}/config/.env" "${UPGRADE_BACKUP_DIR}/config/.env"
+        mkdir -p "${UPGRADE_BACKUP_DIR}/config" || return 1
+        cp "${INSTALL_DIR}/config/.env" "${UPGRADE_BACKUP_DIR}/config/.env" || return 1
     fi
 
     # Save current version info
-    echo "${CURRENT_VERSION}" > "${UPGRADE_BACKUP_DIR}/version.txt"
-    date > "${UPGRADE_BACKUP_DIR}/backup_time.txt"
+    echo "${CURRENT_VERSION}" > "${UPGRADE_BACKUP_DIR}/version.txt" || return 1
+    date > "${UPGRADE_BACKUP_DIR}/backup_time.txt" || return 1
 
     # Save container info if running
     if docker ps --format '{{.Names}}' | grep -q 'family-budget'; then
@@ -285,10 +296,36 @@ create_upgrade_backup() {
 # Upgrade Functions
 # ============================================
 
+# Вернуть рабочее дерево на коммит, из которого собран текущий (уже запущенный)
+# образ. Без этого неудачная сборка оставляет ${SRC_DIR} на новом коммите, тогда
+# как контейнер продолжает работать на старом образе: get_current_version на
+# следующем запуске отдаёт версию, которая никогда не разворачивалась, проверка
+# "CURRENT_VERSION == TARGET_VERSION" пропускает нужную пересборку, а version.txt
+# в бэкапе фиксирует сломанную ревизию — то есть откат восстанавливает не то.
+restore_src_checkout() {
+    local commit=$1
+
+    if [[ -z "${commit}" || "${commit}" == "unknown" ]]; then
+        log_warning "Previous commit is unknown, leaving ${SRC_DIR} as is"
+        return 0
+    fi
+
+    if git -C "${SRC_DIR}" checkout --force --detach "${commit}" 2>/dev/null; then
+        log_info "Restored sources to ${commit}"
+    else
+        log_warning "Failed to restore sources to ${commit}; ${SRC_DIR} may be out of sync with the running image"
+    fi
+}
+
 # Обновить исходники и пересобрать образ.
 # `docker compose pull` тут неприменим: сервис build-only (D-02).
 build_new_version() {
     log_info "Fetching sources for: ${TARGET_VERSION}..."
+
+    # Коммит, из которого собран работающий образ: на него откатываем дерево,
+    # если что-то ниже сломается.
+    local previous_head
+    previous_head=$(git -C "${SRC_DIR}" rev-parse HEAD 2>/dev/null || echo "unknown")
 
     if ! git -C "${SRC_DIR}" fetch --tags --force origin "${TARGET_VERSION}"; then
         log_error "Failed to fetch ref: ${TARGET_VERSION}"
@@ -297,6 +334,7 @@ build_new_version() {
 
     if ! git -C "${SRC_DIR}" checkout --force --detach FETCH_HEAD; then
         log_error "Failed to check out ref: ${TARGET_VERSION}"
+        restore_src_checkout "${previous_head}"
         return 1
     fi
 
@@ -308,6 +346,9 @@ build_new_version() {
         log_success "Successfully built version: ${TARGET_VERSION}"
     else
         log_error "Failed to build new version"
+        # Дерево возвращаем к работающему образу: иначе следующий запуск сочтёт
+        # несобранный коммит текущей версией.
+        restore_src_checkout "${previous_head}"
         return 1
     fi
 }
@@ -331,9 +372,12 @@ stop_service() {
 start_service() {
     log_info "Starting service with new version..."
 
-    cd "${INSTALL_DIR}"
+    cd "${INSTALL_DIR}" || return 1
 
-    docker compose -f "${COMPOSE_FILE}" up -d app
+    # Явная проверка обязательна: `up -d` падает на занятом порте, на нехватке
+    # места и на неверном .env, а вызывающая сторона обрабатывает только
+    # ненулевой код возврата (внутри `if !` механизм `set -e` отключён).
+    docker compose -f "${COMPOSE_FILE}" up -d app || return 1
 
     # Wait for startup
     log_info "Waiting for service to start..."
@@ -420,6 +464,18 @@ rollback() {
         if [[ -f "${UPGRADE_BACKUP_DIR}/budget.db-shm" ]]; then
             cp "${UPGRADE_BACKUP_DIR}/budget.db-shm" "${DATA_DIR}/budget.db-shm"
         fi
+
+        # Скрипт работает из-под root. `cp` поверх существующего budget.db
+        # сохраняет его владельца, но -wal/-shm были удалены строкой выше, и
+        # копии создаются заново от root:root. Контейнер запущен как uid 1000,
+        # SQLite в режиме WAL пишет в оба файла — без chown откатанный сервис
+        # просто не открывает базу. Этот путь как раз штатный на хостах без
+        # sqlite3 (см. backup_database_file).
+        chown "${CONTAINER_UID}:${CONTAINER_GID}" \
+            "${DATA_DIR}/budget.db" \
+            "${DATA_DIR}/budget.db-wal" \
+            "${DATA_DIR}/budget.db-shm" 2>/dev/null || true
+
         log_success "Database restored"
     fi
 
@@ -433,7 +489,12 @@ rollback() {
 
     # Restore previous version: откатываем исходники на сохранённый коммит и
     # пересобираем образ — готового образа для отката в реестре нет (D-02).
-    local prev_version=$(cat "${UPGRADE_BACKUP_DIR}/version.txt" 2>/dev/null || echo "unknown")
+    # Если бэкап не успел записать version.txt (падение до этого шага), берём
+    # версию, определённую в начале прогона: она и есть уже развёрнутая.
+    local prev_version=$(cat "${UPGRADE_BACKUP_DIR}/version.txt" 2>/dev/null || echo "")
+    if [[ -z "${prev_version}" ]]; then
+        prev_version="${CURRENT_VERSION:-unknown}"
+    fi
     log_info "Restoring previous version: ${prev_version}"
 
     if [[ "${prev_version}" == "unknown" ]]; then
@@ -458,6 +519,40 @@ rollback() {
         log_error "Backup location: ${UPGRADE_BACKUP_DIR}"
         return 1
     fi
+}
+
+# Единая точка обработки провала обновления после остановки сервиса.
+#
+# Раньше её не было: в rollback уходил только провал verify_health, а падение
+# create_upgrade_backup или `docker compose up -d` (диск, порт, битый .env)
+# просто завершало скрипт по `set -e` — сервис оставался погашенным, откат не
+# выполнялся, и оператор не получал даже инструкций по восстановлению.
+handle_upgrade_failure() {
+    local reason=$1
+
+    # Снимаем ловушку сразу: внутри rollback команды падают штатно
+    # (`|| true`, отсутствующие файлы), рекурсивный вход всё бы испортил.
+    trap - ERR
+
+    log_error "Upgrade failed: ${reason}"
+
+    if [[ "${ROLLBACK_ON_FAILURE}" == "true" ]]; then
+        if rollback; then
+            log_warning "Upgrade was rolled back successfully"
+            exit 1
+        fi
+
+        log_error "Rollback failed!"
+        log_error "Manual recovery required"
+        log_error "Backup location: ${UPGRADE_BACKUP_DIR}"
+        exit 2
+    fi
+
+    log_error "Auto-rollback disabled, manual intervention required"
+    log_error "The service is currently STOPPED"
+    log_error "To rollback manually, run: $0 rollback"
+    log_error "Backup location: ${UPGRADE_BACKUP_DIR}"
+    exit 1
 }
 
 manual_rollback() {
@@ -521,14 +616,24 @@ upgrade() {
     # Stop service
     stop_service
 
+    # Начиная отсюда сервис остановлен: любая ошибка обязана уходить в
+    # handle_upgrade_failure, иначе `set -e` завершит скрипт с погашенным
+    # сервисом и без единой попытки отката (ROLLBACK_ON_FAILURE игнорируется).
+    trap 'handle_upgrade_failure "unexpected error at line ${LINENO}"' ERR
+
     # Create backup (сервис уже остановлен — база никем не пишется)
-    create_upgrade_backup
+    if ! create_upgrade_backup; then
+        handle_upgrade_failure "failed to create the pre-upgrade backup"
+    fi
 
     # Start with new version
-    start_service
+    if ! start_service; then
+        handle_upgrade_failure "failed to start the service with the new version"
+    fi
 
     # Verify health
     if verify_health; then
+        trap - ERR
         log_success "╔════════════════════════════════════════════════════════════════╗"
         log_success "║       Upgrade Successful!                                      ║"
         log_success "╚════════════════════════════════════════════════════════════════╝"
@@ -542,24 +647,7 @@ upgrade() {
         echo ""
         exit 0
     else
-        log_error "Health check failed after upgrade"
-        
-        if [[ "${ROLLBACK_ON_FAILURE}" == "true" ]]; then
-            if rollback; then
-                log_warning "Upgrade was rolled back successfully"
-                exit 1
-            else
-                log_error "Rollback failed!"
-                log_error "Manual recovery required"
-                log_error "Backup location: ${UPGRADE_BACKUP_DIR}"
-                exit 2
-            fi
-        else
-            log_error "Auto-rollback disabled, manual intervention required"
-            log_error "To rollback manually, run: $0 rollback"
-            log_error "Backup location: ${UPGRADE_BACKUP_DIR}"
-            exit 1
-        fi
+        handle_upgrade_failure "health check failed after upgrade"
     fi
 }
 

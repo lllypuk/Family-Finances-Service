@@ -41,6 +41,14 @@ func (m *MockTransactionService) GetAllTransactions(
 	return args.Get(0).([]*transaction.Transaction), args.Error(1)
 }
 
+func (m *MockTransactionService) CountTransactions(
+	ctx context.Context,
+	filter dto.TransactionFilterDTO,
+) (int, error) {
+	args := m.Called(ctx, filter)
+	return args.Int(0), args.Error(1)
+}
+
 func (m *MockTransactionService) GetTransactionByID(
 	ctx context.Context,
 	id uuid.UUID,

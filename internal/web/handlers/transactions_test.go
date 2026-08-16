@@ -50,6 +50,7 @@ func TestTransactionHandler_Index(t *testing.T) {
 		createTestTransaction(time.Now(), 200.00, transaction.TypeIncome, uuid.New()),
 	}
 	mockTxService.On("GetAllTransactions", mock.Anything, mock.Anything).Return(transactions, nil)
+	mockTxService.On("CountTransactions", mock.Anything, mock.Anything).Return(len(transactions), nil)
 
 	categories := []*category.Category{
 		createTestCategory("Food", category.TypeExpense),
@@ -87,6 +88,7 @@ func TestTransactionHandler_PageDataContract(t *testing.T) {
 		mockCatService.On("GetCategoryByID", mock.Anything, mock.Anything).Return(categories[0], nil).Maybe()
 		mockTxService.On("GetAllTransactions", mock.Anything, mock.Anything).
 			Return([]*transaction.Transaction{}, nil).Maybe()
+		mockTxService.On("CountTransactions", mock.Anything, mock.Anything).Return(0, nil).Maybe()
 		mockUserService.On("GetUserByID", mock.Anything, userID).
 			Return(&user.User{ID: userID, Email: "test@example.com", FirstName: "John", LastName: "Doe"}, nil)
 
@@ -353,6 +355,7 @@ func TestTransactionHandler_Filter_HTMX(t *testing.T) {
 		createTestTransaction(time.Now(), 100.50, transaction.TypeExpense, uuid.New()),
 	}
 	mockTxService.On("GetAllTransactions", mock.Anything, mock.Anything).Return(transactions, nil)
+	mockTxService.On("CountTransactions", mock.Anything, mock.Anything).Return(len(transactions), nil)
 
 	categories := []*category.Category{createTestCategory("Food", category.TypeExpense)}
 	mockCatService.On("GetCategories", mock.Anything, mock.Anything).Return(categories, nil)
@@ -379,6 +382,7 @@ func TestTransactionHandler_List_HTMX(t *testing.T) {
 		createTestTransaction(time.Now(), 100.50, transaction.TypeExpense, uuid.New()),
 	}
 	mockTxService.On("GetAllTransactions", mock.Anything, mock.Anything).Return(transactions, nil)
+	mockTxService.On("CountTransactions", mock.Anything, mock.Anything).Return(len(transactions), nil)
 
 	categories := []*category.Category{createTestCategory("Food", category.TypeExpense)}
 	mockCatService.On("GetCategories", mock.Anything, mock.Anything).Return(categories, nil)

@@ -834,22 +834,26 @@ func (h *BudgetHandler) DeleteAlert(c echo.Context) error {
 	return c.Redirect(http.StatusFound, "/budgets/alerts")
 }
 
-// getBudgetServiceErrorMessage возвращает пользовательское сообщение об ошибке
+// getBudgetServiceErrorMessage возвращает пользовательское сообщение об ошибке.
+//
+// Сам текст ошибки в сообщение не подставляется: он уходит клиенту (в
+// echo.HTTPError и в components/alert), а в него завёрнуты ошибки репозитория —
+// имена таблиц и колонок SQLite, текст ограничений. Распознанные случаи
+// получают человекочитаемую формулировку, остальные — общую.
 func (h *BudgetHandler) getBudgetServiceErrorMessage(err error) string {
-	errMsg := err.Error()
-	switch errMsg {
+	switch err.Error() {
 	case "budget not found":
-		return fmt.Sprintf("Budget not found: %s", errMsg)
+		return "Budget not found"
 	case "invalid budget period":
-		return fmt.Sprintf("Invalid budget period - end date must be after start date: %s", errMsg)
+		return "Invalid budget period - end date must be after start date"
 	case "budget period overlap":
-		return fmt.Sprintf("Budget period overlaps with existing budget for this category: %s", errMsg)
+		return "Budget period overlaps with existing budget for this category"
 	case "budget already exceeded":
-		return fmt.Sprintf("Budget amount is less than already spent amount: %s", errMsg)
+		return "Budget amount is less than already spent amount"
 	case "invalid budget amount":
-		return fmt.Sprintf("Budget amount must be greater than 0: %s", errMsg)
+		return "Budget amount must be greater than 0"
 	default:
-		return fmt.Sprintf("Failed to process budget: %s", errMsg)
+		return "Failed to process budget"
 	}
 }
 

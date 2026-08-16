@@ -407,6 +407,25 @@ func TestTransactionFilters_Pagination(t *testing.T) {
 	}
 }
 
+// TestTransactionFilters_QueryParams фиксирует контракт хвоста ссылок пагинации:
+// активные фильтры и размер страницы обязаны переезжать на соседнюю страницу,
+// а номер страницы шаблон подставляет сам, поэтому его в карте быть не должно.
+func TestTransactionFilters_QueryParams(t *testing.T) {
+	filters := &models.TransactionFilters{
+		Type:     models.TypeExpense,
+		Page:     2,
+		PageSize: 10,
+	}
+
+	params := filters.QueryParams()
+
+	assert.Equal(t, models.TypeExpense, params["type"])
+	assert.Equal(t, "10", params["page_size"],
+		"без page_size переход на соседнюю страницу считал бы offset от размера по умолчанию")
+	assert.NotContains(t, params, "page", "номер страницы подставляет шаблон")
+	assert.NotContains(t, params, "category_id", "пустые фильтры не должны попадать в ссылку")
+}
+
 func TestBulkOperationForm_GetTransactionIDs(t *testing.T) {
 	id1 := uuid.New()
 	id2 := uuid.New()

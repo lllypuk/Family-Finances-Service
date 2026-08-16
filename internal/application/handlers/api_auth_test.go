@@ -1,7 +1,9 @@
 package handlers_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -262,4 +264,75 @@ func TestRequireAPIRole_NoSession_Returns401(t *testing.T) {
 	var body handlers.ErrorResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 	assert.Equal(t, "UNAUTHORIZED", body.Error.Code)
+}
+
+// --- RequireAPIActiveUser: перепроверка владельца сессии в БД для /api/v1.
+
+type stubAPISessionLookup struct {
+	record *user.User
+	err    error
+}
+
+func (s *stubAPISessionLookup) GetUserByID(context.Context, uuid.UUID) (*user.User, error) {
+	return s.record, s.err
+}
+
+// TestRequireAPIActiveUser_TransientDBError_Returns500 — сбой БД это 500, а не
+// 401: 401 заставил бы клиента выбросить рабочую сессию и перелогиниться.
+func TestRequireAPIActiveUser_TransientDBError_Returns500(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	c.Set("user", &middleware.SessionData{
+		UserID: uuid.New(),
+		Role:   user.RoleMember,
+		Email:  "member@example.com",
+	})
+
+	nextCalled := false
+	handler := handlers.RequireAPIActiveUser(&stubAPISessionLookup{
+		err: errors.New("database is locked"),
+	})(func(c echo.Context) error {
+		nextCalled = true
+		return c.NoContent(http.StatusOK)
+	})
+
+	require.NoError(t, handler(c))
+	assert.False(t, nextCalled)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.NotContains(t, rec.Body.String(), "database is locked", "текст ошибки БД наружу не отдаём")
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	errBody, ok := body["error"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "INTERNAL_ERROR", errBody["code"])
+}
+
+// TestRequireAPIActiveUser_DeletedUser_Returns401 — пользователя нет: 401.
+func TestRequireAPIActiveUser_DeletedUser_Returns401(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	c.Set("user", &middleware.SessionData{
+		UserID: uuid.New(),
+		Role:   user.RoleMember,
+		Email:  "deleted@example.com",
+	})
+
+	nextCalled := false
+	handler := handlers.RequireAPIActiveUser(&stubAPISessionLookup{
+		err: user.ErrNotFound,
+	})(func(c echo.Context) error {
+		nextCalled = true
+		return c.NoContent(http.StatusOK)
+	})
+
+	require.NoError(t, handler(c))
+	assert.False(t, nextCalled)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }

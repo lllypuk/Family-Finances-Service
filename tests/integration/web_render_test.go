@@ -114,16 +114,35 @@ func TestWebPages_HTMXPagesCarryCSRFMeta(t *testing.T) {
 	}
 }
 
+// hxRefRe вытаскивает адрес из hx-get/hx-post/hx-put/hx-patch/hx-delete.
+var hxRefRe = regexp.MustCompile(`hx-(get|post|put|patch|delete)="(/[^"]*)"`)
+
+// hxMethods переводит суффикс hx-атрибута в HTTP-метод.
+var hxMethods = map[string]string{
+	"get":    http.MethodGet,
+	"post":   http.MethodPost,
+	"put":    http.MethodPut,
+	"patch":  http.MethodPatch,
+	"delete": http.MethodDelete,
+}
+
 // TestWebPages_NoDeadLinks — та же проверка, что и для /login
 // (login_links_test.go), но по всем страницам аутентифицированного
 // пользователя: шапка вела на /profile и /family/settings, которых в роутере
 // нет, а формы — на несуществующие обработчики.
+//
+// Помимо href/src проверяются hx-атрибуты: сквозной обход только по ссылкам
+// пропустил `hx-post="/budgets/:id/archive"` на странице алертов,
+// `hx-get="/categories/:id/progress"` на карточке категории и
+// `hx-get="/htmx/dashboard/category-insights/export"` в блоке аналитики — три
+// управляющих элемента на незарегистрированных маршрутах. Сверка идёт по
+// методу, иначе кнопка, ведущая на существующий GET, считалась бы живой.
 func TestWebPages_NoDeadLinks(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	auth := testServer.Auth(t)
 	fixtures := seedRenderFixtures(t, testServer)
 
-	routes := registeredGETRoutes(testServer.Server.Echo())
+	routes := registeredRoutes(testServer.Server.Echo())
 	paths := []string{
 		"/",
 		"/transactions",
@@ -151,8 +170,16 @@ func TestWebPages_NoDeadLinks(t *testing.T) {
 
 			for _, ref := range localRefRe.FindAllStringSubmatch(body, -1) {
 				link := stripQuery(ref[1])
-				assert.True(t, matchesAnyRoute(link, routes),
+				assert.True(t, matchesAnyRoute(link, routes[http.MethodGet]),
 					"страница %s ссылается на %q, но такого GET-маршрута нет", path, link)
+			}
+
+			for _, ref := range hxRefRe.FindAllStringSubmatch(body, -1) {
+				method := hxMethods[ref[1]]
+				target := stripQuery(ref[2])
+				assert.True(t, matchesAnyRoute(target, routes[method]),
+					"страница %s вешает hx-%s на %q, но маршрута %s %s нет",
+					path, ref[1], target, method, target)
 			}
 		})
 	}

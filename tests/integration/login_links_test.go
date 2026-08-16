@@ -65,13 +65,16 @@ func fetchAnonymousPage(t *testing.T, ts *testhelpers.TestServer, path string) s
 // registeredGETRoutes возвращает шаблоны всех GET-маршрутов, скомпилированные
 // в регулярные выражения: `:param` — один сегмент, `*` — любой хвост.
 func registeredGETRoutes(e *echo.Echo) []*regexp.Regexp {
-	var routes []*regexp.Regexp
+	return registeredRoutes(e)[http.MethodGet]
+}
+
+// registeredRoutes раскладывает маршруты Echo по HTTP-методам: hx-post и
+// hx-delete должны сверяться со своим методом, иначе кнопка, ведущая на
+// зарегистрированный GET, считалась бы живой.
+func registeredRoutes(e *echo.Echo) map[string][]*regexp.Regexp {
+	routes := make(map[string][]*regexp.Regexp)
 
 	for _, route := range e.Routes() {
-		if route.Method != http.MethodGet {
-			continue
-		}
-
 		pattern := "^"
 		for _, segment := range strings.Split(strings.Trim(route.Path, "/"), "/") {
 			switch {
@@ -87,7 +90,7 @@ func registeredGETRoutes(e *echo.Echo) []*regexp.Regexp {
 		}
 		pattern += "/?$"
 
-		routes = append(routes, regexp.MustCompile(pattern))
+		routes[route.Method] = append(routes[route.Method], regexp.MustCompile(pattern))
 	}
 
 	return routes

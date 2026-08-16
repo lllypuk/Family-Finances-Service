@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 
@@ -12,6 +14,10 @@ import (
 )
 
 const HTMXRequestValue = "true"
+
+// sessionRevalidationErrorMessage — то, что видит клиент, когда перепроверку
+// сессии не удалось выполнить. Детали ошибки уходят только в лог.
+const sessionRevalidationErrorMessage = "Service temporarily unavailable"
 
 // Аналоги этих middleware для группы /api/v1 (401/403 в виде JSON, без
 // редиректа на /login) живут в internal/application/handlers/api_auth.go:
@@ -65,6 +71,10 @@ type SessionUserLookup interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (*user.User, error)
 }
 
+// ErrSessionUserGone — владельца сессии больше нет (удалён или cookie ни на
+// кого не указывает). Единственный случай, когда cookie нужно гасить.
+var ErrSessionUserGone = errors.New("session user no longer exists")
+
 // RevalidateSessionUser перечитывает владельца сессии из БД.
 //
 // Хранилище сессий cookie-based: id и роль приходят из подписанной cookie и до
@@ -73,23 +83,32 @@ type SessionUserLookup interface {
 // нечем. Здесь сессия сверяется с текущим состоянием БД: пользователя нет —
 // доступа нет, роль изменилась — дальше по цепочке идёт актуальная роль.
 //
-// Второе возвращаемое значение false означает «сессию дальше пускать нельзя».
-func RevalidateSessionUser(c echo.Context, lookup SessionUserLookup) (*SessionData, bool) {
+// Ошибка ErrSessionUserGone означает «сессия недействительна, cookie гасить»;
+// любая другая ошибка — сбой инфраструктуры, и сессию трогать нельзя: пул
+// SQLite открыт в одно соединение, так что первый же SQLITE_BUSY или таймаут
+// контекста разлогинил бы работающего пользователя навсегда.
+func RevalidateSessionUser(c echo.Context, lookup SessionUserLookup) (*SessionData, error) {
 	sessionData, err := GetUserFromContext(c)
 	if err != nil {
-		return nil, false
+		return nil, ErrSessionUserGone
 	}
 
 	record, lookupErr := lookup.GetUserByID(c.Request().Context(), sessionData.UserID)
-	if lookupErr != nil || record == nil {
-		return nil, false
+	if lookupErr != nil {
+		if errors.Is(lookupErr, user.ErrNotFound) {
+			return nil, ErrSessionUserGone
+		}
+		return nil, fmt.Errorf("revalidate session user: %w", lookupErr)
+	}
+	if record == nil {
+		return nil, ErrSessionUserGone
 	}
 
 	fresh := *sessionData
 	fresh.Role = record.Role
 	fresh.Email = record.Email
 
-	return &fresh, true
+	return &fresh, nil
 }
 
 // RequireActiveUser middleware перепроверяет владельца сессии в БД.
@@ -98,12 +117,21 @@ func RevalidateSessionUser(c echo.Context, lookup SessionUserLookup) (*SessionDa
 func RequireActiveUser(lookup SessionUserLookup) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			fresh, ok := RevalidateSessionUser(c, lookup)
-			if !ok {
-				// Cookie больше ничего не значит — гасим её, иначе браузер
-				// будет слать её до истечения SessionTimeout.
-				_ = ClearSession(c)
-				return redirectToLogin(c)
+			fresh, err := RevalidateSessionUser(c, lookup)
+			if err != nil {
+				if errors.Is(err, ErrSessionUserGone) {
+					// Cookie больше ничего не значит — гасим её, иначе браузер
+					// будет слать её до истечения SessionTimeout.
+					_ = ClearSession(c)
+					return redirectToLogin(c)
+				}
+
+				// БД недоступна — это ошибка сервера, а не отзыв доступа:
+				// сессию оставляем как есть, пользователь повторит запрос.
+				c.Logger().Errorf("session revalidation failed on %s %s: %v",
+					c.Request().Method, c.Request().URL.Path, err)
+
+				return echo.NewHTTPError(http.StatusInternalServerError, sessionRevalidationErrorMessage)
 			}
 
 			c.Set("user", fresh)

@@ -1,10 +1,13 @@
 package middleware_test
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -511,4 +514,121 @@ func BenchmarkRequireRole(b *testing.B) {
 
 		handler(c)
 	}
+}
+
+// --- RequireActiveUser: перепроверка владельца сессии в БД.
+
+// stubSessionUserLookup подменяет UserService в RequireActiveUser.
+type stubSessionUserLookup struct {
+	record *user.User
+	err    error
+	calls  int
+}
+
+func (s *stubSessionUserLookup) GetUserByID(context.Context, uuid.UUID) (*user.User, error) {
+	s.calls++
+	return s.record, s.err
+}
+
+// TestRequireActiveUser_TransientDBError_KeepsSession — временный сбой БД не
+// должен выглядеть как отзыв доступа.
+//
+// Регрессия: GetUserByID схлопывал любую ошибку репозитория в ErrUserNotFound,
+// а middleware на любую ошибку гасил cookie (ClearSession) и уводил на /login.
+// Пул SQLite открыт в одно соединение, так что первый же SQLITE_BUSY или
+// таймаут контекста разлогинивал работающего пользователя навсегда.
+func TestRequireActiveUser_TransientDBError_KeepsSession(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/transactions", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	c.Set("user", &middleware.SessionData{
+		UserID: uuid.New(),
+		Role:   user.RoleMember,
+		Email:  "member@example.com",
+	})
+
+	lookup := &stubSessionUserLookup{err: errors.New("database is locked")}
+	nextCalled := false
+	handler := middleware.RequireActiveUser(lookup)(func(c echo.Context) error {
+		nextCalled = true
+		return c.NoContent(http.StatusOK)
+	})
+
+	err := handler(c)
+
+	require.Error(t, err)
+	assert.False(t, nextCalled, "запрос не должен доходить до хендлера")
+
+	var httpErr *echo.HTTPError
+	require.ErrorAs(t, err, &httpErr)
+	assert.Equal(t, http.StatusInternalServerError, httpErr.Code)
+
+	assert.Empty(t, rec.Header().Get("Location"), "сбой БД не должен уводить на /login")
+	assert.Empty(t, rec.Header().Get("Hx-Redirect"))
+	assert.Empty(t, rec.Header().Values("Set-Cookie"), "cookie сессии не должна гаситься")
+	assert.Equal(t, 1, lookup.calls)
+}
+
+// TestRequireActiveUser_DeletedUser_RedirectsToLogin — пользователя нет в БД:
+// это единственный случай, когда cookie гасится, а клиент уходит на /login.
+func TestRequireActiveUser_DeletedUser_RedirectsToLogin(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/transactions", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	c.Set("user", &middleware.SessionData{
+		UserID: uuid.New(),
+		Role:   user.RoleMember,
+		Email:  "deleted@example.com",
+	})
+
+	lookup := &stubSessionUserLookup{err: user.ErrNotFound}
+	nextCalled := false
+	handler := middleware.RequireActiveUser(lookup)(func(c echo.Context) error {
+		nextCalled = true
+		return c.NoContent(http.StatusOK)
+	})
+
+	require.NoError(t, handler(c))
+	assert.False(t, nextCalled)
+	assert.Equal(t, http.StatusFound, rec.Code)
+	assert.Equal(t, "/login", rec.Header().Get("Location"))
+}
+
+// TestRequireActiveUser_FreshRoleWins — дальше по цепочке идёт роль из БД, а не
+// из подписанной cookie.
+func TestRequireActiveUser_FreshRoleWins(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/transactions", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	userID := uuid.New()
+	c.Set("user", &middleware.SessionData{
+		UserID: userID,
+		Role:   user.RoleAdmin,
+		Email:  "stale@example.com",
+	})
+
+	lookup := &stubSessionUserLookup{record: &user.User{
+		ID:    userID,
+		Role:  user.RoleChild,
+		Email: "fresh@example.com",
+	}}
+
+	var seen *middleware.SessionData
+	handler := middleware.RequireActiveUser(lookup)(func(c echo.Context) error {
+		var err error
+		seen, err = middleware.GetUserFromContext(c)
+		require.NoError(t, err)
+		return c.NoContent(http.StatusOK)
+	})
+
+	require.NoError(t, handler(c))
+	require.NotNil(t, seen)
+	assert.Equal(t, user.RoleChild, seen.Role)
+	assert.Equal(t, "fresh@example.com", seen.Email)
 }

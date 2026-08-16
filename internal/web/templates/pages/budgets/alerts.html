@@ -228,12 +228,6 @@
                     <footer>
                         <div class="button-group">
                             <a href="/budgets/{{.ID}}" role="button" class="secondary outline">Посмотреть</a>
-                            <button hx-post="/budgets/{{.ID}}/archive" 
-                                    hx-target="closest article" 
-                                    hx-swap="outerHTML"
-                                    class="secondary outline">
-                                Архивировать
-                            </button>
                         </div>
                     </footer>
                 </article>

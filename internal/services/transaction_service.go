@@ -35,6 +35,7 @@ type TransactionRepository interface {
 	Create(ctx context.Context, transaction *transaction.Transaction) error
 	GetByID(ctx context.Context, id uuid.UUID) (*transaction.Transaction, error)
 	GetByFilter(ctx context.Context, filter transaction.Filter) ([]*transaction.Transaction, error)
+	CountByFilter(ctx context.Context, filter transaction.Filter) (int, error)
 	Update(ctx context.Context, transaction *transaction.Transaction) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetTotalByCategory(ctx context.Context, categoryID uuid.UUID, transactionType transaction.Type) (float64, error)
@@ -223,6 +224,35 @@ func (s *TransactionServiceImpl) GetAllTransactions(
 	}
 
 	return transactions, nil
+}
+
+// CountTransactions returns the total number of transactions matching the filter,
+// ignoring Limit/Offset. Used by the UI to build pagination.
+func (s *TransactionServiceImpl) CountTransactions(
+	ctx context.Context,
+	filter dto.TransactionFilterDTO,
+) (int, error) {
+	if err := s.validator.Struct(filter); err != nil {
+		return 0, fmt.Errorf("validation failed: %w", err)
+	}
+
+	if err := filter.ValidateDateRange(); err != nil {
+		return 0, err
+	}
+	if err := filter.ValidateAmountRange(); err != nil {
+		return 0, err
+	}
+
+	repoFilter := s.convertDTOFilterToRepoFilter(filter)
+	repoFilter.Limit = 0
+	repoFilter.Offset = 0
+
+	total, err := s.transactionRepo.CountByFilter(ctx, repoFilter)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count transactions: %w", err)
+	}
+
+	return total, nil
 }
 
 // UpdateTransaction updates an existing transaction

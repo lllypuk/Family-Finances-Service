@@ -552,6 +552,9 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 			c := e.NewContext(req, rec)
 			c.SetParamNames("id")
 			c.SetParamValues(tt.userID)
+			// Хендлер сверяет удаляемого пользователя с владельцем сессии
+			// (запрет самоудаления), поэтому сессия обязательна.
+			withSessionUser(c, uuid.New())
 
 			// Execute
 			err := handler.DeleteUser(c)
@@ -563,4 +566,74 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 			mockService.AssertExpectations(t)
 		})
 	}
+}
+
+// deleteUserRequest прогоняет DELETE /api/v1/users/:id через хендлер с заданной
+// сессией и возвращает ответ.
+func deleteUserRequest(
+	t *testing.T,
+	service *MockUserService,
+	sessionUserID, targetID uuid.UUID,
+) *httptest.ResponseRecorder {
+	t.Helper()
+
+	e := echo.New()
+	handler := handlers.NewUserHandler(&handlers.Repositories{}, service)
+
+	req := httptest.NewRequest(http.MethodDelete, "/users/"+targetID.String(), nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(targetID.String())
+	if sessionUserID != uuid.Nil {
+		withSessionUser(c, sessionUserID)
+	}
+
+	require.NoError(t, handler.DeleteUser(c))
+
+	return rec
+}
+
+// В вебе самоудаление запрещено (AdminHandler.DeleteUser), а в API запрета не
+// было: администратор мог снести собственную учётную запись и мгновенно
+// потерять доступ — в однофамильной модели без права на восстановление.
+func TestUserHandler_DeleteUser_SelfDeletionRejected(t *testing.T) {
+	service := &MockUserService{}
+	selfID := uuid.New()
+
+	rec := deleteUserRequest(t, service, selfID, selfID)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "CANNOT_DELETE_SELF", response.Error.Code)
+
+	service.AssertNotCalled(t, "DeleteUser", mock.Anything, mock.Anything)
+}
+
+// Последний администратор защищён в userService.DeleteUser; API обязан
+// перевести этот отказ в 400, а не в 500.
+func TestUserHandler_DeleteUser_LastAdminRejected(t *testing.T) {
+	service := &MockUserService{}
+	targetID := uuid.New()
+	service.On("DeleteUser", mock.Anything, targetID).Return(services.ErrLastAdmin)
+
+	rec := deleteUserRequest(t, service, uuid.New(), targetID)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "LAST_ADMIN", response.Error.Code)
+	service.AssertExpectations(t)
+}
+
+func TestUserHandler_DeleteUser_NoSession(t *testing.T) {
+	service := &MockUserService{}
+
+	rec := deleteUserRequest(t, service, uuid.Nil, uuid.New())
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	service.AssertNotCalled(t, "DeleteUser", mock.Anything, mock.Anything)
 }

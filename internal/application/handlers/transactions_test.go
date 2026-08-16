@@ -53,6 +53,14 @@ func (m *MockTransactionRepository) GetByFilter(
 	return args.Get(0).([]*transaction.Transaction), args.Error(1)
 }
 
+func (m *MockTransactionRepository) CountByFilter(
+	ctx context.Context,
+	filter transaction.Filter,
+) (int, error) {
+	args := m.Called(ctx, filter)
+	return args.Int(0), args.Error(1)
+}
+
 func (m *MockTransactionRepository) Update(ctx context.Context, tx *transaction.Transaction) error {
 	args := m.Called(ctx, tx)
 	return args.Error(0)

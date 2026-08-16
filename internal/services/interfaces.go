@@ -65,6 +65,8 @@ type TransactionService interface {
 		ctx context.Context,
 		filter dto.TransactionFilterDTO,
 	) ([]*transaction.Transaction, error)
+	// CountTransactions возвращает общее число транзакций под фильтр, без учёта Limit/Offset.
+	CountTransactions(ctx context.Context, filter dto.TransactionFilterDTO) (int, error)
 	UpdateTransaction(ctx context.Context, id uuid.UUID, req dto.UpdateTransactionDTO) (*transaction.Transaction, error)
 	DeleteTransaction(ctx context.Context, id uuid.UUID) error
 

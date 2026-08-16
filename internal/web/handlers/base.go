@@ -259,6 +259,10 @@ func (h *BaseHandler) handleDelete(c echo.Context, params DeleteEntityParams) er
 	// Удаляем сущность
 	err = params.DeleteEntityFunc(c, entityID)
 	if err != nil {
+		// Подробности остаются в логе: наружу уходит только обобщённое сообщение,
+		// потому что в ошибку сервиса завёрнута ошибка репозитория (схема БД).
+		c.Logger().Errorf("delete %s %s failed: %v", params.EntityName, entityID, err)
+
 		errorMsg := params.GetErrorMsgFunc(err)
 
 		if h.IsHTMXRequest(c) {

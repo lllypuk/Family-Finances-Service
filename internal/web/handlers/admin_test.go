@@ -665,6 +665,51 @@ func TestAdminHandler_DeleteUser(t *testing.T) {
 				assert.Contains(t, httpErr.Message.(string), "Failed to delete user")
 			},
 		},
+		{
+			// Регрессия: сообщение собиралось как "Failed to delete user: "+err.Error(),
+			// то есть обёрнутая ошибка репозитория (схема SQLite) уходила в браузер.
+			name:          "Error - delete service error does not leak repository details",
+			userID:        validUserID.String(),
+			sessionUserID: adminID,
+			userRole:      user.RoleAdmin,
+			mockSetup: func(userSvc *MockUserService) {
+				adminUser := &user.User{ID: adminID, Email: "admin@example.com", Role: user.RoleAdmin}
+				userSvc.On("GetUserByID", mock.Anything, adminID).Return(adminUser, nil).Once()
+
+				userToDelete := &user.User{ID: validUserID, Email: "delete@example.com", Role: user.RoleMember}
+				userSvc.On("GetUserByID", mock.Anything, validUserID).Return(userToDelete, nil).Once()
+				userSvc.On("DeleteUser", mock.Anything, validUserID).
+					Return(errors.New(leakyRepoErrorText)).Once()
+			},
+			expectedStatus: http.StatusInternalServerError,
+			checkResponse: func(t *testing.T, httpErr *echo.HTTPError, _ echo.Context) {
+				require.NotNil(t, httpErr)
+				assert.NotContains(t, httpErr.Message.(string), "UNIQUE constraint",
+					"текст ошибки БД уходит клиенту")
+			},
+		},
+		{
+			// Последний администратор не удаляется: семья осталась бы без
+			// администратора навсегда (инвайты выпускает только он).
+			name:          "Error - last admin",
+			userID:        validUserID.String(),
+			sessionUserID: adminID,
+			userRole:      user.RoleAdmin,
+			mockSetup: func(userSvc *MockUserService) {
+				adminUser := &user.User{ID: adminID, Email: "admin@example.com", Role: user.RoleAdmin}
+				userSvc.On("GetUserByID", mock.Anything, adminID).Return(adminUser, nil).Once()
+
+				userToDelete := &user.User{ID: validUserID, Email: "other@example.com", Role: user.RoleAdmin}
+				userSvc.On("GetUserByID", mock.Anything, validUserID).Return(userToDelete, nil).Once()
+				userSvc.On("DeleteUser", mock.Anything, validUserID).
+					Return(services.ErrLastAdmin).Once()
+			},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse: func(t *testing.T, httpErr *echo.HTTPError, _ echo.Context) {
+				require.NotNil(t, httpErr)
+				assert.Equal(t, "Cannot delete the last administrator", httpErr.Message)
+			},
+		},
 	}
 
 	for _, tt := range tests {

@@ -220,7 +220,12 @@ func (h *AdminHandler) DeleteUser(c echo.Context) error {
 
 	// Delete user via service
 	if deleteErr := h.services.User.DeleteUser(c.Request().Context(), userID); deleteErr != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to delete user: "+deleteErr.Error())
+		if errors.Is(deleteErr, services.ErrLastAdmin) {
+			return echo.NewHTTPError(http.StatusBadRequest, "Cannot delete the last administrator")
+		}
+		// Текст ошибки репозитория (имена таблиц/колонок SQLite) клиенту не отдаём.
+		c.Logger().Errorf("delete user %s failed: %v", userID, deleteErr)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to delete user")
 	}
 
 	// Return success for HTMX (empty response with trigger)

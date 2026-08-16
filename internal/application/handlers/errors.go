@@ -22,6 +22,12 @@ const (
 	// ErrCodeForbidden signals a session whose role is not allowed on the route
 	// (отдаёт RequireAPIRole, см. api_auth.go).
 	ErrCodeForbidden = "FORBIDDEN"
+	// ErrCodeInternal signals a server-side failure; подробности только в логе.
+	ErrCodeInternal = "INTERNAL_ERROR"
+	// ErrCodeCannotDeleteSelf signals an attempt to delete the session's own user.
+	ErrCodeCannotDeleteSelf = "CANNOT_DELETE_SELF"
+	// ErrCodeLastAdmin signals an attempt to delete the last remaining admin.
+	ErrCodeLastAdmin = "LAST_ADMIN"
 
 	// Standard error messages paired with the codes above. Kept as constants
 	// so changes propagate to API consumers in lockstep with code updates.
@@ -33,4 +39,7 @@ const (
 	ErrMessageInvalidTransaction = "Invalid transaction data"
 	ErrMessageInvalidCategoryRef = "Invalid category, user, or family ID"
 	ErrMessageFamilyNotFound     = "Family not found"
+	ErrMessageInternal           = "Internal server error"
+	ErrMessageCannotDeleteSelf   = "Cannot delete your own account"
+	ErrMessageLastAdmin          = "Cannot delete the last administrator"
 )

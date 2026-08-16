@@ -3,7 +3,6 @@ package handlers
 import (
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -92,8 +91,14 @@ func (h *TransactionHandler) Index(c echo.Context) error {
 	// Конвертируем категории в опции для селекта
 	categoryOptions := h.buildCategorySelectOptions(categories)
 
-	// Рассчитываем пагинацию
-	pagination := h.calculatePagination(len(transactionVMs), filters.Page, filters.PageSize)
+	// Рассчитываем пагинацию по реальному количеству записей под фильтр:
+	// len(transactionVMs) — это размер уже урезанной LIMIT'ом страницы, по нему
+	// HasNext всегда был бы false и вторая страница оставалась недостижимой.
+	total, err := h.services.Transaction.CountTransactions(c.Request().Context(), filterDTO)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get transactions")
+	}
+	pagination := h.calculatePagination(total, filters.Page, filters.PageSize)
 
 	// Встраиваем *PageData, а не кладём его в map под ключом "PageData":
 	// шаблон шапки читает `.CurrentUser` и `.CSRFToken` из корня контекста,
@@ -102,13 +107,13 @@ func (h *TransactionHandler) Index(c echo.Context) error {
 		*PageData
 
 		Transactions    []webModels.TransactionViewModel
-		Filters         webModels.TransactionFilters
+		Filters         *webModels.TransactionFilters
 		CategoryOptions []webModels.CategorySelectOption
 		Pagination      webModels.TransactionListResponse
 	}{
 		PageData:        h.buildPageData(c, titleTransactions),
 		Transactions:    transactionVMs,
-		Filters:         filters,
+		Filters:         &filters,
 		CategoryOptions: categoryOptions,
 		Pagination:      pagination,
 	}
@@ -192,12 +197,12 @@ func (h *TransactionHandler) Create(c echo.Context) error {
 	// Создаем транзакцию через сервис
 	_, err = h.services.Transaction.CreateTransaction(c.Request().Context(), createDTO)
 	if err != nil {
-		errorMsg := fmt.Sprintf(
-			"Failed to create transaction: %s (UserID: %s)",
-			err.Error(),
-			sessionData.UserID,
-		)
-		return echo.NewHTTPError(http.StatusInternalServerError, errorMsg)
+		// Текст ошибки сервиса наружу не отдаём: в нём оказываются имена таблиц
+		// и колонок SQLite и текст ограничений. Клиенту — общая формулировка,
+		// подробности (включая UserID) — в лог.
+		c.Logger().Errorf("create transaction failed (UserID: %s): %v", sessionData.UserID, err)
+
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create transaction")
 	}
 
 	// Успешное создание - редирект
@@ -430,6 +435,23 @@ func (h *TransactionHandler) BulkDelete(c echo.Context) error {
 
 // Filter применяет фильтры к списку транзакций (HTMX)
 func (h *TransactionHandler) Filter(c echo.Context) error {
+	return h.renderTransactionTable(c)
+}
+
+// List возвращает страницу списка транзакций для пагинации (HTMX).
+//
+// Отдаёт тот же фрагмент, что и Filter, по двум причинам:
+//   - кнопки пагинации в components/transaction_table.html свапают ответ в
+//     <section id="transactions-list">, поэтому голые <tr> (components/transaction_rows)
+//     выбрасывались бы парсером HTML и таблица исчезала бы вместе с пагинацией;
+//   - ссылки несут активные фильтры, и их нужно применить, иначе переход на
+//     соседнюю страницу молча сбрасывал бы фильтрацию.
+func (h *TransactionHandler) List(c echo.Context) error {
+	return h.renderTransactionTable(c)
+}
+
+// renderTransactionTable рендерит components/transaction_table по фильтрам из запроса.
+func (h *TransactionHandler) renderTransactionTable(c echo.Context) error {
 	// Проверяем авторизацию пользователя
 	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
@@ -469,73 +491,18 @@ func (h *TransactionHandler) Filter(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to prepare transaction data")
 	}
 
-	// Рассчитываем пагинацию
-	pagination := h.calculatePagination(len(transactionVMs), filters.Page, filters.PageSize)
+	// Рассчитываем пагинацию по реальному количеству записей под фильтр
+	total, err := h.services.Transaction.CountTransactions(c.Request().Context(), filterDTO)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get transactions")
+	}
+	pagination := h.calculatePagination(total, filters.Page, filters.PageSize)
 
 	data := map[string]any{
 		"Transactions": transactionVMs,
 		"Pagination":   pagination,
-		"Filters":      filters,
+		"Filters":      &filters,
 	}
 
 	return h.renderPartial(c, "components/transaction_table", data)
-}
-
-// List возвращает список транзакций для пагинации (HTMX)
-func (h *TransactionHandler) List(c echo.Context) error {
-	// Проверяем авторизацию пользователя
-	_, err := middleware.GetUserFromContext(c)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
-	}
-
-	// Парсим параметры пагинации
-	pageStr := c.QueryParam("page")
-	page := 1
-	if pageStr != "" {
-		if parsedPage, parseErr := strconv.Atoi(pageStr); parseErr == nil && parsedPage > 0 {
-			page = parsedPage
-		}
-	}
-
-	pageSizeStr := c.QueryParam("page_size")
-	pageSize := DefaultPageSize
-	if pageSizeStr != "" {
-		parsedSize, parseErr := strconv.Atoi(pageSizeStr)
-		if parseErr == nil && parsedSize > 0 && parsedSize <= MaxPageSize {
-			pageSize = parsedSize
-		}
-	}
-
-	// Создаем базовые фильтры
-	filters := webModels.TransactionFilters{
-		Page:     page,
-		PageSize: pageSize,
-	}
-
-	// Получаем транзакции через сервис
-	filterDTO, err := h.buildTransactionFilterDTO(filters)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid filter parameters")
-	}
-
-	transactions, err := h.services.Transaction.GetAllTransactions(
-		c.Request().Context(),
-		filterDTO,
-	)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get transactions")
-	}
-
-	// Конвертируем в view модели
-	transactionVMs, err := h.convertTransactionsToViewModels(c.Request().Context(), transactions)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to prepare transaction data")
-	}
-
-	data := map[string]any{
-		"Transactions": transactionVMs,
-	}
-
-	return h.renderPartial(c, "components/transaction_rows", data)
 }

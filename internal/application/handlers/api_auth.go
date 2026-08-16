@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 
@@ -41,8 +42,18 @@ func RequireAPIAuth() echo.MiddlewareFunc {
 func RequireAPIActiveUser(lookup middleware.SessionUserLookup) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			fresh, ok := middleware.RevalidateSessionUser(c, lookup)
-			if !ok {
+			fresh, err := middleware.RevalidateSessionUser(c, lookup)
+			if err != nil {
+				if !errors.Is(err, middleware.ErrSessionUserGone) {
+					// Сбой БД, а не отзыв доступа: 401 заставил бы клиента
+					// выбросить рабочую сессию и перелогиниться.
+					c.Logger().Errorf("session revalidation failed on %s %s: %v",
+						c.Request().Method, c.Request().URL.Path, err)
+
+					return respondError(c, http.StatusInternalServerError,
+						ErrCodeInternal, ErrMessageInternal)
+				}
+
 				return respondUnauthorized(c)
 			}
 
