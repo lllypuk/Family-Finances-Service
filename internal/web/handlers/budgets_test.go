@@ -103,7 +103,7 @@ func TestBudgetHandler_PageDataContract(t *testing.T) {
 
 		out, err := renderer.renderPageData()
 		require.NoError(t, err, "данные хендлера не дают шаблону .CurrentUser в корне контекста")
-		assert.Equal(t, "John Doe|admin|Budgets", out)
+		assert.Equal(t, "John Doe|admin|Бюджеты", out)
 	})
 
 	t.Run("New", func(t *testing.T) {
@@ -116,7 +116,7 @@ func TestBudgetHandler_PageDataContract(t *testing.T) {
 
 		out, err := renderer.renderPageData()
 		require.NoError(t, err)
-		assert.Equal(t, "John Doe|admin|New Budget", out)
+		assert.Equal(t, "John Doe|admin|Новый бюджет", out)
 	})
 
 	t.Run("Edit", func(t *testing.T) {
@@ -131,7 +131,7 @@ func TestBudgetHandler_PageDataContract(t *testing.T) {
 
 		out, err := renderer.renderPageData()
 		require.NoError(t, err)
-		assert.Equal(t, "John Doe|admin|Edit Budget: Food Budget", out)
+		assert.Equal(t, "John Doe|admin|Редактирование бюджета: Food Budget", out)
 	})
 
 	t.Run("Show", func(t *testing.T) {
@@ -146,7 +146,7 @@ func TestBudgetHandler_PageDataContract(t *testing.T) {
 
 		out, err := renderer.renderPageData()
 		require.NoError(t, err)
-		assert.Equal(t, "John Doe|admin|Budget: Food Budget", out)
+		assert.Equal(t, "John Doe|admin|Бюджет: Food Budget", out)
 	})
 
 	t.Run("FormWithErrors", func(t *testing.T) {
@@ -160,7 +160,7 @@ func TestBudgetHandler_PageDataContract(t *testing.T) {
 
 		out, err := renderer.renderPageData()
 		require.NoError(t, err)
-		assert.Equal(t, "John Doe|admin|New Budget", out)
+		assert.Equal(t, "John Doe|admin|Новый бюджет", out)
 	})
 }
 

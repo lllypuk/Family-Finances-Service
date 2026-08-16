@@ -103,7 +103,7 @@ func TestTransactionHandler_PageDataContract(t *testing.T) {
 
 		out, err := renderer.renderPageData()
 		require.NoError(t, err, "данные хендлера не дают шаблону .CurrentUser в корне контекста")
-		assert.Equal(t, "John Doe|admin|Transactions", out)
+		assert.Equal(t, "John Doe|admin|Транзакции", out)
 	})
 
 	t.Run("New", func(t *testing.T) {
@@ -116,7 +116,7 @@ func TestTransactionHandler_PageDataContract(t *testing.T) {
 
 		out, err := renderer.renderPageData()
 		require.NoError(t, err)
-		assert.Equal(t, "John Doe|admin|New Transaction", out)
+		assert.Equal(t, "John Doe|admin|Новая транзакция", out)
 	})
 
 	t.Run("FormWithErrors", func(t *testing.T) {
@@ -131,7 +131,7 @@ func TestTransactionHandler_PageDataContract(t *testing.T) {
 
 		out, err := renderer.renderPageData()
 		require.NoError(t, err)
-		assert.Equal(t, "John Doe|admin|New Transaction", out)
+		assert.Equal(t, "John Doe|admin|Новая транзакция", out)
 	})
 }
 

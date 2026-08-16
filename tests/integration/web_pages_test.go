@@ -62,11 +62,13 @@ import (
 // Зелёная фаза для /transactions — задача 13: хендлеры транзакций отдают
 // встроенный *PageData вместо `map[string]any{"PageData": …}`, skip снят.
 // Зелёная фаза для /categories и /budgets — задача 14, там же сняты их skip'и.
-// Оставшийся skip (reports) снимает задача 15.
-
-const (
-	webPagesSkipReports = "U-02: /reports — контракт данных и шаблон шапки, skip снимает задача 15"
-)
+// Зелёная фаза для /reports — задача 15: контракт данных в reports.go плюс
+// блок `{{if .CurrentUser}}` в pages/reports/index.html, которого там не было
+// вовсе. Skip'ов в тесте не осталось.
+//
+// Заодно проверяется заголовок страницы (U-05,
+// docs/specs/003-ui-ux-audit.md#u-05): интерфейс русскоязычный, английские
+// «Transactions»/«Budgets»/«Categories»/«Reports» в <title> — регрессия.
 
 // navBlockRe вырезает первый блок <nav>…</nav> — шапку страницы.
 var navBlockRe = regexp.MustCompile(`(?s)<nav[^>]*>.*?</nav>`)
@@ -87,23 +89,24 @@ func TestWebPages_NavigationRendered(t *testing.T) {
 	currentUser := testServer.AuthUser
 
 	cases := []struct {
-		name       string
-		path       string
-		skipReason string
+		name  string
+		path  string
+		title string
 	}{
-		{name: "transactions", path: "/transactions"},
-		{name: "categories", path: "/categories"},
-		{name: "budgets", path: "/budgets"},
-		{name: "reports", path: "/reports", skipReason: webPagesSkipReports},
+		{name: "transactions", path: "/transactions", title: "Транзакции"},
+		{name: "categories", path: "/categories", title: "Категории"},
+		{name: "budgets", path: "/budgets", title: "Бюджеты"},
+		{name: "reports", path: "/reports", title: "Отчёты"},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.skipReason != "" {
-				t.Skip(tc.skipReason)
-			}
+			body := fetchPage(t, testServer, auth, tc.path)
 
-			nav := navBlock(t, fetchPage(t, testServer, auth, tc.path))
+			assert.Contains(t, body, "<title>"+tc.title+" - Семейный бюджет</title>",
+				"на странице %s заголовок не на русском (U-05)", tc.path)
+
+			nav := navBlock(t, body)
 
 			for _, link := range navExpectedLinks {
 				assert.Contains(t, nav, link,

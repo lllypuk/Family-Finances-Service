@@ -107,7 +107,7 @@ func TestCategoryHandler_PageDataContract(t *testing.T) {
 
 		out, err := renderer.renderPageData()
 		require.NoError(t, err, "данные хендлера не дают шаблону .CurrentUser в корне контекста")
-		assert.Equal(t, "John Doe|admin|Categories", out)
+		assert.Equal(t, "John Doe|admin|Категории", out)
 	})
 
 	t.Run("New", func(t *testing.T) {
@@ -120,7 +120,7 @@ func TestCategoryHandler_PageDataContract(t *testing.T) {
 
 		out, err := renderer.renderPageData()
 		require.NoError(t, err)
-		assert.Equal(t, "John Doe|admin|New Category", out)
+		assert.Equal(t, "John Doe|admin|Новая категория", out)
 	})
 
 	t.Run("Edit", func(t *testing.T) {
@@ -135,7 +135,7 @@ func TestCategoryHandler_PageDataContract(t *testing.T) {
 
 		out, err := renderer.renderPageData()
 		require.NoError(t, err)
-		assert.Equal(t, "John Doe|admin|Edit Category", out)
+		assert.Equal(t, "John Doe|admin|Редактирование категории", out)
 	})
 
 	t.Run("Show", func(t *testing.T) {
@@ -164,7 +164,7 @@ func TestCategoryHandler_PageDataContract(t *testing.T) {
 
 		out, err := renderer.renderPageData()
 		require.NoError(t, err)
-		assert.Equal(t, "John Doe|admin|New Category", out)
+		assert.Equal(t, "John Doe|admin|Новая категория", out)
 	})
 }
 

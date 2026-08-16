@@ -709,13 +709,56 @@ errors)` (`base.go`) — он же подставляет общее сообщ�
 - Modify: `internal/web/handlers/reports_test.go`
 - Modify: `internal/web/templates/pages/reports/index.html` (➕ в шапке нет блока пользователя — см. задачу 12)
 
-- [ ] заменить map-контракт на встроенную структуру (4 места в `reports.go`)
-- [ ] перевести заголовки: `Transactions`→`Транзакции`, `Budgets`→`Бюджеты`, `Categories`→`Категории`, `Reports`→`Отчёты`, а также формы `New/Edit …` (U-05)
-- [ ] добавить в `pages/reports/index.html` блок `{{if .CurrentUser}}` с именем пользователя и формой выхода по образцу `pages/transactions/index.html` — одного контракта данных для `/reports` мало
-- [ ] снять `t.Skip(webPagesSkipReports)` в `tests/integration/web_pages_test.go` и удалить константу
-- [ ] прогнать тест из задачи 12 — `/reports` обязан пройти
-- [ ] расширить тест из задачи 12: заголовок страницы на русском
-- [ ] `make test` и `make lint` — 0 issues перед задачей 16
+- [x] заменить map-контракт на встроенную структуру (4 места в `reports.go`)
+- [x] перевести заголовки: `Transactions`→`Транзакции`, `Budgets`→`Бюджеты`, `Categories`→`Категории`, `Reports`→`Отчёты`, а также формы `New/Edit …` (U-05)
+- [x] добавить в `pages/reports/index.html` блок `{{if .CurrentUser}}` с именем пользователя и формой выхода по образцу `pages/transactions/index.html` — одного контракта данных для `/reports` мало
+- [x] снять `t.Skip(webPagesSkipReports)` в `tests/integration/web_pages_test.go` и удалить константу
+- [x] прогнать тест из задачи 12 — `/reports` обязан пройти
+- [x] расширить тест из задачи 12: заголовок страницы на русском
+- [x] `make test` и `make lint` — 0 issues перед задачей 16
+
+ℹ️ Заголовки вынесены константами в `internal/web/handlers/base.go`
+(`titleTransactions`, `titleNewTransaction`, `titleEditTransaction`, `titleCategories`,
+`titleNewCategory`, `titleEditCategory`, `titleBudgets`, `titleNewBudget`,
+`titleEditBudget`, `titleBudgetAlerts`, `titleBudgetPrefix`, `titleReports`,
+`titleNewReport`, `titleReportPrefix`), а не литералами по месту: заголовок
+служит ещё и признаком шаблона в `renderTransactionFormWithErrors` /
+`renderBudgetFormWithErrors` (`if title == titleEditBudget`), и разъезд литералов
+молча увёл бы форму на страницу создания. Контракты данных отчётов — именованные
+типы `reportIndexData`, `reportFormData`, `reportShowData` (`reports.go`).
+
+⚠️ **`/reports/new` был сломан до этой задачи и починен заодно.** `ReportHandler.New`
+не клал в данные `Form`, а `pages/reports/new.html` читает `{{.Form.Name}}` без
+`{{if}}` — на map это давало ошибку исполнения шаблона (500). Сейчас `New` отдаёт
+предзаполненную форму (`defaultReportForm()`, общая с `Index`), проверено на полном
+стеке: `/reports` → 200 и `/reports/new` → 200.
+Шаблон читает ещё `.Form.Description`, `.Form.IncludeCharts` и `.Form.ExportCSV`,
+которых в `webModels.ReportForm` не было, — поля добавлены (в генерации отчёта не
+участвуют, но переживают возврат формы с ошибками). У структуры, в отличие от map,
+обращение к отсутствующему полю — ошибка исполнения, поэтому иначе страница
+падала бы и дальше.
+
+ℹ️ `renderReportFormWithErrors` потерял параметр `title` вместе с веткой на
+`pages/reports/edit`: такого шаблона нет, маршрута редактирования отчёта нет, а
+`unparam` ругается на параметр, который всегда получает одно значение. Заодно
+метод теперь передаёт в форму ошибки полей (`formPageData`) — раньше
+`PageData.Errors` оставались пустыми и шаблон их не показывал.
+
+➕ Переведены и остальные английские строки `pages/reports/index.html`
+(«Financial Reports», подписи формы, шапка таблицы, кнопки) вместе с метками
+`webModels.GetReportTypeOptions` — иначе на русской странице оставался
+англоязычный `<select>`. Тесты в `internal/web/models/reports_test.go` метки не
+фиксируют (`assert.NotEmpty`), правок не потребовалось. `pages/reports/show.html`
+не тронут — он вне объёма задачи.
+
+ℹ️ `internal/web/handlers/reports_test.go` переведён из `package handlers`
+в `package handlers_test`: контракт-тест `TestReportHandler_PageDataContract`
+(подтесты `Index`, `New`, `Show`, `FormWithErrors`) переиспользует
+`capturingRenderer`, `newCapturingContext`, `withSession` и `MockUserService`
+из `testhelpers_test.go`, а они живут во внешнем пакете. Ценой стал
+`TestErrHTMXResponseSent` — он проверял только текст непубличного sentinel
+`errHTMXResponseSent`, снаружи недоступного; поведение, ради которого sentinel
+существует, покрыто `TestReportHandler_Create_HTMXGenerationError`.
 
 ### Task 16: Убрать мёртвую ссылку /register
 

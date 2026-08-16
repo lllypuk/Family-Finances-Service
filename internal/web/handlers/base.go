@@ -29,6 +29,30 @@ const (
 	formValidationMessage = "Проверьте правильность заполнения формы"
 )
 
+// Заголовки страниц. Интерфейс русскоязычный, английские заголовки — находка
+// U-05 (docs/specs/003-ui-ux-audit.md#u-05). Заголовок вида «Редактирование …»
+// работает ещё и признаком шаблона в renderXxxFormWithErrors, поэтому все
+// заголовки живут константами, а не литералами по месту.
+const (
+	titleTransactions    = "Транзакции"
+	titleNewTransaction  = "Новая транзакция"
+	titleEditTransaction = "Редактирование транзакции"
+
+	titleCategories   = "Категории"
+	titleNewCategory  = "Новая категория"
+	titleEditCategory = "Редактирование категории"
+
+	titleBudgets      = "Бюджеты"
+	titleNewBudget    = "Новый бюджет"
+	titleEditBudget   = "Редактирование бюджета"
+	titleBudgetAlerts = "Оповещения по бюджетам"
+	titleBudgetPrefix = "Бюджет: "
+
+	titleReports      = "Отчёты"
+	titleNewReport    = "Новый отчёт"
+	titleReportPrefix = "Отчёт: "
+)
+
 var (
 	// ErrNoSession is returned when no session is found
 	ErrNoSession = errors.New("no session found")

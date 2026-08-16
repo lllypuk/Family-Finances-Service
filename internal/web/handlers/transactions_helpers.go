@@ -387,7 +387,7 @@ func (h *TransactionHandler) renderTransactionFormWithErrors(
 	}
 
 	template := "pages/transactions/new"
-	if title == "Edit Transaction" {
+	if title == titleEditTransaction {
 		template = "pages/transactions/edit"
 	}
 

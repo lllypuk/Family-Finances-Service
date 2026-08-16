@@ -1,9 +1,8 @@
-package handlers
+package handlers_test
 
 import (
 	"context"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,6 +19,7 @@ import (
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
+	"family-budget-service/internal/web/handlers"
 	"family-budget-service/internal/web/middleware"
 )
 
@@ -239,19 +239,12 @@ func (m *MockReportService) CalculateBenchmarks(ctx context.Context) (*dto.Bench
 	return args.Get(0).(*dto.BenchmarkComparisonDTO), args.Error(1)
 }
 
-// mockRenderer is a simple test renderer
-type mockRenderer struct{}
-
-func (r *mockRenderer) Render(_ io.Writer, _ string, _ any, _ echo.Context) error {
-	return nil
-}
-
 const testReportFormData = "type=expenses&period=monthly&start_date=2025-01-01&end_date=2025-01-31&name=Test+Report"
 
 // setupReportHandlerTest creates a test context with session data for report handler tests
 func setupReportHandlerTest(htmx bool) (echo.Context, *httptest.ResponseRecorder) {
 	e := echo.New()
-	e.Renderer = &mockRenderer{}
+	e.Renderer = &MockRenderer{}
 
 	req := httptest.NewRequest(http.MethodPost, "/reports", strings.NewReader(testReportFormData))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
@@ -288,7 +281,7 @@ func TestReportHandler_Create_HTMXGenerationError(t *testing.T) {
 	}
 
 	// Create handler
-	handler := NewReportHandler(nil, svc)
+	handler := handlers.NewReportHandler(nil, svc)
 
 	// Create test context with HTMX header and valid form data
 	// Using testReportFormData constant
@@ -336,7 +329,7 @@ func TestReportHandler_Create_Success(t *testing.T) {
 	}
 
 	// Create handler
-	handler := NewReportHandler(nil, svc)
+	handler := handlers.NewReportHandler(nil, svc)
 
 	// Create test context with valid form data (non-HTMX)
 	// Using testReportFormData constant
@@ -384,7 +377,7 @@ func TestReportHandler_Create_HTMXSuccess(t *testing.T) {
 	}
 
 	// Create handler
-	handler := NewReportHandler(nil, svc)
+	handler := handlers.NewReportHandler(nil, svc)
 
 	// Create test context with HTMX header and valid form data
 	// Using testReportFormData constant
@@ -427,7 +420,7 @@ func TestReportHandler_Create_SaveError(t *testing.T) {
 	}
 
 	// Create handler
-	handler := NewReportHandler(nil, svc)
+	handler := handlers.NewReportHandler(nil, svc)
 
 	// Create test context with HTMX header and valid form data
 	// Using testReportFormData constant
@@ -445,9 +438,106 @@ func TestReportHandler_Create_SaveError(t *testing.T) {
 	mockReportService.AssertCalled(t, "SaveReport", mock.Anything, expenseReport, report.TypeExpenses, mock.Anything)
 }
 
-// TestErrHTMXResponseSent verifies that errHTMXResponseSent is properly defined
-func TestErrHTMXResponseSent(t *testing.T) {
-	// Verify the sentinel error exists and has correct message
-	require.Error(t, errHTMXResponseSent)
-	assert.Equal(t, "HTMX response already sent", errHTMXResponseSent.Error())
+// setupReportHandlerWithUser собирает обработчик отчётов с моками сервисов
+// отчётов и пользователей: buildPageData дочитывает имя и фамилию владельца
+// сессии через UserService, поэтому без него страницы отчётов не собираются.
+func setupReportHandlerWithUser() (*handlers.ReportHandler, *MockReportService, *MockUserService) {
+	mockReportService := new(MockReportService)
+	mockUserService := new(MockUserService)
+
+	svc := &services.Services{
+		Report: mockReportService,
+		User:   mockUserService,
+	}
+
+	return handlers.NewReportHandler(nil, svc), mockReportService, mockUserService
+}
+
+// TestReportHandler_PageDataContract проверяет контракт данных страниц отчётов:
+// шаблон шапки читает `.CurrentUser` из **корня** контекста
+// (`{{if .CurrentUser}}`), поэтому *PageData обязан быть встроен, а не лежать
+// в map под ключом "PageData". Регрессия U-02
+// (docs/specs/003-ui-ux-audit.md#u-02) возникла именно из-за вложенности
+// на уровень глубже. Заодно фиксируются русские заголовки (U-05).
+func TestReportHandler_PageDataContract(t *testing.T) {
+	userID := uuid.New()
+	testReport := &report.Report{
+		ID:     uuid.New(),
+		Name:   "Февраль",
+		Type:   report.TypeExpenses,
+		Period: report.PeriodMonthly,
+		UserID: userID,
+	}
+
+	newHandler := func(t *testing.T) *handlers.ReportHandler {
+		t.Helper()
+
+		handler, mockReportService, mockUserService := setupReportHandlerWithUser()
+
+		mockReportService.On("GetReports", mock.Anything, mock.Anything).
+			Return([]*report.Report{testReport}, nil).Maybe()
+		mockReportService.On("GetReportByID", mock.Anything, testReport.ID).
+			Return(testReport, nil).Maybe()
+		mockUserService.On("GetUserByID", mock.Anything, userID).
+			Return(&user.User{ID: userID, Email: "test@example.com", FirstName: "John", LastName: "Doe"}, nil)
+
+		return handler
+	}
+
+	t.Run("Index", func(t *testing.T) {
+		handler := newHandler(t)
+
+		c, renderer := newCapturingContext(http.MethodGet, "/reports")
+		withSession(c, userID, user.RoleAdmin)
+
+		require.NoError(t, handler.Index(c))
+
+		out, err := renderer.renderPageData()
+		require.NoError(t, err, "данные хендлера не дают шаблону .CurrentUser в корне контекста")
+		assert.Equal(t, "John Doe|admin|Отчёты", out)
+	})
+
+	t.Run("New", func(t *testing.T) {
+		handler := newHandler(t)
+
+		c, renderer := newCapturingContext(http.MethodGet, "/reports/new")
+		withSession(c, userID, user.RoleAdmin)
+
+		require.NoError(t, handler.New(c))
+
+		out, err := renderer.renderPageData()
+		require.NoError(t, err)
+		assert.Equal(t, "John Doe|admin|Новый отчёт", out)
+	})
+
+	t.Run("Show", func(t *testing.T) {
+		handler := newHandler(t)
+
+		c, renderer := newCapturingContext(http.MethodGet, "/reports/"+testReport.ID.String())
+		c.SetParamNames("id")
+		c.SetParamValues(testReport.ID.String())
+		withSession(c, userID, user.RoleAdmin)
+
+		require.NoError(t, handler.Show(c))
+
+		out, err := renderer.renderPageData()
+		require.NoError(t, err)
+		assert.Equal(t, "John Doe|admin|Отчёт: Февраль", out)
+	})
+
+	t.Run("FormWithErrors", func(t *testing.T) {
+		handler := newHandler(t)
+
+		// Пустое тело — форма не проходит валидацию, хендлер перерисовывает
+		// pages/reports/new с ошибками. Шапка обязана остаться на месте.
+		c, renderer := newCapturingContext(http.MethodPost, "/reports")
+		withSession(c, userID, user.RoleAdmin)
+
+		// Create возвращает 400 (форма невалидна), но данные шаблону уже отданы.
+		_ = handler.Create(c)
+
+		out, err := renderer.renderPageData()
+		require.NoError(t, err)
+		assert.Equal(t, "John Doe|admin|Новый отчёт", out)
+	})
 }

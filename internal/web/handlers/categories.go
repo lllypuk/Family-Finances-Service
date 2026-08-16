@@ -128,7 +128,7 @@ func (h *CategoryHandler) Index(c echo.Context) error {
 		WithSubcategoriesCount int
 		Pagination             any
 	}{
-		PageData:               h.buildPageData(c, "Categories"),
+		PageData:               h.buildPageData(c, titleCategories),
 		Categories:             categoryTree,
 		Filters:                filters,
 		IncomeCount:            counts.Income,
@@ -169,7 +169,7 @@ func (h *CategoryHandler) New(c echo.Context) error {
 
 	// CSRF-токен приходит из PageData и промотируется в корень контекста.
 	data := categoryFormData{
-		PageData:      h.buildPageData(c, "New Category"),
+		PageData:      h.buildPageData(c, titleNewCategory),
 		ParentOptions: parentOptions,
 		DefaultColors: getDefaultCategoryColors(),
 		DefaultIcons:  getDefaultCategoryIcons(),
@@ -222,7 +222,7 @@ func (h *CategoryHandler) Create(c echo.Context) error {
 		}
 
 		data := categoryFormData{
-			PageData:      h.formPageData(c, "New Category", validationErrors),
+			PageData:      h.formPageData(c, titleNewCategory, validationErrors),
 			Form:          &form,
 			ParentOptions: parentOptions,
 			DefaultColors: getDefaultCategoryColors(),
@@ -330,7 +330,7 @@ func (h *CategoryHandler) Edit(c echo.Context) error {
 
 	// CSRF-токен приходит из PageData и промотируется в корень контекста.
 	data := categoryFormData{
-		PageData:      h.buildPageData(c, "Edit Category"),
+		PageData:      h.buildPageData(c, titleEditCategory),
 		Form:          &form,
 		Category:      category,
 		ParentOptions: parentOptions,
@@ -432,7 +432,7 @@ func (h *CategoryHandler) handleUpdateValidationError(
 	)
 
 	data := categoryFormData{
-		PageData:      h.formPageData(c, "Edit Category", validationErrors),
+		PageData:      h.formPageData(c, titleEditCategory, validationErrors),
 		Form:          &form,
 		Category:      existingCategory,
 		ParentOptions: parentOptions,

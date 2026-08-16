@@ -138,7 +138,7 @@ func (h *BudgetHandler) Index(c echo.Context) error {
 		Budgets []webModels.BudgetProgressVM
 		Filter  webModels.BudgetFilter
 	}{
-		PageData: h.buildPageData(c, "Budgets"),
+		PageData: h.buildPageData(c, titleBudgets),
 		Budgets:  budgetVMs,
 		Filter:   filterForm,
 	}
@@ -190,7 +190,7 @@ func (h *BudgetHandler) New(c echo.Context) error {
 
 	// CSRF-токен приходит из PageData и промотируется в корень контекста.
 	data := budgetFormData{
-		PageData:        h.buildPageData(c, "New Budget"),
+		PageData:        h.buildPageData(c, titleNewBudget),
 		Form:            defaultForm,
 		DefaultForm:     defaultForm,
 		CategoryOptions: categoryOptions,
@@ -223,7 +223,7 @@ func (h *BudgetHandler) Create(c echo.Context) error {
 			})
 		}
 
-		return h.renderBudgetFormWithErrors(c, form, validationErrors, "New Budget", "")
+		return h.renderBudgetFormWithErrors(c, form, validationErrors, titleNewBudget, "")
 	}
 
 	// Парсим сумму
@@ -333,7 +333,7 @@ func (h *BudgetHandler) Edit(c echo.Context) error {
 
 	// CSRF-токен приходит из PageData и промотируется в корень контекста.
 	data := budgetFormData{
-		PageData:        h.buildPageData(c, "Edit Budget: "+budgetEntity.Name),
+		PageData:        h.buildPageData(c, titleEditBudget+": "+budgetEntity.Name),
 		Form:            form,
 		DefaultForm:     form,
 		CategoryOptions: categoryOptions,
@@ -382,7 +382,7 @@ func (h *BudgetHandler) Update(c echo.Context) error {
 			})
 		}
 
-		return h.renderBudgetFormWithErrors(c, form, validationErrors, "Edit Budget", budgetID.String())
+		return h.renderBudgetFormWithErrors(c, form, validationErrors, titleEditBudget, budgetID.String())
 	}
 
 	// Парсим новые значения
@@ -567,7 +567,7 @@ func (h *BudgetHandler) Show(c echo.Context) error {
 		RecentTransactions []*webModels.TransactionSummary
 		Transactions       any
 	}{
-		PageData:           h.buildPageData(c, "Budget: "+budgetEntity.Name),
+		PageData:           h.buildPageData(c, titleBudgetPrefix+budgetEntity.Name),
 		Budget:             budgetVM,
 		SpendingData:       spendingData,
 		RecentTransactions: recentTransactions,
@@ -625,7 +625,7 @@ func (h *BudgetHandler) renderBudgetFormWithErrors(
 	}
 
 	template := "pages/budgets/new"
-	if title == "Edit Budget" {
+	if title == titleEditBudget {
 		template = "pages/budgets/edit"
 	}
 
@@ -757,7 +757,7 @@ func (h *BudgetHandler) Alerts(c echo.Context) error {
 	csrfToken, _ := middleware.GetCSRFToken(c)
 
 	pageData := &PageData{
-		Title: "Budget Alerts",
+		Title: titleBudgetAlerts,
 	}
 
 	// ВНИМАНИЕ: единственная страница бюджетов, оставленная на map-контракте.

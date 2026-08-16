@@ -106,7 +106,7 @@ func (h *TransactionHandler) Index(c echo.Context) error {
 		CategoryOptions []webModels.CategorySelectOption
 		Pagination      webModels.TransactionListResponse
 	}{
-		PageData:        h.buildPageData(c, "Transactions"),
+		PageData:        h.buildPageData(c, titleTransactions),
 		Transactions:    transactionVMs,
 		Filters:         filters,
 		CategoryOptions: categoryOptions,
@@ -145,7 +145,7 @@ func (h *TransactionHandler) New(c echo.Context) error {
 		Form            webModels.TransactionForm
 		CategoryOptions []webModels.CategorySelectOption
 	}{
-		PageData:        h.buildPageData(c, "New Transaction"),
+		PageData:        h.buildPageData(c, titleNewTransaction),
 		Form:            form,
 		CategoryOptions: categoryOptions,
 	}
@@ -180,7 +180,7 @@ func (h *TransactionHandler) Create(c echo.Context) error {
 		}
 
 		// Для обычных запросов возвращаем форму заново
-		return h.renderTransactionFormWithErrors(c, form, validationErrors, "New Transaction")
+		return h.renderTransactionFormWithErrors(c, form, validationErrors, titleNewTransaction)
 	}
 
 	// Создаем DTO для сервиса
@@ -261,7 +261,7 @@ func (h *TransactionHandler) Edit(c echo.Context) error {
 		Transaction     *transactionDomain.Transaction
 		CategoryOptions []webModels.CategorySelectOption
 	}{
-		PageData:        h.buildPageData(c, "Edit Transaction"),
+		PageData:        h.buildPageData(c, titleEditTransaction),
 		Form:            form,
 		Transaction:     transaction,
 		CategoryOptions: categoryOptions,
@@ -313,7 +313,7 @@ func (h *TransactionHandler) Update(c echo.Context) error {
 		}
 
 		// Для обычных запросов возвращаем форму заново
-		return h.renderTransactionFormWithErrors(c, form, validationErrors, "Edit Transaction")
+		return h.renderTransactionFormWithErrors(c, form, validationErrors, titleEditTransaction)
 	}
 
 	// Создаем DTO для обновления
