@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -56,6 +58,9 @@ import (
 // Задача 4 повесила RequireAPIAuth на группу /api/v1, skip снят — тест обязан
 // проходить. Зелёный прогон означает, что S-01 закрыт для анонимного клиента.
 
+// apiV1Prefix — префикс группы API, по которому маршруты отбираются из роутера.
+const apiV1Prefix = "/api/v1"
+
 // csrfFormTokenRe вытаскивает CSRF-токен из скрытого поля формы входа
 // (internal/web/templates/pages/login.html).
 var csrfFormTokenRe = regexp.MustCompile(`name="_token"\s+value="([^"]+)"`)
@@ -92,39 +97,21 @@ func TestAPIAuth_AnonymousRequestsRejected(t *testing.T) {
 	// Семья и админ нужны только для того, чтобы RequireSetup не уводил всё на /setup.
 	testServer.Auth(t)
 
-	t.Run("GetWithoutSession", func(t *testing.T) {
+	// Список маршрутов не поддерживается руками: он берётся из роутера Echo,
+	// поэтому маршрут, зарегистрированный мимо защищённой группы, немедленно
+	// уронит тест, а не тихо останется без проверки.
+	t.Run("EveryAPIRouteWithoutSession", func(t *testing.T) {
 		fixtures := createAPIFixtures(t, testServer)
+		routes := apiV1Routes(testServer.Server.Echo(), fixtures)
+		require.NotEmpty(t, routes, "в роутере не нашлось ни одного маршрута /api/v1")
 
-		readCases := []struct {
-			name string
-			path string
-		}{
-			{name: "users", path: "/api/v1/users/" + fixtures.userID.String()},
-			{name: "categories", path: "/api/v1/categories"},
-			{name: "transactions", path: "/api/v1/transactions"},
-			{name: "budgets", path: "/api/v1/budgets"},
-			{name: "reports", path: "/api/v1/reports"},
-		}
-
-		for _, tc := range readCases {
-			t.Run(tc.name, func(t *testing.T) {
-				req := httptest.NewRequest(http.MethodGet, tc.path, nil)
-				rec := httptest.NewRecorder()
-
-				testServer.Server.Echo().ServeHTTP(rec, req)
-
-				assert.Equal(t, http.StatusUnauthorized, rec.Code,
-					"анонимный GET %s обязан получить 401", tc.path)
-			})
-		}
-	})
-
-	t.Run("WriteWithAnonymousCSRFToken", func(t *testing.T) {
-		for _, tc := range anonymousWriteCases(t, testServer) {
-			t.Run(tc.name, func(t *testing.T) {
+		for _, route := range routes {
+			t.Run(route.method+" "+route.path, func(t *testing.T) {
+				// Анонимная сессия несёт валидный CSRF-токен: без него запись
+				// отвергает CSRFProtection и до авторизации дело не доходит.
 				anon := newAnonymousSession(t, testServer)
 
-				req := httptest.NewRequest(tc.method, tc.path, bytes.NewBufferString(tc.body))
+				req := httptest.NewRequest(route.method, route.path, bytes.NewBufferString("{}"))
 				req.Header.Set("Content-Type", "application/json")
 				anon.apply(req)
 				rec := httptest.NewRecorder()
@@ -132,7 +119,7 @@ func TestAPIAuth_AnonymousRequestsRejected(t *testing.T) {
 				testServer.Server.Echo().ServeHTTP(rec, req)
 
 				assert.Equal(t, http.StatusUnauthorized, rec.Code,
-					"анонимный %s %s с валидным CSRF-токеном обязан получить 401", tc.method, tc.path)
+					"анонимный %s %s обязан получить 401, тело: %s", route.method, route.path, rec.Body.String())
 			})
 		}
 	})
@@ -305,104 +292,72 @@ func TestAPIAuth_BodyUserIDIgnored(t *testing.T) {
 	assert.Equal(t, testServer.AuthUser.ID, stored.UserID)
 }
 
-type apiWriteCase struct {
-	name   string
+// apiRoute — конкретный запрос, собранный из шаблона маршрута Echo.
+type apiRoute struct {
 	method string
 	path   string
-	body   string
 }
 
-// anonymousWriteCases готовит по отдельному набору записей на каждый кейс:
-// пока дыра открыта, DELETE действительно удаляет, и общие фикстуры дали бы
-// 404 вместо честного «запрос прошёл».
-func anonymousWriteCases(t *testing.T, ts *testhelpers.TestServer) []apiWriteCase {
-	t.Helper()
+// apiV1Routes перечисляет все зарегистрированные маршруты группы /api/v1,
+// подставляя вместо `:param` идентификаторы существующих записей (техника взята
+// из tests/integration/login_links_test.go, только в обратную сторону: там
+// шаблон превращается в регулярное выражение, здесь — в конкретный путь).
+// Wildcard-маршруты (`/*`), которые Echo сам вешает на группу с middleware,
+// пропускаются: за ними стоит NotFoundHandler, а не хендлер приложения.
+func apiV1Routes(e *echo.Echo, fixtures apiFixtures) []apiRoute {
+	seen := make(map[apiRoute]struct{})
+	routes := make([]apiRoute, 0)
 
-	createTx := createAPIFixtures(t, ts)
-	createCat := createAPIFixtures(t, ts)
-	createBudget := createAPIFixtures(t, ts)
-	updateTx := createAPIFixtures(t, ts)
-	deleteTx := createAPIFixtures(t, ts)
-	deleteCat := createAPIFixtures(t, ts)
-	deleteBudget := createAPIFixtures(t, ts)
-	deleteReport := createAPIFixtures(t, ts)
-	deleteUser := createAPIFixtures(t, ts)
+	for _, route := range e.Routes() {
+		if !strings.HasPrefix(route.Path, apiV1Prefix) || strings.Contains(route.Path, "*") {
+			continue
+		}
+		// Псевдо-метод Echo для «маршрут не найден» — не запрос приложения.
+		if route.Method == echo.RouteNotFound {
+			continue
+		}
 
-	transactionBody := func(f apiFixtures) string {
-		return string(mustJSON(t, map[string]any{
-			"amount":      42.0,
-			"type":        "expense",
-			"description": "anonymous write",
-			"category_id": f.categoryID,
-			"user_id":     f.userID,
-			"date":        time.Now(),
-		}))
+		concrete := apiRoute{method: route.Method, path: concreteAPIPath(route.Path, fixtures)}
+		if _, duplicate := seen[concrete]; duplicate {
+			continue
+		}
+
+		seen[concrete] = struct{}{}
+		routes = append(routes, concrete)
 	}
 
-	return []apiWriteCase{
-		{
-			name:   "create transaction",
-			method: http.MethodPost,
-			path:   "/api/v1/transactions",
-			body:   transactionBody(createTx),
-		},
-		{
-			name:   "create category",
-			method: http.MethodPost,
-			path:   "/api/v1/categories",
-			body: string(mustJSON(t, map[string]any{
-				"name":      "Anonymous category",
-				"type":      "expense",
-				"color":     "#ff0000",
-				"icon":      "shopping",
-				"parent_id": createCat.categoryID,
-			})),
-		},
-		{
-			name:   "create budget",
-			method: http.MethodPost,
-			path:   "/api/v1/budgets",
-			body: string(mustJSON(t, map[string]any{
-				"name":        "Anonymous budget",
-				"amount":      500.0,
-				"period":      "monthly",
-				"category_id": createBudget.freeCategoryID,
-				"start_date":  time.Now(),
-				"end_date":    time.Now().AddDate(0, 1, 0),
-			})),
-		},
-		{
-			name:   "update transaction",
-			method: http.MethodPut,
-			path:   "/api/v1/transactions/" + updateTx.transactionID.String(),
-			body:   `{"description":"hijacked by anonymous"}`,
-		},
-		{
-			name:   "delete transaction",
-			method: http.MethodDelete,
-			path:   "/api/v1/transactions/" + deleteTx.transactionID.String(),
-		},
-		{
-			name:   "delete category",
-			method: http.MethodDelete,
-			path:   "/api/v1/categories/" + deleteCat.categoryID.String(),
-		},
-		{
-			name:   "delete budget",
-			method: http.MethodDelete,
-			path:   "/api/v1/budgets/" + deleteBudget.budgetID.String(),
-		},
-		{
-			name:   "delete report",
-			method: http.MethodDelete,
-			path:   "/api/v1/reports/" + deleteReport.reportID.String(),
-		},
-		{
-			name:   "delete user",
-			method: http.MethodDelete,
-			path:   "/api/v1/users/" + deleteUser.userID.String(),
-		},
+	return routes
+}
+
+// concreteAPIPath подставляет в шаблон маршрута реальные идентификаторы: тогда
+// пропущенная авторизация проявится как 200/204 на существующей записи, а не
+// как 404 на выдуманной.
+func concreteAPIPath(pattern string, fixtures apiFixtures) string {
+	resourceIDs := map[string]uuid.UUID{
+		"users":        fixtures.userID,
+		"categories":   fixtures.categoryID,
+		"transactions": fixtures.transactionID,
+		"budgets":      fixtures.budgetID,
+		"reports":      fixtures.reportID,
 	}
+
+	segments := strings.Split(pattern, "/")
+	resource := ""
+
+	for i, segment := range segments {
+		if !strings.HasPrefix(segment, ":") {
+			resource = segment
+			continue
+		}
+
+		id, ok := resourceIDs[resource]
+		if !ok {
+			id = uuid.New()
+		}
+		segments[i] = id.String()
+	}
+
+	return strings.Join(segments, "/")
 }
 
 // newAnonymousSession повторяет шаг аудита: GET /login отдаёт cookie сессии и

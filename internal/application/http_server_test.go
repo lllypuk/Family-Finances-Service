@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -567,6 +568,51 @@ func TestNewHTTPServerWithObservability(t *testing.T) {
 	// Assert
 	assert.NotNil(t, server)
 	assert.NotNil(t, server.Echo())
+}
+
+// TestNewHTTPServer_BrokenTemplatesDir_ReportsInitError — сервер не падает,
+// когда шаблоны не читаются, но обязан сохранить ошибку: на неё смотрит
+// testhelpers.SetupHTTPServer и вызывающий код в internal/run.go, иначе тесты
+// молча работают без сессий, CSRF и веб-маршрутов.
+func TestNewHTTPServer_BrokenTemplatesDir_ReportsInitError(t *testing.T) {
+	repos := NewMockRepositories()
+	mockServices := NewMockServices()
+	config := &application.Config{
+		Port:          "8080",
+		Host:          "localhost",
+		SessionSecret: "test-session-secret",
+		TemplatesDir:  filepath.Join(t.TempDir(), "no-such-templates"),
+	}
+
+	server := application.NewHTTPServer(&repos.Repositories, mockServices, config)
+
+	require.Error(t, server.WebServerInitError(), "битый каталог шаблонов обязан оставить ошибку инициализации")
+
+	// Веб-слой не зарегистрирован — /login отсутствует, а /health и API живы.
+	loginRec := httptest.NewRecorder()
+	server.Echo().ServeHTTP(loginRec, httptest.NewRequest(http.MethodGet, "/login", nil))
+	assert.Equal(t, http.StatusNotFound, loginRec.Code)
+
+	healthRec := httptest.NewRecorder()
+	server.Echo().ServeHTTP(healthRec, httptest.NewRequest(http.MethodGet, "/health", nil))
+	assert.Equal(t, http.StatusOK, healthRec.Code)
+}
+
+// TestNewHTTPServer_ValidTemplatesDir_NoInitError — зеркало предыдущего теста:
+// с настоящим каталогом шаблонов ошибки быть не должно.
+func TestNewHTTPServer_ValidTemplatesDir_NoInitError(t *testing.T) {
+	repos := NewMockRepositories()
+	mockServices := NewMockServices()
+	config := &application.Config{
+		Port:          "8080",
+		Host:          "localhost",
+		SessionSecret: "test-session-secret",
+		TemplatesDir:  filepath.Join("..", "web", "templates"),
+	}
+
+	server := application.NewHTTPServer(&repos.Repositories, mockServices, config)
+
+	require.NoError(t, server.WebServerInitError())
 }
 
 func TestHTTPServer_Echo(t *testing.T) {

@@ -15,6 +15,7 @@ import (
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
+	"family-budget-service/internal/web/middleware"
 )
 
 type TransactionHandler struct {
@@ -44,12 +45,16 @@ func NewTransactionHandler(
 }
 
 func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
-	// Автор записи — владелец сессии. Проверяем до разбора тела: без сессии
+	// Автор записи — владелец сессии, которую RequireAPIAuth кладёт в контекст.
+	// Единственный допустимый источник: тело запроса им быть не может, иначе
+	// аутентифицированный клиент пишет от чужого имени (S-01,
+	// docs/specs/002-security-audit.md). Проверяем до разбора тела: без сессии
 	// транзакцию всё равно не от кого создавать.
-	userID, sessionErr := sessionUserID(c)
+	sessionData, sessionErr := middleware.GetUserFromContext(c)
 	if sessionErr != nil {
 		return respondUnauthorized(c)
 	}
+	userID := sessionData.UserID
 
 	var req CreateTransactionRequest
 	if err := c.Bind(&req); err != nil {

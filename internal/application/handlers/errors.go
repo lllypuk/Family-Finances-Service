@@ -16,12 +16,17 @@ const (
 	ErrCodeFamilyNotFound = "FAMILY_NOT_FOUND"
 	// ErrCodeCategoryNotFound signals that the requested category does not exist.
 	ErrCodeCategoryNotFound = "CATEGORY_NOT_FOUND"
-	// ErrCodeUnauthorized signals a request without a valid session. Совпадает
-	// с кодом, который отдаёт middleware.RequireAPIAuth.
+	// ErrCodeUnauthorized signals a request without a valid session
+	// (отдаёт RequireAPIAuth, см. api_auth.go).
 	ErrCodeUnauthorized = "UNAUTHORIZED"
+	// ErrCodeForbidden signals a session whose role is not allowed on the route
+	// (отдаёт RequireAPIRole, см. api_auth.go).
+	ErrCodeForbidden = "FORBIDDEN"
 
 	// Standard error messages paired with the codes above. Kept as constants
 	// so changes propagate to API consumers in lockstep with code updates.
+	ErrMessageUnauthorized       = "Authentication required"
+	ErrMessageForbidden          = "Insufficient permissions"
 	ErrMessageInvalidRequest     = "Invalid request body"
 	ErrMessageInvalidUserID      = "Invalid user ID format"
 	ErrMessageInvalidCategoryID  = "Invalid category ID format"

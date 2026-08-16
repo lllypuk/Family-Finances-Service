@@ -9,8 +9,6 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
-
-	"family-budget-service/internal/web/middleware"
 )
 
 const apiVersion = "v1"
@@ -50,24 +48,10 @@ func respondError(
 	return c.JSON(status, resp)
 }
 
-// sessionUserID возвращает ID пользователя из сессии, которую RequireAPIAuth
-// кладёт в контекст под ключом "user". Единственный допустимый источник автора
-// записи: тело запроса им быть не может, иначе аутентифицированный клиент
-// пишет от чужого имени (S-01, docs/specs/002-security-audit.md).
-func sessionUserID(c echo.Context) (uuid.UUID, error) {
-	sessionData, err := middleware.GetUserFromContext(c)
-	if err != nil {
-		return uuid.Nil, err
-	}
-
-	return sessionData.UserID, nil
-}
-
-// respondUnauthorized отдаёт 401 в общем формате ошибок API. Штатно сюда не
-// попадают — группа /api/v1 закрыта RequireAPIAuth, — но хендлер не обязан
-// доверять тому, что его повесили в правильную группу.
+// respondUnauthorized отдаёт 401 в общем формате ошибок API: так отвечает
+// RequireAPIAuth и хендлеры, которым без сессии нечего делать.
 func respondUnauthorized(c echo.Context) error {
-	return respondError(c, http.StatusUnauthorized, ErrCodeUnauthorized, "Authentication required")
+	return respondError(c, http.StatusUnauthorized, ErrCodeUnauthorized, ErrMessageUnauthorized)
 }
 
 func buildValidationErrors(err error) []ValidationError {

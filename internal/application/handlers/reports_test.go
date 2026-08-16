@@ -114,8 +114,10 @@ func TestReportHandler_CreateReport_Success(t *testing.T) {
 	mockRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 }
 
-// TestReportHandler_CreateReport_NoSession — владелец отчёта берётся из сессии,
-// поэтому без неё маршрут отвечает 401 и не доходит даже до разбора тела.
+// TestReportHandler_CreateReport_NoSession — сам хендлер сессию не читает:
+// генерация не реализована, автора отчёта записывать некуда, а анонимный клиент
+// до маршрута не доходит (группа /api/v1 закрыта RequireAPIAuth, см.
+// tests/integration/api_auth_test.go). Ничего, кроме 501, здесь не отдаётся.
 func TestReportHandler_CreateReport_NoSession(t *testing.T) {
 	handler, mockRepo := setupReportHandler()
 
@@ -131,11 +133,11 @@ func TestReportHandler_CreateReport_NoSession(t *testing.T) {
 	err = handler.CreateReport(c)
 
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	assert.Equal(t, http.StatusNotImplemented, rec.Code)
 
 	var response handlers.ErrorResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-	assert.Equal(t, "UNAUTHORIZED", response.Error.Code)
+	assert.Equal(t, "NOT_IMPLEMENTED", response.Error.Code)
 
 	mockRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 }

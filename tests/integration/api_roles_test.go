@@ -85,6 +85,15 @@ func TestAPIRoles_DestructiveRoutesRequireAdmin(t *testing.T) {
 			path:    func(f apiFixtures) string { return "/api/v1/categories/" + f.freeCategoryID.String() },
 			adminOK: http.StatusNoContent,
 		},
+		// Чтение карточки пользователя закрыто наравне с остальными
+		// операциями над /users: в вебе весь раздел под RequireAdmin,
+		// и API не должен отдавать member/child чужие email и роли.
+		{
+			name:    "get user",
+			method:  http.MethodGet,
+			path:    func(f apiFixtures) string { return "/api/v1/users/" + f.userID.String() },
+			adminOK: http.StatusOK,
+		},
 	}
 
 	for _, tc := range cases {
@@ -176,6 +185,86 @@ func TestAPIRoles_ChildHasNoAccessToFinanceRoutes(t *testing.T) {
 
 		assert.Equal(t, http.StatusForbidden, rec.Code, "тело: %s", rec.Body.String())
 	})
+}
+
+// TestAPIRoles_MemberHasAccessToFinanceRoutes — обратная сторона предыдущего
+// теста: финансовые разделы открыты роли member так же, как в вебе
+// (RequireAdminOrMember). Без этой проверки сужение financeAccess до одного
+// admin не уронило бы ни одного теста.
+func TestAPIRoles_MemberHasAccessToFinanceRoutes(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+
+	testServer.Auth(t)
+	_, memberAuth := testServer.AuthAs(t, user.RoleMember)
+	fixtures := createAPIFixtures(t, testServer)
+
+	financePaths := []string{
+		"/api/v1/categories",
+		"/api/v1/transactions",
+		"/api/v1/budgets",
+		"/api/v1/reports",
+	}
+
+	for _, path := range financePaths {
+		t.Run("member "+path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			memberAuth.Apply(req)
+			rec := httptest.NewRecorder()
+
+			testServer.Server.Echo().ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code,
+				"роль member работает с %s в вебе, значит и в API, тело: %s", path, rec.Body.String())
+		})
+	}
+
+	// Запись под ролью member тоже разрешена, причём автором становится сам
+	// member: user_id из тела запроса игнорируется (S-01).
+	t.Run("member create transaction", func(t *testing.T) {
+		body := mustJSON(t, map[string]any{
+			"amount":      12.5,
+			"type":        "expense",
+			"description": "member write",
+			"category_id": fixtures.categoryID,
+			"date":        "2026-01-01T00:00:00Z",
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		memberAuth.Apply(req)
+		rec := httptest.NewRecorder()
+
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusCreated, rec.Code, "тело: %s", rec.Body.String())
+	})
+
+	// Раздел пользователей роли member по-прежнему закрыт, даже на чтение.
+	t.Run("member reads user", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/users/"+fixtures.userID.String(), nil)
+		memberAuth.Apply(req)
+		rec := httptest.NewRecorder()
+
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusForbidden, rec.Code, "тело: %s", rec.Body.String())
+	})
+}
+
+// TestAPIRoles_GetUnknownUser_AdminReaches404 — ролевой guard на GET
+// /api/v1/users/:id не должен подменять ответ хендлера: у админа запрос
+// доходит до него и отдаёт честный 404 на несуществующем id.
+func TestAPIRoles_GetUnknownUser_AdminReaches404(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	adminAuth := testServer.Auth(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/"+uuid.New().String(), nil)
+	adminAuth.Apply(req)
+	rec := httptest.NewRecorder()
+
+	testServer.Server.Echo().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code, "тело: %s", rec.Body.String())
 }
 
 // TestAPIRoles_ForbiddenResponseIsJSON — программный клиент обязан получить
