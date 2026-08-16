@@ -47,6 +47,48 @@ cd Family-Finances-Service
 sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@example.com
 ```
 
+### First run over an SSH tunnel
+
+Do the first run without a public domain. `docker-compose.prod.yml` binds
+`127.0.0.1:8080:8080`, so the service is not reachable from the network at all —
+reach it from your laptop through SSH port forwarding:
+
+```bash
+# on your laptop; leave this running
+ssh -N -L 8080:127.0.0.1:8080 mini
+```
+
+Then open <http://localhost:8080> in a browser and walk the whole flow:
+
+1. `/` redirects to `/setup` while no family exists. Create the family and the first
+   admin user — this is the only way an admin account is ever created.
+2. Log in, add a category, add a transaction, open `/transactions` — the pages must
+   render with the navigation bar and a Russian title.
+3. `/health` answers `200` even before setup, so you can point monitoring at it from
+   the start.
+4. **Take a backup and restore it.** A backup you have never restored is not a backup:
+
+   ```bash
+   sudo /opt/family-budget/src/deploy/scripts/backup.sh
+   # then verify the copy actually opens and holds your rows
+   sqlite3 /opt/family-budget/backups/budget_<timestamp>.db \
+     'pragma integrity_check; select count(*) from transactions;'
+   ```
+
+Only after that walk-through is clean should you point a domain at the server and
+move to Option 2 or 3. Note that the application itself still has **no rate limiting
+on login** — brute-force protection comes entirely from the nginx/Caddy configs and
+fail2ban, so a public deployment must go through a reverse proxy.
+
+Useful checks while the tunnel is up:
+
+```bash
+curl -s localhost:8080/health                 # {"status":"healthy",...}
+curl -s -o /dev/null -w '%{http_code}\n' localhost:8080/api/v1/categories   # 401
+```
+
+That `401` is the expected answer: the REST API requires a session (see below).
+
 ## Directory Structure
 
 ```
@@ -197,6 +239,76 @@ All configurations include:
 | `/api/*`  | 100 req/min | API abuse prevention   |
 | General   | 10 req/sec  | DDoS protection        |
 | `/health` | Unlimited   | Monitoring             |
+
+These limits live in the nginx/Caddy configs only. The application has no built-in
+rate limiting, so `docker-compose.minimal.yml` and native systemd deployments are not
+covered by the `/login` limit — put a proxy in front of anything reachable from the
+internet.
+
+### API authentication
+
+`/api/v1/*` is not public. The group is wrapped in `RequireAPIAuth`, and the only
+credential is the same session cookie the web UI uses — there are no API tokens.
+
+| Request | Response |
+|---|---|
+| Any `/api/v1/*` without a session | `401` + `{"error":{"code":"UNAUTHORIZED","message":"Authentication required"}}` |
+| `POST`/`PUT`/`DELETE` without `X-Csrf-Token` | `403 CSRF token validation failed` |
+| `POST`/`PUT`/`DELETE` with a valid token but no session | `401` |
+| Role not allowed for the route | `403` + `{"error":{"code":"FORBIDDEN","message":"Insufficient permissions"}}` |
+
+The `403`-before-`401` ordering is deliberate: CSRF protection is global middleware
+and runs before the API group's auth middleware.
+
+Role gates mirror the web UI: user management (`POST`/`PUT`/`DELETE /api/v1/users`)
+and `DELETE /api/v1/categories/:id` are admin-only; the categories, transactions,
+budgets and reports groups are admin-or-member, so the `child` role gets `403`.
+
+### Programmatic API clients
+
+CSRF protection stays on for `/api/v1` — with cookie-based auth it has to, otherwise
+any third-party page could act as a logged-in user. A script therefore has to behave
+like a browser: keep a cookie jar, and read a CSRF token out of a rendered page.
+
+The token is rotated on login, so the token scraped from `/login` is worthless
+afterwards — fetch a fresh one from an authenticated page.
+
+```bash
+BASE=http://localhost:8080
+JAR=$(mktemp)
+
+# 1. anonymous GET /login -> session cookie + a token for the login form
+TOKEN=$(curl -s -c "$JAR" "$BASE/login" \
+  | grep -oE '_token" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
+
+# 2. log in (302 on success); the session cookie is replaced and the token rotated
+curl -s -b "$JAR" -c "$JAR" -X POST "$BASE/login" -o /dev/null \
+  --data-urlencode "_token=$TOKEN" \
+  --data-urlencode "email=admin@example.com" \
+  --data-urlencode "password=…"
+
+# 3. read the post-login token from any authenticated page (the logout form carries it)
+TOKEN=$(curl -s -b "$JAR" -c "$JAR" "$BASE/transactions" \
+  | grep -oE '_token" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
+
+# 4. reads need only the cookie
+curl -s -b "$JAR" "$BASE/api/v1/categories"
+
+# 5. writes need the cookie *and* the header
+curl -s -b "$JAR" -X POST "$BASE/api/v1/categories" \
+  -H 'Content-Type: application/json' -H "X-Csrf-Token: $TOKEN" \
+  -d '{"name":"Кофе","type":"expense","color":"#ff0000","icon":"cup"}'
+# -> 201 Created
+```
+
+Gotchas found while verifying this against a running server:
+
+- Don't re-fetch `/login` after logging in — an authenticated visitor is redirected
+  away from it, so there is no form to scrape. Use a page you have access to.
+- A single request can write the session cookie more than once; let curl's cookie jar
+  handle it (`-b`/`-c` on every call) rather than parsing `Set-Cookie` yourself.
+- Never send `user_id` in a request body. It is not a field of the create requests any
+  more — the author always comes from the session.
 
 ## Environment Configuration
 

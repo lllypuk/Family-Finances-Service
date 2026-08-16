@@ -27,7 +27,11 @@ go test ./internal/web/handlers -run 'TestAdminHandler_.*' -v
 ```
 
 Docker: `make docker-up` / `docker-up-d` / `docker-down` / `docker-logs` — all use `docker/docker-compose.yml`
-(builds `docker/Dockerfile`, requires `SESSION_SECRET` in env or `.env`).
+(builds `docker/Dockerfile`; **both** `SESSION_SECRET` and `CSRF_SECRET` are required via `${VAR:?}` and compose
+refuses to start without them). Compose is invoked as `docker compose --project-directory .` (the `DOCKER_COMPOSE`
+variable in the Makefile) so that `.env` is read from the repo root — hence `build.context: .` inside
+`docker/docker-compose.yml`. `make compose-config` validates all five compose files (`docker/` + the four
+`deploy/*.yml`) and runs in CI.
 
 SQLite: `make sqlite-shell`, `make sqlite-stats`, `make sqlite-backup`,
 `make sqlite-restore BACKUP_FILE=./backups/<file>.db`.
@@ -66,7 +70,13 @@ on `TransactionRepository`). Add a new repo method to the service-layer interfac
 The deployment serves exactly **one** family. `middleware.RequireSetup` is registered globally: if no family exists,
 every path redirects to `/setup`; once it exists, `/setup` redirects to `/login`. `FamilyService.SetupFamily` is the
 bootstrap path that creates the family plus the first admin user. New members join through the invite system
-(`/invite/:token`), not through open registration.
+(`/invite/:token`), not through open registration — there is no `/register` route or template.
+
+`RequireSetup` details worth knowing (`internal/web/middleware/setup.go`): it matches on `c.Request().URL.Path`, not
+`c.Path()` (which is the *route pattern*, e.g. `/static*`); `isSetupExempt` lets `/health`, `/favicon.ico` and
+`/static/…` through **before** any DB call, so styles load on `/setup` and health checks work pre-setup; a completed
+setup is cached in an `atomic.Bool` inside the closure. Only `true` is cached — a DB error or `false` is not, so the
+setup→ready transition needs no restart.
 
 ### Two HTTP surfaces on one Echo instance
 
@@ -75,7 +85,16 @@ bootstrap path that creates the family plus the first admin user. New members jo
   `RequireAuth()` for the protected group, `RequireAdmin()` for `/users` and `/admin`, `RequireAdminOrMember()` for
   finance pages. Session data lands in the Echo context under key `"user"` (`middleware.GetUserFromContext`).
 - **REST API** (`internal/application/handlers/`): `/api/v1/{users,categories,transactions,budgets,reports}`.
-  Note this group is currently registered **without any auth middleware** — do not assume API routes are protected.
+  The group is registered as `s.echo.Group("/api/v1", webmw.RequireAPIAuth())` — the *same* session cookie as the web
+  UI is the only credential; there are no API tokens. No session → `401` + JSON
+  `{"error":{"code":"UNAUTHORIZED",…},"meta":{…}}`. Per-route role gates mirror the web:
+  `RequireAPIAdmin` on `POST/PUT/DELETE /api/v1/users` and `DELETE /api/v1/categories/:id`,
+  `RequireAPIAdminOrMember` on the categories/transactions/budgets/reports groups
+  (wrong role → `403 FORBIDDEN`). All of it lives in `internal/web/middleware/auth.go`.
+  **Middleware order matters:** the global `CSRFProtection` (`e.Use` in `web.go`) runs *before* the group
+  middleware, so an anonymous write without `X-Csrf-Token` is `403`, and `401` only once a valid token is present.
+  Handlers take the author from the session (`sessionUserID` in `handlers/helpers.go`) — `UserID` is **not** a field
+  of `CreateTransactionRequest`/`CreateReportRequest`, so sending it in the body does nothing.
   `POST /api/v1/reports` intentionally returns `501 Not Implemented`; report *generation* is only exposed through the
   web UI. Stored-report list/get/delete work.
 
@@ -85,11 +104,26 @@ bootstrap path that creates the family plus the first admin user. New members jo
 `templates/admin/*.html` (ParseGlob) and walks `templates/pages/**` (ParseFiles) into one `template.Template`;
 `Render` executes by **template name**, so `{{define "..."}}` names must be unique across the whole tree.
 Custom funcs (`formatCurrency`, `dict`/`map`, `formatBytes`, `safe`, …) are registered in `createTemplateFuncMap`.
-Template data-map keys are centralized as constants in `internal/web/handlers/template_keys.go` — reuse them instead
-of new string literals (`goconst`).
 
-**Working directory matters:** templates (`internal/web/templates`), static files (`internal/web/static`) and
-`./migrations` are all resolved as paths relative to the process CWD. The server must be started from the repo root.
+**Page data is a struct, not a map.** The transactions/categories/budgets/reports handlers pass a named struct that
+**embeds `*PageData`** (`internal/web/handlers/base.go`), built by `BaseHandler.buildPageData(c, title)` — or
+`formPageData(c, title, errors)` when re-rendering a form. `buildPageData` fills `Title`, flash `Messages`,
+`CSRFToken` and `CurrentUser` (name/surname are read via `services.User.GetUserByID`; `middleware.SessionData` has
+no such fields). Because the embedded field is still called `PageData`, existing `{{.PageData.X}}` keeps working
+while `{{if .CurrentUser}}` and `{{.CSRFToken}}` now resolve at the template root — that omission was the U-02 bug.
+Two consequences when adding a field to a page:
+
+- a template reading a field the struct does not have is a **runtime error (500)**, where a map silently rendered
+  `<no value>`. Add the field to the struct instead of hoping.
+- page titles are Russian constants in `base.go` (`titleTransactions`, `titleNewBudget`, …), and some helpers branch
+  on them (`if title == titleEditBudget`) — do not inline the literals.
+
+Older/simpler pages still pass `map[string]any`; keys for those are constants in
+`internal/web/handlers/template_keys.go` — reuse them instead of new string literals (`goconst`).
+
+**Working directory matters:** static files (`internal/web/static`) and `./migrations` are resolved relative to the
+process CWD, so the server must be started from the repo root. Templates default to `internal/web/templates` but the
+path is overridable through `application.Config.TemplatesDir` — that is how the test helper stays cwd-independent.
 
 ### Frontend rules (hard requirements)
 
@@ -97,6 +131,23 @@ of new string literals (`goconst`).
 - No custom JavaScript for interactivity; use `hx-*` attributes and server-rendered partials.
 - Handlers branch on HTMX via `BaseHandler.IsHTMXRequest` / the `Hx-Request` header, and redirect with the
   `Hx-Redirect` response header (see `internal/web/handlers/base.go`).
+
+### Known rough edges (verified, not fixed)
+
+Do not treat these as regressions you introduced, and do not paper over them with a `nolint` or a template guard:
+
+- **`/budgets/alerts` returns 500.** `BudgetHandler.Alerts` is the only budgets page still on the map contract, and
+  `pages/budgets/alerts.html` reads fields that exist in no view model (`.OverBudgetAlerts`, `.Settings`,
+  `.OverspentFormatted`, `.DaysExpired`, …). Fixing it means writing the view model and rewriting the page.
+- **The dashboard `/` does not put `CSRFToken` into its page data**, so `{{.CSRFToken}}` in the logout form renders
+  empty there. The list pages get it from `buildPageData`; `DashboardHandler` builds its `*PageData` by hand.
+- **English titles remain outside the finance sections**: `Sign In` and `Accept Invitation` in
+  `internal/web/handlers/auth.go`. Only transactions/categories/budgets/reports were translated.
+- **No rate limiting on login** ([S-03](docs/specs/002-security-audit.md#s-03)) — protection exists only in the
+  nginx/Caddy configs and fail2ban, i.e. not at all for `docker-compose.minimal.yml` or a bare systemd deployment.
+- **`internal/config.go` still defaults `SESSION_SECRET`/`CSRF_SECRET` to known placeholders** and `Validate()`
+  compares against those exact strings, so a secret of `123` passes. The compose files now demand both via `${VAR:?}`,
+  which covers the documented paths but not `go run ./cmd/server` with `ENVIRONMENT=development`.
 
 ## Database & migrations
 
@@ -116,8 +167,18 @@ Two independent code paths apply migrations, and **both must keep working**:
 
 - In-memory SQLite (`:memory:?_foreign_keys=ON&_journal_mode=WAL`), no Docker, no sockets. Prefer keeping it that way.
 - `testhelpers.SetupSQLiteTestDB(t)` — fresh migrated DB with automatic `t.Cleanup`.
-- `testhelpers.SetupHTTPServer(t)` — full repo + service + `application.HTTPServer` stack over an in-memory DB;
-  this is the entry point for `tests/integration/*`.
+- `testhelpers.SetupHTTPServer(t)` — full repo + service + `application.HTTPServer` stack over an in-memory DB,
+  **including the whole web layer**: `SessionStore`, `CSRFProtection`, `RequireSetup` and the HTML routes, rendered
+  from the real templates. This is the entry point for `tests/integration/*`.
+  - Templates are resolved cwd-independently: the helper walks up to `go.mod` (`testhelpers.RepoRoot(t)`) and passes
+    the absolute path as `application.Config.TemplatesDir`. Do not reintroduce a cwd-relative default here — `go test`
+    runs with cwd = the package directory.
+  - A web-layer init failure is no longer swallowed: `HTTPServer.WebServerInitError()` surfaces it and the helper
+    calls `t.Fatalf`. If a test suddenly dies on "web server initialization failed", a template failed to parse.
+  - Because the real middleware is in play, integration requests need a session **and** a CSRF token on writes:
+    `ts.Auth(t)` (admin of the test family, memoized), `ts.AuthAs(t, role)` (extra user in the *same* family),
+    or `testhelpers.LoginAs(t, ts, u)`. All return an `*AuthSession{Cookie, CSRFToken}`; call `sess.Apply(req)`.
+    `ts.AuthUser` / `ts.AuthFamily` hold what `Auth` created.
 - `testhelpers/factories.go` — `CreateTestFamily`, `CreateTestUser`, etc.
 - Naming: `TestXxx_Method_Scenario` (e.g. `TestTransactionService_CreateTransaction_Success`).
 - `testpackage` is enabled: use an external `package foo_test` unless the path is excluded in `.golangci.yml`
@@ -154,6 +215,8 @@ Two independent code paths apply migrations, and **both must keep working**:
 Project documentation lives in `docs/` (this replaced the older `.memory_bank/` directory that some docs still
 reference): `docs/README.md` (navigation), `docs/product_brief.md`, `docs/tech_stack.md`, `docs/backlog.md`,
 `docs/guides/{coding_standards,testing_strategy}.md`, `docs/patterns/{api_standards,error_handling}.md`.
+`docs/specs/` holds the audit findings (project assessment, security, UI/UX, deployment readiness) with per-finding
+status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the finished ones.
 Self-hosted deployment (install/upgrade/backup scripts, nginx & Caddy configs, systemd units, fail2ban) is in
 `deploy/` — see `deploy/README.md`.
 

@@ -14,8 +14,11 @@ This project is in **active development** with the following achievements:
 - ✅ **Admin panel** — user and invite management
 - ✅ **Lightweight SQLite database** for simple deployment
 - ✅ CI/CD pipelines with GitHub Actions
-- ✅ **Single Docker container** — only 50MB
-- ✅ Multi-platform builds (linux/amd64, linux/arm64)
+- ✅ **Single Docker container**, built from source (`docker/Dockerfile`)
+- 🚧 Multi-platform builds (linux/amd64, linux/arm64) — the workflow exists, but no
+  release has been tagged yet, so nothing is published to GHCR. Every compose file
+  builds locally instead of pulling; see
+  [docs/specs/004-deployment-readiness.md](docs/specs/004-deployment-readiness.md#d-02)
 
 ## 🚀 Features
 
@@ -33,9 +36,34 @@ This project is in **active development** with the following achievements:
 
 ## API Readiness (Ready / Experimental)
 
+### Authentication is required — read this first
+
+The whole `/api/v1` group sits behind `RequireAPIAuth`. There is no anonymous access
+and there are no API tokens yet: **the only credential is the web session cookie**.
+
+| Request | Response |
+|---|---|
+| Any `/api/v1/*` without a session | `401` + `{"error":{"code":"UNAUTHORIZED","message":"Authentication required"}}` |
+| `POST`/`PUT`/`DELETE` without `X-Csrf-Token` | `403 CSRF token validation failed` (global CSRF middleware runs first) |
+| `POST`/`PUT`/`DELETE` with a valid token but no session | `401` |
+| Role not allowed for the route | `403` + `{"error":{"code":"FORBIDDEN","message":"Insufficient permissions"}}` |
+
+Role model mirrors the web UI:
+
+- `POST`/`PUT`/`DELETE /api/v1/users` and `DELETE /api/v1/categories/:id` — **admin only**
+- `/api/v1/{categories,transactions,budgets,reports}` — **admin or member** (`child` gets `403`)
+- `GET /api/v1/users/:id` — any authenticated user
+
+The author of a record is taken from the session: `user_id` is no longer part of
+`CreateTransactionRequest` / `CreateReportRequest`, so sending it in the body has no effect.
+
+A programmatic client therefore has to keep a cookie jar and fetch a CSRF token from a
+rendered page — see [`deploy/README.md`](deploy/README.md#programmatic-api-clients) for a
+working `curl` walkthrough.
+
 ### Ready (current behavior)
 
-- Core REST API for users, categories, transactions, budgets
+- Core REST API for users, categories, transactions, budgets — session-authenticated, role-gated
 - Invite, admin, and backup management APIs/web flows
 - Stored reports API endpoints: list, get by ID, delete
 - Web reports UI: generate preview/save/view/delete/export CSV for expense, income, budget, cash-flow, and category-breakdown reports
@@ -43,6 +71,8 @@ This project is in **active development** with the following achievements:
 
 ### Experimental / In Progress
 
+- **No API tokens.** Session cookies only — fine for a browser or a scripted cookie jar,
+  awkward for a headless integration. Token auth is a separate, not-yet-written plan
 - `POST /api/v1/reports` currently returns `501 Not Implemented` (report generation API is not exposed yet)
 - Advanced analytics/report-generation features described in roadmap-style text are not fully available via public API
 - Scheduled reports, forecasts, insights, and benchmark analytics remain hidden/placeholder service capabilities
@@ -188,7 +218,8 @@ The project follows **Clean Architecture** principles with production-ready impl
 ├── tests/                   # Integration tests and benchmarks
 │   ├── integration/        # Cross-component integration tests
 │   └── benchmarks/         # Load testing and benchmarks
-├── .memory_bank/           # Comprehensive project documentation
+├── docs/                   # Project documentation, audits, and plans
+├── deploy/                 # Self-hosted deployment configs and scripts
 ├── docker/                 # Docker Compose configurations
 └── .github/workflows/      # CI/CD pipelines (ci, docker, security, release)
 ```
@@ -511,12 +542,12 @@ sudo ./deploy/scripts/setup-fail2ban.sh
 ### Developer Resources
 
 - **[CLAUDE.md](CLAUDE.md)** - Comprehensive development and architecture guidance
-- **[.memory_bank](.memory_bank/)** - Detailed project documentation including:
+- **[docs/](docs/README.md)** - Detailed project documentation including:
     - Product brief and business context
     - Technical architecture and design decisions
     - Testing strategy and implementation details
-    - Current project status and roadmap
-- **[docs/tasks/](docs/tasks/)** - Self-hosted deployment task specifications:
+    - Audit findings (`docs/specs/`) and implementation plans (`docs/plans/`)
+- **[deploy/README.md](deploy/README.md)** - Self-hosted deployment guide:
     - Installation and upgrade scripts
     - Nginx/Caddy configurations for TLS/SSL
     - Systemd services for native deployment
@@ -524,9 +555,10 @@ sudo ./deploy/scripts/setup-fail2ban.sh
 
 ### API Documentation
 
-- **REST API** with comprehensive endpoint coverage
-- **OpenAPI 3.0** specification (available at `/api/docs`)
-- **Postman collection** for API testing and integration
+- **REST API** covering users, categories, transactions, budgets, and stored reports
+- Request/response shapes live in `internal/application/handlers/types.go`; the error
+  envelope is in `internal/application/handlers/errors.go`
+- There is **no** OpenAPI spec, `/api/docs` endpoint, or Postman collection yet
 
 ## License
 
