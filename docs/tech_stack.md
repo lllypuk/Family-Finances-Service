@@ -18,7 +18,7 @@
 
 ### Backend
 - **Язык**: Go 1.26+
-- **Framework**: Echo Web Framework v4.13.4+
+- **Framework**: Echo Web Framework v4.15.4
 - **База данных**: SQLite (modernc.org/sqlite — pure Go, без CGO)
 - **Валидация**: go-playground/validator v10.27.0
 - **UUID**: google/uuid v1.6.0 для идентификаторов
@@ -37,7 +37,8 @@
 - **Контейнеризация**: Docker & Docker Compose
 - **Multi-platform**: linux/amd64, linux/arm64
 - **CI/CD**: GitHub Actions (ci, docker, security, release)
-- **Registry**: GitHub Container Registry
+- **Registry**: не используется — образ собирается локально из `docker/Dockerfile`
+  (релизов нет, в GHCR ничего не опубликовано; см. [004-deployment-readiness.md](specs/004-deployment-readiness.md#d-02))
 - **Security Scanning**: CodeQL, Semgrep, TruffleHog, OSV Scanner
 
 ### Документация API
@@ -59,7 +60,7 @@ Family-Finances-Service/
 │   ├── config.go         # Конфигурация приложения
 │   └── run.go           # Bootstrap приложения
 ├── generated/             # Автогенерированный код (OpenAPI)
-├── .memory_bank/         # Документация проекта
+├── docs/                 # Документация проекта (specs, plans, guides, patterns)
 ├── docker-compose.yml    # Docker окружение
 └── Makefile              # Автоматизация задач
 ```
@@ -189,7 +190,9 @@ github.com/stretchr/testify       # Testing utilities
 - **SQL Injection**: Параметризованные запросы и валидация данных
 - **XSS**: Content Security Policy
 - **CORS**: Настроенные CORS политики Echo
-- **Rate Limiting**: Middleware для ограничения запросов
+- **Rate Limiting**: ⬜ не реализован в приложении. Ограничение запросов есть только в
+  конфигурациях nginx/Caddy и fail2ban; `docker-compose.minimal.yml` и native systemd им не покрыты
+  (находка [S-03](specs/002-security-audit.md#s-03) открыта)
 
 ## 📈 Производительность
 

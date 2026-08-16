@@ -115,15 +115,22 @@ Two consequences when adding a field to a page:
 
 - a template reading a field the struct does not have is a **runtime error (500)**, where a map silently rendered
   `<no value>`. Add the field to the struct instead of hoping.
-- page titles are Russian constants in `base.go` (`titleTransactions`, `titleNewBudget`, …), and some helpers branch
-  on them (`if title == titleEditBudget`) — do not inline the literals.
+- page titles are Russian constants in `base.go` (`titleTransactions`, `titleNewBudget`, …) — do not inline the
+  literals. `renderXxxFormWithErrors` picks the template from the entity it was given (`existing != nil`,
+  `budgetID != ""`), never from the title string.
 
 Older/simpler pages still pass `map[string]any`; keys for those are constants in
 `internal/web/handlers/template_keys.go` — reuse them instead of new string literals (`goconst`).
 
-**Working directory matters:** static files (`internal/web/static`) and `./migrations` are resolved relative to the
-process CWD, so the server must be started from the repo root. Templates default to `internal/web/templates` but the
-path is overridable through `application.Config.TemplatesDir` — that is how the test helper stays cwd-independent.
+**Rendering fails loudly.** `TemplateRenderer.Render` executes into a buffer and only then writes the response, so a
+template reading a missing field returns an error instead of a truncated `200`; `customHTTPErrorHandler` renders the
+error page with the real status code (`c.HTMLBlob(code, …)`). Both were silent before: broken pages looked like
+successful responses, and every 404/500 page was served as `200`.
+
+**Working directory matters:** `./migrations` is resolved relative to the process CWD, so the server must be started
+from the repo root. Templates and static files default to `internal/web/templates` / `internal/web/static` but both
+paths are overridable through `application.Config.TemplatesDir` / `Config.StaticDir` (passed on to `web.Paths`) —
+that is how the test helper stays cwd-independent.
 
 ### Frontend rules (hard requirements)
 
@@ -136,15 +143,12 @@ path is overridable through `application.Config.TemplatesDir` — that is how th
 
 Do not treat these as regressions you introduced, and do not paper over them with a `nolint` or a template guard:
 
-- **`/budgets/alerts` returns 500.** `BudgetHandler.Alerts` is the only budgets page still on the map contract, and
-  `pages/budgets/alerts.html` reads fields that exist in no view model (`.OverBudgetAlerts`, `.Settings`,
-  `.OverspentFormatted`, `.DaysExpired`, …). Fixing it means writing the view model and rewriting the page.
-- **The dashboard `/` does not put `CSRFToken` into its page data**, so `{{.CSRFToken}}` in the logout form renders
-  empty there. The list pages get it from `buildPageData`; `DashboardHandler` builds its `*PageData` by hand.
-- **English titles remain outside the finance sections**: `Sign In` and `Accept Invitation` in
-  `internal/web/handlers/auth.go`. Only transactions/categories/budgets/reports were translated.
 - **No rate limiting on login** ([S-03](docs/specs/002-security-audit.md#s-03)) — protection exists only in the
   nginx/Caddy configs and fail2ban, i.e. not at all for `docker-compose.minimal.yml` or a bare systemd deployment.
+- **`.github/workflows/docker.yml` cannot publish anything.** Its `docker/build-push-action` step passes
+  `context: .` with **no `file:`**, so it looks for `./Dockerfile` — which does not exist (the Dockerfile lives in
+  `docker/Dockerfile`). Pushing a tag would fail the build with "failed to read dockerfile"; add
+  `file: docker/Dockerfile` before the first release ([D-02](docs/specs/004-deployment-readiness.md#d-02)).
 - **`internal/config.go` still defaults `SESSION_SECRET`/`CSRF_SECRET` to known placeholders** and `Validate()`
   compares against those exact strings, so a secret of `123` passes. The compose files now demand both via `${VAR:?}`,
   which covers the documented paths but not `go run ./cmd/server` with `ENVIRONMENT=development`.

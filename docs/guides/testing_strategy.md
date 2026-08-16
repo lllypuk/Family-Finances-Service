@@ -212,9 +212,9 @@ func TestFamilyRepository_Integration(t *testing.T) {
 ```go
 func TestFamilyRepository_WithSQLite(t *testing.T) {
     // Создание in-memory базы данных (мгновенно, без Docker)
-    db := testhelpers.NewTestDB(t)
+    // Миграции применяются сразу, очистка вешается через t.Cleanup
+    db := testhelpers.SetupSQLiteTestDB(t)
 
-    // Миграции выполняются автоматически
     repo := NewFamilyRepository(db)
 
     t.Run("ComplexQueries", func(t *testing.T) {
@@ -229,7 +229,36 @@ func TestFamilyRepository_WithSQLite(t *testing.T) {
 - Каждый тест получает изолированную базу данных
 - Автоматическая очистка после завершения теста
 - Параллельное выполнение тестов без конфликтов
+
+### Контракт интеграционных тестов (`tests/integration/`)
+
+`testhelpers.SetupHTTPServer(t)` поднимает **полный стек**: репозитории, сервисы и
+`application.HTTPServer` вместе с веб-слоем (сессии, CSRF, `RequireSetup`). Из этого следуют
+два обязательных шага для любого запроса к `/api/v1`:
+
+- **Нужна сессия.** `ts.Auth(t)` возвращает сессию администратора тестовой семьи (создаёт
+  семью и пользователя при первом вызове), `ts.AuthAs(t, role)` — нового пользователя с
+  указанной ролью в той же семье. Без сессии группа `/api/v1` отвечает `401`.
+- **Записи требуют CSRF-токена.** `sess.Apply(req)` навешивает на запрос cookie сессии и
+  заголовок `X-Csrf-Token`. Без него `POST`/`PUT`/`DELETE` получат `403` от глобального
+  CSRF-middleware.
+
+```go
+func TestTransactionAPI_Create(t *testing.T) {
+    ts := testhelpers.SetupHTTPServer(t)
+    sess := ts.Auth(t)
+
+    req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1/transactions", body)
+    req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+    sess.Apply(req) // cookie сессии + X-Csrf-Token
+
+    rec := httptest.NewRecorder()
+    ts.Server.Echo().ServeHTTP(rec, req)
+}
 ```
+
+Вторую семью в тестах завести нельзя — приложение однофамильное, поэтому ролевые тесты
+добавляют пользователей в уже существующую семью (`ts.AuthAs`).
 
 ## 🌐 API Testing
 

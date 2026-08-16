@@ -50,9 +50,9 @@ and there are no API tokens yet: **the only credential is the web session cookie
 
 Role model mirrors the web UI:
 
-- `POST`/`PUT`/`DELETE /api/v1/users` and `DELETE /api/v1/categories/:id` — **admin only**
+- the whole `/api/v1/users` group (including `GET /api/v1/users/:id`) and
+  `DELETE /api/v1/categories/:id` — **admin only**
 - `/api/v1/{categories,transactions,budgets,reports}` — **admin or member** (`child` gets `403`)
-- `GET /api/v1/users/:id` — any authenticated user
 
 The author of a record is taken from the session: `user_id` is no longer part of
 `CreateTransactionRequest` / `CreateReportRequest`, so sending it in the body has no effect.
@@ -99,9 +99,11 @@ working `curl` walkthrough.
 
 ### DevOps and Quality
 
-- **Single Docker container** (~50MB) for simple deployment
+- **Single Docker container** (~50MB) for simple deployment — built locally from `docker/Dockerfile`;
+  nothing published to a registry yet
 - **GitHub Actions** CI/CD with security scanning
-- **Multi-platform builds** (linux/amd64, linux/arm64)
+- **Multi-platform builds** (linux/amd64, linux/arm64) — workflow only; images are built locally from
+  `docker/Dockerfile`, nothing published to a registry yet
 - **Fast testing** with in-memory SQLite (no Docker)
 - **Security scanning** (CodeQL, Semgrep, TruffleHog)
 
@@ -171,6 +173,7 @@ make pre-commit       # Full pre-commit check
 make docker-up        # Run in Docker
 make docker-down      # Stop container
 make docker-logs      # View logs
+make compose-config   # Validate all docker-compose files (docker/ + deploy/)
 
 # SQLite database
 make sqlite-backup    # Create backup
@@ -322,7 +325,9 @@ make lint             # Code quality checks
 
 ### Deployment Readiness
 
-- ✅ **Multi-platform Docker images** published to GitHub Container Registry
+- 🚧 **Multi-platform Docker images** — not published. No release has been tagged, and
+  `.github/workflows/docker.yml` still lacks `file: docker/Dockerfile`, so the publish job would fail
+  even on a tag; see [docs/specs/004-deployment-readiness.md](docs/specs/004-deployment-readiness.md#d-02)
 - ✅ **Docker-ready** with health checks and graceful shutdown
 - ✅ **Environment configuration** with validation and defaults
 - ✅ **DB connection management** and connection pooling
@@ -348,17 +353,23 @@ make lint             # Code quality checks
 The project includes **complete deployment infrastructure** for installation on your own server with enterprise-grade
 automation, security, and monitoring.
 
-### ⚡ Quick Deployment (One Command)
+### ⚡ Quick Deployment
 
 ```bash
-# Automatic installation on fresh Linux VM
-curl -fsSL https://raw.githubusercontent.com/lllypuk/Family-Finances-Service/main/deploy/scripts/install.sh | sudo bash
-
-# Or clone and run
+# Clone the repository and run the installer from it
 git clone https://github.com/lllypuk/Family-Finances-Service.git
 cd Family-Finances-Service
 sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@example.com
 ```
+
+The installer cannot be piped into `bash` (`curl … | sudo bash`): it sources `lib/common.sh`,
+`lib/docker.sh` and `lib/firewall.sh` from its own directory, which does not exist when the script
+is read from stdin. Always clone first.
+
+**The deployment builds from source, it does not pull an image.** `install.sh` clones the repository
+into `/opt/family-budget/src` (`REPO_GIT_URL` / `REPO_REF` env vars, default: upstream URL and `main`)
+and builds the Docker image on the server, so the machine needs `git` and outbound network access.
+The build is also why the RAM check is what it is (see "Automation and Operations" below).
 
 ### 🖥️ Supported Operating Systems
 
@@ -379,7 +390,9 @@ sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@examp
 **Automatically configured during installation:**
 
 - 🔐 **TLS/SSL** — automatic Let's Encrypt certificates with auto-renewal
-- 🛡️ **Rate Limiting** — 5 attempts/min for login, brute-force protection
+- 🛡️ **Rate Limiting** — 5 attempts/min for login. These limits live in the nginx/Caddy configs only;
+  the application has no built-in rate limiting, so `docker-compose.minimal.yml` and native systemd
+  deployments get none of it
 - 🔥 **Firewall** — UFW/firewalld with blocked direct app port access
 - 🚫 **Fail2ban** — automatic IP blocking after failed login attempts (5 attempts → 1 hour ban)
 - 🔑 **Security Headers** — CSP, XSS Protection, HSTS, Referrer Policy
@@ -396,8 +409,9 @@ sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@examp
 # Upgrade with automatic rollback
 sudo ./deploy/scripts/upgrade.sh
 
-# Upgrade to specific version
-sudo ./deploy/scripts/upgrade.sh --version v1.2.3
+# Upgrade to a specific git ref — tag, branch or commit (no tags exist yet, so use a branch/commit)
+sudo ./deploy/scripts/upgrade.sh --version main
+sudo ./deploy/scripts/upgrade.sh --version 63a4ea3
 
 # Rollback to previous version
 sudo ./deploy/scripts/upgrade.sh rollback
@@ -454,7 +468,9 @@ sudo ./deploy/scripts/setup-fail2ban.sh
 
 ✅ **Installation:**
 
-- System requirements check (2GB RAM, 10GB disk)
+- System requirements check (minimum 512MB RAM, 10GB free disk, internet connectivity). The RAM floor is
+  sized for the local Docker image build, not for the running service, which fits in 128–256MB; below
+  1GB the installer warns that `go build` may be OOM-killed and suggests adding swap
 - Docker and dependencies installation
 - Firewall setup (SSH, HTTP, HTTPS allowed; port 8080 blocked)
 - Cryptographically strong secret generation
@@ -497,16 +513,12 @@ sudo ./deploy/scripts/setup-fail2ban.sh
     - Troubleshooting
     - Performance
 
-**Task specifications in `docs/tasks/`:**
+**Where the details live:**
 
-- ✅ [001: Install Script](docs/tasks/001-install-script.md) — **COMPLETE**
-- ✅ [002: Reverse Proxy Config](docs/tasks/002-reverse-proxy-config.md) — **COMPLETE**
-- ✅ [003: Production Docker Compose](docs/tasks/003-docker-compose-production.md) — **COMPLETE**
-- ✅ [004: Systemd Services](docs/tasks/004-systemd-service.md) — **COMPLETE**
-- ✅ [005: Upgrade Script](docs/tasks/005-upgrade-script.md) — **COMPLETE**
-- ✅ [006: Security Hardening](docs/tasks/006-security-hardening.md) — **COMPLETE**
-- ✅ [007: Deployment Documentation](docs/tasks/007-deployment-documentation.md) — **COMPLETE**
-- ✅ [008: Uninstall Script](docs/tasks/008-uninstall-script.md) — **COMPLETE**
+- 📖 **[deploy/README.md](deploy/README.md)** — every script, compose file, reverse-proxy config and
+  systemd unit, with the operational procedures for each
+- 🔍 **[docs/specs/004-deployment-readiness.md](docs/specs/004-deployment-readiness.md)** — deployment
+  readiness audit: what is verified, what is still open (image publishing, release tag)
 
 ### 🎯 Deployment Statistics
 

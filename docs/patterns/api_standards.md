@@ -189,28 +189,43 @@ GET /families/{id}/transactions?page=1&page_size=20&sort=created_at:desc
 
 ## 🔐 Аутентификация и авторизация
 
-### JWT Bearer Token
+### Сессионная cookie — единственный способ аутентификации
+
+API-токенов (JWT, Bearer, API keys) в проекте **нет**. Вся группа `/api/v1` закрыта тем же
+механизмом, что и веб-интерфейс: подписанная cookie сессии (`family-budget-session`).
+Программный клиент обязан держать cookie jar — вход выполняется через форму `/login`.
+
 ```
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Cookie: family-budget-session=<подписанное значение>
+X-Csrf-Token: <токен из сессии>   # для POST/PUT/DELETE
 ```
+
+### Контракт ответов
+
+| Запрос | Ответ |
+|---|---|
+| Любой `/api/v1/*` без валидной сессии | `401` + `{"error":{"code":"UNAUTHORIZED","message":"Authentication required"}}` |
+| `POST`/`PUT`/`DELETE` без `X-Csrf-Token` | `403 CSRF token validation failed` |
+| Сессия валидна, но роль не подходит маршруту | `403` + `{"error":{"code":"FORBIDDEN","message":"Insufficient permissions"}}` |
+
+Важный порядок: CSRF-middleware зарегистрирован глобально на всём Echo-инстансе и
+отрабатывает **раньше** проверки аутентификации. Поэтому запись без CSRF-токена получит
+`403`, а не `401`, даже если сессии нет вовсе. Токен без сессии — `401`.
 
 ### Роли и права доступа
-- **family_admin**: Полный доступ к семейным данным
-- **family_member**: Ограниченный доступ к семейным данным
-- **viewer**: Только чтение
 
-### Примеры авторизации
-```
-GET /families/{id}
-# family_member может получить данные только своей семьи
-# family_admin может получить данные любой семьи в организации
+Роли те же, что в вебе: **admin**, **member**, **child** (никаких `family_admin` /
+`viewer`). Ролевая модель API повторяет веб-маршруты:
 
-POST /families/{id}/transactions
-# Только family_admin и family_member этой семьи
+- **только `admin`** — вся группа `/api/v1/users` (включая чтение) и удаление категории
+  (`DELETE /api/v1/categories/:id`: через API оно необратимо и не имеет подтверждения,
+  которое есть в UI)
+- **`admin` или `member`** — финансовые разделы: `/api/v1/{categories,transactions,budgets,reports}`;
+  роль `child` получает `403`
 
-DELETE /families/{id}
-# Только family_admin
-```
+Автор записи берётся из сессии, а не из тела запроса: `user_id` отсутствует в
+`CreateTransactionRequest` / `CreateReportRequest`, и подстановка чужого ID в теле
+игнорируется.
 
 ## 🔄 Версионирование
 
