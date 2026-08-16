@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"sync/atomic"
 
 	"github.com/labstack/echo/v4"
 )
@@ -38,9 +39,36 @@ func isSetupExempt(path string) bool {
 	}
 }
 
+// checkSetupCached спрашивает checker только пока настройка не завершена.
+// Второе значение false означает «проверить не удалось» — вызывающий код обязан
+// пропустить запрос (graceful degradation).
+//
+// Кэшируется только положительный результат: семью нельзя удалить через UI,
+// поэтому обратный переход true → false невозможен. Иначе IsSetupComplete
+// означал бы запрос в БД на каждый HTTP-запрос (находка S-05).
+func checkSetupCached(ctx context.Context, checker SetupChecker, cache *atomic.Bool) (bool, bool) {
+	if cache.Load() {
+		return true, true
+	}
+
+	complete, err := checker.IsSetupComplete(ctx)
+	if err != nil {
+		return false, false
+	}
+
+	if complete {
+		cache.Store(true)
+	}
+
+	return complete, true
+}
+
 // RequireSetup middleware redirects to /setup if the family has not been created yet.
 // If the family already exists and the user requests /setup, redirects to /login.
 func RequireSetup(checker SetupChecker) echo.MiddlewareFunc {
+	// Кэш живёт в замыкании, а не в пакетной переменной (gochecknoglobals).
+	var setupComplete atomic.Bool
+
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// Именно URL запроса, а не c.Path(): последний возвращает шаблон маршрута
@@ -51,8 +79,8 @@ func RequireSetup(checker SetupChecker) echo.MiddlewareFunc {
 				return next(c)
 			}
 
-			complete, err := checker.IsSetupComplete(c.Request().Context())
-			if err != nil {
+			complete, checked := checkSetupCached(c.Request().Context(), checker, &setupComplete)
+			if !checked {
 				// On error, allow access (graceful degradation)
 				return next(c)
 			}

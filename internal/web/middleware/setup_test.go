@@ -125,8 +125,57 @@ func TestRequireSetup_CompleteSetup_OtherPathsPass(t *testing.T) {
 
 func TestRequireSetup_CheckerError_GracefulDegradation(t *testing.T) {
 	checker := &stubSetupChecker{err: errors.New("db is down")}
-	rec := doSetupRequest(newSetupEcho(checker), "/dashboard")
+	e := newSetupEcho(checker)
 
-	assert.Equal(t, http.StatusOK, rec.Code)
+	rec := doSetupRequest(e, "/dashboard")
+	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Empty(t, rec.Header().Get(echo.HeaderLocation))
+
+	// Ошибка не должна попадать в кэш: следующий запрос обязан спросить БД снова.
+	rec = doSetupRequest(e, "/dashboard")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, 2, checker.calls, "результат с ошибкой кэшировать нельзя")
+}
+
+func TestRequireSetup_CompleteResultCached(t *testing.T) {
+	checker := &stubSetupChecker{complete: true}
+	e := newSetupEcho(checker)
+
+	rec := doSetupRequest(e, "/dashboard")
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, 1, checker.calls)
+
+	rec = doSetupRequest(e, "/dashboard")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, 1, checker.calls, "после первого true в БД ходить не нужно")
+
+	// Кэш не должен ломать вторую ветку: /setup по-прежнему уводит на /login.
+	rec = doSetupRequest(e, "/setup")
+	require.Equal(t, http.StatusFound, rec.Code)
+	assert.Equal(t, "/login", rec.Header().Get(echo.HeaderLocation))
+	assert.Equal(t, 1, checker.calls)
+}
+
+func TestRequireSetup_IncompleteResultNotCached(t *testing.T) {
+	checker := &stubSetupChecker{complete: false}
+	e := newSetupEcho(checker)
+
+	rec := doSetupRequest(e, "/dashboard")
+	require.Equal(t, http.StatusFound, rec.Code)
+	require.Equal(t, 1, checker.calls)
+
+	rec = doSetupRequest(e, "/dashboard")
+	require.Equal(t, http.StatusFound, rec.Code)
+	require.Equal(t, 2, checker.calls, "до завершения настройки кэш не должен залипать на false")
+
+	// Настройка завершена — middleware обязан это увидеть без перезапуска процесса.
+	checker.complete = true
+
+	rec = doSetupRequest(e, "/dashboard")
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, 3, checker.calls)
+
+	rec = doSetupRequest(e, "/dashboard")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, 3, checker.calls, "и только теперь результат кэшируется")
 }

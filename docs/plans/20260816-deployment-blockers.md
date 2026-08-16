@@ -409,12 +409,26 @@ group-middleware на catch-all маршрут группы) — так анон
 - Modify: `internal/web/middleware/setup.go`
 - Modify: `internal/web/middleware/setup_test.go`
 
-- [ ] завести `atomic.Bool` **внутри замыкания** `RequireSetup` — не пакетную переменную (`gochecknoglobals` включён)
-- [ ] после первого `true` в БД не обращаться
-- [ ] сохранить graceful degradation: при ошибке БД запрос пропускается, как сейчас
-- [ ] написать тест со счётчиком вызовов: второй запрос не дёргает `IsSetupComplete`
-- [ ] написать тест: до завершения настройки кэш не «залипает» на `false`
-- [ ] `make test` и `make lint` — 0 issues перед задачей 10
+- [x] завести `atomic.Bool` **внутри замыкания** `RequireSetup` — не пакетную переменную (`gochecknoglobals` включён)
+- [x] после первого `true` в БД не обращаться
+- [x] сохранить graceful degradation: при ошибке БД запрос пропускается, как сейчас
+- [x] написать тест со счётчиком вызовов: второй запрос не дёргает `IsSetupComplete`
+- [x] написать тест: до завершения настройки кэш не «залипает» на `false`
+- [x] `make test` и `make lint` — 0 issues перед задачей 10
+
+ℹ️ Кэш — `var setupComplete atomic.Bool` в теле `RequireSetup` (одна на middleware,
+общая для всех запросов), логика вынесена в свободную функцию
+`checkSetupCached(ctx, checker, cache) (complete, checked bool)`: инлайн-версия
+подняла `gocognit` до 24 при пороге 20. Второе возвращаемое значение отличает
+«проверили» от «БД недоступна» — так ошибка не попадает в кэш и не путается с
+`false`. Кэшируется **только** `true`; ошибка и `false` не кэшируются, поэтому
+переход «настройка завершена» виден без перезапуска процесса.
+Тесты в `setup_test.go`: `TestRequireSetup_CompleteResultCached` (второй запрос
+не увеличивает `checker.calls`, ветка `/setup` → `/login` работает из кэша),
+`TestRequireSetup_IncompleteResultNotCached` (два редиректа — два обращения,
+после `complete = true` кэш включается), а
+`TestRequireSetup_CheckerError_GracefulDegradation` расширен проверкой, что
+ошибка не кэшируется.
 
 ### Task 10: Починить секреты в compose-файлах (D-01, S-04)
 
