@@ -48,6 +48,7 @@ func TestReportHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/reports", bytes.NewBuffer(requestBodyBytes))
+		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -122,6 +123,7 @@ func TestReportHandler_Integration(t *testing.T) {
 				require.NoError(t, err)
 
 				req := httptest.NewRequest(http.MethodPost, "/api/v1/reports", bytes.NewBuffer(requestBodyBytes))
+				testServer.Auth(t).Apply(req)
 				req.Header.Set("Content-Type", "application/json")
 				rec := httptest.NewRecorder()
 
@@ -163,6 +165,7 @@ func TestReportHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/reports/%s", testReport.ID), nil)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -187,6 +190,7 @@ func TestReportHandler_Integration(t *testing.T) {
 		nonExistentID := uuid.New()
 
 		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/reports/%s", nonExistentID), nil)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -198,6 +202,7 @@ func TestReportHandler_Integration(t *testing.T) {
 		testServer := testhelpers.SetupHTTPServer(t)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/invalid-uuid", nil)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -232,6 +237,7 @@ func TestReportHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/reports?family_id=%s", family.ID), nil)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -282,6 +288,7 @@ func TestReportHandler_Integration(t *testing.T) {
 			fmt.Sprintf("/api/v1/reports?family_id=%s&user_id=%s", family.ID, user1.ID),
 			nil,
 		)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -320,6 +327,7 @@ func TestReportHandler_Integration(t *testing.T) {
 			fmt.Sprintf("/api/v1/reports/%s?family_id=%s", testReport.ID, family.ID),
 			nil,
 		)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -328,6 +336,7 @@ func TestReportHandler_Integration(t *testing.T) {
 
 		// Verify report is deleted by trying to get it
 		getReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/reports/%s", testReport.ID), nil)
+		testServer.Auth(t).Apply(getReq)
 		getRec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(getRec, getReq)
@@ -364,6 +373,7 @@ func TestReportHandler_Integration(t *testing.T) {
 				require.NoError(t, err)
 
 				req := httptest.NewRequest(http.MethodPost, "/api/v1/reports", bytes.NewBuffer(requestBodyBytes))
+				testServer.Auth(t).Apply(req)
 				req.Header.Set("Content-Type", "application/json")
 				rec := httptest.NewRecorder()
 
@@ -428,6 +438,7 @@ func TestReportHandler_Integration(t *testing.T) {
 				require.NoError(t, err)
 
 				req := httptest.NewRequest(http.MethodPost, "/api/v1/reports", bytes.NewBuffer(requestBodyBytes))
+				testServer.Auth(t).Apply(req)
 				req.Header.Set("Content-Type", "application/json")
 				rec := httptest.NewRecorder()
 

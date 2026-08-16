@@ -52,6 +52,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", bytes.NewBuffer(requestBodyBytes))
+		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -131,6 +132,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 				require.NoError(t, err)
 
 				req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", bytes.NewBuffer(requestBodyBytes))
+				testServer.Auth(t).Apply(req)
 				req.Header.Set("Content-Type", "application/json")
 				rec := httptest.NewRecorder()
 
@@ -182,6 +184,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", bytes.NewBuffer(requestBodyBytes))
+		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -221,6 +224,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/transactions/%s", testTransaction.ID), nil)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -245,6 +249,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		nonExistentID := uuid.New()
 
 		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/transactions/%s", nonExistentID), nil)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -256,6 +261,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		testServer := testhelpers.SetupHTTPServer(t)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions/invalid-uuid", nil)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -289,6 +295,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions", nil)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -345,6 +352,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 			fmt.Sprintf("/api/v1/transactions/%s", testTransaction.ID),
 			bytes.NewBuffer(requestBodyBytes),
 		)
+		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -399,6 +407,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 			fmt.Sprintf("/api/v1/transactions/%s", testTransaction.ID),
 			bytes.NewBuffer(requestBodyBytes),
 		)
+		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -443,6 +452,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 			fmt.Sprintf("/api/v1/transactions/%s", testTransaction.ID),
 			nil,
 		)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -451,6 +461,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 
 		// Verify transaction is deleted by trying to get it
 		getReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/transactions/%s", testTransaction.ID), nil)
+		testServer.Auth(t).Apply(getReq)
 		getRec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(getRec, getReq)
@@ -504,6 +515,7 @@ func TestTransactionHandler_Integration_Filters(t *testing.T) {
 			fmt.Sprintf("/api/v1/transactions?family_id=%s&type=expense", family.ID),
 			nil,
 		)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -525,6 +537,7 @@ func TestTransactionHandler_Integration_Filters(t *testing.T) {
 			fmt.Sprintf("/api/v1/transactions?family_id=%s&category_id=%s", family.ID, incomeCategory.ID),
 			nil,
 		)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -555,6 +568,7 @@ func TestTransactionHandler_Integration_Filters(t *testing.T) {
 			"/api/v1/transactions?"+query.Encode(),
 			nil,
 		)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)

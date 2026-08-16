@@ -19,6 +19,9 @@ import (
 const (
 	// HTTPRequestTimeout timeout for HTTP requests
 	HTTPRequestTimeout = 30 * time.Second
+
+	// DefaultTemplatesDir — путь к шаблонам по умолчанию (относительно CWD процесса)
+	DefaultTemplatesDir = "internal/web/templates"
 )
 
 type HTTPServer struct {
@@ -36,7 +39,8 @@ type HTTPServer struct {
 	reportHandler      *handlers.ReportHandler
 
 	// Web Interface
-	webServer *web.Server
+	webServer        *web.Server
+	webServerInitErr error
 }
 
 type Config struct {
@@ -47,6 +51,10 @@ type Config struct {
 	IdleTimeout   time.Duration
 	SessionSecret string
 	IsProduction  bool
+
+	// TemplatesDir — путь к каталогу HTML-шаблонов. Пустое значение означает
+	// DefaultTemplatesDir, который резолвится относительно рабочего каталога процесса.
+	TemplatesDir string
 }
 
 // NewHTTPServer создает HTTP сервер без observability (для обратной совместимости)
@@ -113,13 +121,22 @@ func NewHTTPServerWithObservability(
 	}
 
 	// Инициализация веб-интерфейса
+	templatesDir := config.TemplatesDir
+	if templatesDir == "" {
+		templatesDir = DefaultTemplatesDir
+	}
+
 	webServer, err := web.NewWebServer(
-		e, repositories, services, "internal/web/templates", config.SessionSecret, config.IsProduction,
+		e, repositories, services, templatesDir, config.SessionSecret, config.IsProduction,
 	)
 	if err != nil {
-		// Логируем ошибку, но не прерываем работу сервера
+		// Не прерываем работу сервера, но ошибку обязательно логируем и сохраняем,
+		// чтобы вызывающий код (в том числе тестовый хелпер) мог её увидеть.
+		server.webServerInitErr = err
 		if obsService != nil {
 			obsService.Logger.Error("Failed to initialize web server", "error", err)
+		} else {
+			e.Logger.Errorf("Failed to initialize web server (templates dir %q): %v", templatesDir, err)
 		}
 	} else {
 		server.webServer = webServer
@@ -132,6 +149,12 @@ func NewHTTPServerWithObservability(
 // Echo returns the echo instance for testing purposes
 func (s *HTTPServer) Echo() *echo.Echo {
 	return s.echo
+}
+
+// WebServerInitError возвращает ошибку инициализации веб-интерфейса, если она была.
+// nil означает, что веб-слой (сессии, CSRF, HTML-маршруты) зарегистрирован.
+func (s *HTTPServer) WebServerInitError() error {
+	return s.webServerInitErr
 }
 
 func (s *HTTPServer) setupRoutes() {

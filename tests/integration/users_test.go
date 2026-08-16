@@ -37,6 +37,7 @@ func TestUserHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewBuffer(requestBody))
+		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -68,6 +69,7 @@ func TestUserHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewBuffer(requestBody))
+		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -100,6 +102,7 @@ func TestUserHandler_Integration(t *testing.T) {
 
 		// Get user via API
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/users/"+user.ID.String(), nil)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -120,6 +123,7 @@ func TestUserHandler_Integration(t *testing.T) {
 		nonExistentID := uuid.New()
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/users/"+nonExistentID.String(), nil)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -156,6 +160,7 @@ func TestUserHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/users/"+user.ID.String(), bytes.NewBuffer(requestBody))
+		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -188,6 +193,7 @@ func TestUserHandler_Integration(t *testing.T) {
 			"/api/v1/users/"+user.ID.String()+"?family_id="+family.ID.String(),
 			nil,
 		)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -197,6 +203,7 @@ func TestUserHandler_Integration(t *testing.T) {
 
 		// Verify user is deleted by trying to get it
 		req = httptest.NewRequest(http.MethodGet, "/api/v1/users/"+user.ID.String(), nil)
+		testServer.Auth(t).Apply(req)
 		rec = httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
