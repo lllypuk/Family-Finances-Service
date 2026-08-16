@@ -1,10 +1,13 @@
 package middleware_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -117,6 +120,171 @@ func TestRequireAuth_UnauthenticatedUser_HTMXRequest(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	assert.Equal(t, "/login", rec.Header().Get("Hx-Redirect"))
+}
+
+// --- RequireAPIAuth (задача 3 плана docs/plans/20260816-deployment-blockers.md) ---
+
+// apiErrorBody повторяет формат ответа API-хендлеров
+// (internal/application/handlers: ErrorResponse/ErrorDetail/ResponseMeta).
+// Тест разбирает ответ в эту структуру, чтобы поймать расхождение формата.
+type apiErrorBody struct {
+	Error struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
+	Meta struct {
+		RequestID string    `json:"request_id"`
+		Timestamp time.Time `json:"timestamp"`
+		Version   string    `json:"version"`
+	} `json:"meta"`
+}
+
+func TestRequireAPIAuth_NoSession_Returns401JSON(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	nextCalled := false
+	handler := middleware.RequireAPIAuth()(func(_ echo.Context) error {
+		nextCalled = true
+		return c.String(http.StatusOK, "api content")
+	})
+
+	// Хранилище сессий не подключено — GetSessionData вернёт ошибку,
+	// как это происходит с анонимным запросом к /api/v1.
+	err := handler(c)
+
+	require.NoError(t, err)
+	assert.False(t, nextCalled, "хендлер не должен вызываться без сессии")
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+
+	var body apiErrorBody
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, "UNAUTHORIZED", body.Error.Code)
+	assert.Equal(t, "Authentication required", body.Error.Message)
+	assert.Equal(t, "v1", body.Meta.Version)
+	assert.False(t, body.Meta.Timestamp.IsZero(), "meta.timestamp обязан быть заполнен")
+}
+
+func TestRequireAPIAuth_NoSession_DoesNotRedirect(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/budgets", nil)
+	// Даже с заголовком HTMX API обязан отвечать 401 JSON, а не редиректом.
+	req.Header.Set("Hx-Request", "true")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	handler := middleware.RequireAPIAuth()(func(c echo.Context) error {
+		return c.String(http.StatusOK, "api content")
+	})
+
+	require.NoError(t, handler(c))
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	assert.Empty(t, rec.Header().Get("Location"), "API не должен редиректить на /login")
+	assert.Empty(t, rec.Header().Get("Hx-Redirect"), "API не должен отдавать Hx-Redirect")
+}
+
+func TestRequireAPIAuth_NoSession_ContentTypeIsJSON(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	handler := middleware.RequireAPIAuth()(func(c echo.Context) error {
+		return c.String(http.StatusOK, "api content")
+	})
+
+	require.NoError(t, handler(c))
+	contentType := rec.Header().Get(echo.HeaderContentType)
+	assert.Contains(t, contentType, echo.MIMEApplicationJSON)
+	assert.NotContains(t, contentType, "text/html")
+	assert.NotContains(t, rec.Body.String(), "<html")
+}
+
+func TestRequireAPIAuth_ValidSession_CallsNext(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	sessionData := &middleware.SessionData{
+		UserID: uuid.New(),
+		Role:   user.RoleMember,
+		Email:  "member@example.com",
+	}
+	c.Set("mock_session_data", sessionData)
+
+	nextCalled := false
+	handler := middleware.RequireAPIAuth()(func(c echo.Context) error {
+		nextCalled = true
+		return c.String(http.StatusOK, "api content")
+	})
+
+	require.NoError(t, handler(c))
+	assert.True(t, nextCalled)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "api content", rec.Body.String())
+
+	// SessionData обязан лежать под тем же ключом "user", что и у RequireAuth,
+	// иначе GetUserFromContext в API-хендлерах не найдёт пользователя.
+	userData, err := middleware.GetUserFromContext(c)
+	require.NoError(t, err)
+	assert.Equal(t, sessionData.UserID, userData.UserID)
+	assert.Equal(t, sessionData.Email, userData.Email)
+}
+
+// TestRequireAPIAuth_RealSessionStore проверяет полный путь через настоящее
+// cookie-хранилище: сначала запрос кладёт данные в сессию, затем выданная
+// cookie переиспользуется для защищённого маршрута.
+func TestRequireAPIAuth_RealSessionStore(t *testing.T) {
+	e := echo.New()
+	e.Use(middleware.SessionStore("test-secret-key-for-api-auth", false))
+
+	expectedUser := &middleware.SessionData{
+		UserID: uuid.New(),
+		Role:   user.RoleAdmin,
+		Email:  "admin@example.com",
+	}
+
+	e.GET("/sign-in", func(c echo.Context) error {
+		if err := middleware.SetSessionData(c, expectedUser); err != nil {
+			return err
+		}
+		return c.NoContent(http.StatusOK)
+	})
+
+	e.GET("/api/v1/protected", func(c echo.Context) error {
+		userData, err := middleware.GetUserFromContext(c)
+		if err != nil {
+			return err
+		}
+		return c.String(http.StatusOK, userData.Email)
+	}, middleware.RequireAPIAuth())
+
+	// Без cookie — 401 JSON.
+	anonRec := httptest.NewRecorder()
+	e.ServeHTTP(anonRec, httptest.NewRequest(http.MethodGet, "/api/v1/protected", nil))
+	require.Equal(t, http.StatusUnauthorized, anonRec.Code)
+	assert.Contains(t, anonRec.Header().Get(echo.HeaderContentType), echo.MIMEApplicationJSON)
+
+	// Забираем cookie сессии.
+	loginRec := httptest.NewRecorder()
+	e.ServeHTTP(loginRec, httptest.NewRequest(http.MethodGet, "/sign-in", nil))
+	require.Equal(t, http.StatusOK, loginRec.Code)
+	cookies := (&http.Response{Header: loginRec.Header()}).Cookies()
+	require.NotEmpty(t, cookies, "сессия не выдала cookie")
+
+	// С cookie — запрос проходит.
+	authReq := httptest.NewRequest(http.MethodGet, "/api/v1/protected", nil)
+	for _, cookie := range cookies {
+		authReq.AddCookie(cookie)
+	}
+	authRec := httptest.NewRecorder()
+	e.ServeHTTP(authRec, authReq)
+
+	assert.Equal(t, http.StatusOK, authRec.Code)
+	assert.Equal(t, expectedUser.Email, authRec.Body.String())
 }
 
 func TestRequireRole_ValidRole(t *testing.T) {

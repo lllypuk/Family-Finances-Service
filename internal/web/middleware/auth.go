@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"slices"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -10,6 +11,39 @@ import (
 )
 
 const HTMXRequestValue = "true"
+
+// Формат ошибки для API повторяет ErrorResponse/ErrorDetail/ResponseMeta из
+// internal/application/handlers (types.go, helpers.go, errors.go). Структуры
+// продублированы намеренно: middleware тянет только echo и domain/user, и
+// импорт пакета хендлеров развернул бы направление зависимостей
+// (web → application) ради трёх полей.
+const (
+	// apiErrCodeUnauthorized — код ошибки для запроса без валидной сессии.
+	apiErrCodeUnauthorized = "UNAUTHORIZED"
+	// apiErrMessageUnauthorized — сообщение, парное к apiErrCodeUnauthorized.
+	apiErrMessageUnauthorized = "Authentication required"
+	// apiVersion совпадает с handlers.apiVersion — версия API в meta ответа.
+	apiVersion = "v1"
+)
+
+// apiErrorDetail — тело поля error в ответе API.
+type apiErrorDetail struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+// apiErrorMeta — тело поля meta в ответе API.
+type apiErrorMeta struct {
+	RequestID string    `json:"request_id"`
+	Timestamp time.Time `json:"timestamp"`
+	Version   string    `json:"version"`
+}
+
+// apiErrorResponse — JSON-ошибка API в том же виде, что отдают хендлеры.
+type apiErrorResponse struct {
+	Error apiErrorDetail `json:"error"`
+	Meta  apiErrorMeta   `json:"meta"`
+}
 
 // RequireAuth middleware проверяет, что пользователь аутентифицирован
 func RequireAuth() echo.MiddlewareFunc {
@@ -46,6 +80,50 @@ func RequireAuth() echo.MiddlewareFunc {
 			return next(c)
 		}
 	}
+}
+
+// RequireAPIAuth middleware — аналог RequireAuth для группы /api/v1.
+// Отличие принципиальное: программному клиенту не нужен редирект на /login,
+// поэтому при отсутствии валидной сессии возвращается 401 и JSON-ошибка в том
+// же формате, что отдают API-хендлеры. При валидной сессии SessionData кладётся
+// в контекст под ключом "user" — так же, как это делает RequireAuth,
+// поэтому GetUserFromContext работает и в API-хендлерах.
+func RequireAPIAuth() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			// Поддержка моков для тестирования (как в RequireAuth)
+			if mockData := c.Get("mock_session_data"); mockData != nil {
+				c.Set("user", mockData)
+				return next(c)
+			}
+			if mockError := c.Get("mock_session_error"); mockError != nil {
+				return respondAPIUnauthorized(c)
+			}
+
+			sessionData, err := GetSessionData(c)
+			if err != nil {
+				return respondAPIUnauthorized(c)
+			}
+
+			c.Set("user", sessionData)
+			return next(c)
+		}
+	}
+}
+
+// respondAPIUnauthorized отдаёт 401 с JSON-телом в формате API-хендлеров.
+func respondAPIUnauthorized(c echo.Context) error {
+	return c.JSON(http.StatusUnauthorized, apiErrorResponse{
+		Error: apiErrorDetail{
+			Code:    apiErrCodeUnauthorized,
+			Message: apiErrMessageUnauthorized,
+		},
+		Meta: apiErrorMeta{
+			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
+			Timestamp: time.Now(),
+			Version:   apiVersion,
+		},
+	})
 }
 
 // RequireRole middleware проверяет, что пользователь имеет нужную роль

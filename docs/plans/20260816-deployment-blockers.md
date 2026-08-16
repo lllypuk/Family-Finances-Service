@@ -226,12 +226,18 @@ PUT → 200, DELETE → 204), `WriteWithoutCSRFToken` → 403 как и ожид
 - Modify: `internal/web/middleware/auth.go`
 - Modify: `internal/web/middleware/auth_test.go`
 
-- [ ] добавить `RequireAPIAuth()` — при отсутствии сессии `401` и JSON-ошибка, без редиректа
-- [ ] формат ответа согласовать с `internal/application/handlers/errors.go`
-- [ ] при валидной сессии класть `SessionData` в контекст под ключом `"user"`, как `RequireAuth`
-- [ ] написать тесты: нет сессии → 401 и корректный JSON; валидная сессия → `next` вызван
-- [ ] написать тест: `Content-Type: application/json`, а не HTML
-- [ ] `make test` и `make lint` — 0 issues перед задачей 4
+- [x] добавить `RequireAPIAuth()` — при отсутствии сессии `401` и JSON-ошибка, без редиректа
+- [x] формат ответа согласовать с `internal/application/handlers/errors.go`
+- [x] при валидной сессии класть `SessionData` в контекст под ключом `"user"`, как `RequireAuth`
+- [x] написать тесты: нет сессии → 401 и корректный JSON; валидная сессия → `next` вызван
+- [x] написать тест: `Content-Type: application/json`, а не HTML
+- [x] `make test` и `make lint` — 0 issues перед задачей 4
+
+ℹ️ Формат ответа продублирован структурами `apiErrorResponse`/`apiErrorDetail`/`apiErrorMeta`
+внутри `internal/web/middleware/auth.go`, а не взят импортом из
+`internal/application/handlers`: импорт развернул бы направление зависимостей
+(web → application) ради трёх полей. Тело ответа —
+`{"error":{"code":"UNAUTHORIZED","message":"Authentication required"},"meta":{…,"version":"v1"}}`.
 
 ### Task 4: Включить аутентификацию на группе /api/v1
 
