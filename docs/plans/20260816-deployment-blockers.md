@@ -482,17 +482,74 @@ directory в корень репозитория, где и лежит `.env` (�
 - Modify: `deploy/docker-compose.minimal.yml`
 - Modify: `deploy/docker-compose.caddy.yml`
 - Modify: `deploy/docker-compose.prod.yml`
+- Modify: `deploy/docker-compose.nginx.yml` (➕ тот же мёртвый образ)
 - Modify: `deploy/scripts/install.sh`
 - Modify: `deploy/scripts/upgrade.sh`
+- Modify: `deploy/scripts/lib/common.sh` (➕ там же живёт проверка RAM)
 - Modify: `deploy/README.md`
+- Modify: `deploy/.env.production.example`
+- Modify: `docker/Dockerfile`
+- Modify: `Makefile`
+- Modify: `.github/workflows/ci.yml`
 
-- [ ] перевести `minimal.yml` и `caddy.yml` на `build: {context: .., dockerfile: docker/Dockerfile}`
-- [ ] `prod.yml` переводить **только вместе** с правкой скриптов: `install.sh:156` кладёт compose в `/opt/family-budget` без исходников, а `install.sh:256` и `upgrade.sh:239` делают `docker compose pull` — для build-only сервиса это не сработает
-- [ ] в `install.sh` клонировать репозиторий в `$INSTALL_DIR/src` и заменить `pull` на `build`; то же в `upgrade.sh`
-- [ ] согласовать UID: `docker/Dockerfile` создаёт `/data` от `nobody` (65534), `prod.yml:39` запускает от `1000:1000` — иначе SQLite не откроет БД на bind-mount (D-03)
-- [ ] поправить ссылку на несуществующий `docs/tasks/002-reverse-proxy-config.md` в `install.sh:310` (D-04)
-- [ ] снизить требование «минимум 2 ГБ RAM» в `deploy/README.md` — по замерам хватает 128-256 МБ
-- [ ] добавить в `Makefile` или CI шаг `docker compose -f <файл> config -q` для всех пяти файлов, чтобы D-01 не воспроизвёлся при следующей правке
+- [x] перевести `minimal.yml` и `caddy.yml` на `build: {context: .., dockerfile: docker/Dockerfile}`
+- [x] `prod.yml` переводить **только вместе** с правкой скриптов: `install.sh:156` кладёт compose в `/opt/family-budget` без исходников, а `install.sh:256` и `upgrade.sh:239` делают `docker compose pull` — для build-only сервиса это не сработает
+- [x] в `install.sh` клонировать репозиторий в `$INSTALL_DIR/src` и заменить `pull` на `build`; то же в `upgrade.sh`
+- [x] согласовать UID: `docker/Dockerfile` создаёт `/data` от `nobody` (65534), `prod.yml:39` запускает от `1000:1000` — иначе SQLite не откроет БД на bind-mount (D-03)
+- [x] поправить ссылку на несуществующий `docs/tasks/002-reverse-proxy-config.md` в `install.sh:310` (D-04)
+- [x] снизить требование «минимум 2 ГБ RAM» в `deploy/README.md` — по замерам хватает 128-256 МБ
+- [x] добавить в `Makefile` или CI шаг `docker compose -f <файл> config -q` для всех пяти файлов, чтобы D-01 не воспроизвёлся при следующей правке
+
+ℹ️ **Контекст сборки — переменная, а не фиксированный `..`.** `context: ${BUILD_CONTEXT:-..}`
+во всех четырёх `deploy/*.yml`. Фиксированный `..` работает только когда файл
+запускают на месте, из `deploy/`; `install.sh` кладёт compose в `/opt/family-budget`,
+где `..` — это `/opt`. Значение по умолчанию сохраняет запуск из репозитория,
+а `install.sh` пишет `BUILD_CONTEXT=./src` в `config/.env`. `image:` намеренно
+не задан: у build-only сервиса `docker compose pull` не должен даже пытаться идти
+в реестр.
+
+ℹ️ **UID (D-03) согласован в сторону 1000, а не 65534.** `docker/Dockerfile` теперь
+заводит пользователя `app` = 1000:1000 (`USER 1000:1000`) и отдаёт ему `/data`,
+`/backups`, `/logs`; `prod.yml` со своим `user: "1000:1000"` совпал с образом без
+правок. `install.sh` делает `chown 1000:1000` на смонтированные каталоги
+**после** общего `chown -R $APP_USER` — системный `$APP_USER` имеет UID < 1000 и
+для bind-mount не годится. Заодно в Dockerfile исправлен тот же `wget --spider`,
+что и в compose-файлах (задача 10): HEALTHCHECK в самом образе оставался сломанным.
+
+ℹ️ **`upgrade.sh` переведён с тегов образа на git-ref.** «Версия» — коммит в
+`$INSTALL_DIR/src`: `--version` принимает тег/ветку/коммит (`latest` → `main` для
+совместимости), `pull_new_version` стал `build_new_version` (fetch + checkout +
+`compose build app`), `version.txt` хранит SHA, откат делает checkout этого SHA и
+пересборку. `APP_VERSION` больше не экспортируется — подставлять его некуда.
+
+➕ **`nginx.yml` тоже переведён на `build`**, хотя в задаче не назван: он ссылался
+на тот же несуществующий образ, и без правки D-02 воспроизводился бы для
+Option 2 из `deploy/README.md`.
+
+➕ **Порог RAM живёт в `deploy/scripts/lib/common.sh`, а не в README** — правка
+только документации оставила бы `install.sh` падать на 2 ГБ. Порог снижен до
+**512 МБ**, а не до 128-256 МБ: 128-256 МБ — это потребление работающего сервиса,
+но `install.sh` теперь **собирает образ на месте**, и компилятору Go нужен запас.
+Оба числа записаны в README и в `--help`.
+
+➕ `install_git()` в `common.sh` — исходники теперь обязательны, а `git` на чистой
+машине может отсутствовать (ставится через apt/dnf по `$OS`).
+
+Проверено вживую (docker 29.6.2, compose v5.4.0):
+- `make compose-config` — все 5 файлов rc=0; с пустым `CSRF_SECRET` каждый из
+  четырёх `deploy/*.yml` даёт rc=1 и внятное сообщение;
+- `deploy/docker-compose.prod.yml` с `BUILD_CONTEXT` на корень репозитория:
+  `docker compose build app` проходит, контейнер становится `healthy`,
+  `id` внутри — `uid=1000(app) gid=1000(app)`, SQLite создал `budget.db` на
+  bind-mount, `/health` → 200, `/` → 302, `/static/css/pico.min.css` → 200;
+- встроенный fallback-compose из `install.sh` извлечён и проверен `compose config`
+  — `context` резолвится в `./src`, `user: 1000:1000` на месте;
+- `bash -n` на всех трёх изменённых скриптах; shellcheck (`-S warning`) — новых
+  предупреждений нет, одно старое (SC2046) ушло.
+
+⚠️ Полный прогон `install.sh` на чистом хосте не выполнялся (нужен root, systemd,
+поддерживаемый дистрибутив и правка firewall) — проверены синтаксис, извлечённые
+из скрипта артефакты и все docker-команды, которые он выполняет.
 
 ### Task 12: Тест реального рендеринга страниц-списков
 

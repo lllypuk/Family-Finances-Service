@@ -1,8 +1,16 @@
 version: '3.8'
 
+# Образ собирается из исходников: публичного образа в GHCR нет (D-02).
+# `BUILD_CONTEXT` — путь к корню репозитория относительно project directory
+# (каталог первого `-f`). По умолчанию `..`, то есть файл запускается на месте,
+# из `deploy/`. `install.sh` кладёт compose в `/opt/family-budget`, клонирует
+# исходники в `/opt/family-budget/src` и выставляет `BUILD_CONTEXT=./src`.
+
 services:
   app:
-    image: ghcr.io/lllypuk/family-finances-service:latest
+    build:
+      context: ${BUILD_CONTEXT:-..}
+      dockerfile: docker/Dockerfile
     container_name: family-budget-app
     restart: unless-stopped
     environment:

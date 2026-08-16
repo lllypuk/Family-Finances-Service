@@ -125,6 +125,28 @@ docker-logs:
 	@echo "Showing Docker logs..."
 	@$(DOCKER_COMPOSE) logs -f
 
+# Проверка синтаксиса и интерполяции всех compose-файлов.
+# Секреты подставляются фиктивные — цель ловит опечатки в YAML и `${VAR:?…}`,
+# чтобы D-01 («compose не стартует без CSRF_SECRET») не воспроизвёлся молча.
+# deploy/*.yml запускаются на месте, из `deploy/` — project directory там своя,
+# поэтому `--project-directory .` для них не нужен (в отличие от docker/*.yml).
+DEPLOY_COMPOSE_FILES=deploy/docker-compose.prod.yml \
+	deploy/docker-compose.nginx.yml \
+	deploy/docker-compose.caddy.yml \
+	deploy/docker-compose.minimal.yml
+COMPOSE_VALIDATE_ENV=SESSION_SECRET=validate CSRF_SECRET=validate DOMAIN=example.com
+
+.PHONY: compose-config
+compose-config:
+	@echo "Validating compose files..."
+	@echo "  $(DOCKER_COMPOSE_FILE)"
+	@$(COMPOSE_VALIDATE_ENV) $(DOCKER_COMPOSE) config -q
+	@for f in $(DEPLOY_COMPOSE_FILES); do \
+		echo "  $$f"; \
+		$(COMPOSE_VALIDATE_ENV) docker compose -f $$f config -q || exit 1; \
+	done
+	@echo "All compose files are valid"
+
 # SQLite специфичные команды
 .PHONY: sqlite-backup
 sqlite-backup:
@@ -232,6 +254,7 @@ help:
 	@echo "  docker-up-d      - Start Docker container in detached mode"
 	@echo "  docker-down      - Stop Docker containers"
 	@echo "  docker-logs      - View Docker container logs"
+	@echo "  compose-config   - Validate all docker-compose files"
 	@echo ""
 	@echo "Other commands:"
 	@echo "  help             - Show this help"

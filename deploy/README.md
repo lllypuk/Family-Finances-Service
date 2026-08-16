@@ -7,9 +7,30 @@ This directory contains production-ready deployment configurations and scripts f
 ### Prerequisites
 
 - Linux server (Ubuntu 22.04+, Debian 11+, or Rocky Linux 9)
-- Minimum 2GB RAM, 10GB disk space
+- Minimum 512MB RAM, 10GB disk space.
+  The running service itself fits in **128-256MB** (a single Go process plus SQLite);
+  the extra headroom is for building the Docker image locally.
 - Root or sudo access
+- `git` and outbound network access — the image is built from source (see below)
 - Domain name pointed to your server (for SSL)
+
+### The image is built from source
+
+There is no published `ghcr.io/lllypuk/family-finances-service` image yet, so every
+compose file in this directory builds the app from `docker/Dockerfile` instead of
+pulling. The build context is `${BUILD_CONTEXT:-..}`:
+
+| Where the compose file runs from | `BUILD_CONTEXT` | Sources |
+|---|---|---|
+| in-place, from `deploy/` | `..` (default) | the repository checkout you are in |
+| `/opt/family-budget` (after `install.sh`) | `./src` | clone made by `install.sh` |
+
+`install.sh` clones the repository into `/opt/family-budget/src` and writes
+`BUILD_CONTEXT=./src` into `config/.env`. Consequently `docker compose pull` no
+longer works for the `app` service — use `docker compose build app`.
+
+Set `REPO_GIT_URL` / `REPO_REF` before running `install.sh` to build from a fork or
+a specific tag.
 
 ### One-Command Installation
 
@@ -32,6 +53,7 @@ sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@examp
 deploy/
 ├── scripts/                    # Installation and management scripts
 │   ├── install.sh             # Main installation script
+│   ├── upgrade.sh             # Upgrade with backup and rollback
 │   ├── setup-ssl-nginx.sh     # SSL setup for Nginx
 │   ├── setup-ssl-caddy.sh     # SSL setup for Caddy
 │   └── lib/                   # Shared library functions
@@ -44,11 +66,17 @@ deploy/
 │   └── snippets/              # Reusable config snippets
 ├── caddy/                      # Caddy reverse proxy configs
 │   └── Caddyfile.template     # Caddy configuration
+├── fail2ban/                   # fail2ban jail and filter
+├── systemd/                    # systemd unit files
 ├── docker-compose.prod.yml     # Standalone production setup
 ├── docker-compose.nginx.yml    # Production with Nginx
 ├── docker-compose.caddy.yml    # Production with Caddy
+├── docker-compose.minimal.yml  # No SSL, behind an existing proxy
 └── .env.production.example     # Environment template
 ```
+
+All four compose files build the app image from source; validate them all at once
+from the repository root with `make compose-config`.
 
 ## Deployment Options
 
@@ -76,13 +104,14 @@ sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@examp
 
 ```bash
 cd /opt/family-budget
-sudo cp ~/Family-Finances-Service/deploy/docker-compose.nginx.yml docker-compose.yml
+sudo cp src/deploy/docker-compose.nginx.yml docker-compose.yml
+sudo docker compose build app
 ```
 
 3. Setup SSL:
 
 ```bash
-sudo ~/Family-Finances-Service/deploy/scripts/setup-ssl-nginx.sh \
+sudo /opt/family-budget/src/deploy/scripts/setup-ssl-nginx.sh \
   --domain budget.example.com \
   --email admin@example.com
 ```
@@ -109,13 +138,14 @@ sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@examp
 
 ```bash
 cd /opt/family-budget
-sudo cp ~/Family-Finances-Service/deploy/docker-compose.caddy.yml docker-compose.yml
+sudo cp src/deploy/docker-compose.caddy.yml docker-compose.yml
+sudo docker compose build app
 ```
 
 3. Setup SSL (automatic):
 
 ```bash
-sudo ~/Family-Finances-Service/deploy/scripts/setup-ssl-caddy.sh \
+sudo /opt/family-budget/src/deploy/scripts/setup-ssl-caddy.sh \
   --domain budget.example.com \
   --email admin@example.com
 ```
@@ -181,6 +211,9 @@ DOMAIN=budget.example.com
 # Database
 DATABASE_PATH=/data/budget.db
 
+# Build context: path to the source checkout, relative to /opt/family-budget
+BUILD_CONTEXT=./src
+
 # Security (generate with: openssl rand -base64 32)
 SESSION_SECRET=YOUR_GENERATED_SECRET_HERE
 CSRF_SECRET=YOUR_GENERATED_SECRET_HERE
@@ -218,9 +251,17 @@ docker compose restart app      # Restart only application
 
 ```bash
 cd /opt/family-budget
-docker compose pull app
+
+# Preferred: the upgrade script backs up the DB and rolls back on failure
+sudo ./src/deploy/scripts/upgrade.sh --version main
+
+# Manual equivalent
+git -C src fetch origin main && git -C src checkout --force --detach FETCH_HEAD
+docker compose build app
 docker compose up -d app
 ```
+
+`--version` takes a **git ref** (tag, branch or commit), not an image tag.
 
 ### Backup Database
 
@@ -250,8 +291,10 @@ cd /opt/family-budget
 # Backup database
 sudo cp data/budget.db backups/budget-$(date +%Y%m%d-%H%M%S).db
 
-# Pull latest image
-docker compose pull app
+# Update sources and rebuild the image (there is nothing to pull)
+git -C src fetch origin main
+git -C src checkout --force --detach FETCH_HEAD
+docker compose build app
 
 # Restart with new image
 docker compose up -d app
@@ -388,7 +431,7 @@ sudo docker compose restart caddy
 
 ### 2. Setup fail2ban (recommended)
 
-See `docs/tasks/006-security-hardening.md` for fail2ban configuration.
+See `deploy/fail2ban/` for the ready-made jail and filter definitions.
 
 ### 3. Regular Updates
 
@@ -397,9 +440,13 @@ See `docs/tasks/006-security-hardening.md` for fail2ban configuration.
 sudo apt update && sudo apt upgrade  # Ubuntu/Debian
 sudo dnf update  # RHEL-based
 
-# Update Docker images
+# Rebuild the application image from the latest sources
 cd /opt/family-budget
-docker compose pull
+git -C src fetch origin main && git -C src checkout --force --detach FETCH_HEAD
+docker compose build app
+
+# Pull the sidecar images (nginx/caddy/certbot are still pulled from upstream)
+docker compose pull --ignore-buildable
 docker compose up -d
 ```
 
@@ -429,7 +476,7 @@ sudo ufw delete allow 443/tcp
 
 ## Support
 
-- **Documentation:** See `docs/tasks/` directory
+- **Documentation:** this file, plus `docs/` in the repository root
 - **Issues:** GitHub Issues
 - **Security:** Report security issues privately
 

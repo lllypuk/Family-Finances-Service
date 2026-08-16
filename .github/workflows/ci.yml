@@ -98,6 +98,11 @@ jobs:
           ls -la build/
           file build/family-budget-service
 
+      # Ловит D-01: compose-файл, который не стартует из-за опечатки или
+      # незаданного `${VAR:?…}`, должен падать здесь, а не на сервере пользователя.
+      - name: Validate docker-compose files
+        run: make compose-config
+
       - name: Test Docker build
         run: |
           docker build -f docker/Dockerfile -t family-budget-service:test .

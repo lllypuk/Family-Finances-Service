@@ -8,6 +8,9 @@ set -euo pipefail
 INSTALL_DIR="${INSTALL_DIR:-/opt/family-budget}"
 BACKUP_DIR="${BACKUP_DIR:-${INSTALL_DIR}/backups}"
 DATA_DIR="${DATA_DIR:-${INSTALL_DIR}/data}"
+# Клон репозитория: публичного образа в GHCR нет (D-02), образ собирается на месте,
+# поэтому «версия» — это git-ref в этом каталоге, а не тег образа.
+SRC_DIR="${SRC_DIR:-${INSTALL_DIR}/src}"
 COMPOSE_FILE="${COMPOSE_FILE:-${INSTALL_DIR}/docker-compose.yml}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8080/health}"
 HEALTH_CHECK_TIMEOUT=60
@@ -33,7 +36,8 @@ fi
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 UPGRADE_BACKUP_DIR="${BACKUP_DIR}/upgrade_${TIMESTAMP}"
 CURRENT_VERSION=""
-TARGET_VERSION="latest"
+# git-ref, из которого пересобирается образ. `latest` — синоним ветки по умолчанию.
+TARGET_VERSION="main"
 ROLLBACK_ON_FAILURE=true
 
 # Parse command line arguments
@@ -42,6 +46,10 @@ parse_args() {
         case $1 in
             --version)
                 TARGET_VERSION="$2"
+                # обратная совместимость: раньше это был тег образа
+                if [[ "${TARGET_VERSION}" == "latest" ]]; then
+                    TARGET_VERSION="main"
+                fi
                 shift 2
                 ;;
             --no-rollback)
@@ -72,7 +80,9 @@ Family Budget Service - Upgrade Script
 Usage: sudo ./upgrade.sh [OPTIONS] [COMMAND]
 
 OPTIONS:
-    --version VERSION    Target version (default: latest)
+    --version VERSION    Target git ref - tag, branch or commit (default: main).
+                         The image is built from ${SRC_DIR}, there is no
+                         published registry image to pull.
     --no-rollback        Disable automatic rollback on failure
     --help, -h           Show this help message
 
@@ -120,6 +130,12 @@ check_installation() {
         exit 1
     fi
 
+    if [[ ! -d "${SRC_DIR}/.git" ]]; then
+        log_error "Source checkout not found: ${SRC_DIR}"
+        log_error "The image is built from source; re-run install.sh to create it"
+        exit 1
+    fi
+
     log_success "Installation directory found"
 }
 
@@ -140,13 +156,13 @@ check_disk_space() {
 get_current_version() {
     log_info "Getting current version..."
 
-    if docker ps --format '{{.Names}}' | grep -q 'family-budget'; then
-        CURRENT_VERSION=$(docker inspect --format='{{.Config.Image}}' $(docker ps -q --filter "name=family-budget" | head -1) 2>/dev/null | cut -d: -f2 || echo "unknown")
-    else
-        CURRENT_VERSION="unknown"
-    fi
+    # Версия — это коммит, из которого собран текущий образ.
+    CURRENT_VERSION=$(git -C "${SRC_DIR}" rev-parse HEAD 2>/dev/null || echo "unknown")
 
-    log_info "Current version: ${CURRENT_VERSION}"
+    local human
+    human=$(git -C "${SRC_DIR}" describe --tags --always 2>/dev/null || echo "${CURRENT_VERSION}")
+
+    log_info "Current version: ${human} (${CURRENT_VERSION})"
 }
 
 check_database_integrity() {
@@ -227,19 +243,29 @@ create_upgrade_backup() {
 # Upgrade Functions
 # ============================================
 
-pull_new_version() {
-    log_info "Pulling new version: ${TARGET_VERSION}..."
+# Обновить исходники и пересобрать образ.
+# `docker compose pull` тут неприменим: сервис build-only (D-02).
+build_new_version() {
+    log_info "Fetching sources for: ${TARGET_VERSION}..."
+
+    if ! git -C "${SRC_DIR}" fetch --tags --force origin "${TARGET_VERSION}"; then
+        log_error "Failed to fetch ref: ${TARGET_VERSION}"
+        return 1
+    fi
+
+    if ! git -C "${SRC_DIR}" checkout --force --detach FETCH_HEAD; then
+        log_error "Failed to check out ref: ${TARGET_VERSION}"
+        return 1
+    fi
+
+    log_info "Building image from $(git -C "${SRC_DIR}" rev-parse --short HEAD)..."
 
     cd "${INSTALL_DIR}"
 
-    # Set version environment variable
-    export APP_VERSION="${TARGET_VERSION}"
-
-    # Pull new image
-    if docker compose -f "${COMPOSE_FILE}" pull app 2>/dev/null; then
-        log_success "Successfully pulled version: ${TARGET_VERSION}"
+    if docker compose -f "${COMPOSE_FILE}" build app; then
+        log_success "Successfully built version: ${TARGET_VERSION}"
     else
-        log_error "Failed to pull new version"
+        log_error "Failed to build new version"
         return 1
     fi
 }
@@ -264,9 +290,6 @@ start_service() {
     log_info "Starting service with new version..."
 
     cd "${INSTALL_DIR}"
-    
-    # Set version if needed
-    export APP_VERSION="${TARGET_VERSION}"
 
     docker compose -f "${COMPOSE_FILE}" up -d app
 
@@ -332,11 +355,17 @@ rollback() {
         cp "${UPGRADE_BACKUP_DIR}/config/.env" "${INSTALL_DIR}/config/.env"
     fi
 
-    # Restore previous version
-    local prev_version=$(cat "${UPGRADE_BACKUP_DIR}/version.txt" 2>/dev/null || echo "latest")
+    # Restore previous version: откатываем исходники на сохранённый коммит и
+    # пересобираем образ — готового образа для отката в реестре нет (D-02).
+    local prev_version=$(cat "${UPGRADE_BACKUP_DIR}/version.txt" 2>/dev/null || echo "unknown")
     log_info "Restoring previous version: ${prev_version}"
 
-    export APP_VERSION="${prev_version}"
+    if [[ "${prev_version}" != "unknown" ]] && git -C "${SRC_DIR}" checkout --force --detach "${prev_version}"; then
+        docker compose -f "${COMPOSE_FILE}" build app || log_error "Rebuild of previous version failed"
+    else
+        log_warning "Previous commit is unknown, restarting with the current image"
+    fi
+
     docker compose -f "${COMPOSE_FILE}" up -d app
 
     sleep 10
@@ -389,9 +418,9 @@ upgrade() {
     check_disk_space
     get_current_version
 
-    # Skip if same version
-    if [[ "${CURRENT_VERSION}" == "${TARGET_VERSION}" && "${TARGET_VERSION}" != "latest" ]]; then
-        log_info "Already running version ${TARGET_VERSION}"
+    # Skip if the requested ref is already checked out (полный SHA)
+    if [[ "${CURRENT_VERSION}" == "${TARGET_VERSION}" ]]; then
+        log_info "Already running ${TARGET_VERSION}"
         log_info "No upgrade needed"
         exit 0
     fi
@@ -401,9 +430,9 @@ upgrade() {
     # Create backup
     create_upgrade_backup
 
-    # Pull new version
-    if ! pull_new_version; then
-        log_error "Failed to pull new version"
+    # Fetch sources and rebuild the image
+    if ! build_new_version; then
+        log_error "Failed to build new version"
         exit 1
     fi
 

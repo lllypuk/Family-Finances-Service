@@ -6,9 +6,17 @@ set -euo pipefail
 
 # Constants
 INSTALL_DIR="/opt/family-budget"
+SRC_DIR="${INSTALL_DIR}/src"
 APP_USER="familybudget"
 REPO_URL="https://raw.githubusercontent.com/lllypuk/Family-Finances-Service/main"
+REPO_GIT_URL="${REPO_GIT_URL:-https://github.com/lllypuk/Family-Finances-Service.git}"
+REPO_REF="${REPO_REF:-main}"
 LOG_FILE="/var/log/family-budget-install.log"
+
+# UID/GID пользователя внутри образа (docker/Dockerfile: user `app`).
+# Bind-mount ./data должен принадлежать именно ему, иначе SQLite не откроет БД (D-03).
+CONTAINER_UID=1000
+CONTAINER_GID=1000
 
 # Source library functions
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -76,11 +84,17 @@ EXAMPLES:
     # Non-interactive installation
     sudo ./install.sh --non-interactive --domain budget.example.com --email admin@example.com
 
+ENVIRONMENT:
+    REPO_GIT_URL           Repository to build from (default: upstream GitHub URL)
+    REPO_REF               Branch or tag to check out (default: main)
+
 REQUIREMENTS:
     - Ubuntu 22.04/24.04, Debian 11/12, or Rocky Linux 9
-    - Minimum 2GB RAM
+    - Minimum 512MB RAM (the service itself needs ~128-256MB;
+      the rest is headroom for the Docker image build)
     - Minimum 10GB disk space
     - Root or sudo privileges
+    - Outbound network access (the image is built from source, see D-02)
 
 EOF
 }
@@ -145,28 +159,60 @@ create_directories() {
     log_success "Created directory structure at $INSTALL_DIR"
 }
 
+# Fetch application sources
+#
+# Публичного образа в GHCR нет (D-02), поэтому образ собирается на месте.
+# Для этого рядом с compose-файлом нужны исходники: $INSTALL_DIR/src.
+fetch_sources() {
+    log_info "Fetching application sources into $SRC_DIR..."
+
+    install_git
+
+    if [[ -d "$SRC_DIR/.git" ]]; then
+        log_info "Existing checkout found, updating..."
+        git -C "$SRC_DIR" fetch --depth 1 origin "$REPO_REF"
+        git -C "$SRC_DIR" checkout --detach FETCH_HEAD
+    else
+        rm -rf "$SRC_DIR"
+        git clone --depth 1 --branch "$REPO_REF" "$REPO_GIT_URL" "$SRC_DIR"
+    fi
+
+    log_success "Sources ready at $SRC_DIR ($(git -C "$SRC_DIR" rev-parse --short HEAD))"
+}
+
 # Download deployment files
 download_deployment_files() {
-    log_info "Downloading deployment files..."
-    
+    log_info "Preparing deployment files..."
+
     cd "$INSTALL_DIR"
-    
-    # Download docker-compose.prod.yml
-    if [[ -f "$SCRIPT_DIR/../docker-compose.prod.yml" ]]; then
-        cp "$SCRIPT_DIR/../docker-compose.prod.yml" "$INSTALL_DIR/docker-compose.yml"
-        log_info "Copied docker-compose.prod.yml from local repository"
+
+    # docker-compose.prod.yml — сначала из свежего checkout, затем из локального
+    # репозитория (когда скрипт запущен из клона), иначе встроенный fallback.
+    local compose_src=""
+    if [[ -f "$SRC_DIR/deploy/docker-compose.prod.yml" ]]; then
+        compose_src="$SRC_DIR/deploy/docker-compose.prod.yml"
+    elif [[ -f "$SCRIPT_DIR/../docker-compose.prod.yml" ]]; then
+        compose_src="$SCRIPT_DIR/../docker-compose.prod.yml"
+    fi
+
+    if [[ -n "$compose_src" ]]; then
+        cp "$compose_src" "$INSTALL_DIR/docker-compose.yml"
+        log_info "Copied docker-compose.prod.yml from $compose_src"
     else
-        log_warning "docker-compose.prod.yml not found locally, using minimal configuration"
+        log_warning "docker-compose.prod.yml not found, using minimal configuration"
         cat > "$INSTALL_DIR/docker-compose.yml" <<'EOF'
 version: '3.8'
 
 services:
   app:
-    image: ghcr.io/lllypuk/family-finances-service:latest
+    build:
+      context: ${BUILD_CONTEXT:-./src}
+      dockerfile: docker/Dockerfile
     container_name: family-budget
     restart: unless-stopped
     ports:
       - "8080:8080"
+    user: "1000:1000"
     environment:
       - SERVER_PORT=8080
       - SERVER_HOST=0.0.0.0
@@ -207,6 +253,10 @@ DOMAIN=$DOMAIN
 # Database
 DATABASE_PATH=/data/budget.db
 
+# Build (образ собирается из исходников, D-02).
+# Путь к клону репозитория относительно $INSTALL_DIR.
+BUILD_CONTEXT=./src
+
 # Security
 SESSION_SECRET=$SESSION_SECRET
 CSRF_SECRET=$CSRF_SECRET
@@ -232,14 +282,20 @@ set_file_permissions() {
     
     # Set ownership
     chown -R "$APP_USER:$APP_USER" "$INSTALL_DIR"
-    
+
+    # Каталоги, смонтированные в контейнер, должны принадлежать пользователю
+    # внутри образа (docker/Dockerfile: app = 1000:1000), иначе SQLite не
+    # откроет БД на bind-mount (D-03). $APP_USER — системный, его UID < 1000.
+    chown -R "$CONTAINER_UID:$CONTAINER_GID" \
+        "$INSTALL_DIR/data" "$INSTALL_DIR/backups" "$INSTALL_DIR/logs"
+
     # Set directory permissions
     chmod 755 "$INSTALL_DIR"
     chmod 700 "$INSTALL_DIR/data"
     chmod 700 "$INSTALL_DIR/backups"
     chmod 700 "$INSTALL_DIR/config"
     chmod 755 "$INSTALL_DIR/logs"
-    
+
     log_success "File permissions set"
 }
 
@@ -251,15 +307,16 @@ deploy_application() {
     
     # Create environment symlink for docker-compose
     ln -sf config/.env .env
-    
-    # Pull latest image
-    log_info "Pulling Docker image..."
-    docker compose pull
-    
+
+    # Собираем образ из исходников в ./src — публичного образа нет (D-02),
+    # поэтому `docker compose pull` здесь не сработает.
+    log_info "Building Docker image from sources (this may take a few minutes)..."
+    docker compose build app
+
     # Start services
     log_info "Starting services..."
     docker compose up -d
-    
+
     log_success "Application deployed"
 }
 
@@ -308,11 +365,12 @@ show_completion_message() {
     log_info "Application URL: http://$DOMAIN:8080"
     echo ""
     log_info "Next steps:"
-    log_info "  1. Set up reverse proxy with SSL (see docs/tasks/002-reverse-proxy-config.md)"
+    log_info "  1. Set up reverse proxy with SSL (see deploy/README.md, 'Deployment Options')"
     log_info "  2. Create your first admin user by accessing the application"
     log_info "  3. Review logs: docker compose -f $INSTALL_DIR/docker-compose.yml logs -f"
     log_info "  4. Check status: docker compose -f $INSTALL_DIR/docker-compose.yml ps"
     echo ""
+    log_info "Sources (image is built from them): $SRC_DIR"
     log_info "Database location: $INSTALL_DIR/data/budget.db"
     log_info "Backups location: $INSTALL_DIR/backups/"
     log_info "Installation log: $LOG_FILE"
@@ -358,6 +416,7 @@ main() {
     setup_firewall
     generate_secrets
     create_directories
+    fetch_sources
     download_deployment_files
     create_env_file
     set_file_permissions
