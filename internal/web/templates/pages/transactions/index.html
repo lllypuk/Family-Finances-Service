@@ -15,6 +15,7 @@
     
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
+    {{if .CSRFToken}}<meta name="csrf-token" content="{{.CSRFToken}}">{{end}}
 </head>
 <body>
     <!-- Navigation -->

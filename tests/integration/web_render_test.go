@@ -60,10 +60,56 @@ func TestWebPages_AllHTMLRoutesRender(t *testing.T) {
 		{name: "admin_backup", path: "/admin/backup"},
 	}
 
+	currentUser := testServer.AuthUser
+
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			body := fetchPage(t, testServer, auth, tc.path)
-			assert.NotEmpty(t, navBlock(t, body), "на странице %s нет шапки", tc.path)
+			// Не «есть блок <nav>», а именно шапка вошедшего пользователя:
+			// проверка на существование <nav> проходила и на странице с
+			// вырезанным меню (U-02 на /users/new).
+			assertLoggedInNav(t, body, tc.path, currentUser.FirstName+" "+currentUser.LastName)
+		})
+	}
+}
+
+// TestWebPages_HTMXPagesCarryCSRFMeta — страницы с hx-delete/hx-post вне формы
+// обязаны нести <meta name="csrf-token">: static/js/app.js вешает заголовок
+// X-Csrf-Token на HTMX-запросы только из этого тега, а вне формы поле _token
+// не отправляется. Без тега удаление категории, транзакции и пользователя
+// отвечало 403 «CSRF token validation failed» в живом браузере.
+func TestWebPages_HTMXPagesCarryCSRFMeta(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	auth := testServer.Auth(t)
+	fixtures := seedRenderFixtures(t, testServer)
+
+	metaRe := regexp.MustCompile(`<meta name="csrf-token" content="([^"]*)"`)
+
+	paths := []string{
+		"/",
+		"/transactions",
+		"/transactions/new",
+		"/transactions/" + fixtures.transactionID.String() + "/edit",
+		"/categories",
+		"/categories/new",
+		"/categories/" + fixtures.categoryID.String() + "/edit",
+		"/budgets",
+		"/budgets/alerts",
+		"/reports",
+		"/reports/new",
+		"/users",
+		"/users/new",
+		"/admin/users",
+		"/admin/backup",
+	}
+
+	for _, path := range paths {
+		t.Run(path, func(t *testing.T) {
+			body := fetchPage(t, testServer, auth, path)
+
+			match := metaRe.FindStringSubmatch(body)
+			require.NotNil(t, match, "на странице %s нет <meta name=\"csrf-token\">", path)
+			assert.NotEmpty(t, match[1], "на странице %s csrf-token пустой", path)
 		})
 	}
 }
@@ -119,13 +165,18 @@ func TestWebPages_LogoutFormCarriesCSRFToken(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	auth := testServer.Auth(t)
 
-	tokenRe := regexp.MustCompile(`(?s)name="_token"[^>]*value="([^"]*)"`)
+	paths := []string{
+		"/", "/transactions", "/categories", "/budgets", "/reports",
+		// Эти три страницы несли собственную копию шапки: на /users/new она
+		// была вовсе без пользовательского меню и без формы выхода (U-02).
+		"/users", "/users/new", "/admin/users", "/admin/backup",
+	}
 
-	for _, path := range []string{"/", "/transactions", "/categories", "/budgets", "/reports"} {
+	for _, path := range paths {
 		t.Run(path, func(t *testing.T) {
 			nav := navBlock(t, fetchPage(t, testServer, auth, path))
 
-			match := tokenRe.FindStringSubmatch(nav)
+			match := logoutTokenRe.FindStringSubmatch(nav)
 			require.NotNil(t, match, "в шапке страницы %s нет поля _token", path)
 			assert.NotEmpty(t, match[1], "на странице %s форма выхода несёт пустой _token", path)
 		})

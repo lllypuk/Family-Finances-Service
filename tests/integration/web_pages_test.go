@@ -106,19 +106,40 @@ func TestWebPages_NavigationRendered(t *testing.T) {
 			assert.Contains(t, body, "<title>"+tc.title+" - Семейный бюджет</title>",
 				"на странице %s заголовок не на русском (U-05)", tc.path)
 
-			nav := navBlock(t, body)
-
-			for _, link := range navExpectedLinks {
-				assert.Contains(t, nav, link,
-					"на странице %s в шапке нет пункта меню %s", tc.path, link)
-			}
-
-			assert.Contains(t, nav, currentUser.FirstName+" "+currentUser.LastName,
-				"на странице %s в шапке нет текущего пользователя — .CurrentUser не дошёл до шаблона", tc.path)
-			assert.Contains(t, nav, `action="/logout"`,
-				"на странице %s в шапке нет формы выхода", tc.path)
+			assertLoggedInNav(t, body, tc.path, currentUser.FirstName+" "+currentUser.LastName)
 		})
 	}
+}
+
+// logoutTokenRe достаёт значение скрытого поля _token из формы выхода.
+var logoutTokenRe = regexp.MustCompile(`(?s)name="_token"[^>]*value="([^"]*)"`)
+
+// assertLoggedInNav проверяет, что в шапке страницы действительно шапка
+// вошедшего администратора.
+//
+// Проверять «блок <nav> непустой» бессмысленно: у страницы с вырезанным меню
+// (ровно симптом U-02) блок <nav> тоже есть — там остаётся один логотип.
+// Именно поэтому pages/users/new.html с захардкоженной шапкой без
+// `{{if .CurrentUser}}`, без пользовательского меню и без формы выхода
+// проходил регрессионный тест.
+func assertLoggedInNav(t *testing.T, body, path, userName string) {
+	t.Helper()
+
+	nav := navBlock(t, body)
+
+	for _, link := range navExpectedLinks {
+		assert.Contains(t, nav, link,
+			"на странице %s в шапке нет пункта меню %s", path, link)
+	}
+
+	assert.Contains(t, nav, userName,
+		"на странице %s в шапке нет текущего пользователя — .CurrentUser не дошёл до шаблона", path)
+	assert.Contains(t, nav, `action="/logout"`,
+		"на странице %s в шапке нет формы выхода", path)
+
+	match := logoutTokenRe.FindStringSubmatch(nav)
+	require.NotNil(t, match, "в шапке страницы %s нет поля _token", path)
+	assert.NotEmpty(t, match[1], "на странице %s форма выхода несёт пустой _token", path)
 }
 
 // fetchPage запрашивает HTML-страницу с сессией и возвращает тело ответа.

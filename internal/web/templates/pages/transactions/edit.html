@@ -21,22 +21,7 @@
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="container-fluid">
-        <ul>
-            <li>
-                <a href="/" class="brand">
-                    <strong>💰 Семейный бюджет</strong>
-                </a>
-            </li>
-        </ul>
-        <ul>
-            <li><a href="/">Главная</a></li>
-            <li><a href="/transactions" class="current">Транзакции</a></li>
-            <li><a href="/categories">Категории</a></li>
-            <li><a href="/budgets">Бюджеты</a></li>
-            <li><a href="/reports">Отчеты</a></li>
-        </ul>
-    </nav>
+    {{template "nav" .}}
     
     <!-- Main Content -->
     <main class="container">

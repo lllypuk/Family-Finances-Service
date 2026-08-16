@@ -150,17 +150,12 @@ func (h *BaseHandler) buildPageData(c echo.Context, title string) *PageData {
 		pageData.CSRFToken = csrfToken
 	}
 
-	sessionData, err := middleware.GetUserFromContext(c)
-	if err != nil {
+	currentUser := h.sessionPageUser(c)
+	if currentUser == nil {
 		return pageData
 	}
 
-	currentUser := &SessionData{
-		UserID: sessionData.UserID,
-		Role:   sessionData.Role,
-		Email:  sessionData.Email,
-	}
-	currentUserRecord, userErr := h.services.User.GetUserByID(c.Request().Context(), sessionData.UserID)
+	currentUserRecord, userErr := h.services.User.GetUserByID(c.Request().Context(), currentUser.UserID)
 	if userErr == nil && currentUserRecord != nil {
 		currentUser.FirstName = currentUserRecord.FirstName
 		currentUser.LastName = currentUserRecord.LastName
@@ -168,6 +163,23 @@ func (h *BaseHandler) buildPageData(c echo.Context, title string) *PageData {
 	pageData.CurrentUser = currentUser
 
 	return pageData
+}
+
+// sessionPageUser собирает CurrentUser для шапки страницы из одной только
+// сессии, без обращения к БД: имени и фамилии там нет, поэтому шаблон шапки
+// подписывает меню email'ом (components/nav.html). Нужен там, где страница
+// перерисовывается после ошибки валидации и лишний запрос неоправдан.
+func (h *BaseHandler) sessionPageUser(c echo.Context) *SessionData {
+	sessionData, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		return nil
+	}
+
+	return &SessionData{
+		UserID: sessionData.UserID,
+		Role:   sessionData.Role,
+		Email:  sessionData.Email,
+	}
 }
 
 // formPageData — buildPageData для формы, которую перерисовывают после

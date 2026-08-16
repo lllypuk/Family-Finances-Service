@@ -15,45 +15,11 @@
     
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
+    {{if .CSRFToken}}<meta name="csrf-token" content="{{.CSRFToken}}">{{end}}
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="container-fluid">
-        <ul>
-            <li>
-                <a href="/" class="brand">
-                    <strong>💰 Семейный бюджет</strong>
-                </a>
-            </li>
-        </ul>
-        <ul>
-            {{if .CurrentUser}}
-            <li><a href="/">Главная</a></li>
-            <li><a href="/transactions">Транзакции</a></li>
-            <li><a href="/categories">Категории</a></li>
-            <li><a href="/budgets">Бюджеты</a></li>
-            <li><a href="/reports">Отчеты</a></li>
-            <li>
-                <details class="dropdown">
-                    <summary role="button" class="secondary">
-                        {{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}
-                    </summary>
-                    <ul>
-                        {{if eq .CurrentUser.Role "admin"}}
-                        <li><a href="/users">Пользователи</a></li>
-                        {{end}}
-                        <li>
-                            <form method="POST" action="/logout" style="margin: 0;">
-                                <input type="hidden" name="_token" value="{{.CSRFToken}}">
-                                <button type="submit" class="outline">Выход</button>
-                            </form>
-                        </li>
-                    </ul>
-                </details>
-            </li>
-            {{end}}
-        </ul>
-    </nav>
+    {{template "nav" .}}
     
     <!-- Main Content -->
     <main class="container">

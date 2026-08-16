@@ -87,8 +87,11 @@ func (h *UserHandler) New(c echo.Context) error {
 
 	// FieldErrors обязателен даже пустым: шаблон зовёт `index .FieldErrors …`,
 	// а index по nil-значению — ошибка исполнения (страница отдавала 500).
+	// CurrentUser обязателен: шапка страницы — общий шаблон `nav`, и без него
+	// она рисуется как для анонима, без меню и без формы выхода (U-02).
 	data := map[string]any{
 		"Title":           "Add Family Member",
+		tplKeyCurrentUser: currentUser,
 		tplKeyCSRFToken:   csrfToken,
 		tplKeyFieldErrors: map[string]string{},
 		"Roles": []map[string]any{
@@ -179,8 +182,11 @@ func (h *UserHandler) userError(c echo.Context, message string, fieldErrors map[
 		fieldErrors = map[string]string{}
 	}
 
+	// Перерисованная после ошибки форма — та же страница, поэтому в шапке
+	// должен остаться тот же пользователь (иначе меню и выход исчезают).
 	data := map[string]any{
 		"Title":           "Add Family Member",
+		tplKeyCurrentUser: h.sessionPageUser(c),
 		tplKeyError:       message,
 		tplKeyFieldErrors: fieldErrors,
 		tplKeyCSRFToken:   csrfToken,

@@ -19,7 +19,7 @@
         <li>
             <details class="dropdown">
                 <summary role="button" class="secondary">
-                    {{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}
+                    {{if .CurrentUser.FirstName}}{{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}{{else}}{{.CurrentUser.Email}}{{end}}
                 </summary>
                 <ul>
                     {{if eq .CurrentUser.Role "admin"}}

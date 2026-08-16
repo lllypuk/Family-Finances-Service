@@ -82,10 +82,17 @@ setup→ready transition needs no restart.
 
 - **Web UI** (`internal/web/`): session cookie auth. `middleware.SessionStore` (gorilla/sessions cookie store,
   session name `family-budget-session`) + `middleware.CSRFProtection`. Routes are grouped in `web.go`:
-  `RequireAuth()` for the protected group, `RequireAdmin()` for `/users` and `/admin`, `RequireAdminOrMember()` for
-  finance pages. Session data lands in the Echo context under key `"user"` (`middleware.GetUserFromContext`).
+  `RequireAuth()` + `RequireActiveUser(services.User)` for the protected group, `RequireAdmin()` for `/users` and
+  `/admin`, `RequireAdminOrMember()` for finance pages. Session data lands in the Echo context under key `"user"`
+  (`middleware.GetUserFromContext`). `RequireActiveUser` re-reads the session owner from the DB on every protected
+  request (`middleware.RevalidateSessionUser`): the cookie store has no server-side session id, so without it a
+  deleted or downgraded user kept access for the full 24h `SessionTimeout`. The role used by the role gates therefore
+  comes from the DB, not from the signed cookie. `SessionStore`'s `Secure` flag is `COOKIE_SECURE`
+  (`config.Web.CookieSecure` → `application.Config.CookieSecure`), defaulting to true in production — set it to
+  `false` when serving over plain HTTP, otherwise the browser drops the cookie and login loops.
 - **REST API** (`internal/application/handlers/`): `/api/v1/{users,categories,transactions,budgets,reports}`.
-  The group is registered as `s.echo.Group("/api/v1", webmw.RequireAPIAuth())` — the *same* session cookie as the web
+  The group is registered as `s.echo.Group("/api/v1", RequireAPIAuth(), RequireAPIActiveUser(services.User))` —
+  the *same* session cookie as the web
   UI is the only credential; there are no API tokens. No session → `401` + JSON
   `{"error":{"code":"UNAUTHORIZED",…},"meta":{…}}`. Per-route role gates mirror the web:
   `RequireAPIAdmin` on `POST/PUT/DELETE /api/v1/users` and `DELETE /api/v1/categories/:id`,
@@ -149,6 +156,9 @@ Do not treat these as regressions you introduced, and do not paper over them wit
   `context: .` with **no `file:`**, so it looks for `./Dockerfile` — which does not exist (the Dockerfile lives in
   `docker/Dockerfile`). Pushing a tag would fail the build with "failed to read dockerfile"; add
   `file: docker/Dockerfile` before the first release ([D-02](docs/specs/004-deployment-readiness.md#d-02)).
+- **The error page never shows the raw error for a non-`*echo.HTTPError`** (`customHTTPErrorHandler` in
+  `web.go`): it logs the detail and renders a generic title. If you are debugging a 500, read the server log —
+  the page will not tell you anything.
 - **`internal/config.go` still defaults `SESSION_SECRET`/`CSRF_SECRET` to known placeholders** and `Validate()`
   compares against those exact strings, so a secret of `123` passes. The compose files now demand both via `${VAR:?}`,
   which covers the documented paths but not `go run ./cmd/server` with `ENVIRONMENT=development`.
@@ -179,6 +189,8 @@ Two independent code paths apply migrations, and **both must keep working**:
     runs with cwd = the package directory.
   - A web-layer init failure is no longer swallowed: `HTTPServer.WebServerInitError()` surfaces it and the helper
     calls `t.Fatalf`. If a test suddenly dies on "web server initialization failed", a template failed to parse.
+    In production the same check is fatal — `NewApplication` (`internal/run.go`) returns the error and the process
+    exits non-zero, instead of serving a 200 `/health` with no sessions, no CSRF and no HTML routes.
   - Because the real middleware is in play, integration requests need a session **and** a CSRF token on writes:
     `ts.Auth(t)` (admin of the test family, memoized), `ts.AuthAs(t, role)` (extra user in the *same* family),
     or `testhelpers.LoginAs(t, ts, u)`. All return an `*AuthSession{Cookie, CSRFToken}`; call `sess.Apply(req)`.
