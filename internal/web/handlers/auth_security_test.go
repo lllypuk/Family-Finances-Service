@@ -1,18 +1,25 @@
 package handlers
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 
+	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services"
+	"family-budget-service/internal/web/middleware"
 )
 
 func TestSanitizeRedirectURL_SecurityVectors(t *testing.T) {
@@ -437,14 +444,256 @@ func TestSetup_RateLimitingConsiderations(t *testing.T) {
 	})
 }
 
-func TestLogin_SessionFixation(t *testing.T) {
-	// Document that session should be regenerated on login
-	t.Run("Regenerate session on login", func(_ *testing.T) {
-		// This is a documentation test
-		// Session ID should be regenerated after successful login
-		// to prevent session fixation attacks
-		// No assertion needed - this test exists for documentation
+// loginTestPassword — пароль тестового пользователя для прогона настоящего
+// обработчика входа.
+const loginTestPassword = "Admin123!"
+
+// loginTestSessionSecret — секрет подписи сессий тестового сервера входа.
+const loginTestSessionSecret = "test-session-secret-for-login-fixation"
+
+// stubUserRepository — минимальная реализация handlers.UserRepository:
+// обработчику входа нужен только GetByEmail.
+type stubUserRepository struct {
+	byEmail map[string]*user.User
+}
+
+func (r *stubUserRepository) Create(_ context.Context, _ *user.User) error { return nil }
+
+func (r *stubUserRepository) GetByID(_ context.Context, id uuid.UUID) (*user.User, error) {
+	for _, u := range r.byEmail {
+		if u.ID == id {
+			return u, nil
+		}
+	}
+	return nil, errors.New("user not found")
+}
+
+func (r *stubUserRepository) GetByEmail(_ context.Context, email string) (*user.User, error) {
+	if u, ok := r.byEmail[email]; ok {
+		return u, nil
+	}
+	return nil, errors.New("user not found")
+}
+
+func (r *stubUserRepository) GetAll(_ context.Context) ([]*user.User, error) {
+	users := make([]*user.User, 0, len(r.byEmail))
+	for _, u := range r.byEmail {
+		users = append(users, u)
+	}
+	return users, nil
+}
+
+func (r *stubUserRepository) Update(_ context.Context, _ *user.User) error { return nil }
+
+func (r *stubUserRepository) Delete(_ context.Context, _ uuid.UUID) error { return nil }
+
+// loginTestValidator — Echo-валидатор для формы входа.
+type loginTestValidator struct {
+	validator *validator.Validate
+}
+
+func (v *loginTestValidator) Validate(i any) error {
+	return v.validator.Struct(i)
+}
+
+// loginTestSession — результат прохода через настоящую форму входа.
+type loginTestSession struct {
+	anonCookie *http.Cookie
+	anonToken  string
+	authCookie *http.Cookie
+}
+
+// newLoginTestServer поднимает Echo с настоящими SessionStore и CSRFProtection
+// и реальным AuthHandler. Только на полном стеке видно, что вход перевыпускает
+// CSRF-токен (S-02) и при этом не убивает cookie сессии.
+func newLoginTestServer(t *testing.T) (*echo.Echo, *user.User) {
+	t.Helper()
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(loginTestPassword), bcrypt.MinCost)
+	require.NoError(t, err)
+
+	testUser := &user.User{
+		ID:       uuid.New(),
+		Email:    "login-fixation@example.com",
+		Password: string(hash),
+		Role:     user.RoleAdmin,
+	}
+
+	repos := &handlers.Repositories{
+		User: &stubUserRepository{byEmail: map[string]*user.User{testUser.Email: testUser}},
+	}
+
+	e := echo.New()
+	e.Validator = &loginTestValidator{validator: validator.New()}
+	e.Use(middleware.SessionStore(loginTestSessionSecret, false))
+	e.Use(middleware.CSRFProtection())
+
+	authHandler := NewAuthHandler(repos, &services.Services{})
+	e.POST("/login", authHandler.Login)
+	e.GET("/logout", authHandler.Logout)
+
+	// /token отдаёт текущий токен сессии, /probe — приёмник записи, на котором
+	// видно, принимает ли CSRF-middleware конкретный токен.
+	e.GET("/token", func(c echo.Context) error {
+		token, tokenErr := middleware.GetCSRFToken(c)
+		if tokenErr != nil {
+			return tokenErr
+		}
+		return c.String(http.StatusOK, token)
 	})
+	e.POST("/probe", func(c echo.Context) error {
+		return c.NoContent(http.StatusOK)
+	})
+	e.GET("/whoami", func(c echo.Context) error {
+		if middleware.IsAuthenticated(c) {
+			return c.String(http.StatusOK, "authenticated")
+		}
+		return c.String(http.StatusOK, "anonymous")
+	})
+
+	return e, testUser
+}
+
+// lastSessionCookie возвращает последнюю cookie сессии из ответа: за один
+// запрос сессия может сохраняться несколько раз, и клиент применяет Set-Cookie
+// по порядку, поэтому актуальна именно последняя.
+func lastSessionCookie(t *testing.T, rec *httptest.ResponseRecorder) *http.Cookie {
+	t.Helper()
+
+	var found *http.Cookie
+	for _, cookie := range (&http.Response{Header: rec.Header()}).Cookies() {
+		if cookie.Name == middleware.SessionName {
+			found = cookie
+		}
+	}
+	require.NotNil(t, found, "сессионная cookie не выдана")
+
+	return found
+}
+
+// fetchCSRFToken забирает токен текущей сессии через /token.
+func fetchCSRFToken(t *testing.T, e *echo.Echo, cookie *http.Cookie) (string, *httptest.ResponseRecorder) {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, "/token", nil)
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NotEmpty(t, rec.Body.String())
+
+	return rec.Body.String(), rec
+}
+
+// postProbe шлёт запись с указанными cookie и токеном.
+func postProbe(t *testing.T, e *echo.Echo, cookie *http.Cookie, token string) int {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPost, "/probe", nil)
+	req.Header.Set(middleware.CSRFHeaderKey, token)
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	return rec.Code
+}
+
+// whoami сообщает, считает ли сервер сессию аутентифицированной.
+func whoami(t *testing.T, e *echo.Echo, cookie *http.Cookie) string {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, "/whoami", nil)
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	return rec.Body.String()
+}
+
+// performLogin проходит настоящую форму входа с анонимным CSRF-токеном.
+func performLogin(t *testing.T, e *echo.Echo, u *user.User) loginTestSession {
+	t.Helper()
+
+	anonToken, anonRec := fetchCSRFToken(t, e, nil)
+	anonCookie := lastSessionCookie(t, anonRec)
+
+	form := url.Values{}
+	form.Set("email", u.Email)
+	form.Set("password", loginTestPassword)
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
+	req.Header.Set(middleware.CSRFHeaderKey, anonToken)
+	req.AddCookie(anonCookie)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusFound, rec.Code, "вход не удался: %s", rec.Body.String())
+
+	return loginTestSession{
+		anonCookie: anonCookie,
+		anonToken:  anonToken,
+		authCookie: lastSessionCookie(t, rec),
+	}
+}
+
+// TestLogin_SessionFixation — регрессия на S-02: CSRF-токен, полученный до
+// входа, обязан стать недействительным после успешного входа.
+func TestLogin_SessionFixation(t *testing.T) {
+	e, testUser := newLoginTestServer(t)
+
+	login := performLogin(t, e, testUser)
+
+	// Вход через UI не сломан: cookie сессии живая, а не на удаление.
+	require.Positive(t, login.authCookie.MaxAge,
+		"cookie сессии после входа обязана жить, иначе вход через UI сломан")
+
+	t.Run("AnonymousTokenRejected", func(t *testing.T) {
+		assert.Equal(t, http.StatusForbidden, postProbe(t, e, login.authCookie, login.anonToken),
+			"токен, полученный до входа, обязан отвергаться после входа")
+	})
+
+	t.Run("NewTokenIssuedAndAccepted", func(t *testing.T) {
+		newToken, _ := fetchCSRFToken(t, e, login.authCookie)
+
+		assert.NotEqual(t, login.anonToken, newToken, "после входа обязан выдаваться новый токен")
+		assert.Equal(t, http.StatusOK, postProbe(t, e, login.authCookie, newToken),
+			"новый токен обязан приниматься")
+	})
+
+	t.Run("OldSessionCookieStaysAnonymous", func(t *testing.T) {
+		// Хранилище cookie-based: злоумышленник, подсунувший жертве свою cookie
+		// до входа, продолжает держать в руках именно анонимную сессию — данные
+		// пользователя ушли в новую cookie, выданную при входе.
+		assert.Equal(t, "anonymous", whoami(t, e, login.anonCookie))
+		assert.Equal(t, "authenticated", whoami(t, e, login.authCookie))
+	})
+}
+
+// TestLogout_ClearsCSRFToken — Logout уже чистит сессию через ClearSession,
+// тест фиксирует это поведение: выданная cookie удаляет сессию, а её токен
+// вместе с ней перестаёт действовать.
+func TestLogout_ClearsCSRFToken(t *testing.T) {
+	e, testUser := newLoginTestServer(t)
+
+	login := performLogin(t, e, testUser)
+	authToken, _ := fetchCSRFToken(t, e, login.authCookie)
+
+	req := httptest.NewRequest(http.MethodGet, "/logout", nil)
+	req.AddCookie(login.authCookie)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusFound, rec.Code)
+
+	clearedCookie := lastSessionCookie(t, rec)
+	assert.Negative(t, clearedCookie.MaxAge, "выход обязан удалять cookie сессии")
+
+	assert.Equal(t, http.StatusForbidden, postProbe(t, e, clearedCookie, authToken),
+		"после выхода прежний CSRF-токен не должен подходить к сессии")
 }
 
 func TestSanitizeRedirectURL_ComprehensiveSecurityTest(t *testing.T) {

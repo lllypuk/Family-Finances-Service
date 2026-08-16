@@ -142,7 +142,18 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		Email:  foundUser.Email,
 	}
 
+	// Защита от фиксации сессии (S-02): анонимная сессия вместе с выданным ей
+	// CSRF-токеном отбрасывается до того, как в неё попадут данные пользователя.
+	if clearErr := middleware.ClearSession(c); clearErr != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create session")
+	}
+
 	if sessionErr := middleware.SetSessionData(c, sessionData); sessionErr != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create session")
+	}
+
+	// Новый CSRF-токен: полученный до входа больше не действует.
+	if _, csrfErr := middleware.RegenerateCSRFToken(c); csrfErr != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create session")
 	}
 

@@ -108,6 +108,14 @@ func SetSessionData(c echo.Context, data *SessionData) error {
 		return err
 	}
 
+	// ClearSession выставляет MaxAge = -1, а в рамках одного запроса session.Get
+	// возвращает тот же объект сессии. Без восстановления MaxAge перевыпуск
+	// сессии при входе (ClearSession -> SetSessionData) отдал бы клиенту cookie
+	// на удаление, то есть вход через UI перестал бы работать.
+	if sess.Options != nil {
+		sess.Options.MaxAge = int(SessionTimeout.Seconds())
+	}
+
 	sess.Values[SessionUserKey] = data.UserID
 	sess.Values[SessionRoleKey] = data.Role
 	sess.Values[SessionEmailKey] = data.Email

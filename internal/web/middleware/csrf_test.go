@@ -383,6 +383,89 @@ func TestCSRFToken_Security_Properties(t *testing.T) {
 	}
 }
 
+// TestRegenerateCSRFToken_IssuesDifferentToken — S-02: перевыпуск обязан выдать
+// другой токен и положить в сессию именно его.
+func TestRegenerateCSRFToken_IssuesDifferentToken(t *testing.T) {
+	e, csrfMiddleware := setupCSRFTest()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	var oldToken, newToken string
+	handler := csrfMiddleware(func(c echo.Context) error {
+		var err error
+		oldToken, err = middleware.GetCSRFToken(c)
+		require.NoError(t, err)
+
+		newToken, err = middleware.RegenerateCSRFToken(c)
+		require.NoError(t, err)
+
+		return c.String(http.StatusOK, "ok")
+	})
+
+	require.NoError(t, handler(c))
+
+	require.NotEmpty(t, oldToken)
+	require.NotEmpty(t, newToken)
+	assert.NotEqual(t, oldToken, newToken, "перевыпущенный токен обязан отличаться от прежнего")
+
+	// В сессии лежит именно новый токен.
+	current, err := middleware.GetCSRFToken(c)
+	require.NoError(t, err)
+	assert.Equal(t, newToken, current)
+}
+
+// TestRegenerateCSRFToken_OldTokenRejected — старый токен после перевыпуска
+// перестаёт подходить к сессии, новый принимается.
+func TestRegenerateCSRFToken_OldTokenRejected(t *testing.T) {
+	e, csrfMiddleware := setupCSRFTest()
+
+	getReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	getRec := httptest.NewRecorder()
+	getCtx := e.NewContext(getReq, getRec)
+
+	var oldToken, newToken string
+	genHandler := csrfMiddleware(func(c echo.Context) error {
+		var err error
+		oldToken, err = middleware.GetCSRFToken(c)
+		require.NoError(t, err)
+
+		newToken, err = middleware.RegenerateCSRFToken(c)
+		require.NoError(t, err)
+
+		return c.String(http.StatusOK, "ok")
+	})
+	require.NoError(t, genHandler(getCtx))
+
+	// Перевыпуск добавляет второй Set-Cookie; клиент применяет их по порядку,
+	// поэтому актуальна последняя cookie сессии.
+	cookies := getRec.Result().Cookies()
+	require.NotEmpty(t, cookies, "сессионная cookie не выдана")
+	sessionCookie := cookies[len(cookies)-1]
+
+	postWithToken := func(token string) int {
+		postReq := httptest.NewRequest(http.MethodPost, "/", nil)
+		postReq.Header.Set(middleware.CSRFHeaderKey, token)
+		postReq.AddCookie(sessionCookie)
+
+		postRec := httptest.NewRecorder()
+		postCtx := e.NewContext(postReq, postRec)
+
+		handler := csrfMiddleware(func(c echo.Context) error {
+			return c.String(http.StatusOK, "ok")
+		})
+		require.NoError(t, handler(postCtx))
+
+		return postRec.Code
+	}
+
+	assert.Equal(t, http.StatusForbidden, postWithToken(oldToken),
+		"токен, выданный до перевыпуска, обязан отвергаться")
+	assert.Equal(t, http.StatusOK, postWithToken(newToken),
+		"перевыпущенный токен обязан приниматься")
+}
+
 // Benchmark тесты для производительности CSRF
 func BenchmarkCSRFProtection_GET(b *testing.B) {
 	e, csrfMiddleware := setupCSRFTest()

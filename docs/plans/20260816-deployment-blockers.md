@@ -345,13 +345,40 @@ group-middleware на catch-all маршрут группы) — так анон
 - Modify: `internal/web/handlers/auth.go`
 - Modify: `internal/web/handlers/auth_security_test.go`
 
-- [ ] написать падающий тест: CSRF-токен, полученный анонимно, недействителен после успешного входа
-- [ ] добавить `RegenerateCSRFToken(c)` в `csrf.go` — серверного session ID не существует, хранилище cookie-based (`session.go:38`), поэтому перевыпускается именно токен
-- [ ] вызывать `ClearSession` перед `SetSessionData` в `AuthHandler.Login`, затем генерировать новый токен
-- [ ] написать тест: после логина токен изменился, старый отвергается с 403
-- [ ] написать тест: форма после логина содержит новый токен — вход через UI не сломан
-- [ ] `Logout` уже очищает токен через `ClearSession` (`session.go:113-127`) — только покрыть тестом, кода не трогать
-- [ ] `make test` и `make lint` — 0 issues перед задачей 8
+- [x] написать падающий тест: CSRF-токен, полученный анонимно, недействителен после успешного входа
+- [x] добавить `RegenerateCSRFToken(c)` в `csrf.go` — серверного session ID не существует, хранилище cookie-based (`session.go:38`), поэтому перевыпускается именно токен
+- [x] вызывать `ClearSession` перед `SetSessionData` в `AuthHandler.Login`, затем генерировать новый токен
+- [x] написать тест: после логина токен изменился, старый отвергается с 403
+- [x] написать тест: форма после логина содержит новый токен — вход через UI не сломан
+- [x] `Logout` уже очищает токен через `ClearSession` (`session.go:113-127`) — только покрыть тестом, кода не трогать
+- [x] `make test` и `make lint` — 0 issues перед задачей 8
+
+⚠️ Пришлось тронуть ещё один файл — `internal/web/middleware/session.go`. `session.Get`
+в рамках одного запроса возвращает **тот же** объект сессии, а `ClearSession`
+выставляет на нём `Options.MaxAge = -1`. Без восстановления MaxAge связка
+`ClearSession` → `SetSessionData` отдавала бы клиенту cookie на удаление, то есть
+вход через UI ломался бы наглухо. Поэтому `SetSessionData` теперь восстанавливает
+`MaxAge = SessionTimeout` перед сохранением; на `Logout` это не влияет —
+там `ClearSession` вызывается последним.
+
+ℹ️ Красная фаза зафиксирована: с откатанным `Login` подтесты
+`TestLogin_SessionFixation/AnonymousTokenRejected` (403 против фактических 200) и
+`/NewTokenIssuedAndAccepted` («после входа обязан выдаваться новый токен») падают.
+Тесты в трёх слоях: юнит на middleware (`internal/web/middleware/csrf_test.go` —
+`TestRegenerateCSRFToken_*`), настоящий обработчик входа на реальных
+`SessionStore`+`CSRFProtection` со стаб-репозиторием
+(`internal/web/handlers/auth_security_test.go` — заглушка `TestLogin_SessionFixation`
+заменена рабочим тестом, добавлен `TestLogout_ClearsCSRFToken`) и полный стек с
+настоящими шаблонами (➕ `tests/integration/auth_csrf_test.go`: токен из формы
+`/admin/users` после входа отличается от анонимного и принимается сервером).
+Проба «принимается ли токен» на полном стеке — `POST /login`: глобальный
+`CSRFProtection` отрабатывает раньше маршрутного `RedirectIfAuthenticated`,
+поэтому негодный токен даёт 403, а годный — 302, и состояние не мутируется.
+Замечание для будущих тестов: за один запрос сессия сохраняется несколько раз,
+клиент применяет `Set-Cookie` по порядку — брать надо **последнюю** cookie.
+Про `Logout`: хранилище cookie-based, поэтому «отзыв» токена означает, что
+выданная на выходе cookie пуста; переигранная старая cookie по-прежнему валидна
+(ограничение модели, а не регрессия).
 
 ### Task 8: RequireSetup не трогает статику и /health (U-01)
 

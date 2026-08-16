@@ -109,6 +109,31 @@ func validateCSRFToken(c echo.Context) error {
 	return nil
 }
 
+// RegenerateCSRFToken выпускает новый CSRF-токен и кладёт его в сессию,
+// делая ранее выданный токен недействительным.
+//
+// Хранилище сессий cookie-based (session.go:38), серверного session ID не
+// существует, поэтому от фиксации сессии (S-02) защищает именно перевыпуск
+// токена: полученный до входа токен перестаёт подходить к сессии после входа.
+func RegenerateCSRFToken(c echo.Context) (string, error) {
+	sess, err := getSession(c)
+	if err != nil {
+		return "", err
+	}
+
+	token, err := generateCSRFToken()
+	if err != nil {
+		return "", err
+	}
+
+	sess.Values[CSRFTokenKey] = token
+	if saveErr := sess.Save(c.Request(), c.Response()); saveErr != nil {
+		return "", saveErr
+	}
+
+	return token, nil
+}
+
 // GetCSRFToken возвращает CSRF токен для использования в шаблонах
 func GetCSRFToken(c echo.Context) (string, error) {
 	sess, err := getSession(c)
