@@ -16,6 +16,9 @@ const (
 	ErrCodeFamilyNotFound = "FAMILY_NOT_FOUND"
 	// ErrCodeCategoryNotFound signals that the requested category does not exist.
 	ErrCodeCategoryNotFound = "CATEGORY_NOT_FOUND"
+	// ErrCodeUnauthorized signals a request without a valid session. Совпадает
+	// с кодом, который отдаёт middleware.RequireAPIAuth.
+	ErrCodeUnauthorized = "UNAUTHORIZED"
 
 	// Standard error messages paired with the codes above. Kept as constants
 	// so changes propagate to API consumers in lockstep with code updates.

@@ -39,7 +39,6 @@ func TestReportHandler_Integration(t *testing.T) {
 			Name:      "Monthly Expense Report",
 			Type:      "expenses",
 			Period:    "monthly",
-			UserID:    user.ID,
 			StartDate: startDate,
 			EndDate:   endDate,
 		}
@@ -85,7 +84,6 @@ func TestReportHandler_Integration(t *testing.T) {
 					Name:      "",
 					Type:      "expenses",
 					Period:    "monthly",
-					UserID:    user.ID,
 					StartDate: time.Now().AddDate(0, -1, 0),
 					EndDate:   time.Now(),
 				},
@@ -97,7 +95,6 @@ func TestReportHandler_Integration(t *testing.T) {
 					Name:      "Test Report",
 					Type:      "invalid_type",
 					Period:    "monthly",
-					UserID:    user.ID,
 					StartDate: time.Now().AddDate(0, -1, 0),
 					EndDate:   time.Now(),
 				},
@@ -109,7 +106,6 @@ func TestReportHandler_Integration(t *testing.T) {
 					Name:      "Test Report",
 					Type:      "expenses",
 					Period:    "invalid_period",
-					UserID:    user.ID,
 					StartDate: time.Now().AddDate(0, -1, 0),
 					EndDate:   time.Now(),
 				},
@@ -364,7 +360,6 @@ func TestReportHandler_Integration(t *testing.T) {
 					Name:      fmt.Sprintf("Test %s Report", reportType),
 					Type:      reportType,
 					Period:    "monthly",
-					UserID:    user.ID,
 					StartDate: time.Now().AddDate(0, -1, 0),
 					EndDate:   time.Now(),
 				}
@@ -429,7 +424,6 @@ func TestReportHandler_Integration(t *testing.T) {
 					Name:      fmt.Sprintf("Test %s Report", period),
 					Type:      "expenses",
 					Period:    period,
-					UserID:    user.ID,
 					StartDate: startDate,
 					EndDate:   endDate,
 				}

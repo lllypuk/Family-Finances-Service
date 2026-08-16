@@ -20,6 +20,8 @@ import (
 
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/transaction"
+	"family-budget-service/internal/domain/user"
+	"family-budget-service/internal/web/middleware"
 )
 
 // MockTransactionRepository is a mock implementation of transaction repository
@@ -126,10 +128,20 @@ func createValidTransactionRequest() handlers.CreateTransactionRequest {
 		Type:        "expense",
 		Description: "Test transaction",
 		CategoryID:  uuid.New(),
-		UserID:      uuid.New(),
 		Date:        time.Now(),
 		Tags:        []string{"test", "expense"},
 	}
+}
+
+// withSessionUser кладёт в контекст данные сессии ровно так же, как это делает
+// middleware.RequireAPIAuth на группе /api/v1: ключ "user", значение
+// *middleware.SessionData. Без него API-хендлеры не знают автора записи.
+func withSessionUser(c echo.Context, userID uuid.UUID) {
+	c.Set("user", &middleware.SessionData{
+		UserID: userID,
+		Role:   user.RoleAdmin,
+		Email:  "session@example.com",
+	})
 }
 
 func TestTransactionHandler_CreateTransaction_Success(t *testing.T) {
@@ -137,6 +149,7 @@ func TestTransactionHandler_CreateTransaction_Success(t *testing.T) {
 
 	// Arrange
 	req := createValidTransactionRequest()
+	sessionUserID := uuid.New()
 	mockRepo.On("Create", mock.Anything, mock.AnythingOfType("*transaction.Transaction")).Return(nil)
 
 	// Prepare HTTP request
@@ -148,6 +161,7 @@ func TestTransactionHandler_CreateTransaction_Success(t *testing.T) {
 	httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(httpReq, rec)
+	withSessionUser(c, sessionUserID)
 
 	// Act
 	err = handler.CreateTransaction(c)
@@ -164,10 +178,89 @@ func TestTransactionHandler_CreateTransaction_Success(t *testing.T) {
 	assert.Equal(t, req.Type, response.Data.Type)
 	assert.Equal(t, req.Description, response.Data.Description)
 	assert.Equal(t, req.CategoryID, response.Data.CategoryID)
-	assert.Equal(t, req.UserID, response.Data.UserID)
+	assert.Equal(t, sessionUserID, response.Data.UserID)
 	assert.Equal(t, req.Tags, response.Data.Tags)
 
 	mockRepo.AssertExpectations(t)
+}
+
+// TestTransactionHandler_CreateTransaction_IgnoresBodyUserID закрывает вторую
+// половину S-01: автор записи берётся из сессии, а не из тела запроса, поэтому
+// подмена user_id в JSON не даёт писать от чужого имени.
+func TestTransactionHandler_CreateTransaction_IgnoresBodyUserID(t *testing.T) {
+	handler, mockRepo := setupTransactionHandler()
+
+	// Arrange
+	sessionUserID := uuid.New()
+	victimUserID := uuid.New()
+
+	var created *transaction.Transaction
+	mockRepo.On("Create", mock.Anything, mock.AnythingOfType("*transaction.Transaction")).
+		Run(func(args mock.Arguments) {
+			created, _ = args.Get(1).(*transaction.Transaction)
+		}).
+		Return(nil)
+
+	body, err := json.Marshal(map[string]any{
+		"amount":      100.50,
+		"type":        "expense",
+		"description": "Impersonation attempt",
+		"category_id": uuid.New().String(),
+		"user_id":     victimUserID.String(),
+		"date":        time.Now(),
+	})
+	require.NoError(t, err)
+
+	e := echo.New()
+	httpReq := httptest.NewRequest(http.MethodPost, "/transactions", bytes.NewBuffer(body))
+	httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httpReq, rec)
+	withSessionUser(c, sessionUserID)
+
+	// Act
+	err = handler.CreateTransaction(c)
+
+	// Assert
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, rec.Code, "тело ответа: %s", rec.Body.String())
+
+	require.NotNil(t, created)
+	assert.Equal(t, sessionUserID, created.UserID, "запись обязана быть создана от имени владельца сессии")
+	assert.NotEqual(t, victimUserID, created.UserID, "user_id из тела запроса обязан игнорироваться")
+
+	var response handlers.APIResponse[handlers.TransactionResponse]
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, sessionUserID, response.Data.UserID)
+
+	mockRepo.AssertExpectations(t)
+}
+
+// TestTransactionHandler_CreateTransaction_NoSession — страховка на случай,
+// если хендлер когда-нибудь окажется вне группы с RequireAPIAuth: без сессии
+// автора взять неоткуда, поэтому запись создавать нельзя.
+func TestTransactionHandler_CreateTransaction_NoSession(t *testing.T) {
+	handler, mockRepo := setupTransactionHandler()
+
+	body, err := json.Marshal(createValidTransactionRequest())
+	require.NoError(t, err)
+
+	e := echo.New()
+	httpReq := httptest.NewRequest(http.MethodPost, "/transactions", bytes.NewBuffer(body))
+	httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httpReq, rec)
+
+	err = handler.CreateTransaction(c)
+
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "UNAUTHORIZED", response.Error.Code)
+
+	mockRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 }
 
 func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
@@ -240,6 +333,7 @@ func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
 			httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(httpReq, rec)
+			withSessionUser(c, uuid.New())
 
 			// Act
 			err = handler.CreateTransaction(c)
@@ -268,6 +362,7 @@ func TestTransactionHandler_CreateTransaction_RepositoryError(t *testing.T) {
 	httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(httpReq, rec)
+	withSessionUser(c, uuid.New())
 
 	// Act
 	err = handler.CreateTransaction(c)

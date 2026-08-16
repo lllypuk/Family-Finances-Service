@@ -283,12 +283,23 @@ group-middleware на catch-all маршрут группы) — так анон
 - Modify: `internal/services/dto/api_mappers.go`
 - Modify: `internal/services/dto/api_mappers_test.go`
 
-- [ ] написать падающий тест: запрос с чужим `user_id` в теле создаёт запись от имени владельца сессии
-- [ ] удалить поле `UserID` из `CreateTransactionRequest` (`types.go:105`) и `CreateReportRequest` (`types.go:183`)
-- [ ] заменить `req.UserID` на значение из `GetUserFromContext(c)` в `transactions.go` **строки 83 и 130** и в `reports.go`
-- [ ] удалить мёртвый `dto.CreateTransactionAPIRequest` вместе с его тестом (ссылок из production-кода нет)
-- [ ] написать тесты: подмена `user_id` игнорируется; запись создаётся с ID из сессии
-- [ ] `make test` и `make lint` — 0 issues перед задачей 6
+- [x] написать падающий тест: запрос с чужим `user_id` в теле создаёт запись от имени владельца сессии
+- [x] удалить поле `UserID` из `CreateTransactionRequest` (`types.go:105`) и `CreateReportRequest` (`types.go:183`)
+- [x] заменить `req.UserID` на значение из `GetUserFromContext(c)` в `transactions.go` **строки 83 и 130** и в `reports.go`
+- [x] удалить мёртвый `dto.CreateTransactionAPIRequest` вместе с его тестом (ссылок из production-кода нет)
+- [x] написать тесты: подмена `user_id` игнорируется; запись создаётся с ID из сессии
+- [x] `make test` и `make lint` — 0 issues перед задачей 6
+
+ℹ️ ID сессии достаётся хелпером `sessionUserID(c)` в
+`internal/application/handlers/helpers.go` (обёртка над
+`middleware.GetUserFromContext`), отказ отдаёт `respondUnauthorized` с кодом
+`ErrCodeUnauthorized` = `UNAUTHORIZED` — тот же код, что и у `RequireAPIAuth`.
+Проверка сессии стоит **до** `Bind`/валидации: анонимный клиент не должен
+получать подсказки о формате тела. `reports.go` `req.UserID` нигде не читал
+(маршрут отвечает 501), поэтому там добавлена только проверка сессии — задел на
+момент, когда генерация отчётов появится. Регрессия на полном стеке —
+`TestAPIAuth_BodyUserIDIgnored` в `tests/integration/api_auth_test.go`: проверяет
+и ответ, и то, что легло в БД.
 
 ### Task 6: Ролевые проверки на разрушающих маршрутах API
 

@@ -258,6 +258,53 @@ func TestAPIAuth_AuthenticatedRequestsAllowed(t *testing.T) {
 	})
 }
 
+// TestAPIAuth_BodyUserIDIgnored — вторая половина S-01 на полном стеке:
+// аутентифицированный клиент подставляет в тело чужой user_id, а запись всё
+// равно создаётся от имени владельца сессии. Поле user_id из
+// handlers.CreateTransactionRequest удалено (задача 5), поэтому лишний ключ в
+// JSON просто игнорируется при биндинге.
+func TestAPIAuth_BodyUserIDIgnored(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	auth := testServer.Auth(t)
+	fixtures := createAPIFixtures(t, testServer)
+
+	body := mustJSON(t, map[string]any{
+		"amount":      99.0,
+		"type":        "expense",
+		"description": "impersonation attempt",
+		"category_id": fixtures.freeCategoryID,
+		"user_id":     fixtures.userID,
+		"date":        time.Now(),
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	auth.Apply(req)
+	rec := httptest.NewRecorder()
+
+	testServer.Server.Echo().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusCreated, rec.Code, "тело ответа: %s", rec.Body.String())
+
+	var response struct {
+		Data struct {
+			ID     uuid.UUID `json:"id"`
+			UserID uuid.UUID `json:"user_id"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+
+	assert.Equal(t, testServer.AuthUser.ID, response.Data.UserID,
+		"автор записи обязан совпадать с владельцем сессии")
+	assert.NotEqual(t, fixtures.userID, response.Data.UserID,
+		"user_id из тела запроса обязан игнорироваться")
+
+	// Проверяем не только ответ, но и то, что легло в БД.
+	stored, err := testServer.Repos.Transaction.GetByID(context.Background(), response.Data.ID)
+	require.NoError(t, err)
+	assert.Equal(t, testServer.AuthUser.ID, stored.UserID)
+}
+
 type apiWriteCase struct {
 	name   string
 	method string

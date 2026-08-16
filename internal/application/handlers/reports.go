@@ -35,9 +35,17 @@ func NewReportHandler(
 }
 
 func (h *ReportHandler) CreateReport(c echo.Context) error {
+	// Владелец отчёта берётся из сессии, а не из тела запроса (S-01). Сейчас
+	// генерация не реализована и ID никуда не записывается, но проверка сессии
+	// нужна уже здесь: маршрут не должен отвечать анонимному клиенту ничем,
+	// кроме 401, даже когда его тело невалидно.
+	if _, sessionErr := sessionUserID(c); sessionErr != nil {
+		return respondUnauthorized(c)
+	}
+
 	var req CreateReportRequest
 	if err := c.Bind(&req); err != nil {
-		return respondError(c, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body", err.Error())
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest, err.Error())
 	}
 
 	if err := h.validator.Struct(req); err != nil {

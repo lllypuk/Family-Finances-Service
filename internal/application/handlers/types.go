@@ -101,13 +101,14 @@ type CategoryResponse struct {
 	UpdatedAt time.Time  `json:"updated_at"`
 }
 
-// CreateTransactionRequest represents the request payload for creating a new transaction
+// CreateTransactionRequest represents the request payload for creating a new transaction.
+// Поля user_id здесь нет намеренно: автор записи берётся из сессии
+// (см. sessionUserID в helpers.go), иначе клиент писал бы от чужого имени — S-01.
 type CreateTransactionRequest struct {
 	Amount      float64   `json:"amount"         validate:"required,gt=0"`
 	Type        string    `json:"type"           validate:"required,oneof=income expense"`
 	Description string    `json:"description"    validate:"required,min=2,max=200"`
 	CategoryID  uuid.UUID `json:"category_id"    validate:"required"`
-	UserID      uuid.UUID `json:"user_id"        validate:"required"`
 	Date        time.Time `json:"date"           validate:"required"`
 	Tags        []string  `json:"tags,omitempty"`
 }
@@ -180,12 +181,13 @@ type BudgetResponse struct {
 	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
-// CreateReportRequest represents the request payload for creating a new report
+// CreateReportRequest represents the request payload for creating a new report.
+// Как и в CreateTransactionRequest, user_id из тела запроса убран: владелец
+// отчёта определяется сессией, а не клиентом.
 type CreateReportRequest struct {
 	Name      string    `json:"name"       validate:"required,min=2,max=100"`
 	Type      string    `json:"type"       validate:"required,oneof=expenses income budget cash_flow category_breakdown"`
 	Period    string    `json:"period"     validate:"required,oneof=daily weekly monthly yearly custom"`
-	UserID    uuid.UUID `json:"user_id"    validate:"required"`
 	StartDate time.Time `json:"start_date" validate:"required"`
 	EndDate   time.Time `json:"end_date"   validate:"required"`
 }

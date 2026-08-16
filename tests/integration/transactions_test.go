@@ -43,7 +43,6 @@ func TestTransactionHandler_Integration(t *testing.T) {
 			Type:        "expense",
 			Description: "Grocery shopping",
 			CategoryID:  testCategory.ID,
-			UserID:      user.ID,
 			Date:        time.Now(),
 			Tags:        []string{"food", "essentials"},
 		}
@@ -68,7 +67,8 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		assert.Equal(t, request.Type, response.Data.Type)
 		assert.Equal(t, request.Description, response.Data.Description)
 		assert.Equal(t, request.CategoryID, response.Data.CategoryID)
-		assert.Equal(t, request.UserID, response.Data.UserID)
+		// Автор берётся из сессии, а не из тела запроса (S-01, задача 5 плана).
+		assert.Equal(t, testServer.AuthUser.ID, response.Data.UserID)
 		assert.Equal(t, request.Tags, response.Data.Tags)
 		assert.NotZero(t, response.Data.ID)
 		assert.NotZero(t, response.Data.CreatedAt)
@@ -95,7 +95,6 @@ func TestTransactionHandler_Integration(t *testing.T) {
 					Type:        "expense",
 					Description: "Test transaction",
 					CategoryID:  uuid.New(),
-					UserID:      uuid.New(),
 					Date:        time.Now(),
 				},
 				field: "Amount",
@@ -107,7 +106,6 @@ func TestTransactionHandler_Integration(t *testing.T) {
 					Type:        "invalid_type",
 					Description: "Test transaction",
 					CategoryID:  uuid.New(),
-					UserID:      uuid.New(),
 					Date:        time.Now(),
 				},
 				field: "Type",
@@ -119,7 +117,6 @@ func TestTransactionHandler_Integration(t *testing.T) {
 					Type:        "expense",
 					Description: "",
 					CategoryID:  uuid.New(),
-					UserID:      uuid.New(),
 					Date:        time.Now(),
 				},
 				field: "Description",
@@ -176,7 +173,6 @@ func TestTransactionHandler_Integration(t *testing.T) {
 			Type:        "expense",
 			Description: "Test transaction",
 			CategoryID:  uuid.New(), // non-existent category
-			UserID:      user.ID,
 			Date:        time.Now(),
 		}
 
