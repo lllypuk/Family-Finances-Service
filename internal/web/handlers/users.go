@@ -63,7 +63,7 @@ func (h *UserHandler) Index(c echo.Context) error {
 		"Messages":        h.getFlashMessages(c),
 	}
 
-	return c.Render(http.StatusOK, "users/index.html", data)
+	return c.Render(http.StatusOK, "users/index", data)
 }
 
 // New отображает форму добавления нового пользователя
@@ -85,9 +85,12 @@ func (h *UserHandler) New(c echo.Context) error {
 
 	csrfToken, _ := middleware.GetCSRFToken(c)
 
+	// FieldErrors обязателен даже пустым: шаблон зовёт `index .FieldErrors …`,
+	// а index по nil-значению — ошибка исполнения (страница отдавала 500).
 	data := map[string]any{
-		"Title":         "Add Family Member",
-		tplKeyCSRFToken: csrfToken,
+		"Title":           "Add Family Member",
+		tplKeyCSRFToken:   csrfToken,
+		tplKeyFieldErrors: map[string]string{},
 		"Roles": []map[string]any{
 			{"Value": string(user.RoleAdmin), tplKeyLabel: "Admin"},
 			{"Value": string(user.RoleMember), tplKeyLabel: "Member"},
@@ -96,7 +99,7 @@ func (h *UserHandler) New(c echo.Context) error {
 		"Messages": h.getFlashMessages(c),
 	}
 
-	return c.Render(http.StatusOK, "users/new.html", data)
+	return c.Render(http.StatusOK, "users/new", data)
 }
 
 // Create создает нового пользователя в семье
@@ -172,6 +175,10 @@ func (h *UserHandler) userError(c echo.Context, message string, fieldErrors map[
 	form *models.CreateUserForm) error {
 	csrfToken, _ := middleware.GetCSRFToken(c)
 
+	if fieldErrors == nil {
+		fieldErrors = map[string]string{}
+	}
+
 	data := map[string]any{
 		"Title":           "Add Family Member",
 		tplKeyError:       message,
@@ -194,8 +201,8 @@ func (h *UserHandler) userError(c echo.Context, message string, fieldErrors map[
 
 	// Если это HTMX запрос, возвращаем только форму
 	if h.IsHTMXRequest(c) {
-		return c.Render(http.StatusUnprocessableEntity, "users/new_form.html", data)
+		return c.Render(http.StatusUnprocessableEntity, "users/new_form", data)
 	}
 
-	return c.Render(http.StatusUnprocessableEntity, "users/new.html", data)
+	return c.Render(http.StatusUnprocessableEntity, "users/new", data)
 }

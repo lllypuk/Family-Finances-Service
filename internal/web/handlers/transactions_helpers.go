@@ -360,12 +360,18 @@ func (h *TransactionHandler) buildUpdateTransactionDTO(
 	return updateDTO, nil
 }
 
-// renderTransactionFormWithErrors отображает форму с ошибками
+// renderTransactionFormWithErrors отображает форму с ошибками.
+// existing != nil означает форму редактирования: шаблон
+// pages/transactions/edit.html читает .Transaction из корня контекста, и без
+// этого поля перерисовка формы после неудачной валидации отдавала 500.
+// Выбор шаблона идёт по наличию сущности, а не по сравнению с заголовком
+// страницы: заголовок — отображаемый текст, его перевод не должен уводить
+// форму на другой шаблон.
 func (h *TransactionHandler) renderTransactionFormWithErrors(
 	c echo.Context,
 	form webModels.TransactionForm,
 	errors map[string]string,
-	title string,
+	existing *transaction.Transaction,
 ) error {
 	// Получаем категории для селекта
 	categories, err := h.services.Category.GetCategories(c.Request().Context(), nil)
@@ -375,20 +381,24 @@ func (h *TransactionHandler) renderTransactionFormWithErrors(
 
 	categoryOptions := h.buildCategorySelectOptions(categories)
 
+	title := titleNewTransaction
+	template := "pages/transactions/new"
+	if existing != nil {
+		title = titleEditTransaction
+		template = "pages/transactions/edit"
+	}
+
 	data := struct {
 		*PageData
 
 		Form            webModels.TransactionForm
+		Transaction     *transaction.Transaction
 		CategoryOptions []webModels.CategorySelectOption
 	}{
 		PageData:        h.formPageData(c, title, errors),
 		Form:            form,
+		Transaction:     existing,
 		CategoryOptions: categoryOptions,
-	}
-
-	template := "pages/transactions/new"
-	if title == titleEditTransaction {
-		template = "pages/transactions/edit"
 	}
 
 	return h.renderPage(c, template, data)

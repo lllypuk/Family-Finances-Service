@@ -39,10 +39,8 @@
                         {{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}
                     </summary>
                     <ul>
-                        <li><a href="/profile">Профиль</a></li>
                         {{if eq .CurrentUser.Role "admin"}}
                         <li><a href="/users">Пользователи</a></li>
-                        <li><a href="/family/settings">Настройки семьи</a></li>
                         {{end}}
                         <li>
                             <form method="POST" action="/logout" style="margin: 0;">

@@ -533,8 +533,14 @@ func TestReportHandler_PageDataContract(t *testing.T) {
 		c, renderer := newCapturingContext(http.MethodPost, "/reports")
 		withSession(c, userID, user.RoleAdmin)
 
-		// Create возвращает 400 (форма невалидна), но данные шаблону уже отданы.
-		_ = handler.Create(c)
+		// Форма невалидна: хендлер обязан перерисовать её, а не свалиться в 5xx.
+		createErr := handler.Create(c)
+		if createErr != nil {
+			var httpErr *echo.HTTPError
+			require.ErrorAs(t, createErr, &httpErr)
+			assert.Less(t, httpErr.Code, http.StatusInternalServerError,
+				"перерисовка формы с ошибками не должна давать 5xx")
+		}
 
 		out, err := renderer.renderPageData()
 		require.NoError(t, err)

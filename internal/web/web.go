@@ -1,7 +1,9 @@
 package web
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -12,12 +14,21 @@ import (
 	"family-budget-service/internal/web/middleware"
 )
 
+// Paths — каталоги, которые веб-слой резолвит на диске. Оба пути
+// резолвятся относительно рабочего каталога процесса, если заданы
+// относительными, поэтому интеграционные тесты передают абсолютные.
+type Paths struct {
+	TemplatesDir string
+	StaticDir    string
+}
+
 // Server представляет веб-сервер для HTML интерфейса
 type Server struct {
 	echo         *echo.Echo
 	repositories *handlers.Repositories
 	services     *services.Services
 	renderer     *TemplateRenderer
+	staticDir    string
 
 	// Handlers
 	dashboardHandler   *webHandlers.DashboardHandler
@@ -36,11 +47,12 @@ func NewWebServer(
 	e *echo.Echo,
 	repositories *handlers.Repositories,
 	services *services.Services,
-	templatesDir, sessionSecret string,
+	paths Paths,
+	sessionSecret string,
 	isProduction bool,
 ) (*Server, error) {
 	// Создаем рендерер шаблонов
-	renderer, err := NewTemplateRenderer(templatesDir)
+	renderer, err := NewTemplateRenderer(paths.TemplatesDir)
 	if err != nil {
 		return nil, err
 	}
@@ -63,6 +75,7 @@ func NewWebServer(
 		repositories: repositories,
 		services:     services,
 		renderer:     renderer,
+		staticDir:    paths.StaticDir,
 
 		// Инициализируем handlers
 		dashboardHandler:   webHandlers.NewDashboardHandler(repositories, services),
@@ -82,7 +95,7 @@ func NewWebServer(
 // SetupRoutes настраивает маршруты для веб-интерфейса
 func (ws *Server) SetupRoutes() {
 	// Статические файлы
-	ws.echo.Static("/static", "internal/web/static")
+	ws.echo.Static("/static", ws.staticDir)
 
 	// Setup middleware — redirects to /setup if family doesn't exist
 	ws.echo.Use(middleware.RequireSetup(ws.services.Family))
@@ -272,11 +285,17 @@ func customHTTPErrorHandler(renderer *TemplateRenderer) echo.HTTPErrorHandler {
 			"ErrorMessage": msg,
 		}
 
-		// Пытаемся отрендерить страницу ошибки
-		if renderErr := renderer.Render(c.Response(), "pages/error", data, c); renderErr != nil {
+		// Страница ошибки собирается в буфер: запись прямо в c.Response()
+		// отдавала её со статусом 200 (WriteHeader никто не вызывал), то есть
+		// любые 404/500 выглядели для клиента успешными ответами.
+		var buf bytes.Buffer
+		if renderErr := renderer.Render(&buf, "pages/error", data, c); renderErr != nil {
 			// Fallback: простой текстовый ответ
-			_ = c.String(code, "Error "+string(rune(code))+": "+renderErr.Error())
+			_ = c.String(code, fmt.Sprintf("Error %d: %v", code, msg))
+			return
 		}
+
+		_ = c.HTMLBlob(code, buf.Bytes())
 	}
 }
 

@@ -34,6 +34,9 @@ const (
 // работает ещё и признаком шаблона в renderXxxFormWithErrors, поэтому все
 // заголовки живут константами, а не литералами по месту.
 const (
+	titleLogin           = "Вход"
+	titleInvite          = "Регистрация по приглашению"
+	titleDashboard       = "Главная"
 	titleTransactions    = "Транзакции"
 	titleNewTransaction  = "Новая транзакция"
 	titleEditTransaction = "Редактирование транзакции"

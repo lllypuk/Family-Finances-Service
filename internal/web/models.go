@@ -53,16 +53,6 @@ type LoginFormData struct {
 	Password string `json:"password" form:"password" validate:"required,min=6"`
 }
 
-// RegisterFormData содержит данные формы регистрации семьи
-type RegisterFormData struct {
-	FamilyName string `json:"family_name" form:"family_name" validate:"required,min=2,max=100"`
-	Currency   string `json:"currency"    form:"currency"    validate:"required,len=3"`
-	FirstName  string `json:"first_name"  form:"first_name"  validate:"required,min=2,max=50"`
-	LastName   string `json:"last_name"   form:"last_name"   validate:"required,min=2,max=50"`
-	Email      string `json:"email"       form:"email"       validate:"required,email"`
-	Password   string `json:"password"    form:"password"    validate:"required,min=6"`
-}
-
 // IsEmpty проверяет, пусты ли ошибки формы
 func (fe FormErrors) IsEmpty() bool {
 	return len(fe) == 0

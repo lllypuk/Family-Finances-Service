@@ -14,7 +14,6 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/sessions"
 	"github.com/stretchr/testify/require"
 
@@ -98,6 +97,7 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 		SessionSecret: TestSessionSecret,
 		IsProduction:  false,
 		TemplatesDir:  filepath.Join(RepoRoot(t), "internal", "web", "templates"),
+		StaticDir:     filepath.Join(RepoRoot(t), "internal", "web", "static"),
 	}
 
 	// Create HTTP server without observability for testing
@@ -163,7 +163,7 @@ func (s *AuthSession) Apply(req *http.Request) {
 // LoginAs собирает валидную сессию для указанного пользователя без прохода
 // через форму входа: cookie подписывается тем же секретом, что и у тестового
 // сервера, поэтому SessionStore её принимает.
-func LoginAs(t *testing.T, _ *TestServer, u *user.User) *AuthSession {
+func LoginAs(t *testing.T, u *user.User) *AuthSession {
 	t.Helper()
 
 	store := sessions.NewCookieStore([]byte(TestSessionSecret))
@@ -223,7 +223,7 @@ func (ts *TestServer) Auth(t *testing.T) *AuthSession {
 
 	ts.AuthFamily = family
 	ts.AuthUser = admin
-	ts.authSession = LoginAs(t, ts, admin)
+	ts.authSession = LoginAs(t, admin)
 
 	return ts.authSession
 }
@@ -243,7 +243,7 @@ func (ts *TestServer) AuthAs(t *testing.T, role user.Role) (*user.User, *AuthSes
 	member.Role = role
 	require.NoError(t, ts.Repos.User.Create(context.Background(), member))
 
-	return member, LoginAs(t, ts, member)
+	return member, LoginAs(t, member)
 }
 
 // ensureFamily возвращает уже существующую семью или создаёт новую.
@@ -261,17 +261,17 @@ func (ts *TestServer) ensureFamily(t *testing.T) *user.Family {
 	}
 	require.NoError(t, err)
 
-	id, parseErr := uuid.Parse(idStr)
-	require.NoError(t, parseErr)
+	// Возвращаем запись целиком: тестам нужны Name/Currency, а не только ID.
+	family, getErr := ts.Repos.Family.Get(context.Background())
+	require.NoError(t, getErr)
+	require.NotNil(t, family)
 
-	return &user.Family{ID: id}
+	return family
 }
 
-// Cleanup cleans up the test server resources
-func (ts *TestServer) Cleanup() {
-	// Container cleanup is handled by testcontainers automatically
-	// No explicit cleanup needed as testcontainers handles it
-}
+// Cleanup — хук завершения тестового сервера. Явного освобождения ресурсов не
+// требуется: БД in-memory и закрывается своим t.Cleanup из SetupSQLiteTestDB.
+func (ts *TestServer) Cleanup() {}
 
 // CheckTableExists checks if a table exists in the database (for debugging)
 func (ts *TestServer) CheckTableExists(t *testing.T, tableName string) bool {

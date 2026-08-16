@@ -11,10 +11,10 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/observability"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/web"
-	webmw "family-budget-service/internal/web/middleware"
 )
 
 const (
@@ -23,6 +23,8 @@ const (
 
 	// DefaultTemplatesDir — путь к шаблонам по умолчанию (относительно CWD процесса)
 	DefaultTemplatesDir = "internal/web/templates"
+	// DefaultStaticDir — путь к статике по умолчанию (относительно CWD процесса)
+	DefaultStaticDir = "internal/web/static"
 )
 
 type HTTPServer struct {
@@ -56,6 +58,9 @@ type Config struct {
 	// TemplatesDir — путь к каталогу HTML-шаблонов. Пустое значение означает
 	// DefaultTemplatesDir, который резолвится относительно рабочего каталога процесса.
 	TemplatesDir string
+	// StaticDir — путь к каталогу статики (css/js/img). Пустое значение означает
+	// DefaultStaticDir, который так же резолвится относительно CWD процесса.
+	StaticDir string
 }
 
 // NewHTTPServer создает HTTP сервер без observability (для обратной совместимости)
@@ -127,8 +132,15 @@ func NewHTTPServerWithObservability(
 		templatesDir = DefaultTemplatesDir
 	}
 
+	staticDir := config.StaticDir
+	if staticDir == "" {
+		staticDir = DefaultStaticDir
+	}
+
 	webServer, err := web.NewWebServer(
-		e, repositories, services, templatesDir, config.SessionSecret, config.IsProduction,
+		e, repositories, services,
+		web.Paths{TemplatesDir: templatesDir, StaticDir: staticDir},
+		config.SessionSecret, config.IsProduction,
 	)
 	if err != nil {
 		// Не прерываем работу сервера, но ошибку обязательно логируем и сохраняем,
@@ -175,22 +187,22 @@ func (s *HTTPServer) setupRoutes() {
 	// API версионирование.
 	// RequireAPIAuth закрывает всю группу: без валидной сессии — 401 и JSON-ошибка
 	// (находка S-01). /health и веб-маршруты регистрируются выше и не задеты.
-	api := s.echo.Group("/api/v1", webmw.RequireAPIAuth())
+	api := s.echo.Group("/api/v1", handlers.RequireAPIAuth())
 
 	// Ролевая модель API повторяет веб (internal/web/web.go):
-	// управление пользователями — только админ (RequireAdmin), финансовые
-	// разделы — админ и member (RequireAdminOrMember), роль child к ним не
+	// управление пользователями — только админ (там RequireAdmin), финансовые
+	// разделы — админ и member (там RequireAdminOrMember), роль child к ним не
 	// допущена. Удаление категории дополнительно закрыто до админа: через API
 	// оно необратимо и не имеет подтверждения, которое есть в UI.
-	adminOnly := webmw.RequireAPIAdmin()
-	financeAccess := webmw.RequireAPIAdminOrMember()
+	adminOnly := handlers.RequireAPIRole(user.RoleAdmin)
+	financeAccess := handlers.RequireAPIRole(user.RoleAdmin, user.RoleMember)
 
-	// Маршруты для пользователей
-	users := api.Group("/users")
-	users.POST("", s.userHandler.CreateUser, adminOnly)
+	// Маршруты для пользователей — целиком под админом, как /users в вебе.
+	users := api.Group("/users", adminOnly)
+	users.POST("", s.userHandler.CreateUser)
 	users.GET("/:id", s.userHandler.GetUserByID)
-	users.PUT("/:id", s.userHandler.UpdateUser, adminOnly)
-	users.DELETE("/:id", s.userHandler.DeleteUser, adminOnly)
+	users.PUT("/:id", s.userHandler.UpdateUser)
+	users.DELETE("/:id", s.userHandler.DeleteUser)
 
 	// Маршруты для категорий
 	categories := api.Group("/categories", financeAccess)

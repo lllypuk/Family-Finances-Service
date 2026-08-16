@@ -62,6 +62,30 @@
             <div class="grid">
                 <div></div>
                 <div>
+                    {{template "users/new_form" .}}
+                </div>
+                <div></div>
+            </div>
+        </section>
+    </main>
+    
+    <!-- Footer -->
+    <footer class="container">
+        <hr>
+        <div class="grid">
+            <div>
+                <small>© 2025 Семейный бюджет</small>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- Custom JavaScript -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
+{{end}}
+
+{{define "users/new_form"}}
                     <form method="POST" 
                           action="/users" 
                           hx-post="/users"
@@ -173,24 +197,4 @@
                             </button>
                         </div>
                     </form>
-                </div>
-                <div></div>
-            </div>
-        </section>
-    </main>
-    
-    <!-- Footer -->
-    <footer class="container">
-        <hr>
-        <div class="grid">
-            <div>
-                <small>© 2025 Семейный бюджет</small>
-            </div>
-        </div>
-    </footer>
-    
-    <!-- Custom JavaScript -->
-    <script src="/static/js/app.js"></script>
-</body>
-</html>
 {{end}}

@@ -181,24 +181,6 @@ func TestLoginFormData_StructFields(t *testing.T) {
 	assert.Equal(t, "securepassword123", loginForm.Password)
 }
 
-func TestRegisterFormData_StructFields(t *testing.T) {
-	registerForm := &web.RegisterFormData{
-		FamilyName: "Smith Family",
-		Currency:   "USD",
-		FirstName:  "John",
-		LastName:   "Smith",
-		Email:      "john.smith@example.com",
-		Password:   "verysecurepassword",
-	}
-
-	assert.Equal(t, "Smith Family", registerForm.FamilyName)
-	assert.Equal(t, "USD", registerForm.Currency)
-	assert.Equal(t, "John", registerForm.FirstName)
-	assert.Equal(t, "Smith", registerForm.LastName)
-	assert.Equal(t, "john.smith@example.com", registerForm.Email)
-	assert.Equal(t, "verysecurepassword", registerForm.Password)
-}
-
 func TestFormErrors_NilSafety(t *testing.T) {
 	// Test nil safety of methods
 	var errors web.FormErrors

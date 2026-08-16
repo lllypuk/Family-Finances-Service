@@ -180,7 +180,7 @@ func (h *TransactionHandler) Create(c echo.Context) error {
 		}
 
 		// Для обычных запросов возвращаем форму заново
-		return h.renderTransactionFormWithErrors(c, form, validationErrors, titleNewTransaction)
+		return h.renderTransactionFormWithErrors(c, form, validationErrors, nil)
 	}
 
 	// Создаем DTO для сервиса
@@ -286,7 +286,7 @@ func (h *TransactionHandler) Update(c echo.Context) error {
 	}
 
 	// Проверяем, что транзакция существует
-	_, err = h.services.Transaction.GetTransactionByID(c.Request().Context(), transactionID)
+	existingTransaction, err := h.services.Transaction.GetTransactionByID(c.Request().Context(), transactionID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "Transaction not found")
 	}
@@ -313,7 +313,7 @@ func (h *TransactionHandler) Update(c echo.Context) error {
 		}
 
 		// Для обычных запросов возвращаем форму заново
-		return h.renderTransactionFormWithErrors(c, form, validationErrors, titleEditTransaction)
+		return h.renderTransactionFormWithErrors(c, form, validationErrors, existingTransaction)
 	}
 
 	// Создаем DTO для обновления

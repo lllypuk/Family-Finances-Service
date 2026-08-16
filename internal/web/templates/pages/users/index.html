@@ -39,10 +39,8 @@
                         {{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}
                     </summary>
                     <ul>
-                        <li><a href="/profile">Профиль</a></li>
                         {{if eq .CurrentUser.Role "admin"}}
                         <li><a href="/users">Пользователи</a></li>
-                        <li><a href="/family/settings">Настройки семьи</a></li>
                         {{end}}
                         <li>
                             <form method="POST" action="/logout" style="margin: 0;">
@@ -119,15 +117,9 @@
                             {{if $.CanManage}}
                             <td>
                                 <div class="user-actions">
-                                    <a href="/users/{{.ID}}" class="secondary outline" title="Профиль">
-                                        👁️ Профиль
-                                    </a>
                                     {{if ne .ID $.CurrentUser.ID}}
-                                    <a href="/users/{{.ID}}/edit" class="secondary outline" title="Редактировать">
-                                        ✏️ Изменить
-                                    </a>
                                     <button class="danger outline" 
-                                            hx-delete="/htmx/users/{{.ID}}"
+                                            hx-delete="/admin/users/{{.ID}}"
                                             hx-confirm="Вы уверены, что хотите удалить пользователя {{.FirstName}} {{.LastName}}?"
                                             hx-target="closest tr"
                                             hx-swap="outerHTML"
@@ -165,11 +157,6 @@
                 </small>
             </div>
             <div>
-                <small class="text-right">
-                    <a href="/help">Справка</a> • 
-                    <a href="/privacy">Конфиденциальность</a> • 
-                    <a href="/terms">Условия</a>
-                </small>
             </div>
         </div>
     </footer>

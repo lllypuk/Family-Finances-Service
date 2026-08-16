@@ -63,8 +63,11 @@ func NewCategoryHandler(repositories *handlers.Repositories, services *services.
 type categoryFormData struct {
 	*PageData
 
-	Form          *webModels.CategoryForm
-	Category      *category.Category
+	Form *webModels.CategoryForm
+	// Category — view-модель, а не доменная сущность: pages/categories/edit.html
+	// читает .Category.TransactionCount/.TotalAmount/.LastUsed/.SubCategories,
+	// которых у category.Category нет (страница из-за этого отдавала 500).
+	Category      *webModels.CategoryViewModel
 	ParentOptions []webModels.CategorySelectOption
 	DefaultColors []string
 	DefaultIcons  []string
@@ -112,10 +115,9 @@ func (h *CategoryHandler) Index(c echo.Context) error {
 	// шаблон шапки читает `.CurrentUser` и `.CSRFToken` из корня контекста,
 	// а `{{.PageData.X}}` продолжает работать благодаря имени встроенного поля.
 	//
-	// Счётчики и Pagination обязательны: у структуры обращение к отсутствующему
-	// полю — ошибка исполнения шаблона (у map это молча давало «<no value>»
-	// в карточках сводки). Пагинации на странице категорий нет, поэтому
-	// Pagination остаётся nil и `{{if .Pagination}}` ложно, как и раньше.
+	// Счётчики обязательны: у структуры обращение к отсутствующему полю —
+	// ошибка исполнения шаблона (у map это молча давало «<no value>» в
+	// карточках сводки).
 	counts := countCategoriesByKind(categoryTree)
 
 	data := struct {
@@ -126,7 +128,6 @@ func (h *CategoryHandler) Index(c echo.Context) error {
 		IncomeCount            int
 		ExpenseCount           int
 		WithSubcategoriesCount int
-		Pagination             any
 	}{
 		PageData:               h.buildPageData(c, titleCategories),
 		Categories:             categoryTree,
@@ -134,7 +135,6 @@ func (h *CategoryHandler) Index(c echo.Context) error {
 		IncomeCount:            counts.Income,
 		ExpenseCount:           counts.Expense,
 		WithSubcategoriesCount: counts.WithSubcategories,
-		Pagination:             nil,
 	}
 
 	return h.renderPage(c, "pages/categories/index", data)
@@ -332,7 +332,7 @@ func (h *CategoryHandler) Edit(c echo.Context) error {
 	data := categoryFormData{
 		PageData:      h.buildPageData(c, titleEditCategory),
 		Form:          &form,
-		Category:      category,
+		Category:      h.categoryViewModel(c.Request().Context(), category),
 		ParentOptions: parentOptions,
 		DefaultColors: getDefaultCategoryColors(),
 		DefaultIcons:  getDefaultCategoryIcons(),
@@ -434,7 +434,7 @@ func (h *CategoryHandler) handleUpdateValidationError(
 	data := categoryFormData{
 		PageData:      h.formPageData(c, titleEditCategory, validationErrors),
 		Form:          &form,
-		Category:      existingCategory,
+		Category:      h.categoryViewModel(c.Request().Context(), existingCategory),
 		ParentOptions: parentOptions,
 		DefaultColors: getDefaultCategoryColors(),
 		DefaultIcons:  getDefaultCategoryIcons(),
@@ -632,8 +632,13 @@ func (h *CategoryHandler) Search(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
-	// Получаем параметры поиска
+	// Получаем параметры поиска. Форма фильтра на странице категорий шлёт
+	// `name` (то же имя поля, что и у обычного GET-фильтра), внешние вызовы —
+	// короткое `q`.
 	query := strings.TrimSpace(c.QueryParam("q"))
+	if query == "" {
+		query = strings.TrimSpace(c.QueryParam("name"))
+	}
 	categoryType := c.QueryParam("type")
 	parentOnly := c.QueryParam("parent_only") == "true"
 
@@ -734,6 +739,37 @@ func parseTypeFilter(typeString string) *category.Type {
 	default:
 		return nil
 	}
+}
+
+// categoryViewModel собирает view-модель одной категории: статистику по
+// транзакциям, имя родителя и список подкатегорий. Шаблоны страницы категории
+// читают эти поля напрямую из .Category, а доменная сущность их не несёт.
+func (h *CategoryHandler) categoryViewModel(
+	ctx context.Context,
+	entity *category.Category,
+) *webModels.CategoryViewModel {
+	vm := &webModels.CategoryViewModel{}
+	vm.FromDomain(entity)
+	_ = populateCategoryStats(ctx, vm, h.services.Transaction, h.services.Budget)
+
+	allCategories, err := h.services.Category.GetCategories(ctx, nil)
+	if err != nil {
+		return vm
+	}
+
+	for _, cat := range allCategories {
+		if entity.ParentID != nil && cat.ID == *entity.ParentID {
+			vm.ParentName = cat.Name
+		}
+		if cat.ParentID != nil && *cat.ParentID == entity.ID {
+			var subVM webModels.CategoryViewModel
+			subVM.FromDomain(cat)
+			_ = populateCategoryStats(ctx, &subVM, h.services.Transaction, h.services.Budget)
+			vm.SubCategories = append(vm.SubCategories, subVM)
+		}
+	}
+
+	return vm
 }
 
 // convertToViewModels конвертирует domain модели в view модели с родительскими именами и статистикой
@@ -889,6 +925,14 @@ func countCategoriesByKind(viewModels []webModels.CategoryViewModel) categoryCou
 
 		if len(vm.SubCategories) > 0 {
 			counts.WithSubcategories++
+
+			// Обходим дерево целиком: на вход приходят только корневые узлы, а
+			// карточки сводки считают все категории — иначе числа расходятся
+			// со списком под ними.
+			sub := countCategoriesByKind(vm.SubCategories)
+			counts.Income += sub.Income
+			counts.Expense += sub.Expense
+			counts.WithSubcategories += sub.WithSubcategories
 		}
 	}
 

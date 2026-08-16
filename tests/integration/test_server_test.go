@@ -95,3 +95,46 @@ func TestSetupHTTPServer_RequireSetupRedirectsWithoutFamily(t *testing.T) {
 	assert.Equal(t, http.StatusFound, rec.Code)
 	assert.Equal(t, "/setup", rec.Header().Get("Location"))
 }
+
+// TestSetupPage_RendersOnEmptyDatabase — критерий приёмки U-01: на чистой БД
+// /setup отдаёт страницу, а не редирект, и её статика доступна.
+// Раньше путь к статике был зашит относительно рабочего каталога процесса
+// (`internal/web/static`), поэтому интеграционный сервер её вообще не отдавал
+// и регрессию U-01 нечем было поймать.
+func TestSetupPage_RendersOnEmptyDatabase(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+
+	t.Run("SetupPageRendered", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/setup", nil)
+		rec := httptest.NewRecorder()
+
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		require.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
+		assert.Contains(t, rec.Body.String(), "<form")
+	})
+
+	t.Run("StaticAssetsServedWithoutFamily", func(t *testing.T) {
+		for _, asset := range []string{
+			"/static/css/pico.min.css",
+			"/static/css/custom.css",
+			"/static/js/htmx.min.js",
+		} {
+			req := httptest.NewRequest(http.MethodGet, asset, nil)
+			rec := httptest.NewRecorder()
+
+			testServer.Server.Echo().ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code, "GET %s отдал %d", asset, rec.Code)
+		}
+	})
+
+	t.Run("HealthIsPublic", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		rec := httptest.NewRecorder()
+
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
+}
