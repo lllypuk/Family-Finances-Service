@@ -312,12 +312,31 @@ group-middleware на catch-all маршрут группы) — так анон
 - Modify: `internal/web/middleware/auth.go`
 - Create: `tests/integration/api_roles_test.go`
 
-- [ ] написать падающий тест: пользователь с ролью `child` вызывает `DELETE /api/v1/users/:id` → ожидание `403`
-- [ ] добавить API-вариант проверки роли (401/403 JSON вместо редиректа), переиспользуя `hasRequiredRole`
-- [ ] закрыть `RequireAdmin`-эквивалентом: `POST/PUT/DELETE /api/v1/users`, `DELETE /api/v1/categories/:id`
-- [ ] сверить набор маршрутов с ролевой моделью веба, чтобы поведение не расходилось
-- [ ] написать тесты для каждой роли: admin → 200/204, member и child → 403
-- [ ] `make test` и `make lint` — 0 issues перед задачей 7
+- [x] написать падающий тест: пользователь с ролью `child` вызывает `DELETE /api/v1/users/:id` → ожидание `403`
+- [x] добавить API-вариант проверки роли (401/403 JSON вместо редиректа), переиспользуя `hasRequiredRole`
+- [x] закрыть `RequireAdmin`-эквивалентом: `POST/PUT/DELETE /api/v1/users`, `DELETE /api/v1/categories/:id`
+- [x] сверить набор маршрутов с ролевой моделью веба, чтобы поведение не расходилось
+- [x] написать тесты для каждой роли: admin → 200/204, member и child → 403
+- [x] `make test` и `make lint` — 0 issues перед задачей 7
+
+ℹ️ Добавлены `RequireAPIRole(roles…)` и ярлыки `RequireAPIAdmin` /
+`RequireAPIAdminOrMember` в `internal/web/middleware/auth.go`: нет сессии — 401,
+роль не подходит — 403, тело в обоих случаях `apiErrorResponse` (общий хелпер
+`respondAPIError`, код `FORBIDDEN` / `Insufficient permissions`).
+Сверка с вебом дала на один шаг больше, чем перечислено в задаче: раз финансовые
+разделы веба закрыты `RequireAdminOrMember` (`web.go:158-208`), те же группы
+`/api/v1/{categories,transactions,budgets,reports}` закрыты
+`RequireAPIAdminOrMember` — иначе роль `child` через API делает то, что ей
+запрещено в UI. `GET /api/v1/users/:id` намеренно оставлен всем
+аутентифицированным (в задаче названы только POST/PUT/DELETE).
+Единственное осознанное расхождение с вебом: `DELETE /api/v1/categories/:id`
+требует админа, тогда как в UI категорию удаляет и `member`, — так предписано
+задачей, и через API удаление необратимо и без подтверждения.
+Тесты: `tests/integration/api_roles_test.go` (матрица ролей на полном стеке,
+красная фаза зафиксирована в шапке файла) и юнит-тесты `RequireAPIRole` в
+`internal/web/middleware/auth_test.go`. Хелпер `TestServer.AuthAs(t, role)`
+добавлен в `internal/testhelpers/integration_server.go` — заводит пользователя с
+нужной ролью в **той же** семье.
 
 ### Task 7: Перевыпуск CSRF-токена при логине (S-02)
 

@@ -228,6 +228,24 @@ func (ts *TestServer) Auth(t *testing.T) *AuthSession {
 	return ts.authSession
 }
 
+// AuthAs создаёт нового пользователя с указанной ролью в той же тестовой семье
+// и возвращает его вместе с сессией. Вторую семью заводить нельзя (см.
+// ensureFamily), поэтому ролевые тесты добавляют пользователей в существующую.
+func (ts *TestServer) AuthAs(t *testing.T, role user.Role) (*user.User, *AuthSession) {
+	t.Helper()
+
+	family := ts.ensureFamily(t)
+	if ts.AuthFamily == nil {
+		ts.AuthFamily = family
+	}
+
+	member := CreateTestUser(family.ID)
+	member.Role = role
+	require.NoError(t, ts.Repos.User.Create(context.Background(), member))
+
+	return member, LoginAs(t, ts, member)
+}
+
 // ensureFamily возвращает уже существующую семью или создаёт новую.
 // Вторую семью заводить нельзя: SQLite-репозитории следуют однофамильной модели
 // и берут family_id как `SELECT id FROM families LIMIT 1`.

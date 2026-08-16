@@ -22,6 +22,10 @@ const (
 	apiErrCodeUnauthorized = "UNAUTHORIZED"
 	// apiErrMessageUnauthorized — сообщение, парное к apiErrCodeUnauthorized.
 	apiErrMessageUnauthorized = "Authentication required"
+	// apiErrCodeForbidden — код ошибки для сессии с недостаточной ролью.
+	apiErrCodeForbidden = "FORBIDDEN"
+	// apiErrMessageForbidden — сообщение, парное к apiErrCodeForbidden.
+	apiErrMessageForbidden = "Insufficient permissions"
 	// apiVersion совпадает с handlers.apiVersion — версия API в meta ответа.
 	apiVersion = "v1"
 )
@@ -111,12 +115,55 @@ func RequireAPIAuth() echo.MiddlewareFunc {
 	}
 }
 
+// RequireAPIRole middleware — аналог RequireRole для группы /api/v1.
+// Веб-вариант отдаёт HTML «Access denied», программному клиенту нужен JSON,
+// поэтому здесь: нет сессии — 401, роль не подходит — 403, оба раза телом
+// служит apiErrorResponse. Ставится после RequireAPIAuth, который кладёт
+// SessionData в контекст.
+func RequireAPIRole(roles ...user.Role) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			sessionData, err := GetUserFromContext(c)
+			if err != nil {
+				return respondAPIUnauthorized(c)
+			}
+
+			if !hasRequiredRole(sessionData.Role, roles) {
+				return respondAPIForbidden(c)
+			}
+
+			return next(c)
+		}
+	}
+}
+
+// RequireAPIAdmin middleware — API-ярлык для админов (аналог RequireAdmin).
+func RequireAPIAdmin() echo.MiddlewareFunc {
+	return RequireAPIRole(user.RoleAdmin)
+}
+
+// RequireAPIAdminOrMember middleware — API-аналог RequireAdminOrMember:
+// финансовые разделы, закрытые в вебе от роли child.
+func RequireAPIAdminOrMember() echo.MiddlewareFunc {
+	return RequireAPIRole(user.RoleAdmin, user.RoleMember)
+}
+
 // respondAPIUnauthorized отдаёт 401 с JSON-телом в формате API-хендлеров.
 func respondAPIUnauthorized(c echo.Context) error {
-	return c.JSON(http.StatusUnauthorized, apiErrorResponse{
+	return respondAPIError(c, http.StatusUnauthorized, apiErrCodeUnauthorized, apiErrMessageUnauthorized)
+}
+
+// respondAPIForbidden отдаёт 403 с JSON-телом в формате API-хендлеров.
+func respondAPIForbidden(c echo.Context) error {
+	return respondAPIError(c, http.StatusForbidden, apiErrCodeForbidden, apiErrMessageForbidden)
+}
+
+// respondAPIError собирает JSON-ошибку API.
+func respondAPIError(c echo.Context, status int, code, message string) error {
+	return c.JSON(status, apiErrorResponse{
 		Error: apiErrorDetail{
-			Code:    apiErrCodeUnauthorized,
-			Message: apiErrMessageUnauthorized,
+			Code:    code,
+			Message: message,
 		},
 		Meta: apiErrorMeta{
 			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),

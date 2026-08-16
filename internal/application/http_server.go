@@ -177,23 +177,31 @@ func (s *HTTPServer) setupRoutes() {
 	// (находка S-01). /health и веб-маршруты регистрируются выше и не задеты.
 	api := s.echo.Group("/api/v1", webmw.RequireAPIAuth())
 
+	// Ролевая модель API повторяет веб (internal/web/web.go):
+	// управление пользователями — только админ (RequireAdmin), финансовые
+	// разделы — админ и member (RequireAdminOrMember), роль child к ним не
+	// допущена. Удаление категории дополнительно закрыто до админа: через API
+	// оно необратимо и не имеет подтверждения, которое есть в UI.
+	adminOnly := webmw.RequireAPIAdmin()
+	financeAccess := webmw.RequireAPIAdminOrMember()
+
 	// Маршруты для пользователей
 	users := api.Group("/users")
-	users.POST("", s.userHandler.CreateUser)
+	users.POST("", s.userHandler.CreateUser, adminOnly)
 	users.GET("/:id", s.userHandler.GetUserByID)
-	users.PUT("/:id", s.userHandler.UpdateUser)
-	users.DELETE("/:id", s.userHandler.DeleteUser)
+	users.PUT("/:id", s.userHandler.UpdateUser, adminOnly)
+	users.DELETE("/:id", s.userHandler.DeleteUser, adminOnly)
 
 	// Маршруты для категорий
-	categories := api.Group("/categories")
+	categories := api.Group("/categories", financeAccess)
 	categories.POST("", s.categoryHandler.CreateCategory)
 	categories.GET("", s.categoryHandler.GetCategories)
 	categories.GET("/:id", s.categoryHandler.GetCategoryByID)
 	categories.PUT("/:id", s.categoryHandler.UpdateCategory)
-	categories.DELETE("/:id", s.categoryHandler.DeleteCategory)
+	categories.DELETE("/:id", s.categoryHandler.DeleteCategory, adminOnly)
 
 	// Маршруты для транзакций
-	transactions := api.Group("/transactions")
+	transactions := api.Group("/transactions", financeAccess)
 	transactions.POST("", s.transactionHandler.CreateTransaction)
 	transactions.GET("", s.transactionHandler.GetTransactions)
 	transactions.GET("/:id", s.transactionHandler.GetTransactionByID)
@@ -201,7 +209,7 @@ func (s *HTTPServer) setupRoutes() {
 	transactions.DELETE("/:id", s.transactionHandler.DeleteTransaction)
 
 	// Маршруты для бюджетов
-	budgets := api.Group("/budgets")
+	budgets := api.Group("/budgets", financeAccess)
 	budgets.POST("", s.budgetHandler.CreateBudget)
 	budgets.GET("", s.budgetHandler.GetBudgets)
 	budgets.GET("/:id", s.budgetHandler.GetBudgetByID)
@@ -209,7 +217,7 @@ func (s *HTTPServer) setupRoutes() {
 	budgets.DELETE("/:id", s.budgetHandler.DeleteBudget)
 
 	// Маршруты для отчетов
-	reports := api.Group("/reports")
+	reports := api.Group("/reports", financeAccess)
 	reports.POST("", s.reportHandler.CreateReport)
 	reports.GET("", s.reportHandler.GetReports)
 	reports.GET("/:id", s.reportHandler.GetReportByID)

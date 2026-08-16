@@ -287,6 +287,128 @@ func TestRequireAPIAuth_RealSessionStore(t *testing.T) {
 	assert.Equal(t, expectedUser.Email, authRec.Body.String())
 }
 
+// --- RequireAPIRole (задача 6 плана docs/plans/20260816-deployment-blockers.md) ---
+
+func TestRequireAPIRole_RolesMatrix(t *testing.T) {
+	tests := []struct {
+		name     string
+		role     user.Role
+		required []user.Role
+		wantCode int
+		wantNext bool
+	}{
+		{
+			name:     "admin passes admin-only route",
+			role:     user.RoleAdmin,
+			required: []user.Role{user.RoleAdmin},
+			wantCode: http.StatusOK,
+			wantNext: true,
+		},
+		{
+			name:     "member rejected on admin-only route",
+			role:     user.RoleMember,
+			required: []user.Role{user.RoleAdmin},
+			wantCode: http.StatusForbidden,
+		},
+		{
+			name:     "child rejected on admin-only route",
+			role:     user.RoleChild,
+			required: []user.Role{user.RoleAdmin},
+			wantCode: http.StatusForbidden,
+		},
+		{
+			name:     "member passes finance route",
+			role:     user.RoleMember,
+			required: []user.Role{user.RoleAdmin, user.RoleMember},
+			wantCode: http.StatusOK,
+			wantNext: true,
+		},
+		{
+			name:     "child rejected on finance route",
+			role:     user.RoleChild,
+			required: []user.Role{user.RoleAdmin, user.RoleMember},
+			wantCode: http.StatusForbidden,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := echo.New()
+			req := httptest.NewRequest(http.MethodDelete, "/api/v1/users/42", nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
+			c.Set("user", &middleware.SessionData{
+				UserID: uuid.New(),
+				Role:   tt.role,
+				Email:  "user@example.com",
+			})
+
+			nextCalled := false
+			handler := middleware.RequireAPIRole(tt.required...)(func(c echo.Context) error {
+				nextCalled = true
+				return c.NoContent(http.StatusOK)
+			})
+
+			require.NoError(t, handler(c))
+			assert.Equal(t, tt.wantCode, rec.Code)
+			assert.Equal(t, tt.wantNext, nextCalled)
+		})
+	}
+}
+
+func TestRequireAPIRole_Forbidden_ReturnsJSON(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/users/42", nil)
+	// Даже с заголовком HTMX API обязан отвечать JSON, а не HTML "Access denied".
+	req.Header.Set("Hx-Request", "true")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	c.Set("user", &middleware.SessionData{UserID: uuid.New(), Role: user.RoleChild})
+
+	handler := middleware.RequireAPIAdmin()(func(c echo.Context) error {
+		return c.NoContent(http.StatusOK)
+	})
+
+	require.NoError(t, handler(c))
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+	assert.Contains(t, rec.Header().Get(echo.HeaderContentType), echo.MIMEApplicationJSON)
+	assert.NotContains(t, rec.Body.String(), "Access denied")
+
+	var body apiErrorBody
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, "FORBIDDEN", body.Error.Code)
+	assert.Equal(t, "Insufficient permissions", body.Error.Message)
+	assert.Equal(t, "v1", body.Meta.Version)
+	assert.False(t, body.Meta.Timestamp.IsZero())
+}
+
+// TestRequireAPIRole_NoSession_Returns401 — порядок middleware может измениться,
+// поэтому ролевая проверка без сессии обязана отвечать 401, а не 403 и не
+// редиректом на /login, как это делает веб-вариант RequireRole.
+func TestRequireAPIRole_NoSession_Returns401(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/users/42", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	nextCalled := false
+	handler := middleware.RequireAPIAdminOrMember()(func(c echo.Context) error {
+		nextCalled = true
+		return c.NoContent(http.StatusOK)
+	})
+
+	require.NoError(t, handler(c))
+	assert.False(t, nextCalled)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	assert.Empty(t, rec.Header().Get("Location"))
+
+	var body apiErrorBody
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, "UNAUTHORIZED", body.Error.Code)
+}
+
 func TestRequireRole_ValidRole(t *testing.T) {
 	tests := []struct {
 		name         string
