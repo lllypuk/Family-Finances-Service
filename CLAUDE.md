@@ -83,8 +83,9 @@ setup→ready transition needs no restart.
 - **Web UI** (`internal/web/`): session cookie auth. `middleware.SessionStore` (gorilla/sessions cookie store,
   session name `family-budget-session`) + `middleware.CSRFProtection`. Routes are grouped in `web.go`:
   `RequireAuth()` + `RequireActiveUser(services.User)` for the protected group, `RequireAdmin()` for `/users` and
-  `/admin`, `RequireAdminOrMember()` for finance pages. Session data lands in the Echo context under key `"user"`
-  (`middleware.GetUserFromContext`). `RequireActiveUser` re-reads the session owner from the DB on every protected
+  `/admin`, `RequireAdminOrMember()` for finance pages. Session data lands in the Echo context under
+  `middleware.ContextUserKey` (`"user"`) — one exported constant shared with the API middleware; read it back with
+  `middleware.GetUserFromContext`. `RequireActiveUser` re-reads the session owner from the DB on every protected
   request (`middleware.RevalidateSessionUser`): the cookie store has no server-side session id, so without it a
   deleted or downgraded user kept access for the full 24h `SessionTimeout`. The role used by the role gates therefore
   comes from the DB, not from the signed cookie. `SessionStore`'s `Secure` flag is `COOKIE_SECURE`
@@ -94,13 +95,16 @@ setup→ready transition needs no restart.
   The group is registered as `s.echo.Group("/api/v1", RequireAPIAuth(), RequireAPIActiveUser(services.User))` —
   the *same* session cookie as the web
   UI is the only credential; there are no API tokens. No session → `401` + JSON
-  `{"error":{"code":"UNAUTHORIZED",…},"meta":{…}}`. Per-route role gates mirror the web:
-  `RequireAPIAdmin` on `POST/PUT/DELETE /api/v1/users` and `DELETE /api/v1/categories/:id`,
-  `RequireAPIAdminOrMember` on the categories/transactions/budgets/reports groups
-  (wrong role → `403 FORBIDDEN`). All of it lives in `internal/web/middleware/auth.go`.
+  `{"error":{"code":"UNAUTHORIZED",…},"meta":{…}}`. Per-route role gates mirror the web and are built from a single
+  `RequireAPIRole(roles ...user.Role)`: `http_server.go` declares `adminOnly := RequireAPIRole(user.RoleAdmin)` for
+  the `/api/v1/users` group and `DELETE /api/v1/categories/:id`, and
+  `financeAccess := RequireAPIRole(user.RoleAdmin, user.RoleMember)` for the categories/transactions/budgets/reports
+  groups (wrong role → `403 FORBIDDEN`). All three API middlewares live in
+  `internal/application/handlers/api_auth.go` and reuse the session primitives from `internal/web/middleware`.
   **Middleware order matters:** the global `CSRFProtection` (`e.Use` in `web.go`) runs *before* the group
   middleware, so an anonymous write without `X-Csrf-Token` is `403`, and `401` only once a valid token is present.
-  Handlers take the author from the session (`sessionUserID` in `handlers/helpers.go`) — `UserID` is **not** a field
+  Handlers take the author from the session (`middleware.GetUserFromContext`, see `TransactionHandler.CreateTransaction`)
+  — `UserID` is **not** a field
   of `CreateTransactionRequest`/`CreateReportRequest`, so sending it in the body does nothing.
   `POST /api/v1/reports` intentionally returns `501 Not Implemented`; report *generation* is only exposed through the
   web UI. Stored-report list/get/delete work.

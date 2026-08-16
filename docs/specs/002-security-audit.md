@@ -95,19 +95,23 @@ curl -s -b cj.txt -X DELETE 127.0.0.1:8090/api/v1/transactions/$TX -H "X-Csrf-To
 
 ### ✅ Что сделано
 
-- Группа закрыта целиком: `s.echo.Group("/api/v1", webmw.RequireAPIAuth())`
+- Группа закрыта целиком:
+  `s.echo.Group("/api/v1", handlers.RequireAPIAuth(), handlers.RequireAPIActiveUser(s.services.User))`
   (`internal/application/http_server.go`). Без сессии — `401` и JSON
   `{"error":{"code":"UNAUTHORIZED","message":"Authentication required"},"meta":{…}}`.
-- Ролевая модель API приведена к веб-модели: `RequireAPIAdmin` на
-  `POST/PUT/DELETE /api/v1/users` и `DELETE /api/v1/categories/:id`,
-  `RequireAPIAdminOrMember` на группы `categories`, `transactions`, `budgets`,
-  `reports`. Роль `child` получает `403 FORBIDDEN`.
+- Ролевая модель API приведена к веб-модели одним `RequireAPIRole(roles …)`:
+  `adminOnly` (только `admin`) на `POST/PUT/DELETE /api/v1/users` и
+  `DELETE /api/v1/categories/:id`, `financeAccess` (`admin` + `member`) на группы
+  `categories`, `transactions`, `budgets`, `reports`. Роль `child` получает
+  `403 FORBIDDEN`. Все три middleware живут в
+  `internal/application/handlers/api_auth.go`.
 - `UserID` **удалён** из `CreateTransactionRequest` и `CreateReportRequest`;
-  автор берётся из сессии (`sessionUserID` в
-  `internal/application/handlers/helpers.go`). Подмена `user_id` в теле теперь
+  автор берётся из сессии (`middleware.GetUserFromContext` в
+  `TransactionHandler.CreateTransaction`). Подмена `user_id` в теле теперь
   невозможна — поля просто нет.
 - Регрессионные тесты: `tests/integration/api_auth_test.go`,
   `tests/integration/api_roles_test.go`, юнит-тесты в
+  `internal/application/handlers/api_auth_test.go` и
   `internal/web/middleware/auth_test.go`.
 - Временная мера «закрыть `/api/v1` на reverse proxy» больше не нужна.
 
