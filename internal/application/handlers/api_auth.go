@@ -11,10 +11,6 @@ import (
 	"family-budget-service/internal/web/middleware"
 )
 
-// contextUserKey — ключ, под которым middleware веба и API кладут *SessionData
-// в контекст Echo; middleware.GetUserFromContext читает его же.
-const contextUserKey = "user"
-
 // RequireAPIAuth middleware — аналог middleware.RequireAuth для группы /api/v1.
 // Отличие принципиальное: программному клиенту не нужен редирект на /login,
 // поэтому при отсутствии валидной сессии возвращается 401 и JSON-ошибка в том
@@ -29,7 +25,7 @@ func RequireAPIAuth() echo.MiddlewareFunc {
 				return respondUnauthorized(c)
 			}
 
-			c.Set(contextUserKey, sessionData)
+			c.Set(middleware.ContextUserKey, sessionData)
 			return next(c)
 		}
 	}
@@ -47,9 +43,7 @@ func RequireAPIActiveUser(lookup middleware.SessionUserLookup) echo.MiddlewareFu
 				if !errors.Is(err, middleware.ErrSessionUserGone) {
 					// Сбой БД, а не отзыв доступа: 401 заставил бы клиента
 					// выбросить рабочую сессию и перелогиниться.
-					c.Logger().Errorf("session revalidation failed on %s %s: %v",
-						c.Request().Method, c.Request().URL.Path, err)
-
+					// Детали уже записаны в middleware.RevalidateSessionUser.
 					return respondError(c, http.StatusInternalServerError,
 						ErrCodeInternal, ErrMessageInternal)
 				}
@@ -57,7 +51,7 @@ func RequireAPIActiveUser(lookup middleware.SessionUserLookup) echo.MiddlewareFu
 				return respondUnauthorized(c)
 			}
 
-			c.Set(contextUserKey, fresh)
+			c.Set(middleware.ContextUserKey, fresh)
 			return next(c)
 		}
 	}

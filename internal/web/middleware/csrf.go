@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/gorilla/sessions"
-	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
 )
 
@@ -34,7 +33,7 @@ func CSRFProtection() echo.MiddlewareFunc {
 
 			// Для POST, PUT, DELETE запросов проверяем токен
 			if err := validateCSRFToken(c); err != nil {
-				if c.Request().Header.Get("Hx-Request") == HTMXRequestValue {
+				if IsHTMXRequest(c) {
 					return c.JSON(http.StatusForbidden, map[string]string{
 						"error": "CSRF token validation failed",
 					})
@@ -57,7 +56,7 @@ func CSRFProtection() echo.MiddlewareFunc {
 // Поэтому нечитаемая сессия трактуется как новая: ниже в неё кладётся свежий
 // токен и sess.Save перезаписывает cookie.
 func ensureCSRFToken(c echo.Context) error {
-	sess, err := getSession(c)
+	sess, err := sessionOrNew(c)
 	if sess == nil {
 		return err
 	}
@@ -67,14 +66,25 @@ func ensureCSRFToken(c echo.Context) error {
 		return nil
 	}
 
-	// Генерируем новый токен
+	_, err = setFreshCSRFToken(c, sess)
+	return err
+}
+
+// setFreshCSRFToken выпускает новый токен, кладёт его в сессию и сохраняет
+// cookie. Единственное место, где эти три шага идут вместе: ensureCSRFToken,
+// RegenerateCSRFToken и запасная ветка GetCSRFToken делают ровно это.
+func setFreshCSRFToken(c echo.Context, sess *sessions.Session) (string, error) {
 	token, err := generateCSRFToken()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	sess.Values[CSRFTokenKey] = token
-	return sess.Save(c.Request(), c.Response())
+	if saveErr := sess.Save(c.Request(), c.Response()); saveErr != nil {
+		return "", saveErr
+	}
+
+	return token, nil
 }
 
 // validateCSRFToken проверяет CSRF токен.
@@ -82,7 +92,7 @@ func ensureCSRFToken(c echo.Context) error {
 // Нерасшифровываемая cookie (см. ensureCSRFToken) — это не 500, а обычный
 // отказ: сессии нет, значит и токена в ней нет.
 func validateCSRFToken(c echo.Context) error {
-	sess, err := getSession(c)
+	sess, err := sessionOrNew(c)
 	if sess == nil {
 		return err
 	}
@@ -130,22 +140,12 @@ func validateCSRFToken(c echo.Context) error {
 // существует, поэтому от фиксации сессии (S-02) защищает именно перевыпуск
 // токена: полученный до входа токен перестаёт подходить к сессии после входа.
 func RegenerateCSRFToken(c echo.Context) (string, error) {
-	sess, err := getSession(c)
+	sess, err := sessionOrNew(c)
 	if sess == nil {
 		return "", err
 	}
 
-	token, err := generateCSRFToken()
-	if err != nil {
-		return "", err
-	}
-
-	sess.Values[CSRFTokenKey] = token
-	if saveErr := sess.Save(c.Request(), c.Response()); saveErr != nil {
-		return "", saveErr
-	}
-
-	return token, nil
+	return setFreshCSRFToken(c, sess)
 }
 
 // GetCSRFToken возвращает CSRF токен для использования в шаблонах
@@ -153,7 +153,7 @@ func GetCSRFToken(c echo.Context) (string, error) {
 	// Нечитаемая cookie (чужой/провёрнутый SESSION_SECRET) — не ошибка
 	// рендеринга: gorilla отдаёт вместе с ней пригодную новую сессию,
 	// в которую ниже кладётся свежий токен. См. ensureCSRFToken.
-	sess, err := getSession(c)
+	sess, err := sessionOrNew(c)
 	if sess == nil {
 		return "", err
 	}
@@ -161,17 +161,7 @@ func GetCSRFToken(c echo.Context) (string, error) {
 	token, exists := sess.Values[CSRFTokenKey]
 	if !exists || token == nil {
 		// Генерируем новый токен если его нет
-		newToken, tokenErr := generateCSRFToken()
-		if tokenErr != nil {
-			return "", tokenErr
-		}
-
-		sess.Values[CSRFTokenKey] = newToken
-		if saveErr := sess.Save(c.Request(), c.Response()); saveErr != nil {
-			return "", saveErr
-		}
-
-		return newToken, nil
+		return setFreshCSRFToken(c, sess)
 	}
 
 	tokenStr, ok := token.(string)
@@ -189,9 +179,4 @@ func generateCSRFToken() (string, error) {
 		return "", err
 	}
 	return base64.URLEncoding.EncodeToString(bytes), nil
-}
-
-// getSession - вспомогательная функция для получения сессии
-func getSession(c echo.Context) (*sessions.Session, error) {
-	return session.Get(SessionName, c)
 }

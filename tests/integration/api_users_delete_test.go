@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -57,9 +58,9 @@ func TestAPIUsers_DeleteLastAdminRejected(t *testing.T) {
 		require.NoError(t, testServer.Repos.User.Update(context.Background(), other))
 	}
 
-	// Сервис вызывается напрямую: через API тот же запрос упёрся бы в запрет
-	// самоудаления раньше, а проверить надо именно защиту последнего админа.
-	err = testServer.Services.User.DeleteUser(context.Background(), admin.ID)
+	// Сервис вызывается напрямую от имени другого пользователя: самоудаление
+	// сервис отвергает раньше, а проверить надо именно защиту последнего админа.
+	err = testServer.Services.User.DeleteUser(context.Background(), admin.ID, uuid.New())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "last admin")
 

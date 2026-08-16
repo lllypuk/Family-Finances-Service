@@ -103,8 +103,8 @@ func (m *MockUserService) UpdateUser(ctx context.Context, id uuid.UUID, req dto.
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
-func (m *MockUserService) DeleteUser(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockUserService) DeleteUser(ctx context.Context, id, actorID uuid.UUID) error {
+	args := m.Called(ctx, id, actorID)
 	return args.Error(0)
 }
 
@@ -498,7 +498,7 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 			name:   "Success - User deleted",
 			userID: userID.String(),
 			mockSetup: func(service *MockUserService) {
-				service.On("DeleteUser", mock.Anything, userID).Return(nil)
+				service.On("DeleteUser", mock.Anything, userID, mock.Anything).Return(nil)
 			},
 			expectedStatus: http.StatusNoContent,
 			expectedBody: func(t *testing.T, body string) {
@@ -524,7 +524,7 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 			name:   "Error - User not found",
 			userID: userID.String(),
 			mockSetup: func(service *MockUserService) {
-				service.On("DeleteUser", mock.Anything, userID).Return(errors.New("database error"))
+				service.On("DeleteUser", mock.Anything, userID, mock.Anything).Return(errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody: func(t *testing.T, body string) {
@@ -600,6 +600,9 @@ func deleteUserRequest(
 func TestUserHandler_DeleteUser_SelfDeletionRejected(t *testing.T) {
 	service := &MockUserService{}
 	selfID := uuid.New()
+	// Само правило живёт в userService.DeleteUser (сюда приходит sentinel);
+	// от API требуется 400 с кодом CANNOT_DELETE_SELF, а не 500.
+	service.On("DeleteUser", mock.Anything, selfID, selfID).Return(services.ErrCannotDeleteSelf)
 
 	rec := deleteUserRequest(t, service, selfID, selfID)
 
@@ -609,7 +612,7 @@ func TestUserHandler_DeleteUser_SelfDeletionRejected(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 	assert.Equal(t, "CANNOT_DELETE_SELF", response.Error.Code)
 
-	service.AssertNotCalled(t, "DeleteUser", mock.Anything, mock.Anything)
+	service.AssertExpectations(t)
 }
 
 // Последний администратор защищён в userService.DeleteUser; API обязан
@@ -617,7 +620,7 @@ func TestUserHandler_DeleteUser_SelfDeletionRejected(t *testing.T) {
 func TestUserHandler_DeleteUser_LastAdminRejected(t *testing.T) {
 	service := &MockUserService{}
 	targetID := uuid.New()
-	service.On("DeleteUser", mock.Anything, targetID).Return(services.ErrLastAdmin)
+	service.On("DeleteUser", mock.Anything, targetID, mock.Anything).Return(services.ErrLastAdmin)
 
 	rec := deleteUserRequest(t, service, uuid.New(), targetID)
 

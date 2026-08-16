@@ -188,8 +188,18 @@ func (s *userService) UpdateUser(ctx context.Context, id uuid.UUID, req dto.Upda
 	return existingUser, nil
 }
 
-// DeleteUser deletes a user by ID
-func (s *userService) DeleteUser(ctx context.Context, id uuid.UUID) error {
+// DeleteUser deletes a user by ID.
+// actorID — владелец сессии, от имени которого выполняется удаление: правило
+// «себя удалить нельзя» — бизнес-правило, а не деталь конкретной поверхности,
+// поэтому оно живёт здесь, а веб и API только раскладывают ErrCannotDeleteSelf
+// по своим форматам ответа (как уже сделано для ErrLastAdmin).
+func (s *userService) DeleteUser(ctx context.Context, id, actorID uuid.UUID) error {
+	// Самоудаление: администратор мгновенно теряет и сессию, и доступ к
+	// консоли, а в однофамильной модели вернуть его некому.
+	if id == actorID {
+		return ErrCannotDeleteSelf
+	}
+
 	// Check if user exists
 	existingUser, err := s.GetUserByID(ctx, id)
 	if err != nil {

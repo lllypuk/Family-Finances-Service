@@ -64,9 +64,6 @@ func NewWebServer(
 	e.Use(middleware.SessionStore(sessionSecret, cookieSecure))
 	e.Use(middleware.CSRFProtection())
 
-	// Тот же флаг Secure на flash-cookie.
-	webHandlers.SetCookieSecureForProduction(cookieSecure)
-
 	// Настраиваем обработчик ошибок
 	e.HTTPErrorHandler = customHTTPErrorHandler(renderer)
 
@@ -78,15 +75,15 @@ func NewWebServer(
 		staticDir:    paths.StaticDir,
 
 		// Инициализируем handlers
-		dashboardHandler:   webHandlers.NewDashboardHandler(repositories, services),
-		authHandler:        webHandlers.NewAuthHandler(repositories, services),
-		userHandler:        webHandlers.NewUserHandler(repositories, services),
-		adminHandler:       webHandlers.NewAdminHandler(repositories, services),
-		categoryHandler:    webHandlers.NewCategoryHandler(repositories, services),
-		transactionHandler: webHandlers.NewTransactionHandler(repositories, services),
-		budgetHandler:      webHandlers.NewBudgetHandler(repositories, services),
-		reportHandler:      webHandlers.NewReportHandler(repositories, services),
-		backupHandler:      webHandlers.NewBackupHandler(repositories, services),
+		dashboardHandler:   webHandlers.NewDashboardHandler(repositories, services, cookieSecure),
+		authHandler:        webHandlers.NewAuthHandler(repositories, services, cookieSecure),
+		userHandler:        webHandlers.NewUserHandler(repositories, services, cookieSecure),
+		adminHandler:       webHandlers.NewAdminHandler(repositories, services, cookieSecure),
+		categoryHandler:    webHandlers.NewCategoryHandler(repositories, services, cookieSecure),
+		transactionHandler: webHandlers.NewTransactionHandler(repositories, services, cookieSecure),
+		budgetHandler:      webHandlers.NewBudgetHandler(repositories, services, cookieSecure),
+		reportHandler:      webHandlers.NewReportHandler(repositories, services, cookieSecure),
+		backupHandler:      webHandlers.NewBackupHandler(repositories, services, cookieSecure),
 	}
 
 	return ws, nil
@@ -289,7 +286,7 @@ func customHTTPErrorHandler(renderer *TemplateRenderer) echo.HTTPErrorHandler {
 		}
 
 		// Для HTMX запросов возвращаем простой текст
-		if c.Request().Header.Get("Hx-Request") == "true" {
+		if middleware.IsHTMXRequest(c) {
 			_ = c.String(code, fmt.Sprintf("Error: %v", msg))
 			return
 		}

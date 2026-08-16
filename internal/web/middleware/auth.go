@@ -13,11 +13,35 @@ import (
 	"family-budget-service/internal/domain/user"
 )
 
-const HTMXRequestValue = "true"
+const (
+	// HTMXRequestHeader — заголовок, которым HTMX помечает свои запросы.
+	HTMXRequestHeader = "Hx-Request"
+	// HTMXRequestValue — единственное значение этого заголовка.
+	HTMXRequestValue = "true"
+
+	// ContextUserKey — ключ, под которым middleware веба и API кладут
+	// *SessionData в контекст Echo; GetUserFromContext читает его же.
+	// Один общий ключ на оба слоя: раньше API-обёртки объявляли собственную
+	// копию литерала, и пакеты совпадали только по случайности.
+	ContextUserKey = "user"
+)
+
+// IsHTMXRequest сообщает, пришёл ли запрос от HTMX.
+// Единственное место, где сравнивается заголовок: и middleware, и веб-хендлеры
+// (BaseHandler.IsHTMXRequest), и обработчик ошибок в web.go ходят сюда.
+func IsHTMXRequest(c echo.Context) bool {
+	return c.Request().Header.Get(HTMXRequestHeader) == HTMXRequestValue
+}
 
 // sessionRevalidationErrorMessage — то, что видит клиент, когда перепроверку
 // сессии не удалось выполнить. Детали ошибки уходят только в лог.
 const sessionRevalidationErrorMessage = "Service temporarily unavailable"
+
+// forbiddenMessage — тот же текст, что и handlers.ErrMessageForbidden в
+// internal/application/handlers/errors.go. Константа продублирована осознанно:
+// импорт application/handlers из middleware развернул бы направление
+// зависимостей (web -> application) ради одной строки.
+const forbiddenMessage = "Insufficient permissions"
 
 // Аналоги этих middleware для группы /api/v1 (401/403 в виде JSON, без
 // редиректа на /login) живут в internal/application/handlers/api_auth.go:
@@ -29,16 +53,12 @@ func RequireAuth() echo.MiddlewareFunc {
 		return func(c echo.Context) error {
 			// Поддержка моков для тестирования
 			if mockData := c.Get("mock_session_data"); mockData != nil {
-				c.Set("user", mockData)
+				c.Set(ContextUserKey, mockData)
 				return next(c)
 			}
 			if mockError := c.Get("mock_session_error"); mockError != nil {
-				if c.Request().Header.Get("Hx-Request") == HTMXRequestValue {
-					c.Response().Header().Set("Hx-Redirect", "/login")
-					return c.NoContent(http.StatusUnauthorized)
-				}
-				_ = c.Redirect(http.StatusFound, "/login")
-				return echo.NewHTTPError(http.StatusFound, "redirect to login")
+				// Ровно тот же ответ, что и на настоящей неудачной сессии ниже.
+				return redirectToLogin(c)
 			}
 
 			// Проверяем аутентификацию
@@ -48,7 +68,7 @@ func RequireAuth() echo.MiddlewareFunc {
 			}
 
 			// Сохраняем данные пользователя в контексте
-			c.Set("user", sessionData)
+			c.Set(ContextUserKey, sessionData)
 			return next(c)
 		}
 	}
@@ -58,11 +78,11 @@ func RequireAuth() echo.MiddlewareFunc {
 // HTMX-запросу редирект нужен заголовком, иначе он подставит страницу входа
 // внутрь фрагмента.
 func redirectToLogin(c echo.Context) error {
-	if c.Request().Header.Get("Hx-Request") == HTMXRequestValue {
-		c.Response().Header().Set("Hx-Redirect", "/login")
+	if IsHTMXRequest(c) {
+		c.Response().Header().Set("Hx-Redirect", loginPath)
 		return c.NoContent(http.StatusUnauthorized)
 	}
-	return c.Redirect(http.StatusFound, "/login")
+	return c.Redirect(http.StatusFound, loginPath)
 }
 
 // SessionUserLookup — минимальный контракт для перепроверки владельца сессии.
@@ -98,6 +118,12 @@ func RevalidateSessionUser(c echo.Context, lookup SessionUserLookup) (*SessionDa
 		if errors.Is(lookupErr, user.ErrNotFound) {
 			return nil, ErrSessionUserGone
 		}
+
+		// Логируем здесь, а не в каждой обёртке: и веб-, и API-вариант
+		// RequireActiveUser писали одну и ту же строку дословно.
+		c.Logger().Errorf("session revalidation failed on %s %s: %v",
+			c.Request().Method, c.Request().URL.Path, lookupErr)
+
 		return nil, fmt.Errorf("revalidate session user: %w", lookupErr)
 	}
 	if record == nil {
@@ -128,13 +154,11 @@ func RequireActiveUser(lookup SessionUserLookup) echo.MiddlewareFunc {
 
 				// БД недоступна — это ошибка сервера, а не отзыв доступа:
 				// сессию оставляем как есть, пользователь повторит запрос.
-				c.Logger().Errorf("session revalidation failed on %s %s: %v",
-					c.Request().Method, c.Request().URL.Path, err)
-
+				// Подробности уже записаны в RevalidateSessionUser.
 				return echo.NewHTTPError(http.StatusInternalServerError, sessionRevalidationErrorMessage)
 			}
 
-			c.Set("user", fresh)
+			c.Set(ContextUserKey, fresh)
 			return next(c)
 		}
 	}
@@ -170,7 +194,7 @@ func RequireAdminOrMember() echo.MiddlewareFunc {
 
 // GetUserFromContext извлекает данные пользователя из контекста
 func GetUserFromContext(c echo.Context) (*SessionData, error) {
-	userData, ok := c.Get("user").(*SessionData)
+	userData, ok := c.Get(ContextUserKey).(*SessionData)
 	if !ok {
 		return nil, echo.ErrUnauthorized
 	}
@@ -192,14 +216,13 @@ func RedirectIfAuthenticated(redirectTo string) echo.MiddlewareFunc {
 
 // validateUserAccess проверяет доступ пользователя
 func validateUserAccess(c echo.Context) (*SessionData, error) {
-	userData, ok := c.Get("user").(*SessionData)
+	userData, ok := c.Get(ContextUserKey).(*SessionData)
 	if !ok {
-		if c.Request().Header.Get("Hx-Request") == HTMXRequestValue {
-			c.Response().Header().Set("Hx-Redirect", "/login")
-			_ = c.NoContent(http.StatusUnauthorized)
-			return nil, echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
+		if err := redirectToLogin(c); err != nil {
+			return nil, err
 		}
-		_ = c.Redirect(http.StatusFound, "/login")
+		// Ответ уже записан, но ошибка обязательна: без неё RequireRole пошёл бы
+		// дальше с nil-пользователем.
 		return nil, echo.NewHTTPError(http.StatusFound, "redirect to login")
 	}
 	return userData, nil
@@ -212,9 +235,9 @@ func hasRequiredRole(userRole user.Role, requiredRoles []user.Role) bool {
 
 // handleForbiddenAccess обрабатывает случай недостатка прав
 func handleForbiddenAccess(c echo.Context) error {
-	if c.Request().Header.Get("Hx-Request") == HTMXRequestValue {
+	if IsHTMXRequest(c) {
 		return c.JSON(http.StatusForbidden, map[string]string{
-			"error": "Insufficient permissions",
+			"error": forbiddenMessage,
 		})
 	}
 	return c.String(http.StatusForbidden, "Access denied")

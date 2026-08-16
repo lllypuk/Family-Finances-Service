@@ -1,8 +1,6 @@
 package integration_test
 
 import (
-	"net/http"
-	"net/http/httptest"
 	"regexp"
 	"testing"
 
@@ -140,20 +138,6 @@ func assertLoggedInNav(t *testing.T, body, path, userName string) {
 	match := logoutTokenRe.FindStringSubmatch(nav)
 	require.NotNil(t, match, "в шапке страницы %s нет поля _token", path)
 	assert.NotEmpty(t, match[1], "на странице %s форма выхода несёт пустой _token", path)
-}
-
-// fetchPage запрашивает HTML-страницу с сессией и возвращает тело ответа.
-func fetchPage(t *testing.T, ts *testhelpers.TestServer, auth *testhelpers.AuthSession, path string) string {
-	t.Helper()
-
-	req := httptest.NewRequest(http.MethodGet, path, nil)
-	auth.Apply(req)
-	rec := httptest.NewRecorder()
-
-	ts.Server.Echo().ServeHTTP(rec, req)
-	require.Equal(t, http.StatusOK, rec.Code, "GET %s отдал %d, тело: %s", path, rec.Code, rec.Body.String())
-
-	return rec.Body.String()
 }
 
 // navBlock возвращает разметку шапки страницы.

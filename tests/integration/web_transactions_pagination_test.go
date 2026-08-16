@@ -120,7 +120,7 @@ func TestWebTransactions_NextPageLinkReachesSecondPage(t *testing.T) {
 	createDatedTransactions(t, testServer, expenseCategory.ID, transaction.TypeExpense,
 		"Расход первой страницы A", "Расход первой страницы B", "Расход второй страницы C")
 
-	firstPage := getWebPage(t, testServer, auth, "/transactions?page_size=2")
+	firstPage := fetchPage(t, testServer, auth, "/transactions?page_size=2")
 	assert.Contains(t, firstPage, "из 3", "блок пагинации не показывает реальное общее количество")
 
 	match := nextPageHrefRe.FindStringSubmatch(firstPage)
@@ -129,7 +129,7 @@ func TestWebTransactions_NextPageLinkReachesSecondPage(t *testing.T) {
 	nextHref := html.UnescapeString(match[1])
 	assert.Contains(t, nextHref, "page=2", "ссылка «Следующая» ведёт не на вторую страницу: %s", nextHref)
 
-	secondPage := getWebPage(t, testServer, auth, "/transactions"+nextHref)
+	secondPage := fetchPage(t, testServer, auth, "/transactions"+nextHref)
 	assert.Contains(t, secondPage, "Расход второй страницы C", "вторая страница не отдала оставшуюся транзакцию")
 	assert.NotContains(t, secondPage, "Расход первой страницы A", "вторая страница повторяет первую")
 }
@@ -151,31 +151,17 @@ func TestWebTransactions_HTMXPaginationKeepsFilterAndTable(t *testing.T) {
 	incomeCategory := createTestCategoryFor(t, testServer, category.TypeIncome)
 	createDatedTransactions(t, testServer, incomeCategory.ID, transaction.TypeIncome, "Доход вне фильтра")
 
-	firstPage := getWebPage(t, testServer, auth, "/htmx/transactions/filter?type=expense&page_size=2")
+	firstPage := fetchPage(t, testServer, auth, "/htmx/transactions/filter?type=expense&page_size=2")
 	match := nextPageHxGetRe.FindStringSubmatch(firstPage)
 	require.NotNil(t, match, "в HTMX-фрагменте нет кнопки «Следующая», тело: %s", firstPage)
 
 	nextURL := html.UnescapeString(match[1])
 	require.Contains(t, nextURL, "type=expense", "кнопка «Следующая» потеряла активный фильтр: %s", nextURL)
 
-	secondPage := getWebPage(t, testServer, auth, nextURL)
+	secondPage := fetchPage(t, testServer, auth, nextURL)
 	assert.Contains(t, secondPage, "<table", "фрагмент пагинации пришёл без таблицы — HTMX-своп стёр бы список")
 	assert.Contains(t, secondPage, "Расход второй страницы C", "вторая страница не отдала оставшуюся транзакцию")
 	assert.NotContains(t, secondPage, "Доход вне фильтра", "переход на вторую страницу сбросил фильтр type=expense")
-}
-
-// getWebPage выполняет авторизованный GET и возвращает тело ответа.
-func getWebPage(t *testing.T, ts *testhelpers.TestServer, auth *testhelpers.AuthSession, path string) string {
-	t.Helper()
-
-	req := httptest.NewRequest(http.MethodGet, path, nil)
-	auth.Apply(req)
-	rec := httptest.NewRecorder()
-
-	ts.Server.Echo().ServeHTTP(rec, req)
-	require.Equal(t, http.StatusOK, rec.Code, "GET %s отдал %d, тело: %s", path, rec.Code, rec.Body.String())
-
-	return rec.Body.String()
 }
 
 // createTestCategoryFor создаёт категорию нужного типа для семьи тестового сервера.

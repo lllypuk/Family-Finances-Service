@@ -114,9 +114,7 @@ func GetSessionData(c echo.Context) (*SessionData, error) {
 
 // SetSessionData сохраняет данные в сессии
 func SetSessionData(c echo.Context, data *SessionData) error {
-	// Нечитаемая cookie не мешает записать сессию заново: gorilla отдаёт
-	// вместе с ошибкой пригодную новую сессию (см. csrf.go, ensureCSRFToken).
-	sess, err := session.Get(SessionName, c)
+	sess, err := sessionOrNew(c)
 	if sess == nil {
 		return err
 	}
@@ -145,9 +143,7 @@ func SetSessionData(c echo.Context, data *SessionData) error {
 // вместе с токеном. Вызывать на каждой точке входа в аутентифицированное
 // состояние — вход по паролю и регистрация по приглашению.
 func RotateSession(c echo.Context, data *SessionData) error {
-	// Нечитаемая cookie не мешает записать сессию заново: gorilla отдаёт
-	// вместе с ошибкой пригодную новую сессию (см. csrf.go, ensureCSRFToken).
-	sess, err := session.Get(SessionName, c)
+	sess, err := sessionOrNew(c)
 	if sess == nil {
 		return err
 	}
@@ -175,9 +171,7 @@ func RotateSession(c echo.Context, data *SessionData) error {
 
 // ClearSession очищает сессию
 func ClearSession(c echo.Context) error {
-	// Нечитаемая cookie не мешает записать сессию заново: gorilla отдаёт
-	// вместе с ошибкой пригодную новую сессию (см. csrf.go, ensureCSRFToken).
-	sess, err := session.Get(SessionName, c)
+	sess, err := sessionOrNew(c)
 	if sess == nil {
 		return err
 	}
@@ -205,4 +199,15 @@ func IsAuthenticated(c echo.Context) bool {
 
 	_, err := GetSessionData(c)
 	return err == nil
+}
+
+// sessionOrNew возвращает сессию запроса.
+//
+// Нечитаемая cookie (чужой или провёрнутый SESSION_SECRET) не мешает записать
+// сессию заново: gorilla отдаёт вместе с ошибкой пригодную новую сессию, и
+// последующий sess.Save перезаписывает cookie. Поэтому вызывающий код
+// проверяет именно `sess == nil`, а не `err != nil`. Тот же хелпер используют
+// csrf.go и session.go, чтобы это правило было записано ровно один раз.
+func sessionOrNew(c echo.Context) (*sessions.Session, error) {
+	return session.Get(SessionName, c)
 }

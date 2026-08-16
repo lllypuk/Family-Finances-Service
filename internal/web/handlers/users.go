@@ -20,9 +20,9 @@ type UserHandler struct {
 }
 
 // NewUserHandler создает новый обработчик пользователей
-func NewUserHandler(repos *handlers.Repositories, services *services.Services) *UserHandler {
+func NewUserHandler(repos *handlers.Repositories, services *services.Services, cookieSecure bool) *UserHandler {
 	return &UserHandler{
-		BaseHandler: NewBaseHandler(repos, services),
+		BaseHandler: NewBaseHandler(repos, services, cookieSecure),
 	}
 }
 
@@ -54,7 +54,7 @@ func (h *UserHandler) Index(c echo.Context) error {
 	csrfToken, _ := middleware.GetCSRFToken(c)
 
 	data := map[string]any{
-		"Title":           "Family Members",
+		"Title":           titleUsers,
 		"Users":           users,
 		"Family":          family,
 		tplKeyCurrentUser: currentUser,
@@ -90,7 +90,7 @@ func (h *UserHandler) New(c echo.Context) error {
 	// CurrentUser обязателен: шапка страницы — общий шаблон `nav`, и без него
 	// она рисуется как для анонима, без меню и без формы выхода (U-02).
 	data := map[string]any{
-		"Title":           "Add Family Member",
+		"Title":           titleNewUser,
 		tplKeyCurrentUser: currentUser,
 		tplKeyCSRFToken:   csrfToken,
 		tplKeyFieldErrors: map[string]string{},
@@ -185,7 +185,7 @@ func (h *UserHandler) userError(c echo.Context, message string, fieldErrors map[
 	// Перерисованная после ошибки форма — та же страница, поэтому в шапке
 	// должен остаться тот же пользователь (иначе меню и выход исчезают).
 	data := map[string]any{
-		"Title":           "Add Family Member",
+		"Title":           titleNewUser,
 		tplKeyCurrentUser: h.sessionPageUser(c),
 		tplKeyError:       message,
 		tplKeyFieldErrors: fieldErrors,

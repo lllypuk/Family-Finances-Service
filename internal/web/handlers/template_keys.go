@@ -18,9 +18,6 @@ const (
 	tplKeyEmail       = "Email"
 	tplKeyForm        = "form"
 	tplKeyLabel       = "Label"
-	tplKeyName        = "Name"
-	tplKeyType        = "Type"
-
-	// Display values rendered into the UI.
-	allCategoriesOptionName = "All Categories"
+	tplKeyCategories  = "Categories"
+	tplKeyFilters     = "Filters"
 )

@@ -103,16 +103,3 @@ func TestSessionRevalidation_RoleDowngradeAppliesToHTMXRoutes(t *testing.T) {
 		})
 	}
 }
-
-// doAuthedGET выполняет GET с сессией и возвращает код ответа.
-func doAuthedGET(t *testing.T, ts *testhelpers.TestServer, auth *testhelpers.AuthSession, path string) int {
-	t.Helper()
-
-	req := httptest.NewRequest(http.MethodGet, path, nil)
-	auth.Apply(req)
-	rec := httptest.NewRecorder()
-
-	ts.Server.Echo().ServeHTTP(rec, req)
-
-	return rec.Code
-}

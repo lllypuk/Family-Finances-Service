@@ -44,9 +44,13 @@ type DashboardHandler struct {
 }
 
 // NewDashboardHandler создает новый обработчик дашборда
-func NewDashboardHandler(repositories *handlers.Repositories, services *services.Services) *DashboardHandler {
+func NewDashboardHandler(
+	repositories *handlers.Repositories,
+	services *services.Services,
+	cookieSecure bool,
+) *DashboardHandler {
 	return &DashboardHandler{
-		BaseHandler: NewBaseHandler(repositories, services),
+		BaseHandler: NewBaseHandler(repositories, services, cookieSecure),
 	}
 }
 
@@ -165,7 +169,7 @@ func (h *DashboardHandler) DashboardFilter(c echo.Context) error {
 
 	return h.renderPartial(c, "dashboard-content", map[string]any{
 		"DashboardViewModel": dashboardData,
-		"Filters":            filters,
+		tplKeyFilters:        filters,
 	})
 }
 

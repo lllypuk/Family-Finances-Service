@@ -1,7 +1,6 @@
 package testhelpers
 
 import (
-	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
@@ -113,11 +112,8 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 		Container: container,
 	}
 
-	// Cleanup handler
-	t.Cleanup(func() {
-		testServer.Cleanup()
-	})
-
+	// Явного освобождения ресурсов не требуется: БД in-memory закрывается своим
+	// t.Cleanup из SetupSQLiteTestDB.
 	return testServer
 }
 
@@ -219,7 +215,7 @@ func (ts *TestServer) Auth(t *testing.T) *AuthSession {
 
 	admin := CreateTestUser(family.ID)
 	admin.Role = user.RoleAdmin
-	require.NoError(t, ts.Repos.User.Create(context.Background(), admin))
+	require.NoError(t, ts.Repos.User.Create(t.Context(), admin))
 
 	ts.AuthFamily = family
 	ts.AuthUser = admin
@@ -241,7 +237,7 @@ func (ts *TestServer) AuthAs(t *testing.T, role user.Role) (*user.User, *AuthSes
 
 	member := CreateTestUser(family.ID)
 	member.Role = role
-	require.NoError(t, ts.Repos.User.Create(context.Background(), member))
+	require.NoError(t, ts.Repos.User.Create(t.Context(), member))
 
 	return member, LoginAs(t, member)
 }
@@ -253,31 +249,27 @@ func (ts *TestServer) ensureFamily(t *testing.T) *user.Family {
 	t.Helper()
 
 	var idStr string
-	err := ts.Container.DB.QueryRowContext(context.Background(), "SELECT id FROM families LIMIT 1").Scan(&idStr)
+	err := ts.Container.DB.QueryRowContext(t.Context(), "SELECT id FROM families LIMIT 1").Scan(&idStr)
 	if errors.Is(err, sql.ErrNoRows) {
 		family := CreateTestFamily()
-		require.NoError(t, ts.Repos.Family.Create(context.Background(), family))
+		require.NoError(t, ts.Repos.Family.Create(t.Context(), family))
 		return family
 	}
 	require.NoError(t, err)
 
 	// Возвращаем запись целиком: тестам нужны Name/Currency, а не только ID.
-	family, getErr := ts.Repos.Family.Get(context.Background())
+	family, getErr := ts.Repos.Family.Get(t.Context())
 	require.NoError(t, getErr)
 	require.NotNil(t, family)
 
 	return family
 }
 
-// Cleanup — хук завершения тестового сервера. Явного освобождения ресурсов не
-// требуется: БД in-memory и закрывается своим t.Cleanup из SetupSQLiteTestDB.
-func (ts *TestServer) Cleanup() {}
-
 // CheckTableExists checks if a table exists in the database (for debugging)
 func (ts *TestServer) CheckTableExists(t *testing.T, tableName string) bool {
 	var exists int
 	err := ts.Container.DB.QueryRowContext(
-		context.Background(),
+		t.Context(),
 		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
 		tableName,
 	).Scan(&exists)

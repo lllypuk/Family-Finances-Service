@@ -33,7 +33,7 @@ func setupBackupTest(t *testing.T) (*handlers.BackupHandler, *MockUserService, *
 		Backup: mockBackupService,
 	}
 
-	handler := handlers.NewBackupHandler(repos, srvcs)
+	handler := handlers.NewBackupHandler(repos, srvcs, false)
 	return handler, mockUserService, mockBackupService
 }
 

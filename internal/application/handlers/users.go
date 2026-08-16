@@ -31,106 +31,36 @@ func NewUserHandler(repositories *Repositories, userService services.UserService
 	}
 }
 
-// handleServiceError converts service errors to HTTP responses
+// handleServiceError converts service errors to HTTP responses.
+// Every branch goes through respondError, so the envelope (code/message/details
+// plus request id, timestamp and API version) is built in exactly one place.
 func (h *UserHandler) handleServiceError(c echo.Context, err error) error {
-	requestID := c.Response().Header().Get(echo.HeaderXRequestID)
-	timestamp := time.Now()
-
 	switch {
 	case errors.Is(err, services.ErrValidationFailed):
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    ErrCodeValidationError,
-				Message: "Validation failed",
-				Details: err.Error(),
-			},
-			Meta: ResponseMeta{
-				RequestID: requestID,
-				Timestamp: timestamp,
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusBadRequest, ErrCodeValidationError, "Validation failed", err.Error())
 	case errors.Is(err, services.ErrEmailAlreadyExists):
-		return c.JSON(http.StatusConflict, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "EMAIL_EXISTS",
-				Message: "Email already exists",
-				Details: "A user with this email address already exists",
-			},
-			Meta: ResponseMeta{
-				RequestID: requestID,
-				Timestamp: timestamp,
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusConflict, "EMAIL_EXISTS", "Email already exists",
+			"A user with this email address already exists")
 	case errors.Is(err, services.ErrUserNotFound):
-		return c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "USER_NOT_FOUND",
-				Message: "User not found",
-				Details: "The requested user does not exist",
-			},
-			Meta: ResponseMeta{
-				RequestID: requestID,
-				Timestamp: timestamp,
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusNotFound, "USER_NOT_FOUND", "User not found",
+			"The requested user does not exist")
 	case errors.Is(err, services.ErrFamilyNotFound):
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    ErrCodeFamilyNotFound,
-				Message: ErrMessageFamilyNotFound,
-				Details: "The specified family does not exist",
-			},
-			Meta: ResponseMeta{
-				RequestID: requestID,
-				Timestamp: timestamp,
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusBadRequest, ErrCodeFamilyNotFound, ErrMessageFamilyNotFound,
+			"The specified family does not exist")
 	case errors.Is(err, services.ErrUnauthorized):
-		return c.JSON(http.StatusForbidden, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "UNAUTHORIZED",
-				Message: "Unauthorized access",
-				Details: "You don't have permission to access this resource",
-			},
-			Meta: ResponseMeta{
-				RequestID: requestID,
-				Timestamp: timestamp,
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusForbidden, "UNAUTHORIZED", "Unauthorized access",
+			"You don't have permission to access this resource")
+	case errors.Is(err, services.ErrCannotDeleteSelf):
+		return respondError(c, http.StatusBadRequest, ErrCodeCannotDeleteSelf, ErrMessageCannotDeleteSelf)
 	case errors.Is(err, services.ErrLastAdmin):
 		return respondError(c, http.StatusBadRequest, ErrCodeLastAdmin, ErrMessageLastAdmin,
 			"The family must keep at least one administrator")
 	case errors.Is(err, services.ErrInvalidRole):
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_ROLE",
-				Message: "Invalid role",
-				Details: "The specified role is not valid",
-			},
-			Meta: ResponseMeta{
-				RequestID: requestID,
-				Timestamp: timestamp,
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusBadRequest, "INVALID_ROLE", "Invalid role",
+			"The specified role is not valid")
 	default:
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INTERNAL_ERROR",
-				Message: "Internal server error",
-				Details: "An unexpected error occurred",
-			},
-			Meta: ResponseMeta{
-				RequestID: requestID,
-				Timestamp: timestamp,
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal,
+			"An unexpected error occurred")
 	}
 }
 
@@ -315,19 +245,15 @@ func (h *UserHandler) DeleteUser(c echo.Context) error {
 		})
 	}
 
-	// Ролевая модель API повторяет веб (AdminHandler.DeleteUser): удалить сам
-	// себя нельзя — админ мгновенно теряет и сессию (RequireAPIActiveUser
-	// отзывает её на следующем запросе), и доступ к консоли.
+	// Удаляем от имени владельца сессии: запрет самоудаления — правило сервиса
+	// (userService.DeleteUser), сюда возвращается ErrCannotDeleteSelf.
 	sessionData, sessionErr := middleware.GetUserFromContext(c)
 	if sessionErr != nil {
 		return respondUnauthorized(c)
 	}
-	if sessionData.UserID == id {
-		return respondError(c, http.StatusBadRequest, ErrCodeCannotDeleteSelf, ErrMessageCannotDeleteSelf)
-	}
 
 	// Call service
-	err = h.userService.DeleteUser(c.Request().Context(), id)
+	err = h.userService.DeleteUser(c.Request().Context(), id, sessionData.UserID)
 	if err != nil {
 		return h.handleServiceError(c, err)
 	}

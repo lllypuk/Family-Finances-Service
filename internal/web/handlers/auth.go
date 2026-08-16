@@ -22,9 +22,9 @@ type AuthHandler struct {
 }
 
 // NewAuthHandler создает новый обработчик аутентификации
-func NewAuthHandler(repos *handlers.Repositories, services *services.Services) *AuthHandler {
+func NewAuthHandler(repos *handlers.Repositories, services *services.Services, cookieSecure bool) *AuthHandler {
 	return &AuthHandler{
-		BaseHandler: NewBaseHandler(repos, services),
+		BaseHandler: NewBaseHandler(repos, services, cookieSecure),
 	}
 }
 
@@ -153,7 +153,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	redirectTo := sanitizeRedirectURL(c.QueryParam("redirect"))
 
 	// Если это HTMX запрос, возвращаем redirect header
-	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
+	if h.IsHTMXRequest(c) {
 		c.Response().Header().Set("Hx-Redirect", redirectTo)
 		return c.NoContent(http.StatusOK)
 	}
@@ -170,7 +170,7 @@ func (h *AuthHandler) SetupPage(c echo.Context) error {
 
 	data := map[string]any{
 		tplKeyCSRFToken: csrfToken,
-		"Title":         "Первоначальная настройка",
+		"Title":         titleSetup,
 		"IsSetup":       true,
 		"Messages":      h.getFlashMessages(c),
 	}
@@ -212,11 +212,11 @@ func (h *AuthHandler) Setup(c echo.Context) error {
 		// Текст ошибки сервиса наружу не отдаём (в него попадают детали БД):
 		// пользователю — обобщённая формулировка, подробности — в лог.
 		c.Logger().Errorf("setup family failed: %v", err)
-		return h.setupError(c, "Не удалось создать семью, попробуйте ещё раз", nil)
+		return h.setupError(c, "Failed to create the family, please try again", nil)
 	}
 
 	// Если это HTMX запрос
-	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
+	if h.IsHTMXRequest(c) {
 		c.Response().Header().Set("Hx-Redirect", "/login")
 		return c.NoContent(http.StatusOK)
 	}
@@ -231,7 +231,7 @@ func (h *AuthHandler) Logout(c echo.Context) error {
 	}
 
 	// Если это HTMX запрос
-	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
+	if h.IsHTMXRequest(c) {
 		c.Response().Header().Set("Hx-Redirect", "/login")
 		return c.NoContent(http.StatusOK)
 	}
@@ -253,7 +253,7 @@ func (h *AuthHandler) loginError(c echo.Context, message string, fieldErrors map
 	}
 
 	// Если это HTMX запрос, возвращаем только форму
-	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
+	if h.IsHTMXRequest(c) {
 		return c.Render(http.StatusUnprocessableEntity, "login_form", data)
 	}
 
@@ -266,7 +266,7 @@ func (h *AuthHandler) setupError(c echo.Context, message string, fieldErrors map
 
 	data := map[string]any{
 		tplKeyCSRFToken:   csrfToken,
-		"Title":           "Первоначальная настройка",
+		"Title":           titleSetup,
 		tplKeyError:       message,
 		tplKeyFieldErrors: fieldErrors,
 		"FirstName":       c.FormValue("first_name"),
@@ -278,7 +278,7 @@ func (h *AuthHandler) setupError(c echo.Context, message string, fieldErrors map
 	}
 
 	// Если это HTMX запрос, возвращаем только форму
-	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
+	if h.IsHTMXRequest(c) {
 		return c.Render(http.StatusUnprocessableEntity, "setup_form", data)
 	}
 
@@ -363,7 +363,7 @@ func (h *AuthHandler) InviteRegister(c echo.Context) error {
 			})
 		}
 		c.Logger().Errorf("invite registration failed: %v", err)
-		return h.inviteError(c, token, "Не удалось завершить регистрацию, попробуйте ещё раз", nil)
+		return h.inviteError(c, token, "Failed to complete registration, please try again", nil)
 	}
 
 	// Create session for the new user
@@ -377,7 +377,7 @@ func (h *AuthHandler) InviteRegister(c echo.Context) error {
 	// приглашение — вторая точка входа в аутентифицированное состояние.
 	if sessionErr := middleware.RotateSession(c, sessionData); sessionErr != nil {
 		// User is created, but session failed - redirect to login
-		if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
+		if h.IsHTMXRequest(c) {
 			c.Response().Header().Set("Hx-Redirect", "/login")
 			return c.NoContent(http.StatusOK)
 		}
@@ -385,7 +385,7 @@ func (h *AuthHandler) InviteRegister(c echo.Context) error {
 	}
 
 	// If HTMX request, redirect to dashboard
-	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
+	if h.IsHTMXRequest(c) {
 		c.Response().Header().Set("Hx-Redirect", "/")
 		return c.NoContent(http.StatusOK)
 	}
@@ -417,7 +417,7 @@ func (h *AuthHandler) inviteError(c echo.Context, token, message string, fieldEr
 	}
 
 	// If HTMX request, return only the form
-	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
+	if h.IsHTMXRequest(c) {
 		return c.Render(http.StatusUnprocessableEntity, "pages/invite_form.html", data)
 	}
 

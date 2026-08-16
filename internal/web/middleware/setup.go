@@ -21,6 +21,8 @@ const (
 	healthPath = "/health"
 	// faviconPath — браузер запрашивает его сам, редирект на /setup здесь бессмысленен.
 	faviconPath = "/favicon.ico"
+	// loginPath — куда уходит /setup после того, как семья создана.
+	loginPath = "/login"
 )
 
 // SetupChecker defines an interface for checking setup status
@@ -99,7 +101,7 @@ func RequireSetup(checker SetupChecker) echo.MiddlewareFunc {
 
 			// Family exists — /setup is no longer accessible
 			if path == setupPath {
-				return c.Redirect(http.StatusFound, "/login")
+				return c.Redirect(http.StatusFound, loginPath)
 			}
 
 			return next(c)

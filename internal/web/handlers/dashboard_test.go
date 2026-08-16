@@ -358,6 +358,7 @@ func setupDashboardHandler() (*handlers.DashboardHandler, *MockTransactionServic
 	handler := handlers.NewDashboardHandler(
 		&appHandlers.Repositories{},
 		servicesStruct,
+		false,
 	)
 
 	return handler, mockTransactionService, mockBudgetService, mockCategoryService, mockUserService

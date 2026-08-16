@@ -281,7 +281,7 @@ func TestReportHandler_Create_HTMXGenerationError(t *testing.T) {
 	}
 
 	// Create handler
-	handler := handlers.NewReportHandler(nil, svc)
+	handler := handlers.NewReportHandler(nil, svc, false)
 
 	// Create test context with HTMX header and valid form data
 	// Using testReportFormData constant
@@ -329,7 +329,7 @@ func TestReportHandler_Create_Success(t *testing.T) {
 	}
 
 	// Create handler
-	handler := handlers.NewReportHandler(nil, svc)
+	handler := handlers.NewReportHandler(nil, svc, false)
 
 	// Create test context with valid form data (non-HTMX)
 	// Using testReportFormData constant
@@ -377,7 +377,7 @@ func TestReportHandler_Create_HTMXSuccess(t *testing.T) {
 	}
 
 	// Create handler
-	handler := handlers.NewReportHandler(nil, svc)
+	handler := handlers.NewReportHandler(nil, svc, false)
 
 	// Create test context with HTMX header and valid form data
 	// Using testReportFormData constant
@@ -420,7 +420,7 @@ func TestReportHandler_Create_SaveError(t *testing.T) {
 	}
 
 	// Create handler
-	handler := handlers.NewReportHandler(nil, svc)
+	handler := handlers.NewReportHandler(nil, svc, false)
 
 	// Create test context with HTMX header and valid form data
 	// Using testReportFormData constant
@@ -450,7 +450,7 @@ func setupReportHandlerWithUser() (*handlers.ReportHandler, *MockReportService, 
 		User:   mockUserService,
 	}
 
-	return handlers.NewReportHandler(nil, svc), mockReportService, mockUserService
+	return handlers.NewReportHandler(nil, svc, false), mockReportService, mockUserService
 }
 
 // TestReportHandler_PageDataContract проверяет контракт данных страниц отчётов:

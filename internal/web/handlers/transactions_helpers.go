@@ -194,8 +194,9 @@ func (h *TransactionHandler) convertTransactionsToViewModels(
 	return viewModels, nil
 }
 
-// buildCategorySelectOptions конвертирует категории в опции для select элементов
-func (h *TransactionHandler) buildCategorySelectOptions(
+// buildCategorySelectOptions конвертирует категории в опции для select элементов.
+// Функция, а не метод: тем же контрактом пользуются и формы бюджетов.
+func buildCategorySelectOptions(
 	categories []*category.Category,
 ) []webModels.CategorySelectOption {
 	var options []webModels.CategorySelectOption
@@ -379,7 +380,7 @@ func (h *TransactionHandler) renderTransactionFormWithErrors(
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get categories")
 	}
 
-	categoryOptions := h.buildCategorySelectOptions(categories)
+	categoryOptions := buildCategorySelectOptions(categories)
 
 	title := titleNewTransaction
 	template := "pages/transactions/new"

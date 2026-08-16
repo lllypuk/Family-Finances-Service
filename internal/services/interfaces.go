@@ -21,7 +21,7 @@ type UserService interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (*user.User, error)
 	GetUsers(ctx context.Context) ([]*user.User, error)
 	UpdateUser(ctx context.Context, id uuid.UUID, req dto.UpdateUserDTO) (*user.User, error)
-	DeleteUser(ctx context.Context, id uuid.UUID) error
+	DeleteUser(ctx context.Context, id, actorID uuid.UUID) error
 
 	// Business Operations
 	ChangeUserRole(ctx context.Context, userID uuid.UUID, role user.Role) error

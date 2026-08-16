@@ -191,14 +191,13 @@ func (s *HTTPServer) setupRoutes() {
 	// API версионирование.
 	// RequireAPIAuth закрывает всю группу: без валидной сессии — 401 и JSON-ошибка
 	// (находка S-01). /health и веб-маршруты регистрируются выше и не задеты.
-	apiAuth := []echo.MiddlewareFunc{handlers.RequireAPIAuth()}
-	// Та же перепроверка сессии по БД, что и в вебе. Сервер на моках (unit-тесты
-	// application) собирается без сервисов — там перепроверять нечем и не по чему.
-	if s.services != nil && s.services.User != nil {
-		apiAuth = append(apiAuth, handlers.RequireAPIActiveUser(s.services.User))
-	}
-
-	api := s.echo.Group("/api/v1", apiAuth...)
+	// Та же перепроверка сессии по БД, что и в вебе: роль для RequireAPIRole
+	// берётся из БД, а не из подписанной cookie. Условной регистрации здесь нет
+	// намеренно — иначе конфигурация без сервисов молча теряла бы проверку.
+	api := s.echo.Group("/api/v1",
+		handlers.RequireAPIAuth(),
+		handlers.RequireAPIActiveUser(s.services.User),
+	)
 
 	// Ролевая модель API повторяет веб (internal/web/web.go):
 	// управление пользователями — только админ (там RequireAdmin), финансовые

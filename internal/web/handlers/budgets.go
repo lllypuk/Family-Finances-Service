@@ -27,13 +27,8 @@ const (
 
 	// BudgetExceededThreshold is the percentage threshold when budget is considered exceeded (100%)
 	BudgetExceededThreshold = 100
-	// BudgetCriticalThreshold is the percentage threshold for critical budget alerts (90%)
-	BudgetCriticalThreshold = 90
 	// BudgetWarningThreshold is the percentage threshold for budget warning alerts (80%)
 	BudgetWarningThreshold = 80
-
-	// DefaultAlertThreshold is the default threshold used for healthy budget status (80%)
-	DefaultAlertThreshold = 80
 )
 
 // BudgetHandler обрабатывает HTTP запросы для бюджетов
@@ -44,9 +39,13 @@ type BudgetHandler struct {
 }
 
 // NewBudgetHandler создает новый обработчик бюджетов
-func NewBudgetHandler(repositories *handlers.Repositories, services *services.Services) *BudgetHandler {
+func NewBudgetHandler(
+	repositories *handlers.Repositories,
+	services *services.Services,
+	cookieSecure bool,
+) *BudgetHandler {
 	return &BudgetHandler{
-		BaseHandler: NewBaseHandler(repositories, services),
+		BaseHandler: NewBaseHandler(repositories, services, cookieSecure),
 		validator:   validator.New(),
 	}
 }
@@ -61,7 +60,7 @@ type budgetFormData struct {
 	*PageData
 
 	Form            webModels.BudgetForm
-	CategoryOptions []map[string]any
+	CategoryOptions []webModels.CategorySelectOption
 	BudgetID        string
 }
 
@@ -157,18 +156,9 @@ func (h *BudgetHandler) New(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get categories")
 	}
 
-	// Подготавливаем опции категорий
-	categoryOptions := make([]map[string]any, len(categories)+1)
-	categoryOptions[0] = map[string]any{
-		"ID":   "",
-		"Name": allCategoriesOptionName,
-	}
-	for i, cat := range categories {
-		categoryOptions[i+1] = map[string]any{
-			"ID":   cat.ID.String(),
-			"Name": cat.Name,
-		}
-	}
+	// Подготавливаем опции категорий. Пустой пункт «Все категории» уже есть
+	// в самих шаблонах формы, поэтому список несёт только реальные категории.
+	categoryOptions := buildCategorySelectOptions(categories)
 
 	// Предзаполняем форму с умолчательными значениями
 	now := time.Now()
@@ -216,7 +206,7 @@ func (h *BudgetHandler) Create(c echo.Context) error {
 			})
 		}
 
-		return h.renderBudgetFormWithErrors(c, form, validationErrors, "")
+		return h.renderBudgetFormWithErrors(c, form, validationErrors, nil)
 	}
 
 	// Парсим сумму
@@ -297,18 +287,9 @@ func (h *BudgetHandler) Edit(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get categories")
 	}
 
-	// Подготавливаем опции категорий
-	categoryOptions := make([]map[string]any, len(categories)+1)
-	categoryOptions[0] = map[string]any{
-		"ID":   "",
-		"Name": allCategoriesOptionName,
-	}
-	for i, cat := range categories {
-		categoryOptions[i+1] = map[string]any{
-			"ID":   cat.ID.String(),
-			"Name": cat.Name,
-		}
-	}
+	// Подготавливаем опции категорий. Пустой пункт «Все категории» уже есть
+	// в самих шаблонах формы, поэтому список несёт только реальные категории.
+	categoryOptions := buildCategorySelectOptions(categories)
 
 	// Подготавливаем форму с данными бюджета
 	form := webModels.BudgetForm{
@@ -351,7 +332,7 @@ func (h *BudgetHandler) Update(c echo.Context) error {
 	}
 
 	// Проверяем, что бюджет существует
-	_, err = h.services.Budget.GetBudgetByID(c.Request().Context(), budgetID)
+	existingBudget, err := h.services.Budget.GetBudgetByID(c.Request().Context(), budgetID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "Budget not found")
 	}
@@ -374,7 +355,7 @@ func (h *BudgetHandler) Update(c echo.Context) error {
 			})
 		}
 
-		return h.renderBudgetFormWithErrors(c, form, validationErrors, budgetID.String())
+		return h.renderBudgetFormWithErrors(c, form, validationErrors, existingBudget)
 	}
 
 	// Парсим новые значения
@@ -553,7 +534,7 @@ func (h *BudgetHandler) renderBudgetFormWithErrors(
 	c echo.Context,
 	form webModels.BudgetForm,
 	errors map[string]string,
-	budgetID string,
+	existing *budget.Budget,
 ) error {
 	// Получаем данные пользователя из сессии для категорий
 	_, err := middleware.GetUserFromContext(c)
@@ -570,27 +551,21 @@ func (h *BudgetHandler) renderBudgetFormWithErrors(
 		categories = []*category.Category{} // Пустой список при ошибке
 	}
 
-	// Подготавливаем опции категорий
-	categoryOptions := make([]map[string]any, len(categories)+1)
-	categoryOptions[0] = map[string]any{
-		"ID":   "",
-		"Name": allCategoriesOptionName,
-	}
-	for i, cat := range categories {
-		categoryOptions[i+1] = map[string]any{
-			"ID":   cat.ID.String(),
-			"Name": cat.Name,
-		}
-	}
+	// Подготавливаем опции категорий. Пустой пункт «Все категории» уже есть
+	// в самих шаблонах формы, поэтому список несёт только реальные категории.
+	categoryOptions := buildCategorySelectOptions(categories)
 
-	// Шаблон выбирается по наличию идентификатора бюджета, а не сравнением с
-	// заголовком страницы: заголовок — отображаемый текст, его перевод не
-	// должен уводить форму на другой шаблон.
+	// Шаблон выбирается по наличию самой сущности, а не сравнением с заголовком
+	// страницы: заголовок — отображаемый текст, его перевод не должен уводить
+	// форму на другой шаблон. Тот же признак «новая или существующая запись»
+	// использует renderTransactionFormWithErrors.
 	title := titleNewBudget
 	template := "pages/budgets/new"
-	if budgetID != "" {
+	budgetID := ""
+	if existing != nil {
 		title = titleEditBudget
 		template = "pages/budgets/edit"
+		budgetID = existing.ID.String()
 	}
 
 	data := budgetFormData{
@@ -639,7 +614,7 @@ func (h *BudgetHandler) handleBudgetActivation(c echo.Context, isActive bool) er
 	}
 
 	// Для HTMX запросов возвращаем обновленную страницу
-	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
+	if h.IsHTMXRequest(c) {
 		return h.Show(c)
 	}
 
@@ -798,7 +773,7 @@ func (h *BudgetHandler) CreateAlert(c echo.Context) error {
 	// Сейчас просто возвращаем успех
 
 	// Для HTMX запросов перенаправляем на страницу алертов
-	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
+	if h.IsHTMXRequest(c) {
 		c.Response().Header().Set("Hx-Redirect", "/budgets/alerts")
 		return c.NoContent(http.StatusOK)
 	}
@@ -827,7 +802,7 @@ func (h *BudgetHandler) DeleteAlert(c echo.Context) error {
 	_ = sessionData
 
 	// Для HTMX запросов возвращаем пустой ответ для удаления элемента
-	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
+	if h.IsHTMXRequest(c) {
 		return c.NoContent(http.StatusOK)
 	}
 

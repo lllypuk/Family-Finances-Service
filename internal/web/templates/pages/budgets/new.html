@@ -135,7 +135,7 @@
                     <select id="category_id" name="category_id">
                         <option value="">Все категории</option>
                         {{range .CategoryOptions}}
-                        <option value="{{.ID}}" {{if eq .ID $.Form.CategoryID}}selected{{end}}>
+                        <option value="{{.ID}}" {{if eq .ID.String $.Form.CategoryID}}selected{{end}}>
                             {{.Name}}
                         </option>
                         {{end}}

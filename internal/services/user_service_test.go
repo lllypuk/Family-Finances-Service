@@ -333,6 +333,8 @@ func TestUserService_DeleteUser(t *testing.T) {
 	secondAdmin := &user.User{ID: uuid.New(), Email: "admin2@example.com", Role: user.RoleAdmin}
 	memberUser := &user.User{ID: uuid.New(), Email: "member@example.com", Role: user.RoleMember}
 
+	actorID := uuid.New()
+
 	tests := []struct {
 		name      string
 		userID    uuid.UUID
@@ -340,6 +342,15 @@ func TestUserService_DeleteUser(t *testing.T) {
 		wantError bool
 		errorType error
 	}{
+		{
+			// Правило «себя удалить нельзя» живёт в сервисе, а не в хендлерах:
+			// обе поверхности (веб и API) раскладывают этот sentinel сами.
+			name:      "Error - Cannot delete self",
+			userID:    actorID,
+			setup:     func(_ *MockUserRepository, _ *MockFamilyRepository) {},
+			wantError: true,
+			errorType: services.ErrCannotDeleteSelf,
+		},
 		{
 			name:   "Success - Delete user",
 			userID: existingUser.ID,
@@ -391,7 +402,7 @@ func TestUserService_DeleteUser(t *testing.T) {
 			tt.setup(userRepo, familyRepo)
 
 			service := services.NewUserService(userRepo, familyRepo)
-			err := service.DeleteUser(context.Background(), tt.userID)
+			err := service.DeleteUser(context.Background(), tt.userID, actorID)
 
 			if tt.wantError {
 				require.Error(t, err)

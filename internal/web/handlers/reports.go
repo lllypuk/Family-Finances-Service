@@ -40,9 +40,13 @@ type ReportHandler struct {
 }
 
 // NewReportHandler создает новый обработчик отчетов
-func NewReportHandler(repositories *handlers.Repositories, services *services.Services) *ReportHandler {
+func NewReportHandler(
+	repositories *handlers.Repositories,
+	services *services.Services,
+	cookieSecure bool,
+) *ReportHandler {
 	return &ReportHandler{
-		BaseHandler: NewBaseHandler(repositories, services),
+		BaseHandler: NewBaseHandler(repositories, services, cookieSecure),
 		validator:   validator.New(),
 	}
 }

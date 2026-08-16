@@ -35,6 +35,7 @@ func setupTransactionHandler() (*handlers.TransactionHandler, *MockTransactionSe
 	handler := handlers.NewTransactionHandler(
 		&appHandlers.Repositories{},
 		servicesStruct,
+		false,
 	)
 
 	return handler, mockTransactionService, mockCategoryService, mockUserService

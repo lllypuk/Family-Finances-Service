@@ -27,9 +27,9 @@ type AdminHandler struct {
 }
 
 // NewAdminHandler creates a new admin handler
-func NewAdminHandler(repos *handlers.Repositories, services *services.Services) *AdminHandler {
+func NewAdminHandler(repos *handlers.Repositories, services *services.Services, cookieSecure bool) *AdminHandler {
 	return &AdminHandler{
-		BaseHandler: NewBaseHandler(repos, services),
+		BaseHandler: NewBaseHandler(repos, services, cookieSecure),
 	}
 }
 
@@ -90,7 +90,7 @@ func (h *AdminHandler) ListUsers(c echo.Context) error {
 	inviteURL := fmt.Sprintf("%s://%s", scheme, c.Request().Host)
 
 	data := map[string]any{
-		"Title":           "User Management",
+		"Title":           titleAdminUsers,
 		"Users":           users,
 		"Invites":         invites,
 		tplKeyFamily:      family,
@@ -138,7 +138,7 @@ func (h *AdminHandler) CreateInvite(c echo.Context) error {
 			return h.htmxError(c, "Pending invite already exists for this email")
 		}
 		c.Logger().Errorf("create invite failed: %v", err)
-		return h.htmxError(c, "Не удалось создать приглашение, попробуйте ещё раз")
+		return h.htmxError(c, "Failed to create invite, please try again")
 	}
 
 	// Get base URL for invite links
@@ -202,11 +202,6 @@ func (h *AdminHandler) DeleteUser(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid user ID")
 	}
 
-	// Prevent self-deletion
-	if userID == currentUser.ID {
-		return echo.NewHTTPError(http.StatusBadRequest, "Cannot delete yourself")
-	}
-
 	// Get user to delete to verify it exists
 	_, err = h.services.User.GetUserByID(c.Request().Context(), userID)
 	if err != nil {
@@ -219,7 +214,12 @@ func (h *AdminHandler) DeleteUser(c echo.Context) error {
 	// Single family model - no family check needed
 
 	// Delete user via service
-	if deleteErr := h.services.User.DeleteUser(c.Request().Context(), userID); deleteErr != nil {
+	if deleteErr := h.services.User.DeleteUser(c.Request().Context(), userID, currentUser.ID); deleteErr != nil {
+		// Запрет самоудаления и защита последнего администратора живут в
+		// userService.DeleteUser; здесь только формат ответа.
+		if errors.Is(deleteErr, services.ErrCannotDeleteSelf) {
+			return echo.NewHTTPError(http.StatusBadRequest, "Cannot delete yourself")
+		}
 		if errors.Is(deleteErr, services.ErrLastAdmin) {
 			return echo.NewHTTPError(http.StatusBadRequest, "Cannot delete the last administrator")
 		}

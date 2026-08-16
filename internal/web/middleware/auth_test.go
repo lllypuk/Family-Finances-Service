@@ -85,11 +85,12 @@ func TestRequireAuth_UnauthenticatedUser_RegularRequest(t *testing.T) {
 	// Выполняем запрос
 	err := handler(c)
 
-	// Проверяем результат - должен быть редирект
-	var httpErr *echo.HTTPError
-	require.ErrorAs(t, err, &httpErr)
-	assert.Equal(t, http.StatusFound, httpErr.Code)
+	// Проверяем результат — 302 на /login записан в ответ.
+	// Ветка моков отвечает тем же redirectToLogin, что и настоящая неудачная
+	// сессия, поэтому ошибка наружу не уходит: ответ уже отправлен.
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusFound, rec.Code)
+	assert.Equal(t, "/login", rec.Header().Get("Location"))
 }
 
 func TestRequireAuth_UnauthenticatedUser_HTMXRequest(t *testing.T) {

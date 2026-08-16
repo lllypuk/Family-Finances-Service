@@ -43,9 +43,13 @@ type CategoryHandler struct {
 }
 
 // NewCategoryHandler создает новый обработчик категорий
-func NewCategoryHandler(repositories *handlers.Repositories, services *services.Services) *CategoryHandler {
+func NewCategoryHandler(
+	repositories *handlers.Repositories,
+	services *services.Services,
+	cookieSecure bool,
+) *CategoryHandler {
 	return &CategoryHandler{
-		BaseHandler: NewBaseHandler(repositories, services),
+		BaseHandler: NewBaseHandler(repositories, services, cookieSecure),
 		validator:   validator.New(),
 	}
 }
@@ -663,19 +667,14 @@ func (h *CategoryHandler) Search(c echo.Context) error {
 	categoryViewModels = applyParentOnlyFilter(categoryViewModels, parentOnly)
 
 	// Строим дерево если не только родительские
-	if parentOnly {
-		data := map[string]any{
-			"Categories": categoryViewModels,
-		}
-		return h.renderPartial(c, "components/category_list", data)
+	list := categoryViewModels
+	if !parentOnly {
+		list = webModels.BuildCategoryTree(categoryViewModels)
 	}
 
-	categoryTree := webModels.BuildCategoryTree(categoryViewModels)
-	data := map[string]any{
-		"Categories": categoryTree,
-	}
-
-	return h.renderPartial(c, "components/category_list", data)
+	return h.renderPartial(c, "components/category_list", map[string]any{
+		tplKeyCategories: list,
+	})
 }
 
 // Select возвращает категории для select элементов (HTMX)

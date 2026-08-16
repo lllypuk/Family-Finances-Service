@@ -16,8 +16,6 @@ import (
 )
 
 const (
-	// HTMXRequestHeader is the header value for HTMX requests
-	HTMXRequestHeader = "true"
 	// Flash message cookie names
 	flashCookieName     = "flash_message"
 	flashTypeCookieName = "flash_type"
@@ -54,35 +52,34 @@ const (
 	titleReports      = "Отчёты"
 	titleNewReport    = "Новый отчёт"
 	titleReportPrefix = "Отчёт: "
+
+	titleUsers      = "Участники семьи"
+	titleAdminUsers = "Управление пользователями"
+	titleNewUser    = "Новый участник семьи"
+	titleSetup      = "Первоначальная настройка"
+	titleBackup     = "Резервные копии"
 )
 
-var (
-	// ErrNoSession is returned when no session is found
-	ErrNoSession = errors.New("no session found")
-
-	// cookieSecureForProduction is set by SetCookieSecureForProduction in
-	// production-like environments, so flash cookies are emitted with the
-	// Secure flag. Defaults to false for local development over plain HTTP.
-	cookieSecureForProduction = false //nolint:gochecknoglobals // env flag, set once at startup
-)
-
-// SetCookieSecureForProduction toggles the Secure flag for flash cookies.
-// Call once at startup from web.NewWebServer; safe to leave unset in dev.
-func SetCookieSecureForProduction(secure bool) {
-	cookieSecureForProduction = secure
-}
+// ErrNoSession is returned when no session is found
+var ErrNoSession = errors.New("no session found")
 
 // BaseHandler содержит общие методы для всех веб-обработчиков
 type BaseHandler struct {
 	repositories *handlers.Repositories
 	services     *services.Services
+
+	// cookieSecure — флаг Secure на flash-cookie. Приходит из
+	// application.Config.CookieSecure через web.NewWebServer тем же путём, что и
+	// у cookie сессии; в dev по HTTP он false, иначе браузер выбрасывает cookie.
+	cookieSecure bool
 }
 
 // NewBaseHandler создает новый базовый обработчик
-func NewBaseHandler(repositories *handlers.Repositories, services *services.Services) *BaseHandler {
+func NewBaseHandler(repositories *handlers.Repositories, services *services.Services, cookieSecure bool) *BaseHandler {
 	return &BaseHandler{
 		repositories: repositories,
 		services:     services,
+		cookieSecure: cookieSecure,
 	}
 }
 
@@ -121,7 +118,7 @@ type Message struct {
 
 // getFlashMessages получает flash сообщения из сессии
 func (h *BaseHandler) getFlashMessages(c echo.Context) []Message {
-	msgType, message := GetFlashMessage(c)
+	msgType, message := h.GetFlashMessage(c)
 	if message == "" {
 		return []Message{}
 	}
@@ -216,7 +213,7 @@ func (h *BaseHandler) redirect(c echo.Context, url string) error {
 
 // IsHTMXRequest проверяет, является ли запрос HTMX запросом
 func (h *BaseHandler) IsHTMXRequest(c echo.Context) bool {
-	return c.Request().Header.Get("Hx-Request") == HTMXRequestHeader
+	return middleware.IsHTMXRequest(c)
 }
 
 // DeleteEntityParams содержит параметры для общего метода удаления
@@ -289,8 +286,8 @@ func (h *BaseHandler) htmxError(c echo.Context, message string) error {
 }
 
 // setFlashMessage sets a flash message in a cookie
-func setFlashMessage(c echo.Context, msgType, message string) {
-	// #nosec G124 -- Secure flag is configured at startup via SetCookieSecureForProduction;
+func (h *BaseHandler) setFlashMessage(c echo.Context, msgType, message string) {
+	// #nosec G124 -- Secure flag comes from BaseHandler.cookieSecure (COOKIE_SECURE);
 	// HttpOnly and SameSite are always set.
 	c.SetCookie(&http.Cookie{
 		Name:     flashCookieName,
@@ -298,7 +295,7 @@ func setFlashMessage(c echo.Context, msgType, message string) {
 		Path:     "/",
 		MaxAge:   flashCookieMaxAge,
 		HttpOnly: true,
-		Secure:   cookieSecureForProduction,
+		Secure:   h.cookieSecure,
 		SameSite: http.SameSiteStrictMode,
 	})
 	// #nosec G124 -- see comment above.
@@ -308,13 +305,13 @@ func setFlashMessage(c echo.Context, msgType, message string) {
 		Path:     "/",
 		MaxAge:   flashCookieMaxAge,
 		HttpOnly: true,
-		Secure:   cookieSecureForProduction,
+		Secure:   h.cookieSecure,
 		SameSite: http.SameSiteStrictMode,
 	})
 }
 
 // GetFlashMessage reads and clears the flash message
-func GetFlashMessage(c echo.Context) (string, string) {
+func (h *BaseHandler) GetFlashMessage(c echo.Context) (string, string) {
 	msgCookie, err := c.Cookie(flashCookieName)
 	if err != nil {
 		return "", ""
@@ -322,13 +319,13 @@ func GetFlashMessage(c echo.Context) (string, string) {
 	typeCookie, _ := c.Cookie(flashTypeCookieName)
 
 	// Clear cookies
-	// #nosec G124 -- Secure flag is configured at startup via SetCookieSecureForProduction.
+	// #nosec G124 -- Secure flag comes from BaseHandler.cookieSecure (COOKIE_SECURE).
 	c.SetCookie(&http.Cookie{
 		Name:     flashCookieName,
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   cookieSecureForProduction,
+		Secure:   h.cookieSecure,
 		SameSite: http.SameSiteStrictMode,
 	})
 	// #nosec G124 -- see comment above.
@@ -337,7 +334,7 @@ func GetFlashMessage(c echo.Context) (string, string) {
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   cookieSecureForProduction,
+		Secure:   h.cookieSecure,
 		SameSite: http.SameSiteStrictMode,
 	})
 
@@ -352,7 +349,7 @@ func GetFlashMessage(c echo.Context) (string, string) {
 
 // redirectWithError performs a redirect with an error message
 func (h *BaseHandler) redirectWithError(c echo.Context, redirectURL, message string) error {
-	setFlashMessage(c, "error", message)
+	h.setFlashMessage(c, "error", message)
 	if h.IsHTMXRequest(c) {
 		c.Response().Header().Set("Hx-Redirect", redirectURL)
 		return c.NoContent(http.StatusOK)
@@ -362,7 +359,7 @@ func (h *BaseHandler) redirectWithError(c echo.Context, redirectURL, message str
 
 // redirectWithSuccess performs a redirect with a success message
 func (h *BaseHandler) redirectWithSuccess(c echo.Context, redirectURL, message string) error {
-	setFlashMessage(c, "success", message)
+	h.setFlashMessage(c, "success", message)
 	if h.IsHTMXRequest(c) {
 		c.Response().Header().Set("Hx-Redirect", redirectURL)
 		return c.NoContent(http.StatusOK)

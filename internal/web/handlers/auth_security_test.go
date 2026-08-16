@@ -178,7 +178,7 @@ func TestLogin_OpenRedirectProtection(t *testing.T) {
 	// Create minimal handler setup for testing
 	repos := &handlers.Repositories{}
 	svcs := &services.Services{}
-	_ = NewAuthHandler(repos, svcs)
+	_ = NewAuthHandler(repos, svcs, false)
 
 	redirectTests := []struct {
 		name        string
@@ -528,7 +528,7 @@ func newLoginTestServer(t *testing.T) (*echo.Echo, *user.User) {
 	e.Use(middleware.SessionStore(loginTestSessionSecret, false))
 	e.Use(middleware.CSRFProtection())
 
-	authHandler := NewAuthHandler(repos, &services.Services{})
+	authHandler := NewAuthHandler(repos, &services.Services{}, false)
 	e.POST("/login", authHandler.Login)
 	e.GET("/logout", authHandler.Logout)
 

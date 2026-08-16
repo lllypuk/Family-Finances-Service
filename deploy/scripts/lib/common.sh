@@ -41,8 +41,8 @@ check_system_requirements() {
     log_info "Checking system requirements..."
     
     # Check RAM.
-    # Само приложение в работе укладывается в 128-256MB (Go + SQLite, один процесс).
-    # Порог держим на 512MB: запас нужен не сервису, а локальной сборке Docker-образа.
+    # The running service itself fits in 128-256MB (Go + SQLite, single process).
+    # The floor stays at 512MB for the local Docker image build, not for the service.
     local min_ram_mb=512
     local recommended_ram_mb=1024
     local total_ram=$(free -m | awk '/^Mem:/{print $2}')

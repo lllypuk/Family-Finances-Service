@@ -47,6 +47,7 @@ func setupBudgetHandlerWithUser() (
 	handler := handlers.NewBudgetHandler(
 		&appHandlers.Repositories{},
 		servicesStruct,
+		false,
 	)
 
 	return handler, mockBudgetService, mockCategoryService, mockTransactionService, mockUserService

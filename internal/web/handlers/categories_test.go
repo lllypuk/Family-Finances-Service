@@ -46,6 +46,7 @@ func setupCategoryHandlerWithUser() (
 	handler := handlers.NewCategoryHandler(
 		&appHandlers.Repositories{},
 		servicesStruct,
+		false,
 	)
 
 	return handler, mockCategoryService, mockTransactionService, mockBudgetService, mockUserService

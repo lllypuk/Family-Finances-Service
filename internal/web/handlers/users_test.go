@@ -33,7 +33,7 @@ func setupUserTest(t *testing.T) (*handlers.UserHandler, *MockUserService, *Mock
 		Family: mockFamilyService,
 	}
 
-	handler := handlers.NewUserHandler(repos, srvcs)
+	handler := handlers.NewUserHandler(repos, srvcs, false)
 	return handler, mockUserService, mockFamilyService
 }
 

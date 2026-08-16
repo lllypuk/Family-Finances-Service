@@ -2,7 +2,6 @@ package integration_test
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
@@ -47,19 +46,6 @@ func TestLoginPage_NoDeadLinks(t *testing.T) {
 		assert.True(t, matchesAnyRoute(path, routes),
 			"страница /login ссылается на %q, но такого GET-маршрута нет", path)
 	}
-}
-
-// fetchAnonymousPage запрашивает страницу без сессии и возвращает тело ответа.
-func fetchAnonymousPage(t *testing.T, ts *testhelpers.TestServer, path string) string {
-	t.Helper()
-
-	req := httptest.NewRequest(http.MethodGet, path, nil)
-	rec := httptest.NewRecorder()
-
-	ts.Server.Echo().ServeHTTP(rec, req)
-	require.Equal(t, http.StatusOK, rec.Code, "GET %s отдал %d, тело: %s", path, rec.Code, rec.Body.String())
-
-	return rec.Body.String()
 }
 
 // registeredGETRoutes возвращает шаблоны всех GET-маршрутов, скомпилированные

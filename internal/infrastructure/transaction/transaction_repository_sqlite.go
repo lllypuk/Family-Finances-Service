@@ -349,8 +349,6 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*transact
 // buildFilterConditions собирает WHERE-условия и аргументы для фильтра транзакций.
 // Пагинация (LIMIT/OFFSET) намеренно не добавляется: она нужна только выборке строк,
 // но не подсчёту общего количества (CountByFilter).
-//
-
 func (r *SQLiteRepository) buildFilterConditions(
 	ctx context.Context,
 	filter transaction.Filter,
