@@ -17,7 +17,17 @@ import (
 	"family-budget-service/internal/web/middleware"
 )
 
-// MockRenderer is a mock template renderer
+// MockRenderer is a mock template renderer.
+//
+// ВНИМАНИЕ: он глотает и имя шаблона, и данные, и всегда возвращает nil —
+// то есть **не проверяет ни существование шаблона, ни контракт данных**.
+// Именно поэтому U-02 (docs/specs/003-ui-ux-audit.md#u-02) прошёл мимо тестов:
+// хендлеры отдавали map без `CurrentUser` в корне, шаблон молча терял меню,
+// а тесты на MockRenderer оставались зелёными.
+//
+// Регрессии на рендеринг закрывать этим моком нельзя. Для них есть полный стек
+// с настоящими шаблонами: testhelpers.SetupHTTPServer + tests/integration
+// (образец — tests/integration/web_pages_test.go).
 type MockRenderer struct{}
 
 func (r *MockRenderer) Render(_ io.Writer, _ string, _ any, _ echo.Context) error {

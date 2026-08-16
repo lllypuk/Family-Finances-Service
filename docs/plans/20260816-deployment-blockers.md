@@ -561,11 +561,30 @@ Option 2 из `deploy/README.md`.
 - Create: `tests/integration/web_pages_test.go`
 - Modify: `internal/web/handlers/testhelpers_test.go`
 
-- [ ] написать тест через полный сервер из задачи 1: залогиниться, запросить `/transactions`, проверить наличие пунктов меню в HTML
-- [ ] распространить на `/categories`, `/budgets`, `/reports`
-- [ ] запустить и **убедиться, что тесты падают** для всех четырёх страниц
-- [ ] пометить `MockRenderer` комментарием о том, что он не проверяет шаблоны, чтобы им не закрывали будущие регрессии
-- [ ] не переходить к задаче 13, пока падение не воспроизведено
+- [x] написать тест через полный сервер из задачи 1: залогиниться, запросить `/transactions`, проверить наличие пунктов меню в HTML
+- [x] распространить на `/categories`, `/budgets`, `/reports`
+- [x] запустить и **убедиться, что тесты падают** для всех четырёх страниц
+- [x] пометить `MockRenderer` комментарием о том, что он не проверяет шаблоны, чтобы им не закрывали будущие регрессии
+- [x] не переходить к задаче 13, пока падение не воспроизведено
+
+⚠️ Красная фаза зафиксирована: `TestWebPages_NavigationRendered` падает на всех
+четырёх страницах, вывод записан в шапке `tests/integration/web_pages_test.go`.
+Подтесты закрыты `t.Skip` (константы `webPagesSkipTransactions`,
+`webPagesSkipCategories`, `webPagesSkipBudgets`, `webPagesSkipReports`), чтобы
+`make test` оставался зелёным; **каждая из задач 13-15 обязана снять свой skip**
+— соответствующие пункты добавлены в их чек-листы.
+
+ℹ️ Проверяется не только набор ссылок, но и пользовательская часть шапки (имя
+владельца сессии + `action="/logout"`) — иначе `/reports` прошёл бы и в красной
+фазе: `pages/reports/index.html` рисует пункты меню **безусловно**, без
+`{{if .CurrentUser}}`. Ассерты бьют по вырезанному блоку `<nav>…</nav>`, а не по
+всей странице, чтобы совпадение с ссылками в теле страницы не давало ложного
+зелёного.
+
+⚠️ Следствие для задачи 15: `/reports` закрывается не только контрактом данных,
+но и правкой самого `pages/reports/index.html` — блока с именем пользователя и
+формой выхода там нет вовсе (в отличие от transactions/categories/budgets, где
+он есть, но скрыт ложным `{{if .CurrentUser}}`).
 
 ### Task 13: Контракт данных — транзакции
 
@@ -577,6 +596,7 @@ Option 2 из `deploy/README.md`.
 - [ ] заменить `map[string]any{"PageData": …}` на встроенную структуру по образцу `dashboard.go:110` (3 места в `transactions.go`, 1 в `transactions_helpers.go`)
 - [ ] встроенные поля ставить первыми и отделять пустой строкой (`embeddedstructfieldcheck`)
 - [ ] проверить, что `{{.PageData.X}}` в шаблонах продолжает работать — имя встроенного поля остаётся `PageData`
+- [ ] снять `t.Skip(webPagesSkipTransactions)` в `tests/integration/web_pages_test.go` и удалить константу
 - [ ] прогнать тест из задачи 12 — страница `/transactions` обязана пройти
 - [ ] написать тест на данные хендлера: `CurrentUser` доступен в корне контекста
 - [ ] `make test` и `make lint` — 0 issues перед задачей 14
@@ -591,6 +611,7 @@ Option 2 из `deploy/README.md`.
 
 - [ ] заменить map-контракт на встроенную структуру (5 мест в `categories.go`, 6 в `budgets.go`)
 - [ ] следить за `dupl`: почти одинаковые анонимные структуры в production-коде линтер может зацепить — при срабатывании вынести общий тип
+- [ ] снять `t.Skip(webPagesSkipCategories)` и `t.Skip(webPagesSkipBudgets)` в `tests/integration/web_pages_test.go` и удалить константы
 - [ ] прогнать тест из задачи 12 — `/categories` и `/budgets` обязаны пройти
 - [ ] написать тесты на данные хендлеров для обеих страниц
 - [ ] `make test` и `make lint` — 0 issues перед задачей 15
@@ -603,9 +624,12 @@ Option 2 из `deploy/README.md`.
 - Modify: `internal/web/handlers/categories.go`
 - Modify: `internal/web/handlers/budgets.go`
 - Modify: `internal/web/handlers/reports_test.go`
+- Modify: `internal/web/templates/pages/reports/index.html` (➕ в шапке нет блока пользователя — см. задачу 12)
 
 - [ ] заменить map-контракт на встроенную структуру (4 места в `reports.go`)
 - [ ] перевести заголовки: `Transactions`→`Транзакции`, `Budgets`→`Бюджеты`, `Categories`→`Категории`, `Reports`→`Отчёты`, а также формы `New/Edit …` (U-05)
+- [ ] добавить в `pages/reports/index.html` блок `{{if .CurrentUser}}` с именем пользователя и формой выхода по образцу `pages/transactions/index.html` — одного контракта данных для `/reports` мало
+- [ ] снять `t.Skip(webPagesSkipReports)` в `tests/integration/web_pages_test.go` и удалить константу
 - [ ] прогнать тест из задачи 12 — `/reports` обязан пройти
 - [ ] расширить тест из задачи 12: заголовок страницы на русском
 - [ ] `make test` и `make lint` — 0 issues перед задачей 16
