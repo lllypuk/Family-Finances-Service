@@ -386,12 +386,22 @@ group-middleware на catch-all маршрут группы) — так анон
 - Modify: `internal/web/middleware/setup.go`
 - Create: `internal/web/middleware/setup_test.go`
 
-- [ ] перейти с `c.Path()` на `c.Request().URL.Path` — `c.Path()` возвращает шаблон маршрута (`/static*`), а для незарегистрированного `/favicon.ico` вернёт не то
-- [ ] пропускать без проверок: префикс `/static/`, `/health`, `/favicon.ico`
-- [ ] написать тесты: при незавершённой настройке `/static/css/pico.min.css` → 200, `/health` → 200, `/favicon.ico` → не редирект
-- [ ] написать тест: при незавершённой настройке любой другой путь по-прежнему → 302 на `/setup`
-- [ ] написать тест: после завершения настройки `/setup` → 302 на `/login` (поведение не изменилось)
-- [ ] `make test` и `make lint` — 0 issues перед задачей 9
+- [x] перейти с `c.Path()` на `c.Request().URL.Path` — `c.Path()` возвращает шаблон маршрута (`/static*`), а для незарегистрированного `/favicon.ico` вернёт не то
+- [x] пропускать без проверок: префикс `/static/`, `/health`, `/favicon.ico`
+- [x] написать тесты: при незавершённой настройке `/static/css/pico.min.css` → 200, `/health` → 200, `/favicon.ico` → не редирект
+- [x] написать тест: при незавершённой настройке любой другой путь по-прежнему → 302 на `/setup`
+- [x] написать тест: после завершения настройки `/setup` → 302 на `/login` (поведение не изменилось)
+- [x] `make test` и `make lint` — 0 issues перед задачей 9
+
+ℹ️ Исключения вынесены в `isSetupExempt(path)` (`setup.go`): точные `/health`,
+`/favicon.ico`, `/static` плюс префикс `/static/`; пути-константы (`mnd`/`goconst`),
+без пакетных переменных (`gochecknoglobals` — таблица-map потребовала бы `nolint`).
+Проверка исключений стоит **до** обращения к `IsSetupComplete`, поэтому статика и
+`/health` вообще не ходят в БД — это же поведение пригодится задаче 9.
+Тесты — `internal/web/middleware/setup_test.go` (`package middleware_test`),
+запросы идут через `e.ServeHTTP` с зарегистрированным маршрутом `/static*`, чтобы
+`c.Path()` реально возвращал шаблон: на старом коде `/static/css/pico.min.css`
+дал бы 302. Заглушка `stubSetupChecker` считает вызовы — задел под задачу 9.
 
 ### Task 9: Кэшировать IsSetupComplete (S-05)
 
