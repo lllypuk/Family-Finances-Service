@@ -34,20 +34,23 @@ longer works for the `app` service — use `docker compose build app`.
 Set `REPO_GIT_URL` / `REPO_REF` before running `install.sh` to build from a fork or
 a specific tag.
 
-### One-Command Installation
+### Installation
 
-```bash
-# Download and run installation script
-curl -fsSL https://raw.githubusercontent.com/lllypuk/Family-Finances-Service/main/deploy/scripts/install.sh | sudo bash -s -- --domain budget.example.com --email admin@example.com
-```
-
-Or clone the repository and run locally:
+Clone the repository and run the installer from the checkout — it sources
+`deploy/scripts/lib/*.sh` next to itself, so piping it into `bash` (`curl … | sudo bash`)
+cannot work: `BASH_SOURCE[0]` is not a path there and the `source` aborts under `set -e`.
 
 ```bash
 git clone https://github.com/lllypuk/Family-Finances-Service.git
 cd Family-Finances-Service
 sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@example.com
 ```
+
+Re-running `install.sh` on an existing installation is safe: `data/`, `backups/` and the
+secrets in `config/.env` are kept, the sources are re-fetched and the image is rebuilt.
+Pass `--reinstall` only when you deliberately want the old tree moved to
+`/opt/family-budget.backup.<timestamp>` and fresh secrets generated (that invalidates
+every session).
 
 ### First run over an SSH tunnel
 

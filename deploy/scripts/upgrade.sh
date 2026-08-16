@@ -183,28 +183,68 @@ check_database_integrity() {
         return 0
     fi
 
-    # Try to check integrity if container is running
-    if docker ps --format '{{.Names}}' | grep -q 'family-budget'; then
-        local integrity=$(docker exec $(docker ps -q --filter "name=family-budget" | head -1) sh -c "sqlite3 /data/budget.db 'PRAGMA integrity_check;'" 2>/dev/null || echo "cannot_check")
-
-        if [[ "${integrity}" != "ok" && "${integrity}" != "cannot_check" ]]; then
-            log_error "Database integrity check failed: ${integrity}"
-            exit 1
-        fi
-
-        if [[ "${integrity}" == "ok" ]]; then
-            log_success "Database integrity: OK"
-        else
-            log_warning "Could not check database integrity (container may not be running)"
-        fi
-    else
-        log_warning "Container not running, skipping database integrity check"
+    # Внутри рантайм-образа sqlite3 нет (docker/Dockerfile ставит только
+    # ca-certificates/tzdata/wget), поэтому проверка делается на хосте.
+    if ! command -v sqlite3 >/dev/null 2>&1; then
+        log_warning "sqlite3 is not installed on the host, skipping integrity check"
+        log_warning "Install it (apt-get install sqlite3 / dnf install sqlite) for safer upgrades"
+        return 0
     fi
+
+    local integrity
+    integrity=$(sqlite3 "${db_file}" 'PRAGMA integrity_check;' 2>/dev/null || echo "cannot_check")
+
+    if [[ "${integrity}" == "ok" ]]; then
+        log_success "Database integrity: OK"
+        return 0
+    fi
+
+    if [[ "${integrity}" == "cannot_check" ]]; then
+        log_warning "Could not check database integrity"
+        return 0
+    fi
+
+    log_error "Database integrity check failed: ${integrity}"
+    exit 1
 }
 
 # ============================================
 # Backup Functions
 # ============================================
+
+# Снять копию базы на ХОСТЕ.
+#
+# Раньше здесь был `docker exec … sqlite3 …`, но в рантайм-образе sqlite3 нет
+# (docker/Dockerfile ставит только ca-certificates/tzdata/wget), поэтому под
+# `set -euo pipefail` скрипт падал с кодом 127 на каждом реальном обновлении —
+# то есть бэкапа и материала для отката не было вовсе.
+#
+# Вызывается уже после stop_service, так что копия снимается с остановленной
+# базы. sqlite3 на хосте предпочтителен (`.backup` сворачивает WAL в один
+# файл); без него копируем файл вместе с -wal/-shm, иначе копия неполная.
+backup_database_file() {
+    local db_file=$1
+    local dest=$2
+
+    if command -v sqlite3 >/dev/null 2>&1; then
+        if sqlite3 "${db_file}" ".backup '${dest}'"; then
+            return 0
+        fi
+        log_warning "sqlite3 .backup failed, falling back to a plain file copy"
+    else
+        log_warning "sqlite3 is not installed on the host, copying database files as-is"
+    fi
+
+    cp "${db_file}" "${dest}"
+    if [[ -f "${db_file}-wal" ]]; then
+        cp "${db_file}-wal" "${dest}-wal"
+    fi
+    if [[ -f "${db_file}-shm" ]]; then
+        cp "${db_file}-shm" "${dest}-shm"
+    fi
+
+    return 0
+}
 
 create_upgrade_backup() {
     log_info "Creating pre-upgrade backup..."
@@ -215,13 +255,7 @@ create_upgrade_backup() {
     local db_file="${DATA_DIR}/budget.db"
     if [[ -f "${db_file}" ]]; then
         log_info "Backing up database..."
-        if docker ps --format '{{.Names}}' | grep -q 'family-budget'; then
-            docker exec $(docker ps -q --filter "name=family-budget" | head -1) sh -c "sqlite3 /data/budget.db \".backup '/data/pre_upgrade_${TIMESTAMP}.db'\""
-            cp "${DATA_DIR}/pre_upgrade_${TIMESTAMP}.db" "${UPGRADE_BACKUP_DIR}/budget.db"
-            rm -f "${DATA_DIR}/pre_upgrade_${TIMESTAMP}.db"
-        else
-            cp "${db_file}" "${UPGRADE_BACKUP_DIR}/budget.db"
-        fi
+        backup_database_file "${db_file}" "${UPGRADE_BACKUP_DIR}/budget.db"
         log_success "Database backed up"
     fi
 
@@ -373,10 +407,19 @@ rollback() {
     docker compose -f "${COMPOSE_FILE}" stop app 2>/dev/null || true
     sleep 3
 
-    # Restore database
+    # Restore database.
+    # Осиротевшие -wal/-shm от неудачного запуска обязательно удалить: SQLite
+    # накатил бы их поверх восстановленного файла и вернул данные обратно.
     if [[ -f "${UPGRADE_BACKUP_DIR}/budget.db" ]]; then
         log_info "Restoring database from backup..."
+        rm -f "${DATA_DIR}/budget.db-wal" "${DATA_DIR}/budget.db-shm"
         cp "${UPGRADE_BACKUP_DIR}/budget.db" "${DATA_DIR}/budget.db"
+        if [[ -f "${UPGRADE_BACKUP_DIR}/budget.db-wal" ]]; then
+            cp "${UPGRADE_BACKUP_DIR}/budget.db-wal" "${DATA_DIR}/budget.db-wal"
+        fi
+        if [[ -f "${UPGRADE_BACKUP_DIR}/budget.db-shm" ]]; then
+            cp "${UPGRADE_BACKUP_DIR}/budget.db-shm" "${DATA_DIR}/budget.db-shm"
+        fi
         log_success "Database restored"
     fi
 
@@ -466,10 +509,10 @@ upgrade() {
 
     check_database_integrity
 
-    # Create backup
-    create_upgrade_backup
-
-    # Fetch sources and rebuild the image
+    # Fetch sources and rebuild the image.
+    # Делается ДО бэкапа намеренно: неудачная сборка ничего не меняет на диске,
+    # а бэкап снимается с уже остановленного сервиса (см. ниже) — так копия
+    # базы заведомо консистентна.
     if ! build_new_version; then
         log_error "Failed to build new version"
         exit 1
@@ -477,6 +520,9 @@ upgrade() {
 
     # Stop service
     stop_service
+
+    # Create backup (сервис уже остановлен — база никем не пишется)
+    create_upgrade_backup
 
     # Start with new version
     start_service

@@ -28,6 +28,10 @@ source "${SCRIPT_DIR}/lib/firewall.sh"
 DOMAIN=""
 ADMIN_EMAIL=""
 NON_INTERACTIVE=false
+# --reinstall: явное согласие снести существующую установку (каталог целиком
+# уезжает в $INSTALL_DIR.backup.<ts>). Без флага повторный запуск сохраняет
+# данные и секреты — см. create_directories/generate_secrets.
+REINSTALL=false
 SESSION_SECRET=""
 CSRF_SECRET=""
 
@@ -41,6 +45,10 @@ parse_args() {
         case $1 in
             --non-interactive)
                 NON_INTERACTIVE=true
+                shift
+                ;;
+            --reinstall)
+                REINSTALL=true
                 shift
                 ;;
             --domain)
@@ -75,6 +83,10 @@ OPTIONS:
     --non-interactive       Run without user prompts
     --domain DOMAIN        Set domain name (e.g., budget.example.com)
     --email EMAIL          Set admin email for Let's Encrypt
+    --reinstall            DESTRUCTIVE. Move the existing $INSTALL_DIR aside
+                           (database, backups and config included) and install
+                           from scratch. Without this flag a repeated run keeps
+                           data/, backups/ and the secrets in config/.env.
     --help, -h             Show this help message
 
 EXAMPLES:
@@ -138,26 +150,75 @@ prompt_configuration() {
     fi
 }
 
-# Generate secrets
+# Read a KEY=value entry out of the existing config/.env, if it is there.
+read_env_value() {
+    local key=$1
+    local env_file="$INSTALL_DIR/config/.env"
+
+    if [[ ! -f "$env_file" ]]; then
+        return 0
+    fi
+
+    sed -n "s/^${key}=//p" "$env_file" | tail -1
+}
+
+# Generate secrets.
+#
+# Повторный запуск НЕ перевыпускает секреты, если они уже есть в config/.env:
+# новый SESSION_SECRET разлогинил бы всех и превратил бы уже выданные cookie в
+# «битые» (см. ensureCSRFToken). Свежие значения генерируются только когда
+# файла нет — то есть при первой установке или после --reinstall.
+#
+# Вызывается ПОСЛЕ create_directories: только там становится понятно, остался
+# ли config/.env на месте.
 generate_secrets() {
+    SESSION_SECRET=$(read_env_value SESSION_SECRET)
+    CSRF_SECRET=$(read_env_value CSRF_SECRET)
+
+    if [[ -n "$SESSION_SECRET" && -n "$CSRF_SECRET" ]]; then
+        log_info "Reusing SESSION_SECRET and CSRF_SECRET from $INSTALL_DIR/config/.env"
+        return 0
+    fi
+
     log_info "Generating secure secrets..."
-    
-    SESSION_SECRET=$(generate_secret)
-    CSRF_SECRET=$(generate_secret)
-    
+
+    if [[ -z "$SESSION_SECRET" ]]; then
+        SESSION_SECRET=$(generate_secret)
+    fi
+    if [[ -z "$CSRF_SECRET" ]]; then
+        CSRF_SECRET=$(generate_secret)
+    fi
+
     log_success "Generated SESSION_SECRET and CSRF_SECRET"
 }
 
-# Create directory structure
+# Create directory structure.
+#
+# Раньше здесь безусловно вызывался `backup_directory "$INSTALL_DIR"` (обычный
+# `mv`): второй запуск install.sh на живой установке уносил в сторону боевую
+# базу, бэкапы и config/.env, после чего сервис поднимался на пустом ./data с
+# новыми секретами — то есть выглядел как полная потеря данных. Теперь снос
+# требует явного --reinstall, а обычный повторный запуск идемпотентен.
 create_directories() {
     log_info "Creating directory structure..."
-    
-    # Backup existing installation if present
-    backup_directory "$INSTALL_DIR"
-    
+
+    if [[ -d "$INSTALL_DIR" ]]; then
+        if [[ "$REINSTALL" == "true" ]]; then
+            log_warning "--reinstall: moving the existing installation aside"
+            # Контейнер держит открытым файл БД на bind-mount: сначала гасим.
+            if [[ -f "$INSTALL_DIR/docker-compose.yml" ]]; then
+                (cd "$INSTALL_DIR" && docker compose down 2>/dev/null) || true
+            fi
+            backup_directory "$INSTALL_DIR"
+        else
+            log_info "Existing installation found at $INSTALL_DIR - keeping data/, backups/ and config/.env"
+            log_info "Pass --reinstall to wipe it instead (the old tree is moved to ${INSTALL_DIR}.backup.<timestamp>)"
+        fi
+    fi
+
     # Create main directory
     mkdir -p "$INSTALL_DIR"/{data,backups,config,logs}
-    
+
     log_success "Created directory structure at $INSTALL_DIR"
 }
 
@@ -239,6 +300,12 @@ CSRF_SECRET=$CSRF_SECRET
 # Logging
 LOG_LEVEL=info
 ENVIRONMENT=production
+
+# Флаг Secure на cookie сессии. За TLS-прокси оставить true.
+# Если сервис пока отдаётся по http:// (кроме localhost/SSH-туннеля), поставьте
+# false: браузер молча выбрасывает Secure-cookie на небезопасном origin, и вход
+# зацикливается на "CSRF token not found in session".
+COOKIE_SECURE=true
 
 # Admin Contact
 ADMIN_EMAIL=$ADMIN_EMAIL
@@ -389,8 +456,10 @@ main() {
     
     install_docker
     setup_firewall
-    generate_secrets
+    # Порядок важен: create_directories решает, остаётся ли config/.env на
+    # месте, а generate_secrets переиспользует секреты именно оттуда.
     create_directories
+    generate_secrets
     fetch_sources
     download_deployment_files
     create_env_file
