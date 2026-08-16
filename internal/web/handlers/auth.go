@@ -94,7 +94,7 @@ func (h *AuthHandler) LoginPage(c echo.Context) error {
 
 	data := map[string]any{
 		tplKeyCSRFToken: csrfToken,
-		"Title":         "Sign In",
+		"Title":         titleLogin,
 		"IsLogin":       true,
 		"Messages":      h.getFlashMessages(c),
 	}
@@ -143,17 +143,9 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	}
 
 	// Защита от фиксации сессии (S-02): анонимная сессия вместе с выданным ей
-	// CSRF-токеном отбрасывается до того, как в неё попадут данные пользователя.
-	if clearErr := middleware.ClearSession(c); clearErr != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create session")
-	}
-
-	if sessionErr := middleware.SetSessionData(c, sessionData); sessionErr != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create session")
-	}
-
-	// Новый CSRF-токен: полученный до входа больше не действует.
-	if _, csrfErr := middleware.RegenerateCSRFToken(c); csrfErr != nil {
+	// CSRF-токеном отбрасывается целиком, пользователь получает новую сессию и
+	// новый токен одним сохранением.
+	if sessionErr := middleware.RotateSession(c, sessionData); sessionErr != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create session")
 	}
 
@@ -250,7 +242,7 @@ func (h *AuthHandler) loginError(c echo.Context, message string, fieldErrors map
 
 	data := map[string]any{
 		tplKeyCSRFToken:   csrfToken,
-		"Title":           "Sign In",
+		"Title":           titleLogin,
 		tplKeyError:       message,
 		tplKeyFieldErrors: fieldErrors,
 		tplKeyEmail:       c.FormValue("email"), // Сохраняем введенный email
@@ -313,7 +305,7 @@ func (h *AuthHandler) InviteRegisterPage(c echo.Context) error {
 
 	data := map[string]any{
 		tplKeyCSRFToken: csrfToken,
-		"Title":         "Accept Invitation",
+		"Title":         titleInvite,
 		"Invite":        invite,
 		"Token":         token,
 		tplKeyEmail:     invite.Email,
@@ -377,7 +369,9 @@ func (h *AuthHandler) InviteRegister(c echo.Context) error {
 		Email:  newUser.Email,
 	}
 
-	if sessionErr := middleware.SetSessionData(c, sessionData); sessionErr != nil {
+	// Та же защита от фиксации сессии, что и при входе по паролю (S-02):
+	// приглашение — вторая точка входа в аутентифицированное состояние.
+	if sessionErr := middleware.RotateSession(c, sessionData); sessionErr != nil {
 		// User is created, but session failed - redirect to login
 		if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
 			c.Response().Header().Set("Hx-Redirect", "/login")
@@ -409,7 +403,7 @@ func (h *AuthHandler) inviteError(c echo.Context, token, message string, fieldEr
 
 	data := map[string]any{
 		tplKeyCSRFToken:   csrfToken,
-		"Title":           "Accept Invitation",
+		"Title":           titleInvite,
 		tplKeyError:       message,
 		tplKeyFieldErrors: fieldErrors,
 		"Token":           token,
@@ -423,5 +417,5 @@ func (h *AuthHandler) inviteError(c echo.Context, token, message string, fieldEr
 		return c.Render(http.StatusUnprocessableEntity, "pages/invite_form.html", data)
 	}
 
-	return c.Render(http.StatusUnprocessableEntity, "pages/invite.html", data)
+	return c.Render(http.StatusUnprocessableEntity, "invite", data)
 }

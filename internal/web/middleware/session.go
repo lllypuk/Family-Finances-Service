@@ -43,6 +43,11 @@ func SessionStore(secretKey string, isProduction bool) echo.MiddlewareFunc {
 		Secure:   isProduction, // true для production с HTTPS, false для разработки
 		SameSite: http.SameSiteLaxMode,
 	}
+	// NewCookieStore штампует кодеки своим MaxAge по умолчанию (30 дней), и
+	// присвоение Options меняет только атрибут cookie. Без этого вызова
+	// перехваченная cookie оставалась бы валидной на сервере 30 дней вместо
+	// SessionTimeout.
+	store.MaxAge(store.Options.MaxAge)
 
 	return session.Middleware(store)
 }
@@ -119,6 +124,41 @@ func SetSessionData(c echo.Context, data *SessionData) error {
 	sess.Values[SessionUserKey] = data.UserID
 	sess.Values[SessionRoleKey] = data.Role
 	sess.Values[SessionEmailKey] = data.Email
+
+	return sess.Save(c.Request(), c.Response())
+}
+
+// RotateSession перевыпускает сессию под нового пользователя: все прежние
+// значения (включая CSRF-токен анонимной сессии) отбрасываются, записываются
+// данные пользователя и свежий CSRF-токен, cookie сохраняется один раз.
+//
+// Это защита от фиксации сессии (S-02): хранилище cookie-based, серверного
+// session ID нет, поэтому «новой» сессию делает именно полная замена значений
+// вместе с токеном. Вызывать на каждой точке входа в аутентифицированное
+// состояние — вход по паролю и регистрация по приглашению.
+func RotateSession(c echo.Context, data *SessionData) error {
+	sess, err := session.Get(SessionName, c)
+	if err != nil {
+		return err
+	}
+
+	for k := range sess.Values {
+		delete(sess.Values, k)
+	}
+
+	if sess.Options != nil {
+		sess.Options.MaxAge = int(SessionTimeout.Seconds())
+	}
+
+	token, err := generateCSRFToken()
+	if err != nil {
+		return err
+	}
+
+	sess.Values[SessionUserKey] = data.UserID
+	sess.Values[SessionRoleKey] = data.Role
+	sess.Values[SessionEmailKey] = data.Email
+	sess.Values[CSRFTokenKey] = token
 
 	return sess.Save(c.Request(), c.Response())
 }

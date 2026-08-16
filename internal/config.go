@@ -17,6 +17,15 @@ const (
 
 	// Web session defaults
 	defaultSessionTimeout = 24 * time.Hour
+
+	// minProductionSecretLength — минимальная длина секретов в production.
+	// Проверки только на плейсхолдер было мало: SESSION_SECRET=123 её проходил
+	// (S-04, docs/specs/002-security-audit.md). `openssl rand -base64 32`
+	// даёт 44 символа.
+	minProductionSecretLength = 32
+
+	placeholderSessionSecret = "your-super-secret-session-key-change-in-production"
+	placeholderCSRFSecret    = "your-csrf-secret-key-change-in-production"
 )
 
 type Config struct {
@@ -43,6 +52,10 @@ type DatabaseConfig struct {
 type WebConfig struct {
 	SessionSecret  string
 	SessionTimeout time.Duration
+	// CSRFSecret пока ничего не подписывает: CSRF-токен генерируется случайно
+	// и хранится в сессии, которую защищает SESSION_SECRET. Значение остаётся
+	// обязательным в production (и валидируется), чтобы не менять контракт
+	// развёртывания задним числом; см. docs/backlog.md.
 	CSRFSecret     string
 	CookieSecure   bool
 	CookieHTTPOnly bool
@@ -83,9 +96,9 @@ func LoadConfig() *Config {
 			Path: getEnv("DATABASE_PATH", "./data/budget.db"),
 		},
 		Web: WebConfig{
-			SessionSecret:  getEnv("SESSION_SECRET", "your-super-secret-session-key-change-in-production"),
+			SessionSecret:  getEnv("SESSION_SECRET", placeholderSessionSecret),
 			SessionTimeout: getDurationEnv("SESSION_TIMEOUT", defaultSessionTimeout),
-			CSRFSecret:     getEnv("CSRF_SECRET", "your-csrf-secret-key-change-in-production"),
+			CSRFSecret:     getEnv("CSRF_SECRET", placeholderCSRFSecret),
 			CookieSecure:   getBoolEnv("COOKIE_SECURE", false),
 			CookieHTTPOnly: getBoolEnv("COOKIE_HTTP_ONLY", true),
 			CookieSameSite: getEnv("COOKIE_SAME_SITE", "Lax"),
@@ -112,8 +125,8 @@ func LoadConfig() *Config {
 			config.Logging.Level = "debug"
 		}
 		// Warn about default secrets in development
-		if config.Web.SessionSecret == "your-super-secret-session-key-change-in-production" ||
-			config.Web.CSRFSecret == "your-csrf-secret-key-change-in-production" {
+		if config.Web.SessionSecret == placeholderSessionSecret ||
+			config.Web.CSRFSecret == placeholderCSRFSecret {
 			fmt.Fprintln(
 				os.Stderr,
 				"WARNING: Using default secrets in development mode - ensure these are changed before deploying to production",
@@ -131,17 +144,33 @@ func LoadConfig() *Config {
 
 // Validate validates the configuration
 func (c *Config) Validate() error {
-	// Add validation logic here
-	if c.Web.SessionSecret == "your-super-secret-session-key-change-in-production" && c.IsProduction() {
-		return errors.New("session secret must be changed in production")
-	}
-
-	if c.Web.CSRFSecret == "your-csrf-secret-key-change-in-production" && c.IsProduction() {
-		return errors.New("CSRF secret must be changed in production")
-	}
-
 	if c.Database.Path == "" {
 		return errors.New("database path is required")
+	}
+
+	if !c.IsProduction() {
+		return nil
+	}
+
+	if err := validateProductionSecret("session secret", c.Web.SessionSecret, placeholderSessionSecret); err != nil {
+		return err
+	}
+
+	return validateProductionSecret("CSRF secret", c.Web.CSRFSecret, placeholderCSRFSecret)
+}
+
+// validateProductionSecret отвергает секреты, оставленные плейсхолдером или
+// слишком короткие, чтобы их нельзя было подобрать.
+func validateProductionSecret(name, value, placeholder string) error {
+	if value == placeholder {
+		return fmt.Errorf("%s must be changed in production - generate one with `openssl rand -base64 32`", name)
+	}
+
+	if len(value) < minProductionSecretLength {
+		return fmt.Errorf(
+			"%s must be at least %d characters in production - generate one with `openssl rand -base64 32`",
+			name, minProductionSecretLength,
+		)
 	}
 
 	return nil

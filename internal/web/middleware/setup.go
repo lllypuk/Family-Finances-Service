@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"net/http"
+	stdpath "path"
 	"strings"
 	"sync/atomic"
 
@@ -30,7 +31,10 @@ type SetupChecker interface {
 // isSetupExempt сообщает, что путь не участвует в проверке завершённости настройки.
 // Без этого страница /setup открывается без стилей, а мониторинг не может опросить
 // сервис до первого запуска (находка U-01).
-func isSetupExempt(path string) bool {
+func isSetupExempt(rawPath string) bool {
+	// Нормализуем путь: `/static/../secret` до очистки выглядит как статика.
+	path := stdpath.Clean(rawPath)
+
 	switch path {
 	case healthPath, faviconPath, staticPath:
 		return true

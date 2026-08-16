@@ -179,3 +179,22 @@ func TestRequireSetup_IncompleteResultNotCached(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, 3, checker.calls, "и только теперь результат кэшируется")
 }
+
+// TestIsSetupExempt_DoesNotMatchTraversalPaths — путь вида /static/../admin не
+// должен считаться статикой: до нормализации он проходил проверку по префиксу.
+func TestIsSetupExempt_DoesNotMatchTraversalPaths(t *testing.T) {
+	e := echo.New()
+	checker := &stubSetupChecker{complete: false}
+	handler := middleware.RequireSetup(checker)(func(c echo.Context) error {
+		return c.NoContent(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/static/../admin/users", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	require.NoError(t, handler(c))
+
+	assert.Equal(t, http.StatusFound, rec.Code, "путь с ../ не должен обходить гейт настройки")
+	assert.Equal(t, "/setup", rec.Header().Get("Location"))
+}

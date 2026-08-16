@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"net/http"
 
@@ -101,8 +102,10 @@ func validateCSRFToken(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusForbidden, "CSRF token not provided")
 	}
 
-	// Сравниваем токены
-	if sessionTokenStr != requestToken {
+	// Сравниваем токены за постоянное время — обычное сравнение строк
+	// завершается на первом несовпавшем байте и позволяет подбирать токен
+	// по времени ответа.
+	if subtle.ConstantTimeCompare([]byte(sessionTokenStr), []byte(requestToken)) != 1 {
 		return echo.NewHTTPError(http.StatusForbidden, "CSRF token mismatch")
 	}
 

@@ -12,6 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 
+	"family-budget-service/internal/domain/user"
+	"family-budget-service/internal/services/dto"
 	"family-budget-service/internal/testhelpers"
 	"family-budget-service/internal/web/middleware"
 )
@@ -40,11 +42,11 @@ func TestLogin_RegeneratesCSRFToken(t *testing.T) {
 	require.Positive(t, authCookie.MaxAge,
 		"cookie сессии после входа обязана жить, иначе вход через UI сломан")
 
-	var newToken string
+	// Токен снимается до подтестов: иначе `go test -run …/NewTokenAccepted`
+	// падал бы на пустом newToken — подтесты не должны зависеть от порядка.
+	newToken := csrfTokenFromPage(t, testServer, authCookie, "/admin/users")
 
 	t.Run("FormCarriesNewToken", func(t *testing.T) {
-		newToken = csrfTokenFromPage(t, testServer, authCookie, "/admin/users")
-
 		assert.NotEqual(t, anon.token, newToken,
 			"после входа форма обязана нести новый CSRF-токен")
 	})
@@ -55,8 +57,6 @@ func TestLogin_RegeneratesCSRFToken(t *testing.T) {
 	})
 
 	t.Run("NewTokenAccepted", func(t *testing.T) {
-		require.NotEmpty(t, newToken)
-
 		assert.Equal(t, http.StatusFound, csrfProbe(t, testServer, authCookie, newToken),
 			"новый токен обязан приниматься — иначе вход через UI сломан")
 	})
@@ -169,4 +169,50 @@ func lastSessionCookie(t *testing.T, rec *httptest.ResponseRecorder) *http.Cooki
 	require.NotNil(t, found, "сессионная cookie не выдана")
 
 	return found
+}
+
+// TestInviteRegister_RegeneratesSession — та же находка S-02 на второй точке
+// входа: регистрация по приглашению создавала сессию поверх анонимной, не
+// сбрасывая её CSRF-токен. В однофамильной модели приглашение — единственный
+// способ появления новых участников, то есть путь каждого не-администратора.
+func TestInviteRegister_RegeneratesSession(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	admin := testServer.Auth(t)
+	_ = admin
+
+	const invitedEmail = "invited-member@example.com"
+
+	invite, err := testServer.Services.Invite.CreateInvite(
+		context.Background(),
+		testServer.AuthUser.ID,
+		dto.CreateInviteDTO{Email: invitedEmail, Role: string(user.RoleMember)},
+	)
+	require.NoError(t, err)
+
+	anon := newAnonymousSession(t, testServer)
+
+	form := url.Values{}
+	form.Set("email", invitedEmail)
+	form.Set("name", "Invited Member")
+	form.Set("password", integrationLoginPassword)
+	form.Set("_token", anon.token)
+
+	req := httptest.NewRequest(http.MethodPost, "/invite/"+invite.Token, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(anon.cookie)
+	rec := httptest.NewRecorder()
+
+	testServer.Server.Echo().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusFound, rec.Code, "регистрация по приглашению не удалась: %s", rec.Body.String())
+
+	memberCookie := lastSessionCookie(t, rec)
+	require.Positive(t, memberCookie.MaxAge, "cookie сессии после приглашения обязана жить")
+
+	assert.Equal(t, http.StatusForbidden, csrfProbe(t, testServer, memberCookie, anon.token),
+		"токен анонимной сессии обязан перестать действовать после регистрации по приглашению")
+
+	newToken := csrfTokenFromPage(t, testServer, memberCookie, "/transactions")
+	assert.NotEqual(t, anon.token, newToken, "после регистрации форма обязана нести новый CSRF-токен")
+	assert.Equal(t, http.StatusFound, csrfProbe(t, testServer, memberCookie, newToken),
+		"новый токен обязан приниматься")
 }
