@@ -21,16 +21,26 @@ import (
 	"family-budget-service/internal/web/handlers"
 )
 
-// setupCategoryHandler creates a test category handler with mocks
-func setupCategoryHandler() (*handlers.CategoryHandler, *MockCategoryService, *MockTransactionService, *MockBudgetService) {
+// setupCategoryHandlerWithUser creates a test category handler with mocks,
+// including the user service: buildPageData дочитывает имя и фамилию владельца
+// сессии через UserService, поэтому без него хендлеры страниц падают.
+func setupCategoryHandlerWithUser() (
+	*handlers.CategoryHandler,
+	*MockCategoryService,
+	*MockTransactionService,
+	*MockBudgetService,
+	*MockUserService,
+) {
 	mockCategoryService := new(MockCategoryService)
 	mockTransactionService := new(MockTransactionService)
 	mockBudgetService := new(MockBudgetService)
+	mockUserService := new(MockUserService)
 
 	servicesStruct := &services.Services{
 		Category:    mockCategoryService,
 		Transaction: mockTransactionService,
 		Budget:      mockBudgetService,
+		User:        mockUserService,
 	}
 
 	handler := handlers.NewCategoryHandler(
@@ -38,7 +48,124 @@ func setupCategoryHandler() (*handlers.CategoryHandler, *MockCategoryService, *M
 		servicesStruct,
 	)
 
+	return handler, mockCategoryService, mockTransactionService, mockBudgetService, mockUserService
+}
+
+// setupCategoryHandler — то же самое для тестов, которым владелец сессии не важен.
+func setupCategoryHandler() (
+	*handlers.CategoryHandler,
+	*MockCategoryService,
+	*MockTransactionService,
+	*MockBudgetService,
+) {
+	handler, mockCategoryService, mockTransactionService, mockBudgetService, mockUserService :=
+		setupCategoryHandlerWithUser()
+
+	mockUserService.On("GetUserByID", mock.Anything, mock.Anything).
+		Return(&user.User{ID: uuid.New(), FirstName: "Test", LastName: "User"}, nil).
+		Maybe()
+
 	return handler, mockCategoryService, mockTransactionService, mockBudgetService
+}
+
+// TestCategoryHandler_PageDataContract проверяет контракт данных страниц
+// категорий: шаблоны шапки читают `.CurrentUser` из **корня** контекста
+// (`{{if .CurrentUser}}`), поэтому *PageData обязан быть встроен, а не лежать
+// в map под ключом "PageData". Регрессия U-02
+// (docs/specs/003-ui-ux-audit.md#u-02) возникла именно из-за вложенности
+// на уровень глубже.
+func TestCategoryHandler_PageDataContract(t *testing.T) {
+	userID := uuid.New()
+	testCategory := createTestCategory("Food", category.TypeExpense)
+
+	newHandler := func(t *testing.T) *handlers.CategoryHandler {
+		t.Helper()
+
+		handler, mockCatService, mockTxService, mockBudgetService, mockUserService := setupCategoryHandlerWithUser()
+
+		mockCatService.On("GetCategories", mock.Anything, mock.Anything).
+			Return([]*category.Category{testCategory}, nil).Maybe()
+		mockCatService.On("GetCategoryByID", mock.Anything, testCategory.ID).
+			Return(testCategory, nil).Maybe()
+		mockTxService.On("GetTransactionsByCategory", mock.Anything, mock.Anything, mock.Anything).
+			Return([]*transaction.Transaction{}, nil).Maybe()
+		mockBudgetService.On("GetBudgetsByCategory", mock.Anything, mock.Anything).
+			Return([]*budget.Budget{}, nil).Maybe()
+		mockUserService.On("GetUserByID", mock.Anything, userID).
+			Return(&user.User{ID: userID, Email: "test@example.com", FirstName: "John", LastName: "Doe"}, nil)
+
+		return handler
+	}
+
+	t.Run("Index", func(t *testing.T) {
+		handler := newHandler(t)
+
+		c, renderer := newCapturingContext(http.MethodGet, "/categories")
+		withSession(c, userID, user.RoleAdmin)
+
+		require.NoError(t, handler.Index(c))
+
+		out, err := renderer.renderPageData()
+		require.NoError(t, err, "данные хендлера не дают шаблону .CurrentUser в корне контекста")
+		assert.Equal(t, "John Doe|admin|Categories", out)
+	})
+
+	t.Run("New", func(t *testing.T) {
+		handler := newHandler(t)
+
+		c, renderer := newCapturingContext(http.MethodGet, "/categories/new")
+		withSession(c, userID, user.RoleAdmin)
+
+		require.NoError(t, handler.New(c))
+
+		out, err := renderer.renderPageData()
+		require.NoError(t, err)
+		assert.Equal(t, "John Doe|admin|New Category", out)
+	})
+
+	t.Run("Edit", func(t *testing.T) {
+		handler := newHandler(t)
+
+		c, renderer := newCapturingContext(http.MethodGet, "/categories/"+testCategory.ID.String()+"/edit")
+		c.SetParamNames("id")
+		c.SetParamValues(testCategory.ID.String())
+		withSession(c, userID, user.RoleAdmin)
+
+		require.NoError(t, handler.Edit(c))
+
+		out, err := renderer.renderPageData()
+		require.NoError(t, err)
+		assert.Equal(t, "John Doe|admin|Edit Category", out)
+	})
+
+	t.Run("Show", func(t *testing.T) {
+		handler := newHandler(t)
+
+		c, renderer := newCapturingContext(http.MethodGet, "/categories/"+testCategory.ID.String())
+		c.SetParamNames("id")
+		c.SetParamValues(testCategory.ID.String())
+		withSession(c, userID, user.RoleAdmin)
+
+		require.NoError(t, handler.Show(c))
+
+		out, err := renderer.renderPageData()
+		require.NoError(t, err)
+		assert.Equal(t, "John Doe|admin|Food", out)
+	})
+
+	t.Run("FormWithErrors", func(t *testing.T) {
+		handler := newHandler(t)
+
+		// Пустая форма не проходит валидацию — хендлер перерисовывает её.
+		c, renderer := newCapturingContext(http.MethodPost, "/categories")
+		withSession(c, userID, user.RoleAdmin)
+
+		require.NoError(t, handler.Create(c))
+
+		out, err := renderer.renderPageData()
+		require.NoError(t, err)
+		assert.Equal(t, "John Doe|admin|New Category", out)
+	})
 }
 
 // TestCategoryHandler_Index tests the category list page

@@ -52,10 +52,16 @@ func (r *capturingRenderer) Render(_ io.Writer, _ string, data any, _ echo.Conte
 	return nil
 }
 
-// renderWith исполняет по захваченным данным пробный шаблон и возвращает
+// pageDataProbe — пробный шаблон контракта страниц: шапка читает .CurrentUser
+// из **корня** контекста, а заголовок — из встроенного PageData. Ровно на этом
+// сочетании развалился U-02 (docs/specs/003-ui-ux-audit.md#u-02).
+const pageDataProbe = `{{if .CurrentUser}}{{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}` +
+	`|{{.CurrentUser.Role}}|{{.PageData.Title}}{{end}}`
+
+// renderPageData исполняет pageDataProbe по захваченным данным и возвращает
 // результат. Ошибка шаблона означает, что данных нужного вида в контексте нет.
-func (r *capturingRenderer) renderWith(text string) (string, error) {
-	tmpl, err := template.New("probe").Parse(text)
+func (r *capturingRenderer) renderPageData() (string, error) {
+	tmpl, err := template.New("probe").Parse(pageDataProbe)
 	if err != nil {
 		return "", err
 	}
@@ -69,8 +75,8 @@ func (r *capturingRenderer) renderWith(text string) (string, error) {
 }
 
 // newCapturingContext — как newTestContext, но с рендерером, запоминающим данные.
-func newCapturingContext(method, path, body string) (echo.Context, *capturingRenderer) {
-	c, _ := newTestContext(method, path, body)
+func newCapturingContext(method, path string) (echo.Context, *capturingRenderer) {
+	c, _ := newTestContext(method, path, "")
 	renderer := &capturingRenderer{}
 	c.Echo().Renderer = renderer
 	return c, renderer

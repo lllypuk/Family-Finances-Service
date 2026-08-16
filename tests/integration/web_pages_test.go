@@ -61,12 +61,11 @@ import (
 //
 // Зелёная фаза для /transactions — задача 13: хендлеры транзакций отдают
 // встроенный *PageData вместо `map[string]any{"PageData": …}`, skip снят.
-// Оставшиеся skip'и (categories, budgets, reports) снимают задачи 14 и 15.
+// Зелёная фаза для /categories и /budgets — задача 14, там же сняты их skip'и.
+// Оставшийся skip (reports) снимает задача 15.
 
 const (
-	webPagesSkipCategories = "U-02: /categories — контракт данных хендлера, skip снимает задача 14"
-	webPagesSkipBudgets    = "U-02: /budgets — контракт данных хендлера, skip снимает задача 14"
-	webPagesSkipReports    = "U-02: /reports — контракт данных и шаблон шапки, skip снимает задача 15"
+	webPagesSkipReports = "U-02: /reports — контракт данных и шаблон шапки, skip снимает задача 15"
 )
 
 // navBlockRe вырезает первый блок <nav>…</nav> — шапку страницы.
@@ -93,8 +92,8 @@ func TestWebPages_NavigationRendered(t *testing.T) {
 		skipReason string
 	}{
 		{name: "transactions", path: "/transactions"},
-		{name: "categories", path: "/categories", skipReason: webPagesSkipCategories},
-		{name: "budgets", path: "/budgets", skipReason: webPagesSkipBudgets},
+		{name: "categories", path: "/categories"},
+		{name: "budgets", path: "/budgets"},
 		{name: "reports", path: "/reports", skipReason: webPagesSkipReports},
 	}
 

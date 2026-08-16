@@ -23,6 +23,10 @@ const (
 	flashTypeCookieName = "flash_type"
 	// Flash message cookie expiration in seconds
 	flashCookieMaxAge = 10 // 10 seconds - enough time for redirect
+
+	// formValidationMessage — общее сообщение над формой, вернувшейся с
+	// ошибками валидации.
+	formValidationMessage = "Проверьте правильность заполнения формы"
 )
 
 var (
@@ -135,6 +139,19 @@ func (h *BaseHandler) buildPageData(c echo.Context, title string) *PageData {
 		currentUser.LastName = currentUserRecord.LastName
 	}
 	pageData.CurrentUser = currentUser
+
+	return pageData
+}
+
+// formPageData — buildPageData для формы, которую перерисовывают после
+// неудачной валидации: к общим данным страницы добавляются ошибки полей и
+// одно общее сообщение.
+func (h *BaseHandler) formPageData(c echo.Context, title string, errors map[string]string) *PageData {
+	pageData := h.buildPageData(c, title)
+	pageData.Errors = errors
+	pageData.Messages = []Message{
+		{Type: "error", Text: formValidationMessage},
+	}
 
 	return pageData
 }

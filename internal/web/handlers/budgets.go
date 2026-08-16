@@ -51,6 +51,26 @@ func NewBudgetHandler(repositories *handlers.Repositories, services *services.Se
 	}
 }
 
+// budgetFormData — данные страниц-форм бюджета (new/edit).
+//
+// Встроенный *PageData отдаёт шаблону `.CurrentUser` и `.CSRFToken` из корня
+// контекста, а `{{.PageData.X}}` продолжает работать благодаря имени
+// встроенного поля. Общий тип на обе страницы — чтобы `dupl` не ругался на три
+// почти одинаковых анонимных структуры.
+//
+// Form и DefaultForm дублируют друг друга намеренно: pages/budgets/new.html
+// читает `.DefaultForm`, pages/budgets/edit.html — `.Form`, а у структуры
+// (в отличие от map) обращение к отсутствующему полю — ошибка исполнения
+// шаблона.
+type budgetFormData struct {
+	*PageData
+
+	Form            webModels.BudgetForm
+	DefaultForm     webModels.BudgetForm
+	CategoryOptions []map[string]any
+	BudgetID        string
+}
+
 // Index отображает список бюджетов с прогрессом
 func (h *BudgetHandler) Index(c echo.Context) error {
 	// Получаем данные пользователя из сессии
@@ -109,14 +129,18 @@ func (h *BudgetHandler) Index(c echo.Context) error {
 		filterForm.Period = string(*filter.Period)
 	}
 
-	pageData := &PageData{
-		Title: "Budgets",
-	}
+	// Встраиваем *PageData, а не кладём его в map под ключом "PageData":
+	// шаблон шапки читает `.CurrentUser` и `.CSRFToken` из корня контекста,
+	// а `{{.PageData.X}}` продолжает работать благодаря имени встроенного поля.
+	data := struct {
+		*PageData
 
-	data := map[string]any{
-		"PageData": pageData,
-		"Budgets":  budgetVMs,
-		"Filter":   filterForm,
+		Budgets []webModels.BudgetProgressVM
+		Filter  webModels.BudgetFilter
+	}{
+		PageData: h.buildPageData(c, "Budgets"),
+		Budgets:  budgetVMs,
+		Filter:   filterForm,
 	}
 
 	return h.renderPage(c, "pages/budgets/index", data)
@@ -164,18 +188,12 @@ func (h *BudgetHandler) New(c echo.Context) error {
 		IsActive:  true,
 	}
 
-	// Получаем CSRF токен
-	csrfToken, _ := middleware.GetCSRFToken(c)
-
-	pageData := &PageData{
-		Title: "New Budget",
-	}
-
-	data := map[string]any{
-		"PageData":            pageData,
-		tplKeyCategoryOptions: categoryOptions,
-		"DefaultForm":         defaultForm,
-		tplKeyCSRFToken:       csrfToken,
+	// CSRF-токен приходит из PageData и промотируется в корень контекста.
+	data := budgetFormData{
+		PageData:        h.buildPageData(c, "New Budget"),
+		Form:            defaultForm,
+		DefaultForm:     defaultForm,
+		CategoryOptions: categoryOptions,
 	}
 
 	return h.renderPage(c, "pages/budgets/new", data)
@@ -205,7 +223,7 @@ func (h *BudgetHandler) Create(c echo.Context) error {
 			})
 		}
 
-		return h.renderBudgetFormWithErrors(c, form, "New Budget")
+		return h.renderBudgetFormWithErrors(c, form, validationErrors, "New Budget", "")
 	}
 
 	// Парсим сумму
@@ -313,19 +331,13 @@ func (h *BudgetHandler) Edit(c echo.Context) error {
 		form.CategoryID = budgetEntity.CategoryID.String()
 	}
 
-	// Получаем CSRF токен
-	csrfToken, _ := middleware.GetCSRFToken(c)
-
-	pageData := &PageData{
-		Title: "Edit Budget: " + budgetEntity.Name,
-	}
-
-	data := map[string]any{
-		"PageData":            pageData,
-		"Form":                form,
-		tplKeyCategoryOptions: categoryOptions,
-		"BudgetID":            budgetID.String(),
-		tplKeyCSRFToken:       csrfToken,
+	// CSRF-токен приходит из PageData и промотируется в корень контекста.
+	data := budgetFormData{
+		PageData:        h.buildPageData(c, "Edit Budget: "+budgetEntity.Name),
+		Form:            form,
+		DefaultForm:     form,
+		CategoryOptions: categoryOptions,
+		BudgetID:        budgetID.String(),
 	}
 
 	return h.renderPage(c, "pages/budgets/edit", data)
@@ -370,7 +382,7 @@ func (h *BudgetHandler) Update(c echo.Context) error {
 			})
 		}
 
-		return h.renderBudgetFormWithErrors(c, form, "Edit Budget")
+		return h.renderBudgetFormWithErrors(c, form, validationErrors, "Edit Budget", budgetID.String())
 	}
 
 	// Парсим новые значения
@@ -542,15 +554,24 @@ func (h *BudgetHandler) Show(c echo.Context) error {
 		recentTransactions = []*webModels.TransactionSummary{}
 	}
 
-	pageData := &PageData{
-		Title: "Budget: " + budgetEntity.Name,
-	}
+	// Transactions обязателен: у структуры обращение к отсутствующему полю —
+	// ошибка исполнения шаблона, а pages/budgets/show.html ветвится на
+	// `{{if .Transactions}}`. Оставляем nil, как было с map: строки таблицы
+	// в шаблоне читают .FormattedDate и .UserName, которых у
+	// webModels.TransactionSummary нет, — подключать блок нужно отдельно.
+	data := struct {
+		*PageData
 
-	data := map[string]any{
-		"PageData":           pageData,
-		tplKeyBudget:         budgetVM,
-		"SpendingData":       spendingData,
-		"RecentTransactions": recentTransactions,
+		Budget             webModels.BudgetProgressVM
+		SpendingData       *webModels.SpendingAnalysis
+		RecentTransactions []*webModels.TransactionSummary
+		Transactions       any
+	}{
+		PageData:           h.buildPageData(c, "Budget: "+budgetEntity.Name),
+		Budget:             budgetVM,
+		SpendingData:       spendingData,
+		RecentTransactions: recentTransactions,
+		Transactions:       nil,
 	}
 
 	return h.renderPage(c, "pages/budgets/show", data)
@@ -560,7 +581,9 @@ func (h *BudgetHandler) Show(c echo.Context) error {
 func (h *BudgetHandler) renderBudgetFormWithErrors(
 	c echo.Context,
 	form webModels.BudgetForm,
+	errors map[string]string,
 	title string,
+	budgetID string,
 ) error {
 	// Получаем данные пользователя из сессии для категорий
 	_, err := middleware.GetUserFromContext(c)
@@ -590,17 +613,15 @@ func (h *BudgetHandler) renderBudgetFormWithErrors(
 		}
 	}
 
-	pageData := &PageData{
-		Title: title,
-		Messages: []Message{
-			{Type: "error", Text: "Проверьте правильность заполнения формы"},
-		},
-	}
-
-	data := map[string]any{
-		"PageData":            pageData,
-		"Form":                form,
-		tplKeyCategoryOptions: categoryOptions,
+	// DefaultForm обязателен даже на странице ошибок: pages/budgets/new.html
+	// читает `{{.DefaultForm.Name}}` без всяких `{{if}}`, и на map это давало
+	// ошибку исполнения шаблона (форма с невалидными данными не рисовалась).
+	data := budgetFormData{
+		PageData:        h.formPageData(c, title, errors),
+		Form:            form,
+		DefaultForm:     form,
+		CategoryOptions: categoryOptions,
+		BudgetID:        budgetID,
 	}
 
 	template := "pages/budgets/new"
@@ -739,6 +760,14 @@ func (h *BudgetHandler) Alerts(c echo.Context) error {
 		Title: "Budget Alerts",
 	}
 
+	// ВНИМАНИЕ: единственная страница бюджетов, оставленная на map-контракте.
+	// pages/budgets/alerts.html написан под данные, которых в коде нет вовсе:
+	// .OverBudgetAlerts/.WarningAlerts/.ExpiredAlerts/.Settings/.WarningCount/
+	// .NormalCount/.OverBudgetCount, а карточки читают .OverspentFormatted,
+	// .SpentFormatted, .DaysExpired — таких полей нет ни у BudgetAlertVM, ни у
+	// BudgetProgressVM. Страница падает уже сейчас (`.Settings.WarningThreshold`
+	// по отсутствующему ключу), и перевод на структуру потребовал бы новой
+	// view-модели, то есть переписывания страницы, — это отдельная задача.
 	data := map[string]any{
 		"PageData":       pageData,
 		"Alerts":         alerts,

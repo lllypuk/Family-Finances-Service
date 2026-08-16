@@ -50,6 +50,26 @@ func NewCategoryHandler(repositories *handlers.Repositories, services *services.
 	}
 }
 
+// categoryFormData — данные страниц-форм категории (new/edit).
+//
+// Встроенный *PageData отдаёт шаблону `.CurrentUser` и `.CSRFToken` из корня
+// контекста, а `{{.PageData.X}}` продолжает работать благодаря имени
+// встроенного поля. Общий тип на обе страницы — чтобы `dupl` не ругался на
+// четыре почти одинаковых анонимных структуры.
+//
+// Form и Category — указатели: pages/categories/new.html ветвится на
+// `{{if .Form}}`, а у структуры (в отличие от map) обращение к отсутствующему
+// полю — ошибка исполнения шаблона, поэтому «пусто» выражается nil-указателем.
+type categoryFormData struct {
+	*PageData
+
+	Form          *webModels.CategoryForm
+	Category      *category.Category
+	ParentOptions []webModels.CategorySelectOption
+	DefaultColors []string
+	DefaultIcons  []string
+}
+
 // Index отображает список всех категорий
 func (h *CategoryHandler) Index(c echo.Context) error {
 	// Проверяем авторизацию пользователя
@@ -88,14 +108,33 @@ func (h *CategoryHandler) Index(c echo.Context) error {
 	// Строим дерево категорий
 	categoryTree := webModels.BuildCategoryTree(categoryViewModels)
 
-	pageData := &PageData{
-		Title: "Categories",
-	}
+	// Встраиваем *PageData, а не кладём его в map под ключом "PageData":
+	// шаблон шапки читает `.CurrentUser` и `.CSRFToken` из корня контекста,
+	// а `{{.PageData.X}}` продолжает работать благодаря имени встроенного поля.
+	//
+	// Счётчики и Pagination обязательны: у структуры обращение к отсутствующему
+	// полю — ошибка исполнения шаблона (у map это молча давало «<no value>»
+	// в карточках сводки). Пагинации на странице категорий нет, поэтому
+	// Pagination остаётся nil и `{{if .Pagination}}` ложно, как и раньше.
+	counts := countCategoriesByKind(categoryTree)
 
-	data := map[string]any{
-		"PageData":       pageData,
-		tplKeyCategories: categoryTree,
-		tplKeyFilters:    filters,
+	data := struct {
+		*PageData
+
+		Categories             []webModels.CategoryViewModel
+		Filters                webModels.CategoryFilter
+		IncomeCount            int
+		ExpenseCount           int
+		WithSubcategoriesCount int
+		Pagination             any
+	}{
+		PageData:               h.buildPageData(c, "Categories"),
+		Categories:             categoryTree,
+		Filters:                filters,
+		IncomeCount:            counts.Income,
+		ExpenseCount:           counts.Expense,
+		WithSubcategoriesCount: counts.WithSubcategories,
+		Pagination:             nil,
 	}
 
 	return h.renderPage(c, "pages/categories/index", data)
@@ -128,22 +167,12 @@ func (h *CategoryHandler) New(c echo.Context) error {
 		}
 	}
 
-	// Получаем CSRF токен
-	csrfToken, err := middleware.GetCSRFToken(c)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get CSRF token")
-	}
-
-	pageData := &PageData{
-		Title: "New Category",
-	}
-
-	data := map[string]any{
-		"PageData":          pageData,
-		tplKeyCSRFToken:     csrfToken,
-		"ParentOptions":     parentOptions,
-		tplKeyDefaultColors: getDefaultCategoryColors(),
-		tplKeyDefaultIcons:  getDefaultCategoryIcons(),
+	// CSRF-токен приходит из PageData и промотируется в корень контекста.
+	data := categoryFormData{
+		PageData:      h.buildPageData(c, "New Category"),
+		ParentOptions: parentOptions,
+		DefaultColors: getDefaultCategoryColors(),
+		DefaultIcons:  getDefaultCategoryIcons(),
 	}
 
 	return h.renderPage(c, "pages/categories/new", data)
@@ -176,14 +205,6 @@ func (h *CategoryHandler) Create(c echo.Context) error {
 		}
 
 		// Для обычных запросов возвращаем форму заново
-		pageData := &PageData{
-			Title:  "New Category",
-			Errors: validationErrors,
-			Messages: []Message{
-				{Type: "error", Text: "Проверьте правильность заполнения формы"},
-			},
-		}
-
 		parentCategories, _ := h.services.Category.GetCategories(
 			c.Request().Context(),
 			nil,
@@ -200,15 +221,12 @@ func (h *CategoryHandler) Create(c echo.Context) error {
 			}
 		}
 
-		csrfToken, _ := middleware.GetCSRFToken(c)
-
-		data := map[string]any{
-			"PageData":          pageData,
-			"Form":              form,
-			tplKeyCSRFToken:     csrfToken,
-			"ParentOptions":     parentOptions,
-			tplKeyDefaultColors: getDefaultCategoryColors(),
-			tplKeyDefaultIcons:  getDefaultCategoryIcons(),
+		data := categoryFormData{
+			PageData:      h.formPageData(c, "New Category", validationErrors),
+			Form:          &form,
+			ParentOptions: parentOptions,
+			DefaultColors: getDefaultCategoryColors(),
+			DefaultIcons:  getDefaultCategoryIcons(),
 		}
 
 		return h.renderPage(c, "pages/categories/new", data)
@@ -310,24 +328,14 @@ func (h *CategoryHandler) Edit(c echo.Context) error {
 		form.ParentID = category.ParentID.String()
 	}
 
-	// Получаем CSRF токен
-	csrfToken, err := middleware.GetCSRFToken(c)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get CSRF token")
-	}
-
-	pageData := &PageData{
-		Title: "Edit Category",
-	}
-
-	data := map[string]any{
-		"PageData":          pageData,
-		tplKeyCSRFToken:     csrfToken,
-		"Form":              form,
-		tplKeyCategory:      category,
-		"ParentOptions":     parentOptions,
-		tplKeyDefaultColors: getDefaultCategoryColors(),
-		tplKeyDefaultIcons:  getDefaultCategoryIcons(),
+	// CSRF-токен приходит из PageData и промотируется в корень контекста.
+	data := categoryFormData{
+		PageData:      h.buildPageData(c, "Edit Category"),
+		Form:          &form,
+		Category:      category,
+		ParentOptions: parentOptions,
+		DefaultColors: getDefaultCategoryColors(),
+		DefaultIcons:  getDefaultCategoryIcons(),
 	}
 
 	return h.renderPage(c, "pages/categories/edit", data)
@@ -417,29 +425,19 @@ func (h *CategoryHandler) handleUpdateValidationError(
 	}
 
 	// Для обычных запросов возвращаем форму заново
-	pageData := &PageData{
-		Title:  "Edit Category",
-		Errors: validationErrors,
-		Messages: []Message{
-			{Type: "error", Text: "Проверьте правильность заполнения формы"},
-		},
-	}
-
 	parentOptions := h.getParentOptionsForUpdate(
 		c.Request().Context(),
 		categoryID,
 		existingCategory,
 	)
-	csrfToken, _ := middleware.GetCSRFToken(c)
 
-	data := map[string]any{
-		"PageData":          pageData,
-		"Form":              form,
-		tplKeyCSRFToken:     csrfToken,
-		tplKeyCategory:      existingCategory,
-		"ParentOptions":     parentOptions,
-		tplKeyDefaultColors: getDefaultCategoryColors(),
-		tplKeyDefaultIcons:  getDefaultCategoryIcons(),
+	data := categoryFormData{
+		PageData:      h.formPageData(c, "Edit Category", validationErrors),
+		Form:          &form,
+		Category:      existingCategory,
+		ParentOptions: parentOptions,
+		DefaultColors: getDefaultCategoryColors(),
+		DefaultIcons:  getDefaultCategoryIcons(),
 	}
 
 	return h.renderPage(c, "pages/categories/edit", data)
@@ -556,10 +554,19 @@ func (h *CategoryHandler) Show(c echo.Context) error {
 	// Получаем последние транзакции для этой категории (если есть Transaction сервис)
 	var recentTransactions []any // TODO: заменить на Transaction модель когда будет доступна
 
-	data := map[string]any{
-		tplKeyCategory:  categoryVM,
-		"Subcategories": subcategoryVMs,
-		"Transactions":  recentTransactions,
+	// pages/categories/show.html рисует ту же шапку с `{{if .CurrentUser}}` —
+	// без PageData она схлопывалась до логотипа, как и на списке (U-02).
+	data := struct {
+		*PageData
+
+		Category      webModels.CategoryViewModel
+		Subcategories []webModels.CategoryViewModel
+		Transactions  []any
+	}{
+		PageData:      h.buildPageData(c, categoryVM.Name),
+		Category:      categoryVM,
+		Subcategories: subcategoryVMs,
+		Transactions:  recentTransactions,
 	}
 
 	return h.renderPage(c, "pages/categories/show", data)
@@ -860,6 +867,32 @@ func calculateBudgetProgress(vm *webModels.CategoryViewModel) {
 		vm.BudgetRemaining = 0
 		vm.BudgetOverspent = 0
 	}
+}
+
+// categoryCounts — карточки сводки на странице списка категорий.
+type categoryCounts struct {
+	Income            int
+	Expense           int
+	WithSubcategories int
+}
+
+// countCategoriesByKind считает категории по типу и наличию подкатегорий.
+func countCategoriesByKind(viewModels []webModels.CategoryViewModel) categoryCounts {
+	var counts categoryCounts
+	for _, vm := range viewModels {
+		switch vm.Type {
+		case category.TypeIncome:
+			counts.Income++
+		case category.TypeExpense:
+			counts.Expense++
+		}
+
+		if len(vm.SubCategories) > 0 {
+			counts.WithSubcategories++
+		}
+	}
+
+	return counts
 }
 
 // applyNameFilter фильтрует категории по имени

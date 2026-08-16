@@ -633,12 +633,71 @@ Option 2 из `deploy/README.md`.
 - Modify: `internal/web/handlers/categories_test.go`
 - Modify: `internal/web/handlers/budgets_test.go`
 
-- [ ] заменить map-контракт на встроенную структуру (5 мест в `categories.go`, 6 в `budgets.go`)
-- [ ] следить за `dupl`: почти одинаковые анонимные структуры в production-коде линтер может зацепить — при срабатывании вынести общий тип
-- [ ] снять `t.Skip(webPagesSkipCategories)` и `t.Skip(webPagesSkipBudgets)` в `tests/integration/web_pages_test.go` и удалить константы
-- [ ] прогнать тест из задачи 12 — `/categories` и `/budgets` обязаны пройти
-- [ ] написать тесты на данные хендлеров для обеих страниц
-- [ ] `make test` и `make lint` — 0 issues перед задачей 15
+- [x] заменить map-контракт на встроенную структуру (5 мест в `categories.go`, 6 в `budgets.go`)
+- [x] следить за `dupl`: почти одинаковые анонимные структуры в production-коде линтер может зацепить — при срабатывании вынести общий тип
+- [x] снять `t.Skip(webPagesSkipCategories)` и `t.Skip(webPagesSkipBudgets)` в `tests/integration/web_pages_test.go` и удалить константы
+- [x] прогнать тест из задачи 12 — `/categories` и `/budgets` обязаны пройти
+- [x] написать тесты на данные хендлеров для обеих страниц
+- [x] `make test` и `make lint` — 0 issues перед задачей 15
+
+ℹ️ Общий тип заведён **сразу**, не дожидаясь `dupl`: `categoryFormData`
+(`categories.go`) и `budgetFormData` (`budgets.go`) обслуживают по две страницы
+формы каждый. `*PageData` собирается хелпером `BaseHandler.buildPageData` из
+задачи 13, а для форм с ошибками добавлен `BaseHandler.formPageData(c, title,
+errors)` (`base.go`) — он же подставляет общее сообщение
+`formValidationMessage`; `transactions_helpers.go` переведён на него, чтобы
+литерал не размножался (`goconst`).
+
+⚠️ **Ключевое отличие структуры от map:** обращение к отсутствующему полю
+структуры — **ошибка исполнения** шаблона, тогда как у map это молча давало
+`<no value>`. Поэтому пришлось доложить в контракт всё, что шаблоны реально
+читают, иначе страницы отдавали бы 500:
+- `pages/categories/index.html` — `IncomeCount`/`ExpenseCount`/
+  `WithSubcategoriesCount` (считает новый `countCategoriesByKind`; раньше в
+  карточках сводки печаталось `<no value>`) и `Pagination` (пагинации на
+  странице нет — поле `any`/nil, `{{if .Pagination}}` ложно, как и было);
+- `pages/categories/new.html` — `{{if .Form}}`, поэтому `Form` в
+  `categoryFormData` указатель: `nil` на пустой форме, `&form` на возврате
+  с ошибками;
+- `pages/budgets/new.html` — `{{.DefaultForm.Name}}` без `{{if}}`; на map
+  возврат формы бюджета с ошибками валидации **падал**, теперь
+  `renderBudgetFormWithErrors` кладёт и `DefaultForm`, и `BudgetID`
+  (у него появились параметры `errors` и `budgetID`);
+- `pages/budgets/show.html` — `{{if .Transactions}}`; поле оставлено nil, как
+  было с map: строки таблицы читают `.FormattedDate` и `.UserName`, которых
+  у `webModels.TransactionSummary` нет.
+
+➕ Попутно переведён `CategoryHandler.Show` (`pages/categories/show.html`) —
+в задаче он не назван, потому что в нём вообще не было `PageData`, но шапка
+там та же и U-02 воспроизводился один в один.
+
+⚠️ **`BudgetHandler.Alerts` осознанно оставлен на map — это 5 из 6 названных
+мест в `budgets.go`.** `pages/budgets/alerts.html` написан под данные, которых
+в коде нет вовсе: `.OverBudgetAlerts`/`.WarningAlerts`/`.ExpiredAlerts`/
+`.Settings`/`.WarningCount`/`.NormalCount`/`.OverBudgetCount`, а карточки
+читают `.OverspentFormatted`, `.SpentFormatted`, `.DaysExpired` — таких полей
+нет ни у `BudgetAlertVM`, ни у `BudgetProgressVM`. Страница падает уже сейчас
+(`.Settings.WarningThreshold` по отсутствующему ключу), и перевод на структуру
+потребовал бы новой view-модели, то есть переписывания страницы. Причина
+записана комментарием в самом хендлере.
+
+ℹ️ Тесты на данные хендлеров — `TestCategoryHandler_PageDataContract` и
+`TestBudgetHandler_PageDataContract` (подтесты `Index`, `New`, `Edit`, `Show`,
+`FormWithErrors`) по образцу задачи 13: исполняют пробный шаблон по данным,
+которые хендлер отдал рендереру. Пробный шаблон и `renderWith` переехали в
+`testhelpers_test.go` как `pageDataProbe` + `renderPageData()` — с тремя
+наборами тестов `unparam` начал ругаться на параметры, которые всегда получают
+одно и то же значение (заодно `newCapturingContext` потерял параметр `body`).
+`buildPageData` ходит в `UserService`, которого в `setupCategoryHandler`/
+`setupBudgetHandler` не было, — добавлены варианты `…WithUser`, а старые
+хелперы делегируют им и вешают разрешающий `.Maybe()`.
+
+ℹ️ Побочно закрыт тот же латентный баг, что и в задаче 13: `{{.CSRFToken}}`
+в форме выхода на `/categories` и `/budgets` рендерился пустым — теперь токен
+приходит из `PageData`. Дашборд (`/`) по-прежнему затронут, но он ничей
+чекбокс. Осиротевшие константы `tplKeyCategories`, `tplKeyFilters`,
+`tplKeyCategory`, `tplKeyCategoryOptions`, `tplKeyDefaultColors`,
+`tplKeyDefaultIcons` удалены из `template_keys.go`.
 
 ### Task 15: Контракт данных — отчёты и русские заголовки
 

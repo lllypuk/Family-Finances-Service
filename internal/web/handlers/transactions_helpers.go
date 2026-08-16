@@ -375,19 +375,13 @@ func (h *TransactionHandler) renderTransactionFormWithErrors(
 
 	categoryOptions := h.buildCategorySelectOptions(categories)
 
-	pageData := h.buildPageData(c, title)
-	pageData.Errors = errors
-	pageData.Messages = []Message{
-		{Type: "error", Text: "Проверьте правильность заполнения формы"},
-	}
-
 	data := struct {
 		*PageData
 
 		Form            webModels.TransactionForm
 		CategoryOptions []webModels.CategorySelectOption
 	}{
-		PageData:        pageData,
+		PageData:        h.formPageData(c, title, errors),
 		Form:            form,
 		CategoryOptions: categoryOptions,
 	}

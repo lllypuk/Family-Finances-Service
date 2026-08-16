@@ -75,9 +75,6 @@ func TestTransactionHandler_Index(t *testing.T) {
 // в map под ключом "PageData". Регрессия U-02 (docs/specs/003-ui-ux-audit.md#u-02)
 // возникла именно из-за вложенности на уровень глубже.
 func TestTransactionHandler_PageDataContract(t *testing.T) {
-	const probe = `{{if .CurrentUser}}{{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}` +
-		`|{{.CurrentUser.Role}}|{{.PageData.Title}}{{end}}`
-
 	userID := uuid.New()
 
 	newHandler := func(t *testing.T) *handlers.TransactionHandler {
@@ -99,12 +96,12 @@ func TestTransactionHandler_PageDataContract(t *testing.T) {
 	t.Run("Index", func(t *testing.T) {
 		handler := newHandler(t)
 
-		c, renderer := newCapturingContext(http.MethodGet, "/transactions", "")
+		c, renderer := newCapturingContext(http.MethodGet, "/transactions")
 		withSession(c, userID, user.RoleAdmin)
 
 		require.NoError(t, handler.Index(c))
 
-		out, err := renderer.renderWith(probe)
+		out, err := renderer.renderPageData()
 		require.NoError(t, err, "данные хендлера не дают шаблону .CurrentUser в корне контекста")
 		assert.Equal(t, "John Doe|admin|Transactions", out)
 	})
@@ -112,12 +109,12 @@ func TestTransactionHandler_PageDataContract(t *testing.T) {
 	t.Run("New", func(t *testing.T) {
 		handler := newHandler(t)
 
-		c, renderer := newCapturingContext(http.MethodGet, "/transactions/new", "")
+		c, renderer := newCapturingContext(http.MethodGet, "/transactions/new")
 		withSession(c, userID, user.RoleAdmin)
 
 		require.NoError(t, handler.New(c))
 
-		out, err := renderer.renderWith(probe)
+		out, err := renderer.renderPageData()
 		require.NoError(t, err)
 		assert.Equal(t, "John Doe|admin|New Transaction", out)
 	})
@@ -127,12 +124,12 @@ func TestTransactionHandler_PageDataContract(t *testing.T) {
 
 		// Пустая форма не проходит валидацию — хендлер перерисовывает её
 		// через renderTransactionFormWithErrors.
-		c, renderer := newCapturingContext(http.MethodPost, "/transactions", "")
+		c, renderer := newCapturingContext(http.MethodPost, "/transactions")
 		withSession(c, userID, user.RoleAdmin)
 
 		require.NoError(t, handler.Create(c))
 
-		out, err := renderer.renderWith(probe)
+		out, err := renderer.renderPageData()
 		require.NoError(t, err)
 		assert.Equal(t, "John Doe|admin|New Transaction", out)
 	})
