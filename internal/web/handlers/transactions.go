@@ -12,6 +12,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/application/handlers"
+	transactionDomain "family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/web/middleware"
 	webModels "family-budget-service/internal/web/models"
@@ -94,16 +95,22 @@ func (h *TransactionHandler) Index(c echo.Context) error {
 	// Рассчитываем пагинацию
 	pagination := h.calculatePagination(len(transactionVMs), filters.Page, filters.PageSize)
 
-	pageData := &PageData{
-		Title: "Transactions",
-	}
+	// Встраиваем *PageData, а не кладём его в map под ключом "PageData":
+	// шаблон шапки читает `.CurrentUser` и `.CSRFToken` из корня контекста,
+	// а `{{.PageData.X}}` продолжает работать благодаря имени встроенного поля.
+	data := struct {
+		*PageData
 
-	data := map[string]any{
-		"PageData":            pageData,
-		"Transactions":        transactionVMs,
-		"Filters":             filters,
-		tplKeyCategoryOptions: categoryOptions,
-		"Pagination":          pagination,
+		Transactions    []webModels.TransactionViewModel
+		Filters         webModels.TransactionFilters
+		CategoryOptions []webModels.CategorySelectOption
+		Pagination      webModels.TransactionListResponse
+	}{
+		PageData:        h.buildPageData(c, "Transactions"),
+		Transactions:    transactionVMs,
+		Filters:         filters,
+		CategoryOptions: categoryOptions,
+		Pagination:      pagination,
 	}
 
 	return h.renderPage(c, "pages/transactions/index", data)
@@ -131,18 +138,16 @@ func (h *TransactionHandler) New(c echo.Context) error {
 		Type: TransactionTypeExpense, // По умолчанию расход
 	}
 
-	// Получаем CSRF токен
-	csrfToken, _ := middleware.GetCSRFToken(c)
+	// CSRF-токен приходит из PageData и промотируется в корень контекста.
+	data := struct {
+		*PageData
 
-	pageData := &PageData{
-		Title: "New Transaction",
-	}
-
-	data := map[string]any{
-		"PageData":            pageData,
-		"Form":                form,
-		tplKeyCategoryOptions: categoryOptions,
-		tplKeyCSRFToken:       csrfToken,
+		Form            webModels.TransactionForm
+		CategoryOptions []webModels.CategorySelectOption
+	}{
+		PageData:        h.buildPageData(c, "New Transaction"),
+		Form:            form,
+		CategoryOptions: categoryOptions,
 	}
 
 	return h.renderPage(c, "pages/transactions/new", data)
@@ -248,19 +253,18 @@ func (h *TransactionHandler) Edit(c echo.Context) error {
 		Tags:        strings.Join(transaction.Tags, ", "),
 	}
 
-	// Получаем CSRF токен
-	csrfToken, _ := middleware.GetCSRFToken(c)
+	// CSRF-токен приходит из PageData и промотируется в корень контекста.
+	data := struct {
+		*PageData
 
-	pageData := &PageData{
-		Title: "Edit Transaction",
-	}
-
-	data := map[string]any{
-		"PageData":            pageData,
-		"Form":                form,
-		"Transaction":         transaction,
-		tplKeyCategoryOptions: categoryOptions,
-		tplKeyCSRFToken:       csrfToken,
+		Form            webModels.TransactionForm
+		Transaction     *transactionDomain.Transaction
+		CategoryOptions []webModels.CategorySelectOption
+	}{
+		PageData:        h.buildPageData(c, "Edit Transaction"),
+		Form:            form,
+		Transaction:     transaction,
+		CategoryOptions: categoryOptions,
 	}
 
 	return h.renderPage(c, "pages/transactions/edit", data)

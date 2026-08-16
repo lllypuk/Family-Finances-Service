@@ -58,12 +58,15 @@ import (
 //
 // Подтесты закрыты t.Skip, чтобы `make test` оставался зелёным до задач 13-15;
 // каждая из них обязана снять свой skip (см. чек-листы в плане).
+//
+// Зелёная фаза для /transactions — задача 13: хендлеры транзакций отдают
+// встроенный *PageData вместо `map[string]any{"PageData": …}`, skip снят.
+// Оставшиеся skip'и (categories, budgets, reports) снимают задачи 14 и 15.
 
 const (
-	webPagesSkipTransactions = "U-02: /transactions — контракт данных хендлера, skip снимает задача 13"
-	webPagesSkipCategories   = "U-02: /categories — контракт данных хендлера, skip снимает задача 14"
-	webPagesSkipBudgets      = "U-02: /budgets — контракт данных хендлера, skip снимает задача 14"
-	webPagesSkipReports      = "U-02: /reports — контракт данных и шаблон шапки, skip снимает задача 15"
+	webPagesSkipCategories = "U-02: /categories — контракт данных хендлера, skip снимает задача 14"
+	webPagesSkipBudgets    = "U-02: /budgets — контракт данных хендлера, skip снимает задача 14"
+	webPagesSkipReports    = "U-02: /reports — контракт данных и шаблон шапки, skip снимает задача 15"
 )
 
 // navBlockRe вырезает первый блок <nav>…</nav> — шапку страницы.
@@ -89,7 +92,7 @@ func TestWebPages_NavigationRendered(t *testing.T) {
 		path       string
 		skipReason string
 	}{
-		{name: "transactions", path: "/transactions", skipReason: webPagesSkipTransactions},
+		{name: "transactions", path: "/transactions"},
 		{name: "categories", path: "/categories", skipReason: webPagesSkipCategories},
 		{name: "budgets", path: "/budgets", skipReason: webPagesSkipBudgets},
 		{name: "reports", path: "/reports", skipReason: webPagesSkipReports},
@@ -97,7 +100,9 @@ func TestWebPages_NavigationRendered(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Skip(tc.skipReason)
+			if tc.skipReason != "" {
+				t.Skip(tc.skipReason)
+			}
 
 			nav := navBlock(t, fetchPage(t, testServer, auth, tc.path))
 

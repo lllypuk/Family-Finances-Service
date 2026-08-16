@@ -102,6 +102,43 @@ func (h *BaseHandler) getFlashMessages(c echo.Context) []Message {
 	}
 }
 
+// buildPageData собирает общие данные страницы: заголовок, flash-сообщения,
+// CSRF-токен и текущего пользователя.
+//
+// Имя и фамилия в сессии не хранятся (см. middleware.SessionData), поэтому они
+// дочитываются через UserService — как это делает DashboardHandler.
+// Если сессии нет или пользователь не читается, CurrentUser остаётся nil:
+// шаблоны шапки завязаны на `{{if .CurrentUser}}` и просто не покажут меню.
+func (h *BaseHandler) buildPageData(c echo.Context, title string) *PageData {
+	pageData := &PageData{
+		Title:    title,
+		Messages: h.getFlashMessages(c),
+	}
+
+	if csrfToken, err := middleware.GetCSRFToken(c); err == nil {
+		pageData.CSRFToken = csrfToken
+	}
+
+	sessionData, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		return pageData
+	}
+
+	currentUser := &SessionData{
+		UserID: sessionData.UserID,
+		Role:   sessionData.Role,
+		Email:  sessionData.Email,
+	}
+	currentUserRecord, userErr := h.services.User.GetUserByID(c.Request().Context(), sessionData.UserID)
+	if userErr == nil && currentUserRecord != nil {
+		currentUser.FirstName = currentUserRecord.FirstName
+		currentUser.LastName = currentUserRecord.LastName
+	}
+	pageData.CurrentUser = currentUser
+
+	return pageData
+}
+
 // renderPage рендерит полную страницу
 func (h *BaseHandler) renderPage(c echo.Context, templateName string, data any) error {
 	return c.Render(http.StatusOK, templateName, data)

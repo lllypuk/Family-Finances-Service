@@ -1,7 +1,9 @@
 package handlers_test
 
 import (
+	"bytes"
 	"context"
+	"html/template"
 	"io"
 	"net/http/httptest"
 	"strings"
@@ -33,6 +35,45 @@ type MockRenderer struct{}
 func (r *MockRenderer) Render(_ io.Writer, _ string, _ any, _ echo.Context) error {
 	// Simple mock that just returns success
 	return nil
+}
+
+// capturingRenderer запоминает данные, которые хендлер передал шаблону.
+//
+// В отличие от MockRenderer он позволяет проверить **контракт данных**:
+// доступен ли `.CurrentUser` в корне контекста, как этого ждут шаблоны шапки
+// (см. U-02). Полноценной заменой рендерингу на настоящих шаблонах он не
+// является — для этого есть tests/integration/web_pages_test.go.
+type capturingRenderer struct {
+	data any
+}
+
+func (r *capturingRenderer) Render(_ io.Writer, _ string, data any, _ echo.Context) error {
+	r.data = data
+	return nil
+}
+
+// renderWith исполняет по захваченным данным пробный шаблон и возвращает
+// результат. Ошибка шаблона означает, что данных нужного вида в контексте нет.
+func (r *capturingRenderer) renderWith(text string) (string, error) {
+	tmpl, err := template.New("probe").Parse(text)
+	if err != nil {
+		return "", err
+	}
+
+	var buf bytes.Buffer
+	if execErr := tmpl.Execute(&buf, r.data); execErr != nil {
+		return "", execErr
+	}
+
+	return buf.String(), nil
+}
+
+// newCapturingContext — как newTestContext, но с рендерером, запоминающим данные.
+func newCapturingContext(method, path, body string) (echo.Context, *capturingRenderer) {
+	c, _ := newTestContext(method, path, body)
+	renderer := &capturingRenderer{}
+	c.Echo().Renderer = renderer
+	return c, renderer
 }
 
 // CustomValidator wraps go-playground/validator for Echo

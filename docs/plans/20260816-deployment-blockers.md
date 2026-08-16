@@ -593,13 +593,37 @@ Option 2 из `deploy/README.md`.
 - Modify: `internal/web/handlers/transactions_helpers.go`
 - Modify: `internal/web/handlers/transactions_test.go`
 
-- [ ] заменить `map[string]any{"PageData": …}` на встроенную структуру по образцу `dashboard.go:110` (3 места в `transactions.go`, 1 в `transactions_helpers.go`)
-- [ ] встроенные поля ставить первыми и отделять пустой строкой (`embeddedstructfieldcheck`)
-- [ ] проверить, что `{{.PageData.X}}` в шаблонах продолжает работать — имя встроенного поля остаётся `PageData`
-- [ ] снять `t.Skip(webPagesSkipTransactions)` в `tests/integration/web_pages_test.go` и удалить константу
-- [ ] прогнать тест из задачи 12 — страница `/transactions` обязана пройти
-- [ ] написать тест на данные хендлера: `CurrentUser` доступен в корне контекста
-- [ ] `make test` и `make lint` — 0 issues перед задачей 14
+- [x] заменить `map[string]any{"PageData": …}` на встроенную структуру по образцу `dashboard.go:110` (3 места в `transactions.go`, 1 в `transactions_helpers.go`)
+- [x] встроенные поля ставить первыми и отделять пустой строкой (`embeddedstructfieldcheck`)
+- [x] проверить, что `{{.PageData.X}}` в шаблонах продолжает работать — имя встроенного поля остаётся `PageData`
+- [x] снять `t.Skip(webPagesSkipTransactions)` в `tests/integration/web_pages_test.go` и удалить константу
+- [x] прогнать тест из задачи 12 — страница `/transactions` обязана пройти
+- [x] написать тест на данные хендлера: `CurrentUser` доступен в корне контекста
+- [x] `make test` и `make lint` — 0 issues перед задачей 14
+
+ℹ️ Сборка `*PageData` вынесена в общий хелпер `BaseHandler.buildPageData(c, title)`
+(`internal/web/handlers/base.go`): заголовок, flash-сообщения, CSRF-токен и
+`CurrentUser`. Имени и фамилии в `middleware.SessionData` нет, поэтому они
+дочитываются через `services.User.GetUserByID` — так же, как это делает
+`DashboardHandler`. Хелпер положен в `base.go`, а не в `transactions.go`,
+чтобы задачи 14-15 переиспользовали его и не породили пять почти одинаковых
+блоков, на которые ругнётся `dupl` (замечание из «Development Approach»).
+
+ℹ️ Побочно закрыт латентный баг из задачи 7: `{{.CSRFToken}}` в форме выхода
+рендерился пустым, потому что хендлеры не клали токен в данные страницы.
+`buildPageData` кладёт его в `PageData.CSRFToken`, откуда он промотируется в
+корень контекста; проверено на полном стеке — `/transactions` отдаёт
+`name="_token" value="…"` с непустым токеном. Прежние ключи `tplKeyCSRFToken`
+в `New`/`Edit` транзакций больше не нужны.
+
+ℹ️ Тест на контракт данных — `TestTransactionHandler_PageDataContract`
+(`internal/web/handlers/transactions_test.go`): подтесты `Index`, `New`,
+`FormWithErrors`. Он не сверяет структуру полем-по-полю, а **исполняет**
+пробный шаблон `{{if .CurrentUser}}…{{.PageData.Title}}{{end}}` по данным,
+которые хендлер отдал рендереру — то есть ловит ровно ту ошибку, что дала U-02.
+Для этого в `internal/web/handlers/testhelpers_test.go` добавлен
+`capturingRenderer` (в отличие от `MockRenderer` он данные запоминает) и
+`newCapturingContext`; задачи 14-15 могут переиспользовать оба.
 
 ### Task 14: Контракт данных — категории и бюджеты
 
