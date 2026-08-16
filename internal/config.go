@@ -113,7 +113,12 @@ func LoadConfig() *Config {
 
 	// Adjust settings based on environment
 	if config.IsProduction() {
-		config.Web.CookieSecure = true
+		// COOKIE_SECURE остаётся управляемым и в production: `Secure` на
+		// session-cookie означает, что браузер выбросит её на любом http://
+		// origin, и вход превращается в бесконечный редирект. Это ровно случай
+		// docker-compose.minimal.yml и первого запуска по IP/SSH-туннелю до
+		// того, как перед сервисом появился TLS-прокси. По умолчанию true.
+		config.Web.CookieSecure = getBoolEnv("COOKIE_SECURE", true)
 		if config.Logging.Level == "debug" {
 			config.Logging.Level = "info"
 		}

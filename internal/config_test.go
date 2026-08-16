@@ -81,3 +81,35 @@ func TestConfig_Validate_RequiresDatabasePath(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "database path")
 }
+
+// COOKIE_SECURE — единственный рычаг, которым развёртывание без TLS
+// (deploy/docker-compose.minimal.yml, первый запуск по IP) может отключить
+// флаг Secure на session-cookie: браузер выбрасывает такую cookie на любом
+// http:// origin, и вход зацикливается на «CSRF token not found in session».
+// Раньше значение в production безусловно перетиралось на true.
+func TestLoadConfig_CookieSecure(t *testing.T) {
+	cases := []struct {
+		name        string
+		environment string
+		cookieValue string
+		expected    bool
+	}{
+		{name: "production по умолчанию", environment: "production", cookieValue: "", expected: true},
+		{name: "production с явным false", environment: "production", cookieValue: "false", expected: false},
+		{name: "production с явным true", environment: "production", cookieValue: "true", expected: true},
+		{name: "development по умолчанию", environment: "development", cookieValue: "", expected: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("ENVIRONMENT", tc.environment)
+			t.Setenv("SESSION_SECRET", strongSecret)
+			t.Setenv("CSRF_SECRET", strongSecret)
+			if tc.cookieValue != "" {
+				t.Setenv("COOKIE_SECURE", tc.cookieValue)
+			}
+
+			assert.Equal(t, tc.expected, internal.LoadConfig().Web.CookieSecure)
+		})
+	}
+}

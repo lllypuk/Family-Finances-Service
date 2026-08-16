@@ -260,7 +260,7 @@ The application uses environment variables for configuration. Key variables:
 | `SESSION_SECRET`       | insecure dev default (change in production)          | Session encryption key                                |
 | `SESSION_TIMEOUT`      | `24h`                                                | Session lifetime                                      |
 | `CSRF_SECRET`          | insecure dev default (change in production)          | CSRF signing secret                                   |
-| `COOKIE_SECURE`        | `false` (forced `true` in production)                | Secure cookie flag                                    |
+| `COOKIE_SECURE`        | `false` (`true` in production unless set)            | `Secure` flag on the session cookie. Set to `false` when serving over plain HTTP (no TLS proxy yet) — otherwise the browser drops the cookie and login loops |
 | `COOKIE_HTTP_ONLY`     | `true`                                               | HttpOnly cookie flag                                  |
 | `COOKIE_SAME_SITE`     | `Lax`                                                | SameSite cookie mode                                  |
 

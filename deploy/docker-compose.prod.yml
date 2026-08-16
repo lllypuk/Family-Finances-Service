@@ -24,6 +24,10 @@ services:
       - CSRF_SECRET=${CSRF_SECRET:?CSRF_SECRET is required - generate one with `openssl rand -base64 32`}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - ENVIRONMENT=${ENVIRONMENT:-production}
+      # Secure на session-cookie. Оставьте true за TLS-прокси; поставьте
+      # COOKIE_SECURE=false, пока сервис отдаётся по http:// — иначе браузер
+      # выбросит cookie и вход зациклится.
+      - COOKIE_SECURE=${COOKIE_SECURE:-true}
     volumes:
       - ./data:/data
       - ./backups:/backups

@@ -33,6 +33,12 @@ services:
       - CSRF_SECRET=${CSRF_SECRET:?CSRF_SECRET is required - generate one with `openssl rand -base64 32`}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - ENVIRONMENT=${ENVIRONMENT:-production}
+      # Этот файл заявлен как «без SSL» и публикует порт на всех интерфейсах,
+      # поэтому Secure на session-cookie здесь ВЫКЛЮЧЕН: браузер выбрасывает
+      # Secure-cookie на http:// origin, и вход зацикливается на
+      # «CSRF token not found in session». Поставив перед сервисом TLS-прокси,
+      # переключите на COOKIE_SECURE=true.
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
     volumes:
       - ./data:/data
       - ./backups:/backups

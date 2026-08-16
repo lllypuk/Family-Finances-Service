@@ -33,6 +33,7 @@ services:
 
       # Application Configuration
       ENVIRONMENT: ${ENVIRONMENT:-production}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required - generate one with `openssl rand -base64 32`}
       CSRF_SECRET: ${CSRF_SECRET:?CSRF_SECRET is required - generate one with `openssl rand -base64 32`}

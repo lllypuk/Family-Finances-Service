@@ -95,7 +95,7 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 		Port:          "8080",
 		Host:          "localhost",
 		SessionSecret: TestSessionSecret,
-		IsProduction:  false,
+		CookieSecure:  false,
 		TemplatesDir:  filepath.Join(RepoRoot(t), "internal", "web", "templates"),
 		StaticDir:     filepath.Join(RepoRoot(t), "internal", "web", "static"),
 	}
