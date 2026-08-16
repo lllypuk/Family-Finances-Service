@@ -251,12 +251,24 @@ PUT → 200, DELETE → 204), `WriteWithoutCSRFToken` → 403 как и ожид
 - Modify: `tests/integration/users_test.go`
 - Modify: `tests/integration/categories_test.go`
 
-- [ ] навесить `webmw.RequireAPIAuth()` на группу `api` (`http_server.go:152`)
-- [ ] проверить, что `/health` и веб-маршруты не задеты
-- [ ] обновить ~70 вызовов `/api/v1` в 7 тестовых файлах: добавить сессию через `LoginAs` из задачи 1 (в т.ч. явное ожидание 200 в `http_server_test.go:759`)
-- [ ] снять `t.Skip(apiAuthSkipReason)` в `tests/integration/api_auth_test.go` и прогнать тест из задачи 2 — **теперь он обязан проходить**
-- [ ] написать тест: аутентифицированный запрос по-прежнему получает 200
-- [ ] `make test` и `make lint` — 0 issues перед задачей 5
+- [x] навесить `webmw.RequireAPIAuth()` на группу `api` (`http_server.go:152`)
+- [x] проверить, что `/health` и веб-маршруты не задеты
+- [x] обновить ~70 вызовов `/api/v1` в 7 тестовых файлах: добавить сессию через `LoginAs` из задачи 1 (в т.ч. явное ожидание 200 в `http_server_test.go:759`)
+- [x] снять `t.Skip(apiAuthSkipReason)` в `tests/integration/api_auth_test.go` и прогнать тест из задачи 2 — **теперь он обязан проходить**
+- [x] написать тест: аутентифицированный запрос по-прежнему получает 200
+- [x] `make test` и `make lint` — 0 issues перед задачей 5
+
+ℹ️ Вызовы `/api/v1` в `tests/integration/*` уже несли сессию с задачи 1
+(`testServer.Auth(t).Apply(req)`), править их не пришлось.
+`internal/application/handlers/families_test.go` дёргает хендлеры напрямую, минуя
+роутер, — middleware его не задевает. А сервер в `http_server_test.go` собран на
+mock-репозиториях без веб-слоя, поэтому сессии в нём нет в принципе: ожидания
+`/api/v1/categories` и `/api/v1/nonexistent` переведены на 401 с комментарием, а
+аутентифицированный путь (200/201) проверяется на полном стеке —
+`TestAPIAuth_AuthenticatedRequestsAllowed` в `tests/integration/api_auth_test.go`.
+Побочный эффект: несуществующий путь внутри группы тоже отдаёт 401 (Echo вешает
+group-middleware на catch-all маршрут группы) — так анонимный клиент не различает
+существующие и несуществующие маршруты API.
 
 ### Task 5: Брать user_id из сессии, а не из тела запроса
 

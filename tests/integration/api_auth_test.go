@@ -53,8 +53,8 @@ import (
 // Единственный подтест, который проходил и в красной фазе, —
 // WriteWithoutCSRFToken: 403 отдаёт глобальный CSRFProtection, а не авторизация.
 //
-// Тест снимается со `t.Skip` в задаче 4, которая вешает RequireAPIAuth на группу.
-const apiAuthSkipReason = "S-01: RequireAPIAuth ещё не подключён к /api/v1 — снять skip в задаче 4 плана"
+// Задача 4 повесила RequireAPIAuth на группу /api/v1, skip снят — тест обязан
+// проходить. Зелёный прогон означает, что S-01 закрыт для анонимного клиента.
 
 // csrfFormTokenRe вытаскивает CSRF-токен из скрытого поля формы входа
 // (internal/web/templates/pages/login.html).
@@ -87,8 +87,6 @@ type apiFixtures struct {
 }
 
 func TestAPIAuth_AnonymousRequestsRejected(t *testing.T) {
-	t.Skip(apiAuthSkipReason)
-
 	testServer := testhelpers.SetupHTTPServer(t)
 
 	// Семья и админ нужны только для того, чтобы RequireSetup не уводил всё на /setup.
@@ -176,6 +174,87 @@ func TestAPIAuth_AnonymousRequestsRejected(t *testing.T) {
 
 		require.Equal(t, http.StatusUnauthorized, rec.Code,
 			"анонимный клиент создал транзакцию, тело ответа: %s", rec.Body.String())
+	})
+}
+
+// TestAPIAuth_AuthenticatedRequestsAllowed — обратная сторона задачи 4:
+// RequireAPIAuth не должен ломать легитимный доступ. Заодно проверяется, что
+// middleware повешено именно на группу /api/v1: /health и веб-маршруты не задеты.
+func TestAPIAuth_AuthenticatedRequestsAllowed(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	auth := testServer.Auth(t)
+	fixtures := createAPIFixtures(t, testServer)
+
+	t.Run("GetWithSession", func(t *testing.T) {
+		readCases := []struct {
+			name string
+			path string
+		}{
+			{name: "users", path: "/api/v1/users/" + fixtures.userID.String()},
+			{name: "categories", path: "/api/v1/categories"},
+			{name: "transactions", path: "/api/v1/transactions"},
+			{name: "budgets", path: "/api/v1/budgets"},
+			{name: "reports", path: "/api/v1/reports"},
+		}
+
+		for _, tc := range readCases {
+			t.Run(tc.name, func(t *testing.T) {
+				req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+				auth.Apply(req)
+				rec := httptest.NewRecorder()
+
+				testServer.Server.Echo().ServeHTTP(rec, req)
+
+				assert.Equal(t, http.StatusOK, rec.Code,
+					"аутентифицированный GET %s обязан получить 200, тело: %s", tc.path, rec.Body.String())
+			})
+		}
+	})
+
+	t.Run("WriteWithSession", func(t *testing.T) {
+		body := mustJSON(t, map[string]any{
+			"amount":      21.0,
+			"type":        "expense",
+			"description": "authenticated write",
+			"category_id": fixtures.categoryID,
+			"user_id":     fixtures.userID,
+			"date":        time.Now(),
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		auth.Apply(req)
+		rec := httptest.NewRecorder()
+
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusCreated, rec.Code, "тело ответа: %s", rec.Body.String())
+	})
+
+	// /health зарегистрирован вне группы /api/v1 и обязан остаться публичным:
+	// на него смотрит внешний мониторинг и healthcheck контейнера.
+	t.Run("HealthStaysPublic", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		rec := httptest.NewRecorder()
+
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
+
+	// Веб-маршруты живут своей аутентификацией: у анонимного клиента /login
+	// открывается, а защищённая страница уводит редиректом, а не отдаёт 401 JSON.
+	t.Run("WebRoutesUntouched", func(t *testing.T) {
+		loginReq := httptest.NewRequest(http.MethodGet, "/login", nil)
+		loginRec := httptest.NewRecorder()
+		testServer.Server.Echo().ServeHTTP(loginRec, loginReq)
+		assert.Equal(t, http.StatusOK, loginRec.Code)
+
+		dashReq := httptest.NewRequest(http.MethodGet, "/", nil)
+		dashRec := httptest.NewRecorder()
+		testServer.Server.Echo().ServeHTTP(dashRec, dashReq)
+		assert.Equal(t, http.StatusFound, dashRec.Code)
+		assert.Equal(t, "/login", dashRec.Header().Get("Location"))
 	})
 }
 

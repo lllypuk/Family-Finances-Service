@@ -755,9 +755,16 @@ func TestHTTPServer_IntegrationWithRealEndpoints(t *testing.T) {
 		expected int
 	}{
 		{"GET", "/health", http.StatusOK},
-		{"GET", "/", http.StatusNotFound},            // Dashboard not available without observability
-		{"GET", "/api/v1/categories", http.StatusOK}, // Returns empty list in single-family model
-		{"GET", "/api/v1/nonexistent", http.StatusNotFound},
+		{"GET", "/", http.StatusNotFound}, // Dashboard not available without observability
+		// Группа /api/v1 закрыта RequireAPIAuth (S-01). Этот сервер собран на моках
+		// без веб-слоя, поэтому сессии здесь нет и любой запрос к API — 401.
+		// Аутентифицированный путь (200) проверяется на полном стеке:
+		// tests/integration/api_auth_test.go, TestAPIAuth_AuthenticatedRequestsAllowed.
+		{"GET", "/api/v1/categories", http.StatusUnauthorized},
+		// Несуществующий путь внутри группы тоже отдаёт 401: Echo вешает
+		// group-middleware на catch-all маршрут группы, и это правильно — анонимный
+		// клиент не должен различать существующие и несуществующие маршруты API.
+		{"GET", "/api/v1/nonexistent", http.StatusUnauthorized},
 	}
 
 	for _, tc := range testCases {

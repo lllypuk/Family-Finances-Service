@@ -14,6 +14,7 @@ import (
 	"family-budget-service/internal/observability"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/web"
+	webmw "family-budget-service/internal/web/middleware"
 )
 
 const (
@@ -171,8 +172,10 @@ func (s *HTTPServer) setupRoutes() {
 		s.webServer.SetupRoutes()
 	}
 
-	// API версионирование
-	api := s.echo.Group("/api/v1")
+	// API версионирование.
+	// RequireAPIAuth закрывает всю группу: без валидной сессии — 401 и JSON-ошибка
+	// (находка S-01). /health и веб-маршруты регистрируются выше и не задеты.
+	api := s.echo.Group("/api/v1", webmw.RequireAPIAuth())
 
 	// Маршруты для пользователей
 	users := api.Group("/users")
