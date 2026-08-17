@@ -121,8 +121,10 @@ func RevalidateSessionUser(c echo.Context, lookup SessionUserLookup) (*SessionDa
 
 		// Логируем здесь, а не в каждой обёртке: и веб-, и API-вариант
 		// RequireActiveUser писали одну и ту же строку дословно.
-		c.Logger().Errorf("session revalidation failed on %s %s: %v",
-			c.Request().Method, c.Request().URL.Path, lookupErr)
+		// %q для пути и текста ошибки: декодированный URL.Path может
+		// содержать перевод строки и подделать лог-запись.
+		c.Logger().Errorf("session revalidation failed on %s %q: %q",
+			c.Request().Method, c.Request().URL.Path, lookupErr.Error())
 
 		return nil, fmt.Errorf("revalidate session user: %w", lookupErr)
 	}

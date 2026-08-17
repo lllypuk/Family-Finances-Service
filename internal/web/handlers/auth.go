@@ -211,7 +211,7 @@ func (h *AuthHandler) Setup(c echo.Context) error {
 	if err != nil {
 		// Текст ошибки сервиса наружу не отдаём (в него попадают детали БД):
 		// пользователю — обобщённая формулировка, подробности — в лог.
-		c.Logger().Errorf("setup family failed: %v", err)
+		c.Logger().Errorf("setup family failed: %q", err.Error())
 		return h.setupError(c, "Failed to create the family, please try again", nil)
 	}
 
@@ -362,7 +362,7 @@ func (h *AuthHandler) InviteRegister(c echo.Context) error {
 				"email": "Email must match the invited email address",
 			})
 		}
-		c.Logger().Errorf("invite registration failed: %v", err)
+		c.Logger().Errorf("invite registration failed: %q", err.Error())
 		return h.inviteError(c, token, "Failed to complete registration, please try again", nil)
 	}
 

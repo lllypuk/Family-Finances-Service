@@ -218,7 +218,7 @@ func (h *TransactionHandler) Create(c echo.Context) error {
 		// Текст ошибки сервиса наружу не отдаём: в нём оказываются имена таблиц
 		// и колонок SQLite и текст ограничений. Клиенту — общая формулировка,
 		// подробности (включая UserID) — в лог.
-		c.Logger().Errorf("create transaction failed (UserID: %s): %v", sessionData.UserID, err)
+		c.Logger().Errorf("create transaction failed (UserID: %s): %q", sessionData.UserID, err.Error())
 
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create transaction")
 	}

@@ -275,8 +275,12 @@ func customHTTPErrorHandler(renderer *TemplateRenderer) echo.HTTPErrorHandler {
 			// шаблонов и полей структур (renderer.go оборачивает ошибку
 			// исполнения) и обёрнутые ошибки репозиториев/сервисов. Клиент
 			// получает обобщённую формулировку, подробности — только в лог.
-			c.Logger().Errorf("unhandled error on %s %s: %v",
-				c.Request().Method, c.Request().URL.Path, err)
+			// %q, а не %s: URL.Path приходит уже декодированным, поэтому
+			// %0a в запросе даёт настоящий перевод строки и позволяет
+			// подделать лог-запись. То же и с текстом ошибки — в него
+			// попадают введённые пользователем значения.
+			c.Logger().Errorf("unhandled error on %s %q: %q",
+				c.Request().Method, c.Request().URL.Path, err.Error())
 			msg = getErrorTitle(code)
 		}
 

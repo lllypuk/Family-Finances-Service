@@ -137,7 +137,7 @@ func (h *AdminHandler) CreateInvite(c echo.Context) error {
 		if strings.Contains(err.Error(), "pending invite already exists") {
 			return h.htmxError(c, "Pending invite already exists for this email")
 		}
-		c.Logger().Errorf("create invite failed: %v", err)
+		c.Logger().Errorf("create invite failed: %q", err.Error())
 		return h.htmxError(c, "Failed to create invite, please try again")
 	}
 
@@ -224,7 +224,7 @@ func (h *AdminHandler) DeleteUser(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, "Cannot delete the last administrator")
 		}
 		// Текст ошибки репозитория (имена таблиц/колонок SQLite) клиенту не отдаём.
-		c.Logger().Errorf("delete user %s failed: %v", userID, deleteErr)
+		c.Logger().Errorf("delete user %s failed: %q", userID, deleteErr.Error())
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to delete user")
 	}
 
