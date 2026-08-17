@@ -42,10 +42,8 @@
                         {{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}
                     </summary>
                     <ul>
-                        <li><a href="/profile">Профиль</a></li>
                         {{if eq .CurrentUser.Role "admin"}}
                         <li><a href="/users">Пользователи</a></li>
-                        <li><a href="/family/settings">Настройки семьи</a></li>
                         {{end}}
                         <li>
                             <form method="POST" action="/logout" style="margin: 0;">
@@ -230,12 +228,6 @@
                     <footer>
                         <div class="button-group">
                             <a href="/budgets/{{.ID}}" role="button" class="secondary outline">Посмотреть</a>
-                            <button hx-post="/budgets/{{.ID}}/archive" 
-                                    hx-target="closest article" 
-                                    hx-swap="outerHTML"
-                                    class="secondary outline">
-                                Архивировать
-                            </button>
                         </div>
                     </footer>
                 </article>
@@ -255,46 +247,6 @@
         </section>
         {{end}}
 
-        <!-- Alert Settings -->
-        <section class="alert-settings">
-            <details>
-                <summary>⚙️ Настройки уведомлений</summary>
-                <div class="settings-content">
-                    <h4>Пороговые значения</h4>
-                    <form method="POST" action="/budgets/alerts/settings">
-                        <input type="hidden" name="_token" value="{{.CSRFToken}}">
-                        
-                        <div class="grid">
-                            <div>
-                                <label for="warning_threshold">Порог предупреждения (%)</label>
-                                <input type="number" 
-                                       id="warning_threshold" 
-                                       name="warning_threshold" 
-                                       min="50" 
-                                       max="95" 
-                                       value="{{.Settings.WarningThreshold}}"
-                                       step="5">
-                                <small>При каком проценте использования показывать предупреждение</small>
-                            </div>
-                            
-                            <div>
-                                <label>
-                                    <input type="checkbox" 
-                                           name="email_notifications" 
-                                           {{if .Settings.EmailNotifications}}checked{{end}}>
-                                    Email уведомления
-                                </label>
-                                <small>Получать уведомления на email</small>
-                            </div>
-                        </div>
-                        
-                        <div class="button-group">
-                            <button type="submit" class="primary">Сохранить настройки</button>
-                        </div>
-                    </form>
-                </div>
-            </details>
-        </section>
     </main>
     
     <!-- Footer -->

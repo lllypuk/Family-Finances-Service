@@ -16,6 +16,7 @@
 
         <!-- Favicon -->
         <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico" />
+        {{if .CSRFToken}}<meta name="csrf-token" content="{{.CSRFToken}}">{{end}}
     </head>
     <body>
         <!-- Navigation -->
@@ -40,11 +41,9 @@
                             {{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}
                         </summary>
                         <ul>
-                            <li><a href="/profile">Профиль</a></li>
                             {{if eq .CurrentUser.Role "admin"}}
                             <li><a href="/users">Пользователи</a></li>
                             <li>
-                                <a href="/family/settings">Настройки семьи</a>
                             </li>
                             {{end}}
                             <li>
@@ -67,8 +66,7 @@
                     </details>
                 </li>
                 {{else}}
-                <li><a href="/login">Вход</a></li>
-                <li><a href="/register" role="button">Регистрация</a></li>
+                <li><a href="/login" role="button">Вход</a></li>
                 {{end}}
             </ul>
         </nav>
@@ -127,11 +125,6 @@
                     </small>
                 </div>
                 <div>
-                    <small class="text-right">
-                        <a href="/help">Справка</a> •
-                        <a href="/privacy">Конфиденциальность</a> •
-                        <a href="/terms">Условия</a>
-                    </small>
                 </div>
             </div>
         </footer>

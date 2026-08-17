@@ -20,9 +20,9 @@ type UserHandler struct {
 }
 
 // NewUserHandler создает новый обработчик пользователей
-func NewUserHandler(repos *handlers.Repositories, services *services.Services) *UserHandler {
+func NewUserHandler(repos *handlers.Repositories, services *services.Services, cookieSecure bool) *UserHandler {
 	return &UserHandler{
-		BaseHandler: NewBaseHandler(repos, services),
+		BaseHandler: NewBaseHandler(repos, services, cookieSecure),
 	}
 }
 
@@ -54,7 +54,7 @@ func (h *UserHandler) Index(c echo.Context) error {
 	csrfToken, _ := middleware.GetCSRFToken(c)
 
 	data := map[string]any{
-		"Title":           "Family Members",
+		"Title":           titleUsers,
 		"Users":           users,
 		"Family":          family,
 		tplKeyCurrentUser: currentUser,
@@ -63,7 +63,7 @@ func (h *UserHandler) Index(c echo.Context) error {
 		"Messages":        h.getFlashMessages(c),
 	}
 
-	return c.Render(http.StatusOK, "users/index.html", data)
+	return c.Render(http.StatusOK, "users/index", data)
 }
 
 // New отображает форму добавления нового пользователя
@@ -85,9 +85,15 @@ func (h *UserHandler) New(c echo.Context) error {
 
 	csrfToken, _ := middleware.GetCSRFToken(c)
 
+	// FieldErrors обязателен даже пустым: шаблон зовёт `index .FieldErrors …`,
+	// а index по nil-значению — ошибка исполнения (страница отдавала 500).
+	// CurrentUser обязателен: шапка страницы — общий шаблон `nav`, и без него
+	// она рисуется как для анонима, без меню и без формы выхода (U-02).
 	data := map[string]any{
-		"Title":         "Add Family Member",
-		tplKeyCSRFToken: csrfToken,
+		"Title":           titleNewUser,
+		tplKeyCurrentUser: currentUser,
+		tplKeyCSRFToken:   csrfToken,
+		tplKeyFieldErrors: map[string]string{},
 		"Roles": []map[string]any{
 			{"Value": string(user.RoleAdmin), tplKeyLabel: "Admin"},
 			{"Value": string(user.RoleMember), tplKeyLabel: "Member"},
@@ -96,7 +102,7 @@ func (h *UserHandler) New(c echo.Context) error {
 		"Messages": h.getFlashMessages(c),
 	}
 
-	return c.Render(http.StatusOK, "users/new.html", data)
+	return c.Render(http.StatusOK, "users/new", data)
 }
 
 // Create создает нового пользователя в семье
@@ -172,8 +178,15 @@ func (h *UserHandler) userError(c echo.Context, message string, fieldErrors map[
 	form *models.CreateUserForm) error {
 	csrfToken, _ := middleware.GetCSRFToken(c)
 
+	if fieldErrors == nil {
+		fieldErrors = map[string]string{}
+	}
+
+	// Перерисованная после ошибки форма — та же страница, поэтому в шапке
+	// должен остаться тот же пользователь (иначе меню и выход исчезают).
 	data := map[string]any{
-		"Title":           "Add Family Member",
+		"Title":           titleNewUser,
+		tplKeyCurrentUser: h.sessionPageUser(c),
 		tplKeyError:       message,
 		tplKeyFieldErrors: fieldErrors,
 		tplKeyCSRFToken:   csrfToken,
@@ -194,8 +207,8 @@ func (h *UserHandler) userError(c echo.Context, message string, fieldErrors map[
 
 	// Если это HTMX запрос, возвращаем только форму
 	if h.IsHTMXRequest(c) {
-		return c.Render(http.StatusUnprocessableEntity, "users/new_form.html", data)
+		return c.Render(http.StatusUnprocessableEntity, "users/new_form", data)
 	}
 
-	return c.Render(http.StatusUnprocessableEntity, "users/new.html", data)
+	return c.Render(http.StatusUnprocessableEntity, "users/new", data)
 }

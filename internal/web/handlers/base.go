@@ -16,42 +16,70 @@ import (
 )
 
 const (
-	// HTMXRequestHeader is the header value for HTMX requests
-	HTMXRequestHeader = "true"
 	// Flash message cookie names
 	flashCookieName     = "flash_message"
 	flashTypeCookieName = "flash_type"
 	// Flash message cookie expiration in seconds
 	flashCookieMaxAge = 10 // 10 seconds - enough time for redirect
+
+	// formValidationMessage — общее сообщение над формой, вернувшейся с
+	// ошибками валидации.
+	formValidationMessage = "Проверьте правильность заполнения формы"
 )
 
-var (
-	// ErrNoSession is returned when no session is found
-	ErrNoSession = errors.New("no session found")
+// Заголовки страниц. Интерфейс русскоязычный, английские заголовки — находка
+// U-05 (docs/specs/003-ui-ux-audit.md#u-05). Заголовок вида «Редактирование …»
+// работает ещё и признаком шаблона в renderXxxFormWithErrors, поэтому все
+// заголовки живут константами, а не литералами по месту.
+const (
+	titleLogin           = "Вход"
+	titleInvite          = "Регистрация по приглашению"
+	titleDashboard       = "Главная"
+	titleTransactions    = "Транзакции"
+	titleNewTransaction  = "Новая транзакция"
+	titleEditTransaction = "Редактирование транзакции"
 
-	// cookieSecureForProduction is set by SetCookieSecureForProduction in
-	// production-like environments, so flash cookies are emitted with the
-	// Secure flag. Defaults to false for local development over plain HTTP.
-	cookieSecureForProduction = false //nolint:gochecknoglobals // env flag, set once at startup
+	titleCategories   = "Категории"
+	titleNewCategory  = "Новая категория"
+	titleEditCategory = "Редактирование категории"
+
+	titleBudgets      = "Бюджеты"
+	titleNewBudget    = "Новый бюджет"
+	titleEditBudget   = "Редактирование бюджета"
+	titleBudgetAlerts = "Оповещения по бюджетам"
+	titleBudgetPrefix = "Бюджет: "
+
+	titleReports      = "Отчёты"
+	titleNewReport    = "Новый отчёт"
+	titleReportPrefix = "Отчёт: "
+
+	titleUsers      = "Участники семьи"
+	titleAdminUsers = "Управление пользователями"
+	titleNewUser    = "Новый участник семьи"
+	titleSetup      = "Первоначальная настройка"
+	titleBackup     = "Резервные копии"
 )
 
-// SetCookieSecureForProduction toggles the Secure flag for flash cookies.
-// Call once at startup from web.NewWebServer; safe to leave unset in dev.
-func SetCookieSecureForProduction(secure bool) {
-	cookieSecureForProduction = secure
-}
+// ErrNoSession is returned when no session is found
+var ErrNoSession = errors.New("no session found")
 
 // BaseHandler содержит общие методы для всех веб-обработчиков
 type BaseHandler struct {
 	repositories *handlers.Repositories
 	services     *services.Services
+
+	// cookieSecure — флаг Secure на flash-cookie. Приходит из
+	// application.Config.CookieSecure через web.NewWebServer тем же путём, что и
+	// у cookie сессии; в dev по HTTP он false, иначе браузер выбрасывает cookie.
+	cookieSecure bool
 }
 
 // NewBaseHandler создает новый базовый обработчик
-func NewBaseHandler(repositories *handlers.Repositories, services *services.Services) *BaseHandler {
+func NewBaseHandler(repositories *handlers.Repositories, services *services.Services, cookieSecure bool) *BaseHandler {
 	return &BaseHandler{
 		repositories: repositories,
 		services:     services,
+		cookieSecure: cookieSecure,
 	}
 }
 
@@ -90,7 +118,7 @@ type Message struct {
 
 // getFlashMessages получает flash сообщения из сессии
 func (h *BaseHandler) getFlashMessages(c echo.Context) []Message {
-	msgType, message := GetFlashMessage(c)
+	msgType, message := h.GetFlashMessage(c)
 	if message == "" {
 		return []Message{}
 	}
@@ -100,6 +128,68 @@ func (h *BaseHandler) getFlashMessages(c echo.Context) []Message {
 			Text: message,
 		},
 	}
+}
+
+// buildPageData собирает общие данные страницы: заголовок, flash-сообщения,
+// CSRF-токен и текущего пользователя.
+//
+// Имя и фамилия в сессии не хранятся (см. middleware.SessionData), поэтому они
+// дочитываются через UserService — как это делает DashboardHandler.
+// Если сессии нет или пользователь не читается, CurrentUser остаётся nil:
+// шаблоны шапки завязаны на `{{if .CurrentUser}}` и просто не покажут меню.
+func (h *BaseHandler) buildPageData(c echo.Context, title string) *PageData {
+	pageData := &PageData{
+		Title:    title,
+		Messages: h.getFlashMessages(c),
+	}
+
+	if csrfToken, err := middleware.GetCSRFToken(c); err == nil {
+		pageData.CSRFToken = csrfToken
+	}
+
+	currentUser := h.sessionPageUser(c)
+	if currentUser == nil {
+		return pageData
+	}
+
+	currentUserRecord, userErr := h.services.User.GetUserByID(c.Request().Context(), currentUser.UserID)
+	if userErr == nil && currentUserRecord != nil {
+		currentUser.FirstName = currentUserRecord.FirstName
+		currentUser.LastName = currentUserRecord.LastName
+	}
+	pageData.CurrentUser = currentUser
+
+	return pageData
+}
+
+// sessionPageUser собирает CurrentUser для шапки страницы из одной только
+// сессии, без обращения к БД: имени и фамилии там нет, поэтому шаблон шапки
+// подписывает меню email'ом (components/nav.html). Нужен там, где страница
+// перерисовывается после ошибки валидации и лишний запрос неоправдан.
+func (h *BaseHandler) sessionPageUser(c echo.Context) *SessionData {
+	sessionData, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		return nil
+	}
+
+	return &SessionData{
+		UserID: sessionData.UserID,
+		Role:   sessionData.Role,
+		Email:  sessionData.Email,
+	}
+}
+
+// formPageData — buildPageData для формы, которую перерисовывают после
+// неудачной валидации: к общим данным страницы добавляются ошибки полей и
+// одно общее сообщение.
+func (h *BaseHandler) formPageData(c echo.Context, title string, errors map[string]string) *PageData {
+	pageData := h.buildPageData(c, title)
+	pageData.Errors = errors
+	pageData.Messages = []Message{
+		{Type: "error", Text: formValidationMessage},
+	}
+
+	return pageData
 }
 
 // renderPage рендерит полную страницу
@@ -123,7 +213,7 @@ func (h *BaseHandler) redirect(c echo.Context, url string) error {
 
 // IsHTMXRequest проверяет, является ли запрос HTMX запросом
 func (h *BaseHandler) IsHTMXRequest(c echo.Context) bool {
-	return c.Request().Header.Get("Hx-Request") == HTMXRequestHeader
+	return middleware.IsHTMXRequest(c)
 }
 
 // DeleteEntityParams содержит параметры для общего метода удаления
@@ -166,6 +256,10 @@ func (h *BaseHandler) handleDelete(c echo.Context, params DeleteEntityParams) er
 	// Удаляем сущность
 	err = params.DeleteEntityFunc(c, entityID)
 	if err != nil {
+		// Подробности остаются в логе: наружу уходит только обобщённое сообщение,
+		// потому что в ошибку сервиса завёрнута ошибка репозитория (схема БД).
+		c.Logger().Errorf("delete %s %q failed: %q", params.EntityName, entityID, err.Error())
+
 		errorMsg := params.GetErrorMsgFunc(err)
 
 		if h.IsHTMXRequest(c) {
@@ -192,8 +286,8 @@ func (h *BaseHandler) htmxError(c echo.Context, message string) error {
 }
 
 // setFlashMessage sets a flash message in a cookie
-func setFlashMessage(c echo.Context, msgType, message string) {
-	// #nosec G124 -- Secure flag is configured at startup via SetCookieSecureForProduction;
+func (h *BaseHandler) setFlashMessage(c echo.Context, msgType, message string) {
+	// #nosec G124 -- Secure flag comes from BaseHandler.cookieSecure (COOKIE_SECURE);
 	// HttpOnly and SameSite are always set.
 	c.SetCookie(&http.Cookie{
 		Name:     flashCookieName,
@@ -201,7 +295,7 @@ func setFlashMessage(c echo.Context, msgType, message string) {
 		Path:     "/",
 		MaxAge:   flashCookieMaxAge,
 		HttpOnly: true,
-		Secure:   cookieSecureForProduction,
+		Secure:   h.cookieSecure,
 		SameSite: http.SameSiteStrictMode,
 	})
 	// #nosec G124 -- see comment above.
@@ -211,13 +305,13 @@ func setFlashMessage(c echo.Context, msgType, message string) {
 		Path:     "/",
 		MaxAge:   flashCookieMaxAge,
 		HttpOnly: true,
-		Secure:   cookieSecureForProduction,
+		Secure:   h.cookieSecure,
 		SameSite: http.SameSiteStrictMode,
 	})
 }
 
 // GetFlashMessage reads and clears the flash message
-func GetFlashMessage(c echo.Context) (string, string) {
+func (h *BaseHandler) GetFlashMessage(c echo.Context) (string, string) {
 	msgCookie, err := c.Cookie(flashCookieName)
 	if err != nil {
 		return "", ""
@@ -225,13 +319,13 @@ func GetFlashMessage(c echo.Context) (string, string) {
 	typeCookie, _ := c.Cookie(flashTypeCookieName)
 
 	// Clear cookies
-	// #nosec G124 -- Secure flag is configured at startup via SetCookieSecureForProduction.
+	// #nosec G124 -- Secure flag comes from BaseHandler.cookieSecure (COOKIE_SECURE).
 	c.SetCookie(&http.Cookie{
 		Name:     flashCookieName,
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   cookieSecureForProduction,
+		Secure:   h.cookieSecure,
 		SameSite: http.SameSiteStrictMode,
 	})
 	// #nosec G124 -- see comment above.
@@ -240,7 +334,7 @@ func GetFlashMessage(c echo.Context) (string, string) {
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   cookieSecureForProduction,
+		Secure:   h.cookieSecure,
 		SameSite: http.SameSiteStrictMode,
 	})
 
@@ -255,7 +349,7 @@ func GetFlashMessage(c echo.Context) (string, string) {
 
 // redirectWithError performs a redirect with an error message
 func (h *BaseHandler) redirectWithError(c echo.Context, redirectURL, message string) error {
-	setFlashMessage(c, "error", message)
+	h.setFlashMessage(c, "error", message)
 	if h.IsHTMXRequest(c) {
 		c.Response().Header().Set("Hx-Redirect", redirectURL)
 		return c.NoContent(http.StatusOK)
@@ -265,7 +359,7 @@ func (h *BaseHandler) redirectWithError(c echo.Context, redirectURL, message str
 
 // redirectWithSuccess performs a redirect with a success message
 func (h *BaseHandler) redirectWithSuccess(c echo.Context, redirectURL, message string) error {
-	setFlashMessage(c, "success", message)
+	h.setFlashMessage(c, "success", message)
 	if h.IsHTMXRequest(c) {
 		c.Response().Header().Set("Hx-Redirect", redirectURL)
 		return c.NoContent(http.StatusOK)

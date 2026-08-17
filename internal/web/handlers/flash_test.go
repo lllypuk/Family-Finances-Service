@@ -18,7 +18,8 @@ func TestSetFlashMessage(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	// Set flash message
-	setFlashMessage(c, "success", "Operation completed successfully")
+	h := NewBaseHandler(nil, nil, false)
+	h.setFlashMessage(c, "success", "Operation completed successfully")
 
 	// Check cookies were set
 	cookies := rec.Result().Cookies()
@@ -127,7 +128,8 @@ func TestGetFlashMessage(t *testing.T) {
 			c := e.NewContext(req, rec)
 
 			// Get flash message
-			msgType, message := GetFlashMessage(c)
+			h := NewBaseHandler(nil, nil, false)
+			msgType, message := h.GetFlashMessage(c)
 
 			// Assert message content
 			assert.Equal(t, tt.expectedType, msgType)

@@ -35,6 +35,7 @@ func setupTransactionHandler() (*handlers.TransactionHandler, *MockTransactionSe
 	handler := handlers.NewTransactionHandler(
 		&appHandlers.Repositories{},
 		servicesStruct,
+		false,
 	)
 
 	return handler, mockTransactionService, mockCategoryService, mockUserService
@@ -50,6 +51,7 @@ func TestTransactionHandler_Index(t *testing.T) {
 		createTestTransaction(time.Now(), 200.00, transaction.TypeIncome, uuid.New()),
 	}
 	mockTxService.On("GetAllTransactions", mock.Anything, mock.Anything).Return(transactions, nil)
+	mockTxService.On("CountTransactions", mock.Anything, mock.Anything).Return(len(transactions), nil)
 
 	categories := []*category.Category{
 		createTestCategory("Food", category.TypeExpense),
@@ -69,12 +71,81 @@ func TestTransactionHandler_Index(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
+// TestTransactionHandler_PageDataContract проверяет контракт данных страниц
+// транзакций: шаблоны шапки читают `.CurrentUser` из **корня** контекста
+// (`{{if .CurrentUser}}`), поэтому *PageData обязан быть встроен, а не лежать
+// в map под ключом "PageData". Регрессия U-02 (docs/specs/003-ui-ux-audit.md#u-02)
+// возникла именно из-за вложенности на уровень глубже.
+func TestTransactionHandler_PageDataContract(t *testing.T) {
+	userID := uuid.New()
+
+	newHandler := func(t *testing.T) *handlers.TransactionHandler {
+		t.Helper()
+
+		handler, mockTxService, mockCatService, mockUserService := setupTransactionHandler()
+
+		categories := []*category.Category{createTestCategory("Food", category.TypeExpense)}
+		mockCatService.On("GetCategories", mock.Anything, mock.Anything).Return(categories, nil).Maybe()
+		mockCatService.On("GetCategoryByID", mock.Anything, mock.Anything).Return(categories[0], nil).Maybe()
+		mockTxService.On("GetAllTransactions", mock.Anything, mock.Anything).
+			Return([]*transaction.Transaction{}, nil).Maybe()
+		mockTxService.On("CountTransactions", mock.Anything, mock.Anything).Return(0, nil).Maybe()
+		mockUserService.On("GetUserByID", mock.Anything, userID).
+			Return(&user.User{ID: userID, Email: "test@example.com", FirstName: "John", LastName: "Doe"}, nil)
+
+		return handler
+	}
+
+	t.Run("Index", func(t *testing.T) {
+		handler := newHandler(t)
+
+		c, renderer := newCapturingContext(http.MethodGet, "/transactions")
+		withSession(c, userID, user.RoleAdmin)
+
+		require.NoError(t, handler.Index(c))
+
+		out, err := renderer.renderPageData()
+		require.NoError(t, err, "данные хендлера не дают шаблону .CurrentUser в корне контекста")
+		assert.Equal(t, "John Doe|admin|Транзакции", out)
+	})
+
+	t.Run("New", func(t *testing.T) {
+		handler := newHandler(t)
+
+		c, renderer := newCapturingContext(http.MethodGet, "/transactions/new")
+		withSession(c, userID, user.RoleAdmin)
+
+		require.NoError(t, handler.New(c))
+
+		out, err := renderer.renderPageData()
+		require.NoError(t, err)
+		assert.Equal(t, "John Doe|admin|Новая транзакция", out)
+	})
+
+	t.Run("FormWithErrors", func(t *testing.T) {
+		handler := newHandler(t)
+
+		// Пустая форма не проходит валидацию — хендлер перерисовывает её
+		// через renderTransactionFormWithErrors.
+		c, renderer := newCapturingContext(http.MethodPost, "/transactions")
+		withSession(c, userID, user.RoleAdmin)
+
+		require.NoError(t, handler.Create(c))
+
+		out, err := renderer.renderPageData()
+		require.NoError(t, err)
+		assert.Equal(t, "John Doe|admin|Новая транзакция", out)
+	})
+}
+
 // TestTransactionHandler_New tests the new transaction form
 func TestTransactionHandler_New(t *testing.T) {
-	handler, _, mockCatService, _ := setupTransactionHandler()
+	handler, _, mockCatService, mockUserService := setupTransactionHandler()
 
 	categories := []*category.Category{createTestCategory("Food", category.TypeExpense)}
 	mockCatService.On("GetCategories", mock.Anything, mock.Anything).Return(categories, nil)
+	mockUserService.On("GetUserByID", mock.Anything, mock.Anything).
+		Return(&user.User{ID: uuid.New(), FirstName: "Test", LastName: "User"}, nil).Maybe()
 
 	c, rec := newTestContext(http.MethodGet, "/transactions/new", "")
 	withSession(c, uuid.New(), user.RoleAdmin)
@@ -158,7 +229,7 @@ func TestTransactionHandler_Create_ServiceError(t *testing.T) {
 
 // TestTransactionHandler_Edit tests the edit form
 func TestTransactionHandler_Edit(t *testing.T) {
-	handler, mockTxService, mockCatService, _ := setupTransactionHandler()
+	handler, mockTxService, mockCatService, mockUserService := setupTransactionHandler()
 
 	transactionID := uuid.New()
 	tx := createTestTransaction(time.Now(), 100.50, transaction.TypeExpense, uuid.New())
@@ -166,6 +237,8 @@ func TestTransactionHandler_Edit(t *testing.T) {
 
 	categories := []*category.Category{createTestCategory("Food", category.TypeExpense)}
 	mockCatService.On("GetCategories", mock.Anything, mock.Anything).Return(categories, nil)
+	mockUserService.On("GetUserByID", mock.Anything, mock.Anything).
+		Return(&user.User{ID: uuid.New(), FirstName: "Test", LastName: "User"}, nil).Maybe()
 
 	c, rec := newTestContext(http.MethodGet, "/transactions/"+transactionID.String()+"/edit", "")
 	c.SetParamNames("id")
@@ -283,6 +356,7 @@ func TestTransactionHandler_Filter_HTMX(t *testing.T) {
 		createTestTransaction(time.Now(), 100.50, transaction.TypeExpense, uuid.New()),
 	}
 	mockTxService.On("GetAllTransactions", mock.Anything, mock.Anything).Return(transactions, nil)
+	mockTxService.On("CountTransactions", mock.Anything, mock.Anything).Return(len(transactions), nil)
 
 	categories := []*category.Category{createTestCategory("Food", category.TypeExpense)}
 	mockCatService.On("GetCategories", mock.Anything, mock.Anything).Return(categories, nil)
@@ -309,6 +383,7 @@ func TestTransactionHandler_List_HTMX(t *testing.T) {
 		createTestTransaction(time.Now(), 100.50, transaction.TypeExpense, uuid.New()),
 	}
 	mockTxService.On("GetAllTransactions", mock.Anything, mock.Anything).Return(transactions, nil)
+	mockTxService.On("CountTransactions", mock.Anything, mock.Anything).Return(len(transactions), nil)
 
 	categories := []*category.Category{createTestCategory("Food", category.TypeExpense)}
 	mockCatService.On("GetCategories", mock.Anything, mock.Anything).Return(categories, nil)

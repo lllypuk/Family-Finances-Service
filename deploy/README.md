@@ -7,18 +7,38 @@ This directory contains production-ready deployment configurations and scripts f
 ### Prerequisites
 
 - Linux server (Ubuntu 22.04+, Debian 11+, or Rocky Linux 9)
-- Minimum 2GB RAM, 10GB disk space
+- Minimum 512MB RAM, 10GB disk space. **1GB is recommended.**
+  The running service itself fits in **128-256MB** (a single Go process plus SQLite);
+  the extra headroom is for building the Docker image locally. Below 1GB the `go build`
+  inside that image build may be OOM-killed — `install.sh` warns and suggests adding
+  swap, which is enough to make a 512MB box work.
 - Root or sudo access
+- `git` and outbound network access — the image is built from source (see below)
 - Domain name pointed to your server (for SSL)
 
-### One-Command Installation
+### The image is built from source
 
-```bash
-# Download and run installation script
-curl -fsSL https://raw.githubusercontent.com/lllypuk/Family-Finances-Service/main/deploy/scripts/install.sh | sudo bash -s -- --domain budget.example.com --email admin@example.com
-```
+There is no published `ghcr.io/lllypuk/family-finances-service` image yet, so every
+compose file in this directory builds the app from `docker/Dockerfile` instead of
+pulling. The build context is `${BUILD_CONTEXT:-..}`:
 
-Or clone the repository and run locally:
+| Where the compose file runs from | `BUILD_CONTEXT` | Sources |
+|---|---|---|
+| in-place, from `deploy/` | `..` (default) | the repository checkout you are in |
+| `/opt/family-budget` (after `install.sh`) | `./src` | clone made by `install.sh` |
+
+`install.sh` clones the repository into `/opt/family-budget/src` and writes
+`BUILD_CONTEXT=./src` into `config/.env`. Consequently `docker compose pull` no
+longer works for the `app` service — use `docker compose build app`.
+
+Set `REPO_GIT_URL` / `REPO_REF` before running `install.sh` to build from a fork or
+a specific tag.
+
+### Installation
+
+Clone the repository and run the installer from the checkout — it sources
+`deploy/scripts/lib/*.sh` next to itself, so piping it into `bash` (`curl … | sudo bash`)
+cannot work: `BASH_SOURCE[0]` is not a path there and the `source` aborts under `set -e`.
 
 ```bash
 git clone https://github.com/lllypuk/Family-Finances-Service.git
@@ -26,12 +46,61 @@ cd Family-Finances-Service
 sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@example.com
 ```
 
+Re-running `install.sh` on an existing installation is safe: `data/`, `backups/` and the
+secrets in `config/.env` are kept, the sources are re-fetched and the image is rebuilt.
+Pass `--reinstall` only when you deliberately want the old tree moved to
+`/opt/family-budget.backup.<timestamp>` and fresh secrets generated (that invalidates
+every session).
+
+### First run over an SSH tunnel
+
+Do the first run without a public domain. `docker-compose.prod.yml` binds
+`127.0.0.1:8080:8080`, so the service is not reachable from the network at all —
+reach it from your laptop through SSH port forwarding:
+
+```bash
+# on your laptop; leave this running
+ssh -N -L 8080:127.0.0.1:8080 mini
+```
+
+Then open <http://localhost:8080> in a browser and walk the whole flow:
+
+1. `/` redirects to `/setup` while no family exists. Create the family and the first
+   admin user — this is the only way an admin account is ever created.
+2. Log in, add a category, add a transaction, open `/transactions` — the pages must
+   render with the navigation bar and a Russian title.
+3. `/health` answers `200` even before setup, so you can point monitoring at it from
+   the start.
+4. **Take a backup and restore it.** A backup you have never restored is not a backup:
+
+   ```bash
+   sudo /opt/family-budget/src/deploy/scripts/backup.sh
+   # then verify the copy actually opens and holds your rows
+   sqlite3 /opt/family-budget/backups/budget_<timestamp>.db \
+     'pragma integrity_check; select count(*) from transactions;'
+   ```
+
+Only after that walk-through is clean should you point a domain at the server and
+move to Option 2 or 3. Note that the application itself still has **no rate limiting
+on login** — brute-force protection comes entirely from the nginx/Caddy configs and
+fail2ban, so a public deployment must go through a reverse proxy.
+
+Useful checks while the tunnel is up:
+
+```bash
+curl -s localhost:8080/health                 # {"status":"healthy",...}
+curl -s -o /dev/null -w '%{http_code}\n' localhost:8080/api/v1/categories   # 401
+```
+
+That `401` is the expected answer: the REST API requires a session (see below).
+
 ## Directory Structure
 
 ```
 deploy/
 ├── scripts/                    # Installation and management scripts
 │   ├── install.sh             # Main installation script
+│   ├── upgrade.sh             # Upgrade with backup and rollback
 │   ├── setup-ssl-nginx.sh     # SSL setup for Nginx
 │   ├── setup-ssl-caddy.sh     # SSL setup for Caddy
 │   └── lib/                   # Shared library functions
@@ -44,13 +113,34 @@ deploy/
 │   └── snippets/              # Reusable config snippets
 ├── caddy/                      # Caddy reverse proxy configs
 │   └── Caddyfile.template     # Caddy configuration
+├── fail2ban/                   # fail2ban jail and filter
+├── systemd/                    # systemd unit files
 ├── docker-compose.prod.yml     # Standalone production setup
 ├── docker-compose.nginx.yml    # Production with Nginx
 ├── docker-compose.caddy.yml    # Production with Caddy
+├── docker-compose.minimal.yml  # No SSL, behind an existing proxy
 └── .env.production.example     # Environment template
 ```
 
+All four compose files build the app image from source; validate them all at once
+from the repository root with `make compose-config`.
+
 ## Deployment Options
+
+### Prepare the bind-mount directories first
+
+`docker-compose.minimal.yml`, `docker-compose.nginx.yml` and `docker-compose.caddy.yml`
+bind-mount `./data`, `./backups` and `./logs` from the host, and the container runs as
+`1000:1000` (`docker/Dockerfile`: `USER 1000:1000`). Docker creates a *missing*
+bind-mount source as **root-owned**, and then SQLite cannot create the database.
+
+`install.sh` does this for you. When you run one of those compose files by hand, create
+and chown the directories first, from the same directory the compose file runs in:
+
+```bash
+mkdir -p data backups logs
+sudo chown -R 1000:1000 data backups logs
+```
 
 ### Option 1: Standalone (No Reverse Proxy)
 
@@ -76,13 +166,14 @@ sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@examp
 
 ```bash
 cd /opt/family-budget
-sudo cp ~/Family-Finances-Service/deploy/docker-compose.nginx.yml docker-compose.yml
+sudo cp src/deploy/docker-compose.nginx.yml docker-compose.yml
+sudo docker compose build app
 ```
 
 3. Setup SSL:
 
 ```bash
-sudo ~/Family-Finances-Service/deploy/scripts/setup-ssl-nginx.sh \
+sudo /opt/family-budget/src/deploy/scripts/setup-ssl-nginx.sh \
   --domain budget.example.com \
   --email admin@example.com
 ```
@@ -109,13 +200,14 @@ sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@examp
 
 ```bash
 cd /opt/family-budget
-sudo cp ~/Family-Finances-Service/deploy/docker-compose.caddy.yml docker-compose.yml
+sudo cp src/deploy/docker-compose.caddy.yml docker-compose.yml
+sudo docker compose build app
 ```
 
 3. Setup SSL (automatic):
 
 ```bash
-sudo ~/Family-Finances-Service/deploy/scripts/setup-ssl-caddy.sh \
+sudo /opt/family-budget/src/deploy/scripts/setup-ssl-caddy.sh \
   --domain budget.example.com \
   --email admin@example.com
 ```
@@ -168,6 +260,76 @@ All configurations include:
 | General   | 10 req/sec  | DDoS protection        |
 | `/health` | Unlimited   | Monitoring             |
 
+These limits live in the nginx/Caddy configs only. The application has no built-in
+rate limiting, so `docker-compose.minimal.yml` and native systemd deployments are not
+covered by the `/login` limit — put a proxy in front of anything reachable from the
+internet.
+
+### API authentication
+
+`/api/v1/*` is not public. The group is wrapped in `RequireAPIAuth`, and the only
+credential is the same session cookie the web UI uses — there are no API tokens.
+
+| Request | Response |
+|---|---|
+| Any `/api/v1/*` without a session | `401` + `{"error":{"code":"UNAUTHORIZED","message":"Authentication required"}}` |
+| `POST`/`PUT`/`DELETE` without `X-Csrf-Token` | `403 CSRF token validation failed` |
+| `POST`/`PUT`/`DELETE` with a valid token but no session | `401` |
+| Role not allowed for the route | `403` + `{"error":{"code":"FORBIDDEN","message":"Insufficient permissions"}}` |
+
+The `403`-before-`401` ordering is deliberate: CSRF protection is global middleware
+and runs before the API group's auth middleware.
+
+Role gates mirror the web UI: user management (`POST`/`PUT`/`DELETE /api/v1/users`)
+and `DELETE /api/v1/categories/:id` are admin-only; the categories, transactions,
+budgets and reports groups are admin-or-member, so the `child` role gets `403`.
+
+### Programmatic API clients
+
+CSRF protection stays on for `/api/v1` — with cookie-based auth it has to, otherwise
+any third-party page could act as a logged-in user. A script therefore has to behave
+like a browser: keep a cookie jar, and read a CSRF token out of a rendered page.
+
+The token is rotated on login, so the token scraped from `/login` is worthless
+afterwards — fetch a fresh one from an authenticated page.
+
+```bash
+BASE=http://localhost:8080
+JAR=$(mktemp)
+
+# 1. anonymous GET /login -> session cookie + a token for the login form
+TOKEN=$(curl -s -c "$JAR" "$BASE/login" \
+  | grep -oE '_token" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
+
+# 2. log in (302 on success); the session cookie is replaced and the token rotated
+curl -s -b "$JAR" -c "$JAR" -X POST "$BASE/login" -o /dev/null \
+  --data-urlencode "_token=$TOKEN" \
+  --data-urlencode "email=admin@example.com" \
+  --data-urlencode "password=…"
+
+# 3. read the post-login token from any authenticated page (the logout form carries it)
+TOKEN=$(curl -s -b "$JAR" -c "$JAR" "$BASE/transactions" \
+  | grep -oE '_token" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
+
+# 4. reads need only the cookie
+curl -s -b "$JAR" "$BASE/api/v1/categories"
+
+# 5. writes need the cookie *and* the header
+curl -s -b "$JAR" -X POST "$BASE/api/v1/categories" \
+  -H 'Content-Type: application/json' -H "X-Csrf-Token: $TOKEN" \
+  -d '{"name":"Кофе","type":"expense","color":"#ff0000","icon":"cup"}'
+# -> 201 Created
+```
+
+Gotchas found while verifying this against a running server:
+
+- Don't re-fetch `/login` after logging in — an authenticated visitor is redirected
+  away from it, so there is no form to scrape. Use a page you have access to.
+- A single request can write the session cookie more than once; let curl's cookie jar
+  handle it (`-b`/`-c` on every call) rather than parsing `Set-Cookie` yourself.
+- Never send `user_id` in a request body. It is not a field of the create requests any
+  more — the author always comes from the session.
+
 ## Environment Configuration
 
 Create `.env` file in `/opt/family-budget/config/`:
@@ -180,6 +342,9 @@ DOMAIN=budget.example.com
 
 # Database
 DATABASE_PATH=/data/budget.db
+
+# Build context: path to the source checkout, relative to /opt/family-budget
+BUILD_CONTEXT=./src
 
 # Security (generate with: openssl rand -base64 32)
 SESSION_SECRET=YOUR_GENERATED_SECRET_HERE
@@ -218,9 +383,17 @@ docker compose restart app      # Restart only application
 
 ```bash
 cd /opt/family-budget
-docker compose pull app
+
+# Preferred: the upgrade script backs up the DB and rolls back on failure
+sudo ./src/deploy/scripts/upgrade.sh --version main
+
+# Manual equivalent
+git -C src fetch origin main && git -C src checkout --force --detach FETCH_HEAD
+docker compose build app
 docker compose up -d app
 ```
+
+`--version` takes a **git ref** (tag, branch or commit), not an image tag.
 
 ### Backup Database
 
@@ -250,8 +423,10 @@ cd /opt/family-budget
 # Backup database
 sudo cp data/budget.db backups/budget-$(date +%Y%m%d-%H%M%S).db
 
-# Pull latest image
-docker compose pull app
+# Update sources and rebuild the image (there is nothing to pull)
+git -C src fetch origin main
+git -C src checkout --force --detach FETCH_HEAD
+docker compose build app
 
 # Restart with new image
 docker compose up -d app
@@ -388,7 +563,7 @@ sudo docker compose restart caddy
 
 ### 2. Setup fail2ban (recommended)
 
-See `docs/tasks/006-security-hardening.md` for fail2ban configuration.
+See `deploy/fail2ban/` for the ready-made jail and filter definitions.
 
 ### 3. Regular Updates
 
@@ -397,9 +572,13 @@ See `docs/tasks/006-security-hardening.md` for fail2ban configuration.
 sudo apt update && sudo apt upgrade  # Ubuntu/Debian
 sudo dnf update  # RHEL-based
 
-# Update Docker images
+# Rebuild the application image from the latest sources
 cd /opt/family-budget
-docker compose pull
+git -C src fetch origin main && git -C src checkout --force --detach FETCH_HEAD
+docker compose build app
+
+# Pull the sidecar images (nginx/caddy/certbot are still pulled from upstream)
+docker compose pull --ignore-buildable
 docker compose up -d
 ```
 
@@ -429,7 +608,7 @@ sudo ufw delete allow 443/tcp
 
 ## Support
 
-- **Documentation:** See `docs/tasks/` directory
+- **Documentation:** this file, plus `docs/` in the repository root
 - **Issues:** GitHub Issues
 - **Security:** Report security issues privately
 

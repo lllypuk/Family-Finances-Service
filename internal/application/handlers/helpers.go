@@ -48,6 +48,12 @@ func respondError(
 	return c.JSON(status, resp)
 }
 
+// respondUnauthorized отдаёт 401 в общем формате ошибок API: так отвечает
+// RequireAPIAuth и хендлеры, которым без сессии нечего делать.
+func respondUnauthorized(c echo.Context) error {
+	return respondError(c, http.StatusUnauthorized, ErrCodeUnauthorized, ErrMessageUnauthorized)
+}
+
 func buildValidationErrors(err error) []ValidationError {
 	var validationErrors []ValidationError
 	for _, fieldErr := range func() validator.ValidationErrors {

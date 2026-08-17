@@ -37,6 +37,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/categories", bytes.NewBuffer(requestBodyBytes))
+		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -76,6 +77,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 
 		// Get categories via API with family_id query parameter
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/categories?family_id="+family.ID.String(), nil)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -107,6 +109,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 
 		// Get category via API
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/categories/"+category.ID.String(), nil)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -150,6 +153,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 			"/api/v1/categories/"+category.ID.String(),
 			bytes.NewBuffer(requestBodyBytes),
 		)
+		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -184,6 +188,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 			"/api/v1/categories/"+category.ID.String()+"?family_id="+family.ID.String(),
 			nil,
 		)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -193,6 +198,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 
 		// Verify category is soft deleted by checking it's not returned in active categories
 		req = httptest.NewRequest(http.MethodGet, "/api/v1/categories?family_id="+family.ID.String(), nil)
+		testServer.Auth(t).Apply(req)
 		rec = httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)

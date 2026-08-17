@@ -48,6 +48,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/budgets", bytes.NewBuffer(requestBodyBytes))
+		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -125,6 +126,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 				require.NoError(t, err)
 
 				req := httptest.NewRequest(http.MethodPost, "/api/v1/budgets", bytes.NewBuffer(requestBodyBytes))
+				testServer.Auth(t).Apply(req)
 				req.Header.Set("Content-Type", "application/json")
 				rec := httptest.NewRecorder()
 
@@ -175,6 +177,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/budgets", bytes.NewBuffer(requestBodyBytes))
+		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -212,6 +215,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/budgets/%s", testBudget.ID), nil)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -236,6 +240,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		nonExistentID := uuid.New()
 
 		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/budgets/%s", nonExistentID), nil)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -247,6 +252,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		testServer := testhelpers.SetupHTTPServer(t)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/budgets/invalid-uuid", nil)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -278,6 +284,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/budgets?family_id=%s", family.ID), nil)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -328,6 +335,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 			fmt.Sprintf("/api/v1/budgets?family_id=%s&active_only=true", family.ID),
 			nil,
 		)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -374,6 +382,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 			fmt.Sprintf("/api/v1/budgets/%s", testBudget.ID),
 			bytes.NewBuffer(requestBodyBytes),
 		)
+		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -425,6 +434,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 			fmt.Sprintf("/api/v1/budgets/%s", testBudget.ID),
 			bytes.NewBuffer(requestBodyBytes),
 		)
+		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -476,6 +486,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 			fmt.Sprintf("/api/v1/budgets/%s", testBudget.ID),
 			bytes.NewBuffer(requestBodyBytes),
 		)
+		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -513,6 +524,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/budgets/%s", testBudget.ID), nil)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -524,6 +536,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 
 		// Verify budget is soft deleted (is_active = false) by getting it and checking status
 		getReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/budgets/%s", testBudget.ID), nil)
+		testServer.Auth(t).Apply(getReq)
 		getRec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(getRec, getReq)

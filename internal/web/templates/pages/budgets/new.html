@@ -42,10 +42,8 @@
                         {{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}
                     </summary>
                     <ul>
-                        <li><a href="/profile">Профиль</a></li>
                         {{if eq .CurrentUser.Role "admin"}}
                         <li><a href="/users">Пользователи</a></li>
-                        <li><a href="/family/settings">Настройки семьи</a></li>
                         {{end}}
                         <li>
                             <form method="POST" action="/logout" style="margin: 0;">
@@ -101,7 +99,7 @@
                            id="name" 
                            name="name" 
                            placeholder="Ежемесячный бюджет на продукты" 
-                           value="{{.DefaultForm.Name}}"
+                           value="{{.Form.Name}}"
                            required>
                     <small>Дайте вашему бюджету понятное название</small>
                 </div>
@@ -114,7 +112,7 @@
                            step="0.01" 
                            min="0.01" 
                            placeholder="50000.00" 
-                           value="{{.DefaultForm.Amount}}"
+                           value="{{.Form.Amount}}"
                            required>
                     <small>Максимальная сумма для трат</small>
                 </div>
@@ -124,10 +122,10 @@
                 <div>
                     <label for="period">Период бюджета</label>
                     <select id="period" name="period" required>
-                        <option value="weekly" {{if eq .DefaultForm.Period "weekly"}}selected{{end}}>Еженедельно</option>
-                        <option value="monthly" {{if eq .DefaultForm.Period "monthly"}}selected{{end}}>Ежемесячно</option>
-                        <option value="yearly" {{if eq .DefaultForm.Period "yearly"}}selected{{end}}>Ежегодно</option>
-                        <option value="custom" {{if eq .DefaultForm.Period "custom"}}selected{{end}}>Произвольный период</option>
+                        <option value="weekly" {{if eq .Form.Period "weekly"}}selected{{end}}>Еженедельно</option>
+                        <option value="monthly" {{if eq .Form.Period "monthly"}}selected{{end}}>Ежемесячно</option>
+                        <option value="yearly" {{if eq .Form.Period "yearly"}}selected{{end}}>Ежегодно</option>
+                        <option value="custom" {{if eq .Form.Period "custom"}}selected{{end}}>Произвольный период</option>
                     </select>
                     <small>На какой срок планируется бюджет?</small>
                 </div>
@@ -137,7 +135,7 @@
                     <select id="category_id" name="category_id">
                         <option value="">Все категории</option>
                         {{range .CategoryOptions}}
-                        <option value="{{.ID}}" {{if eq .ID $.DefaultForm.CategoryID}}selected{{end}}>
+                        <option value="{{.ID}}" {{if eq .ID.String $.Form.CategoryID}}selected{{end}}>
                             {{.Name}}
                         </option>
                         {{end}}
@@ -152,7 +150,7 @@
                     <input type="date" 
                            id="start_date" 
                            name="start_date" 
-                           value="{{.DefaultForm.StartDate}}"
+                           value="{{.Form.StartDate}}"
                            required>
                 </div>
                 
@@ -161,7 +159,7 @@
                     <input type="date" 
                            id="end_date" 
                            name="end_date" 
-                           value="{{.DefaultForm.EndDate}}"
+                           value="{{.Form.EndDate}}"
                            required>
                 </div>
             </div>
@@ -171,7 +169,7 @@
                     <input type="checkbox" 
                            name="is_active" 
                            value="true" 
-                           {{if .DefaultForm.IsActive}}checked{{end}}>
+                           {{if .Form.IsActive}}checked{{end}}>
                     Активировать бюджет сразу
                 </label>
                 <small>Снимите флажок, чтобы создать неактивный бюджет для активации позже</small>

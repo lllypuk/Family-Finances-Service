@@ -16,13 +16,30 @@ const (
 	ErrCodeFamilyNotFound = "FAMILY_NOT_FOUND"
 	// ErrCodeCategoryNotFound signals that the requested category does not exist.
 	ErrCodeCategoryNotFound = "CATEGORY_NOT_FOUND"
+	// ErrCodeUnauthorized signals a request without a valid session
+	// (returned by RequireAPIAuth, see api_auth.go).
+	ErrCodeUnauthorized = "UNAUTHORIZED"
+	// ErrCodeForbidden signals a session whose role is not allowed on the route
+	// (returned by RequireAPIRole, see api_auth.go).
+	ErrCodeForbidden = "FORBIDDEN"
+	// ErrCodeInternal signals a server-side failure; details stay in the log only.
+	ErrCodeInternal = "INTERNAL_ERROR"
+	// ErrCodeCannotDeleteSelf signals an attempt to delete the session's own user.
+	ErrCodeCannotDeleteSelf = "CANNOT_DELETE_SELF"
+	// ErrCodeLastAdmin signals an attempt to delete the last remaining admin.
+	ErrCodeLastAdmin = "LAST_ADMIN"
 
 	// Standard error messages paired with the codes above. Kept as constants
 	// so changes propagate to API consumers in lockstep with code updates.
+	ErrMessageUnauthorized       = "Authentication required"
+	ErrMessageForbidden          = "Insufficient permissions"
 	ErrMessageInvalidRequest     = "Invalid request body"
 	ErrMessageInvalidUserID      = "Invalid user ID format"
 	ErrMessageInvalidCategoryID  = "Invalid category ID format"
 	ErrMessageInvalidTransaction = "Invalid transaction data"
 	ErrMessageInvalidCategoryRef = "Invalid category, user, or family ID"
 	ErrMessageFamilyNotFound     = "Family not found"
+	ErrMessageInternal           = "Internal server error"
+	ErrMessageCannotDeleteSelf   = "Cannot delete your own account"
+	ErrMessageLastAdmin          = "Cannot delete the last administrator"
 )

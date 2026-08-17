@@ -145,11 +145,12 @@ func TestUserService_CreateUser(t *testing.T) {
 
 func TestUserService_GetUserByID(t *testing.T) {
 	tests := []struct {
-		name      string
-		userID    uuid.UUID
-		setup     func(*MockUserRepository, *MockFamilyRepository)
-		wantError bool
-		errorType error
+		name         string
+		userID       uuid.UUID
+		setup        func(*MockUserRepository, *MockFamilyRepository)
+		wantError    bool
+		errorType    error
+		notErrorType error
 	}{
 		{
 			name:   "Success - User found",
@@ -170,10 +171,23 @@ func TestUserService_GetUserByID(t *testing.T) {
 			name:   "Error - User not found",
 			userID: uuid.New(),
 			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
-				userRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, errors.New("not found"))
+				userRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, user.ErrNotFound)
 			},
 			wantError: true,
 			errorType: services.ErrUserNotFound,
+		},
+		{
+			// Сбой инфраструктуры не должен выглядеть как «пользователя нет»:
+			// middleware перепроверки сессии в этом случае гасит cookie, то
+			// есть один SQLITE_BUSY разлогинил бы работающего пользователя.
+			name:   "Error - infrastructure failure is not a not-found",
+			userID: uuid.New(),
+			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
+				userRepo.On("GetByID", mock.Anything, mock.Anything).
+					Return(nil, errors.New("database is locked"))
+			},
+			wantError:    true,
+			notErrorType: services.ErrUserNotFound,
 		},
 	}
 
@@ -185,6 +199,11 @@ func TestUserService_GetUserByID(t *testing.T) {
 
 			service := services.NewUserService(userRepo, familyRepo)
 			result, err := service.GetUserByID(context.Background(), tt.userID)
+
+			if tt.notErrorType != nil {
+				require.Error(t, err)
+				require.NotErrorIs(t, err, tt.notErrorType)
+			}
 
 			if tt.wantError {
 				require.Error(t, err)
@@ -253,7 +272,7 @@ func TestUserService_UpdateUser(t *testing.T) {
 				FirstName: new("NewFirst"),
 			},
 			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
-				userRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, errors.New("not found"))
+				userRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, user.ErrNotFound)
 			},
 			wantError: true,
 			errorType: services.ErrUserNotFound,
@@ -310,6 +329,12 @@ func TestUserService_DeleteUser(t *testing.T) {
 		LastName:  "Doe",
 	}
 
+	lastAdmin := &user.User{ID: uuid.New(), Email: "admin@example.com", Role: user.RoleAdmin}
+	secondAdmin := &user.User{ID: uuid.New(), Email: "admin2@example.com", Role: user.RoleAdmin}
+	memberUser := &user.User{ID: uuid.New(), Email: "member@example.com", Role: user.RoleMember}
+
+	actorID := uuid.New()
+
 	tests := []struct {
 		name      string
 		userID    uuid.UUID
@@ -317,6 +342,15 @@ func TestUserService_DeleteUser(t *testing.T) {
 		wantError bool
 		errorType error
 	}{
+		{
+			// Правило «себя удалить нельзя» живёт в сервисе, а не в хендлерах:
+			// обе поверхности (веб и API) раскладывают этот sentinel сами.
+			name:      "Error - Cannot delete self",
+			userID:    actorID,
+			setup:     func(_ *MockUserRepository, _ *MockFamilyRepository) {},
+			wantError: true,
+			errorType: services.ErrCannotDeleteSelf,
+		},
 		{
 			name:   "Success - Delete user",
 			userID: existingUser.ID,
@@ -330,10 +364,34 @@ func TestUserService_DeleteUser(t *testing.T) {
 			name:   "Error - User not found",
 			userID: uuid.New(),
 			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
-				userRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, errors.New("not found"))
+				userRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, user.ErrNotFound)
 			},
 			wantError: true,
 			errorType: services.ErrUserNotFound,
+		},
+		{
+			// Модель однофамильная: без администратора некому выпускать
+			// инвайты, а открытой регистрации нет — состояние невосстановимо.
+			name:   "Error - Last admin",
+			userID: lastAdmin.ID,
+			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
+				userRepo.On("GetByID", mock.Anything, lastAdmin.ID).Return(lastAdmin, nil)
+				userRepo.On("GetAll", mock.Anything).
+					Return([]*user.User{lastAdmin, memberUser}, nil)
+			},
+			wantError: true,
+			errorType: services.ErrLastAdmin,
+		},
+		{
+			name:   "Success - Admin deleted while another admin remains",
+			userID: lastAdmin.ID,
+			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
+				userRepo.On("GetByID", mock.Anything, lastAdmin.ID).Return(lastAdmin, nil)
+				userRepo.On("GetAll", mock.Anything).
+					Return([]*user.User{lastAdmin, secondAdmin}, nil)
+				userRepo.On("Delete", mock.Anything, lastAdmin.ID).Return(nil)
+			},
+			wantError: false,
 		},
 	}
 
@@ -344,7 +402,7 @@ func TestUserService_DeleteUser(t *testing.T) {
 			tt.setup(userRepo, familyRepo)
 
 			service := services.NewUserService(userRepo, familyRepo)
-			err := service.DeleteUser(context.Background(), tt.userID)
+			err := service.DeleteUser(context.Background(), tt.userID, actorID)
 
 			if tt.wantError {
 				require.Error(t, err)
@@ -399,7 +457,7 @@ func TestUserService_ChangeUserRole(t *testing.T) {
 			userID: uuid.New(),
 			role:   user.RoleAdmin,
 			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
-				userRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, errors.New("not found"))
+				userRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, user.ErrNotFound)
 			},
 			wantError: true,
 			errorType: services.ErrUserNotFound,
@@ -457,7 +515,7 @@ func TestUserService_ValidateUserAccess(t *testing.T) {
 			userID:          uuid.New(),
 			resourceOwnerID: user2.ID,
 			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
-				userRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, errors.New("not found")).Once()
+				userRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, user.ErrNotFound).Once()
 			},
 			wantError: true,
 			errorType: services.ErrUserNotFound,

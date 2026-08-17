@@ -27,13 +27,8 @@ const (
 
 	// BudgetExceededThreshold is the percentage threshold when budget is considered exceeded (100%)
 	BudgetExceededThreshold = 100
-	// BudgetCriticalThreshold is the percentage threshold for critical budget alerts (90%)
-	BudgetCriticalThreshold = 90
 	// BudgetWarningThreshold is the percentage threshold for budget warning alerts (80%)
 	BudgetWarningThreshold = 80
-
-	// DefaultAlertThreshold is the default threshold used for healthy budget status (80%)
-	DefaultAlertThreshold = 80
 )
 
 // BudgetHandler обрабатывает HTTP запросы для бюджетов
@@ -44,11 +39,29 @@ type BudgetHandler struct {
 }
 
 // NewBudgetHandler создает новый обработчик бюджетов
-func NewBudgetHandler(repositories *handlers.Repositories, services *services.Services) *BudgetHandler {
+func NewBudgetHandler(
+	repositories *handlers.Repositories,
+	services *services.Services,
+	cookieSecure bool,
+) *BudgetHandler {
 	return &BudgetHandler{
-		BaseHandler: NewBaseHandler(repositories, services),
+		BaseHandler: NewBaseHandler(repositories, services, cookieSecure),
 		validator:   validator.New(),
 	}
+}
+
+// budgetFormData — данные страниц-форм бюджета (new/edit).
+//
+// Встроенный *PageData отдаёт шаблону `.CurrentUser` и `.CSRFToken` из корня
+// контекста, а `{{.PageData.X}}` продолжает работать благодаря имени
+// встроенного поля. Общий тип на обе страницы — чтобы `dupl` не ругался на три
+// почти одинаковых анонимных структуры.
+type budgetFormData struct {
+	*PageData
+
+	Form            webModels.BudgetForm
+	CategoryOptions []webModels.CategorySelectOption
+	BudgetID        string
 }
 
 // Index отображает список бюджетов с прогрессом
@@ -109,14 +122,18 @@ func (h *BudgetHandler) Index(c echo.Context) error {
 		filterForm.Period = string(*filter.Period)
 	}
 
-	pageData := &PageData{
-		Title: "Budgets",
-	}
+	// Встраиваем *PageData, а не кладём его в map под ключом "PageData":
+	// шаблон шапки читает `.CurrentUser` и `.CSRFToken` из корня контекста,
+	// а `{{.PageData.X}}` продолжает работать благодаря имени встроенного поля.
+	data := struct {
+		*PageData
 
-	data := map[string]any{
-		"PageData": pageData,
-		"Budgets":  budgetVMs,
-		"Filter":   filterForm,
+		Budgets []webModels.BudgetProgressVM
+		Filter  webModels.BudgetFilter
+	}{
+		PageData: h.buildPageData(c, titleBudgets),
+		Budgets:  budgetVMs,
+		Filter:   filterForm,
 	}
 
 	return h.renderPage(c, "pages/budgets/index", data)
@@ -139,18 +156,9 @@ func (h *BudgetHandler) New(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get categories")
 	}
 
-	// Подготавливаем опции категорий
-	categoryOptions := make([]map[string]any, len(categories)+1)
-	categoryOptions[0] = map[string]any{
-		"ID":   "",
-		"Name": allCategoriesOptionName,
-	}
-	for i, cat := range categories {
-		categoryOptions[i+1] = map[string]any{
-			"ID":   cat.ID.String(),
-			"Name": cat.Name,
-		}
-	}
+	// Подготавливаем опции категорий. Пустой пункт «Все категории» уже есть
+	// в самих шаблонах формы, поэтому список несёт только реальные категории.
+	categoryOptions := buildCategorySelectOptions(categories)
 
 	// Предзаполняем форму с умолчательными значениями
 	now := time.Now()
@@ -164,18 +172,11 @@ func (h *BudgetHandler) New(c echo.Context) error {
 		IsActive:  true,
 	}
 
-	// Получаем CSRF токен
-	csrfToken, _ := middleware.GetCSRFToken(c)
-
-	pageData := &PageData{
-		Title: "New Budget",
-	}
-
-	data := map[string]any{
-		"PageData":            pageData,
-		tplKeyCategoryOptions: categoryOptions,
-		"DefaultForm":         defaultForm,
-		tplKeyCSRFToken:       csrfToken,
+	// CSRF-токен приходит из PageData и промотируется в корень контекста.
+	data := budgetFormData{
+		PageData:        h.buildPageData(c, titleNewBudget),
+		Form:            defaultForm,
+		CategoryOptions: categoryOptions,
 	}
 
 	return h.renderPage(c, "pages/budgets/new", data)
@@ -205,7 +206,7 @@ func (h *BudgetHandler) Create(c echo.Context) error {
 			})
 		}
 
-		return h.renderBudgetFormWithErrors(c, form, "New Budget")
+		return h.renderBudgetFormWithErrors(c, form, validationErrors, nil)
 	}
 
 	// Парсим сумму
@@ -286,18 +287,9 @@ func (h *BudgetHandler) Edit(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get categories")
 	}
 
-	// Подготавливаем опции категорий
-	categoryOptions := make([]map[string]any, len(categories)+1)
-	categoryOptions[0] = map[string]any{
-		"ID":   "",
-		"Name": allCategoriesOptionName,
-	}
-	for i, cat := range categories {
-		categoryOptions[i+1] = map[string]any{
-			"ID":   cat.ID.String(),
-			"Name": cat.Name,
-		}
-	}
+	// Подготавливаем опции категорий. Пустой пункт «Все категории» уже есть
+	// в самих шаблонах формы, поэтому список несёт только реальные категории.
+	categoryOptions := buildCategorySelectOptions(categories)
 
 	// Подготавливаем форму с данными бюджета
 	form := webModels.BudgetForm{
@@ -313,19 +305,12 @@ func (h *BudgetHandler) Edit(c echo.Context) error {
 		form.CategoryID = budgetEntity.CategoryID.String()
 	}
 
-	// Получаем CSRF токен
-	csrfToken, _ := middleware.GetCSRFToken(c)
-
-	pageData := &PageData{
-		Title: "Edit Budget: " + budgetEntity.Name,
-	}
-
-	data := map[string]any{
-		"PageData":            pageData,
-		"Form":                form,
-		tplKeyCategoryOptions: categoryOptions,
-		"BudgetID":            budgetID.String(),
-		tplKeyCSRFToken:       csrfToken,
+	// CSRF-токен приходит из PageData и промотируется в корень контекста.
+	data := budgetFormData{
+		PageData:        h.buildPageData(c, titleEditBudget+": "+budgetEntity.Name),
+		Form:            form,
+		CategoryOptions: categoryOptions,
+		BudgetID:        budgetID.String(),
 	}
 
 	return h.renderPage(c, "pages/budgets/edit", data)
@@ -347,7 +332,7 @@ func (h *BudgetHandler) Update(c echo.Context) error {
 	}
 
 	// Проверяем, что бюджет существует
-	_, err = h.services.Budget.GetBudgetByID(c.Request().Context(), budgetID)
+	existingBudget, err := h.services.Budget.GetBudgetByID(c.Request().Context(), budgetID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "Budget not found")
 	}
@@ -370,7 +355,7 @@ func (h *BudgetHandler) Update(c echo.Context) error {
 			})
 		}
 
-		return h.renderBudgetFormWithErrors(c, form, "Edit Budget")
+		return h.renderBudgetFormWithErrors(c, form, validationErrors, existingBudget)
 	}
 
 	// Парсим новые значения
@@ -517,20 +502,6 @@ func (h *BudgetHandler) Show(c echo.Context) error {
 		}
 	}
 
-	// Получаем данные о тратах для анализа
-	var spendingData *webModels.SpendingAnalysis
-	if budgetEntity.IsActive && budgetEntity.Spent > 0 {
-		dailyAvg := budgetEntity.Spent / float64(budgetVM.DaysElapsed)
-		budgetPace := budgetEntity.Amount / float64(budgetVM.DaysTotal)
-		spendingData = &webModels.SpendingAnalysis{
-			DailyAverage:   dailyAvg,
-			BudgetPace:     budgetPace,
-			ProjectedTotal: dailyAvg * float64(budgetVM.DaysTotal),
-			DaysElapsed:    budgetVM.DaysElapsed,
-			Variance:       dailyAvg - budgetPace,
-		}
-	}
-
 	// Получаем последние транзакции связанные с бюджетом
 	recentTransactions, err := h.getRecentTransactionsForBudget(
 		c.Request().Context(),
@@ -542,15 +513,17 @@ func (h *BudgetHandler) Show(c echo.Context) error {
 		recentTransactions = []*webModels.TransactionSummary{}
 	}
 
-	pageData := &PageData{
-		Title: "Budget: " + budgetEntity.Name,
-	}
+	// Шаблон читает список под именем .Transactions (раньше сюда клали nil,
+	// и раздел «Связанные транзакции» не мог отрисоваться никогда).
+	data := struct {
+		*PageData
 
-	data := map[string]any{
-		"PageData":           pageData,
-		tplKeyBudget:         budgetVM,
-		"SpendingData":       spendingData,
-		"RecentTransactions": recentTransactions,
+		Budget       webModels.BudgetProgressVM
+		Transactions []*webModels.TransactionSummary
+	}{
+		PageData:     h.buildPageData(c, titleBudgetPrefix+budgetEntity.Name),
+		Budget:       budgetVM,
+		Transactions: recentTransactions,
 	}
 
 	return h.renderPage(c, "pages/budgets/show", data)
@@ -560,7 +533,8 @@ func (h *BudgetHandler) Show(c echo.Context) error {
 func (h *BudgetHandler) renderBudgetFormWithErrors(
 	c echo.Context,
 	form webModels.BudgetForm,
-	title string,
+	errors map[string]string,
+	existing *budget.Budget,
 ) error {
 	// Получаем данные пользователя из сессии для категорий
 	_, err := middleware.GetUserFromContext(c)
@@ -577,35 +551,28 @@ func (h *BudgetHandler) renderBudgetFormWithErrors(
 		categories = []*category.Category{} // Пустой список при ошибке
 	}
 
-	// Подготавливаем опции категорий
-	categoryOptions := make([]map[string]any, len(categories)+1)
-	categoryOptions[0] = map[string]any{
-		"ID":   "",
-		"Name": allCategoriesOptionName,
-	}
-	for i, cat := range categories {
-		categoryOptions[i+1] = map[string]any{
-			"ID":   cat.ID.String(),
-			"Name": cat.Name,
-		}
-	}
+	// Подготавливаем опции категорий. Пустой пункт «Все категории» уже есть
+	// в самих шаблонах формы, поэтому список несёт только реальные категории.
+	categoryOptions := buildCategorySelectOptions(categories)
 
-	pageData := &PageData{
-		Title: title,
-		Messages: []Message{
-			{Type: "error", Text: "Проверьте правильность заполнения формы"},
-		},
-	}
-
-	data := map[string]any{
-		"PageData":            pageData,
-		"Form":                form,
-		tplKeyCategoryOptions: categoryOptions,
-	}
-
+	// Шаблон выбирается по наличию самой сущности, а не сравнением с заголовком
+	// страницы: заголовок — отображаемый текст, его перевод не должен уводить
+	// форму на другой шаблон. Тот же признак «новая или существующая запись»
+	// использует renderTransactionFormWithErrors.
+	title := titleNewBudget
 	template := "pages/budgets/new"
-	if title == "Edit Budget" {
+	budgetID := ""
+	if existing != nil {
+		title = titleEditBudget
 		template = "pages/budgets/edit"
+		budgetID = existing.ID.String()
+	}
+
+	data := budgetFormData{
+		PageData:        h.formPageData(c, title, errors),
+		Form:            form,
+		CategoryOptions: categoryOptions,
+		BudgetID:        budgetID,
 	}
 
 	return h.renderPage(c, template, data)
@@ -647,7 +614,7 @@ func (h *BudgetHandler) handleBudgetActivation(c echo.Context, isActive bool) er
 	}
 
 	// Для HTMX запросов возвращаем обновленную страницу
-	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
+	if h.IsHTMXRequest(c) {
 		return h.Show(c)
 	}
 
@@ -665,11 +632,70 @@ func (h *BudgetHandler) Deactivate(c echo.Context) error {
 	return h.handleBudgetActivation(c, false)
 }
 
-// Alerts отображает страницу с алертами для бюджетов
+// budgetAlertCard — карточка бюджета на странице оповещений.
+// Поля названы так, как их читает pages/budgets/alerts.html.
+type budgetAlertCard struct {
+	ID                 uuid.UUID
+	Name               string
+	CategoryName       string
+	Period             budget.Period
+	StartDate          time.Time
+	EndDate            time.Time
+	Percentage         float64
+	AmountFormatted    string
+	SpentFormatted     string
+	RemainingFormatted string
+	OverspentFormatted string
+	DaysLeft           int
+	DaysExpired        int
+}
+
+// newBudgetAlertCard собирает карточку из доменного бюджета.
+func newBudgetAlertCard(entity *budget.Budget) budgetAlertCard {
+	vm := webModels.BudgetProgressVM{}
+	vm.FromDomain(entity)
+
+	card := budgetAlertCard{
+		ID:                 vm.ID,
+		Name:               vm.Name,
+		CategoryName:       vm.CategoryName,
+		Period:             vm.Period,
+		StartDate:          vm.StartDate,
+		EndDate:            vm.EndDate,
+		Percentage:         vm.Percentage,
+		AmountFormatted:    vm.FormattedAmount,
+		SpentFormatted:     vm.FormattedSpent,
+		RemainingFormatted: vm.FormattedRemaining,
+		OverspentFormatted: vm.FormattedOverage,
+		DaysLeft:           vm.DaysLeft,
+	}
+
+	if now := time.Now(); now.After(entity.EndDate) {
+		card.DaysExpired = int(now.Sub(entity.EndDate).Hours() / webModels.HoursInDay)
+	}
+
+	return card
+}
+
+// budgetAlertsData — данные страницы /budgets/alerts.
+type budgetAlertsData struct {
+	*PageData
+
+	OverBudgetAlerts []budgetAlertCard
+	WarningAlerts    []budgetAlertCard
+	ExpiredAlerts    []budgetAlertCard
+	TotalCount       int
+	OverBudgetCount  int
+	WarningCount     int
+	NormalCount      int
+}
+
+// Alerts отображает страницу с оповещениями по бюджетам.
+// Страница раскладывает активные бюджеты на три группы: истёкшие,
+// превышенные и приблизившиеся к порогу предупреждения.
 func (h *BudgetHandler) Alerts(c echo.Context) error {
 	// Получаем данные пользователя из сессии
-	_, err := middleware.GetUserFromContext(c)
-	if err != nil {
+	if _, err := middleware.GetUserFromContext(c); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
 	}
 
@@ -683,70 +709,29 @@ func (h *BudgetHandler) Alerts(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load budgets")
 	}
 
-	// Создаем алерты для каждого бюджета
-	var alerts []*webModels.BudgetAlertVM
-	triggeredCount := 0
-	for _, budgetEntity := range budgets {
-		// Создаем view модель бюджета
-		budgetVM := webModels.BudgetProgressVM{}
-		budgetVM.FromDomain(budgetEntity)
+	data := budgetAlertsData{
+		PageData:   h.buildPageData(c, titleBudgetAlerts),
+		TotalCount: len(budgets),
+	}
 
-		// Создаем алерт на основе текущего состояния бюджета
-		alert := &webModels.BudgetAlertVM{
-			ID:         uuid.New(), // В реальном приложении это был бы ID из базы
-			BudgetID:   budgetEntity.ID,
-			BudgetName: budgetEntity.Name,
-		}
+	for _, entity := range budgets {
+		card := newBudgetAlertCard(entity)
+		percentage := entity.GetSpentPercentage()
 
-		// Определяем тип алерта на основе процента использования
-		percentage := budgetEntity.GetSpentPercentage()
 		switch {
+		case card.DaysExpired > 0:
+			data.ExpiredAlerts = append(data.ExpiredAlerts, card)
 		case percentage >= BudgetExceededThreshold:
-			alert.Threshold = BudgetExceededThreshold
-			alert.IsTriggered = true
-			alert.Message = fmt.Sprintf("Budget exceeded! You've spent %.1f%% of your allocated amount.", percentage)
-			alert.AlertClass = "danger"
-			triggeredCount++
-		case percentage >= BudgetCriticalThreshold:
-			alert.Threshold = BudgetCriticalThreshold
-			alert.IsTriggered = true
-			alert.Message = fmt.Sprintf("Critical alert: You've reached %.1f%% of your budget.", percentage)
-			alert.AlertClass = "danger"
-			triggeredCount++
+			data.OverBudgetAlerts = append(data.OverBudgetAlerts, card)
 		case percentage >= BudgetWarningThreshold:
-			alert.Threshold = BudgetWarningThreshold
-			alert.IsTriggered = true
-			alert.Message = fmt.Sprintf("Warning: You've used %.1f%% of your budget.", percentage)
-			alert.AlertClass = "warning"
-			triggeredCount++
+			data.WarningAlerts = append(data.WarningAlerts, card)
 		default:
-			alert.Threshold = DefaultAlertThreshold
-			alert.IsTriggered = false
-			alert.Message = fmt.Sprintf("Budget is healthy at %.1f%% usage.", percentage)
-			alert.AlertClass = "info"
+			data.NormalCount++
 		}
-
-		alerts = append(alerts, alert)
 	}
 
-	totalCount := len(alerts)
-	healthyCount := totalCount - triggeredCount
-
-	// Получаем CSRF токен
-	csrfToken, _ := middleware.GetCSRFToken(c)
-
-	pageData := &PageData{
-		Title: "Budget Alerts",
-	}
-
-	data := map[string]any{
-		"PageData":       pageData,
-		"Alerts":         alerts,
-		"TotalCount":     totalCount,
-		"TriggeredCount": triggeredCount,
-		"HealthyCount":   healthyCount,
-		tplKeyCSRFToken:  csrfToken,
-	}
+	data.OverBudgetCount = len(data.OverBudgetAlerts)
+	data.WarningCount = len(data.WarningAlerts)
 
 	return h.renderPage(c, "pages/budgets/alerts", data)
 }
@@ -788,7 +773,7 @@ func (h *BudgetHandler) CreateAlert(c echo.Context) error {
 	// Сейчас просто возвращаем успех
 
 	// Для HTMX запросов перенаправляем на страницу алертов
-	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
+	if h.IsHTMXRequest(c) {
 		c.Response().Header().Set("Hx-Redirect", "/budgets/alerts")
 		return c.NoContent(http.StatusOK)
 	}
@@ -817,29 +802,33 @@ func (h *BudgetHandler) DeleteAlert(c echo.Context) error {
 	_ = sessionData
 
 	// Для HTMX запросов возвращаем пустой ответ для удаления элемента
-	if c.Request().Header.Get("Hx-Request") == HTMXRequestHeader {
+	if h.IsHTMXRequest(c) {
 		return c.NoContent(http.StatusOK)
 	}
 
 	return c.Redirect(http.StatusFound, "/budgets/alerts")
 }
 
-// getBudgetServiceErrorMessage возвращает пользовательское сообщение об ошибке
+// getBudgetServiceErrorMessage возвращает пользовательское сообщение об ошибке.
+//
+// Сам текст ошибки в сообщение не подставляется: он уходит клиенту (в
+// echo.HTTPError и в components/alert), а в него завёрнуты ошибки репозитория —
+// имена таблиц и колонок SQLite, текст ограничений. Распознанные случаи
+// получают человекочитаемую формулировку, остальные — общую.
 func (h *BudgetHandler) getBudgetServiceErrorMessage(err error) string {
-	errMsg := err.Error()
-	switch errMsg {
+	switch err.Error() {
 	case "budget not found":
-		return fmt.Sprintf("Budget not found: %s", errMsg)
+		return "Budget not found"
 	case "invalid budget period":
-		return fmt.Sprintf("Invalid budget period - end date must be after start date: %s", errMsg)
+		return "Invalid budget period - end date must be after start date"
 	case "budget period overlap":
-		return fmt.Sprintf("Budget period overlaps with existing budget for this category: %s", errMsg)
+		return "Budget period overlaps with existing budget for this category"
 	case "budget already exceeded":
-		return fmt.Sprintf("Budget amount is less than already spent amount: %s", errMsg)
+		return "Budget amount is less than already spent amount"
 	case "invalid budget amount":
-		return fmt.Sprintf("Budget amount must be greater than 0: %s", errMsg)
+		return "Budget amount must be greater than 0"
 	default:
-		return fmt.Sprintf("Failed to process budget: %s", errMsg)
+		return "Failed to process budget"
 	}
 }
 

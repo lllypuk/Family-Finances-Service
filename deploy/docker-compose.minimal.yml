@@ -2,10 +2,23 @@ version: '3.8'
 
 # Minimal configuration for testing without SSL
 # Use this for local development or behind an existing reverse proxy
+#
+# Образ собирается из исходников: публичного образа в GHCR нет (D-02).
+# `BUILD_CONTEXT` — путь к корню репозитория относительно project directory
+# (каталог первого `-f`). По умолчанию `..`, то есть файл запускается на месте,
+# из `deploy/`. `install.sh` кладёт compose в `/opt/family-budget`, клонирует
+# исходники в `/opt/family-budget/src` и выставляет `BUILD_CONTEXT=./src`.
+#
+# ВАЖНО: каталоги bind-mount'ов нужно создать ДО первого `up` и отдать 1000:1000
+# (docker/Dockerfile: `USER 1000:1000`). Недостающие каталоги Docker создаёт от
+# root, и тогда SQLite не сможет создать БД:
+#   mkdir -p data backups logs && sudo chown -R 1000:1000 data backups logs
 
 services:
   app:
-    image: ghcr.io/lllypuk/family-finances-service:${APP_VERSION:-latest}
+    build:
+      context: ${BUILD_CONTEXT:-..}
+      dockerfile: docker/Dockerfile
     container_name: family-budget-app
     restart: unless-stopped
     ports:
@@ -16,23 +29,35 @@ services:
       - SERVER_PORT=8080
       - SERVER_HOST=0.0.0.0
       - DATABASE_PATH=/data/budget.db
-      - SESSION_SECRET=${SESSION_SECRET:-INSECURE_DEV_SECRET_CHANGE_IN_PRODUCTION}
-      - CSRF_SECRET=${CSRF_SECRET:-INSECURE_DEV_CSRF_SECRET}
-      - LOG_LEVEL=${LOG_LEVEL:-debug}
-      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET is required - generate one with `openssl rand -base64 32`}
+      - CSRF_SECRET=${CSRF_SECRET:?CSRF_SECRET is required - generate one with `openssl rand -base64 32`}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      # Этот файл заявлен как «без SSL» и публикует порт на всех интерфейсах,
+      # поэтому Secure на session-cookie здесь ВЫКЛЮЧЕН: браузер выбрасывает
+      # Secure-cookie на http:// origin, и вход зацикливается на
+      # «CSRF token not found in session». Поставив перед сервисом TLS-прокси,
+      # переключите на COOKIE_SECURE=true.
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
     volumes:
       - ./data:/data
       - ./backups:/backups
       - ./logs:/logs
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      # `--spider` шлёт HEAD, а зарегистрирован только GET /health — HEAD уходит
+      # в редирект на /login и healthcheck падает. Поэтому обычный GET в /dev/null.
+      test: ["CMD", "wget", "--quiet", "--tries=1", "-O", "/dev/null", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
 # Usage:
-#   docker compose -f docker-compose.minimal.yml up -d
+#   cp .env.production.example .env   # затем заполнить SESSION_SECRET и CSRF_SECRET
+#   docker compose -f docker-compose.minimal.yml up -d --build
+#
+# Без заданных SESSION_SECRET и CSRF_SECRET compose откажется стартовать —
+# так задумано (S-04): «безопасных» значений по умолчанию для секретов не бывает.
 #
 # Access at:
 #   http://localhost:8080

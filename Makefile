@@ -3,6 +3,10 @@ APP_NAME=family-budget-service
 BUILD_DIR=./build
 DATA_DIR=./data
 DOCKER_COMPOSE_FILE=docker/docker-compose.yml
+# compose v2 берёт `.env` и относительные пути из project directory, которая по
+# умолчанию равна каталогу первого `-f` (то есть `docker/`). `--project-directory .`
+# возвращает её в корень репозитория — там, где лежит `.env` (см. README).
+DOCKER_COMPOSE=docker compose --project-directory . -f $(DOCKER_COMPOSE_FILE)
 
 # Сборка приложения
 .PHONY: build
@@ -97,29 +101,63 @@ clean:
 .PHONY: docker-build
 docker-build:
 	@echo "Building Docker image..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) build
+	@$(DOCKER_COMPOSE) build
 
 .PHONY: docker-up
 docker-up:
 	@echo "Starting Docker container..."
 	@mkdir -p $(DATA_DIR)
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) up
+	@$(DOCKER_COMPOSE) up
 
 .PHONY: docker-up-d
 docker-up-d:
 	@echo "Starting Docker container in detached mode..."
 	@mkdir -p $(DATA_DIR)
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) up -d
+	@$(DOCKER_COMPOSE) up -d
 
 .PHONY: docker-down
 docker-down:
 	@echo "Stopping Docker containers..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) down
+	@$(DOCKER_COMPOSE) down
 
 .PHONY: docker-logs
 docker-logs:
 	@echo "Showing Docker logs..."
-	@docker-compose -f $(DOCKER_COMPOSE_FILE) logs -f
+	@$(DOCKER_COMPOSE) logs -f
+
+# Проверка синтаксиса и интерполяции всех compose-файлов — в два прохода:
+#   1) с фиктивными секретами — ловит опечатки в YAML и `${VAR:?…}`;
+#   2) без секретов — проверяет, что `${SESSION_SECRET:?…}` / `${CSRF_SECRET:?…}`
+#      действительно на месте и compose отказывается стартовать (регрессия D-01).
+# `--env-file /dev/null` во втором проходе нужен, чтобы локальный `.env`
+# разработчика не подставил секреты и не сделал проверку бессмысленной.
+# deploy/*.yml запускаются на месте, из `deploy/` — project directory там своя,
+# поэтому `--project-directory .` для них не нужен (в отличие от docker/*.yml).
+DEPLOY_COMPOSE_FILES=deploy/docker-compose.prod.yml \
+	deploy/docker-compose.nginx.yml \
+	deploy/docker-compose.caddy.yml \
+	deploy/docker-compose.minimal.yml
+COMPOSE_VALIDATE_ENV=SESSION_SECRET=validate CSRF_SECRET=validate DOMAIN=example.com
+
+.PHONY: compose-config
+compose-config:
+	@echo "Validating compose files..."
+	@echo "  $(DOCKER_COMPOSE_FILE)"
+	@$(COMPOSE_VALIDATE_ENV) $(DOCKER_COMPOSE) config -q
+	@for f in $(DEPLOY_COMPOSE_FILES); do \
+		echo "  $$f"; \
+		$(COMPOSE_VALIDATE_ENV) docker compose -f $$f config -q || exit 1; \
+	done
+	@echo "Checking that compose refuses to start without secrets..."
+	@for f in $(DOCKER_COMPOSE_FILE) $(DEPLOY_COMPOSE_FILES); do \
+		echo "  $$f"; \
+		if env -u SESSION_SECRET -u CSRF_SECRET \
+			docker compose --env-file /dev/null -f $$f config -q >/dev/null 2>&1; then \
+			echo "ERROR: $$f validates without SESSION_SECRET/CSRF_SECRET (D-01 regression)"; \
+			exit 1; \
+		fi; \
+	done
+	@echo "All compose files are valid"
 
 # SQLite специфичные команды
 .PHONY: sqlite-backup
@@ -228,6 +266,7 @@ help:
 	@echo "  docker-up-d      - Start Docker container in detached mode"
 	@echo "  docker-down      - Stop Docker containers"
 	@echo "  docker-logs      - View Docker container logs"
+	@echo "  compose-config   - Validate all docker-compose files"
 	@echo ""
 	@echo "Other commands:"
 	@echo "  help             - Show this help"

@@ -248,6 +248,14 @@ func (m *MockTransactionRepository) GetByFilter(
 	return args.Get(0).([]*transaction.Transaction), args.Error(1)
 }
 
+func (m *MockTransactionRepository) CountByFilter(
+	ctx context.Context,
+	filter transaction.Filter,
+) (int, error) {
+	args := m.Called(ctx, filter)
+	return args.Int(0), args.Error(1)
+}
+
 // Updated: GetAll replaces GetByFamilyID (no familyID param)
 func (m *MockTransactionRepository) GetAll(
 	ctx context.Context,
@@ -379,6 +387,14 @@ func (m *MockTransactionService) GetAllTransactions(
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*transaction.Transaction), args.Error(1)
+}
+
+func (m *MockTransactionService) CountTransactions(
+	ctx context.Context,
+	filter dto.TransactionFilterDTO,
+) (int, error) {
+	args := m.Called(ctx, filter)
+	return args.Int(0), args.Error(1)
 }
 
 func (m *MockTransactionService) UpdateTransaction(

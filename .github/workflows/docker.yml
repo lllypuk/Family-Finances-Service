@@ -56,6 +56,9 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          # Dockerfile лежит в docker/, а не в корне: без file: сборка падает
+          # на первом же теге v*.*.* с "failed to read dockerfile".
+          file: docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

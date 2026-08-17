@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gorilla/sessions"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -383,6 +384,89 @@ func TestCSRFToken_Security_Properties(t *testing.T) {
 	}
 }
 
+// TestRegenerateCSRFToken_IssuesDifferentToken — S-02: перевыпуск обязан выдать
+// другой токен и положить в сессию именно его.
+func TestRegenerateCSRFToken_IssuesDifferentToken(t *testing.T) {
+	e, csrfMiddleware := setupCSRFTest()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	var oldToken, newToken string
+	handler := csrfMiddleware(func(c echo.Context) error {
+		var err error
+		oldToken, err = middleware.GetCSRFToken(c)
+		require.NoError(t, err)
+
+		newToken, err = middleware.RegenerateCSRFToken(c)
+		require.NoError(t, err)
+
+		return c.String(http.StatusOK, "ok")
+	})
+
+	require.NoError(t, handler(c))
+
+	require.NotEmpty(t, oldToken)
+	require.NotEmpty(t, newToken)
+	assert.NotEqual(t, oldToken, newToken, "перевыпущенный токен обязан отличаться от прежнего")
+
+	// В сессии лежит именно новый токен.
+	current, err := middleware.GetCSRFToken(c)
+	require.NoError(t, err)
+	assert.Equal(t, newToken, current)
+}
+
+// TestRegenerateCSRFToken_OldTokenRejected — старый токен после перевыпуска
+// перестаёт подходить к сессии, новый принимается.
+func TestRegenerateCSRFToken_OldTokenRejected(t *testing.T) {
+	e, csrfMiddleware := setupCSRFTest()
+
+	getReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	getRec := httptest.NewRecorder()
+	getCtx := e.NewContext(getReq, getRec)
+
+	var oldToken, newToken string
+	genHandler := csrfMiddleware(func(c echo.Context) error {
+		var err error
+		oldToken, err = middleware.GetCSRFToken(c)
+		require.NoError(t, err)
+
+		newToken, err = middleware.RegenerateCSRFToken(c)
+		require.NoError(t, err)
+
+		return c.String(http.StatusOK, "ok")
+	})
+	require.NoError(t, genHandler(getCtx))
+
+	// Перевыпуск добавляет второй Set-Cookie; клиент применяет их по порядку,
+	// поэтому актуальна последняя cookie сессии.
+	cookies := getRec.Result().Cookies()
+	require.NotEmpty(t, cookies, "сессионная cookie не выдана")
+	sessionCookie := cookies[len(cookies)-1]
+
+	postWithToken := func(token string) int {
+		postReq := httptest.NewRequest(http.MethodPost, "/", nil)
+		postReq.Header.Set(middleware.CSRFHeaderKey, token)
+		postReq.AddCookie(sessionCookie)
+
+		postRec := httptest.NewRecorder()
+		postCtx := e.NewContext(postReq, postRec)
+
+		handler := csrfMiddleware(func(c echo.Context) error {
+			return c.String(http.StatusOK, "ok")
+		})
+		require.NoError(t, handler(postCtx))
+
+		return postRec.Code
+	}
+
+	assert.Equal(t, http.StatusForbidden, postWithToken(oldToken),
+		"токен, выданный до перевыпуска, обязан отвергаться")
+	assert.Equal(t, http.StatusOK, postWithToken(newToken),
+		"перевыпущенный токен обязан приниматься")
+}
+
 // Benchmark тесты для производительности CSRF
 func BenchmarkCSRFProtection_GET(b *testing.B) {
 	e, csrfMiddleware := setupCSRFTest()
@@ -448,4 +532,49 @@ func BenchmarkGetCSRFToken(b *testing.B) {
 
 		middleware.GetCSRFToken(c)
 	}
+}
+
+// Cookie, подписанная другим (провёрнутым) SESSION_SECRET, не расшифровывается.
+// gorilla CookieStore.New возвращает в этом случае НЕнулевую ошибку вместе с
+// пригодной новой сессией; раньше ensureCSRFToken пробрасывал её наружу, и
+// браузер со старой cookie получал 500 на каждый GET, причём сама cookie не
+// перезаписывалась — выйти из этого состояния можно было только руками.
+func TestCSRFProtection_GET_WithUndecodableCookie_RecoversInsteadOf500(t *testing.T) {
+	// Сессия, подписанная чужим секретом.
+	foreignStore := sessions.NewCookieStore([]byte("some-completely-different-secret-value"))
+	foreignReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	foreignSess, err := foreignStore.New(foreignReq, middleware.SessionName)
+	require.NoError(t, err)
+	foreignSess.Values["csrf_token"] = "stale-token"
+
+	foreignRec := httptest.NewRecorder()
+	require.NoError(t, foreignSess.Save(foreignReq, foreignRec))
+
+	staleCookies := (&http.Response{Header: foreignRec.Header()}).Cookies()
+	require.NotEmpty(t, staleCookies)
+
+	e, csrfMiddleware := setupCSRFTest()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(staleCookies[0])
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	called := false
+	handler := csrfMiddleware(func(ctx echo.Context) error {
+		called = true
+		return ctx.String(http.StatusOK, "ok")
+	})
+
+	require.NoError(t, handler(c))
+	assert.True(t, called, "обработчик не вызван — нечитаемая cookie отдала ошибку вместо новой сессии")
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	token, tokenErr := middleware.GetCSRFToken(c)
+	require.NoError(t, tokenErr)
+	assert.NotEmpty(t, token)
+	assert.NotEqual(t, "stale-token", token, "токен взят из нечитаемой сессии")
+
+	assert.NotEmpty(t, (&http.Response{Header: rec.Header()}).Cookies(),
+		"новая cookie не выдана, браузер продолжит слать нечитаемую")
 }

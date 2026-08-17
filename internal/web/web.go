@@ -1,7 +1,9 @@
 package web
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -12,12 +14,21 @@ import (
 	"family-budget-service/internal/web/middleware"
 )
 
+// Paths — каталоги, которые веб-слой резолвит на диске. Оба пути
+// резолвятся относительно рабочего каталога процесса, если заданы
+// относительными, поэтому интеграционные тесты передают абсолютные.
+type Paths struct {
+	TemplatesDir string
+	StaticDir    string
+}
+
 // Server представляет веб-сервер для HTML интерфейса
 type Server struct {
 	echo         *echo.Echo
 	repositories *handlers.Repositories
 	services     *services.Services
 	renderer     *TemplateRenderer
+	staticDir    string
 
 	// Handlers
 	dashboardHandler   *webHandlers.DashboardHandler
@@ -36,11 +47,12 @@ func NewWebServer(
 	e *echo.Echo,
 	repositories *handlers.Repositories,
 	services *services.Services,
-	templatesDir, sessionSecret string,
-	isProduction bool,
+	paths Paths,
+	sessionSecret string,
+	cookieSecure bool,
 ) (*Server, error) {
 	// Создаем рендерер шаблонов
-	renderer, err := NewTemplateRenderer(templatesDir)
+	renderer, err := NewTemplateRenderer(paths.TemplatesDir)
 	if err != nil {
 		return nil, err
 	}
@@ -49,11 +61,8 @@ func NewWebServer(
 	e.Renderer = renderer
 
 	// Настраиваем middleware
-	e.Use(middleware.SessionStore(sessionSecret, isProduction))
+	e.Use(middleware.SessionStore(sessionSecret, cookieSecure))
 	e.Use(middleware.CSRFProtection())
-
-	// Включаем Secure flag на flash-cookie в production.
-	webHandlers.SetCookieSecureForProduction(isProduction)
 
 	// Настраиваем обработчик ошибок
 	e.HTTPErrorHandler = customHTTPErrorHandler(renderer)
@@ -63,17 +72,18 @@ func NewWebServer(
 		repositories: repositories,
 		services:     services,
 		renderer:     renderer,
+		staticDir:    paths.StaticDir,
 
 		// Инициализируем handlers
-		dashboardHandler:   webHandlers.NewDashboardHandler(repositories, services),
-		authHandler:        webHandlers.NewAuthHandler(repositories, services),
-		userHandler:        webHandlers.NewUserHandler(repositories, services),
-		adminHandler:       webHandlers.NewAdminHandler(repositories, services),
-		categoryHandler:    webHandlers.NewCategoryHandler(repositories, services),
-		transactionHandler: webHandlers.NewTransactionHandler(repositories, services),
-		budgetHandler:      webHandlers.NewBudgetHandler(repositories, services),
-		reportHandler:      webHandlers.NewReportHandler(repositories, services),
-		backupHandler:      webHandlers.NewBackupHandler(repositories, services),
+		dashboardHandler:   webHandlers.NewDashboardHandler(repositories, services, cookieSecure),
+		authHandler:        webHandlers.NewAuthHandler(repositories, services, cookieSecure),
+		userHandler:        webHandlers.NewUserHandler(repositories, services, cookieSecure),
+		adminHandler:       webHandlers.NewAdminHandler(repositories, services, cookieSecure),
+		categoryHandler:    webHandlers.NewCategoryHandler(repositories, services, cookieSecure),
+		transactionHandler: webHandlers.NewTransactionHandler(repositories, services, cookieSecure),
+		budgetHandler:      webHandlers.NewBudgetHandler(repositories, services, cookieSecure),
+		reportHandler:      webHandlers.NewReportHandler(repositories, services, cookieSecure),
+		backupHandler:      webHandlers.NewBackupHandler(repositories, services, cookieSecure),
 	}
 
 	return ws, nil
@@ -82,7 +92,7 @@ func NewWebServer(
 // SetupRoutes настраивает маршруты для веб-интерфейса
 func (ws *Server) SetupRoutes() {
 	// Статические файлы
-	ws.echo.Static("/static", "internal/web/static")
+	ws.echo.Static("/static", ws.staticDir)
 
 	// Setup middleware — redirects to /setup if family doesn't exist
 	ws.echo.Use(middleware.RequireSetup(ws.services.Family))
@@ -90,8 +100,14 @@ func (ws *Server) SetupRoutes() {
 	// Настраиваем маршруты аутентификации
 	ws.setupAuthRoutes()
 
-	// Защищенные маршруты (требуют аутентификации)
-	protected := ws.echo.Group("", middleware.RequireAuth())
+	// Защищенные маршруты (требуют аутентификации).
+	// RequireActiveUser сверяет владельца подписанной cookie с БД: иначе
+	// удалённый или пониженный в правах пользователь работал бы до конца
+	// SessionTimeout (24 часа), и отозвать доступ было бы нечем.
+	protected := ws.echo.Group("",
+		middleware.RequireAuth(),
+		middleware.RequireActiveUser(ws.services.User),
+	)
 
 	// Главная страница
 	protected.GET("/", ws.dashboardHandler.Dashboard)
@@ -209,7 +225,13 @@ func (ws *Server) setupReportRoutes(protected *echo.Group) {
 
 // setupHTMXRoutes настраивает HTMX endpoints
 func (ws *Server) setupHTMXRoutes(protected *echo.Group) {
-	htmx := protected.Group("/htmx", middleware.RequireAuth())
+	// Никакого повторного middleware.RequireAuth() здесь быть не должно: Echo
+	// склеивает middleware родительской группы с middleware дочерней, поэтому
+	// второй RequireAuth отработал бы ПОСЛЕ RequireActiveUser и перезаписал бы
+	// в контексте свежую (прочитанную из БД) SessionData той, что лежит в
+	// подписанной cookie. Ролевые проверки ниже читали бы устаревшую роль, и
+	// понижение прав не действовало бы до конца SessionTimeout.
+	htmx := protected.Group("/htmx")
 
 	// HTMX для dashboard
 	htmx.GET("/dashboard/stats", ws.dashboardHandler.DashboardStats)
@@ -249,7 +271,17 @@ func customHTTPErrorHandler(renderer *TemplateRenderer) echo.HTTPErrorHandler {
 			code = he.Code
 			msg = he.Message
 		} else {
-			msg = err.Error()
+			// Текст произвольной ошибки наружу не отдаём: там оказываются имена
+			// шаблонов и полей структур (renderer.go оборачивает ошибку
+			// исполнения) и обёрнутые ошибки репозиториев/сервисов. Клиент
+			// получает обобщённую формулировку, подробности — только в лог.
+			// %q, а не %s: URL.Path приходит уже декодированным, поэтому
+			// %0a в запросе даёт настоящий перевод строки и позволяет
+			// подделать лог-запись. То же и с текстом ошибки — в него
+			// попадают введённые пользователем значения.
+			c.Logger().Errorf("unhandled error on %s %q: %q",
+				c.Request().Method, c.Request().URL.Path, err.Error())
+			msg = getErrorTitle(code)
 		}
 
 		// Если ответ уже отправлен, не делаем ничего
@@ -258,8 +290,8 @@ func customHTTPErrorHandler(renderer *TemplateRenderer) echo.HTTPErrorHandler {
 		}
 
 		// Для HTMX запросов возвращаем простой текст
-		if c.Request().Header.Get("Hx-Request") == "true" {
-			_ = c.String(code, "Error: "+err.Error())
+		if middleware.IsHTMXRequest(c) {
+			_ = c.String(code, fmt.Sprintf("Error: %v", msg))
 			return
 		}
 
@@ -272,11 +304,17 @@ func customHTTPErrorHandler(renderer *TemplateRenderer) echo.HTTPErrorHandler {
 			"ErrorMessage": msg,
 		}
 
-		// Пытаемся отрендерить страницу ошибки
-		if renderErr := renderer.Render(c.Response(), "pages/error", data, c); renderErr != nil {
+		// Страница ошибки собирается в буфер: запись прямо в c.Response()
+		// отдавала её со статусом 200 (WriteHeader никто не вызывал), то есть
+		// любые 404/500 выглядели для клиента успешными ответами.
+		var buf bytes.Buffer
+		if renderErr := renderer.Render(&buf, "pages/error", data, c); renderErr != nil {
 			// Fallback: простой текстовый ответ
-			_ = c.String(code, "Error "+string(rune(code))+": "+renderErr.Error())
+			_ = c.String(code, fmt.Sprintf("Error %d: %v", code, msg))
+			return
 		}
+
+		_ = c.HTMLBlob(code, buf.Bytes())
 	}
 }
 

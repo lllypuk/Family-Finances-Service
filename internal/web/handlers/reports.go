@@ -40,11 +40,46 @@ type ReportHandler struct {
 }
 
 // NewReportHandler создает новый обработчик отчетов
-func NewReportHandler(repositories *handlers.Repositories, services *services.Services) *ReportHandler {
+func NewReportHandler(
+	repositories *handlers.Repositories,
+	services *services.Services,
+	cookieSecure bool,
+) *ReportHandler {
 	return &ReportHandler{
-		BaseHandler: NewBaseHandler(repositories, services),
+		BaseHandler: NewBaseHandler(repositories, services, cookieSecure),
 		validator:   validator.New(),
 	}
+}
+
+// reportIndexData — контракт данных страницы списка отчётов.
+//
+// Встроенный *PageData отдаёт шаблону `.CurrentUser` и `.CSRFToken` из корня
+// контекста (шапка страницы ветвится на `{{if .CurrentUser}}`), а
+// `{{.PageData.X}}` продолжает работать благодаря имени встроенного поля.
+type reportIndexData struct {
+	*PageData
+
+	Reports           []webModels.ReportDataVM
+	ReportTypeOptions []webModels.ReportTypeOption
+	DefaultForm       webModels.ReportForm
+}
+
+// reportFormData — контракт данных формы отчёта (pages/reports/new).
+//
+// Form — значение, а не указатель: pages/reports/new.html читает `.Form.Name`
+// и остальные поля без всяких `{{if}}`, а у структуры (в отличие от map)
+// обращение к отсутствующему полю — ошибка исполнения шаблона.
+type reportFormData struct {
+	*PageData
+
+	Form webModels.ReportForm
+}
+
+// reportShowData — контракт данных страницы просмотра отчёта.
+type reportShowData struct {
+	*PageData
+
+	Report webModels.ReportDataVM
 }
 
 // Index отображает список отчетов и форму создания
@@ -53,12 +88,6 @@ func (h *ReportHandler) Index(c echo.Context) error {
 	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
-	}
-
-	// Получаем CSRF токен
-	csrfToken, err := middleware.GetCSRFToken(c)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get CSRF token")
 	}
 
 	// Получаем список существующих отчетов
@@ -73,31 +102,12 @@ func (h *ReportHandler) Index(c echo.Context) error {
 		reportVMs[i].FromDomain(r)
 	}
 
-	// Подготавливаем опции типов отчетов
-	reportTypeOptions := webModels.GetReportTypeOptions()
-
-	// Предзаполняем форму с текущим месяцем
-	now := time.Now()
-	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-	endOfMonth := startOfMonth.AddDate(0, 1, 0).Add(-time.Second)
-
-	defaultForm := webModels.ReportForm{
-		Type:      "expenses",
-		Period:    "monthly",
-		StartDate: startOfMonth.Format("2006-01-02"),
-		EndDate:   endOfMonth.Format("2006-01-02"),
-	}
-
-	pageData := &PageData{
-		Title: "Reports",
-	}
-
-	data := map[string]any{
-		"PageData":          pageData,
-		"Reports":           reportVMs,
-		"ReportTypeOptions": reportTypeOptions,
-		"DefaultForm":       defaultForm,
-		tplKeyCSRFToken:     csrfToken,
+	// CSRF-токен приходит из PageData и промотируется в корень контекста.
+	data := reportIndexData{
+		PageData:          h.buildPageData(c, titleReports),
+		Reports:           reportVMs,
+		ReportTypeOptions: webModels.GetReportTypeOptions(),
+		DefaultForm:       defaultReportForm(),
 	}
 
 	return h.renderPage(c, "pages/reports/index", data)
@@ -105,20 +115,26 @@ func (h *ReportHandler) Index(c echo.Context) error {
 
 // New отображает форму создания нового отчета
 func (h *ReportHandler) New(c echo.Context) error {
-	// Получаем CSRF токен
-	csrfToken, _ := middleware.GetCSRFToken(c)
-
-	// TODO: Реализовать отображение формы создания отчета
-	pageData := &PageData{
-		Title: "New Report",
-	}
-
-	data := map[string]any{
-		"PageData":      pageData,
-		tplKeyCSRFToken: csrfToken,
+	data := reportFormData{
+		PageData: h.buildPageData(c, titleNewReport),
+		Form:     defaultReportForm(),
 	}
 
 	return h.renderPage(c, "pages/reports/new", data)
+}
+
+// defaultReportForm возвращает форму отчёта, предзаполненную текущим месяцем.
+func defaultReportForm() webModels.ReportForm {
+	now := time.Now()
+	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	endOfMonth := startOfMonth.AddDate(0, 1, 0).Add(-time.Second)
+
+	return webModels.ReportForm{
+		Type:      "expenses",
+		Period:    "monthly",
+		StartDate: startOfMonth.Format("2006-01-02"),
+		EndDate:   endOfMonth.Format("2006-01-02"),
+	}
 }
 
 // Create создает и генерирует новый отчет
@@ -189,7 +205,7 @@ func (h *ReportHandler) parseAndValidateReportForm(c echo.Context) (*webModels.R
 			})
 		}
 
-		return nil, h.renderReportFormWithErrors(c, form, "New Report")
+		return nil, h.renderReportFormWithErrors(c, form, validationErrors)
 	}
 
 	return &form, nil
@@ -354,13 +370,9 @@ func (h *ReportHandler) Show(c echo.Context) error {
 	reportVM := webModels.ReportDataVM{}
 	reportVM.FromDomain(report)
 
-	pageData := &PageData{
-		Title: "Report: " + report.Name,
-	}
-
-	data := map[string]any{
-		"PageData": pageData,
-		"Report":   reportVM,
+	data := reportShowData{
+		PageData: h.buildPageData(c, titleReportPrefix+report.Name),
+		Report:   reportVM,
 	}
 
 	return h.renderPage(c, "pages/reports/show", data)
@@ -622,33 +634,20 @@ func (h *ReportHandler) exportBudgetComparisonCSV(writer *csv.Writer, r *report.
 	return nil
 }
 
-// renderReportFormWithErrors отображает форму с ошибками
+// renderReportFormWithErrors отображает форму создания отчёта с ошибками
+// валидации. Страницы редактирования отчёта нет ни в маршрутах, ни в шаблонах,
+// поэтому ветка на "pages/reports/edit" убрана вместе с параметром title.
 func (h *ReportHandler) renderReportFormWithErrors(
 	c echo.Context,
 	form webModels.ReportForm,
-	title string,
+	errors map[string]string,
 ) error {
-	reportTypeOptions := webModels.GetReportTypeOptions()
-
-	pageData := &PageData{
-		Title: title,
-		Messages: []Message{
-			{Type: "error", Text: "Проверьте правильность заполнения формы"},
-		},
+	data := reportFormData{
+		PageData: h.formPageData(c, titleNewReport, errors),
+		Form:     form,
 	}
 
-	data := map[string]any{
-		"PageData":          pageData,
-		"Form":              form,
-		"ReportTypeOptions": reportTypeOptions,
-	}
-
-	template := "pages/reports/new"
-	if title == "Edit Report" {
-		template = "pages/reports/edit"
-	}
-
-	return h.renderPage(c, template, data)
+	return h.renderPage(c, "pages/reports/new", data)
 }
 
 // convertReportDataToStandard конвертирует специфичные DTO в стандартный report.Data формат
@@ -806,19 +805,23 @@ func (h *ReportHandler) convertTopExpensesItems(items []dto.TransactionSummaryDT
 	return topExpenses
 }
 
-// getReportServiceErrorMessage возвращает пользовательское сообщение об ошибке
+// getReportServiceErrorMessage возвращает пользовательское сообщение об ошибке.
+//
+// Как и у бюджетов, исходный текст ошибки клиенту не показывается: обёрнутая
+// ошибка репозитория раскрывает схему БД. Наружу идёт только распознанная
+// формулировка либо общая.
 func (h *ReportHandler) getReportServiceErrorMessage(err error) string {
 	errMsg := err.Error()
 	switch {
 	case strings.Contains(errMsg, "report not found"):
-		return fmt.Sprintf("Report not found: %s", errMsg)
+		return "Report not found"
 	case strings.Contains(errMsg, "invalid date range"):
-		return fmt.Sprintf("Invalid date range: %s", errMsg)
+		return "Invalid date range"
 	case strings.Contains(errMsg, "no data available"):
-		return fmt.Sprintf("No data available for the specified period: %s", errMsg)
+		return "No data available for the specified period"
 	case strings.Contains(errMsg, "generation failed"):
-		return fmt.Sprintf("Failed to generate report: %s", errMsg)
+		return "Failed to generate report"
 	default:
-		return fmt.Sprintf("Failed to process report: %s", errMsg)
+		return "Failed to process report"
 	}
 }

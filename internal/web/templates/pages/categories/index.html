@@ -15,6 +15,7 @@
 
         <!-- Favicon -->
         <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico" />
+        {{if .CSRFToken}}<meta name="csrf-token" content="{{.CSRFToken}}">{{end}}
     </head>
     <body>
         <!-- Navigation -->
@@ -39,11 +40,9 @@
                             {{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}
                         </summary>
                         <ul>
-                            <li><a href="/profile">Профиль</a></li>
                             {{if eq .CurrentUser.Role "admin"}}
                             <li><a href="/users">Пользователи</a></li>
                             <li>
-                                <a href="/family/settings">Настройки семьи</a>
                             </li>
                             {{end}}
                             <li>
@@ -96,7 +95,7 @@
                     <form
                         method="GET"
                         action="/categories"
-                        hx-get="/htmx/categories/filter"
+                        hx-get="/htmx/categories/search"
                         hx-target="#categories-list"
                         hx-swap="innerHTML"
                         hx-trigger="input delay:500ms from:input, change from:select"
@@ -121,12 +120,12 @@
 
                             <!-- Поиск по названию -->
                             <div>
-                                <label for="search">
+                                <label for="name">
                                     Поиск по названию
                                     <input
                                         type="text"
-                                        id="search"
-                                        name="search"
+                                        id="name"
+                                        name="name"
                                         value=""
                                         placeholder="Введите название категории"
                                     />
@@ -274,40 +273,7 @@
                     </article>
                     {{end}}
                 </div>
-
-                <!-- Pagination -->
-                {{if .Pagination}}
-                <nav class="pagination" style="margin-top: 2rem">
-                    <div class="grid">
-                        <div>
-                            <small>
-                                Показано {{len .Categories}} из
-                                {{.Pagination.Total}}
-                            </small>
-                        </div>
-                        <div>
-                            {{if .Pagination.HasPrev}}
-                            <a href="?page=1" class="secondary outline"
-                                >← Предыдущая</a
-                            >
-                            {{end}}
-
-                            <span class="current-page">
-                                Страница {{.Pagination.Page}} из
-                                {{.Pagination.TotalPages}}
-                            </span>
-
-                            {{if .Pagination.HasNext}}
-                            <a
-                                href="?page={{.Pagination.TotalPages}}"
-                                class="secondary outline"
-                                >Следующая →</a
-                            >
-                            {{end}}
-                        </div>
-                    </div>
-                </nav>
-                {{end}} {{else}}
+                {{else}}
                 <!-- Empty State -->
                 <div class="empty-state">
                     <p style="font-size: 3rem">📂</p>

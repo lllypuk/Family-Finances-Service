@@ -1,18 +1,31 @@
 version: "3.8"
 
+# ВАЖНО: этот файл рассчитан на project directory = корень репозитория.
+# По умолчанию compose v2 берёт её из каталога первого `-f` (то есть `docker/`),
+# и тогда `.env` ищется в `docker/.env`, а все относительные пути (build context,
+# `DATA_DIR`) резолвятся от `docker/`. Поэтому запускать нужно так:
+#
+#   docker compose --project-directory . -f docker/docker-compose.yml up -d
+#
+# Именно это делают цели `make docker-up` / `docker-up-d` / `docker-down`.
+# `.env` при этом лежит в корне репозитория — как и учит README.
+
 services:
   # Family Budget Service - единый контейнер с SQLite
   family-budget:
     build:
-      context: ..
+      # Относительно project directory (корень репозитория, см. комментарий выше).
+      context: .
       dockerfile: docker/Dockerfile
     container_name: family-budget-service
     restart: unless-stopped
     ports:
       - "${SERVER_PORT:-8080}:8080"
     environment:
-      # Server Configuration
-      SERVER_PORT: ${SERVER_PORT:-8080}
+      # Server Configuration.
+      # Внутри контейнера порт всегда 8080 (его же ждут `ports` и healthcheck);
+      # `SERVER_PORT` управляет только портом на хосте — как в deploy/*.yml.
+      SERVER_PORT: 8080
       SERVER_HOST: ${SERVER_HOST:-0.0.0.0}
 
       # Database Configuration (SQLite)
@@ -20,8 +33,10 @@ services:
 
       # Application Configuration
       ENVIRONMENT: ${ENVIRONMENT:-production}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required - generate one with `openssl rand -base64 32`}
+      CSRF_SECRET: ${CSRF_SECRET:?CSRF_SECRET is required - generate one with `openssl rand -base64 32`}
 
     volumes:
       # Persistent volume for SQLite database
@@ -29,7 +44,9 @@ services:
     networks:
       - family-budget-network
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      # `--spider` шлёт HEAD, а зарегистрирован только GET /health — HEAD уходит
+      # в редирект на /login и healthcheck падает. Поэтому обычный GET в /dev/null.
+      test: ["CMD", "wget", "--quiet", "--tries=1", "-O", "/dev/null", "http://localhost:8080/health"]
       interval: 30s
       timeout: 3s
       retries: 3

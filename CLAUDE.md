@@ -2,617 +2,252 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Structure & Module Organization
-
-This is a Go monorepo for a family finance service with layered architecture.
-
-- `cmd/server/`: application entry point
-- `internal/domain/`: domain models and validation
-- `internal/services/`: business logic (use-cases)
-- `internal/application/`: API server and HTTP handlers
-- `internal/web/`: web UI handlers, middleware, templates
-- `internal/infrastructure/`: SQLite repositories, migrations integration
-- `internal/observability/`: logging and health checks
-- `tests/integration/`, `tests/benchmarks/`: cross-layer tests and benchmarks
-- `migrations/`: consolidated SQL migrations (`001_consolidated.up/down.sql`)
-- `deploy/`: self-hosted deployment scripts, compose files, and systemd units
-- `docs/`, `docs/backlog.md`: design notes and implementation backlog
-
-## Development Commands
-
-### Building and Running
-
-- `make build` - Build the application (outputs to ./build/family-budget-service)
-- `make run` - Run the application directly with go run
-- `make run-local` - Run with local development environment variables (requires `make dev-up` first)
-
-#### Local Development Setup
-
-**No prerequisites** - just run the application:
+## Commands
 
 ```bash
-make run-local  # Runs the application on localhost:8080
+make run-local        # run on localhost:8080, SQLite at ./data/budget.db, LOG_LEVEL=debug
+make build            # -> ./build/family-budget-service (CGO_ENABLED=0)
+make test             # go test -v ./...
+make test-unit        # ./internal/...
+make test-integration # ./tests/...
+make test-coverage    # coverage.out + coverage.html
+make fmt              # go fmt ./...
+make lint             # golangci-lint run --fix
+make pre-commit       # fmt + test + lint
+make security-check   # gosec + govulncheck
+make deps             # go mod download && go mod tidy
 ```
 
-The `run-local` command sets up the following environment:
-
-- **Server**: localhost:8080 (default port)
-- **Database**: SQLite at `./data/budget.db` (created automatically)
-- **Logging**: DEBUG level for development
-- **Session Secret**: Development-specific secret key
-- **Auto-migrations**: Database schema created on first run
-
-#### Test Credentials for Local Development
-
-Use these credentials when testing the application locally:
-
-- **Email**: `admin@test.com`
-- **Password**: `Admin123!`
-- **Family Name**: `Test Family`
-
-These credentials are used for creating the initial admin user during local testing.
-
-#### Testing Local Interface
-
-When testing the web interface locally, use the `--noproxy` flag to bypass proxy settings:
+Run a single test / package:
 
 ```bash
-# Test health endpoint
-curl -s --noproxy '*' 127.0.0.1:8080/health
-
-# Test main page
-curl -s --noproxy '*' 127.0.0.1:8080/
-
-# Test login page
-curl -s --noproxy '*' 127.0.0.1:8080/login
+go test ./internal/services -run TestInviteService_CreateInvite -v
+go test ./tests/integration -run TestInviteFlow_FullCycle -v
+go test ./internal/web/handlers -run 'TestAdminHandler_.*' -v
 ```
 
-### Testing and Code Quality
-
-- `make test` - Run all tests (`go test ./...`)
-- `make test-unit` - Unit tests only (internal package tests)
-- `make test-integration` - Integration tests only (`./tests/...`)
-- `make test-coverage` - generate `coverage.out` and `coverage.html`
-- `make lint` - Run golangci-lint for comprehensive code quality checks
-- `make fmt` - Format code with go fmt
-- `make pre-commit` - Run pre-commit checks (format, test, lint)
-
-#### Coding Style & Naming Conventions
-
-- Follow standard Go style; always run `gofmt` before committing.
-- Use idiomatic Go naming: exported `PascalCase`, internal `camelCase`.
-- Keep handlers thin; prefer business logic in `internal/services/`.
-- File names should be descriptive and snake_case-like for Go (`transaction_service.go`, `user_repository_sqlite.go`).
-- Add tests alongside code using `_test.go`.
-
-## Testing Guidelines
-
-- Use Go `testing` plus `testify` (`assert`, `require`, `mock`).
-- Prefer unit tests for services/repositories and integration tests in `tests/integration/`.
-- Test names follow `TestXxx_*` patterns (e.g., `TestTransactionService_CreateTransaction_Success`).
-- For sandboxed environments, prefer tests that do not require opening local sockets unless necessary.
-
-## Commit & Pull Request Guidelines
-
-- Current history follows conventional prefixes: `feat:`, `fix:`, `docs:`, `refactor:`, `security:`.
-- Keep commits focused and scoped to one change.
-- PRs should include:
-    - clear summary and rationale
-    - linked issue/task (`docs/backlog.md` and/or related task doc if applicable)
-    - test evidence (`make test`, targeted `go test ...`)
-    - screenshots for UI/template changes
-
-## Security & Configuration Tips
-
-- Configure secrets via env vars (`SESSION_SECRET`, `CSRF_SECRET`); do not commit real secrets.
-- Use `make security-check` for `gosec` and `govulncheck`.
-- When changing schema, update consolidated migrations and test locally (`make run-local` + relevant tests).
-
-After any code change, run `make fmt`, `make lint`, and `make test` before handing off work or opening a PR.
-
-## 🚀 Performance Optimization for Tests
-
-The project uses **in-memory SQLite** for ultra-fast testing:
-
-**Performance benefits:**
-
-- **No Docker** - Tests start instantly
-- **In-memory database** - Each test gets a fresh database in milliseconds
-- **Automatic cleanup** - Database destroyed after each test
-- **Parallel execution** - Tests can run in parallel safely
-
-#### Code Quality Tools
-
-The project uses **golangci-lint** with a comprehensive configuration (`.golangci.yml`) that includes:
-
-- **Static analysis**: errcheck, govet, staticcheck, ineffassign
-- **Code style**: gofmt, revive, whitespace alignment
-- **Complexity checks**: gocognit, funlen, cyclop
-- **Security**: gosec for security vulnerabilities
-- **Best practices**: gocritic, unconvert, unused
-- **Testing**: testifylint for proper test assertions
-
-**IMPORTANT**: Always run `make lint` after completing any development work to ensure code quality standards. All linter
-errors must be fixed before committing changes.
-
-**Workflow for development:**
-
-1. Make your changes
-2. Run `make fmt` to format code
-3. Run `make test` to ensure tests pass
-4. **Run `make lint` and fix ALL errors** - this is mandatory
-5. Commit changes only after lint passes with 0 issues
-
-### Frontend Testing with Agent-Browser
-
-The project includes **agent-browser** for interactive frontend testing and browser automation.
-
-**What it is:**
-
-- Headless browser automation CLI optimized for AI agents
-- Provides accessibility tree snapshots with element references
-- Enables testing of HTMX dynamic updates and web interactions
-
-**Quick usage:**
-
-```bash
-# Start local server first
-make run-local
-
-# In another terminal, test the frontend
-agent-browser open "http://127.0.0.1:8080"
-agent-browser snapshot  # Get page structure with element refs
-agent-browser click @e5  # Interact with elements
-agent-browser screenshot /tmp/page.png  # Capture visuals
-agent-browser close
-```
-
-**Common testing scenarios:**
-
-- Login flow validation
-- HTMX dynamic update verification
-- Form submission and validation
-- Session management testing
-- Responsive design checks
-- Screenshot generation for documentation
-
-**Available as skill:** Use `/test-frontend` to launch interactive frontend testing with step-by-step guidance.
-
-**Documentation:** Full command reference at https://github.com/vercel-labs/agent-browser
-
-### Dependencies and Maintenance
-
-- `make deps` - Download and tidy Go modules
-- `make clean` - Remove build artifacts and coverage reports
-- `make generate` - Generate OpenAPI code
-
-### Docker Environment
-
-- `make docker-up` - Start application in Docker
-- `make docker-up-d` - Start in detached mode (background)
-- `make docker-down` - Stop Docker containers
-- `make docker-logs` - View application logs
-- `make docker-build` - Build Docker image
-
-The Docker container includes:
-
-- **Single container** deployment (~50MB Alpine-based image)
-- **SQLite database** persisted in Docker volume (`./data/`)
-- **Health check** endpoint for container orchestration
-- **Automatic migrations** applied on startup
-
-### Production Deployment
-
-The project includes comprehensive deployment automation for self-hosted installations. See `deploy/` directory for
-complete infrastructure.
-
-#### Quick Deployment
-
-```bash
-# One-command installation on fresh Linux VM
-curl -fsSL https://raw.githubusercontent.com/lllypuk/Family-Finances-Service/main/deploy/scripts/install.sh | sudo bash
-
-# Or clone and run
-git clone https://github.com/lllypuk/Family-Finances-Service.git
-cd Family-Finances-Service
-sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@example.com
-```
-
-#### Deployment Options
-
-1. **Docker + Nginx** (Traditional)
-    - Full reverse proxy with Nginx
-    - Let's Encrypt SSL with Certbot
-    - Manual certificate management
-    - Files: `docker-compose.nginx.yml`
-
-2. **Docker + Caddy** (Modern, Recommended)
-    - Automatic HTTPS with Caddy
-    - Zero-config SSL management
-    - HTTP/3 support
-    - Files: `docker-compose.caddy.yml`
-
-3. **Native Systemd** (No Docker)
-    - Direct Linux service deployment
-    - Systemd integration
-    - Automated backups via timer
-    - Files: `deploy/systemd/*.service`
-
-#### Deployment Scripts
-
-- `deploy/scripts/install.sh` - Automated installation (Ubuntu, Debian, Rocky/Alma Linux)
-- `deploy/scripts/upgrade.sh` - Safe upgrade with automatic rollback
-- `deploy/scripts/uninstall.sh` - Clean removal with data preservation
-- `deploy/scripts/backup.sh` - Database backup with integrity checks
-- `deploy/scripts/setup-ssl-nginx.sh` - SSL setup for Nginx
-- `deploy/scripts/setup-ssl-caddy.sh` - SSL setup for Caddy (automatic)
-- `deploy/scripts/setup-fail2ban.sh` - Brute-force protection
-
-#### Deployment Features
-
-✅ **Security:**
-
-- Firewall configuration (UFW/firewalld)
-- Fail2ban brute-force protection
-- SSL/TLS with strong ciphers (TLS 1.2+)
-- Security headers (CSP, XSS, HSTS)
-- Rate limiting (5/min login, 100/min API)
-
-✅ **Automation:**
-
-- One-command installation
-- Automatic SSL certificate management
-- Daily backups at 3:00 AM
-- Backup integrity verification
-- Automatic rollback on failed upgrades
-
-✅ **Operations:**
-
-- Health check monitoring
-- Upgrade with zero-downtime preparation
-- Database backup/restore
-- Service management (systemctl/docker compose)
-
-For complete deployment documentation, see `deploy/README.md`.
-
-### SQLite Database Commands
-
-- `make sqlite-backup` - Create database backup
-- `make sqlite-restore BACKUP_FILE=./backups/file.db` - Restore from backup
-- `make sqlite-shell` - Open SQLite interactive shell
-- `make sqlite-stats` - Show database statistics
-
-### Database Migrations
-
-- `make migrate-create` - Show guide for adding new migrations
-- **Migration Structure**: All migrations are consolidated in two files:
-    - `migrations/001_consolidated.up.sql` - All schema changes (9 tables, 19+ indexes, triggers)
-    - `migrations/001_consolidated.down.sql` - All rollback statements
-- **Tables**: families, users, categories, transactions, budgets, budget_alerts, reports, user_sessions, invites
-- **Adding New Migrations**: Edit the consolidated files directly, adding new changes at the end
-- **Documentation**: See `migrations/README.md` for detailed guide and `migrations/CHANGELOG.md` for history
-- **Note**: Migrations run automatically on application startup
-
-## Architecture Overview
-
-This is a production-ready family budget management service built with Go, following Clean Architecture principles and
-comprehensive testing practices. For project context (product brief, tech stack, testing plan, current tasks) see
-`.memory_bank/`.
-
-### Current Status: DEVELOPMENT READY
-
-- ✅ **Complete web interface** with HTMX 2.0.4 + PicoCSS 2.1.1
-- ✅ **Full API implementation** with REST endpoints
-- ✅ **Comprehensive security** with authentication & authorization
-- ✅ **Invite system** for user onboarding via secure token links
-- ✅ **Backup management** with create, download, restore, and auto-cleanup
-- ✅ **Admin panel** for user and invite management
-- ✅ **CI/CD pipelines** with GitHub Actions
-
-### Domain Structure
-
-The application is organized into domain modules in `internal/domain/`:
-
-- **User/Family**: User management with role-based access (admin, member, child)
-- **Invite**: Invitation system with secure tokens, expiration, and status tracking
-- **Category**: Income and expense category management
-- **Transaction**: Financial transaction tracking
-- **Budget**: Budget planning and monitoring
-- **Report**: Financial reporting and analytics
-
-### Layer Architecture (Clean Architecture)
-
-- `cmd/server/main.go` - Application entry point with health checks
-- `internal/run.go` - Application bootstrap and graceful shutdown
-- `internal/application/` - HTTP server and handler layer
-- `internal/web/` - Web interface (HTMX templates, middleware, static files)
-- `internal/domain/` - Domain entities and business logic
-- `internal/services/` - Business logic services (invite, backup, budget, etc.)
-- `internal/infrastructure/` - SQLite repositories and data persistence
-- `internal/observability/` - Logging and health checks
-
-### Key Technologies (Production Stack)
-
-- **Go 1.26.0** - Latest Go version with Green Tea GC and enhanced performance
-- **Echo v4.13.4** - HTTP web framework with middleware
-- **SQLite** (modernc.org/sqlite) - Embedded database, pure Go, no CGO
-- **HTMX v2.0.4** - Modern web interface without complex JavaScript
-- **PicoCSS v2.1.1** - Minimalist CSS framework for clean UI
-- **Docker + GitHub Actions** - Multi-platform CI/CD
-- **In-memory testing** - Ultra-fast tests with SQLite
-
-### Configuration
-
-Environment variables are managed in `internal/config.go`. Key variables:
-
-- `SERVER_PORT` / `SERVER_HOST` - Server configuration (default: localhost:8080)
-- `DATABASE_PATH` - Path to SQLite database file (default: `./data/budget.db`)
-- `SESSION_SECRET` - Secret key for session management (required for web interface)
-- `LOG_LEVEL` - Logging level (debug, info, warn, error)
-- `ENVIRONMENT` - Application environment (development, production)
-
-### Repository Pattern
-
-All data access is abstracted through repository interfaces in `internal/application/handlers/repositories.go`.
-Full implementations are available in `internal/infrastructure/` with comprehensive error handling.
-
-### Security
-
-- **Role-based access control**: Admin, Member, Child roles with different permissions
-- **Session management**: Secure HTTP-only cookies with CSRF protection
-- **Input validation**: Comprehensive validation with go-playground/validator
-- **Password security**: bcrypt hashing with proper salt rounds
-- **Invite tokens**: Cryptographically secure 32-byte tokens with 7-day expiration
-- **Backup security**: Path traversal protection, admin-only access, filename validation
-
-### Web Interface Architecture
-
-The project includes a complete web interface built with modern technologies:
-
-**Frontend Stack:**
-
-- **HTMX v2.0.4** - Dynamic updates without complex JavaScript (MANDATORY: use HTMX 2.0.4+ only)
-- **PicoCSS v2.1.1** - Minimalist CSS framework for clean UI (MANDATORY: use PicoCSS 2.1.1+ only)
-- **Go Templates** - Server-side rendering with layout system
-- **Progressive Web App** - Installable with offline capabilities
-
-**🚨 CRITICAL Frontend Development Rules:**
-
-1. **MANDATORY: Use HTMX v2.0.4+** - Never downgrade to HTMX v1.x
-2. **MANDATORY: Use PicoCSS v2.1.1+** - Leverage class-less approach and modern CSS variables
-3. **AVOID JavaScript** - Use HTMX for dynamic behavior instead of custom JS
-4. **Server-Side First** - Prefer server rendering over client-side solutions
-5. **HTMX-Only Interactivity** - Use hx-* attributes for all dynamic features
-
-**Web Components:**
-
-- `internal/web/handlers/` - Authentication, dashboard, admin, backup, and HTMX endpoints
-- `internal/web/middleware/` - Session management, CSRF protection, auth guards
-- `internal/web/templates/` - HTML templates with layouts, components, and admin pages
-- `internal/web/static/` - CSS, JS, and image assets
-- `internal/web/models/` - Form validation and web-specific data structures
-
-**User Experience:**
-
-- Responsive design works on mobile and desktop
-- Real-time updates via HTMX without page refreshes
-- Form validation with immediate feedback
-- Accessible interface following modern UX principles
-
-### Testing Strategy
-
-The project has comprehensive testing across all layers:
-
-**Unit Tests (73+ test files):**
-
-- Domain models with business logic validation
-- Repository implementations with in-memory SQLite
-- Service layer tests (invite, backup, budget, category, transaction, report, user)
-- HTTP handlers with table-driven tests
-- Middleware components with edge cases
-- Web form validation and error handling
-- Template renderer tests
-- Web handlers (admin, auth, backup, budgets, categories, dashboard, reports, transactions, users)
-- Web models (categories, budgets, forms, dashboard, reports, transactions)
-
-**Integration Tests:**
-
-- End-to-end API workflows with in-memory database
-- Database operations with SQLite
-- Authentication flows with session management
-- Invite flow integration
-- Data integrity validation
-
-### Documentation
-
-Comprehensive documentation is available in the following directories:
-
-**Project Documentation** (`.memory_bank/`):
-
-- **Product Brief** - Business context and goals
-- **Tech Stack** - Architecture and technology choices
-- **Testing Plan** - Detailed testing strategy and coverage
-- **Current Tasks** - Project status and next steps
-
-**Repository Note:** Use `README.md` + this file (`CLAUDE.md`) as the primary source for current runtime/dev commands
-when documentation appears inconsistent.
-
-**Self-Hosted Deployment** (`docs/tasks/`):
-
-- **Installation Script** - Automated deployment on Linux VMs
-- **Reverse Proxy Config** - Nginx/Caddy with TLS/SSL
-- **Production Docker Compose** - Hardened container deployment
-- **Security Hardening** - Firewall, fail2ban, security headers
-
-## CI/CD Pipeline
-
-The project uses GitHub Actions for continuous integration and deployment with the following workflows:
-
-### CI Pipeline (`.github/workflows/ci.yml`)
-
-Runs on every push and pull request to main/develop branches:
-
-- **Environment Setup**: Go 1.26.0, SQLite for integration tests
-- **Quality Checks**:
-    - Code formatting verification with `make fmt`
-    - Comprehensive linting with golangci-lint (50+ rules)
-    - Security scanning with `govulncheck`
-- **Testing**: Full test suite with coverage reporting to Codecov
-- **Build Verification**: Compile application and Docker image test
-
-### Docker Build Pipeline (`.github/workflows/docker.yml`)
-
-Triggered on version tags and releases:
-
-- **Multi-platform**: Builds for linux/amd64 and linux/arm64
-- **Container Registry**: Publishes to GitHub Container Registry
-- **Security**: Trivy vulnerability scanning of images
-- **Size Optimization**: Enforces 50MB image size limit
-- **Versioning**: Semantic versioning with appropriate tags
-
-### Security Pipeline (`.github/workflows/security.yml`)
-
-Comprehensive security scanning (runs on schedule and PR):
-
-- **CodeQL**: GitHub's semantic code analysis for Go
-- **Dependency Review**: License and vulnerability checking
-- **Secret Scanning**: TruffleHog for credential detection
-- **SAST**: Semgrep static analysis security testing
-- **OSV Scanner**: Open source vulnerability scanning
-- **OSSF Scorecard**: Security posture scoring
-
-### Release Pipeline (`.github/workflows/release.yml`)
-
-Automated releases on version tags:
-
-- **Multi-platform Binaries**: Linux, macOS, Windows (amd64/arm64)
-- **Docker Images**: Automated publishing with semantic versioning
-- **Release Notes**: Auto-generated from commit history
-- **Checksums**: SHA256 validation for all binaries
-- **Notifications**: Success/failure reporting
-
-### Dependency Management
-
-- **Dependabot**: Automated dependency updates (Go modules, GitHub Actions, Docker)
-- **Security**: Automatic vulnerability detection and patching
-- **Schedule**: Weekly updates on different days to manage load
-
-### Code Review Process
-
-- **CODEOWNERS**: Automatic reviewer assignment for critical files
-- **Branch Protection**: Required status checks and reviews
-- **Quality Gates**: All CI checks must pass before merge
-
-### Monitoring
-
-- **Health Check**: `/health` endpoint for container orchestration
-- **Structured Logging**: slog-based logging with configurable levels
-- **Coverage Reports**: Integrated with Codecov for test coverage tracking
-
-Use `make lint` and `make test` locally to ensure CI pipeline success before pushing changes.
-
-## 🚨 CRITICAL: Code Quality Requirements
-
-**MANDATORY LINTER COMPLIANCE**: This project enforces strict code quality standards through golangci-lint.
-
-### For ALL Development Work:
-
-**After completing ANY task that modifies code, you MUST:**
-
-1. **Run `make fmt`** - Format code according to project standards
-2. **Run `make test`** - Ensure all tests pass
-3. **Run `make lint`** - **MANDATORY** - Must result in 0 issues
-4. **Fix ALL linter errors** - No exceptions, no compromises
-
-### What the Linter Catches:
-
-- Type errors and unused variables/imports
-- Security vulnerabilities (gosec)
-- Code style violations (revive, gofmt)
-- Test assertion problems (testifylint)
-- Performance issues (ineffassign)
-- Complexity violations (funlen, cyclop)
-- Best practices violations (gocritic)
-
-### Zero Tolerance Policy:
-
-- **0 linter issues** required before task completion
-- **No bypassing** linter rules without explicit approval
-- **All warnings must be addressed**
-- If unable to resolve, escalate with specific error details
-
-### Quick Fix Commands:
-
-```bash
-make fmt          # Auto-format code
-make lint         # Check for issues
-make pre-commit   # Run full check sequence
-```
-
-**Remember: Clean code is not optional - it's mandatory for project integrity.**
-
-## 🚀 Self-Hosted Deployment
-
-The project includes comprehensive self-hosted deployment capabilities for running on dedicated VMs.
-
-### Target Directory Structure
-
-```
-deploy/
-├── scripts/
-│   ├── install.sh           # Automated installation
-│   ├── upgrade.sh           # Safe upgrades with rollback
-│   ├── backup.sh            # Cron-compatible backup script
-│   ├── health-check.sh      # Health monitoring
-│   ├── setup-firewall.sh    # UFW configuration
-│   ├── setup-fail2ban.sh    # Brute-force protection
-│   └── uninstall.sh         # Clean removal
-├── nginx/                   # Nginx reverse proxy configs
-├── caddy/                   # Caddy reverse proxy configs
-├── systemd/                 # Native Linux service files
-├── fail2ban/                # Fail2ban filters and jails
-├── docker-compose.prod.yml  # Production with nginx
-├── docker-compose.caddy.yml # Production with Caddy
-└── .env.production.example  # Production environment template
-```
-
-### Security Features for Self-Hosted
-
-- **TLS/SSL**: Let's Encrypt auto-renewal via Caddy or Certbot
-- **Rate Limiting**: Nginx/Caddy rate limiting for login and API endpoints
-- **Firewall**: UFW configuration blocking direct app port access
-- **Fail2ban**: Automatic IP blocking after failed login attempts
-- **Security Headers**: Full set of modern security headers (CSP, HSTS, etc.)
-- **Container Hardening**: Read-only filesystem, non-root user, resource limits
-
-## 🚧 Known Issues & TODO
-
-### Test Coverage Status
-
-- ✅ **Web handlers**: Comprehensive coverage implemented (admin, auth, backup, budgets, categories, dashboard, reports,
-  transactions, users)
-- ✅ **Web models**: Expanded validation tests added (categories, budgets, forms, dashboard, reports, transactions)
-- ✅ **Admin/Backup handlers**: Full test coverage implemented
-- ✅ **DTOs**: Comprehensive validation tests added
-
-### Deployment Status
-
-- ✅ **Production deployment scripts**: Complete (see `deploy/` directory)
-    - ✅ Automated installation for Ubuntu, Debian, Rocky/Alma Linux
-    - ✅ Nginx and Caddy reverse proxy configurations
-    - ✅ SSL/TLS automation with Let's Encrypt
-    - ✅ Fail2ban brute-force protection
-    - ✅ Systemd service integration
-    - ✅ Safe upgrade with automatic rollback
-    - ✅ Automated daily backups
-    - ✅ Clean uninstall scripts
-    - ✅ Comprehensive documentation
-
-### Development Priorities
-
-1. ~~Implement self-hosted deployment scripts~~ ✅ **COMPLETED**
-2. Test deployment on actual VMs (Ubuntu 22.04/24.04, Debian 11/12)
-3. Add more integration test scenarios for invite flow
-4. Performance optimization and benchmarking
-5. End-to-end testing with agent-browser
-6. Load testing and stress testing scenarios
+Docker: `make docker-up` / `docker-up-d` / `docker-down` / `docker-logs` — all use `docker/docker-compose.yml`
+(builds `docker/Dockerfile`; **both** `SESSION_SECRET` and `CSRF_SECRET` are required via `${VAR:?}` and compose
+refuses to start without them). Compose is invoked as `docker compose --project-directory .` (the `DOCKER_COMPOSE`
+variable in the Makefile) so that `.env` is read from the repo root — hence `build.context: .` inside
+`docker/docker-compose.yml`. `make compose-config` validates all five compose files (`docker/` + the four
+`deploy/*.yml`) and runs in CI.
+
+SQLite: `make sqlite-shell`, `make sqlite-stats`, `make sqlite-backup`,
+`make sqlite-restore BACKUP_FILE=./backups/<file>.db`.
+
+**Mandatory before handing off any code change: `make fmt`, `make test`, `make lint` — `make lint` must report
+0 issues.** The linter config is strict (see "Linter constraints" below); do not add `//nolint` without a specific
+linter name and an explanation (`nolintlint` enforces both).
+
+### Local testing notes
+
+- Curl the local server with `--noproxy '*'`: `curl -s --noproxy '*' 127.0.0.1:8080/health`
+- Test credentials for the local setup flow: `admin@test.com` / `Admin123!`, family `Test Family`
+- Project skills in `.claude/skills/`: `/test-frontend` (drives `agent-browser` against a running `make run-local`
+  instance), `/pre-commit`, `/db-backup`, `/db-shell`, `/docker-up`, `/migrate-create`, `/memory-update`
+
+## Architecture
+
+Layered/Clean architecture, single Go module `family-budget-service`. Wiring happens in one place —
+`internal/run.go` (`NewApplication`) — in this order:
+
+1. `LoadConfig()` + `Validate()` (`internal/config.go`) — all config is env vars, no config files.
+2. `infrastructure.NewSQLiteConnection(path)` then `infrastructure.NewMigrationManager(dbURL, "./migrations").Up()`
+   — migrations run automatically at startup via golang-migrate.
+3. `infrastructure.NewRepositoriesSQLite(db)` → `*handlers.Repositories` (one struct holding every repo).
+4. `services.NewServices(...)` → `*services.Services` (one struct holding every service).
+5. `application.NewHTTPServerWithObservability(...)` — builds the Echo instance, registers `/api/v1` handlers, and
+   calls `web.NewWebServer(...)` which mounts the HTML/HTMX interface onto the *same* Echo instance.
+
+Dependency direction: `web`/`application/handlers` → `services` → repository interfaces → `infrastructure`.
+Repository interfaces are declared in `internal/services/interfaces.go`;
+`internal/application/handlers/repositories.go` re-exports them as type aliases (plus one handler-only extra method
+on `TransactionRepository`). Add a new repo method to the service-layer interface, not to the handler alias.
+
+### Single-family model
+
+The deployment serves exactly **one** family. `middleware.RequireSetup` is registered globally: if no family exists,
+every path redirects to `/setup`; once it exists, `/setup` redirects to `/login`. `FamilyService.SetupFamily` is the
+bootstrap path that creates the family plus the first admin user. New members join through the invite system
+(`/invite/:token`), not through open registration — there is no `/register` route or template.
+
+`RequireSetup` details worth knowing (`internal/web/middleware/setup.go`): it matches on `c.Request().URL.Path`, not
+`c.Path()` (which is the *route pattern*, e.g. `/static*`); `isSetupExempt` lets `/health`, `/favicon.ico` and
+`/static/…` through **before** any DB call, so styles load on `/setup` and health checks work pre-setup; a completed
+setup is cached in an `atomic.Bool` inside the closure. Only `true` is cached — a DB error or `false` is not, so the
+setup→ready transition needs no restart.
+
+### Two HTTP surfaces on one Echo instance
+
+- **Web UI** (`internal/web/`): session cookie auth. `middleware.SessionStore` (gorilla/sessions cookie store,
+  session name `family-budget-session`) + `middleware.CSRFProtection`. Routes are grouped in `web.go`:
+  `RequireAuth()` + `RequireActiveUser(services.User)` for the protected group, `RequireAdmin()` for `/users` and
+  `/admin`, `RequireAdminOrMember()` for finance pages. Session data lands in the Echo context under
+  `middleware.ContextUserKey` (`"user"`) — one exported constant shared with the API middleware; read it back with
+  `middleware.GetUserFromContext`. `RequireActiveUser` re-reads the session owner from the DB on every protected
+  request (`middleware.RevalidateSessionUser`): the cookie store has no server-side session id, so without it a
+  deleted or downgraded user kept access for the full 24h `SessionTimeout`. The role used by the role gates therefore
+  comes from the DB, not from the signed cookie. `SessionStore`'s `Secure` flag is `COOKIE_SECURE`
+  (`config.Web.CookieSecure` → `application.Config.CookieSecure`), defaulting to true in production — set it to
+  `false` when serving over plain HTTP, otherwise the browser drops the cookie and login loops.
+- **REST API** (`internal/application/handlers/`): `/api/v1/{users,categories,transactions,budgets,reports}`.
+  The group is registered as `s.echo.Group("/api/v1", RequireAPIAuth(), RequireAPIActiveUser(services.User))` —
+  the *same* session cookie as the web
+  UI is the only credential; there are no API tokens. No session → `401` + JSON
+  `{"error":{"code":"UNAUTHORIZED",…},"meta":{…}}`. Per-route role gates mirror the web and are built from a single
+  `RequireAPIRole(roles ...user.Role)`: `http_server.go` declares `adminOnly := RequireAPIRole(user.RoleAdmin)` for
+  the `/api/v1/users` group and `DELETE /api/v1/categories/:id`, and
+  `financeAccess := RequireAPIRole(user.RoleAdmin, user.RoleMember)` for the categories/transactions/budgets/reports
+  groups (wrong role → `403 FORBIDDEN`). All three API middlewares live in
+  `internal/application/handlers/api_auth.go` and reuse the session primitives from `internal/web/middleware`.
+  **Middleware order matters:** the global `CSRFProtection` (`e.Use` in `web.go`) runs *before* the group
+  middleware, so an anonymous write without `X-Csrf-Token` is `403`, and `401` only once a valid token is present.
+  Handlers take the author from the session (`middleware.GetUserFromContext`, see `TransactionHandler.CreateTransaction`)
+  — `UserID` is **not** a field
+  of `CreateTransactionRequest`/`CreateReportRequest`, so sending it in the body does nothing.
+  `POST /api/v1/reports` intentionally returns `501 Not Implemented`; report *generation* is only exposed through the
+  web UI. Stored-report list/get/delete work.
+
+### Templates
+
+`internal/web/renderer.go` parses `templates/layouts/*.html`, `templates/components/*.html`,
+`templates/admin/*.html` (ParseGlob) and walks `templates/pages/**` (ParseFiles) into one `template.Template`;
+`Render` executes by **template name**, so `{{define "..."}}` names must be unique across the whole tree.
+Custom funcs (`formatCurrency`, `dict`/`map`, `formatBytes`, `safe`, …) are registered in `createTemplateFuncMap`.
+
+**Page data is a struct, not a map.** The transactions/categories/budgets/reports handlers pass a named struct that
+**embeds `*PageData`** (`internal/web/handlers/base.go`), built by `BaseHandler.buildPageData(c, title)` — or
+`formPageData(c, title, errors)` when re-rendering a form. `buildPageData` fills `Title`, flash `Messages`,
+`CSRFToken` and `CurrentUser` (name/surname are read via `services.User.GetUserByID`; `middleware.SessionData` has
+no such fields). Because the embedded field is still called `PageData`, existing `{{.PageData.X}}` keeps working
+while `{{if .CurrentUser}}` and `{{.CSRFToken}}` now resolve at the template root — that omission was the U-02 bug.
+Two consequences when adding a field to a page:
+
+- a template reading a field the struct does not have is a **runtime error (500)**, where a map silently rendered
+  `<no value>`. Add the field to the struct instead of hoping.
+- page titles are Russian constants in `base.go` (`titleTransactions`, `titleNewBudget`, …) — do not inline the
+  literals. `renderXxxFormWithErrors` picks the template from the entity it was given (`existing != nil`,
+  `budgetID != ""`), never from the title string.
+
+Older/simpler pages still pass `map[string]any`; keys for those are constants in
+`internal/web/handlers/template_keys.go` — reuse them instead of new string literals (`goconst`).
+
+**Rendering fails loudly.** `TemplateRenderer.Render` executes into a buffer and only then writes the response, so a
+template reading a missing field returns an error instead of a truncated `200`; `customHTTPErrorHandler` renders the
+error page with the real status code (`c.HTMLBlob(code, …)`). Both were silent before: broken pages looked like
+successful responses, and every 404/500 page was served as `200`.
+
+**Working directory matters:** `./migrations` is resolved relative to the process CWD, so the server must be started
+from the repo root. Templates and static files default to `internal/web/templates` / `internal/web/static` but both
+paths are overridable through `application.Config.TemplatesDir` / `Config.StaticDir` (passed on to `web.Paths`) —
+that is how the test helper stays cwd-independent.
+
+### Frontend rules (hard requirements)
+
+- HTMX **v2.0.4+** and PicoCSS **v2.1.1+** only — never downgrade to HTMX 1.x.
+- No custom JavaScript for interactivity; use `hx-*` attributes and server-rendered partials.
+- Handlers branch on HTMX via `BaseHandler.IsHTMXRequest` / the `Hx-Request` header, and redirect with the
+  `Hx-Redirect` response header (see `internal/web/handlers/base.go`).
+
+### Known rough edges (verified, not fixed)
+
+Do not treat these as regressions you introduced, and do not paper over them with a `nolint` or a template guard:
+
+- **No rate limiting on login** ([S-03](docs/specs/002-security-audit.md#s-03)) — protection exists only in the
+  nginx/Caddy configs and fail2ban, i.e. not at all for `docker-compose.minimal.yml` or a bare systemd deployment.
+- **`.github/workflows/docker.yml` cannot publish anything.** Its `docker/build-push-action` step passes
+  `context: .` with **no `file:`**, so it looks for `./Dockerfile` — which does not exist (the Dockerfile lives in
+  `docker/Dockerfile`). Pushing a tag would fail the build with "failed to read dockerfile"; add
+  `file: docker/Dockerfile` before the first release ([D-02](docs/specs/004-deployment-readiness.md#d-02)).
+- **The error page never shows the raw error for a non-`*echo.HTTPError`** (`customHTTPErrorHandler` in
+  `web.go`): it logs the detail and renders a generic title. If you are debugging a 500, read the server log —
+  the page will not tell you anything.
+- **`internal/config.go` still defaults `SESSION_SECRET`/`CSRF_SECRET` to known placeholders** and `Validate()`
+  compares against those exact strings, so a secret of `123` passes. The compose files now demand both via `${VAR:?}`,
+  which covers the documented paths but not `go run ./cmd/server` with `ENVIRONMENT=development`.
+
+## Database & migrations
+
+All schema lives in **two consolidated files**: `migrations/001_consolidated.up.sql` and `001_consolidated.down.sql`
+(tables: families, users, categories, transactions, budgets, budget_alerts, reports, user_sessions, invites).
+There is no per-change migration file; append new DDL to the end of the `.up.sql` and the matching `DROP` to the
+front of the `.down.sql`. See `migrations/README.md`, and `make migrate-create` for the reminder.
+
+Two independent code paths apply migrations, and **both must keep working**:
+
+- production/dev: golang-migrate (`internal/infrastructure/migrations.go`)
+- tests: `internal/testhelpers/sqlite.go` reads and executes the `*.up.sql` files directly
+
+`testhelpers.SQLiteTestDB.CleanTables` has a hardcoded, FK-ordered table list — add any new table to it.
+
+## Testing
+
+- In-memory SQLite (`:memory:?_foreign_keys=ON&_journal_mode=WAL`), no Docker, no sockets. Prefer keeping it that way.
+- `testhelpers.SetupSQLiteTestDB(t)` — fresh migrated DB with automatic `t.Cleanup`.
+- `testhelpers.SetupHTTPServer(t)` — full repo + service + `application.HTTPServer` stack over an in-memory DB,
+  **including the whole web layer**: `SessionStore`, `CSRFProtection`, `RequireSetup` and the HTML routes, rendered
+  from the real templates. This is the entry point for `tests/integration/*`.
+  - Templates are resolved cwd-independently: the helper walks up to `go.mod` (`testhelpers.RepoRoot(t)`) and passes
+    the absolute path as `application.Config.TemplatesDir`. Do not reintroduce a cwd-relative default here — `go test`
+    runs with cwd = the package directory.
+  - A web-layer init failure is no longer swallowed: `HTTPServer.WebServerInitError()` surfaces it and the helper
+    calls `t.Fatalf`. If a test suddenly dies on "web server initialization failed", a template failed to parse.
+    In production the same check is fatal — `NewApplication` (`internal/run.go`) returns the error and the process
+    exits non-zero, instead of serving a 200 `/health` with no sessions, no CSRF and no HTML routes.
+  - Because the real middleware is in play, integration requests need a session **and** a CSRF token on writes:
+    `ts.Auth(t)` (admin of the test family, memoized), `ts.AuthAs(t, role)` (extra user in the *same* family),
+    or `testhelpers.LoginAs(t, ts, u)`. All return an `*AuthSession{Cookie, CSRFToken}`; call `sess.Apply(req)`.
+    `ts.AuthUser` / `ts.AuthFamily` hold what `Auth` created.
+- `testhelpers/factories.go` — `CreateTestFamily`, `CreateTestUser`, etc.
+- Naming: `TestXxx_Method_Scenario` (e.g. `TestTransactionService_CreateTransaction_Success`).
+- `testpackage` is enabled: use an external `package foo_test` unless the path is excluded in `.golangci.yml`
+  (`internal/web/handlers/`, `internal/observability/`, `internal/services/dto/`, `tests/`).
+- Web handler tests bypass real sessions: `RequireAuth`/`GetSessionData` honor the context keys
+  `mock_session_data` and `mock_session_error`. See `internal/web/handlers/testhelpers_test.go`
+  (`newTestContext`, `withSession`, `withHTMX`) — reuse those helpers rather than hand-rolling contexts.
+- Use testify `require` for fatal preconditions, `assert` for the rest (`testifylint` enforces correct usage).
+
+## Linter constraints worth knowing up front
+
+`.golangci.yml` is the "maratori golden config" with project tweaks. The rules that most often force a rewrite:
+
+- `golines` max line length **120**; `goimports` local prefix `family-budget-service` (local imports last group).
+- `funlen` 100 lines / 50 statements, `gocognit` 20, `cyclop` 30 per function and **10.0 package average**.
+- `gochecknoglobals` / `gochecknoinits` — no package-level vars or `init()`; `mnd` — no magic numbers (declare consts).
+- `sloglint`: no global loggers, and use the `...Context` slog methods when a context is in scope. Pass `*slog.Logger`
+  down explicitly (as `NewServices` does).
+- `depguard`: `log` is banned outside `main.go` (use `log/slog`), `math/rand` banned (use `math/rand/v2`).
+- `nonamedreturns`, `nakedret` (max 0 lines), `errorlint` (wrap with `%w`), `errcheck` incl. type assertions,
+  `govet` shadow-strict, `exhaustive` on switches **and** maps.
+- `funcorder`: constructors go immediately after the type they construct (the struct-method ordering check is off).
+
+## Conventions
+
+- Comments and log messages are a mix of Russian and English; match the surrounding file rather than converting it.
+- File names are snake_case-ish and descriptive: `transaction_service.go`, `user_repository_sqlite.go`.
+- Keep handlers thin — business logic belongs in `internal/services/`.
+- Commit prefixes in use: `feat:`, `fix:`, `docs:`, `refactor:`, `security:`, `deps(deps):`.
+- PRs: summary + rationale, link to `docs/backlog.md` item when applicable, test evidence, screenshots for UI changes.
+
+## Reference docs
+
+Project documentation lives in `docs/` (this replaced the older `.memory_bank/` directory that some docs still
+reference): `docs/README.md` (navigation), `docs/product_brief.md`, `docs/tech_stack.md`, `docs/backlog.md`,
+`docs/guides/{coding_standards,testing_strategy}.md`, `docs/patterns/{api_standards,error_handling}.md`.
+`docs/specs/` holds the audit findings (project assessment, security, UI/UX, deployment readiness) with per-finding
+status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the finished ones.
+Self-hosted deployment (install/upgrade/backup scripts, nginx & Caddy configs, systemd units, fail2ban) is in
+`deploy/` — see `deploy/README.md`.
+
+When runtime/dev commands disagree between documents, `Makefile` + this file win.
+
+## Stack versions (keep in sync with go.mod)
+
+Go **1.26.5** (also pinned as `GO_VERSION` in `.github/workflows/ci.yml`), Echo **v4.15.4**,
+`modernc.org/sqlite` (pure Go, no CGO), golang-migrate v4, gorilla/sessions, go-playground/validator v10,
+testify. Frontend: HTMX 2.0.4, PicoCSS 2.1.1.
+
+CI (`.github/workflows/ci.yml`) runs golangci-lint, `govulncheck`, `make test-coverage`, `make build`, and a Docker
+build/run smoke test. Additional workflows: `docker.yml`, `security.yml` (CodeQL, Semgrep, TruffleHog, OSV,
+Scorecard), `release.yml`.

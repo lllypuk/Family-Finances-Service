@@ -220,11 +220,29 @@ stop_docker_services() {
     if [[ "${SKIP_CONFIRMATION}" == "false" ]]; then
         read -p "Remove Docker images? (yes/no): " remove_images
         if [[ "${remove_images}" == "yes" ]]; then
-            docker rmi ghcr.io/lllypuk/family-finances-service:latest 2>/dev/null || true
-            docker rmi $(docker images -q 'ghcr.io/lllypuk/family-finances-service:*') 2>/dev/null || true
-            log_success "Docker images removed"
+            remove_docker_images
         fi
     fi
+}
+
+# Публичного образа в GHCR нет (D-02) — образ собирается локально, и compose
+# называет его `<project>-<service>`, где project — имя каталога установки.
+# Имена GHCR оставлены для старых инсталляций, которые ещё тянули образ.
+remove_docker_images() {
+    local project
+    project="$(basename "${INSTALL_DIR}")"
+
+    docker rmi "${project}-app" 2>/dev/null || true
+    docker rmi "${project}_app" 2>/dev/null || true
+
+    local ghcr_images
+    ghcr_images="$(docker images -q 'ghcr.io/lllypuk/family-finances-service:*' 2>/dev/null || true)"
+    if [[ -n "${ghcr_images}" ]]; then
+        # shellcheck disable=SC2086 # список ID, нужен word splitting
+        docker rmi ${ghcr_images} 2>/dev/null || true
+    fi
+
+    log_success "Docker images removed"
 }
 
 stop_systemd_services() {

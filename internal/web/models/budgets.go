@@ -64,18 +64,6 @@ type BudgetProgressVM struct {
 	UpdatedAt          time.Time     `json:"updated_at"`
 }
 
-// BudgetAlertVM представляет алерт для бюджета
-type BudgetAlertVM struct {
-	ID          uuid.UUID  `json:"id"`
-	BudgetID    uuid.UUID  `json:"budget_id"`
-	BudgetName  string     `json:"budget_name"`
-	Threshold   float64    `json:"threshold"`
-	IsTriggered bool       `json:"is_triggered"`
-	TriggeredAt *time.Time `json:"triggered_at,omitempty"`
-	Message     string     `json:"message"`
-	AlertClass  string     `json:"alert_class"` // "warning", "danger"
-}
-
 // BudgetFilter представляет фильтры для поиска бюджетов
 type BudgetFilter struct {
 	Name       string `form:"name"        json:"name,omitempty"`
@@ -89,15 +77,6 @@ type BudgetFilter struct {
 type BudgetAlertForm struct {
 	BudgetID  string `form:"budget_id" validate:"required,uuid"                  json:"budget_id"`
 	Threshold string `form:"threshold" validate:"required,numeric,min=1,max=100" json:"threshold"`
-}
-
-// SpendingAnalysis представляет анализ трат по бюджету
-type SpendingAnalysis struct {
-	DailyAverage   float64 `json:"daily_average"`
-	BudgetPace     float64 `json:"budget_pace"`
-	ProjectedTotal float64 `json:"projected_total"`
-	DaysElapsed    int     `json:"days_elapsed"`
-	Variance       float64 `json:"variance"` // Разница между DailyAverage и BudgetPace
 }
 
 // TransactionSummary представляет краткую информацию о транзакции
@@ -241,26 +220,6 @@ func (f *BudgetAlertForm) GetThreshold() (float64, error) {
 	return strconv.ParseFloat(f.Threshold, 64)
 }
 
-// FromDomainAlert создает BudgetAlertVM из domain модели
-func (vm *BudgetAlertVM) FromDomainAlert(alert *budget.Alert, budgetName string) {
-	vm.ID = alert.ID
-	vm.BudgetID = alert.BudgetID
-	vm.BudgetName = budgetName
-	vm.Threshold = alert.Threshold
-	vm.IsTriggered = alert.IsTriggered
-	vm.TriggeredAt = alert.TriggeredAt
-
-	// Создаем сообщение
-	if alert.IsTriggered {
-		vm.Message = formatAlertMessage(alert.Threshold, true)
-	} else {
-		vm.Message = formatAlertMessage(alert.Threshold, false)
-	}
-
-	// CSS класс для алерта
-	vm.AlertClass = getAlertClassForThreshold(alert.Threshold)
-}
-
 // formatMoney форматирует денежную сумму
 func formatMoney(amount float64) string {
 	return strconv.FormatFloat(amount, 'f', 2, 64)
@@ -294,31 +253,4 @@ func getAlertLevel(percentage float64, isOverBudget bool) string {
 	}
 
 	return ""
-}
-
-// formatAlertMessage создает сообщение для алерта
-func formatAlertMessage(threshold float64, isTriggered bool) string {
-	thresholdStr := strconv.FormatFloat(threshold, 'f', 0, 64)
-
-	if isTriggered {
-		if threshold >= ThresholdMax {
-			return "Budget exceeded! You've spent more than allocated."
-		}
-		return "Alert: You've reached " + thresholdStr + "% of your budget."
-	}
-
-	return "Alert will trigger at " + thresholdStr + "% of budget."
-}
-
-// getAlertClassForThreshold возвращает CSS класс для алерта по порогу
-func getAlertClassForThreshold(threshold float64) string {
-	if threshold >= ThresholdMax {
-		return AlertLevelDanger
-	}
-
-	if threshold >= ThresholdHigh {
-		return AlertLevelWarning
-	}
-
-	return AlertLevelInfo
 }

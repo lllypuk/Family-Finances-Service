@@ -37,6 +37,7 @@ func TestUserHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewBuffer(requestBody))
+		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -68,6 +69,7 @@ func TestUserHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewBuffer(requestBody))
+		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -100,6 +102,7 @@ func TestUserHandler_Integration(t *testing.T) {
 
 		// Get user via API
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/users/"+user.ID.String(), nil)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -120,6 +123,7 @@ func TestUserHandler_Integration(t *testing.T) {
 		nonExistentID := uuid.New()
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/users/"+nonExistentID.String(), nil)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -156,6 +160,7 @@ func TestUserHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/users/"+user.ID.String(), bytes.NewBuffer(requestBody))
+		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -173,21 +178,24 @@ func TestUserHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("DeleteUser_Success", func(t *testing.T) {
-		// Create family and user
-		family := testhelpers.CreateTestFamily()
-		err := testServer.Repos.Family.Create(context.Background(), family)
-		require.NoError(t, err)
+		// Пользователь заводится в ТОЙ ЖЕ семье, что и владелец сессии:
+		// репозитории следуют однофамильной модели и берут family_id как
+		// `SELECT id FROM families LIMIT 1`, поэтому вторая семья делала
+		// проверку «последний администратор» плавающей — при выборе второй
+		// семьи в ней оказывался ровно один пользователь, и DELETE отвечал 400.
+		testServer.Auth(t)
 
-		user := testhelpers.CreateTestUser(family.ID)
-		err = testServer.Repos.User.Create(context.Background(), user)
+		user := testhelpers.CreateTestUser(testServer.AuthFamily.ID)
+		err := testServer.Repos.User.Create(context.Background(), user)
 		require.NoError(t, err)
 
 		// Delete user
 		req := httptest.NewRequest(
 			http.MethodDelete,
-			"/api/v1/users/"+user.ID.String()+"?family_id="+family.ID.String(),
+			"/api/v1/users/"+user.ID.String()+"?family_id="+testServer.AuthFamily.ID.String(),
 			nil,
 		)
+		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -197,6 +205,7 @@ func TestUserHandler_Integration(t *testing.T) {
 
 		// Verify user is deleted by trying to get it
 		req = httptest.NewRequest(http.MethodGet, "/api/v1/users/"+user.ID.String(), nil)
+		testServer.Auth(t).Apply(req)
 		rec = httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)

@@ -1,7 +1,9 @@
 package handlers_test
 
 import (
+	"bytes"
 	"context"
+	"html/template"
 	"io"
 	"net/http/httptest"
 	"strings"
@@ -17,12 +19,67 @@ import (
 	"family-budget-service/internal/web/middleware"
 )
 
-// MockRenderer is a mock template renderer
+// MockRenderer is a mock template renderer.
+//
+// ВНИМАНИЕ: он глотает и имя шаблона, и данные, и всегда возвращает nil —
+// то есть **не проверяет ни существование шаблона, ни контракт данных**.
+// Именно поэтому U-02 (docs/specs/003-ui-ux-audit.md#u-02) прошёл мимо тестов:
+// хендлеры отдавали map без `CurrentUser` в корне, шаблон молча терял меню,
+// а тесты на MockRenderer оставались зелёными.
+//
+// Регрессии на рендеринг закрывать этим моком нельзя. Для них есть полный стек
+// с настоящими шаблонами: testhelpers.SetupHTTPServer + tests/integration
+// (образец — tests/integration/web_pages_test.go).
 type MockRenderer struct{}
 
 func (r *MockRenderer) Render(_ io.Writer, _ string, _ any, _ echo.Context) error {
 	// Simple mock that just returns success
 	return nil
+}
+
+// capturingRenderer запоминает данные, которые хендлер передал шаблону.
+//
+// В отличие от MockRenderer он позволяет проверить **контракт данных**:
+// доступен ли `.CurrentUser` в корне контекста, как этого ждут шаблоны шапки
+// (см. U-02). Полноценной заменой рендерингу на настоящих шаблонах он не
+// является — для этого есть tests/integration/web_pages_test.go.
+type capturingRenderer struct {
+	data any
+}
+
+func (r *capturingRenderer) Render(_ io.Writer, _ string, data any, _ echo.Context) error {
+	r.data = data
+	return nil
+}
+
+// pageDataProbe — пробный шаблон контракта страниц: шапка читает .CurrentUser
+// из **корня** контекста, а заголовок — из встроенного PageData. Ровно на этом
+// сочетании развалился U-02 (docs/specs/003-ui-ux-audit.md#u-02).
+const pageDataProbe = `{{if .CurrentUser}}{{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}` +
+	`|{{.CurrentUser.Role}}|{{.PageData.Title}}{{end}}`
+
+// renderPageData исполняет pageDataProbe по захваченным данным и возвращает
+// результат. Ошибка шаблона означает, что данных нужного вида в контексте нет.
+func (r *capturingRenderer) renderPageData() (string, error) {
+	tmpl, err := template.New("probe").Parse(pageDataProbe)
+	if err != nil {
+		return "", err
+	}
+
+	var buf bytes.Buffer
+	if execErr := tmpl.Execute(&buf, r.data); execErr != nil {
+		return "", execErr
+	}
+
+	return buf.String(), nil
+}
+
+// newCapturingContext — как newTestContext, но с рендерером, запоминающим данные.
+func newCapturingContext(method, path string) (echo.Context, *capturingRenderer) {
+	c, _ := newTestContext(method, path, "")
+	renderer := &capturingRenderer{}
+	c.Echo().Renderer = renderer
+	return c, renderer
 }
 
 // CustomValidator wraps go-playground/validator for Echo
@@ -173,8 +230,8 @@ func (m *MockUserService) UpdateUser(
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
-func (m *MockUserService) DeleteUser(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockUserService) DeleteUser(ctx context.Context, id, actorID uuid.UUID) error {
+	args := m.Called(ctx, id, actorID)
 	return args.Error(0)
 }
 

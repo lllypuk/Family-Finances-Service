@@ -44,17 +44,20 @@ type DashboardHandler struct {
 }
 
 // NewDashboardHandler создает новый обработчик дашборда
-func NewDashboardHandler(repositories *handlers.Repositories, services *services.Services) *DashboardHandler {
+func NewDashboardHandler(
+	repositories *handlers.Repositories,
+	services *services.Services,
+	cookieSecure bool,
+) *DashboardHandler {
 	return &DashboardHandler{
-		BaseHandler: NewBaseHandler(repositories, services),
+		BaseHandler: NewBaseHandler(repositories, services, cookieSecure),
 	}
 }
 
 // Dashboard отображает главную страницу
 func (h *DashboardHandler) Dashboard(c echo.Context) error {
-	// Получаем данные пользователя из сессии
-	sessionData, err := middleware.GetUserFromContext(c)
-	if err != nil {
+	// Проверяем наличие сессии
+	if _, err := middleware.GetUserFromContext(c); err != nil {
 		return echo.NewHTTPError(HTTPStatusInternalServerError, "Session error occurred")
 	}
 
@@ -84,26 +87,10 @@ func (h *DashboardHandler) Dashboard(c echo.Context) error {
 		filters,
 	)
 
-	// Получаем данные пользователя для персонализации
-	currentUser, userErr := h.services.User.GetUserByID(c.Request().Context(), sessionData.UserID)
-	var firstName, lastName string
-	if userErr == nil && currentUser != nil {
-		firstName = currentUser.FirstName
-		lastName = currentUser.LastName
-	}
-
-	// Подготавливаем данные для страницы
-	pageData := &PageData{
-		Title:    "Главная",
-		Messages: h.getFlashMessages(c),
-		CurrentUser: &SessionData{
-			UserID:    sessionData.UserID,
-			Role:      sessionData.Role,
-			Email:     sessionData.Email,
-			FirstName: firstName,
-			LastName:  lastName,
-		},
-	}
+	// Общие данные страницы собирает buildPageData: он же кладёт CSRF-токен,
+	// без которого форма выхода на дашборде уходила с пустым _token и
+	// получала 403.
+	pageData := h.buildPageData(c, titleDashboard)
 
 	// Объединяем данные
 	data := struct {
@@ -182,7 +169,7 @@ func (h *DashboardHandler) DashboardFilter(c echo.Context) error {
 
 	return h.renderPartial(c, "dashboard-content", map[string]any{
 		"DashboardViewModel": dashboardData,
-		"Filters":            filters,
+		tplKeyFilters:        filters,
 	})
 }
 

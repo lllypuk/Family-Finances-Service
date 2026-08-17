@@ -35,9 +35,13 @@ func NewReportHandler(
 }
 
 func (h *ReportHandler) CreateReport(c echo.Context) error {
+	// Доступ закрыт RequireAPIAuth на группе /api/v1: анонимный клиент сюда не
+	// доходит. Генерация не реализована, владельца отчёта записывать некуда,
+	// поэтому сессия здесь не читается — когда генерация появится, ID автора
+	// обязан браться из сессии, а не из тела запроса (S-01).
 	var req CreateReportRequest
 	if err := c.Bind(&req); err != nil {
-		return respondError(c, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body", err.Error())
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest, err.Error())
 	}
 
 	if err := h.validator.Struct(req); err != nil {

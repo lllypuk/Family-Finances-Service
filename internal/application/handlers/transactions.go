@@ -15,6 +15,7 @@ import (
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
+	"family-budget-service/internal/web/middleware"
 )
 
 type TransactionHandler struct {
@@ -44,9 +45,20 @@ func NewTransactionHandler(
 }
 
 func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
+	// Автор записи — владелец сессии, которую RequireAPIAuth кладёт в контекст.
+	// Единственный допустимый источник: тело запроса им быть не может, иначе
+	// аутентифицированный клиент пишет от чужого имени (S-01,
+	// docs/specs/002-security-audit.md). Проверяем до разбора тела: без сессии
+	// транзакцию всё равно не от кого создавать.
+	sessionData, sessionErr := middleware.GetUserFromContext(c)
+	if sessionErr != nil {
+		return respondUnauthorized(c)
+	}
+	userID := sessionData.UserID
+
 	var req CreateTransactionRequest
 	if err := c.Bind(&req); err != nil {
-		return respondError(c, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body", err.Error())
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest, err.Error())
 	}
 
 	if err := h.validator.Struct(req); err != nil {
@@ -54,10 +66,10 @@ func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
 	}
 
 	if h.transactionService != nil {
-		return h.createTransactionViaService(c, req)
+		return h.createTransactionViaService(c, req, userID)
 	}
 
-	newTransaction := h.buildTransaction(req)
+	newTransaction := h.buildTransaction(req, userID)
 
 	if err := h.repositories.Transaction.Create(c.Request().Context(), newTransaction); err != nil {
 		// Check if it's a foreign key constraint error
@@ -74,13 +86,17 @@ func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
 	return respondAPI(c, http.StatusCreated, response)
 }
 
-func (h *TransactionHandler) createTransactionViaService(c echo.Context, req CreateTransactionRequest) error {
+func (h *TransactionHandler) createTransactionViaService(
+	c echo.Context,
+	req CreateTransactionRequest,
+	userID uuid.UUID,
+) error {
 	createdTx, err := h.transactionService.CreateTransaction(c.Request().Context(), dto.CreateTransactionDTO{
 		Amount:      req.Amount,
 		Type:        transaction.Type(req.Type),
 		Description: req.Description,
 		CategoryID:  req.CategoryID,
-		UserID:      req.UserID,
+		UserID:      userID,
 		Date:        req.Date,
 		Tags:        req.Tags,
 	})
@@ -120,14 +136,17 @@ func (h *TransactionHandler) handleCreateTransactionServiceError(c echo.Context,
 	}
 }
 
-func (h *TransactionHandler) buildTransaction(req CreateTransactionRequest) *transaction.Transaction {
+func (h *TransactionHandler) buildTransaction(
+	req CreateTransactionRequest,
+	userID uuid.UUID,
+) *transaction.Transaction {
 	return &transaction.Transaction{
 		ID:          uuid.New(),
 		Amount:      req.Amount,
 		Type:        transaction.Type(req.Type),
 		Description: req.Description,
 		CategoryID:  req.CategoryID,
-		UserID:      req.UserID,
+		UserID:      userID,
 		Date:        req.Date,
 		Tags:        req.Tags,
 		CreatedAt:   time.Now(),

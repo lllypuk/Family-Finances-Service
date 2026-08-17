@@ -124,17 +124,6 @@ func ToCategoryAPIResponse(c *category.Category) CategoryAPIResponse {
 
 // Transaction API mappers
 
-// CreateTransactionAPIRequest represents API request for transaction creation
-type CreateTransactionAPIRequest struct {
-	Amount      float64   `json:"amount"         validate:"required,gt=0"`
-	Type        string    `json:"type"           validate:"required,oneof=income expense"`
-	Description string    `json:"description"    validate:"required,min=2,max=200"`
-	CategoryID  uuid.UUID `json:"category_id"    validate:"required"`
-	UserID      uuid.UUID `json:"user_id"        validate:"required"`
-	Date        time.Time `json:"date"           validate:"required"`
-	Tags        []string  `json:"tags,omitempty"`
-}
-
 // UpdateTransactionAPIRequest represents API request for transaction update
 type UpdateTransactionAPIRequest struct {
 	Amount      *float64   `json:"amount,omitempty"      validate:"omitempty,gt=0"`
@@ -157,19 +146,6 @@ type TransactionAPIResponse struct {
 	Tags        []string  `json:"tags"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
-}
-
-// ToCreateTransactionDTO converts API request to service DTO
-func (r CreateTransactionAPIRequest) ToCreateTransactionDTO() CreateTransactionDTO {
-	return CreateTransactionDTO{
-		Amount:      r.Amount,
-		Type:        transaction.Type(r.Type),
-		Description: r.Description,
-		CategoryID:  r.CategoryID,
-		UserID:      r.UserID,
-		Date:        r.Date,
-		Tags:        r.Tags,
-	}
 }
 
 // ToUpdateTransactionDTO converts API request to service DTO

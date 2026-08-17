@@ -34,7 +34,7 @@ func setupAdminTest(t *testing.T) (*handlers.AdminHandler, *MockUserService, *Mo
 		Invite: mockInviteService,
 	}
 
-	handler := handlers.NewAdminHandler(repos, srvcs)
+	handler := handlers.NewAdminHandler(repos, srvcs, false)
 	return handler, mockUserService, mockInviteService
 }
 
@@ -529,7 +529,7 @@ func TestAdminHandler_DeleteUser(t *testing.T) {
 					Role:  user.RoleMember,
 				}
 				userSvc.On("GetUserByID", mock.Anything, validUserID).Return(userToDelete, nil).Once()
-				userSvc.On("DeleteUser", mock.Anything, validUserID).Return(nil).Once()
+				userSvc.On("DeleteUser", mock.Anything, validUserID, mock.Anything).Return(nil).Once()
 			},
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, httpErr *echo.HTTPError, c echo.Context) {
@@ -538,6 +538,8 @@ func TestAdminHandler_DeleteUser(t *testing.T) {
 			},
 		},
 		{
+			// Правило живёт в userService.DeleteUser; от веба требуется 400 с
+			// понятным текстом, а не 500.
 			name:          "Error - cannot delete self",
 			userID:        adminID.String(),
 			sessionUserID: adminID,
@@ -548,7 +550,9 @@ func TestAdminHandler_DeleteUser(t *testing.T) {
 					Email: "admin@example.com",
 					Role:  user.RoleAdmin,
 				}
-				userSvc.On("GetUserByID", mock.Anything, adminID).Return(adminUser, nil).Once()
+				userSvc.On("GetUserByID", mock.Anything, adminID).Return(adminUser, nil).Twice()
+				userSvc.On("DeleteUser", mock.Anything, adminID, adminID).
+					Return(services.ErrCannotDeleteSelf).Once()
 			},
 			expectedStatus: http.StatusBadRequest,
 			checkResponse: func(t *testing.T, httpErr *echo.HTTPError, _ echo.Context) {
@@ -656,13 +660,58 @@ func TestAdminHandler_DeleteUser(t *testing.T) {
 					Role:  user.RoleMember,
 				}
 				userSvc.On("GetUserByID", mock.Anything, validUserID).Return(userToDelete, nil).Once()
-				userSvc.On("DeleteUser", mock.Anything, validUserID).
+				userSvc.On("DeleteUser", mock.Anything, validUserID, mock.Anything).
 					Return(errors.New("constraint violation")).Once()
 			},
 			expectedStatus: http.StatusInternalServerError,
 			checkResponse: func(t *testing.T, httpErr *echo.HTTPError, _ echo.Context) {
 				assert.NotNil(t, httpErr)
 				assert.Contains(t, httpErr.Message.(string), "Failed to delete user")
+			},
+		},
+		{
+			// Регрессия: сообщение собиралось как "Failed to delete user: "+err.Error(),
+			// то есть обёрнутая ошибка репозитория (схема SQLite) уходила в браузер.
+			name:          "Error - delete service error does not leak repository details",
+			userID:        validUserID.String(),
+			sessionUserID: adminID,
+			userRole:      user.RoleAdmin,
+			mockSetup: func(userSvc *MockUserService) {
+				adminUser := &user.User{ID: adminID, Email: "admin@example.com", Role: user.RoleAdmin}
+				userSvc.On("GetUserByID", mock.Anything, adminID).Return(adminUser, nil).Once()
+
+				userToDelete := &user.User{ID: validUserID, Email: "delete@example.com", Role: user.RoleMember}
+				userSvc.On("GetUserByID", mock.Anything, validUserID).Return(userToDelete, nil).Once()
+				userSvc.On("DeleteUser", mock.Anything, validUserID, mock.Anything).
+					Return(errors.New(leakyRepoErrorText)).Once()
+			},
+			expectedStatus: http.StatusInternalServerError,
+			checkResponse: func(t *testing.T, httpErr *echo.HTTPError, _ echo.Context) {
+				require.NotNil(t, httpErr)
+				assert.NotContains(t, httpErr.Message.(string), "UNIQUE constraint",
+					"текст ошибки БД уходит клиенту")
+			},
+		},
+		{
+			// Последний администратор не удаляется: семья осталась бы без
+			// администратора навсегда (инвайты выпускает только он).
+			name:          "Error - last admin",
+			userID:        validUserID.String(),
+			sessionUserID: adminID,
+			userRole:      user.RoleAdmin,
+			mockSetup: func(userSvc *MockUserService) {
+				adminUser := &user.User{ID: adminID, Email: "admin@example.com", Role: user.RoleAdmin}
+				userSvc.On("GetUserByID", mock.Anything, adminID).Return(adminUser, nil).Once()
+
+				userToDelete := &user.User{ID: validUserID, Email: "other@example.com", Role: user.RoleAdmin}
+				userSvc.On("GetUserByID", mock.Anything, validUserID).Return(userToDelete, nil).Once()
+				userSvc.On("DeleteUser", mock.Anything, validUserID, mock.Anything).
+					Return(services.ErrLastAdmin).Once()
+			},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse: func(t *testing.T, httpErr *echo.HTTPError, _ echo.Context) {
+				require.NotNil(t, httpErr)
+				assert.Equal(t, "Cannot delete the last administrator", httpErr.Message)
 			},
 		},
 	}

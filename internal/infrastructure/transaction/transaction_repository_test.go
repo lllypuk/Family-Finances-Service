@@ -315,6 +315,56 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		}
 	})
 
+	// CountByFilter обязан считать все подходящие записи, а не страницу: именно на
+	// нём держится HasNext в пагинации веб-интерфейса.
+	t.Run("CountByFilter_IgnoresPagination", func(t *testing.T) {
+		db := container.GetTestDatabase(t)
+		repo := transactionrepo.NewSQLiteRepository(db)
+
+		familyID, err := helper.CreateTestFamily(ctx, "Count Test Family", "USD")
+		require.NoError(t, err)
+
+		userID, err := helper.CreateTestUser(ctx, "count@example.com", "Count", "Test", "admin", familyID)
+		require.NoError(t, err)
+
+		categoryID, err := helper.CreateTestCategory(ctx, "Test Category", "expense", familyID, nil)
+		require.NoError(t, err)
+
+		expenseType := transaction.TypeExpense
+		for i := range 3 {
+			require.NoError(t, repo.Create(ctx, &transaction.Transaction{
+				ID:          uuid.New(),
+				Amount:      100.00,
+				Type:        expenseType,
+				Description: "Counted expense",
+				CategoryID:  uuid.MustParse(categoryID),
+				UserID:      uuid.MustParse(userID),
+				Date:        time.Now().AddDate(0, 0, -i),
+				Tags:        []string{},
+			}))
+		}
+		require.NoError(t, repo.Create(ctx, &transaction.Transaction{
+			ID:          uuid.New(),
+			Amount:      500.00,
+			Type:        transaction.TypeIncome,
+			Description: "Not counted income",
+			CategoryID:  uuid.MustParse(categoryID),
+			UserID:      uuid.MustParse(userID),
+			Date:        time.Now(),
+			Tags:        []string{},
+		}))
+
+		filter := transaction.Filter{Type: &expenseType, Limit: 2, Offset: 0}
+
+		page, err := repo.GetByFilter(ctx, filter)
+		require.NoError(t, err)
+		require.Len(t, page, 2, "страница должна быть урезана LIMIT'ом")
+
+		total, err := repo.CountByFilter(ctx, filter)
+		require.NoError(t, err)
+		assert.Equal(t, 3, total, "счётчик обязан игнорировать LIMIT/OFFSET и фильтровать по типу")
+	})
+
 	t.Run("GetTransactionSummary", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
 		repo := transactionrepo.NewSQLiteRepository(db)

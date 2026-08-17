@@ -3,7 +3,6 @@ package handlers
 import (
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/web/middleware"
 	webModels "family-budget-service/internal/web/models"
@@ -32,11 +32,34 @@ type TransactionHandler struct {
 }
 
 // NewTransactionHandler создает новый обработчик транзакций
-func NewTransactionHandler(repositories *handlers.Repositories, services *services.Services) *TransactionHandler {
+func NewTransactionHandler(
+	repositories *handlers.Repositories,
+	services *services.Services,
+	cookieSecure bool,
+) *TransactionHandler {
 	return &TransactionHandler{
-		BaseHandler: NewBaseHandler(repositories, services),
+		BaseHandler: NewBaseHandler(repositories, services, cookieSecure),
 		validator:   validator.New(),
 	}
+}
+
+// TransactionTableData — контракт данных таблицы транзакций.
+// Один и тот же тип получают и страница /transactions, и HTMX-фрагмент
+// components/transaction_table: шаблон таблицы читает `.Transactions`,
+// `.Filters` и `.Pagination` из корня контекста в обоих случаях.
+type TransactionTableData struct {
+	Transactions []webModels.TransactionViewModel
+	Filters      *webModels.TransactionFilters
+	Pagination   webModels.TransactionListResponse
+}
+
+// transactionIndexData — данные страницы /transactions: к таблице добавляются
+// общие данные страницы и опции селекта категорий для формы фильтра.
+type transactionIndexData struct {
+	*PageData
+	TransactionTableData
+
+	CategoryOptions []webModels.CategorySelectOption
 }
 
 // Index отображает список транзакций с фильтрами
@@ -89,21 +112,28 @@ func (h *TransactionHandler) Index(c echo.Context) error {
 	}
 
 	// Конвертируем категории в опции для селекта
-	categoryOptions := h.buildCategorySelectOptions(categories)
+	categoryOptions := buildCategorySelectOptions(categories)
 
-	// Рассчитываем пагинацию
-	pagination := h.calculatePagination(len(transactionVMs), filters.Page, filters.PageSize)
-
-	pageData := &PageData{
-		Title: "Transactions",
+	// Рассчитываем пагинацию по реальному количеству записей под фильтр:
+	// len(transactionVMs) — это размер уже урезанной LIMIT'ом страницы, по нему
+	// HasNext всегда был бы false и вторая страница оставалась недостижимой.
+	total, err := h.services.Transaction.CountTransactions(c.Request().Context(), filterDTO)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get transactions")
 	}
+	pagination := h.calculatePagination(total, filters.Page, filters.PageSize)
 
-	data := map[string]any{
-		"PageData":            pageData,
-		"Transactions":        transactionVMs,
-		"Filters":             filters,
-		tplKeyCategoryOptions: categoryOptions,
-		"Pagination":          pagination,
+	// Встраиваем *PageData, а не кладём его в map под ключом "PageData":
+	// шаблон шапки читает `.CurrentUser` и `.CSRFToken` из корня контекста,
+	// а `{{.PageData.X}}` продолжает работать благодаря имени встроенного поля.
+	data := transactionIndexData{
+		PageData: h.buildPageData(c, titleTransactions),
+		TransactionTableData: TransactionTableData{
+			Transactions: transactionVMs,
+			Filters:      &filters,
+			Pagination:   pagination,
+		},
+		CategoryOptions: categoryOptions,
 	}
 
 	return h.renderPage(c, "pages/transactions/index", data)
@@ -123,7 +153,7 @@ func (h *TransactionHandler) New(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get categories")
 	}
 
-	categoryOptions := h.buildCategorySelectOptions(categories)
+	categoryOptions := buildCategorySelectOptions(categories)
 
 	// Предзаполняем форму с текущей датой
 	form := webModels.TransactionForm{
@@ -131,18 +161,16 @@ func (h *TransactionHandler) New(c echo.Context) error {
 		Type: TransactionTypeExpense, // По умолчанию расход
 	}
 
-	// Получаем CSRF токен
-	csrfToken, _ := middleware.GetCSRFToken(c)
+	// CSRF-токен приходит из PageData и промотируется в корень контекста.
+	data := struct {
+		*PageData
 
-	pageData := &PageData{
-		Title: "New Transaction",
-	}
-
-	data := map[string]any{
-		"PageData":            pageData,
-		"Form":                form,
-		tplKeyCategoryOptions: categoryOptions,
-		tplKeyCSRFToken:       csrfToken,
+		Form            webModels.TransactionForm
+		CategoryOptions []webModels.CategorySelectOption
+	}{
+		PageData:        h.buildPageData(c, titleNewTransaction),
+		Form:            form,
+		CategoryOptions: categoryOptions,
 	}
 
 	return h.renderPage(c, "pages/transactions/new", data)
@@ -175,7 +203,7 @@ func (h *TransactionHandler) Create(c echo.Context) error {
 		}
 
 		// Для обычных запросов возвращаем форму заново
-		return h.renderTransactionFormWithErrors(c, form, validationErrors, "New Transaction")
+		return h.renderTransactionFormWithErrors(c, form, validationErrors, nil)
 	}
 
 	// Создаем DTO для сервиса
@@ -187,12 +215,12 @@ func (h *TransactionHandler) Create(c echo.Context) error {
 	// Создаем транзакцию через сервис
 	_, err = h.services.Transaction.CreateTransaction(c.Request().Context(), createDTO)
 	if err != nil {
-		errorMsg := fmt.Sprintf(
-			"Failed to create transaction: %s (UserID: %s)",
-			err.Error(),
-			sessionData.UserID,
-		)
-		return echo.NewHTTPError(http.StatusInternalServerError, errorMsg)
+		// Текст ошибки сервиса наружу не отдаём: в нём оказываются имена таблиц
+		// и колонок SQLite и текст ограничений. Клиенту — общая формулировка,
+		// подробности (включая UserID) — в лог.
+		c.Logger().Errorf("create transaction failed (UserID: %s): %q", sessionData.UserID, err.Error())
+
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create transaction")
 	}
 
 	// Успешное создание - редирект
@@ -222,7 +250,7 @@ func (h *TransactionHandler) Edit(c echo.Context) error {
 	}
 
 	// Получаем транзакцию
-	transaction, err := h.services.Transaction.GetTransactionByID(c.Request().Context(), transactionID)
+	existing, err := h.services.Transaction.GetTransactionByID(c.Request().Context(), transactionID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "Transaction not found")
 	}
@@ -236,31 +264,30 @@ func (h *TransactionHandler) Edit(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get categories")
 	}
 
-	categoryOptions := h.buildCategorySelectOptions(categories)
+	categoryOptions := buildCategorySelectOptions(categories)
 
 	// Создаем форму из данных транзакции
 	form := webModels.TransactionForm{
-		Amount:      fmt.Sprintf("%.2f", transaction.Amount),
-		Type:        string(transaction.Type),
-		Description: transaction.Description,
-		CategoryID:  transaction.CategoryID.String(),
-		Date:        transaction.Date.Format("2006-01-02"),
-		Tags:        strings.Join(transaction.Tags, ", "),
+		Amount:      fmt.Sprintf("%.2f", existing.Amount),
+		Type:        string(existing.Type),
+		Description: existing.Description,
+		CategoryID:  existing.CategoryID.String(),
+		Date:        existing.Date.Format("2006-01-02"),
+		Tags:        strings.Join(existing.Tags, ", "),
 	}
 
-	// Получаем CSRF токен
-	csrfToken, _ := middleware.GetCSRFToken(c)
+	// CSRF-токен приходит из PageData и промотируется в корень контекста.
+	data := struct {
+		*PageData
 
-	pageData := &PageData{
-		Title: "Edit Transaction",
-	}
-
-	data := map[string]any{
-		"PageData":            pageData,
-		"Form":                form,
-		"Transaction":         transaction,
-		tplKeyCategoryOptions: categoryOptions,
-		tplKeyCSRFToken:       csrfToken,
+		Form            webModels.TransactionForm
+		Transaction     *transaction.Transaction
+		CategoryOptions []webModels.CategorySelectOption
+	}{
+		PageData:        h.buildPageData(c, titleEditTransaction),
+		Form:            form,
+		Transaction:     existing,
+		CategoryOptions: categoryOptions,
 	}
 
 	return h.renderPage(c, "pages/transactions/edit", data)
@@ -282,7 +309,7 @@ func (h *TransactionHandler) Update(c echo.Context) error {
 	}
 
 	// Проверяем, что транзакция существует
-	_, err = h.services.Transaction.GetTransactionByID(c.Request().Context(), transactionID)
+	existingTransaction, err := h.services.Transaction.GetTransactionByID(c.Request().Context(), transactionID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "Transaction not found")
 	}
@@ -309,7 +336,7 @@ func (h *TransactionHandler) Update(c echo.Context) error {
 		}
 
 		// Для обычных запросов возвращаем форму заново
-		return h.renderTransactionFormWithErrors(c, form, validationErrors, "Edit Transaction")
+		return h.renderTransactionFormWithErrors(c, form, validationErrors, existingTransaction)
 	}
 
 	// Создаем DTO для обновления
@@ -426,6 +453,23 @@ func (h *TransactionHandler) BulkDelete(c echo.Context) error {
 
 // Filter применяет фильтры к списку транзакций (HTMX)
 func (h *TransactionHandler) Filter(c echo.Context) error {
+	return h.renderTransactionTable(c)
+}
+
+// List возвращает страницу списка транзакций для пагинации (HTMX).
+//
+// Отдаёт тот же фрагмент, что и Filter, по двум причинам:
+//   - кнопки пагинации в components/transaction_table.html свапают ответ в
+//     <section id="transactions-list">, поэтому голые <tr> (components/transaction_rows)
+//     выбрасывались бы парсером HTML и таблица исчезала бы вместе с пагинацией;
+//   - ссылки несут активные фильтры, и их нужно применить, иначе переход на
+//     соседнюю страницу молча сбрасывал бы фильтрацию.
+func (h *TransactionHandler) List(c echo.Context) error {
+	return h.renderTransactionTable(c)
+}
+
+// renderTransactionTable рендерит components/transaction_table по фильтрам из запроса.
+func (h *TransactionHandler) renderTransactionTable(c echo.Context) error {
 	// Проверяем авторизацию пользователя
 	_, err := middleware.GetUserFromContext(c)
 	if err != nil {
@@ -465,73 +509,18 @@ func (h *TransactionHandler) Filter(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to prepare transaction data")
 	}
 
-	// Рассчитываем пагинацию
-	pagination := h.calculatePagination(len(transactionVMs), filters.Page, filters.PageSize)
-
-	data := map[string]any{
-		"Transactions": transactionVMs,
-		"Pagination":   pagination,
-		"Filters":      filters,
-	}
-
-	return h.renderPartial(c, "components/transaction_table", data)
-}
-
-// List возвращает список транзакций для пагинации (HTMX)
-func (h *TransactionHandler) List(c echo.Context) error {
-	// Проверяем авторизацию пользователя
-	_, err := middleware.GetUserFromContext(c)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Unable to get user session")
-	}
-
-	// Парсим параметры пагинации
-	pageStr := c.QueryParam("page")
-	page := 1
-	if pageStr != "" {
-		if parsedPage, parseErr := strconv.Atoi(pageStr); parseErr == nil && parsedPage > 0 {
-			page = parsedPage
-		}
-	}
-
-	pageSizeStr := c.QueryParam("page_size")
-	pageSize := DefaultPageSize
-	if pageSizeStr != "" {
-		parsedSize, parseErr := strconv.Atoi(pageSizeStr)
-		if parseErr == nil && parsedSize > 0 && parsedSize <= MaxPageSize {
-			pageSize = parsedSize
-		}
-	}
-
-	// Создаем базовые фильтры
-	filters := webModels.TransactionFilters{
-		Page:     page,
-		PageSize: pageSize,
-	}
-
-	// Получаем транзакции через сервис
-	filterDTO, err := h.buildTransactionFilterDTO(filters)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid filter parameters")
-	}
-
-	transactions, err := h.services.Transaction.GetAllTransactions(
-		c.Request().Context(),
-		filterDTO,
-	)
+	// Рассчитываем пагинацию по реальному количеству записей под фильтр
+	total, err := h.services.Transaction.CountTransactions(c.Request().Context(), filterDTO)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get transactions")
 	}
+	pagination := h.calculatePagination(total, filters.Page, filters.PageSize)
 
-	// Конвертируем в view модели
-	transactionVMs, err := h.convertTransactionsToViewModels(c.Request().Context(), transactions)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to prepare transaction data")
+	data := TransactionTableData{
+		Transactions: transactionVMs,
+		Filters:      &filters,
+		Pagination:   pagination,
 	}
 
-	data := map[string]any{
-		"Transactions": transactionVMs,
-	}
-
-	return h.renderPartial(c, "components/transaction_rows", data)
+	return h.renderPartial(c, "components/transaction_table", data)
 }

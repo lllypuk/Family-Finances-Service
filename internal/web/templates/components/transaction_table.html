@@ -95,7 +95,7 @@
         </div>
         <div>
             {{if .Pagination.HasPrev}}
-            <button hx-get="/htmx/transactions/list?page={{sub .Pagination.Page 1}}{{range $key, $value := .Filters}}{{if $value}}&{{$key}}={{$value}}{{end}}{{end}}"
+            <button hx-get="/htmx/transactions/list?page={{sub .Pagination.Page 1}}{{range $key, $value := .Filters.QueryParams}}{{if $value}}&{{$key}}={{$value}}{{end}}{{end}}"
                     hx-target="#transactions-list"
                     class="secondary outline">
                 ← Предыдущая
@@ -107,7 +107,7 @@
             </span>
             
             {{if .Pagination.HasNext}}
-            <button hx-get="/htmx/transactions/list?page={{add .Pagination.Page 1}}{{range $key, $value := .Filters}}{{if $value}}&{{$key}}={{$value}}{{end}}{{end}}"
+            <button hx-get="/htmx/transactions/list?page={{add .Pagination.Page 1}}{{range $key, $value := .Filters.QueryParams}}{{if $value}}&{{$key}}={{$value}}{{end}}{{end}}"
                     hx-target="#transactions-list"
                     class="secondary outline">
                 Следующая →

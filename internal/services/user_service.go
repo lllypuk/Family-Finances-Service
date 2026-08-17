@@ -15,12 +15,20 @@ import (
 )
 
 var (
-	ErrFamilyNotFound     = errors.New("family not found")
-	ErrUserNotFound       = errors.New("user not found")
+	ErrFamilyNotFound = errors.New("family not found")
+	// ErrUserNotFound — тот же sentinel, что и user.ErrNotFound: слой middleware
+	// проверяет его через errors.Is, не импортируя пакет services.
+	ErrUserNotFound       = user.ErrNotFound
 	ErrEmailAlreadyExists = errors.New("email already exists")
 	ErrInvalidRole        = errors.New("invalid user role")
 	ErrUnauthorized       = errors.New("unauthorized access")
 	ErrValidationFailed   = errors.New("validation failed")
+	// ErrLastAdmin — попытка удалить последнего администратора семьи.
+	// Модель однофамильная: без администратора некому выпускать инвайты и
+	// открытой регистрации нет, поэтому состояние невосстановимо.
+	ErrLastAdmin = errors.New("cannot delete the last admin")
+	// ErrCannotDeleteSelf — пользователь пытается удалить собственную учётную запись.
+	ErrCannotDeleteSelf = errors.New("cannot delete yourself")
 )
 
 // UserRepository defines the data access operations for users
@@ -102,11 +110,19 @@ func (s *userService) CreateUser(ctx context.Context, req dto.CreateUserDTO) (*u
 	return newUser, nil
 }
 
-// GetUserByID retrieves a user by ID
+// GetUserByID retrieves a user by ID.
+//
+// Сбой инфраструктуры (таймаут контекста, SQLITE_BUSY) НЕ схлопывается в
+// ErrUserNotFound: вызывающему нужно отличать удалённого пользователя от
+// временно недоступной БД — middleware перепроверки сессии в первом случае
+// гасит cookie, а во втором обязано вернуть 500 и сессию не трогать.
 func (s *userService) GetUserByID(ctx context.Context, id uuid.UUID) (*user.User, error) {
 	foundUser, err := s.userRepo.GetByID(ctx, id)
 	if err != nil {
-		return nil, ErrUserNotFound
+		if errors.Is(err, user.ErrNotFound) {
+			return nil, ErrUserNotFound
+		}
+		return nil, fmt.Errorf("failed to get user by id: %w", err)
 	}
 	if foundUser == nil {
 		return nil, ErrUserNotFound
@@ -172,11 +188,28 @@ func (s *userService) UpdateUser(ctx context.Context, id uuid.UUID, req dto.Upda
 	return existingUser, nil
 }
 
-// DeleteUser deletes a user by ID
-func (s *userService) DeleteUser(ctx context.Context, id uuid.UUID) error {
+// DeleteUser deletes a user by ID.
+// actorID — владелец сессии, от имени которого выполняется удаление: правило
+// «себя удалить нельзя» — бизнес-правило, а не деталь конкретной поверхности,
+// поэтому оно живёт здесь, а веб и API только раскладывают ErrCannotDeleteSelf
+// по своим форматам ответа (как уже сделано для ErrLastAdmin).
+func (s *userService) DeleteUser(ctx context.Context, id, actorID uuid.UUID) error {
+	// Самоудаление: администратор мгновенно теряет и сессию, и доступ к
+	// консоли, а в однофамильной модели вернуть его некому.
+	if id == actorID {
+		return ErrCannotDeleteSelf
+	}
+
 	// Check if user exists
-	_, err := s.GetUserByID(ctx, id)
+	existingUser, err := s.GetUserByID(ctx, id)
 	if err != nil {
+		return err
+	}
+
+	// Последний администратор не удаляется ни через API, ни через веб:
+	// иначе семья остаётся без администратора навсегда (инвайты выпускает
+	// только он, открытой регистрации нет).
+	if err = s.ensureNotLastAdmin(ctx, existingUser); err != nil {
 		return err
 	}
 
@@ -186,6 +219,27 @@ func (s *userService) DeleteUser(ctx context.Context, id uuid.UUID) error {
 	}
 
 	return nil
+}
+
+// ensureNotLastAdmin возвращает ErrLastAdmin, если удаляемый пользователь —
+// единственный оставшийся администратор.
+func (s *userService) ensureNotLastAdmin(ctx context.Context, target *user.User) error {
+	if target.Role != user.RoleAdmin {
+		return nil
+	}
+
+	users, err := s.userRepo.GetAll(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to load users: %w", err)
+	}
+
+	for _, u := range users {
+		if u.Role == user.RoleAdmin && u.ID != target.ID {
+			return nil
+		}
+	}
+
+	return ErrLastAdmin
 }
 
 // ChangeUserRole changes a user's role

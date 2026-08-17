@@ -1,0 +1,78 @@
+{{define "components/category_list"}}
+{{if .Categories}}
+<div class="categories-grid">
+    {{range .Categories}}
+    <article class="category-card category-{{.Type}}">
+        <header>
+            <div class="category-header">
+                <h4>
+                    <span class="category-icon">{{if eq .Type "income"}}💰{{else}}💸{{end}}</span>
+                    {{.Name}}
+                </h4>
+                <span class="category-type {{.Type}}">
+                    {{if eq .Type "income"}}Доход{{else}}Расход{{end}}
+                </span>
+            </div>
+        </header>
+
+        <div class="category-stats">
+            <div class="stats-grid">
+                <div class="stat">
+                    <span class="stat-label">Транзакций</span>
+                    <span class="stat-value">{{.TransactionCount}}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Общая сумма</span>
+                    <span class="stat-value">{{.TotalAmount}} ₽</span>
+                </div>
+                {{if .LastUsed}}
+                <div class="stat">
+                    <span class="stat-label">Последнее использование</span>
+                    <span class="stat-value">{{.LastUsed.Format "02.01.2006"}}</span>
+                </div>
+                {{end}}
+            </div>
+        </div>
+
+        {{if .SubCategories}}
+        <div class="subcategories">
+            <h5>Подкатегории ({{len .SubCategories}})</h5>
+            <div class="subcategories-list">
+                {{range .SubCategories}}
+                <span class="subcategory-tag">
+                    {{.Name}} {{if .TransactionCount}}<small>({{.TransactionCount}})</small>{{end}}
+                </span>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+
+        <footer>
+            <div class="button-group">
+                <a href="/categories/{{.ID}}" role="button" class="secondary outline">
+                    👁️ Просмотр
+                </a>
+                <a href="/categories/{{.ID}}/edit" role="button" class="secondary outline">
+                    ✏️ Редактировать
+                </a>
+                <button
+                    hx-delete="/categories/{{.ID}}"
+                    hx-confirm="Вы уверены, что хотите удалить категорию '{{.Name}}'? Это действие нельзя отменить."
+                    hx-target="closest article"
+                    hx-swap="outerHTML"
+                    class="danger outline"
+                >
+                    🗑️ Удалить
+                </button>
+            </div>
+        </footer>
+    </article>
+    {{end}}
+</div>
+{{else}}
+<div class="empty-state">
+    <h3>Категории не найдены</h3>
+    <p>Измените параметры фильтра или создайте новую категорию.</p>
+</div>
+{{end}}
+{{end}}

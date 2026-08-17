@@ -103,8 +103,8 @@ func (m *MockUserService) UpdateUser(ctx context.Context, id uuid.UUID, req dto.
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
-func (m *MockUserService) DeleteUser(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockUserService) DeleteUser(ctx context.Context, id, actorID uuid.UUID) error {
+	args := m.Called(ctx, id, actorID)
 	return args.Error(0)
 }
 
@@ -498,7 +498,7 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 			name:   "Success - User deleted",
 			userID: userID.String(),
 			mockSetup: func(service *MockUserService) {
-				service.On("DeleteUser", mock.Anything, userID).Return(nil)
+				service.On("DeleteUser", mock.Anything, userID, mock.Anything).Return(nil)
 			},
 			expectedStatus: http.StatusNoContent,
 			expectedBody: func(t *testing.T, body string) {
@@ -524,7 +524,7 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 			name:   "Error - User not found",
 			userID: userID.String(),
 			mockSetup: func(service *MockUserService) {
-				service.On("DeleteUser", mock.Anything, userID).Return(errors.New("database error"))
+				service.On("DeleteUser", mock.Anything, userID, mock.Anything).Return(errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody: func(t *testing.T, body string) {
@@ -552,6 +552,9 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 			c := e.NewContext(req, rec)
 			c.SetParamNames("id")
 			c.SetParamValues(tt.userID)
+			// Хендлер сверяет удаляемого пользователя с владельцем сессии
+			// (запрет самоудаления), поэтому сессия обязательна.
+			withSessionUser(c, uuid.New())
 
 			// Execute
 			err := handler.DeleteUser(c)
@@ -563,4 +566,77 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 			mockService.AssertExpectations(t)
 		})
 	}
+}
+
+// deleteUserRequest прогоняет DELETE /api/v1/users/:id через хендлер с заданной
+// сессией и возвращает ответ.
+func deleteUserRequest(
+	t *testing.T,
+	service *MockUserService,
+	sessionUserID, targetID uuid.UUID,
+) *httptest.ResponseRecorder {
+	t.Helper()
+
+	e := echo.New()
+	handler := handlers.NewUserHandler(&handlers.Repositories{}, service)
+
+	req := httptest.NewRequest(http.MethodDelete, "/users/"+targetID.String(), nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(targetID.String())
+	if sessionUserID != uuid.Nil {
+		withSessionUser(c, sessionUserID)
+	}
+
+	require.NoError(t, handler.DeleteUser(c))
+
+	return rec
+}
+
+// В вебе самоудаление запрещено (AdminHandler.DeleteUser), а в API запрета не
+// было: администратор мог снести собственную учётную запись и мгновенно
+// потерять доступ — в однофамильной модели без права на восстановление.
+func TestUserHandler_DeleteUser_SelfDeletionRejected(t *testing.T) {
+	service := &MockUserService{}
+	selfID := uuid.New()
+	// Само правило живёт в userService.DeleteUser (сюда приходит sentinel);
+	// от API требуется 400 с кодом CANNOT_DELETE_SELF, а не 500.
+	service.On("DeleteUser", mock.Anything, selfID, selfID).Return(services.ErrCannotDeleteSelf)
+
+	rec := deleteUserRequest(t, service, selfID, selfID)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "CANNOT_DELETE_SELF", response.Error.Code)
+
+	service.AssertExpectations(t)
+}
+
+// Последний администратор защищён в userService.DeleteUser; API обязан
+// перевести этот отказ в 400, а не в 500.
+func TestUserHandler_DeleteUser_LastAdminRejected(t *testing.T) {
+	service := &MockUserService{}
+	targetID := uuid.New()
+	service.On("DeleteUser", mock.Anything, targetID, mock.Anything).Return(services.ErrLastAdmin)
+
+	rec := deleteUserRequest(t, service, uuid.New(), targetID)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "LAST_ADMIN", response.Error.Code)
+	service.AssertExpectations(t)
+}
+
+func TestUserHandler_DeleteUser_NoSession(t *testing.T) {
+	service := &MockUserService{}
+
+	rec := deleteUserRequest(t, service, uuid.Nil, uuid.New())
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	service.AssertNotCalled(t, "DeleteUser", mock.Anything, mock.Anything)
 }

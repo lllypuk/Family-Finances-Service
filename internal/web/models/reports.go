@@ -16,13 +16,23 @@ const (
 	WarningPerformanceThreshold = 100
 )
 
-// ReportForm представляет форму создания отчета
+// ReportForm представляет форму создания отчета.
+//
+// Description, IncludeCharts и ExportCSV не участвуют в генерации отчёта, но
+// присутствуют в pages/reports/new.html: шаблон читает их без всяких `{{if}}`,
+// а у структуры (в отличие от map) обращение к отсутствующему полю — ошибка
+// исполнения шаблона. Заодно значения этих полей переживают возврат формы с
+// ошибками валидации.
 type ReportForm struct {
-	Name      string `form:"name"       validate:"required,min=1,max=100"                                         json:"name"`
-	Type      string `form:"type"       validate:"required,oneof=expenses income budget cash_flow category_break" json:"type"`
-	Period    string `form:"period"     validate:"required,oneof=daily weekly monthly yearly custom"              json:"period"`
-	StartDate string `form:"start_date" validate:"required"                                                       json:"start_date"`
-	EndDate   string `form:"end_date"   validate:"required"                                                       json:"end_date"`
+	Name        string `form:"name"        validate:"required,min=1,max=100"                                         json:"name"`
+	Type        string `form:"type"        validate:"required,oneof=expenses income budget cash_flow category_break" json:"type"`
+	Period      string `form:"period"      validate:"required,oneof=daily weekly monthly yearly custom"              json:"period"`
+	StartDate   string `form:"start_date"  validate:"required"                                                       json:"start_date"`
+	EndDate     string `form:"end_date"    validate:"required"                                                       json:"end_date"`
+	Description string `form:"description" validate:"max=500"                                                        json:"description,omitempty"`
+
+	IncludeCharts bool `form:"include_charts" json:"include_charts,omitempty"`
+	ExportCSV     bool `form:"export_csv"     json:"export_csv,omitempty"`
 }
 
 // ReportDataVM представляет данные отчета для отображения
@@ -124,28 +134,28 @@ func GetReportTypeOptions() []ReportTypeOption {
 	return []ReportTypeOption{
 		{
 			Value:       "expenses",
-			Label:       "Expenses Report",
-			Description: "Detailed breakdown of all expenses",
+			Label:       "Отчёт по расходам",
+			Description: "Детальная разбивка всех расходов",
 		},
 		{
 			Value:       "income",
-			Label:       "Income Report",
-			Description: "Analysis of income sources",
+			Label:       "Отчёт по доходам",
+			Description: "Анализ источников дохода",
 		},
 		{
 			Value:       "budget",
-			Label:       "Budget Performance",
-			Description: "Compare actual vs planned spending",
+			Label:       "Исполнение бюджета",
+			Description: "Сравнение факта с планом",
 		},
 		{
 			Value:       "cash_flow",
-			Label:       "Cash Flow Summary",
-			Description: "Income vs expenses over time",
+			Label:       "Денежный поток",
+			Description: "Доходы и расходы во времени",
 		},
 		{
 			Value:       "category_break",
-			Label:       "Category Breakdown",
-			Description: "Spending analysis by category",
+			Label:       "Разбивка по категориям",
+			Description: "Анализ трат по категориям",
 		},
 	}
 }

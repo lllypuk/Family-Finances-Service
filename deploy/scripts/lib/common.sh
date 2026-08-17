@@ -40,11 +40,21 @@ check_root() {
 check_system_requirements() {
     log_info "Checking system requirements..."
     
-    # Check RAM (minimum 2GB)
+    # Check RAM.
+    # The running service itself fits in 128-256MB (Go + SQLite, single process).
+    # The floor stays at 512MB for the local Docker image build, not for the service.
+    local min_ram_mb=512
+    local recommended_ram_mb=1024
     local total_ram=$(free -m | awk '/^Mem:/{print $2}')
-    if [[ $total_ram -lt 2000 ]]; then
-        log_error "Insufficient RAM: ${total_ram}MB (minimum 2GB required)"
+    if [[ $total_ram -lt $min_ram_mb ]]; then
+        log_error "Insufficient RAM: ${total_ram}MB (minimum ${min_ram_mb}MB required)"
         exit 1
+    fi
+    if [[ $total_ram -lt $recommended_ram_mb ]]; then
+        log_warning "Only ${total_ram}MB RAM: the local Docker image build compiles Go on this machine"
+        log_warning "and \`go build\` may be OOM-killed below ${recommended_ram_mb}MB."
+        log_warning "Add swap before continuing, e.g.:"
+        log_warning "  fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile"
     fi
     log_success "RAM check passed: ${total_ram}MB"
     
@@ -145,6 +155,34 @@ detect_os() {
 # Generate secure random secret
 generate_secret() {
     openssl rand -base64 32
+}
+
+# Ensure git is available (needed to fetch sources — the image is built locally)
+install_git() {
+    if command -v git &>/dev/null; then
+        return 0
+    fi
+
+    log_info "Installing git..."
+    case "${OS:-}" in
+        ubuntu|debian)
+            apt-get update
+            apt-get install -y git
+            ;;
+        rocky|almalinux|centos|rhel|fedora)
+            if command -v dnf &>/dev/null; then
+                dnf install -y git
+            else
+                yum install -y git
+            fi
+            ;;
+        *)
+            log_error "Cannot install git automatically on OS: ${OS:-unknown}"
+            log_error "Install git manually and re-run the script"
+            exit 1
+            ;;
+    esac
+    log_success "git installed"
 }
 
 # Create user if doesn't exist

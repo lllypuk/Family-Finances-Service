@@ -1,18 +1,32 @@
 version: '3.8'
 
+# Образ собирается из исходников: публичного образа в GHCR нет (D-02).
+# `BUILD_CONTEXT` — путь к корню репозитория относительно project directory
+# (каталог первого `-f`). По умолчанию `..`, то есть файл запускается на месте,
+# из `deploy/`. `install.sh` кладёт compose в `/opt/family-budget`, клонирует
+# исходники в `/opt/family-budget/src` и выставляет `BUILD_CONTEXT=./src`.
+#
+# ВАЖНО: каталоги bind-mount'ов нужно создать ДО первого `up` и отдать 1000:1000
+# (docker/Dockerfile: `USER 1000:1000`). Недостающие каталоги Docker создаёт от
+# root, и тогда SQLite не сможет создать БД:
+#   mkdir -p data backups logs && sudo chown -R 1000:1000 data backups logs
+
 services:
   app:
-    image: ghcr.io/lllypuk/family-finances-service:latest
+    build:
+      context: ${BUILD_CONTEXT:-..}
+      dockerfile: docker/Dockerfile
     container_name: family-budget-app
     restart: unless-stopped
     environment:
       - SERVER_PORT=8080
       - SERVER_HOST=0.0.0.0
       - DATABASE_PATH=/data/budget.db
-      - SESSION_SECRET=${SESSION_SECRET}
-      - CSRF_SECRET=${CSRF_SECRET:-}
+      - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET is required - generate one with `openssl rand -base64 32`}
+      - CSRF_SECRET=${CSRF_SECRET:?CSRF_SECRET is required - generate one with `openssl rand -base64 32`}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - ENVIRONMENT=${ENVIRONMENT:-production}
+      - COOKIE_SECURE=${COOKIE_SECURE:-true}
     volumes:
       - ./data:/data
       - ./backups:/backups
@@ -31,7 +45,9 @@ services:
       - SETGID
       - SETUID
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      # `--spider` шлёт HEAD, а зарегистрирован только GET /health — HEAD уходит
+      # в редирект на /login и healthcheck падает. Поэтому обычный GET в /dev/null.
+      test: ["CMD", "wget", "--quiet", "--tries=1", "-O", "/dev/null", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3

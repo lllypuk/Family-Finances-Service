@@ -1,8 +1,17 @@
 version: '3.8'
 
+# Образ собирается из исходников: публичного образа в GHCR нет (D-02).
+# `BUILD_CONTEXT` — путь к корню репозитория относительно project directory
+# (каталог первого `-f`). По умолчанию `..`, то есть файл запускается на месте,
+# из `deploy/`. `install.sh` кладёт этот файл в `/opt/family-budget`, клонирует
+# исходники в `/opt/family-budget/src` и выставляет `BUILD_CONTEXT=./src`.
+# Поэтому `docker compose pull` тут не работает — только `build`.
+
 services:
   app:
-    image: ghcr.io/lllypuk/family-finances-service:latest
+    build:
+      context: ${BUILD_CONTEXT:-..}
+      dockerfile: docker/Dockerfile
     container_name: family-budget
     restart: unless-stopped
     ports:
@@ -11,16 +20,22 @@ services:
       - SERVER_PORT=8080
       - SERVER_HOST=0.0.0.0
       - DATABASE_PATH=/data/budget.db
-      - SESSION_SECRET=${SESSION_SECRET}
-      - CSRF_SECRET=${CSRF_SECRET:-}
+      - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET is required - generate one with `openssl rand -base64 32`}
+      - CSRF_SECRET=${CSRF_SECRET:?CSRF_SECRET is required - generate one with `openssl rand -base64 32`}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - ENVIRONMENT=${ENVIRONMENT:-production}
+      # Secure на session-cookie. Оставьте true за TLS-прокси; поставьте
+      # COOKIE_SECURE=false, пока сервис отдаётся по http:// — иначе браузер
+      # выбросит cookie и вход зациклится.
+      - COOKIE_SECURE=${COOKIE_SECURE:-true}
     volumes:
       - ./data:/data
       - ./backups:/backups
       - ./logs:/logs
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      # `--spider` шлёт HEAD, а зарегистрирован только GET /health — HEAD уходит
+      # в редирект на /login и healthcheck падает. Поэтому обычный GET в /dev/null.
+      test: ["CMD", "wget", "--quiet", "--tries=1", "-O", "/dev/null", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -36,7 +51,10 @@ services:
       - CHOWN
       - SETGID
       - SETUID
-    user: "1000:1000"  # Run as non-root user
+    # UID/GID должны совпадать с пользователем внутри образа (docker/Dockerfile
+    # создаёт `app` = 1000:1000 и отдаёт ему /data), иначе SQLite не откроет
+    # БД на bind-mount ./data (D-03).
+    user: "1000:1000"
     networks:
       - family-budget-net
 

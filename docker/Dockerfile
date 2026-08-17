@@ -28,8 +28,15 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 FROM alpine:3.20
 
 # Установка необходимых runtime зависимостей
-# Note: User 65534 (nobody) already exists in Alpine
 RUN apk add --no-cache ca-certificates tzdata wget
+
+# Непривилегированный пользователь с фиксированным UID/GID 1000.
+# Раньше здесь был `nobody` (65534), а deploy/docker-compose.prod.yml запускал
+# контейнер от `1000:1000` — на bind-mount `./data` SQLite не мог открыть БД (D-03).
+# Теперь UID один и тот же в образе и в compose; install.sh делает
+# `chown 1000:1000` на data/backups/logs.
+RUN addgroup -g 1000 -S app && \
+    adduser -u 1000 -S -G app -H -s /sbin/nologin app
 
 # Создание рабочего каталога
 WORKDIR /app
@@ -44,13 +51,13 @@ COPY --from=builder /app/migrations /app/migrations
 COPY --from=builder /app/internal/web/templates /app/internal/web/templates
 COPY --from=builder /app/internal/web/static /app/internal/web/static
 
-# Создание директории для данных SQLite
-RUN mkdir -p /data && \
-    chown -R nobody:nobody /data && \
-    chown -R nobody:nobody /app
+# Создание директорий для данных SQLite, бэкапов и логов
+# (deploy/docker-compose.*.yml монтируют /backups и /logs с хоста)
+RUN mkdir -p /data /backups /logs && \
+    chown -R app:app /data /backups /logs /app
 
-# Переключение на непривилегированного пользователя (nobody = 65534)
-USER nobody
+# Переключение на непривилегированного пользователя (app = 1000:1000)
+USER 1000:1000
 
 # Volume для SQLite данных
 VOLUME ["/data"]
@@ -65,9 +72,11 @@ ENV DATABASE_PATH=/data/budget.db \
 # Открытие порта
 EXPOSE 8080
 
-# Healthcheck для проверки состояния приложения
+# Healthcheck для проверки состояния приложения.
+# `--spider` шлёт HEAD, а зарегистрирован только GET /health — HEAD уходит
+# в редирект на /login и healthcheck падает. Поэтому обычный GET в /dev/null.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget -q --spider http://localhost:8080/health || exit 1
+    CMD wget -q -O /dev/null http://localhost:8080/health || exit 1
 
 # Точка входа
 ENTRYPOINT ["/app/family-budget-service"]

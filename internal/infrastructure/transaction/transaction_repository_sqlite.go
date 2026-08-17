@@ -346,17 +346,17 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*transact
 	return &t, nil
 }
 
-// GetByFilter retrieves transactions based on filter criteria
-//
-//nolint:gocognit,funlen // Complex function due to multiple optional filter conditions - necessary for comprehensive filtering
-func (r *SQLiteRepository) GetByFilter(
+// buildFilterConditions собирает WHERE-условия и аргументы для фильтра транзакций.
+// Пагинация (LIMIT/OFFSET) намеренно не добавляется: она нужна только выборке строк,
+// но не подсчёту общего количества (CountByFilter).
+func (r *SQLiteRepository) buildFilterConditions(
 	ctx context.Context,
 	filter transaction.Filter,
-) ([]*transaction.Transaction, error) {
+) ([]string, []any, error) {
 	// Get single family ID
 	familyID, err := r.getSingleFamilyID(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get family ID: %w", err)
+		return nil, nil, fmt.Errorf("failed to get family ID: %w", err)
 	}
 
 	// Build dynamic query parts
@@ -370,7 +370,7 @@ func (r *SQLiteRepository) GetByFilter(
 	// Optional filters
 	if filter.UserID != nil {
 		if validationErr := validation.ValidateUUID(*filter.UserID); validationErr != nil {
-			return nil, fmt.Errorf("invalid user ID: %w", validationErr)
+			return nil, nil, fmt.Errorf("invalid user ID: %w", validationErr)
 		}
 		conditions = append(conditions, "user_id = ?")
 		args = append(args, sqlitehelpers.UUIDToString(*filter.UserID))
@@ -378,7 +378,7 @@ func (r *SQLiteRepository) GetByFilter(
 
 	if filter.CategoryID != nil {
 		if validationErr := validation.ValidateUUID(*filter.CategoryID); validationErr != nil {
-			return nil, fmt.Errorf("invalid category ID: %w", validationErr)
+			return nil, nil, fmt.Errorf("invalid category ID: %w", validationErr)
 		}
 		conditions = append(conditions, "category_id = ?")
 		args = append(args, sqlitehelpers.UUIDToString(*filter.CategoryID))
@@ -424,6 +424,38 @@ func (r *SQLiteRepository) GetByFilter(
 			args = append(args, tag)
 		}
 		conditions = append(conditions, "("+strings.Join(tagConditions, " OR ")+")")
+	}
+
+	return conditions, args, nil
+}
+
+// CountByFilter возвращает общее количество транзакций, подходящих под фильтр,
+// без учёта LIMIT/OFFSET. Нужен пагинации: без реального итога UI не может
+// узнать, есть ли следующая страница.
+func (r *SQLiteRepository) CountByFilter(ctx context.Context, filter transaction.Filter) (int, error) {
+	conditions, args, err := r.buildFilterConditions(ctx, filter)
+	if err != nil {
+		return 0, err
+	}
+
+	query := `SELECT COUNT(*) FROM transactions WHERE ` + strings.Join(conditions, " AND ")
+
+	var total int
+	if scanErr := r.db.QueryRowContext(ctx, query, args...).Scan(&total); scanErr != nil {
+		return 0, fmt.Errorf("failed to count transactions by filter: %w", scanErr)
+	}
+
+	return total, nil
+}
+
+// GetByFilter retrieves transactions based on filter criteria
+func (r *SQLiteRepository) GetByFilter(
+	ctx context.Context,
+	filter transaction.Filter,
+) ([]*transaction.Transaction, error) {
+	conditions, args, err := r.buildFilterConditions(ctx, filter)
+	if err != nil {
+		return nil, err
 	}
 
 	// Build final query

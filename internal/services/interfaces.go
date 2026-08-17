@@ -21,7 +21,7 @@ type UserService interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (*user.User, error)
 	GetUsers(ctx context.Context) ([]*user.User, error)
 	UpdateUser(ctx context.Context, id uuid.UUID, req dto.UpdateUserDTO) (*user.User, error)
-	DeleteUser(ctx context.Context, id uuid.UUID) error
+	DeleteUser(ctx context.Context, id, actorID uuid.UUID) error
 
 	// Business Operations
 	ChangeUserRole(ctx context.Context, userID uuid.UUID, role user.Role) error
@@ -65,6 +65,8 @@ type TransactionService interface {
 		ctx context.Context,
 		filter dto.TransactionFilterDTO,
 	) ([]*transaction.Transaction, error)
+	// CountTransactions возвращает общее число транзакций под фильтр, без учёта Limit/Offset.
+	CountTransactions(ctx context.Context, filter dto.TransactionFilterDTO) (int, error)
 	UpdateTransaction(ctx context.Context, id uuid.UUID, req dto.UpdateTransactionDTO) (*transaction.Transaction, error)
 	DeleteTransaction(ctx context.Context, id uuid.UUID) error
 

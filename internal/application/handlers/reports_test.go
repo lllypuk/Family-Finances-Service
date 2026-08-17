@@ -76,7 +76,6 @@ func createValidReportRequest() handlers.CreateReportRequest {
 		Name:      "Monthly Expenses Report",
 		Type:      "expenses",
 		Period:    "monthly",
-		UserID:    uuid.New(),
 		StartDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 		EndDate:   time.Date(2025, 1, 31, 23, 59, 59, 0, time.UTC),
 	}
@@ -97,6 +96,7 @@ func TestReportHandler_CreateReport_Success(t *testing.T) {
 	httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(httpReq, rec)
+	withSessionUser(c, uuid.New())
 
 	// Act
 	err = handler.CreateReport(c)
@@ -110,6 +110,34 @@ func TestReportHandler_CreateReport_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "NOT_IMPLEMENTED", response.Error.Code)
 	assert.Equal(t, "Report generation API is not implemented yet", response.Error.Message)
+
+	mockRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+}
+
+// TestReportHandler_CreateReport_NoSession — сам хендлер сессию не читает:
+// генерация не реализована, автора отчёта записывать некуда, а анонимный клиент
+// до маршрута не доходит (группа /api/v1 закрыта RequireAPIAuth, см.
+// tests/integration/api_auth_test.go). Ничего, кроме 501, здесь не отдаётся.
+func TestReportHandler_CreateReport_NoSession(t *testing.T) {
+	handler, mockRepo := setupReportHandler()
+
+	body, err := json.Marshal(createValidReportRequest())
+	require.NoError(t, err)
+
+	e := echo.New()
+	httpReq := httptest.NewRequest(http.MethodPost, "/reports", bytes.NewBuffer(body))
+	httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httpReq, rec)
+
+	err = handler.CreateReport(c)
+
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusNotImplemented, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "NOT_IMPLEMENTED", response.Error.Code)
 
 	mockRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 }
@@ -184,6 +212,7 @@ func TestReportHandler_CreateReport_InvalidRequest(t *testing.T) {
 			httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(httpReq, rec)
+			withSessionUser(c, uuid.New())
 
 			// Act
 			err = handler.CreateReport(c)
@@ -210,6 +239,7 @@ func TestReportHandler_CreateReport_RepositoryError(t *testing.T) {
 	httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(httpReq, rec)
+	withSessionUser(c, uuid.New())
 
 	// Act
 	err = handler.CreateReport(c)
@@ -601,6 +631,7 @@ func TestReportHandler_ReportTypes_Validation(t *testing.T) {
 			httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(httpReq, rec)
+			withSessionUser(c, uuid.New())
 
 			err = handler.CreateReport(c)
 			require.NoError(t, err)
@@ -633,6 +664,7 @@ func TestReportHandler_ReportPeriods_Validation(t *testing.T) {
 			httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(httpReq, rec)
+			withSessionUser(c, uuid.New())
 
 			err = handler.CreateReport(c)
 			require.NoError(t, err)
@@ -684,6 +716,7 @@ func TestReportHandler_DateRange_Validation(t *testing.T) {
 			httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(httpReq, rec)
+			withSessionUser(c, uuid.New())
 
 			err = handler.CreateReport(c)
 			require.NoError(t, err)

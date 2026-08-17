@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"fmt"
 	"html/template"
 	"io"
@@ -179,8 +180,22 @@ func loadPageTemplates(tmpl *template.Template, templatesDir string) (*template.
 }
 
 // Render рендерит шаблон с данными
+// Шаблон исполняется в буфер, а не прямо в ответ: при ошибке исполнения
+// (шаблон читает поле, которого нет в переданной структуре) прямая запись
+// успевает отдать клиенту 200 и обрезанный HTML, а обработчик ошибок Echo уже
+// не может ничего изменить — страница молча ломается посередине. С буфером
+// такая ошибка доходит до обработчика и превращается в честный 500.
 func (t *TemplateRenderer) Render(w io.Writer, name string, data any, _ echo.Context) error {
-	return t.templates.ExecuteTemplate(w, name, data)
+	var buf bytes.Buffer
+	if err := t.templates.ExecuteTemplate(&buf, name, data); err != nil {
+		return fmt.Errorf("render template %s: %w", name, err)
+	}
+
+	if _, err := buf.WriteTo(w); err != nil {
+		return fmt.Errorf("write rendered template %s: %w", name, err)
+	}
+
+	return nil
 }
 
 // formatCurrency форматирует сумму с валютой

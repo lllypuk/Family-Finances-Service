@@ -156,7 +156,7 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*user.Use
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("user with id %s not found", id)
+			return nil, fmt.Errorf("user with id %s: %w", id, user.ErrNotFound)
 		}
 		return nil, fmt.Errorf("failed to get user by id: %w", err)
 	}

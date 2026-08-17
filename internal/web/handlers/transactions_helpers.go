@@ -194,8 +194,9 @@ func (h *TransactionHandler) convertTransactionsToViewModels(
 	return viewModels, nil
 }
 
-// buildCategorySelectOptions конвертирует категории в опции для select элементов
-func (h *TransactionHandler) buildCategorySelectOptions(
+// buildCategorySelectOptions конвертирует категории в опции для select элементов.
+// Функция, а не метод: тем же контрактом пользуются и формы бюджетов.
+func buildCategorySelectOptions(
 	categories []*category.Category,
 ) []webModels.CategorySelectOption {
 	var options []webModels.CategorySelectOption
@@ -360,12 +361,18 @@ func (h *TransactionHandler) buildUpdateTransactionDTO(
 	return updateDTO, nil
 }
 
-// renderTransactionFormWithErrors отображает форму с ошибками
+// renderTransactionFormWithErrors отображает форму с ошибками.
+// existing != nil означает форму редактирования: шаблон
+// pages/transactions/edit.html читает .Transaction из корня контекста, и без
+// этого поля перерисовка формы после неудачной валидации отдавала 500.
+// Выбор шаблона идёт по наличию сущности, а не по сравнению с заголовком
+// страницы: заголовок — отображаемый текст, его перевод не должен уводить
+// форму на другой шаблон.
 func (h *TransactionHandler) renderTransactionFormWithErrors(
 	c echo.Context,
 	form webModels.TransactionForm,
 	errors map[string]string,
-	title string,
+	existing *transaction.Transaction,
 ) error {
 	// Получаем категории для селекта
 	categories, err := h.services.Category.GetCategories(c.Request().Context(), nil)
@@ -373,43 +380,49 @@ func (h *TransactionHandler) renderTransactionFormWithErrors(
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get categories")
 	}
 
-	categoryOptions := h.buildCategorySelectOptions(categories)
+	categoryOptions := buildCategorySelectOptions(categories)
 
-	pageData := &PageData{
-		Title:  title,
-		Errors: errors,
-		Messages: []Message{
-			{Type: "error", Text: "Проверьте правильность заполнения формы"},
-		},
-	}
-
-	data := map[string]any{
-		"PageData":            pageData,
-		"Form":                form,
-		tplKeyCategoryOptions: categoryOptions,
-	}
-
+	title := titleNewTransaction
 	template := "pages/transactions/new"
-	if title == "Edit Transaction" {
+	if existing != nil {
+		title = titleEditTransaction
 		template = "pages/transactions/edit"
+	}
+
+	data := struct {
+		*PageData
+
+		Form            webModels.TransactionForm
+		Transaction     *transaction.Transaction
+		CategoryOptions []webModels.CategorySelectOption
+	}{
+		PageData:        h.formPageData(c, title, errors),
+		Form:            form,
+		Transaction:     existing,
+		CategoryOptions: categoryOptions,
 	}
 
 	return h.renderPage(c, template, data)
 }
 
-// getTransactionServiceErrorMessage возвращает пользовательское сообщение об ошибке
+// getTransactionServiceErrorMessage возвращает пользовательское сообщение об ошибке.
+//
+// Как у бюджетов и отчётов, исходный текст ошибки клиенту не подставляется:
+// сообщение уходит в echo.HTTPError и в components/alert, а в ошибку сервиса
+// завёрнута ошибка репозитория — имена таблиц и колонок SQLite, текст
+// ограничений. Наружу идёт только распознанная формулировка либо общая.
 func (h *TransactionHandler) getTransactionServiceErrorMessage(err error) string {
 	errMsg := err.Error()
 	switch {
 	case strings.Contains(errMsg, "category not found"):
-		return fmt.Sprintf("Selected category not found: %s", errMsg)
+		return "Selected category not found"
 	case strings.Contains(errMsg, "insufficient balance"):
-		return fmt.Sprintf("Insufficient budget balance for this category: %s", errMsg)
+		return "Insufficient budget balance for this category"
 	case strings.Contains(errMsg, "invalid date"):
-		return fmt.Sprintf("Invalid transaction date: %s", errMsg)
+		return "Invalid transaction date"
 	case strings.Contains(errMsg, "invalid amount"):
-		return fmt.Sprintf("Invalid transaction amount: %s", errMsg)
+		return "Invalid transaction amount"
 	default:
-		return fmt.Sprintf("Failed to process transaction: %s", errMsg)
+		return "Failed to process transaction"
 	}
 }

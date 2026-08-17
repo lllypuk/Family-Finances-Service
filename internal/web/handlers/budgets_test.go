@@ -22,24 +22,147 @@ import (
 	"family-budget-service/internal/web/handlers"
 )
 
-// setupBudgetHandler creates a test budget handler with mocks
-func setupBudgetHandler() (*handlers.BudgetHandler, *MockBudgetService, *MockCategoryService, *MockTransactionService) {
+// setupBudgetHandlerWithUser creates a test budget handler with mocks, including
+// the user service: buildPageData дочитывает имя и фамилию владельца сессии
+// через UserService, поэтому без него хендлеры страниц падают.
+func setupBudgetHandlerWithUser() (
+	*handlers.BudgetHandler,
+	*MockBudgetService,
+	*MockCategoryService,
+	*MockTransactionService,
+	*MockUserService,
+) {
 	mockBudgetService := new(MockBudgetService)
 	mockCategoryService := new(MockCategoryService)
 	mockTransactionService := new(MockTransactionService)
+	mockUserService := new(MockUserService)
 
 	servicesStruct := &services.Services{
 		Budget:      mockBudgetService,
 		Category:    mockCategoryService,
 		Transaction: mockTransactionService,
+		User:        mockUserService,
 	}
 
 	handler := handlers.NewBudgetHandler(
 		&appHandlers.Repositories{},
 		servicesStruct,
+		false,
 	)
 
+	return handler, mockBudgetService, mockCategoryService, mockTransactionService, mockUserService
+}
+
+// setupBudgetHandler — то же самое для тестов, которым владелец сессии не важен.
+func setupBudgetHandler() (*handlers.BudgetHandler, *MockBudgetService, *MockCategoryService, *MockTransactionService) {
+	handler, mockBudgetService, mockCategoryService, mockTransactionService, mockUserService :=
+		setupBudgetHandlerWithUser()
+
+	mockUserService.On("GetUserByID", mock.Anything, mock.Anything).
+		Return(&user.User{ID: uuid.New(), FirstName: "Test", LastName: "User"}, nil).
+		Maybe()
+
 	return handler, mockBudgetService, mockCategoryService, mockTransactionService
+}
+
+// TestBudgetHandler_PageDataContract проверяет контракт данных страниц
+// бюджетов: шаблоны шапки читают `.CurrentUser` из **корня** контекста
+// (`{{if .CurrentUser}}`), поэтому *PageData обязан быть встроен, а не лежать
+// в map под ключом "PageData". Регрессия U-02
+// (docs/specs/003-ui-ux-audit.md#u-02) возникла именно из-за вложенности
+// на уровень глубже.
+func TestBudgetHandler_PageDataContract(t *testing.T) {
+	userID := uuid.New()
+	testBudget := createTestBudgetWithSpent("Food Budget", 1000, 500, nil, true)
+
+	newHandler := func(t *testing.T) *handlers.BudgetHandler {
+		t.Helper()
+
+		handler, mockBudgetService, mockCategoryService, mockTxService, mockUserService := setupBudgetHandlerWithUser()
+
+		mockBudgetService.On("GetAllBudgets", mock.Anything, mock.Anything).
+			Return([]*budget.Budget{testBudget}, nil).Maybe()
+		mockBudgetService.On("GetBudgetByID", mock.Anything, testBudget.ID).
+			Return(testBudget, nil).Maybe()
+		mockCategoryService.On("GetCategories", mock.Anything, mock.Anything).
+			Return([]*category.Category{createTestCategory("Food", category.TypeExpense)}, nil).Maybe()
+		mockTxService.On("GetTransactionsByDateRange", mock.Anything, mock.Anything, mock.Anything).
+			Return([]*transaction.Transaction{}, nil).Maybe()
+		mockUserService.On("GetUserByID", mock.Anything, userID).
+			Return(&user.User{ID: userID, Email: "test@example.com", FirstName: "John", LastName: "Doe"}, nil)
+
+		return handler
+	}
+
+	t.Run("Index", func(t *testing.T) {
+		handler := newHandler(t)
+
+		c, renderer := newCapturingContext(http.MethodGet, "/budgets")
+		withSession(c, userID, user.RoleAdmin)
+
+		require.NoError(t, handler.Index(c))
+
+		out, err := renderer.renderPageData()
+		require.NoError(t, err, "данные хендлера не дают шаблону .CurrentUser в корне контекста")
+		assert.Equal(t, "John Doe|admin|Бюджеты", out)
+	})
+
+	t.Run("New", func(t *testing.T) {
+		handler := newHandler(t)
+
+		c, renderer := newCapturingContext(http.MethodGet, "/budgets/new")
+		withSession(c, userID, user.RoleAdmin)
+
+		require.NoError(t, handler.New(c))
+
+		out, err := renderer.renderPageData()
+		require.NoError(t, err)
+		assert.Equal(t, "John Doe|admin|Новый бюджет", out)
+	})
+
+	t.Run("Edit", func(t *testing.T) {
+		handler := newHandler(t)
+
+		c, renderer := newCapturingContext(http.MethodGet, "/budgets/"+testBudget.ID.String()+"/edit")
+		c.SetParamNames("id")
+		c.SetParamValues(testBudget.ID.String())
+		withSession(c, userID, user.RoleAdmin)
+
+		require.NoError(t, handler.Edit(c))
+
+		out, err := renderer.renderPageData()
+		require.NoError(t, err)
+		assert.Equal(t, "John Doe|admin|Редактирование бюджета: Food Budget", out)
+	})
+
+	t.Run("Show", func(t *testing.T) {
+		handler := newHandler(t)
+
+		c, renderer := newCapturingContext(http.MethodGet, "/budgets/"+testBudget.ID.String())
+		c.SetParamNames("id")
+		c.SetParamValues(testBudget.ID.String())
+		withSession(c, userID, user.RoleAdmin)
+
+		require.NoError(t, handler.Show(c))
+
+		out, err := renderer.renderPageData()
+		require.NoError(t, err)
+		assert.Equal(t, "John Doe|admin|Бюджет: Food Budget", out)
+	})
+
+	t.Run("FormWithErrors", func(t *testing.T) {
+		handler := newHandler(t)
+
+		// Пустая форма не проходит валидацию — хендлер перерисовывает её.
+		c, renderer := newCapturingContext(http.MethodPost, "/budgets")
+		withSession(c, userID, user.RoleAdmin)
+
+		require.NoError(t, handler.Create(c))
+
+		out, err := renderer.renderPageData()
+		require.NoError(t, err)
+		assert.Equal(t, "John Doe|admin|Новый бюджет", out)
+	})
 }
 
 // createTestBudgetWithSpent creates a test budget with spent amount

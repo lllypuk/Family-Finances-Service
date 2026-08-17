@@ -15,6 +15,7 @@
 
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
+    {{if .CSRFToken}}<meta name="csrf-token" content="{{.CSRFToken}}">{{end}}
 </head>
 <body>
     <!-- Navigation -->
@@ -39,10 +40,8 @@
                         {{.CurrentUser.FirstName}} {{.CurrentUser.LastName}}
                     </summary>
                     <ul>
-                        <li><a href="/profile">Профиль</a></li>
                         {{if eq .CurrentUser.Role "admin"}}
                         <li><a href="/users">Пользователи</a></li>
-                        <li><a href="/family/settings">Настройки семьи</a></li>
                         {{end}}
                         <li>
                             <form method="POST" action="/logout" style="margin: 0;">
@@ -123,7 +122,7 @@
             {{if .Budget.IsOverBudget}}
             <div class="alert alert-danger" style="margin-top: 1rem;">
                 <h4>⚠️ Бюджет превышен!</h4>
-                <p>Вы потратили на {{.Budget.FormattedOverspent}} ₽ больше запланированного.</p>
+                <p>Вы потратили на {{.Budget.FormattedOverage}} ₽ больше запланированного.</p>
             </div>
             {{else if gt .Budget.Percentage 80.0}}
             <div class="alert alert-warning" style="margin-top: 1rem;">
@@ -189,14 +188,11 @@
                         <tr>
                             <td>
                                 <time datetime="{{.Date.Format "2006-01-02"}}">
-                                    {{.FormattedDate}}
+                                    {{.Date.Format "02.01.2006"}}
                                 </time>
                             </td>
                             <td>
                                 <strong>{{.Description}}</strong>
-                                {{if .UserName}}
-                                <br><small>от {{.UserName}}</small>
-                                {{end}}
                             </td>
                             <td>
                                 <span class="category-badge category-{{.Type}}">

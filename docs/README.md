@@ -15,7 +15,8 @@
 4. **[Стратегия тестирования](guides/testing_strategy.md)** - Как мы тестируем код
 
 ### Для работы с задачами
-- **[Текущие задачи](current_task.md)** - Статус проекта и следующие шаги
+- **[Бэклог](backlog.md)** - Статус проекта и следующие шаги
+- **[Аудиты](specs/README.md)** - Что найдено и что из этого закрыто
 - **[Новая фича](workflows/new_feature.md)** - Пошаговый процесс добавления функций
 - **[Исправление багов](workflows/bug_fix.md)** - Алгоритм работы с ошибками
 
@@ -64,7 +65,7 @@
 ### 📊 Основные документы
 - **[product_brief.md](product_brief.md)** - Бизнес-контекст и цели проекта
 - **[tech_stack.md](tech_stack.md)** - Технологический паспорт
-- **[current_tasks.md](current_tasks.md)** - Активные задачи и их статусы
+- **[backlog.md](backlog.md)** - Активные задачи и их статусы
 
 ### 🏗️ patterns/ - Архитектурные решения
 - **[api_standards.md](patterns/api_standards.md)** - Стандарты проектирования API
@@ -74,9 +75,16 @@
 - **[coding_standards.md](guides/coding_standards.md)** - Стиль кода и соглашения
 - **[testing_strategy.md](guides/testing_strategy.md)** - Подходы к тестированию
 
-### 📋 specs/ - Технические задания
-- **[feature_xyz.md](specs/feature_xyz.md)** - Шаблон для новых функций
-- *Здесь будут появляться спецификации новых фич*
+### 📋 specs/ - Аудиты и спецификации
+- **[specs/README.md](specs/README.md)** - Навигация по аудитам
+- **[001-project-assessment.md](specs/001-project-assessment.md)** - Общая оценка проекта
+- **[002-security-audit.md](specs/002-security-audit.md)** - Аудит безопасности (S-01…S-05, со статусами)
+- **[003-ui-ux-audit.md](specs/003-ui-ux-audit.md)** - Аудит интерфейса (U-01…U-05)
+- **[004-deployment-readiness.md](specs/004-deployment-readiness.md)** - Готовность к развёртыванию (D-01…D-04)
+
+### 🗂️ plans/ - Планы реализации
+- `plans/*.md` - планы в работе, задача за задачей, с отметками `[x]`
+- `plans/completed/` - завершённые планы (архив решений и отклонений)
 
 ### ⚙️ workflows/ - Рабочие процессы
 - **[new_feature.md](workflows/new_feature.md)** - Жизненный цикл новой функции
@@ -86,7 +94,7 @@
 
 ### При добавлении новой функции:
 1. Создайте спецификацию в `specs/`
-2. Обновите `current_tasks.md`
+2. Обновите `backlog.md`
 3. Следуйте процессу из `workflows/new_feature.md`
 
 ### При изменении архитектуры:
@@ -96,7 +104,7 @@
 
 ### При обнаружении бага:
 1. Следуйте `workflows/bug_fix.md`
-2. Обновите `current_tasks.md`
+2. Обновите `backlog.md`
 3. Рассмотрите необходимость обновления `guides/testing_strategy.md`
 
 ## 🤝 Принципы работы с документацией

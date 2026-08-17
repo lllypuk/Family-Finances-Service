@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -73,8 +74,8 @@ func (m *MockUserService) UpdateUser(ctx context.Context, id uuid.UUID, req dto.
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
-func (m *MockUserService) DeleteUser(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockUserService) DeleteUser(ctx context.Context, id, actorID uuid.UUID) error {
+	args := m.Called(ctx, id, actorID)
 	return args.Error(0)
 }
 
@@ -261,6 +262,14 @@ func (m *MockTransactionService) GetAllTransactions(
 	filter dto.TransactionFilterDTO,
 ) ([]*transaction.Transaction, error) {
 	return nil, nil
+}
+
+//nolint:revive // test mock
+func (m *MockTransactionService) CountTransactions(
+	ctx context.Context,
+	filter dto.TransactionFilterDTO,
+) (int, error) {
+	return 0, nil
 }
 
 //nolint:revive // test mock
@@ -569,6 +578,51 @@ func TestNewHTTPServerWithObservability(t *testing.T) {
 	assert.NotNil(t, server.Echo())
 }
 
+// TestNewHTTPServer_BrokenTemplatesDir_ReportsInitError — сервер не падает,
+// когда шаблоны не читаются, но обязан сохранить ошибку: на неё смотрит
+// testhelpers.SetupHTTPServer и вызывающий код в internal/run.go, иначе тесты
+// молча работают без сессий, CSRF и веб-маршрутов.
+func TestNewHTTPServer_BrokenTemplatesDir_ReportsInitError(t *testing.T) {
+	repos := NewMockRepositories()
+	mockServices := NewMockServices()
+	config := &application.Config{
+		Port:          "8080",
+		Host:          "localhost",
+		SessionSecret: "test-session-secret",
+		TemplatesDir:  filepath.Join(t.TempDir(), "no-such-templates"),
+	}
+
+	server := application.NewHTTPServer(&repos.Repositories, mockServices, config)
+
+	require.Error(t, server.WebServerInitError(), "битый каталог шаблонов обязан оставить ошибку инициализации")
+
+	// Веб-слой не зарегистрирован — /login отсутствует, а /health и API живы.
+	loginRec := httptest.NewRecorder()
+	server.Echo().ServeHTTP(loginRec, httptest.NewRequest(http.MethodGet, "/login", nil))
+	assert.Equal(t, http.StatusNotFound, loginRec.Code)
+
+	healthRec := httptest.NewRecorder()
+	server.Echo().ServeHTTP(healthRec, httptest.NewRequest(http.MethodGet, "/health", nil))
+	assert.Equal(t, http.StatusOK, healthRec.Code)
+}
+
+// TestNewHTTPServer_ValidTemplatesDir_NoInitError — зеркало предыдущего теста:
+// с настоящим каталогом шаблонов ошибки быть не должно.
+func TestNewHTTPServer_ValidTemplatesDir_NoInitError(t *testing.T) {
+	repos := NewMockRepositories()
+	mockServices := NewMockServices()
+	config := &application.Config{
+		Port:          "8080",
+		Host:          "localhost",
+		SessionSecret: "test-session-secret",
+		TemplatesDir:  filepath.Join("..", "web", "templates"),
+	}
+
+	server := application.NewHTTPServer(&repos.Repositories, mockServices, config)
+
+	require.NoError(t, server.WebServerInitError())
+}
+
 func TestHTTPServer_Echo(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
@@ -755,9 +809,16 @@ func TestHTTPServer_IntegrationWithRealEndpoints(t *testing.T) {
 		expected int
 	}{
 		{"GET", "/health", http.StatusOK},
-		{"GET", "/", http.StatusNotFound},            // Dashboard not available without observability
-		{"GET", "/api/v1/categories", http.StatusOK}, // Returns empty list in single-family model
-		{"GET", "/api/v1/nonexistent", http.StatusNotFound},
+		{"GET", "/", http.StatusNotFound}, // Dashboard not available without observability
+		// Группа /api/v1 закрыта RequireAPIAuth (S-01). Этот сервер собран на моках
+		// без веб-слоя, поэтому сессии здесь нет и любой запрос к API — 401.
+		// Аутентифицированный путь (200) проверяется на полном стеке:
+		// tests/integration/api_auth_test.go, TestAPIAuth_AuthenticatedRequestsAllowed.
+		{"GET", "/api/v1/categories", http.StatusUnauthorized},
+		// Несуществующий путь внутри группы тоже отдаёт 401: Echo вешает
+		// group-middleware на catch-all маршрут группы, и это правильно — анонимный
+		// клиент не должен различать существующие и несуществующие маршруты API.
+		{"GET", "/api/v1/nonexistent", http.StatusUnauthorized},
 	}
 
 	for _, tc := range testCases {

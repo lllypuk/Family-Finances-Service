@@ -19,9 +19,9 @@ type BackupHandler struct {
 }
 
 // NewBackupHandler creates a new BackupHandler
-func NewBackupHandler(repos *handlers.Repositories, services *services.Services) *BackupHandler {
+func NewBackupHandler(repos *handlers.Repositories, services *services.Services, cookieSecure bool) *BackupHandler {
 	return &BackupHandler{
-		BaseHandler: NewBaseHandler(repos, services),
+		BaseHandler: NewBaseHandler(repos, services, cookieSecure),
 	}
 }
 
@@ -72,7 +72,7 @@ func (h *BackupHandler) BackupPage(c echo.Context) error {
 	csrfToken, _ := middleware.GetCSRFToken(c)
 
 	data := map[string]any{
-		"Title":   "Резервные копии",
+		"Title":   titleBackup,
 		"Backups": backups,
 		tplKeyCurrentUser: &SessionData{
 			UserID:    sessionData.UserID,
@@ -97,14 +97,14 @@ func (h *BackupHandler) CreateBackup(c echo.Context) error {
 	// Create backup
 	backupInfo, err := h.services.Backup.CreateBackup(c.Request().Context())
 	if err != nil {
-		if IsHTMXRequest(c) {
+		if h.IsHTMXRequest(c) {
 			return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create backup")
 		}
 		return h.redirectWithError(c, "/admin/backup", "Failed to create backup")
 	}
 
 	// If HTMX request, return partial
-	if IsHTMXRequest(c) {
+	if h.IsHTMXRequest(c) {
 		data := map[string]any{
 			"Backup": backupInfo,
 		}
@@ -173,7 +173,7 @@ func (h *BackupHandler) DeleteBackup(c echo.Context) error {
 	}
 
 	// If HTMX request, return empty response (element will be deleted from DOM)
-	if IsHTMXRequest(c) {
+	if h.IsHTMXRequest(c) {
 		return c.NoContent(http.StatusOK)
 	}
 
@@ -205,7 +205,7 @@ func (h *BackupHandler) RestoreBackup(c echo.Context) error {
 	}
 
 	// Return success message
-	if IsHTMXRequest(c) {
+	if h.IsHTMXRequest(c) {
 		data := map[string]any{
 			"Message": "База данных восстановлена. Перезапустите приложение.",
 			"Type":    "warning",
@@ -214,9 +214,4 @@ func (h *BackupHandler) RestoreBackup(c echo.Context) error {
 	}
 
 	return h.redirectWithSuccess(c, "/admin/backup", "Database restored. Please restart the application.")
-}
-
-// IsHTMXRequest checks if the request is from HTMX
-func IsHTMXRequest(c echo.Context) bool {
-	return c.Request().Header.Get("Hx-Request") == HTMXRequestHeader
 }

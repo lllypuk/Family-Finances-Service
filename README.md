@@ -14,8 +14,11 @@ This project is in **active development** with the following achievements:
 - ✅ **Admin panel** — user and invite management
 - ✅ **Lightweight SQLite database** for simple deployment
 - ✅ CI/CD pipelines with GitHub Actions
-- ✅ **Single Docker container** — only 50MB
-- ✅ Multi-platform builds (linux/amd64, linux/arm64)
+- ✅ **Single Docker container**, built from source (`docker/Dockerfile`)
+- 🚧 Multi-platform builds (linux/amd64, linux/arm64) — the workflow exists, but no
+  release has been tagged yet, so nothing is published to GHCR. Every compose file
+  builds locally instead of pulling; see
+  [docs/specs/004-deployment-readiness.md](docs/specs/004-deployment-readiness.md#d-02)
 
 ## 🚀 Features
 
@@ -33,9 +36,34 @@ This project is in **active development** with the following achievements:
 
 ## API Readiness (Ready / Experimental)
 
+### Authentication is required — read this first
+
+The whole `/api/v1` group sits behind `RequireAPIAuth`. There is no anonymous access
+and there are no API tokens yet: **the only credential is the web session cookie**.
+
+| Request | Response |
+|---|---|
+| Any `/api/v1/*` without a session | `401` + `{"error":{"code":"UNAUTHORIZED","message":"Authentication required"}}` |
+| `POST`/`PUT`/`DELETE` without `X-Csrf-Token` | `403 CSRF token validation failed` (global CSRF middleware runs first) |
+| `POST`/`PUT`/`DELETE` with a valid token but no session | `401` |
+| Role not allowed for the route | `403` + `{"error":{"code":"FORBIDDEN","message":"Insufficient permissions"}}` |
+
+Role model mirrors the web UI:
+
+- the whole `/api/v1/users` group (including `GET /api/v1/users/:id`) and
+  `DELETE /api/v1/categories/:id` — **admin only**
+- `/api/v1/{categories,transactions,budgets,reports}` — **admin or member** (`child` gets `403`)
+
+The author of a record is taken from the session: `user_id` is no longer part of
+`CreateTransactionRequest` / `CreateReportRequest`, so sending it in the body has no effect.
+
+A programmatic client therefore has to keep a cookie jar and fetch a CSRF token from a
+rendered page — see [`deploy/README.md`](deploy/README.md#programmatic-api-clients) for a
+working `curl` walkthrough.
+
 ### Ready (current behavior)
 
-- Core REST API for users, categories, transactions, budgets
+- Core REST API for users, categories, transactions, budgets — session-authenticated, role-gated
 - Invite, admin, and backup management APIs/web flows
 - Stored reports API endpoints: list, get by ID, delete
 - Web reports UI: generate preview/save/view/delete/export CSV for expense, income, budget, cash-flow, and category-breakdown reports
@@ -43,6 +71,8 @@ This project is in **active development** with the following achievements:
 
 ### Experimental / In Progress
 
+- **No API tokens.** Session cookies only — fine for a browser or a scripted cookie jar,
+  awkward for a headless integration. Token auth is a separate, not-yet-written plan
 - `POST /api/v1/reports` currently returns `501 Not Implemented` (report generation API is not exposed yet)
 - Advanced analytics/report-generation features described in roadmap-style text are not fully available via public API
 - Scheduled reports, forecasts, insights, and benchmark analytics remain hidden/placeholder service capabilities
@@ -69,9 +99,11 @@ This project is in **active development** with the following achievements:
 
 ### DevOps and Quality
 
-- **Single Docker container** (~50MB) for simple deployment
+- **Single Docker container** (~50MB) for simple deployment — built locally from `docker/Dockerfile`;
+  nothing published to a registry yet
 - **GitHub Actions** CI/CD with security scanning
-- **Multi-platform builds** (linux/amd64, linux/arm64)
+- **Multi-platform builds** (linux/amd64, linux/arm64) — workflow only; images are built locally from
+  `docker/Dockerfile`, nothing published to a registry yet
 - **Fast testing** with in-memory SQLite (no Docker)
 - **Security scanning** (CodeQL, Semgrep, TruffleHog)
 
@@ -87,12 +119,13 @@ This project is in **active development** with the following achievements:
 ### Option 1: Docker (Recommended)
 
 ```bash
-# 1. Create .env file
+# 1. Create .env file in the repository root
 cp .env.example .env
-# Edit SESSION_SECRET in .env!
+# Set SESSION_SECRET and CSRF_SECRET — both are required, compose won't start without them:
+#   openssl rand -base64 32
 
-# 2. Start container
-docker-compose -f docker/docker-compose.yml up -d
+# 2. Start container (make docker-up-d does the same)
+docker compose --project-directory . -f docker/docker-compose.yml up -d
 
 # 3. Open in browser
 # http://localhost:8080
@@ -140,6 +173,7 @@ make pre-commit       # Full pre-commit check
 make docker-up        # Run in Docker
 make docker-down      # Stop container
 make docker-logs      # View logs
+make compose-config   # Validate all docker-compose files (docker/ + deploy/)
 
 # SQLite database
 make sqlite-backup    # Create backup
@@ -187,7 +221,8 @@ The project follows **Clean Architecture** principles with production-ready impl
 ├── tests/                   # Integration tests and benchmarks
 │   ├── integration/        # Cross-component integration tests
 │   └── benchmarks/         # Load testing and benchmarks
-├── .memory_bank/           # Comprehensive project documentation
+├── docs/                   # Project documentation, audits, and plans
+├── deploy/                 # Self-hosted deployment configs and scripts
 ├── docker/                 # Docker Compose configurations
 └── .github/workflows/      # CI/CD pipelines (ci, docker, security, release)
 ```
@@ -225,21 +260,30 @@ The application uses environment variables for configuration. Key variables:
 | `SESSION_SECRET`       | insecure dev default (change in production)          | Session encryption key                                |
 | `SESSION_TIMEOUT`      | `24h`                                                | Session lifetime                                      |
 | `CSRF_SECRET`          | insecure dev default (change in production)          | CSRF signing secret                                   |
-| `COOKIE_SECURE`        | `false` (forced `true` in production)                | Secure cookie flag                                    |
+| `COOKIE_SECURE`        | `false` (`true` in production unless set)            | `Secure` flag on the session cookie. Set to `false` when serving over plain HTTP (no TLS proxy yet) — otherwise the browser drops the cookie and login loops |
 | `COOKIE_HTTP_ONLY`     | `true`                                               | HttpOnly cookie flag                                  |
 | `COOKIE_SAME_SITE`     | `Lax`                                                | SameSite cookie mode                                  |
 
 ## Running with Docker
 
+`SESSION_SECRET` and `CSRF_SECRET` are mandatory: the compose file declares them as
+`${VAR:?...}`, so an unset or empty value aborts the command with an explicit message
+instead of silently booting with a well-known default.
+
+`.env` belongs in the **repository root**. Compose v2 resolves `.env` (and relative
+paths such as `DATA_DIR`) against the *project directory*, which defaults to the
+directory of the first `-f` file — `docker/`. `--project-directory .` moves it back to
+the root, which is why every command below (and every `make docker-*` target) passes it.
+
 ```bash
 # Build and start all services
-docker-compose -f docker/docker-compose.yml up --build
+docker compose --project-directory . -f docker/docker-compose.yml up --build
 
 # Run in background
-docker-compose -f docker/docker-compose.yml up -d
+docker compose --project-directory . -f docker/docker-compose.yml up -d
 
 # Stop services
-docker-compose -f docker/docker-compose.yml down
+docker compose --project-directory . -f docker/docker-compose.yml down
 ```
 
 ## Development
@@ -281,7 +325,9 @@ make lint             # Code quality checks
 
 ### Deployment Readiness
 
-- ✅ **Multi-platform Docker images** published to GitHub Container Registry
+- 🚧 **Multi-platform Docker images** — not published. No release has been tagged, and
+  `.github/workflows/docker.yml` still lacks `file: docker/Dockerfile`, so the publish job would fail
+  even on a tag; see [docs/specs/004-deployment-readiness.md](docs/specs/004-deployment-readiness.md#d-02)
 - ✅ **Docker-ready** with health checks and graceful shutdown
 - ✅ **Environment configuration** with validation and defaults
 - ✅ **DB connection management** and connection pooling
@@ -307,17 +353,23 @@ make lint             # Code quality checks
 The project includes **complete deployment infrastructure** for installation on your own server with enterprise-grade
 automation, security, and monitoring.
 
-### ⚡ Quick Deployment (One Command)
+### ⚡ Quick Deployment
 
 ```bash
-# Automatic installation on fresh Linux VM
-curl -fsSL https://raw.githubusercontent.com/lllypuk/Family-Finances-Service/main/deploy/scripts/install.sh | sudo bash
-
-# Or clone and run
+# Clone the repository and run the installer from it
 git clone https://github.com/lllypuk/Family-Finances-Service.git
 cd Family-Finances-Service
 sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@example.com
 ```
+
+The installer cannot be piped into `bash` (`curl … | sudo bash`): it sources `lib/common.sh`,
+`lib/docker.sh` and `lib/firewall.sh` from its own directory, which does not exist when the script
+is read from stdin. Always clone first.
+
+**The deployment builds from source, it does not pull an image.** `install.sh` clones the repository
+into `/opt/family-budget/src` (`REPO_GIT_URL` / `REPO_REF` env vars, default: upstream URL and `main`)
+and builds the Docker image on the server, so the machine needs `git` and outbound network access.
+The build is also why the RAM check is what it is (see "Automation and Operations" below).
 
 ### 🖥️ Supported Operating Systems
 
@@ -338,7 +390,9 @@ sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@examp
 **Automatically configured during installation:**
 
 - 🔐 **TLS/SSL** — automatic Let's Encrypt certificates with auto-renewal
-- 🛡️ **Rate Limiting** — 5 attempts/min for login, brute-force protection
+- 🛡️ **Rate Limiting** — 5 attempts/min for login. These limits live in the nginx/Caddy configs only;
+  the application has no built-in rate limiting, so `docker-compose.minimal.yml` and native systemd
+  deployments get none of it
 - 🔥 **Firewall** — UFW/firewalld with blocked direct app port access
 - 🚫 **Fail2ban** — automatic IP blocking after failed login attempts (5 attempts → 1 hour ban)
 - 🔑 **Security Headers** — CSP, XSS Protection, HSTS, Referrer Policy
@@ -355,8 +409,9 @@ sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@examp
 # Upgrade with automatic rollback
 sudo ./deploy/scripts/upgrade.sh
 
-# Upgrade to specific version
-sudo ./deploy/scripts/upgrade.sh --version v1.2.3
+# Upgrade to a specific git ref — tag, branch or commit (no tags exist yet, so use a branch/commit)
+sudo ./deploy/scripts/upgrade.sh --version main
+sudo ./deploy/scripts/upgrade.sh --version 63a4ea3
 
 # Rollback to previous version
 sudo ./deploy/scripts/upgrade.sh rollback
@@ -413,7 +468,9 @@ sudo ./deploy/scripts/setup-fail2ban.sh
 
 ✅ **Installation:**
 
-- System requirements check (2GB RAM, 10GB disk)
+- System requirements check (minimum 512MB RAM, 10GB free disk, internet connectivity). The RAM floor is
+  sized for the local Docker image build, not for the running service, which fits in 128–256MB; below
+  1GB the installer warns that `go build` may be OOM-killed and suggests adding swap
 - Docker and dependencies installation
 - Firewall setup (SSH, HTTP, HTTPS allowed; port 8080 blocked)
 - Cryptographically strong secret generation
@@ -456,16 +513,12 @@ sudo ./deploy/scripts/setup-fail2ban.sh
     - Troubleshooting
     - Performance
 
-**Task specifications in `docs/tasks/`:**
+**Where the details live:**
 
-- ✅ [001: Install Script](docs/tasks/001-install-script.md) — **COMPLETE**
-- ✅ [002: Reverse Proxy Config](docs/tasks/002-reverse-proxy-config.md) — **COMPLETE**
-- ✅ [003: Production Docker Compose](docs/tasks/003-docker-compose-production.md) — **COMPLETE**
-- ✅ [004: Systemd Services](docs/tasks/004-systemd-service.md) — **COMPLETE**
-- ✅ [005: Upgrade Script](docs/tasks/005-upgrade-script.md) — **COMPLETE**
-- ✅ [006: Security Hardening](docs/tasks/006-security-hardening.md) — **COMPLETE**
-- ✅ [007: Deployment Documentation](docs/tasks/007-deployment-documentation.md) — **COMPLETE**
-- ✅ [008: Uninstall Script](docs/tasks/008-uninstall-script.md) — **COMPLETE**
+- 📖 **[deploy/README.md](deploy/README.md)** — every script, compose file, reverse-proxy config and
+  systemd unit, with the operational procedures for each
+- 🔍 **[docs/specs/004-deployment-readiness.md](docs/specs/004-deployment-readiness.md)** — deployment
+  readiness audit: what is verified, what is still open (image publishing, release tag)
 
 ### 🎯 Deployment Statistics
 
@@ -501,12 +554,12 @@ sudo ./deploy/scripts/setup-fail2ban.sh
 ### Developer Resources
 
 - **[CLAUDE.md](CLAUDE.md)** - Comprehensive development and architecture guidance
-- **[.memory_bank](.memory_bank/)** - Detailed project documentation including:
+- **[docs/](docs/README.md)** - Detailed project documentation including:
     - Product brief and business context
     - Technical architecture and design decisions
     - Testing strategy and implementation details
-    - Current project status and roadmap
-- **[docs/tasks/](docs/tasks/)** - Self-hosted deployment task specifications:
+    - Audit findings (`docs/specs/`) and implementation plans (`docs/plans/`)
+- **[deploy/README.md](deploy/README.md)** - Self-hosted deployment guide:
     - Installation and upgrade scripts
     - Nginx/Caddy configurations for TLS/SSL
     - Systemd services for native deployment
@@ -514,9 +567,10 @@ sudo ./deploy/scripts/setup-fail2ban.sh
 
 ### API Documentation
 
-- **REST API** with comprehensive endpoint coverage
-- **OpenAPI 3.0** specification (available at `/api/docs`)
-- **Postman collection** for API testing and integration
+- **REST API** covering users, categories, transactions, budgets, and stored reports
+- Request/response shapes live in `internal/application/handlers/types.go`; the error
+  envelope is in `internal/application/handlers/errors.go`
+- There is **no** OpenAPI spec, `/api/docs` endpoint, or Postman collection yet
 
 ## License
 
