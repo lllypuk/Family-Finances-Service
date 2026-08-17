@@ -10,7 +10,7 @@ on:
     - cron: "0 2 * * 0"
 
 env:
-  GO_VERSION: "1.26.5"
+  GO_VERSION: "1.26.6"
 
 jobs:
   codeql:
@@ -190,6 +190,10 @@ jobs:
           [[IgnoredVulns]]
           id = "GO-2026-4337"
           reason = "Fixed by upgrading to Go 1.26.0. This vulnerability is resolved by the Go version update."
+
+          [[IgnoredVulns]]
+          id = "GO-2026-5932"
+          reason = "golang.org/x/crypto/openpgp is unmaintained and has no fix version. This project imports only golang.org/x/crypto/bcrypt; govulncheck confirms the openpgp code is never called."
           EOF
 
       - name: Run OSV Scanner
