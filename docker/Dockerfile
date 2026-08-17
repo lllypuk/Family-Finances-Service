@@ -1,5 +1,5 @@
 # Multi-stage build для оптимизации размера образа
-FROM golang:1.26-alpine AS builder
+FROM golang:1.26-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83 AS builder
 
 # Установка необходимых инструментов
 RUN apk add --no-cache ca-certificates git tzdata
@@ -25,7 +25,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     ./cmd/server
 
 # Финальный образ - используем alpine вместо scratch для лучшей совместимости
-FROM alpine:3.20
+FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
 
 # Установка необходимых runtime зависимостей
 RUN apk add --no-cache ca-certificates tzdata wget

@@ -44,8 +44,11 @@ updates:
       - "github-actions"
 
   # Docker
+  # directory обязан указывать на каталог с Dockerfile: при "/" Dependabot искал
+  # ./Dockerfile, которого нет, и docker-обновления не приезжали вообще —
+  # а базовые образы теперь пришпилены по дайджесту и без него бы не обновлялись.
   - package-ecosystem: "docker"
-    directory: "/"
+    directory: "/docker"
     schedule:
       interval: "weekly"
       day: "wednesday"

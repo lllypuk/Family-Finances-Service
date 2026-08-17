@@ -253,3 +253,13 @@ any workflow that declares a top-level `env` or `defaults` (`security.yml` decla
 job running `ossf/scorecard-action` may hold `id-token: write`. Keep that file free of global `env`/`defaults`, and
 do not add steps beyond the action's approved list (`actions/checkout`, `actions/upload-artifact`,
 `github/codeql-action/upload-sarif`, `ossf/scorecard-action`, `step-security/harden-runner`).
+
+**Every `uses:` is pinned to a commit SHA** with the version as a trailing comment
+(`uses: actions/checkout@d23441a… # v6.1.0`), and both `FROM` lines in `docker/Dockerfile` are pinned by digest.
+There are no exceptions. Do not reintroduce a tag or branch ref (`@v4`, `@main`, `@master`) — Dependabot updates
+the SHA and its comment together. `go install` in CI likewise pins exact tool versions, never `@latest`.
+
+**Token permissions:** every workflow declares a top-level `permissions: contents: read`, and write scopes are
+granted per job (`packages: write` to push images, `security-events: write` to upload SARIF, `contents: write` only
+for the release job). Job-level `permissions` *replaces* the top-level block rather than merging with it, so a job
+that needs `security-events: write` must also restate `contents: read` or its `actions/checkout` loses the token.
