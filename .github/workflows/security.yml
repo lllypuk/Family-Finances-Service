@@ -129,8 +129,11 @@ jobs:
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          base: main
-          head: HEAD
+          # base/head намеренно не заданы: при push в main они оба резолвились
+          # в один коммит и экшен падал с "BASE and HEAD commits are the same".
+          # Без них диапазон выбирается по типу события: push →
+          # event.before..event.after, pull_request → base.sha..head.sha,
+          # schedule → полное сканирование истории.
           extra_args: --debug --only-verified
 
   semgrep:
@@ -208,27 +211,7 @@ jobs:
         with:
           sarif_file: osv-results.sarif
 
-  security-scorecard:
-    name: OSSF Scorecard
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      id-token: write
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - name: Run analysis
-        uses: ossf/scorecard-action@v2.4.3
-        with:
-          results_file: results.sarif
-          results_format: sarif
-          publish_results: true
-
-      - name: Upload to code-scanning
-        uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: results.sarif
+# OSSF Scorecard живёт в отдельном scorecard.yml: с publish_results: true
+# scorecard-action отвергает результаты любого workflow, где объявлен глобальный
+# env или defaults — а здесь есть env.GO_VERSION.
+# https://github.com/ossf/scorecard-action#workflow-restrictions

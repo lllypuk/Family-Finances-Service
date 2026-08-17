@@ -1,0 +1,50 @@
+name: Scorecard
+
+# Вынесен из security.yml: с publish_results: true scorecard-action отвергает
+# результаты workflow, в котором объявлены глобальный env или defaults
+# (в security.yml это env.GO_VERSION) — публикация падала с
+# "workflow contains global env vars or defaults".
+# https://github.com/ossf/scorecard-action#workflow-restrictions
+#
+# Ограничения, которые обязан соблюдать этот файл:
+#   - никаких top-level env / defaults;
+#   - никаких write-прав на уровне workflow;
+#   - id-token: write только у джобы с ossf/scorecard-action;
+#   - в этой джобе допустимы только actions/checkout, actions/upload-artifact,
+#     github/codeql-action/upload-sarif, ossf/scorecard-action,
+#     step-security/harden-runner.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Еженедельно, воскресенье 02:00 UTC — как и остальные security-сканы
+    - cron: "0 2 * * 0"
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: OSSF Scorecard
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Run analysis
+        uses: ossf/scorecard-action@v2.4.3
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - name: Upload to code-scanning
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: results.sarif

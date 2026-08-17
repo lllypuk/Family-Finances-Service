@@ -245,5 +245,11 @@ Go **1.26.5** (also pinned as `GO_VERSION` in `.github/workflows/ci.yml`), Echo 
 testify. Frontend: HTMX 2.0.4, PicoCSS 2.1.1.
 
 CI (`.github/workflows/ci.yml`) runs golangci-lint, `govulncheck`, `make test-coverage`, `make build`, and a Docker
-build/run smoke test. Additional workflows: `docker.yml`, `security.yml` (CodeQL, Semgrep, TruffleHog, OSV,
-Scorecard), `release.yml`.
+build/run smoke test. Additional workflows: `docker.yml`, `security.yml` (CodeQL, Semgrep, TruffleHog, OSV),
+`scorecard.yml` (OSSF Scorecard), `release.yml`.
+
+`scorecard.yml` is deliberately a **separate file**: with `publish_results: true` the OSSF API rejects results from
+any workflow that declares a top-level `env` or `defaults` (`security.yml` declares `env.GO_VERSION`), and only the
+job running `ossf/scorecard-action` may hold `id-token: write`. Keep that file free of global `env`/`defaults`, and
+do not add steps beyond the action's approved list (`actions/checkout`, `actions/upload-artifact`,
+`github/codeql-action/upload-sarif`, `ossf/scorecard-action`, `step-security/harden-runner`).
