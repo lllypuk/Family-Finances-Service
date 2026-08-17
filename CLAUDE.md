@@ -156,10 +156,6 @@ Do not treat these as regressions you introduced, and do not paper over them wit
 
 - **No rate limiting on login** ([S-03](docs/specs/002-security-audit.md#s-03)) — protection exists only in the
   nginx/Caddy configs and fail2ban, i.e. not at all for `docker-compose.minimal.yml` or a bare systemd deployment.
-- **`.github/workflows/docker.yml` cannot publish anything.** Its `docker/build-push-action` step passes
-  `context: .` with **no `file:`**, so it looks for `./Dockerfile` — which does not exist (the Dockerfile lives in
-  `docker/Dockerfile`). Pushing a tag would fail the build with "failed to read dockerfile"; add
-  `file: docker/Dockerfile` before the first release ([D-02](docs/specs/004-deployment-readiness.md#d-02)).
 - **The error page never shows the raw error for a non-`*echo.HTTPError`** (`customHTTPErrorHandler` in
   `web.go`): it logs the detail and renders a generic title. If you are debugging a 500, read the server log —
   the page will not tell you anything.
