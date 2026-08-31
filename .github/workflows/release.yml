@@ -12,7 +12,7 @@ on:
         type: string
 
 env:
-  GO_VERSION: "1.26.6"
+  GO_VERSION: "1.26.7"
 
 # Дефолт для всех джоб; write-скоупы выдаются точечно на уровне джобы.
 permissions:
