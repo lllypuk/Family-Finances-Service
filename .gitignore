@@ -9,3 +9,4 @@ cookies.txt
 /server
 /data/
 .cache/
+.gocache/

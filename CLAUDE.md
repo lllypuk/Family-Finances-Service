@@ -240,7 +240,7 @@ When runtime/dev commands disagree between documents, `Makefile` + this file win
 
 ## Stack versions (keep in sync with go.mod)
 
-Go **1.26.5** (also pinned as `GO_VERSION` in `.github/workflows/ci.yml`), Echo **v4.15.4**,
+Go **1.26.7** (also pinned as `GO_VERSION` in `.github/workflows/ci.yml`), Echo **v4.15.4**,
 `modernc.org/sqlite` (pure Go, no CGO), golang-migrate v4, gorilla/sessions, go-playground/validator v10,
 testify. Frontend: HTMX 2.0.4, PicoCSS 2.1.1.
 
