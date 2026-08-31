@@ -710,7 +710,7 @@ func TestHTTPServer_MiddlewareSetup(t *testing.T) {
 	server.Echo().ServeHTTP(rec, req)
 
 	// Assert that middleware headers are present
-	assert.NotEmpty(t, rec.Header().Get("X-Request-Id")) // RequestID middleware
+	assert.NotEmpty(t, rec.Header().Get("X-Request-ID")) // RequestID middleware
 }
 
 func TestHTTPServer_WithObservabilityRoutes(t *testing.T) {
