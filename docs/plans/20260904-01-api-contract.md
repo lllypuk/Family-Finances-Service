@@ -92,11 +92,11 @@
 **Files:**
 - Create: `docs/api/openapi.yaml`, `docs/api/README.md`
 
-- [ ] описать все группы из «Technical Details», включая `GET /health` (`status`, `version`, `setup_complete`): параметры, тела, ответы, коды ошибок, роль в `description` каждой операции
-- [ ] `components/schemas`: `Error`, `Meta`, `Pagination`, `User`, `Family`, `Category`, `Transaction`, `Budget`, `Report`, `StatsSummary`, `Backup`, `Session`, `LoginRequest`, `LoginResponse`; деньги — `amount_minor` int64, даты операций — `format: date`
-- [ ] `components/securitySchemes.bearerAuth`; `security` по умолчанию на всех операциях, кроме `POST /auth/login`
-- [ ] `docs/api/README.md`: как читать спецификацию, как генерировать Kotlin-клиент (одна команда, без привязки к конкретному генератору), правило «роут без описания — красный тест»
-- [ ] проверить файл любым OpenAPI-валидатором (npx `@redocly/cli lint` или `swagger-cli`) — результат зафиксировать в PR, в CI не добавлять
+- [x] описать все группы из «Technical Details», включая `GET /health` (`status`, `version`, `setup_complete`): параметры, тела, ответы, коды ошибок, роль в `description` каждой операции
+- [x] `components/schemas`: `Error`, `Meta`, `Pagination`, `User`, `Family`, `Category`, `Transaction`, `Budget`, `Report`, `StatsSummary`, `Backup`, `Session`, `LoginRequest`, `LoginResponse`; деньги — `amount_minor` int64, даты операций — `format: date`
+- [x] `components/securitySchemes.bearerAuth`; `security` по умолчанию на всех операциях, кроме `POST /auth/login`
+- [x] `docs/api/README.md`: как читать спецификацию, как генерировать Kotlin-клиент (одна команда, без привязки к конкретному генератору), правило «роут без описания — красный тест»
+- [x] проверить файл любым OpenAPI-валидатором (npx `@redocly/cli lint` или `swagger-cli`) — результат зафиксировать в PR, в CI не добавлять
 
 ### Task 3: Тест покрытия роутов спецификацией
 
