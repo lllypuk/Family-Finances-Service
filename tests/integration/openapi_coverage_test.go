@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.yaml.in/yaml/v3"
@@ -20,7 +21,6 @@ const (
 	errorSchemaRef     = "#/components/schemas/Error"
 	responsesRefPrefix = "#/components/responses/"
 	jsonMediaType      = "application/json"
-	echoPackagePrefix  = "github.com/labstack/echo/v4"
 )
 
 // openAPISpec — минимальная модель спецификации: только то, что проверяет тест.
@@ -40,16 +40,16 @@ type openAPIPathItem struct {
 }
 
 func (p openAPIPathItem) operations() map[string]*openAPIOperation {
-	byMethod := map[string]*openAPIOperation{
+	byMethod := make(map[string]*openAPIOperation)
+	for method, op := range map[string]*openAPIOperation{
 		http.MethodGet:    p.Get,
 		http.MethodPut:    p.Put,
 		http.MethodPost:   p.Post,
 		http.MethodPatch:  p.Patch,
 		http.MethodDelete: p.Delete,
-	}
-	for method, op := range byMethod {
-		if op == nil {
-			delete(byMethod, method)
+	} {
+		if op != nil {
+			byMethod[method] = op
 		}
 	}
 
@@ -99,15 +99,15 @@ func specRoutes(spec openAPISpec) map[string]bool {
 	return routes
 }
 
-// registeredRoutes — роуты /api/v1 плюс GET /health. Заглушки echo для групп
-// (Any("") и Any("/*") из Group.Use) отсеиваются по имени обработчика и суффиксу пути.
+// registeredAPIRoutes — роуты /api/v1 плюс GET /health. Заглушки echo для групп
+// (Any("") и Any("/*") из Group.Use) регистрируются с методом echo.RouteNotFound.
 func registeredAPIRoutes(t *testing.T) []string {
 	t.Helper()
 
 	ts := testhelpers.SetupHTTPServer(t)
 	var routes []string
 	for _, route := range ts.Server.Echo().Routes() {
-		if strings.HasPrefix(route.Name, echoPackagePrefix) || strings.HasSuffix(route.Path, "*") {
+		if route.Method == echo.RouteNotFound {
 			continue
 		}
 		if route.Path != "/health" && !strings.HasPrefix(route.Path, "/api/v1") {
@@ -154,11 +154,17 @@ func TestOpenAPISpec_CoversRegisteredRoutes(t *testing.T) {
 func TestOpenAPISpec_OperationsHaveIDAndErrorResponse(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 
+	seen := make(map[string]string)
 	for path, item := range spec.Paths {
 		for method, op := range item.operations() {
 			route := method + " " + path
 			assert.NotEmptyf(t, op.OperationID, "%s: нет operationId", route)
 			assert.Truef(t, hasErrorResponse(spec, op), "%s: нет ответа 4xx со схемой Error", route)
+			if op.OperationID != "" {
+				assert.Emptyf(t, seen[op.OperationID], "%s: operationId %q уже занят %s",
+					route, op.OperationID, seen[op.OperationID])
+				seen[op.OperationID] = route
+			}
 		}
 	}
 }

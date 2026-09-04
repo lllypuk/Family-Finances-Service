@@ -102,7 +102,7 @@ jobs:
         run: |
           BINARY_NAME="family-budget-service-${{ matrix.name }}${{ matrix.ext }}"
           go build \
-            -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -ldflags="-s -w -X family-budget-service/internal/version.Version=${VERSION}" \
             -o "build/${BINARY_NAME}" \
             ./cmd/server
 

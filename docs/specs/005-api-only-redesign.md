@@ -55,7 +55,7 @@
 | `Transaction.Date` — `time.Time` RFC3339 в JSON, `DATE` в SQLite; у семьи нет часового пояса | `internal/domain/transaction/transaction.go:10` |
 | `POST` генерирует UUID на сервере — сетевой ретрай создаёт дубль | `internal/services/transaction_service.go:149` |
 | Валюту семьи можно сменить при наличии операций — история молча «переименуется» | `internal/services/family_service.go:107` |
-| `/health` отдаёт версию `1.0.0`, захардкоженную в `internal/run.go:51` | |
+| ~~`/health` отдаёт версию `1.0.0`, захардкоженную в `internal/run.go:51`~~ — закрыто планом 01 | `internal/version` |
 
 ### Инварианты, которые код не держит
 

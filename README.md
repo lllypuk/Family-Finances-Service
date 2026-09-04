@@ -580,7 +580,9 @@ sudo ./deploy/scripts/setup-fail2ban.sh
 - **REST API** covering users, categories, transactions, budgets, and stored reports
 - Request/response shapes live in `internal/application/handlers/types.go`; the error
   envelope is in `internal/application/handlers/errors.go`
-- There is **no** OpenAPI spec, `/api/docs` endpoint, or Postman collection yet
+- **Target contract**: [docs/api/openapi.yaml](docs/api/openapi.yaml) (OpenAPI 3.1) — describes the API
+  after plans 02–04, not today's server; see [docs/api/README.md](docs/api/README.md)
+- There is no `/api/docs` endpoint or Postman collection
 
 ## License
 

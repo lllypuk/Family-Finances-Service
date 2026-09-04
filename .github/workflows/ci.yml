@@ -109,15 +109,26 @@ jobs:
 
       - name: Test Docker build
         run: |
-          docker build -f docker/Dockerfile -t family-budget-service:test .
+          docker build -f docker/Dockerfile --build-arg VERSION=test -t family-budget-service:test .
           docker images family-budget-service:test
 
+      # Раньше шаг не мог упасть: `docker ps -a` возвращает 0 и для контейнера,
+      # который сразу вышел с ошибкой. Проверяем ответ /health и версию сборки.
       - name: Test Docker container runs
         run: |
-          docker run --rm -d --name test-container family-budget-service:test
-          sleep 5
-          docker ps -a
-          docker stop test-container 2>/dev/null || true
+          docker run -d --name test-container -p 8080:8080 \
+            -e ENVIRONMENT=production \
+            -e SESSION_SECRET="$(openssl rand -base64 32)" \
+            -e CSRF_SECRET="$(openssl rand -base64 32)" \
+            family-budget-service:test
+          for _ in $(seq 1 20); do
+            body=$(curl -fsS localhost:8080/health) && break
+            sleep 1
+          done
+          docker logs test-container
+          echo "$body"
+          echo "$body" | grep -q '"version":"test"'
+          docker rm -f test-container
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

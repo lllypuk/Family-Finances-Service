@@ -88,7 +88,8 @@ fail2ban, so a public deployment must go through a reverse proxy.
 Useful checks while the tunnel is up:
 
 ```bash
-curl -s localhost:8080/health                 # {"status":"healthy",...}
+curl -s localhost:8080/health                 # {"status":"healthy",...,"version":"v0.4.1-3-gabc1234"}
+# version — `git describe` сборки; `dev`, если образ собран без --build-arg VERSION
 curl -s -o /dev/null -w '%{http_code}\n' localhost:8080/api/v1/categories   # 401
 ```
 

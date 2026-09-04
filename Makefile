@@ -9,6 +9,8 @@ DOCKER_COMPOSE_FILE=docker/docker-compose.yml
 DOCKER_COMPOSE=docker compose --project-directory . -f $(DOCKER_COMPOSE_FILE)
 # Версия сборки: подставляется линкером в internal/version.Version, попадает в /health
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+# compose подставляет VERSION в build-args (docker/docker-compose.yml)
+export VERSION
 VERSION_LDFLAGS=-X family-budget-service/internal/version.Version=$(VERSION)
 
 # Сборка приложения

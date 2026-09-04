@@ -399,7 +399,8 @@ deploy_application() {
     # Собираем образ из исходников в ./src — публичного образа нет (D-02),
     # поэтому `docker compose pull` здесь не сработает.
     log_info "Building Docker image from sources (this may take a few minutes)..."
-    docker compose build app
+    VERSION="$(git -C "$SRC_DIR" describe --tags --always --dirty 2>/dev/null || echo dev)" \
+        docker compose build app
 
     # Start services
     log_info "Starting services..."

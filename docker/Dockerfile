@@ -23,7 +23,7 @@ COPY . .
 # CGO_ENABLED=0 правильно для modernc.org/sqlite (pure Go драйвер, не требует CGO)
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -a -installsuffix cgo \
-    -ldflags="-w -s -extldflags '-static' -X family-budget-service/internal/version.Version=${VERSION}" \
+    -ldflags="-w -s -extldflags '-static' -X family-budget-service/internal/version.Version=${VERSION:-dev}" \
     -o family-budget-service \
     ./cmd/server
 

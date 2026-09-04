@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/testhelpers"
+	"family-budget-service/internal/version"
 )
 
 // TestSetupHTTPServer_WebLayerRegistered — тест-страж для testhelpers.SetupHTTPServer.
@@ -140,6 +141,6 @@ func TestSetupPage_RendersOnEmptyDatabase(t *testing.T) {
 
 		var body map[string]string
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-		assert.NotEmpty(t, body["version"])
+		assert.Equal(t, version.String(), body["version"])
 	})
 }

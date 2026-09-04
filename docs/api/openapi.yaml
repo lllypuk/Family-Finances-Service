@@ -1114,8 +1114,10 @@ components:
           description: false — семья ещё не создана CLI `setup`, логин ответит `409 SETUP_REQUIRED` (A-02)
         timestamp: { $ref: '#/components/schemas/Timestamp' }
         uptime:
-          type: string
-          description: Время с запуска процесса
+          type: integer
+          format: int64
+          description: Время с запуска процесса в наносекундах (`time.Duration`)
+          examples: [1018947743]
         checks:
           type: object
           additionalProperties:

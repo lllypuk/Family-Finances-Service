@@ -8,6 +8,7 @@ import (
 	"family-budget-service/internal/version"
 )
 
-func TestVersion_String_Default(t *testing.T) {
-	assert.Equal(t, "dev", version.String())
+func TestVersion_String_ReturnsLinkedValue(t *testing.T) {
+	assert.Equal(t, version.Version, version.String())
+	assert.NotEmpty(t, version.String())
 }

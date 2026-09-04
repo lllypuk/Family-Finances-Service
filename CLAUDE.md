@@ -64,7 +64,11 @@ The version reported by `/health` comes from `internal/version` (`version.String
 `Version` is the one package-level var allowed by `.golangci.yml` (file-scoped `gochecknoglobals` exclusion); it
 defaults to `dev` and is overwritten at link time by `-ldflags "-X family-budget-service/internal/version.Version=…"`
 — `VERSION` in the `Makefile` (`git describe --tags --always --dirty`) and `ARG VERSION` in `docker/Dockerfile`.
-`go build ./...` without `-ldflags` therefore reports `dev`, which is correct, not a bug.
+Every build path that matters passes it: the Makefile `export`s `VERSION` so compose forwards it as a build-arg
+(`args: VERSION: ${VERSION:-dev}` in all five compose files), `deploy/scripts/{install,upgrade}.sh` set it from
+`git describe` in `./src`, and `docker.yml`/`release.yml` pass `--build-arg`/`-ldflags`. A `-X` flag naming a
+symbol that does not exist is silently dropped by the linker, so keep the full package path in sync.
+`go build ./...` without `-ldflags` reports `dev`, which is correct, not a bug.
 
 Dependency direction: `web`/`application/handlers` → `services` → repository interfaces → `infrastructure`.
 Repository interfaces are declared in `internal/services/interfaces.go`;
@@ -241,8 +245,8 @@ reference): `docs/README.md` (navigation), `docs/product_brief.md`, `docs/tech_s
 status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the finished ones.
 
 **Current direction:** `docs/specs/005-api-only-redesign.md` — the service becomes an API-only backend for an
-Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans `docs/plans/20260904-0[1-5]-*.md`
-run in order; the web layer described above survives only until plan 03. Do not invest in the web UI.
+Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans `docs/plans/20260904-0[2-5]-*.md`
+run in order (01 is done, in `docs/plans/completed/`); the web layer described above survives only until plan 03. Do not invest in the web UI.
 
 `docs/api/openapi.yaml` is the target contract for `/api/v1` (plus `GET /health`) — the Android client generates
 from it, plans 02–04 bring the code up to it. **A registered route with no operation in the spec fails
@@ -258,7 +262,7 @@ When runtime/dev commands disagree between documents, `Makefile` + this file win
 
 Go **1.26.7** (also pinned as `GO_VERSION` in `.github/workflows/ci.yml`), Echo **v4.15.4**,
 `modernc.org/sqlite` (pure Go, no CGO), golang-migrate v4, gorilla/sessions, go-playground/validator v10,
-testify. Frontend: HTMX 2.0.4, PicoCSS 2.1.1.
+testify, `go.yaml.in/yaml/v3` (test-only: parses `docs/api/openapi.yaml` in the coverage test). Frontend: HTMX 2.0.4, PicoCSS 2.1.1.
 
 CI (`.github/workflows/ci.yml`) runs golangci-lint, `govulncheck`, `make test-coverage`, `make build`, and a Docker
 build/run smoke test. Additional workflows: `docker.yml`, `security.yml` (CodeQL, Semgrep, TruffleHog, OSV),
