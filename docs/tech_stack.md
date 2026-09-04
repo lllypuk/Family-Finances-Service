@@ -205,18 +205,18 @@ github.com/stretchr/testify       # Testing utilities
 ### Оптимизации
 - **SQLite**: Индексы, WAL mode, prepared statements
 - **Compression**: gzip middleware Echo
-- **Profiling**: pprof интеграция
+- **Profiling/metrics**: нет — ни pprof, ни `/metrics`; только `/health` и JSON-лог
 
 ## 🔄 Планы развития
 
 ### Ближайшие обновления
-- [ ] Увеличение тестового покрытия до 60%+
-- [ ] Расширение веб-интерфейса
+- [ ] Переход на API-only для Android: планы 01–05 в `docs/plans/`, решения в
+  [specs/005-api-only-redesign.md](specs/005-api-only-redesign.md) — удаление раздела
+  «Frontend» выше, bearer-аутентификация, деньги в минимальных единицах, один compose с Caddy
 - [ ] Улучшение аналитики и отчетов
 
 ### Среднесрочные планы
-- [ ] PWA поддержка (offline mode)
-- [ ] Экспорт/импорт данных (CSV, JSON)
+- [ ] Офлайн-синхронизация мобильного клиента (A-10: revision + tombstones)
 - [ ] Расширенная система уведомлений
 
 ### Долгосрочная перспектива

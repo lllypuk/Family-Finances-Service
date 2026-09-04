@@ -4,6 +4,11 @@
 
 ## 🎯 Project Status: IN DEVELOPMENT 🚧
 
+> **Direction (September 2026):** the service is being turned into an API-only JSON backend for an
+> Android app; the web interface is scheduled for removal. Decisions and the five implementation
+> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). The sections
+> below describe the code as it is today.
+
 This project is in **active development** with the following achievements:
 
 - ✅ Complete web interface (HTMX v2.0.4 + PicoCSS v2.1.1)

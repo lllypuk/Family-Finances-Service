@@ -193,7 +193,7 @@ Two independent code paths apply migrations, and **both must keep working**:
     exits non-zero, instead of serving a 200 `/health` with no sessions, no CSRF and no HTML routes.
   - Because the real middleware is in play, integration requests need a session **and** a CSRF token on writes:
     `ts.Auth(t)` (admin of the test family, memoized), `ts.AuthAs(t, role)` (extra user in the *same* family),
-    or `testhelpers.LoginAs(t, ts, u)`. All return an `*AuthSession{Cookie, CSRFToken}`; call `sess.Apply(req)`.
+    or `testhelpers.LoginAs(t, u)` (signs the cookie itself, no DB access). All return an `*AuthSession{Cookie, CSRFToken}`; call `sess.Apply(req)`.
     `ts.AuthUser` / `ts.AuthFamily` hold what `Auth` created.
 - `testhelpers/factories.go` — `CreateTestFamily`, `CreateTestUser`, etc.
 - Naming: `TestXxx_Method_Scenario` (e.g. `TestTransactionService_CreateTransaction_Success`).
@@ -233,6 +233,11 @@ reference): `docs/README.md` (navigation), `docs/product_brief.md`, `docs/tech_s
 `docs/guides/{coding_standards,testing_strategy}.md`, `docs/patterns/{api_standards,error_handling}.md`.
 `docs/specs/` holds the audit findings (project assessment, security, UI/UX, deployment readiness) with per-finding
 status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the finished ones.
+
+**Current direction:** `docs/specs/005-api-only-redesign.md` — the service becomes an API-only backend for an
+Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans `docs/plans/20260904-0[1-5]-*.md`
+run in order; the web layer described above survives only until plan 03. Do not invest in the web UI; new
+`/api/v1` routes must be added to `docs/api/openapi.yaml` once plan 01 lands.
 Self-hosted deployment (install/upgrade/backup scripts, nginx & Caddy configs, systemd units, fail2ban) is in
 `deploy/` — see `deploy/README.md`.
 
