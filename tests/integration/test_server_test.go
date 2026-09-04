@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"family-budget-service/internal/observability"
 	"family-budget-service/internal/testhelpers"
 	"family-budget-service/internal/version"
 )
@@ -142,5 +143,7 @@ func TestSetupPage_RendersOnEmptyDatabase(t *testing.T) {
 		var body map[string]string
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 		assert.Equal(t, version.String(), body["version"])
+		assert.Equal(t, observability.HealthStatusHealthy, body["status"])
+		assert.NotEmpty(t, body["timestamp"])
 	})
 }

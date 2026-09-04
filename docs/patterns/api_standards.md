@@ -154,7 +154,7 @@ email. Общего rate limiting на API нет.
 
 - Поля — `snake_case`.
 - **Деньги** (A-05): целые в минимальных единицах валюты семьи, поле с суффиксом `_minor`
-  (`amount_minor`, `limit_minor`, `spent_minor`), тип `integer/int64`. Валюта — у семьи
+  (`amount_minor`, `spent_minor`, `remaining_minor`), тип `integer/int64`. Валюта — у семьи
   (ISO 4217), в каждой сумме не повторяется. Проценты и утилизация — `float64`.
 - **Дата операции** (A-06): календарная `YYYY-MM-DD` (`format: date`), без времени и зоны.
 - **Служебные метки**: RFC3339 UTC (`created_at`, `updated_at`, `expires_at`).
@@ -174,7 +174,7 @@ email. Общего rate limiting на API нет.
 ## Фильтрация
 
 ```
-GET /api/v1/transactions?category_id=…&type=expense&date_from=2026-01-01&amount_to=500000
+GET /api/v1/transactions?category_id=…&type=expense&date_from=2026-01-01&amount_to_minor=500000
 ```
 
 Суффиксы `_from` / `_to` для диапазонов (включительно), точное равенство для остального,
