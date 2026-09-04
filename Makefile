@@ -7,19 +7,22 @@ DOCKER_COMPOSE_FILE=docker/docker-compose.yml
 # умолчанию равна каталогу первого `-f` (то есть `docker/`). `--project-directory .`
 # возвращает её в корень репозитория — там, где лежит `.env` (см. README).
 DOCKER_COMPOSE=docker compose --project-directory . -f $(DOCKER_COMPOSE_FILE)
+# Версия сборки: подставляется линкером в internal/version.Version, попадает в /health
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+VERSION_LDFLAGS=-X family-budget-service/internal/version.Version=$(VERSION)
 
 # Сборка приложения
 .PHONY: build
 build:
 	@echo "Building $(APP_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	@CGO_ENABLED=0 go build -ldflags="-w -s" -o $(BUILD_DIR)/$(APP_NAME) ./cmd/server
+	@CGO_ENABLED=0 go build -ldflags="-w -s $(VERSION_LDFLAGS)" -o $(BUILD_DIR)/$(APP_NAME) ./cmd/server
 
 # Запуск приложения
 .PHONY: run
 run:
 	@echo "Running $(APP_NAME)..."
-	@go run ./cmd/server/main.go
+	@go run -ldflags="$(VERSION_LDFLAGS)" ./cmd/server/main.go
 
 # Запуск с локальными переменными окружения для SQLite
 .PHONY: run-local
@@ -32,7 +35,7 @@ run-local:
 	 SESSION_SECRET=your-super-secret-session-key-for-local-dev \
 	 LOG_LEVEL=debug \
 	 ENVIRONMENT=development \
-	 go run ./cmd/server/main.go
+	 go run -ldflags="$(VERSION_LDFLAGS)" ./cmd/server/main.go
 
 # Тесты с SQLite (in-memory)
 .PHONY: test

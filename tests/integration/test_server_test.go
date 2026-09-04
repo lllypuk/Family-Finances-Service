@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -136,5 +137,9 @@ func TestSetupPage_RendersOnEmptyDatabase(t *testing.T) {
 		testServer.Server.Echo().ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
+
+		var body map[string]string
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+		assert.NotEmpty(t, body["version"])
 	})
 }

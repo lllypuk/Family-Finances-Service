@@ -81,11 +81,11 @@
 - Create: `internal/version/version.go`, `internal/version/version_test.go`
 - Modify: `internal/run.go`, `Makefile`, `docker/Dockerfile`, `.golangci.yml`
 
-- [ ] создать `internal/version` с `Version = "dev"` и функцией `String()` (единственное разрешённое место для package-level var — добавить исключение `gochecknoglobals` для этого файла в `.golangci.yml` с объяснением)
-- [ ] передать `version.String()` в `observability.NewHealthService` вместо литерала
-- [ ] `Makefile`: переменная `VERSION`, `-X` в `build`, `run`, `run-local`; `docker/Dockerfile`: `ARG VERSION=dev`, тот же `-X`; workflows не трогать — `docker.yml` и `release.yml` уже передают `VERSION`
-- [ ] тест: `String()` возвращает `dev` по умолчанию; интеграционный тест `/health` — поле `version` непустое
-- [ ] `make fmt && make test && make lint` — зелёные
+- [x] создать `internal/version` с `Version = "dev"` и функцией `String()` (единственное разрешённое место для package-level var — добавить исключение `gochecknoglobals` для этого файла в `.golangci.yml` с объяснением)
+- [x] передать `version.String()` в `observability.NewHealthService` вместо литерала
+- [x] `Makefile`: переменная `VERSION`, `-X` в `build`, `run`, `run-local`; `docker/Dockerfile`: `ARG VERSION=dev`, тот же `-X`; workflows не трогать — `docker.yml` и `release.yml` уже передают `VERSION`
+- [x] тест: `String()` возвращает `dev` по умолчанию; интеграционный тест `/health` — поле `version` непустое
+- [x] `make fmt && make test && make lint` — зелёные
 
 ### Task 2: `docs/api/openapi.yaml` — целевой контракт
 

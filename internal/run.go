@@ -16,6 +16,7 @@ import (
 	"family-budget-service/internal/infrastructure"
 	"family-budget-service/internal/observability"
 	"family-budget-service/internal/services"
+	"family-budget-service/internal/version"
 )
 
 const (
@@ -48,7 +49,7 @@ func NewApplication() (*Application, error) {
 		obsConfig.Logging.Level = level
 	}
 
-	observabilityService, err := observability.NewService(obsConfig, "1.0.0")
+	observabilityService, err := observability.NewService(obsConfig, version.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize observability: %w", err)
 	}

@@ -7,6 +7,9 @@ RUN apk add --no-cache ca-certificates git tzdata
 # Создание рабочего каталога
 WORKDIR /app
 
+# Версия сборки: docker.yml и release.yml передают её через --build-arg
+ARG VERSION=dev
+
 # Копирование go.mod и go.sum для кэширования зависимостей
 COPY go.mod go.sum ./
 
@@ -20,7 +23,7 @@ COPY . .
 # CGO_ENABLED=0 правильно для modernc.org/sqlite (pure Go драйвер, не требует CGO)
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -a -installsuffix cgo \
-    -ldflags='-w -s -extldflags "-static"' \
+    -ldflags="-w -s -extldflags '-static' -X family-budget-service/internal/version.Version=${VERSION}" \
     -o family-budget-service \
     ./cmd/server
 
