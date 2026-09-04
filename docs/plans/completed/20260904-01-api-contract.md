@@ -132,10 +132,10 @@
 
 ### Task 6: [Final] Update documentation
 
-- [ ] `README.md`: раздел «API Readiness» → ссылка на `docs/api/openapi.yaml` и spec 005
-- [ ] `CLAUDE.md`: абзац про `internal/version` и правило «новый роут → openapi.yaml, иначе тест красный»
-- [ ] `docs/README.md`: строка про `docs/api/`
-- [ ] переместить план в `docs/plans/completed/`
+- [x] `README.md`: раздел «API Readiness» → ссылка на `docs/api/openapi.yaml` и spec 005
+- [x] `CLAUDE.md`: абзац про `internal/version` и правило «новый роут → openapi.yaml, иначе тест красный»
+- [x] `docs/README.md`: строка про `docs/api/`
+- [x] переместить план в `docs/plans/completed/`
 
 ## Post-Completion
 

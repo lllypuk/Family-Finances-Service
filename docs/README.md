@@ -87,6 +87,10 @@
 - **[004-deployment-readiness.md](specs/004-deployment-readiness.md)** - Готовность к развёртыванию (D-01…D-04)
 - **[005-api-only-redesign.md](specs/005-api-only-redesign.md)** - Переход на API-only для Android (решения A-01…A-12)
 
+### 🔌 api/ - Контракт API
+- **[api/openapi.yaml](api/openapi.yaml)** - целевой контракт `/api/v1` (OpenAPI 3.1), источник для Kotlin-клиента
+- **[api/README.md](api/README.md)** - как читать спецификацию и генерировать клиент; роут без описания — красный тест
+
 ### 🗂️ plans/ - Планы реализации
 - `plans/*.md` - планы в работе, задача за задачей, с отметками `[x]`
 - `plans/completed/` - завершённые планы (архив решений и отклонений)

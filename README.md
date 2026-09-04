@@ -41,6 +41,11 @@ This project is in **active development** with the following achievements:
 
 ## API Readiness (Ready / Experimental)
 
+The **target** contract lives in [`docs/api/openapi.yaml`](docs/api/openapi.yaml) (OpenAPI 3.1, hand-written,
+see [`docs/api/README.md`](docs/api/README.md)) — bearer tokens, `limit/offset`, money in minor units. It is what
+the Android client generates from, not a description of today's server; the gap is closed by plans 02–04 of
+[spec 005](docs/specs/005-api-only-redesign.md). The sections below describe the API **as it behaves now**.
+
 ### Authentication is required — read this first
 
 The whole `/api/v1` group sits behind `RequireAPIAuth`. There is no anonymous access
