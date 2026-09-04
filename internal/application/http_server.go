@@ -269,7 +269,8 @@ func (s *HTTPServer) buildNetHTTPServer(address string) *http.Server {
 }
 
 // healthCheck — резервный /health, когда сервер собран без observability.
-// Форма ответа обязана совпадать со схемой Health из docs/api/openapi.yaml.
+// Ответ — подмножество схемы Health из docs/api/openapi.yaml: setup_complete
+// добавляет план 03.
 func (s *HTTPServer) healthCheck(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{
 		"status":    observability.HealthStatusHealthy,
