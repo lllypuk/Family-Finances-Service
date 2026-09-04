@@ -126,9 +126,9 @@
 
 ### Task 5: Verify acceptance criteria
 
-- [ ] `openapi.yaml` валиден, тест покрытия зелёный, `/health` показывает `git describe`
-- [ ] `make pre-commit` зелёный
-- [ ] `docker build --build-arg VERSION=test -f docker/Dockerfile .` собирается, `/health` внутри контейнера отдаёт `test`
+- [x] `openapi.yaml` валиден (`npx @redocly/cli lint` — valid, 1 warning `no-server-example.com` на `http://localhost:8080`, оставлен намеренно), `TestOpenAPISpec_*` зелёные, `/health` отдаёт `1198013` = `git describe --tags --always --dirty`
+- [x] `make pre-commit` зелёный (тесты PASS, golangci-lint 0 issues)
+- [x] `docker build --build-arg VERSION=test -f docker/Dockerfile .` собирается, `/health` внутри контейнера отдаёт `"version":"test"`
 
 ### Task 6: [Final] Update documentation
 
