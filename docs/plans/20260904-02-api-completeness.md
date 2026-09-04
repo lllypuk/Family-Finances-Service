@@ -67,7 +67,7 @@
 - `GET /stats/summary?from=YYYY-MM-DD&to=YYYY-MM-DD` — по умолчанию текущий месяц.
 - `POST /reports` — тело как `CreateReportRequest`, ответ `201` с сохранённым отчётом.
 - `GET /reports/{id}/export` — `text/csv`, `Content-Disposition: attachment`.
-- `GET /users` — без пагинации (пользователей двое), `GET /family`, `PUT /family` (admin).
+- `GET /users`, `GET /family`, `PUT /family` (admin).
 - `POST /transactions/bulk-delete {ids: [uuid]}` → `200 {deleted: n}`; отсутствующие id
   игнорируются, чужих быть не может (одна семья).
 - Бэкапы: `POST /backups` → `201 {name, size, created_at}`; `GET /backups`;
@@ -75,8 +75,9 @@
   (по умолчанию `<dir(db)>/backups`, в compose `/backups`). Restore через API не делаем (A-11).
 - Envelope: `respondError(c, status, code, message, details)`; валидация → `422 VALIDATION_ERROR`
   с `details[{field, message, code}]`; `respondValidationErrors` и inline-`ResponseMeta` удаляются.
-- Списки: `meta.pagination {limit, offset, total}`; лимит по умолчанию 50, максимум 200;
-  на транзакциях, бюджетах, отчётах. Категории — без пагинации (их десятки).
+- Списки: `meta.pagination {limit, offset, total}`; лимит по умолчанию 50, максимум 200 —
+  на всех списках без исключений (A-08), включая короткие: клиент генерируется из
+  `ListMeta`, где `pagination` обязательна.
 
 ## Implementation Steps
 
@@ -161,7 +162,7 @@
 - [ ] `TransactionService.BulkDelete(ctx, ids)` — одна транзакция БД, возвращает число удалённых; веб-`bulk-delete` использует его
 - [ ] `POST /api/v1/transactions/bulk-delete`
 - [ ] `PaginationMeta{limit, offset, total}` в `ResponseMeta`; хелпер `parsePagination(c)` с константами `defaultLimit=50`, `maxLimit=200`
-- [ ] транзакции: `total` из `CountTransactions`; бюджеты и отчёты: `limit/offset` в репозиторные фильтры (сейчас бюджеты выбираются страницами по 100 внутри обработчика — убрать)
+- [ ] транзакции: `total` из `CountTransactions`; бюджеты и отчёты: `limit/offset` в репозиторные фильтры (сейчас бюджеты выбираются страницами по 100 внутри обработчика — убрать); users, categories, sessions, backups — `total` по длине выборки
 - [ ] тесты: `total` совпадает с числом созданных, `limit=500` → 400 `INVALID_QUERY_PARAM` (становится 422 в задаче 7), `offset` за пределом → пустой `data` и верный `total`; bulk-delete: часть id не существует → удалены существующие
 - [ ] `openapi.yaml` обновлён
 

@@ -138,7 +138,7 @@ paths:
                   data:
                     type: array
                     items: { $ref: '#/components/schemas/Session' }
-                  meta: { $ref: '#/components/schemas/Meta' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
   /api/v1/auth/sessions/{id}:
@@ -246,7 +246,7 @@ paths:
                   data:
                     type: array
                     items: { $ref: '#/components/schemas/User' }
-                  meta: { $ref: '#/components/schemas/Meta' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
     post:
@@ -382,7 +382,7 @@ paths:
                   data:
                     type: array
                     items: { $ref: '#/components/schemas/Category' }
-                  meta: { $ref: '#/components/schemas/Meta' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
     post:
@@ -471,10 +471,10 @@ paths:
           in: query
           description: Включительно
           schema: { $ref: '#/components/schemas/CalendarDate' }
-        - name: amount_from
+        - name: amount_from_minor
           in: query
           schema: { $ref: '#/components/schemas/Money' }
-        - name: amount_to
+        - name: amount_to_minor
           in: query
           schema: { $ref: '#/components/schemas/Money' }
         - name: description
@@ -493,7 +493,7 @@ paths:
                   data:
                     type: array
                     items: { $ref: '#/components/schemas/Transaction' }
-                  meta: { $ref: '#/components/schemas/Meta' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
@@ -522,7 +522,8 @@ paths:
       tags: [transactions]
       summary: Удалить несколько транзакций
       description: |
-        admin и member. Операция атомарна: неизвестный id в списке отменяет всё — `404`.
+        admin и member. Неизвестные id пропускаются — ответ несёт число фактически удалённых
+        записей, повтор того же запроса возвращает `0`. Чужих id не бывает: семья одна.
       requestBody:
         required: true
         content:
@@ -545,7 +546,6 @@ paths:
                   meta: { $ref: '#/components/schemas/Meta' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
 
   /api/v1/transactions/{id}:
@@ -615,7 +615,7 @@ paths:
                   data:
                     type: array
                     items: { $ref: '#/components/schemas/Budget' }
-                  meta: { $ref: '#/components/schemas/Meta' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
     post:
@@ -699,7 +699,7 @@ paths:
                   data:
                     type: array
                     items: { $ref: '#/components/schemas/ReportSummary' }
-                  meta: { $ref: '#/components/schemas/Meta' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
     post:
@@ -826,7 +826,7 @@ paths:
                   data:
                     type: array
                     items: { $ref: '#/components/schemas/Backup' }
-                  meta: { $ref: '#/components/schemas/Meta' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
     post:
@@ -1054,6 +1054,13 @@ components:
           description: Версия сборки, как в `/health`
         pagination:
           $ref: '#/components/schemas/Pagination'
+    ListMeta:
+      allOf:
+        - { $ref: '#/components/schemas/Meta' }
+        - type: object
+          required: [pagination]
+          properties:
+            pagination: { $ref: '#/components/schemas/Pagination' }
     Pagination:
       type: object
       required: [limit, offset, total]
@@ -1216,6 +1223,7 @@ components:
         role: { $ref: '#/components/schemas/Role' }
     UpdateUserRequest:
       type: object
+      minProperties: 1
       description: Полей нет — ошибка `VALIDATION_ERROR`
       properties:
         email: { type: string, format: email }
@@ -1223,6 +1231,7 @@ components:
         last_name: { type: string, minLength: 1, maxLength: 50 }
     PatchUserRequest:
       type: object
+      minProperties: 1
       description: Меняет только роль и активность; хотя бы одно поле обязательно
       properties:
         role: { $ref: '#/components/schemas/Role' }
@@ -1247,6 +1256,7 @@ components:
         updated_at: { $ref: '#/components/schemas/Timestamp' }
     UpdateFamilyRequest:
       type: object
+      minProperties: 1
       description: Хотя бы одно поле обязательно
       properties:
         name: { type: string, minLength: 2, maxLength: 100 }
@@ -1290,6 +1300,7 @@ components:
         parent_id: { type: string, format: uuid }
     UpdateCategoryRequest:
       type: object
+      minProperties: 1
       description: Тип категории не меняется. Хотя бы одно поле обязательно
       properties:
         name: { type: string, minLength: 2, maxLength: 50 }
@@ -1336,6 +1347,7 @@ components:
           items: { type: string }
     UpdateTransactionRequest:
       type: object
+      minProperties: 1
       description: Хотя бы одно поле обязательно
       properties:
         amount_minor:
@@ -1402,6 +1414,7 @@ components:
         end_date: { $ref: '#/components/schemas/CalendarDate' }
     UpdateBudgetRequest:
       type: object
+      minProperties: 1
       description: Хотя бы одно поле обязательно
       properties:
         name: { type: string, minLength: 2, maxLength: 100 }
@@ -1525,6 +1538,20 @@ components:
           type: array
           description: Бюджеты, пересекающиеся с периодом
           items: { $ref: '#/components/schemas/BudgetComparisonItem' }
+        recent:
+          type: array
+          description: Последние операции периода, по убыванию даты
+          items: { $ref: '#/components/schemas/RecentTransactionItem' }
+    RecentTransactionItem:
+      type: object
+      required: [id, type, amount_minor, description, category_name, date]
+      properties:
+        id: { type: string, format: uuid }
+        type: { $ref: '#/components/schemas/TransactionType' }
+        amount_minor: { $ref: '#/components/schemas/Money' }
+        description: { type: string }
+        category_name: { type: string }
+        date: { $ref: '#/components/schemas/CalendarDate' }
 
     Backup:
       type: object
