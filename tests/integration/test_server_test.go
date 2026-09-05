@@ -30,6 +30,7 @@ func TestSetupHTTPServer_WebLayerRegistered(t *testing.T) {
 
 	// Семья обязана существовать, иначе RequireSetup уводит любой путь на /setup.
 	session := testServer.Auth(t)
+	webSession := webLoginAs(t, testServer, testServer.AuthUser)
 
 	t.Run("LoginRouteRegistered", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/login", nil)
@@ -51,7 +52,7 @@ func TestSetupHTTPServer_WebLayerRegistered(t *testing.T) {
 		assert.Equal(t, http.StatusForbidden, rec.Code, "CSRF middleware is not registered")
 	})
 
-	t.Run("CSRFMiddlewareAcceptsTokenFromLoginAs", func(t *testing.T) {
+	t.Run("BearerFromLoginAsAcceptedByAPI", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", strings.NewReader(`{}`))
 		req.Header.Set("Content-Type", "application/json")
 		session.Apply(req)
@@ -59,13 +60,23 @@ func TestSetupHTTPServer_WebLayerRegistered(t *testing.T) {
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
 
-		// Тело пустое — ждём ошибку валидации, но не отказ CSRF.
-		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+		// Тело пустое — ждём ошибку валидации, а не 401 и не отказ CSRF.
+		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
 	})
 
-	t.Run("LoginAsSessionIsAcceptedByProtectedWebRoute", func(t *testing.T) {
+	t.Run("BearerIsIgnoredByProtectedWebRoute", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/transactions", nil)
 		session.Apply(req)
+		rec := httptest.NewRecorder()
+
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusFound, rec.Code, "веб-маршрут принял bearer-токен вместо cookie")
+	})
+
+	t.Run("WebSessionIsAcceptedByProtectedWebRoute", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/transactions", nil)
+		webSession.Apply(req)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)

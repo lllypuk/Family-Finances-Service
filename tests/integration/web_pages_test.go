@@ -83,7 +83,7 @@ var navExpectedLinks = []string{
 
 func TestWebPages_NavigationRendered(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
-	auth := testServer.Auth(t)
+	auth := webAuth(t, testServer)
 	currentUser := testServer.AuthUser
 
 	cases := []struct {

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -16,8 +15,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/transaction"
+	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/testhelpers"
 )
 
@@ -57,25 +58,18 @@ import (
 //
 // Задача 4 повесила RequireAPIAuth на группу /api/v1, skip снят — тест обязан
 // проходить. Зелёный прогон означает, что S-01 закрыт для анонимного клиента.
+//
+// План 03 (задача 7): единственная учётная запись API — bearer-токен. Ниже
+// проверяются три отказа: заголовка нет, токен мусорный, токен отозван.
+// Запись без заголовка вовсе до задачи 8 перехватывает глобальный
+// CSRFProtection (403, см. api_error_envelope_test.go), поэтому «нет
+// заголовка» проверяется на GET-маршрутах, остальные два — на всех.
 
 // apiV1Prefix — префикс группы API, по которому маршруты отбираются из роутера.
 const apiV1Prefix = "/api/v1"
 
-// csrfFormTokenRe вытаскивает CSRF-токен из скрытого поля формы входа
-// (internal/web/templates/pages/login.html).
-var csrfFormTokenRe = regexp.MustCompile(`name="_token"\s+value="([^"]+)"`)
-
-// anonymousSession — сессия без пользователя: cookie, выданная на GET /login,
-// и лежащий в ней CSRF-токен. Ровно тот набор, которым в аудите обходили защиту.
-type anonymousSession struct {
-	cookie *http.Cookie
-	token  string
-}
-
-func (s *anonymousSession) apply(req *http.Request) {
-	req.AddCookie(s.cookie)
-	req.Header.Set("X-Csrf-Token", s.token)
-}
+// garbageBearer — синтаксически корректный, но неизвестный серверу токен.
+const garbageBearer = "Bearer not-a-real-token"
 
 // apiFixtures — идентификаторы существующих записей, чтобы анонимные
 // GET/PUT/DELETE били по реальным данным, а не получали 404.
@@ -94,55 +88,52 @@ type apiFixtures struct {
 func TestAPIAuth_AnonymousRequestsRejected(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 
-	// Семья и админ нужны только для того, чтобы RequireSetup не уводил всё на /setup.
+	// Семья и админ: без семьи логин отвечает SETUP_REQUIRED, а не 401.
 	testServer.Auth(t)
+
+	fixtures := createAPIFixtures(t, testServer)
 
 	// Список маршрутов не поддерживается руками: он берётся из роутера Echo,
 	// поэтому маршрут, зарегистрированный мимо защищённой группы, немедленно
 	// уронит тест, а не тихо останется без проверки.
-	t.Run("EveryAPIRouteWithoutSession", func(t *testing.T) {
-		fixtures := createAPIFixtures(t, testServer)
-		routes := apiV1Routes(testServer.Server.Echo(), fixtures)
-		require.NotEmpty(t, routes, "в роутере не нашлось ни одного маршрута /api/v1")
+	routes := apiV1Routes(testServer.Server.Echo(), fixtures)
+	require.NotEmpty(t, routes, "в роутере не нашлось ни одного маршрута /api/v1")
 
+	// Отозванный токен: сессия выдана и тут же удалена, сам токен остался у клиента.
+	member, memberAuth := testServer.AuthAs(t, user.RoleAdmin)
+	require.NoError(t, testServer.Services.Auth.RevokeAllSessions(context.Background(), member.ID))
+	revokedBearer := "Bearer " + memberAuth.Token
+
+	t.Run("GetWithoutHeader", func(t *testing.T) {
 		for _, route := range routes {
-			t.Run(route.method+" "+route.path, func(t *testing.T) {
-				// Анонимная сессия несёт валидный CSRF-токен: без него запись
-				// отвергает CSRFProtection и до авторизации дело не доходит.
-				anon := newAnonymousSession(t, testServer)
-
-				req := httptest.NewRequest(route.method, route.path, bytes.NewBufferString("{}"))
-				req.Header.Set("Content-Type", "application/json")
-				anon.apply(req)
-				rec := httptest.NewRecorder()
-
-				testServer.Server.Echo().ServeHTTP(rec, req)
-
-				assert.Equal(t, http.StatusUnauthorized, rec.Code,
-					"анонимный %s %s обязан получить 401, тело: %s", route.method, route.path, rec.Body.String())
+			if route.method != http.MethodGet {
+				continue
+			}
+			t.Run(route.path, func(t *testing.T) {
+				assertAPIUnauthorized(t, testServer, route, "")
 			})
 		}
 	})
 
-	// Без токена отвечает глобальный CSRFProtection — он регистрируется через
-	// e.Use и отрабатывает раньше group-middleware группы /api/v1, поэтому здесь
-	// ожидается 403, а не 401 (см. Technical Details плана).
-	t.Run("WriteWithoutCSRFToken", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", bytes.NewBufferString(`{}`))
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-
-		testServer.Server.Echo().ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusForbidden, rec.Code)
+	t.Run("EveryAPIRouteWithGarbageToken", func(t *testing.T) {
+		for _, route := range routes {
+			t.Run(route.method+" "+route.path, func(t *testing.T) {
+				assertAPIUnauthorized(t, testServer, route, garbageBearer)
+			})
+		}
 	})
 
-	// Дословный сценарий обхода из аудита: анонимно взять CSRF-токен со страницы
-	// входа и создать транзакцию от имени произвольного пользователя.
-	t.Run("AuditBypassScenario", func(t *testing.T) {
-		fixtures := createAPIFixtures(t, testServer)
-		anon := newAnonymousSession(t, testServer)
+	t.Run("EveryAPIRouteWithRevokedToken", func(t *testing.T) {
+		for _, route := range routes {
+			t.Run(route.method+" "+route.path, func(t *testing.T) {
+				assertAPIUnauthorized(t, testServer, route, revokedBearer)
+			})
+		}
+	})
 
+	// Дословный сценарий обхода из аудита, только вместо анонимного CSRF-токена —
+	// выдуманный bearer: создать транзакцию от имени произвольного пользователя.
+	t.Run("AuditBypassScenario", func(t *testing.T) {
 		body := mustJSON(t, map[string]any{
 			"amount":      13.37,
 			"type":        "expense",
@@ -154,7 +145,7 @@ func TestAPIAuth_AnonymousRequestsRejected(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", bytes.NewBuffer(body))
 		req.Header.Set("Content-Type", "application/json")
-		anon.apply(req)
+		req.Header.Set(echo.HeaderAuthorization, garbageBearer)
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
@@ -162,6 +153,29 @@ func TestAPIAuth_AnonymousRequestsRejected(t *testing.T) {
 		require.Equal(t, http.StatusUnauthorized, rec.Code,
 			"анонимный клиент создал транзакцию, тело ответа: %s", rec.Body.String())
 	})
+}
+
+// assertAPIUnauthorized шлёт запрос с указанным Authorization (пустой — без
+// заголовка) и требует 401 в общем envelope.
+func assertAPIUnauthorized(t *testing.T, ts *testhelpers.TestServer, route apiRoute, authorization string) {
+	t.Helper()
+
+	req := httptest.NewRequest(route.method, route.path, bytes.NewBufferString("{}"))
+	req.Header.Set("Content-Type", "application/json")
+	if authorization != "" {
+		req.Header.Set(echo.HeaderAuthorization, authorization)
+	}
+	rec := httptest.NewRecorder()
+
+	ts.Server.Echo().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusUnauthorized, rec.Code,
+		"%s %s с Authorization=%q обязан получить 401, тело: %s",
+		route.method, route.path, authorization, rec.Body.String())
+
+	var body handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body), rec.Body.String())
+	assert.Equal(t, handlers.ErrCodeUnauthorized, body.Error.Code)
 }
 
 // TestAPIAuth_AuthenticatedRequestsAllowed — обратная сторона задачи 4:
@@ -362,26 +376,6 @@ func concreteAPIPath(pattern string, fixtures apiFixtures) string {
 	}
 
 	return strings.Join(segments, "/")
-}
-
-// newAnonymousSession повторяет шаг аудита: GET /login отдаёт cookie сессии и
-// CSRF-токен в форме, при этом пользователь в сессию не записывается.
-func newAnonymousSession(t *testing.T, ts *testhelpers.TestServer) *anonymousSession {
-	t.Helper()
-
-	req := httptest.NewRequest(http.MethodGet, "/login", nil)
-	rec := httptest.NewRecorder()
-
-	ts.Server.Echo().ServeHTTP(rec, req)
-	require.Equal(t, http.StatusOK, rec.Code, "страница входа недоступна")
-
-	cookies := (&http.Response{Header: rec.Header()}).Cookies()
-	require.NotEmpty(t, cookies, "GET /login не выдал cookie сессии")
-
-	match := csrfFormTokenRe.FindStringSubmatch(rec.Body.String())
-	require.Len(t, match, 2, "CSRF-токен не найден в форме входа")
-
-	return &anonymousSession{cookie: cookies[0], token: match[1]}
 }
 
 // createAPIFixtures создаёт по одной записи каждого типа в тестовой семье.

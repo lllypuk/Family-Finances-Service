@@ -10,6 +10,12 @@ import (
 	"family-budget-service/internal/testhelpers"
 )
 
+// requestAuth — учётные данные запроса: bearer-токен (testhelpers.AuthSession)
+// или cookie веб-сессии (webSession).
+type requestAuth interface {
+	Apply(req *http.Request)
+}
+
 // doGET выполняет GET через полный стек тестового сервера и возвращает ответ.
 // auth == nil означает анонимный запрос.
 //
@@ -18,7 +24,7 @@ import (
 func doGET(
 	t *testing.T,
 	ts *testhelpers.TestServer,
-	auth *testhelpers.AuthSession,
+	auth requestAuth,
 	path string,
 ) *httptest.ResponseRecorder {
 	t.Helper()
@@ -35,7 +41,7 @@ func doGET(
 }
 
 // fetchPage запрашивает HTML-страницу с сессией и возвращает тело ответа.
-func fetchPage(t *testing.T, ts *testhelpers.TestServer, auth *testhelpers.AuthSession, path string) string {
+func fetchPage(t *testing.T, ts *testhelpers.TestServer, auth requestAuth, path string) string {
 	t.Helper()
 
 	return requireOKBody(t, doGET(t, ts, auth, path), path)
@@ -49,7 +55,7 @@ func fetchAnonymousPage(t *testing.T, ts *testhelpers.TestServer, path string) s
 }
 
 // doAuthedGET выполняет GET с сессией и возвращает код ответа.
-func doAuthedGET(t *testing.T, ts *testhelpers.TestServer, auth *testhelpers.AuthSession, path string) int {
+func doAuthedGET(t *testing.T, ts *testhelpers.TestServer, auth requestAuth, path string) int {
 	t.Helper()
 
 	return doGET(t, ts, auth, path).Code

@@ -225,10 +225,12 @@ Two independent code paths apply migrations, and **both must keep working**:
     calls `t.Fatalf`. If a test suddenly dies on "web server initialization failed", a template failed to parse.
     In production the same check is fatal — `NewApplication` (`internal/run.go`) returns the error and the process
     exits non-zero, instead of serving a 200 `/health` with no sessions, no CSRF and no HTML routes.
-  - Because the real middleware is in play, integration requests need a session **and** a CSRF token on writes:
-    `ts.Auth(t)` (admin of the test family, memoized), `ts.AuthAs(t, role)` (extra user in the *same* family),
-    or `testhelpers.LoginAs(t, u)` (signs the cookie itself, no DB access). All return an `*AuthSession{Cookie, CSRFToken}`; call `sess.Apply(req)`.
-    `ts.AuthUser` / `ts.AuthFamily` hold what `Auth` created.
+  - API requests authenticate with a bearer token: `ts.Auth(t)` (admin of the test family, memoized),
+    `ts.AuthAs(t, role)` (extra user in the *same* family), or `testhelpers.LoginAs(t, ts, u)` (writes a session
+    row for `u` directly, bypassing the password). All return an `*AuthSession{Token}`; call `sess.Apply(req)`.
+    `ts.AuthUser` / `ts.AuthFamily` hold what `Auth` created. Until the web layer is removed (plan 03, task 8),
+    HTML routes still need a cookie: `webLoginAs(t, ts, u)` / `webAuth(t, ts)` in
+    `tests/integration/web_session_test.go` log in through the real form.
 - `testhelpers/factories.go` — `CreateTestFamily`, `CreateTestUser`, etc.
 - Naming: `TestXxx_Method_Scenario` (e.g. `TestTransactionService_CreateTransaction_Success`).
 - `testpackage` is enabled: use an external `package foo_test` unless the path is excluded in `.golangci.yml`

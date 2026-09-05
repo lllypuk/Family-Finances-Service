@@ -34,7 +34,7 @@ import (
 // записях в БД.
 func TestWebTransactions_PaginatedPagesRender(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
-	auth := testServer.Auth(t)
+	auth := webAuth(t, testServer)
 	createPaginationFixtures(t, testServer)
 
 	cases := []struct {
@@ -80,7 +80,7 @@ var prevPageLinkRe = regexp.MustCompile(`href="\?page=[^"]*"`)
 // страницу сбрасывал бы фильтр.
 func TestWebTransactions_PaginationLinksCarryFilters(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
-	auth := testServer.Auth(t)
+	auth := webAuth(t, testServer)
 	createPaginationFixtures(t, testServer)
 
 	req := httptest.NewRequest(http.MethodGet, "/transactions?page=2&page_size=1&type=expense", nil)
@@ -114,7 +114,7 @@ var (
 // прежний тест запрашивал `?page=2` напрямую и потому дефект не ловил.
 func TestWebTransactions_NextPageLinkReachesSecondPage(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
-	auth := testServer.Auth(t)
+	auth := webAuth(t, testServer)
 
 	expenseCategory := createTestCategoryFor(t, testServer, category.TypeExpense)
 	createDatedTransactions(t, testServer, expenseCategory.ID, transaction.TypeExpense,
@@ -142,7 +142,7 @@ func TestWebTransactions_NextPageLinkReachesSecondPage(t *testing.T) {
 // исчезала целиком.
 func TestWebTransactions_HTMXPaginationKeepsFilterAndTable(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
-	auth := testServer.Auth(t)
+	auth := webAuth(t, testServer)
 
 	expenseCategory := createTestCategoryFor(t, testServer, category.TypeExpense)
 	createDatedTransactions(t, testServer, expenseCategory.ID, transaction.TypeExpense,

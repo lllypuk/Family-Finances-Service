@@ -23,7 +23,7 @@ const leakySecret = "table budgets: no such column secret_internal_detail"
 // уезжали имена шаблонов, поля структур и обёрнутые ошибки репозиториев.
 func TestErrorPage_DoesNotLeakInternalErrorText(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
-	auth := testServer.Auth(t)
+	auth := webAuth(t, testServer)
 
 	// Маршрут, падающий обычной (не HTTP) ошибкой — так падает исполнение
 	// шаблона или запрос к БД внутри хендлера.

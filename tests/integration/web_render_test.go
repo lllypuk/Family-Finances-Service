@@ -34,7 +34,7 @@ import (
 // ответа и шапку — содержательные проверки живут в web_pages_test.go.
 func TestWebPages_AllHTMLRoutesRender(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
-	auth := testServer.Auth(t)
+	auth := webAuth(t, testServer)
 	fixtures := seedRenderFixtures(t, testServer)
 
 	cases := []struct {
@@ -80,7 +80,7 @@ func TestWebPages_AllHTMLRoutesRender(t *testing.T) {
 // отвечало 403 «CSRF token validation failed» в живом браузере.
 func TestWebPages_HTMXPagesCarryCSRFMeta(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
-	auth := testServer.Auth(t)
+	auth := webAuth(t, testServer)
 	fixtures := seedRenderFixtures(t, testServer)
 
 	metaRe := regexp.MustCompile(`<meta name="csrf-token" content="([^"]*)"`)
@@ -139,7 +139,7 @@ var hxMethods = map[string]string{
 // методу, иначе кнопка, ведущая на существующий GET, считалась бы живой.
 func TestWebPages_NoDeadLinks(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
-	auth := testServer.Auth(t)
+	auth := webAuth(t, testServer)
 	fixtures := seedRenderFixtures(t, testServer)
 
 	routes := registeredRoutes(testServer.Server.Echo())
@@ -190,7 +190,7 @@ func TestWebPages_NoDeadLinks(t *testing.T) {
 // CSRFProtection с 403 (так было на дашборде).
 func TestWebPages_LogoutFormCarriesCSRFToken(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
-	auth := testServer.Auth(t)
+	auth := webAuth(t, testServer)
 
 	paths := []string{
 		"/", "/transactions", "/categories", "/budgets", "/reports",
@@ -265,7 +265,7 @@ func seedRenderFixtures(t *testing.T, ts *testhelpers.TestServer) renderFixtures
 // (components/category_list и components/category_select не существовали вовсе).
 func TestWebPages_HTMXPartialsRender(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
-	auth := testServer.Auth(t)
+	auth := webAuth(t, testServer)
 	fixtures := seedRenderFixtures(t, testServer)
 
 	paths := []string{
@@ -301,7 +301,7 @@ func TestWebPages_HTMXPartialsRender(t *testing.T) {
 // именно там шаблон edit.html читает поля, которых в структуре ошибок не было.
 func TestWebPages_FormValidationErrorsRerender(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
-	auth := testServer.Auth(t)
+	auth := webAuth(t, testServer)
 	fixtures := seedRenderFixtures(t, testServer)
 
 	cases := []struct {

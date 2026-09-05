@@ -191,10 +191,10 @@ A-01…A-04, A-09, A-12). После него сервис отвечает то
   `tests/integration/api_auth_test.go`, `session_revalidation_test.go`, `test_server_test.go`,
   все `tests/integration/*_test.go` с `Apply`
 
-- [ ] `AuthSession{Token}`, `Apply` ставит `Authorization: Bearer`; `LoginAs` выдаёт токен через `auth.Service` тестового сервера — сигнатура меняется с `LoginAs(t, u)` (`integration_server.go:162`) на `LoginAs(t, ts, u)`, вызовы `:222,:242` и в `tests/integration` обновить; CLAUDE.md уже ошибочно описывает трёхаргументную форму
-- [ ] `api_auth_test.go`: проверки cookie/CSRF заменить на bearer (нет заголовка → 401, мусор → 401, отозванный → 401); `session_revalidation_test.go`: смена роли / деактивация видна на следующем запросе
-- [ ] удалить `TestSessionSecret`, `randomCSRFToken`, зависимость от `gorilla/sessions` в хелпере
-- [ ] `make test` — зелёный при обоих путях аутентификации
+- [x] `AuthSession{Token}`, `Apply` ставит `Authorization: Bearer`; `LoginAs` выдаёт токен через `auth.Service` тестового сервера — сигнатура меняется с `LoginAs(t, u)` (`integration_server.go:162`) на `LoginAs(t, ts, u)`, вызовы `:222,:242` и в `tests/integration` обновить; CLAUDE.md уже ошибочно описывает трёхаргументную форму
+- [x] `api_auth_test.go`: проверки cookie/CSRF заменить на bearer (нет заголовка → 401, мусор → 401, отозванный → 401); `session_revalidation_test.go`: смена роли / деактивация видна на следующем запросе
+- [x] удалить `TestSessionSecret`, `randomCSRFToken`, зависимость от `gorilla/sessions` в хелпере
+- [x] `make test` — зелёный при обоих путях аутентификации
 
 ### Task 8: Удаление веб-слоя и чистка конфига
 

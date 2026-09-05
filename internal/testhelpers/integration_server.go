@@ -1,19 +1,17 @@
 package testhelpers
 
 import (
-	"crypto/rand"
 	"database/sql"
-	"encoding/base64"
 	"errors"
 	"log/slog"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
-	"github.com/gorilla/sessions"
+	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/application"
@@ -27,16 +25,14 @@ import (
 	transactionrepo "family-budget-service/internal/infrastructure/transaction"
 	userrepo "family-budget-service/internal/infrastructure/user"
 	"family-budget-service/internal/services"
-	"family-budget-service/internal/web/middleware"
 )
 
 const (
-	// TestSessionSecret — секрет подписи сессий тестового сервера.
-	// LoginAs использует его же, чтобы собрать валидную cookie.
-	TestSessionSecret = "test-session-secret-for-integration-tests"
+	// webSessionSecret — секрет cookie-сессий веб-слоя; нужен только до его удаления (план 03, задача 8).
+	webSessionSecret = "test-session-secret-for-integration-tests"
 
-	// testCSRFTokenLength — длина случайного CSRF-токена в байтах.
-	testCSRFTokenLength = 32
+	// testDeviceName — device_name сессий, выданных LoginAs.
+	testDeviceName = "integration-test"
 )
 
 // TestServer represents a test HTTP server setup
@@ -101,7 +97,7 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 	config := &application.Config{
 		Port:          "8080",
 		Host:          "localhost",
-		SessionSecret: TestSessionSecret,
+		SessionSecret: webSessionSecret,
 		CookieSecure:  false,
 		TemplatesDir:  filepath.Join(RepoRoot(t), "internal", "web", "templates"),
 		StaticDir:     filepath.Join(RepoRoot(t), "internal", "web", "static"),
@@ -151,67 +147,31 @@ func RepoRoot(t *testing.T) string {
 	}
 }
 
-// AuthSession — аутентифицированная сессия для интеграционных тестов:
-// подписанная cookie сессии плюс CSRF-токен, лежащий в той же сессии.
+// AuthSession — bearer-токен для запросов интеграционных тестов.
 type AuthSession struct {
-	Cookie    *http.Cookie
-	CSRFToken string
+	Token string
 }
 
-// Apply добавляет к запросу cookie сессии и CSRF-токен в заголовке.
+// Apply ставит заголовок Authorization: Bearer.
 func (s *AuthSession) Apply(req *http.Request) {
-	req.AddCookie(s.Cookie)
-	req.Header.Set(middleware.CSRFHeaderKey, s.CSRFToken)
+	req.Header.Set(echo.HeaderAuthorization, "Bearer "+s.Token)
 }
 
-// LoginAs собирает валидную сессию для указанного пользователя без прохода
-// через форму входа: cookie подписывается тем же секретом, что и у тестового
-// сервера, поэтому SessionStore её принимает.
-func LoginAs(t *testing.T, u *user.User) *AuthSession {
+// LoginAs выдаёт токен указанному пользователю, минуя проверку пароля:
+// у пользователей из фабрик вместо хеша заглушка, через Service.Login не пройти.
+// Сессия пишется в БД тестового сервера, поэтому RequireBearer принимает её как настоящую.
+func LoginAs(t *testing.T, ts *TestServer, u *user.User) *AuthSession {
 	t.Helper()
 
-	store := sessions.NewCookieStore([]byte(TestSessionSecret))
-	store.Options = &sessions.Options{
-		Path:     "/",
-		MaxAge:   int(middleware.SessionTimeout.Seconds()),
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	}
+	plain, hash := auth.GenerateToken()
+	require.NoError(t, ts.Repos.Session.Create(t.Context(), auth.NewSession(u.ID, hash, testDeviceName, time.Now())))
 
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
-	sess, err := store.New(req, middleware.SessionName)
-	require.NoError(t, err)
-
-	csrfToken := randomCSRFToken(t)
-	sess.Values[middleware.SessionUserKey] = u.ID
-	sess.Values[middleware.SessionRoleKey] = u.Role
-	sess.Values[middleware.SessionEmailKey] = u.Email
-	sess.Values[middleware.CSRFTokenKey] = csrfToken
-
-	rec := httptest.NewRecorder()
-	require.NoError(t, sess.Save(req, rec))
-
-	cookies := (&http.Response{Header: rec.Header()}).Cookies()
-	require.NotEmpty(t, cookies, "session cookie was not written")
-
-	return &AuthSession{Cookie: cookies[0], CSRFToken: csrfToken}
-}
-
-// randomCSRFToken генерирует токен в том же формате, что и middleware.
-func randomCSRFToken(t *testing.T) string {
-	t.Helper()
-
-	buf := make([]byte, testCSRFTokenLength)
-	_, err := rand.Read(buf)
-	require.NoError(t, err)
-
-	return base64.URLEncoding.EncodeToString(buf)
+	return &AuthSession{Token: plain}
 }
 
 // Auth возвращает сессию администратора тестовой семьи, создавая семью и
-// пользователя в БД при первом обращении. Нужна интеграционным тестам, потому
-// что тестовый сервер несёт полный веб-слой: RequireSetup требует существующей
-// семьи, а CSRFProtection — токена на каждый запрос записи.
+// пользователя в БД при первом обращении. Семья нужна и без запросов к API:
+// без неё логин отвечает SETUP_REQUIRED, а RequireSetup уводит веб на /setup.
 func (ts *TestServer) Auth(t *testing.T) *AuthSession {
 	t.Helper()
 
@@ -227,7 +187,7 @@ func (ts *TestServer) Auth(t *testing.T) *AuthSession {
 
 	ts.AuthFamily = family
 	ts.AuthUser = admin
-	ts.authSession = LoginAs(t, admin)
+	ts.authSession = LoginAs(t, ts, admin)
 
 	return ts.authSession
 }
@@ -247,7 +207,7 @@ func (ts *TestServer) AuthAs(t *testing.T, role user.Role) (*user.User, *AuthSes
 	member.Role = role
 	require.NoError(t, ts.Repos.User.Create(t.Context(), member))
 
-	return member, LoginAs(t, member)
+	return member, LoginAs(t, ts, member)
 }
 
 // ensureFamily возвращает уже существующую семью или создаёт новую.
