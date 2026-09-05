@@ -22,9 +22,9 @@ import (
 // Красная фаза (до RequireActiveUser/RequireAPIActiveUser): все проверки ниже
 // получали 200 вместо 302/401/403.
 
-// TestSessionRevalidation_DeletedUserLosesAccess — cookie удалённого
+// TestSessionRevalidation_DeactivatedUserLosesAccess — cookie деактивированного
 // пользователя больше не открывает ни веб-страницу, ни API.
-func TestSessionRevalidation_DeletedUserLosesAccess(t *testing.T) {
+func TestSessionRevalidation_DeactivatedUserLosesAccess(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	testServer.Auth(t) // семья + админ
 
@@ -34,12 +34,15 @@ func TestSessionRevalidation_DeletedUserLosesAccess(t *testing.T) {
 	require.Equal(t, http.StatusOK, doAuthedGET(t, testServer, memberAuth, "/transactions"))
 	require.Equal(t, http.StatusOK, doAuthedGET(t, testServer, memberAuth, "/api/v1/transactions"))
 
-	require.NoError(t, testServer.Repos.User.Delete(context.Background(), member.ID))
+	require.NoError(
+		t,
+		testServer.Services.User.SetActive(context.Background(), member.ID, false, testServer.AuthUser.ID),
+	)
 
 	assert.Equal(t, http.StatusFound, doAuthedGET(t, testServer, memberAuth, "/transactions"),
-		"веб-страница осталась доступна по cookie удалённого пользователя")
+		"веб-страница осталась доступна по cookie деактивированного пользователя")
 	assert.Equal(t, http.StatusUnauthorized, doAuthedGET(t, testServer, memberAuth, "/api/v1/transactions"),
-		"API осталось доступно по cookie удалённого пользователя")
+		"API осталось доступно по cookie деактивированного пользователя")
 }
 
 // TestSessionRevalidation_RoleDowngradeTakesEffect — роль берётся из БД, а не

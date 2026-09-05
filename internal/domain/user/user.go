@@ -23,6 +23,8 @@ type User struct {
 	FirstName string    `json:"first_name" bson:"first_name"`
 	LastName  string    `json:"last_name"  bson:"last_name"`
 	Role      Role      `json:"role"       bson:"role"`
+	// IsActive — false запрещает вход и отзывает сессии; записи пользователя остаются (A-04).
+	IsActive  bool      `json:"is_active"  bson:"is_active"`
 	CreatedAt time.Time `json:"created_at" bson:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" bson:"updated_at"`
 }
@@ -50,6 +52,7 @@ func NewUser(email, firstName, lastName string, role Role) *User {
 		FirstName: firstName,
 		LastName:  lastName,
 		Role:      role,
+		IsActive:  true,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}

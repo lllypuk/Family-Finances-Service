@@ -22,6 +22,7 @@ type AuthService interface {
 	ListSessions(ctx context.Context, userID uuid.UUID) ([]*auth.Session, error)
 	RevokeSession(ctx context.Context, userID, sessionID uuid.UUID) error
 	ChangePassword(ctx context.Context, userID uuid.UUID, current, newPassword string, keepSessionID uuid.UUID) error
+	AdminSetPassword(ctx context.Context, userID uuid.UUID, newPassword string) error
 }
 
 // AuthHandler — выдача и отзыв bearer-токенов.

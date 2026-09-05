@@ -131,7 +131,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	if passwordErr := bcrypt.CompareHashAndPassword(
 		[]byte(foundUser.Password),
 		[]byte(form.Password),
-	); passwordErr != nil {
+	); passwordErr != nil || !foundUser.IsActive {
 		return h.loginError(c, "Invalid email or password", nil)
 	}
 

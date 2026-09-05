@@ -100,8 +100,13 @@ func (m *MockUserRepository) UpdatePassword(ctx context.Context, id uuid.UUID, p
 	return args.Error(0)
 }
 
-func (m *MockUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+// MockSessionRevoker — заглушка services.SessionRevoker.
+type MockSessionRevoker struct {
+	mock.Mock
+}
+
+func (m *MockSessionRevoker) RevokeAllSessions(ctx context.Context, userID uuid.UUID) error {
+	args := m.Called(ctx, userID)
 	return args.Error(0)
 }
 

@@ -615,9 +615,10 @@ func TestRequireActiveUser_FreshRoleWins(t *testing.T) {
 	})
 
 	lookup := &stubSessionUserLookup{record: &user.User{
-		ID:    userID,
-		Role:  user.RoleChild,
-		Email: "fresh@example.com",
+		ID:       userID,
+		Role:     user.RoleChild,
+		Email:    "fresh@example.com",
+		IsActive: true,
 	}}
 
 	var seen *middleware.SessionData

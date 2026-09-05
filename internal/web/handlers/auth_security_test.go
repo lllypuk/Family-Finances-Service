@@ -521,6 +521,7 @@ func newLoginTestServer(t *testing.T) (*echo.Echo, *user.User) {
 		Email:    "login-fixation@example.com",
 		Password: string(hash),
 		Role:     user.RoleAdmin,
+		IsActive: true,
 	}
 
 	repos := &handlers.Repositories{

@@ -102,7 +102,7 @@ func (s *Service) Login(ctx context.Context, email, password, device string) (*L
 		}
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
-	if !ComparePassword(u.Password, password) {
+	if !ComparePassword(u.Password, password) || !u.IsActive {
 		return nil, ErrInvalidCredentials
 	}
 
@@ -124,6 +124,10 @@ func (s *Service) Authenticate(ctx context.Context, token string) (*Principal, e
 		return nil, fmt.Errorf("failed to find session: %w", err)
 	}
 
+	if !u.IsActive {
+		return nil, ErrUnauthorized
+	}
+
 	now := s.now()
 	if !now.Before(sess.ExpiresAt) {
 		if err = s.sessions.Delete(ctx, sess.ID); err != nil && !errors.Is(err, ErrSessionNotFound) {
@@ -143,6 +147,11 @@ func (s *Service) Authenticate(ctx context.Context, token string) (*Principal, e
 // Logout удаляет сессию.
 func (s *Service) Logout(ctx context.Context, sessionID uuid.UUID) error {
 	return s.sessions.Delete(ctx, sessionID)
+}
+
+// RevokeAllSessions удаляет все сессии пользователя (деактивация админом).
+func (s *Service) RevokeAllSessions(ctx context.Context, userID uuid.UUID) error {
+	return s.sessions.DeleteByUser(ctx, userID, uuid.Nil)
 }
 
 // ListSessions — сессии пользователя, новые первыми.

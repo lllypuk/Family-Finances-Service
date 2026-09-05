@@ -277,34 +277,52 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		assert.Equal(t, "newemail@example.com", retrievedUser.Email)
 	})
 
-	t.Run("Delete_Success", func(t *testing.T) {
+	// Неактивный пользователь остаётся видимым: активность решает auth, а не репозиторий.
+	t.Run("Update_Deactivate_StillVisible", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
 		repo := userrepo.NewSQLiteRepository(db)
 
-		// Create test family and user
 		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
 		testUser := &user.User{
 			ID:        uuid.New(),
-			Email:     "remove@example.com",
+			Email:     "inactive@example.com",
 			Password:  "hashed_password",
-			FirstName: "Delete",
-			LastName:  "Me",
+			FirstName: "Off",
+			LastName:  "Line",
 			Role:      user.RoleMember,
 		}
+		require.NoError(t, repo.Create(ctx, testUser))
+		assert.True(t, testUser.IsActive, "Create всегда заводит активного пользователя")
 
-		err = repo.Create(ctx, testUser)
+		testUser.IsActive = false
+		require.NoError(t, repo.Update(ctx, testUser))
+
+		byID, err := repo.GetByID(ctx, testUser.ID)
 		require.NoError(t, err)
+		assert.False(t, byID.IsActive)
 
-		// Delete user (soft delete)
-		err = repo.Delete(ctx, testUser.ID)
+		byEmail, err := repo.GetByEmail(ctx, testUser.Email)
 		require.NoError(t, err)
+		assert.False(t, byEmail.IsActive)
 
-		// Verify user is not found (soft deleted)
-		_, err = repo.GetByID(ctx, testUser.ID)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "not found")
+		all, err := repo.GetAll(ctx)
+		require.NoError(t, err)
+		found := false
+		for _, u := range all {
+			if u.ID == testUser.ID {
+				found = true
+				assert.False(t, u.IsActive)
+			}
+		}
+		assert.True(t, found, "GetAll скрыл неактивного пользователя")
+
+		testUser.IsActive = true
+		require.NoError(t, repo.Update(ctx, testUser))
+		byID, err = repo.GetByID(ctx, testUser.ID)
+		require.NoError(t, err)
+		assert.True(t, byID.IsActive)
 	})
 
 	t.Run("GetUsersByRole_Success", func(t *testing.T) {

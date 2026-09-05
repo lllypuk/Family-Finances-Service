@@ -162,12 +162,12 @@ A-01…A-04, A-09, A-12). После него сервис отвечает то
   `internal/application/handlers/users.go`, `users_test.go`, `tests/integration/users_test.go`,
   `docs/api/openapi.yaml`
 
-- [ ] `user.User.IsActive` в домене; репозиторий читает и пишет колонку, фильтр `is_active = 1` убрать из `GetByID`/`GetByEmail`/`GetAll` (`user_repository_sqlite.go:144,188,234`) — активность проверяет `auth`, список показывает всех с полем `is_active`
-- [ ] удаление пользователя сейчас — soft delete `is_active = 0` (`Delete`, `:315`), то есть то же, что деактивация, а транзакции ссылаются на пользователя `ON DELETE RESTRICT`. Поэтому: `DELETE /api/v1/users/:id` и `UserService.DeleteUser` удалить, `tests/integration/api_users_delete_test.go` и веб-тесты удаления переписать на `PATCH`; `Delete` в репозитории удалить
-- [ ] `UserService.SetActive(id, active, actorID)`: нельзя себя, нельзя последнего активного админа; деактивация → `sessions.DeleteByUser`
-- [ ] `PATCH /api/v1/users/:id {is_active?, role?}`, `PUT /api/v1/users/:id/password` (admin)
-- [ ] тесты: деактивированный не логинится и его токен → 401, самодеактивация → 409, последний админ → 409 `LAST_ADMIN`, `GET /users` показывает неактивного с `is_active: false`
-- [ ] `openapi.yaml` обновлён (`DELETE /users/{id}` убран); `make fmt && make test && make lint` — зелёные
+- [x] `user.User.IsActive` в домене; репозиторий читает и пишет колонку, фильтр `is_active = 1` убрать из `GetByID`/`GetByEmail`/`GetAll` (`user_repository_sqlite.go:144,188,234`) — активность проверяет `auth`, список показывает всех с полем `is_active`
+- [x] удаление пользователя сейчас — soft delete `is_active = 0` (`Delete`, `:315`), то есть то же, что деактивация, а транзакции ссылаются на пользователя `ON DELETE RESTRICT`. Поэтому: `DELETE /api/v1/users/:id` и `UserService.DeleteUser` удалить, `tests/integration/api_users_delete_test.go` и веб-тесты удаления переписать на `PATCH`; `Delete` в репозитории удалить
+- [x] `UserService.SetActive(id, active, actorID)`: нельзя себя, нельзя последнего активного админа; деактивация → `sessions.DeleteByUser`
+- [x] `PATCH /api/v1/users/:id {is_active?, role?}`, `PUT /api/v1/users/:id/password` (admin)
+- [x] тесты: деактивированный не логинится и его токен → 401, самодеактивация → 409, последний админ → 409 `LAST_ADMIN`, `GET /users` показывает неактивного с `is_active: false`
+- [x] `openapi.yaml` обновлён (`DELETE /users/{id}` убран); `make fmt && make test && make lint` — зелёные
 
 ### Task 6: CLI `setup` и `reset-password`, транзакционный bootstrap
 

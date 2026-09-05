@@ -47,28 +47,29 @@ func (r *SessionSQLiteRepository) Create(ctx context.Context, s *auth.Session) e
 	return nil
 }
 
-// FindByTokenHash ищет сессию по хешу токена вместе с активным владельцем.
+// FindByTokenHash ищет сессию по хешу токена вместе с владельцем; активность решает auth.Service.
 func (r *SessionSQLiteRepository) FindByTokenHash(
 	ctx context.Context,
 	tokenHash string,
 ) (*auth.Session, *user.User, error) {
 	query := `
 		SELECT s.id, s.user_id, s.token_hash, s.device_name, s.created_at, s.last_used_at, s.expires_at,
-		       u.email, u.first_name, u.last_name, u.role
+		       u.email, u.first_name, u.last_name, u.role, u.is_active
 		FROM sessions s
 		JOIN users u ON u.id = s.user_id
-		WHERE s.token_hash = ? AND u.is_active = 1`
+		WHERE s.token_hash = ?`
 
 	var (
 		idStr, userIDStr, createdAt, lastUsedAt, expiresAt string
 		s                                                  auth.Session
 		u                                                  user.User
 		roleStr                                            string
+		isActive                                           int
 	)
 
 	err := r.db.QueryRowContext(ctx, query, tokenHash).Scan(
 		&idStr, &userIDStr, &s.TokenHash, &s.DeviceName, &createdAt, &lastUsedAt, &expiresAt,
-		&u.Email, &u.FirstName, &u.LastName, &roleStr,
+		&u.Email, &u.FirstName, &u.LastName, &roleStr, &isActive,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -82,6 +83,7 @@ func (r *SessionSQLiteRepository) FindByTokenHash(
 	}
 	u.ID = s.UserID
 	u.Role = user.Role(roleStr)
+	u.IsActive = isActive == 1
 	return &s, &u, nil
 }
 

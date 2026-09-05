@@ -52,9 +52,17 @@ func TestAPIRoles_DestructiveRoutesRequireAdmin(t *testing.T) {
 
 	cases := []apiRoleCase{
 		{
-			name:    "delete user",
-			method:  http.MethodDelete,
+			name:    "deactivate user",
+			method:  http.MethodPatch,
 			path:    func(f apiFixtures) string { return "/api/v1/users/" + f.userID.String() },
+			body:    func(_ *testing.T, _ apiFixtures) string { return `{"is_active":false}` },
+			adminOK: http.StatusOK,
+		},
+		{
+			name:    "set user password",
+			method:  http.MethodPut,
+			path:    func(f apiFixtures) string { return "/api/v1/users/" + f.userID.String() + "/password" },
+			body:    func(_ *testing.T, _ apiFixtures) string { return `{"new_password":"Sup3rSecret!!"}` },
 			adminOK: http.StatusNoContent,
 		},
 		{
@@ -117,8 +125,8 @@ func TestAPIRoles_DestructiveRoutesRequireAdmin(t *testing.T) {
 
 			for _, rc := range roleCases {
 				t.Run(rc.role, func(t *testing.T) {
-					// Свежие фикстуры на каждый прогон: успешный DELETE админа
-					// действительно удаляет запись.
+					// Свежие фикстуры на каждый прогон: успешная деактивация админом
+					// действительно меняет запись.
 					fixtures := createAPIFixtures(t, testServer)
 
 					rec := doRoleRequest(t, testServer, tc, fixtures, rc.auth)

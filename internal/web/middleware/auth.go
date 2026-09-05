@@ -128,7 +128,7 @@ func RevalidateSessionUser(c echo.Context, lookup SessionUserLookup) (*SessionDa
 
 		return nil, fmt.Errorf("revalidate session user: %w", lookupErr)
 	}
-	if record == nil {
+	if record == nil || !record.IsActive {
 		return nil, ErrSessionUserGone
 	}
 

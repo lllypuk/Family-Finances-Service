@@ -179,39 +179,35 @@ func TestUserHandler_Integration(t *testing.T) {
 		assert.Equal(t, user.Email, response.Data.Email) // Email should remain unchanged
 	})
 
-	t.Run("DeleteUser_Success", func(t *testing.T) {
+	t.Run("Deactivate_ViaPatch", func(t *testing.T) {
 		// Пользователь заводится в ТОЙ ЖЕ семье, что и владелец сессии:
-		// репозитории следуют однофамильной модели и берут family_id как
-		// `SELECT id FROM families LIMIT 1`, поэтому вторая семья делала
-		// проверку «последний администратор» плавающей — при выборе второй
-		// семьи в ней оказывался ровно один пользователь, и DELETE отвечал 400.
+		// репозитории берут family_id как `SELECT id FROM families LIMIT 1`.
 		testServer.Auth(t)
 
 		user := testhelpers.CreateTestUser(testServer.AuthFamily.ID)
 		err := testServer.Repos.User.Create(context.Background(), user)
 		require.NoError(t, err)
 
-		// Delete user
-		req := httptest.NewRequest(
-			http.MethodDelete,
-			"/api/v1/users/"+user.ID.String()+"?family_id="+testServer.AuthFamily.ID.String(),
-			nil,
-		)
+		req := httptest.NewRequest(http.MethodPatch, "/api/v1/users/"+user.ID.String(),
+			bytes.NewBufferString(`{"is_active":false}`))
 		testServer.Auth(t).Apply(req)
+		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
-		// DELETE operations might return 200 or 204, both are valid
-		assert.True(t, rec.Code == http.StatusOK || rec.Code == http.StatusNoContent)
-
-		// Verify user is deleted by trying to get it
+		// Настоящего удаления нет: пользователь остаётся, но с is_active=false.
 		req = httptest.NewRequest(http.MethodGet, "/api/v1/users/"+user.ID.String(), nil)
 		testServer.Auth(t).Apply(req)
 		rec = httptest.NewRecorder()
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
-		assert.Equal(t, http.StatusNotFound, rec.Code)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var response handlers.APIResponse[handlers.UserResponse]
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		assert.False(t, response.Data.IsActive)
 	})
 }
 

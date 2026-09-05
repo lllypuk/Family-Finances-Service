@@ -150,7 +150,7 @@ func NewHTTPServerWithObservability(
 		// Инициализация API handlers
 		authHandler:        handlers.NewAuthHandler(services.Auth, auth.NewRateLimiter(nil), logger),
 		meHandler:          handlers.NewMeHandler(services.User, services.Auth),
-		userHandler:        handlers.NewUserHandler(repositories, services.User),
+		userHandler:        handlers.NewUserHandler(repositories, services.User, services.Auth),
 		familyHandler:      handlers.NewFamilyHandler(services.Family),
 		categoryHandler:    handlers.NewCategoryHandler(repositories, services.Category),
 		transactionHandler: handlers.NewTransactionHandler(repositories, services.Transaction),
@@ -245,7 +245,7 @@ func (s *HTTPServer) setupRoutes() {
 	users.GET("/:id", s.userHandler.GetUserByID)
 	users.PUT("/:id", s.userHandler.UpdateUser)
 	users.PATCH("/:id", s.userHandler.PatchUser)
-	users.DELETE("/:id", s.userHandler.DeleteUser)
+	users.PUT("/:id/password", s.userHandler.SetUserPassword)
 
 	// Маршруты для категорий
 	categories := api.Group("/categories", financeAccess)

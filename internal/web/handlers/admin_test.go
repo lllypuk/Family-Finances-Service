@@ -529,7 +529,7 @@ func TestAdminHandler_DeleteUser(t *testing.T) {
 					Role:  user.RoleMember,
 				}
 				userSvc.On("GetUserByID", mock.Anything, validUserID).Return(userToDelete, nil).Once()
-				userSvc.On("DeleteUser", mock.Anything, validUserID, mock.Anything).Return(nil).Once()
+				userSvc.On("SetActive", mock.Anything, validUserID, false, mock.Anything).Return(nil).Once()
 			},
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, httpErr *echo.HTTPError, c echo.Context) {
@@ -538,7 +538,7 @@ func TestAdminHandler_DeleteUser(t *testing.T) {
 			},
 		},
 		{
-			// Правило живёт в userService.DeleteUser; от веба требуется 400 с
+			// Правило живёт в userService.SetActive; от веба требуется 400 с
 			// понятным текстом, а не 500.
 			name:          "Error - cannot delete self",
 			userID:        adminID.String(),
@@ -551,8 +551,8 @@ func TestAdminHandler_DeleteUser(t *testing.T) {
 					Role:  user.RoleAdmin,
 				}
 				userSvc.On("GetUserByID", mock.Anything, adminID).Return(adminUser, nil).Twice()
-				userSvc.On("DeleteUser", mock.Anything, adminID, adminID).
-					Return(services.ErrCannotDeleteSelf).Once()
+				userSvc.On("SetActive", mock.Anything, adminID, false, adminID).
+					Return(services.ErrCannotDeactivateSelf).Once()
 			},
 			expectedStatus: http.StatusBadRequest,
 			checkResponse: func(t *testing.T, httpErr *echo.HTTPError, _ echo.Context) {
@@ -660,7 +660,7 @@ func TestAdminHandler_DeleteUser(t *testing.T) {
 					Role:  user.RoleMember,
 				}
 				userSvc.On("GetUserByID", mock.Anything, validUserID).Return(userToDelete, nil).Once()
-				userSvc.On("DeleteUser", mock.Anything, validUserID, mock.Anything).
+				userSvc.On("SetActive", mock.Anything, validUserID, false, mock.Anything).
 					Return(errors.New("constraint violation")).Once()
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -682,7 +682,7 @@ func TestAdminHandler_DeleteUser(t *testing.T) {
 
 				userToDelete := &user.User{ID: validUserID, Email: "delete@example.com", Role: user.RoleMember}
 				userSvc.On("GetUserByID", mock.Anything, validUserID).Return(userToDelete, nil).Once()
-				userSvc.On("DeleteUser", mock.Anything, validUserID, mock.Anything).
+				userSvc.On("SetActive", mock.Anything, validUserID, false, mock.Anything).
 					Return(errors.New(leakyRepoErrorText)).Once()
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -705,7 +705,7 @@ func TestAdminHandler_DeleteUser(t *testing.T) {
 
 				userToDelete := &user.User{ID: validUserID, Email: "other@example.com", Role: user.RoleAdmin}
 				userSvc.On("GetUserByID", mock.Anything, validUserID).Return(userToDelete, nil).Once()
-				userSvc.On("DeleteUser", mock.Anything, validUserID, mock.Anything).
+				userSvc.On("SetActive", mock.Anything, validUserID, false, mock.Anything).
 					Return(services.ErrLastAdmin).Once()
 			},
 			expectedStatus: http.StatusBadRequest,

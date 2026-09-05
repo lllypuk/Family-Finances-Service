@@ -103,7 +103,7 @@ func (h *MeHandler) ChangePassword(c echo.Context) error {
 				ErrCodeValidationError,
 				ErrMessageValidationFailed,
 				ErrorDetail{
-					Field:   "new_password",
+					Field:   fieldNewPassword,
 					Message: auth.ErrInvalidPassword.Error(),
 					Code:    ErrCodeValidationError,
 				},

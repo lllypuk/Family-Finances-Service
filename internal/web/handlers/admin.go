@@ -213,11 +213,9 @@ func (h *AdminHandler) DeleteUser(c echo.Context) error {
 
 	// Single family model - no family check needed
 
-	// Delete user via service
-	if deleteErr := h.services.User.DeleteUser(c.Request().Context(), userID, currentUser.ID); deleteErr != nil {
-		// Запрет самоудаления и защита последнего администратора живут в
-		// userService.DeleteUser; здесь только формат ответа.
-		if errors.Is(deleteErr, services.ErrCannotDeleteSelf) {
+	// «Удаление» в вебе — деактивация: настоящего удаления нет, транзакции ссылаются на пользователя.
+	if deleteErr := h.services.User.SetActive(c.Request().Context(), userID, false, currentUser.ID); deleteErr != nil {
+		if errors.Is(deleteErr, services.ErrCannotDeactivateSelf) {
 			return echo.NewHTTPError(http.StatusBadRequest, "Cannot delete yourself")
 		}
 		if errors.Is(deleteErr, services.ErrLastAdmin) {

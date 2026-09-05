@@ -41,6 +41,13 @@ type fakeAuthService struct {
 	revoked    []uuid.UUID
 	loggedOut  []uuid.UUID
 	changeCall *changePasswordCall
+	adminErr   error
+	adminSet   *adminSetPasswordCall
+}
+
+type adminSetPasswordCall struct {
+	userID uuid.UUID
+	next   string
 }
 
 type changePasswordCall struct {
@@ -108,6 +115,11 @@ func (f *fakeAuthService) ChangePassword(
 ) error {
 	f.changeCall = &changePasswordCall{userID: userID, current: current, next: next, keep: keep}
 	return f.changeErr
+}
+
+func (f *fakeAuthService) AdminSetPassword(_ context.Context, userID uuid.UUID, next string) error {
+	f.adminSet = &adminSetPasswordCall{userID: userID, next: next}
+	return f.adminErr
 }
 
 func newAuthHandler(svc *fakeAuthService) *handlers.AuthHandler {

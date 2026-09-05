@@ -23,12 +23,12 @@ var (
 	ErrInvalidRole        = errors.New("invalid user role")
 	ErrUnauthorized       = errors.New("unauthorized access")
 	ErrValidationFailed   = errors.New("validation failed")
-	// ErrLastAdmin — попытка удалить или понизить последнего администратора семьи.
-	// Модель однофамильная: без администратора некому выпускать инвайты и
+	// ErrLastAdmin — попытка деактивировать или понизить последнего активного администратора.
+	// Модель однофамильная: без администратора некому заводить пользователей и
 	// открытой регистрации нет, поэтому состояние невосстановимо.
-	ErrLastAdmin = errors.New("cannot delete the last admin")
-	// ErrCannotDeleteSelf — пользователь пытается удалить собственную учётную запись.
-	ErrCannotDeleteSelf = errors.New("cannot delete yourself")
+	ErrLastAdmin = errors.New("cannot deactivate the last admin")
+	// ErrCannotDeactivateSelf — администратор пытается деактивировать собственную учётную запись.
+	ErrCannotDeactivateSelf = errors.New("cannot deactivate yourself")
 )
 
 // UserRepository defines the data access operations for users
@@ -39,7 +39,11 @@ type UserRepository interface {
 	GetAll(ctx context.Context) ([]*user.User, error)
 	Update(ctx context.Context, user *user.User) error
 	UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error
-	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+// SessionRevoker отзывает bearer-сессии пользователя; реализуется *auth.Service.
+type SessionRevoker interface {
+	RevokeAllSessions(ctx context.Context, userID uuid.UUID) error
 }
 
 // FamilyRepository defines the data access operations for the single family
@@ -54,14 +58,16 @@ type FamilyRepository interface {
 type userService struct {
 	userRepo   UserRepository
 	familyRepo FamilyRepository
+	sessions   SessionRevoker
 	validator  *validator.Validate
 }
 
 // NewUserService creates a new UserService instance
-func NewUserService(userRepo UserRepository, familyRepo FamilyRepository) UserService {
+func NewUserService(userRepo UserRepository, familyRepo FamilyRepository, sessions SessionRevoker) UserService {
 	return &userService{
 		userRepo:   userRepo,
 		familyRepo: familyRepo,
+		sessions:   sessions,
 		validator:  newValidator(),
 	}
 }
@@ -99,6 +105,7 @@ func (s *userService) CreateUser(ctx context.Context, req dto.CreateUserDTO) (*u
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
 		Role:      req.Role,
+		IsActive:  true,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -189,43 +196,45 @@ func (s *userService) UpdateUser(ctx context.Context, id uuid.UUID, req dto.Upda
 	return existingUser, nil
 }
 
-// DeleteUser deletes a user by ID.
-// actorID — владелец сессии, от имени которого выполняется удаление: правило
-// «себя удалить нельзя» — бизнес-правило, а не деталь конкретной поверхности,
-// поэтому оно живёт здесь, а веб и API только раскладывают ErrCannotDeleteSelf
-// по своим форматам ответа (как уже сделано для ErrLastAdmin).
-func (s *userService) DeleteUser(ctx context.Context, id, actorID uuid.UUID) error {
-	// Самоудаление: администратор мгновенно теряет и сессию, и доступ к
-	// консоли, а в однофамильной модели вернуть его некому.
-	if id == actorID {
-		return ErrCannotDeleteSelf
+// SetActive включает или выключает пользователя. Деактивация отзывает все его сессии;
+// себя и последнего активного администратора выключить нельзя.
+func (s *userService) SetActive(ctx context.Context, id uuid.UUID, active bool, actorID uuid.UUID) error {
+	if !active && id == actorID {
+		return ErrCannotDeactivateSelf
 	}
 
-	// Check if user exists
 	existingUser, err := s.GetUserByID(ctx, id)
 	if err != nil {
 		return err
 	}
-
-	// Последний администратор не удаляется ни через API, ни через веб:
-	// иначе семья остаётся без администратора навсегда (инвайты выпускает
-	// только он, открытой регистрации нет).
-	if err = s.ensureNotLastAdmin(ctx, existingUser); err != nil {
-		return err
+	if existingUser.IsActive == active {
+		return nil
 	}
 
-	// Delete user
-	if err = s.userRepo.Delete(ctx, id); err != nil {
-		return fmt.Errorf("failed to delete user: %w", err)
+	if !active {
+		if err = s.ensureNotLastAdmin(ctx, existingUser); err != nil {
+			return err
+		}
+	}
+
+	existingUser.IsActive = active
+	existingUser.UpdatedAt = time.Now()
+	if err = s.userRepo.Update(ctx, existingUser); err != nil {
+		return fmt.Errorf("failed to update user: %w", err)
+	}
+
+	if !active {
+		if err = s.sessions.RevokeAllSessions(ctx, id); err != nil {
+			return fmt.Errorf("failed to revoke sessions: %w", err)
+		}
 	}
 
 	return nil
 }
 
-// ensureNotLastAdmin возвращает ErrLastAdmin, если удаляемый пользователь —
-// единственный оставшийся администратор.
+// ensureNotLastAdmin возвращает ErrLastAdmin, если target — единственный активный администратор.
 func (s *userService) ensureNotLastAdmin(ctx context.Context, target *user.User) error {
-	if target.Role != user.RoleAdmin {
+	if target.Role != user.RoleAdmin || !target.IsActive {
 		return nil
 	}
 
@@ -235,7 +244,7 @@ func (s *userService) ensureNotLastAdmin(ctx context.Context, target *user.User)
 	}
 
 	for _, u := range users {
-		if u.Role == user.RoleAdmin && u.ID != target.ID {
+		if u.Role == user.RoleAdmin && u.IsActive && u.ID != target.ID {
 			return nil
 		}
 	}
@@ -256,8 +265,7 @@ func (s *userService) ChangeUserRole(ctx context.Context, userID uuid.UUID, role
 		return err
 	}
 
-	// Понижение — такая же потеря администратора, как и удаление: семья
-	// остаётся без того, кто выпускает инвайты и заводит пользователей.
+	// Понижение — такая же потеря администратора, как и деактивация.
 	if role != user.RoleAdmin {
 		if err = s.ensureNotLastAdmin(ctx, existingUser); err != nil {
 			return err

@@ -20,7 +20,7 @@ info:
     Коды ошибок: `INVALID_REQUEST` / `INVALID_ID` (400 — тело или id не разобрались),
     `UNAUTHORIZED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404),
     `VALIDATION_ERROR` (422 — тело или query-параметры не прошли проверку, поля в `error.details`),
-    `SETUP_REQUIRED` / `CURRENCY_LOCKED` / `LAST_ADMIN` (409),
+    `SETUP_REQUIRED` / `CURRENCY_LOCKED` / `LAST_ADMIN` / `CANNOT_DEACTIVATE_SELF` (409),
     `RATE_LIMITED` (429, с `Retry-After`), `INTERNAL_ERROR` (500).
   license:
     name: MIT
@@ -306,7 +306,9 @@ paths:
       summary: Изменить роль или активность
       description: |
         Только admin. Деактивация (`is_active: false`) отзывает все сессии пользователя (A-04).
-        Понижение роли или деактивация последнего активного админа — `409 LAST_ADMIN`.
+        Понижение роли или деактивация последнего активного админа — `409 LAST_ADMIN`;
+        деактивация себя — `409 CANNOT_DEACTIVATE_SELF`. Оба поля в одном запросе
+        применяются по очереди: сначала роль, затем активность.
       requestBody:
         required: true
         content:
@@ -319,22 +321,6 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
-    delete:
-      operationId: deleteUser
-      tags: [users]
-      deprecated: true
-      summary: Устаревшее «удаление» пользователя
-      description: |
-        Только admin. Роут существует в текущем коде и на деле выполняет `is_active = 0`
-        (`user_repository_sqlite.go:315`) — настоящее удаление невозможно, транзакции ссылаются
-        на пользователя `ON DELETE RESTRICT`. В целевом контракте деактивация делается
-        через `PATCH /api/v1/users/{id}`; этот роут удаляется в плане 03.
-      responses:
-        '204': { description: Пользователь деактивирован }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
 
   /api/v1/users/{id}/password:
     parameters:
@@ -955,7 +941,7 @@ components:
     Conflict:
       description: |
         Состояние не допускает операцию: `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`,
-        `EMAIL_TAKEN`, `CATEGORY_IN_USE`
+        `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN`, `CATEGORY_IN_USE`
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }

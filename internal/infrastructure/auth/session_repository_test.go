@@ -67,8 +67,9 @@ func TestSessionRepositorySQLite_Integration(t *testing.T) {
 		_, err := db.ExecContext(ctx, `UPDATE users SET is_active = 0 WHERE id = ?`, userID.String())
 		require.NoError(t, err)
 
-		_, _, err = repo.FindByTokenHash(ctx, "hash-inactive")
-		require.ErrorIs(t, err, auth.ErrSessionNotFound)
+		_, owner, err := repo.FindByTokenHash(ctx, "hash-inactive")
+		require.NoError(t, err)
+		assert.False(t, owner.IsActive, "активность решает auth.Service, репозиторий её только читает")
 	})
 
 	t.Run("Touch_ExtendsIdleAndCapsAtAbsolute", func(t *testing.T) {

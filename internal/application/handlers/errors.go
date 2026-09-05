@@ -33,9 +33,9 @@ const (
 	ErrCodeCSRFTokenInvalid = "CSRF_TOKEN_INVALID"
 	// ErrCodeInternal signals a server-side failure; details stay in the log only.
 	ErrCodeInternal = "INTERNAL_ERROR"
-	// ErrCodeCannotDeleteSelf signals an attempt to delete the session's own user.
-	ErrCodeCannotDeleteSelf = "CANNOT_DELETE_SELF"
-	// ErrCodeLastAdmin signals an attempt to delete the last remaining admin.
+	// ErrCodeCannotDeactivateSelf signals an attempt to deactivate the session's own user.
+	ErrCodeCannotDeactivateSelf = "CANNOT_DEACTIVATE_SELF"
+	// ErrCodeLastAdmin signals an attempt to deactivate or demote the last active admin.
 	ErrCodeLastAdmin = "LAST_ADMIN"
 	// ErrCodeCurrencyLocked signals a currency change on a family that already has transactions.
 	ErrCodeCurrencyLocked = "CURRENCY_LOCKED"
@@ -72,8 +72,8 @@ const (
 	ErrMessageInvalidCategoryRef = "Invalid category, user, or family ID"
 	ErrMessageFamilyNotFound     = "Family not found"
 	ErrMessageInternal           = "Internal server error"
-	ErrMessageCannotDeleteSelf   = "Cannot delete your own account"
-	ErrMessageLastAdmin          = "Cannot delete the last administrator"
+	ErrMessageCannotDeactivate   = "Cannot deactivate your own account"
+	ErrMessageLastAdmin          = "Cannot deactivate or demote the last administrator"
 	ErrMessageCurrencyLocked     = "Currency cannot be changed while transactions exist"
 	ErrMessageInvalidBackupName  = "Invalid backup filename"
 	ErrMessageBackupNotFound     = "Backup not found"
@@ -85,7 +85,8 @@ const (
 	ErrMessageRateLimited        = "Too many login attempts"
 
 	// fieldBody — значение ErrorDetail.Field для ошибок, не привязанных к полю.
-	fieldBody     = "body"
-	fieldRole     = "role"
-	fieldCurrency = "currency"
+	fieldBody        = "body"
+	fieldRole        = "role"
+	fieldNewPassword = "new_password"
+	fieldCurrency    = "currency"
 )

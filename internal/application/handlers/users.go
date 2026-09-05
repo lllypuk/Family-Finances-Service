@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
+	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
@@ -19,13 +20,19 @@ var ErrFamilyNotFound = errors.New("family not found")
 type UserHandler struct {
 	repositories *Repositories
 	userService  services.UserService
+	authService  AuthService
 	validator    *validator.Validate
 }
 
-func NewUserHandler(repositories *Repositories, userService services.UserService) *UserHandler {
+func NewUserHandler(
+	repositories *Repositories,
+	userService services.UserService,
+	authService AuthService,
+) *UserHandler {
 	return &UserHandler{
 		repositories: repositories,
 		userService:  userService,
+		authService:  authService,
 		validator:    newAPIValidator(),
 	}
 }
@@ -51,8 +58,8 @@ func respondUserServiceError(c echo.Context, err error) error {
 		return respondError(c, http.StatusBadRequest, ErrCodeFamilyNotFound, ErrMessageFamilyNotFound)
 	case errors.Is(err, services.ErrUnauthorized):
 		return respondError(c, http.StatusForbidden, ErrCodeForbidden, ErrMessageForbidden)
-	case errors.Is(err, services.ErrCannotDeleteSelf):
-		return respondError(c, http.StatusBadRequest, ErrCodeCannotDeleteSelf, ErrMessageCannotDeleteSelf)
+	case errors.Is(err, services.ErrCannotDeactivateSelf):
+		return respondError(c, http.StatusConflict, ErrCodeCannotDeactivateSelf, ErrMessageCannotDeactivate)
 	case errors.Is(err, services.ErrLastAdmin):
 		return respondError(c, http.StatusConflict, ErrCodeLastAdmin, ErrMessageLastAdmin)
 	case errors.Is(err, services.ErrInvalidRole):
@@ -149,29 +156,6 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 	return respondAPI(c, http.StatusOK, response)
 }
 
-func (h *UserHandler) DeleteUser(c echo.Context) error {
-	idParam := c.Param("id")
-	id, err := uuid.Parse(idParam)
-	if err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
-	}
-
-	// Удаляем от имени владельца сессии: запрет самоудаления — правило сервиса
-	// (userService.DeleteUser), сюда возвращается ErrCannotDeleteSelf.
-	sessionData, sessionErr := middleware.GetUserFromContext(c)
-	if sessionErr != nil {
-		return respondUnauthorized(c)
-	}
-
-	// Call service
-	err = h.userService.DeleteUser(c.Request().Context(), id, sessionData.UserID)
-	if err != nil {
-		return h.handleServiceError(c, err)
-	}
-
-	return c.NoContent(http.StatusNoContent)
-}
-
 // toUserResponse раскладывает доменного пользователя в API-форму.
 func toUserResponse(u *user.User) UserResponse {
 	return UserResponse{
@@ -180,6 +164,7 @@ func toUserResponse(u *user.User) UserResponse {
 		FirstName: u.FirstName,
 		LastName:  u.LastName,
 		Role:      string(u.Role),
+		IsActive:  u.IsActive,
 		CreatedAt: u.CreatedAt,
 		UpdatedAt: u.UpdatedAt,
 	}
@@ -205,8 +190,8 @@ func (h *UserHandler) GetUsers(c echo.Context) error {
 	return respondList(c, response, page, len(users))
 }
 
-// PatchUser меняет роль пользователя. Понижение последнего администратора
-// отбивается сервисом (ErrLastAdmin -> 409).
+// PatchUser меняет роль и/или активность. Оба правила (последний админ, самодеактивация)
+// живут в сервисе и приходят сюда как sentinel-ошибки -> 409.
 func (h *UserHandler) PatchUser(c echo.Context) error {
 	idParam := c.Param("id")
 	id, err := uuid.Parse(idParam)
@@ -223,19 +208,72 @@ func (h *UserHandler) PatchUser(c echo.Context) error {
 	if validationErr := h.validator.Struct(&req); validationErr != nil {
 		return respondValidationErrors(c, validationErr)
 	}
-	if req.Role == nil {
+	if req.Role == nil && req.IsActive == nil {
 		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
-			ErrorDetail{Field: fieldRole, Message: "required", Code: ErrCodeValidationError})
+			bodyDetail(ErrCodeValidationError, "at least one field is required"))
 	}
 
-	if roleErr := h.userService.ChangeUserRole(c.Request().Context(), id, user.Role(*req.Role)); roleErr != nil {
-		return h.handleServiceError(c, roleErr)
+	// Актор — владелец сессии (cookie или bearer, оба кладут SessionData): запрет самодеактивации.
+	sessionData, sessionErr := middleware.GetUserFromContext(c)
+	if sessionErr != nil {
+		return respondUnauthorized(c)
 	}
 
-	updatedUser, err := h.userService.GetUserByID(c.Request().Context(), id)
+	ctx := c.Request().Context()
+	if req.Role != nil {
+		if roleErr := h.userService.ChangeUserRole(ctx, id, user.Role(*req.Role)); roleErr != nil {
+			return h.handleServiceError(c, roleErr)
+		}
+	}
+	if req.IsActive != nil {
+		if activeErr := h.userService.SetActive(ctx, id, *req.IsActive, sessionData.UserID); activeErr != nil {
+			return h.handleServiceError(c, activeErr)
+		}
+	}
+
+	updatedUser, err := h.userService.GetUserByID(ctx, id)
 	if err != nil {
 		return h.handleServiceError(c, err)
 	}
 
 	return respondAPI(c, http.StatusOK, toUserResponse(updatedUser))
+}
+
+// SetUserPassword задаёт пароль без текущего; все сессии пользователя отзываются.
+func (h *UserHandler) SetUserPassword(c echo.Context) error {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
+	}
+
+	var req SetPasswordRequest
+	if bindErr := c.Bind(&req); bindErr != nil {
+		return HandleBindError(c)
+	}
+	if validationErr := h.validator.Struct(&req); validationErr != nil {
+		return respondValidationErrors(c, validationErr)
+	}
+
+	if err = h.authService.AdminSetPassword(c.Request().Context(), id, req.NewPassword); err != nil {
+		switch {
+		case errors.Is(err, user.ErrNotFound):
+			return respondError(c, http.StatusNotFound, "USER_NOT_FOUND", "User not found")
+		case errors.Is(err, auth.ErrInvalidPassword):
+			return respondError(
+				c,
+				http.StatusUnprocessableEntity,
+				ErrCodeValidationError,
+				ErrMessageValidationFailed,
+				ErrorDetail{
+					Field:   fieldNewPassword,
+					Message: auth.ErrInvalidPassword.Error(),
+					Code:    ErrCodeValidationError,
+				},
+			)
+		default:
+			return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+		}
+	}
+
+	return c.NoContent(http.StatusNoContent)
 }

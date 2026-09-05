@@ -203,6 +203,43 @@ func TestService_Login_UnknownEmail_SameError(t *testing.T) {
 	assert.Empty(t, f.sessions.byHash)
 }
 
+// Деактивированный пользователь получает тот же ответ, что и при неверном пароле.
+func TestService_Login_InactiveUser(t *testing.T) {
+	f := newFixture(t, true)
+	f.user.IsActive = false
+
+	res, err := f.svc.Login(context.Background(), f.user.Email, testPassword, testDevice)
+
+	require.ErrorIs(t, err, auth.ErrInvalidCredentials)
+	assert.Nil(t, res)
+	assert.Empty(t, f.sessions.byHash)
+}
+
+// Деактивация после логина: сессия ещё лежит в БД, но токен уже не принимается.
+func TestService_Authenticate_InactiveUser(t *testing.T) {
+	f := newFixture(t, true)
+	token := f.login(t)
+	f.user.IsActive = false
+
+	p, err := f.svc.Authenticate(context.Background(), token)
+
+	require.ErrorIs(t, err, auth.ErrUnauthorized)
+	assert.Nil(t, p)
+}
+
+func TestService_RevokeAllSessions(t *testing.T) {
+	f := newFixture(t, true)
+	first := f.login(t)
+	second := f.login(t)
+
+	require.NoError(t, f.svc.RevokeAllSessions(context.Background(), f.user.ID))
+
+	_, err := f.svc.Authenticate(context.Background(), first)
+	require.ErrorIs(t, err, auth.ErrUnauthorized)
+	_, err = f.svc.Authenticate(context.Background(), second)
+	require.ErrorIs(t, err, auth.ErrUnauthorized)
+}
+
 func TestService_Login_SetupRequired(t *testing.T) {
 	f := newFixture(t, false)
 

@@ -60,9 +60,15 @@ type UpdateUserRequest struct {
 	Email     *string `json:"email,omitempty"      validate:"omitempty,email"`
 }
 
-// PatchUserRequest меняет только роль; is_active появится вместе с полем в домене (план 04).
+// PatchUserRequest меняет роль и/или активность; хотя бы одно поле обязательно.
 type PatchUserRequest struct {
-	Role *string `json:"role,omitempty" validate:"omitempty,oneof=admin member child"`
+	Role     *string `json:"role,omitempty"      validate:"omitempty,oneof=admin member child"`
+	IsActive *bool   `json:"is_active,omitempty"`
+}
+
+// SetPasswordRequest — тело PUT /users/{id}/password (admin, без текущего пароля).
+type SetPasswordRequest struct {
+	NewPassword string `json:"new_password" validate:"required,password"`
 }
 
 type UserResponse struct {
@@ -71,6 +77,7 @@ type UserResponse struct {
 	FirstName string    `json:"first_name"`
 	LastName  string    `json:"last_name"`
 	Role      string    `json:"role"`
+	IsActive  bool      `json:"is_active"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

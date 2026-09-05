@@ -230,8 +230,8 @@ func (m *MockUserService) UpdateUser(
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
-func (m *MockUserService) DeleteUser(ctx context.Context, id, actorID uuid.UUID) error {
-	args := m.Called(ctx, id, actorID)
+func (m *MockUserService) SetActive(ctx context.Context, id uuid.UUID, active bool, actorID uuid.UUID) error {
+	args := m.Called(ctx, id, active, actorID)
 	return args.Error(0)
 }
 
