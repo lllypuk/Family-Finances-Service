@@ -117,6 +117,11 @@ type BudgetService interface {
 	RecalculateBudgetSpent(ctx context.Context, budgetID uuid.UUID) error
 }
 
+// StatsService defines aggregated statistics over a period (dashboard, GET /stats/summary)
+type StatsService interface {
+	Summary(ctx context.Context, from, to time.Time) (*dto.StatsSummary, error)
+}
+
 // ReportService defines business operations for report generation and analytics
 type ReportService interface {
 	// Report Generation

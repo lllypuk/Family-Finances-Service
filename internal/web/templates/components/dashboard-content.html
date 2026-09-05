@@ -1,9 +1,6 @@
 {{define "dashboard-content"}}
 <div id="dashboard-content">
-    <!-- Enhanced Stats Cards -->
-    {{if .DashboardViewModel.EnhancedStats}}
-    {{template "enhanced-stats" .DashboardViewModel}}
-    {{else if .DashboardViewModel.MonthlySummary}}
+    {{if .DashboardViewModel.MonthlySummary}}
     {{template "dashboard-stats" .DashboardViewModel}}
     {{else}}
     <section class="stats-grid"

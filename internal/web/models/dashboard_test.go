@@ -381,26 +381,6 @@ func TestRecentActivityCard_Pagination(t *testing.T) {
 	assert.False(t, card.LastUpdated.IsZero())
 }
 
-func TestEnhancedStatsCard(t *testing.T) {
-	card := &models.EnhancedStatsCard{
-		AvgIncomePerDay:  100.0,
-		AvgExpensePerDay: 75.0,
-		SavingsRate:      25.0,
-		Forecast: &models.ForecastData{
-			ExpectedIncome:   3000.0,
-			ExpectedExpenses: 2250.0,
-			MonthEndBalance:  750.0,
-			DaysRemaining:    10,
-		},
-	}
-
-	assert.InEpsilon(t, 100.0, card.AvgIncomePerDay, 0.001)
-	assert.InEpsilon(t, 75.0, card.AvgExpensePerDay, 0.001)
-	assert.InEpsilon(t, 25.0, card.SavingsRate, 0.001)
-	assert.NotNil(t, card.Forecast)
-	assert.InEpsilon(t, 750.0, card.Forecast.MonthEndBalance, 0.001)
-}
-
 func TestCategoryInsightsCard(t *testing.T) {
 	now := time.Now()
 	card := &models.CategoryInsightsCard{

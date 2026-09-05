@@ -26,6 +26,7 @@ type Services struct {
 	Category    CategoryService
 	Transaction TransactionService
 	Budget      BudgetService
+	Stats       StatsService
 	Report      ReportService
 	Invite      InviteService
 	Backup      BackupService
@@ -54,6 +55,8 @@ func NewServices(
 	budgetService := NewBudgetServiceWithLogger(fullBudgetRepo, transactionRepo, logger)
 	inviteService := NewInviteService(inviteRepo, userRepo, familyRepo, logger)
 
+	statsService := NewStatsService(transactionService, budgetService, categoryService)
+
 	// Create report service with dependencies on other services
 	reportService := NewReportService(
 		reportRepo,
@@ -72,6 +75,7 @@ func NewServices(
 		Category:    categoryService,
 		Transaction: transactionService,
 		Budget:      budgetService,
+		Stats:       statsService,
 		Report:      reportService,
 		Invite:      inviteService,
 		Backup:      backupService,

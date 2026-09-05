@@ -353,6 +353,7 @@ func setupDashboardHandler() (*handlers.DashboardHandler, *MockTransactionServic
 		Budget:      mockBudgetService,
 		Category:    mockCategoryService,
 		User:        mockUserService,
+		Stats:       services.NewStatsService(mockTransactionService, mockBudgetService, mockCategoryService),
 	}
 
 	handler := handlers.NewDashboardHandler(
@@ -429,8 +430,9 @@ func TestDashboardHandler_Dashboard(t *testing.T) {
 					createTestTransaction(time.Now(), 500, transaction.TypeExpense, categoryID),
 				}
 				mts.On("GetAllTransactions", mock.Anything, mock.Anything).Return(transactions, nil).Maybe()
+				mts.On("CountTransactions", mock.Anything, mock.Anything).Return(len(transactions), nil).Maybe()
 
-				// Mock budgets - called by buildDashboardViewModel -> buildBudgetOverview
+				// Mock budgets
 				budgets := []*budget.Budget{
 					createTestBudget("Food", 1000, 500, &categoryID),
 				}
@@ -463,6 +465,7 @@ func TestDashboardHandler_Dashboard(t *testing.T) {
 			name: "dashboard with empty data",
 			setupMocks: func(mts *MockTransactionService, mbs *MockBudgetService, _ *MockCategoryService, mus *MockUserService) {
 				mts.On("GetAllTransactions", mock.Anything, mock.Anything).Return([]*transaction.Transaction{}, nil)
+				mts.On("CountTransactions", mock.Anything, mock.Anything).Return(0, nil)
 				mbs.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil)
 
 				testUser := &user.User{
@@ -560,10 +563,10 @@ func TestDashboardHandler_DashboardFilter(t *testing.T) {
 			name:        "filter by current month",
 			queryParams: "period=current_month",
 			setupMocks: func(mts *MockTransactionService, mbs *MockBudgetService, _ *MockCategoryService) {
-				// DashboardFilter calls: buildMonthlySummary (2x), buildRecentActivity (1x), buildCategoryInsights (1x), buildEnhancedStats (1x) = 5 total
 				mts.On("GetAllTransactions", mock.Anything, mock.Anything).
 					Return([]*transaction.Transaction{}, nil).
 					Maybe()
+				mts.On("CountTransactions", mock.Anything, mock.Anything).Return(0, nil).Maybe()
 				mbs.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil).Maybe()
 			},
 			setupContext: func(c echo.Context) {
@@ -579,6 +582,7 @@ func TestDashboardHandler_DashboardFilter(t *testing.T) {
 				mts.On("GetAllTransactions", mock.Anything, mock.Anything).
 					Return([]*transaction.Transaction{}, nil).
 					Maybe()
+				mts.On("CountTransactions", mock.Anything, mock.Anything).Return(0, nil).Maybe()
 				mbs.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil).Maybe()
 			},
 			setupContext: func(c echo.Context) {
@@ -637,14 +641,16 @@ func TestDashboardHandler_DashboardFilter(t *testing.T) {
 func TestDashboardHandler_DashboardStats(t *testing.T) {
 	tests := []struct {
 		name           string
-		setupMocks     func(*MockTransactionService)
+		setupMocks     func(*MockTransactionService, *MockBudgetService)
 		setupContext   func(echo.Context)
 		expectedStatus int
 	}{
 		{
 			name: "successful stats load",
-			setupMocks: func(mts *MockTransactionService) {
+			setupMocks: func(mts *MockTransactionService, mbs *MockBudgetService) {
 				mts.On("GetAllTransactions", mock.Anything, mock.Anything).Return([]*transaction.Transaction{}, nil)
+				mts.On("CountTransactions", mock.Anything, mock.Anything).Return(0, nil)
+				mbs.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil)
 			},
 			setupContext: func(c echo.Context) {
 				withSession(c, uuid.New(), user.RoleAdmin)
@@ -654,7 +660,7 @@ func TestDashboardHandler_DashboardStats(t *testing.T) {
 		},
 		{
 			name: "service error",
-			setupMocks: func(mts *MockTransactionService) {
+			setupMocks: func(mts *MockTransactionService, _ *MockBudgetService) {
 				mts.On("GetAllTransactions", mock.Anything, mock.Anything).Return(nil, errors.New("database error"))
 			},
 			setupContext: func(c echo.Context) {
@@ -667,10 +673,10 @@ func TestDashboardHandler_DashboardStats(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler, mockTxService, _, _, _ := setupDashboardHandler()
+			handler, mockTxService, mockBudgetService, _, _ := setupDashboardHandler()
 
 			if tt.setupMocks != nil {
-				tt.setupMocks(mockTxService)
+				tt.setupMocks(mockTxService, mockBudgetService)
 			}
 
 			c, _ := newTestContext("GET", "/dashboard/stats", "")
@@ -699,13 +705,15 @@ func TestDashboardHandler_DashboardStats(t *testing.T) {
 func TestDashboardHandler_RecentTransactions(t *testing.T) {
 	tests := []struct {
 		name           string
-		setupMocks     func(*MockTransactionService, *MockCategoryService)
+		setupMocks     func(*MockTransactionService, *MockBudgetService, *MockCategoryService)
 		setupContext   func(echo.Context)
 		expectedStatus int
 	}{
 		{
 			name: "successful load with transactions",
-			setupMocks: func(mts *MockTransactionService, mcs *MockCategoryService) {
+			setupMocks: func(mts *MockTransactionService, mbs *MockBudgetService, mcs *MockCategoryService) {
+				mts.On("CountTransactions", mock.Anything, mock.Anything).Return(1, nil)
+				mbs.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil)
 				categoryID := uuid.New()
 				transactions := []*transaction.Transaction{
 					createTestTransaction(time.Now(), 100, transaction.TypeExpense, categoryID),
@@ -723,8 +731,10 @@ func TestDashboardHandler_RecentTransactions(t *testing.T) {
 		},
 		{
 			name: "empty transactions",
-			setupMocks: func(mts *MockTransactionService, _ *MockCategoryService) {
+			setupMocks: func(mts *MockTransactionService, mbs *MockBudgetService, _ *MockCategoryService) {
 				mts.On("GetAllTransactions", mock.Anything, mock.Anything).Return([]*transaction.Transaction{}, nil)
+				mts.On("CountTransactions", mock.Anything, mock.Anything).Return(0, nil)
+				mbs.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil)
 			},
 			setupContext: func(c echo.Context) {
 				withSession(c, uuid.New(), user.RoleAdmin)
@@ -736,10 +746,10 @@ func TestDashboardHandler_RecentTransactions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler, mockTxService, _, mockCatService, _ := setupDashboardHandler()
+			handler, mockTxService, mockBudgetService, mockCatService, _ := setupDashboardHandler()
 
 			if tt.setupMocks != nil {
-				tt.setupMocks(mockTxService, mockCatService)
+				tt.setupMocks(mockTxService, mockBudgetService, mockCatService)
 			}
 
 			c, _ := newTestContext("GET", "/dashboard/recent", "")
@@ -765,13 +775,15 @@ func TestDashboardHandler_RecentTransactions(t *testing.T) {
 func TestDashboardHandler_BudgetOverview(t *testing.T) {
 	tests := []struct {
 		name           string
-		setupMocks     func(*MockBudgetService, *MockCategoryService)
+		setupMocks     func(*MockTransactionService, *MockBudgetService, *MockCategoryService)
 		setupContext   func(echo.Context)
 		expectedStatus int
 	}{
 		{
 			name: "successful load with budgets",
-			setupMocks: func(mbs *MockBudgetService, mcs *MockCategoryService) {
+			setupMocks: func(mts *MockTransactionService, mbs *MockBudgetService, mcs *MockCategoryService) {
+				mts.On("GetAllTransactions", mock.Anything, mock.Anything).Return([]*transaction.Transaction{}, nil)
+				mts.On("CountTransactions", mock.Anything, mock.Anything).Return(0, nil)
 				categoryID := uuid.New()
 				budgets := []*budget.Budget{
 					createTestBudget("Food", 1000, 500, &categoryID),
@@ -789,7 +801,9 @@ func TestDashboardHandler_BudgetOverview(t *testing.T) {
 		},
 		{
 			name: "empty budgets",
-			setupMocks: func(mbs *MockBudgetService, _ *MockCategoryService) {
+			setupMocks: func(mts *MockTransactionService, mbs *MockBudgetService, _ *MockCategoryService) {
+				mts.On("GetAllTransactions", mock.Anything, mock.Anything).Return([]*transaction.Transaction{}, nil)
+				mts.On("CountTransactions", mock.Anything, mock.Anything).Return(0, nil)
 				mbs.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil)
 			},
 			setupContext: func(c echo.Context) {
@@ -800,7 +814,8 @@ func TestDashboardHandler_BudgetOverview(t *testing.T) {
 		},
 		{
 			name: "service error",
-			setupMocks: func(mbs *MockBudgetService, _ *MockCategoryService) {
+			setupMocks: func(mts *MockTransactionService, mbs *MockBudgetService, _ *MockCategoryService) {
+				mts.On("GetAllTransactions", mock.Anything, mock.Anything).Return([]*transaction.Transaction{}, nil)
 				mbs.On("GetActiveBudgets", mock.Anything, mock.Anything).Return(nil, errors.New("database error"))
 			},
 			setupContext: func(c echo.Context) {
@@ -813,10 +828,10 @@ func TestDashboardHandler_BudgetOverview(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler, _, mockBudgetService, mockCatService, _ := setupDashboardHandler()
+			handler, mockTxService, mockBudgetService, mockCatService, _ := setupDashboardHandler()
 
 			if tt.setupMocks != nil {
-				tt.setupMocks(mockBudgetService, mockCatService)
+				tt.setupMocks(mockTxService, mockBudgetService, mockCatService)
 			}
 
 			c, _ := newTestContext("GET", "/dashboard/budgets", "")
@@ -1085,7 +1100,7 @@ func TestDashboardHandler_EdgeCases(t *testing.T) {
 
 	t.Run("large dataset handling", func(t *testing.T) {
 		// Test that handler can process many transactions
-		handler, mockTxService, mockBudgetService, _, _ := setupDashboardHandler()
+		handler, mockTxService, mockBudgetService, mockCatService, _ := setupDashboardHandler()
 
 		// Create 1000 test transactions
 		var transactions []*transaction.Transaction
@@ -1096,7 +1111,10 @@ func TestDashboardHandler_EdgeCases(t *testing.T) {
 		}
 
 		mockTxService.On("GetAllTransactions", mock.Anything, mock.Anything).Return(transactions, nil)
+		mockTxService.On("CountTransactions", mock.Anything, mock.Anything).Return(len(transactions), nil)
 		mockBudgetService.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil)
+		mockCatService.On("GetCategoryByID", mock.Anything, mock.Anything).
+			Return(createTestCategory("Food", category.TypeExpense), nil).Maybe()
 
 		c, _ := newTestContext("GET", "/dashboard/stats", "")
 		withSession(c, uuid.New(), user.RoleAdmin)
@@ -1131,10 +1149,12 @@ func TestDashboardHandler_EdgeCases(t *testing.T) {
 // TestDashboardHandler_HTMXEndpoints tests HTMX-specific behavior
 func TestDashboardHandler_HTMXEndpoints(t *testing.T) {
 	t.Run("HTMX request header present", func(t *testing.T) {
-		handler, mockTxService, _, _, _ := setupDashboardHandler()
+		handler, mockTxService, mockBudgetService, _, _ := setupDashboardHandler()
 
 		mockTxService.On("GetAllTransactions", mock.Anything, mock.Anything).
 			Return([]*transaction.Transaction{}, nil)
+		mockTxService.On("CountTransactions", mock.Anything, mock.Anything).Return(0, nil)
+		mockBudgetService.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil)
 
 		c, rec := newTestContext("GET", "/dashboard/stats", "")
 		withSession(c, uuid.New(), user.RoleAdmin)
@@ -1154,6 +1174,7 @@ func TestDashboardHandler_HTMXEndpoints(t *testing.T) {
 
 		mockTxService.On("GetAllTransactions", mock.Anything, mock.Anything).
 			Return([]*transaction.Transaction{}, nil)
+		mockTxService.On("CountTransactions", mock.Anything, mock.Anything).Return(0, nil)
 		mockBudgetService.On("GetActiveBudgets", mock.Anything, mock.Anything).
 			Return([]*budget.Budget{}, nil)
 
@@ -1173,10 +1194,13 @@ func TestDashboardHandler_HTMXEndpoints(t *testing.T) {
 // TestDashboardHandler_ConcurrentRequests tests concurrent access
 func TestDashboardHandler_ConcurrentRequests(t *testing.T) {
 	t.Run("multiple simultaneous requests", func(_ *testing.T) {
-		handler, mockTxService, _, _, _ := setupDashboardHandler()
+		handler, mockTxService, mockBudgetService, _, _ := setupDashboardHandler()
 
 		mockTxService.On("GetAllTransactions", mock.Anything, mock.Anything).
 			Return([]*transaction.Transaction{}, nil).Maybe()
+		mockTxService.On("CountTransactions", mock.Anything, mock.Anything).Return(0, nil).Maybe()
+		mockBudgetService.On("GetActiveBudgets", mock.Anything, mock.Anything).
+			Return([]*budget.Budget{}, nil).Maybe()
 
 		// Simulate 10 concurrent requests
 		done := make(chan bool, 10)
@@ -1198,28 +1222,25 @@ func TestDashboardHandler_ConcurrentRequests(t *testing.T) {
 	})
 }
 
-// TestDashboardHandler_GracefulDegradation tests error recovery
-func TestDashboardHandler_GracefulDegradation(t *testing.T) {
-	t.Run("budget service fails but dashboard still loads", func(t *testing.T) {
-		handler, mockTxService, mockBudgetService, _, mockUserService := setupDashboardHandler()
+// TestDashboardHandler_StatsFailure проверяет, что отказ данных виден как 500,
+// а не как дашборд с нулями.
+func TestDashboardHandler_StatsFailure(t *testing.T) {
+	t.Run("budget service failure fails the dashboard", func(t *testing.T) {
+		handler, mockTxService, mockBudgetService, _, _ := setupDashboardHandler()
 
-		// Transactions succeed
 		mockTxService.On("GetAllTransactions", mock.Anything, mock.Anything).
 			Return([]*transaction.Transaction{}, nil)
-
-		// Budgets fail
 		mockBudgetService.On("GetActiveBudgets", mock.Anything, mock.Anything).
 			Return(nil, errors.New("budget service down"))
-
-		// User succeeds
-		mockUserService.On("GetUserByID", mock.Anything, mock.Anything).
-			Return(&user.User{FirstName: "Test", LastName: "User"}, nil)
 
 		c, _ := newTestContext("GET", "/dashboard", "")
 		withSession(c, uuid.New(), user.RoleAdmin)
 
-		// Should not fail completely
 		err := handler.Dashboard(c)
-		require.NoError(t, err) // Dashboard handles partial failures gracefully
+
+		require.Error(t, err)
+		httpErr := &echo.HTTPError{}
+		require.ErrorAs(t, err, &httpErr)
+		assert.Equal(t, http.StatusInternalServerError, httpErr.Code)
 	})
 }

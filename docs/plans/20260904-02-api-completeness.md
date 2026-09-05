@@ -89,12 +89,12 @@
 - Modify: `internal/services/interfaces.go`, `internal/services/container.go`,
   `internal/web/handlers/dashboard.go`, `internal/web/handlers/dashboard_test.go`
 
-- [ ] `dto.StatsSummary` и вложенные типы (`PeriodTotals`, `CategoryShare`, `BudgetProgress`, `RecentTransaction`)
-- [ ] `StatsService.Summary(ctx, from, to)`: перенести `buildMonthlySummary`, `calculatePreviousData`, `calculateChanges`, `buildBudgetOverview`, `buildRecentActivity`, `buildCategoryInsights` из `dashboard.go`; `buildEnhancedStats`/`buildForecast` не переносить — удалить вместе с их партиалами
-- [ ] `DashboardHandler` строит view-модель из `StatsSummary`; функции вычислений из обработчика удалить
-- [ ] перенести unit-тесты вычислений из `dashboard_test.go:413-1223` в `stats_service_test.go` (моки репозиториев — по образцу `helpers_test.go`)
-- [ ] тесты ошибок: пустой период, репозиторий вернул ошибку, `from > to`
-- [ ] `make test` — зелёный, тесты веб-дашборда адаптированы
+- [x] `dto.StatsSummary` и вложенные типы (`PeriodTotals`, `CategoryShare`, `BudgetProgress`, `RecentTransaction`)
+- [x] `StatsService.Summary(ctx, from, to)`: перенести `buildMonthlySummary`, `calculatePreviousData`, `calculateChanges`, `buildBudgetOverview`, `buildRecentActivity`, `buildCategoryInsights` из `dashboard.go`; `buildEnhancedStats`/`buildForecast` не переносить — удалить вместе с их партиалами
+- [x] `DashboardHandler` строит view-модель из `StatsSummary`; функции вычислений из обработчика удалить
+- [x] перенести unit-тесты вычислений из `dashboard_test.go:413-1223` в `stats_service_test.go` (моки репозиториев — по образцу `helpers_test.go`)
+- [x] тесты ошибок: пустой период, репозиторий вернул ошибку, `from > to`
+- [x] `make test` — зелёный, тесты веб-дашборда адаптированы
 
 ### Task 2: `ReportService.GenerateReport` и чистка заглушек
 
