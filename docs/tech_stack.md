@@ -22,16 +22,12 @@
 - **База данных**: SQLite (modernc.org/sqlite — pure Go, без CGO)
 - **Валидация**: go-playground/validator v10.27.0
 - **UUID**: google/uuid v1.6.0 для идентификаторов
-- **Sessions**: gorilla/sessions v1.4.0
-- **Password Hashing**: golang.org/x/crypto/bcrypt
+- **Аутентификация**: `internal/auth` — bearer-токены, таблица `sessions`, лимитер логина
+- **Password Hashing**: golang.org/x/crypto/bcrypt, cost 12
 - **Testing**: testify v1.10.0 + in-memory SQLite
 
-### Frontend (Web Interface)
-- **Framework**: HTMX v2.0.4+ для dynamic updates
-- **CSS**: PicoCSS v2.1.1+ minimalist framework
-- **Templates**: Go Templates с layout system
-- **Static Assets**: Echo static middleware
-- **PWA**: Service Worker ready
+### Клиент
+- Android-приложение, генерируется из `docs/api/openapi.yaml`; HTML сервис не отдаёт
 
 ### Инфраструктура
 - **Контейнеризация**: Docker & Docker Compose
@@ -42,26 +38,27 @@
 - **Security Scanning**: CodeQL, Semgrep, TruffleHog, OSV Scanner
 
 ### Документация API
-- **Спецификация**: OpenAPI 3.0 (планируется)
-- **Генерация**: go generate (в development)
-- **UI**: Swagger UI (планируется)
-- **Тестирование**: HTTP тесты
+- **Спецификация**: OpenAPI 3.1 — `docs/api/openapi.yaml`, роут без описания валит `make test`
+- **Тестирование**: интеграционные HTTP-тесты в `tests/integration/`
 
 ## 🗂️ Структура проекта
 
 ```
 Family-Finances-Service/
 ├── cmd/                    # Точки входа приложения
-│   └── server/            # HTTP сервер
+│   └── server/            # HTTP сервер + подкоманды `setup`, `reset-password`
 ├── internal/              # Приватный код приложения
 │   ├── domain/           # Domain entities и бизнес-логика
-│   ├── application/      # Application layer с интерфейсами
-│   ├── infrastructure/   # Реализация репозиториев (SQLite)
+│   ├── auth/             # Bearer-токены, сессии, middleware, лимитер логина
+│   ├── application/      # Echo, JSON error handler, хендлеры /api/v1
+│   ├── services/         # Бизнес-логика
+│   ├── infrastructure/   # Реализация репозиториев (SQLite), миграции
+│   ├── bootstrap.go      # OpenDatabase, Setup, ResetPassword — общие для сервера и CLI
 │   ├── config.go         # Конфигурация приложения
 │   └── run.go           # Bootstrap приложения
-├── generated/             # Автогенерированный код (OpenAPI)
-├── docs/                 # Документация проекта (specs, plans, guides, patterns)
-├── docker-compose.yml    # Docker окружение
+├── migrations/            # 001_consolidated.{up,down}.sql
+├── docs/                 # Документация проекта (specs, plans, guides, patterns, api)
+├── docker/               # Dockerfile, docker-compose.yml
 └── Makefile              # Автоматизация задач
 ```
 
@@ -134,9 +131,12 @@ budget_alerts  -- Оповещения о бюджете
 - **Content-Type**: application/json
 
 ### Аутентификация и авторизация
-- **Схема**: Сессии с HTTP-only cookies
-- **Роли**: Admin, Member, Child
-- **CSRF защита**: Токены в формах
+- **Схема**: `Authorization: Bearer <token>`; токен непрозрачный, в БД — SHA-256; 30 дней без
+  активности, не дольше 180 дней. Cookie и CSRF нет
+- **Роли**: Admin, Member, Child; проверяются на каждом запросе из БД, а не из токена
+- **Bootstrap**: семьи и первого администратора — только CLI `setup`; логин до него — `409 SETUP_REQUIRED`
+- **Лимитер логина**: 10 попыток с IP за 5 минут, 20 на email за час, `429` + `Retry-After`;
+  IP из `X-Forwarded-For` только от `TRUSTED_PROXIES`
 
 ## 🚀 DevOps и развертывание
 
@@ -170,7 +170,8 @@ make test
 github.com/labstack/echo/v4        # Web framework
 modernc.org/sqlite                 # SQLite driver (pure Go)
 github.com/google/uuid             # UUID generation
-github.com/gorilla/sessions        # Session management
+golang.org/x/crypto                # bcrypt
+github.com/golang-migrate/migrate  # Migrations
 ```
 
 ### Dev зависимости
@@ -188,11 +189,11 @@ github.com/stretchr/testify       # Testing utilities
 
 ### Реализация
 - **SQL Injection**: Параметризованные запросы и валидация данных
-- **XSS**: Content Security Policy
-- **CORS**: Настроенные CORS политики Echo
-- **Rate Limiting**: ⬜ не реализован в приложении. Ограничение запросов есть только в
-  конфигурациях nginx/Caddy и fail2ban; `docker-compose.minimal.yml` и native systemd им не покрыты
-  (находка [S-03](specs/002-security-audit.md#s-03) открыта)
+- **Пароли**: bcrypt cost 12, политика 10…72 байта одна для API и CLI; неизвестный email
+  сравнивается с фиктивным хешем, ответ одинаков
+- **Rate Limiting**: лимитер логина в приложении (`internal/auth/ratelimit.go`), не зависит от reverse proxy
+  ([S-03](specs/002-security-audit.md#s-03) закрыта)
+- **Секретов в конфиге нет**: токены случайные и хранятся хешем, подписывать нечего
 
 ## 📈 Производительность
 
@@ -210,9 +211,9 @@ github.com/stretchr/testify       # Testing utilities
 ## 🔄 Планы развития
 
 ### Ближайшие обновления
-- [ ] Переход на API-only для Android: планы 01–05 в `docs/plans/`, решения в
-  [specs/005-api-only-redesign.md](specs/005-api-only-redesign.md) — удаление раздела
-  «Frontend» выше, bearer-аутентификация, деньги в минимальных единицах, один compose с Caddy
+- [ ] Переход на API-only для Android: планы 01–03 выполнены (bearer, удаление веб-слоя), 04–05 в
+  `docs/plans/` — деньги в минимальных единицах, один compose с Caddy; решения в
+  [specs/005-api-only-redesign.md](specs/005-api-only-redesign.md)
 - [ ] Улучшение аналитики и отчетов
 
 ### Среднесрочные планы

@@ -1,174 +1,123 @@
 # Family Finances Service
 
-**Modern family budget management system** with full-featured web interface, REST API, and advanced security features.
+**Self-hosted family budget backend**: a single Go binary with an embedded SQLite database that serves a JSON
+API for the Android client. One instance = one family.
 
 ## 🎯 Project Status: IN DEVELOPMENT 🚧
 
-> **Direction (September 2026):** the service is being turned into an API-only JSON backend for an
-> Android app; the web interface is scheduled for removal. Decisions and the five implementation
-> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). The sections
-> below describe the code as it is today.
+> **Direction (September 2026):** API-only backend for an Android app. Decisions and the five implementation
+> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–03 are done: the
+> web interface, cookie sessions and CSRF are gone; the sections below describe the code as it is today.
 
-This project is in **active development** with the following achievements:
-
-- ✅ Complete web interface (HTMX v2.0.4 + PicoCSS v2.1.1)
-- ✅ REST API for core entities (users, categories, transactions, budgets, invites, backups)
-- ✅ Advanced security (authentication, authorization, CSRF protection)
-- ✅ **Invite system** — user onboarding via secure token links
-- ✅ **Backup management** — create, download, restore, and auto-cleanup
-- ✅ **Admin panel** — user and invite management
-- ✅ **Lightweight SQLite database** for simple deployment
+- ✅ REST API for family, users, categories, transactions, budgets, reports, stats, backups
+- ✅ Bearer-token authentication with server-side sessions and a login rate limiter
+- ✅ Family bootstrap and password reset from the CLI (`setup`, `reset-password`)
+- ✅ Lightweight SQLite database, migrations applied at startup
 - ✅ CI/CD pipelines with GitHub Actions
-- ✅ **Single Docker container**, built from source (`docker/Dockerfile`)
-- 🚧 Multi-platform builds (linux/amd64, linux/arm64) — the workflow exists, but no
-  release has been tagged yet, so nothing is published to GHCR. Every compose file
-  builds locally instead of pulling; see
+- ✅ Single Docker container, built from source (`docker/Dockerfile`)
+- 🚧 Multi-platform builds (linux/amd64, linux/arm64) — the workflow exists, but no release has been tagged yet,
+  so nothing is published to GHCR. Every compose file builds locally instead of pulling; see
   [docs/specs/004-deployment-readiness.md](docs/specs/004-deployment-readiness.md#d-02)
+- 🚧 Money is still `float64` and `deploy/` still targets the old web build — plans 04 and 05
 
-## 🚀 Features
-
-- 📊 **Complete Web Interface**: Modern UI based on HTMX with responsive design
-- 👥 **Role-Based Access Control**: Family Admin, Member, Child with different permissions
-- 💰 **Advanced Budget Management**: Category limits, period tracking, overspending alerts
-- 📈 **Real-Time Analytics**: Interactive dashboards with live updates
-- 🎯 **Financial Goals Tracking**: Savings goals with progress visualization
-- 🔐 **Enterprise Security**: Session management, CSRF protection, input validation
-- 📊 **Reporting**: generate, store, view, delete reports and export CSV — over REST API and in the web UI
-- 📨 **Invite System**: Secure registration via links with role control and expiration
-- 💾 **Backup Management**: Create, download, restore DB with auto-cleanup (up to 10 backups)
-- 🛠️ **Admin Panel**: User, invite, and backup management
-- 🌐 **Multi-Platform Ready**: REST API, web interface, mobile-ready design
-
-## API Readiness
+## API
 
 The **target** contract lives in [`docs/api/openapi.yaml`](docs/api/openapi.yaml) (OpenAPI 3.1, hand-written,
-see [`docs/api/README.md`](docs/api/README.md)) — bearer tokens, `limit/offset`, money in minor units. It is what
-the Android client generates from, not a description of today's server; the gap is closed by plans 02–04 of
-[spec 005](docs/specs/005-api-only-redesign.md). The sections below describe the API **as it behaves now**.
+see [`docs/api/README.md`](docs/api/README.md)); the Android client generates from it. Authentication and the
+error/pagination envelope already match it; money in minor units and calendar dates land in plan 04.
 
-### Authentication is required — read this first
+### Authentication
 
-The whole `/api/v1` group sits behind `RequireAPIAuth`. There is no anonymous access
-and there are no API tokens yet: **the only credential is the web session cookie**.
+Two public routes: `GET /health` and `POST /api/v1/auth/login`. Everything else needs
+`Authorization: Bearer <token>`.
 
 | Request | Response |
 |---|---|
-| Any `/api/v1/*` without a session | `401` + `{"error":{"code":"UNAUTHORIZED","message":"Authentication required"}}` |
-| `POST`/`PUT`/`DELETE` without `X-Csrf-Token` | `403 CSRF token validation failed` (global CSRF middleware runs first) |
-| `POST`/`PUT`/`DELETE` with a valid token but no session | `401` |
-| Role not allowed for the route | `403` + `{"error":{"code":"FORBIDDEN","message":"Insufficient permissions"}}` |
+| Login before `setup` has been run | `409 SETUP_REQUIRED` |
+| Wrong email or password (same answer for both) | `401 INVALID_CREDENTIALS` |
+| 11th attempt from one IP in 5 min, or 21st for one email in an hour | `429 RATE_LIMITED` + `Retry-After` |
+| Any `/api/v1/*` without a token, or with an expired/revoked one | `401 UNAUTHORIZED` |
+| Role not allowed for the route | `403 FORBIDDEN` |
 
-Role model mirrors the web UI:
+Tokens are opaque (32 random bytes; the server stores only a SHA-256), slide 30 days without activity and expire
+180 days after login regardless. `POST /auth/logout` revokes the current one, `GET`/`DELETE /auth/sessions`
+manage the rest; changing your own password keeps the current session and revokes the others, an admin
+password reset or deactivation revokes all.
 
-- the whole `/api/v1/users` and `/api/v1/backups` groups, `PUT /api/v1/family` and
-  `DELETE /api/v1/categories/:id` — **admin only**
+Roles:
+
+- `/api/v1/users` and `/api/v1/backups`, `PUT /api/v1/family`, `DELETE /api/v1/categories/:id` — **admin only**
 - `/api/v1/{categories,transactions,budgets,reports,stats}` — **admin or member** (`child` gets `403`)
-- `GET /api/v1/family` — any authenticated role, including `child`
+- `GET /api/v1/family`, `/api/v1/me*`, `/api/v1/auth/*` — any authenticated role
 
-The author of a record is taken from the session: `user_id` is no longer part of
-`CreateTransactionRequest` / `CreateReportRequest`, so sending it in the body has no effect.
-
-A programmatic client therefore has to keep a cookie jar and fetch a CSRF token from a
-rendered page — see [`deploy/README.md`](deploy/README.md#programmatic-api-clients) for a
-working `curl` walkthrough.
+The author of a record is taken from the token, so `user_id` in a request body is ignored.
 
 ### Ready (current behavior)
 
-- Core REST API for users, categories, transactions, budgets, reports — session-authenticated, role-gated
 - `POST /api/v1/reports` generates and stores a report (expense, income, budget, cash-flow,
   category-breakdown); `GET /api/v1/reports/:id/export` returns CSV
 - `GET /api/v1/stats/summary?from=YYYY-MM-DD&to=YYYY-MM-DD` — dashboard summary (totals, deltas to the
   previous period, top categories, budget progress, recent transactions); defaults to the current month
-- `GET /api/v1/users`, `PATCH /api/v1/users/:id` (role change), `GET`/`PUT /api/v1/family`
+- `GET`/`PUT /api/v1/me`, `PUT /api/v1/me/password`; `PATCH /api/v1/users/:id` (`role`, `is_active`),
+  `PUT /api/v1/users/:id/password`
 - Backups over API: `POST`/`GET /api/v1/backups`, `GET /api/v1/backups/:name/download`,
   `DELETE /api/v1/backups/:name`
 - `POST /api/v1/transactions/bulk-delete`
 - Every list answers with `meta.pagination {limit, offset, total}` — `limit` defaults to 50, max 200
 - One error envelope everywhere: `{"error":{"code","message","details"},"meta":{...}}`;
   validation fails with `422 VALIDATION_ERROR` and per-field `details`
-- Invite and admin web flows, web UI for day-to-day finance workflows
 
 ### Not available yet
 
-- **No API tokens.** Session cookies only — fine for a browser or a scripted cookie jar,
-  awkward for a headless integration. Bearer auth is [plan 03](docs/plans/20260904-03-bearer-auth-web-removal.md)
-- Login, logout, setup and invites are web-only routes; the API has no equivalents until plan 03
 - Money is still `float64` (minor units land in plan 04, together with the rest of the `openapi.yaml` gap)
-- Backup **restore** is deliberately not exposed over the API — use the web admin panel or `make sqlite-restore`
-- Scheduled reports, spending forecast and benchmarks were placeholder service methods and have been
-  removed; financial insights and trend analysis stay hidden stubs in `ReportService` with no route
+- Users are never deleted, only deactivated (`PATCH /users/:id {"is_active": false}`)
+- Backup **restore** is deliberately not exposed over the API — use `make sqlite-restore`
+- Invites have no route any more and are removed for good in plan 04
 
 ## 🏗️ Architecture and Technology Stack
 
-### Backend (Production Ready)
-
-- **Go 1.26.0** with Echo v4.15.0 framework
-- **SQLite** (modernc.org/sqlite) - Pure Go, no CGO dependencies
-- **Automatic migrations** on application startup
-- **Clean Architecture** with domain-driven design
-- **Repository pattern** with comprehensive error handling
-- **Structured logging** with slog
-
-### Frontend (Modern Web Interface)
-
-- **HTMX v2.0.4** for dynamic updates without complex JavaScript
-- **PicoCSS v2.1.1** minimalist CSS framework
-- **Go Templates** with layout system and components
-- **Progressive Web App** capabilities
-- **Responsive design** for mobile and desktop
-
-### DevOps and Quality
-
-- **Single Docker container** (~50MB) for simple deployment — built locally from `docker/Dockerfile`;
-  nothing published to a registry yet
-- **GitHub Actions** CI/CD with security scanning
-- **Multi-platform builds** (linux/amd64, linux/arm64) — workflow only; images are built locally from
-  `docker/Dockerfile`, nothing published to a registry yet
-- **Fast testing** with in-memory SQLite (no Docker)
-- **Security scanning** (CodeQL, Semgrep, TruffleHog)
-
-### Monitoring and Reliability
-
-- **Health check endpoint** for Docker
-- **Structured logging** (JSON/text formats)
-- **Graceful shutdown** with signal handling
-- **Persistent storage** via Docker volumes
+- **Go 1.26** with Echo v4.15
+- **SQLite** (modernc.org/sqlite) — pure Go, no CGO; migrations applied automatically at startup
+- **Clean Architecture**: `domain` → `services` → repository interfaces → `infrastructure`; `internal/auth`
+  (tokens, sessions, middleware, rate limiter) beside them
+- **Structured logging** with slog, `/health` for orchestration, graceful shutdown
+- **Single Docker container** (~50MB), in-memory SQLite for tests (no Docker needed)
 
 ## 🚀 Quick Start
 
-### Option 1: Docker (Recommended)
+### Option 1: Docker
 
 ```bash
-# 1. Create .env file in the repository root
-cp .env.example .env
-# Set SESSION_SECRET and CSRF_SECRET — both are required, compose won't start without them:
-#   openssl rand -base64 32
-
-# 2. Start container (make docker-up-d does the same)
-docker compose --project-directory . -f docker/docker-compose.yml up -d
-
-# 3. Open in browser
-# http://localhost:8080
+cp .env.example .env          # no secrets to fill in; adjust TRUSTED_PROXIES if behind a reverse proxy
+make docker-up-d              # = docker compose --project-directory . -f docker/docker-compose.yml up -d
 ```
 
-**Done!** All data is saved in `./data/budget.db`
-
-### Option 2: Local Development
-
-**Prerequisites:**
-
-- Go 1.26.0+
-- Make (optional)
+### Option 2: Local development
 
 ```bash
-# 1. Run application
-make run-local  # or: go run ./cmd/server/main.go
-
-# 2. Open in browser
-# http://localhost:8080
+make run-local                # localhost:8080, SQLite at ./data/budget.db
 ```
 
-**Database** is created automatically in `./data/budget.db`
+### Create the family and log in
+
+The family and its first admin are created from the CLI, not over HTTP. Run it from the repo root with the same
+`DATABASE_PATH` the server uses (default `./data/budget.db`; in Docker: `docker compose … exec app
+/app/family-budget-service setup …`):
+
+```bash
+printf 'Admin1234!\n' | go run ./cmd/server setup \
+    --family 'Test Family' --currency RUB --timezone Europe/Moscow \
+    --email admin@test.com --first-name Admin --last-name Test --password-stdin
+
+TOKEN=$(curl -s -X POST localhost:8080/api/v1/auth/login \
+    -H 'Content-Type: application/json' \
+    -d '{"email":"admin@test.com","password":"Admin1234!","device_name":"curl"}' | jq -r .data.token)
+
+curl -s localhost:8080/api/v1/me -H "Authorization: Bearer $TOKEN"
+```
+
+Passwords are 10–72 bytes and are read from stdin only. `reset-password --email … --password-stdin` sets a new
+password and revokes every session of that user.
 
 ### 📋 Development Commands
 
@@ -200,97 +149,56 @@ make sqlite-backup    # Create backup
 make sqlite-restore   # Restore from backup
 make sqlite-shell     # Open SQLite shell
 make sqlite-stats     # DB statistics
+make db-reset         # Delete ./data/budget.db* (required after editing the migration, see migrations/README.md)
 
 # Development
-make migrate-create   # Create new migration
+make migrate-create   # Reminder on how schema changes are made
 make help             # Show all commands
 ```
 
-## 🏛️ Architecture
-
-The project follows **Clean Architecture** principles with production-ready implementations:
-
-### Layer Structure
-
-- **Domain layer** (`internal/domain/`): Business entities with comprehensive validation (User, Family, Invite,
-  Transaction, Budget, etc.)
-- **Services layer** (`internal/services/`): Business logic (invite, backup, budget, category, transaction, report,
-  user)
-- **Application layer** (`internal/application/`): HTTP server and handler orchestration
-- **Web layer** (`internal/web/`): HTMX templates, middleware, authentication, admin panel
-- **Infrastructure layer** (`internal/infrastructure/`): SQLite repositories and data persistence
-- **Observability layer** (`internal/observability/`): Logging and health checks
-
-### Project Structure
+## 🏛️ Project Structure
 
 ```
-├── cmd/server/              # Application entry point with health checks
+├── cmd/server/              # Entry point: server, `-health-check`, `setup`, `reset-password`
 ├── internal/
-│   ├── domain/              # Business entities (User, Family, Invite, Transaction, Budget, Report)
-│   ├── application/         # HTTP server, handlers, repository interfaces
-│   ├── services/            # Business logic (invite, backup, budget, category, transaction, etc.)
-│   ├── web/                 # Complete web interface
-│   │   ├── handlers/        # Authentication, dashboard, admin, backups, HTMX endpoints
-│   │   ├── middleware/      # Sessions, CSRF, authorization guards
-│   │   ├── templates/       # HTML templates with layouts and admin pages
-│   │   ├── static/          # CSS, JS, images
-│   │   └── models/          # Form validation and web-specific structures
-│   ├── infrastructure/      # SQLite repositories and connection management
-│   ├── observability/       # Production monitoring and logging
-│   └── testhelpers/         # Testing utilities and factories
-├── tests/                   # Integration tests and benchmarks
-│   ├── integration/        # Cross-component integration tests
-│   └── benchmarks/         # Load testing and benchmarks
-├── docs/                   # Project documentation, audits, and plans
-├── deploy/                 # Self-hosted deployment configs and scripts
-├── docker/                 # Docker Compose configurations
-└── .github/workflows/      # CI/CD pipelines (ci, docker, security, release)
+│   ├── domain/              # Business entities (User, Family, Transaction, Budget, Report, …)
+│   ├── auth/                # Bearer tokens, sessions, RequireBearer/RequireRole, login rate limiter
+│   ├── application/         # Echo server, JSON error handler, /api/v1 handlers
+│   ├── services/            # Business logic
+│   ├── infrastructure/      # SQLite repositories, migrations, connection
+│   ├── observability/       # Logging and /health
+│   ├── testhelpers/         # In-memory DB, full test server, bearer helpers, factories
+│   ├── bootstrap.go         # OpenDatabase (DB + migrations), Setup, ResetPassword — shared by server and CLI
+│   ├── config.go            # Env-var configuration
+│   └── run.go               # Wiring
+├── migrations/              # 001_consolidated.{up,down}.sql — the whole schema
+├── tests/integration/       # HTTP tests over the full stack, OpenAPI coverage test
+├── docs/                    # Product brief, tech stack, audits (specs/), plans, API contract
+├── deploy/                  # Self-hosted deployment (stale until plan 05)
+├── docker/                  # Dockerfile + docker-compose.yml
+└── .github/workflows/       # CI/CD pipelines (ci, docker, security, scorecard, release)
 ```
-
-### Production Components
-
-- **Authentication and Authorization**: Role-based access with session management
-- **Invite System**: Secure tokens, expiration, role control
-- **Backup Management**: Create, restore, download with auto-cleanup
-- **Admin Panel**: User, invite, and backup management
-- **Reports**: generation and CSV export live in `ReportService`, reachable over REST and the web UI
-- **Data Validation**: Comprehensive input validation with go-playground/validator
-- **Error Handling**: Structured error responses with proper HTTP status codes
-- **Security**: CSRF protection, password hashing, input sanitization, path traversal protection
-- **Testing**: 73+ test files across all layers
-- **Observability**: Structured logging (slog), health check endpoint
-- **Deployment**: Multi-platform Docker builds with GitHub Actions CI/CD
 
 ## Configuration
 
-The application uses environment variables for configuration. Key variables:
+All configuration is environment variables; there are no secrets.
 
-| Variable               | Default                                              | Description                                           |
-|------------------------|------------------------------------------------------|-------------------------------------------------------|
-| `SERVER_HOST`          | `localhost`                                          | HTTP server host                                      |
-| `SERVER_PORT`          | `8080`                                               | HTTP server port                                      |
-| `SERVER_READ_TIMEOUT`  | `15s`                                                | HTTP server read timeout                              |
-| `SERVER_WRITE_TIMEOUT` | `15s`                                                | HTTP server write timeout                             |
-| `SERVER_IDLE_TIMEOUT`  | `60s`                                                | HTTP server idle timeout                              |
-| `TRUSTED_PROXIES`      | empty                                                | Comma-separated CIDRs whose `X-Forwarded-For` is trusted for the client IP (login rate limiter). Empty — only the TCP peer address counts |
-| `DATABASE_PATH`        | `./data/budget.db`                                   | SQLite database file path                             |
-| `BACKUP_DIR`           | empty → `<dir(DATABASE_PATH)>/backups`               | Where `POST /api/v1/backups` and the admin panel write backups. Docker compose sets `/backups` so `VACUUM INTO` copies do not land inside the database volume |
-| `ENVIRONMENT`          | `development`                                        | App environment (`development`, `production`, `test`) |
-| `LOG_LEVEL`            | `info`                                               | Logging level                                         |
-| `LOG_FORMAT`           | `json`                                               | Log format                                            |
-| `LOG_OUTPUT_PATH`      | `stdout`                                             | Log output destination                                |
-| `SESSION_SECRET`       | insecure dev default (change in production)          | Session encryption key                                |
-| `SESSION_TIMEOUT`      | `24h`                                                | Session lifetime                                      |
-| `CSRF_SECRET`          | insecure dev default (change in production)          | CSRF signing secret                                   |
-| `COOKIE_SECURE`        | `false` (`true` in production unless set)            | `Secure` flag on the session cookie. Set to `false` when serving over plain HTTP (no TLS proxy yet) — otherwise the browser drops the cookie and login loops |
-| `COOKIE_HTTP_ONLY`     | `true`                                               | HttpOnly cookie flag                                  |
-| `COOKIE_SAME_SITE`     | `Lax`                                                | SameSite cookie mode                                  |
+| Variable               | Default                                | Description                                                                 |
+|------------------------|----------------------------------------|-----------------------------------------------------------------------------|
+| `SERVER_HOST`          | `localhost`                            | HTTP server host                                                            |
+| `SERVER_PORT`          | `8080`                                 | HTTP server port                                                            |
+| `SERVER_READ_TIMEOUT`  | `15s`                                  | HTTP server read timeout                                                    |
+| `SERVER_WRITE_TIMEOUT` | `15s`                                  | HTTP server write timeout                                                   |
+| `SERVER_IDLE_TIMEOUT`  | `60s`                                  | HTTP server idle timeout                                                    |
+| `TRUSTED_PROXIES`      | empty                                  | Comma-separated CIDRs whose `X-Forwarded-For` is trusted for the client IP (login rate limiter). Empty — only the TCP peer address counts, so behind a proxy all clients share one bucket |
+| `DATABASE_PATH`        | `./data/budget.db`                     | SQLite database file path                                                   |
+| `BACKUP_DIR`           | empty → `<dir(DATABASE_PATH)>/backups` | Where `POST /api/v1/backups` writes. Docker compose sets `/backups` so `VACUUM INTO` copies do not land inside the database volume |
+| `ENVIRONMENT`          | `development`                          | App environment (`development`, `production`, `test`)                       |
+| `LOG_LEVEL`            | `info`                                 | Logging level                                                               |
+| `LOG_FORMAT`           | `json`                                 | Log format                                                                  |
+| `LOG_OUTPUT_PATH`      | `stdout`                               | Log output destination                                                      |
 
 ## Running with Docker
-
-`SESSION_SECRET` and `CSRF_SECRET` are mandatory: the compose file declares them as
-`${VAR:?...}`, so an unset or empty value aborts the command with an explicit message
-instead of silently booting with a well-known default.
 
 `docker/docker-compose.yml` bind-mounts `${DATA_DIR:-.}/backups`; a bind volume does not create
 its source directory, so create it before the first `up` (`make docker-up` does it for you).
@@ -301,87 +209,43 @@ directory of the first `-f` file — `docker/`. `--project-directory .` moves it
 the root, which is why every command below (and every `make docker-*` target) passes it.
 
 ```bash
-# Build and start all services
-docker compose --project-directory . -f docker/docker-compose.yml up --build
-
-# Run in background
-docker compose --project-directory . -f docker/docker-compose.yml up -d
-
-# Stop services
-docker compose --project-directory . -f docker/docker-compose.yml down
-```
-
-## Development
-
-```bash
-# Run application locally
-make run-local
+docker compose --project-directory . -f docker/docker-compose.yml up --build   # build and start
+docker compose --project-directory . -f docker/docker-compose.yml up -d        # background
+docker compose --project-directory . -f docker/docker-compose.yml down         # stop
 ```
 
 ## 🧪 Testing and Quality
 
-The project maintains **high quality standards** with comprehensive testing:
-
-### Testing
-
-- **73+ test files** across all application layers
-- **Unit tests**: Domain models, services (invite, backup, etc.), repositories, middleware
-- **Web tests**: Handlers (admin, auth, backup, budgets, categories, dashboard, reports, transactions, users)
-- **Models**: Form validation (categories, budgets, forms, dashboard, reports, transactions)
-- **Integration tests**: SQLite integration tests with in-memory database
-- **Service tests**: Invite service, backup service, budget, category, transaction, report
-
-### Quality Control
-
-- **golangci-lint** with 50+ linters for code quality
-- **Comprehensive CI/CD** with GitHub Actions
-- **Security scanning** (CodeQL, Semgrep, TruffleHog, OSV Scanner)
-- **Dependency management** with automated Dependabot updates
-- **Multi-platform testing** (linux/amd64, linux/arm64)
+- Unit tests for domain, services, repositories, `internal/auth` (tokens, limiter, middleware) and handlers
+- Integration tests in `tests/integration/` run the real HTTP stack — bearer middleware, role gates, rate
+  limiter, JSON error handler — over an in-memory SQLite database
+- A registered route with no operation in `docs/api/openapi.yaml` fails `make test`
+- golangci-lint with 50+ linters, 0 issues required; CodeQL, Semgrep, TruffleHog, OSV Scanner in CI; Dependabot
 
 ```bash
-# Run comprehensive test suite
 make test              # All tests
-make test-coverage    # With coverage report
-make lint             # Code quality checks
+make test-coverage     # With coverage report
+make lint              # Code quality checks
 ```
 
-## 📊 Production Readiness
+## 🔒 Security
 
-### Deployment Readiness
-
-- 🚧 **Multi-platform Docker images** — not published. No release has been tagged, and
-  `.github/workflows/docker.yml` still lacks `file: docker/Dockerfile`, so the publish job would fail
-  even on a tag; see [docs/specs/004-deployment-readiness.md](docs/specs/004-deployment-readiness.md#d-02)
-- ✅ **Docker-ready** with health checks and graceful shutdown
-- ✅ **Environment configuration** with validation and defaults
-- ✅ **DB connection management** and connection pooling
-- ✅ **Logging and health check** for monitoring
-
-### Monitoring and Observability
-
-- ✅ **Health checks** - `/health` endpoint for container orchestration
-- ✅ **Structured logging** - slog with configurable levels
-
-### Security Features
-
-- ✅ **Role-Based Access Control** (Admin, Member, Child)
-- ✅ **Session security** with HTTP-only cookies and CSRF protection
-- ✅ **Input validation and sanitization** for all endpoints
-- ✅ **Password security** with bcrypt hashing
-- ✅ **Secure invite tokens** (cryptographically strong, 32 bytes, 7-day expiration)
-- ✅ **Backup protection** from path traversal with filename validation
-- ✅ **Security headers** and modern security practices
+- Bearer tokens with server-side sessions: only the SHA-256 of a token is stored, sliding 30-day / absolute
+  180-day lifetime, per-session revocation
+- Login rate limiter in the application (per IP and per email), `TRUSTED_PROXIES` for the real client IP
+- Passwords: bcrypt cost 12, 10–72 bytes, never on the command line
+- Role-based access (Admin, Member, Child), input validation on every endpoint
+- Backups protected from path traversal with filename validation
 
 ## 🏠 Self-Hosted Deployment
 
-The project includes **complete deployment infrastructure** for installation on your own server with enterprise-grade
-automation, security, and monitoring.
-
-### ⚡ Quick Deployment
+> `deploy/` still targets the previous web build: its compose files require `SESSION_SECRET`/`CSRF_SECRET`
+> that the application no longer reads, and the nginx/Caddy/fail2ban rules watch a `/login` page that no
+> longer exists. Plan 05 replaces the directory with one compose + Caddy setup for `ffs.shatrov.tech`
+> ([docs/plans/20260904-05-deploy-ffs.md](docs/plans/20260904-05-deploy-ffs.md)). Until then the notes below
+> describe what the scripts do, not a recommended path.
 
 ```bash
-# Clone the repository and run the installer from it
 git clone https://github.com/lllypuk/Family-Finances-Service.git
 cd Family-Finances-Service
 sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@example.com
@@ -393,211 +257,23 @@ is read from stdin. Always clone first.
 
 **The deployment builds from source, it does not pull an image.** `install.sh` clones the repository
 into `/opt/family-budget/src` (`REPO_GIT_URL` / `REPO_REF` env vars, default: upstream URL and `main`)
-and builds the Docker image on the server, so the machine needs `git` and outbound network access.
-The build is also why the RAM check is what it is (see "Automation and Operations" below).
+and builds the Docker image on the server, so the machine needs `git` and outbound network access; the
+512MB RAM floor is sized for that build, not for the running service (128–256MB).
 
-### 🖥️ Supported Operating Systems
-
-- ✅ Ubuntu 22.04 LTS / 24.04 LTS
-- ✅ Debian 11 / 12
-- ✅ Rocky Linux 9 / AlmaLinux 9
-
-### 🎯 Deployment Options
-
-| Option             | Description       | Features                          | Complexity   |
-|--------------------|-------------------|-----------------------------------|--------------|
-| **Docker + Caddy** | Automatic SSL     | HTTP/3, zero-config SSL           | ⭐ Simple     |
-| **Docker + Nginx** | Traditional stack | Flexible configuration, Certbot   | ⭐⭐ Medium    |
-| **Native Systemd** | Without Docker    | Direct control, minimal resources | ⭐⭐⭐ Advanced |
-
-### 🔒 Security Features
-
-**Automatically configured during installation:**
-
-- 🔐 **TLS/SSL** — automatic Let's Encrypt certificates with auto-renewal
-- 🛡️ **Rate Limiting** — 5 attempts/min for login. These limits live in the nginx/Caddy configs only;
-  the application has no built-in rate limiting, so `docker-compose.minimal.yml` and native systemd
-  deployments get none of it
-- 🔥 **Firewall** — UFW/firewalld with blocked direct app port access
-- 🚫 **Fail2ban** — automatic IP blocking after failed login attempts (5 attempts → 1 hour ban)
-- 🔑 **Security Headers** — CSP, XSS Protection, HSTS, Referrer Policy
-- 📊 **Health Monitoring** — health checks for monitoring
-
-### 🛠️ Deployment Scripts
-
-**Main operations:**
-
-```bash
-# Installation (automatic)
-sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@example.com
-
-# Upgrade with automatic rollback
-sudo ./deploy/scripts/upgrade.sh
-
-# Upgrade to a specific git ref — tag, branch or commit (no tags exist yet, so use a branch/commit)
-sudo ./deploy/scripts/upgrade.sh --version main
-sudo ./deploy/scripts/upgrade.sh --version 63a4ea3
-
-# Rollback to previous version
-sudo ./deploy/scripts/upgrade.sh rollback
-
-# Uninstall with data preservation
-sudo ./deploy/scripts/uninstall.sh --keep-data
-
-# Create database backup
-sudo ./deploy/scripts/backup.sh
-
-# Setup fail2ban protection
-sudo ./deploy/scripts/setup-fail2ban.sh
-```
-
-**Available scripts (deploy/scripts/):**
-
-- ✅ `install.sh` — complete automatic installation
-- ✅ `upgrade.sh` — safe upgrade with rollback
-- ✅ `uninstall.sh` — clean removal
-- ✅ `backup.sh` — DB backup with integrity verification
-- ✅ `health-check.sh` — health monitoring
-- ✅ `setup-ssl-nginx.sh` — SSL for Nginx
-- ✅ `setup-ssl-caddy.sh` — SSL for Caddy (automatic)
-- ✅ `setup-fail2ban.sh` — brute-force protection
-
-### 📦 Deployment Configurations
-
-**Docker Compose files:**
-
-- `deploy/docker-compose.prod.yml` — standalone without reverse proxy
-- `deploy/docker-compose.nginx.yml` — with Nginx + Certbot
-- `deploy/docker-compose.caddy.yml` — with Caddy (automatic SSL)
-- `deploy/docker-compose.minimal.yml` — for testing
-
-**Reverse Proxy configurations:**
-
-- `deploy/nginx/*` — 5 Nginx configuration files
-- `deploy/caddy/*` — Caddy configuration with auto-SSL
-
-**Systemd integration:**
-
-- `deploy/systemd/family-budget.service` — main service
-- `deploy/systemd/family-budget-backup.service` — backup service
-- `deploy/systemd/family-budget-backup.timer` — daily backups at 3:00 AM
-
-**Fail2ban protection:**
-
-- `deploy/fail2ban/family-budget.conf` — filter for attack detection
-- `deploy/fail2ban/jail.local` — jail configuration
-
-### 🔧 Automation and Operations
-
-**What's automated:**
-
-✅ **Installation:**
-
-- System requirements check (minimum 512MB RAM, 10GB free disk, internet connectivity). The RAM floor is
-  sized for the local Docker image build, not for the running service, which fits in 128–256MB; below
-  1GB the installer warns that `go build` may be OOM-killed and suggests adding swap
-- Docker and dependencies installation
-- Firewall setup (SSH, HTTP, HTTPS allowed; port 8080 blocked)
-- Cryptographically strong secret generation
-- System user creation with proper permissions
-- Application deployment
-- Health check verification
-
-✅ **Backup:**
-
-- Daily automatic backups at 3:00 AM (systemd timer)
-- SQLite integrity verification after creation
-- Storage of up to 50 backups or 30 days
-- Automatic old backup cleanup
-
-✅ **Upgrade:**
-
-- Current version check
-- Pre-upgrade backup creation
-- Service stop
-- Upgrade to new version
-- Health check verification
-- **Automatic rollback** on failure
-
-✅ **Security:**
-
-- TLS 1.2+ only (no legacy protocols)
-- Strong cipher suites (ECDHE, AES-GCM)
-- Perfect Forward Secrecy
-- Automatic SSL certificate renewal
-
-### 📚 Deployment Documentation
-
-**Complete documentation in `deploy/` directory:**
-
-- 📖 **[deploy/README.md](deploy/README.md)** — comprehensive guide (10KB+)
-    - Quick start
-    - All deployment options
-    - Security configuration
-    - Common operations
-    - Troubleshooting
-    - Performance
-
-**Where the details live:**
-
-- 📖 **[deploy/README.md](deploy/README.md)** — every script, compose file, reverse-proxy config and
-  systemd unit, with the operational procedures for each
-- 🔍 **[docs/specs/004-deployment-readiness.md](docs/specs/004-deployment-readiness.md)** — deployment
-  readiness audit: what is verified, what is still open (image publishing, release tag)
-
-### 🎯 Deployment Statistics
-
-- **30+ files** for deployment
-- **10 executable bash scripts**
-- **13 configuration files**
-- **~20,000 lines** of automation code
-- **100% coverage** of deployment tasks
-- **6 supported OS** (Ubuntu, Debian, Rocky/Alma)
-- **3 deployment options** (Docker+Nginx, Docker+Caddy, Native)
-
-## 🚧 Known Issues and TODO
-
-### Test Coverage Status
-
-- ✅ **Web handlers**: Comprehensive coverage implemented (admin, auth, backup, budgets, categories, dashboard, reports,
-  transactions, users)
-- ✅ **Web models**: Extended validation tests added (categories, budgets, forms, dashboard, reports, transactions)
-- ✅ **Admin/Backup handlers**: Full test coverage implemented
-- ✅ **DTOs**: Comprehensive validation tests added
-
-### Development Priorities
-
-1. ~~Implement self-hosted deployment scripts~~ ✅ **COMPLETE** (8/8 tasks, 100%)
-2. Deployment testing on real VMs (Ubuntu 22.04/24.04, Debian 11/12)
-3. Add more integration test scenarios for invite flow
-4. Performance optimization and benchmarking
-5. End-to-end testing with agent-browser
-6. Load testing and stress testing
+Supported: Ubuntu 22.04/24.04, Debian 11/12, Rocky/AlmaLinux 9. Options: Docker + Caddy (automatic SSL),
+Docker + Nginx (Certbot), native systemd. Scripts in `deploy/scripts/`: `install.sh`, `upgrade.sh`
+(`--version <ref>`, `rollback`), `uninstall.sh --keep-data`, `backup.sh`, `health-check.sh`,
+`setup-ssl-{nginx,caddy}.sh`, `setup-fail2ban.sh`. Details: [deploy/README.md](deploy/README.md) and
+[docs/specs/004-deployment-readiness.md](docs/specs/004-deployment-readiness.md).
 
 ## 📚 Documentation
 
-### Developer Resources
-
-- **[CLAUDE.md](CLAUDE.md)** - Comprehensive development and architecture guidance
-- **[docs/](docs/README.md)** - Detailed project documentation including:
-    - Product brief and business context
-    - Technical architecture and design decisions
-    - Testing strategy and implementation details
-    - Audit findings (`docs/specs/`) and implementation plans (`docs/plans/`)
-- **[deploy/README.md](deploy/README.md)** - Self-hosted deployment guide:
-    - Installation and upgrade scripts
-    - Nginx/Caddy configurations for TLS/SSL
-    - Systemd services for native deployment
-    - Security hardening (firewall, fail2ban)
-
-### API Documentation
-
-- **REST API** covering users, categories, transactions, budgets, and stored reports
-- Request/response shapes live in `internal/application/handlers/types.go`; the error
-  envelope is in `internal/application/handlers/errors.go`
-- **Target contract**: [docs/api/openapi.yaml](docs/api/openapi.yaml) (OpenAPI 3.1) — describes the API
-  after plans 02–04, not today's server; see [docs/api/README.md](docs/api/README.md)
-- There is no `/api/docs` endpoint or Postman collection
+- **[CLAUDE.md](CLAUDE.md)** — development and architecture guidance
+- **[docs/](docs/README.md)** — product brief, tech stack, testing strategy, audits (`docs/specs/`), plans
+  (`docs/plans/`)
+- **[docs/api/openapi.yaml](docs/api/openapi.yaml)** — the API contract; request/response structs live in
+  `internal/application/handlers/types.go`, the error envelope in `handlers/errors.go`
+- **[deploy/README.md](deploy/README.md)** — self-hosted deployment guide (see the note above)
 
 ## License
 

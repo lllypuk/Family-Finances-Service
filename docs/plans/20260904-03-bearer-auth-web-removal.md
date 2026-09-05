@@ -226,12 +226,12 @@ A-01…A-04, A-09, A-12). После него сервис отвечает то
 
 ### Task 10: [Final] Update documentation
 
-- [ ] `CLAUDE.md`: переписать «Architecture» (нет web, есть `internal/auth`, CLI), «Two HTTP surfaces» → одна, удалить «Templates», «Frontend rules», `/test-frontend`; «Known rough edges» — убрать S-03 и секреты; «Testing» — `LoginAs` выдаёт bearer
-- [ ] `README.md`: убрать разделы про веб-интерфейс, admin panel, HTMX/PicoCSS, cookie-конфиг; Quick Start — CLI `setup` и `curl`-пример логина
-- [ ] `docs/product_brief.md`, `docs/tech_stack.md`: раздел Frontend удалить, «Безопасность» — bearer + лимитер; `docs/guides/testing_strategy.md` — абзац про сессии и CSRF
-- [ ] `docs/backlog.md`: закрыть S-03, `CSRF_SECRET`, `echo-contrib`, долг `application → web`; `docs/specs/README.md` — отметить S-03 закрытой, 003 — «устарел, UI удалён»; `docs/specs/003-ui-ux-audit.md` удалить
-- [ ] `.claude/skills/README.md`: убрать `/test-frontend`
-- [ ] переместить план в `docs/plans/completed/`
+- [x] `CLAUDE.md`: переписать «Architecture» (нет web, есть `internal/auth`, CLI), «Two HTTP surfaces» → одна, удалить «Templates», «Frontend rules», `/test-frontend`; «Known rough edges» — убрать S-03 и секреты; «Testing» — `LoginAs` выдаёт bearer
+- [x] `README.md`: убрать разделы про веб-интерфейс, admin panel, HTMX/PicoCSS, cookie-конфиг; Quick Start — CLI `setup` и `curl`-пример логина
+- [x] `docs/product_brief.md`, `docs/tech_stack.md`: раздел Frontend удалить, «Безопасность» — bearer + лимитер; `docs/guides/testing_strategy.md` — абзац про сессии и CSRF
+- [x] `docs/backlog.md`: закрыть S-03, `CSRF_SECRET`, `echo-contrib`, долг `application → web`; `docs/specs/README.md` — отметить S-03 закрытой, 003 — «устарел, UI удалён»; `docs/specs/003-ui-ux-audit.md` удалить
+- [x] `.claude/skills/README.md`: убрать `/test-frontend`
+- [x] переместить план в `docs/plans/completed/`
 
 ## Post-Completion
 
