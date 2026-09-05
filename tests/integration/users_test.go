@@ -77,7 +77,7 @@ func TestUserHandler_Integration(t *testing.T) {
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
 
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
 		var response handlers.ErrorResponse
 		err = json.Unmarshal(rec.Body.Bytes(), &response)

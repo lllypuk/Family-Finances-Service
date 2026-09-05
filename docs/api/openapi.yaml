@@ -17,8 +17,10 @@ info:
     - Списки: `limit` (по умолчанию 50, максимум 200) и `offset`; `meta.pagination.total` — общее число (A-08).
     - Ошибка всегда одной формы: `{"error": {...}, "meta": {...}}` (A-08).
 
-    Коды ошибок: `UNAUTHORIZED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404),
-    `VALIDATION_ERROR` (422), `SETUP_REQUIRED` / `CURRENCY_LOCKED` / `LAST_ADMIN` (409),
+    Коды ошибок: `INVALID_REQUEST` / `INVALID_ID` (400 — тело или id не разобрались),
+    `UNAUTHORIZED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404),
+    `VALIDATION_ERROR` (422 — тело или query-параметры не прошли проверку, поля в `error.details`),
+    `SETUP_REQUIRED` / `CURRENCY_LOCKED` / `LAST_ADMIN` (409),
     `RATE_LIMITED` (429, с `Retry-After`), `INTERNAL_ERROR` (500).
   license:
     name: MIT

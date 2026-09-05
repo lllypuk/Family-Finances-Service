@@ -58,11 +58,12 @@ func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
 
 	var req CreateTransactionRequest
 	if err := c.Bind(&req); err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest, err.Error())
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
+			bodyDetail(ErrCodeInvalidRequest, err.Error()))
 	}
 
 	if err := h.validator.Struct(req); err != nil {
-		return HandleValidationError(c, err)
+		return respondValidationErrors(c, err)
 	}
 
 	if h.transactionService != nil {
@@ -130,7 +131,8 @@ func (h *TransactionHandler) handleCreateTransactionServiceError(c echo.Context,
 		strings.Contains(err.Error(), "validation failed"),
 		strings.Contains(err.Error(), "user not found"),
 		strings.Contains(err.Error(), "category not found"):
-		return respondError(c, http.StatusBadRequest, "VALIDATION_ERROR", message, err.Error())
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, message,
+			bodyDetail(ErrCodeValidationError, err.Error()))
 	default:
 		return respondError(c, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create transaction")
 	}
@@ -261,10 +263,10 @@ func (h *TransactionHandler) getTransactionsViaService(c echo.Context, filters T
 			strings.Contains(err.Error(), "validation failed") {
 			return respondError(
 				c,
-				http.StatusBadRequest,
-				"VALIDATION_ERROR",
+				http.StatusUnprocessableEntity,
+				ErrCodeValidationError,
 				"Invalid transaction filters",
-				err.Error(),
+				bodyDetail(ErrCodeValidationError, err.Error()),
 			)
 		}
 		return respondError(c, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch transactions")
@@ -381,7 +383,7 @@ func (h *TransactionHandler) writeInvalidQueryParamError(
 func (h *TransactionHandler) validateTransactionFilters(c echo.Context, filters TransactionFilterParams) error {
 	err := h.validator.Struct(filters)
 	if err != nil {
-		return HandleValidationError(c, err)
+		return respondValidationErrors(c, err)
 	}
 	return nil
 }
@@ -538,7 +540,7 @@ func (h *TransactionHandler) updateTransactionViaService(c echo.Context) error {
 		return HandleBindError(c)
 	}
 	if validationErr := h.validator.Struct(req); validationErr != nil {
-		return HandleValidationError(c, validationErr)
+		return respondValidationErrors(c, validationErr)
 	}
 
 	serviceReq := dto.UpdateTransactionDTO{
@@ -610,11 +612,12 @@ func (h *TransactionHandler) DeleteTransaction(c echo.Context) error {
 func (h *TransactionHandler) BulkDeleteTransactions(c echo.Context) error {
 	var req BulkDeleteRequest
 	if err := c.Bind(&req); err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest, err.Error())
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
+			bodyDetail(ErrCodeInvalidRequest, err.Error()))
 	}
 
 	if err := h.validator.Struct(req); err != nil {
-		return HandleValidationError(c, err)
+		return respondValidationErrors(c, err)
 	}
 
 	if h.transactionService == nil {
@@ -640,7 +643,8 @@ func (h *TransactionHandler) handleUpdateTransactionServiceError(c echo.Context,
 		errors.Is(err, dto.ErrInvalidAmountRange),
 		strings.Contains(err.Error(), "validation failed"),
 		strings.Contains(err.Error(), "category not found"):
-		return respondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid transaction data", err.Error())
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageInvalidTransaction,
+			bodyDetail(ErrCodeValidationError, err.Error()))
 	default:
 		return respondError(c, http.StatusInternalServerError, "UPDATE_FAILED", "Failed to update transaction")
 	}

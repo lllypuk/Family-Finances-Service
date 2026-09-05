@@ -46,23 +46,24 @@ func respondError(
 	c echo.Context,
 	status int,
 	code, message string,
-	details ...any,
+	details ...ErrorDetail,
 ) error {
-	resp := ErrorResponse{
-		Error: ErrorDetail{
+	return c.JSON(status, ErrorResponse{
+		Error: APIError{
 			Code:    code,
 			Message: message,
+			Details: details,
 		},
 		Meta: apiResponseMeta(c),
-	}
-	if len(details) > 0 {
-		resp.Error.Details = details[0]
-	}
-
-	return c.JSON(status, resp)
+	})
 }
 
-// parsePagination разбирает limit/offset. При выходе за границы ответ 400 уже записан,
+// bodyDetail — деталь для ошибки, не привязанной к конкретному полю запроса.
+func bodyDetail(code, message string) ErrorDetail {
+	return ErrorDetail{Field: fieldBody, Message: message, Code: code}
+}
+
+// parsePagination разбирает limit/offset. При выходе за границы ответ 422 уже записан,
 // а вызывающему возвращается errResponseAlreadyWritten — гасится через ignoreWritten.
 func parsePagination(c echo.Context) (pageParams, error) {
 	page := pageParams{Limit: defaultLimit, Offset: 0}
@@ -90,10 +91,10 @@ func parsePagination(c echo.Context) (pageParams, error) {
 func writeInvalidQueryParam(c echo.Context, param, value, reason string) error {
 	if err := respondError(
 		c,
-		http.StatusBadRequest,
-		ErrCodeInvalidQueryParam,
-		"Invalid query parameter",
-		map[string]string{"param": param, "value": value, "reason": reason},
+		http.StatusUnprocessableEntity,
+		ErrCodeValidationError,
+		ErrMessageValidationFailed,
+		ErrorDetail{Field: param, Message: reason + `, got "` + value + `"`, Code: ErrCodeInvalidQueryParam},
 	); err != nil {
 		return err
 	}
@@ -142,29 +143,35 @@ func respondUnauthorized(c echo.Context) error {
 	return respondError(c, http.StatusUnauthorized, ErrCodeUnauthorized, ErrMessageUnauthorized)
 }
 
-func buildValidationErrors(err error) []ValidationError {
-	var validationErrors []ValidationError
-	for _, fieldErr := range func() validator.ValidationErrors {
-		var target validator.ValidationErrors
-		_ = errors.As(err, &target)
-		return target
-	}() {
-		validationErrors = append(validationErrors, ValidationError{
+// buildValidationErrors раскладывает ошибки validator по полям; на нераспознанной
+// ошибке возвращает одну деталь с её текстом, чтобы details никогда не был пустым.
+func buildValidationErrors(err error) []ErrorDetail {
+	var fieldErrs validator.ValidationErrors
+	if !errors.As(err, &fieldErrs) {
+		return []ErrorDetail{bodyDetail(ErrCodeValidationError, err.Error())}
+	}
+
+	details := make([]ErrorDetail, 0, len(fieldErrs))
+	for _, fieldErr := range fieldErrs {
+		details = append(details, ErrorDetail{
 			Field:   fieldErr.Field(),
 			Message: fieldErr.Tag(),
 			Code:    ErrCodeValidationError,
 		})
 	}
 
-	return validationErrors
+	return details
 }
 
-func respondValidationErrors(c echo.Context, validationErrors []ValidationError) error {
-	return c.JSON(http.StatusBadRequest, APIResponse[any]{
-		Data:   nil,
-		Meta:   apiResponseMeta(c),
-		Errors: validationErrors,
-	})
+// respondValidationErrors — единственный вход для 422: тело или параметры не прошли проверку.
+func respondValidationErrors(c echo.Context, err error) error {
+	return respondError(
+		c,
+		http.StatusUnprocessableEntity,
+		ErrCodeValidationError,
+		ErrMessageValidationFailed,
+		buildValidationErrors(err)...,
+	)
 }
 
 // DeleteEntityHelper provides common delete functionality for all handlers
@@ -175,7 +182,7 @@ func DeleteEntityHelper(c echo.Context, deleter func(uuid.UUID) error, entityTyp
 		return respondError(
 			c,
 			http.StatusBadRequest,
-			"INVALID_ID",
+			ErrCodeInvalidID,
 			"Invalid "+strings.ToLower(entityType)+" ID format",
 		)
 	}
@@ -198,7 +205,7 @@ func ParseIDParam(c echo.Context) (uuid.UUID, error) {
 	idParam := c.Param("id")
 	id, err := uuid.Parse(idParam)
 	if err != nil {
-		jsonErr := respondError(c, http.StatusBadRequest, "INVALID_ID", "Invalid ID format")
+		jsonErr := respondError(c, http.StatusBadRequest, ErrCodeInvalidID, "Invalid ID format")
 		return uuid.Nil, jsonErr
 	}
 	return id, nil
@@ -254,19 +261,14 @@ func HandleIDParseError(c echo.Context, entityType string) error {
 	return respondError(
 		c,
 		http.StatusBadRequest,
-		"INVALID_ID",
+		ErrCodeInvalidID,
 		"Invalid "+strings.ToLower(entityType)+" ID format",
 	)
 }
 
-// HandleValidationError processes validation errors and returns standardized error response
-func HandleValidationError(c echo.Context, err error) error {
-	return respondValidationErrors(c, buildValidationErrors(err))
-}
-
 // HandleBindError returns standardized bind error response
 func HandleBindError(c echo.Context) error {
-	return respondError(c, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest)
 }
 
 // UpdateEntityHelper provides common update functionality for all handlers
@@ -332,7 +334,7 @@ func (h *UpdateEntityHelper[TRequest, TEntity, TResponse]) Execute(c echo.Contex
 
 	// Validate request
 	if validationErr := h.Validate(&req); validationErr != nil {
-		return HandleValidationError(c, validationErr)
+		return respondValidationErrors(c, validationErr)
 	}
 
 	// Get existing entity

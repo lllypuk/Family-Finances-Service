@@ -179,7 +179,7 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				service.On("CreateUser", mock.Anything, mock.AnythingOfType("dto.CreateUserDTO")).
 					Return(nil, services.ErrValidationFailed)
 			},
-			expectedStatus: http.StatusBadRequest,
+			expectedStatus: http.StatusUnprocessableEntity,
 			expectedBody: func(t *testing.T, body string) {
 				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
@@ -197,7 +197,7 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				service.On("CreateUser", mock.Anything, mock.AnythingOfType("dto.CreateUserDTO")).
 					Return(nil, services.ErrValidationFailed)
 			},
-			expectedStatus: http.StatusBadRequest,
+			expectedStatus: http.StatusUnprocessableEntity,
 			expectedBody: func(t *testing.T, body string) {
 				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
@@ -218,7 +218,7 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				service.On("CreateUser", mock.Anything, mock.AnythingOfType("dto.CreateUserDTO")).
 					Return(nil, services.ErrValidationFailed)
 			},
-			expectedStatus: http.StatusBadRequest,
+			expectedStatus: http.StatusUnprocessableEntity,
 			expectedBody: func(t *testing.T, body string) {
 				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
@@ -751,7 +751,7 @@ func TestUserHandler_PatchUser_InvalidRole(t *testing.T) {
 
 	rec := patchUserRequest(t, service, uuid.New().String(), `{"role":"owner"}`)
 
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
 	var response handlers.ErrorResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
@@ -765,7 +765,7 @@ func TestUserHandler_PatchUser_EmptyBody(t *testing.T) {
 
 	rec := patchUserRequest(t, service, uuid.New().String(), `{}`)
 
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
 	service.AssertNotCalled(t, "ChangeUserRole", mock.Anything, mock.Anything, mock.Anything)
 }

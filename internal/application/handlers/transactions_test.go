@@ -351,9 +351,13 @@ func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
 			// Act
 			err = handler.CreateTransaction(c)
 
-			// Assert
+			// Assert: битый JSON — 400, непрошедшее валидацию тело — 422.
 			require.NoError(t, err)
-			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			expectedStatus := http.StatusUnprocessableEntity
+			if tt.expectedMsg != "" {
+				expectedStatus = http.StatusBadRequest
+			}
+			assert.Equal(t, expectedStatus, rec.Code)
 		})
 	}
 }
@@ -576,15 +580,15 @@ func TestTransactionHandler_GetTransactions_InvalidQueryParams(t *testing.T) {
 			err := handler.GetTransactions(c)
 
 			require.NoError(t, err)
-			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
 			var response handlers.ErrorResponse
 			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-			assert.Equal(t, "INVALID_QUERY_PARAM", response.Error.Code)
+			assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
 
-			details, ok := response.Error.Details.(map[string]any)
-			require.True(t, ok)
-			assert.Equal(t, tt.expectedParam, details["param"])
+			require.Len(t, response.Error.Details, 1)
+			assert.Equal(t, "INVALID_QUERY_PARAM", response.Error.Details[0].Code)
+			assert.Equal(t, tt.expectedParam, response.Error.Details[0].Field)
 
 			mockRepo.AssertNotCalled(t, "GetByFilter", mock.Anything, mock.Anything)
 		})

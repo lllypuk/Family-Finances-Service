@@ -60,7 +60,7 @@ func TestSetupHTTPServer_WebLayerRegistered(t *testing.T) {
 		testServer.Server.Echo().ServeHTTP(rec, req)
 
 		// Тело пустое — ждём ошибку валидации, но не отказ CSRF.
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 	})
 
 	t.Run("LoginAsSessionIsAcceptedByProtectedWebRoute", func(t *testing.T) {

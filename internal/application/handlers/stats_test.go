@@ -101,11 +101,13 @@ func TestStatsHandler_GetSummary_InvalidDate(t *testing.T) {
 			c, rec := statsRequest(tt.target)
 
 			require.NoError(t, handler.GetSummary(c))
-			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
 			var response handlers.ErrorResponse
 			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-			assert.Equal(t, "INVALID_QUERY_PARAM", response.Error.Code)
+			assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
+			require.Len(t, response.Error.Details, 1)
+			assert.Equal(t, "INVALID_QUERY_PARAM", response.Error.Details[0].Code)
 
 			mockService.AssertNotCalled(t, "Summary", mock.Anything, mock.Anything, mock.Anything)
 		})
@@ -122,11 +124,13 @@ func TestStatsHandler_GetSummary_InvertedPeriod(t *testing.T) {
 	c, rec := statsRequest("/stats/summary?from=2025-03-31&to=2025-03-01")
 
 	require.NoError(t, handler.GetSummary(c))
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
 	var response handlers.ErrorResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-	assert.Equal(t, "INVALID_QUERY_PARAM", response.Error.Code)
+	assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
+	require.Len(t, response.Error.Details, 1)
+	assert.Equal(t, "from", response.Error.Details[0].Field)
 }
 
 func TestStatsHandler_GetSummary_ServiceError(t *testing.T) {

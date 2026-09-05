@@ -136,15 +136,15 @@ func TestReportHandler_Integration(t *testing.T) {
 
 				testServer.Server.Echo().ServeHTTP(rec, req)
 
-				assert.Equal(t, http.StatusBadRequest, rec.Code)
+				assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
-				var response handlers.APIResponse[any]
+				var response handlers.ErrorResponse
 				err = json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
 
-				assert.NotEmpty(t, response.Errors)
+				assert.NotEmpty(t, response.Error.Details)
 				found := false
-				for _, validationError := range response.Errors {
+				for _, validationError := range response.Error.Details {
 					if validationError.Field == tt.field {
 						found = true
 						break
@@ -550,7 +550,7 @@ func TestStatsAPI_Summary(t *testing.T) {
 	assert.Equal(t, expenseCat.Name, response.Data.ExpenseCategories[0].Name)
 }
 
-// TestStatsAPI_Summary_InvalidDate — нераспознанная дата отбивается 400, сервис не вызывается.
+// TestStatsAPI_Summary_InvalidDate — нераспознанная дата отбивается 422, сервис не вызывается.
 func TestStatsAPI_Summary_InvalidDate(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	session := testServer.Auth(t)
@@ -560,9 +560,11 @@ func TestStatsAPI_Summary_InvalidDate(t *testing.T) {
 	rec := httptest.NewRecorder()
 	testServer.Server.Echo().ServeHTTP(rec, req)
 
-	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
 	var response handlers.ErrorResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-	assert.Equal(t, "INVALID_QUERY_PARAM", response.Error.Code)
+	assert.Equal(t, handlers.ErrCodeValidationError, response.Error.Code)
+	require.Len(t, response.Error.Details, 1)
+	assert.Equal(t, "from", response.Error.Details[0].Field)
 }

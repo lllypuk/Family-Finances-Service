@@ -8,9 +8,8 @@ import (
 
 // APIResponse represents a generic API response structure for HTTP responses
 type APIResponse[T any] struct {
-	Data   T                 `json:"data"`
-	Meta   ResponseMeta      `json:"meta"`
-	Errors []ValidationError `json:"errors,omitempty"`
+	Data T            `json:"data"`
+	Meta ResponseMeta `json:"meta"`
 }
 
 type ResponseMeta struct {
@@ -27,21 +26,23 @@ type PaginationMeta struct {
 	Total  int `json:"total"`
 }
 
-type ValidationError struct {
+// ErrorDetail — элемент error.details: одно поле запроса, не прошедшее проверку.
+type ErrorDetail struct {
 	Field   string `json:"field"`
 	Message string `json:"message"`
 	Code    string `json:"code"`
 }
 
 type ErrorResponse struct {
-	Error ErrorDetail  `json:"error"`
+	Error APIError     `json:"error"`
 	Meta  ResponseMeta `json:"meta"`
 }
 
-type ErrorDetail struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Details any    `json:"details,omitempty"`
+// APIError — единственная форма ошибки API (A-08).
+type APIError struct {
+	Code    string        `json:"code"`
+	Message string        `json:"message"`
+	Details []ErrorDetail `json:"details,omitempty"`
 }
 
 // CreateUserRequest represents the request payload for creating a new user

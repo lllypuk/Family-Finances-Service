@@ -362,9 +362,13 @@ func TestReportHandler_CreateReport_InvalidRequest(t *testing.T) {
 			// Act
 			err = handler.CreateReport(c)
 
-			// Assert
+			// Assert: битый JSON — 400, непрошедшее валидацию тело — 422.
 			require.NoError(t, err)
-			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			expectedStatus := http.StatusUnprocessableEntity
+			if tt.expectedMsg != "" {
+				expectedStatus = http.StatusBadRequest
+			}
+			assert.Equal(t, expectedStatus, rec.Code)
 		})
 	}
 }

@@ -173,11 +173,11 @@
   `categories.go`, `transactions.go`, `budgets.go`, `reports.go`, все `*_test.go` рядом,
   `internal/services/dto/api_mappers.go`, `api_mappers_test.go`, `tests/integration/*_test.go`
 
-- [ ] `respondError` принимает `details []ErrorDetail`; `respondValidationErrors` → `422 VALIDATION_ERROR` с details; `APIResponse.Errors` удалить
-- [ ] `users.go`, `categories.go`: заменить inline-`ResponseMeta` на `respondAPI`/`respondError`; убрать двойную валидацию в `categories.go:48-96`
-- [ ] удалить неиспользуемое из `dto/api_mappers.go` (оставить только то, на что есть вызовы) и `types.go` (`UpdateFamilyRequest` — если не понадобился в Task 4)
-- [ ] обновить ожидания во всех тестах обработчиков и интеграционных тестах (статус 400 → 422 для валидации, форма `error.details`)
-- [ ] `make test && make lint` — зелёные
+- [x] `respondError` принимает `details ...ErrorDetail` (`ErrorDetail` — теперь элемент `error.details` из спецификации, конверт ошибки называется `APIError`); `respondValidationErrors` → `422 VALIDATION_ERROR` с details; `APIResponse.Errors` удалён
+- [x] `users.go`, `categories.go`: заменить inline-`ResponseMeta` на `respondAPI`/`respondError`; убрать двойную валидацию в `categories.go:48-96`
+- [x] удалить неиспользуемое из `dto/api_mappers.go` (остались `CategoryAPIResponse`/`ToCategoryAPIResponse`); `UpdateFamilyRequest` в `types.go` оставлен — используется `PUT /family`
+- [x] обновить ожидания во всех тестах обработчиков и интеграционных тестах (статус 400 → 422 для валидации, форма `error.details`); битый JSON и неразобранный id остаются 400 — это добавлено в описание кодов в `openapi.yaml`
+- [x] `make test && make lint` — зелёные
 
 ### Task 8: Verify acceptance criteria
 

@@ -122,6 +122,6 @@ func TestFamilyAPI_Integration(t *testing.T) {
 
 	t.Run("UpdateFamily_ValidationError", func(t *testing.T) {
 		rec := do(t, http.MethodPut, `{"currency":"EURO"}`, adminAuth)
-		assert.Equal(t, http.StatusBadRequest, rec.Code, "тело: %s", rec.Body.String())
+		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
 	})
 }

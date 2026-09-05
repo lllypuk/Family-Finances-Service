@@ -148,7 +148,7 @@ func TestFamilyHandler_UpdateFamily_ValidationError(t *testing.T) {
 
 	rec := familyRequest(t, service, http.MethodPut, `{"currency":"EURO"}`)
 
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
 	var response handlers.ErrorResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
@@ -163,7 +163,7 @@ func TestFamilyHandler_UpdateFamily_EmptyBody(t *testing.T) {
 
 	rec := familyRequest(t, service, http.MethodPut, `{}`)
 
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
 	var response handlers.ErrorResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))

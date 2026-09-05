@@ -28,7 +28,7 @@ const (
 	ErrCodeCannotDeleteSelf = "CANNOT_DELETE_SELF"
 	// ErrCodeLastAdmin signals an attempt to delete the last remaining admin.
 	ErrCodeLastAdmin = "LAST_ADMIN"
-	// ErrCodeInvalidQueryParam signals an unparseable or out-of-range query parameter.
+	// ErrCodeInvalidQueryParam маркирует деталь ошибки 422 по query-параметру.
 	ErrCodeInvalidQueryParam = "INVALID_QUERY_PARAM"
 	// ErrCodeGenerationFailed signals a failed report generation.
 	ErrCodeGenerationFailed = "GENERATION_FAILED"
@@ -59,4 +59,10 @@ const (
 	ErrMessageInvalidBackupName  = "Invalid backup filename"
 	ErrMessageBackupNotFound     = "Backup not found"
 	ErrMessageBackupFailed       = "Failed to create backup"
+	ErrMessageValidationFailed   = "Validation failed"
+	ErrMessageCategoryNotFound   = "Category not found"
+
+	// fieldBody — значение ErrorDetail.Field для ошибок, не привязанных к полю.
+	fieldBody = "body"
+	fieldRole = "role"
 )

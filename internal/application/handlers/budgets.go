@@ -41,11 +41,12 @@ func NewBudgetHandler(
 func (h *BudgetHandler) CreateBudget(c echo.Context) error {
 	var req CreateBudgetRequest
 	if err := c.Bind(&req); err != nil {
-		return respondError(c, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body", err.Error())
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
+			bodyDetail(ErrCodeInvalidRequest, err.Error()))
 	}
 
 	if err := h.validator.Struct(req); err != nil {
-		return HandleValidationError(c, err)
+		return respondValidationErrors(c, err)
 	}
 
 	if h.budgetService != nil {
@@ -328,7 +329,7 @@ func (h *BudgetHandler) updateBudgetViaService(c echo.Context) error {
 		return HandleBindError(c)
 	}
 	if validationErr := h.validator.Struct(req); validationErr != nil {
-		return HandleValidationError(c, validationErr)
+		return respondValidationErrors(c, validationErr)
 	}
 
 	updatedBudget, err := h.budgetService.UpdateBudget(c.Request().Context(), id, dto.UpdateBudgetDTO{
@@ -361,7 +362,8 @@ func (h *BudgetHandler) handleBudgetServiceError(c echo.Context, err error, oper
 		errors.Is(err, dto.ErrInvalidDateRange),
 		errors.Is(err, dto.ErrInvalidAmountRange),
 		strings.Contains(err.Error(), "validation failed"):
-		return respondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid budget data", err.Error())
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+			bodyDetail(ErrCodeValidationError, err.Error()))
 	default:
 		switch operation {
 		case "create":

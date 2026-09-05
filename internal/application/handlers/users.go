@@ -3,7 +3,6 @@ package handlers
 import (
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
@@ -37,48 +36,33 @@ func NewUserHandler(repositories *Repositories, userService services.UserService
 func (h *UserHandler) handleServiceError(c echo.Context, err error) error {
 	switch {
 	case errors.Is(err, services.ErrValidationFailed):
-		return respondError(c, http.StatusBadRequest, ErrCodeValidationError, "Validation failed", err.Error())
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+			bodyDetail(ErrCodeValidationError, err.Error()))
 	case errors.Is(err, services.ErrEmailAlreadyExists):
-		return respondError(c, http.StatusConflict, "EMAIL_EXISTS", "Email already exists",
-			"A user with this email address already exists")
+		return respondError(c, http.StatusConflict, "EMAIL_EXISTS", "Email already exists")
 	case errors.Is(err, services.ErrUserNotFound):
-		return respondError(c, http.StatusNotFound, "USER_NOT_FOUND", "User not found",
-			"The requested user does not exist")
+		return respondError(c, http.StatusNotFound, "USER_NOT_FOUND", "User not found")
 	case errors.Is(err, services.ErrFamilyNotFound):
-		return respondError(c, http.StatusBadRequest, ErrCodeFamilyNotFound, ErrMessageFamilyNotFound,
-			"The specified family does not exist")
+		return respondError(c, http.StatusBadRequest, ErrCodeFamilyNotFound, ErrMessageFamilyNotFound)
 	case errors.Is(err, services.ErrUnauthorized):
-		return respondError(c, http.StatusForbidden, "UNAUTHORIZED", "Unauthorized access",
-			"You don't have permission to access this resource")
+		return respondError(c, http.StatusForbidden, ErrCodeForbidden, ErrMessageForbidden)
 	case errors.Is(err, services.ErrCannotDeleteSelf):
 		return respondError(c, http.StatusBadRequest, ErrCodeCannotDeleteSelf, ErrMessageCannotDeleteSelf)
 	case errors.Is(err, services.ErrLastAdmin):
-		return respondError(c, http.StatusConflict, ErrCodeLastAdmin, ErrMessageLastAdmin,
-			"The family must keep at least one administrator")
+		return respondError(c, http.StatusConflict, ErrCodeLastAdmin, ErrMessageLastAdmin)
 	case errors.Is(err, services.ErrInvalidRole):
-		return respondError(c, http.StatusBadRequest, "INVALID_ROLE", "Invalid role",
-			"The specified role is not valid")
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+			ErrorDetail{Field: fieldRole, Message: "invalid role", Code: ErrCodeValidationError})
 	default:
-		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal,
-			"An unexpected error occurred")
+		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 }
 
 func (h *UserHandler) CreateUser(c echo.Context) error {
 	var req CreateUserRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    ErrCodeInvalidRequest,
-				Message: ErrMessageInvalidRequest,
-				Details: err.Error(),
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
+			bodyDetail(ErrCodeInvalidRequest, err.Error()))
 	}
 
 	// Convert API request to DTO
@@ -99,31 +83,14 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 	// Convert to API response
 	response := toUserResponse(createdUser)
 
-	return c.JSON(http.StatusCreated, APIResponse[UserResponse]{
-		Data: response,
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+	return respondAPI(c, http.StatusCreated, response)
 }
 
 func (h *UserHandler) GetUserByID(c echo.Context) error {
 	idParam := c.Param("id")
 	id, err := uuid.Parse(idParam)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    ErrCodeInvalidID,
-				Message: ErrMessageInvalidUserID,
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
 	}
 
 	// Call service
@@ -135,47 +102,20 @@ func (h *UserHandler) GetUserByID(c echo.Context) error {
 	// Convert to API response
 	response := toUserResponse(foundUser)
 
-	return c.JSON(http.StatusOK, APIResponse[UserResponse]{
-		Data: response,
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+	return respondAPI(c, http.StatusOK, response)
 }
 
 func (h *UserHandler) UpdateUser(c echo.Context) error {
 	idParam := c.Param("id")
 	id, err := uuid.Parse(idParam)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    ErrCodeInvalidID,
-				Message: ErrMessageInvalidUserID,
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
 	}
 
 	var req UpdateUserRequest
 	if bindErr := c.Bind(&req); bindErr != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    ErrCodeInvalidRequest,
-				Message: ErrMessageInvalidRequest,
-				Details: bindErr.Error(),
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
+			bodyDetail(ErrCodeInvalidRequest, bindErr.Error()))
 	}
 
 	// Convert API request to DTO
@@ -194,31 +134,14 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 	// Convert to API response
 	response := toUserResponse(updatedUser)
 
-	return c.JSON(http.StatusOK, APIResponse[UserResponse]{
-		Data: response,
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+	return respondAPI(c, http.StatusOK, response)
 }
 
 func (h *UserHandler) DeleteUser(c echo.Context) error {
 	idParam := c.Param("id")
 	id, err := uuid.Parse(idParam)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    ErrCodeInvalidID,
-				Message: ErrMessageInvalidUserID,
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
 	}
 
 	// Удаляем от имени владельца сессии: запрет самоудаления — правило сервиса
@@ -281,16 +204,16 @@ func (h *UserHandler) PatchUser(c echo.Context) error {
 
 	var req PatchUserRequest
 	if bindErr := c.Bind(&req); bindErr != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest, bindErr.Error())
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
+			bodyDetail(ErrCodeInvalidRequest, bindErr.Error()))
 	}
 
 	if validationErr := h.validator.Struct(&req); validationErr != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeValidationError, "Validation failed",
-			buildValidationErrors(validationErr))
+		return respondValidationErrors(c, validationErr)
 	}
 	if req.Role == nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeValidationError, "Validation failed",
-			"At least one field must be provided")
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+			ErrorDetail{Field: fieldRole, Message: "required", Code: ErrCodeValidationError})
 	}
 
 	if roleErr := h.userService.ChangeUserRole(c.Request().Context(), id, user.Role(*req.Role)); roleErr != nil {

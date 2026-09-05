@@ -38,16 +38,16 @@ func (h *FamilyHandler) GetFamily(c echo.Context) error {
 func (h *FamilyHandler) UpdateFamily(c echo.Context) error {
 	var req UpdateFamilyRequest
 	if bindErr := c.Bind(&req); bindErr != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest, bindErr.Error())
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
+			bodyDetail(ErrCodeInvalidRequest, bindErr.Error()))
 	}
 
 	if validationErr := h.validator.Struct(&req); validationErr != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeValidationError, "Validation failed",
-			buildValidationErrors(validationErr))
+		return respondValidationErrors(c, validationErr)
 	}
 	if req.Name == nil && req.Currency == nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeValidationError, "Validation failed",
-			"At least one field must be provided")
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+			bodyDetail(ErrCodeValidationError, "at least one field must be provided"))
 	}
 
 	updatedFamily, err := h.familyService.UpdateFamily(c.Request().Context(), dto.UpdateFamilyDTO{
@@ -66,7 +66,8 @@ func (h *FamilyHandler) handleServiceError(c echo.Context, err error) error {
 	case errors.Is(err, services.ErrFamilyNotFound):
 		return respondError(c, http.StatusNotFound, ErrCodeFamilyNotFound, ErrMessageFamilyNotFound)
 	case errors.Is(err, services.ErrValidationFailed):
-		return respondError(c, http.StatusBadRequest, ErrCodeValidationError, "Validation failed", err.Error())
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+			bodyDetail(ErrCodeValidationError, err.Error()))
 	default:
 		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}

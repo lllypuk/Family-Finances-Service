@@ -30,9 +30,10 @@ func NewStatsHandler(statsService services.StatsService) *StatsHandler {
 
 // GetSummary отдаёт сводку за период [from, to]; без параметров — текущий месяц.
 func (h *StatsHandler) GetSummary(c echo.Context) error {
-	from, to, err := parseStatsPeriod(c)
-	if err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidQueryParam, err.Error())
+	from, to, detail := parseStatsPeriod(c)
+	if detail != nil {
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError,
+			ErrMessageValidationFailed, *detail)
 	}
 
 	if h.statsService == nil {
@@ -42,7 +43,8 @@ func (h *StatsHandler) GetSummary(c echo.Context) error {
 	summary, err := h.statsService.Summary(c.Request().Context(), from, to)
 	if err != nil {
 		if errors.Is(err, services.ErrInvalidStatsPeriod) {
-			return respondError(c, http.StatusBadRequest, ErrCodeInvalidQueryParam, "from must not be after to")
+			return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+				ErrorDetail{Field: "from", Message: "must not be after to", Code: ErrCodeInvalidQueryParam})
 		}
 		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
@@ -52,7 +54,7 @@ func (h *StatsHandler) GetSummary(c echo.Context) error {
 
 // parseStatsPeriod разбирает from/to. Границы включительные: to расширяется до конца суток,
 // иначе операции сегодняшнего дня выпадают из выборки.
-func parseStatsPeriod(c echo.Context) (time.Time, time.Time, error) {
+func parseStatsPeriod(c echo.Context) (time.Time, time.Time, *ErrorDetail) {
 	now := time.Now()
 	from := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	to := endOfDay(now)
@@ -60,7 +62,9 @@ func parseStatsPeriod(c echo.Context) (time.Time, time.Time, error) {
 	if raw := c.QueryParam("from"); raw != "" {
 		parsed, err := time.ParseInLocation(statsDateLayout, raw, now.Location())
 		if err != nil {
-			return time.Time{}, time.Time{}, errors.New("from must be a date in YYYY-MM-DD format")
+			return time.Time{}, time.Time{}, &ErrorDetail{
+				Field: "from", Message: "must be a date in YYYY-MM-DD format", Code: ErrCodeInvalidQueryParam,
+			}
 		}
 		from = parsed
 	}
@@ -68,7 +72,9 @@ func parseStatsPeriod(c echo.Context) (time.Time, time.Time, error) {
 	if raw := c.QueryParam("to"); raw != "" {
 		parsed, err := time.ParseInLocation(statsDateLayout, raw, now.Location())
 		if err != nil {
-			return time.Time{}, time.Time{}, errors.New("to must be a date in YYYY-MM-DD format")
+			return time.Time{}, time.Time{}, &ErrorDetail{
+				Field: "to", Message: "must be a date in YYYY-MM-DD format", Code: ErrCodeInvalidQueryParam,
+			}
 		}
 		to = endOfDay(parsed)
 	}

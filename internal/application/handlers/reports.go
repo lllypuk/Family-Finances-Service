@@ -52,11 +52,12 @@ func (h *ReportHandler) CreateReport(c echo.Context) error {
 
 	var req CreateReportRequest
 	if err := c.Bind(&req); err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest, err.Error())
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
+			bodyDetail(ErrCodeInvalidRequest, err.Error()))
 	}
 
 	if err := h.validator.Struct(req); err != nil {
-		return HandleValidationError(c, err)
+		return respondValidationErrors(c, err)
 	}
 
 	if h.reportService == nil {

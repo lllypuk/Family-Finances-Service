@@ -78,8 +78,11 @@ func TestAPIPagination_Transactions_LimitAboveMax(t *testing.T) {
 
 	code, response := getJSON[handlers.ErrorResponse](t, testServer, "/api/v1/transactions?limit=500")
 
-	require.Equal(t, http.StatusBadRequest, code)
-	assert.Equal(t, handlers.ErrCodeInvalidQueryParam, response.Error.Code)
+	require.Equal(t, http.StatusUnprocessableEntity, code)
+	assert.Equal(t, handlers.ErrCodeValidationError, response.Error.Code)
+	require.Len(t, response.Error.Details, 1)
+	assert.Equal(t, handlers.ErrCodeInvalidQueryParam, response.Error.Details[0].Code)
+	assert.Equal(t, "limit", response.Error.Details[0].Field)
 }
 
 func TestAPIPagination_Transactions_OffsetBeyondTotal(t *testing.T) {
@@ -205,5 +208,5 @@ func TestAPIBulkDelete_Transactions_EmptyIDsRejected(t *testing.T) {
 	rec := httptest.NewRecorder()
 	testServer.Server.Echo().ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 }
