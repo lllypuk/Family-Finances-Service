@@ -16,11 +16,9 @@ const (
 	ErrCodeFamilyNotFound = "FAMILY_NOT_FOUND"
 	// ErrCodeCategoryNotFound signals that the requested category does not exist.
 	ErrCodeCategoryNotFound = "CATEGORY_NOT_FOUND"
-	// ErrCodeUnauthorized signals a request without a valid session
-	// (returned by RequireAPIAuth, see api_auth.go).
+	// ErrCodeUnauthorized signals a request without a valid bearer token (auth.RequireBearer).
 	ErrCodeUnauthorized = "UNAUTHORIZED"
-	// ErrCodeForbidden signals a session whose role is not allowed on the route
-	// (returned by RequireAPIRole, see api_auth.go).
+	// ErrCodeForbidden signals a token whose role is not allowed on the route (auth.RequireRole).
 	ErrCodeForbidden = "FORBIDDEN"
 	// ErrCodeNotFound signals an unknown route or a missing resource (404 outside a handler).
 	ErrCodeNotFound = "NOT_FOUND"
@@ -28,9 +26,6 @@ const (
 	ErrCodeMethodNotAllowed = "METHOD_NOT_ALLOWED"
 	// ErrCodeBadRequest signals a request rejected before reaching a handler.
 	ErrCodeBadRequest = "BAD_REQUEST"
-	// ErrCodeCSRFTokenInvalid signals a missing or mismatched X-Csrf-Token on a write.
-	//nolint:gosec // G101: это код ошибки в ответе API, а не учётные данные.
-	ErrCodeCSRFTokenInvalid = "CSRF_TOKEN_INVALID"
 	// ErrCodeInternal signals a server-side failure; details stay in the log only.
 	ErrCodeInternal = "INTERNAL_ERROR"
 	// ErrCodeCannotDeactivateSelf signals an attempt to deactivate the session's own user.

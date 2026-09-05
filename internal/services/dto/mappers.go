@@ -2,7 +2,6 @@ package dto
 
 import (
 	"family-budget-service/internal/domain/user"
-	"family-budget-service/internal/web/models"
 )
 
 // ToUserResponseDTO converts a domain User to UserResponseDTO
@@ -26,28 +25,5 @@ func ToFamilyResponseDTO(f *user.Family) FamilyResponseDTO {
 		Currency:  f.Currency,
 		CreatedAt: f.CreatedAt,
 		UpdatedAt: f.UpdatedAt,
-	}
-}
-
-// FromCreateUserForm converts web CreateUserForm to CreateUserDTO
-func FromCreateUserForm(form *models.CreateUserForm) CreateUserDTO {
-	return CreateUserDTO{
-		Email:     form.Email,
-		FirstName: form.FirstName,
-		LastName:  form.LastName,
-		Password:  form.Password,
-		Role:      user.Role(form.Role),
-	}
-}
-
-// FromSetupForm converts web SetupForm to SetupFamilyDTO
-func FromSetupForm(form *models.SetupForm) SetupFamilyDTO {
-	return SetupFamilyDTO{
-		FamilyName: form.FamilyName,
-		Currency:   form.Currency,
-		Email:      form.Email,
-		FirstName:  form.FirstName,
-		LastName:   form.LastName,
-		Password:   form.Password,
 	}
 }

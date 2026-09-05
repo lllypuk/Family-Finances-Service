@@ -27,13 +27,8 @@ import (
 	"family-budget-service/internal/services"
 )
 
-const (
-	// webSessionSecret — секрет cookie-сессий веб-слоя; нужен только до его удаления (план 03, задача 8).
-	webSessionSecret = "test-session-secret-for-integration-tests"
-
-	// testDeviceName — device_name сессий, выданных LoginAs.
-	testDeviceName = "integration-test"
-)
+// testDeviceName — device_name сессий, выданных LoginAs.
+const testDeviceName = "integration-test"
 
 // TestServer represents a test HTTP server setup
 type TestServer struct {
@@ -91,23 +86,13 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 		slog.Default(),    // logger
 	)
 
-	// Create HTTP server configuration for testing.
-	// Путь к шаблонам резолвится от корня репозитория, а не от cwd теста, иначе
-	// веб-слой (сессии, CSRF, HTML-маршруты) не поднимется.
 	config := &application.Config{
-		Port:          "8080",
-		Host:          "localhost",
-		SessionSecret: webSessionSecret,
-		CookieSecure:  false,
-		TemplatesDir:  filepath.Join(RepoRoot(t), "internal", "web", "templates"),
-		StaticDir:     filepath.Join(RepoRoot(t), "internal", "web", "static"),
+		Port: "8080",
+		Host: "localhost",
 	}
 
 	// Create HTTP server without observability for testing
 	httpServer := application.NewHTTPServer(repos, servicesContainer, config)
-	if initErr := httpServer.WebServerInitError(); initErr != nil {
-		t.Fatalf("web server initialization failed, test server has no session/CSRF/web routes: %v", initErr)
-	}
 
 	testServer := &TestServer{
 		Repos:     repos,
@@ -122,7 +107,7 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 }
 
 // RepoRoot возвращает абсолютный путь к корню репозитория.
-// Нужен потому, что шаблоны, статика и миграции резолвятся относительно cwd,
+// Нужен потому, что миграции резолвятся относительно cwd,
 // а cwd у `go test` — каталог тестируемого пакета.
 func RepoRoot(t *testing.T) string {
 	t.Helper()
@@ -171,7 +156,7 @@ func LoginAs(t *testing.T, ts *TestServer, u *user.User) *AuthSession {
 
 // Auth возвращает сессию администратора тестовой семьи, создавая семью и
 // пользователя в БД при первом обращении. Семья нужна и без запросов к API:
-// без неё логин отвечает SETUP_REQUIRED, а RequireSetup уводит веб на /setup.
+// без неё логин отвечает SETUP_REQUIRED.
 func (ts *TestServer) Auth(t *testing.T) *AuthSession {
 	t.Helper()
 

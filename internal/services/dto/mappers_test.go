@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"family-budget-service/internal/domain/user"
-	"family-budget-service/internal/web/models"
 )
 
 func TestToUserResponseDTO(t *testing.T) {
@@ -141,110 +140,6 @@ func TestToFamilyResponseDTO(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ToFamilyResponseDTO(tt.family)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestFromCreateUserForm(t *testing.T) {
-	tests := []struct {
-		name     string
-		form     *models.CreateUserForm
-		expected CreateUserDTO
-	}{
-		{
-			name: "complete form",
-			form: &models.CreateUserForm{
-				Email:     "test@example.com",
-				FirstName: "Test",
-				LastName:  "User",
-				Password:  "password123",
-				Role:      "admin",
-			},
-			expected: CreateUserDTO{
-				Email:     "test@example.com",
-				FirstName: "Test",
-				LastName:  "User",
-				Password:  "password123",
-				Role:      user.RoleAdmin,
-			},
-		},
-		{
-			name: "member role",
-			form: &models.CreateUserForm{
-				Email:     "member@example.com",
-				FirstName: "Member",
-				LastName:  "User",
-				Password:  "password123",
-				Role:      "member",
-			},
-			expected: CreateUserDTO{
-				Email:     "member@example.com",
-				FirstName: "Member",
-				LastName:  "User",
-				Password:  "password123",
-				Role:      user.RoleMember,
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := FromCreateUserForm(tt.form)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestFromSetupForm(t *testing.T) {
-	tests := []struct {
-		name     string
-		form     *models.SetupForm
-		expected SetupFamilyDTO
-	}{
-		{
-			name: "complete setup form",
-			form: &models.SetupForm{
-				FamilyName: "Test Family",
-				Currency:   "USD",
-				Email:      "admin@example.com",
-				FirstName:  "Admin",
-				LastName:   "User",
-				Password:   "password123",
-			},
-			expected: SetupFamilyDTO{
-				FamilyName: "Test Family",
-				Currency:   "USD",
-				Email:      "admin@example.com",
-				FirstName:  "Admin",
-				LastName:   "User",
-				Password:   "password123",
-			},
-		},
-		{
-			name: "EUR currency",
-			form: &models.SetupForm{
-				FamilyName: "European Family",
-				Currency:   "EUR",
-				Email:      "admin@example.com",
-				FirstName:  "Admin",
-				LastName:   "User",
-				Password:   "password123",
-			},
-			expected: SetupFamilyDTO{
-				FamilyName: "European Family",
-				Currency:   "EUR",
-				Email:      "admin@example.com",
-				FirstName:  "Admin",
-				LastName:   "User",
-				Password:   "password123",
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := FromSetupForm(tt.form)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

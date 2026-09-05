@@ -12,7 +12,6 @@ import (
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
-	"family-budget-service/internal/web/middleware"
 )
 
 var ErrFamilyNotFound = errors.New("family not found")
@@ -213,9 +212,9 @@ func (h *UserHandler) PatchUser(c echo.Context) error {
 			bodyDetail(ErrCodeValidationError, "at least one field is required"))
 	}
 
-	// Актор — владелец сессии (cookie или bearer, оба кладут SessionData): запрет самодеактивации.
-	sessionData, sessionErr := middleware.GetUserFromContext(c)
-	if sessionErr != nil {
+	// Актор — владелец токена: запрет самодеактивации.
+	principal, principalErr := auth.FromContext(c)
+	if principalErr != nil {
 		return respondUnauthorized(c)
 	}
 
@@ -226,7 +225,7 @@ func (h *UserHandler) PatchUser(c echo.Context) error {
 		}
 	}
 	if req.IsActive != nil {
-		if activeErr := h.userService.SetActive(ctx, id, *req.IsActive, sessionData.UserID); activeErr != nil {
+		if activeErr := h.userService.SetActive(ctx, id, *req.IsActive, principal.UserID); activeErr != nil {
 			return h.handleServiceError(c, activeErr)
 		}
 	}

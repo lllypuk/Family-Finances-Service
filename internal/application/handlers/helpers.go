@@ -159,7 +159,7 @@ func pageSlice[T any](items []T, page pageParams) []T {
 }
 
 // RespondAPIError пишет общий envelope для ошибки, не дошедшей до хендлера
-// (404 роутера, 405, отбитый CSRF); пустой code выводится из статуса.
+// (404 роутера, 405, отказ middleware); пустой code выводится из статуса.
 func RespondAPIError(c echo.Context, status int, code, message string) error {
 	if code == "" {
 		code = ErrorCodeForStatus(status)
@@ -188,8 +188,8 @@ func ErrorCodeForStatus(status int) string {
 	}
 }
 
-// respondUnauthorized отдаёт 401 в общем формате ошибок API: так отвечает
-// RequireAPIAuth и хендлеры, которым без сессии нечего делать.
+// respondUnauthorized отдаёт 401 в общем формате ошибок API хендлерам,
+// которым без владельца токена нечего делать.
 func respondUnauthorized(c echo.Context) error {
 	return respondError(c, http.StatusUnauthorized, ErrCodeUnauthorized, ErrMessageUnauthorized)
 }

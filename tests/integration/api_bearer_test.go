@@ -15,8 +15,8 @@ import (
 	"family-budget-service/internal/testhelpers"
 )
 
-// Bearer-путь /api/v1 до удаления cookie (план 03, задача 3): токен из auth.Service принимается
-// той же группой, что и cookie-сессия; мусор и отозванный токен — 401 в общем envelope.
+// Bearer-путь /api/v1 (план 03): токен из auth.Service принимается группой;
+// мусор и отозванный токен — 401 в общем envelope.
 func TestAPIBearer_TokenFromAuthService(t *testing.T) {
 	ts := testhelpers.SetupHTTPServer(t)
 	ts.Auth(t)

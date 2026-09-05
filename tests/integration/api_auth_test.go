@@ -59,11 +59,8 @@ import (
 // Задача 4 повесила RequireAPIAuth на группу /api/v1, skip снят — тест обязан
 // проходить. Зелёный прогон означает, что S-01 закрыт для анонимного клиента.
 //
-// План 03 (задача 7): единственная учётная запись API — bearer-токен. Ниже
-// проверяются три отказа: заголовка нет, токен мусорный, токен отозван.
-// Запись без заголовка вовсе до задачи 8 перехватывает глобальный
-// CSRFProtection (403, см. api_error_envelope_test.go), поэтому «нет
-// заголовка» проверяется на GET-маршрутах, остальные два — на всех.
+// План 03: единственная учётная запись API — bearer-токен. Ниже проверяются
+// три отказа на каждом маршруте: заголовка нет, токен мусорный, токен отозван.
 
 // apiV1Prefix — префикс группы API, по которому маршруты отбираются из роутера.
 const apiV1Prefix = "/api/v1"
@@ -104,12 +101,9 @@ func TestAPIAuth_AnonymousRequestsRejected(t *testing.T) {
 	require.NoError(t, testServer.Services.Auth.RevokeAllSessions(context.Background(), member.ID))
 	revokedBearer := "Bearer " + memberAuth.Token
 
-	t.Run("GetWithoutHeader", func(t *testing.T) {
+	t.Run("EveryAPIRouteWithoutHeader", func(t *testing.T) {
 		for _, route := range routes {
-			if route.method != http.MethodGet {
-				continue
-			}
-			t.Run(route.path, func(t *testing.T) {
+			t.Run(route.method+" "+route.path, func(t *testing.T) {
 				assertAPIUnauthorized(t, testServer, route, "")
 			})
 		}
@@ -179,8 +173,8 @@ func assertAPIUnauthorized(t *testing.T, ts *testhelpers.TestServer, route apiRo
 }
 
 // TestAPIAuth_AuthenticatedRequestsAllowed — обратная сторона задачи 4:
-// RequireAPIAuth не должен ломать легитимный доступ. Заодно проверяется, что
-// middleware повешено именно на группу /api/v1: /health и веб-маршруты не задеты.
+// RequireBearer не должен ломать легитимный доступ. Заодно проверяется, что
+// middleware повешено именно на группу /api/v1: /health не задет.
 func TestAPIAuth_AuthenticatedRequestsAllowed(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	auth := testServer.Auth(t)
@@ -242,21 +236,6 @@ func TestAPIAuth_AuthenticatedRequestsAllowed(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 	})
-
-	// Веб-маршруты живут своей аутентификацией: у анонимного клиента /login
-	// открывается, а защищённая страница уводит редиректом, а не отдаёт 401 JSON.
-	t.Run("WebRoutesUntouched", func(t *testing.T) {
-		loginReq := httptest.NewRequest(http.MethodGet, "/login", nil)
-		loginRec := httptest.NewRecorder()
-		testServer.Server.Echo().ServeHTTP(loginRec, loginReq)
-		assert.Equal(t, http.StatusOK, loginRec.Code)
-
-		dashReq := httptest.NewRequest(http.MethodGet, "/", nil)
-		dashRec := httptest.NewRecorder()
-		testServer.Server.Echo().ServeHTTP(dashRec, dashReq)
-		assert.Equal(t, http.StatusFound, dashRec.Code)
-		assert.Equal(t, "/login", dashRec.Header().Get("Location"))
-	})
 }
 
 // TestAPIAuth_BodyUserIDIgnored — вторая половина S-01 на полном стеке:
@@ -313,9 +292,7 @@ type apiRoute struct {
 }
 
 // apiV1Routes перечисляет все зарегистрированные маршруты группы /api/v1,
-// подставляя вместо `:param` идентификаторы существующих записей (техника взята
-// из tests/integration/login_links_test.go, только в обратную сторону: там
-// шаблон превращается в регулярное выражение, здесь — в конкретный путь).
+// подставляя вместо `:param` идентификаторы существующих записей.
 // Wildcard-маршруты (`/*`), которые Echo сам вешает на группу с middleware,
 // пропускаются: за ними стоит NotFoundHandler, а не хендлер приложения.
 func apiV1Routes(e *echo.Echo, fixtures apiFixtures) []apiRoute {

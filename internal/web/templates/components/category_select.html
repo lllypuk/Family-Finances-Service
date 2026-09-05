@@ -1,8 +1,0 @@
-{{define "components/category_select"}}
-<option value="">Выберите категорию</option>
-{{range .Options}}
-<option value="{{.ID}}" data-type="{{.Type}}">
-    {{if .Icon}}{{.Icon}} {{end}}{{if gt .Level 0}}—&nbsp;{{end}}{{.Name}}
-</option>
-{{end}}
-{{end}}

@@ -18,17 +18,11 @@ import (
 	"family-budget-service/internal/observability"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/version"
-	"family-budget-service/internal/web"
 )
 
 const (
 	// HTTPRequestTimeout timeout for HTTP requests
 	HTTPRequestTimeout = 30 * time.Second
-
-	// DefaultTemplatesDir — путь к шаблонам по умолчанию (относительно CWD процесса)
-	DefaultTemplatesDir = "internal/web/templates"
-	// DefaultStaticDir — путь к статике по умолчанию (относительно CWD процесса)
-	DefaultStaticDir = "internal/web/static"
 )
 
 type HTTPServer struct {
@@ -50,10 +44,6 @@ type HTTPServer struct {
 	reportHandler      *handlers.ReportHandler
 	statsHandler       *handlers.StatsHandler
 	backupHandler      *handlers.BackupHandler
-
-	// Web Interface
-	webServer        *web.Server
-	webServerInitErr error
 }
 
 type Config struct {
@@ -64,19 +54,6 @@ type Config struct {
 	IdleTimeout  time.Duration
 	// TrustedProxies — сети, чей X-Forwarded-For определяет c.RealIP(); пусто — только RemoteAddr.
 	TrustedProxies []*net.IPNet
-	SessionSecret  string
-	// CookieSecure — флаг Secure на session-cookie (и на flash-cookie).
-	// Обычно совпадает с production, но управляется отдельно (COOKIE_SECURE):
-	// на http:// origin браузер выбрасывает Secure-cookie, и вход становится
-	// невозможен — см. internal/config.go.
-	CookieSecure bool
-
-	// TemplatesDir — путь к каталогу HTML-шаблонов. Пустое значение означает
-	// DefaultTemplatesDir, который резолвится относительно рабочего каталога процесса.
-	TemplatesDir string
-	// StaticDir — путь к каталогу статики (css/js/img). Пустое значение означает
-	// DefaultStaticDir, который так же резолвится относительно CWD процесса.
-	StaticDir string
 }
 
 // NewHTTPServer создает HTTP сервер без observability (для обратной совместимости)
@@ -96,10 +73,10 @@ func NewHTTPServerWithObservability(
 	// Настройка валидации
 	e.Validator = &CustomValidator{validator: validator.New()}
 	e.IPExtractor = auth.IPExtractor(config.TrustedProxies)
+	e.HTTPErrorHandler = apiErrorHandler
 
 	// Базовые middleware
 	e.Use(middleware.Recover())
-	e.Use(middleware.CORS())
 	e.Use(middleware.RequestID())
 
 	// Timeout для всех запросов
@@ -160,35 +137,6 @@ func NewHTTPServerWithObservability(
 		backupHandler:      handlers.NewBackupHandler(services.Backup),
 	}
 
-	// Инициализация веб-интерфейса
-	templatesDir := config.TemplatesDir
-	if templatesDir == "" {
-		templatesDir = DefaultTemplatesDir
-	}
-
-	staticDir := config.StaticDir
-	if staticDir == "" {
-		staticDir = DefaultStaticDir
-	}
-
-	webServer, err := web.NewWebServer(
-		e, repositories, services,
-		web.Paths{TemplatesDir: templatesDir, StaticDir: staticDir},
-		config.SessionSecret, config.CookieSecure,
-	)
-	if err != nil {
-		// Не прерываем работу сервера, но ошибку обязательно логируем и сохраняем,
-		// чтобы вызывающий код (в том числе тестовый хелпер) мог её увидеть.
-		server.webServerInitErr = err
-		if obsService != nil {
-			obsService.Logger.Error("Failed to initialize web server", "error", err)
-		} else {
-			e.Logger.Errorf("Failed to initialize web server (templates dir %q): %v", templatesDir, err)
-		}
-	} else {
-		server.webServer = webServer
-	}
-
 	server.setupRoutes()
 	return server
 }
@@ -198,47 +146,41 @@ func (s *HTTPServer) Echo() *echo.Echo {
 	return s.echo
 }
 
-// WebServerInitError возвращает ошибку инициализации веб-интерфейса, если она была.
-// nil означает, что веб-слой (сессии, CSRF, HTML-маршруты) зарегистрирован.
-func (s *HTTPServer) WebServerInitError() error {
-	return s.webServerInitErr
-}
-
 func (s *HTTPServer) setupRoutes() {
 	s.echo.GET("/health", s.healthService.HealthHandler())
 
-	// Веб-интерфейс маршруты
-	if s.webServer != nil {
-		s.webServer.SetupRoutes()
-	}
+	// Единственный публичный маршрут API. Зарегистрирован мимо группы, поэтому
+	// RequireBearer его не касается.
+	s.echo.POST("/api/v1/auth/login", s.authHandler.Login)
 
-	s.setupAuthRoutes()
+	// Роль берётся из БД при каждой проверке токена (JOIN users в FindByTokenHash),
+	// а не из выданного токена. Group с middleware вешает его и на catch-all группы:
+	// неизвестный путь под /api/v1 без токена — 401, с токеном — 404.
+	api := s.echo.Group("/api/v1", auth.RequireBearer(s.services.Auth))
 
-	// API версионирование.
-	// RequireAPIAuth закрывает всю группу: без валидной сессии — 401 и JSON-ошибка
-	// (находка S-01). /health и веб-маршруты регистрируются выше и не задеты.
-	// Та же перепроверка сессии по БД, что и в вебе: роль для RequireAPIRole
-	// берётся из БД, а не из подписанной cookie. Условной регистрации здесь нет
-	// намеренно — иначе конфигурация без сервисов молча теряла бы проверку.
-	api := s.echo.Group("/api/v1",
-		handlers.RequireAPIAuth(s.services.Auth),
-		handlers.RequireAPIActiveUser(s.services.User),
-	)
+	api.POST("/auth/logout", s.authHandler.Logout)
+	api.GET("/auth/sessions", s.authHandler.ListSessions)
+	api.DELETE("/auth/sessions/:id", s.authHandler.RevokeSession)
 
-	// Ролевая модель API повторяет веб (internal/web/web.go):
-	// управление пользователями — только админ (там RequireAdmin), финансовые
-	// разделы — админ и member (там RequireAdminOrMember), роль child к ним не
-	// допущена. Удаление категории дополнительно закрыто до админа: через API
-	// оно необратимо и не имеет подтверждения, которое есть в UI.
-	adminOnly := handlers.RequireAPIRole(user.RoleAdmin)
-	financeAccess := handlers.RequireAPIRole(user.RoleAdmin, user.RoleMember)
+	api.GET("/me", s.meHandler.GetMe)
+	api.PUT("/me", s.meHandler.UpdateMe)
+	api.PUT("/me/password", s.meHandler.ChangePassword)
+
+	s.setupResourceRoutes(api)
+}
+
+// setupResourceRoutes — ролевая модель: управление пользователями — только админ,
+// финансовые разделы — админ и member, роль child к ним не допущена. Удаление
+// категории закрыто до админа: через API оно необратимо и без подтверждения.
+func (s *HTTPServer) setupResourceRoutes(api *echo.Group) {
+	adminOnly := auth.RequireRole(user.RoleAdmin)
+	financeAccess := auth.RequireRole(user.RoleAdmin, user.RoleMember)
 
 	// Семья: читают все роли, меняет только админ.
 	family := api.Group("/family")
 	family.GET("", s.familyHandler.GetFamily)
 	family.PUT("", s.familyHandler.UpdateFamily, adminOnly)
 
-	// Маршруты для пользователей — целиком под админом, как /users в вебе.
 	users := api.Group("/users", adminOnly)
 	users.POST("", s.userHandler.CreateUser)
 	users.GET("", s.userHandler.GetUsers)
@@ -247,7 +189,6 @@ func (s *HTTPServer) setupRoutes() {
 	users.PATCH("/:id", s.userHandler.PatchUser)
 	users.PUT("/:id/password", s.userHandler.SetUserPassword)
 
-	// Маршруты для категорий
 	categories := api.Group("/categories", financeAccess)
 	categories.POST("", s.categoryHandler.CreateCategory)
 	categories.GET("", s.categoryHandler.GetCategories)
@@ -255,7 +196,6 @@ func (s *HTTPServer) setupRoutes() {
 	categories.PUT("/:id", s.categoryHandler.UpdateCategory)
 	categories.DELETE("/:id", s.categoryHandler.DeleteCategory, adminOnly)
 
-	// Маршруты для транзакций
 	transactions := api.Group("/transactions", financeAccess)
 	transactions.POST("", s.transactionHandler.CreateTransaction)
 	transactions.GET("", s.transactionHandler.GetTransactions)
@@ -264,7 +204,6 @@ func (s *HTTPServer) setupRoutes() {
 	transactions.PUT("/:id", s.transactionHandler.UpdateTransaction)
 	transactions.DELETE("/:id", s.transactionHandler.DeleteTransaction)
 
-	// Маршруты для бюджетов
 	budgets := api.Group("/budgets", financeAccess)
 	budgets.POST("", s.budgetHandler.CreateBudget)
 	budgets.GET("", s.budgetHandler.GetBudgets)
@@ -272,7 +211,6 @@ func (s *HTTPServer) setupRoutes() {
 	budgets.PUT("/:id", s.budgetHandler.UpdateBudget)
 	budgets.DELETE("/:id", s.budgetHandler.DeleteBudget)
 
-	// Маршруты для отчетов
 	reports := api.Group("/reports", financeAccess)
 	reports.POST("", s.reportHandler.CreateReport)
 	reports.GET("", s.reportHandler.GetReports)
@@ -280,35 +218,14 @@ func (s *HTTPServer) setupRoutes() {
 	reports.GET("/:id/export", s.reportHandler.ExportReport)
 	reports.DELETE("/:id", s.reportHandler.DeleteReport)
 
-	// Статистика — та же ролевая модель, что у финансовых разделов.
 	stats := api.Group("/stats", financeAccess)
 	stats.GET("/summary", s.statsHandler.GetSummary)
 
-	// Backups routes (admin only)
 	backups := api.Group("/backups", adminOnly)
 	backups.POST("", s.backupHandler.CreateBackup)
 	backups.GET("", s.backupHandler.ListBackups)
 	backups.GET("/:name/download", s.backupHandler.DownloadBackup)
 	backups.DELETE("/:name", s.backupHandler.DeleteBackup)
-}
-
-// setupAuthRoutes — bearer-маршруты (план 03): логин публичный, остальные только по токену,
-// без cookie-пути, потому что principal должен нести id сессии (logout, current в списке).
-// Middleware висит на маршрутах, а не на группе: Group с middleware регистрирует catch-all,
-// который перекрыл бы 401 общей группы /api/v1 для несуществующих путей.
-func (s *HTTPServer) setupAuthRoutes() {
-	bearer := auth.RequireBearer(s.services.Auth)
-
-	authGroup := s.echo.Group("/api/v1/auth")
-	authGroup.POST("/login", s.authHandler.Login)
-	authGroup.POST("/logout", s.authHandler.Logout, bearer)
-	authGroup.GET("/sessions", s.authHandler.ListSessions, bearer)
-	authGroup.DELETE("/sessions/:id", s.authHandler.RevokeSession, bearer)
-
-	me := s.echo.Group("/api/v1/me")
-	me.GET("", s.meHandler.GetMe, bearer)
-	me.PUT("", s.meHandler.UpdateMe, bearer)
-	me.PUT("/password", s.meHandler.ChangePassword, bearer)
 }
 
 func (s *HTTPServer) Start(_ context.Context) error {

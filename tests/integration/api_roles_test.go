@@ -20,8 +20,8 @@ import (
 //
 // До задачи 6 группа /api/v1 была закрыта только RequireAPIAuth, то есть любой
 // аутентифицированный пользователь — включая роль child — мог удалить чужого
-// пользователя или категорию. В вебе те же действия закрыты RequireAdmin
-// (internal/web/web.go:132) и RequireAdminOrMember (там же, финансовые разделы).
+// пользователя или категорию. В удалённом вебе те же действия были закрыты
+// RequireAdmin и RequireAdminOrMember (финансовые разделы).
 //
 // TDD, красная фаза (`go test ./tests/integration -run TestAPIRoles`):
 //
@@ -140,10 +140,8 @@ func TestAPIRoles_DestructiveRoutesRequireAdmin(t *testing.T) {
 	}
 }
 
-// TestAPIRoles_ChildHasNoAccessToFinanceRoutes сверяет API с ролевой моделью
-// веба: разделы транзакций, бюджетов, категорий и отчётов закрыты
-// RequireAdminOrMember (internal/web/web.go:158-208), значит и в API роль child
-// не должна их видеть — иначе поведение двух поверхностей расходится.
+// TestAPIRoles_ChildHasNoAccessToFinanceRoutes — разделы транзакций, бюджетов,
+// категорий и отчётов закрыты для роли child (RequireRole admin|member).
 func TestAPIRoles_ChildHasNoAccessToFinanceRoutes(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 

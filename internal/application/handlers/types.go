@@ -161,7 +161,7 @@ type CategoryResponse struct {
 
 // CreateTransactionRequest represents the request payload for creating a new transaction.
 // Поля user_id здесь нет намеренно: автор записи берётся из сессии
-// (CreateTransaction читает её через middleware.GetUserFromContext),
+// (CreateTransaction читает её через auth.FromContext),
 // иначе клиент писал бы от чужого имени — S-01.
 type CreateTransactionRequest struct {
 	Amount      float64   `json:"amount"         validate:"required,gt=0"`

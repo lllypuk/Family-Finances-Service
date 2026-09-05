@@ -187,8 +187,6 @@ func TestAuth_Login_Errors(t *testing.T) {
 		assert.Equal(t, "VALIDATION_ERROR", errorCode(t, rec))
 	})
 
-	// Без заголовка — 401 на чтении; запись без заголовка до задачи 8 отбивает глобальный CSRF
-	// (403), поэтому записи проверяются с мусорным токеном: он освобождён от CSRF и даёт 401.
 	t.Run("protected routes without valid token are 401", func(t *testing.T) {
 		for _, route := range []struct{ method, path, token string }{
 			{http.MethodGet, "/api/v1/auth/sessions", ""},

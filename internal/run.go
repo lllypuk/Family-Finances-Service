@@ -39,7 +39,6 @@ func NewApplication() (*Application, error) {
 	// Загрузка конфигурации
 	config := LoadConfig()
 
-	// Валидация конфигурации (включая проверку production secrets)
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
@@ -113,8 +112,6 @@ func NewApplication() (*Application, error) {
 		WriteTimeout:   config.Server.WriteTimeout,
 		IdleTimeout:    config.Server.IdleTimeout,
 		TrustedProxies: trustedProxies,
-		SessionSecret:  config.Web.SessionSecret,
-		CookieSecure:   config.Web.CookieSecure,
 	}
 	app.httpServer = application.NewHTTPServerWithObservability(
 		app.repositories,
@@ -122,15 +119,6 @@ func NewApplication() (*Application, error) {
 		serverConfig,
 		app.observabilityService,
 	)
-
-	// Без веб-слоя не поднимаются ни сессии, ни CSRF, ни один HTML-маршрут, а
-	// /health всё равно отвечает 200 — docker healthcheck и verify_health в
-	// deploy-скриптах считали бы такую установку исправной. Реальная причина —
-	// неверный CWD или отсутствующий каталог шаблонов в образе, и молча
-	// продолжать работу здесь нельзя.
-	if err = app.httpServer.WebServerInitError(); err != nil {
-		return nil, fmt.Errorf("failed to initialize web interface: %w", err)
-	}
 
 	return app, nil
 }

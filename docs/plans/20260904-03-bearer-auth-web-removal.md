@@ -209,14 +209,14 @@ A-01…A-04, A-09, A-12). После него сервис отвечает то
   (`deploy/*.yml` и `deploy/.env.production.example` не трогать — их целиком заменяет план 05;
   до него они требуют `SESSION_SECRET`/`CSRF_SECRET`, которые приложение уже игнорирует)
 
-- [ ] до удаления: `transactions.go:53` и `users.go:250` с `middleware.GetUserFromContext` перевести на `auth.FromContext`; полный список импортёров вне `internal/web` — `grep -rl 'family-budget-service/internal/web' --include='*.go' . | grep -v '^./internal/web/'` (9 файлов) — должен опустеть
-- [ ] `http_server.go`: убрать `web.NewWebServer`, `TemplatesDir`/`StaticDir`, `WebServerInitError`; `HTTPErrorHandler` — JSON в едином envelope для любых ошибок (в том числе 404 неизвестного пути); `CORS()` убрать
-- [ ] `run.go`: убрать проверку веб-инициализации и `CookieSecure`; `config.go`: удалить `Web.*` кроме нового `TrustedProxies`/`BackupDir`, упростить `Validate()`; `config_test.go` обновить
-- [ ] `dto/mappers.go`: удалить функции форм (`FromCreateUserForm`, `FromSetupForm`) и импорт `internal/web/models`
-- [ ] удалить файлы из списка; `go mod tidy` (уходят `echo-contrib`, `gorilla/sessions`); `.golangci.yml:456-473` — исключения для `internal/web` убрать
-- [ ] `Dockerfile`: убрать `COPY` шаблонов и статики, комментарий про `--spider`/`/login`; `docker/docker-compose.yml`: убрать `SESSION_SECRET`, `CSRF_SECRET`, `COOKIE_SECURE`, добавить `TRUSTED_PROXIES`; `Makefile compose-config` (`:140-158`): убрать цикл «стартует без секретов» и `COMPOSE_VALIDATE_ENV` для секретов — список `DEPLOY_COMPOSE_FILES` сокращает план 05
-- [ ] `http_server_test.go`: тесты регистрации роутов — только API; неизвестный путь → 404 JSON
-- [ ] `make fmt && make test && make lint` — зелёные; `docker build` собирается, `/health` внутри контейнера 200
+- [x] до удаления: `transactions.go:53` и `users.go:250` с `middleware.GetUserFromContext` перевести на `auth.FromContext`; полный список импортёров вне `internal/web` — `grep -rl 'family-budget-service/internal/web' --include='*.go' . | grep -v '^./internal/web/'` (9 файлов) — должен опустеть
+- [x] `http_server.go`: убрать `web.NewWebServer`, `TemplatesDir`/`StaticDir`, `WebServerInitError`; `HTTPErrorHandler` — JSON в едином envelope для любых ошибок (в том числе 404 неизвестного пути); `CORS()` убрать
+- [x] `run.go`: убрать проверку веб-инициализации и `CookieSecure`; `config.go`: удалить `Web.*` кроме нового `TrustedProxies`/`BackupDir`, упростить `Validate()`; `config_test.go` обновить
+- [x] `dto/mappers.go`: удалить функции форм (`FromCreateUserForm`, `FromSetupForm`) и импорт `internal/web/models`
+- [x] удалить файлы из списка; `go mod tidy` (уходят `echo-contrib`, `gorilla/sessions`); `.golangci.yml:456-473` — исключения для `internal/web` убрать
+- [x] `Dockerfile`: убрать `COPY` шаблонов и статики, комментарий про `--spider`/`/login`; `docker/docker-compose.yml`: убрать `SESSION_SECRET`, `CSRF_SECRET`, `COOKIE_SECURE`, добавить `TRUSTED_PROXIES`; `Makefile compose-config` (`:140-158`): убрать цикл «стартует без секретов» и `COMPOSE_VALIDATE_ENV` для секретов — список `DEPLOY_COMPOSE_FILES` сокращает план 05
+- [x] `http_server_test.go`: тесты регистрации роутов — только API; неизвестный путь → 404 JSON
+- [x] `make fmt && make test && make lint` — зелёные; `docker build` собирается, `/health` внутри контейнера 200
 
 ### Task 9: Verify acceptance criteria
 
