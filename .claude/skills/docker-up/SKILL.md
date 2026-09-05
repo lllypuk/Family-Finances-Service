@@ -53,7 +53,7 @@ Create `.env` file in project root to override defaults:
 SERVER_PORT=8080
 SERVER_HOST=0.0.0.0
 DATABASE_PATH=/data/budget.db
-SESSION_SECRET=your-secret-key-here
+TRUSTED_PROXIES=
 LOG_LEVEL=info
 ENVIRONMENT=production
 ```

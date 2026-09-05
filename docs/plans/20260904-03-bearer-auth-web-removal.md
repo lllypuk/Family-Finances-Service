@@ -220,9 +220,9 @@ A-01…A-04, A-09, A-12). После него сервис отвечает то
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] `grep -r "internal/web" --include='*.go'` пуст; `grep -r SESSION_SECRET` вне `docs/plans/completed` пуст
-- [ ] ручной прогон на `make run-local`: `setup` через CLI → `curl` login → `GET /me` → `PUT /me/password` → старый токен 401 → 11 неверных логинов → 429
-- [ ] `make pre-commit` зелёный; покрытие не ниже, чем до плана (веб-тесты удалены, значит смотреть на `internal/auth` и `handlers` отдельно)
+- [x] `grep -r "internal/web" --include='*.go'` пуст; `grep -r SESSION_SECRET` вне `docs/plans/completed` пуст
+- [x] ручной прогон на `make run-local`: `setup` через CLI → `curl` login → `GET /me` → `PUT /me/password` → старый токен 401 → 11 неверных логинов → 429
+- [x] `make pre-commit` зелёный; покрытие не ниже, чем до плана (веб-тесты удалены, значит смотреть на `internal/auth` и `handlers` отдельно)
 
 ### Task 10: [Final] Update documentation
 

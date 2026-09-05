@@ -62,11 +62,9 @@ func TestLoadConfig_ReadsBackupDir(t *testing.T) {
 	assert.Equal(t, "/mnt/backups", cfg.GetBackupDir())
 }
 
-// Ключи веб-слоя после плана 03 не читаются: их присутствие в окружении ничего не меняет.
-func TestLoadConfig_ProductionIgnoresRemovedWebKeys(t *testing.T) {
+// После плана 03 production не требует секретов: Validate проходит на голом окружении.
+func TestLoadConfig_ProductionNeedsNoSecrets(t *testing.T) {
 	t.Setenv("ENVIRONMENT", "production")
-	t.Setenv("SESSION_SECRET", "")
-	t.Setenv("CSRF_SECRET", "")
 	t.Setenv("LOG_LEVEL", "debug")
 
 	cfg := internal.LoadConfig()
