@@ -161,10 +161,11 @@ func newFixture(t *testing.T, setupDone bool) *fixture {
 
 func (f *fixture) login(t *testing.T) string {
 	t.Helper()
-	token, u, err := f.svc.Login(context.Background(), f.user.Email, testPassword, testDevice)
+	res, err := f.svc.Login(context.Background(), f.user.Email, testPassword, testDevice)
 	require.NoError(t, err)
-	require.Equal(t, f.user.ID, u.ID)
-	return token
+	require.Equal(t, f.user.ID, res.User.ID)
+	require.Equal(t, auth.HashToken(res.Token), res.Session.TokenHash)
+	return res.Token
 }
 
 func TestService_Login_Success(t *testing.T) {
@@ -184,19 +185,18 @@ func TestService_Login_Success(t *testing.T) {
 func TestService_Login_WrongPassword(t *testing.T) {
 	f := newFixture(t, true)
 
-	token, u, err := f.svc.Login(context.Background(), f.user.Email, "wrong-password", testDevice)
+	res, err := f.svc.Login(context.Background(), f.user.Email, "wrong-password", testDevice)
 
 	require.ErrorIs(t, err, auth.ErrInvalidCredentials)
-	assert.Empty(t, token)
-	assert.Nil(t, u)
+	assert.Nil(t, res)
 	assert.Empty(t, f.sessions.byHash)
 }
 
 func TestService_Login_UnknownEmail_SameError(t *testing.T) {
 	f := newFixture(t, true)
 
-	_, _, errUnknown := f.svc.Login(context.Background(), "nobody@example.com", testPassword, testDevice)
-	_, _, errWrong := f.svc.Login(context.Background(), f.user.Email, "wrong-password", testDevice)
+	_, errUnknown := f.svc.Login(context.Background(), "nobody@example.com", testPassword, testDevice)
+	_, errWrong := f.svc.Login(context.Background(), f.user.Email, "wrong-password", testDevice)
 
 	require.ErrorIs(t, errUnknown, auth.ErrInvalidCredentials)
 	assert.Equal(t, errWrong, errUnknown)
@@ -206,7 +206,7 @@ func TestService_Login_UnknownEmail_SameError(t *testing.T) {
 func TestService_Login_SetupRequired(t *testing.T) {
 	f := newFixture(t, false)
 
-	_, _, err := f.svc.Login(context.Background(), f.user.Email, testPassword, testDevice)
+	_, err := f.svc.Login(context.Background(), f.user.Email, testPassword, testDevice)
 
 	require.ErrorIs(t, err, auth.ErrSetupRequired)
 }
@@ -338,9 +338,9 @@ func TestService_ChangePassword_Success_KeepsCurrentSession(t *testing.T) {
 	_, err = f.svc.Authenticate(context.Background(), otherToken)
 	require.ErrorIs(t, err, auth.ErrUnauthorized)
 
-	_, _, err = f.svc.Login(context.Background(), f.user.Email, testPassword, testDevice)
+	_, err = f.svc.Login(context.Background(), f.user.Email, testPassword, testDevice)
 	require.ErrorIs(t, err, auth.ErrInvalidCredentials, "old password no longer works")
-	_, _, err = f.svc.Login(context.Background(), f.user.Email, "new-password-1", testDevice)
+	_, err = f.svc.Login(context.Background(), f.user.Email, "new-password-1", testDevice)
 	require.NoError(t, err)
 }
 

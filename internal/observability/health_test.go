@@ -242,3 +242,49 @@ func BenchmarkHealthService(b *testing.B) {
 		}
 	})
 }
+
+// TestHealthService_SetupChecker — setup_complete и проверка "setup": отсутствие семьи не
+// делает сервис нездоровым, а сбой проверки — делает.
+func TestHealthService_SetupChecker(t *testing.T) {
+	t.Run("WithoutChecker", func(t *testing.T) {
+		service := observability.NewHealthService("v")
+
+		health := service.CheckHealth(context.Background())
+
+		assert.False(t, health.SetupComplete)
+		assert.NotContains(t, health.Checks, "setup")
+	})
+
+	t.Run("SetupNotDone_StaysHealthy", func(t *testing.T) {
+		service := observability.NewHealthService("v")
+		service.SetSetupChecker(func(context.Context) (bool, error) { return false, nil })
+
+		health := service.CheckHealth(context.Background())
+
+		assert.Equal(t, observability.HealthStatusHealthy, health.Status)
+		assert.False(t, health.SetupComplete)
+		assert.Equal(t, observability.HealthStatusHealthy, health.Checks["setup"].Status)
+		assert.NotEmpty(t, health.Checks["setup"].Message)
+	})
+
+	t.Run("SetupDone", func(t *testing.T) {
+		service := observability.NewHealthService("v")
+		service.SetSetupChecker(func(context.Context) (bool, error) { return true, nil })
+
+		health := service.CheckHealth(context.Background())
+
+		assert.True(t, health.SetupComplete)
+		assert.Empty(t, health.Checks["setup"].Message)
+	})
+
+	t.Run("CheckFails_Unhealthy", func(t *testing.T) {
+		service := observability.NewHealthService("v")
+		service.SetSetupChecker(func(context.Context) (bool, error) { return false, errors.New("db down") })
+
+		health := service.CheckHealth(context.Background())
+
+		assert.Equal(t, observability.HealthStatusUnhealthy, health.Status)
+		assert.False(t, health.SetupComplete)
+		assert.Equal(t, "db down", health.Checks["setup"].Message)
+	})
+}

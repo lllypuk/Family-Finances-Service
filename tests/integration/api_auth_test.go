@@ -316,6 +316,10 @@ func apiV1Routes(e *echo.Echo, fixtures apiFixtures) []apiRoute {
 		if route.Method == echo.RouteNotFound {
 			continue
 		}
+		// Единственный публичный маршрут API: логин выдаёт токен анонимному клиенту.
+		if route.Method == http.MethodPost && route.Path == apiV1Prefix+"/auth/login" {
+			continue
+		}
 
 		concrete := apiRoute{method: route.Method, path: concreteAPIPath(route.Path, fixtures)}
 		if _, duplicate := seen[concrete]; duplicate {

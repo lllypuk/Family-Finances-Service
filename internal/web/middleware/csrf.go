@@ -10,6 +10,8 @@ import (
 
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo/v4"
+
+	"family-budget-service/internal/auth"
 )
 
 // apiPathPrefix — префикс JSON-роутов; ответы под ним всегда в API-envelope.
@@ -31,10 +33,30 @@ const (
 	CSRFTokenLength = 32
 )
 
+// apiLoginPath — публичный bearer-логин: сессии и токена у него нет по определению.
+const apiLoginPath = "/api/v1/auth/login"
+
+// isCSRFExempt — bearer-запросы не несут ambient-credentials, и RequireAPIAuth при заголовке
+// Authorization на cookie не откатывается; защищать их от CSRF нечего.
+func isCSRFExempt(r *http.Request) bool {
+	if !IsAPIPath(r.URL.Path) {
+		return false
+	}
+	if r.URL.Path == apiLoginPath {
+		return true
+	}
+	_, bearer := auth.BearerToken(r)
+	return bearer
+}
+
 // CSRFProtection middleware защищает от CSRF атак
 func CSRFProtection() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			if isCSRFExempt(c.Request()) {
+				return next(c)
+			}
+
 			// Пропускаем GET, HEAD, OPTIONS запросы
 			method := c.Request().Method
 			if method == "GET" || method == "HEAD" || method == "OPTIONS" {
@@ -47,24 +69,27 @@ func CSRFProtection() echo.MiddlewareFunc {
 
 			// Для POST, PUT, DELETE запросов проверяем токен
 			if err := validateCSRFToken(c); err != nil {
-				// API отвечает общим envelope, а не текстом: сгенерированный
-				// клиент читает только {"error":…} и по коду понимает,
-				// что токен пора обновить.
-				if IsAPIPath(c.Request().URL.Path) {
-					return echo.NewHTTPError(http.StatusForbidden, "CSRF token validation failed").
-						SetInternal(ErrCSRFTokenInvalid)
-				}
-				if IsHTMXRequest(c) {
-					return c.JSON(http.StatusForbidden, map[string]string{
-						"error": "CSRF token validation failed",
-					})
-				}
-				return c.String(http.StatusForbidden, "CSRF token validation failed")
+				return rejectCSRF(c)
 			}
 
 			return next(c)
 		}
 	}
+}
+
+// rejectCSRF — 403 в форме, которую ждёт клиент. API отвечает общим envelope, а не текстом:
+// сгенерированный клиент читает только {"error":…} и по коду понимает, что токен пора обновить.
+func rejectCSRF(c echo.Context) error {
+	if IsAPIPath(c.Request().URL.Path) {
+		return echo.NewHTTPError(http.StatusForbidden, "CSRF token validation failed").
+			SetInternal(ErrCSRFTokenInvalid)
+	}
+	if IsHTMXRequest(c) {
+		return c.JSON(http.StatusForbidden, map[string]string{
+			"error": "CSRF token validation failed",
+		})
+	}
+	return c.String(http.StatusForbidden, "CSRF token validation failed")
 }
 
 // ensureCSRFToken гарантирует наличие CSRF токена в сессии.

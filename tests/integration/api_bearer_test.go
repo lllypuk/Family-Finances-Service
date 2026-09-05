@@ -29,8 +29,9 @@ func TestAPIBearer_TokenFromAuthService(t *testing.T) {
 	member.Password = hash
 	require.NoError(t, ts.Repos.User.Create(t.Context(), member))
 
-	token, _, err := ts.Services.Auth.Login(t.Context(), member.Email, password, "integration")
+	login, err := ts.Services.Auth.Login(t.Context(), member.Email, password, "integration")
 	require.NoError(t, err)
+	token := login.Token
 
 	get := func(authorization string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions", nil)

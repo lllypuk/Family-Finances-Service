@@ -500,11 +500,18 @@ func (m *MockReportService) GenerateTrendAnalysis(
 	return nil, nil //nolint:nilnil // test mock
 }
 
+// newMockFamilyService — семья «создана»: /health спрашивает IsSetupComplete на каждом запросе.
+func newMockFamilyService() *MockFamilyService {
+	family := &MockFamilyService{}
+	family.On("IsSetupComplete", mock.Anything).Return(true, nil).Maybe()
+	return family
+}
+
 // Create a services struct that satisfies the services.Services interface
 func NewMockServices() *services.Services {
 	return &services.Services{
 		User:        &MockUserService{},
-		Family:      &MockFamilyService{},
+		Family:      newMockFamilyService(),
 		Category:    &MockCategoryService{},
 		Transaction: &MockTransactionService{},
 		Budget:      &MockBudgetService{},
@@ -630,6 +637,7 @@ func TestHTTPServer_HealthEndpoint(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), `"status":"healthy"`)
 	assert.Contains(t, rec.Body.String(), `"timestamp"`)
+	assert.Contains(t, rec.Body.String(), `"setup_complete":true`)
 }
 
 func TestHTTPServer_RoutesSetup(t *testing.T) {
@@ -768,7 +776,7 @@ func TestHTTPServer_IntegrationWithRealEndpoints(t *testing.T) {
 
 	mockServices := &services.Services{
 		User:        &MockUserService{},
-		Family:      &MockFamilyService{},
+		Family:      newMockFamilyService(),
 		Category:    mockCategoryService,
 		Transaction: &MockTransactionService{},
 		Budget:      &MockBudgetService{},

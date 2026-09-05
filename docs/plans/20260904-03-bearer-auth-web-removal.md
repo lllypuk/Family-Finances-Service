@@ -148,11 +148,11 @@ A-01…A-04, A-09, A-12). После него сервис отвечает то
 - Modify: `internal/application/http_server.go`, `internal/application/handlers/types.go`,
   `internal/observability/health.go`, `internal/run.go`, `docs/api/openapi.yaml`
 
-- [ ] публичная группа `/api/v1/auth`: `POST /login` — лимитер → `Service.Login` → `200 {token, user}`; `401 INVALID_CREDENTIALS`, `409 SETUP_REQUIRED`, `429`
-- [ ] защищённые: `POST /auth/logout`, `GET /auth/sessions` (текущая помечена `current: true`), `DELETE /auth/sessions/:id` (чужая → 404), `GET /me`, `PUT /me {first_name, last_name, email}`, `PUT /me/password`
-- [ ] `/health`: `setup_complete` через `FamilyService.IsSetupComplete`
-- [ ] тесты обработчиков (успех, ошибки, коды) и интеграционный цикл: login → `GET /me` → смена пароля → старый токен другой сессии 401, текущий жив → logout → 401
-- [ ] `openapi.yaml` обновлён; `make fmt && make test && make lint` — зелёные
+- [x] публичная группа `/api/v1/auth`: `POST /login` — лимитер → `Service.Login` → `200 {token, user}`; `401 INVALID_CREDENTIALS`, `409 SETUP_REQUIRED`, `429`
+- [x] защищённые: `POST /auth/logout`, `GET /auth/sessions` (текущая помечена `current: true`), `DELETE /auth/sessions/:id` (чужая → 404), `GET /me`, `PUT /me {first_name, last_name, email}`, `PUT /me/password`
+- [x] `/health`: `setup_complete` через `FamilyService.IsSetupComplete`
+- [x] тесты обработчиков (успех, ошибки, коды) и интеграционный цикл: login → `GET /me` → смена пароля → старый токен другой сессии 401, текущий жив → logout → 401
+- [x] `openapi.yaml` обновлён; `make fmt && make test && make lint` — зелёные
 
 ### Task 5: Администрирование пользователей
 

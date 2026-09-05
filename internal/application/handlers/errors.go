@@ -53,6 +53,13 @@ const (
 	ErrCodeBackupNotFound = "BACKUP_NOT_FOUND"
 	// ErrCodeBackupFailed signals that a backup could not be created.
 	ErrCodeBackupFailed = "BACKUP_FAILED"
+	// ErrCodeInvalidCredentials — неверный email или пароль; ответ одинаков для обоих случаев.
+	//nolint:gosec // G101: это код ошибки в ответе API, а не учётные данные.
+	ErrCodeInvalidCredentials = "INVALID_CREDENTIALS"
+	// ErrCodeSetupRequired — семья ещё не создана CLI `setup`, логин невозможен.
+	ErrCodeSetupRequired = "SETUP_REQUIRED"
+	// ErrCodeRateLimited — сработал лимитер логина; секунды до повтора — в Retry-After.
+	ErrCodeRateLimited = "RATE_LIMITED"
 
 	// Standard error messages paired with the codes above. Kept as constants
 	// so changes propagate to API consumers in lockstep with code updates.
@@ -73,6 +80,9 @@ const (
 	ErrMessageBackupFailed       = "Failed to create backup"
 	ErrMessageValidationFailed   = "Validation failed"
 	ErrMessageCategoryNotFound   = "Category not found"
+	ErrMessageInvalidCredentials = "Invalid email or password"
+	ErrMessageSetupRequired      = "Family is not set up yet"
+	ErrMessageRateLimited        = "Too many login attempts"
 
 	// fieldBody — значение ErrorDetail.Field для ошибок, не привязанных к полю.
 	fieldBody     = "body"

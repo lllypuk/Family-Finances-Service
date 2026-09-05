@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"time"
@@ -36,8 +37,11 @@ type HTTPServer struct {
 	services             *services.Services
 	config               *Config
 	observabilityService *observability.Service
+	healthService        *observability.HealthService
 
 	// API Handlers
+	authHandler        *handlers.AuthHandler
+	meHandler          *handlers.MeHandler
 	userHandler        *handlers.UserHandler
 	familyHandler      *handlers.FamilyHandler
 	categoryHandler    *handlers.CategoryHandler
@@ -124,14 +128,28 @@ func NewHTTPServerWithObservability(
 		}))
 	}
 
+	// Без observability /health всё равно отвечает по схеме Health (в том числе setup_complete).
+	healthService := observability.NewHealthService(version.String())
+	logger := slog.Default()
+	if obsService != nil {
+		healthService = obsService.HealthService
+		logger = obsService.Logger
+	}
+	healthService.SetSetupChecker(func(ctx context.Context) (bool, error) {
+		return services.Family.IsSetupComplete(ctx)
+	})
+
 	server := &HTTPServer{
 		echo:                 e,
 		repositories:         repositories,
 		services:             services,
 		config:               config,
 		observabilityService: obsService,
+		healthService:        healthService,
 
 		// Инициализация API handlers
+		authHandler:        handlers.NewAuthHandler(services.Auth, auth.NewRateLimiter(nil), logger),
+		meHandler:          handlers.NewMeHandler(services.User, services.Auth),
 		userHandler:        handlers.NewUserHandler(repositories, services.User),
 		familyHandler:      handlers.NewFamilyHandler(services.Family),
 		categoryHandler:    handlers.NewCategoryHandler(repositories, services.Category),
@@ -187,18 +205,14 @@ func (s *HTTPServer) WebServerInitError() error {
 }
 
 func (s *HTTPServer) setupRoutes() {
-	// Health check endpoints
-	if s.observabilityService != nil {
-		s.echo.GET("/health", s.observabilityService.HealthService.HealthHandler())
-	} else {
-		// Fallback health check
-		s.echo.GET("/health", s.healthCheck)
-	}
+	s.echo.GET("/health", s.healthService.HealthHandler())
 
 	// Веб-интерфейс маршруты
 	if s.webServer != nil {
 		s.webServer.SetupRoutes()
 	}
+
+	s.setupAuthRoutes()
 
 	// API версионирование.
 	// RequireAPIAuth закрывает всю группу: без валидной сессии — 401 и JSON-ошибка
@@ -278,6 +292,25 @@ func (s *HTTPServer) setupRoutes() {
 	backups.DELETE("/:name", s.backupHandler.DeleteBackup)
 }
 
+// setupAuthRoutes — bearer-маршруты (план 03): логин публичный, остальные только по токену,
+// без cookie-пути, потому что principal должен нести id сессии (logout, current в списке).
+// Middleware висит на маршрутах, а не на группе: Group с middleware регистрирует catch-all,
+// который перекрыл бы 401 общей группы /api/v1 для несуществующих путей.
+func (s *HTTPServer) setupAuthRoutes() {
+	bearer := auth.RequireBearer(s.services.Auth)
+
+	authGroup := s.echo.Group("/api/v1/auth")
+	authGroup.POST("/login", s.authHandler.Login)
+	authGroup.POST("/logout", s.authHandler.Logout, bearer)
+	authGroup.GET("/sessions", s.authHandler.ListSessions, bearer)
+	authGroup.DELETE("/sessions/:id", s.authHandler.RevokeSession, bearer)
+
+	me := s.echo.Group("/api/v1/me")
+	me.GET("", s.meHandler.GetMe, bearer)
+	me.PUT("", s.meHandler.UpdateMe, bearer)
+	me.PUT("/password", s.meHandler.ChangePassword, bearer)
+}
+
 func (s *HTTPServer) Start(_ context.Context) error {
 	address := fmt.Sprintf("%s:%s", s.config.Host, s.config.Port)
 	server := s.buildNetHTTPServer(address)
@@ -297,17 +330,6 @@ func (s *HTTPServer) buildNetHTTPServer(address string) *http.Server {
 		WriteTimeout: s.config.WriteTimeout,
 		IdleTimeout:  s.config.IdleTimeout,
 	}
-}
-
-// healthCheck — резервный /health, когда сервер собран без observability.
-// Ответ — подмножество схемы Health из docs/api/openapi.yaml: setup_complete
-// добавляет план 03.
-func (s *HTTPServer) healthCheck(c echo.Context) error {
-	return c.JSON(http.StatusOK, map[string]string{
-		"status":    observability.HealthStatusHealthy,
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
-		"version":   version.String(),
-	})
 }
 
 // CustomValidator wraps go-playground/validator for Echo

@@ -31,9 +31,14 @@ func NewUserHandler(repositories *Repositories, userService services.UserService
 }
 
 // handleServiceError converts service errors to HTTP responses.
+func (h *UserHandler) handleServiceError(c echo.Context, err error) error {
+	return respondUserServiceError(c, err)
+}
+
+// respondUserServiceError — ошибки UserService в envelope; общая для /users и /me.
 // Every branch goes through respondError, so the envelope (code/message/details
 // plus request id, timestamp and API version) is built in exactly one place.
-func (h *UserHandler) handleServiceError(c echo.Context, err error) error {
+func respondUserServiceError(c echo.Context, err error) error {
 	switch {
 	case errors.Is(err, services.ErrValidationFailed):
 		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,

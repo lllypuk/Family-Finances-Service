@@ -140,10 +140,11 @@ func TestSetupPage_RendersOnEmptyDatabase(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
-		var body map[string]string
+		var body observability.HealthStatus
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-		assert.Equal(t, version.String(), body["version"])
-		assert.Equal(t, observability.HealthStatusHealthy, body["status"])
-		assert.NotEmpty(t, body["timestamp"])
+		assert.Equal(t, version.String(), body.Version)
+		assert.Equal(t, observability.HealthStatusHealthy, body.Status)
+		assert.False(t, body.Timestamp.IsZero())
+		assert.False(t, body.SetupComplete, "семьи ещё нет — setup_complete обязан быть false")
 	})
 }

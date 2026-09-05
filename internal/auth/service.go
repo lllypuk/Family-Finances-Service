@@ -40,6 +40,13 @@ type Principal struct {
 	Role      user.Role
 }
 
+// LoginResult — выданный токен вместе с сессией и её владельцем.
+type LoginResult struct {
+	Token   string
+	Session *Session
+	User    *user.User
+}
+
 // Option настраивает Service.
 type Option func(*Service)
 
@@ -78,32 +85,33 @@ func NewService(sessions SessionRepository, users UserLookup, setup SetupChecker
 }
 
 // Login проверяет пароль и выдаёт токен новой сессии.
-func (s *Service) Login(ctx context.Context, email, password, device string) (string, *user.User, error) {
+func (s *Service) Login(ctx context.Context, email, password, device string) (*LoginResult, error) {
 	exists, err := s.setup.Exists(ctx)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to check setup: %w", err)
+		return nil, fmt.Errorf("failed to check setup: %w", err)
 	}
 	if !exists {
-		return "", nil, ErrSetupRequired
+		return nil, ErrSetupRequired
 	}
 
 	u, err := s.users.GetByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, user.ErrNotFound) {
 			ComparePassword(s.dummyHash, password)
-			return "", nil, ErrInvalidCredentials
+			return nil, ErrInvalidCredentials
 		}
-		return "", nil, fmt.Errorf("failed to get user: %w", err)
+		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 	if !ComparePassword(u.Password, password) {
-		return "", nil, ErrInvalidCredentials
+		return nil, ErrInvalidCredentials
 	}
 
 	plain, hash := GenerateToken()
-	if err = s.sessions.Create(ctx, NewSession(u.ID, hash, device, s.now())); err != nil {
-		return "", nil, fmt.Errorf("failed to create session: %w", err)
+	sess := NewSession(u.ID, hash, device, s.now())
+	if err = s.sessions.Create(ctx, sess); err != nil {
+		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
-	return plain, u, nil
+	return &LoginResult{Token: plain, Session: sess, User: u}, nil
 }
 
 // Authenticate проверяет токен; просроченная сессия удаляется.

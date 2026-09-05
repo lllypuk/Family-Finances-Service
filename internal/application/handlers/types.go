@@ -75,6 +75,36 @@ type UserResponse struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// LoginRequest — тело POST /auth/login; device_name показывается в списке сессий.
+type LoginRequest struct {
+	Email      string `json:"email"       validate:"required,email"`
+	Password   string `json:"password"    validate:"required,password"`
+	DeviceName string `json:"device_name" validate:"max=64"`
+}
+
+// LoginResponse — токен отдаётся один раз, сервер хранит только его хеш.
+type LoginResponse struct {
+	Token     string       `json:"token"`
+	ExpiresAt time.Time    `json:"expires_at"`
+	User      UserResponse `json:"user"`
+}
+
+// SessionResponse — элемент GET /auth/sessions; Current — сессия, чьим токеном сделан запрос.
+type SessionResponse struct {
+	ID         uuid.UUID `json:"id"`
+	DeviceName string    `json:"device_name"`
+	CreatedAt  time.Time `json:"created_at"`
+	LastUsedAt time.Time `json:"last_used_at"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	Current    bool      `json:"current"`
+}
+
+// ChangePasswordRequest — тело PUT /me/password.
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password" validate:"required"`
+	NewPassword     string `json:"new_password"     validate:"required,password"`
+}
+
 type UpdateFamilyRequest struct {
 	Name     *string `json:"name,omitempty"     validate:"omitempty,min=2,max=100"`
 	Currency *string `json:"currency,omitempty" validate:"omitempty,len=3"`

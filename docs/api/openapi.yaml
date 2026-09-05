@@ -1138,6 +1138,9 @@ components:
           examples: [1018947743]
         checks:
           type: object
+          description: |
+            Проверки по имени (`sqlite`, `setup`, …). `setup` здоров и при отсутствии семьи —
+            нездоров только сбой самой проверки; результат читается из `setup_complete`.
           additionalProperties:
             type: object
             properties:

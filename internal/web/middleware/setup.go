@@ -32,7 +32,8 @@ type SetupChecker interface {
 
 // isSetupExempt сообщает, что путь не участвует в проверке завершённости настройки.
 // Без этого страница /setup открывается без стилей, а мониторинг не может опросить
-// сервис до первого запуска (находка U-01).
+// сервис до первого запуска (находка U-01). JSON-API редирект на /setup бесполезен:
+// до setup оно само отвечает 401/409 SETUP_REQUIRED.
 func isSetupExempt(rawPath string) bool {
 	// Нормализуем путь: `/static/../secret` до очистки выглядит как статика.
 	path := stdpath.Clean(rawPath)
@@ -41,7 +42,7 @@ func isSetupExempt(rawPath string) bool {
 	case healthPath, faviconPath, staticPath:
 		return true
 	default:
-		return strings.HasPrefix(path, staticPathPrefix)
+		return strings.HasPrefix(path, staticPathPrefix) || IsAPIPath(path)
 	}
 }
 
