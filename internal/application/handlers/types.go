@@ -48,7 +48,7 @@ type APIError struct {
 // CreateUserRequest represents the request payload for creating a new user
 type CreateUserRequest struct {
 	Email     string `json:"email"      validate:"required,email"`
-	Password  string `json:"password"   validate:"required,min=6"`
+	Password  string `json:"password"   validate:"required,password"`
 	FirstName string `json:"first_name" validate:"required"`
 	LastName  string `json:"last_name"  validate:"required"`
 	Role      string `json:"role"       validate:"required,oneof=admin member child"`

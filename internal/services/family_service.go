@@ -8,8 +8,8 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 
+	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services/dto"
@@ -43,7 +43,7 @@ func NewFamilyService(
 		userRepo:        userRepo,
 		transactionRepo: transactionRepo,
 		categoryService: categoryService,
-		validator:       validator.New(),
+		validator:       newValidator(),
 	}
 }
 
@@ -83,13 +83,13 @@ func (s *familyService) SetupFamily(ctx context.Context, req dto.SetupFamilyDTO)
 	}
 
 	// Create admin user
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	hashedPassword, err := auth.HashPassword(req.Password)
 	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %w", err)
+		return nil, err
 	}
 
 	adminUser := user.NewUser(req.Email, req.FirstName, req.LastName, user.RoleAdmin)
-	adminUser.Password = string(hashedPassword)
+	adminUser.Password = hashedPassword
 
 	if err = s.userRepo.Create(ctx, adminUser); err != nil {
 		return nil, fmt.Errorf("failed to create admin user: %w", err)

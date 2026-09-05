@@ -13,7 +13,7 @@ type CreateUserDTO struct {
 	Email     string    `validate:"required,email,max=254"`
 	FirstName string    `validate:"required,min=2,max=50"`
 	LastName  string    `validate:"required,min=2,max=50"`
-	Password  string    `validate:"required,min=6"`
+	Password  string    `validate:"required,password"`
 	Role      user.Role `validate:"required"`
 }
 
@@ -51,8 +51,8 @@ type SetupFamilyDTO struct {
 	Email     string `validate:"required,email,max=254"`
 	FirstName string `validate:"required,min=2,max=50"`
 	LastName  string `validate:"required,min=2,max=50"`
-	// Password must be at least 6 characters long
-	Password string `validate:"required,min=6"`
+	// Password policy: auth.ValidatePassword (10…72 bytes)
+	Password string `validate:"required,password"`
 }
 
 // UpdateFamilyDTO represents the data transfer object for updating a family
@@ -80,7 +80,7 @@ type CreateInviteDTO struct {
 type AcceptInviteDTO struct {
 	Email    string `validate:"required,email,max=254"`
 	Name     string `validate:"required,min=2,max=100"`
-	Password string `validate:"required,min=6"`
+	Password string `validate:"required,password"`
 }
 
 // InviteResponseDTO represents the data transfer object for invite responses

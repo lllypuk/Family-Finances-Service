@@ -8,8 +8,8 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 
+	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services/dto"
 )
@@ -61,7 +61,7 @@ func NewUserService(userRepo UserRepository, familyRepo FamilyRepository) UserSe
 	return &userService{
 		userRepo:   userRepo,
 		familyRepo: familyRepo,
-		validator:  validator.New(),
+		validator:  newValidator(),
 	}
 }
 
@@ -85,16 +85,16 @@ func (s *userService) CreateUser(ctx context.Context, req dto.CreateUserDTO) (*u
 	}
 
 	// Hash password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	hashedPassword, err := auth.HashPassword(req.Password)
 	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %w", err)
+		return nil, err
 	}
 
 	// Create user entity
 	newUser := &user.User{
 		ID:        uuid.New(),
 		Email:     req.Email,
-		Password:  string(hashedPassword),
+		Password:  hashedPassword,
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
 		Role:      req.Role,

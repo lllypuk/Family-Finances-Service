@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
+	"family-budget-service/internal/auth"
 	"family-budget-service/internal/services"
 )
 
@@ -34,6 +35,7 @@ type pageParams struct {
 // из json-тега, иначе клиент получал бы имя поля Go (StartDate вместо start_date).
 func newAPIValidator() *validator.Validate {
 	v := validator.New()
+	auth.RegisterPasswordValidation(v)
 	v.RegisterTagNameFunc(func(field reflect.StructField) string {
 		name := strings.Split(field.Tag.Get("json"), ",")[0]
 		if name == "" || name == "-" {
@@ -221,6 +223,8 @@ func validationMessage(fieldErr validator.FieldError) string {
 		return "must be one of: " + fieldErr.Param()
 	case "email":
 		return "must be a valid email"
+	case auth.PasswordTag:
+		return auth.ErrInvalidPassword.Error()
 	}
 
 	if fieldErr.Param() != "" {

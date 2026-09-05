@@ -29,7 +29,7 @@ import (
 // восстановления клиент получил бы cookie на удаление.
 
 // integrationLoginPassword — пароль тестового пользователя (bcrypt-хеш кладётся в БД).
-const integrationLoginPassword = "Admin123!"
+const integrationLoginPassword = "Admin1234!"
 
 func TestLogin_RegeneratesCSRFToken(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)

@@ -116,14 +116,14 @@ A-01…A-04, A-09, A-12). После него сервис отвечает то
   `internal/auth/service_test.go`, `internal/auth/password_test.go`
 - Modify: `internal/services/user_service.go`, `family_service.go`, `internal/services/dto/user_dto.go`
 
-- [ ] направление зависимостей: `internal/auth` не импортирует `internal/services`. Ему нужны три узких интерфейса, объявленных в `internal/auth`: `SessionRepository` (задача 1), `UserLookup` (`GetByEmail`, `GetByID`, `UpdatePassword`) и `SetupChecker` (`Exists`); их реализуют репозитории из `internal/infrastructure/user`. `internal/services` импортирует `auth` только ради `HashPassword`/`ValidatePassword`
-- [ ] `GenerateToken() (plain, hash string)`, `HashToken(plain)`; константы `IdleTTL = 30d`, `AbsoluteTTL = 180d`, `TouchInterval = 1h`
-- [ ] `auth.HashPassword` (cost 12), `auth.ComparePassword`, `auth.ValidatePassword` (10…72 байта); сервисы и DTO переходят на них, `min=6` заменить
-- [ ] `Service.Login(ctx, email, password, device) (token, *user.User, error)`: фиктивный хеш для неизвестного email — поле `Service.dummyHash`, вычисляется в `NewService` (`gochecknoglobals` запрещает package-level var), `ErrInvalidCredentials`, `ErrSetupRequired` (семьи нет), неактивный пользователь → `ErrInvalidCredentials`
-- [ ] `Service.Authenticate(ctx, token) (*Principal, error)`: истёк → удалить и `ErrUnauthorized`; `Touch`, только если `now - last_used_at > TouchInterval`
-- [ ] `Logout`, `ListSessions`, `RevokeSession(userID, id)`, `ChangePassword(userID, current, new, keepSessionID)` — проверка `current`, новый хеш, `DeleteByUser(except)`; `AdminSetPassword(userID, new)` — отзыв всех сессий
-- [ ] тесты: успех, неверный пароль, неизвестный email (одинаковый ответ), просроченный токен, touch не пишет в БД раньше интервала (мок репозитория считает вызовы), смена пароля с неверным `current` → ошибка и сессии целы
-- [ ] `make test` — зелёный
+- [x] направление зависимостей: `internal/auth` не импортирует `internal/services`. Ему нужны три узких интерфейса, объявленных в `internal/auth`: `SessionRepository` (задача 1), `UserLookup` (`GetByEmail`, `GetByID`, `UpdatePassword`) и `SetupChecker` (`Exists`); их реализуют репозитории из `internal/infrastructure/user`. `internal/services` импортирует `auth` только ради `HashPassword`/`ValidatePassword`
+- [x] `GenerateToken() (plain, hash string)`, `HashToken(plain)`; константы `IdleTTL = 30d`, `AbsoluteTTL = 180d`, `TouchInterval = 1h`
+- [x] `auth.HashPassword` (cost 12), `auth.ComparePassword`, `auth.ValidatePassword` (10…72 байта); сервисы и DTO переходят на них, `min=6` заменить
+- [x] `Service.Login(ctx, email, password, device) (token, *user.User, error)`: фиктивный хеш для неизвестного email — поле `Service.dummyHash`, вычисляется в `NewService` (`gochecknoglobals` запрещает package-level var), `ErrInvalidCredentials`, `ErrSetupRequired` (семьи нет), неактивный пользователь → `ErrInvalidCredentials`
+- [x] `Service.Authenticate(ctx, token) (*Principal, error)`: истёк → удалить и `ErrUnauthorized`; `Touch`, только если `now - last_used_at > TouchInterval`
+- [x] `Logout`, `ListSessions`, `RevokeSession(userID, id)`, `ChangePassword(userID, current, new, keepSessionID)` — проверка `current`, новый хеш, `DeleteByUser(except)`; `AdminSetPassword(userID, new)` — отзыв всех сессий
+- [x] тесты: успех, неверный пароль, неизвестный email (одинаковый ответ), просроченный токен, touch не пишет в БД раньше интервала (мок репозитория считает вызовы), смена пароля с неверным `current` → ошибка и сессии целы
+- [x] `make test` — зелёный
 
 ### Task 3: Middleware и лимитер
 

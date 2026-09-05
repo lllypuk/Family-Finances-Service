@@ -200,7 +200,7 @@ func (r *SQLiteRepository) GetByEmail(ctx context.Context, email string) (*user.
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("user with email %s not found", sanitizedEmail)
+			return nil, fmt.Errorf("user with email %s: %w", sanitizedEmail, user.ErrNotFound)
 		}
 		return nil, fmt.Errorf("failed to get user by email: %w", err)
 	}
@@ -341,6 +341,32 @@ func (r *SQLiteRepository) Delete(ctx context.Context, id uuid.UUID) error {
 
 	if rowsAffected == 0 {
 		return fmt.Errorf("user with id %s not found", id)
+	}
+
+	return nil
+}
+
+// UpdatePassword записывает новый хеш пароля; активность не проверяется — админ может
+// сбросить пароль и деактивированному пользователю.
+func (r *SQLiteRepository) UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error {
+	if err := validation.ValidateUUID(id); err != nil {
+		return fmt.Errorf("invalid id parameter: %w", err)
+	}
+
+	result, err := r.db.ExecContext(ctx,
+		`UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+		passwordHash, id.String(),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("user with id %s: %w", id, user.ErrNotFound)
 	}
 
 	return nil

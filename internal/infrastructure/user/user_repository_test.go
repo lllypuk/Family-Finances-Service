@@ -386,4 +386,39 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, testUser.ID, retrievedUser.ID)
 	})
+
+	t.Run("UpdatePassword", func(t *testing.T) {
+		db := container.GetTestDatabase(t)
+		repo := userrepo.NewSQLiteRepository(db)
+
+		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
+		require.NoError(t, err)
+
+		testUser := &user.User{
+			ID:        uuid.New(),
+			Email:     "password@example.com",
+			Password:  "old_hash",
+			FirstName: "Pass",
+			LastName:  "Word",
+			Role:      user.RoleMember,
+		}
+		require.NoError(t, repo.Create(ctx, testUser))
+
+		require.NoError(t, repo.UpdatePassword(ctx, testUser.ID, "new_hash"))
+
+		retrievedUser, err := repo.GetByID(ctx, testUser.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "new_hash", retrievedUser.Password)
+
+		err = repo.UpdatePassword(ctx, uuid.New(), "hash")
+		require.ErrorIs(t, err, user.ErrNotFound)
+	})
+
+	t.Run("GetByEmail_NotFound", func(t *testing.T) {
+		db := container.GetTestDatabase(t)
+		repo := userrepo.NewSQLiteRepository(db)
+
+		_, err := repo.GetByEmail(ctx, "nobody@example.com")
+		require.ErrorIs(t, err, user.ErrNotFound)
+	})
 }

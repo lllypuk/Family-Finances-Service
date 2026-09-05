@@ -43,7 +43,7 @@ linter name and an explanation (`nolintlint` enforces both).
 ### Local testing notes
 
 - Curl the local server with `--noproxy '*'`: `curl -s --noproxy '*' 127.0.0.1:8080/health`
-- Test credentials for the local setup flow: `admin@test.com` / `Admin123!`, family `Test Family`
+- Test credentials for the local setup flow: `admin@test.com` / `Admin1234!`, family `Test Family`
 - Project skills in `.claude/skills/`: `/test-frontend` (drives `agent-browser` against a running `make run-local`
   instance), `/pre-commit`, `/db-backup`, `/db-shell`, `/docker-up`, `/migrate-create`, `/memory-update`
 
