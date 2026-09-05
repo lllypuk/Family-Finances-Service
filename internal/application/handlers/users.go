@@ -65,6 +65,10 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 			bodyDetail(ErrCodeInvalidRequest, err.Error()))
 	}
 
+	if validationErr := h.validator.Struct(&req); validationErr != nil {
+		return respondValidationErrors(c, validationErr)
+	}
+
 	// Convert API request to DTO
 	userDTO := dto.CreateUserDTO{
 		Email:     req.Email,

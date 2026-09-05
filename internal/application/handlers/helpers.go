@@ -11,6 +11,8 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+
+	"family-budget-service/internal/services"
 )
 
 const apiVersion = "v1"
@@ -209,6 +211,14 @@ func respondValidationErrors(c echo.Context, err error) error {
 	)
 }
 
+// isNotFoundError отличает «сущности нет» от настоящего сбоя: спека требует 404, а не 500.
+func isNotFoundError(err error) bool {
+	return errors.Is(err, services.ErrTransactionNotFound) ||
+		errors.Is(err, services.ErrBudgetNotFoundService) ||
+		errors.Is(err, services.ErrReportNotFound) ||
+		errors.Is(err, services.ErrCategoryNotFound)
+}
+
 // DeleteEntityHelper provides common delete functionality for all handlers
 func DeleteEntityHelper(c echo.Context, deleter func(uuid.UUID) error, entityType string) error {
 	idParam := c.Param("id")
@@ -224,6 +234,10 @@ func DeleteEntityHelper(c echo.Context, deleter func(uuid.UUID) error, entityTyp
 
 	err = deleter(id)
 	if err != nil {
+		if isNotFoundError(err) {
+			return HandleNotFoundError(c, entityType)
+		}
+
 		return respondError(
 			c,
 			http.StatusInternalServerError,

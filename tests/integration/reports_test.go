@@ -519,6 +519,38 @@ func TestReportAPI_GenerateAndExport(t *testing.T) {
 	assert.Equal(t, "TOTAL", rows[len(rows)-1][0])
 }
 
+// TestReportAPI_CreateReport_CustomPeriodKeepsDates — при period=custom границы берутся из запроса,
+// а не из календарного месяца (иначе category_breakdown/budget молча считают текущий месяц).
+func TestReportAPI_CreateReport_CustomPeriodKeepsDates(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+
+	start := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, time.January, 31, 0, 0, 0, 0, time.UTC)
+
+	request := handlers.CreateReportRequest{
+		Name:      "Custom Breakdown",
+		Type:      "category_breakdown",
+		Period:    "custom",
+		StartDate: start,
+		EndDate:   end,
+	}
+	body, err := json.Marshal(request)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/reports", bytes.NewBuffer(body))
+	session.Apply(req)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+
+	var created handlers.APIResponse[handlers.ReportResponse]
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &created))
+	assert.True(t, created.Data.StartDate.Equal(start), "start: %s", created.Data.StartDate)
+	assert.True(t, created.Data.EndDate.Equal(end), "end: %s", created.Data.EndDate)
+}
+
 // TestStatsAPI_Summary — сводка за период совпадает с созданными операциями.
 func TestStatsAPI_Summary(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)

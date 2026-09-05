@@ -671,6 +671,7 @@ func TestReportService_DeleteReport(t *testing.T) {
 	reportID := uuid.New()
 
 	// Setup mock expectations
+	mockReportRepo.On("GetByID", ctx, reportID).Return(&report.Report{ID: reportID}, nil)
 	mockReportRepo.On("Delete", ctx, reportID).Return(nil)
 
 	// Execute
@@ -679,6 +680,19 @@ func TestReportService_DeleteReport(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 
+	mockReportRepo.AssertExpectations(t)
+}
+
+func TestReportService_DeleteReport_NotFound(t *testing.T) {
+	service, mockReportRepo, _, _, _, _ := setupReportService()
+	ctx := context.Background()
+
+	reportID := uuid.New()
+	mockReportRepo.On("GetByID", ctx, reportID).Return(nil, errors.New("not found"))
+
+	err := service.DeleteReport(ctx, reportID)
+
+	require.ErrorIs(t, err, services.ErrReportNotFound)
 	mockReportRepo.AssertExpectations(t)
 }
 

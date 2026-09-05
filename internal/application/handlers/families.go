@@ -3,11 +3,13 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/domain/user"
+	"family-budget-service/internal/infrastructure/validation"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
 )
@@ -42,8 +44,20 @@ func (h *FamilyHandler) UpdateFamily(c echo.Context) error {
 			bodyDetail(ErrCodeInvalidRequest, bindErr.Error()))
 	}
 
+	// Репозиторий сохраняет уже подрезанное имя, поэтому длину проверяем по нему же.
+	if req.Name != nil {
+		trimmed := strings.TrimSpace(*req.Name)
+		req.Name = &trimmed
+	}
+
 	if validationErr := h.validator.Struct(&req); validationErr != nil {
 		return respondValidationErrors(c, validationErr)
+	}
+	if req.Currency != nil {
+		if currencyErr := validation.ValidateCurrency(*req.Currency); currencyErr != nil {
+			return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+				ErrorDetail{Field: fieldCurrency, Message: currencyErr.Error(), Code: ErrCodeValidationError})
+		}
 	}
 	if req.Name == nil && req.Currency == nil {
 		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,

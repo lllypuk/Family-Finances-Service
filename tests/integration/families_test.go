@@ -124,4 +124,19 @@ func TestFamilyAPI_Integration(t *testing.T) {
 		rec := do(t, http.MethodPut, `{"currency":"EURO"}`, adminAuth)
 		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
 	})
+
+	t.Run("UpdateFamily_UnsupportedCurrency", func(t *testing.T) {
+		rec := do(t, http.MethodPut, `{"currency":"XYZ"}`, adminAuth)
+		require.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
+
+		var response handlers.ErrorResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		require.Len(t, response.Error.Details, 1)
+		assert.Equal(t, "currency", response.Error.Details[0].Field)
+	})
+
+	t.Run("UpdateFamily_BlankName", func(t *testing.T) {
+		rec := do(t, http.MethodPut, `{"name":"  "}`, adminAuth)
+		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
+	})
 }

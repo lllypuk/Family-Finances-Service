@@ -35,6 +35,7 @@ var (
 	ErrReportFeatureHiddenFromPublicAPI = errors.New("report feature hidden from public API until implemented")
 	ErrUnsupportedReportType            = errors.New("unsupported report type")
 	ErrUnsupportedCSVData               = errors.New("csv export supports report data only")
+	ErrReportNotFound                   = errors.New("report not found")
 )
 
 type reportService struct {
@@ -226,9 +227,16 @@ func (s *reportService) GenerateBudgetComparisonReport(
 	ctx context.Context,
 	period report.Period,
 ) (*dto.BudgetComparisonDTO, error) {
-	// Calculate date range based on period
 	startDate, endDate := s.calculatePeriodDates(period)
 
+	return s.budgetComparisonReport(ctx, period, startDate, endDate)
+}
+
+func (s *reportService) budgetComparisonReport(
+	ctx context.Context,
+	period report.Period,
+	startDate, endDate time.Time,
+) (*dto.BudgetComparisonDTO, error) {
 	// Get active budgets for the period
 	budgets, err := s.budgetService.GetActiveBudgets(ctx, startDate)
 	if err != nil {
@@ -369,6 +377,14 @@ func (s *reportService) GenerateCategoryBreakdownReport(
 ) (*dto.CategoryBreakdownDTO, error) {
 	startDate, endDate := s.calculatePeriodDates(period)
 
+	return s.categoryBreakdownReport(ctx, period, startDate, endDate)
+}
+
+func (s *reportService) categoryBreakdownReport(
+	ctx context.Context,
+	period report.Period,
+	startDate, endDate time.Time,
+) (*dto.CategoryBreakdownDTO, error) {
 	// Get all transactions for the period
 	transactions, err := s.getTransactionsForPeriod(ctx, startDate, endDate, "", nil)
 	if err != nil {
@@ -435,7 +451,7 @@ func (s *reportService) GenerateReport(ctx context.Context, req dto.ReportReques
 	// сохранять надо те границы, по которым реально посчитаны данные.
 	startDate, endDate := req.StartDate, req.EndDate
 	if req.Type == report.TypeBudget || req.Type == report.TypeCategoryBreak {
-		startDate, endDate = s.calculatePeriodDates(req.Period)
+		startDate, endDate = s.requestPeriodDates(req)
 	}
 
 	newReport := report.NewReport(req.Name, req.Type, req.Period, req.UserID, startDate, endDate)
@@ -451,11 +467,15 @@ func (s *reportService) generateReportData(ctx context.Context, req dto.ReportRe
 	case report.TypeIncome:
 		return s.GenerateIncomeReport(ctx, req)
 	case report.TypeBudget:
-		return s.GenerateBudgetComparisonReport(ctx, req.Period)
+		start, end := s.requestPeriodDates(req)
+
+		return s.budgetComparisonReport(ctx, req.Period, start, end)
 	case report.TypeCashFlow:
 		return s.GenerateCashFlowReport(ctx, req.StartDate, req.EndDate)
 	case report.TypeCategoryBreak:
-		return s.GenerateCategoryBreakdownReport(ctx, req.Period)
+		start, end := s.requestPeriodDates(req)
+
+		return s.categoryBreakdownReport(ctx, req.Period, start, end)
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedReportType, req.Type)
 	}
@@ -490,6 +510,10 @@ func (s *reportService) GetReportsByUserID(ctx context.Context, userID uuid.UUID
 
 // DeleteReport deletes a report by its ID
 func (s *reportService) DeleteReport(ctx context.Context, id uuid.UUID) error {
+	if _, err := s.reportRepo.GetByID(ctx, id); err != nil {
+		return ErrReportNotFound
+	}
+
 	return s.reportRepo.Delete(ctx, id)
 }
 
@@ -774,6 +798,15 @@ func (s *reportService) getTopTransactions(
 	}
 
 	return result
+}
+
+// requestPeriodDates: у period=custom границы задаёт сам запрос, иначе они считаются от календаря.
+func (s *reportService) requestPeriodDates(req dto.ReportRequestDTO) (time.Time, time.Time) {
+	if req.Period == report.PeriodCustom {
+		return req.StartDate, req.EndDate
+	}
+
+	return s.calculatePeriodDates(req.Period)
 }
 
 func (s *reportService) calculatePeriodDates(period report.Period) (time.Time, time.Time) {

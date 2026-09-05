@@ -167,7 +167,7 @@ func TestUserHandler_CreateUser(t *testing.T) {
 			},
 		},
 		{
-			name: "Error - Service validation failed",
+			name: "Error - Request validation failed",
 			requestBody: handlers.CreateUserRequest{
 				Email:     "invalid-email", // Invalid email format
 				Password:  "123",           // Too short password
@@ -175,10 +175,7 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				LastName:  "Doe",
 				Role:      "member",
 			},
-			mockSetup: func(service *MockUserService, _ uuid.UUID) {
-				service.On("CreateUser", mock.Anything, mock.AnythingOfType("dto.CreateUserDTO")).
-					Return(nil, services.ErrValidationFailed)
-			},
+			mockSetup:      func(_ *MockUserService, _ uuid.UUID) {},
 			expectedStatus: http.StatusUnprocessableEntity,
 			expectedBody: func(t *testing.T, body string) {
 				var response handlers.ErrorResponse
@@ -193,10 +190,7 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				Email: "test@example.com",
 				// Missing password, name, etc.
 			},
-			mockSetup: func(service *MockUserService, _ uuid.UUID) {
-				service.On("CreateUser", mock.Anything, mock.AnythingOfType("dto.CreateUserDTO")).
-					Return(nil, services.ErrValidationFailed)
-			},
+			mockSetup:      func(_ *MockUserService, _ uuid.UUID) {},
 			expectedStatus: http.StatusUnprocessableEntity,
 			expectedBody: func(t *testing.T, body string) {
 				var response handlers.ErrorResponse
@@ -214,16 +208,33 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				LastName:  "Doe",
 				Role:      "member",
 			},
-			mockSetup: func(service *MockUserService, _ uuid.UUID) {
-				service.On("CreateUser", mock.Anything, mock.AnythingOfType("dto.CreateUserDTO")).
-					Return(nil, services.ErrValidationFailed)
-			},
+			mockSetup:      func(_ *MockUserService, _ uuid.UUID) {},
 			expectedStatus: http.StatusUnprocessableEntity,
 			expectedBody: func(t *testing.T, body string) {
 				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
 				require.NoError(t, err)
 				assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
+			},
+		},
+		{
+			name: "Error - Unknown role",
+			requestBody: handlers.CreateUserRequest{
+				Email:     "test@example.com",
+				Password:  "password123",
+				FirstName: "John",
+				LastName:  "Doe",
+				Role:      "superadmin",
+			},
+			mockSetup:      func(_ *MockUserService, _ uuid.UUID) {},
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedBody: func(t *testing.T, body string) {
+				var response handlers.ErrorResponse
+				err := json.Unmarshal([]byte(body), &response)
+				require.NoError(t, err)
+				assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
+				require.Len(t, response.Error.Details, 1)
+				assert.Equal(t, "role", response.Error.Details[0].Field)
 			},
 		},
 		{

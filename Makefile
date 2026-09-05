@@ -111,13 +111,13 @@ docker-build:
 .PHONY: docker-up
 docker-up:
 	@echo "Starting Docker container..."
-	@mkdir -p $(DATA_DIR) $(DATA_DIR)/backups
+	@mkdir -p $(DATA_DIR) $(DATA_DIR)/data $(DATA_DIR)/backups
 	@$(DOCKER_COMPOSE) up
 
 .PHONY: docker-up-d
 docker-up-d:
 	@echo "Starting Docker container in detached mode..."
-	@mkdir -p $(DATA_DIR) $(DATA_DIR)/backups
+	@mkdir -p $(DATA_DIR) $(DATA_DIR)/data $(DATA_DIR)/backups
 	@$(DOCKER_COMPOSE) up -d
 
 .PHONY: docker-down

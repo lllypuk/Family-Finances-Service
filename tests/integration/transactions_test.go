@@ -464,6 +464,18 @@ func TestTransactionHandler_Integration(t *testing.T) {
 
 		assert.Equal(t, http.StatusNotFound, getRec.Code)
 	})
+
+	t.Run("DeleteTransaction_NotFound", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
+		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/transactions/%s", uuid.New()), nil)
+		testServer.Auth(t).Apply(req)
+		rec := httptest.NewRecorder()
+
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNotFound, rec.Code, "тело: %s", rec.Body.String())
+	})
 }
 
 func TestTransactionHandler_Integration_Filters(t *testing.T) {

@@ -63,6 +63,7 @@ const (
 	ErrMessageCategoryNotFound   = "Category not found"
 
 	// fieldBody — значение ErrorDetail.Field для ошибок, не привязанных к полю.
-	fieldBody = "body"
-	fieldRole = "role"
+	fieldBody     = "body"
+	fieldRole     = "role"
+	fieldCurrency = "currency"
 )
