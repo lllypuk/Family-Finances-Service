@@ -58,7 +58,7 @@ DELETE /api/v1/transactions/{id}
 | 400 | Тело не парсится (не валидация — она `422`) |
 | 401 | `UNAUTHORIZED` / `INVALID_CREDENTIALS` |
 | 403 | `FORBIDDEN` — роль не подходит |
-| 404 | `NOT_FOUND` |
+| 404 | `NOT_FOUND` (неизвестный путь) / `<ENTITY>_NOT_FOUND` (нет записи) |
 | 409 | `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`, `EMAIL_TAKEN`, `CATEGORY_IN_USE` |
 | 422 | `VALIDATION_ERROR` — поля в `error.details` |
 | 429 | `RATE_LIMITED` + `Retry-After` |

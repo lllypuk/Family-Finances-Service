@@ -1,14 +1,14 @@
 ---
 name: migrate-create
-description: Create a new database migration with up/down SQL files
+description: Add a schema change to the consolidated migration files
 disable-model-invocation: true
 argument-hint: [migration_name]
 allowed-tools: Bash(make migrate-create *)
 ---
 
-# Create Database Migration
+# Add a Database Migration
 
-Generate new migration files for database schema changes.
+Guide for changing the schema in the consolidated migration files.
 
 ## Usage
 
@@ -18,17 +18,19 @@ make migrate-create NAME=add_user_preferences
 
 Replace `add_user_preferences` with a descriptive name for your migration.
 
-## What Gets Created
+## What Happens
 
-Two files in `migrations/` directory:
+`make migrate-create` creates nothing: the project keeps the whole schema in two consolidated files. The
+target prints the three steps to follow by hand:
 
-1. **Up migration**: `YYYYMMDDHHMMSS_add_user_preferences.up.sql`
-   - Contains SQL to apply the change
-   - Executed when migrating forward
+1. Append the new DDL to the end of `migrations/001_consolidated.up.sql`
+2. Add the matching `DROP` statements to the front of `migrations/001_consolidated.down.sql` (reverse order)
+3. Recreate the local database — an already-migrated DB ignores edits to `001`:
+   ```bash
+   make db-reset && make run-local
+   ```
 
-2. **Down migration**: `YYYYMMDDHHMMSS_add_user_preferences.down.sql`
-   - Contains SQL to revert the change
-   - Executed when rolling back
+Also add any new table to `CleanTables` in `internal/testhelpers/sqlite.go`.
 
 ## Migration Naming Conventions
 
@@ -48,7 +50,7 @@ Use descriptive names that indicate the change:
 
 ## Example Migration Content
 
-### Up Migration (`*_add_user_preferences.up.sql`)
+### Up (appended to `001_consolidated.up.sql`)
 ```sql
 -- Add user preferences column
 ALTER TABLE users ADD COLUMN preferences TEXT DEFAULT '{}';
@@ -57,7 +59,7 @@ ALTER TABLE users ADD COLUMN preferences TEXT DEFAULT '{}';
 CREATE INDEX idx_users_preferences ON users(preferences);
 ```
 
-### Down Migration (`*_add_user_preferences.down.sql`)
+### Down (prepended to `001_consolidated.down.sql`)
 ```sql
 -- Remove index
 DROP INDEX IF EXISTS idx_users_preferences;
@@ -77,26 +79,25 @@ ALTER TABLE users DROP COLUMN preferences;
 ## Automatic Execution
 
 Migrations run automatically:
-- **On app startup**: Both `make run-local` and `make docker-up`
-- **In order**: Sorted by timestamp prefix
-- **Once only**: Tracks applied migrations to avoid re-running
+- **On startup**: `internal.OpenDatabase` — the server, `make docker-up`, and the CLI `setup`/`reset-password`
+- **Once only**: golang-migrate records the applied version, so edits to `001` need `make db-reset`
 
 ## Migration Workflow
 
-1. **Create migration files**:
+1. **Read the reminder**:
    ```bash
    make migrate-create NAME=add_budget_categories
    ```
 
 2. **Edit up migration**:
-   Add SQL to apply changes in `migrations/*_add_budget_categories.up.sql`
+   Append SQL to `migrations/001_consolidated.up.sql`
 
 3. **Edit down migration**:
-   Add SQL to revert changes in `migrations/*_add_budget_categories.down.sql`
+   Prepend the reverting SQL to `migrations/001_consolidated.down.sql`
 
 4. **Test locally**:
    ```bash
-   make run-local  # Applies migrations automatically
+   make db-reset && make run-local
    ```
 
 5. **Verify in database**:

@@ -101,8 +101,10 @@ make run-local                # localhost:8080, SQLite at ./data/budget.db
 ### Create the family and log in
 
 The family and its first admin are created from the CLI, not over HTTP. Run it from the repo root with the same
-`DATABASE_PATH` the server uses (default `./data/budget.db`; in Docker: `docker compose … exec app
-/app/family-budget-service setup …`):
+`DATABASE_PATH` the server uses (default `./data/budget.db`). In Docker the service is `family-budget` and
+`exec` needs `-T` so the password pipe reaches stdin:
+`printf 'Admin1234!\n' | docker compose --project-directory . -f docker/docker-compose.yml exec -T family-budget
+/app/family-budget-service setup … --password-stdin`.
 
 ```bash
 printf 'Admin1234!\n' | go run ./cmd/server setup \

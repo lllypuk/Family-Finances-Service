@@ -18,7 +18,7 @@ info:
     - Ошибка всегда одной формы: `{"error": {...}, "meta": {...}}` (A-08).
 
     Коды ошибок: `INVALID_REQUEST` / `INVALID_ID` (400 — тело или id не разобрались),
-    `UNAUTHORIZED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404),
+    `UNAUTHORIZED` (401), `FORBIDDEN` (403), `NOT_FOUND` / `<ENTITY>_NOT_FOUND` (404),
     `VALIDATION_ERROR` (422 — тело или query-параметры не прошли проверку, поля в `error.details`),
     `SETUP_REQUIRED` / `CURRENCY_LOCKED` / `LAST_ADMIN` / `CANNOT_DEACTIVATE_SELF` (409),
     `RATE_LIMITED` (429, с `Retry-After`), `INTERNAL_ERROR` (500).
@@ -308,7 +308,8 @@ paths:
         Только admin. Деактивация (`is_active: false`) отзывает все сессии пользователя (A-04).
         Понижение роли или деактивация последнего активного админа — `409 LAST_ADMIN`;
         деактивация себя — `409 CANNOT_DEACTIVATE_SELF`. Оба поля в одном запросе
-        применяются по очереди: сначала роль, затем активность.
+        применяются по очереди: сначала роль, затем активность; если второй шаг отвечает
+        `409`, изменение роли уже сохранено — ответ описывает только не применённый шаг.
       requestBody:
         required: true
         content:
@@ -934,7 +935,9 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     NotFound:
-      description: Объект не найден (`NOT_FOUND`)
+      description: |
+        Объект не найден: `NOT_FOUND` для неизвестного пути, `<ENTITY>_NOT_FOUND`
+        (`USER_NOT_FOUND`, `SESSION_NOT_FOUND`, `CATEGORY_NOT_FOUND`, …) для отсутствующей записи
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }

@@ -31,9 +31,22 @@ make docker-logs
 make docker-down
 ```
 
+### Create the family (first start only)
+
+The container serves only the JSON API; until the family exists `/health` reports `setup_complete:false`
+and `POST /api/v1/auth/login` answers `409 SETUP_REQUIRED`. Bootstrap it inside the container
+(`-T`: the password comes through stdin, no TTY):
+
+```bash
+printf 'Admin1234!\n' | docker compose --project-directory . -f docker/docker-compose.yml \
+  exec -T family-budget /app/family-budget-service setup \
+  --family 'Test Family' --currency RUB --timezone Europe/Moscow \
+  --email admin@test.com --first-name Admin --last-name Test --password-stdin
+```
+
 ## What Gets Started
 
-- **Application**: Go web service on configured port (default: 8080)
+- **Application**: Go JSON API on configured port (default: 8080)
 - **Database**: SQLite at `./data/budget.db` (persisted in Docker volume)
 - **Health check**: Automatic container health monitoring via `/health` endpoint
 - **Auto-migrations**: Database schema applied on startup
@@ -94,7 +107,7 @@ make docker-logs -f
 The container includes automatic health monitoring:
 - **Endpoint**: `/health`
 - **Interval**: 30 seconds
-- **Timeout**: 10 seconds
+- **Timeout**: 3 seconds
 - **Retries**: 3
 
 Check health status:
@@ -102,9 +115,9 @@ Check health status:
 curl http://localhost:8080/health
 ```
 
-Expected response:
+Expected response (`503` only when a check fails; a missing family keeps it `200`):
 ```json
-{"status":"healthy","timestamp":"2026-01-30T10:45:00Z"}
+{"status":"healthy","version":"v0.1.0","setup_complete":true,"timestamp":"2026-09-05T10:45:00Z","checks":{"sqlite":{"status":"healthy"},"setup":{"status":"healthy"}}}
 ```
 
 ## Troubleshooting

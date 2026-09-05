@@ -108,10 +108,9 @@ make docker-up
 Migrations run automatically when the application starts:
 
 ```go
-// In internal/run.go
-migrationManager := infrastructure.NewMigrationManager(dbURL, "./migrations")
-if err := migrationManager.Up(); err != nil {
-    return fmt.Errorf("migration failed: %w", err)
+// internal/bootstrap.go — internal.OpenDatabase, общий для сервера и CLI (setup, reset-password)
+if err = infrastructure.NewMigrationManager(dbURL, migrationsDir).Up(); err != nil {
+    return nil, fmt.Errorf("failed to run migrations: %w", err)
 }
 ```
 
@@ -218,6 +217,7 @@ SELECT * FROM schema_migrations;
 | | - Performance indexes | |
 | | - Automatic timestamp triggers | |
 | | - User invitation system | |
+| 001 | Bearer auth (plan 03): `sessions` replaces `user_sessions`; `families.singleton` UNIQUE | 2026-09-05 |
 
 ## See Also
 
