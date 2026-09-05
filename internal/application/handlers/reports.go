@@ -114,17 +114,18 @@ func (h *ReportHandler) ExportReport(c echo.Context) error {
 }
 
 func (h *ReportHandler) GetReports(c echo.Context) error {
-	if h.reportService != nil {
-		return h.getReportsViaService(c)
+	page, err := parsePagination(c)
+	if err != nil {
+		return ignoreWritten(err)
 	}
 
-	// Получаем параметры запроса
+	if h.reportService != nil {
+		return h.getReportsViaService(c, page)
+	}
+
 	userIDParam := c.QueryParam("user_id")
 
 	var reports []*report.Report
-	var err error
-
-	// Если указан пользователь, получаем отчеты для конкретного пользователя
 	if userIDParam != "" {
 		userID, parseErr := uuid.Parse(userIDParam)
 		if parseErr != nil {
@@ -132,7 +133,6 @@ func (h *ReportHandler) GetReports(c echo.Context) error {
 		}
 		reports, err = h.repositories.Report.GetByUserID(c.Request().Context(), userID)
 	} else {
-		// Иначе получаем все отчеты семьи
 		reports, err = h.repositories.Report.GetAll(c.Request().Context())
 	}
 
@@ -140,12 +140,7 @@ func (h *ReportHandler) GetReports(c echo.Context) error {
 		return respondError(c, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch reports")
 	}
 
-	var response []ReportResponse
-	for _, r := range reports {
-		response = append(response, newReportResponse(r))
-	}
-
-	return respondAPI(c, http.StatusOK, response)
+	return respondList(c, buildReportListResponse(pageSlice(reports, page)), page, len(reports))
 }
 
 func (h *ReportHandler) GetReportByID(c echo.Context) error {
@@ -180,7 +175,7 @@ func (h *ReportHandler) DeleteReport(c echo.Context) error {
 	}, "Report")
 }
 
-func (h *ReportHandler) getReportsViaService(c echo.Context) error {
+func (h *ReportHandler) getReportsViaService(c echo.Context, page pageParams) error {
 	userIDParam := c.QueryParam("user_id")
 
 	var reports []*report.Report
@@ -199,12 +194,16 @@ func (h *ReportHandler) getReportsViaService(c echo.Context) error {
 		return respondError(c, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch reports")
 	}
 
+	return respondList(c, buildReportListResponse(pageSlice(reports, page)), page, len(reports))
+}
+
+func buildReportListResponse(reports []*report.Report) []ReportResponse {
 	response := make([]ReportResponse, 0, len(reports))
 	for _, r := range reports {
 		response = append(response, newReportResponse(r))
 	}
 
-	return respondAPI(c, http.StatusOK, response)
+	return response
 }
 
 func (h *ReportHandler) getReportByIDViaService(c echo.Context) error {

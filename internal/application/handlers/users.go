@@ -252,17 +252,22 @@ func toUserResponse(u *user.User) UserResponse {
 
 // GetUsers отдаёт всех пользователей семьи; группа /users закрыта adminOnly.
 func (h *UserHandler) GetUsers(c echo.Context) error {
+	page, pageErr := parsePagination(c)
+	if pageErr != nil {
+		return ignoreWritten(pageErr)
+	}
+
 	users, err := h.userService.GetUsers(c.Request().Context())
 	if err != nil {
 		return h.handleServiceError(c, err)
 	}
 
-	response := make([]UserResponse, 0, len(users))
-	for _, u := range users {
+	response := make([]UserResponse, 0, page.Limit)
+	for _, u := range pageSlice(users, page) {
 		response = append(response, toUserResponse(u))
 	}
 
-	return respondAPI(c, http.StatusOK, response)
+	return respondList(c, response, page, len(users))
 }
 
 // PatchUser меняет роль пользователя. Понижение последнего администратора

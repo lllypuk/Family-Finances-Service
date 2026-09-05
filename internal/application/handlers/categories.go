@@ -135,6 +135,11 @@ func (h *CategoryHandler) CreateCategory(c echo.Context) error {
 }
 
 func (h *CategoryHandler) GetCategories(c echo.Context) error {
+	page, pageErr := parsePagination(c)
+	if pageErr != nil {
+		return ignoreWritten(pageErr)
+	}
+
 	// Получаем параметры запроса
 	typeParam := c.QueryParam("type")
 
@@ -162,19 +167,12 @@ func (h *CategoryHandler) GetCategories(c echo.Context) error {
 	}
 
 	// Convert domain models to API responses
-	var response []dto.CategoryAPIResponse
-	for _, cat := range categories {
+	response := make([]dto.CategoryAPIResponse, 0, page.Limit)
+	for _, cat := range pageSlice(categories, page) {
 		response = append(response, dto.ToCategoryAPIResponse(cat))
 	}
 
-	return c.JSON(http.StatusOK, APIResponse[[]dto.CategoryAPIResponse]{
-		Data: response,
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+	return respondList(c, response, page, len(categories))
 }
 
 func (h *CategoryHandler) GetCategoryByID(c echo.Context) error {

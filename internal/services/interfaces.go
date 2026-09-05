@@ -69,6 +69,9 @@ type TransactionService interface {
 	CountTransactions(ctx context.Context, filter dto.TransactionFilterDTO) (int, error)
 	UpdateTransaction(ctx context.Context, id uuid.UUID, req dto.UpdateTransactionDTO) (*transaction.Transaction, error)
 	DeleteTransaction(ctx context.Context, id uuid.UUID) error
+	// BulkDelete удаляет транзакции одним запросом и возвращает число удалённых;
+	// отсутствующие id игнорируются.
+	BulkDelete(ctx context.Context, ids []uuid.UUID) (int, error)
 
 	// Business Operations
 	GetTransactionsByCategory(
@@ -99,6 +102,8 @@ type BudgetService interface {
 	CreateBudget(ctx context.Context, req dto.CreateBudgetDTO) (*budget.Budget, error)
 	GetBudgetByID(ctx context.Context, id uuid.UUID) (*budget.Budget, error)
 	GetAllBudgets(ctx context.Context, filter dto.BudgetFilterDTO) ([]*budget.Budget, error) // Single family
+	// GetBudgetsPage — та же выборка плюс общее число подходящих записей, для meta.pagination.
+	GetBudgetsPage(ctx context.Context, filter dto.BudgetFilterDTO) ([]*budget.Budget, int, error)
 	UpdateBudget(ctx context.Context, id uuid.UUID, req dto.UpdateBudgetDTO) (*budget.Budget, error)
 	DeleteBudget(ctx context.Context, id uuid.UUID) error
 

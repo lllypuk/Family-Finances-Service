@@ -159,12 +159,12 @@
   `budgets_test.go`, `reports.go`, `types.go`, `helpers.go`, `internal/services/transaction_service.go`,
   `internal/services/interfaces.go`, `tests/integration/transactions_test.go`, `docs/api/openapi.yaml`
 
-- [ ] `TransactionService.BulkDelete(ctx, ids)` — одна транзакция БД, возвращает число удалённых; веб-`bulk-delete` использует его
-- [ ] `POST /api/v1/transactions/bulk-delete`
-- [ ] `PaginationMeta{limit, offset, total}` в `ResponseMeta`; хелпер `parsePagination(c)` с константами `defaultLimit=50`, `maxLimit=200`
-- [ ] транзакции: `total` из `CountTransactions`; бюджеты и отчёты: `limit/offset` в репозиторные фильтры (сейчас бюджеты выбираются страницами по 100 внутри обработчика — убрать); users, categories, sessions, backups — `total` по длине выборки
-- [ ] тесты: `total` совпадает с числом созданных, `limit=500` → 400 `INVALID_QUERY_PARAM` (становится 422 в задаче 7), `offset` за пределом → пустой `data` и верный `total`; bulk-delete: часть id не существует → удалены существующие
-- [ ] `openapi.yaml` обновлён
+- [x] `TransactionService.BulkDelete(ctx, ids)` — одна транзакция БД, возвращает число удалённых; веб-`bulk-delete` использует его
+- [x] `POST /api/v1/transactions/bulk-delete`
+- [x] `PaginationMeta{limit, offset, total}` в `ResponseMeta`; хелпер `parsePagination(c)` с константами `defaultLimit=50`, `maxLimit=200`
+- [x] транзакции: `total` из `CountTransactions`; бюджеты и отчёты: `limit/offset` в репозиторные фильтры (сейчас бюджеты выбираются страницами по 100 внутри обработчика — убрать); users, categories, sessions, backups — `total` по длине выборки
+- [x] тесты: `total` совпадает с числом созданных, `limit=500` → 400 `INVALID_QUERY_PARAM` (становится 422 в задаче 7), `offset` за пределом → пустой `data` и верный `total`; bulk-delete: часть id не существует → удалены существующие
+- [x] `openapi.yaml` обновлён
 
 ### Task 7: Единый envelope ошибок
 

@@ -31,17 +31,22 @@ func (h *BackupHandler) CreateBackup(c echo.Context) error {
 
 // ListBackups отдаёт файлы каталога бэкапов, свежие первыми.
 func (h *BackupHandler) ListBackups(c echo.Context) error {
+	page, pageErr := parsePagination(c)
+	if pageErr != nil {
+		return ignoreWritten(pageErr)
+	}
+
 	backups, err := h.backupService.ListBackups(c.Request().Context())
 	if err != nil {
 		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 
-	responses := make([]BackupResponse, 0, len(backups))
-	for _, info := range backups {
+	responses := make([]BackupResponse, 0, page.Limit)
+	for _, info := range pageSlice(backups, page) {
 		responses = append(responses, toBackupResponse(info))
 	}
 
-	return respondAPI(c, http.StatusOK, responses)
+	return respondList(c, responses, page, len(backups))
 }
 
 // DownloadBackup отдаёт файл вложением; имя проверяет сервис.

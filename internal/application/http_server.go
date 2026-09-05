@@ -240,6 +240,7 @@ func (s *HTTPServer) setupRoutes() {
 	transactions := api.Group("/transactions", financeAccess)
 	transactions.POST("", s.transactionHandler.CreateTransaction)
 	transactions.GET("", s.transactionHandler.GetTransactions)
+	transactions.POST("/bulk-delete", s.transactionHandler.BulkDeleteTransactions)
 	transactions.GET("/:id", s.transactionHandler.GetTransactionByID)
 	transactions.PUT("/:id", s.transactionHandler.UpdateTransaction)
 	transactions.DELETE("/:id", s.transactionHandler.DeleteTransaction)

@@ -14,9 +14,17 @@ type APIResponse[T any] struct {
 }
 
 type ResponseMeta struct {
-	RequestID string    `json:"request_id"`
-	Timestamp time.Time `json:"timestamp"`
-	Version   string    `json:"version"`
+	RequestID  string          `json:"request_id"`
+	Timestamp  time.Time       `json:"timestamp"`
+	Version    string          `json:"version"`
+	Pagination *PaginationMeta `json:"pagination,omitempty"`
+}
+
+// PaginationMeta сопровождает каждый ответ-список (A-08); Total считается без учёта Limit/Offset.
+type PaginationMeta struct {
+	Limit  int `json:"limit"`
+	Offset int `json:"offset"`
+	Total  int `json:"total"`
 }
 
 type ValidationError struct {
@@ -146,6 +154,15 @@ type TransactionResponse struct {
 	Tags        []string  `json:"tags"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// BulkDeleteRequest — тело POST /transactions/bulk-delete; неизвестные id игнорируются.
+type BulkDeleteRequest struct {
+	IDs []uuid.UUID `json:"ids" validate:"required,min=1,max=200"`
+}
+
+type BulkDeleteResponse struct {
+	Deleted int `json:"deleted"`
 }
 
 type TransactionFilterParams struct {

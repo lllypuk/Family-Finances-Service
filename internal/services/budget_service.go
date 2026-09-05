@@ -150,22 +150,32 @@ func (s *BudgetServiceImpl) GetAllBudgets(
 	ctx context.Context,
 	filter dto.BudgetFilterDTO,
 ) ([]*budget.Budget, error) {
+	budgets, _, err := s.GetBudgetsPage(ctx, filter)
+	return budgets, err
+}
+
+// GetBudgetsPage возвращает страницу бюджетов и общее число подходящих под фильтр
+// записей без учёта Limit/Offset — за один проход, поскольку фильтрация идёт в памяти.
+func (s *BudgetServiceImpl) GetBudgetsPage(
+	ctx context.Context,
+	filter dto.BudgetFilterDTO,
+) ([]*budget.Budget, int, error) {
 	if err := s.validator.Struct(filter); err != nil {
-		return nil, fmt.Errorf("validation failed: %w", err)
+		return nil, 0, fmt.Errorf("validation failed: %w", err)
 	}
 
 	// Validate filter ranges
 	if err := filter.ValidateDateRange(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if err := filter.ValidateAmountRange(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	// Get budgets based on filter criteria
 	budgets, err := s.getBudgetsWithFilter(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get budgets: %w", err)
+		return nil, 0, fmt.Errorf("failed to get budgets: %w", err)
 	}
 
 	// Recalculate spent amounts for all budgets
@@ -175,7 +185,9 @@ func (s *BudgetServiceImpl) GetAllBudgets(
 		}
 	}
 
-	return s.applyBudgetFilters(budgets, filter), nil
+	matched := s.filterBudgets(budgets, filter)
+
+	return paginateBudgets(matched, filter), len(matched), nil
 }
 
 // UpdateBudget updates an existing budget
@@ -436,7 +448,7 @@ func (s *BudgetServiceImpl) getBudgetsWithFilter(
 	return s.budgetRepo.GetAll(ctx)
 }
 
-func (s *BudgetServiceImpl) applyBudgetFilters(budgets []*budget.Budget, filter dto.BudgetFilterDTO) []*budget.Budget {
+func (s *BudgetServiceImpl) filterBudgets(budgets []*budget.Budget, filter dto.BudgetFilterDTO) []*budget.Budget {
 	var filtered []*budget.Budget
 
 	for _, b := range budgets {
@@ -445,19 +457,22 @@ func (s *BudgetServiceImpl) applyBudgetFilters(budgets []*budget.Budget, filter 
 		}
 	}
 
-	// Apply pagination
+	return filtered
+}
+
+func paginateBudgets(budgets []*budget.Budget, filter dto.BudgetFilterDTO) []*budget.Budget {
 	start := filter.Offset
 	end := start + filter.Limit
 
-	if start >= len(filtered) {
+	if start >= len(budgets) {
 		return []*budget.Budget{}
 	}
 
-	if end > len(filtered) {
-		end = len(filtered)
+	if end > len(budgets) {
+		end = len(budgets)
 	}
 
-	return filtered[start:end]
+	return budgets[start:end]
 }
 
 func (s *BudgetServiceImpl) budgetMatchesFilter(b *budget.Budget, filter dto.BudgetFilterDTO) bool {

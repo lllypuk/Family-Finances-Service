@@ -607,6 +607,44 @@ func (r *SQLiteRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// DeleteBulk удаляет транзакции семьи одним запросом; отсутствующие id просто не попадают
+// в rows affected, поэтому повтор того же вызова вернёт 0.
+func (r *SQLiteRepository) DeleteBulk(ctx context.Context, ids []uuid.UUID) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get family ID: %w", err)
+	}
+
+	args := make([]any, 0, len(ids)+1)
+	args = append(args, familyID.String())
+	for _, id := range ids {
+		if validateErr := validation.ValidateUUID(id); validateErr != nil {
+			return 0, fmt.Errorf("invalid id parameter: %w", validateErr)
+		}
+		args = append(args, sqlitehelpers.UUIDToString(id))
+	}
+
+	//nolint:gosec // G202: в запрос подставляются только плейсхолдеры "?", значения идут через args
+	query := `DELETE FROM transactions WHERE family_id = ? AND id IN (` +
+		strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",") + `)`
+
+	result, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete transactions: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	return int(rowsAffected), nil
+}
+
 // GetSummary returns transaction summary for a family
 func (r *SQLiteRepository) GetSummary(
 	ctx context.Context,

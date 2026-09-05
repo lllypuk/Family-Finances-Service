@@ -238,6 +238,11 @@ func (m *MockTransactionService) DeleteTransaction(ctx context.Context, id uuid.
 }
 
 //nolint:revive // test mock
+func (m *MockTransactionService) BulkDelete(ctx context.Context, ids []uuid.UUID) (int, error) {
+	return 0, nil
+}
+
+//nolint:revive // test mock
 func (m *MockTransactionService) BulkCategorizeTransactions(
 	ctx context.Context,
 	transactionIDs []uuid.UUID,
@@ -368,6 +373,14 @@ func (m *MockBudgetService) UpdateBudgetSpent(ctx context.Context, budgetID uuid
 //nolint:revive // test mock
 func (m *MockBudgetService) GetAllBudgets(ctx context.Context, filter dto.BudgetFilterDTO) ([]*budget.Budget, error) {
 	return nil, nil
+}
+
+//nolint:revive // test mock
+func (m *MockBudgetService) GetBudgetsPage(
+	ctx context.Context,
+	filter dto.BudgetFilterDTO,
+) ([]*budget.Budget, int, error) {
+	return nil, 0, nil
 }
 
 //nolint:revive // test mock

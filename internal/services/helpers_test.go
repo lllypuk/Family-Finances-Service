@@ -279,6 +279,11 @@ func (m *MockTransactionRepository) Delete(ctx context.Context, id uuid.UUID) er
 	return args.Error(0)
 }
 
+func (m *MockTransactionRepository) DeleteBulk(ctx context.Context, ids []uuid.UUID) (int, error) {
+	args := m.Called(ctx, ids)
+	return args.Int(0), args.Error(1)
+}
+
 func (m *MockTransactionRepository) GetTotalByCategory(
 	ctx context.Context,
 	categoryID uuid.UUID,
@@ -414,6 +419,11 @@ func (m *MockTransactionService) DeleteTransaction(ctx context.Context, id uuid.
 	return args.Error(0)
 }
 
+func (m *MockTransactionService) BulkDelete(ctx context.Context, ids []uuid.UUID) (int, error) {
+	args := m.Called(ctx, ids)
+	return args.Int(0), args.Error(1)
+}
+
 func (m *MockTransactionService) GetTransactionsByCategory(
 	ctx context.Context,
 	categoryID uuid.UUID,
@@ -484,6 +494,17 @@ func (m *MockBudgetService) GetAllBudgets(ctx context.Context, filter dto.Budget
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*budget.Budget), args.Error(1)
+}
+
+func (m *MockBudgetService) GetBudgetsPage(
+	ctx context.Context,
+	filter dto.BudgetFilterDTO,
+) ([]*budget.Budget, int, error) {
+	args := m.Called(ctx, filter)
+	if args.Get(0) == nil {
+		return nil, 0, args.Error(2)
+	}
+	return args.Get(0).([]*budget.Budget), args.Int(1), args.Error(2)
 }
 
 func (m *MockBudgetService) UpdateBudget(

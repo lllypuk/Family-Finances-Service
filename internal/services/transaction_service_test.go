@@ -341,6 +341,59 @@ func TestTransactionService_DeleteTransaction_Success(t *testing.T) {
 	budgetRepo.AssertExpectations(t)
 }
 
+func TestTransactionService_BulkDelete_SkipsUnknownIDs(t *testing.T) {
+	service, txRepo, budgetRepo, _, _ := setupTransactionService()
+	ctx := context.Background()
+
+	categoryID := uuid.New()
+	existingTx := createTestTransaction(uuid.New(), 100.50, transaction.TypeExpense, time.Now())
+	existingTx.CategoryID = categoryID
+	missingID := uuid.New()
+	testBudget := createTestBudget(uuid.New(), 500.00, categoryID)
+
+	ids := []uuid.UUID{existingTx.ID, missingID}
+
+	txRepo.On("GetByID", ctx, existingTx.ID).Return(existingTx, nil)
+	txRepo.On("GetByID", ctx, missingID).Return(nil, errors.New("not found"))
+	txRepo.On("DeleteBulk", ctx, ids).Return(1, nil)
+	budgetRepo.On("GetActiveBudgets", ctx).Return([]*budget.Budget{testBudget}, nil)
+	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
+
+	deleted, err := service.BulkDelete(ctx, ids)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, deleted)
+	assert.InDelta(t, -existingTx.Amount, testBudget.Spent, 0.001)
+
+	txRepo.AssertExpectations(t)
+	budgetRepo.AssertExpectations(t)
+}
+
+func TestTransactionService_BulkDelete_EmptyIDs(t *testing.T) {
+	service, txRepo, _, _, _ := setupTransactionService()
+
+	deleted, err := service.BulkDelete(context.Background(), nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, 0, deleted)
+	txRepo.AssertNotCalled(t, "DeleteBulk", mock.Anything, mock.Anything)
+}
+
+func TestTransactionService_BulkDelete_RepositoryError(t *testing.T) {
+	service, txRepo, _, _, _ := setupTransactionService()
+	ctx := context.Background()
+
+	id := uuid.New()
+	txRepo.On("GetByID", ctx, id).Return(nil, errors.New("not found"))
+	txRepo.On("DeleteBulk", ctx, []uuid.UUID{id}).Return(0, errors.New("db is gone"))
+
+	deleted, err := service.BulkDelete(ctx, []uuid.UUID{id})
+
+	require.Error(t, err)
+	assert.Equal(t, 0, deleted)
+	txRepo.AssertExpectations(t)
+}
+
 // Test BulkCategorizeTransactions
 func TestTransactionService_BulkCategorizeTransactions_Success(t *testing.T) {
 	service, txRepo, budgetRepo, categoryRepo, _ := setupTransactionService()

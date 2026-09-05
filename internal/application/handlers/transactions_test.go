@@ -71,6 +71,11 @@ func (m *MockTransactionRepository) Delete(ctx context.Context, id uuid.UUID) er
 	return args.Error(0)
 }
 
+func (m *MockTransactionRepository) DeleteBulk(ctx context.Context, ids []uuid.UUID) (int, error) {
+	args := m.Called(ctx, ids)
+	return args.Int(0), args.Error(1)
+}
+
 func (m *MockTransactionRepository) GetTotalByDateRange(
 	ctx context.Context,
 	startDate, endDate time.Time,
@@ -419,6 +424,8 @@ func TestTransactionHandler_GetTransactions_Success(t *testing.T) {
 
 	mockRepo.On("GetByFilter", mock.Anything, mock.AnythingOfType("transaction.Filter")).
 		Return(expectedTransactions, nil)
+	mockRepo.On("CountByFilter", mock.Anything, mock.AnythingOfType("transaction.Filter")).
+		Return(len(expectedTransactions), nil)
 
 	e := echo.New()
 	httpReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/transactions?family_id=%s", familyID), nil)
@@ -503,6 +510,8 @@ func TestTransactionHandler_GetTransactions_WithFilters(t *testing.T) {
 
 	mockRepo.On("GetByFilter", mock.Anything, mock.AnythingOfType("transaction.Filter")).
 		Return([]*transaction.Transaction{}, nil)
+	mockRepo.On("CountByFilter", mock.Anything, mock.AnythingOfType("transaction.Filter")).
+		Return(0, nil)
 
 	e := echo.New()
 	query := url.Values{}
@@ -849,6 +858,8 @@ func BenchmarkTransactionHandler_GetTransactions(b *testing.B) {
 	// Setup mock to return empty slice for all calls
 	mockRepo.On("GetByFilter", mock.Anything, mock.AnythingOfType("transaction.Filter")).
 		Return([]*transaction.Transaction{}, nil)
+	mockRepo.On("CountByFilter", mock.Anything, mock.AnythingOfType("transaction.Filter")).
+		Return(0, nil)
 
 	familyID := uuid.New()
 

@@ -38,6 +38,9 @@ type TransactionRepository interface {
 	CountByFilter(ctx context.Context, filter transaction.Filter) (int, error)
 	Update(ctx context.Context, transaction *transaction.Transaction) error
 	Delete(ctx context.Context, id uuid.UUID) error
+	// DeleteBulk удаляет переданные id одним запросом и возвращает число удалённых строк;
+	// отсутствующие id молча пропускаются.
+	DeleteBulk(ctx context.Context, ids []uuid.UUID) (int, error)
 	GetTotalByCategory(ctx context.Context, categoryID uuid.UUID, transactionType transaction.Type) (float64, error)
 	GetTotalByDateRange(
 		ctx context.Context,
@@ -360,6 +363,43 @@ func (s *TransactionServiceImpl) DeleteTransaction(ctx context.Context, id uuid.
 	}
 
 	return nil
+}
+
+// BulkDelete удаляет транзакции одним запросом и возвращает число фактически удалённых:
+// неизвестные id пропускаются молча. Бюджеты корректируются после удаления, по снимку,
+// снятому до него, — иначе списанные суммы уже не восстановить.
+func (s *TransactionServiceImpl) BulkDelete(ctx context.Context, ids []uuid.UUID) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	expenses := make([]*transaction.Transaction, 0, len(ids))
+	for _, id := range ids {
+		existingTx, err := s.transactionRepo.GetByID(ctx, id)
+		if err != nil {
+			continue
+		}
+		if existingTx.Type == transaction.TypeExpense {
+			expenses = append(expenses, existingTx)
+		}
+	}
+
+	deleted, err := s.transactionRepo.DeleteBulk(ctx, ids)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete transactions: %w", err)
+	}
+
+	for _, tx := range expenses {
+		if budgetErr := s.updateBudgetSpent(ctx, tx.CategoryID, -tx.Amount); budgetErr != nil {
+			s.warnBudgetAdjustment(ctx, "failed to reverse budget spent after bulk delete",
+				slog.String("transaction_id", tx.ID.String()),
+				slog.String("category_id", tx.CategoryID.String()),
+				slog.String("error", budgetErr.Error()),
+			)
+		}
+	}
+
+	return deleted, nil
 }
 
 // GetTransactionsByCategory retrieves transactions for a specific category

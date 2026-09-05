@@ -249,6 +249,7 @@ paths:
                   meta: { $ref: '#/components/schemas/ListMeta' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
     post:
       operationId: createUser
       tags: [users]
@@ -385,6 +386,7 @@ paths:
                   meta: { $ref: '#/components/schemas/ListMeta' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
     post:
       operationId: createCategory
       tags: [categories]
@@ -618,6 +620,7 @@ paths:
                   meta: { $ref: '#/components/schemas/ListMeta' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
     post:
       operationId: createBudget
       tags: [budgets]
@@ -702,6 +705,7 @@ paths:
                   meta: { $ref: '#/components/schemas/ListMeta' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
     post:
       operationId: createReport
       tags: [reports]
@@ -823,6 +827,7 @@ paths:
                   meta: { $ref: '#/components/schemas/ListMeta' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
     post:
       operationId: createBackup
       tags: [backups]

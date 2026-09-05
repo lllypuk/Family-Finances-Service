@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,6 +13,19 @@ import (
 )
 
 const apiVersion = "v1"
+
+const (
+	// defaultLimit — размер страницы, если limit не задан.
+	defaultLimit = 50
+	// maxLimit — потолок страницы на всех списках API (A-08).
+	maxLimit = 200
+)
+
+// pageParams — разобранные limit/offset одного запроса-списка.
+type pageParams struct {
+	Limit  int
+	Offset int
+}
 
 func apiResponseMeta(c echo.Context) ResponseMeta {
 	return ResponseMeta{
@@ -46,6 +60,80 @@ func respondError(
 	}
 
 	return c.JSON(status, resp)
+}
+
+// parsePagination разбирает limit/offset. При выходе за границы ответ 400 уже записан,
+// а вызывающему возвращается errResponseAlreadyWritten — гасится через ignoreWritten.
+func parsePagination(c echo.Context) (pageParams, error) {
+	page := pageParams{Limit: defaultLimit, Offset: 0}
+
+	if limitParam := c.QueryParam("limit"); limitParam != "" {
+		limit, err := strconv.Atoi(limitParam)
+		if err != nil || limit < 1 || limit > maxLimit {
+			return page, writeInvalidQueryParam(c, "limit", limitParam,
+				"must be an integer between 1 and "+strconv.Itoa(maxLimit))
+		}
+		page.Limit = limit
+	}
+
+	if offsetParam := c.QueryParam("offset"); offsetParam != "" {
+		offset, err := strconv.Atoi(offsetParam)
+		if err != nil || offset < 0 {
+			return page, writeInvalidQueryParam(c, "offset", offsetParam, "must be a non-negative integer")
+		}
+		page.Offset = offset
+	}
+
+	return page, nil
+}
+
+func writeInvalidQueryParam(c echo.Context, param, value, reason string) error {
+	if err := respondError(
+		c,
+		http.StatusBadRequest,
+		ErrCodeInvalidQueryParam,
+		"Invalid query parameter",
+		map[string]string{"param": param, "value": value, "reason": reason},
+	); err != nil {
+		return err
+	}
+
+	return errResponseAlreadyWritten
+}
+
+// ignoreWritten гасит sentinel: ответ уже отправлен тем, кто вернул ошибку.
+func ignoreWritten(err error) error {
+	if errors.Is(err, errResponseAlreadyWritten) {
+		return nil
+	}
+
+	return err
+}
+
+// respondList отдаёт список с meta.pagination; data всегда массив, а не null.
+func respondList[T any](c echo.Context, items []T, page pageParams, total int) error {
+	meta := apiResponseMeta(c)
+	meta.Pagination = &PaginationMeta{Limit: page.Limit, Offset: page.Offset, Total: total}
+
+	if items == nil {
+		items = []T{}
+	}
+
+	return c.JSON(http.StatusOK, APIResponse[[]T]{Data: items, Meta: meta})
+}
+
+// pageSlice режет окно [offset, offset+limit) для списков, которые репозиторий отдаёт целиком.
+func pageSlice[T any](items []T, page pageParams) []T {
+	if page.Offset >= len(items) {
+		return []T{}
+	}
+
+	end := page.Offset + page.Limit
+	if end > len(items) {
+		end = len(items)
+	}
+
+	return items[page.Offset:end]
 }
 
 // respondUnauthorized отдаёт 401 в общем формате ошибок API: так отвечает

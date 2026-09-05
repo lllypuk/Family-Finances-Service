@@ -90,18 +90,17 @@ func (h *BudgetHandler) CreateBudget(c echo.Context) error {
 }
 
 func (h *BudgetHandler) GetBudgets(c echo.Context) error {
-	if h.budgetService != nil {
-		return h.getBudgetsViaService(c)
+	page, err := parsePagination(c)
+	if err != nil {
+		return ignoreWritten(err)
 	}
 
-	// Получаем параметры запроса
-	activeOnlyParam := c.QueryParam("active_only")
+	if h.budgetService != nil {
+		return h.getBudgetsViaService(c, page)
+	}
 
 	var budgets []*budget.Budget
-	var err error
-
-	// Если запрашиваются только активные бюджеты
-	if activeOnlyParam == "true" {
+	if c.QueryParam("active_only") == "true" {
 		budgets, err = h.repositories.Budget.GetActiveBudgets(c.Request().Context())
 	} else {
 		budgets, err = h.repositories.Budget.GetAll(c.Request().Context())
@@ -111,25 +110,13 @@ func (h *BudgetHandler) GetBudgets(c echo.Context) error {
 		return respondError(c, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch budgets")
 	}
 
-	var response []BudgetResponse
-	for _, b := range budgets {
-		response = append(response, BudgetResponse{
-			ID:         b.ID,
-			Name:       b.Name,
-			Amount:     b.Amount,
-			Spent:      b.Spent,
-			Remaining:  b.Amount - b.Spent,
-			Period:     string(b.Period),
-			CategoryID: b.CategoryID,
-			StartDate:  b.StartDate,
-			EndDate:    b.EndDate,
-			IsActive:   b.IsActive,
-			CreatedAt:  b.CreatedAt,
-			UpdatedAt:  b.UpdatedAt,
-		})
+	total := len(budgets)
+	response := make([]BudgetResponse, 0, page.Limit)
+	for _, b := range pageSlice(budgets, page) {
+		response = append(response, h.buildBudgetResponse(b))
 	}
 
-	return respondAPI(c, http.StatusOK, response)
+	return respondList(c, response, page, total)
 }
 
 func (h *BudgetHandler) GetBudgetByID(c echo.Context) error {
@@ -280,16 +267,21 @@ func (h *BudgetHandler) createBudgetViaService(c echo.Context, req CreateBudgetR
 	return respondAPI(c, http.StatusCreated, h.buildBudgetResponse(createdBudget))
 }
 
-func (h *BudgetHandler) getBudgetsViaService(c echo.Context) error {
-	activeOnlyParam := c.QueryParam("active_only")
-
+func (h *BudgetHandler) getBudgetsViaService(c echo.Context, page pageParams) error {
 	var budgets []*budget.Budget
+	var total int
 	var err error
 
-	if activeOnlyParam == "true" {
-		budgets, err = h.budgetService.GetActiveBudgets(c.Request().Context(), time.Now())
+	if c.QueryParam("active_only") == "true" {
+		var active []*budget.Budget
+		active, err = h.budgetService.GetActiveBudgets(c.Request().Context(), time.Now())
+		total = len(active)
+		budgets = pageSlice(active, page)
 	} else {
-		budgets, err = h.getAllBudgetsViaService(c)
+		filter := dto.NewBudgetFilterDTO()
+		filter.Limit = page.Limit
+		filter.Offset = page.Offset
+		budgets, total, err = h.budgetService.GetBudgetsPage(c.Request().Context(), filter)
 	}
 	if err != nil {
 		return h.handleBudgetServiceError(c, err, "fetch")
@@ -300,29 +292,7 @@ func (h *BudgetHandler) getBudgetsViaService(c echo.Context) error {
 		response = append(response, h.buildBudgetResponse(b))
 	}
 
-	return respondAPI(c, http.StatusOK, response)
-}
-
-func (h *BudgetHandler) getAllBudgetsViaService(c echo.Context) ([]*budget.Budget, error) {
-	filter := dto.NewBudgetFilterDTO()
-	filter.Limit = 100
-	filter.Offset = 0
-
-	var allBudgets []*budget.Budget
-	for {
-		page, err := h.budgetService.GetAllBudgets(c.Request().Context(), filter)
-		if err != nil {
-			return nil, err
-		}
-
-		allBudgets = append(allBudgets, page...)
-		if len(page) < filter.Limit {
-			break
-		}
-		filter.Offset += filter.Limit
-	}
-
-	return allBudgets, nil
+	return respondList(c, response, page, total)
 }
 
 func (h *BudgetHandler) getBudgetByIDViaService(c echo.Context) error {
