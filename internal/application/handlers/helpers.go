@@ -84,6 +84,12 @@ func bodyDetail(code, message string) ErrorDetail {
 	return ErrorDetail{Field: fieldBody, Message: message, Code: code}
 }
 
+// respondBindError — 400 на тело, которое не разобралось; текст ошибки Bind — в details.
+func respondBindError(c echo.Context, err error) error {
+	return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
+		bodyDetail(ErrCodeInvalidRequest, err.Error()))
+}
+
 // parsePagination разбирает limit/offset. При выходе за границы ответ 422 уже записан,
 // а вызывающему возвращается errResponseAlreadyWritten — гасится через ignoreWritten.
 func parsePagination(c echo.Context) (pageParams, error) {
@@ -251,6 +257,12 @@ func respondValidationErrors(c echo.Context, err error) error {
 		ErrMessageValidationFailed,
 		buildValidationErrors(err)...,
 	)
+}
+
+// respondPasswordPolicyError — 422 на new_password, не прошедший auth.ValidatePassword в сервисе.
+func respondPasswordPolicyError(c echo.Context) error {
+	return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		ErrorDetail{Field: fieldNewPassword, Message: auth.ErrInvalidPassword.Error(), Code: ErrCodeValidationError})
 }
 
 // isNotFoundError отличает «сущности нет» от настоящего сбоя: спека требует 404, а не 500.

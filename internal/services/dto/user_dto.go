@@ -62,7 +62,7 @@ type CreateInviteDTO struct {
 type AcceptInviteDTO struct {
 	Email    string `validate:"required,email,max=254"`
 	Name     string `validate:"required,min=2,max=100"`
-	Password string `validate:"required,password"`
+	Password string `validate:"required"`
 }
 
 // InviteResponseDTO represents the data transfer object for invite responses

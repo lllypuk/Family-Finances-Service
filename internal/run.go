@@ -95,10 +95,11 @@ func NewApplication() (*Application, error) {
 		logger,
 	)
 
-	trustedProxies := config.TrustedProxyRanges()
+	trustedProxies, err := config.TrustedProxyRanges()
+	if err != nil {
+		return nil, err
+	}
 	if config.IsProduction() && len(trustedProxies) == 0 {
-		// За прокси без TRUSTED_PROXIES все клиенты видны как один IP, и лимитер логина
-		// блокирует всех разом.
 		logger.WarnContext(context.Background(),
 			"TRUSTED_PROXIES is empty: X-Forwarded-For is ignored, the login limiter counts every client "+
 				"behind a reverse proxy as one IP")
@@ -112,6 +113,7 @@ func NewApplication() (*Application, error) {
 		WriteTimeout:   config.Server.WriteTimeout,
 		IdleTimeout:    config.Server.IdleTimeout,
 		TrustedProxies: trustedProxies,
+		LoginLimiter:   auth.NewRateLimiter(nil),
 	}
 	app.httpServer = application.NewHTTPServerWithObservability(
 		app.repositories,

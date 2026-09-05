@@ -11,6 +11,7 @@ import (
 
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/user"
+	categoryrepo "family-budget-service/internal/infrastructure/category"
 	userrepo "family-budget-service/internal/infrastructure/user"
 	testutils "family-budget-service/internal/testhelpers"
 )
@@ -26,6 +27,14 @@ func bootstrapFixtures() (*user.Family, []*category.Category, *user.User) {
 	return family, categories, admin
 }
 
+func newFamilyRepo(db *sql.DB) *userrepo.SQLiteFamilyRepository {
+	return userrepo.NewSQLiteFamilyRepository(
+		db,
+		categoryrepo.NewSQLiteRepository(db),
+		userrepo.NewSQLiteRepository(db),
+	)
+}
+
 func countRows(t *testing.T, db *sql.DB, table string) int {
 	t.Helper()
 	var n int
@@ -39,7 +48,7 @@ func TestFamilyRepository_Bootstrap(t *testing.T) {
 
 	t.Run("creates family, categories and admin", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := userrepo.NewSQLiteFamilyRepository(db)
+		repo := newFamilyRepo(db)
 		family, categories, admin := bootstrapFixtures()
 
 		require.NoError(t, repo.Bootstrap(ctx, family, categories, admin))
@@ -57,7 +66,7 @@ func TestFamilyRepository_Bootstrap(t *testing.T) {
 
 	t.Run("second bootstrap fails with ErrFamilyExists and changes nothing", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := userrepo.NewSQLiteFamilyRepository(db)
+		repo := newFamilyRepo(db)
 		family, categories, admin := bootstrapFixtures()
 		require.NoError(t, repo.Bootstrap(ctx, family, categories, admin))
 
@@ -73,7 +82,7 @@ func TestFamilyRepository_Bootstrap(t *testing.T) {
 
 	t.Run("admin failure rolls back family and categories", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := userrepo.NewSQLiteFamilyRepository(db)
+		repo := newFamilyRepo(db)
 		family, categories, admin := bootstrapFixtures()
 		admin.Password = "" // CHECK (LENGTH(TRIM(password_hash)) > 0)
 
@@ -87,7 +96,7 @@ func TestFamilyRepository_Bootstrap(t *testing.T) {
 
 	t.Run("invalid category name rolls back family", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
-		repo := userrepo.NewSQLiteFamilyRepository(db)
+		repo := newFamilyRepo(db)
 		family, categories, admin := bootstrapFixtures()
 		categories = append(categories, category.NewCategory("", category.TypeExpense))
 

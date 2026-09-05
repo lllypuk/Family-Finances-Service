@@ -69,11 +69,6 @@ func NewService(sessions SessionRepository, users UserLookup, setup SetupChecker
 	}
 }
 
-// SetClock подменяет источник времени (для тестов).
-func (s *Service) SetClock(now func() time.Time) {
-	s.now = now
-}
-
 // Login проверяет пароль и выдаёт токен новой сессии; попутно чистит истёкшие сессии.
 func (s *Service) Login(ctx context.Context, email, password, device string) (*LoginResult, error) {
 	exists, err := s.setup.Exists(ctx)
@@ -145,19 +140,25 @@ func (s *Service) Authenticate(ctx context.Context, token string) (*Principal, e
 
 // Logout удаляет сессию.
 func (s *Service) Logout(ctx context.Context, sessionID uuid.UUID) error {
-	return s.sessions.Delete(ctx, sessionID)
+	if err := s.sessions.Delete(ctx, sessionID); err != nil {
+		return fmt.Errorf("failed to delete session: %w", err)
+	}
+	return nil
 }
 
 // RevokeAllSessions удаляет все сессии пользователя (деактивация админом).
 func (s *Service) RevokeAllSessions(ctx context.Context, userID uuid.UUID) error {
-	return s.sessions.DeleteByUser(ctx, userID, uuid.Nil)
+	if err := s.sessions.DeleteByUser(ctx, userID, uuid.Nil); err != nil {
+		return fmt.Errorf("failed to revoke sessions: %w", err)
+	}
+	return nil
 }
 
 // ListSessions — живые сессии пользователя, новые первыми; истёкшие лежат в БД до ближайшего логина.
 func (s *Service) ListSessions(ctx context.Context, userID uuid.UUID) ([]*Session, error) {
 	all, err := s.sessions.ListByUser(ctx, userID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list sessions: %w", err)
 	}
 	now := s.now()
 	live := make([]*Session, 0, len(all))
@@ -171,7 +172,10 @@ func (s *Service) ListSessions(ctx context.Context, userID uuid.UUID) ([]*Sessio
 
 // RevokeSession удаляет сессию пользователя; чужая или неизвестная → ErrSessionNotFound.
 func (s *Service) RevokeSession(ctx context.Context, userID, sessionID uuid.UUID) error {
-	return s.sessions.DeleteOwned(ctx, userID, sessionID)
+	if err := s.sessions.DeleteOwned(ctx, userID, sessionID); err != nil {
+		return fmt.Errorf("failed to revoke session: %w", err)
+	}
+	return nil
 }
 
 // ChangePassword меняет пароль по текущему и отзывает все сессии, кроме keepSessionID.

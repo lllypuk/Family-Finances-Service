@@ -23,11 +23,11 @@ const (
 
 // RateLimiter — счётчик попыток логина в памяти; инстанс один, поэтому этого достаточно.
 type RateLimiter struct {
-	mu    sync.Mutex
-	now   func() time.Time
-	ips   map[string][]time.Time
-	email map[string][]time.Time
-	calls int
+	mu     sync.Mutex
+	now    func() time.Time
+	ips    map[string][]time.Time
+	emails map[string][]time.Time
+	calls  int
 }
 
 // NewRateLimiter создаёт лимитер; nil now — time.Now.
@@ -36,9 +36,9 @@ func NewRateLimiter(now func() time.Time) *RateLimiter {
 		now = time.Now
 	}
 	return &RateLimiter{
-		now:   now,
-		ips:   map[string][]time.Time{},
-		email: map[string][]time.Time{},
+		now:    now,
+		ips:    map[string][]time.Time{},
+		emails: map[string][]time.Time{},
 	}
 }
 
@@ -54,7 +54,7 @@ func (l *RateLimiter) Allow(ip, email string) (time.Duration, bool) {
 	}
 
 	ipHits := prune(l.ips[ip], now.Add(-IPWindow))
-	emailHits := prune(l.email[email], now.Add(-EmailWindow))
+	emailHits := prune(l.emails[email], now.Add(-EmailWindow))
 
 	if len(ipHits) >= IPLimit {
 		return retryAfter(ipHits[0], IPWindow, now), false
@@ -64,7 +64,7 @@ func (l *RateLimiter) Allow(ip, email string) (time.Duration, bool) {
 	}
 
 	l.ips[ip] = append(ipHits, now)
-	l.email[email] = append(emailHits, now)
+	l.emails[email] = append(emailHits, now)
 	return 0, true
 }
 
@@ -72,7 +72,7 @@ func (l *RateLimiter) Allow(ip, email string) (time.Duration, bool) {
 func (l *RateLimiter) Reset(email string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	delete(l.email, email)
+	delete(l.emails, email)
 }
 
 func (l *RateLimiter) cleanup(now time.Time) {
@@ -81,9 +81,9 @@ func (l *RateLimiter) cleanup(now time.Time) {
 			delete(l.ips, key)
 		}
 	}
-	for key, hits := range l.email {
+	for key, hits := range l.emails {
 		if len(prune(hits, now.Add(-EmailWindow))) == 0 {
-			delete(l.email, key)
+			delete(l.emails, key)
 		}
 	}
 }

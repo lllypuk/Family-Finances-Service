@@ -47,7 +47,7 @@ func NewAuthHandler(authService AuthService, limiter *auth.RateLimiter, logger *
 func (h *AuthHandler) Login(c echo.Context) error {
 	var req LoginRequest
 	if err := c.Bind(&req); err != nil {
-		return HandleBindError(c)
+		return respondBindError(c, err)
 	}
 	if err := h.validator.Struct(&req); err != nil {
 		return respondValidationErrors(c, err)
@@ -73,7 +73,8 @@ func (h *AuthHandler) Login(c echo.Context) error {
 			h.logLoginFailure(ctx, email, ip, "invalid_credentials")
 			return respondError(c, http.StatusUnauthorized, ErrCodeInvalidCredentials, ErrMessageInvalidCredentials)
 		default:
-			h.logger.ErrorContext(ctx, "login failed", slog.String("email", email), slog.String("error", err.Error()))
+			h.logger.ErrorContext(ctx, "login error",
+				slog.String("email", email), slog.String("ip", ip), slog.String("error", err.Error()))
 			return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 		}
 	}

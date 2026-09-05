@@ -37,8 +37,8 @@ func setupParams() dto.SetupFamilyDTO {
 
 func newAuthService(t *testing.T, db *sql.DB) *auth.Service {
 	t.Helper()
-	return auth.NewService(infrastructure.NewRepositoriesSQLite(db).Session,
-		infrastructure.NewRepositoriesSQLite(db).User, infrastructure.NewRepositoriesSQLite(db).Family)
+	repos := infrastructure.NewRepositoriesSQLite(db)
+	return auth.NewService(repos.Session, repos.User, repos.Family)
 }
 
 func TestOpenDatabase_AppliesMigrationsAndIsIdempotent(t *testing.T) {

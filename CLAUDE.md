@@ -125,7 +125,8 @@ has a catch-all, an unknown `/api/v1/...` path is `401` without a token and `404
 - **Login** returns `{token, expires_at, user}`; unknown email and wrong password are the same
   `401 INVALID_CREDENTIALS` (an unknown email still runs bcrypt against `Service.dummyHash`). Passwords are
   10…72 bytes, enforced by the `password` validator tag (`auth.RegisterPasswordValidation`) in both
-  `services.newValidator()` and `handlers.newAPIValidator()`; bcrypt cost 12.
+  `services.newValidator()` and `handlers.newAPIValidator()`; bcrypt cost 12. `LoginRequest` checks only
+  `max=72` — policy lives on the password-setting paths, so tightening it never locks existing users out.
 - **Rate limiter** (`internal/auth/ratelimit.go`, in-memory sliding window): 10 attempts per IP per 5 min, 20 per
   email per hour, `429 RATE_LIMITED` + `Retry-After`; a successful login resets the email counter, a blocked
   attempt is not counted. The IP comes from `e.IPExtractor = auth.IPExtractor(config.TrustedProxies)`:
@@ -135,7 +136,7 @@ has a catch-all, an unknown `/api/v1/...` path is `401` without a token and `404
   `DELETE /api/v1/categories/:id`, `/api/v1/backups` and `PUT /api/v1/family`; `financeAccess` (admin or member)
   for categories/transactions/budgets/reports/stats; `GET /api/v1/family` and the `/auth/*`, `/me*` routes are
   open to any authenticated role. Wrong role → `403 FORBIDDEN`.
-- **Errors outside handlers** (`internal/application/error_handler.go`, `apiErrorHandler`): `RequireBearer` and
+- **Errors outside handlers** (`internal/application/error_handler.go`, `newAPIErrorHandler`): `RequireBearer` and
   `RequireRole` return `*echo.HTTPError` (they cannot import `handlers` — cycle), and the error handler renders
   the JSON envelope for every error, router 404 and panics included. A non-`*echo.HTTPError` becomes a bare
   `500` — the text goes to the log only, so read the server log when debugging one.

@@ -171,7 +171,7 @@ func (r *SQLiteRepository) GetByEmail(ctx context.Context, email string) (*user.
 	// Адрес, который Create не принял бы, не может быть в таблице — это «не найден», а не сбой:
 	// иначе логин с таким email отвечал бы 500 вместо 401.
 	if err := validation.ValidateEmail(email); err != nil {
-		return nil, fmt.Errorf("invalid email parameter %w: %w", user.ErrNotFound, err)
+		return nil, fmt.Errorf("%w: invalid email parameter: %w", user.ErrNotFound, err)
 	}
 
 	// Sanitize email for consistent querying

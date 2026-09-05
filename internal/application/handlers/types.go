@@ -83,9 +83,10 @@ type UserResponse struct {
 }
 
 // LoginRequest — тело POST /auth/login; device_name показывается в списке сессий.
+// Пароль здесь не проверяется на политику: её ужесточение не должно запирать существующих пользователей.
 type LoginRequest struct {
 	Email      string `json:"email"       validate:"required,email"`
-	Password   string `json:"password"    validate:"required,password"`
+	Password   string `json:"password"    validate:"required,max=72"`
 	DeviceName string `json:"device_name" validate:"max=64"`
 }
 

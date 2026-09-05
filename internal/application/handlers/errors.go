@@ -83,6 +83,8 @@ const (
 	ErrMessageInvalidCredentials = "Invalid email or password"
 	ErrMessageSetupRequired      = "Family is not set up yet"
 	ErrMessageRateLimited        = "Too many login attempts"
+	// ErrMessageNoFields — деталь 422 для частичного обновления без единого поля.
+	ErrMessageNoFields = "at least one field is required"
 
 	// fieldBody — значение ErrorDetail.Field для ошибок, не привязанных к полю.
 	fieldBody        = "body"

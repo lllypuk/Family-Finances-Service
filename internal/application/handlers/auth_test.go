@@ -253,15 +253,13 @@ func TestAuthHandler_Login_Validation(t *testing.T) {
 		{name: "broken json", body: `{`, code: http.StatusBadRequest},
 		{name: "bad email", body: loginBody("not-an-email", fakeLoginPassword), code: http.StatusUnprocessableEntity,
 			field: "email"},
-		{name: "short password", body: loginBody(fakeLoginEmail, "short"), code: http.StatusUnprocessableEntity,
-			field: "password"},
+		{name: "short password is a credential check, not policy", body: loginBody(fakeLoginEmail, "short"),
+			code: http.StatusUnauthorized},
 		{name: "long device", body: `{"email":"` + fakeLoginEmail + `","password":"` + fakeLoginPassword +
 			`","device_name":"` + strings.Repeat("x", 65) + `"}`, code: http.StatusUnprocessableEntity,
 			field: "device_name"},
 		{name: "device of 64 is accepted", body: `{"email":"` + fakeLoginEmail + `","password":"` +
 			fakeLoginPassword + `","device_name":"` + strings.Repeat("x", 64) + `"}`, code: http.StatusOK},
-		{name: "password of 10 bytes passes validation", body: loginBody(fakeLoginEmail, strings.Repeat("p", 10)),
-			code: http.StatusUnauthorized},
 		{name: "password of 72 bytes passes validation", body: loginBody(fakeLoginEmail, strings.Repeat("p", 72)),
 			code: http.StatusUnauthorized},
 		{name: "password of 73 bytes", body: loginBody(fakeLoginEmail, strings.Repeat("p", 73)),

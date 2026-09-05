@@ -64,11 +64,13 @@ func SetupHTTPServer(t *testing.T, opts ...ServerOption) *TestServer {
 	db := container.DB
 
 	// Create repositories
+	userRepo := userrepo.NewSQLiteRepository(db)
+	categoryRepo := categoryrepo.NewSQLiteRepository(db)
 	repos := &handlers.Repositories{
-		User:        userrepo.NewSQLiteRepository(db),
-		Family:      userrepo.NewSQLiteFamilyRepository(db),
+		User:        userRepo,
+		Family:      userrepo.NewSQLiteFamilyRepository(db, categoryRepo, userRepo),
 		Budget:      budgetrepo.NewSQLiteRepository(db),
-		Category:    categoryrepo.NewSQLiteRepository(db),
+		Category:    categoryRepo,
 		Transaction: transactionrepo.NewSQLiteRepository(db),
 		Report:      reportrepo.NewSQLiteRepository(db),
 		Invite:      userrepo.NewInviteSQLiteRepository(db),

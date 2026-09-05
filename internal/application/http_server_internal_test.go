@@ -3,6 +3,7 @@ package application
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -37,7 +38,7 @@ func TestHTTPServer_BuildNetHTTPServer_UsesConfiguredTimeouts(t *testing.T) {
 	assert.Same(t, e, server.Handler)
 }
 
-// Ветки apiErrorHandler, недостижимые через роутер: произвольная ошибка → 500 без её текста,
+// Ветки newAPIErrorHandler, недостижимые через роутер: произвольная ошибка → 500 без её текста,
 // уже записанный ответ не перезаписывается, 403 и авторский текст HTTPError.
 func TestAPIErrorHandler(t *testing.T) {
 	cases := []struct {
@@ -67,7 +68,7 @@ func TestAPIErrorHandler(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
 			rec := httptest.NewRecorder()
 
-			apiErrorHandler(tc.err, e.NewContext(req, rec))
+			newAPIErrorHandler(slog.New(slog.DiscardHandler))(tc.err, e.NewContext(req, rec))
 
 			require.Equal(t, tc.status, rec.Code, rec.Body.String())
 			var body handlers.ErrorResponse
@@ -85,7 +86,7 @@ func TestAPIErrorHandler(t *testing.T) {
 		c := e.NewContext(req, rec)
 		require.NoError(t, c.NoContent(http.StatusNoContent))
 
-		apiErrorHandler(errors.New("late failure"), c)
+		newAPIErrorHandler(slog.New(slog.DiscardHandler))(errors.New("late failure"), c)
 
 		assert.Equal(t, http.StatusNoContent, rec.Code)
 		assert.Empty(t, rec.Body.String())

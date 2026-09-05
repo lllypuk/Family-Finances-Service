@@ -14,10 +14,12 @@ import (
 
 // NewRepositoriesSQLite создает и возвращает все репозитории с SQLite подключениями
 func NewRepositoriesSQLite(db *sql.DB) *handlers.Repositories {
+	userRepo := user.NewSQLiteRepository(db)
+	categoryRepo := category.NewSQLiteRepository(db)
 	return &handlers.Repositories{
-		User:        user.NewSQLiteRepository(db),
-		Family:      user.NewSQLiteFamilyRepository(db),
-		Category:    category.NewSQLiteRepository(db),
+		User:        userRepo,
+		Family:      user.NewSQLiteFamilyRepository(db, categoryRepo, userRepo),
+		Category:    categoryRepo,
 		Transaction: transaction.NewSQLiteRepository(db),
 		Budget:      budget.NewSQLiteRepository(db),
 		Report:      report.NewSQLiteRepository(db),

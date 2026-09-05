@@ -51,15 +51,14 @@ func (h *MeHandler) UpdateMe(c echo.Context) error {
 
 	var req UpdateUserRequest
 	if bindErr := c.Bind(&req); bindErr != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
-			bodyDetail(ErrCodeInvalidRequest, bindErr.Error()))
+		return respondBindError(c, bindErr)
 	}
 	if validationErr := h.validator.Struct(&req); validationErr != nil {
 		return respondValidationErrors(c, validationErr)
 	}
 	if req.FirstName == nil && req.LastName == nil && req.Email == nil {
 		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
-			bodyDetail(ErrCodeValidationError, "at least one field is required"))
+			bodyDetail(ErrCodeValidationError, ErrMessageNoFields))
 	}
 
 	updated, err := h.userService.UpdateUser(c.Request().Context(), principal.UserID, dto.UpdateUserDTO{
@@ -83,7 +82,7 @@ func (h *MeHandler) ChangePassword(c echo.Context) error {
 
 	var req ChangePasswordRequest
 	if bindErr := c.Bind(&req); bindErr != nil {
-		return HandleBindError(c)
+		return respondBindError(c, bindErr)
 	}
 	if validationErr := h.validator.Struct(&req); validationErr != nil {
 		return respondValidationErrors(c, validationErr)
@@ -97,17 +96,7 @@ func (h *MeHandler) ChangePassword(c echo.Context) error {
 		case errors.Is(err, auth.ErrInvalidCredentials):
 			return respondError(c, http.StatusUnauthorized, ErrCodeInvalidCredentials, ErrMessageInvalidCredentials)
 		case errors.Is(err, auth.ErrInvalidPassword):
-			return respondError(
-				c,
-				http.StatusUnprocessableEntity,
-				ErrCodeValidationError,
-				ErrMessageValidationFailed,
-				ErrorDetail{
-					Field:   fieldNewPassword,
-					Message: auth.ErrInvalidPassword.Error(),
-					Code:    ErrCodeValidationError,
-				},
-			)
+			return respondPasswordPolicyError(c)
 		default:
 			return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 		}

@@ -54,6 +54,8 @@ type Config struct {
 	IdleTimeout  time.Duration
 	// TrustedProxies — сети, чей X-Forwarded-For определяет c.RealIP(); пусто — только RemoteAddr.
 	TrustedProxies []*net.IPNet
+	// LoginLimiter — лимитер POST /auth/login; nil — auth.NewRateLimiter(nil).
+	LoginLimiter *auth.RateLimiter
 }
 
 // NewHTTPServer создает HTTP сервер без observability (для обратной совместимости)
@@ -70,10 +72,23 @@ func NewHTTPServerWithObservability(
 ) *HTTPServer {
 	e := echo.New()
 
-	// Настройка валидации
+	// Без observability /health всё равно отвечает по схеме Health (в том числе setup_complete).
+	healthService := observability.NewHealthService(version.String())
+	logger := slog.Default()
+	if obsService != nil {
+		healthService = obsService.HealthService
+		logger = obsService.Logger
+	}
+	healthService.SetSetupChecker(services.Family.IsSetupComplete)
+
+	limiter := config.LoginLimiter
+	if limiter == nil {
+		limiter = auth.NewRateLimiter(nil)
+	}
+
 	e.Validator = &CustomValidator{validator: validator.New()}
 	e.IPExtractor = auth.IPExtractor(config.TrustedProxies)
-	e.HTTPErrorHandler = apiErrorHandler
+	e.HTTPErrorHandler = newAPIErrorHandler(logger)
 
 	// Базовые middleware
 	e.Use(middleware.Recover())
@@ -105,15 +120,6 @@ func NewHTTPServerWithObservability(
 		}))
 	}
 
-	// Без observability /health всё равно отвечает по схеме Health (в том числе setup_complete).
-	healthService := observability.NewHealthService(version.String())
-	logger := slog.Default()
-	if obsService != nil {
-		healthService = obsService.HealthService
-		logger = obsService.Logger
-	}
-	healthService.SetSetupChecker(services.Family.IsSetupComplete)
-
 	server := &HTTPServer{
 		echo:                 e,
 		repositories:         repositories,
@@ -123,7 +129,7 @@ func NewHTTPServerWithObservability(
 		healthService:        healthService,
 
 		// Инициализация API handlers
-		authHandler:        handlers.NewAuthHandler(services.Auth, auth.NewRateLimiter(nil), logger),
+		authHandler:        handlers.NewAuthHandler(services.Auth, limiter, logger),
 		meHandler:          handlers.NewMeHandler(services.User, services.Auth),
 		userHandler:        handlers.NewUserHandler(services.User, services.Auth),
 		familyHandler:      handlers.NewFamilyHandler(services.Family),
@@ -151,9 +157,6 @@ func (s *HTTPServer) setupRoutes() {
 	// RequireBearer его не касается.
 	s.echo.POST("/api/v1/auth/login", s.authHandler.Login)
 
-	// Роль берётся из БД при каждой проверке токена (JOIN users в FindByTokenHash),
-	// а не из выданного токена. Group с middleware вешает его и на catch-all группы:
-	// неизвестный путь под /api/v1 без токена — 401, с токеном — 404.
 	api := s.echo.Group("/api/v1", auth.RequireBearer(s.services.Auth))
 
 	api.POST("/auth/logout", s.authHandler.Logout)

@@ -12,13 +12,24 @@ import (
 
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/user"
-	categoryrepo "family-budget-service/internal/infrastructure/category"
 	"family-budget-service/internal/infrastructure/validation"
 )
 
+// CategoryInserter — репозиторий категорий; Bootstrap выполняет его INSERT в своей транзакции.
+type CategoryInserter interface {
+	CreateWithTransaction(ctx context.Context, tx *sql.Tx, familyID uuid.UUID, c *category.Category) error
+}
+
+// Inserter — репозиторий пользователей; Bootstrap выполняет его INSERT в своей транзакции.
+type Inserter interface {
+	CreateWithTransaction(ctx context.Context, tx *sql.Tx, u *user.User) error
+}
+
 // SQLiteFamilyRepository implements family repository using SQLite
 type SQLiteFamilyRepository struct {
-	db *sql.DB
+	db         *sql.DB
+	categories CategoryInserter
+	users      Inserter
 }
 
 // FamilyStatistics holds family statistics
@@ -37,9 +48,11 @@ type FamilyStatistics struct {
 }
 
 // NewSQLiteFamilyRepository creates a new SQLite family repository
-func NewSQLiteFamilyRepository(db *sql.DB) *SQLiteFamilyRepository {
+func NewSQLiteFamilyRepository(db *sql.DB, categories CategoryInserter, users Inserter) *SQLiteFamilyRepository {
 	return &SQLiteFamilyRepository{
-		db: db,
+		db:         db,
+		categories: categories,
+		users:      users,
 	}
 }
 
@@ -286,14 +299,13 @@ func (r *SQLiteFamilyRepository) Bootstrap(
 		return err
 	}
 
-	categoryRepo := categoryrepo.NewSQLiteRepository(r.db)
 	for _, c := range categories {
-		if err = categoryRepo.CreateWithTransaction(ctx, tx, family.ID, c); err != nil {
+		if err = r.categories.CreateWithTransaction(ctx, tx, family.ID, c); err != nil {
 			return err
 		}
 	}
 
-	if err = NewSQLiteRepository(r.db).CreateWithTransaction(ctx, tx, admin); err != nil {
+	if err = r.users.CreateWithTransaction(ctx, tx, admin); err != nil {
 		return err
 	}
 

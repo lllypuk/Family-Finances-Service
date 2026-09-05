@@ -31,8 +31,8 @@ func TestFullWorkflowIntegration(t *testing.T) {
 
 	// Initialize repositories
 	userRepo := userrepo.NewSQLiteRepository(db)
-	familyRepo := userrepo.NewSQLiteFamilyRepository(db)
 	categoryRepo := categoryrepo.NewSQLiteRepository(db)
+	familyRepo := userrepo.NewSQLiteFamilyRepository(db, categoryRepo, userRepo)
 	transactionRepo := transactionrepo.NewSQLiteRepository(db)
 	budgetRepo := budgetrepo.NewSQLiteRepository(db)
 

@@ -36,6 +36,10 @@ S-03 (лимитер логина в `internal/auth/ratelimit.go`), `CSRF_SECRET
   подставляет заглушки ради `make compose-config`), nginx/Caddy/fail2ban ограничивают `/login`.
   Чинить точечно не нужно — план 05 заменяет каталог целиком.
 
+- **Инвайты живут без вызывающих**: `Repositories.Invite`, `Services.Invite`, `InviteService`,
+  `user.InviteRepository` и таблица `invites` после удаления веб-слоя нужны только своим тестам.
+  Удаляет план 04, задача 2.
+
 - **`--timezone` в CLI `setup` принимается и не сохраняется** — у `user.Family` нет колонки до плана 04.
 
 - **`ensureNotLastAdmin` — read-then-write без транзакции** (`internal/services/user_service.go`): два

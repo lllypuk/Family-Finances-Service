@@ -31,8 +31,6 @@ func NewUserHandler(userService services.UserService, authService AuthService) *
 }
 
 // respondUserServiceError — ошибки UserService в envelope; общая для /users и /me.
-// Every branch goes through respondError, so the envelope (code/message/details
-// plus request id, timestamp and API version) is built in exactly one place.
 func respondUserServiceError(c echo.Context, err error) error {
 	switch {
 	case errors.Is(err, services.ErrValidationFailed):
@@ -59,8 +57,7 @@ func respondUserServiceError(c echo.Context, err error) error {
 func (h *UserHandler) CreateUser(c echo.Context) error {
 	var req CreateUserRequest
 	if err := c.Bind(&req); err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
-			bodyDetail(ErrCodeInvalidRequest, err.Error()))
+		return respondBindError(c, err)
 	}
 
 	if validationErr := h.validator.Struct(&req); validationErr != nil {
@@ -116,8 +113,7 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 
 	var req UpdateUserRequest
 	if bindErr := c.Bind(&req); bindErr != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
-			bodyDetail(ErrCodeInvalidRequest, bindErr.Error()))
+		return respondBindError(c, bindErr)
 	}
 	if validationErr := h.validator.Struct(&req); validationErr != nil {
 		return respondValidationErrors(c, validationErr)
@@ -187,8 +183,7 @@ func (h *UserHandler) PatchUser(c echo.Context) error {
 
 	var req PatchUserRequest
 	if bindErr := c.Bind(&req); bindErr != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
-			bodyDetail(ErrCodeInvalidRequest, bindErr.Error()))
+		return respondBindError(c, bindErr)
 	}
 
 	if validationErr := h.validator.Struct(&req); validationErr != nil {
@@ -196,7 +191,7 @@ func (h *UserHandler) PatchUser(c echo.Context) error {
 	}
 	if req.Role == nil && req.IsActive == nil {
 		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
-			bodyDetail(ErrCodeValidationError, "at least one field is required"))
+			bodyDetail(ErrCodeValidationError, ErrMessageNoFields))
 	}
 
 	// Актор — владелец токена: запрет самодеактивации.
@@ -234,7 +229,7 @@ func (h *UserHandler) SetUserPassword(c echo.Context) error {
 
 	var req SetPasswordRequest
 	if bindErr := c.Bind(&req); bindErr != nil {
-		return HandleBindError(c)
+		return respondBindError(c, bindErr)
 	}
 	if validationErr := h.validator.Struct(&req); validationErr != nil {
 		return respondValidationErrors(c, validationErr)
@@ -245,17 +240,7 @@ func (h *UserHandler) SetUserPassword(c echo.Context) error {
 		case errors.Is(err, user.ErrNotFound):
 			return HandleNotFoundError(c, entityUser)
 		case errors.Is(err, auth.ErrInvalidPassword):
-			return respondError(
-				c,
-				http.StatusUnprocessableEntity,
-				ErrCodeValidationError,
-				ErrMessageValidationFailed,
-				ErrorDetail{
-					Field:   fieldNewPassword,
-					Message: auth.ErrInvalidPassword.Error(),
-					Code:    ErrCodeValidationError,
-				},
-			)
+			return respondPasswordPolicyError(c)
 		default:
 			return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 		}

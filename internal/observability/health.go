@@ -45,13 +45,13 @@ type HealthChecker interface {
 	Name() string
 }
 
-// SetupChecker сообщает, создана ли семья; реализация — FamilyService.IsSetupComplete.
-type SetupChecker func(ctx context.Context) (bool, error)
+// SetupCheckFunc сообщает, создана ли семья; реализация — FamilyService.IsSetupComplete.
+type SetupCheckFunc func(ctx context.Context) (bool, error)
 
 // HealthService управляет health checks
 type HealthService struct {
 	checkers   []HealthChecker
-	setupCheck SetupChecker
+	setupCheck SetupCheckFunc
 	version    string
 	startTime  time.Time
 }
@@ -71,7 +71,7 @@ func (hs *HealthService) AddChecker(checker HealthChecker) {
 }
 
 // SetSetupChecker включает поле setup_complete и проверку "setup".
-func (hs *HealthService) SetSetupChecker(check SetupChecker) {
+func (hs *HealthService) SetSetupChecker(check SetupCheckFunc) {
 	hs.setupCheck = check
 }
 
