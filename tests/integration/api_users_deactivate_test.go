@@ -18,7 +18,7 @@ import (
 	"family-budget-service/internal/testhelpers"
 )
 
-// adminJSON — запрос от имени cookie-сессии администратора с JSON-телом.
+// adminJSON — запрос с bearer-токеном администратора и JSON-телом.
 func adminJSON(
 	t *testing.T, ts *testhelpers.TestServer, sess *testhelpers.AuthSession, method, path, body string,
 ) *httptest.ResponseRecorder {
@@ -113,7 +113,7 @@ func TestAPIUsers_DeactivateLastAdminRejected(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, "второй админ остаётся, первого можно выключить: %s", rec.Body.String())
 
 	assert.Equal(t, http.StatusUnauthorized, doAuthedGET(t, ts, firstSess, "/api/v1/transactions"),
-		"cookie деактивированного администратора всё ещё открывает API")
+		"токен деактивированного администратора всё ещё открывает API")
 
 	err := ts.Services.User.SetActive(context.Background(), second.ID, false, uuid.New())
 	require.ErrorIs(t, err, services.ErrLastAdmin)

@@ -94,11 +94,6 @@ func (m *MockCategoryService) CheckCategoryUsage(ctx context.Context, categoryID
 	return args.Get(0).(bool), args.Error(1)
 }
 
-func (m *MockCategoryService) CreateDefaultCategories(ctx context.Context) error {
-	args := m.Called(ctx)
-	return args.Error(0)
-}
-
 func TestCategoryHandler_CreateCategory(t *testing.T) {
 	// Define a consistent family ID for all test cases
 	testFamilyID := uuid.New()

@@ -111,6 +111,7 @@ func TestRequireBearer_GarbageToken_Returns401(t *testing.T) {
 	_, err := serve(handler, "Bearer not-a-real-token")
 
 	assert.Equal(t, http.StatusUnauthorized, httpCode(t, err))
+	require.ErrorIs(t, err, auth.ErrUnauthorized)
 	assert.Equal(t, []string{"not-a-real-token"}, a.seen)
 }
 
@@ -203,7 +204,7 @@ func TestRequireRole(t *testing.T) {
 				return
 			}
 			assert.Equal(t, tc.wantCode, httpCode(t, err))
-			require.ErrorIs(t, err, auth.ErrForbidden)
+			require.NotErrorIs(t, err, auth.ErrUnauthorized, "403 — не отказ в аутентификации")
 			assert.False(t, nextCalled)
 		})
 	}

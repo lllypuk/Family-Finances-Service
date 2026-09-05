@@ -190,11 +190,6 @@ func (m *MockCategoryService) CheckCategoryUsage(ctx context.Context, categoryID
 	return false, nil
 }
 
-//nolint:revive // test mock
-func (m *MockCategoryService) CreateDefaultCategories(ctx context.Context) error {
-	return nil
-}
-
 // MockTransactionService is a mock for transaction service
 type MockTransactionService struct {
 	mock.Mock

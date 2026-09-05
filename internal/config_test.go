@@ -80,17 +80,14 @@ func TestConfig_Validate_TrustedProxies(t *testing.T) {
 
 	cfg.Server.TrustedProxies = "10.0.0.0/8, 172.16.0.0/12"
 	require.NoError(t, cfg.Validate())
-	ranges, err := cfg.TrustedProxyRanges()
-	require.NoError(t, err)
-	assert.Len(t, ranges, 2)
+	assert.Len(t, cfg.TrustedProxyRanges(), 2)
 
 	cfg.Server.TrustedProxies = ""
-	ranges, err = cfg.TrustedProxyRanges()
-	require.NoError(t, err)
-	assert.Empty(t, ranges, "пустой список — доверять только RemoteAddr")
+	require.NoError(t, cfg.Validate())
+	assert.Empty(t, cfg.TrustedProxyRanges(), "пустой список — доверять только RemoteAddr")
 
 	cfg.Server.TrustedProxies = "10.0.0.1"
-	err = cfg.Validate()
+	err := cfg.Validate()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "TRUSTED_PROXIES")
 }

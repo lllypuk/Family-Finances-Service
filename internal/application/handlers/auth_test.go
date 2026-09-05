@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -37,6 +38,8 @@ type fakeAuthService struct {
 	sessions   []*auth.Session
 	loginErr   error
 	logoutErr  error
+	listErr    error
+	revokeErr  error
 	changeErr  error
 	revoked    []uuid.UUID
 	loggedOut  []uuid.UUID
@@ -91,6 +94,9 @@ func (f *fakeAuthService) Logout(_ context.Context, sessionID uuid.UUID) error {
 }
 
 func (f *fakeAuthService) ListSessions(_ context.Context, userID uuid.UUID) ([]*auth.Session, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
 	var out []*auth.Session
 	for _, s := range f.sessions {
 		if s.UserID == userID {
@@ -101,6 +107,9 @@ func (f *fakeAuthService) ListSessions(_ context.Context, userID uuid.UUID) ([]*
 }
 
 func (f *fakeAuthService) RevokeSession(_ context.Context, userID, sessionID uuid.UUID) error {
+	if f.revokeErr != nil {
+		return f.revokeErr
+	}
 	for _, s := range f.sessions {
 		if s.ID == sessionID && s.UserID == userID {
 			f.revoked = append(f.revoked, sessionID)
@@ -161,6 +170,19 @@ func decodeError(t *testing.T, rec *httptest.ResponseRecorder) handlers.ErrorRes
 
 func loginBody(email, password string) string {
 	return `{"email":"` + email + `","password":"` + password + `","device_name":"` + fakeDevice + `"}`
+}
+
+// loginFrom — POST /auth/login с указанного RemoteAddr; лимитер по IP считает именно его.
+func loginFrom(t *testing.T, h *handlers.AuthHandler, ip, email, password string) *httptest.ResponseRecorder {
+	t.Helper()
+	c, rec := principalContext(http.MethodPost, "/api/v1/auth/login", loginBody(email, password), nil)
+	c.Request().RemoteAddr = ip + ":4242"
+	require.NoError(t, h.Login(c))
+	return rec
+}
+
+func ipN(n int) string {
+	return "10.0." + strconv.Itoa(n/256) + "." + strconv.Itoa(n%256)
 }
 
 func TestAuthHandler_Login_Success(t *testing.T) {
@@ -236,6 +258,14 @@ func TestAuthHandler_Login_Validation(t *testing.T) {
 		{name: "long device", body: `{"email":"` + fakeLoginEmail + `","password":"` + fakeLoginPassword +
 			`","device_name":"` + strings.Repeat("x", 65) + `"}`, code: http.StatusUnprocessableEntity,
 			field: "device_name"},
+		{name: "device of 64 is accepted", body: `{"email":"` + fakeLoginEmail + `","password":"` +
+			fakeLoginPassword + `","device_name":"` + strings.Repeat("x", 64) + `"}`, code: http.StatusOK},
+		{name: "password of 10 bytes passes validation", body: loginBody(fakeLoginEmail, strings.Repeat("p", 10)),
+			code: http.StatusUnauthorized},
+		{name: "password of 72 bytes passes validation", body: loginBody(fakeLoginEmail, strings.Repeat("p", 72)),
+			code: http.StatusUnauthorized},
+		{name: "password of 73 bytes", body: loginBody(fakeLoginEmail, strings.Repeat("p", 73)),
+			code: http.StatusUnprocessableEntity, field: "password"},
 	}
 
 	for _, tc := range cases {
@@ -255,8 +285,7 @@ func TestAuthHandler_Login_Validation(t *testing.T) {
 	}
 }
 
-// Лимитер: 11-я попытка с того же IP — 429 с Retry-After, а успех сбрасывает счётчик email,
-// но не IP.
+// Лимитер: 11-я попытка с того же IP — 429 с Retry-After на всё окно.
 func TestAuthHandler_Login_RateLimited(t *testing.T) {
 	svc := newFakeAuthService()
 	handler := newAuthHandler(svc)
@@ -277,9 +306,46 @@ func TestAuthHandler_Login_RateLimited(t *testing.T) {
 
 	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
 	assert.Equal(t, "RATE_LIMITED", decodeError(t, rec).Error.Code)
-	retryAfter := rec.Header().Get(echo.HeaderRetryAfter)
-	assert.NotEmpty(t, retryAfter)
-	assert.NotEqual(t, "0", retryAfter)
+	assert.Equal(t, strconv.Itoa(int(auth.IPWindow.Seconds())), rec.Header().Get(echo.HeaderRetryAfter))
+}
+
+// Успешный вход сбрасывает счётчик email (иначе владелец, перебравший пароли с разных
+// устройств, остался бы заблокирован на час), но не счётчик IP.
+func TestAuthHandler_Login_SuccessResetsEmailCounterOnly(t *testing.T) {
+	svc := newFakeAuthService()
+	handler := newAuthHandler(svc)
+
+	for i := range auth.EmailLimit - 1 {
+		require.Equal(t, http.StatusUnauthorized,
+			loginFrom(t, handler, ipN(i), fakeLoginEmail, "wrong-password").Code)
+	}
+	require.Equal(t, http.StatusOK, loginFrom(t, handler, ipN(100), fakeLoginEmail, fakeLoginPassword).Code)
+
+	rec := loginFrom(t, handler, ipN(101), fakeLoginEmail, "wrong-password")
+	assert.Equal(t, http.StatusUnauthorized, rec.Code, "после успеха счётчик email пуст")
+
+	const sameIP = "192.0.2.50"
+	for range auth.IPLimit - 1 {
+		loginFrom(t, handler, sameIP, "other@example.com", "wrong-password")
+	}
+	require.Equal(t, http.StatusOK, loginFrom(t, handler, sameIP, fakeLoginEmail, fakeLoginPassword).Code)
+	rec = loginFrom(t, handler, sameIP, fakeLoginEmail, fakeLoginPassword)
+	assert.Equal(t, http.StatusTooManyRequests, rec.Code, "успех не сбрасывает счётчик IP")
+}
+
+// Ключ лимитера по email — после приведения к нижнему регистру, иначе регистр обходил бы лимит.
+func TestAuthHandler_Login_EmailLimitIgnoresCase(t *testing.T) {
+	svc := newFakeAuthService()
+	handler := newAuthHandler(svc)
+	variants := []string{"Member@Example.COM", "member@example.com"}
+
+	for i := range auth.EmailLimit {
+		require.Equal(t, http.StatusUnauthorized,
+			loginFrom(t, handler, ipN(i), variants[i%2], "wrong-password").Code)
+	}
+
+	rec := loginFrom(t, handler, ipN(200), "MEMBER@example.com", fakeLoginPassword)
+	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
 }
 
 func TestAuthHandler_Logout(t *testing.T) {
@@ -310,6 +376,17 @@ func TestAuthHandler_Logout(t *testing.T) {
 		require.NoError(t, newAuthHandler(svc).Logout(c))
 
 		assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	})
+
+	t.Run("storage failure is 500", func(t *testing.T) {
+		svc := newFakeAuthService()
+		svc.logoutErr = errors.New("db down")
+		c, rec := principalContext(http.MethodPost, "/api/v1/auth/logout", "", principalFor(svc))
+
+		require.NoError(t, newAuthHandler(svc).Logout(c))
+
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		assert.Equal(t, "INTERNAL_ERROR", decodeError(t, rec).Error.Code)
 	})
 }
 
@@ -346,6 +423,17 @@ func TestAuthHandler_ListSessions_BadLimit(t *testing.T) {
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 }
 
+func TestAuthHandler_ListSessions_StorageFailure(t *testing.T) {
+	svc := newFakeAuthService()
+	svc.listErr = errors.New("db down")
+	c, rec := principalContext(http.MethodGet, "/api/v1/auth/sessions", "", principalFor(svc))
+
+	require.NoError(t, newAuthHandler(svc).ListSessions(c))
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Equal(t, "INTERNAL_ERROR", decodeError(t, rec).Error.Code)
+}
+
 func TestAuthHandler_RevokeSession(t *testing.T) {
 	svc := newFakeAuthService()
 	other := auth.NewSession(svc.user.ID, "other-hash", "Laptop", time.Now())
@@ -376,6 +464,13 @@ func TestAuthHandler_RevokeSession(t *testing.T) {
 		rec := revoke("not-a-uuid")
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 		assert.Equal(t, "INVALID_ID", decodeError(t, rec).Error.Code)
+	})
+
+	t.Run("storage failure is 500", func(t *testing.T) {
+		svc.revokeErr = errors.New("db down")
+		rec := revoke(other.ID.String())
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		assert.Equal(t, "INTERNAL_ERROR", decodeError(t, rec).Error.Code)
 	})
 }
 

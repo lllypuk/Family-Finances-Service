@@ -14,6 +14,7 @@ import (
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/infrastructure"
 	"family-budget-service/internal/services"
+	"family-budget-service/internal/services/dto"
 	"family-budget-service/internal/testhelpers"
 )
 
@@ -22,8 +23,8 @@ const (
 	setupEmail    = "admin@example.com"
 )
 
-func setupParams() internal.SetupParams {
-	return internal.SetupParams{
+func setupParams() dto.SetupFamilyDTO {
+	return dto.SetupFamilyDTO{
 		FamilyName: "Test Family",
 		Currency:   "RUB",
 		Timezone:   "Europe/Moscow",
@@ -36,10 +37,8 @@ func setupParams() internal.SetupParams {
 
 func newAuthService(t *testing.T, db *sql.DB) *auth.Service {
 	t.Helper()
-	repos := infrastructure.NewRepositoriesSQLite(db)
-	svc, err := auth.NewService(repos.Session, repos.User, repos.Family)
-	require.NoError(t, err)
-	return svc
+	return auth.NewService(infrastructure.NewRepositoriesSQLite(db).Session,
+		infrastructure.NewRepositoriesSQLite(db).User, infrastructure.NewRepositoriesSQLite(db).Family)
 }
 
 func TestOpenDatabase_AppliesMigrationsAndIsIdempotent(t *testing.T) {

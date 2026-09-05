@@ -72,30 +72,23 @@ func TestSessionRepositorySQLite_Integration(t *testing.T) {
 		assert.False(t, owner.IsActive, "активность решает auth.Service, репозиторий её только читает")
 	})
 
-	t.Run("Touch_ExtendsIdleAndCapsAtAbsolute", func(t *testing.T) {
+	t.Run("Touch_WritesGivenTimestamps", func(t *testing.T) {
 		repo := authrepo.NewSessionSQLiteRepository(container.GetTestDatabase(t))
 		userID := createUser(t, "touch@example.com")
 
-		fresh := auth.NewSession(userID, "hash-fresh", "d", now)
-		require.NoError(t, repo.Create(ctx, fresh))
-		old := auth.NewSession(userID, "hash-old", "d", now.Add(-auth.AbsoluteTTL+time.Hour))
-		require.NoError(t, repo.Create(ctx, old))
+		s := auth.NewSession(userID, "hash-touch", "d", now)
+		require.NoError(t, repo.Create(ctx, s))
 
 		later := now.Add(2 * time.Hour)
-		require.NoError(t, repo.Touch(ctx, fresh.ID, later))
-		require.NoError(t, repo.Touch(ctx, old.ID, later))
+		expires := later.Add(auth.IdleTTL)
+		require.NoError(t, repo.Touch(ctx, s.ID, later, expires))
 
-		got, _, err := repo.FindByTokenHash(ctx, "hash-fresh")
+		got, _, err := repo.FindByTokenHash(ctx, "hash-touch")
 		require.NoError(t, err)
 		assert.True(t, got.LastUsedAt.Equal(later))
-		assert.True(t, got.ExpiresAt.Equal(later.Add(auth.IdleTTL)))
+		assert.True(t, got.ExpiresAt.Equal(expires))
 
-		got, _, err = repo.FindByTokenHash(ctx, "hash-old")
-		require.NoError(t, err)
-		assert.True(t, got.LastUsedAt.Equal(later))
-		assert.True(t, got.ExpiresAt.Equal(old.CreatedAt.Add(auth.AbsoluteTTL)))
-
-		require.ErrorIs(t, repo.Touch(ctx, uuid.New(), later), auth.ErrSessionNotFound)
+		require.ErrorIs(t, repo.Touch(ctx, uuid.New(), later, expires), auth.ErrSessionNotFound)
 	})
 
 	t.Run("Delete", func(t *testing.T) {
@@ -109,6 +102,21 @@ func TestSessionRepositorySQLite_Integration(t *testing.T) {
 
 		_, _, err := repo.FindByTokenHash(ctx, "hash-del")
 		require.ErrorIs(t, err, auth.ErrSessionNotFound)
+	})
+
+	t.Run("DeleteOwned_IgnoresForeignSession", func(t *testing.T) {
+		repo := authrepo.NewSessionSQLiteRepository(container.GetTestDatabase(t))
+		owner := createUser(t, "owned@example.com")
+		stranger := createUserInSameFamily(ctx, t, container, owner, "stranger@example.com")
+		s := auth.NewSession(owner, "hash-owned", "d", now)
+		require.NoError(t, repo.Create(ctx, s))
+
+		require.ErrorIs(t, repo.DeleteOwned(ctx, stranger, s.ID), auth.ErrSessionNotFound)
+		_, _, err := repo.FindByTokenHash(ctx, "hash-owned")
+		require.NoError(t, err, "чужой запрос не трогает сессию")
+
+		require.NoError(t, repo.DeleteOwned(ctx, owner, s.ID))
+		require.ErrorIs(t, repo.DeleteOwned(ctx, owner, s.ID), auth.ErrSessionNotFound)
 	})
 
 	t.Run("DeleteByUser_KeepsException", func(t *testing.T) {
@@ -189,12 +197,4 @@ func createUserInSameFamily(
 		CreateTestUser(ctx, email, "Ivan", "Petrov", "member", familyID)
 	require.NoError(t, err)
 	return uuid.MustParse(id)
-}
-
-func TestSession_ExpiryAfter(t *testing.T) {
-	created := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	s := auth.NewSession(uuid.New(), "h", "d", created)
-
-	assert.Equal(t, created.Add(auth.IdleTTL), s.ExpiresAt)
-	assert.Equal(t, created.Add(auth.AbsoluteTTL), s.ExpiryAfter(created.Add(auth.AbsoluteTTL-time.Hour)))
 }

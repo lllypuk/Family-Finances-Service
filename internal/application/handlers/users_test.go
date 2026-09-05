@@ -267,8 +267,7 @@ func TestUserHandler_CreateUser(t *testing.T) {
 			mockService := &MockUserService{}
 			tt.mockSetup(mockService, uuid.New())
 
-			repositories := &handlers.Repositories{}
-			handler := handlers.NewUserHandler(repositories, mockService, newFakeAuthService())
+			handler := handlers.NewUserHandler(mockService, newFakeAuthService())
 
 			// Create request
 			var reqBody []byte
@@ -365,8 +364,7 @@ func TestUserHandler_GetUserByID(t *testing.T) {
 			mockService := &MockUserService{}
 			tt.mockSetup(mockService, uuid.New())
 
-			repositories := &handlers.Repositories{}
-			handler := handlers.NewUserHandler(repositories, mockService, newFakeAuthService())
+			handler := handlers.NewUserHandler(mockService, newFakeAuthService())
 
 			// Create request
 			req := httptest.NewRequest(http.MethodGet, "/users/"+tt.userID, nil)
@@ -471,8 +469,7 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 			mockService := &MockUserService{}
 			tt.mockSetup(mockService, uuid.New())
 
-			repositories := &handlers.Repositories{}
-			handler := handlers.NewUserHandler(repositories, mockService, newFakeAuthService())
+			handler := handlers.NewUserHandler(mockService, newFakeAuthService())
 
 			// Create request
 			jsonBody, _ := json.Marshal(tt.requestBody)
@@ -499,7 +496,7 @@ func listUsersRequest(t *testing.T, service *MockUserService) *httptest.Response
 	t.Helper()
 
 	e := echo.New()
-	handler := handlers.NewUserHandler(&handlers.Repositories{}, service, newFakeAuthService())
+	handler := handlers.NewUserHandler(service, newFakeAuthService())
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
 	rec := httptest.NewRecorder()
@@ -515,7 +512,7 @@ func patchUserRequest(
 	t.Helper()
 
 	e := echo.New()
-	handler := handlers.NewUserHandler(&handlers.Repositories{}, service, newFakeAuthService())
+	handler := handlers.NewUserHandler(service, newFakeAuthService())
 
 	req := httptest.NewRequest(http.MethodPatch, "/api/v1/users/"+targetID, bytes.NewBufferString(body))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -538,7 +535,7 @@ func setUserPasswordRequest(
 	t.Helper()
 
 	e := echo.New()
-	handler := handlers.NewUserHandler(&handlers.Repositories{}, &MockUserService{}, svc)
+	handler := handlers.NewUserHandler(&MockUserService{}, svc)
 
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/users/"+targetID+"/password", bytes.NewBufferString(body))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)

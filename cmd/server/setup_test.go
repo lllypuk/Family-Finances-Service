@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"family-budget-service/internal"
 	"family-budget-service/internal/auth"
+	"family-budget-service/internal/services/dto"
 )
 
 func fullSetupArgs() []string {
@@ -28,7 +28,7 @@ func TestParseSetupArgs_Success(t *testing.T) {
 	params, err := parseSetupArgs(fullSetupArgs(), strings.NewReader("Admin1234!\nsecond line ignored\n"))
 	require.NoError(t, err)
 
-	assert.Equal(t, internal.SetupParams{
+	assert.Equal(t, dto.SetupFamilyDTO{
 		FamilyName: "Test Family",
 		Currency:   "RUB",
 		Timezone:   "Europe/Moscow",

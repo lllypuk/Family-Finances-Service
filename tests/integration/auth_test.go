@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/auth"
@@ -47,11 +50,12 @@ func createBearerMember(t *testing.T, ts *testhelpers.TestServer) *user.User {
 	t.Helper()
 	ts.Auth(t)
 
-	hash, err := auth.HashPassword(bearerPassword)
+	// MinCost: проверяется путь, а не стоимость хеша (cost 12 — ~250 мс на фикстуру).
+	hash, err := bcrypt.GenerateFromPassword([]byte(bearerPassword), bcrypt.MinCost)
 	require.NoError(t, err)
 	member := testhelpers.CreateTestUser(ts.AuthFamily.ID)
 	member.Role = user.RoleMember
-	member.Password = hash
+	member.Password = string(hash)
 	require.NoError(t, ts.Repos.User.Create(t.Context(), member))
 	return member
 }
@@ -230,6 +234,75 @@ func TestAuth_Login_RateLimited(t *testing.T) {
 	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
 	assert.Equal(t, "RATE_LIMITED", errorCode(t, rec))
 	assert.NotEmpty(t, rec.Header().Get(echo.HeaderRetryAfter))
+}
+
+// X-Forwarded-For принимается только от TRUSTED_PROXIES: без них подмена заголовка не даёт
+// новых «IP» лимитеру, с ними — каждое значение считается отдельным клиентом.
+func TestAuth_Login_XForwardedFor(t *testing.T) {
+	spoofed := func(ts *testhelpers.TestServer, email string, i int) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBufferString(
+			`{"email":"`+email+`","password":"wrong-password-1"}`))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set(echo.HeaderXForwardedFor, "203.0.113."+strconv.Itoa(i+1))
+		rec := httptest.NewRecorder()
+		ts.Server.Echo().ServeHTTP(rec, req)
+		return rec
+	}
+
+	t.Run("ignored without trusted proxies", func(t *testing.T) {
+		ts := testhelpers.SetupHTTPServer(t)
+		member := createBearerMember(t, ts)
+
+		for i := range auth.IPLimit {
+			require.Equal(t, http.StatusUnauthorized, spoofed(ts, member.Email, i).Code)
+		}
+		assert.Equal(t, http.StatusTooManyRequests, spoofed(ts, member.Email, auth.IPLimit).Code,
+			"подменённый X-Forwarded-For не должен обходить лимит по IP")
+	})
+
+	t.Run("honoured from a trusted proxy", func(t *testing.T) {
+		// httptest.NewRequest ставит RemoteAddr 192.0.2.1 — объявляем эту сеть доверенным прокси.
+		ts := testhelpers.SetupHTTPServer(t, testhelpers.WithTrustedProxies(t, "192.0.2.0/24"))
+		member := createBearerMember(t, ts)
+
+		for i := range auth.IPLimit + 1 {
+			assert.Equal(t, http.StatusUnauthorized, spoofed(ts, member.Email, i).Code,
+				"каждый X-Forwarded-For — отдельный клиент")
+		}
+	})
+}
+
+// Истёкшая сессия на настоящей SQLite: RFC3339 туда-обратно, сравнение с now и удаление строки.
+func TestAuth_ExpiredSession_IsRejectedAndDeleted(t *testing.T) {
+	ts := testhelpers.SetupHTTPServer(t)
+	member := createBearerMember(t, ts)
+
+	plain, hash := auth.GenerateToken()
+	stale := auth.NewSession(member.ID, hash, "old phone", time.Now().Add(-auth.IdleTTL-time.Hour))
+	require.NoError(t, ts.Repos.Session.Create(t.Context(), stale))
+	require.False(t, stale.ExpiresAt.After(time.Now()))
+
+	rec := bearerRequest(ts, http.MethodGet, "/api/v1/me", plain, nil)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code, rec.Body.String())
+	assert.Equal(t, "UNAUTHORIZED", errorCode(t, rec))
+
+	left, err := ts.Repos.Session.ListByUser(t.Context(), member.ID)
+	require.NoError(t, err)
+	assert.Empty(t, left, "истёкшая сессия удалена при первом же обращении")
+}
+
+// Адрес, который репозиторий отвергает как подозрительный («update» в локальной части),
+// проходит тег email хендлера — ответ обязан быть 401, а не 500.
+func TestAuth_Login_SuspiciousEmail_Is401(t *testing.T) {
+	ts := testhelpers.SetupHTTPServer(t)
+	createBearerMember(t, ts)
+
+	rec := bearerRequest(ts, http.MethodPost, "/api/v1/auth/login", "", map[string]string{
+		"email": "updates@gmail.com", "password": bearerPassword,
+	})
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code, rec.Body.String())
+	assert.Equal(t, "INVALID_CREDENTIALS", errorCode(t, rec))
 }
 
 // До setup: /health отдаёт setup_complete=false, логин — 409 SETUP_REQUIRED, а не редирект на /setup.

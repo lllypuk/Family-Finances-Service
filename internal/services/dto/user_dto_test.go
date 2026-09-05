@@ -73,29 +73,6 @@ func TestUserFilterDTO_AllFilters(t *testing.T) {
 	assert.Equal(t, "test@example.com", *filter.Email)
 }
 
-func TestUserResponseDTO_AllFields(t *testing.T) {
-	now := time.Now()
-	userID := uuid.New()
-
-	response := UserResponseDTO{
-		ID:        userID,
-		Email:     "test@example.com",
-		FirstName: "John",
-		LastName:  "Doe",
-		Role:      user.RoleAdmin,
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-
-	assert.Equal(t, userID, response.ID)
-	assert.Equal(t, "test@example.com", response.Email)
-	assert.Equal(t, "John", response.FirstName)
-	assert.Equal(t, "Doe", response.LastName)
-	assert.Equal(t, user.RoleAdmin, response.Role)
-	assert.Equal(t, now, response.CreatedAt)
-	assert.Equal(t, now, response.UpdatedAt)
-}
-
 func TestSetupFamilyDTO_AllFields(t *testing.T) {
 	dto := SetupFamilyDTO{
 		FamilyName: "Test Family",
@@ -139,25 +116,6 @@ func TestUpdateFamilyDTO_PartialUpdate(t *testing.T) {
 	assert.NotNil(t, dto.Name)
 	assert.Equal(t, "New Name", *dto.Name)
 	assert.Nil(t, dto.Currency)
-}
-
-func TestFamilyResponseDTO_AllFields(t *testing.T) {
-	now := time.Now()
-	familyID := uuid.New()
-
-	response := FamilyResponseDTO{
-		ID:        familyID,
-		Name:      "Test Family",
-		Currency:  "USD",
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-
-	assert.Equal(t, familyID, response.ID)
-	assert.Equal(t, "Test Family", response.Name)
-	assert.Equal(t, "USD", response.Currency)
-	assert.Equal(t, now, response.CreatedAt)
-	assert.Equal(t, now, response.UpdatedAt)
 }
 
 func TestCreateInviteDTO_AllFields(t *testing.T) {

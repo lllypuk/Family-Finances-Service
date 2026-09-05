@@ -4,6 +4,9 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -138,6 +141,44 @@ func TestRateLimiter_Cleanup_KeepsBlockingWithinWindow(t *testing.T) {
 
 	_, ok := l.Allow(limiterIP, limiterEmail)
 	assert.False(t, ok)
+}
+
+// Retry-After никогда не 0: за миллисекунду до конца окна ответ — секунда.
+func TestRateLimiter_RetryAfter_ClampsToOneSecond(t *testing.T) {
+	clock := newFakeClock()
+	l := auth.NewRateLimiter(clock.Now)
+
+	exhaust(l, limiterEmail, auth.IPLimit)
+	clock.Advance(auth.IPWindow - time.Millisecond)
+
+	retry, ok := l.Allow(limiterIP, limiterEmail)
+	require.False(t, ok)
+	assert.Equal(t, time.Second, retry)
+
+	clock.Advance(-time.Second - 400*time.Millisecond)
+	retry, ok = l.Allow(limiterIP, limiterEmail)
+	require.False(t, ok)
+	assert.Equal(t, time.Second, retry, "1.4s округляется до секунды")
+}
+
+// Карты лимитера под мьютексом: параллельные Allow с одного IP пропускают ровно IPLimit попыток.
+func TestRateLimiter_Concurrent(t *testing.T) {
+	l := auth.NewRateLimiter(nil)
+	const workers = 50
+
+	var wg sync.WaitGroup
+	var allowed atomic.Int32
+	for i := range workers {
+		wg.Go(func() {
+			if _, ok := l.Allow(limiterIP, "user"+strconv.Itoa(i)+"@example.com"); ok {
+				allowed.Add(1)
+			}
+			l.Reset(limiterEmail)
+		})
+	}
+	wg.Wait()
+
+	assert.Equal(t, int32(auth.IPLimit), allowed.Load())
 }
 
 func TestParseTrustedProxies(t *testing.T) {

@@ -9,8 +9,8 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 
-	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/testhelpers"
 )
@@ -22,11 +22,11 @@ func TestAPIBearer_TokenFromAuthService(t *testing.T) {
 	ts.Auth(t)
 
 	const password = "correct-horse-battery"
-	hash, err := auth.HashPassword(password)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
 	require.NoError(t, err)
 	member := testhelpers.CreateTestUser(ts.AuthFamily.ID)
 	member.Role = user.RoleMember
-	member.Password = hash
+	member.Password = string(hash)
 	require.NoError(t, ts.Repos.User.Create(t.Context(), member))
 
 	login, err := ts.Services.Auth.Login(t.Context(), member.Email, password, "integration")

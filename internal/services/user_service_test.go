@@ -178,8 +178,7 @@ func TestUserService_GetUserByID(t *testing.T) {
 		},
 		{
 			// Сбой инфраструктуры не должен выглядеть как «пользователя нет»:
-			// middleware перепроверки сессии в этом случае гасит cookie, то
-			// есть один SQLITE_BUSY разлогинил бы работающего пользователя.
+			// один SQLITE_BUSY отвечал бы 404 вместо 500.
 			name:   "Error - infrastructure failure is not a not-found",
 			userID: uuid.New(),
 			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {

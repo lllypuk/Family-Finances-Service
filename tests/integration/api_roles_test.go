@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 
 	"family-budget-service/internal/domain/user"
@@ -319,7 +321,9 @@ func TestAPIRoles_ForbiddenResponseIsJSON(t *testing.T) {
 	_, childAuth := testServer.AuthAs(t, user.RoleChild)
 	fixtures := createAPIFixtures(t, testServer)
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/users/"+fixtures.userID.String(), nil)
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/users/"+fixtures.userID.String(),
+		strings.NewReader(`{"role":"admin"}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	childAuth.Apply(req)
 	rec := httptest.NewRecorder()
 

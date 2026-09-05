@@ -692,11 +692,6 @@ func (m *MockCategoryService) CheckCategoryUsage(ctx context.Context, categoryID
 	return args.Get(0).(bool), args.Error(1)
 }
 
-func (m *MockCategoryService) CreateDefaultCategories(ctx context.Context) error {
-	args := m.Called(ctx)
-	return args.Error(0)
-}
-
 // Common Test Helper Functions
 
 // createTestTransaction creates a test transaction with all required parameters

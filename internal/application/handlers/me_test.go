@@ -32,6 +32,31 @@ func TestMeHandler_GetMe(t *testing.T) {
 	users.AssertExpectations(t)
 }
 
+// Пользователь токена исчез из БД или БД недоступна: 404 и 500 различаются.
+func TestMeHandler_GetMe_ServiceErrors(t *testing.T) {
+	cases := map[string]struct {
+		err  error
+		code int
+		body string
+	}{
+		"user gone":       {err: services.ErrUserNotFound, code: http.StatusNotFound, body: "USER_NOT_FOUND"},
+		"storage failure": {err: errors.New("db down"), code: http.StatusInternalServerError, body: "INTERNAL_ERROR"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			svc := newFakeAuthService()
+			users := &MockUserService{}
+			users.On("GetUserByID", mock.Anything, svc.user.ID).Return(nil, tc.err)
+
+			c, rec := principalContext(http.MethodGet, "/api/v1/me", "", principalFor(svc))
+			require.NoError(t, handlers.NewMeHandler(users, svc).GetMe(c))
+
+			assert.Equal(t, tc.code, rec.Code)
+			assert.Equal(t, tc.body, decodeError(t, rec).Error.Code)
+		})
+	}
+}
+
 func TestMeHandler_GetMe_NoPrincipal(t *testing.T) {
 	svc := newFakeAuthService()
 	c, rec := principalContext(http.MethodGet, "/api/v1/me", "", nil)
@@ -87,6 +112,19 @@ func TestMeHandler_UpdateMe(t *testing.T) {
 		require.NoError(t, handlers.NewMeHandler(users, svc).UpdateMe(c))
 
 		assert.Equal(t, http.StatusConflict, rec.Code)
+		assert.Equal(t, "EMAIL_TAKEN", decodeError(t, rec).Error.Code)
+	})
+
+	t.Run("storage failure is 500", func(t *testing.T) {
+		svc := newFakeAuthService()
+		users := &MockUserService{}
+		users.On("UpdateUser", mock.Anything, svc.user.ID, mock.Anything).Return(nil, errors.New("db down"))
+
+		c, rec := principalContext(http.MethodPut, "/api/v1/me", `{"first_name":"Janet"}`, principalFor(svc))
+		require.NoError(t, handlers.NewMeHandler(users, svc).UpdateMe(c))
+
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		assert.Equal(t, "INTERNAL_ERROR", decodeError(t, rec).Error.Code)
 	})
 }
 

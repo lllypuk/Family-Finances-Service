@@ -2,6 +2,7 @@ package observability_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -100,6 +101,22 @@ func TestHealthHandlers(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 		assert.Contains(t, rec.Body.String(), "healthy")
 		assert.Contains(t, rec.Body.String(), "test-version")
+	})
+
+	// Единственный реальный источник 503 для docker healthcheck — упавшая проверка setup.
+	t.Run("HealthHandler_SetupCheckFails_503", func(t *testing.T) {
+		hs := observability.NewHealthService("v")
+		hs.SetSetupChecker(func(context.Context) (bool, error) { return false, errors.New("db down") })
+		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		rec := httptest.NewRecorder()
+
+		require.NoError(t, hs.HealthHandler()(e.NewContext(req, rec)))
+
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+		var status observability.HealthStatus
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &status))
+		assert.Equal(t, observability.HealthStatusUnhealthy, status.Status)
+		assert.False(t, status.SetupComplete)
 	})
 }
 
