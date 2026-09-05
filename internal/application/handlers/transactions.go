@@ -39,7 +39,7 @@ func NewTransactionHandler(
 	return &TransactionHandler{
 		repositories:       repositories,
 		transactionService: transactionService,
-		validator:          validator.New(),
+		validator:          newAPIValidator(),
 		logger:             slog.Default(),
 	}
 }
@@ -58,11 +58,12 @@ func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
 
 	var req CreateTransactionRequest
 	if err := c.Bind(&req); err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest, err.Error())
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
+			bodyDetail(ErrCodeInvalidRequest, err.Error()))
 	}
 
 	if err := h.validator.Struct(req); err != nil {
-		return HandleValidationError(c, err)
+		return respondValidationErrors(c, err)
 	}
 
 	if h.transactionService != nil {
@@ -130,7 +131,8 @@ func (h *TransactionHandler) handleCreateTransactionServiceError(c echo.Context,
 		strings.Contains(err.Error(), "validation failed"),
 		strings.Contains(err.Error(), "user not found"),
 		strings.Contains(err.Error(), "category not found"):
-		return respondError(c, http.StatusBadRequest, "VALIDATION_ERROR", message, err.Error())
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, message,
+			bodyDetail(ErrCodeValidationError, err.Error()))
 	default:
 		return respondError(c, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create transaction")
 	}
@@ -238,32 +240,49 @@ func (h *TransactionHandler) GetTransactions(c echo.Context) error {
 		return respondError(c, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch transactions")
 	}
 
-	response := h.buildTransactionListResponse(transactions)
+	total, err := h.repositories.Transaction.CountByFilter(c.Request().Context(), repoFilter)
+	if err != nil {
+		return respondError(c, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch transactions")
+	}
 
-	return respondAPI(c, http.StatusOK, response)
+	return respondList(
+		c,
+		h.buildTransactionListResponse(transactions),
+		pageParams{Limit: filters.Limit, Offset: filters.Offset},
+		total,
+	)
 }
 
 func (h *TransactionHandler) getTransactionsViaService(c echo.Context, filters TransactionFilterParams) error {
-	transactions, err := h.transactionService.GetAllTransactions(
-		c.Request().Context(),
-		h.buildTransactionServiceFilter(filters),
-	)
+	serviceFilter := h.buildTransactionServiceFilter(filters)
+
+	transactions, err := h.transactionService.GetAllTransactions(c.Request().Context(), serviceFilter)
 	if err != nil {
 		if errors.Is(err, dto.ErrInvalidDateRange) ||
 			errors.Is(err, dto.ErrInvalidAmountRange) ||
 			strings.Contains(err.Error(), "validation failed") {
 			return respondError(
 				c,
-				http.StatusBadRequest,
-				"VALIDATION_ERROR",
+				http.StatusUnprocessableEntity,
+				ErrCodeValidationError,
 				"Invalid transaction filters",
-				err.Error(),
+				bodyDetail(ErrCodeValidationError, err.Error()),
 			)
 		}
 		return respondError(c, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch transactions")
 	}
 
-	return respondAPI(c, http.StatusOK, h.buildTransactionListResponse(transactions))
+	total, err := h.transactionService.CountTransactions(c.Request().Context(), serviceFilter)
+	if err != nil {
+		return respondError(c, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch transactions")
+	}
+
+	return respondList(
+		c,
+		h.buildTransactionListResponse(transactions),
+		pageParams{Limit: filters.Limit, Offset: filters.Offset},
+		total,
+	)
 }
 
 func (h *TransactionHandler) parseTransactionFilters(c echo.Context) (TransactionFilterParams, error) {
@@ -286,7 +305,7 @@ func (h *TransactionHandler) parseOptionalFilters(c echo.Context, filters *Trans
 	if userIDParam := c.QueryParam("user_id"); userIDParam != "" {
 		userID, parseErr := uuid.Parse(userIDParam)
 		if parseErr != nil {
-			return h.writeInvalidQueryParamError(c, "user_id", userIDParam, "must be a valid UUID")
+			return writeInvalidQueryParam(c, "user_id", userIDParam, "must be a valid UUID")
 		}
 		filters.UserID = &userID
 	}
@@ -294,7 +313,7 @@ func (h *TransactionHandler) parseOptionalFilters(c echo.Context, filters *Trans
 	if categoryIDParam := c.QueryParam("category_id"); categoryIDParam != "" {
 		categoryID, parseErr := uuid.Parse(categoryIDParam)
 		if parseErr != nil {
-			return h.writeInvalidQueryParamError(c, "category_id", categoryIDParam, "must be a valid UUID")
+			return writeInvalidQueryParam(c, "category_id", categoryIDParam, "must be a valid UUID")
 		}
 		filters.CategoryID = &categoryID
 	}
@@ -306,7 +325,7 @@ func (h *TransactionHandler) parseOptionalFilters(c echo.Context, filters *Trans
 	if dateFromParam := c.QueryParam("date_from"); dateFromParam != "" {
 		dateFrom, parseErr := time.Parse(time.RFC3339, dateFromParam)
 		if parseErr != nil {
-			return h.writeInvalidQueryParamError(c, "date_from", dateFromParam, "must be RFC3339 datetime")
+			return writeInvalidQueryParam(c, "date_from", dateFromParam, "must be RFC3339 datetime")
 		}
 		filters.DateFrom = &dateFrom
 	}
@@ -314,7 +333,7 @@ func (h *TransactionHandler) parseOptionalFilters(c echo.Context, filters *Trans
 	if dateToParam := c.QueryParam("date_to"); dateToParam != "" {
 		dateTo, parseErr := time.Parse(time.RFC3339, dateToParam)
 		if parseErr != nil {
-			return h.writeInvalidQueryParamError(c, "date_to", dateToParam, "must be RFC3339 datetime")
+			return writeInvalidQueryParam(c, "date_to", dateToParam, "must be RFC3339 datetime")
 		}
 		filters.DateTo = &dateTo
 	}
@@ -322,7 +341,7 @@ func (h *TransactionHandler) parseOptionalFilters(c echo.Context, filters *Trans
 	if amountFromParam := c.QueryParam("amount_from"); amountFromParam != "" {
 		amountFrom, parseErr := strconv.ParseFloat(amountFromParam, 64)
 		if parseErr != nil {
-			return h.writeInvalidQueryParamError(c, "amount_from", amountFromParam, "must be a valid number")
+			return writeInvalidQueryParam(c, "amount_from", amountFromParam, "must be a valid number")
 		}
 		filters.AmountFrom = &amountFrom
 	}
@@ -330,7 +349,7 @@ func (h *TransactionHandler) parseOptionalFilters(c echo.Context, filters *Trans
 	if amountToParam := c.QueryParam("amount_to"); amountToParam != "" {
 		amountTo, parseErr := strconv.ParseFloat(amountToParam, 64)
 		if parseErr != nil {
-			return h.writeInvalidQueryParamError(c, "amount_to", amountToParam, "must be a valid number")
+			return writeInvalidQueryParam(c, "amount_to", amountToParam, "must be a valid number")
 		}
 		filters.AmountTo = &amountTo
 	}
@@ -343,58 +362,21 @@ func (h *TransactionHandler) parseOptionalFilters(c echo.Context, filters *Trans
 }
 
 func (h *TransactionHandler) parsePaginationParams(c echo.Context, filters *TransactionFilterParams) error {
-	filters.Limit = 50 // По умолчанию
-	if limitParam := c.QueryParam("limit"); limitParam != "" {
-		limit, parseErr := strconv.Atoi(limitParam)
-		if parseErr != nil {
-			return h.writeInvalidQueryParamError(c, "limit", limitParam, "must be an integer between 1 and 1000")
-		}
-		if limit <= 0 || limit > 1000 {
-			return h.writeInvalidQueryParamError(c, "limit", limitParam, "must be an integer between 1 and 1000")
-		}
-		filters.Limit = limit
-	}
-
-	filters.Offset = 0 // По умолчанию
-	if offsetParam := c.QueryParam("offset"); offsetParam != "" {
-		offset, parseErr := strconv.Atoi(offsetParam)
-		if parseErr != nil {
-			return h.writeInvalidQueryParamError(c, "offset", offsetParam, "must be a non-negative integer")
-		}
-		if offset < 0 {
-			return h.writeInvalidQueryParamError(c, "offset", offsetParam, "must be a non-negative integer")
-		}
-		filters.Offset = offset
-	}
-
-	return nil
-}
-
-func (h *TransactionHandler) invalidQueryParamError(
-	c echo.Context,
-	param, value, reason string,
-) error {
-	return respondError(c, http.StatusBadRequest, "INVALID_QUERY_PARAM", "Invalid query parameter", map[string]string{
-		"param":  param,
-		"value":  value,
-		"reason": reason,
-	})
-}
-
-func (h *TransactionHandler) writeInvalidQueryParamError(
-	c echo.Context,
-	param, value, reason string,
-) error {
-	if err := h.invalidQueryParamError(c, param, value, reason); err != nil {
+	page, err := parsePagination(c)
+	if err != nil {
 		return err
 	}
-	return errResponseAlreadyWritten
+
+	filters.Limit = page.Limit
+	filters.Offset = page.Offset
+
+	return nil
 }
 
 func (h *TransactionHandler) validateTransactionFilters(c echo.Context, filters TransactionFilterParams) error {
 	err := h.validator.Struct(filters)
 	if err != nil {
-		return HandleValidationError(c, err)
+		return respondValidationErrors(c, err)
 	}
 	return nil
 }
@@ -446,7 +428,7 @@ func (h *TransactionHandler) buildRepositoryFilter(filters TransactionFilterPara
 func (h *TransactionHandler) buildTransactionListResponse(
 	transactions []*transaction.Transaction,
 ) []TransactionResponse {
-	var response []TransactionResponse
+	response := make([]TransactionResponse, 0, len(transactions))
 	for _, tx := range transactions {
 		response = append(response, TransactionResponse{
 			ID:          tx.ID,
@@ -551,7 +533,7 @@ func (h *TransactionHandler) updateTransactionViaService(c echo.Context) error {
 		return HandleBindError(c)
 	}
 	if validationErr := h.validator.Struct(req); validationErr != nil {
-		return HandleValidationError(c, validationErr)
+		return respondValidationErrors(c, validationErr)
 	}
 
 	serviceReq := dto.UpdateTransactionDTO{
@@ -618,6 +600,31 @@ func (h *TransactionHandler) DeleteTransaction(c echo.Context) error {
 	}, "Transaction")
 }
 
+// BulkDeleteTransactions удаляет несколько транзакций за один запрос; неизвестные id
+// не ошибка — ответ несёт число фактически удалённых записей.
+func (h *TransactionHandler) BulkDeleteTransactions(c echo.Context) error {
+	var req BulkDeleteRequest
+	if err := c.Bind(&req); err != nil {
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
+			bodyDetail(ErrCodeInvalidRequest, err.Error()))
+	}
+
+	if err := h.validator.Struct(req); err != nil {
+		return respondValidationErrors(c, err)
+	}
+
+	if h.transactionService == nil {
+		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+	}
+
+	deleted, err := h.transactionService.BulkDelete(c.Request().Context(), req.IDs)
+	if err != nil {
+		return respondError(c, http.StatusInternalServerError, "DELETE_FAILED", "Failed to delete transactions")
+	}
+
+	return respondAPI(c, http.StatusOK, BulkDeleteResponse{Deleted: deleted})
+}
+
 func (h *TransactionHandler) handleUpdateTransactionServiceError(c echo.Context, err error) error {
 	switch {
 	case errors.Is(err, services.ErrTransactionNotFound):
@@ -629,7 +636,8 @@ func (h *TransactionHandler) handleUpdateTransactionServiceError(c echo.Context,
 		errors.Is(err, dto.ErrInvalidAmountRange),
 		strings.Contains(err.Error(), "validation failed"),
 		strings.Contains(err.Error(), "category not found"):
-		return respondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid transaction data", err.Error())
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageInvalidTransaction,
+			bodyDetail(ErrCodeValidationError, err.Error()))
 	default:
 		return respondError(c, http.StatusInternalServerError, "UPDATE_FAILED", "Failed to update transaction")
 	}

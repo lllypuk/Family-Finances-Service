@@ -89,12 +89,12 @@
 - Modify: `internal/services/interfaces.go`, `internal/services/container.go`,
   `internal/web/handlers/dashboard.go`, `internal/web/handlers/dashboard_test.go`
 
-- [ ] `dto.StatsSummary` и вложенные типы (`PeriodTotals`, `CategoryShare`, `BudgetProgress`, `RecentTransaction`)
-- [ ] `StatsService.Summary(ctx, from, to)`: перенести `buildMonthlySummary`, `calculatePreviousData`, `calculateChanges`, `buildBudgetOverview`, `buildRecentActivity`, `buildCategoryInsights` из `dashboard.go`; `buildEnhancedStats`/`buildForecast` не переносить — удалить вместе с их партиалами
-- [ ] `DashboardHandler` строит view-модель из `StatsSummary`; функции вычислений из обработчика удалить
-- [ ] перенести unit-тесты вычислений из `dashboard_test.go:413-1223` в `stats_service_test.go` (моки репозиториев — по образцу `helpers_test.go`)
-- [ ] тесты ошибок: пустой период, репозиторий вернул ошибку, `from > to`
-- [ ] `make test` — зелёный, тесты веб-дашборда адаптированы
+- [x] `dto.StatsSummary` и вложенные типы (`PeriodTotals`, `CategoryShare`, `BudgetProgress`, `RecentTransaction`)
+- [x] `StatsService.Summary(ctx, from, to)`: перенести `buildMonthlySummary`, `calculatePreviousData`, `calculateChanges`, `buildBudgetOverview`, `buildRecentActivity`, `buildCategoryInsights` из `dashboard.go`; `buildEnhancedStats`/`buildForecast` не переносить — удалить вместе с их партиалами
+- [x] `DashboardHandler` строит view-модель из `StatsSummary`; функции вычислений из обработчика удалить
+- [x] перенести unit-тесты вычислений из `dashboard_test.go:413-1223` в `stats_service_test.go` (моки репозиториев — по образцу `helpers_test.go`)
+- [x] тесты ошибок: пустой период, репозиторий вернул ошибку, `from > to`
+- [x] `make test` — зелёный, тесты веб-дашборда адаптированы
 
 ### Task 2: `ReportService.GenerateReport` и чистка заглушек
 
@@ -103,11 +103,11 @@
   `internal/services/report_service_test.go`, `internal/web/handlers/reports.go`,
   `internal/web/handlers/reports_test.go`
 
-- [ ] `GenerateReport(ctx, dto.GenerateReportRequest) (*report.Report, error)` — диспетчер по `report.Type` и конвертация в `report.Data` из `reports.go:240,654-800`
-- [ ] удалить из интерфейса и реализации `ScheduleReport`, `GetScheduledReports`, `UpdateScheduledReport`, `DeleteScheduledReport`, `ExecuteScheduledReport`, `GenerateSpendingForecast`, `CalculateBenchmarks` (заглушки `report_service.go:1074-1124`) и их тесты
-- [ ] веб-обработчик и HTMX-партиал `reports/generate` вызывают `GenerateReport`; локальный диспетчер удалить
-- [ ] тесты `GenerateReport`: по одному на каждый из пяти типов, ошибка неизвестного типа, ошибка репозитория
-- [ ] `make test` — зелёный
+- [x] `GenerateReport(ctx, dto.ReportRequestDTO) (*report.Report, error)` (используется существующий DTO; `SaveReport` теперь принимает готовый `*report.Report`) — диспетчер по `report.Type` и конвертация в `report.Data` из `reports.go:240,654-800`
+- [x] удалить из интерфейса и реализации `ScheduleReport`, `GetScheduledReports`, `UpdateScheduledReport`, `DeleteScheduledReport`, `ExecuteScheduledReport`, `GenerateSpendingForecast`, `CalculateBenchmarks` (заглушки `report_service.go:1074-1124`) и их тесты
+- [x] веб-обработчик и HTMX-партиал `reports/generate` вызывают `GenerateReport`; локальный диспетчер удалить
+- [x] тесты `GenerateReport`: по одному на каждый из пяти типов, ошибка неизвестного типа, ошибка репозитория
+- [x] `make test` — зелёный
 
 ### Task 3: Роуты отчётов и статистики
 
@@ -117,11 +117,11 @@
   `internal/application/http_server.go`, `tests/integration/reports_test.go`,
   `docs/api/openapi.yaml`
 
-- [ ] `POST /api/v1/reports` → `GenerateReport` + `SaveReport`, `201`; убрать `501`
-- [ ] `GET /api/v1/reports/:id/export` — CSV через `ReportService.ExportReport`; перенести CSV-писатели из `internal/web/handlers/reports.go:533-639` в сервис, веб вызывает сервис
-- [ ] `GET /api/v1/stats/summary` — парсинг `from`/`to` (`YYYY-MM-DD`), по умолчанию текущий месяц
-- [ ] тесты обработчиков: успех, невалидные даты, ошибка сервиса; интеграционные: сгенерировать отчёт → получить → экспорт CSV с ожидаемым заголовком
-- [ ] `openapi.yaml` обновлён; `make fmt && make test && make lint` — зелёные
+- [x] `POST /api/v1/reports` → `GenerateReport` + `SaveReport`, `201`; убрать `501`
+- [x] `GET /api/v1/reports/:id/export` — CSV через `ReportService.ExportReport`; перенести CSV-писатели из `internal/web/handlers/reports.go:533-639` в сервис, веб вызывает сервис
+- [x] `GET /api/v1/stats/summary` — парсинг `from`/`to` (`YYYY-MM-DD`), по умолчанию текущий месяц
+- [x] тесты обработчиков: успех, невалидные даты, ошибка сервиса; интеграционные: сгенерировать отчёт → получить → экспорт CSV с ожидаемым заголовком
+- [x] `openapi.yaml` обновлён; `make fmt && make test && make lint` — зелёные
 
 ### Task 4: Пользователи и семья
 
@@ -131,11 +131,11 @@
   `user_service_test.go`, `tests/integration/users_test.go`, `tests/integration/families_test.go`,
   `docs/api/openapi.yaml`
 
-- [ ] `GET /api/v1/users` (admin) через `UserService.GetUsers`
-- [ ] зарегистрировать `GET /api/v1/family` и `PUT /api/v1/family` (admin); `GetFamilyMembers` удалить — дублирует `GET /users`
-- [ ] `PATCH /api/v1/users/:id {role}` через `ChangeUserRole`; в сервисе — запрет понижать последнего админа (`ensureNotLastAdmin` вызывать и из `ChangeUserRole`)
-- [ ] тесты: список для admin — 200, для member — 403; понижение единственного админа — 409 `LAST_ADMIN`
-- [ ] `openapi.yaml` обновлён; `make fmt && make test && make lint` — зелёные
+- [x] `GET /api/v1/users` (admin) через `UserService.GetUsers`
+- [x] зарегистрировать `GET /api/v1/family` и `PUT /api/v1/family` (admin); `GetFamilyMembers` удалить — дублирует `GET /users`
+- [x] `PATCH /api/v1/users/:id {role}` через `ChangeUserRole`; в сервисе — запрет понижать последнего админа (`ensureNotLastAdmin` вызывать и из `ChangeUserRole`)
+- [x] тесты: список для admin — 200, для member — 403; понижение единственного админа — 409 `LAST_ADMIN` (заодно `DELETE` с `ErrLastAdmin` переведён с 400 на 409 — контракт уже описывал 409)
+- [x] `openapi.yaml` обновлён (правок не потребовалось: план 01 уже описал все три роута); `make fmt && make test && make lint` — зелёные
 
 ### Task 5: Бэкапы через API
 
@@ -146,11 +146,11 @@
   `internal/run.go`, `internal/application/http_server.go`, `docs/api/openapi.yaml`,
   `docker/docker-compose.yml` (файлы `deploy/*.yml` не трогать — их заменяет план 05)
 
-- [ ] `BACKUP_DIR` в конфиге (по умолчанию `<dir(DATABASE_PATH)>/backups`), передаётся в `NewBackupService`; dev-compose задаёт `/backups`
-- [ ] `POST|GET /api/v1/backups`, `GET /api/v1/backups/:name/download` (`c.Attachment`), `DELETE /api/v1/backups/:name` — группа `adminOnly`; имя проверяет сервис (`ErrInvalidBackupFilename` из `GetBackup`/`DeleteBackup` → `400 INVALID_BACKUP_NAME`)
-- [ ] тесты обработчиков: создание → список содержит файл → скачивание отдаёт `application/octet-stream` → удаление; имя не по шаблону `backup_*.db` → 400; несуществующее → 404; member → 403
-- [ ] интеграционный тест на временном каталоге (`t.TempDir()`), веб-тесты бэкапов адаптированы под `BACKUP_DIR`
-- [ ] `openapi.yaml` обновлён; `make fmt && make test && make lint` — зелёные
+- [x] `BACKUP_DIR` в конфиге (по умолчанию `<dir(DATABASE_PATH)>/backups`), передаётся в `NewBackupService`; dev-compose задаёт `/backups`
+- [x] `POST|GET /api/v1/backups`, `GET /api/v1/backups/:name/download` (`c.Attachment`), `DELETE /api/v1/backups/:name` — группа `adminOnly`; имя проверяет сервис (`ErrInvalidBackupFilename` из `GetBackup`/`DeleteBackup` → `400 INVALID_BACKUP_NAME`)
+- [x] тесты обработчиков: создание → список содержит файл → скачивание отдаёт `application/octet-stream` → удаление; имя не по шаблону `backup_*.db` → 400; несуществующее → 404; member → 403
+- [x] интеграционный тест на временном каталоге (`t.TempDir()`), веб-тесты бэкапов адаптированы под `BACKUP_DIR`
+- [x] `openapi.yaml` обновлён; `make fmt && make test && make lint` — зелёные
 
 ### Task 6: Массовое удаление и пагинация с `total`
 
@@ -159,12 +159,12 @@
   `budgets_test.go`, `reports.go`, `types.go`, `helpers.go`, `internal/services/transaction_service.go`,
   `internal/services/interfaces.go`, `tests/integration/transactions_test.go`, `docs/api/openapi.yaml`
 
-- [ ] `TransactionService.BulkDelete(ctx, ids)` — одна транзакция БД, возвращает число удалённых; веб-`bulk-delete` использует его
-- [ ] `POST /api/v1/transactions/bulk-delete`
-- [ ] `PaginationMeta{limit, offset, total}` в `ResponseMeta`; хелпер `parsePagination(c)` с константами `defaultLimit=50`, `maxLimit=200`
-- [ ] транзакции: `total` из `CountTransactions`; бюджеты и отчёты: `limit/offset` в репозиторные фильтры (сейчас бюджеты выбираются страницами по 100 внутри обработчика — убрать); users, categories, sessions, backups — `total` по длине выборки
-- [ ] тесты: `total` совпадает с числом созданных, `limit=500` → 400 `INVALID_QUERY_PARAM` (становится 422 в задаче 7), `offset` за пределом → пустой `data` и верный `total`; bulk-delete: часть id не существует → удалены существующие
-- [ ] `openapi.yaml` обновлён
+- [x] `TransactionService.BulkDelete(ctx, ids)` — одна транзакция БД, возвращает число удалённых; веб-`bulk-delete` использует его
+- [x] `POST /api/v1/transactions/bulk-delete`
+- [x] `PaginationMeta{limit, offset, total}` в `ResponseMeta`; хелпер `parsePagination(c)` с константами `defaultLimit=50`, `maxLimit=200`
+- [x] транзакции: `total` из `CountTransactions`; бюджеты и отчёты: `limit/offset` в репозиторные фильтры (сейчас бюджеты выбираются страницами по 100 внутри обработчика — убрать); users, categories, sessions, backups — `total` по длине выборки
+- [x] тесты: `total` совпадает с числом созданных, `limit=500` → 400 `INVALID_QUERY_PARAM` (становится 422 в задаче 7), `offset` за пределом → пустой `data` и верный `total`; bulk-delete: часть id не существует → удалены существующие
+- [x] `openapi.yaml` обновлён
 
 ### Task 7: Единый envelope ошибок
 
@@ -173,24 +173,30 @@
   `categories.go`, `transactions.go`, `budgets.go`, `reports.go`, все `*_test.go` рядом,
   `internal/services/dto/api_mappers.go`, `api_mappers_test.go`, `tests/integration/*_test.go`
 
-- [ ] `respondError` принимает `details []ErrorDetail`; `respondValidationErrors` → `422 VALIDATION_ERROR` с details; `APIResponse.Errors` удалить
-- [ ] `users.go`, `categories.go`: заменить inline-`ResponseMeta` на `respondAPI`/`respondError`; убрать двойную валидацию в `categories.go:48-96`
-- [ ] удалить неиспользуемое из `dto/api_mappers.go` (оставить только то, на что есть вызовы) и `types.go` (`UpdateFamilyRequest` — если не понадобился в Task 4)
-- [ ] обновить ожидания во всех тестах обработчиков и интеграционных тестах (статус 400 → 422 для валидации, форма `error.details`)
-- [ ] `make test && make lint` — зелёные
+- [x] `respondError` принимает `details ...ErrorDetail` (`ErrorDetail` — теперь элемент `error.details` из спецификации, конверт ошибки называется `APIError`); `respondValidationErrors` → `422 VALIDATION_ERROR` с details; `APIResponse.Errors` удалён
+- [x] `users.go`, `categories.go`: заменить inline-`ResponseMeta` на `respondAPI`/`respondError`; убрать двойную валидацию в `categories.go:48-96`
+- [x] удалить неиспользуемое из `dto/api_mappers.go` (остались `CategoryAPIResponse`/`ToCategoryAPIResponse`); `UpdateFamilyRequest` в `types.go` оставлен — используется `PUT /family`
+- [x] обновить ожидания во всех тестах обработчиков и интеграционных тестах (статус 400 → 422 для валидации, форма `error.details`); битый JSON и неразобранный id остаются 400 — это добавлено в описание кодов в `openapi.yaml`
+- [x] `make test && make lint` — зелёные
 
 ### Task 8: Verify acceptance criteria
 
-- [ ] каждая строка таблицы «Полнота API» из spec 005 закрыта роутом или помечена «удалено»
-- [ ] тест покрытия `openapi.yaml` зелёный; веб-интерфейс по-прежнему работает (`make run-local`, вручную пройти дашборд, отчёты, бэкапы)
-- [ ] `make pre-commit` зелёный, покрытие не ниже текущего (`make test-coverage`)
+- [x] каждая строка таблицы «Полнота API» из spec 005 закрыта роутом или помечена «удалено»
+  (логин/setup/инвайты — план 03; алерты бюджетов вместе с таблицей `budget_alerts` — план 04,
+  задача «удалить `budget.Alert`…»; остальные восемь строк закрыты роутами `/api/v1`)
+- [x] тест покрытия `openapi.yaml` зелёный; веб-интерфейс проверен автоматически —
+  `TestWebPages_AllHTMLRoutesRender` рендерит все HTML-роуты на реальных шаблонах,
+  `web_pages_test.go` — навигацию и страницы отчётов; ручной проход в браузере (`make run-local`)
+  пропущен как неавтоматизируемый
+- [x] `make pre-commit` зелёный (lint — 0 issues), `make test-coverage` — 64.5% statements
 
 ### Task 9: [Final] Update documentation
 
-- [ ] `README.md`: раздел «API Readiness» — убрать «Experimental»/501, перечислить новые группы
-- [ ] `CLAUDE.md`: `StatsService`, `GenerateReport`, `BACKUP_DIR`, единый envelope, пагинация
-- [ ] `docs/backlog.md`: закрыть пункт про `POST /api/v1/reports` → 501
-- [ ] переместить план в `docs/plans/completed/`
+- [x] `README.md`: раздел «API Readiness» — убрать «Experimental»/501, перечислить новые группы
+- [x] `CLAUDE.md`: `StatsService`, `GenerateReport`, `BACKUP_DIR`, единый envelope, пагинация
+- [x] `docs/backlog.md`: пункта про `POST /api/v1/reports` → 501 в бэклоге нет — 501 упоминался только
+      в `README.md`, `CLAUDE.md` и снимке состояния в spec 005 (таблица «Полнота API»); первые два обновлены
+- [x] переместить план в `docs/plans/completed/` (ссылки в spec 005 и `docs/api/README.md` обновлены)
 
 ## Post-Completion
 

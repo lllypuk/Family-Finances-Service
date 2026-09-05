@@ -113,3 +113,36 @@ func TestLoadConfig_CookieSecure(t *testing.T) {
 		})
 	}
 }
+
+// GetBackupDir кормит NewBackupService: пустой BACKUP_DIR должен давать
+// каталог рядом с БД, иначе бэкапы уезжают мимо смонтированного тома.
+func TestConfig_GetBackupDir(t *testing.T) {
+	tests := []struct {
+		name      string
+		dbPath    string
+		backupDir string
+		want      string
+	}{
+		{name: "explicit", dbPath: "/data/budget.db", backupDir: "/backups", want: "/backups"},
+		{name: "fallback", dbPath: "/data/budget.db", want: "/data/backups"},
+		{name: "fallback relative", dbPath: "./data/budget.db", want: "data/backups"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &internal.Config{
+				Database: internal.DatabaseConfig{Path: tt.dbPath, BackupDir: tt.backupDir},
+			}
+
+			assert.Equal(t, tt.want, cfg.GetBackupDir())
+		})
+	}
+}
+
+func TestLoadConfig_ReadsBackupDir(t *testing.T) {
+	t.Setenv("BACKUP_DIR", "/mnt/backups")
+
+	cfg := internal.LoadConfig()
+
+	assert.Equal(t, "/mnt/backups", cfg.GetBackupDir())
+}

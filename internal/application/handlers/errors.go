@@ -22,12 +22,37 @@ const (
 	// ErrCodeForbidden signals a session whose role is not allowed on the route
 	// (returned by RequireAPIRole, see api_auth.go).
 	ErrCodeForbidden = "FORBIDDEN"
+	// ErrCodeNotFound signals an unknown route or a missing resource (404 outside a handler).
+	ErrCodeNotFound = "NOT_FOUND"
+	// ErrCodeMethodNotAllowed signals a method not registered on the route.
+	ErrCodeMethodNotAllowed = "METHOD_NOT_ALLOWED"
+	// ErrCodeBadRequest signals a request rejected before reaching a handler.
+	ErrCodeBadRequest = "BAD_REQUEST"
+	// ErrCodeCSRFTokenInvalid signals a missing or mismatched X-Csrf-Token on a write.
+	//nolint:gosec // G101: это код ошибки в ответе API, а не учётные данные.
+	ErrCodeCSRFTokenInvalid = "CSRF_TOKEN_INVALID"
 	// ErrCodeInternal signals a server-side failure; details stay in the log only.
 	ErrCodeInternal = "INTERNAL_ERROR"
 	// ErrCodeCannotDeleteSelf signals an attempt to delete the session's own user.
 	ErrCodeCannotDeleteSelf = "CANNOT_DELETE_SELF"
 	// ErrCodeLastAdmin signals an attempt to delete the last remaining admin.
 	ErrCodeLastAdmin = "LAST_ADMIN"
+	// ErrCodeCurrencyLocked signals a currency change on a family that already has transactions.
+	ErrCodeCurrencyLocked = "CURRENCY_LOCKED"
+	// ErrCodeInvalidQueryParam маркирует деталь ошибки 422 по query-параметру.
+	ErrCodeInvalidQueryParam = "INVALID_QUERY_PARAM"
+	// ErrCodeGenerationFailed signals a failed report generation.
+	ErrCodeGenerationFailed = "GENERATION_FAILED"
+	// ErrCodeSaveFailed signals that a generated entity could not be persisted.
+	ErrCodeSaveFailed = "SAVE_FAILED"
+	// ErrCodeExportFailed signals a failed report export.
+	ErrCodeExportFailed = "EXPORT_FAILED"
+	// ErrCodeInvalidBackupName signals a backup filename outside the `backup_*.db` pattern.
+	ErrCodeInvalidBackupName = "INVALID_BACKUP_NAME"
+	// ErrCodeBackupNotFound signals that the requested backup file does not exist.
+	ErrCodeBackupNotFound = "BACKUP_NOT_FOUND"
+	// ErrCodeBackupFailed signals that a backup could not be created.
+	ErrCodeBackupFailed = "BACKUP_FAILED"
 
 	// Standard error messages paired with the codes above. Kept as constants
 	// so changes propagate to API consumers in lockstep with code updates.
@@ -42,4 +67,15 @@ const (
 	ErrMessageInternal           = "Internal server error"
 	ErrMessageCannotDeleteSelf   = "Cannot delete your own account"
 	ErrMessageLastAdmin          = "Cannot delete the last administrator"
+	ErrMessageCurrencyLocked     = "Currency cannot be changed while transactions exist"
+	ErrMessageInvalidBackupName  = "Invalid backup filename"
+	ErrMessageBackupNotFound     = "Backup not found"
+	ErrMessageBackupFailed       = "Failed to create backup"
+	ErrMessageValidationFailed   = "Validation failed"
+	ErrMessageCategoryNotFound   = "Category not found"
+
+	// fieldBody — значение ErrorDetail.Field для ошибок, не привязанных к полю.
+	fieldBody     = "body"
+	fieldRole     = "role"
+	fieldCurrency = "currency"
 )

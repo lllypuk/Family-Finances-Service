@@ -8,32 +8,41 @@ import (
 
 // APIResponse represents a generic API response structure for HTTP responses
 type APIResponse[T any] struct {
-	Data   T                 `json:"data"`
-	Meta   ResponseMeta      `json:"meta"`
-	Errors []ValidationError `json:"errors,omitempty"`
+	Data T            `json:"data"`
+	Meta ResponseMeta `json:"meta"`
 }
 
 type ResponseMeta struct {
-	RequestID string    `json:"request_id"`
-	Timestamp time.Time `json:"timestamp"`
-	Version   string    `json:"version"`
+	RequestID  string          `json:"request_id"`
+	Timestamp  time.Time       `json:"timestamp"`
+	Version    string          `json:"version"`
+	Pagination *PaginationMeta `json:"pagination,omitempty"`
 }
 
-type ValidationError struct {
+// PaginationMeta сопровождает каждый ответ-список (A-08); Total считается без учёта Limit/Offset.
+type PaginationMeta struct {
+	Limit  int `json:"limit"`
+	Offset int `json:"offset"`
+	Total  int `json:"total"`
+}
+
+// ErrorDetail — элемент error.details: одно поле запроса, не прошедшее проверку.
+type ErrorDetail struct {
 	Field   string `json:"field"`
 	Message string `json:"message"`
 	Code    string `json:"code"`
 }
 
 type ErrorResponse struct {
-	Error ErrorDetail  `json:"error"`
+	Error APIError     `json:"error"`
 	Meta  ResponseMeta `json:"meta"`
 }
 
-type ErrorDetail struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Details any    `json:"details,omitempty"`
+// APIError — единственная форма ошибки API (A-08).
+type APIError struct {
+	Code    string        `json:"code"`
+	Message string        `json:"message"`
+	Details []ErrorDetail `json:"details,omitempty"`
 }
 
 // CreateUserRequest represents the request payload for creating a new user
@@ -49,6 +58,11 @@ type UpdateUserRequest struct {
 	FirstName *string `json:"first_name,omitempty"`
 	LastName  *string `json:"last_name,omitempty"`
 	Email     *string `json:"email,omitempty"      validate:"omitempty,email"`
+}
+
+// PatchUserRequest меняет только роль; is_active появится вместе с полем в домене (план 04).
+type PatchUserRequest struct {
+	Role *string `json:"role,omitempty" validate:"omitempty,oneof=admin member child"`
 }
 
 type UserResponse struct {
@@ -72,6 +86,13 @@ type FamilyResponse struct {
 	Currency  string    `json:"currency"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// BackupResponse describes a file in the backup directory.
+type BackupResponse struct {
+	Name      string    `json:"name"`
+	SizeBytes int64     `json:"size_bytes"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // CreateCategoryRequest represents the request payload for creating a new category
@@ -136,6 +157,15 @@ type TransactionResponse struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+// BulkDeleteRequest — тело POST /transactions/bulk-delete; неизвестные id игнорируются.
+type BulkDeleteRequest struct {
+	IDs []uuid.UUID `json:"ids" validate:"required,min=1,max=200,dive,required"`
+}
+
+type BulkDeleteResponse struct {
+	Deleted int `json:"deleted"`
+}
+
 type TransactionFilterParams struct {
 	UserID      *uuid.UUID `query:"user_id"`
 	CategoryID  *uuid.UUID `query:"category_id"`
@@ -190,7 +220,7 @@ type CreateReportRequest struct {
 	Type      string    `json:"type"       validate:"required,oneof=expenses income budget cash_flow category_breakdown"`
 	Period    string    `json:"period"     validate:"required,oneof=daily weekly monthly yearly custom"`
 	StartDate time.Time `json:"start_date" validate:"required"`
-	EndDate   time.Time `json:"end_date"   validate:"required"`
+	EndDate   time.Time `json:"end_date"   validate:"required,gtefield=StartDate"`
 }
 
 type ReportResponse struct {

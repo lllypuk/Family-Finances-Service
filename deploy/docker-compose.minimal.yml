@@ -31,6 +31,8 @@ services:
       - SERVER_PORT=8080
       - SERVER_HOST=0.0.0.0
       - DATABASE_PATH=/data/budget.db
+      # Без этого бэкапы легли бы в /data/backups, то есть внутрь тома с самой БД
+      - BACKUP_DIR=${BACKUP_DIR:-/backups}
       - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET is required - generate one with `openssl rand -base64 32`}
       - CSRF_SECRET=${CSRF_SECRET:?CSRF_SECRET is required - generate one with `openssl rand -base64 32`}
       - LOG_LEVEL=${LOG_LEVEL:-info}

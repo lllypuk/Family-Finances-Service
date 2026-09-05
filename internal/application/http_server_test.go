@@ -238,6 +238,11 @@ func (m *MockTransactionService) DeleteTransaction(ctx context.Context, id uuid.
 }
 
 //nolint:revive // test mock
+func (m *MockTransactionService) BulkDelete(ctx context.Context, ids []uuid.UUID) (int, error) {
+	return 0, nil
+}
+
+//nolint:revive // test mock
 func (m *MockTransactionService) BulkCategorizeTransactions(
 	ctx context.Context,
 	transactionIDs []uuid.UUID,
@@ -371,6 +376,14 @@ func (m *MockBudgetService) GetAllBudgets(ctx context.Context, filter dto.Budget
 }
 
 //nolint:revive // test mock
+func (m *MockBudgetService) GetBudgetsPage(
+	ctx context.Context,
+	filter dto.BudgetFilterDTO,
+) ([]*budget.Budget, int, error) {
+	return nil, 0, nil
+}
+
+//nolint:revive // test mock
 func (m *MockBudgetService) RecalculateBudgetSpent(ctx context.Context, budgetID uuid.UUID) error {
 	return nil
 }
@@ -421,13 +434,16 @@ func (m *MockReportService) GenerateCategoryBreakdownReport(
 }
 
 //nolint:revive // test mock
-func (m *MockReportService) SaveReport(
+func (m *MockReportService) GenerateReport(
 	ctx context.Context,
-	reportData any,
-	reportType report.Type,
 	req dto.ReportRequestDTO,
 ) (*report.Report, error) {
 	return nil, nil //nolint:nilnil // test mock
+}
+
+//nolint:revive // test mock
+func (m *MockReportService) SaveReport(ctx context.Context, reportEntity *report.Report) error {
+	return nil
 }
 
 //nolint:revive // test mock
@@ -471,49 +487,7 @@ func (m *MockReportService) ExportReportData(
 }
 
 //nolint:revive // test mock
-func (m *MockReportService) ScheduleReport(
-	ctx context.Context,
-	req dto.ScheduleReportDTO,
-) (*dto.ScheduledReportDTO, error) {
-	return nil, nil //nolint:nilnil // test mock
-}
-
-//nolint:revive // test mock
-func (m *MockReportService) GetScheduledReports(ctx context.Context) ([]*dto.ScheduledReportDTO, error) {
-	return nil, nil
-}
-
-//nolint:revive // test mock
-func (m *MockReportService) UpdateScheduledReport(
-	ctx context.Context,
-	id uuid.UUID,
-	req dto.ScheduleReportDTO,
-) (*dto.ScheduledReportDTO, error) {
-	return nil, nil //nolint:nilnil // test mock
-}
-
-//nolint:revive // test mock
-func (m *MockReportService) DeleteScheduledReport(ctx context.Context, id uuid.UUID) error {
-	return nil
-}
-
-//nolint:revive // test mock
-func (m *MockReportService) ExecuteScheduledReport(ctx context.Context, scheduledReportID uuid.UUID) error {
-	return nil
-}
-
-//nolint:revive // test mock
-func (m *MockReportService) CalculateBenchmarks(ctx context.Context) (*dto.BenchmarkComparisonDTO, error) {
-	return nil, nil //nolint:nilnil // test mock
-}
-
-//nolint:revive // test mock
 func (m *MockReportService) GenerateFinancialInsights(ctx context.Context) ([]dto.RecommendationDTO, error) {
-	return nil, nil
-}
-
-//nolint:revive // test mock
-func (m *MockReportService) GenerateSpendingForecast(ctx context.Context, months int) ([]dto.ForecastDTO, error) {
 	return nil, nil
 }
 

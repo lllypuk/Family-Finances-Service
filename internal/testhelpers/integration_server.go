@@ -70,8 +70,9 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 		Invite:      userrepo.NewInviteSQLiteRepository(db),
 	}
 
-	// Create BackupService for testing with in-memory database
-	backupService := services.NewBackupService(db, ":memory:", slog.Default())
+	// Create BackupService for testing with in-memory database.
+	// Каталог бэкапов — временный: иначе сервис пишет ./backups в каталог пакета.
+	backupService := services.NewBackupService(db, ":memory:", t.TempDir(), slog.Default())
 
 	// Create services for testing - use simplified version to avoid circular dependencies
 	servicesContainer := services.NewServices(

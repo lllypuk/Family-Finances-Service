@@ -85,6 +85,13 @@ func TestAPIRoles_DestructiveRoutesRequireAdmin(t *testing.T) {
 			path:    func(f apiFixtures) string { return "/api/v1/categories/" + f.freeCategoryID.String() },
 			adminOK: http.StatusNoContent,
 		},
+		{
+			name:    "patch user role",
+			method:  http.MethodPatch,
+			path:    func(f apiFixtures) string { return "/api/v1/users/" + f.userID.String() },
+			body:    func(_ *testing.T, _ apiFixtures) string { return `{"role":"child"}` },
+			adminOK: http.StatusOK,
+		},
 		// Чтение карточки пользователя закрыто наравне с остальными
 		// операциями над /users: в вебе весь раздел под RequireAdmin,
 		// и API не должен отдавать member/child чужие email и роли.
@@ -141,6 +148,7 @@ func TestAPIRoles_ChildHasNoAccessToFinanceRoutes(t *testing.T) {
 		"/api/v1/transactions",
 		"/api/v1/budgets",
 		"/api/v1/reports",
+		"/api/v1/stats/summary",
 	}
 
 	for _, path := range financePaths {
@@ -165,6 +173,20 @@ func TestAPIRoles_ChildHasNoAccessToFinanceRoutes(t *testing.T) {
 			assert.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
 		})
 	}
+
+	// Массовое удаление — тот же financeAccess, что и остальные операции с транзакциями.
+	t.Run("child bulk delete transactions", func(t *testing.T) {
+		body := mustJSON(t, map[string]any{"ids": []string{uuid.New().String()}})
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions/bulk-delete", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		childAuth.Apply(req)
+		rec := httptest.NewRecorder()
+
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusForbidden, rec.Code, "тело: %s", rec.Body.String())
+	})
 
 	// Запись под ролью child закрыта так же, как чтение.
 	t.Run("child create transaction", func(t *testing.T) {
@@ -203,6 +225,7 @@ func TestAPIRoles_MemberHasAccessToFinanceRoutes(t *testing.T) {
 		"/api/v1/transactions",
 		"/api/v1/budgets",
 		"/api/v1/reports",
+		"/api/v1/stats/summary",
 	}
 
 	for _, path := range financePaths {
@@ -237,6 +260,19 @@ func TestAPIRoles_MemberHasAccessToFinanceRoutes(t *testing.T) {
 		testServer.Server.Echo().ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusCreated, rec.Code, "тело: %s", rec.Body.String())
+	})
+
+	t.Run("member bulk delete transactions", func(t *testing.T) {
+		body := mustJSON(t, map[string]any{"ids": []string{uuid.New().String()}})
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions/bulk-delete", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		memberAuth.Apply(req)
+		rec := httptest.NewRecorder()
+
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
 	})
 
 	// Раздел пользователей роли member по-прежнему закрыт, даже на чтение.

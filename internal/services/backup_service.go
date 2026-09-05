@@ -39,9 +39,12 @@ type backupService struct {
 	logger    *slog.Logger
 }
 
-// NewBackupService creates a new BackupService instance
-func NewBackupService(db *sql.DB, dbPath string, logger *slog.Logger) BackupService {
-	backupDir := filepath.Join(filepath.Dir(dbPath), "backups")
+// NewBackupService creates a new BackupService instance.
+// Пустой backupDir означает <dir(dbPath)>/backups.
+func NewBackupService(db *sql.DB, dbPath, backupDir string, logger *slog.Logger) BackupService {
+	if backupDir == "" {
+		backupDir = filepath.Join(filepath.Dir(dbPath), "backups")
+	}
 	return &backupService{
 		db:        db,
 		dbPath:    dbPath,

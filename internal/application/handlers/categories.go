@@ -3,7 +3,6 @@ package handlers
 import (
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
@@ -24,78 +23,21 @@ func NewCategoryHandler(repositories *Repositories, categoryService services.Cat
 	return &CategoryHandler{
 		repositories:    repositories,
 		categoryService: categoryService,
-		validator:       validator.New(),
+		validator:       newAPIValidator(),
 	}
 }
 
 func (h *CategoryHandler) CreateCategory(c echo.Context) error {
 	var req CreateCategoryRequest
 	if bindErr := c.Bind(&req); bindErr != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    ErrCodeInvalidRequest,
-				Message: ErrMessageInvalidRequest,
-				Details: bindErr.Error(),
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
+			bodyDetail(ErrCodeInvalidRequest, bindErr.Error()))
 	}
 
-	if err := h.validator.Struct(req); err != nil {
-		var validationErrors []ValidationError
-		for _, err := range func() validator.ValidationErrors {
-			var target validator.ValidationErrors
-			_ = errors.As(err, &target)
-			return target
-		}() {
-			validationErrors = append(validationErrors, ValidationError{
-				Field:   err.Field(),
-				Message: err.Tag(),
-				Code:    ErrCodeValidationError,
-			})
-		}
-
-		return c.JSON(http.StatusBadRequest, APIResponse[any]{
-			Data: nil,
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-			Errors: validationErrors,
-		})
+	if validationErr := h.validator.Struct(req); validationErr != nil {
+		return respondValidationErrors(c, validationErr)
 	}
 
-	// Validate request
-	if err := h.validator.Struct(req); err != nil {
-		var validationErrors []ValidationError
-		var validationErrs validator.ValidationErrors
-		if errors.As(err, &validationErrs) {
-			for _, err := range validationErrs {
-				validationErrors = append(validationErrors, ValidationError{
-					Field:   err.Field(),
-					Message: err.Tag(),
-					Code:    "VALIDATION_ERROR",
-				})
-			}
-		}
-
-		return c.JSON(http.StatusBadRequest, APIResponse[any]{
-			Data: nil,
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-			Errors: validationErrors,
-		})
-	}
-
-	// Convert request to DTO
 	createDTO := dto.CreateCategoryDTO{
 		Name:     req.Name,
 		Type:     category.Type(req.Type),
@@ -104,38 +46,20 @@ func (h *CategoryHandler) CreateCategory(c echo.Context) error {
 		ParentID: req.ParentID,
 	}
 
-	// Use service to create category
 	newCategory, err := h.categoryService.CreateCategory(c.Request().Context(), createDTO)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "CREATE_FAILED",
-				Message: "Failed to create category",
-				Details: err.Error(),
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create category")
 	}
 
-	// Convert domain model to API response
-	response := dto.ToCategoryAPIResponse(newCategory)
-
-	return c.JSON(http.StatusCreated, APIResponse[dto.CategoryAPIResponse]{
-		Data: response,
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+	return respondAPI(c, http.StatusCreated, dto.ToCategoryAPIResponse(newCategory))
 }
 
 func (h *CategoryHandler) GetCategories(c echo.Context) error {
-	// Получаем параметры запроса
+	page, pageErr := parsePagination(c)
+	if pageErr != nil {
+		return ignoreWritten(pageErr)
+	}
+
 	typeParam := c.QueryParam("type")
 
 	var typeFilter *category.Type
@@ -144,203 +68,79 @@ func (h *CategoryHandler) GetCategories(c echo.Context) error {
 		typeFilter = &categoryType
 	}
 
-	// Use service to get categories (single-family model)
 	categories, err := h.categoryService.GetCategories(c.Request().Context(), typeFilter)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "FETCH_FAILED",
-				Message: "Failed to fetch categories",
-				Details: err.Error(),
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch categories")
 	}
 
-	// Convert domain models to API responses
-	var response []dto.CategoryAPIResponse
-	for _, cat := range categories {
+	response := make([]dto.CategoryAPIResponse, 0, page.Limit)
+	for _, cat := range pageSlice(categories, page) {
 		response = append(response, dto.ToCategoryAPIResponse(cat))
 	}
 
-	return c.JSON(http.StatusOK, APIResponse[[]dto.CategoryAPIResponse]{
-		Data: response,
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+	return respondList(c, response, page, len(categories))
 }
 
 func (h *CategoryHandler) GetCategoryByID(c echo.Context) error {
-	idParam := c.Param("id")
-	id, err := uuid.Parse(idParam)
+	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    ErrCodeInvalidID,
-				Message: ErrMessageInvalidCategoryID,
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidCategoryID)
 	}
 
 	foundCategory, err := h.categoryService.GetCategoryByID(c.Request().Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    ErrCodeCategoryNotFound,
-				Message: "Category not found",
-				Details: err.Error(),
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusNotFound, ErrCodeCategoryNotFound, ErrMessageCategoryNotFound)
 	}
 
-	// Convert domain model to API response
-	response := dto.ToCategoryAPIResponse(foundCategory)
-
-	return c.JSON(http.StatusOK, APIResponse[dto.CategoryAPIResponse]{
-		Data: response,
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+	return respondAPI(c, http.StatusOK, dto.ToCategoryAPIResponse(foundCategory))
 }
 
 func (h *CategoryHandler) UpdateCategory(c echo.Context) error {
-	idParam := c.Param("id")
-	id, err := uuid.Parse(idParam)
+	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_ID",
-				Message: "Invalid category ID format",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidCategoryID)
 	}
 
 	var req UpdateCategoryRequest
 	if bindErr := c.Bind(&req); bindErr != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "INVALID_REQUEST",
-				Message: "Invalid request body",
-				Details: bindErr.Error(),
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
+			bodyDetail(ErrCodeInvalidRequest, bindErr.Error()))
 	}
 
-	// Convert request to DTO
+	if validationErr := h.validator.Struct(req); validationErr != nil {
+		return respondValidationErrors(c, validationErr)
+	}
+
 	updateDTO := dto.UpdateCategoryDTO{
 		Name:  req.Name,
 		Color: req.Color,
 		Icon:  req.Icon,
 	}
 
-	// Use service to update category
 	updatedCategory, err := h.categoryService.UpdateCategory(c.Request().Context(), id, updateDTO)
 	if err != nil {
-		statusCode := http.StatusInternalServerError
-		errorCode := "UPDATE_FAILED"
-
 		if errors.Is(err, services.ErrCategoryNotFound) {
-			statusCode = http.StatusNotFound
-			errorCode = "CATEGORY_NOT_FOUND"
+			return respondError(c, http.StatusNotFound, ErrCodeCategoryNotFound, ErrMessageCategoryNotFound)
 		}
 
-		return c.JSON(statusCode, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    errorCode,
-				Message: err.Error(),
-				Details: err.Error(),
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusInternalServerError, "UPDATE_FAILED", "Failed to update category")
 	}
 
-	// Convert domain model to API response
-	response := dto.ToCategoryAPIResponse(updatedCategory)
-
-	return c.JSON(http.StatusOK, APIResponse[dto.CategoryAPIResponse]{
-		Data: response,
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+	return respondAPI(c, http.StatusOK, dto.ToCategoryAPIResponse(updatedCategory))
 }
 
 func (h *CategoryHandler) DeleteCategory(c echo.Context) error {
-	idParam := c.Param("id")
-	id, err := uuid.Parse(idParam)
+	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    ErrCodeInvalidID,
-				Message: ErrMessageInvalidCategoryID,
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidCategoryID)
 	}
 
-	// Use service to delete category (single-family model)
-	err = h.categoryService.DeleteCategory(c.Request().Context(), id)
-	if err != nil {
-		statusCode := http.StatusInternalServerError
-		errorCode := "DELETE_FAILED"
-
-		if errors.Is(err, services.ErrCategoryNotFound) {
-			statusCode = http.StatusNotFound
-			errorCode = "CATEGORY_NOT_FOUND"
+	if delErr := h.categoryService.DeleteCategory(c.Request().Context(), id); delErr != nil {
+		if errors.Is(delErr, services.ErrCategoryNotFound) {
+			return respondError(c, http.StatusNotFound, ErrCodeCategoryNotFound, ErrMessageCategoryNotFound)
 		}
 
-		return c.JSON(statusCode, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    errorCode,
-				Message: err.Error(),
-				Details: err.Error(),
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return respondError(c, http.StatusInternalServerError, "DELETE_FAILED", "Failed to delete category")
 	}
 
 	return c.NoContent(http.StatusNoContent)

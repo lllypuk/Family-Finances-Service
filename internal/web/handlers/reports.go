@@ -1,11 +1,9 @@
 package handlers
 
 import (
-	"encoding/csv"
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -236,82 +234,23 @@ func (h *ReportHandler) buildReportRequestDTO(
 	}, nil
 }
 
-// generateReport генерирует отчет по типу
+// generateReport генерирует и сохраняет отчет через сервис
 func (h *ReportHandler) generateReport(c echo.Context, createDTO dto.ReportRequestDTO) (*report.Report, error) {
-	switch createDTO.Type {
-	case report.TypeExpenses:
-		return h.generateExpenseReport(c, createDTO)
-	case report.TypeIncome:
-		return h.generateIncomeReport(c, createDTO)
-	case report.TypeBudget:
-		return h.generateBudgetReport(c, createDTO)
-	case report.TypeCashFlow:
-		return h.generateCashFlowReport(c, createDTO)
-	case report.TypeCategoryBreak:
-		return h.generateCategoryReport(c, createDTO)
-	default:
-		return h.handleUnsupportedReportType(c)
-	}
-}
+	ctx := c.Request().Context()
 
-// generateExpenseReport генерирует отчет по расходам
-func (h *ReportHandler) generateExpenseReport(c echo.Context, createDTO dto.ReportRequestDTO) (*report.Report, error) {
-	expenseReport, err := h.services.Report.GenerateExpenseReport(c.Request().Context(), createDTO)
+	reportEntity, err := h.services.Report.GenerateReport(ctx, createDTO)
 	if err != nil {
+		if errors.Is(err, services.ErrUnsupportedReportType) {
+			return h.handleUnsupportedReportType(c)
+		}
 		return nil, h.handleReportGenerationError(c, err)
 	}
 
-	return h.services.Report.SaveReport(c.Request().Context(), expenseReport, createDTO.Type, createDTO)
-}
-
-// generateIncomeReport генерирует отчет по доходам
-func (h *ReportHandler) generateIncomeReport(c echo.Context, createDTO dto.ReportRequestDTO) (*report.Report, error) {
-	incomeReport, err := h.services.Report.GenerateIncomeReport(c.Request().Context(), createDTO)
-	if err != nil {
-		return nil, h.handleReportGenerationError(c, err)
+	if saveErr := h.services.Report.SaveReport(ctx, reportEntity); saveErr != nil {
+		return nil, h.handleReportGenerationError(c, saveErr)
 	}
 
-	return h.services.Report.SaveReport(c.Request().Context(), incomeReport, createDTO.Type, createDTO)
-}
-
-// generateBudgetReport генерирует отчет по бюджету
-func (h *ReportHandler) generateBudgetReport(c echo.Context, createDTO dto.ReportRequestDTO) (*report.Report, error) {
-	budgetReport, err := h.services.Report.GenerateBudgetComparisonReport(
-		c.Request().Context(),
-		createDTO.Period,
-	)
-	if err != nil {
-		return nil, h.handleReportGenerationError(c, err)
-	}
-
-	return h.services.Report.SaveReport(c.Request().Context(), budgetReport, createDTO.Type, createDTO)
-}
-
-// generateCashFlowReport генерирует отчет по денежному потоку
-func (h *ReportHandler) generateCashFlowReport(c echo.Context, createDTO dto.ReportRequestDTO) (*report.Report, error) {
-	cashFlowReport, err := h.services.Report.GenerateCashFlowReport(
-		c.Request().Context(),
-		createDTO.StartDate,
-		createDTO.EndDate,
-	)
-	if err != nil {
-		return nil, h.handleReportGenerationError(c, err)
-	}
-
-	return h.services.Report.SaveReport(c.Request().Context(), cashFlowReport, createDTO.Type, createDTO)
-}
-
-// generateCategoryReport генерирует отчет по категориям
-func (h *ReportHandler) generateCategoryReport(c echo.Context, createDTO dto.ReportRequestDTO) (*report.Report, error) {
-	categoryReport, err := h.services.Report.GenerateCategoryBreakdownReport(
-		c.Request().Context(),
-		createDTO.Period,
-	)
-	if err != nil {
-		return nil, h.handleReportGenerationError(c, err)
-	}
-
-	return h.services.Report.SaveReport(c.Request().Context(), categoryReport, createDTO.Type, createDTO)
+	return reportEntity, nil
 }
 
 // handleUnsupportedReportType обрабатывает неподдерживаемый тип отчета
@@ -469,56 +408,17 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 		EndDate:   endDate,
 	}
 
-	// Генерация отчета через сервис
-	var reportData any
-	var generateErr error
-
-	switch generateDTO.Type {
-	case report.TypeExpenses:
-		reportData, generateErr = h.services.Report.GenerateExpenseReport(c.Request().Context(), generateDTO)
-	case report.TypeIncome:
-		reportData, generateErr = h.services.Report.GenerateIncomeReport(c.Request().Context(), generateDTO)
-	case report.TypeBudget:
-		reportData, generateErr = h.services.Report.GenerateBudgetComparisonReport(
-			c.Request().Context(),
-			generateDTO.Period,
-		)
-	case report.TypeCashFlow:
-		reportData, generateErr = h.services.Report.GenerateCashFlowReport(
-			c.Request().Context(),
-			generateDTO.StartDate,
-			generateDTO.EndDate,
-		)
-	case report.TypeCategoryBreak:
-		reportData, generateErr = h.services.Report.GenerateCategoryBreakdownReport(
-			c.Request().Context(),
-			generateDTO.Period,
-		)
-	default:
-		return h.renderPartial(c, "components/form_errors", map[string]any{
-			tplKeyErrors: map[string]string{tplKeyForm: "Unsupported report type"},
-		})
-	}
-	if generateErr != nil {
+	// Генерация отчета через сервис (без сохранения — это предпросмотр)
+	tempReport, err := h.services.Report.GenerateReport(c.Request().Context(), generateDTO)
+	if err != nil {
+		if errors.Is(err, services.ErrUnsupportedReportType) {
+			return h.renderPartial(c, "components/form_errors", map[string]any{
+				tplKeyErrors: map[string]string{tplKeyForm: "Unsupported report type"},
+			})
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to generate report")
 	}
 
-	// Создаем временный отчет для отображения
-	tempReport := &report.Report{
-		ID:          uuid.New(),
-		Name:        form.Name,
-		Type:        generateDTO.Type,
-		Period:      generateDTO.Period,
-		UserID:      generateDTO.UserID,
-		StartDate:   generateDTO.StartDate,
-		EndDate:     generateDTO.EndDate,
-		GeneratedAt: time.Now(),
-	}
-
-	// Конвертируем данные отчета в стандартный формат
-	tempReport.Data = h.convertReportDataToStandard(reportData, generateDTO.Type)
-
-	// Конвертируем в view модель
 	reportVM := webModels.ReportDataVM{}
 	reportVM.FromDomain(tempReport)
 
@@ -529,109 +429,19 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 	return h.renderPartial(c, "components/report_data", data)
 }
 
-// exportReportAsCSV экспортирует отчет в CSV формат
+// exportReportAsCSV отдаёт CSV, собранный сервисом отчётов.
 func (h *ReportHandler) exportReportAsCSV(c echo.Context, r *report.Report) error {
+	body, err := h.services.Report.ExportReport(c.Request().Context(), r.ID, "csv", dto.ExportOptionsDTO{})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to export report")
+	}
+
 	filename := fmt.Sprintf("%s_%s.csv",
 		strings.ReplaceAll(r.Name, " ", "_"),
 		r.GeneratedAt.Format("2006-01-02"))
-
-	c.Response().Header().Set("Content-Type", "text/csv")
 	c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 
-	writer := csv.NewWriter(c.Response().Writer)
-	defer writer.Flush()
-
-	// В зависимости от типа отчета экспортируем разные данные
-	switch r.Type {
-	case report.TypeExpenses, report.TypeIncome, report.TypeCategoryBreak:
-		return h.exportCategoryBreakdownCSV(writer, r)
-	case report.TypeCashFlow:
-		return h.exportDailyBreakdownCSV(writer, r)
-	case report.TypeBudget:
-		return h.exportBudgetComparisonCSV(writer, r)
-	default:
-		return h.exportCategoryBreakdownCSV(writer, r)
-	}
-}
-
-// exportCategoryBreakdownCSV экспортирует разбивку по категориям
-func (h *ReportHandler) exportCategoryBreakdownCSV(writer *csv.Writer, r *report.Report) error {
-	// Заголовки
-	headers := []string{"Category", "Amount", "Percentage", "Transaction Count"}
-	if err := writer.Write(headers); err != nil {
-		return err
-	}
-
-	// Данные
-	for _, item := range r.Data.CategoryBreakdown {
-		row := []string{
-			item.CategoryName,
-			fmt.Sprintf("%.2f", item.Amount),
-			fmt.Sprintf("%.1f%%", item.Percentage),
-			strconv.Itoa(item.Count),
-		}
-		if err := writer.Write(row); err != nil {
-			return err
-		}
-	}
-
-	// Итого
-	totalRow := []string{
-		"TOTAL",
-		fmt.Sprintf("%.2f", r.Data.TotalExpenses),
-		"100.0%",
-		"",
-	}
-	return writer.Write(totalRow)
-}
-
-// exportDailyBreakdownCSV экспортирует дневную разбивку
-func (h *ReportHandler) exportDailyBreakdownCSV(writer *csv.Writer, r *report.Report) error {
-	// Заголовки
-	headers := []string{"Date", "Income", "Expenses", "Balance"}
-	if err := writer.Write(headers); err != nil {
-		return err
-	}
-
-	// Данные
-	for _, item := range r.Data.DailyBreakdown {
-		row := []string{
-			item.Date.Format("2006-01-02"),
-			fmt.Sprintf("%.2f", item.Income),
-			fmt.Sprintf("%.2f", item.Expenses),
-			fmt.Sprintf("%.2f", item.Balance),
-		}
-		if err := writer.Write(row); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// exportBudgetComparisonCSV экспортирует сравнение с бюджетом
-func (h *ReportHandler) exportBudgetComparisonCSV(writer *csv.Writer, r *report.Report) error {
-	// Заголовки
-	headers := []string{"Budget", "Planned", "Actual", "Difference", "Percentage"}
-	if err := writer.Write(headers); err != nil {
-		return err
-	}
-
-	// Данные
-	for _, item := range r.Data.BudgetComparison {
-		row := []string{
-			item.BudgetName,
-			fmt.Sprintf("%.2f", item.Planned),
-			fmt.Sprintf("%.2f", item.Actual),
-			fmt.Sprintf("%.2f", item.Difference),
-			fmt.Sprintf("%.1f%%", item.Percentage),
-		}
-		if err := writer.Write(row); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return c.Blob(http.StatusOK, "text/csv", body)
 }
 
 // renderReportFormWithErrors отображает форму создания отчёта с ошибками
@@ -648,161 +458,6 @@ func (h *ReportHandler) renderReportFormWithErrors(
 	}
 
 	return h.renderPage(c, "pages/reports/new", data)
-}
-
-// convertReportDataToStandard конвертирует специфичные DTO в стандартный report.Data формат
-func (h *ReportHandler) convertReportDataToStandard(reportData any, reportType report.Type) report.Data {
-	switch reportType {
-	case report.TypeExpenses:
-		return h.convertExpenseReportData(reportData)
-	case report.TypeIncome:
-		return h.convertIncomeReportData(reportData)
-	case report.TypeBudget:
-		return h.convertBudgetReportData(reportData)
-	case report.TypeCashFlow:
-		return h.convertCashFlowReportData(reportData)
-	case report.TypeCategoryBreak:
-		return h.convertCategoryReportData(reportData)
-	default:
-		return report.Data{}
-	}
-}
-
-// convertExpenseReportData конвертирует данные отчета по расходам
-func (h *ReportHandler) convertExpenseReportData(reportData any) report.Data {
-	expenseReport, ok := reportData.(*dto.ExpenseReportDTO)
-	if !ok {
-		return report.Data{}
-	}
-
-	categoryBreakdown := h.convertCategoryBreakdownItems(expenseReport.CategoryBreakdown)
-	topExpenses := h.convertTopExpensesItems(expenseReport.TopExpenses)
-
-	return report.Data{
-		TotalExpenses:     expenseReport.TotalExpenses,
-		CategoryBreakdown: categoryBreakdown,
-		TopExpenses:       topExpenses,
-	}
-}
-
-// convertIncomeReportData конвертирует данные отчета по доходам
-func (h *ReportHandler) convertIncomeReportData(reportData any) report.Data {
-	incomeReport, ok := reportData.(*dto.IncomeReportDTO)
-	if !ok {
-		return report.Data{}
-	}
-
-	categoryBreakdown := h.convertCategoryBreakdownItems(incomeReport.CategoryBreakdown)
-
-	return report.Data{
-		TotalIncome:       incomeReport.TotalIncome,
-		CategoryBreakdown: categoryBreakdown,
-	}
-}
-
-// convertBudgetReportData конвертирует данные отчета по бюджету
-func (h *ReportHandler) convertBudgetReportData(reportData any) report.Data {
-	budgetReport, ok := reportData.(*dto.BudgetComparisonDTO)
-	if !ok {
-		return report.Data{}
-	}
-
-	budgetComparison := make([]report.BudgetComparisonItem, len(budgetReport.Categories))
-	for i, item := range budgetReport.Categories {
-		budgetComparison[i] = report.BudgetComparisonItem{
-			BudgetID:   item.CategoryID, // Используем CategoryID как BudgetID
-			BudgetName: item.CategoryName,
-			Planned:    item.BudgetAmount,
-			Actual:     item.ActualAmount,
-			Difference: item.Variance,
-			Percentage: item.Utilization,
-		}
-	}
-
-	return report.Data{
-		TotalExpenses:    budgetReport.TotalSpent,
-		BudgetComparison: budgetComparison,
-	}
-}
-
-// convertCashFlowReportData конвертирует данные отчета по денежному потоку
-func (h *ReportHandler) convertCashFlowReportData(reportData any) report.Data {
-	cashFlowReport, ok := reportData.(*dto.CashFlowReportDTO)
-	if !ok {
-		return report.Data{}
-	}
-
-	dailyBreakdown := make([]report.DailyReportItem, len(cashFlowReport.DailyFlow))
-	for i, item := range cashFlowReport.DailyFlow {
-		dailyBreakdown[i] = report.DailyReportItem{
-			Date:     item.Date,
-			Income:   item.Inflow,
-			Expenses: item.Outflow,
-			Balance:  item.Balance,
-		}
-	}
-
-	return report.Data{
-		TotalIncome:    cashFlowReport.TotalInflows,
-		TotalExpenses:  cashFlowReport.TotalOutflows,
-		NetIncome:      cashFlowReport.NetCashFlow,
-		DailyBreakdown: dailyBreakdown,
-	}
-}
-
-// convertCategoryReportData конвертирует данные отчета по категориям
-func (h *ReportHandler) convertCategoryReportData(reportData any) report.Data {
-	categoryReport, ok := reportData.(*dto.CategoryBreakdownDTO)
-	if !ok {
-		return report.Data{}
-	}
-
-	categoryBreakdown := make([]report.CategoryReportItem, len(categoryReport.Categories))
-	for i, item := range categoryReport.Categories {
-		categoryBreakdown[i] = report.CategoryReportItem{
-			CategoryID:   item.CategoryID,
-			CategoryName: item.CategoryName,
-			Amount:       item.TotalAmount,
-			Percentage:   item.Percentage,
-			Count:        item.TransactionCount,
-		}
-	}
-
-	return report.Data{
-		CategoryBreakdown: categoryBreakdown,
-	}
-}
-
-// convertCategoryBreakdownItems конвертирует элементы разбивки по категориям
-func (h *ReportHandler) convertCategoryBreakdownItems(
-	items []dto.CategoryBreakdownItemDTO,
-) []report.CategoryReportItem {
-	categoryBreakdown := make([]report.CategoryReportItem, len(items))
-	for i, item := range items {
-		categoryBreakdown[i] = report.CategoryReportItem{
-			CategoryID:   item.CategoryID,
-			CategoryName: item.CategoryName,
-			Amount:       item.Amount,
-			Percentage:   item.Percentage,
-			Count:        item.Count,
-		}
-	}
-	return categoryBreakdown
-}
-
-// convertTopExpensesItems конвертирует элементы топ расходов
-func (h *ReportHandler) convertTopExpensesItems(items []dto.TransactionSummaryDTO) []report.TransactionReportItem {
-	topExpenses := make([]report.TransactionReportItem, len(items))
-	for i, item := range items {
-		topExpenses[i] = report.TransactionReportItem{
-			ID:          item.ID,
-			Amount:      item.Amount,
-			Description: item.Description,
-			Category:    item.Category,
-			Date:        item.Date,
-		}
-	}
-	return topExpenses
 }
 
 // getReportServiceErrorMessage возвращает пользовательское сообщение об ошибке.

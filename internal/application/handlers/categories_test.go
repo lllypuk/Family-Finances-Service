@@ -172,13 +172,14 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 			mockSetup: func(_ *MockCategoryService, _ uuid.UUID) {
 				// No service call expected since validation fails at handler level
 			},
-			expectedStatus: http.StatusBadRequest,
+			expectedStatus: http.StatusUnprocessableEntity,
 			expectedBody: func(t *testing.T, body string) {
-				var response handlers.APIResponse[any]
+				var response handlers.ErrorResponse
 				err := json.Unmarshal([]byte(body), &response)
 				require.NoError(t, err)
-				assert.NotEmpty(t, response.Errors)
-				assert.Equal(t, "VALIDATION_ERROR", response.Errors[0].Code)
+				assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
+				require.NotEmpty(t, response.Error.Details)
+				assert.Equal(t, "VALIDATION_ERROR", response.Error.Details[0].Code)
 			},
 		},
 		{

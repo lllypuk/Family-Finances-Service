@@ -4,11 +4,25 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
+	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo/v4"
 )
+
+// apiPathPrefix — префикс JSON-роутов; ответы под ним всегда в API-envelope.
+const apiPathPrefix = "/api/"
+
+// ErrCSRFTokenInvalid — маркер отбитого CSRF-запроса к API: по нему обработчик
+// ошибок выбирает error.code в JSON-envelope.
+var ErrCSRFTokenInvalid = errors.New("csrf token validation failed")
+
+// IsAPIPath сообщает, обслуживается ли путь JSON-API.
+func IsAPIPath(path string) bool {
+	return strings.HasPrefix(path, apiPathPrefix)
+}
 
 const (
 	CSRFTokenKey    = "csrf_token"
@@ -33,6 +47,13 @@ func CSRFProtection() echo.MiddlewareFunc {
 
 			// Для POST, PUT, DELETE запросов проверяем токен
 			if err := validateCSRFToken(c); err != nil {
+				// API отвечает общим envelope, а не текстом: сгенерированный
+				// клиент читает только {"error":…} и по коду понимает,
+				// что токен пора обновить.
+				if IsAPIPath(c.Request().URL.Path) {
+					return echo.NewHTTPError(http.StatusForbidden, "CSRF token validation failed").
+						SetInternal(ErrCSRFTokenInvalid)
+				}
 				if IsHTMXRequest(c) {
 					return c.JSON(http.StatusForbidden, map[string]string{
 						"error": "CSRF token validation failed",

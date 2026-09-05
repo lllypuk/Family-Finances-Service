@@ -23,7 +23,7 @@ var (
 	ErrInvalidRole        = errors.New("invalid user role")
 	ErrUnauthorized       = errors.New("unauthorized access")
 	ErrValidationFailed   = errors.New("validation failed")
-	// ErrLastAdmin — попытка удалить последнего администратора семьи.
+	// ErrLastAdmin — попытка удалить или понизить последнего администратора семьи.
 	// Модель однофамильная: без администратора некому выпускать инвайты и
 	// открытой регистрации нет, поэтому состояние невосстановимо.
 	ErrLastAdmin = errors.New("cannot delete the last admin")
@@ -253,6 +253,14 @@ func (s *userService) ChangeUserRole(ctx context.Context, userID uuid.UUID, role
 	existingUser, err := s.GetUserByID(ctx, userID)
 	if err != nil {
 		return err
+	}
+
+	// Понижение — такая же потеря администратора, как и удаление: семья
+	// остаётся без того, кто выпускает инвайты и заводит пользователей.
+	if role != user.RoleAdmin {
+		if err = s.ensureNotLastAdmin(ctx, existingUser); err != nil {
+			return err
+		}
 	}
 
 	// Update role

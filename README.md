@@ -33,13 +33,13 @@ This project is in **active development** with the following achievements:
 - 📈 **Real-Time Analytics**: Interactive dashboards with live updates
 - 🎯 **Financial Goals Tracking**: Savings goals with progress visualization
 - 🔐 **Enterprise Security**: Session management, CSRF protection, input validation
-- 📊 **Reporting (mixed readiness)**: Web UI supports preview/save/view/delete and CSV export for reports; public report-generation REST API is still in progress
+- 📊 **Reporting**: generate, store, view, delete reports and export CSV — over REST API and in the web UI
 - 📨 **Invite System**: Secure registration via links with role control and expiration
 - 💾 **Backup Management**: Create, download, restore DB with auto-cleanup (up to 10 backups)
 - 🛠️ **Admin Panel**: User, invite, and backup management
 - 🌐 **Multi-Platform Ready**: REST API, web interface, mobile-ready design
 
-## API Readiness (Ready / Experimental)
+## API Readiness
 
 The **target** contract lives in [`docs/api/openapi.yaml`](docs/api/openapi.yaml) (OpenAPI 3.1, hand-written,
 see [`docs/api/README.md`](docs/api/README.md)) — bearer tokens, `limit/offset`, money in minor units. It is what
@@ -60,9 +60,10 @@ and there are no API tokens yet: **the only credential is the web session cookie
 
 Role model mirrors the web UI:
 
-- the whole `/api/v1/users` group (including `GET /api/v1/users/:id`) and
+- the whole `/api/v1/users` and `/api/v1/backups` groups, `PUT /api/v1/family` and
   `DELETE /api/v1/categories/:id` — **admin only**
-- `/api/v1/{categories,transactions,budgets,reports}` — **admin or member** (`child` gets `403`)
+- `/api/v1/{categories,transactions,budgets,reports,stats}` — **admin or member** (`child` gets `403`)
+- `GET /api/v1/family` — any authenticated role, including `child`
 
 The author of a record is taken from the session: `user_id` is no longer part of
 `CreateTransactionRequest` / `CreateReportRequest`, so sending it in the body has no effect.
@@ -73,20 +74,29 @@ working `curl` walkthrough.
 
 ### Ready (current behavior)
 
-- Core REST API for users, categories, transactions, budgets — session-authenticated, role-gated
-- Invite, admin, and backup management APIs/web flows
-- Stored reports API endpoints: list, get by ID, delete
-- Web reports UI: generate preview/save/view/delete/export CSV for expense, income, budget, cash-flow, and category-breakdown reports
-- Web UI for day-to-day finance workflows
+- Core REST API for users, categories, transactions, budgets, reports — session-authenticated, role-gated
+- `POST /api/v1/reports` generates and stores a report (expense, income, budget, cash-flow,
+  category-breakdown); `GET /api/v1/reports/:id/export` returns CSV
+- `GET /api/v1/stats/summary?from=YYYY-MM-DD&to=YYYY-MM-DD` — dashboard summary (totals, deltas to the
+  previous period, top categories, budget progress, recent transactions); defaults to the current month
+- `GET /api/v1/users`, `PATCH /api/v1/users/:id` (role change), `GET`/`PUT /api/v1/family`
+- Backups over API: `POST`/`GET /api/v1/backups`, `GET /api/v1/backups/:name/download`,
+  `DELETE /api/v1/backups/:name`
+- `POST /api/v1/transactions/bulk-delete`
+- Every list answers with `meta.pagination {limit, offset, total}` — `limit` defaults to 50, max 200
+- One error envelope everywhere: `{"error":{"code","message","details"},"meta":{...}}`;
+  validation fails with `422 VALIDATION_ERROR` and per-field `details`
+- Invite and admin web flows, web UI for day-to-day finance workflows
 
-### Experimental / In Progress
+### Not available yet
 
 - **No API tokens.** Session cookies only — fine for a browser or a scripted cookie jar,
-  awkward for a headless integration. Token auth is a separate, not-yet-written plan
-- `POST /api/v1/reports` currently returns `501 Not Implemented` (report generation API is not exposed yet)
-- Advanced analytics/report-generation features described in roadmap-style text are not fully available via public API
-- Scheduled reports, forecasts, insights, and benchmark analytics remain hidden/placeholder service capabilities
-- Treat "comprehensive reporting" as partial readiness: storage/retrieval is available, generation is pending
+  awkward for a headless integration. Bearer auth is [plan 03](docs/plans/20260904-03-bearer-auth-web-removal.md)
+- Login, logout, setup and invites are web-only routes; the API has no equivalents until plan 03
+- Money is still `float64` (minor units land in plan 04, together with the rest of the `openapi.yaml` gap)
+- Backup **restore** is deliberately not exposed over the API — use the web admin panel or `make sqlite-restore`
+- Scheduled reports, spending forecast and benchmarks were placeholder service methods and have been
+  removed; financial insights and trend analysis stay hidden stubs in `ReportService` with no route
 
 ## 🏗️ Architecture and Technology Stack
 
@@ -243,7 +253,7 @@ The project follows **Clean Architecture** principles with production-ready impl
 - **Invite System**: Secure tokens, expiration, role control
 - **Backup Management**: Create, restore, download with auto-cleanup
 - **Admin Panel**: User, invite, and backup management
-- **Reports (UI-first)**: interactive preview generation and CSV export for saved reports
+- **Reports**: generation and CSV export live in `ReportService`, reachable over REST and the web UI
 - **Data Validation**: Comprehensive input validation with go-playground/validator
 - **Error Handling**: Structured error responses with proper HTTP status codes
 - **Security**: CSRF protection, password hashing, input sanitization, path traversal protection
@@ -263,6 +273,7 @@ The application uses environment variables for configuration. Key variables:
 | `SERVER_WRITE_TIMEOUT` | `15s`                                                | HTTP server write timeout                             |
 | `SERVER_IDLE_TIMEOUT`  | `60s`                                                | HTTP server idle timeout                              |
 | `DATABASE_PATH`        | `./data/budget.db`                                   | SQLite database file path                             |
+| `BACKUP_DIR`           | empty → `<dir(DATABASE_PATH)>/backups`               | Where `POST /api/v1/backups` and the admin panel write backups. Docker compose sets `/backups` so `VACUUM INTO` copies do not land inside the database volume |
 | `ENVIRONMENT`          | `development`                                        | App environment (`development`, `production`, `test`) |
 | `LOG_LEVEL`            | `info`                                               | Logging level                                         |
 | `LOG_FORMAT`           | `json`                                               | Log format                                            |
@@ -279,6 +290,9 @@ The application uses environment variables for configuration. Key variables:
 `SESSION_SECRET` and `CSRF_SECRET` are mandatory: the compose file declares them as
 `${VAR:?...}`, so an unset or empty value aborts the command with an explicit message
 instead of silently booting with a well-known default.
+
+`docker/docker-compose.yml` bind-mounts `${DATA_DIR:-.}/backups`; a bind volume does not create
+its source directory, so create it before the first `up` (`make docker-up` does it for you).
 
 `.env` belongs in the **repository root**. Compose v2 resolves `.env` (and relative
 paths such as `DATA_DIR`) against the *project directory*, which defaults to the

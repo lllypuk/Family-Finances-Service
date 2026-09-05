@@ -420,10 +420,15 @@ func TestUserService_DeleteUser(t *testing.T) {
 }
 
 func TestUserService_ChangeUserRole(t *testing.T) {
-	existingUser := &user.User{
-		ID:   uuid.New(),
-		Role: user.RoleMember,
+	// ChangeUserRole меняет Role у переданного объекта, поэтому фикстуры создаются
+	// заново на каждый кейс: общий указатель делал таблицу зависимой от порядка.
+	newUser := func(id uuid.UUID, role user.Role) *user.User {
+		return &user.User{ID: id, Role: role}
 	}
+	existingUserID := uuid.New()
+	onlyAdminID := uuid.New()
+	otherAdminID := uuid.New()
+	plainMemberID := uuid.New()
 
 	tests := []struct {
 		name      string
@@ -435,17 +440,18 @@ func TestUserService_ChangeUserRole(t *testing.T) {
 	}{
 		{
 			name:   "Success - Change role to admin",
-			userID: existingUser.ID,
+			userID: existingUserID,
 			role:   user.RoleAdmin,
 			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
-				userRepo.On("GetByID", mock.Anything, existingUser.ID).Return(existingUser, nil)
+				userRepo.On("GetByID", mock.Anything, existingUserID).
+					Return(newUser(existingUserID, user.RoleMember), nil)
 				userRepo.On("Update", mock.Anything, mock.AnythingOfType("*user.User")).Return(nil)
 			},
 			wantError: false,
 		},
 		{
 			name:   "Error - Invalid role",
-			userID: existingUser.ID,
+			userID: existingUserID,
 			role:   user.Role("invalid"),
 			setup: func(_ *MockUserRepository, _ *MockFamilyRepository) {
 			},
@@ -461,6 +467,34 @@ func TestUserService_ChangeUserRole(t *testing.T) {
 			},
 			wantError: true,
 			errorType: services.ErrUserNotFound,
+		},
+		{
+			// Понижение последнего админа оставляет семью без того, кто
+			// заводит пользователей — тот же запрет, что и на удаление.
+			name:   "Error - Demoting the last admin",
+			userID: onlyAdminID,
+			role:   user.RoleMember,
+			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
+				admin := newUser(onlyAdminID, user.RoleAdmin)
+				userRepo.On("GetByID", mock.Anything, onlyAdminID).Return(admin, nil)
+				userRepo.On("GetAll", mock.Anything).
+					Return([]*user.User{admin, newUser(plainMemberID, user.RoleMember)}, nil)
+			},
+			wantError: true,
+			errorType: services.ErrLastAdmin,
+		},
+		{
+			name:   "Success - Demoting an admin while another admin remains",
+			userID: onlyAdminID,
+			role:   user.RoleMember,
+			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
+				admin := newUser(onlyAdminID, user.RoleAdmin)
+				userRepo.On("GetByID", mock.Anything, onlyAdminID).Return(admin, nil)
+				userRepo.On("GetAll", mock.Anything).
+					Return([]*user.User{admin, newUser(otherAdminID, user.RoleAdmin)}, nil)
+				userRepo.On("Update", mock.Anything, mock.AnythingOfType("*user.User")).Return(nil)
+			},
+			wantError: false,
 		},
 	}
 

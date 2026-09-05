@@ -26,6 +26,7 @@ type Services struct {
 	Category    CategoryService
 	Transaction TransactionService
 	Budget      BudgetService
+	Stats       StatsService
 	Report      ReportService
 	Invite      InviteService
 	Backup      BackupService
@@ -49,10 +50,12 @@ func NewServices(
 	// Create core services first
 	userService := NewUserService(userRepo, familyRepo)
 	categoryService := NewCategoryService(categoryRepo, familyRepo, usageChecker)
-	familyService := NewFamilyService(familyRepo, userRepo, categoryService)
+	familyService := NewFamilyService(familyRepo, userRepo, transactionRepo, categoryService)
 	transactionService := NewTransactionServiceWithLogger(transactionRepo, budgetRepo, categoryRepo, userRepo, logger)
 	budgetService := NewBudgetServiceWithLogger(fullBudgetRepo, transactionRepo, logger)
 	inviteService := NewInviteService(inviteRepo, userRepo, familyRepo, logger)
+
+	statsService := NewStatsService(transactionService, budgetService, categoryService)
 
 	// Create report service with dependencies on other services
 	reportService := NewReportService(
@@ -72,6 +75,7 @@ func NewServices(
 		Category:    categoryService,
 		Transaction: transactionService,
 		Budget:      budgetService,
+		Stats:       statsService,
 		Report:      reportService,
 		Invite:      inviteService,
 		Backup:      backupService,

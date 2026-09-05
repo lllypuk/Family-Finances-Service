@@ -58,7 +58,7 @@ type BudgetFilterDTO struct {
 	HasUnspentFunds *bool `validate:"omitempty"` // Remaining > 0
 
 	// Pagination
-	Limit  int `validate:"min=1,max=100"`
+	Limit  int `validate:"min=1,max=200"`
 	Offset int `validate:"min=0"`
 
 	// Sorting

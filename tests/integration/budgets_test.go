@@ -94,7 +94,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 					StartDate: time.Now(),
 					EndDate:   time.Now().AddDate(0, 1, 0),
 				},
-				field: "Amount",
+				field: "amount",
 			},
 			{
 				name: "invalid_period",
@@ -105,7 +105,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 					StartDate: time.Now(),
 					EndDate:   time.Now().AddDate(0, 1, 0),
 				},
-				field: "Period",
+				field: "period",
 			},
 			{
 				name: "empty_name",
@@ -116,7 +116,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 					StartDate: time.Now(),
 					EndDate:   time.Now().AddDate(0, 1, 0),
 				},
-				field: "Name",
+				field: "name",
 			},
 		}
 
@@ -132,15 +132,15 @@ func TestBudgetHandler_Integration(t *testing.T) {
 
 				testServer.Server.Echo().ServeHTTP(rec, req)
 
-				assert.Equal(t, http.StatusBadRequest, rec.Code)
+				assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
-				var response handlers.APIResponse[any]
+				var response handlers.ErrorResponse
 				err = json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
 
-				assert.NotEmpty(t, response.Errors)
+				assert.NotEmpty(t, response.Error.Details)
 				found := false
-				for _, validationError := range response.Errors {
+				for _, validationError := range response.Error.Details {
 					if validationError.Field == tt.field {
 						found = true
 						break

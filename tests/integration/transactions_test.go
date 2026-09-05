@@ -97,7 +97,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 					CategoryID:  uuid.New(),
 					Date:        time.Now(),
 				},
-				field: "Amount",
+				field: "amount",
 			},
 			{
 				name: "invalid_type",
@@ -108,7 +108,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 					CategoryID:  uuid.New(),
 					Date:        time.Now(),
 				},
-				field: "Type",
+				field: "type",
 			},
 			{
 				name: "empty_description",
@@ -119,7 +119,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 					CategoryID:  uuid.New(),
 					Date:        time.Now(),
 				},
-				field: "Description",
+				field: "description",
 			},
 		}
 
@@ -135,15 +135,15 @@ func TestTransactionHandler_Integration(t *testing.T) {
 
 				testServer.Server.Echo().ServeHTTP(rec, req)
 
-				assert.Equal(t, http.StatusBadRequest, rec.Code)
+				assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
-				var response handlers.APIResponse[any]
+				var response handlers.ErrorResponse
 				err = json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
 
-				assert.NotEmpty(t, response.Errors)
+				assert.NotEmpty(t, response.Error.Details)
 				found := false
-				for _, validationError := range response.Errors {
+				for _, validationError := range response.Error.Details {
 					if validationError.Field == tt.field {
 						found = true
 						break
@@ -187,7 +187,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		testServer.Server.Echo().ServeHTTP(rec, req)
 
 		// Database enforces foreign key constraints, so this should fail
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
 		var response handlers.ErrorResponse
 		err = json.Unmarshal(rec.Body.Bytes(), &response)
@@ -463,6 +463,18 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		testServer.Server.Echo().ServeHTTP(getRec, getReq)
 
 		assert.Equal(t, http.StatusNotFound, getRec.Code)
+	})
+
+	t.Run("DeleteTransaction_NotFound", func(t *testing.T) {
+		testServer := testhelpers.SetupHTTPServer(t)
+
+		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/transactions/%s", uuid.New()), nil)
+		testServer.Auth(t).Apply(req)
+		rec := httptest.NewRecorder()
+
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNotFound, rec.Code, "тело: %s", rec.Body.String())
 	})
 }
 

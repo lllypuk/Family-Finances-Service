@@ -71,6 +71,11 @@ func (m *MockTransactionRepository) Delete(ctx context.Context, id uuid.UUID) er
 	return args.Error(0)
 }
 
+func (m *MockTransactionRepository) DeleteBulk(ctx context.Context, ids []uuid.UUID) (int, error) {
+	args := m.Called(ctx, ids)
+	return args.Int(0), args.Error(1)
+}
+
 func (m *MockTransactionRepository) GetTotalByDateRange(
 	ctx context.Context,
 	startDate, endDate time.Time,
@@ -275,14 +280,17 @@ func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
 	handler, _ := setupTransactionHandler()
 
 	tests := []struct {
-		name        string
-		requestBody any
-		expectedMsg string
+		name           string
+		requestBody    any
+		expectedStatus int
+		expectedCode   string
+		expectedField  string
 	}{
 		{
-			name:        "Invalid JSON",
-			requestBody: "invalid json",
-			expectedMsg: "Invalid request body",
+			name:           "Invalid JSON",
+			requestBody:    "invalid json",
+			expectedStatus: http.StatusBadRequest,
+			expectedCode:   handlers.ErrCodeInvalidRequest,
 		},
 		{
 			name: "Missing amount",
@@ -294,7 +302,9 @@ func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
 				"family_id":   uuid.New().String(),
 				"date":        time.Now(),
 			},
-			expectedMsg: "",
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedCode:   handlers.ErrCodeValidationError,
+			expectedField:  "amount",
 		},
 		{
 			name: "Negative amount",
@@ -307,7 +317,9 @@ func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
 				"family_id":   uuid.New().String(),
 				"date":        time.Now(),
 			},
-			expectedMsg: "",
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedCode:   handlers.ErrCodeValidationError,
+			expectedField:  "amount",
 		},
 		{
 			name: "Invalid type",
@@ -320,7 +332,9 @@ func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
 				"family_id":   uuid.New().String(),
 				"date":        time.Now(),
 			},
-			expectedMsg: "",
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedCode:   handlers.ErrCodeValidationError,
+			expectedField:  "type",
 		},
 	}
 
@@ -346,9 +360,17 @@ func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
 			// Act
 			err = handler.CreateTransaction(c)
 
-			// Assert
+			// Assert: битый JSON — 400, непрошедшее валидацию тело — 422 с деталями по полям.
 			require.NoError(t, err)
-			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.Equal(t, tt.expectedStatus, rec.Code)
+
+			var response handlers.ErrorResponse
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+			assert.Equal(t, tt.expectedCode, response.Error.Code)
+			if tt.expectedField != "" {
+				require.NotEmpty(t, response.Error.Details)
+				assert.Equal(t, tt.expectedField, response.Error.Details[0].Field)
+			}
 		})
 	}
 }
@@ -419,6 +441,8 @@ func TestTransactionHandler_GetTransactions_Success(t *testing.T) {
 
 	mockRepo.On("GetByFilter", mock.Anything, mock.AnythingOfType("transaction.Filter")).
 		Return(expectedTransactions, nil)
+	mockRepo.On("CountByFilter", mock.Anything, mock.AnythingOfType("transaction.Filter")).
+		Return(len(expectedTransactions), nil)
 
 	e := echo.New()
 	httpReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/transactions?family_id=%s", familyID), nil)
@@ -503,6 +527,8 @@ func TestTransactionHandler_GetTransactions_WithFilters(t *testing.T) {
 
 	mockRepo.On("GetByFilter", mock.Anything, mock.AnythingOfType("transaction.Filter")).
 		Return([]*transaction.Transaction{}, nil)
+	mockRepo.On("CountByFilter", mock.Anything, mock.AnythingOfType("transaction.Filter")).
+		Return(0, nil)
 
 	e := echo.New()
 	query := url.Values{}
@@ -567,15 +593,15 @@ func TestTransactionHandler_GetTransactions_InvalidQueryParams(t *testing.T) {
 			err := handler.GetTransactions(c)
 
 			require.NoError(t, err)
-			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
 			var response handlers.ErrorResponse
 			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-			assert.Equal(t, "INVALID_QUERY_PARAM", response.Error.Code)
+			assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
 
-			details, ok := response.Error.Details.(map[string]any)
-			require.True(t, ok)
-			assert.Equal(t, tt.expectedParam, details["param"])
+			require.Len(t, response.Error.Details, 1)
+			assert.Equal(t, "INVALID_QUERY_PARAM", response.Error.Details[0].Code)
+			assert.Equal(t, tt.expectedParam, response.Error.Details[0].Field)
 
 			mockRepo.AssertNotCalled(t, "GetByFilter", mock.Anything, mock.Anything)
 		})
@@ -849,6 +875,8 @@ func BenchmarkTransactionHandler_GetTransactions(b *testing.B) {
 	// Setup mock to return empty slice for all calls
 	mockRepo.On("GetByFilter", mock.Anything, mock.AnythingOfType("transaction.Filter")).
 		Return([]*transaction.Transaction{}, nil)
+	mockRepo.On("CountByFilter", mock.Anything, mock.AnythingOfType("transaction.Filter")).
+		Return(0, nil)
 
 	familyID := uuid.New()
 

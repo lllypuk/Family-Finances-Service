@@ -83,7 +83,7 @@ func NewApplication() (*Application, error) {
 	logger := app.observabilityService.Logger
 
 	// Инициализация BackupService
-	backupService := services.NewBackupService(sqliteConn.DB(), config.Database.Path, logger)
+	backupService := services.NewBackupService(sqliteConn.DB(), config.Database.Path, config.GetBackupDir(), logger)
 
 	// Инициализация сервисов
 	app.services = services.NewServices(

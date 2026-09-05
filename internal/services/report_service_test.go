@@ -2,6 +2,7 @@ package services_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
+	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
 )
 
@@ -310,181 +312,183 @@ func TestReportService_SaveReport(t *testing.T) {
 	service, mockReportRepo, _, _, _, _ := setupReportService()
 	ctx := context.Background()
 
-	userID := uuid.New()
-	startDate := time.Now().AddDate(0, 0, -30)
-	endDate := time.Now()
+	reportEntity := report.NewReport(
+		"Test Report",
+		report.TypeExpenses,
+		report.PeriodMonthly,
+		uuid.New(),
+		time.Now().AddDate(0, 0, -30),
+		time.Now(),
+	)
+	reportEntity.Data.TotalExpenses = 1000.0
 
-	req := dto.ReportRequestDTO{
-		Name:      "Test Report",
-		Type:      report.TypeExpenses,
-		Period:    report.PeriodMonthly,
-		UserID:    userID,
-		StartDate: startDate,
-		EndDate:   endDate,
-	}
+	mockReportRepo.On("Create", ctx, reportEntity).Return(nil)
 
-	reportData := &dto.ExpenseReportDTO{
-		Name:          req.Name,
-		TotalExpenses: 1000.0,
-		CategoryBreakdown: []dto.CategoryBreakdownItemDTO{
-			{
-				CategoryID:   uuid.New(),
-				CategoryName: "Groceries",
-				Amount:       1000.0,
-				Percentage:   100.0,
-				Count:        2,
-			},
-		},
-		TopExpenses: []dto.TransactionSummaryDTO{
-			{
-				ID:          uuid.New(),
-				Amount:      700.0,
-				Description: "Weekly grocery run",
-				Category:    "Groceries",
-				Date:        startDate.AddDate(0, 0, 1),
-			},
-		},
-	}
+	err := service.SaveReport(ctx, reportEntity)
 
-	var createdReport *report.Report
-	// Setup mock expectations
-	mockReportRepo.On("Create", ctx, mock.AnythingOfType("*report.Report")).
-		Run(func(args mock.Arguments) {
-			createdReport = args.Get(1).(*report.Report)
-		}).
-		Return(nil)
-
-	// Execute
-	result, err := service.SaveReport(ctx, reportData, report.TypeExpenses, req)
-
-	// Assert
 	require.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Equal(t, req.Name, result.Name)
-	assert.Equal(t, req.Type, result.Type)
-	assert.Equal(t, req.UserID, result.UserID)
-	require.NotNil(t, createdReport)
-	assert.InEpsilon(t, 1000.0, createdReport.Data.TotalExpenses, 0.01)
-	require.Len(t, createdReport.Data.CategoryBreakdown, 1)
-	assert.Equal(t, "Groceries", createdReport.Data.CategoryBreakdown[0].CategoryName)
-	assert.Equal(t, 2, createdReport.Data.CategoryBreakdown[0].Count)
-	require.Len(t, createdReport.Data.TopExpenses, 1)
-	assert.Equal(t, "Weekly grocery run", createdReport.Data.TopExpenses[0].Description)
-
 	mockReportRepo.AssertExpectations(t)
 }
 
-func TestReportService_SaveReport_ConvertsSupportedTypes(t *testing.T) {
+func TestReportService_SaveReport_RepositoryError(t *testing.T) {
+	service, mockReportRepo, _, _, _, _ := setupReportService()
+	ctx := context.Background()
+
+	reportEntity := report.NewReport(
+		"Test Report",
+		report.TypeExpenses,
+		report.PeriodMonthly,
+		uuid.New(),
+		time.Now().AddDate(0, 0, -30),
+		time.Now(),
+	)
+
+	mockReportRepo.On("Create", ctx, reportEntity).Return(errors.New("database error"))
+
+	err := service.SaveReport(ctx, reportEntity)
+
+	require.ErrorContains(t, err, "database error")
+	mockReportRepo.AssertExpectations(t)
+}
+
+// reportServiceMocks собирает моки, нужные генераторам отчётов всех типов.
+type reportServiceMocks struct {
+	userRepo    *MockUserRepository
+	transaction *MockTransactionService
+	budget      *MockBudgetService
+	category    *MockCategoryService
+}
+
+// Tests for GenerateReport
+func TestReportService_GenerateReport(t *testing.T) {
+	categoryID := uuid.New()
+	expenses := []*transaction.Transaction{
+		createTestTransactionWithCategory(
+			uuid.New(),
+			categoryID,
+			300.0,
+			transaction.TypeExpense,
+			time.Now().AddDate(0, 0, -3),
+		),
+		createTestTransactionWithCategory(
+			uuid.New(),
+			categoryID,
+			200.0,
+			transaction.TypeExpense,
+			time.Now().AddDate(0, 0, -2),
+		),
+	}
+	incomes := []*transaction.Transaction{
+		createTestTransactionWithCategory(
+			uuid.New(),
+			categoryID,
+			2500.0,
+			transaction.TypeIncome,
+			time.Now().AddDate(0, 0, -5),
+		),
+	}
+	mixed := []*transaction.Transaction{
+		createTestTransaction(uuid.New(), 3000.0, transaction.TypeIncome, time.Now().AddDate(0, 0, -6)),
+		createTestTransaction(uuid.New(), 1200.0, transaction.TypeExpense, time.Now().AddDate(0, 0, -4)),
+	}
+
 	tests := []struct {
 		name       string
 		reportType report.Type
-		reportData any
+		setup      func(ctx context.Context, m reportServiceMocks)
 		assertData func(t *testing.T, rep *report.Report)
 	}{
 		{
+			name:       "expenses",
+			reportType: report.TypeExpenses,
+			setup: func(ctx context.Context, m reportServiceMocks) {
+				expectTransactions(ctx, m.transaction, expenses)
+				expectCategory(ctx, m.category, categoryID, "Groceries", category.TypeExpense)
+				expectUsers(ctx, m.userRepo, expenses)
+			},
+			assertData: func(t *testing.T, rep *report.Report) {
+				assert.InEpsilon(t, 500.0, rep.Data.TotalExpenses, 0.01)
+				require.Len(t, rep.Data.CategoryBreakdown, 1)
+				assert.Equal(t, "Groceries", rep.Data.CategoryBreakdown[0].CategoryName)
+				assert.Len(t, rep.Data.TopExpenses, 2)
+			},
+		},
+		{
 			name:       "income",
 			reportType: report.TypeIncome,
-			reportData: &dto.IncomeReportDTO{
-				TotalIncome: 2500.0,
-				CategoryBreakdown: []dto.CategoryBreakdownItemDTO{
-					{
-						CategoryID:   uuid.New(),
-						CategoryName: "Salary",
-						Amount:       2500.0,
-						Percentage:   100.0,
-						Count:        1,
-					},
-				},
-				TopSources: []dto.TransactionSummaryDTO{
-					{
-						ID:          uuid.New(),
-						Amount:      2500.0,
-						Description: "January salary",
-						Category:    "Salary",
-						Date:        time.Now(),
-					},
-				},
+			setup: func(ctx context.Context, m reportServiceMocks) {
+				expectTransactions(ctx, m.transaction, incomes)
+				expectCategory(ctx, m.category, categoryID, "Salary", category.TypeIncome)
+				expectUsers(ctx, m.userRepo, incomes)
 			},
 			assertData: func(t *testing.T, rep *report.Report) {
 				assert.InEpsilon(t, 2500.0, rep.Data.TotalIncome, 0.01)
 				require.Len(t, rep.Data.CategoryBreakdown, 1)
-				require.Len(t, rep.Data.TopExpenses, 1)
+				assert.Equal(t, "Salary", rep.Data.CategoryBreakdown[0].CategoryName)
 			},
 		},
 		{
 			name:       "budget",
 			reportType: report.TypeBudget,
-			reportData: &dto.BudgetComparisonDTO{
-				TotalSpent: 900.0,
-				Categories: []dto.BudgetCategoryComparisonDTO{
-					{
-						CategoryID:   uuid.New(),
-						CategoryName: "Groceries",
-						BudgetAmount: 1000.0,
-						ActualAmount: 900.0,
-						Variance:     100.0,
-						Utilization:  90.0,
-					},
-				},
+			setup: func(ctx context.Context, m reportServiceMocks) {
+				budgets := []*budget.Budget{createTestBudget(uuid.New(), 1000.0, categoryID)}
+				m.budget.On("GetActiveBudgets", ctx, mock.AnythingOfType("time.Time")).Return(budgets, nil)
+				expectTransactions(ctx, m.transaction, expenses)
 			},
 			assertData: func(t *testing.T, rep *report.Report) {
-				assert.InEpsilon(t, 900.0, rep.Data.TotalExpenses, 0.01)
-				require.Len(t, rep.Data.BudgetComparison, 1)
-				assert.Equal(t, "Groceries", rep.Data.BudgetComparison[0].BudgetName)
+				assert.InEpsilon(t, 500.0, rep.Data.TotalExpenses, 0.01)
+				// Разбивка по бюджетам пока пустая: generateBudgetCategoryComparisons — заглушка.
+				assert.Empty(t, rep.Data.BudgetComparison)
 			},
 		},
 		{
 			name:       "cash_flow",
 			reportType: report.TypeCashFlow,
-			reportData: &dto.CashFlowReportDTO{
-				TotalInflows:  3000.0,
-				TotalOutflows: 1200.0,
-				NetCashFlow:   1800.0,
-				DailyFlow: []dto.DailyCashFlowDTO{
-					{
-						Date:    time.Now(),
-						Inflow:  1000.0,
-						Outflow: 300.0,
-						Balance: 700.0,
-					},
-				},
+			setup: func(ctx context.Context, m reportServiceMocks) {
+				expectTransactions(ctx, m.transaction, mixed)
 			},
 			assertData: func(t *testing.T, rep *report.Report) {
 				assert.InEpsilon(t, 3000.0, rep.Data.TotalIncome, 0.01)
 				assert.InEpsilon(t, 1200.0, rep.Data.TotalExpenses, 0.01)
 				assert.InEpsilon(t, 1800.0, rep.Data.NetIncome, 0.01)
-				require.Len(t, rep.Data.DailyBreakdown, 1)
+
+				// Дни идут по возрастанию, Balance — нарастающий итог.
+				require.Len(t, rep.Data.DailyBreakdown, 2)
+				first, second := rep.Data.DailyBreakdown[0], rep.Data.DailyBreakdown[1]
+				assert.True(t, first.Date.Before(second.Date))
+				assert.InEpsilon(t, 3000.0, first.Income, 0.01)
+				assert.InEpsilon(t, 3000.0, first.Balance, 0.01)
+				assert.InEpsilon(t, 1200.0, second.Expenses, 0.01)
+				assert.InEpsilon(t, 1800.0, second.Balance, 0.01)
 			},
 		},
 		{
 			name:       "category_breakdown",
 			reportType: report.TypeCategoryBreak,
-			reportData: &dto.CategoryBreakdownDTO{
-				Categories: []dto.CategoryAnalysisDTO{
-					{
-						CategoryID:       uuid.New(),
-						CategoryName:     "Transport",
-						TotalAmount:      450.0,
-						Percentage:       45.0,
-						TransactionCount: 3,
-					},
-				},
+			setup: func(ctx context.Context, m reportServiceMocks) {
+				expectTransactions(ctx, m.transaction, expenses)
+				m.category.On("GetCategoryHierarchy", ctx).Return([]*category.Category{}, nil)
 			},
 			assertData: func(t *testing.T, rep *report.Report) {
-				require.Len(t, rep.Data.CategoryBreakdown, 1)
-				assert.Equal(t, "Transport", rep.Data.CategoryBreakdown[0].CategoryName)
-				assert.Equal(t, 3, rep.Data.CategoryBreakdown[0].Count)
+				assert.Empty(t, rep.Data.CategoryBreakdown)
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service, mockReportRepo, _, _, _, _ := setupReportService()
+			service, mockReportRepo, mockUserRepo, mockTxService, mockBudgetService, mockCategoryService := setupReportService()
 			ctx := context.Background()
 
+			tt.setup(ctx, reportServiceMocks{
+				userRepo:    mockUserRepo,
+				transaction: mockTxService,
+				budget:      mockBudgetService,
+				category:    mockCategoryService,
+			})
+
 			req := dto.ReportRequestDTO{
-				Name:      "Converted " + tt.name,
+				Name:      "Generated " + tt.name,
 				Type:      tt.reportType,
 				Period:    report.PeriodMonthly,
 				UserID:    uuid.New(),
@@ -492,21 +496,87 @@ func TestReportService_SaveReport_ConvertsSupportedTypes(t *testing.T) {
 				EndDate:   time.Now(),
 			}
 
-			var createdReport *report.Report
-			mockReportRepo.On("Create", ctx, mock.AnythingOfType("*report.Report")).
-				Run(func(args mock.Arguments) {
-					createdReport = args.Get(1).(*report.Report)
-				}).
-				Return(nil)
-
-			result, err := service.SaveReport(ctx, tt.reportData, tt.reportType, req)
+			result, err := service.GenerateReport(ctx, req)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
-			require.NotNil(t, createdReport)
-			tt.assertData(t, createdReport)
-			mockReportRepo.AssertExpectations(t)
+			assert.Equal(t, req.Name, result.Name)
+			assert.Equal(t, tt.reportType, result.Type)
+			assert.Equal(t, req.UserID, result.UserID)
+			tt.assertData(t, result)
+			assert.Equal(t, req.StartDate, result.StartDate)
+			assert.Equal(t, req.EndDate, result.EndDate)
+
+			// Генерация не сохраняет отчёт — это делает SaveReport.
+			mockReportRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 		})
+	}
+}
+
+func TestReportService_GenerateReport_UnsupportedType(t *testing.T) {
+	service, _, _, _, _, _ := setupReportService()
+	ctx := context.Background()
+
+	req := dto.ReportRequestDTO{
+		Name:      "Unknown",
+		Type:      report.Type("unknown"),
+		Period:    report.PeriodMonthly,
+		UserID:    uuid.New(),
+		StartDate: time.Now().AddDate(0, 0, -30),
+		EndDate:   time.Now(),
+	}
+
+	result, err := service.GenerateReport(ctx, req)
+
+	require.ErrorIs(t, err, services.ErrUnsupportedReportType)
+	assert.Nil(t, result)
+}
+
+func TestReportService_GenerateReport_GenerationError(t *testing.T) {
+	service, _, _, mockTransactionService, _, _ := setupReportService()
+	ctx := context.Background()
+
+	mockTransactionService.On("GetAllTransactions", ctx, mock.AnythingOfType("dto.TransactionFilterDTO")).
+		Return(nil, errors.New("database error"))
+
+	req := dto.ReportRequestDTO{
+		Name:      "Broken",
+		Type:      report.TypeExpenses,
+		Period:    report.PeriodMonthly,
+		UserID:    uuid.New(),
+		StartDate: time.Now().AddDate(0, 0, -30),
+		EndDate:   time.Now(),
+	}
+
+	result, err := service.GenerateReport(ctx, req)
+
+	require.ErrorContains(t, err, "database error")
+	assert.Nil(t, result)
+	mockTransactionService.AssertExpectations(t)
+}
+
+func expectTransactions(ctx context.Context, m *MockTransactionService, transactions []*transaction.Transaction) {
+	m.On("GetAllTransactions", ctx, mock.AnythingOfType("dto.TransactionFilterDTO")).Return(transactions, nil)
+}
+
+func expectCategory(
+	ctx context.Context,
+	m *MockCategoryService,
+	id uuid.UUID,
+	name string,
+	categoryType category.Type,
+) {
+	m.On("GetCategoryByID", ctx, id).Return(createTestCategory(id, name, categoryType), nil)
+}
+
+func expectUsers(ctx context.Context, m *MockUserRepository, transactions []*transaction.Transaction) {
+	for _, tx := range transactions {
+		m.On("GetByID", ctx, tx.UserID).Return(&user.User{
+			ID:        tx.UserID,
+			FirstName: "Test",
+			LastName:  "User",
+			Email:     "test@example.com",
+		}, nil)
 	}
 }
 
@@ -587,6 +657,7 @@ func TestReportService_DeleteReport(t *testing.T) {
 	reportID := uuid.New()
 
 	// Setup mock expectations
+	mockReportRepo.On("GetByID", ctx, reportID).Return(&report.Report{ID: reportID}, nil)
 	mockReportRepo.On("Delete", ctx, reportID).Return(nil)
 
 	// Execute
@@ -595,6 +666,19 @@ func TestReportService_DeleteReport(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 
+	mockReportRepo.AssertExpectations(t)
+}
+
+func TestReportService_DeleteReport_NotFound(t *testing.T) {
+	service, mockReportRepo, _, _, _, _ := setupReportService()
+	ctx := context.Background()
+
+	reportID := uuid.New()
+	mockReportRepo.On("GetByID", ctx, reportID).Return(nil, errors.New("not found"))
+
+	err := service.DeleteReport(ctx, reportID)
+
+	require.ErrorIs(t, err, services.ErrReportNotFound)
 	mockReportRepo.AssertExpectations(t)
 }
 

@@ -311,54 +311,36 @@ func buildMeta(c echo.Context) map[string]any {
 
 ## 📊 Формат ошибок в API
 
+Единственный способ отдать ошибку из `/api/v1` — `respondError` / `respondValidationErrors`
+(`internal/application/handlers/helpers.go`); руками собранный конверт запрещён.
+`error.details` — **массив** `{field, message, code}`, `meta` — `{request_id, timestamp, version}`
+(плюс `pagination` в списках).
+
 ### Структура ответа с ошибкой
 ```json
 {
   "error": {
     "code": "VALIDATION_ERROR",
-    "message": "Validation failed for the request",
-    "details": {
-      "field": "email",
-      "value": "invalid-email",
-      "constraint": "Must be a valid email address"
-    }
+    "message": "Validation failed",
+    "details": [
+      {
+        "field": "email",
+        "message": "must be a valid email",
+        "code": "VALIDATION_ERROR"
+      }
+    ]
   },
   "meta": {
-    "timestamp": "2024-12-15T10:30:00Z",
     "request_id": "req_abc123",
-    "path": "/api/v1/families",
-    "method": "POST"
+    "timestamp": "2026-09-04T10:30:00Z",
+    "version": "v1"
   }
 }
 ```
 
-### Множественные ошибки валидации
-```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Multiple validation errors occurred",
-    "details": {
-      "fields": [
-        {
-          "field": "name",
-          "message": "Name is required",
-          "code": "VALIDATION_REQUIRED"
-        },
-        {
-          "field": "email",
-          "message": "Invalid email format",
-          "code": "VALIDATION_FORMAT"
-        }
-      ]
-    }
-  },
-  "meta": {
-    "timestamp": "2024-12-15T10:30:00Z",
-    "request_id": "req_abc123"
-  }
-}
-```
+Имя в `field` — имя поля из json-тега запроса (`start_date`, не `StartDate`): валидатор
+хендлеров зарегистрирован через `newAPIValidator`. Для ошибок, не привязанных к полю,
+используется `bodyDetail` с `field: "body"`.
 
 ## 🔍 Валидация данных
 

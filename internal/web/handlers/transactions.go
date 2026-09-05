@@ -404,41 +404,16 @@ func (h *TransactionHandler) BulkDelete(c echo.Context) error {
 		transactionIDs = append(transactionIDs, transactionID)
 	}
 
-	// Проверяем каждую транзакцию и удаляем
-	deleted := 0
-	errors := []string{}
-	for _, transactionID := range transactionIDs {
-		// Проверяем существование
-		_, getErr := h.services.Transaction.GetTransactionByID(c.Request().Context(), transactionID)
-		if getErr != nil {
-			errors = append(errors, fmt.Sprintf("Transaction %s not found", transactionID))
-			continue
-		}
-
-		// In single-family model, all transactions belong to the family
-		// No additional access check needed
-
-		// Удаляем
-		deleteErr := h.services.Transaction.DeleteTransaction(
-			c.Request().Context(),
-			transactionID,
-		)
-		if deleteErr != nil {
-			errors = append(errors, fmt.Sprintf("Failed to delete transaction %s", transactionID))
-			continue
-		}
-		deleted++
+	deleted, deleteErr := h.services.Transaction.BulkDelete(c.Request().Context(), transactionIDs)
+	if deleteErr != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to delete transactions")
 	}
 
 	if h.IsHTMXRequest(c) {
-		// Возвращаем сообщение о результате
 		message := fmt.Sprintf("Successfully deleted %d transactions", deleted)
-		if len(errors) > 0 {
-			message += fmt.Sprintf(". Errors: %s", strings.Join(errors, "; "))
-		}
-
 		alertType := "success"
-		if len(errors) > 0 {
+		if deleted < len(transactionIDs) {
+			message += fmt.Sprintf(". Not found: %d", len(transactionIDs)-deleted)
 			alertType = "warning"
 		}
 

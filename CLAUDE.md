@@ -53,10 +53,14 @@ Layered/Clean architecture, single Go module `family-budget-service`. Wiring hap
 `internal/run.go` (`NewApplication`) — in this order:
 
 1. `LoadConfig()` + `Validate()` (`internal/config.go`) — all config is env vars, no config files.
+   `BACKUP_DIR` is optional: empty means `<dir(DATABASE_PATH)>/backups`, resolved by `Config.GetBackupDir()` and
+   passed to `NewBackupService` (compose mounts `/backups`).
 2. `infrastructure.NewSQLiteConnection(path)` then `infrastructure.NewMigrationManager(dbURL, "./migrations").Up()`
    — migrations run automatically at startup via golang-migrate.
 3. `infrastructure.NewRepositoriesSQLite(db)` → `*handlers.Repositories` (one struct holding every repo).
-4. `services.NewServices(...)` → `*services.Services` (one struct holding every service).
+4. `services.NewServices(...)` → `*services.Services` (one struct holding every service). `StatsService.Summary(ctx,
+   from, to)` owns the dashboard arithmetic (totals, deltas to the previous period, category shares, budget progress,
+   recent activity) and feeds both `GET /api/v1/stats/summary` and the web dashboard; the handler only formats.
 5. `application.NewHTTPServerWithObservability(...)` — builds the Echo instance, registers `/api/v1` handlers, and
    calls `web.NewWebServer(...)` which mounts the HTML/HTMX interface onto the *same* Echo instance.
 
@@ -101,23 +105,38 @@ setup→ready transition needs no restart.
   comes from the DB, not from the signed cookie. `SessionStore`'s `Secure` flag is `COOKIE_SECURE`
   (`config.Web.CookieSecure` → `application.Config.CookieSecure`), defaulting to true in production — set it to
   `false` when serving over plain HTTP, otherwise the browser drops the cookie and login loops.
-- **REST API** (`internal/application/handlers/`): `/api/v1/{users,categories,transactions,budgets,reports}`.
+- **REST API** (`internal/application/handlers/`):
+  `/api/v1/{users,family,categories,transactions,budgets,reports,stats,backups}`.
   The group is registered as `s.echo.Group("/api/v1", RequireAPIAuth(), RequireAPIActiveUser(services.User))` —
   the *same* session cookie as the web
   UI is the only credential; there are no API tokens. No session → `401` + JSON
   `{"error":{"code":"UNAUTHORIZED",…},"meta":{…}}`. Per-route role gates mirror the web and are built from a single
   `RequireAPIRole(roles ...user.Role)`: `http_server.go` declares `adminOnly := RequireAPIRole(user.RoleAdmin)` for
   the `/api/v1/users` group and `DELETE /api/v1/categories/:id`, and
-  `financeAccess := RequireAPIRole(user.RoleAdmin, user.RoleMember)` for the categories/transactions/budgets/reports
-  groups (wrong role → `403 FORBIDDEN`). All three API middlewares live in
+  `financeAccess := RequireAPIRole(user.RoleAdmin, user.RoleMember)` for the
+  categories/transactions/budgets/reports/stats groups (wrong role → `403 FORBIDDEN`); `/api/v1/backups` and
+  `PUT /api/v1/family` are `adminOnly` too, while `GET /api/v1/family` is deliberately ungated (any role, `child`
+  included). All three API middlewares live in
   `internal/application/handlers/api_auth.go` and reuse the session primitives from `internal/web/middleware`.
   **Middleware order matters:** the global `CSRFProtection` (`e.Use` in `web.go`) runs *before* the group
   middleware, so an anonymous write without `X-Csrf-Token` is `403`, and `401` only once a valid token is present.
   Handlers take the author from the session (`middleware.GetUserFromContext`, see `TransactionHandler.CreateTransaction`)
   — `UserID` is **not** a field
   of `CreateTransactionRequest`/`CreateReportRequest`, so sending it in the body does nothing.
-  `POST /api/v1/reports` intentionally returns `501 Not Implemented`; report *generation* is only exposed through the
-  web UI. Stored-report list/get/delete work.
+  `POST /api/v1/reports` generates the report through `ReportService.GenerateReport` and stores it (`201`);
+  `GET /api/v1/reports/:id/export` returns CSV from `ReportService.ExportReport` — the web handler calls the same
+  service, no CSV writing lives in `internal/web`.
+  **One error envelope, one pagination shape** (`internal/application/handlers/helpers.go`): answer with
+  `respondAPI`/`respondError(c, status, code, message, details...)`, never a hand-built `ResponseMeta`; validation
+  failures are `422 VALIDATION_ERROR` with `error.details[{field, message, code}]`, while broken JSON and an
+  unparseable id stay `400`. Every list runs its query params through `parsePagination(c)` (`defaultLimit=50`,
+  `maxLimit=200`, out-of-range → `422`) and reports `meta.pagination {limit, offset, total}` — including the short
+  lists, because the Android client generates from a `ListMeta` where `pagination` is required.
+  `parsePagination` **writes the 422 itself** and returns the `errResponseAlreadyWritten` sentinel: callers return
+  `ignoreWritten(err)`, never the raw error, or Echo's error handler writes a second response over it. Lists the
+  repository returns whole are windowed with `pageSlice(items, page)` and answered by `respondList(c, items, page,
+  len(all))`. The `field` in `error.details` is the json name (`start_date`), because every handler validator comes
+  from `newAPIValidator()` — plain `validator.New()` would report Go field names.
 
 ### Templates
 

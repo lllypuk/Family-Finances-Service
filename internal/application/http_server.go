@@ -37,10 +37,13 @@ type HTTPServer struct {
 
 	// API Handlers
 	userHandler        *handlers.UserHandler
+	familyHandler      *handlers.FamilyHandler
 	categoryHandler    *handlers.CategoryHandler
 	transactionHandler *handlers.TransactionHandler
 	budgetHandler      *handlers.BudgetHandler
 	reportHandler      *handlers.ReportHandler
+	statsHandler       *handlers.StatsHandler
+	backupHandler      *handlers.BackupHandler
 
 	// Web Interface
 	webServer        *web.Server
@@ -125,10 +128,13 @@ func NewHTTPServerWithObservability(
 
 		// Инициализация API handlers
 		userHandler:        handlers.NewUserHandler(repositories, services.User),
+		familyHandler:      handlers.NewFamilyHandler(services.Family),
 		categoryHandler:    handlers.NewCategoryHandler(repositories, services.Category),
 		transactionHandler: handlers.NewTransactionHandler(repositories, services.Transaction),
 		budgetHandler:      handlers.NewBudgetHandler(repositories, services.Budget),
 		reportHandler:      handlers.NewReportHandler(repositories, services.Report),
+		statsHandler:       handlers.NewStatsHandler(services.Stats),
+		backupHandler:      handlers.NewBackupHandler(services.Backup),
 	}
 
 	// Инициализация веб-интерфейса
@@ -208,11 +214,18 @@ func (s *HTTPServer) setupRoutes() {
 	adminOnly := handlers.RequireAPIRole(user.RoleAdmin)
 	financeAccess := handlers.RequireAPIRole(user.RoleAdmin, user.RoleMember)
 
+	// Семья: читают все роли, меняет только админ.
+	family := api.Group("/family")
+	family.GET("", s.familyHandler.GetFamily)
+	family.PUT("", s.familyHandler.UpdateFamily, adminOnly)
+
 	// Маршруты для пользователей — целиком под админом, как /users в вебе.
 	users := api.Group("/users", adminOnly)
 	users.POST("", s.userHandler.CreateUser)
+	users.GET("", s.userHandler.GetUsers)
 	users.GET("/:id", s.userHandler.GetUserByID)
 	users.PUT("/:id", s.userHandler.UpdateUser)
+	users.PATCH("/:id", s.userHandler.PatchUser)
 	users.DELETE("/:id", s.userHandler.DeleteUser)
 
 	// Маршруты для категорий
@@ -227,6 +240,7 @@ func (s *HTTPServer) setupRoutes() {
 	transactions := api.Group("/transactions", financeAccess)
 	transactions.POST("", s.transactionHandler.CreateTransaction)
 	transactions.GET("", s.transactionHandler.GetTransactions)
+	transactions.POST("/bulk-delete", s.transactionHandler.BulkDeleteTransactions)
 	transactions.GET("/:id", s.transactionHandler.GetTransactionByID)
 	transactions.PUT("/:id", s.transactionHandler.UpdateTransaction)
 	transactions.DELETE("/:id", s.transactionHandler.DeleteTransaction)
@@ -244,7 +258,19 @@ func (s *HTTPServer) setupRoutes() {
 	reports.POST("", s.reportHandler.CreateReport)
 	reports.GET("", s.reportHandler.GetReports)
 	reports.GET("/:id", s.reportHandler.GetReportByID)
+	reports.GET("/:id/export", s.reportHandler.ExportReport)
 	reports.DELETE("/:id", s.reportHandler.DeleteReport)
+
+	// Статистика — та же ролевая модель, что у финансовых разделов.
+	stats := api.Group("/stats", financeAccess)
+	stats.GET("/summary", s.statsHandler.GetSummary)
+
+	// Backups routes (admin only)
+	backups := api.Group("/backups", adminOnly)
+	backups.POST("", s.backupHandler.CreateBackup)
+	backups.GET("", s.backupHandler.ListBackups)
+	backups.GET("/:name/download", s.backupHandler.DownloadBackup)
+	backups.DELETE("/:name", s.backupHandler.DeleteBackup)
 }
 
 func (s *HTTPServer) Start(_ context.Context) error {

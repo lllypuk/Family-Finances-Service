@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -26,9 +27,16 @@ const (
 	hoursPerDay                 = 24
 	daysPerWeek                 = 7
 	reportTransactionQueryLimit = 1000 // Maximum transactions to query for reports
+
+	exportFormatCSV = "csv"
 )
 
-var ErrReportFeatureHiddenFromPublicAPI = errors.New("report feature hidden from public API until implemented")
+var (
+	ErrReportFeatureHiddenFromPublicAPI = errors.New("report feature hidden from public API until implemented")
+	ErrUnsupportedReportType            = errors.New("unsupported report type")
+	ErrUnsupportedCSVData               = errors.New("csv export supports report data only")
+	ErrReportNotFound                   = errors.New("report not found")
+)
 
 type reportService struct {
 	reportRepo      ReportRepository
@@ -219,9 +227,16 @@ func (s *reportService) GenerateBudgetComparisonReport(
 	ctx context.Context,
 	period report.Period,
 ) (*dto.BudgetComparisonDTO, error) {
-	// Calculate date range based on period
 	startDate, endDate := s.calculatePeriodDates(period)
 
+	return s.budgetComparisonReport(ctx, period, startDate, endDate)
+}
+
+func (s *reportService) budgetComparisonReport(
+	ctx context.Context,
+	period report.Period,
+	startDate, endDate time.Time,
+) (*dto.BudgetComparisonDTO, error) {
 	// Get active budgets for the period
 	budgets, err := s.budgetService.GetActiveBudgets(ctx, startDate)
 	if err != nil {
@@ -362,6 +377,14 @@ func (s *reportService) GenerateCategoryBreakdownReport(
 ) (*dto.CategoryBreakdownDTO, error) {
 	startDate, endDate := s.calculatePeriodDates(period)
 
+	return s.categoryBreakdownReport(ctx, period, startDate, endDate)
+}
+
+func (s *reportService) categoryBreakdownReport(
+	ctx context.Context,
+	period report.Period,
+	startDate, endDate time.Time,
+) (*dto.CategoryBreakdownDTO, error) {
 	// Get all transactions for the period
 	transactions, err := s.getTransactionsForPeriod(ctx, startDate, endDate, "", nil)
 	if err != nil {
@@ -409,34 +432,51 @@ func (s *reportService) GenerateCategoryBreakdownReport(
 	}, nil
 }
 
-// SaveReport saves a generated report to the database
-func (s *reportService) SaveReport(
-	ctx context.Context,
-	reportData any,
-	reportType report.Type,
-	req dto.ReportRequestDTO,
-) (*report.Report, error) {
-	// Convert reportData to report.Data format
-	data, err := s.convertToReportData(reportData, reportType)
+// GenerateReport строит отчёт запрошенного типа: генерация данных плюс конвертация в report.Data.
+//
+// Отчёт не сохраняется: HTMX-предпросмотр показывает его, не записывая в БД.
+// Неизвестный тип — ErrUnsupportedReportType.
+func (s *reportService) GenerateReport(ctx context.Context, req dto.ReportRequestDTO) (*report.Report, error) {
+	reportData, err := s.generateReportData(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := s.convertToReportData(reportData, req.Type)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert report data: %w", err)
 	}
 
-	newReport := report.NewReport(
-		req.Name,
-		reportType,
-		req.Period,
-		req.UserID,
-		req.StartDate,
-		req.EndDate,
-	)
+	newReport := report.NewReport(req.Name, req.Type, req.Period, req.UserID, req.StartDate, req.EndDate)
 	newReport.Data = data
 
-	if createErr := s.reportRepo.Create(ctx, newReport); createErr != nil {
-		return nil, fmt.Errorf("failed to save report: %w", createErr)
+	return newReport, nil
+}
+
+func (s *reportService) generateReportData(ctx context.Context, req dto.ReportRequestDTO) (any, error) {
+	switch req.Type {
+	case report.TypeExpenses:
+		return s.GenerateExpenseReport(ctx, req)
+	case report.TypeIncome:
+		return s.GenerateIncomeReport(ctx, req)
+	case report.TypeBudget:
+		return s.budgetComparisonReport(ctx, req.Period, req.StartDate, req.EndDate)
+	case report.TypeCashFlow:
+		return s.GenerateCashFlowReport(ctx, req.StartDate, req.EndDate)
+	case report.TypeCategoryBreak:
+		return s.categoryBreakdownReport(ctx, req.Period, req.StartDate, req.EndDate)
+	default:
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedReportType, req.Type)
+	}
+}
+
+// SaveReport сохраняет сгенерированный отчёт.
+func (s *reportService) SaveReport(ctx context.Context, reportEntity *report.Report) error {
+	if err := s.reportRepo.Create(ctx, reportEntity); err != nil {
+		return fmt.Errorf("failed to save report: %w", err)
 	}
 
-	return newReport, nil
+	return nil
 }
 
 // GetReportByID retrieves a report by its ID
@@ -459,6 +499,10 @@ func (s *reportService) GetReportsByUserID(ctx context.Context, userID uuid.UUID
 
 // DeleteReport deletes a report by its ID
 func (s *reportService) DeleteReport(ctx context.Context, id uuid.UUID) error {
+	if _, err := s.reportRepo.GetByID(ctx, id); err != nil {
+		return ErrReportNotFound
+	}
+
 	return s.reportRepo.Delete(ctx, id)
 }
 
@@ -474,6 +518,12 @@ func (s *reportService) ExportReport(
 		return nil, fmt.Errorf("failed to get report: %w", err)
 	}
 
+	// Тип отчёта известен только здесь: ExportReportData получает голые данные,
+	// а колонки CSV зависят от типа.
+	if strings.EqualFold(format, exportFormatCSV) {
+		return reportToCSV(reportEntity.Data, reportEntity.Type)
+	}
+
 	return s.ExportReportData(ctx, reportEntity.Data, format, options)
 }
 
@@ -487,7 +537,7 @@ func (s *reportService) ExportReportData(
 	switch strings.ToLower(format) {
 	case "json":
 		return json.Marshal(reportData)
-	case "csv":
+	case exportFormatCSV:
 		return s.exportToCSV(reportData, options)
 	case "excel":
 		return s.exportToExcel(reportData, options)
@@ -840,13 +890,46 @@ func (s *reportService) generateBudgetAlerts(_ []dto.BudgetCategoryComparisonDTO
 	return []dto.BudgetAlertReportDTO{}
 }
 
+// generateDailyCashFlow сводит операции по календарным дням периода; Balance —
+// нарастающий итог от openingBalance. Дни без операций пропускаются.
 func (s *reportService) generateDailyCashFlow(
-	_ []*transaction.Transaction,
-	_ float64,
+	transactions []*transaction.Transaction,
+	openingBalance float64,
 	_, _ time.Time,
 ) []dto.DailyCashFlowDTO {
-	// ROADMAP: daily cash-flow calculation with running balance.
-	return []dto.DailyCashFlowDTO{}
+	byDay := make(map[time.Time]*dto.DailyCashFlowDTO)
+	for _, tx := range transactions {
+		day := time.Date(tx.Date.Year(), tx.Date.Month(), tx.Date.Day(), 0, 0, 0, 0, tx.Date.Location())
+		item, ok := byDay[day]
+		if !ok {
+			item = &dto.DailyCashFlowDTO{Date: day}
+			byDay[day] = item
+		}
+
+		switch tx.Type {
+		case transaction.TypeIncome:
+			item.Inflow += tx.Amount
+		case transaction.TypeExpense:
+			item.Outflow += tx.Amount
+		}
+	}
+
+	days := make([]dto.DailyCashFlowDTO, 0, len(byDay))
+	for _, item := range byDay {
+		days = append(days, *item)
+	}
+	slices.SortFunc(days, func(a, b dto.DailyCashFlowDTO) int {
+		return a.Date.Compare(b.Date)
+	})
+
+	balance := openingBalance
+	for i := range days {
+		days[i].NetFlow = days[i].Inflow - days[i].Outflow
+		balance += days[i].NetFlow
+		days[i].Balance = balance
+	}
+
+	return days
 }
 
 func (s *reportService) generateWeeklyCashFlow(_ []dto.DailyCashFlowDTO) []dto.WeeklyCashFlowDTO {
@@ -1053,9 +1136,14 @@ func convertDailyCashFlowItemsToReportData(items []dto.DailyCashFlowDTO) []repor
 	return result
 }
 
-func (s *reportService) exportToCSV(_ any, _ dto.ExportOptionsDTO) ([]byte, error) {
-	// ROADMAP: CSV export implementation.
-	return []byte{}, nil
+// exportToCSV принимает только report.Data: для прочих структур набор колонок неизвестен.
+func (s *reportService) exportToCSV(reportData any, _ dto.ExportOptionsDTO) ([]byte, error) {
+	data, ok := reportData.(report.Data)
+	if !ok {
+		return nil, ErrUnsupportedCSVData
+	}
+
+	return reportToCSV(data, "")
 }
 
 func (s *reportService) exportToExcel(_ any, _ dto.ExportOptionsDTO) ([]byte, error) {
@@ -1066,38 +1154,6 @@ func (s *reportService) exportToExcel(_ any, _ dto.ExportOptionsDTO) ([]byte, er
 func (s *reportService) exportToPDF(_ any, _ dto.ExportOptionsDTO) ([]byte, error) {
 	// ROADMAP: PDF export implementation.
 	return []byte{}, nil
-}
-
-// Hidden API stubs: methods remain on ReportService for interface compatibility,
-// but callers must not expose them via public API until implemented.
-
-func (s *reportService) ScheduleReport(_ context.Context, _ dto.ScheduleReportDTO) (*dto.ScheduledReportDTO, error) {
-	// HIDDEN_API_STUB: scheduled report creation.
-	return nil, reportFeatureHiddenStubError("scheduled report creation")
-}
-
-func (s *reportService) GetScheduledReports(_ context.Context) ([]*dto.ScheduledReportDTO, error) {
-	// HIDDEN_API_STUB: scheduled report retrieval.
-	return nil, reportFeatureHiddenStubError("scheduled report retrieval")
-}
-
-func (s *reportService) UpdateScheduledReport(
-	_ context.Context,
-	_ uuid.UUID,
-	_ dto.ScheduleReportDTO,
-) (*dto.ScheduledReportDTO, error) {
-	// HIDDEN_API_STUB: scheduled report update.
-	return nil, reportFeatureHiddenStubError("scheduled report update")
-}
-
-func (s *reportService) DeleteScheduledReport(_ context.Context, _ uuid.UUID) error {
-	// HIDDEN_API_STUB: scheduled report deletion.
-	return reportFeatureHiddenStubError("scheduled report deletion")
-}
-
-func (s *reportService) ExecuteScheduledReport(_ context.Context, _ uuid.UUID) error {
-	// HIDDEN_API_STUB: scheduled report execution.
-	return reportFeatureHiddenStubError("scheduled report execution")
 }
 
 // Hidden API stubs for advanced analytics endpoints.
@@ -1111,19 +1167,9 @@ func (s *reportService) GenerateTrendAnalysis(
 	return nil, reportFeatureHiddenStubError("trend analysis")
 }
 
-func (s *reportService) GenerateSpendingForecast(_ context.Context, _ int) ([]dto.ForecastDTO, error) {
-	// HIDDEN_API_STUB: spending forecast service entrypoint.
-	return nil, reportFeatureHiddenStubError("spending forecast")
-}
-
 func (s *reportService) GenerateFinancialInsights(_ context.Context) ([]dto.RecommendationDTO, error) {
 	// HIDDEN_API_STUB: financial insights service entrypoint.
 	return nil, reportFeatureHiddenStubError("financial insights")
-}
-
-func (s *reportService) CalculateBenchmarks(_ context.Context) (*dto.BenchmarkComparisonDTO, error) {
-	// HIDDEN_API_STUB: benchmarks service entrypoint.
-	return nil, reportFeatureHiddenStubError("benchmark calculations")
 }
 
 // generateExpenseSpecificData generates expense-specific report components

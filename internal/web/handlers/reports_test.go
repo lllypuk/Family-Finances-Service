@@ -83,17 +83,20 @@ func (m *MockReportService) GenerateCategoryBreakdownReport(
 	return args.Get(0).(*dto.CategoryBreakdownDTO), args.Error(1)
 }
 
-func (m *MockReportService) SaveReport(
+func (m *MockReportService) GenerateReport(
 	ctx context.Context,
-	reportData any,
-	reportType report.Type,
 	req dto.ReportRequestDTO,
 ) (*report.Report, error) {
-	args := m.Called(ctx, reportData, reportType, req)
+	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*report.Report), args.Error(1)
+}
+
+func (m *MockReportService) SaveReport(ctx context.Context, reportEntity *report.Report) error {
+	args := m.Called(ctx, reportEntity)
+	return args.Error(0)
 }
 
 func (m *MockReportService) GetReportByID(ctx context.Context, id uuid.UUID) (*report.Report, error) {
@@ -154,52 +157,6 @@ func (m *MockReportService) ExportReportData(
 	return args.Get(0).([]byte), args.Error(1)
 }
 
-func (m *MockReportService) ScheduleReport(
-	ctx context.Context,
-	req dto.ScheduleReportDTO,
-) (*dto.ScheduledReportDTO, error) {
-	args := m.Called(ctx, req)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*dto.ScheduledReportDTO), args.Error(1)
-}
-
-func (m *MockReportService) GetScheduledReports(ctx context.Context) ([]*dto.ScheduledReportDTO, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*dto.ScheduledReportDTO), args.Error(1)
-}
-
-func (m *MockReportService) UpdateScheduledReport(
-	ctx context.Context,
-	id uuid.UUID,
-	req dto.ScheduleReportDTO,
-) (*dto.ScheduledReportDTO, error) {
-	args := m.Called(ctx, id, req)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*dto.ScheduledReportDTO), args.Error(1)
-}
-
-func (m *MockReportService) DeleteScheduledReport(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
-}
-
-func (m *MockReportService) CancelScheduledReport(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
-}
-
-func (m *MockReportService) ExecuteScheduledReport(ctx context.Context, scheduledReportID uuid.UUID) error {
-	args := m.Called(ctx, scheduledReportID)
-	return args.Error(0)
-}
-
 func (m *MockReportService) GenerateTrendAnalysis(
 	ctx context.Context,
 	categoryID *uuid.UUID,
@@ -212,31 +169,12 @@ func (m *MockReportService) GenerateTrendAnalysis(
 	return args.Get(0).(*dto.TrendAnalysisDTO), args.Error(1)
 }
 
-func (m *MockReportService) GenerateSpendingForecast(
-	ctx context.Context,
-	months int,
-) ([]dto.ForecastDTO, error) {
-	args := m.Called(ctx, months)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]dto.ForecastDTO), args.Error(1)
-}
-
 func (m *MockReportService) GenerateFinancialInsights(ctx context.Context) ([]dto.RecommendationDTO, error) {
 	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]dto.RecommendationDTO), args.Error(1)
-}
-
-func (m *MockReportService) CalculateBenchmarks(ctx context.Context) (*dto.BenchmarkComparisonDTO, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*dto.BenchmarkComparisonDTO), args.Error(1)
 }
 
 const testReportFormData = "type=expenses&period=monthly&start_date=2025-01-01&end_date=2025-01-31&name=Test+Report"
@@ -272,7 +210,7 @@ func TestReportHandler_Create_HTMXGenerationError(t *testing.T) {
 	mockReportService := new(MockReportService)
 
 	// Simulate error during report generation
-	mockReportService.On("GenerateExpenseReport", mock.Anything, mock.Anything).
+	mockReportService.On("GenerateReport", mock.Anything, mock.Anything).
 		Return(nil, errors.New("failed to get transactions"))
 
 	// Create services container with mock
@@ -294,7 +232,7 @@ func TestReportHandler_Create_HTMXGenerationError(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify mock was called
-	mockReportService.AssertCalled(t, "GenerateExpenseReport", mock.Anything, mock.Anything)
+	mockReportService.AssertCalled(t, "GenerateReport", mock.Anything, mock.Anything)
 
 	// Verify response status (should be 200 OK with rendered error template)
 	assert.Equal(t, http.StatusOK, rec.Code)
@@ -306,22 +244,14 @@ func TestReportHandler_Create_Success(t *testing.T) {
 	mockReportService := new(MockReportService)
 
 	// Simulate successful report generation
-	expenseReport := &dto.ExpenseReportDTO{
-		ID:            uuid.New(),
-		Name:          "Test Report",
-		TotalExpenses: 1000.0,
-	}
-	mockReportService.On("GenerateExpenseReport", mock.Anything, mock.Anything).
-		Return(expenseReport, nil)
-
-	// Simulate successful save
-	savedReport := &report.Report{
+	generatedReport := &report.Report{
 		ID:   uuid.New(),
 		Name: "Test Report",
 		Type: report.TypeExpenses,
 	}
-	mockReportService.On("SaveReport", mock.Anything, expenseReport, report.TypeExpenses, mock.Anything).
-		Return(savedReport, nil)
+	mockReportService.On("GenerateReport", mock.Anything, mock.Anything).
+		Return(generatedReport, nil)
+	mockReportService.On("SaveReport", mock.Anything, generatedReport).Return(nil)
 
 	// Create services container with mock
 	svc := &services.Services{
@@ -344,8 +274,8 @@ func TestReportHandler_Create_Success(t *testing.T) {
 	assert.Contains(t, rec.Header().Get("Location"), "/reports/")
 
 	// Verify mocks were called
-	mockReportService.AssertCalled(t, "GenerateExpenseReport", mock.Anything, mock.Anything)
-	mockReportService.AssertCalled(t, "SaveReport", mock.Anything, expenseReport, report.TypeExpenses, mock.Anything)
+	mockReportService.AssertCalled(t, "GenerateReport", mock.Anything, mock.Anything)
+	mockReportService.AssertCalled(t, "SaveReport", mock.Anything, generatedReport)
 }
 
 // TestReportHandler_Create_HTMXSuccess tests successful report creation with HTMX
@@ -354,22 +284,14 @@ func TestReportHandler_Create_HTMXSuccess(t *testing.T) {
 	mockReportService := new(MockReportService)
 
 	// Simulate successful report generation
-	expenseReport := &dto.ExpenseReportDTO{
-		ID:            uuid.New(),
-		Name:          "Test Report",
-		TotalExpenses: 1000.0,
-	}
-	mockReportService.On("GenerateExpenseReport", mock.Anything, mock.Anything).
-		Return(expenseReport, nil)
-
-	// Simulate successful save
-	savedReport := &report.Report{
+	generatedReport := &report.Report{
 		ID:   uuid.New(),
 		Name: "Test Report",
 		Type: report.TypeExpenses,
 	}
-	mockReportService.On("SaveReport", mock.Anything, expenseReport, report.TypeExpenses, mock.Anything).
-		Return(savedReport, nil)
+	mockReportService.On("GenerateReport", mock.Anything, mock.Anything).
+		Return(generatedReport, nil)
+	mockReportService.On("SaveReport", mock.Anything, generatedReport).Return(nil)
 
 	// Create services container with mock
 	svc := &services.Services{
@@ -392,8 +314,8 @@ func TestReportHandler_Create_HTMXSuccess(t *testing.T) {
 	assert.Contains(t, rec.Header().Get("Hx-Redirect"), "/reports/")
 
 	// Verify mocks were called
-	mockReportService.AssertCalled(t, "GenerateExpenseReport", mock.Anything, mock.Anything)
-	mockReportService.AssertCalled(t, "SaveReport", mock.Anything, expenseReport, report.TypeExpenses, mock.Anything)
+	mockReportService.AssertCalled(t, "GenerateReport", mock.Anything, mock.Anything)
+	mockReportService.AssertCalled(t, "SaveReport", mock.Anything, generatedReport)
 }
 
 // TestReportHandler_Create_SaveError tests error handling during report save
@@ -402,17 +324,17 @@ func TestReportHandler_Create_SaveError(t *testing.T) {
 	mockReportService := new(MockReportService)
 
 	// Simulate successful report generation
-	expenseReport := &dto.ExpenseReportDTO{
-		ID:            uuid.New(),
-		Name:          "Test Report",
-		TotalExpenses: 1000.0,
+	generatedReport := &report.Report{
+		ID:   uuid.New(),
+		Name: "Test Report",
+		Type: report.TypeExpenses,
 	}
-	mockReportService.On("GenerateExpenseReport", mock.Anything, mock.Anything).
-		Return(expenseReport, nil)
+	mockReportService.On("GenerateReport", mock.Anything, mock.Anything).
+		Return(generatedReport, nil)
 
 	// Simulate save error
-	mockReportService.On("SaveReport", mock.Anything, expenseReport, report.TypeExpenses, mock.Anything).
-		Return(nil, errors.New("database error"))
+	mockReportService.On("SaveReport", mock.Anything, generatedReport).
+		Return(errors.New("database error"))
 
 	// Create services container with mock
 	svc := &services.Services{
@@ -424,18 +346,18 @@ func TestReportHandler_Create_SaveError(t *testing.T) {
 
 	// Create test context with HTMX header and valid form data
 	// Using testReportFormData constant
-	c, _ := setupReportHandlerTest(true)
+	c, rec := setupReportHandlerTest(true)
 
-	// Execute handler - save errors are propagated as-is
+	// Execute handler
 	err := handler.Create(c)
 
-	// SaveReport errors are not wrapped in HTMX response, they're returned directly
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "database error")
+	// Ошибка сохранения идёт тем же путём, что и ошибка генерации: HTMX-партиал с текстом ошибки
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
 
 	// Verify mocks were called
-	mockReportService.AssertCalled(t, "GenerateExpenseReport", mock.Anything, mock.Anything)
-	mockReportService.AssertCalled(t, "SaveReport", mock.Anything, expenseReport, report.TypeExpenses, mock.Anything)
+	mockReportService.AssertCalled(t, "GenerateReport", mock.Anything, mock.Anything)
+	mockReportService.AssertCalled(t, "SaveReport", mock.Anything, generatedReport)
 }
 
 // setupReportHandlerWithUser собирает обработчик отчётов с моками сервисов

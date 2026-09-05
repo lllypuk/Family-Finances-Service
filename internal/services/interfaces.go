@@ -69,6 +69,9 @@ type TransactionService interface {
 	CountTransactions(ctx context.Context, filter dto.TransactionFilterDTO) (int, error)
 	UpdateTransaction(ctx context.Context, id uuid.UUID, req dto.UpdateTransactionDTO) (*transaction.Transaction, error)
 	DeleteTransaction(ctx context.Context, id uuid.UUID) error
+	// BulkDelete удаляет транзакции одним запросом и возвращает число удалённых;
+	// отсутствующие id игнорируются.
+	BulkDelete(ctx context.Context, ids []uuid.UUID) (int, error)
 
 	// Business Operations
 	GetTransactionsByCategory(
@@ -99,6 +102,8 @@ type BudgetService interface {
 	CreateBudget(ctx context.Context, req dto.CreateBudgetDTO) (*budget.Budget, error)
 	GetBudgetByID(ctx context.Context, id uuid.UUID) (*budget.Budget, error)
 	GetAllBudgets(ctx context.Context, filter dto.BudgetFilterDTO) ([]*budget.Budget, error) // Single family
+	// GetBudgetsPage — та же выборка плюс общее число подходящих записей, для meta.pagination.
+	GetBudgetsPage(ctx context.Context, filter dto.BudgetFilterDTO) ([]*budget.Budget, int, error)
 	UpdateBudget(ctx context.Context, id uuid.UUID, req dto.UpdateBudgetDTO) (*budget.Budget, error)
 	DeleteBudget(ctx context.Context, id uuid.UUID) error
 
@@ -117,6 +122,11 @@ type BudgetService interface {
 	RecalculateBudgetSpent(ctx context.Context, budgetID uuid.UUID) error
 }
 
+// StatsService defines aggregated statistics over a period (dashboard, GET /stats/summary)
+type StatsService interface {
+	Summary(ctx context.Context, from, to time.Time) (*dto.StatsSummary, error)
+}
+
 // ReportService defines business operations for report generation and analytics
 type ReportService interface {
 	// Report Generation
@@ -132,13 +142,11 @@ type ReportService interface {
 		period report.Period,
 	) (*dto.CategoryBreakdownDTO, error)
 
+	// GenerateReport dispatches by req.Type and returns an unsaved report with converted data
+	GenerateReport(ctx context.Context, req dto.ReportRequestDTO) (*report.Report, error)
+
 	// Report Management
-	SaveReport(
-		ctx context.Context,
-		reportData any,
-		reportType report.Type,
-		req dto.ReportRequestDTO,
-	) (*report.Report, error)
+	SaveReport(ctx context.Context, reportEntity *report.Report) error
 	GetReportByID(ctx context.Context, id uuid.UUID) (*report.Report, error)
 	GetReports(ctx context.Context, typeFilter *report.Type) ([]*report.Report, error)
 	GetReportsByUserID(ctx context.Context, userID uuid.UUID) ([]*report.Report, error)
@@ -148,22 +156,13 @@ type ReportService interface {
 	ExportReport(ctx context.Context, reportID uuid.UUID, format string, options dto.ExportOptionsDTO) ([]byte, error)
 	ExportReportData(ctx context.Context, reportData any, format string, options dto.ExportOptionsDTO) ([]byte, error)
 
-	// Scheduled Reports
-	ScheduleReport(ctx context.Context, req dto.ScheduleReportDTO) (*dto.ScheduledReportDTO, error)
-	GetScheduledReports(ctx context.Context) ([]*dto.ScheduledReportDTO, error)
-	UpdateScheduledReport(ctx context.Context, id uuid.UUID, req dto.ScheduleReportDTO) (*dto.ScheduledReportDTO, error)
-	DeleteScheduledReport(ctx context.Context, id uuid.UUID) error
-	ExecuteScheduledReport(ctx context.Context, scheduledReportID uuid.UUID) error
-
 	// Analytics & Insights
 	GenerateTrendAnalysis(
 		ctx context.Context,
 		categoryID *uuid.UUID,
 		period report.Period,
 	) (*dto.TrendAnalysisDTO, error)
-	GenerateSpendingForecast(ctx context.Context, months int) ([]dto.ForecastDTO, error)
 	GenerateFinancialInsights(ctx context.Context) ([]dto.RecommendationDTO, error)
-	CalculateBenchmarks(ctx context.Context) (*dto.BenchmarkComparisonDTO, error)
 }
 
 // BackupService defines business operations for database backup management

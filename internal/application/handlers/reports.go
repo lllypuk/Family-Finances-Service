@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/go-playground/validator/v10"
@@ -10,6 +11,13 @@ import (
 
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/services"
+	"family-budget-service/internal/services/dto"
+	"family-budget-service/internal/web/middleware"
+)
+
+const (
+	exportFormatCSV = "csv"
+	csvContentType  = "text/csv; charset=utf-8"
 )
 
 type ReportHandler struct {
@@ -29,46 +37,96 @@ func NewReportHandler(
 
 	return &ReportHandler{
 		repositories:  repositories,
-		validator:     validator.New(),
+		validator:     newAPIValidator(),
 		reportService: reportService,
 	}
 }
 
+// CreateReport генерирует отчёт и сохраняет его. Автор берётся из сессии:
+// user_id в теле запроса нет намеренно (S-01).
 func (h *ReportHandler) CreateReport(c echo.Context) error {
-	// Доступ закрыт RequireAPIAuth на группе /api/v1: анонимный клиент сюда не
-	// доходит. Генерация не реализована, владельца отчёта записывать некуда,
-	// поэтому сессия здесь не читается — когда генерация появится, ID автора
-	// обязан браться из сессии, а не из тела запроса (S-01).
+	sessionData, sessionErr := middleware.GetUserFromContext(c)
+	if sessionErr != nil {
+		return respondUnauthorized(c)
+	}
+
 	var req CreateReportRequest
 	if err := c.Bind(&req); err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest, err.Error())
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
+			bodyDetail(ErrCodeInvalidRequest, err.Error()))
 	}
 
 	if err := h.validator.Struct(req); err != nil {
-		return HandleValidationError(c, err)
+		return respondValidationErrors(c, err)
 	}
 
-	return respondError(
-		c,
-		http.StatusNotImplemented,
-		"NOT_IMPLEMENTED",
-		"Report generation API is not implemented yet",
-		"Use stored reports endpoints only until report generation is completed",
-	)
+	if h.reportService == nil {
+		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+	}
+
+	ctx := c.Request().Context()
+	generated, err := h.reportService.GenerateReport(ctx, dto.ReportRequestDTO{
+		Name:      req.Name,
+		Type:      report.Type(req.Type),
+		Period:    report.Period(req.Period),
+		UserID:    sessionData.UserID,
+		StartDate: req.StartDate,
+		EndDate:   req.EndDate,
+	})
+	if err != nil {
+		if errors.Is(err, services.ErrUnsupportedReportType) {
+			return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, "Unsupported report type")
+		}
+		return respondError(c, http.StatusInternalServerError, ErrCodeGenerationFailed, "Failed to generate report")
+	}
+
+	if saveErr := h.reportService.SaveReport(ctx, generated); saveErr != nil {
+		return respondError(c, http.StatusInternalServerError, ErrCodeSaveFailed, "Failed to save report")
+	}
+
+	return respondAPI(c, http.StatusCreated, newReportResponse(generated))
+}
+
+// ExportReport отдаёт отчёт в CSV; другие форматы не поддерживаются.
+func (h *ReportHandler) ExportReport(c echo.Context) error {
+	id, err := ParseIDParamWithError(c, "report")
+	if err != nil {
+		return HandleIDParseError(c, "report")
+	}
+
+	if h.reportService == nil {
+		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+	}
+
+	ctx := c.Request().Context()
+	if _, getErr := h.reportService.GetReportByID(ctx, id); getErr != nil {
+		return HandleNotFoundError(c, "Report")
+	}
+
+	body, err := h.reportService.ExportReport(ctx, id, exportFormatCSV, dto.ExportOptionsDTO{})
+	if err != nil {
+		return respondError(c, http.StatusInternalServerError, ErrCodeExportFailed, "Failed to export report")
+	}
+
+	c.Response().Header().Set(echo.HeaderContentDisposition,
+		fmt.Sprintf("attachment; filename=%q", "report-"+id.String()+".csv"))
+
+	return c.Blob(http.StatusOK, csvContentType, body)
 }
 
 func (h *ReportHandler) GetReports(c echo.Context) error {
-	if h.reportService != nil {
-		return h.getReportsViaService(c)
+	page, err := parsePagination(c)
+	if err != nil {
+		return ignoreWritten(err)
 	}
 
-	// Получаем параметры запроса
+	if h.reportService != nil {
+		return h.getReportsViaService(c, page)
+	}
+
 	userIDParam := c.QueryParam("user_id")
 
 	var reports []*report.Report
-	var err error
-
-	// Если указан пользователь, получаем отчеты для конкретного пользователя
 	if userIDParam != "" {
 		userID, parseErr := uuid.Parse(userIDParam)
 		if parseErr != nil {
@@ -76,7 +134,6 @@ func (h *ReportHandler) GetReports(c echo.Context) error {
 		}
 		reports, err = h.repositories.Report.GetByUserID(c.Request().Context(), userID)
 	} else {
-		// Иначе получаем все отчеты семьи
 		reports, err = h.repositories.Report.GetAll(c.Request().Context())
 	}
 
@@ -84,22 +141,7 @@ func (h *ReportHandler) GetReports(c echo.Context) error {
 		return respondError(c, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch reports")
 	}
 
-	var response []ReportResponse
-	for _, r := range reports {
-		response = append(response, ReportResponse{
-			ID:          r.ID,
-			Name:        r.Name,
-			Type:        string(r.Type),
-			Period:      string(r.Period),
-			UserID:      r.UserID,
-			StartDate:   r.StartDate,
-			EndDate:     r.EndDate,
-			Data:        r.Data,
-			GeneratedAt: r.GeneratedAt,
-		})
-	}
-
-	return respondAPI(c, http.StatusOK, response)
+	return respondList(c, buildReportListResponse(pageSlice(reports, page)), page, len(reports))
 }
 
 func (h *ReportHandler) GetReportByID(c echo.Context) error {
@@ -118,19 +160,7 @@ func (h *ReportHandler) GetReportByID(c echo.Context) error {
 		return HandleNotFoundError(c, "Report")
 	}
 
-	response := ReportResponse{
-		ID:          foundReport.ID,
-		Name:        foundReport.Name,
-		Type:        string(foundReport.Type),
-		Period:      string(foundReport.Period),
-		UserID:      foundReport.UserID,
-		StartDate:   foundReport.StartDate,
-		EndDate:     foundReport.EndDate,
-		Data:        foundReport.Data,
-		GeneratedAt: foundReport.GeneratedAt,
-	}
-
-	return respondAPI(c, http.StatusOK, response)
+	return respondAPI(c, http.StatusOK, newReportResponse(foundReport))
 }
 
 func (h *ReportHandler) DeleteReport(c echo.Context) error {
@@ -146,7 +176,7 @@ func (h *ReportHandler) DeleteReport(c echo.Context) error {
 	}, "Report")
 }
 
-func (h *ReportHandler) getReportsViaService(c echo.Context) error {
+func (h *ReportHandler) getReportsViaService(c echo.Context, page pageParams) error {
 	userIDParam := c.QueryParam("user_id")
 
 	var reports []*report.Report
@@ -165,22 +195,16 @@ func (h *ReportHandler) getReportsViaService(c echo.Context) error {
 		return respondError(c, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch reports")
 	}
 
+	return respondList(c, buildReportListResponse(pageSlice(reports, page)), page, len(reports))
+}
+
+func buildReportListResponse(reports []*report.Report) []ReportResponse {
 	response := make([]ReportResponse, 0, len(reports))
 	for _, r := range reports {
-		response = append(response, ReportResponse{
-			ID:          r.ID,
-			Name:        r.Name,
-			Type:        string(r.Type),
-			Period:      string(r.Period),
-			UserID:      r.UserID,
-			StartDate:   r.StartDate,
-			EndDate:     r.EndDate,
-			Data:        r.Data,
-			GeneratedAt: r.GeneratedAt,
-		})
+		response = append(response, newReportResponse(r))
 	}
 
-	return respondAPI(c, http.StatusOK, response)
+	return response
 }
 
 func (h *ReportHandler) getReportByIDViaService(c echo.Context) error {
@@ -198,15 +222,19 @@ func (h *ReportHandler) getReportByIDViaService(c echo.Context) error {
 		return HandleNotFoundError(c, "Report")
 	}
 
-	return respondAPI(c, http.StatusOK, ReportResponse{
-		ID:          foundReport.ID,
-		Name:        foundReport.Name,
-		Type:        string(foundReport.Type),
-		Period:      string(foundReport.Period),
-		UserID:      foundReport.UserID,
-		StartDate:   foundReport.StartDate,
-		EndDate:     foundReport.EndDate,
-		Data:        foundReport.Data,
-		GeneratedAt: foundReport.GeneratedAt,
-	})
+	return respondAPI(c, http.StatusOK, newReportResponse(foundReport))
+}
+
+func newReportResponse(r *report.Report) ReportResponse {
+	return ReportResponse{
+		ID:          r.ID,
+		Name:        r.Name,
+		Type:        string(r.Type),
+		Period:      string(r.Period),
+		UserID:      r.UserID,
+		StartDate:   r.StartDate,
+		EndDate:     r.EndDate,
+		Data:        r.Data,
+		GeneratedAt: r.GeneratedAt,
+	}
 }

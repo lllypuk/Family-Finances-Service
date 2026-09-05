@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 )
@@ -47,6 +48,10 @@ type ServerConfig struct {
 type DatabaseConfig struct {
 	// SQLite configuration
 	Path string
+	// BackupDir — каталог файлов бэкапа. Пустой BACKUP_DIR означает
+	// <dir(Path)>/backups; в контейнере каталог смонтирован отдельным томом,
+	// поэтому путь задаётся явно.
+	BackupDir string
 }
 
 type WebConfig struct {
@@ -93,7 +98,8 @@ func LoadConfig() *Config {
 			IdleTimeout:  getDurationEnv("SERVER_IDLE_TIMEOUT", defaultServerIdleTimeout),
 		},
 		Database: DatabaseConfig{
-			Path: getEnv("DATABASE_PATH", "./data/budget.db"),
+			Path:      getEnv("DATABASE_PATH", "./data/budget.db"),
+			BackupDir: getEnv("BACKUP_DIR", ""),
 		},
 		Web: WebConfig{
 			SessionSecret:  getEnv("SESSION_SECRET", placeholderSessionSecret),
@@ -179,6 +185,14 @@ func validateProductionSecret(name, value, placeholder string) error {
 	}
 
 	return nil
+}
+
+// GetBackupDir returns the backup directory, falling back to <dir(database)>/backups.
+func (c *Config) GetBackupDir() string {
+	if c.Database.BackupDir != "" {
+		return c.Database.BackupDir
+	}
+	return filepath.Join(filepath.Dir(c.Database.Path), "backups")
 }
 
 // GetDatabasePath returns the database file path

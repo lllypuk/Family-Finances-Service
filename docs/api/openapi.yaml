@@ -17,8 +17,10 @@ info:
     - Списки: `limit` (по умолчанию 50, максимум 200) и `offset`; `meta.pagination.total` — общее число (A-08).
     - Ошибка всегда одной формы: `{"error": {...}, "meta": {...}}` (A-08).
 
-    Коды ошибок: `UNAUTHORIZED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404),
-    `VALIDATION_ERROR` (422), `SETUP_REQUIRED` / `CURRENCY_LOCKED` / `LAST_ADMIN` (409),
+    Коды ошибок: `INVALID_REQUEST` / `INVALID_ID` (400 — тело или id не разобрались),
+    `UNAUTHORIZED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404),
+    `VALIDATION_ERROR` (422 — тело или query-параметры не прошли проверку, поля в `error.details`),
+    `SETUP_REQUIRED` / `CURRENCY_LOCKED` / `LAST_ADMIN` (409),
     `RATE_LIMITED` (429, с `Retry-After`), `INTERNAL_ERROR` (500).
   license:
     name: MIT
@@ -249,6 +251,7 @@ paths:
                   meta: { $ref: '#/components/schemas/ListMeta' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
     post:
       operationId: createUser
       tags: [users]
@@ -385,6 +388,7 @@ paths:
                   meta: { $ref: '#/components/schemas/ListMeta' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
     post:
       operationId: createCategory
       tags: [categories]
@@ -618,6 +622,7 @@ paths:
                   meta: { $ref: '#/components/schemas/ListMeta' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
     post:
       operationId: createBudget
       tags: [budgets]
@@ -702,13 +707,13 @@ paths:
                   meta: { $ref: '#/components/schemas/ListMeta' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
     post:
       operationId: createReport
       tags: [reports]
       summary: Сгенерировать отчёт
       description: |
-        admin и member. Владелец берётся из токена — `user_id` в теле игнорируется.
-        До плана 02 роут отвечает `501 NOT_IMPLEMENTED`: генерация есть только в веб-интерфейсе.
+        admin и member. Владелец берётся из сессии — `user_id` в теле игнорируется.
       requestBody:
         required: true
         content:
@@ -719,11 +724,6 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
-        '501':
-          description: Генерация ещё не перенесена в сервисный слой (снимается планом 02)
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
 
   /api/v1/reports/{id}:
     parameters:
@@ -829,6 +829,7 @@ paths:
                   meta: { $ref: '#/components/schemas/ListMeta' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
     post:
       operationId: createBackup
       tags: [backups]
@@ -865,6 +866,11 @@ paths:
       description: Только admin.
       responses:
         '204': { description: Файл удалён }
+        '400':
+          description: Имя не соответствует шаблону `backup_YYYYMMDD_HHMMSSmmm.db`
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -883,6 +889,11 @@ paths:
           content:
             application/octet-stream:
               schema: { type: string, format: binary }
+        '400':
+          description: Имя не соответствует шаблону `backup_YYYYMMDD_HHMMSSmmm.db`
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -908,7 +919,7 @@ components:
       in: path
       required: true
       description: Имя файла бэкапа из `GET /api/v1/backups`
-      schema: { type: string, pattern: '^[A-Za-z0-9._-]+$' }
+      schema: { type: string, pattern: '^backup_\d{8}_\d{9}\.db$' }
     Limit:
       name: limit
       in: query
@@ -1514,7 +1525,7 @@ components:
           description: '`planned_minor - actual_minor`'
         utilization: { type: number, format: double }
 
-    StatsSummary:
+    PeriodTotals:
       type: object
       required: [from, to, income_minor, expenses_minor, net_minor, transaction_count]
       properties:
@@ -1526,25 +1537,89 @@ components:
           allOf: [{ $ref: '#/components/schemas/Money' }]
           description: '`income_minor - expenses_minor`'
         transaction_count: { type: integer }
+    CategoryShare:
+      type: object
+      required: [category_id, name, amount_minor, transaction_count, share]
+      properties:
+        category_id: { type: string, format: uuid }
+        name: { type: string }
+        color: { type: string }
+        icon: { type: string }
+        amount_minor: { $ref: '#/components/schemas/Money' }
+        transaction_count:
+          type: integer
+          description: Число операций категории **того же типа**, что и список
+        share:
+          type: number
+          format: double
+          description: Доля в сумме периода (0.25 = 25%)
+    BudgetProgress:
+      type: object
+      required:
+        [id, name, amount_minor, spent_minor, remaining_minor, utilization, period,
+         start_date, end_date, days_remaining, is_active, is_over_budget, is_near_limit]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        category_name: { type: string }
+        amount_minor: { $ref: '#/components/schemas/Money' }
+        spent_minor: { $ref: '#/components/schemas/Money' }
+        remaining_minor: { $ref: '#/components/schemas/Money' }
+        utilization:
+          type: number
+          format: double
+          description: '`spent_minor / amount_minor`, доля (1.0 = лимит выбран)'
+        period: { $ref: '#/components/schemas/BudgetPeriod' }
+        start_date: { $ref: '#/components/schemas/CalendarDate' }
+        end_date: { $ref: '#/components/schemas/CalendarDate' }
+        days_remaining: { type: integer }
+        is_active: { type: boolean }
+        is_over_budget: { type: boolean }
+        is_near_limit: { type: boolean }
+    StatsSummary:
+      type: object
+      required: [from, to, current, previous, has_previous_data, income_delta, expenses_delta,
+                 expense_categories, income_categories, budgets, recent, transactions_total]
+      properties:
+        from: { $ref: '#/components/schemas/CalendarDate' }
+        to: { $ref: '#/components/schemas/CalendarDate' }
+        current: { $ref: '#/components/schemas/PeriodTotals' }
+        previous:
+          allOf: [{ $ref: '#/components/schemas/PeriodTotals' }]
+          description: Предыдущий период той же длины; заполнен нулями, если данных нет
+        has_previous_data:
+          type: boolean
+          description: false — сравнивать с `previous` нельзя, дельты равны нулю
+        income_delta:
+          type: number
+          format: double
+          description: Изменение доходов к предыдущему периоду, доля (0.12 = +12%)
         expenses_delta:
           type: number
           format: double
-          description: Изменение расходов к предыдущему периоду той же длины, доля (0.12 = +12%)
-        categories:
+          description: Изменение расходов к предыдущему периоду, доля (0.12 = +12%)
+        expense_categories:
           type: array
           description: Разбивка расходов по категориям, по убыванию суммы
-          items: { $ref: '#/components/schemas/CategoryBreakdownItem' }
+          items: { $ref: '#/components/schemas/CategoryShare' }
+        income_categories:
+          type: array
+          description: Разбивка доходов по категориям, по убыванию суммы
+          items: { $ref: '#/components/schemas/CategoryShare' }
         budgets:
           type: array
-          description: Бюджеты, пересекающиеся с периодом
-          items: { $ref: '#/components/schemas/BudgetComparisonItem' }
+          description: Бюджеты, активные на момент запроса (не на границы периода), по убыванию утилизации
+          items: { $ref: '#/components/schemas/BudgetProgress' }
         recent:
           type: array
-          description: Последние операции периода, по убыванию даты
+          description: Последние операции семьи, по убыванию даты; не ограничены периодом
           items: { $ref: '#/components/schemas/RecentTransactionItem' }
+        transactions_total:
+          type: integer
+          description: Общее число операций семьи за всё время, а не за период
     RecentTransactionItem:
       type: object
-      required: [id, type, amount_minor, description, category_name, date]
+      required: [id, type, amount_minor, description, date, created_at]
       properties:
         id: { type: string, format: uuid }
         type: { $ref: '#/components/schemas/TransactionType' }
@@ -1552,6 +1627,7 @@ components:
         description: { type: string }
         category_name: { type: string }
         date: { $ref: '#/components/schemas/CalendarDate' }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
 
     Backup:
       type: object
@@ -1560,6 +1636,6 @@ components:
         name:
           type: string
           description: Имя файла; используется в `{name}` для скачивания и удаления
-          examples: ['budget-20260904-030000.db']
+          examples: ['backup_20260904_030000123.db']
         size_bytes: { type: integer, format: int64 }
         created_at: { $ref: '#/components/schemas/Timestamp' }
