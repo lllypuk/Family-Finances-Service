@@ -79,6 +79,13 @@ type FamilyResponse struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// BackupResponse describes a file in the backup directory.
+type BackupResponse struct {
+	Name      string    `json:"name"`
+	SizeBytes int64     `json:"size_bytes"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 // CreateCategoryRequest represents the request payload for creating a new category
 type CreateCategoryRequest struct {
 	Name     string     `json:"name"                validate:"required,min=2,max=50"`

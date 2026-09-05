@@ -146,11 +146,11 @@
   `internal/run.go`, `internal/application/http_server.go`, `docs/api/openapi.yaml`,
   `docker/docker-compose.yml` (файлы `deploy/*.yml` не трогать — их заменяет план 05)
 
-- [ ] `BACKUP_DIR` в конфиге (по умолчанию `<dir(DATABASE_PATH)>/backups`), передаётся в `NewBackupService`; dev-compose задаёт `/backups`
-- [ ] `POST|GET /api/v1/backups`, `GET /api/v1/backups/:name/download` (`c.Attachment`), `DELETE /api/v1/backups/:name` — группа `adminOnly`; имя проверяет сервис (`ErrInvalidBackupFilename` из `GetBackup`/`DeleteBackup` → `400 INVALID_BACKUP_NAME`)
-- [ ] тесты обработчиков: создание → список содержит файл → скачивание отдаёт `application/octet-stream` → удаление; имя не по шаблону `backup_*.db` → 400; несуществующее → 404; member → 403
-- [ ] интеграционный тест на временном каталоге (`t.TempDir()`), веб-тесты бэкапов адаптированы под `BACKUP_DIR`
-- [ ] `openapi.yaml` обновлён; `make fmt && make test && make lint` — зелёные
+- [x] `BACKUP_DIR` в конфиге (по умолчанию `<dir(DATABASE_PATH)>/backups`), передаётся в `NewBackupService`; dev-compose задаёт `/backups`
+- [x] `POST|GET /api/v1/backups`, `GET /api/v1/backups/:name/download` (`c.Attachment`), `DELETE /api/v1/backups/:name` — группа `adminOnly`; имя проверяет сервис (`ErrInvalidBackupFilename` из `GetBackup`/`DeleteBackup` → `400 INVALID_BACKUP_NAME`)
+- [x] тесты обработчиков: создание → список содержит файл → скачивание отдаёт `application/octet-stream` → удаление; имя не по шаблону `backup_*.db` → 400; несуществующее → 404; member → 403
+- [x] интеграционный тест на временном каталоге (`t.TempDir()`), веб-тесты бэкапов адаптированы под `BACKUP_DIR`
+- [x] `openapi.yaml` обновлён; `make fmt && make test && make lint` — зелёные
 
 ### Task 6: Массовое удаление и пагинация с `total`
 

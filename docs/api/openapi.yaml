@@ -859,6 +859,11 @@ paths:
       description: Только admin.
       responses:
         '204': { description: Файл удалён }
+        '400':
+          description: Имя не соответствует шаблону `backup_YYYYMMDD_HHMMSSmmm.db`
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -877,6 +882,11 @@ paths:
           content:
             application/octet-stream:
               schema: { type: string, format: binary }
+        '400':
+          description: Имя не соответствует шаблону `backup_YYYYMMDD_HHMMSSmmm.db`
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -902,7 +912,7 @@ components:
       in: path
       required: true
       description: Имя файла бэкапа из `GET /api/v1/backups`
-      schema: { type: string, pattern: '^[A-Za-z0-9._-]+$' }
+      schema: { type: string, pattern: '^backup_\d{8}_\d{9}\.db$' }
     Limit:
       name: limit
       in: query
@@ -1554,6 +1564,6 @@ components:
         name:
           type: string
           description: Имя файла; используется в `{name}` для скачивания и удаления
-          examples: ['budget-20260904-030000.db']
+          examples: ['backup_20260904_030000123.db']
         size_bytes: { type: integer, format: int64 }
         created_at: { $ref: '#/components/schemas/Timestamp' }

@@ -36,6 +36,12 @@ const (
 	ErrCodeSaveFailed = "SAVE_FAILED"
 	// ErrCodeExportFailed signals a failed report export.
 	ErrCodeExportFailed = "EXPORT_FAILED"
+	// ErrCodeInvalidBackupName signals a backup filename outside the `backup_*.db` pattern.
+	ErrCodeInvalidBackupName = "INVALID_BACKUP_NAME"
+	// ErrCodeBackupNotFound signals that the requested backup file does not exist.
+	ErrCodeBackupNotFound = "BACKUP_NOT_FOUND"
+	// ErrCodeBackupFailed signals that a backup could not be created.
+	ErrCodeBackupFailed = "BACKUP_FAILED"
 
 	// Standard error messages paired with the codes above. Kept as constants
 	// so changes propagate to API consumers in lockstep with code updates.
@@ -50,4 +56,7 @@ const (
 	ErrMessageInternal           = "Internal server error"
 	ErrMessageCannotDeleteSelf   = "Cannot delete your own account"
 	ErrMessageLastAdmin          = "Cannot delete the last administrator"
+	ErrMessageInvalidBackupName  = "Invalid backup filename"
+	ErrMessageBackupNotFound     = "Backup not found"
+	ErrMessageBackupFailed       = "Failed to create backup"
 )

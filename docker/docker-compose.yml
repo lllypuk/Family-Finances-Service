@@ -32,6 +32,9 @@ services:
 
       # Database Configuration (SQLite)
       DATABASE_PATH: ${DATABASE_PATH:-/data/budget.db}
+      # Каталог бэкапов вынесен из тома с БД: `VACUUM INTO` пишет копию рядом
+      # с оригиналом только если BACKUP_DIR пуст.
+      BACKUP_DIR: ${BACKUP_DIR:-/backups}
 
       # Application Configuration
       ENVIRONMENT: ${ENVIRONMENT:-production}
@@ -43,6 +46,7 @@ services:
     volumes:
       # Persistent volume for SQLite database
       - budget_data:/data
+      - budget_backups:/backups
     networks:
       - family-budget-network
     healthcheck:
@@ -61,6 +65,13 @@ volumes:
       type: none
       o: bind
       device: ${DATA_DIR:-.}/data
+  # Каталог должен существовать до `up`: bind-том его не создаёт.
+  budget_backups:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_DIR:-.}/backups
 
 networks:
   family-budget-network:
