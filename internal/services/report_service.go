@@ -28,7 +28,10 @@ const (
 	reportTransactionQueryLimit = 1000 // Maximum transactions to query for reports
 )
 
-var ErrReportFeatureHiddenFromPublicAPI = errors.New("report feature hidden from public API until implemented")
+var (
+	ErrReportFeatureHiddenFromPublicAPI = errors.New("report feature hidden from public API until implemented")
+	ErrUnsupportedReportType            = errors.New("unsupported report type")
+)
 
 type reportService struct {
 	reportRepo      ReportRepository
@@ -409,34 +412,51 @@ func (s *reportService) GenerateCategoryBreakdownReport(
 	}, nil
 }
 
-// SaveReport saves a generated report to the database
-func (s *reportService) SaveReport(
-	ctx context.Context,
-	reportData any,
-	reportType report.Type,
-	req dto.ReportRequestDTO,
-) (*report.Report, error) {
-	// Convert reportData to report.Data format
-	data, err := s.convertToReportData(reportData, reportType)
+// GenerateReport строит отчёт запрошенного типа: генерация данных плюс конвертация в report.Data.
+//
+// Отчёт не сохраняется: HTMX-предпросмотр показывает его, не записывая в БД.
+// Неизвестный тип — ErrUnsupportedReportType.
+func (s *reportService) GenerateReport(ctx context.Context, req dto.ReportRequestDTO) (*report.Report, error) {
+	reportData, err := s.generateReportData(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := s.convertToReportData(reportData, req.Type)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert report data: %w", err)
 	}
 
-	newReport := report.NewReport(
-		req.Name,
-		reportType,
-		req.Period,
-		req.UserID,
-		req.StartDate,
-		req.EndDate,
-	)
+	newReport := report.NewReport(req.Name, req.Type, req.Period, req.UserID, req.StartDate, req.EndDate)
 	newReport.Data = data
 
-	if createErr := s.reportRepo.Create(ctx, newReport); createErr != nil {
-		return nil, fmt.Errorf("failed to save report: %w", createErr)
+	return newReport, nil
+}
+
+func (s *reportService) generateReportData(ctx context.Context, req dto.ReportRequestDTO) (any, error) {
+	switch req.Type {
+	case report.TypeExpenses:
+		return s.GenerateExpenseReport(ctx, req)
+	case report.TypeIncome:
+		return s.GenerateIncomeReport(ctx, req)
+	case report.TypeBudget:
+		return s.GenerateBudgetComparisonReport(ctx, req.Period)
+	case report.TypeCashFlow:
+		return s.GenerateCashFlowReport(ctx, req.StartDate, req.EndDate)
+	case report.TypeCategoryBreak:
+		return s.GenerateCategoryBreakdownReport(ctx, req.Period)
+	default:
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedReportType, req.Type)
+	}
+}
+
+// SaveReport сохраняет сгенерированный отчёт.
+func (s *reportService) SaveReport(ctx context.Context, reportEntity *report.Report) error {
+	if err := s.reportRepo.Create(ctx, reportEntity); err != nil {
+		return fmt.Errorf("failed to save report: %w", err)
 	}
 
-	return newReport, nil
+	return nil
 }
 
 // GetReportByID retrieves a report by its ID
@@ -1068,38 +1088,6 @@ func (s *reportService) exportToPDF(_ any, _ dto.ExportOptionsDTO) ([]byte, erro
 	return []byte{}, nil
 }
 
-// Hidden API stubs: methods remain on ReportService for interface compatibility,
-// but callers must not expose them via public API until implemented.
-
-func (s *reportService) ScheduleReport(_ context.Context, _ dto.ScheduleReportDTO) (*dto.ScheduledReportDTO, error) {
-	// HIDDEN_API_STUB: scheduled report creation.
-	return nil, reportFeatureHiddenStubError("scheduled report creation")
-}
-
-func (s *reportService) GetScheduledReports(_ context.Context) ([]*dto.ScheduledReportDTO, error) {
-	// HIDDEN_API_STUB: scheduled report retrieval.
-	return nil, reportFeatureHiddenStubError("scheduled report retrieval")
-}
-
-func (s *reportService) UpdateScheduledReport(
-	_ context.Context,
-	_ uuid.UUID,
-	_ dto.ScheduleReportDTO,
-) (*dto.ScheduledReportDTO, error) {
-	// HIDDEN_API_STUB: scheduled report update.
-	return nil, reportFeatureHiddenStubError("scheduled report update")
-}
-
-func (s *reportService) DeleteScheduledReport(_ context.Context, _ uuid.UUID) error {
-	// HIDDEN_API_STUB: scheduled report deletion.
-	return reportFeatureHiddenStubError("scheduled report deletion")
-}
-
-func (s *reportService) ExecuteScheduledReport(_ context.Context, _ uuid.UUID) error {
-	// HIDDEN_API_STUB: scheduled report execution.
-	return reportFeatureHiddenStubError("scheduled report execution")
-}
-
 // Hidden API stubs for advanced analytics endpoints.
 
 func (s *reportService) GenerateTrendAnalysis(
@@ -1111,19 +1099,9 @@ func (s *reportService) GenerateTrendAnalysis(
 	return nil, reportFeatureHiddenStubError("trend analysis")
 }
 
-func (s *reportService) GenerateSpendingForecast(_ context.Context, _ int) ([]dto.ForecastDTO, error) {
-	// HIDDEN_API_STUB: spending forecast service entrypoint.
-	return nil, reportFeatureHiddenStubError("spending forecast")
-}
-
 func (s *reportService) GenerateFinancialInsights(_ context.Context) ([]dto.RecommendationDTO, error) {
 	// HIDDEN_API_STUB: financial insights service entrypoint.
 	return nil, reportFeatureHiddenStubError("financial insights")
-}
-
-func (s *reportService) CalculateBenchmarks(_ context.Context) (*dto.BenchmarkComparisonDTO, error) {
-	// HIDDEN_API_STUB: benchmarks service entrypoint.
-	return nil, reportFeatureHiddenStubError("benchmark calculations")
 }
 
 // generateExpenseSpecificData generates expense-specific report components

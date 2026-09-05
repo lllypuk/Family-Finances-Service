@@ -103,11 +103,11 @@
   `internal/services/report_service_test.go`, `internal/web/handlers/reports.go`,
   `internal/web/handlers/reports_test.go`
 
-- [ ] `GenerateReport(ctx, dto.GenerateReportRequest) (*report.Report, error)` — диспетчер по `report.Type` и конвертация в `report.Data` из `reports.go:240,654-800`
-- [ ] удалить из интерфейса и реализации `ScheduleReport`, `GetScheduledReports`, `UpdateScheduledReport`, `DeleteScheduledReport`, `ExecuteScheduledReport`, `GenerateSpendingForecast`, `CalculateBenchmarks` (заглушки `report_service.go:1074-1124`) и их тесты
-- [ ] веб-обработчик и HTMX-партиал `reports/generate` вызывают `GenerateReport`; локальный диспетчер удалить
-- [ ] тесты `GenerateReport`: по одному на каждый из пяти типов, ошибка неизвестного типа, ошибка репозитория
-- [ ] `make test` — зелёный
+- [x] `GenerateReport(ctx, dto.ReportRequestDTO) (*report.Report, error)` (используется существующий DTO; `SaveReport` теперь принимает готовый `*report.Report`) — диспетчер по `report.Type` и конвертация в `report.Data` из `reports.go:240,654-800`
+- [x] удалить из интерфейса и реализации `ScheduleReport`, `GetScheduledReports`, `UpdateScheduledReport`, `DeleteScheduledReport`, `ExecuteScheduledReport`, `GenerateSpendingForecast`, `CalculateBenchmarks` (заглушки `report_service.go:1074-1124`) и их тесты
+- [x] веб-обработчик и HTMX-партиал `reports/generate` вызывают `GenerateReport`; локальный диспетчер удалить
+- [x] тесты `GenerateReport`: по одному на каждый из пяти типов, ошибка неизвестного типа, ошибка репозитория
+- [x] `make test` — зелёный
 
 ### Task 3: Роуты отчётов и статистики
 
