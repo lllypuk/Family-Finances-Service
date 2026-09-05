@@ -10,7 +10,9 @@ import (
 
 	"github.com/google/uuid"
 
+	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/user"
+	"family-budget-service/internal/infrastructure/sqlitehelpers"
 	"family-budget-service/internal/infrastructure/validation"
 )
 
@@ -253,6 +255,88 @@ func (r *SQLiteFamilyRepository) CreateWithTransaction(ctx context.Context, tx *
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create family: %w", err)
+	}
+
+	return nil
+}
+
+// Bootstrap создаёт семью, стартовые категории и админа одной транзакцией.
+// Повторный вызов падает на UNIQUE families.singleton → user.ErrFamilyExists.
+func (r *SQLiteFamilyRepository) Bootstrap(
+	ctx context.Context,
+	family *user.Family,
+	categories []*category.Category,
+	admin *user.User,
+) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	rollbackNeeded := true
+	defer func() {
+		if rollbackNeeded {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if err = r.CreateWithTransaction(ctx, tx, family); err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed: families.singleton") {
+			return user.ErrFamilyExists
+		}
+		return err
+	}
+
+	for _, c := range categories {
+		if err = insertCategoryTx(ctx, tx, family.ID, c); err != nil {
+			return err
+		}
+	}
+
+	if err = NewSQLiteRepository(r.db).CreateWithTransaction(ctx, tx, admin); err != nil {
+		return err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	rollbackNeeded = false
+
+	return nil
+}
+
+func insertCategoryTx(ctx context.Context, tx *sql.Tx, familyID uuid.UUID, c *category.Category) error {
+	if err := validation.ValidateUUID(c.ID); err != nil {
+		return fmt.Errorf("invalid category ID: %w", err)
+	}
+	if err := validation.ValidateCategoryType(c.Type); err != nil {
+		return fmt.Errorf("invalid category type: %w", err)
+	}
+	if err := validation.ValidateCategoryName(c.Name); err != nil {
+		return fmt.Errorf("invalid category name: %w", err)
+	}
+
+	now := time.Now()
+	c.CreatedAt = now
+	c.UpdatedAt = now
+
+	query := `
+		INSERT INTO categories (
+			id, name, type, description, parent_id, family_id, is_active, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := tx.ExecContext(ctx, query,
+		sqlitehelpers.UUIDToString(c.ID),
+		c.Name,
+		string(c.Type),
+		"",
+		sqlitehelpers.UUIDPtrToString(c.ParentID),
+		familyID.String(),
+		sqlitehelpers.BoolToInt(c.IsActive),
+		c.CreatedAt,
+		c.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create category %q: %w", c.Name, err)
 	}
 
 	return nil

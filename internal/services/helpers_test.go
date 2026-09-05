@@ -50,6 +50,16 @@ func (m *MockFamilyRepository) Exists(ctx context.Context) (bool, error) {
 	return args.Bool(0), args.Error(1)
 }
 
+func (m *MockFamilyRepository) Bootstrap(
+	ctx context.Context,
+	family *user.Family,
+	categories []*category.Category,
+	admin *user.User,
+) error {
+	args := m.Called(ctx, family, categories, admin)
+	return args.Error(0)
+}
+
 // MockUserRepository is a mock implementation of UserRepository
 type MockUserRepository struct {
 	mock.Mock

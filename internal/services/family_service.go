@@ -25,45 +25,30 @@ var (
 // familyService implements FamilyService interface
 type familyService struct {
 	familyRepo      FamilyRepository
-	userRepo        UserRepository // manages user entities, including creating the bootstrap admin user during initial family setup
 	transactionRepo TransactionRepository
-	categoryService CategoryService
 	validator       *validator.Validate
 }
 
 // NewFamilyService creates a new FamilyService instance
-func NewFamilyService(
-	familyRepo FamilyRepository,
-	userRepo UserRepository,
-	transactionRepo TransactionRepository,
-	categoryService CategoryService,
-) FamilyService {
+func NewFamilyService(familyRepo FamilyRepository, transactionRepo TransactionRepository) FamilyService {
 	return &familyService{
 		familyRepo:      familyRepo,
-		userRepo:        userRepo,
 		transactionRepo: transactionRepo,
-		categoryService: categoryService,
 		validator:       newValidator(),
 	}
 }
 
-// SetupFamily creates the initial family with admin user (bootstrap only)
+// SetupFamily — bootstrap: семья, стартовые категории и админ одной транзакцией.
 func (s *familyService) SetupFamily(ctx context.Context, req dto.SetupFamilyDTO) (*user.Family, error) {
-	// Validate input
 	if err := s.validator.Struct(req); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrValidationFailed, err)
 	}
 
-	// Check if family already exists
-	exists, err := s.familyRepo.Exists(ctx)
+	hashedPassword, err := auth.HashPassword(req.Password)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check family existence: %w", err)
-	}
-	if exists {
-		return nil, ErrFamilyAlreadyExists
+		return nil, err
 	}
 
-	// Create family entity
 	newFamily := &user.Family{
 		ID:        uuid.New(),
 		Name:      req.FamilyName,
@@ -71,28 +56,14 @@ func (s *familyService) SetupFamily(ctx context.Context, req dto.SetupFamilyDTO)
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
-
-	// Save family to database
-	if err = s.familyRepo.Create(ctx, newFamily); err != nil {
-		return nil, fmt.Errorf("failed to create family: %w", err)
-	}
-
-	// Create default categories for the new family
-	if err = s.categoryService.CreateDefaultCategories(ctx); err != nil {
-		return nil, fmt.Errorf("failed to create default categories: %w", err)
-	}
-
-	// Create admin user
-	hashedPassword, err := auth.HashPassword(req.Password)
-	if err != nil {
-		return nil, err
-	}
-
 	adminUser := user.NewUser(req.Email, req.FirstName, req.LastName, user.RoleAdmin)
 	adminUser.Password = hashedPassword
 
-	if err = s.userRepo.Create(ctx, adminUser); err != nil {
-		return nil, fmt.Errorf("failed to create admin user: %w", err)
+	if err = s.familyRepo.Bootstrap(ctx, newFamily, DefaultCategories(), adminUser); err != nil {
+		if errors.Is(err, user.ErrFamilyExists) {
+			return nil, ErrFamilyAlreadyExists
+		}
+		return nil, fmt.Errorf("failed to bootstrap family: %w", err)
 	}
 
 	return newFamily, nil

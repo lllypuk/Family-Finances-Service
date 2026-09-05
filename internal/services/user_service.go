@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"family-budget-service/internal/auth"
+	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services/dto"
 )
@@ -52,6 +53,8 @@ type FamilyRepository interface {
 	Get(ctx context.Context) (*user.Family, error)
 	Update(ctx context.Context, family *user.Family) error
 	Exists(ctx context.Context) (bool, error)
+	// Bootstrap — семья, категории и админ одной транзакцией; повтор → user.ErrFamilyExists.
+	Bootstrap(ctx context.Context, family *user.Family, categories []*category.Category, admin *user.User) error
 }
 
 // userService implements UserService interface

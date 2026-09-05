@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -30,7 +31,7 @@ type Application struct {
 	repositories         *handlers.Repositories
 	services             *services.Services
 	httpServer           *application.HTTPServer
-	sqliteConn           *infrastructure.SQLiteConnection
+	db                   *sql.DB
 	observabilityService *observability.Service
 }
 
@@ -60,31 +61,23 @@ func NewApplication() (*Application, error) {
 		observabilityService: observabilityService,
 	}
 
-	// Подключение к SQLite
-	sqliteConn, err := infrastructure.NewSQLiteConnection(config.Database.Path)
+	db, err := OpenDatabase(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to SQLite: %w", err)
+		return nil, err
 	}
-	app.sqliteConn = sqliteConn
-
-	// Запуск миграций
-	dbURL := fmt.Sprintf("sqlite://%s", config.Database.Path)
-	migrationManager := infrastructure.NewMigrationManager(dbURL, "./migrations")
-	if err = migrationManager.Up(); err != nil {
-		return nil, fmt.Errorf("failed to run migrations: %w", err)
-	}
+	app.db = db
 
 	// Добавляем health check для SQLite
-	app.observabilityService.AddCustomHealthCheck("sqlite", sqliteConn.HealthCheck)
+	app.observabilityService.AddCustomHealthCheck("sqlite", db.PingContext)
 
 	// Инициализация репозиториев
-	app.repositories = infrastructure.NewRepositoriesSQLite(sqliteConn.DB())
+	app.repositories = infrastructure.NewRepositoriesSQLite(db)
 
 	// Получаем logger из observability service
 	logger := app.observabilityService.Logger
 
 	// Инициализация BackupService
-	backupService := services.NewBackupService(sqliteConn.DB(), config.Database.Path, config.GetBackupDir(), logger)
+	backupService := services.NewBackupService(db, config.Database.Path, config.GetBackupDir(), logger)
 
 	authService, err := auth.NewService(app.repositories.Session, app.repositories.User, app.repositories.Family)
 	if err != nil {
@@ -188,8 +181,8 @@ func (a *Application) shutdown() error {
 	}
 
 	// Закрытие подключения к SQLite
-	if a.sqliteConn != nil {
-		if closeErr := a.sqliteConn.Close(); closeErr != nil {
+	if a.db != nil {
+		if closeErr := a.db.Close(); closeErr != nil {
 			a.observabilityService.Logger.ErrorContext(
 				ctx,
 				"SQLite close error",

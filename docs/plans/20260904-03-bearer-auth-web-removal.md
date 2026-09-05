@@ -178,11 +178,11 @@ A-01…A-04, A-09, A-12). После него сервис отвечает то
   `family_service_test.go`, `internal/infrastructure/user/family_repository_sqlite.go`,
   `migrations/001_consolidated.up.sql`
 
-- [ ] `internal.OpenDatabase(cfg) (*sql.DB, error)` — открытие + миграции; `NewApplication` использует её
-- [ ] `families.singleton INTEGER NOT NULL DEFAULT 1 CHECK (singleton = 1) UNIQUE` в миграции; `FamilyRepository.Bootstrap(ctx, family, categories, admin)` — одна транзакция `BEGIN IMMEDIATE`; `SetupFamily` вызывает её; ошибка UNIQUE → `ErrFamilyAlreadyExists`
-- [ ] подкоманды в `main.go`: `setup` (флаги из «Technical Details», пароль из stdin, `ValidatePassword`), `reset-password`; без подкоманды — сервер, как сейчас
-- [ ] тесты: `Bootstrap` при сбое на админе не оставляет семью; два `Bootstrap` подряд → второй `ErrFamilyAlreadyExists`; CLI — парсинг флагов и чтение пароля из stdin (через `io.Reader`)
-- [ ] `make test` — зелёный
+- [x] `internal.OpenDatabase(cfg) (*sql.DB, error)` — открытие + миграции; `NewApplication` использует её
+- [x] `families.singleton INTEGER NOT NULL DEFAULT 1 CHECK (singleton = 1) UNIQUE` в миграции; `FamilyRepository.Bootstrap(ctx, family, categories, admin)` — одна транзакция `BEGIN IMMEDIATE`; `SetupFamily` вызывает её; ошибка UNIQUE → `ErrFamilyAlreadyExists`
+- [x] подкоманды в `main.go`: `setup` (флаги из «Technical Details», пароль из stdin, `ValidatePassword`), `reset-password`; без подкоманды — сервер, как сейчас
+- [x] тесты: `Bootstrap` при сбое на админе не оставляет семью; два `Bootstrap` подряд → второй `ErrFamilyAlreadyExists`; CLI — парсинг флагов и чтение пароля из stdin (через `io.Reader`)
+- [x] `make test` — зелёный
 
 ### Task 7: `testhelpers` на bearer, интеграционные тесты без cookie
 

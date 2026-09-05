@@ -30,8 +30,9 @@ func NewSQLiteConnection(dbPath string) (*SQLiteConnection, error) {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
-	// Connection string with optimizations for production
-	dsn := dbPath + "?_journal_mode=WAL&_foreign_keys=ON&_busy_timeout=5000&_synchronous=NORMAL"
+	// _txlock=immediate: BeginTx сразу берёт write-lock, а не при первой записи —
+	// иначе deferred-транзакция может упереться в SQLITE_BUSY на апгрейде блокировки.
+	dsn := dbPath + "?_journal_mode=WAL&_foreign_keys=ON&_busy_timeout=5000&_synchronous=NORMAL&_txlock=immediate"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)

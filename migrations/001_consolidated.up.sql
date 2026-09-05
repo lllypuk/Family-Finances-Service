@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS families (
     currency TEXT NOT NULL DEFAULT 'USD',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    -- singleton: ровно одна семья на инсталляцию (A-02) — вторая INSERT падает на UNIQUE
+    singleton INTEGER NOT NULL DEFAULT 1 CHECK (singleton = 1) UNIQUE,
 
     -- Constraints
     CHECK (LENGTH(TRIM(name)) > 0),

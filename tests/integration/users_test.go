@@ -93,13 +93,11 @@ func TestUserHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("GetUserByID_Success", func(t *testing.T) {
-		// Create family and user
-		family := testhelpers.CreateTestFamily()
-		err := testServer.Repos.Family.Create(context.Background(), family)
-		require.NoError(t, err)
-
+		// families.singleton: вторую семью не создать, пользователь добавляется в существующую
+		testServer.Auth(t)
+		family := testServer.AuthFamily
 		user := testhelpers.CreateTestUser(family.ID)
-		err = testServer.Repos.User.Create(context.Background(), user)
+		err := testServer.Repos.User.Create(context.Background(), user)
 		require.NoError(t, err)
 
 		// Get user via API
@@ -141,13 +139,11 @@ func TestUserHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("UpdateUser_Success", func(t *testing.T) {
-		// Create family and user
-		family := testhelpers.CreateTestFamily()
-		err := testServer.Repos.Family.Create(context.Background(), family)
-		require.NoError(t, err)
-
+		// families.singleton: вторую семью не создать, пользователь добавляется в существующую
+		testServer.Auth(t)
+		family := testServer.AuthFamily
 		user := testhelpers.CreateTestUser(family.ID)
-		err = testServer.Repos.User.Create(context.Background(), user)
+		err := testServer.Repos.User.Create(context.Background(), user)
 		require.NoError(t, err)
 
 		// Update user

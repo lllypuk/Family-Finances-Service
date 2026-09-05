@@ -332,64 +332,50 @@ func (s *categoryService) getSubcategories(ctx context.Context, parentID uuid.UU
 	return subcategories, nil
 }
 
+// DefaultCategories — стартовый набор категорий новой семьи.
+func DefaultCategories() []*category.Category {
+	defaults := []struct {
+		name  string
+		typ   category.Type
+		color string
+		icon  string
+	}{
+		{"Продукты", category.TypeExpense, "#FF6B6B", "🛒"},
+		{"Транспорт", category.TypeExpense, "#4ECDC4", "🚗"},
+		{"Коммунальные услуги", category.TypeExpense, "#45B7D1", "🏠"},
+		{"Развлечения", category.TypeExpense, "#F7DC6F", "🎬"},
+		{"Здоровье", category.TypeExpense, "#BB8FCE", "🏥"},
+		{"Одежда", category.TypeExpense, "#85C1E9", "👕"},
+		{"Образование", category.TypeExpense, "#F8C471", "📚"},
+		{"Прочее", category.TypeExpense, "#AEB6BF", "📦"},
+		{"Зарплата", category.TypeIncome, "#58D68D", "💰"},
+		{"Бонус", category.TypeIncome, "#76D7C4", "🎁"},
+		{"Фриланс", category.TypeIncome, "#F9E79F", "💻"},
+		{"Инвестиции", category.TypeIncome, "#D2B4DE", "📈"},
+		{"Прочий доход", category.TypeIncome, "#A9DFBF", "💵"},
+	}
+
+	result := make([]*category.Category, 0, len(defaults))
+	for _, d := range defaults {
+		c := category.NewCategory(d.name, d.typ)
+		c.Color = d.color
+		c.Icon = d.icon
+		result = append(result, c)
+	}
+	return result
+}
+
 // CreateDefaultCategories creates default categories for a newly created family
 func (s *categoryService) CreateDefaultCategories(ctx context.Context) error {
-	// Default expense categories
-	expenseCategories := []struct {
-		name  string
-		color string
-		icon  string
-	}{
-		{"Продукты", "#FF6B6B", "🛒"},
-		{"Транспорт", "#4ECDC4", "🚗"},
-		{"Коммунальные услуги", "#45B7D1", "🏠"},
-		{"Развлечения", "#F7DC6F", "🎬"},
-		{"Здоровье", "#BB8FCE", "🏥"},
-		{"Одежда", "#85C1E9", "👕"},
-		{"Образование", "#F8C471", "📚"},
-		{"Прочее", "#AEB6BF", "📦"},
-	}
-
-	// Default income categories
-	incomeCategories := []struct {
-		name  string
-		color string
-		icon  string
-	}{
-		{"Зарплата", "#58D68D", "💰"},
-		{"Бонус", "#76D7C4", "🎁"},
-		{"Фриланс", "#F9E79F", "💻"},
-		{"Инвестиции", "#D2B4DE", "📈"},
-		{"Прочий доход", "#A9DFBF", "💵"},
-	}
-
-	// Create expense categories
-	for _, cat := range expenseCategories {
+	for _, c := range DefaultCategories() {
 		categoryDTO := dto.CreateCategoryDTO{
-			Name:  cat.name,
-			Type:  category.TypeExpense,
-			Color: cat.color,
-			Icon:  cat.icon,
+			Name:  c.Name,
+			Type:  c.Type,
+			Color: c.Color,
+			Icon:  c.Icon,
 		}
-
-		_, err := s.CreateCategory(ctx, categoryDTO)
-		if err != nil {
-			return fmt.Errorf("failed to create expense category %s: %w", cat.name, err)
-		}
-	}
-
-	// Create income categories
-	for _, cat := range incomeCategories {
-		categoryDTO := dto.CreateCategoryDTO{
-			Name:  cat.name,
-			Type:  category.TypeIncome,
-			Color: cat.color,
-			Icon:  cat.icon,
-		}
-
-		_, err := s.CreateCategory(ctx, categoryDTO)
-		if err != nil {
-			return fmt.Errorf("failed to create income category %s: %w", cat.name, err)
+		if _, err := s.CreateCategory(ctx, categoryDTO); err != nil {
+			return fmt.Errorf("failed to create default category %s: %w", c.Name, err)
 		}
 	}
 

@@ -16,6 +16,9 @@ import (
 // иначе временный сбой БД гасил бы cookie всем работающим пользователям.
 var ErrNotFound = errors.New("user not found")
 
+// ErrFamilyExists — семья уже создана; единственность держит UNIQUE families.singleton.
+var ErrFamilyExists = errors.New("family already exists")
+
 type User struct {
 	ID        uuid.UUID `json:"id"         bson:"_id"`
 	Email     string    `json:"email"      bson:"email"`
