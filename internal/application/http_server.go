@@ -41,6 +41,7 @@ type HTTPServer struct {
 	transactionHandler *handlers.TransactionHandler
 	budgetHandler      *handlers.BudgetHandler
 	reportHandler      *handlers.ReportHandler
+	statsHandler       *handlers.StatsHandler
 
 	// Web Interface
 	webServer        *web.Server
@@ -129,6 +130,7 @@ func NewHTTPServerWithObservability(
 		transactionHandler: handlers.NewTransactionHandler(repositories, services.Transaction),
 		budgetHandler:      handlers.NewBudgetHandler(repositories, services.Budget),
 		reportHandler:      handlers.NewReportHandler(repositories, services.Report),
+		statsHandler:       handlers.NewStatsHandler(services.Stats),
 	}
 
 	// Инициализация веб-интерфейса
@@ -244,7 +246,12 @@ func (s *HTTPServer) setupRoutes() {
 	reports.POST("", s.reportHandler.CreateReport)
 	reports.GET("", s.reportHandler.GetReports)
 	reports.GET("/:id", s.reportHandler.GetReportByID)
+	reports.GET("/:id/export", s.reportHandler.ExportReport)
 	reports.DELETE("/:id", s.reportHandler.DeleteReport)
+
+	// Статистика — та же ролевая модель, что у финансовых разделов.
+	stats := api.Group("/stats", financeAccess)
+	stats.GET("/summary", s.statsHandler.GetSummary)
 }
 
 func (s *HTTPServer) Start(_ context.Context) error {

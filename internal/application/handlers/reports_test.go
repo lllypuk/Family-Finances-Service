@@ -19,6 +19,8 @@ import (
 
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/report"
+	"family-budget-service/internal/services"
+	"family-budget-service/internal/services/dto"
 )
 
 // MockReportRepository is a mock implementation of report repository
@@ -70,6 +72,42 @@ func setupReportHandler() (*handlers.ReportHandler, *MockReportRepository) {
 	return handler, mockRepo
 }
 
+// setupReportHandlerWithService creates a handler backed by a mocked report service
+func setupReportHandlerWithService() (*handlers.ReportHandler, *MockReportService) {
+	mockService := &MockReportService{}
+	handler := handlers.NewReportHandler(&handlers.Repositories{}, mockService)
+	return handler, mockService
+}
+
+// generatedTestReport is the report a mocked GenerateReport returns
+func generatedTestReport(userID uuid.UUID) *report.Report {
+	generated := report.NewReport(
+		"Monthly Expenses Report",
+		report.TypeExpenses,
+		report.PeriodMonthly,
+		userID,
+		time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2025, 1, 31, 23, 59, 59, 0, time.UTC),
+	)
+	generated.Data = report.Data{TotalExpenses: 100}
+	return generated
+}
+
+// postReportRequest builds a POST /reports context with the given body
+func postReportRequest(t *testing.T, body any) (echo.Context, *httptest.ResponseRecorder) {
+	t.Helper()
+
+	raw, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	e := echo.New()
+	httpReq := httptest.NewRequest(http.MethodPost, "/reports", bytes.NewBuffer(raw))
+	httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+
+	return e.NewContext(httpReq, rec), rec
+}
+
 // createValidReportRequest creates a valid report request for testing
 func createValidReportRequest() handlers.CreateReportRequest {
 	return handlers.CreateReportRequest{
@@ -82,64 +120,171 @@ func createValidReportRequest() handlers.CreateReportRequest {
 }
 
 func TestReportHandler_CreateReport_Success(t *testing.T) {
-	handler, mockRepo := setupReportHandler()
+	handler, mockService := setupReportHandlerWithService()
 
-	// Arrange
-	req := createValidReportRequest()
+	userID := uuid.New()
+	generated := generatedTestReport(userID)
 
-	// Prepare HTTP request
-	body, err := json.Marshal(req)
-	require.NoError(t, err)
+	mockService.On("GenerateReport", mock.Anything, mock.MatchedBy(func(req dto.ReportRequestDTO) bool {
+		return req.UserID == userID && req.Type == report.TypeExpenses
+	})).Return(generated, nil)
+	mockService.On("SaveReport", mock.Anything, generated).Return(nil)
 
-	e := echo.New()
-	httpReq := httptest.NewRequest(http.MethodPost, "/reports", bytes.NewBuffer(body))
-	httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(httpReq, rec)
-	withSessionUser(c, uuid.New())
+	c, rec := postReportRequest(t, createValidReportRequest())
+	withSessionUser(c, userID)
 
-	// Act
-	err = handler.CreateReport(c)
+	require.NoError(t, handler.CreateReport(c))
+	assert.Equal(t, http.StatusCreated, rec.Code)
 
-	// Assert
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusNotImplemented, rec.Code)
+	var response handlers.APIResponse[handlers.ReportResponse]
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, generated.ID, response.Data.ID)
+	assert.Equal(t, userID, response.Data.UserID)
+	assert.Equal(t, "expenses", response.Data.Type)
 
-	var response handlers.ErrorResponse
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
-	require.NoError(t, err)
-	assert.Equal(t, "NOT_IMPLEMENTED", response.Error.Code)
-	assert.Equal(t, "Report generation API is not implemented yet", response.Error.Message)
-
-	mockRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+	mockService.AssertExpectations(t)
 }
 
-// TestReportHandler_CreateReport_NoSession — сам хендлер сессию не читает:
-// генерация не реализована, автора отчёта записывать некуда, а анонимный клиент
-// до маршрута не доходит (группа /api/v1 закрыта RequireAPIAuth, см.
-// tests/integration/api_auth_test.go). Ничего, кроме 501, здесь не отдаётся.
+// TestReportHandler_CreateReport_NoSession — автор отчёта берётся только из сессии,
+// поэтому без неё роут отвечает 401, не читая тело (S-01).
 func TestReportHandler_CreateReport_NoSession(t *testing.T) {
-	handler, mockRepo := setupReportHandler()
+	handler, mockService := setupReportHandlerWithService()
 
-	body, err := json.Marshal(createValidReportRequest())
-	require.NoError(t, err)
+	c, rec := postReportRequest(t, createValidReportRequest())
 
-	e := echo.New()
-	httpReq := httptest.NewRequest(http.MethodPost, "/reports", bytes.NewBuffer(body))
-	httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(httpReq, rec)
-
-	err = handler.CreateReport(c)
-
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusNotImplemented, rec.Code)
+	require.NoError(t, handler.CreateReport(c))
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 
 	var response handlers.ErrorResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-	assert.Equal(t, "NOT_IMPLEMENTED", response.Error.Code)
+	assert.Equal(t, "UNAUTHORIZED", response.Error.Code)
 
-	mockRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+	mockService.AssertNotCalled(t, "GenerateReport", mock.Anything, mock.Anything)
+}
+
+func TestReportHandler_CreateReport_UnsupportedType(t *testing.T) {
+	handler, mockService := setupReportHandlerWithService()
+
+	mockService.On("GenerateReport", mock.Anything, mock.Anything).
+		Return(nil, services.ErrUnsupportedReportType)
+
+	c, rec := postReportRequest(t, createValidReportRequest())
+	withSessionUser(c, uuid.New())
+
+	require.NoError(t, handler.CreateReport(c))
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "INVALID_REQUEST", response.Error.Code)
+
+	mockService.AssertNotCalled(t, "SaveReport", mock.Anything, mock.Anything)
+}
+
+func TestReportHandler_CreateReport_GenerationError(t *testing.T) {
+	handler, mockService := setupReportHandlerWithService()
+
+	mockService.On("GenerateReport", mock.Anything, mock.Anything).
+		Return(nil, errors.New("repository failure"))
+
+	c, rec := postReportRequest(t, createValidReportRequest())
+	withSessionUser(c, uuid.New())
+
+	require.NoError(t, handler.CreateReport(c))
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "GENERATION_FAILED", response.Error.Code)
+}
+
+func TestReportHandler_CreateReport_SaveError(t *testing.T) {
+	handler, mockService := setupReportHandlerWithService()
+
+	userID := uuid.New()
+	mockService.On("GenerateReport", mock.Anything, mock.Anything).
+		Return(generatedTestReport(userID), nil)
+	mockService.On("SaveReport", mock.Anything, mock.Anything).
+		Return(errors.New("repository failure"))
+
+	c, rec := postReportRequest(t, createValidReportRequest())
+	withSessionUser(c, userID)
+
+	require.NoError(t, handler.CreateReport(c))
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "SAVE_FAILED", response.Error.Code)
+
+	mockService.AssertExpectations(t)
+}
+
+func TestReportHandler_ExportReport_Success(t *testing.T) {
+	handler, mockService := setupReportHandlerWithService()
+
+	reportID := uuid.New()
+	stored := generatedTestReport(uuid.New())
+	stored.ID = reportID
+	csvBody := []byte("Category,Amount,Percentage,Transaction Count\n")
+
+	mockService.On("GetReportByID", mock.Anything, reportID).Return(stored, nil)
+	mockService.On("ExportReport", mock.Anything, reportID, "csv", dto.ExportOptionsDTO{}).
+		Return(csvBody, nil)
+
+	e := echo.New()
+	httpReq := httptest.NewRequest(http.MethodGet, "/reports/"+reportID.String()+"/export", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httpReq, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(reportID.String())
+
+	require.NoError(t, handler.ExportReport(c))
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get(echo.HeaderContentType), "text/csv")
+	assert.Contains(t, rec.Header().Get(echo.HeaderContentDisposition), "report-"+reportID.String()+".csv")
+	assert.Equal(t, string(csvBody), rec.Body.String())
+
+	mockService.AssertExpectations(t)
+}
+
+func TestReportHandler_ExportReport_NotFound(t *testing.T) {
+	handler, mockService := setupReportHandlerWithService()
+
+	reportID := uuid.New()
+	mockService.On("GetReportByID", mock.Anything, reportID).Return(nil, errors.New("report not found"))
+
+	e := echo.New()
+	httpReq := httptest.NewRequest(http.MethodGet, "/reports/"+reportID.String()+"/export", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httpReq, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(reportID.String())
+
+	require.NoError(t, handler.ExportReport(c))
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+
+	mockService.AssertNotCalled(t, "ExportReport", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestReportHandler_ExportReport_InvalidID(t *testing.T) {
+	handler, mockService := setupReportHandlerWithService()
+
+	e := echo.New()
+	httpReq := httptest.NewRequest(http.MethodGet, "/reports/not-a-uuid/export", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httpReq, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("not-a-uuid")
+
+	require.NoError(t, handler.ExportReport(c))
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "INVALID_ID", response.Error.Code)
+
+	mockService.AssertNotCalled(t, "GetReportByID", mock.Anything, mock.Anything)
 }
 
 func TestReportHandler_CreateReport_InvalidRequest(t *testing.T) {
@@ -222,37 +367,6 @@ func TestReportHandler_CreateReport_InvalidRequest(t *testing.T) {
 			assert.Equal(t, http.StatusBadRequest, rec.Code)
 		})
 	}
-}
-
-func TestReportHandler_CreateReport_RepositoryError(t *testing.T) {
-	handler, mockRepo := setupReportHandler()
-
-	// Arrange
-	req := createValidReportRequest()
-
-	// Prepare HTTP request
-	body, err := json.Marshal(req)
-	require.NoError(t, err)
-
-	e := echo.New()
-	httpReq := httptest.NewRequest(http.MethodPost, "/reports", bytes.NewBuffer(body))
-	httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(httpReq, rec)
-	withSessionUser(c, uuid.New())
-
-	// Act
-	err = handler.CreateReport(c)
-
-	// Assert
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusNotImplemented, rec.Code)
-
-	var response handlers.ErrorResponse
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
-	require.NoError(t, err)
-	assert.Equal(t, "NOT_IMPLEMENTED", response.Error.Code)
-	mockRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 }
 
 func TestReportHandler_GetReports_ByFamily_Success(t *testing.T) {
@@ -614,136 +728,96 @@ func TestReportHandler_DeleteReport_RepositoryError(t *testing.T) {
 }
 
 func TestReportHandler_ReportTypes_Validation(t *testing.T) {
-	handler, mockRepo := setupReportHandler()
-
 	validTypes := []string{"expenses", "income", "budget", "cash_flow", "category_breakdown"}
 
 	for _, reportType := range validTypes {
 		t.Run(fmt.Sprintf("Valid type: %s", reportType), func(t *testing.T) {
+			handler, mockService := setupReportHandlerWithService()
+			userID := uuid.New()
+			mockService.On("GenerateReport", mock.Anything, mock.Anything).Return(generatedTestReport(userID), nil)
+			mockService.On("SaveReport", mock.Anything, mock.Anything).Return(nil)
+
 			req := createValidReportRequest()
 			req.Type = reportType
 
-			body, err := json.Marshal(req)
-			require.NoError(t, err)
+			c, rec := postReportRequest(t, req)
+			withSessionUser(c, userID)
 
-			e := echo.New()
-			httpReq := httptest.NewRequest(http.MethodPost, "/reports", bytes.NewBuffer(body))
-			httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-			rec := httptest.NewRecorder()
-			c := e.NewContext(httpReq, rec)
-			withSessionUser(c, uuid.New())
-
-			err = handler.CreateReport(c)
-			require.NoError(t, err)
-			assert.Equal(t, http.StatusNotImplemented, rec.Code)
-
-			var response handlers.ErrorResponse
-			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-			assert.Equal(t, "NOT_IMPLEMENTED", response.Error.Code)
+			require.NoError(t, handler.CreateReport(c))
+			assert.Equal(t, http.StatusCreated, rec.Code)
 		})
 	}
-
-	mockRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 }
 
 func TestReportHandler_ReportPeriods_Validation(t *testing.T) {
-	handler, mockRepo := setupReportHandler()
-
 	validPeriods := []string{"daily", "weekly", "monthly", "yearly", "custom"}
 
 	for _, period := range validPeriods {
 		t.Run(fmt.Sprintf("Valid period: %s", period), func(t *testing.T) {
+			handler, mockService := setupReportHandlerWithService()
+			userID := uuid.New()
+			mockService.On("GenerateReport", mock.Anything, mock.Anything).Return(generatedTestReport(userID), nil)
+			mockService.On("SaveReport", mock.Anything, mock.Anything).Return(nil)
+
 			req := createValidReportRequest()
 			req.Period = period
 
-			body, err := json.Marshal(req)
-			require.NoError(t, err)
+			c, rec := postReportRequest(t, req)
+			withSessionUser(c, userID)
 
-			e := echo.New()
-			httpReq := httptest.NewRequest(http.MethodPost, "/reports", bytes.NewBuffer(body))
-			httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-			rec := httptest.NewRecorder()
-			c := e.NewContext(httpReq, rec)
-			withSessionUser(c, uuid.New())
-
-			err = handler.CreateReport(c)
-			require.NoError(t, err)
-			assert.Equal(t, http.StatusNotImplemented, rec.Code)
-
-			var response handlers.ErrorResponse
-			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-			assert.Equal(t, "NOT_IMPLEMENTED", response.Error.Code)
+			require.NoError(t, handler.CreateReport(c))
+			assert.Equal(t, http.StatusCreated, rec.Code)
 		})
 	}
-
-	mockRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 }
 
 func TestReportHandler_DateRange_Validation(t *testing.T) {
-	handler, mockRepo := setupReportHandler()
-
 	tests := []struct {
 		name      string
 		startDate time.Time
 		endDate   time.Time
-		valid     bool
 	}{
 		{
 			name:      "Valid date range",
 			startDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 			endDate:   time.Date(2025, 1, 31, 23, 59, 59, 0, time.UTC),
-			valid:     true,
 		},
 		{
 			name:      "Same start and end date",
 			startDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 			endDate:   time.Date(2025, 1, 1, 23, 59, 59, 0, time.UTC),
-			valid:     true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			handler, mockService := setupReportHandlerWithService()
+			userID := uuid.New()
+			mockService.On("GenerateReport", mock.Anything, mock.Anything).Return(generatedTestReport(userID), nil)
+			mockService.On("SaveReport", mock.Anything, mock.Anything).Return(nil)
+
 			req := createValidReportRequest()
 			req.StartDate = tt.startDate
 			req.EndDate = tt.endDate
 
-			body, err := json.Marshal(req)
-			require.NoError(t, err)
+			c, rec := postReportRequest(t, req)
+			withSessionUser(c, userID)
 
-			e := echo.New()
-			httpReq := httptest.NewRequest(http.MethodPost, "/reports", bytes.NewBuffer(body))
-			httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-			rec := httptest.NewRecorder()
-			c := e.NewContext(httpReq, rec)
-			withSessionUser(c, uuid.New())
-
-			err = handler.CreateReport(c)
-			require.NoError(t, err)
-
-			if tt.valid {
-				assert.Equal(t, http.StatusNotImplemented, rec.Code)
-				var response handlers.ErrorResponse
-				require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-				assert.Equal(t, "NOT_IMPLEMENTED", response.Error.Code)
-			} else {
-				assert.Equal(t, http.StatusBadRequest, rec.Code)
-			}
+			require.NoError(t, handler.CreateReport(c))
+			assert.Equal(t, http.StatusCreated, rec.Code)
 		})
 	}
-
-	mockRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 }
 
 // Benchmark tests for performance validation
 func BenchmarkReportHandler_CreateReport(b *testing.B) {
-	handler, mockRepo := setupReportHandler()
+	handler, mockService := setupReportHandlerWithService()
 
-	// Setup mock to return nil for all calls
-	mockRepo.On("Create", mock.Anything, mock.AnythingOfType("*report.Report")).Return(nil)
+	userID := uuid.New()
+	mockService.On("GenerateReport", mock.Anything, mock.Anything).Return(generatedTestReport(userID), nil)
+	mockService.On("SaveReport", mock.Anything, mock.Anything).Return(nil)
 
-	req := createValidReportRequest()
-	body, _ := json.Marshal(req)
+	body, _ := json.Marshal(createValidReportRequest())
 
 	for b.Loop() {
 		e := echo.New()
@@ -751,6 +825,7 @@ func BenchmarkReportHandler_CreateReport(b *testing.B) {
 		httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(httpReq, rec)
+		withSessionUser(c, userID)
 
 		handler.CreateReport(c)
 	}

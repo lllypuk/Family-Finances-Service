@@ -707,8 +707,7 @@ paths:
       tags: [reports]
       summary: Сгенерировать отчёт
       description: |
-        admin и member. Владелец берётся из токена — `user_id` в теле игнорируется.
-        До плана 02 роут отвечает `501 NOT_IMPLEMENTED`: генерация есть только в веб-интерфейсе.
+        admin и member. Владелец берётся из сессии — `user_id` в теле игнорируется.
       requestBody:
         required: true
         content:
@@ -719,11 +718,6 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
-        '501':
-          description: Генерация ещё не перенесена в сервисный слой (снимается планом 02)
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
 
   /api/v1/reports/{id}:
     parameters:

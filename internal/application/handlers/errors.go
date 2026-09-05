@@ -28,6 +28,14 @@ const (
 	ErrCodeCannotDeleteSelf = "CANNOT_DELETE_SELF"
 	// ErrCodeLastAdmin signals an attempt to delete the last remaining admin.
 	ErrCodeLastAdmin = "LAST_ADMIN"
+	// ErrCodeInvalidQueryParam signals an unparseable or out-of-range query parameter.
+	ErrCodeInvalidQueryParam = "INVALID_QUERY_PARAM"
+	// ErrCodeGenerationFailed signals a failed report generation.
+	ErrCodeGenerationFailed = "GENERATION_FAILED"
+	// ErrCodeSaveFailed signals that a generated entity could not be persisted.
+	ErrCodeSaveFailed = "SAVE_FAILED"
+	// ErrCodeExportFailed signals a failed report export.
+	ErrCodeExportFailed = "EXPORT_FAILED"
 
 	// Standard error messages paired with the codes above. Kept as constants
 	// so changes propagate to API consumers in lockstep with code updates.

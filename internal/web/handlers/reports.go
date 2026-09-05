@@ -1,11 +1,9 @@
 package handlers
 
 import (
-	"encoding/csv"
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -431,109 +429,19 @@ func (h *ReportHandler) Generate(c echo.Context) error {
 	return h.renderPartial(c, "components/report_data", data)
 }
 
-// exportReportAsCSV экспортирует отчет в CSV формат
+// exportReportAsCSV отдаёт CSV, собранный сервисом отчётов.
 func (h *ReportHandler) exportReportAsCSV(c echo.Context, r *report.Report) error {
+	body, err := h.services.Report.ExportReport(c.Request().Context(), r.ID, "csv", dto.ExportOptionsDTO{})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to export report")
+	}
+
 	filename := fmt.Sprintf("%s_%s.csv",
 		strings.ReplaceAll(r.Name, " ", "_"),
 		r.GeneratedAt.Format("2006-01-02"))
-
-	c.Response().Header().Set("Content-Type", "text/csv")
 	c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 
-	writer := csv.NewWriter(c.Response().Writer)
-	defer writer.Flush()
-
-	// В зависимости от типа отчета экспортируем разные данные
-	switch r.Type {
-	case report.TypeExpenses, report.TypeIncome, report.TypeCategoryBreak:
-		return h.exportCategoryBreakdownCSV(writer, r)
-	case report.TypeCashFlow:
-		return h.exportDailyBreakdownCSV(writer, r)
-	case report.TypeBudget:
-		return h.exportBudgetComparisonCSV(writer, r)
-	default:
-		return h.exportCategoryBreakdownCSV(writer, r)
-	}
-}
-
-// exportCategoryBreakdownCSV экспортирует разбивку по категориям
-func (h *ReportHandler) exportCategoryBreakdownCSV(writer *csv.Writer, r *report.Report) error {
-	// Заголовки
-	headers := []string{"Category", "Amount", "Percentage", "Transaction Count"}
-	if err := writer.Write(headers); err != nil {
-		return err
-	}
-
-	// Данные
-	for _, item := range r.Data.CategoryBreakdown {
-		row := []string{
-			item.CategoryName,
-			fmt.Sprintf("%.2f", item.Amount),
-			fmt.Sprintf("%.1f%%", item.Percentage),
-			strconv.Itoa(item.Count),
-		}
-		if err := writer.Write(row); err != nil {
-			return err
-		}
-	}
-
-	// Итого
-	totalRow := []string{
-		"TOTAL",
-		fmt.Sprintf("%.2f", r.Data.TotalExpenses),
-		"100.0%",
-		"",
-	}
-	return writer.Write(totalRow)
-}
-
-// exportDailyBreakdownCSV экспортирует дневную разбивку
-func (h *ReportHandler) exportDailyBreakdownCSV(writer *csv.Writer, r *report.Report) error {
-	// Заголовки
-	headers := []string{"Date", "Income", "Expenses", "Balance"}
-	if err := writer.Write(headers); err != nil {
-		return err
-	}
-
-	// Данные
-	for _, item := range r.Data.DailyBreakdown {
-		row := []string{
-			item.Date.Format("2006-01-02"),
-			fmt.Sprintf("%.2f", item.Income),
-			fmt.Sprintf("%.2f", item.Expenses),
-			fmt.Sprintf("%.2f", item.Balance),
-		}
-		if err := writer.Write(row); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// exportBudgetComparisonCSV экспортирует сравнение с бюджетом
-func (h *ReportHandler) exportBudgetComparisonCSV(writer *csv.Writer, r *report.Report) error {
-	// Заголовки
-	headers := []string{"Budget", "Planned", "Actual", "Difference", "Percentage"}
-	if err := writer.Write(headers); err != nil {
-		return err
-	}
-
-	// Данные
-	for _, item := range r.Data.BudgetComparison {
-		row := []string{
-			item.BudgetName,
-			fmt.Sprintf("%.2f", item.Planned),
-			fmt.Sprintf("%.2f", item.Actual),
-			fmt.Sprintf("%.2f", item.Difference),
-			fmt.Sprintf("%.1f%%", item.Percentage),
-		}
-		if err := writer.Write(row); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return c.Blob(http.StatusOK, "text/csv", body)
 }
 
 // renderReportFormWithErrors отображает форму создания отчёта с ошибками

@@ -26,11 +26,14 @@ const (
 	hoursPerDay                 = 24
 	daysPerWeek                 = 7
 	reportTransactionQueryLimit = 1000 // Maximum transactions to query for reports
+
+	exportFormatCSV = "csv"
 )
 
 var (
 	ErrReportFeatureHiddenFromPublicAPI = errors.New("report feature hidden from public API until implemented")
 	ErrUnsupportedReportType            = errors.New("unsupported report type")
+	ErrUnsupportedCSVData               = errors.New("csv export supports report data only")
 )
 
 type reportService struct {
@@ -494,6 +497,12 @@ func (s *reportService) ExportReport(
 		return nil, fmt.Errorf("failed to get report: %w", err)
 	}
 
+	// Тип отчёта известен только здесь: ExportReportData получает голые данные,
+	// а колонки CSV зависят от типа.
+	if strings.EqualFold(format, exportFormatCSV) {
+		return reportToCSV(reportEntity.Data, reportEntity.Type)
+	}
+
 	return s.ExportReportData(ctx, reportEntity.Data, format, options)
 }
 
@@ -507,7 +516,7 @@ func (s *reportService) ExportReportData(
 	switch strings.ToLower(format) {
 	case "json":
 		return json.Marshal(reportData)
-	case "csv":
+	case exportFormatCSV:
 		return s.exportToCSV(reportData, options)
 	case "excel":
 		return s.exportToExcel(reportData, options)
@@ -1073,9 +1082,14 @@ func convertDailyCashFlowItemsToReportData(items []dto.DailyCashFlowDTO) []repor
 	return result
 }
 
-func (s *reportService) exportToCSV(_ any, _ dto.ExportOptionsDTO) ([]byte, error) {
-	// ROADMAP: CSV export implementation.
-	return []byte{}, nil
+// exportToCSV принимает только report.Data: для прочих структур набор колонок неизвестен.
+func (s *reportService) exportToCSV(reportData any, _ dto.ExportOptionsDTO) ([]byte, error) {
+	data, ok := reportData.(report.Data)
+	if !ok {
+		return nil, ErrUnsupportedCSVData
+	}
+
+	return reportToCSV(data, "")
 }
 
 func (s *reportService) exportToExcel(_ any, _ dto.ExportOptionsDTO) ([]byte, error) {

@@ -3,10 +3,12 @@ package integration_test
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,7 +17,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/report"
+	"family-budget-service/internal/domain/transaction"
+	"family-budget-service/internal/services/dto"
 	"family-budget-service/internal/testhelpers"
 )
 
@@ -53,12 +58,18 @@ func TestReportHandler_Integration(t *testing.T) {
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
 
-		assert.Equal(t, http.StatusNotImplemented, rec.Code)
+		assert.Equal(t, http.StatusCreated, rec.Code)
 
-		var response handlers.ErrorResponse
+		var response handlers.APIResponse[handlers.ReportResponse]
 		err = json.Unmarshal(rec.Body.Bytes(), &response)
 		require.NoError(t, err)
-		assert.Equal(t, "NOT_IMPLEMENTED", response.Error.Code)
+		assert.Equal(t, "Monthly Expense Report", response.Data.Name)
+		assert.Equal(t, "expenses", response.Data.Type)
+		assert.Equal(t, testServer.AuthUser.ID, response.Data.UserID)
+
+		stored, err := testServer.Repos.Report.GetByID(context.Background(), response.Data.ID)
+		require.NoError(t, err)
+		assert.Equal(t, response.Data.ID, stored.ID)
 	})
 
 	t.Run("CreateReport_ValidationError", func(t *testing.T) {
@@ -374,12 +385,12 @@ func TestReportHandler_Integration(t *testing.T) {
 
 				testServer.Server.Echo().ServeHTTP(rec, req)
 
-				assert.Equal(t, http.StatusNotImplemented, rec.Code)
+				assert.Equal(t, http.StatusCreated, rec.Code)
 
-				var response handlers.ErrorResponse
+				var response handlers.APIResponse[handlers.ReportResponse]
 				err = json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				assert.Equal(t, "NOT_IMPLEMENTED", response.Error.Code)
+				assert.NotEqual(t, uuid.Nil, response.Data.ID)
 			})
 		}
 	})
@@ -438,13 +449,120 @@ func TestReportHandler_Integration(t *testing.T) {
 
 				testServer.Server.Echo().ServeHTTP(rec, req)
 
-				assert.Equal(t, http.StatusNotImplemented, rec.Code)
+				assert.Equal(t, http.StatusCreated, rec.Code)
 
-				var response handlers.ErrorResponse
+				var response handlers.APIResponse[handlers.ReportResponse]
 				err = json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				assert.Equal(t, "NOT_IMPLEMENTED", response.Error.Code)
+				assert.NotEqual(t, uuid.Nil, response.Data.ID)
 			})
 		}
 	})
+}
+
+// TestReportAPI_GenerateAndExport — генерация отчёта через API и выгрузка его в CSV.
+func TestReportAPI_GenerateAndExport(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+	ctx := context.Background()
+
+	cat := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(ctx, cat))
+
+	tx := testhelpers.CreateTestTransaction(
+		testServer.AuthFamily.ID, testServer.AuthUser.ID, cat.ID, transaction.TypeExpense,
+	)
+	tx.Amount = 150.5
+	tx.Date = time.Now().AddDate(0, 0, -1)
+	require.NoError(t, testServer.Repos.Transaction.Create(ctx, tx))
+
+	request := handlers.CreateReportRequest{
+		Name:      "Export Report",
+		Type:      "expenses",
+		Period:    "monthly",
+		StartDate: time.Now().AddDate(0, 0, -7),
+		EndDate:   time.Now(),
+	}
+	body, err := json.Marshal(request)
+	require.NoError(t, err)
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/reports", bytes.NewBuffer(body))
+	session.Apply(createReq)
+	createReq.Header.Set("Content-Type", "application/json")
+	createRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(createRec, createReq)
+	require.Equal(t, http.StatusCreated, createRec.Code, createRec.Body.String())
+
+	var created handlers.APIResponse[handlers.ReportResponse]
+	require.NoError(t, json.Unmarshal(createRec.Body.Bytes(), &created))
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/reports/"+created.Data.ID.String(), nil)
+	session.Apply(getReq)
+	getRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(getRec, getReq)
+	require.Equal(t, http.StatusOK, getRec.Code)
+
+	exportReq := httptest.NewRequest(http.MethodGet, "/api/v1/reports/"+created.Data.ID.String()+"/export", nil)
+	session.Apply(exportReq)
+	exportRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(exportRec, exportReq)
+
+	require.Equal(t, http.StatusOK, exportRec.Code, exportRec.Body.String())
+	assert.Contains(t, exportRec.Header().Get("Content-Type"), "text/csv")
+	assert.Contains(t, exportRec.Header().Get("Content-Disposition"), "attachment")
+
+	csvBody := strings.TrimPrefix(exportRec.Body.String(), "\ufeff")
+	rows, err := csv.NewReader(strings.NewReader(csvBody)).ReadAll()
+	require.NoError(t, err)
+	require.NotEmpty(t, rows)
+	assert.Equal(t, []string{"Category", "Amount", "Percentage", "Transaction Count"}, rows[0])
+	assert.Equal(t, "TOTAL", rows[len(rows)-1][0])
+}
+
+// TestStatsAPI_Summary — сводка за период совпадает с созданными операциями.
+func TestStatsAPI_Summary(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+	ctx := context.Background()
+
+	expenseCat := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(ctx, expenseCat))
+
+	expense := testhelpers.CreateTestTransaction(
+		testServer.AuthFamily.ID, testServer.AuthUser.ID, expenseCat.ID, transaction.TypeExpense,
+	)
+	expense.Amount = 200
+	expense.Date = time.Now()
+	require.NoError(t, testServer.Repos.Transaction.Create(ctx, expense))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/summary", nil)
+	session.Apply(req)
+	rec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var response handlers.APIResponse[dto.StatsSummary]
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.InDelta(t, 200.0, response.Data.Current.Expenses, 0.001)
+	assert.Equal(t, 1, response.Data.Current.TransactionCount)
+	require.Len(t, response.Data.ExpenseCategories, 1)
+	assert.Equal(t, expenseCat.Name, response.Data.ExpenseCategories[0].Name)
+}
+
+// TestStatsAPI_Summary_InvalidDate — нераспознанная дата отбивается 400, сервис не вызывается.
+func TestStatsAPI_Summary_InvalidDate(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/summary?from=01.03.2025", nil)
+	session.Apply(req)
+	rec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "INVALID_QUERY_PARAM", response.Error.Code)
 }

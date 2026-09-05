@@ -117,11 +117,11 @@
   `internal/application/http_server.go`, `tests/integration/reports_test.go`,
   `docs/api/openapi.yaml`
 
-- [ ] `POST /api/v1/reports` → `GenerateReport` + `SaveReport`, `201`; убрать `501`
-- [ ] `GET /api/v1/reports/:id/export` — CSV через `ReportService.ExportReport`; перенести CSV-писатели из `internal/web/handlers/reports.go:533-639` в сервис, веб вызывает сервис
-- [ ] `GET /api/v1/stats/summary` — парсинг `from`/`to` (`YYYY-MM-DD`), по умолчанию текущий месяц
-- [ ] тесты обработчиков: успех, невалидные даты, ошибка сервиса; интеграционные: сгенерировать отчёт → получить → экспорт CSV с ожидаемым заголовком
-- [ ] `openapi.yaml` обновлён; `make fmt && make test && make lint` — зелёные
+- [x] `POST /api/v1/reports` → `GenerateReport` + `SaveReport`, `201`; убрать `501`
+- [x] `GET /api/v1/reports/:id/export` — CSV через `ReportService.ExportReport`; перенести CSV-писатели из `internal/web/handlers/reports.go:533-639` в сервис, веб вызывает сервис
+- [x] `GET /api/v1/stats/summary` — парсинг `from`/`to` (`YYYY-MM-DD`), по умолчанию текущий месяц
+- [x] тесты обработчиков: успех, невалидные даты, ошибка сервиса; интеграционные: сгенерировать отчёт → получить → экспорт CSV с ожидаемым заголовком
+- [x] `openapi.yaml` обновлён; `make fmt && make test && make lint` — зелёные
 
 ### Task 4: Пользователи и семья
 
