@@ -7,19 +7,38 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/web/middleware"
 )
 
-// RequireAPIAuth middleware — аналог middleware.RequireAuth для группы /api/v1.
-// Отличие принципиальное: программному клиенту не нужен редирект на /login,
-// поэтому при отсутствии валидной сессии возвращается 401 и JSON-ошибка в том
-// же формате, что отдают остальные ответы API. При валидной сессии SessionData
-// кладётся в контекст под тем же ключом, что и у RequireAuth, поэтому
-// middleware.GetUserFromContext работает и в API-хендлерах.
-func RequireAPIAuth() echo.MiddlewareFunc {
+// RequireAPIAuth — аутентификация группы /api/v1: bearer-токен, а без заголовка Authorization —
+// cookie веб-сессии. Оба пути кладут *middleware.SessionData под middleware.ContextUserKey,
+// чтобы хендлеры не различали их до удаления веб-слоя (план 03, задача 8).
+// Присутствующий, но невалидный bearer — 401 без отката на cookie.
+func RequireAPIAuth(authenticator auth.Authenticator) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			if _, ok := auth.BearerToken(c.Request()); ok {
+				principal, err := auth.AuthenticateRequest(c, authenticator)
+				if err != nil {
+					if errors.Is(err, auth.ErrUnauthorized) {
+						return respondUnauthorized(c)
+					}
+					c.Logger().Errorf("bearer authentication failed on %s %q: %q",
+						c.Request().Method, c.Request().URL.Path, err.Error())
+					return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+				}
+
+				c.Set(auth.ContextKey, principal)
+				c.Set(middleware.ContextUserKey, &middleware.SessionData{
+					UserID: principal.UserID,
+					Role:   principal.Role,
+					Email:  principal.Email,
+				})
+				return next(c)
+			}
+
 			sessionData, err := middleware.GetSessionData(c)
 			if err != nil {
 				return respondUnauthorized(c)
@@ -31,19 +50,15 @@ func RequireAPIAuth() echo.MiddlewareFunc {
 	}
 }
 
-// RequireAPIActiveUser middleware — аналог middleware.RequireActiveUser для
-// группы /api/v1: владелец сессии перечитывается из БД, удалённый пользователь
-// получает 401, а роль для RequireAPIRole берётся актуальная, а не та, что
-// лежит в подписанной cookie. Ставится сразу после RequireAPIAuth.
+// RequireAPIActiveUser перечитывает владельца сессии из БД: удалённый пользователь получает 401,
+// а роль для RequireAPIRole берётся актуальная. Ставится сразу после RequireAPIAuth.
 func RequireAPIActiveUser(lookup middleware.SessionUserLookup) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			fresh, err := middleware.RevalidateSessionUser(c, lookup)
 			if err != nil {
 				if !errors.Is(err, middleware.ErrSessionUserGone) {
-					// Сбой БД, а не отзыв доступа: 401 заставил бы клиента
-					// выбросить рабочую сессию и перелогиниться.
-					// Детали уже записаны в middleware.RevalidateSessionUser.
+					// Сбой БД, а не отзыв доступа: 401 заставил бы клиента выбросить рабочую сессию.
 					return respondError(c, http.StatusInternalServerError,
 						ErrCodeInternal, ErrMessageInternal)
 				}
@@ -57,11 +72,7 @@ func RequireAPIActiveUser(lookup middleware.SessionUserLookup) echo.MiddlewareFu
 	}
 }
 
-// RequireAPIRole middleware — аналог middleware.RequireRole для группы /api/v1.
-// Веб-вариант отдаёт HTML «Access denied», программному клиенту нужен JSON,
-// поэтому здесь: нет сессии — 401, роль не подходит — 403, оба раза телом
-// служит ErrorResponse. Ставится после RequireAPIAuth, который кладёт
-// SessionData в контекст.
+// RequireAPIRole — нет сессии 401, роль не подходит 403; ставится после RequireAPIAuth.
 func RequireAPIRole(roles ...user.Role) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {

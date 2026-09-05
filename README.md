@@ -272,6 +272,7 @@ The application uses environment variables for configuration. Key variables:
 | `SERVER_READ_TIMEOUT`  | `15s`                                                | HTTP server read timeout                              |
 | `SERVER_WRITE_TIMEOUT` | `15s`                                                | HTTP server write timeout                             |
 | `SERVER_IDLE_TIMEOUT`  | `60s`                                                | HTTP server idle timeout                              |
+| `TRUSTED_PROXIES`      | empty                                                | Comma-separated CIDRs whose `X-Forwarded-For` is trusted for the client IP (login rate limiter). Empty — only the TCP peer address counts |
 | `DATABASE_PATH`        | `./data/budget.db`                                   | SQLite database file path                             |
 | `BACKUP_DIR`           | empty → `<dir(DATABASE_PATH)>/backups`               | Where `POST /api/v1/backups` and the admin panel write backups. Docker compose sets `/backups` so `VACUUM INTO` copies do not land inside the database volume |
 | `ENVIRONMENT`          | `development`                                        | App environment (`development`, `production`, `test`) |

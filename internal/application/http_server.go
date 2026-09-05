@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/observability"
 	"family-budget-service/internal/services"
@@ -51,12 +53,14 @@ type HTTPServer struct {
 }
 
 type Config struct {
-	Port          string
-	Host          string
-	ReadTimeout   time.Duration
-	WriteTimeout  time.Duration
-	IdleTimeout   time.Duration
-	SessionSecret string
+	Port         string
+	Host         string
+	ReadTimeout  time.Duration
+	WriteTimeout time.Duration
+	IdleTimeout  time.Duration
+	// TrustedProxies — сети, чей X-Forwarded-For определяет c.RealIP(); пусто — только RemoteAddr.
+	TrustedProxies []*net.IPNet
+	SessionSecret  string
 	// CookieSecure — флаг Secure на session-cookie (и на flash-cookie).
 	// Обычно совпадает с production, но управляется отдельно (COOKIE_SECURE):
 	// на http:// origin браузер выбрасывает Secure-cookie, и вход становится
@@ -87,6 +91,7 @@ func NewHTTPServerWithObservability(
 
 	// Настройка валидации
 	e.Validator = &CustomValidator{validator: validator.New()}
+	e.IPExtractor = auth.IPExtractor(config.TrustedProxies)
 
 	// Базовые middleware
 	e.Use(middleware.Recover())
@@ -202,7 +207,7 @@ func (s *HTTPServer) setupRoutes() {
 	// берётся из БД, а не из подписанной cookie. Условной регистрации здесь нет
 	// намеренно — иначе конфигурация без сервисов молча теряла бы проверку.
 	api := s.echo.Group("/api/v1",
-		handlers.RequireAPIAuth(),
+		handlers.RequireAPIAuth(s.services.Auth),
 		handlers.RequireAPIActiveUser(s.services.User),
 	)
 

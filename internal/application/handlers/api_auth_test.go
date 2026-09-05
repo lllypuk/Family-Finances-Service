@@ -14,9 +14,37 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/web/middleware"
 )
+
+const stubBearerToken = "stub-bearer-token"
+
+// stubAuthenticator принимает только stubBearerToken; failErr имитирует сбой хранилища.
+type stubAuthenticator struct {
+	principal *auth.Principal
+	failErr   error
+}
+
+func newStubAuthenticator() *stubAuthenticator {
+	return &stubAuthenticator{principal: &auth.Principal{
+		SessionID: uuid.New(),
+		UserID:    uuid.New(),
+		Email:     "bearer@example.com",
+		Role:      user.RoleMember,
+	}}
+}
+
+func (s *stubAuthenticator) Authenticate(_ context.Context, token string) (*auth.Principal, error) {
+	if s.failErr != nil {
+		return nil, s.failErr
+	}
+	if token != stubBearerToken {
+		return nil, auth.ErrUnauthorized
+	}
+	return s.principal, nil
+}
 
 // --- RequireAPIAuth / RequireAPIRole: авторизация группы /api/v1.
 // Раньше эти middleware жили в internal/web/middleware и несли собственную
@@ -30,7 +58,7 @@ func TestRequireAPIAuth_NoSession_Returns401JSON(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	nextCalled := false
-	handler := handlers.RequireAPIAuth()(func(c echo.Context) error {
+	handler := handlers.RequireAPIAuth(newStubAuthenticator())(func(c echo.Context) error {
 		nextCalled = true
 		return c.String(http.StatusOK, "api content")
 	})
@@ -59,7 +87,7 @@ func TestRequireAPIAuth_NoSession_DoesNotRedirect(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	handler := handlers.RequireAPIAuth()(func(c echo.Context) error {
+	handler := handlers.RequireAPIAuth(newStubAuthenticator())(func(c echo.Context) error {
 		return c.String(http.StatusOK, "api content")
 	})
 
@@ -75,7 +103,7 @@ func TestRequireAPIAuth_NoSession_ContentTypeIsJSON(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	handler := handlers.RequireAPIAuth()(func(c echo.Context) error {
+	handler := handlers.RequireAPIAuth(newStubAuthenticator())(func(c echo.Context) error {
 		return c.String(http.StatusOK, "api content")
 	})
 
@@ -116,7 +144,7 @@ func TestRequireAPIAuth_ValidSession_CallsNext(t *testing.T) {
 		}
 		seen = userData
 		return c.String(http.StatusOK, userData.Email)
-	}, handlers.RequireAPIAuth())
+	}, handlers.RequireAPIAuth(newStubAuthenticator()))
 
 	// Без cookie — 401 JSON.
 	anonRec := httptest.NewRecorder()
@@ -144,6 +172,118 @@ func TestRequireAPIAuth_ValidSession_CallsNext(t *testing.T) {
 	require.NotNil(t, seen)
 	assert.Equal(t, expectedUser.UserID, seen.UserID)
 	assert.Equal(t, expectedUser.Role, seen.Role)
+}
+
+// --- Bearer-путь RequireAPIAuth (план 03): до удаления веб-слоя оба способа живут рядом.
+
+func TestRequireAPIAuth_ValidBearer_PutsPrincipalAndSessionData(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions", nil)
+	req.Header.Set(echo.HeaderAuthorization, "Bearer "+stubBearerToken)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	stub := newStubAuthenticator()
+	var seenSession *middleware.SessionData
+	var seenPrincipal *auth.Principal
+	handler := handlers.RequireAPIAuth(stub)(func(c echo.Context) error {
+		sessionData, err := middleware.GetUserFromContext(c)
+		if err != nil {
+			return err
+		}
+		principal, err := auth.FromContext(c)
+		if err != nil {
+			return err
+		}
+		seenSession, seenPrincipal = sessionData, principal
+		return c.NoContent(http.StatusOK)
+	})
+
+	require.NoError(t, handler(c))
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, stub.principal, seenPrincipal)
+	require.NotNil(t, seenSession)
+	assert.Equal(t, stub.principal.UserID, seenSession.UserID)
+	assert.Equal(t, stub.principal.Role, seenSession.Role)
+	assert.Equal(t, stub.principal.Email, seenSession.Email)
+}
+
+func TestRequireAPIAuth_InvalidBearer_Returns401JSON(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions", nil)
+	req.Header.Set(echo.HeaderAuthorization, "Bearer garbage")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	nextCalled := false
+	handler := handlers.RequireAPIAuth(newStubAuthenticator())(func(echo.Context) error {
+		nextCalled = true
+		return nil
+	})
+
+	require.NoError(t, handler(c))
+	assert.False(t, nextCalled)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+
+	var body handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, "UNAUTHORIZED", body.Error.Code)
+}
+
+// TestRequireAPIAuth_InvalidBearer_NoCookieFallback — невалидный bearer не откатывается на
+// cookie: клиент должен узнать, что его токен отозван, а не жить на старой сессии.
+func TestRequireAPIAuth_InvalidBearer_NoCookieFallback(t *testing.T) {
+	e := echo.New()
+	e.Use(middleware.SessionStore("test-secret-key-for-api-auth", false))
+	e.GET("/sign-in", func(c echo.Context) error {
+		if err := middleware.SetSessionData(
+			c,
+			&middleware.SessionData{UserID: uuid.New(), Role: user.RoleAdmin},
+		); err != nil {
+			return err
+		}
+		return c.NoContent(http.StatusOK)
+	})
+	e.GET("/api/v1/protected", func(c echo.Context) error {
+		return c.NoContent(http.StatusOK)
+	}, handlers.RequireAPIAuth(newStubAuthenticator()))
+
+	loginRec := httptest.NewRecorder()
+	e.ServeHTTP(loginRec, httptest.NewRequest(http.MethodGet, "/sign-in", nil))
+	cookies := (&http.Response{Header: loginRec.Header()}).Cookies()
+	require.NotEmpty(t, cookies)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/protected", nil)
+	for _, cookie := range cookies {
+		req.AddCookie(cookie)
+	}
+	req.Header.Set(echo.HeaderAuthorization, "Bearer revoked")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestRequireAPIAuth_BearerStorageFailure_Returns500(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions", nil)
+	req.Header.Set(echo.HeaderAuthorization, "Bearer "+stubBearerToken)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	stub := newStubAuthenticator()
+	stub.failErr = errors.New("database is locked")
+	handler := handlers.RequireAPIAuth(stub)(func(c echo.Context) error {
+		return c.NoContent(http.StatusOK)
+	})
+
+	require.NoError(t, handler(c))
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.NotContains(t, rec.Body.String(), "database is locked")
+
+	var body handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, "INTERNAL_ERROR", body.Error.Code)
 }
 
 func TestRequireAPIRole_RolesMatrix(t *testing.T) {

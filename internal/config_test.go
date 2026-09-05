@@ -146,3 +146,31 @@ func TestLoadConfig_ReadsBackupDir(t *testing.T) {
 
 	assert.Equal(t, "/mnt/backups", cfg.GetBackupDir())
 }
+
+// TRUSTED_PROXIES решает, чей X-Forwarded-For попадает в лимитер логина; опечатка в CIDR
+// должна останавливать старт, а не молча превращаться в «доверять никому».
+func TestConfig_Validate_TrustedProxies(t *testing.T) {
+	cfg := productionConfig(strongSecret, strongSecret)
+
+	cfg.Server.TrustedProxies = "10.0.0.0/8, 172.16.0.0/12"
+	require.NoError(t, cfg.Validate())
+	ranges, err := cfg.TrustedProxyRanges()
+	require.NoError(t, err)
+	assert.Len(t, ranges, 2)
+
+	cfg.Server.TrustedProxies = ""
+	ranges, err = cfg.TrustedProxyRanges()
+	require.NoError(t, err)
+	assert.Empty(t, ranges, "пустой список — доверять только RemoteAddr")
+
+	cfg.Server.TrustedProxies = "10.0.0.1"
+	err = cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "TRUSTED_PROXIES")
+}
+
+func TestLoadConfig_TrustedProxies(t *testing.T) {
+	t.Setenv("TRUSTED_PROXIES", "172.18.0.0/16")
+
+	assert.Equal(t, "172.18.0.0/16", internal.LoadConfig().Server.TrustedProxies)
+}

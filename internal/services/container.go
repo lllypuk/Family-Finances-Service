@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/user"
 )
@@ -30,6 +31,8 @@ type Services struct {
 	Report      ReportService
 	Invite      InviteService
 	Backup      BackupService
+	// Auth — bearer-сессии; собирается снаружи, как и Backup: ему нужны репозитории, а не сервисы.
+	Auth *auth.Service
 }
 
 // NewServices creates a new services container with all dependencies
@@ -43,6 +46,7 @@ func NewServices(
 	reportRepo ReportRepository,
 	inviteRepo user.InviteRepository,
 	backupService BackupService,
+	authService *auth.Service,
 	logger *slog.Logger,
 ) *Services {
 	usageChecker := NewCategoryUsageChecker(transactionRepo)
@@ -79,5 +83,6 @@ func NewServices(
 		Report:      reportService,
 		Invite:      inviteService,
 		Backup:      backupService,
+		Auth:        authService,
 	}
 }

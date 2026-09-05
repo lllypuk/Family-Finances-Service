@@ -18,7 +18,9 @@ import (
 
 	"family-budget-service/internal/application"
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/user"
+	authrepo "family-budget-service/internal/infrastructure/auth"
 	budgetrepo "family-budget-service/internal/infrastructure/budget"
 	categoryrepo "family-budget-service/internal/infrastructure/category"
 	reportrepo "family-budget-service/internal/infrastructure/report"
@@ -68,7 +70,11 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 		Transaction: transactionrepo.NewSQLiteRepository(db),
 		Report:      reportrepo.NewSQLiteRepository(db),
 		Invite:      userrepo.NewInviteSQLiteRepository(db),
+		Session:     authrepo.NewSessionSQLiteRepository(db),
 	}
+
+	authService, err := auth.NewService(repos.Session, repos.User, repos.Family)
+	require.NoError(t, err)
 
 	// Create BackupService for testing with in-memory database.
 	// Каталог бэкапов — временный: иначе сервис пишет ./backups в каталог пакета.
@@ -85,6 +91,7 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 		repos.Report,      // reportRepo
 		repos.Invite,      // inviteRepo
 		backupService,     // backupService
+		authService,       // authService
 		slog.Default(),    // logger
 	)
 
@@ -102,8 +109,8 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 
 	// Create HTTP server without observability for testing
 	httpServer := application.NewHTTPServer(repos, servicesContainer, config)
-	if err := httpServer.WebServerInitError(); err != nil {
-		t.Fatalf("web server initialization failed, test server has no session/CSRF/web routes: %v", err)
+	if initErr := httpServer.WebServerInitError(); initErr != nil {
+		t.Fatalf("web server initialization failed, test server has no session/CSRF/web routes: %v", initErr)
 	}
 
 	testServer := &TestServer{

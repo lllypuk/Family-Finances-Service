@@ -133,12 +133,12 @@ A-01…A-04, A-09, A-12). После него сервис отвечает то
 - Modify: `internal/application/handlers/api_auth.go` (временно делегирует), `internal/config.go`,
   `internal/application/http_server.go`
 
-- [ ] `auth.ContextKey`, `auth.Principal{UserID, Role, Email}`, `auth.FromContext(c)`; `RequireBearer(service)` — `401 UNAUTHORIZED` без заголовка / с плохим токеном; `RequireRole(roles...)` — `403 FORBIDDEN`
-- [ ] `RateLimiter` (окно, лимиты, `Allow(ip, email) (retryAfter time.Duration, ok bool)`, `Reset(email)`); `TRUSTED_PROXIES` → `e.IPExtractor`
-- [ ] `api_auth.go`: `RequireAPIAuth`/`RequireAPIActiveUser`/`RequireAPIRole` принимают и cookie, и bearer (проверить `Authorization` первым) — чтобы оба пути жили до задачи 8
-- [ ] тесты middleware через `httptest`: нет заголовка, мусор, валидный токен → principal в контексте, роль не та → 403
-- [ ] тесты лимитера: 11-я попытка с IP → блок, `Retry-After` > 0, окно сдвигается, `Reset` снимает блок по email, IP из XFF учитывается только от доверенного прокси
-- [ ] `make test` — зелёный
+- [x] `auth.ContextKey`, `auth.Principal{UserID, Role, Email}`, `auth.FromContext(c)`; `RequireBearer(service)` — `401 UNAUTHORIZED` без заголовка / с плохим токеном; `RequireRole(roles...)` — `403 FORBIDDEN`
+- [x] `RateLimiter` (окно, лимиты, `Allow(ip, email) (retryAfter time.Duration, ok bool)`, `Reset(email)`); `TRUSTED_PROXIES` → `e.IPExtractor`
+- [x] `api_auth.go`: `RequireAPIAuth`/`RequireAPIActiveUser`/`RequireAPIRole` принимают и cookie, и bearer (проверить `Authorization` первым) — чтобы оба пути жили до задачи 8
+- [x] тесты middleware через `httptest`: нет заголовка, мусор, валидный токен → principal в контексте, роль не та → 403
+- [x] тесты лимитера: 11-я попытка с IP → блок, `Retry-After` > 0, окно сдвигается, `Reset` снимает блок по email, IP из XFF учитывается только от доверенного прокси
+- [x] `make test` — зелёный
 
 ### Task 4: Роуты `/auth/*` и `/me`
 

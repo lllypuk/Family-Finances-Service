@@ -13,6 +13,7 @@ import (
 
 	"family-budget-service/internal/application"
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/auth"
 	"family-budget-service/internal/infrastructure"
 	"family-budget-service/internal/observability"
 	"family-budget-service/internal/services"
@@ -85,6 +86,11 @@ func NewApplication() (*Application, error) {
 	// Инициализация BackupService
 	backupService := services.NewBackupService(sqliteConn.DB(), config.Database.Path, config.GetBackupDir(), logger)
 
+	authService, err := auth.NewService(app.repositories.Session, app.repositories.User, app.repositories.Family)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize auth service: %w", err)
+	}
+
 	// Инициализация сервисов
 	app.services = services.NewServices(
 		app.repositories.User,
@@ -96,18 +102,26 @@ func NewApplication() (*Application, error) {
 		app.repositories.Report,
 		app.repositories.Invite,
 		backupService,
+		authService,
 		logger,
 	)
 
+	// Validate уже проверил список, здесь ошибка невозможна.
+	trustedProxies, err := config.TrustedProxyRanges()
+	if err != nil {
+		return nil, fmt.Errorf("invalid TRUSTED_PROXIES: %w", err)
+	}
+
 	// Создание HTTP сервера с observability
 	serverConfig := &application.Config{
-		Port:          config.Server.Port,
-		Host:          config.Server.Host,
-		ReadTimeout:   config.Server.ReadTimeout,
-		WriteTimeout:  config.Server.WriteTimeout,
-		IdleTimeout:   config.Server.IdleTimeout,
-		SessionSecret: config.Web.SessionSecret,
-		CookieSecure:  config.Web.CookieSecure,
+		Port:           config.Server.Port,
+		Host:           config.Server.Host,
+		ReadTimeout:    config.Server.ReadTimeout,
+		WriteTimeout:   config.Server.WriteTimeout,
+		IdleTimeout:    config.Server.IdleTimeout,
+		TrustedProxies: trustedProxies,
+		SessionSecret:  config.Web.SessionSecret,
+		CookieSecure:   config.Web.CookieSecure,
 	}
 	app.httpServer = application.NewHTTPServerWithObservability(
 		app.repositories,

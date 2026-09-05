@@ -3,10 +3,13 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"family-budget-service/internal/auth"
 )
 
 // Configuration constants
@@ -43,6 +46,9 @@ type ServerConfig struct {
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
 	IdleTimeout  time.Duration
+	// TrustedProxies — TRUSTED_PROXIES как есть: CIDR через запятую, чьи X-Forwarded-For принимаются.
+	// Пусто — доверять только RemoteAddr; разбирается TrustedProxyRanges.
+	TrustedProxies string
 }
 
 type DatabaseConfig struct {
@@ -91,11 +97,12 @@ func (c *Config) IsTest() bool {
 func LoadConfig() *Config {
 	config := &Config{
 		Server: ServerConfig{
-			Port:         getEnv("SERVER_PORT", "8080"),
-			Host:         getEnv("SERVER_HOST", "localhost"),
-			ReadTimeout:  getDurationEnv("SERVER_READ_TIMEOUT", defaultServerReadTimeout),
-			WriteTimeout: getDurationEnv("SERVER_WRITE_TIMEOUT", defaultServerWriteTimeout),
-			IdleTimeout:  getDurationEnv("SERVER_IDLE_TIMEOUT", defaultServerIdleTimeout),
+			Port:           getEnv("SERVER_PORT", "8080"),
+			Host:           getEnv("SERVER_HOST", "localhost"),
+			ReadTimeout:    getDurationEnv("SERVER_READ_TIMEOUT", defaultServerReadTimeout),
+			WriteTimeout:   getDurationEnv("SERVER_WRITE_TIMEOUT", defaultServerWriteTimeout),
+			IdleTimeout:    getDurationEnv("SERVER_IDLE_TIMEOUT", defaultServerIdleTimeout),
+			TrustedProxies: getEnv("TRUSTED_PROXIES", ""),
 		},
 		Database: DatabaseConfig{
 			Path:      getEnv("DATABASE_PATH", "./data/budget.db"),
@@ -159,6 +166,10 @@ func (c *Config) Validate() error {
 		return errors.New("database path is required")
 	}
 
+	if _, err := c.TrustedProxyRanges(); err != nil {
+		return err
+	}
+
 	if !c.IsProduction() {
 		return nil
 	}
@@ -185,6 +196,15 @@ func validateProductionSecret(name, value, placeholder string) error {
 	}
 
 	return nil
+}
+
+// TrustedProxyRanges — разобранный TRUSTED_PROXIES для echo.IPExtractor.
+func (c *Config) TrustedProxyRanges() ([]*net.IPNet, error) {
+	ranges, err := auth.ParseTrustedProxies(c.Server.TrustedProxies)
+	if err != nil {
+		return nil, fmt.Errorf("TRUSTED_PROXIES: %w", err)
+	}
+	return ranges, nil
 }
 
 // GetBackupDir returns the backup directory, falling back to <dir(database)>/backups.

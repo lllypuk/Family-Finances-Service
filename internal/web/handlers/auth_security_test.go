@@ -485,6 +485,10 @@ func (r *stubUserRepository) GetAll(_ context.Context) ([]*user.User, error) {
 
 func (r *stubUserRepository) Update(_ context.Context, _ *user.User) error { return nil }
 
+func (r *stubUserRepository) UpdatePassword(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}
+
 func (r *stubUserRepository) Delete(_ context.Context, _ uuid.UUID) error { return nil }
 
 // loginTestValidator — Echo-валидатор для формы входа.
