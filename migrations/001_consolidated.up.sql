@@ -149,19 +149,6 @@ CREATE TABLE IF NOT EXISTS reports (
     CHECK (is_cached IN (0, 1))
 );
 
--- Create user_sessions table
-CREATE TABLE IF NOT EXISTS user_sessions (
-    id TEXT PRIMARY KEY,
-    session_token TEXT UNIQUE NOT NULL,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    expires_at DATETIME NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
-    -- Constraints
-    CHECK (LENGTH(TRIM(session_token)) > 0),
-    CHECK (expires_at > created_at)
-);
-
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_users_family_id ON users(family_id);
 CREATE INDEX IF NOT EXISTS idx_users_email_active ON users(email, is_active);
@@ -190,10 +177,6 @@ CREATE INDEX IF NOT EXISTS idx_reports_family_type ON reports(family_id, type);
 CREATE INDEX IF NOT EXISTS idx_reports_generated_by ON reports(generated_by);
 CREATE INDEX IF NOT EXISTS idx_reports_date_range ON reports(start_date, end_date);
 CREATE INDEX IF NOT EXISTS idx_reports_cached ON reports(is_cached, cache_expires_at);
-
-CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(session_token);
-CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at);
 
 -- Create triggers for updated_at
 CREATE TRIGGER IF NOT EXISTS update_families_updated_at
@@ -318,3 +301,20 @@ FOR EACH ROW
 BEGIN
     UPDATE invites SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
+
+-- ==============================================================================
+-- Migration 006: Bearer sessions (plan 03)
+-- ==============================================================================
+
+-- Только хеш токена; срок продлевается активностью (см. internal/auth/session.go)
+CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    device_name TEXT NOT NULL,
+    created_at DATETIME NOT NULL,
+    last_used_at DATETIME NOT NULL,
+    expires_at DATETIME NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);

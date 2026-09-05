@@ -102,12 +102,12 @@ A-01…A-04, A-09, A-12). После него сервис отвечает то
 - Modify: `migrations/001_consolidated.up.sql`, `001_consolidated.down.sql`,
   `internal/testhelpers/sqlite.go` (`CleanTables`), `internal/infrastructure/repositories_sqlite.go`
 
-- [ ] таблица `sessions` в миграции, `user_sessions` удалить; `CleanTables` обновить (заодно добавить отсутствующую там `invites`)
-- [ ] `make db-reset` (удаляет `./data/budget.db*`) и правило в `migrations/README.md` + `CLAUDE.md`: golang-migrate хранит только номер версии, правка уже применённой `001` на существующей БД — no-op (`Up()` → `ErrNoChange`), тестовый путь этого не покажет; до первого релиза схема меняется переписыванием `001`, локальные и серверные БД пересоздаются
-- [ ] `auth.Session` (поля из «Technical Details») и `auth.SessionRepository`: `Create`, `FindByTokenHash` (JOIN users → `Session` + `user.User`), `Touch(id, at)`, `Delete(id)`, `DeleteByUser(userID, exceptID)`, `ListByUser`, `DeleteExpired(now)`
-- [ ] реализация на SQLite по образцу `internal/infrastructure/user/user_repository_sqlite.go`
-- [ ] тесты репозитория: создание и поиск, неизвестный хеш → `ErrSessionNotFound`, `DeleteByUser` сохраняет исключение, `DeleteExpired` удаляет только просроченные (CASCADE не тестировать — приложение пользователей не удаляет, см. задачу 5)
-- [ ] `make test` — зелёный (обе ветки миграций: golang-migrate и `testhelpers`)
+- [x] таблица `sessions` в миграции, `user_sessions` удалить; `CleanTables` обновить (заодно добавить отсутствующую там `invites`)
+- [x] `make db-reset` (удаляет `./data/budget.db*`) и правило в `migrations/README.md` + `CLAUDE.md`: golang-migrate хранит только номер версии, правка уже применённой `001` на существующей БД — no-op (`Up()` → `ErrNoChange`), тестовый путь этого не покажет; до первого релиза схема меняется переписыванием `001`, локальные и серверные БД пересоздаются
+- [x] `auth.Session` (поля из «Technical Details») и `auth.SessionRepository`: `Create`, `FindByTokenHash` (JOIN users → `Session` + `user.User`), `Touch(id, at)`, `Delete(id)`, `DeleteByUser(userID, exceptID)`, `ListByUser`, `DeleteExpired(now)`
+- [x] реализация на SQLite по образцу `internal/infrastructure/user/user_repository_sqlite.go`
+- [x] тесты репозитория: создание и поиск, неизвестный хеш → `ErrSessionNotFound`, `DeleteByUser` сохраняет исключение, `DeleteExpired` удаляет только просроченные (CASCADE не тестировать — приложение пользователей не удаляет, см. задачу 5)
+- [x] `make test` — зелёный (обе ветки миграций: golang-migrate и `testhelpers`)
 
 ### Task 2: `auth.Service` — выдача, проверка и отзыв токенов
 

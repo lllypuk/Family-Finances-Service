@@ -34,7 +34,7 @@ variable in the Makefile) so that `.env` is read from the repo root — hence `b
 `deploy/*.yml`) and runs in CI.
 
 SQLite: `make sqlite-shell`, `make sqlite-stats`, `make sqlite-backup`,
-`make sqlite-restore BACKUP_FILE=./backups/<file>.db`.
+`make sqlite-restore BACKUP_FILE=./backups/<file>.db`, `make db-reset` (delete the local DB after a schema change).
 
 **Mandatory before handing off any code change: `make fmt`, `make test`, `make lint` — `make lint` must report
 0 issues.** The linter config is strict (see "Linter constraints" below); do not add `//nolint` without a specific
@@ -195,9 +195,14 @@ Do not treat these as regressions you introduced, and do not paper over them wit
 ## Database & migrations
 
 All schema lives in **two consolidated files**: `migrations/001_consolidated.up.sql` and `001_consolidated.down.sql`
-(tables: families, users, categories, transactions, budgets, budget_alerts, reports, user_sessions, invites).
+(tables: families, users, categories, transactions, budgets, budget_alerts, reports, invites, sessions).
 There is no per-change migration file; append new DDL to the end of the `.up.sql` and the matching `DROP` to the
 front of the `.down.sql`. See `migrations/README.md`, and `make migrate-create` for the reminder.
+
+**Editing `001` does not touch an existing database.** golang-migrate stores only the version number, so on a DB
+that already has version 1 `Up()` returns `ErrNoChange` and the new DDL is skipped silently; the test path starts
+from an empty in-memory DB and will not show this. Until the first release the schema changes by rewriting `001`,
+and local and server databases are recreated: `make db-reset` (deletes `./data/budget.db*`) then `make run-local`.
 
 Two independent code paths apply migrations, and **both must keep working**:
 

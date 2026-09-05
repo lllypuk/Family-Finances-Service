@@ -102,6 +102,13 @@ clean:
 	@rm -rf $(BUILD_DIR)
 	@rm -f coverage.out coverage.html
 
+# Пересоздание локальной БД: golang-migrate хранит только номер версии,
+# поэтому правка уже применённой 001 без удаления файла — no-op
+.PHONY: db-reset
+db-reset:
+	@echo "Removing $(DATA_DIR)/budget.db*"
+	@rm -f $(DATA_DIR)/budget.db $(DATA_DIR)/budget.db-wal $(DATA_DIR)/budget.db-shm
+
 # Docker команды
 .PHONY: docker-build
 docker-build:
@@ -208,7 +215,7 @@ migrate-create:
 	@echo "Steps to add a migration:"
 	@echo "  1. Add new tables/indexes/triggers to the UP file"
 	@echo "  2. Add corresponding DROP statements to the DOWN file (in reverse order)"
-	@echo "  3. Test with: make clean && make run-local"
+	@echo "  3. Test with: make db-reset && make run-local (an already-migrated DB ignores edits to 001)"
 
 # Безопасность и валидация
 .PHONY: security-check
@@ -253,6 +260,7 @@ help:
 	@echo "Dependencies and Maintenance:"
 	@echo "  deps             - Download and tidy Go modules"
 	@echo "  clean            - Remove build artifacts and coverage reports"
+	@echo "  db-reset         - Delete ./data/budget.db* (schema changes in 001 need a fresh DB)"
 	@echo "  generate         - Generate OpenAPI code"
 	@echo "  docs             - Start documentation server"
 	@echo ""
