@@ -3,6 +3,7 @@ package services_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
@@ -328,7 +329,6 @@ func TestUserService_SetActive(t *testing.T) {
 	actorID := uuid.New()
 	memberID := uuid.New()
 	lastAdminID := uuid.New()
-	otherAdminID := uuid.New()
 
 	tests := []struct {
 		name      string
@@ -351,9 +351,7 @@ func TestUserService_SetActive(t *testing.T) {
 			active: false,
 			setup: func(userRepo *MockUserRepository, sessions *MockSessionRevoker) {
 				userRepo.On("GetByID", mock.Anything, memberID).Return(newUser(memberID, user.RoleMember, true), nil)
-				userRepo.On("Update", mock.Anything, mock.MatchedBy(func(u *user.User) bool {
-					return u.ID == memberID && !u.IsActive
-				})).Return(nil)
+				userRepo.On("SetActive", mock.Anything, memberID, false).Return(nil)
 				sessions.On("RevokeAllSessions", mock.Anything, memberID).Return(nil)
 			},
 		},
@@ -363,9 +361,7 @@ func TestUserService_SetActive(t *testing.T) {
 			active: true,
 			setup: func(userRepo *MockUserRepository, _ *MockSessionRevoker) {
 				userRepo.On("GetByID", mock.Anything, memberID).Return(newUser(memberID, user.RoleMember, false), nil)
-				userRepo.On("Update", mock.Anything, mock.MatchedBy(func(u *user.User) bool {
-					return u.ID == memberID && u.IsActive
-				})).Return(nil)
+				userRepo.On("SetActive", mock.Anything, memberID, true).Return(nil)
 			},
 		},
 		{
@@ -386,18 +382,15 @@ func TestUserService_SetActive(t *testing.T) {
 			wantError: services.ErrUserNotFound,
 		},
 		{
-			// Неактивные админы не считаются: семья без активного админа невосстановима.
+			// Проверку «последний активный админ» делает репозиторий в транзакции; сервис
+			// пробрасывает sentinel и не отзывает сессии.
 			name:   "Error - Last active admin",
 			userID: lastAdminID,
 			active: false,
 			setup: func(userRepo *MockUserRepository, _ *MockSessionRevoker) {
 				userRepo.On("GetByID", mock.Anything, lastAdminID).
 					Return(newUser(lastAdminID, user.RoleAdmin, true), nil)
-				userRepo.On("GetAll", mock.Anything).Return([]*user.User{
-					newUser(lastAdminID, user.RoleAdmin, true),
-					newUser(otherAdminID, user.RoleAdmin, false),
-					newUser(memberID, user.RoleMember, true),
-				}, nil)
+				userRepo.On("SetActive", mock.Anything, lastAdminID, false).Return(user.ErrLastAdmin)
 			},
 			wantError: services.ErrLastAdmin,
 		},
@@ -408,11 +401,7 @@ func TestUserService_SetActive(t *testing.T) {
 			setup: func(userRepo *MockUserRepository, sessions *MockSessionRevoker) {
 				userRepo.On("GetByID", mock.Anything, lastAdminID).
 					Return(newUser(lastAdminID, user.RoleAdmin, true), nil)
-				userRepo.On("GetAll", mock.Anything).Return([]*user.User{
-					newUser(lastAdminID, user.RoleAdmin, true),
-					newUser(otherAdminID, user.RoleAdmin, true),
-				}, nil)
-				userRepo.On("Update", mock.Anything, mock.AnythingOfType("*user.User")).Return(nil)
+				userRepo.On("SetActive", mock.Anything, lastAdminID, false).Return(nil)
 				sessions.On("RevokeAllSessions", mock.Anything, lastAdminID).Return(nil)
 			},
 		},
@@ -422,7 +411,7 @@ func TestUserService_SetActive(t *testing.T) {
 			active: false,
 			setup: func(userRepo *MockUserRepository, sessions *MockSessionRevoker) {
 				userRepo.On("GetByID", mock.Anything, memberID).Return(newUser(memberID, user.RoleMember, true), nil)
-				userRepo.On("Update", mock.Anything, mock.AnythingOfType("*user.User")).Return(nil)
+				userRepo.On("SetActive", mock.Anything, memberID, false).Return(nil)
 				sessions.On("RevokeAllSessions", mock.Anything, memberID).Return(errors.New("db down"))
 			},
 			wantError: errors.New("db down"),
@@ -456,15 +445,10 @@ func TestUserService_SetActive(t *testing.T) {
 }
 
 func TestUserService_ChangeUserRole(t *testing.T) {
-	// ChangeUserRole меняет Role у переданного объекта, поэтому фикстуры создаются
-	// заново на каждый кейс: общий указатель делал таблицу зависимой от порядка.
-	newUser := func(id uuid.UUID, role user.Role) *user.User {
-		return &user.User{ID: id, Role: role, IsActive: true}
-	}
+	// Проверка «последний админ» и запись — одна транзакция репозитория (UpdateRole);
+	// сервис только валидирует роль и пробрасывает sentinel-ошибки.
 	existingUserID := uuid.New()
 	onlyAdminID := uuid.New()
-	otherAdminID := uuid.New()
-	plainMemberID := uuid.New()
 
 	tests := []struct {
 		name      string
@@ -479,9 +463,7 @@ func TestUserService_ChangeUserRole(t *testing.T) {
 			userID: existingUserID,
 			role:   user.RoleAdmin,
 			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
-				userRepo.On("GetByID", mock.Anything, existingUserID).
-					Return(newUser(existingUserID, user.RoleMember), nil)
-				userRepo.On("Update", mock.Anything, mock.AnythingOfType("*user.User")).Return(nil)
+				userRepo.On("UpdateRole", mock.Anything, existingUserID, user.RoleAdmin).Return(nil)
 			},
 			wantError: false,
 		},
@@ -499,7 +481,8 @@ func TestUserService_ChangeUserRole(t *testing.T) {
 			userID: uuid.New(),
 			role:   user.RoleAdmin,
 			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
-				userRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, user.ErrNotFound)
+				userRepo.On("UpdateRole", mock.Anything, mock.Anything, user.RoleAdmin).
+					Return(fmt.Errorf("user with id x: %w", user.ErrNotFound))
 			},
 			wantError: true,
 			errorType: services.ErrUserNotFound,
@@ -511,10 +494,7 @@ func TestUserService_ChangeUserRole(t *testing.T) {
 			userID: onlyAdminID,
 			role:   user.RoleMember,
 			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
-				admin := newUser(onlyAdminID, user.RoleAdmin)
-				userRepo.On("GetByID", mock.Anything, onlyAdminID).Return(admin, nil)
-				userRepo.On("GetAll", mock.Anything).
-					Return([]*user.User{admin, newUser(plainMemberID, user.RoleMember)}, nil)
+				userRepo.On("UpdateRole", mock.Anything, onlyAdminID, user.RoleMember).Return(user.ErrLastAdmin)
 			},
 			wantError: true,
 			errorType: services.ErrLastAdmin,
@@ -524,11 +504,7 @@ func TestUserService_ChangeUserRole(t *testing.T) {
 			userID: onlyAdminID,
 			role:   user.RoleMember,
 			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
-				admin := newUser(onlyAdminID, user.RoleAdmin)
-				userRepo.On("GetByID", mock.Anything, onlyAdminID).Return(admin, nil)
-				userRepo.On("GetAll", mock.Anything).
-					Return([]*user.User{admin, newUser(otherAdminID, user.RoleAdmin)}, nil)
-				userRepo.On("Update", mock.Anything, mock.AnythingOfType("*user.User")).Return(nil)
+				userRepo.On("UpdateRole", mock.Anything, onlyAdminID, user.RoleMember).Return(nil)
 			},
 			wantError: false,
 		},

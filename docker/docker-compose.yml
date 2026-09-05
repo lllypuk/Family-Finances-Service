@@ -40,7 +40,9 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-production}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # CIDR через запятую, чьи X-Forwarded-For определяют IP клиента для лимитера логина.
-      # Пусто — доверять только RemoteAddr (без обратного прокси).
+      # Пусто — реальный IP неизвестен, лимит только по email (без обратного прокси так и надо).
+      # За Caddy/nginx в этой же сети compose — подсеть сети, например 172.20.0.0/16
+      # (`docker network inspect`), иначе за прокси корзина IP была бы общей на всех.
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
 
     volumes:

@@ -101,8 +101,8 @@ func NewApplication() (*Application, error) {
 	}
 	if config.IsProduction() && len(trustedProxies) == 0 {
 		logger.WarnContext(context.Background(),
-			"TRUSTED_PROXIES is empty: X-Forwarded-For is ignored, the login limiter counts every client "+
-				"behind a reverse proxy as one IP")
+			"TRUSTED_PROXIES is empty: X-Forwarded-For is ignored and the login limiter counts only per email; "+
+				"list the reverse proxy network to enable the per-IP limit")
 	}
 
 	// Создание HTTP сервера с observability
@@ -113,7 +113,6 @@ func NewApplication() (*Application, error) {
 		WriteTimeout:   config.Server.WriteTimeout,
 		IdleTimeout:    config.Server.IdleTimeout,
 		TrustedProxies: trustedProxies,
-		LoginLimiter:   auth.NewRateLimiter(nil),
 	}
 	app.httpServer = application.NewHTTPServerWithObservability(
 		app.repositories,

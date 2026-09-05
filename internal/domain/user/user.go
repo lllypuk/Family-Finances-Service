@@ -17,6 +17,10 @@ var ErrNotFound = errors.New("user not found")
 // ErrFamilyExists — семья уже создана; единственность держит UNIQUE families.singleton.
 var ErrFamilyExists = errors.New("family already exists")
 
+// ErrLastAdmin — запись оставила бы семью без активного администратора.
+// Проверяется в транзакции репозитория: два параллельных PATCH иначе понижали бы друг друга.
+var ErrLastAdmin = errors.New("last active admin")
+
 type User struct {
 	ID        uuid.UUID `json:"id"         bson:"_id"`
 	Email     string    `json:"email"      bson:"email"`

@@ -110,6 +110,16 @@ func (m *MockUserRepository) UpdatePassword(ctx context.Context, id uuid.UUID, p
 	return args.Error(0)
 }
 
+func (m *MockUserRepository) UpdateRole(ctx context.Context, id uuid.UUID, role user.Role) error {
+	args := m.Called(ctx, id, role)
+	return args.Error(0)
+}
+
+func (m *MockUserRepository) SetActive(ctx context.Context, id uuid.UUID, active bool) error {
+	args := m.Called(ctx, id, active)
+	return args.Error(0)
+}
+
 // MockSessionRevoker — заглушка services.SessionRevoker.
 type MockSessionRevoker struct {
 	mock.Mock

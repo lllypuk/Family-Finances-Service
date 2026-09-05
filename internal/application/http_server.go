@@ -54,7 +54,8 @@ type Config struct {
 	IdleTimeout  time.Duration
 	// TrustedProxies — сети, чей X-Forwarded-For определяет c.RealIP(); пусто — только RemoteAddr.
 	TrustedProxies []*net.IPNet
-	// LoginLimiter — лимитер POST /auth/login; nil — auth.NewRateLimiter(nil).
+	// LoginLimiter — лимитер POST /auth/login; nil — auth.NewRateLimiter, причём без TrustedProxies
+	// корзина per-IP отключена: за прокси все клиенты — один адрес, лимит закрывал бы вход всей семье.
 	LoginLimiter *auth.RateLimiter
 }
 
@@ -83,7 +84,11 @@ func NewHTTPServerWithObservability(
 
 	limiter := config.LoginLimiter
 	if limiter == nil {
-		limiter = auth.NewRateLimiter(nil)
+		var opts []auth.LimiterOption
+		if len(config.TrustedProxies) == 0 {
+			opts = append(opts, auth.WithoutIPLimit())
+		}
+		limiter = auth.NewRateLimiter(nil, opts...)
 	}
 
 	e.Validator = &CustomValidator{validator: validator.New()}

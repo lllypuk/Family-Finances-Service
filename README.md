@@ -192,7 +192,7 @@ All configuration is environment variables; there are no secrets.
 | `SERVER_READ_TIMEOUT`  | `15s`                                  | HTTP server read timeout                                                    |
 | `SERVER_WRITE_TIMEOUT` | `15s`                                  | HTTP server write timeout                                                   |
 | `SERVER_IDLE_TIMEOUT`  | `60s`                                  | HTTP server idle timeout                                                    |
-| `TRUSTED_PROXIES`      | empty                                  | Comma-separated CIDRs whose `X-Forwarded-For` is trusted for the client IP (login rate limiter). Empty — only the TCP peer address counts, so behind a proxy all clients share one bucket |
+| `TRUSTED_PROXIES`      | empty                                  | Comma-separated CIDRs whose `X-Forwarded-For` is trusted for the client IP (login rate limiter). Empty — the client IP is unknown and only the per-email limit applies; behind a reverse proxy set it to the proxy network (e.g. `172.20.0.0/16`) to enable the per-IP limit |
 | `DATABASE_PATH`        | `./data/budget.db`                     | SQLite database file path                                                   |
 | `BACKUP_DIR`           | empty → `<dir(DATABASE_PATH)>/backups` | Where `POST /api/v1/backups` writes. Docker compose sets `/backups` so `VACUUM INTO` copies do not land inside the database volume |
 | `ENVIRONMENT`          | `development`                          | App environment (`development`, `production`, `test`)                       |

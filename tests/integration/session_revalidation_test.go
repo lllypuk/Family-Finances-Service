@@ -46,8 +46,7 @@ func TestSessionRevalidation_RoleDowngradeTakesEffect(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, doAuthedGET(t, testServer, memberAuth, "/api/v1/transactions"))
 
-	member.Role = user.RoleChild
-	require.NoError(t, testServer.Repos.User.Update(context.Background(), member))
+	require.NoError(t, testServer.Repos.User.UpdateRole(context.Background(), member.ID, user.RoleChild))
 
 	assert.Equal(t, http.StatusForbidden, doAuthedGET(t, testServer, memberAuth, "/api/v1/transactions"),
 		"роль всё ещё читается из выданного токена, а не из БД")
@@ -63,8 +62,7 @@ func TestSessionRevalidation_RoleUpgradeTakesEffect(t *testing.T) {
 
 	require.Equal(t, http.StatusForbidden, doAuthedGET(t, testServer, memberAuth, "/api/v1/users"))
 
-	member.Role = user.RoleAdmin
-	require.NoError(t, testServer.Repos.User.Update(context.Background(), member))
+	require.NoError(t, testServer.Repos.User.UpdateRole(context.Background(), member.ID, user.RoleAdmin))
 
 	assert.Equal(t, http.StatusOK, doAuthedGET(t, testServer, memberAuth, "/api/v1/users"))
 }

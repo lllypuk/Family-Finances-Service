@@ -26,8 +26,9 @@ var (
 	ErrValidationFailed   = errors.New("validation failed")
 	// ErrLastAdmin — попытка деактивировать или понизить последнего активного администратора.
 	// Модель однофамильная: без администратора некому заводить пользователей и
-	// открытой регистрации нет, поэтому состояние невосстановимо.
-	ErrLastAdmin = errors.New("cannot deactivate the last admin")
+	// открытой регистрации нет, поэтому состояние невосстановимо. Тот же sentinel, что
+	// и user.ErrLastAdmin: проверку делает репозиторий в транзакции.
+	ErrLastAdmin = user.ErrLastAdmin
 	// ErrCannotDeactivateSelf — администратор пытается деактивировать собственную учётную запись.
 	ErrCannotDeactivateSelf = errors.New("cannot deactivate yourself")
 )
@@ -38,8 +39,13 @@ type UserRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*user.User, error)
 	GetByEmail(ctx context.Context, email string) (*user.User, error)
 	GetAll(ctx context.Context) ([]*user.User, error)
+	// Update пишет только профиль (email, имя, фамилия).
 	Update(ctx context.Context, user *user.User) error
 	UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error
+	// UpdateRole и SetActive — одиночные записи с атомарной проверкой последнего активного
+	// администратора: user.ErrLastAdmin, если запись оставила бы семью без него.
+	UpdateRole(ctx context.Context, id uuid.UUID, role user.Role) error
+	SetActive(ctx context.Context, id uuid.UUID, active bool) error
 }
 
 // SessionRevoker отзывает bearer-сессии пользователя; реализуется *auth.Service.
@@ -213,15 +219,7 @@ func (s *userService) SetActive(ctx context.Context, id uuid.UUID, active bool, 
 		return nil
 	}
 
-	if !active {
-		if err = s.ensureNotLastAdmin(ctx, existingUser); err != nil {
-			return err
-		}
-	}
-
-	existingUser.IsActive = active
-	existingUser.UpdatedAt = time.Now()
-	if err = s.userRepo.Update(ctx, existingUser); err != nil {
+	if err = s.userRepo.SetActive(ctx, id, active); err != nil {
 		return fmt.Errorf("failed to update user: %w", err)
 	}
 
@@ -234,53 +232,14 @@ func (s *userService) SetActive(ctx context.Context, id uuid.UUID, active bool, 
 	return nil
 }
 
-// ensureNotLastAdmin возвращает ErrLastAdmin, если target — единственный активный администратор.
-func (s *userService) ensureNotLastAdmin(ctx context.Context, target *user.User) error {
-	if target.Role != user.RoleAdmin || !target.IsActive {
-		return nil
-	}
-
-	users, err := s.userRepo.GetAll(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to load users: %w", err)
-	}
-
-	for _, u := range users {
-		if u.Role == user.RoleAdmin && u.IsActive && u.ID != target.ID {
-			return nil
-		}
-	}
-
-	return ErrLastAdmin
-}
-
-// ChangeUserRole changes a user's role
+// ChangeUserRole changes a user's role; понижение последнего активного администратора — ErrLastAdmin.
 func (s *userService) ChangeUserRole(ctx context.Context, userID uuid.UUID, role user.Role) error {
-	// Validate role first
 	if !s.isValidRole(role) {
 		return ErrInvalidRole
 	}
 
-	// Get existing user
-	existingUser, err := s.GetUserByID(ctx, userID)
-	if err != nil {
-		return err
-	}
-
-	// Понижение — такая же потеря администратора, как и деактивация.
-	if role != user.RoleAdmin {
-		if err = s.ensureNotLastAdmin(ctx, existingUser); err != nil {
-			return err
-		}
-	}
-
-	// Update role
-	existingUser.Role = role
-	existingUser.UpdatedAt = time.Now()
-
-	// Save to database
-	if updateErr := s.userRepo.Update(ctx, existingUser); updateErr != nil {
-		return fmt.Errorf("failed to update user role: %w", updateErr)
+	if err := s.userRepo.UpdateRole(ctx, userID, role); err != nil {
+		return fmt.Errorf("failed to update user role: %w", err)
 	}
 
 	return nil

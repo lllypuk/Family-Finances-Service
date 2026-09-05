@@ -228,43 +228,24 @@ func (r *SQLiteRepository) GetAll(ctx context.Context) ([]*user.User, error) {
 	return users, nil
 }
 
-// Update updates an existing user
+// Update записывает профиль: email, first_name, last_name. Пароль, роль и активность пишут
+// свои методы — иначе параллельная смена пароля или PATCH откатывались бы значениями,
+// прочитанными в начале запроса.
 func (r *SQLiteRepository) Update(ctx context.Context, u *user.User) error {
-	// Validate UUID parameters to prevent injection attacks
 	if err := validation.ValidateUUID(u.ID); err != nil {
 		return fmt.Errorf("invalid user ID: %w", err)
 	}
-
-	// Get single family ID
-	familyID, err := r.getSingleFamilyID(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get family ID: %w", err)
+	if err := validation.ValidateEmail(u.Email); err != nil {
+		return fmt.Errorf("invalid user email: %w", err)
 	}
-
-	// Validate email to prevent injection attacks
-	if validationErr := validation.ValidateEmail(u.Email); validationErr != nil {
-		return fmt.Errorf("invalid user email: %w", validationErr)
-	}
-
-	// Sanitize email before updating
 	u.Email = validation.SanitizeEmail(u.Email)
-
-	// Update timestamp
 	u.UpdatedAt = time.Now()
 
-	query := `
-		UPDATE users
-		SET email = ?, password_hash = ?, first_name = ?, last_name = ?,
-			role = ?, family_id = ?, is_active = ?, updated_at = ?
-		WHERE id = ?`
-
-	result, err := r.db.ExecContext(ctx, query,
-		u.Email, u.Password, u.FirstName, u.LastName,
-		string(u.Role), familyID.String(), boolToInt(u.IsActive), u.UpdatedAt, u.ID.String(),
+	result, err := r.db.ExecContext(ctx,
+		`UPDATE users SET email = ?, first_name = ?, last_name = ?, updated_at = ? WHERE id = ?`,
+		u.Email, u.FirstName, u.LastName, u.UpdatedAt, u.ID.String(),
 	)
-
 	if err != nil {
-		// Check for unique constraint violation (email already exists)
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			return fmt.Errorf("user with email %s already exists", u.Email)
 		}
@@ -275,12 +256,83 @@ func (r *SQLiteRepository) Update(ctx context.Context, u *user.User) error {
 	if err != nil {
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
-
 	if rowsAffected == 0 {
-		return fmt.Errorf("user with id %s not found", u.ID)
+		return fmt.Errorf("user with id %s: %w", u.ID, user.ErrNotFound)
 	}
 
 	return nil
+}
+
+// UpdateRole меняет роль; понижение последнего активного администратора — user.ErrLastAdmin.
+func (r *SQLiteRepository) UpdateRole(ctx context.Context, id uuid.UUID, role user.Role) error {
+	return r.updateGuarded(ctx, id, role != user.RoleAdmin,
+		`UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, string(role), id.String())
+}
+
+// SetActive включает или выключает пользователя; выключение последнего активного
+// администратора — user.ErrLastAdmin.
+func (r *SQLiteRepository) SetActive(ctx context.Context, id uuid.UUID, active bool) error {
+	return r.updateGuarded(ctx, id, !active,
+		`UPDATE users SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, boolToInt(active), id.String())
+}
+
+// updateGuarded выполняет query в одной транзакции с проверкой «последний активный админ»
+// (только при dropsAdmin). _txlock=immediate берёт write-lock уже на BeginTx, поэтому два
+// параллельных вызова видят результат друг друга.
+func (r *SQLiteRepository) updateGuarded(
+	ctx context.Context, id uuid.UUID, dropsAdmin bool, query string, args ...any,
+) error {
+	if err := validation.ValidateUUID(id); err != nil {
+		return fmt.Errorf("invalid id parameter: %w", err)
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if dropsAdmin {
+		last, lastErr := isLastActiveAdmin(ctx, tx, id)
+		if lastErr != nil {
+			return lastErr
+		}
+		if last {
+			return user.ErrLastAdmin
+		}
+	}
+
+	result, err := tx.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("failed to update user: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("user with id %s: %w", id, user.ErrNotFound)
+	}
+
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	return nil
+}
+
+// isLastActiveAdmin — строка id активный администратор, а других активных администраторов нет.
+func isLastActiveAdmin(ctx context.Context, tx *sql.Tx, id uuid.UUID) (bool, error) {
+	var self, others int
+	err := tx.QueryRowContext(ctx, `
+		SELECT
+			(SELECT COUNT(*) FROM users WHERE id = ? AND role = ? AND is_active = 1),
+			(SELECT COUNT(*) FROM users WHERE id != ? AND role = ? AND is_active = 1)`,
+		id.String(), string(user.RoleAdmin), id.String(), string(user.RoleAdmin),
+	).Scan(&self, &others)
+	if err != nil {
+		return false, fmt.Errorf("failed to count active admins: %w", err)
+	}
+	return self == 1 && others == 0, nil
 }
 
 // UpdatePassword записывает новый хеш пароля; активность не проверяется — админ может

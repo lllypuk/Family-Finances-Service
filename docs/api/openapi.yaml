@@ -188,7 +188,8 @@ paths:
       summary: Сменить свой пароль
       description: |
         Доступно любой роли. Успешная смена отзывает все сессии пользователя, кроме текущей (A-01).
-        Неверный `current_password` — `401`.
+        Неверный `current_password` — `401 INVALID_CREDENTIALS`; сессия при этом жива,
+        разлогинивать клиента не нужно.
       requestBody:
         required: true
         content:
@@ -196,7 +197,13 @@ paths:
             schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
       responses:
         '204': { description: Пароль изменён }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+        '401':
+          description: |
+            `UNAUTHORIZED` — токен отсутствует, просрочен или отозван;
+            `INVALID_CREDENTIALS` — неверный `current_password`. Различать по `error.code`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
 
   /api/v1/family:

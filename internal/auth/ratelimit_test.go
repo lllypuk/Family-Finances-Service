@@ -60,6 +60,23 @@ func TestRateLimiter_IPLimit_CountsAcrossEmails(t *testing.T) {
 	assert.False(t, ok, "перебор email с одного IP ограничен лимитом IP")
 }
 
+// Без доверенных прокси IP всех клиентов один и тот же: корзина per-IP выключена, email — нет.
+func TestRateLimiter_WithoutIPLimit_OnlyEmailCounts(t *testing.T) {
+	clock := newFakeClock()
+	l := auth.NewRateLimiter(clock.Now, auth.WithoutIPLimit())
+
+	for i := range auth.EmailLimit {
+		_, ok := l.Allow(limiterIP, limiterEmail)
+		require.True(t, ok, "попытка %d с одного IP должна пройти", i+1)
+	}
+
+	retry, ok := l.Allow(limiterIP, limiterEmail)
+	assert.False(t, ok)
+	assert.Equal(t, auth.EmailWindow, retry, "блок — по email, а не по IP")
+	_, ok = l.Allow(limiterIP, "other@example.com")
+	assert.True(t, ok, "другой email с того же IP не заблокирован")
+}
+
 func TestRateLimiter_WindowSlides(t *testing.T) {
 	clock := newFakeClock()
 	l := auth.NewRateLimiter(clock.Now)

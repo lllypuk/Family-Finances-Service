@@ -129,13 +129,21 @@ has a catch-all, an unknown `/api/v1/...` path is `401` without a token and `404
   `max=72` — policy lives on the password-setting paths, so tightening it never locks existing users out.
 - **Rate limiter** (`internal/auth/ratelimit.go`, in-memory sliding window): 10 attempts per IP per 5 min, 20 per
   email per hour, `429 RATE_LIMITED` + `Retry-After`; a successful login resets the email counter, a blocked
-  attempt is not counted. The IP comes from `e.IPExtractor = auth.IPExtractor(config.TrustedProxies)`:
-  with `TRUSTED_PROXIES` empty only `RemoteAddr` counts, so behind a proxy every client shares one bucket until
-  the proxy CIDR is listed.
+  attempt is not counted. The IP comes from `e.IPExtractor = auth.IPExtractor(config.TrustedProxies)`.
+  **With `TRUSTED_PROXIES` empty the per-IP bucket is off** (`auth.WithoutIPLimit()`, wired in
+  `NewHTTPServerWithObservability` when `Config.LoginLimiter` is nil): behind a proxy every client would share
+  the proxy's address and ten stray failures would lock the whole family out, so only the per-email limit
+  applies until the proxy CIDR is listed. Integration tests that need the IP limit pass
+  `testhelpers.WithTrustedProxies(t, "192.0.2.0/24")` (httptest's `RemoteAddr`).
 - **Role gates** are built from `auth.RequireRole(roles...)`: `adminOnly` for `/api/v1/users`,
   `DELETE /api/v1/categories/:id`, `/api/v1/backups` and `PUT /api/v1/family`; `financeAccess` (admin or member)
   for categories/transactions/budgets/reports/stats; `GET /api/v1/family` and the `/auth/*`, `/me*` routes are
   open to any authenticated role. Wrong role → `403 FORBIDDEN`.
+- **User writes are column-scoped.** `UserRepository.Update` writes only `email`/`first_name`/`last_name`;
+  password, role and `is_active` go through `UpdatePassword`, `UpdateRole`, `SetActive`, so an overlapping
+  `PUT /me` cannot write a stale hash or `is_active` back. `UpdateRole`/`SetActive` run the "last active admin"
+  check and the write in one `BeginTx` (`_txlock=immediate` serialises them) and return `user.ErrLastAdmin`
+  (= `services.ErrLastAdmin`) — there is no read-then-check in the service any more.
 - **Errors outside handlers** (`internal/application/error_handler.go`, `newAPIErrorHandler`): `RequireBearer` and
   `RequireRole` return `*echo.HTTPError` (they cannot import `handlers` — cycle), and the error handler renders
   the JSON envelope for every error, router 404 and panics included. A non-`*echo.HTTPError` becomes a bare

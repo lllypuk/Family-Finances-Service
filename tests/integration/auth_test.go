@@ -216,9 +216,10 @@ func TestAuth_Login_Errors(t *testing.T) {
 	})
 }
 
-// Лимитер на полном стеке: httptest даёт всем запросам один RemoteAddr, поэтому 11-я попытка — 429.
+// Лимитер на полном стеке: httptest даёт всем запросам один RemoteAddr (192.0.2.1), поэтому
+// 11-я попытка — 429. Корзина per-IP включена только с TRUSTED_PROXIES.
 func TestAuth_Login_RateLimited(t *testing.T) {
-	ts := testhelpers.SetupHTTPServer(t)
+	ts := testhelpers.SetupHTTPServer(t, testhelpers.WithTrustedProxies(t, "192.0.2.0/24"))
 	member := createBearerMember(t, ts)
 
 	for range auth.IPLimit {
@@ -236,8 +237,9 @@ func TestAuth_Login_RateLimited(t *testing.T) {
 	assert.NotEmpty(t, rec.Header().Get(echo.HeaderRetryAfter))
 }
 
-// X-Forwarded-For принимается только от TRUSTED_PROXIES: без них подмена заголовка не даёт
-// новых «IP» лимитеру, с ними — каждое значение считается отдельным клиентом.
+// X-Forwarded-For принимается только от TRUSTED_PROXIES: без них реальный IP неизвестен и
+// корзина per-IP выключена (считается только email), с ними — каждое значение X-Forwarded-For
+// отдельный клиент.
 func TestAuth_Login_XForwardedFor(t *testing.T) {
 	spoofed := func(ts *testhelpers.TestServer, email string, i int) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBufferString(
@@ -249,15 +251,16 @@ func TestAuth_Login_XForwardedFor(t *testing.T) {
 		return rec
 	}
 
-	t.Run("ignored without trusted proxies", func(t *testing.T) {
+	t.Run("only the email limit without trusted proxies", func(t *testing.T) {
 		ts := testhelpers.SetupHTTPServer(t)
 		member := createBearerMember(t, ts)
 
-		for i := range auth.IPLimit {
-			require.Equal(t, http.StatusUnauthorized, spoofed(ts, member.Email, i).Code)
+		for i := range auth.EmailLimit {
+			require.Equal(t, http.StatusUnauthorized, spoofed(ts, member.Email, i).Code,
+				"без TRUSTED_PROXIES корзина per-IP выключена: %d-я попытка с одного RemoteAddr", i+1)
 		}
-		assert.Equal(t, http.StatusTooManyRequests, spoofed(ts, member.Email, auth.IPLimit).Code,
-			"подменённый X-Forwarded-For не должен обходить лимит по IP")
+		assert.Equal(t, http.StatusTooManyRequests, spoofed(ts, member.Email, auth.EmailLimit).Code,
+			"лимит по email действует независимо от IP")
 	})
 
 	t.Run("honoured from a trusted proxy", func(t *testing.T) {

@@ -25,21 +25,37 @@ const (
 type RateLimiter struct {
 	mu     sync.Mutex
 	now    func() time.Time
+	perIP  bool
 	ips    map[string][]time.Time
 	emails map[string][]time.Time
 	calls  int
 }
 
+// LimiterOption настраивает RateLimiter.
+type LimiterOption func(*RateLimiter)
+
+// WithoutIPLimit оставляет только лимит по email. Нужен, когда реальный IP клиента неизвестен
+// (за прокси без TRUSTED_PROXIES все клиенты — один адрес): иначе десять чужих неудач
+// закрывали бы вход всей семье.
+func WithoutIPLimit() LimiterOption {
+	return func(l *RateLimiter) { l.perIP = false }
+}
+
 // NewRateLimiter создаёт лимитер; nil now — time.Now.
-func NewRateLimiter(now func() time.Time) *RateLimiter {
+func NewRateLimiter(now func() time.Time, opts ...LimiterOption) *RateLimiter {
 	if now == nil {
 		now = time.Now
 	}
-	return &RateLimiter{
+	l := &RateLimiter{
 		now:    now,
+		perIP:  true,
 		ips:    map[string][]time.Time{},
 		emails: map[string][]time.Time{},
 	}
+	for _, opt := range opts {
+		opt(l)
+	}
+	return l
 }
 
 // Allow регистрирует попытку; при блокировке попытка не записывается, retryAfter — до конца окна.
@@ -53,8 +69,11 @@ func (l *RateLimiter) Allow(ip, email string) (time.Duration, bool) {
 		l.cleanup(now)
 	}
 
-	ipHits := prune(l.ips[ip], now.Add(-IPWindow))
 	emailHits := prune(l.emails[email], now.Add(-EmailWindow))
+	var ipHits []time.Time
+	if l.perIP {
+		ipHits = prune(l.ips[ip], now.Add(-IPWindow))
+	}
 
 	if len(ipHits) >= IPLimit {
 		return retryAfter(ipHits[0], IPWindow, now), false
@@ -63,7 +82,9 @@ func (l *RateLimiter) Allow(ip, email string) (time.Duration, bool) {
 		return retryAfter(emailHits[0], EmailWindow, now), false
 	}
 
-	l.ips[ip] = append(ipHits, now)
+	if l.perIP {
+		l.ips[ip] = append(ipHits, now)
+	}
 	l.emails[email] = append(emailHits, now)
 	return 0, true
 }
