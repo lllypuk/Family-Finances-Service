@@ -289,6 +289,11 @@ func customHTTPErrorHandler(renderer *TemplateRenderer) echo.HTTPErrorHandler {
 			return
 		}
 
+		if middleware.IsAPIPath(c.Request().URL.Path) {
+			writeAPIError(c, code, err, he)
+			return
+		}
+
 		// Для HTMX запросов возвращаем простой текст
 		if middleware.IsHTMXRequest(c) {
 			_ = c.String(code, fmt.Sprintf("Error: %v", msg))
@@ -316,6 +321,27 @@ func customHTTPErrorHandler(renderer *TemplateRenderer) echo.HTTPErrorHandler {
 
 		_ = c.HTMLBlob(code, buf.Bytes())
 	}
+}
+
+// writeAPIError отдаёт ошибку JSON-роута в общем envelope: до хендлеров
+// доходят не все ошибки (404 роутера, 405, отбитый CSRF), а клиент API читает
+// только {"error":…}.
+func writeAPIError(c echo.Context, code int, err error, he *echo.HTTPError) {
+	errCode := ""
+	if errors.Is(err, middleware.ErrCSRFTokenInvalid) {
+		errCode = handlers.ErrCodeCSRFTokenInvalid
+	}
+
+	// Текст берём только из echo.HTTPError: сообщение произвольной ошибки
+	// наружу не отдаём (см. ветку выше).
+	message := http.StatusText(code)
+	if he != nil {
+		if text, ok := he.Message.(string); ok && text != "" {
+			message = text
+		}
+	}
+
+	_ = handlers.RespondAPIError(c, code, errCode, message)
 }
 
 // getErrorTitle возвращает заголовок для страницы ошибки

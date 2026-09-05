@@ -22,6 +22,15 @@ const (
 	// ErrCodeForbidden signals a session whose role is not allowed on the route
 	// (returned by RequireAPIRole, see api_auth.go).
 	ErrCodeForbidden = "FORBIDDEN"
+	// ErrCodeNotFound signals an unknown route or a missing resource (404 outside a handler).
+	ErrCodeNotFound = "NOT_FOUND"
+	// ErrCodeMethodNotAllowed signals a method not registered on the route.
+	ErrCodeMethodNotAllowed = "METHOD_NOT_ALLOWED"
+	// ErrCodeBadRequest signals a request rejected before reaching a handler.
+	ErrCodeBadRequest = "BAD_REQUEST"
+	// ErrCodeCSRFTokenInvalid signals a missing or mismatched X-Csrf-Token on a write.
+	//nolint:gosec // G101: это код ошибки в ответе API, а не учётные данные.
+	ErrCodeCSRFTokenInvalid = "CSRF_TOKEN_INVALID"
 	// ErrCodeInternal signals a server-side failure; details stay in the log only.
 	ErrCodeInternal = "INTERNAL_ERROR"
 	// ErrCodeCannotDeleteSelf signals an attempt to delete the session's own user.

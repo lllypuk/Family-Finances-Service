@@ -220,19 +220,16 @@ func (r *SQLiteRepository) GetAll(ctx context.Context) ([]*report.Report, error)
 		return nil, fmt.Errorf("failed to get family ID: %w", err)
 	}
 
-	// Set default pagination values
-	limit := 100 // Default limit for reports
-	offset := 0
-
+	// Без LIMIT: окно режет вызывающий, а усечение здесь занижало бы
+	// meta.pagination.total и делало недостижимой любую страницу после сотой.
 	query := `
 		SELECT id, name, type, period, start_date, end_date, data,
 			   family_id, generated_by, generated_at
 		FROM reports
 		WHERE family_id = ?
-		ORDER BY generated_at DESC
-		LIMIT ? OFFSET ?`
+		ORDER BY generated_at DESC`
 
-	rows, err := r.db.QueryContext(ctx, query, sqlitehelpers.UUIDToString(familyID), limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, sqlitehelpers.UUIDToString(familyID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get reports by family id: %w", err)
 	}

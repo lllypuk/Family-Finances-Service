@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -15,6 +16,7 @@ import (
 
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/testhelpers"
 )
@@ -321,4 +323,35 @@ func TestAPIBulkDelete_Transactions_RejectsBadBodies(t *testing.T) {
 			assert.Equal(t, tc.want, rec.Code, "тело: %s", rec.Body.String())
 		})
 	}
+}
+
+// reportsBeyondRepoLimit — на сотне репозиторий отчётов раньше обрезал выборку,
+// поэтому total занижался, а страницы после сотой были пустыми.
+const reportsBeyondRepoLimit = 101
+
+func TestAPIPagination_Reports_TotalBeyondRepositoryLimit(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	testServer.Auth(t)
+
+	start := time.Now().AddDate(0, 0, -1)
+	for i := range reportsBeyondRepoLimit {
+		rep := report.NewReport(
+			fmt.Sprintf("Report %d", i),
+			report.TypeExpenses,
+			report.PeriodMonthly,
+			testServer.AuthUser.ID,
+			start,
+			start.AddDate(0, 0, 1),
+		)
+		require.NoError(t, testServer.Repos.Report.Create(t.Context(), rep))
+	}
+
+	code, response := getJSON[handlers.APIResponse[[]handlers.ReportResponse]](
+		t, testServer, "/api/v1/reports?limit=1&offset=100",
+	)
+
+	require.Equal(t, http.StatusOK, code)
+	require.NotNil(t, response.Meta.Pagination)
+	assert.Equal(t, reportsBeyondRepoLimit, response.Meta.Pagination.Total)
+	assert.Len(t, response.Data, 1)
 }
