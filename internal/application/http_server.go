@@ -37,6 +37,7 @@ type HTTPServer struct {
 
 	// API Handlers
 	userHandler        *handlers.UserHandler
+	familyHandler      *handlers.FamilyHandler
 	categoryHandler    *handlers.CategoryHandler
 	transactionHandler *handlers.TransactionHandler
 	budgetHandler      *handlers.BudgetHandler
@@ -126,6 +127,7 @@ func NewHTTPServerWithObservability(
 
 		// Инициализация API handlers
 		userHandler:        handlers.NewUserHandler(repositories, services.User),
+		familyHandler:      handlers.NewFamilyHandler(services.Family),
 		categoryHandler:    handlers.NewCategoryHandler(repositories, services.Category),
 		transactionHandler: handlers.NewTransactionHandler(repositories, services.Transaction),
 		budgetHandler:      handlers.NewBudgetHandler(repositories, services.Budget),
@@ -210,11 +212,18 @@ func (s *HTTPServer) setupRoutes() {
 	adminOnly := handlers.RequireAPIRole(user.RoleAdmin)
 	financeAccess := handlers.RequireAPIRole(user.RoleAdmin, user.RoleMember)
 
+	// Семья: читают все роли, меняет только админ.
+	family := api.Group("/family")
+	family.GET("", s.familyHandler.GetFamily)
+	family.PUT("", s.familyHandler.UpdateFamily, adminOnly)
+
 	// Маршруты для пользователей — целиком под админом, как /users в вебе.
 	users := api.Group("/users", adminOnly)
 	users.POST("", s.userHandler.CreateUser)
+	users.GET("", s.userHandler.GetUsers)
 	users.GET("/:id", s.userHandler.GetUserByID)
 	users.PUT("/:id", s.userHandler.UpdateUser)
+	users.PATCH("/:id", s.userHandler.PatchUser)
 	users.DELETE("/:id", s.userHandler.DeleteUser)
 
 	// Маршруты для категорий

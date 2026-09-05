@@ -131,11 +131,11 @@
   `user_service_test.go`, `tests/integration/users_test.go`, `tests/integration/families_test.go`,
   `docs/api/openapi.yaml`
 
-- [ ] `GET /api/v1/users` (admin) через `UserService.GetUsers`
-- [ ] зарегистрировать `GET /api/v1/family` и `PUT /api/v1/family` (admin); `GetFamilyMembers` удалить — дублирует `GET /users`
-- [ ] `PATCH /api/v1/users/:id {role}` через `ChangeUserRole`; в сервисе — запрет понижать последнего админа (`ensureNotLastAdmin` вызывать и из `ChangeUserRole`)
-- [ ] тесты: список для admin — 200, для member — 403; понижение единственного админа — 409 `LAST_ADMIN`
-- [ ] `openapi.yaml` обновлён; `make fmt && make test && make lint` — зелёные
+- [x] `GET /api/v1/users` (admin) через `UserService.GetUsers`
+- [x] зарегистрировать `GET /api/v1/family` и `PUT /api/v1/family` (admin); `GetFamilyMembers` удалить — дублирует `GET /users`
+- [x] `PATCH /api/v1/users/:id {role}` через `ChangeUserRole`; в сервисе — запрет понижать последнего админа (`ensureNotLastAdmin` вызывать и из `ChangeUserRole`)
+- [x] тесты: список для admin — 200, для member — 403; понижение единственного админа — 409 `LAST_ADMIN` (заодно `DELETE` с `ErrLastAdmin` переведён с 400 на 409 — контракт уже описывал 409)
+- [x] `openapi.yaml` обновлён (правок не потребовалось: план 01 уже описал все три роута); `make fmt && make test && make lint` — зелёные
 
 ### Task 5: Бэкапы через API
 

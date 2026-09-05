@@ -53,7 +53,7 @@ func (h *UserHandler) handleServiceError(c echo.Context, err error) error {
 	case errors.Is(err, services.ErrCannotDeleteSelf):
 		return respondError(c, http.StatusBadRequest, ErrCodeCannotDeleteSelf, ErrMessageCannotDeleteSelf)
 	case errors.Is(err, services.ErrLastAdmin):
-		return respondError(c, http.StatusBadRequest, ErrCodeLastAdmin, ErrMessageLastAdmin,
+		return respondError(c, http.StatusConflict, ErrCodeLastAdmin, ErrMessageLastAdmin,
 			"The family must keep at least one administrator")
 	case errors.Is(err, services.ErrInvalidRole):
 		return respondError(c, http.StatusBadRequest, "INVALID_ROLE", "Invalid role",
@@ -97,15 +97,7 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 	}
 
 	// Convert to API response
-	response := UserResponse{
-		ID:        createdUser.ID,
-		Email:     createdUser.Email,
-		FirstName: createdUser.FirstName,
-		LastName:  createdUser.LastName,
-		Role:      string(createdUser.Role),
-		CreatedAt: createdUser.CreatedAt,
-		UpdatedAt: createdUser.UpdatedAt,
-	}
+	response := toUserResponse(createdUser)
 
 	return c.JSON(http.StatusCreated, APIResponse[UserResponse]{
 		Data: response,
@@ -141,15 +133,7 @@ func (h *UserHandler) GetUserByID(c echo.Context) error {
 	}
 
 	// Convert to API response
-	response := UserResponse{
-		ID:        foundUser.ID,
-		Email:     foundUser.Email,
-		FirstName: foundUser.FirstName,
-		LastName:  foundUser.LastName,
-		Role:      string(foundUser.Role),
-		CreatedAt: foundUser.CreatedAt,
-		UpdatedAt: foundUser.UpdatedAt,
-	}
+	response := toUserResponse(foundUser)
 
 	return c.JSON(http.StatusOK, APIResponse[UserResponse]{
 		Data: response,
@@ -208,15 +192,7 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 	}
 
 	// Convert to API response
-	response := UserResponse{
-		ID:        updatedUser.ID,
-		Email:     updatedUser.Email,
-		FirstName: updatedUser.FirstName,
-		LastName:  updatedUser.LastName,
-		Role:      string(updatedUser.Role),
-		CreatedAt: updatedUser.CreatedAt,
-		UpdatedAt: updatedUser.UpdatedAt,
-	}
+	response := toUserResponse(updatedUser)
 
 	return c.JSON(http.StatusOK, APIResponse[UserResponse]{
 		Data: response,
@@ -259,4 +235,67 @@ func (h *UserHandler) DeleteUser(c echo.Context) error {
 	}
 
 	return c.NoContent(http.StatusNoContent)
+}
+
+// toUserResponse раскладывает доменного пользователя в API-форму.
+func toUserResponse(u *user.User) UserResponse {
+	return UserResponse{
+		ID:        u.ID,
+		Email:     u.Email,
+		FirstName: u.FirstName,
+		LastName:  u.LastName,
+		Role:      string(u.Role),
+		CreatedAt: u.CreatedAt,
+		UpdatedAt: u.UpdatedAt,
+	}
+}
+
+// GetUsers отдаёт всех пользователей семьи; группа /users закрыта adminOnly.
+func (h *UserHandler) GetUsers(c echo.Context) error {
+	users, err := h.userService.GetUsers(c.Request().Context())
+	if err != nil {
+		return h.handleServiceError(c, err)
+	}
+
+	response := make([]UserResponse, 0, len(users))
+	for _, u := range users {
+		response = append(response, toUserResponse(u))
+	}
+
+	return respondAPI(c, http.StatusOK, response)
+}
+
+// PatchUser меняет роль пользователя. Понижение последнего администратора
+// отбивается сервисом (ErrLastAdmin -> 409).
+func (h *UserHandler) PatchUser(c echo.Context) error {
+	idParam := c.Param("id")
+	id, err := uuid.Parse(idParam)
+	if err != nil {
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
+	}
+
+	var req PatchUserRequest
+	if bindErr := c.Bind(&req); bindErr != nil {
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest, bindErr.Error())
+	}
+
+	if validationErr := h.validator.Struct(&req); validationErr != nil {
+		return respondError(c, http.StatusBadRequest, ErrCodeValidationError, "Validation failed",
+			buildValidationErrors(validationErr))
+	}
+	if req.Role == nil {
+		return respondError(c, http.StatusBadRequest, ErrCodeValidationError, "Validation failed",
+			"At least one field must be provided")
+	}
+
+	if roleErr := h.userService.ChangeUserRole(c.Request().Context(), id, user.Role(*req.Role)); roleErr != nil {
+		return h.handleServiceError(c, roleErr)
+	}
+
+	updatedUser, err := h.userService.GetUserByID(c.Request().Context(), id)
+	if err != nil {
+		return h.handleServiceError(c, err)
+	}
+
+	return respondAPI(c, http.StatusOK, toUserResponse(updatedUser))
 }

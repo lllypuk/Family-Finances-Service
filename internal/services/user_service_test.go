@@ -424,6 +424,18 @@ func TestUserService_ChangeUserRole(t *testing.T) {
 		ID:   uuid.New(),
 		Role: user.RoleMember,
 	}
+	onlyAdmin := &user.User{
+		ID:   uuid.New(),
+		Role: user.RoleAdmin,
+	}
+	otherAdmin := &user.User{
+		ID:   uuid.New(),
+		Role: user.RoleAdmin,
+	}
+	plainMember := &user.User{
+		ID:   uuid.New(),
+		Role: user.RoleMember,
+	}
 
 	tests := []struct {
 		name      string
@@ -461,6 +473,30 @@ func TestUserService_ChangeUserRole(t *testing.T) {
 			},
 			wantError: true,
 			errorType: services.ErrUserNotFound,
+		},
+		{
+			// Понижение последнего админа оставляет семью без того, кто
+			// заводит пользователей — тот же запрет, что и на удаление.
+			name:   "Error - Demoting the last admin",
+			userID: onlyAdmin.ID,
+			role:   user.RoleMember,
+			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
+				userRepo.On("GetByID", mock.Anything, onlyAdmin.ID).Return(onlyAdmin, nil)
+				userRepo.On("GetAll", mock.Anything).Return([]*user.User{onlyAdmin, plainMember}, nil)
+			},
+			wantError: true,
+			errorType: services.ErrLastAdmin,
+		},
+		{
+			name:   "Success - Demoting an admin while another admin remains",
+			userID: onlyAdmin.ID,
+			role:   user.RoleMember,
+			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
+				userRepo.On("GetByID", mock.Anything, onlyAdmin.ID).Return(onlyAdmin, nil)
+				userRepo.On("GetAll", mock.Anything).Return([]*user.User{onlyAdmin, otherAdmin}, nil)
+				userRepo.On("Update", mock.Anything, mock.AnythingOfType("*user.User")).Return(nil)
+			},
+			wantError: false,
 		},
 	}
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/testhelpers"
 )
 
@@ -210,5 +212,71 @@ func TestUserHandler_Integration(t *testing.T) {
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusNotFound, rec.Code)
+	})
+}
+
+// TestUsersAPI_ListAndPatch покрывает GET /api/v1/users и PATCH /api/v1/users/:id.
+func TestUsersAPI_ListAndPatch(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	adminAuth := testServer.Auth(t)
+	member, memberAuth := testServer.AuthAs(t, user.RoleMember)
+
+	do := func(t *testing.T, method, path, body string, auth *testhelpers.AuthSession) *httptest.ResponseRecorder {
+		t.Helper()
+
+		var reader io.Reader
+		if body != "" {
+			reader = bytes.NewBufferString(body)
+		}
+		req := httptest.NewRequest(method, path, reader)
+		req.Header.Set("Content-Type", "application/json")
+		auth.Apply(req)
+		rec := httptest.NewRecorder()
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		return rec
+	}
+
+	t.Run("List_Admin", func(t *testing.T) {
+		rec := do(t, http.MethodGet, "/api/v1/users", "", adminAuth)
+		require.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
+
+		var response handlers.APIResponse[[]handlers.UserResponse]
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		emails := make([]string, 0, len(response.Data))
+		for _, u := range response.Data {
+			emails = append(emails, u.Email)
+		}
+		assert.Contains(t, emails, testServer.AuthUser.Email)
+		assert.Contains(t, emails, member.Email)
+	})
+
+	t.Run("List_MemberForbidden", func(t *testing.T) {
+		rec := do(t, http.MethodGet, "/api/v1/users", "", memberAuth)
+		assert.Equal(t, http.StatusForbidden, rec.Code, "тело: %s", rec.Body.String())
+	})
+
+	// Понижение единственного админа оставило бы семью без администратора.
+	t.Run("Patch_LastAdminConflict", func(t *testing.T) {
+		rec := do(t, http.MethodPatch, "/api/v1/users/"+testServer.AuthUser.ID.String(),
+			`{"role":"member"}`, adminAuth)
+		require.Equal(t, http.StatusConflict, rec.Code, "тело: %s", rec.Body.String())
+
+		var response handlers.ErrorResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		assert.Equal(t, "LAST_ADMIN", response.Error.Code)
+	})
+
+	t.Run("Patch_PromotesMember", func(t *testing.T) {
+		rec := do(t, http.MethodPatch, "/api/v1/users/"+member.ID.String(), `{"role":"admin"}`, adminAuth)
+		require.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
+
+		var response handlers.APIResponse[handlers.UserResponse]
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		assert.Equal(t, "admin", response.Data.Role)
+
+		stored, err := testServer.Repos.User.GetByID(context.Background(), member.ID)
+		require.NoError(t, err)
+		assert.Equal(t, user.RoleAdmin, stored.Role)
 	})
 }

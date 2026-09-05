@@ -616,7 +616,7 @@ func TestUserHandler_DeleteUser_SelfDeletionRejected(t *testing.T) {
 }
 
 // Последний администратор защищён в userService.DeleteUser; API обязан
-// перевести этот отказ в 400, а не в 500.
+// перевести этот отказ в 409, а не в 500.
 func TestUserHandler_DeleteUser_LastAdminRejected(t *testing.T) {
 	service := &MockUserService{}
 	targetID := uuid.New()
@@ -624,7 +624,7 @@ func TestUserHandler_DeleteUser_LastAdminRejected(t *testing.T) {
 
 	rec := deleteUserRequest(t, service, uuid.New(), targetID)
 
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, http.StatusConflict, rec.Code)
 
 	var response handlers.ErrorResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
@@ -639,4 +639,163 @@ func TestUserHandler_DeleteUser_NoSession(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	service.AssertNotCalled(t, "DeleteUser", mock.Anything, mock.Anything)
+}
+
+func listUsersRequest(t *testing.T, service *MockUserService) *httptest.ResponseRecorder {
+	t.Helper()
+
+	e := echo.New()
+	handler := handlers.NewUserHandler(&handlers.Repositories{}, service)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
+	rec := httptest.NewRecorder()
+	require.NoError(t, handler.GetUsers(e.NewContext(req, rec)))
+
+	return rec
+}
+
+func patchUserRequest(t *testing.T, service *MockUserService, targetID, body string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	e := echo.New()
+	handler := handlers.NewUserHandler(&handlers.Repositories{}, service)
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/users/"+targetID, bytes.NewBufferString(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(targetID)
+
+	require.NoError(t, handler.PatchUser(c))
+
+	return rec
+}
+
+func TestUserHandler_GetUsers_Success(t *testing.T) {
+	service := &MockUserService{}
+	users := []*user.User{
+		{ID: uuid.New(), Email: "admin@family.com", FirstName: "A", LastName: "Admin", Role: user.RoleAdmin},
+		{ID: uuid.New(), Email: "member@family.com", FirstName: "M", LastName: "Member", Role: user.RoleMember},
+	}
+	service.On("GetUsers", mock.Anything).Return(users, nil)
+
+	rec := listUsersRequest(t, service)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var response handlers.APIResponse[[]handlers.UserResponse]
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Data, 2)
+	assert.Equal(t, users[0].Email, response.Data[0].Email)
+	assert.Equal(t, "member", response.Data[1].Role)
+
+	service.AssertExpectations(t)
+}
+
+func TestUserHandler_GetUsers_ServiceError(t *testing.T) {
+	service := &MockUserService{}
+	service.On("GetUsers", mock.Anything).Return(nil, errors.New("database down"))
+
+	rec := listUsersRequest(t, service)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "INTERNAL_ERROR", response.Error.Code)
+
+	service.AssertExpectations(t)
+}
+
+func TestUserHandler_PatchUser_ChangesRole(t *testing.T) {
+	service := &MockUserService{}
+	targetID := uuid.New()
+	service.On("ChangeUserRole", mock.Anything, targetID, user.RoleMember).Return(nil)
+	service.On("GetUserByID", mock.Anything, targetID).Return(&user.User{
+		ID:    targetID,
+		Email: "member@family.com",
+		Role:  user.RoleMember,
+	}, nil)
+
+	rec := patchUserRequest(t, service, targetID.String(), `{"role":"member"}`)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var response handlers.APIResponse[handlers.UserResponse]
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "member", response.Data.Role)
+
+	service.AssertExpectations(t)
+}
+
+// Понижение единственного администратора отбивает сервис; API отдаёт 409.
+func TestUserHandler_PatchUser_LastAdminRejected(t *testing.T) {
+	service := &MockUserService{}
+	targetID := uuid.New()
+	service.On("ChangeUserRole", mock.Anything, targetID, user.RoleMember).Return(services.ErrLastAdmin)
+
+	rec := patchUserRequest(t, service, targetID.String(), `{"role":"member"}`)
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "LAST_ADMIN", response.Error.Code)
+
+	service.AssertExpectations(t)
+}
+
+func TestUserHandler_PatchUser_InvalidRole(t *testing.T) {
+	service := &MockUserService{}
+
+	rec := patchUserRequest(t, service, uuid.New().String(), `{"role":"owner"}`)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
+
+	service.AssertNotCalled(t, "ChangeUserRole", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestUserHandler_PatchUser_EmptyBody(t *testing.T) {
+	service := &MockUserService{}
+
+	rec := patchUserRequest(t, service, uuid.New().String(), `{}`)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	service.AssertNotCalled(t, "ChangeUserRole", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestUserHandler_PatchUser_InvalidID(t *testing.T) {
+	service := &MockUserService{}
+
+	rec := patchUserRequest(t, service, "not-a-uuid", `{"role":"member"}`)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "INVALID_ID", response.Error.Code)
+
+	service.AssertNotCalled(t, "ChangeUserRole", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestUserHandler_PatchUser_UserNotFound(t *testing.T) {
+	service := &MockUserService{}
+	targetID := uuid.New()
+	service.On("ChangeUserRole", mock.Anything, targetID, user.RoleChild).Return(services.ErrUserNotFound)
+
+	rec := patchUserRequest(t, service, targetID.String(), `{"role":"child"}`)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "USER_NOT_FOUND", response.Error.Code)
+
+	service.AssertExpectations(t)
 }

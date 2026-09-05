@@ -1,110 +1,83 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
-	"time"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
+
+	"family-budget-service/internal/domain/user"
+	"family-budget-service/internal/services"
+	"family-budget-service/internal/services/dto"
 )
 
 type FamilyHandler struct {
-	repositories *Repositories
-	validator    *validator.Validate
+	familyService services.FamilyService
+	validator     *validator.Validate
 }
 
-func NewFamilyHandler(repositories *Repositories) *FamilyHandler {
+func NewFamilyHandler(familyService services.FamilyService) *FamilyHandler {
 	return &FamilyHandler{
-		repositories: repositories,
-		validator:    validator.New(),
+		familyService: familyService,
+		validator:     validator.New(),
 	}
 }
 
+// GetFamily отдаёт единственную семью; доступно любой роли.
 func (h *FamilyHandler) GetFamily(c echo.Context) error {
-	foundFamily, err := h.repositories.Family.Get(c.Request().Context())
+	foundFamily, err := h.familyService.GetFamily(c.Request().Context())
 	if err != nil {
-		return c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    ErrCodeFamilyNotFound,
-				Message: ErrMessageFamilyNotFound,
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+		return h.handleServiceError(c, err)
 	}
 
-	response := FamilyResponse{
-		ID:        foundFamily.ID,
-		Name:      foundFamily.Name,
-		Currency:  foundFamily.Currency,
-		CreatedAt: foundFamily.CreatedAt,
-		UpdatedAt: foundFamily.UpdatedAt,
-	}
-
-	return c.JSON(http.StatusOK, APIResponse[FamilyResponse]{
-		Data: response,
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
-	})
+	return respondAPI(c, http.StatusOK, toFamilyResponse(foundFamily))
 }
 
-func (h *FamilyHandler) GetFamilyMembers(c echo.Context) error {
-	// Get the single family
-	_, err := h.repositories.Family.Get(c.Request().Context())
-	if err != nil {
-		return c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    ErrCodeFamilyNotFound,
-				Message: ErrMessageFamilyNotFound,
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+// UpdateFamily меняет имя и валюту семьи; только admin.
+func (h *FamilyHandler) UpdateFamily(c echo.Context) error {
+	var req UpdateFamilyRequest
+	if bindErr := c.Bind(&req); bindErr != nil {
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest, bindErr.Error())
 	}
 
-	members, err := h.repositories.User.GetAll(c.Request().Context())
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Code:    "FETCH_FAILED",
-				Message: "Failed to fetch family members",
-			},
-			Meta: ResponseMeta{
-				RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-				Timestamp: time.Now(),
-				Version:   "v1",
-			},
-		})
+	if validationErr := h.validator.Struct(&req); validationErr != nil {
+		return respondError(c, http.StatusBadRequest, ErrCodeValidationError, "Validation failed",
+			buildValidationErrors(validationErr))
+	}
+	if req.Name == nil && req.Currency == nil {
+		return respondError(c, http.StatusBadRequest, ErrCodeValidationError, "Validation failed",
+			"At least one field must be provided")
 	}
 
-	var response []UserResponse
-	for _, member := range members {
-		response = append(response, UserResponse{
-			ID:        member.ID,
-			Email:     member.Email,
-			FirstName: member.FirstName,
-			LastName:  member.LastName,
-			Role:      string(member.Role),
-			CreatedAt: member.CreatedAt,
-			UpdatedAt: member.UpdatedAt,
-		})
-	}
-
-	return c.JSON(http.StatusOK, APIResponse[[]UserResponse]{
-		Data: response,
-		Meta: ResponseMeta{
-			RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-			Timestamp: time.Now(),
-			Version:   "v1",
-		},
+	updatedFamily, err := h.familyService.UpdateFamily(c.Request().Context(), dto.UpdateFamilyDTO{
+		Name:     req.Name,
+		Currency: req.Currency,
 	})
+	if err != nil {
+		return h.handleServiceError(c, err)
+	}
+
+	return respondAPI(c, http.StatusOK, toFamilyResponse(updatedFamily))
+}
+
+func (h *FamilyHandler) handleServiceError(c echo.Context, err error) error {
+	switch {
+	case errors.Is(err, services.ErrFamilyNotFound):
+		return respondError(c, http.StatusNotFound, ErrCodeFamilyNotFound, ErrMessageFamilyNotFound)
+	case errors.Is(err, services.ErrValidationFailed):
+		return respondError(c, http.StatusBadRequest, ErrCodeValidationError, "Validation failed", err.Error())
+	default:
+		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+	}
+}
+
+func toFamilyResponse(f *user.Family) FamilyResponse {
+	return FamilyResponse{
+		ID:        f.ID,
+		Name:      f.Name,
+		Currency:  f.Currency,
+		CreatedAt: f.CreatedAt,
+		UpdatedAt: f.UpdatedAt,
+	}
 }

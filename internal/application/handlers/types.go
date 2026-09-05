@@ -51,6 +51,11 @@ type UpdateUserRequest struct {
 	Email     *string `json:"email,omitempty"      validate:"omitempty,email"`
 }
 
+// PatchUserRequest меняет только роль; is_active появится вместе с полем в домене (план 04).
+type PatchUserRequest struct {
+	Role *string `json:"role,omitempty" validate:"omitempty,oneof=admin member child"`
+}
+
 type UserResponse struct {
 	ID        uuid.UUID `json:"id"`
 	Email     string    `json:"email"`
