@@ -473,6 +473,11 @@ linters:
       - path: "internal/web/models/"
         linters:
           - goconst
+      # internal/version.Version подставляется линкером через -ldflags -X,
+      # поэтому обязана быть package-level var, а не константой.
+      - path: "internal/version/"
+        linters:
+          - gochecknoglobals
       - source: "TODO"
         linters: [godot]
       - text: "should have a package comment"

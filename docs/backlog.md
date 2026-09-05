@@ -23,19 +23,19 @@
 ## Открытые находки аудита (август 2026)
 
 Полные описания и шаги воспроизведения — в [docs/specs/](specs/README.md).
+План [03-bearer-auth-web-removal](plans/20260904-03-bearer-auth-web-removal.md) закрывает
+S-03, `CSRF_SECRET`, бамп `echo-contrib` (зависимость уходит) и долг `application → web`
+одним заходом — отдельные планы на них не нужны.
 
 - **S-03 — нет rate limiting на логин** ([002-security-audit.md](specs/002-security-audit.md#s-03)).
   Защита от перебора живёт только в конфигурациях nginx/Caddy и fail2ban, значит
   `docker-compose.minimal.yml` и native systemd не покрыты. Нужен отдельный план для защиты
   на уровне приложения.
 
-- **`.github/workflows/docker.yml` не может собрать образ.** Шаг `docker/build-push-action`
-  задан как `context: .` без `file:`, то есть ищет `./Dockerfile`, которого нет (файл лежит в
-  `docker/Dockerfile`). Пуш тега уронит сборку на «failed to read dockerfile». См.
-  [D-02](specs/004-deployment-readiness.md#d-02).
-
-- **Тег `v0.1.0` не поставлен** — действие владельца репозитория. Ставить его можно только
-  после починки `docker.yml`, иначе первый же релиз упадёт.
+- **Тег `v0.1.0` не поставлен** — действие владельца репозитория. `docker.yml` и `release.yml`
+  уже указывают `file: docker/Dockerfile`, блокера нет. Ставить тег имеет смысл после перехода
+  на API-only ([005](specs/005-api-only-redesign.md)), иначе первый релиз — образ с веб-интерфейсом,
+  который тут же удаляется.
 
 - **`CSRF_SECRET` — конфигурационная ручка, которую никто не читает.** `internal/config.go`
   объявляет и валидирует `Web.CSRFSecret` (в production — не плейсхолдер и не короче 32 символов),

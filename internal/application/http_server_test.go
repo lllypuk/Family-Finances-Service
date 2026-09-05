@@ -654,8 +654,8 @@ func TestHTTPServer_HealthEndpoint(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Contains(t, rec.Body.String(), `"status":"ok"`)
-	assert.Contains(t, rec.Body.String(), `"time"`)
+	assert.Contains(t, rec.Body.String(), `"status":"healthy"`)
+	assert.Contains(t, rec.Body.String(), `"timestamp"`)
 }
 
 func TestHTTPServer_RoutesSetup(t *testing.T) {

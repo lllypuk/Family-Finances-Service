@@ -1,0 +1,1565 @@
+openapi: 3.1.0
+info:
+  title: Family Budget Service API
+  version: 1.0.0
+  description: |
+    Целевой контракт `/api/v1` для Android-клиента (spec 005, решения A-01…A-09).
+
+    Это описание **целевого** состояния: планы 02–04 приводят код в соответствие с ним.
+    Обратное направление держит тест `tests/integration/openapi_coverage_test.go` —
+    зарегистрированный роут без описания здесь роняет `make test`.
+
+    Соглашения:
+    - Деньги — целые в минимальных единицах валюты семьи (`amount_minor`, int64). Валюта — у семьи (A-05).
+    - Дата операции — календарная `YYYY-MM-DD` без времени; служебные метки — RFC3339 UTC (A-06).
+    - `POST` для транзакций, бюджетов и категорий принимает клиентский `id` (UUID v4);
+      повтор с тем же `id` возвращает `200` с существующей записью (A-07).
+    - Списки: `limit` (по умолчанию 50, максимум 200) и `offset`; `meta.pagination.total` — общее число (A-08).
+    - Ошибка всегда одной формы: `{"error": {...}, "meta": {...}}` (A-08).
+
+    Коды ошибок: `UNAUTHORIZED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404),
+    `VALIDATION_ERROR` (422), `SETUP_REQUIRED` / `CURRENCY_LOCKED` / `LAST_ADMIN` (409),
+    `RATE_LIMITED` (429, с `Retry-After`), `INTERNAL_ERROR` (500).
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: https://ffs.shatrov.tech
+    description: Продовый инстанс (одна семья)
+  - url: http://localhost:8080
+    description: Локальный запуск (`make run-local`)
+tags:
+  - name: auth
+    description: Логин, логаут и управление сессиями (A-01)
+  - name: me
+    description: Текущий пользователь
+  - name: family
+    description: Семья (одна на инстанс)
+  - name: users
+    description: Управление пользователями, только admin
+  - name: categories
+    description: Категории доходов и расходов
+  - name: transactions
+    description: Операции семьи
+  - name: budgets
+    description: Лимиты по периодам и категориям
+  - name: reports
+    description: Сохранённые отчёты и CSV-экспорт
+  - name: stats
+    description: Сводка для главного экрана клиента
+  - name: backups
+    description: Файлы бэкапа БД, только admin
+  - name: system
+    description: Служебные endpoint-ы вне `/api/v1`
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      tags: [system]
+      summary: Состояние сервиса
+      description: |
+        Публичный endpoint вне `/api/v1`. Клиент читает `version` (значение `git describe`,
+        подставляется через `-ldflags`) и `setup_complete`: пока семьи нет, логин отвечает `409 SETUP_REQUIRED`.
+      security: []
+      responses:
+        '200':
+          description: Сервис работает
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+        '503':
+          description: Сервис деградировал (проверки не прошли)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Выдать bearer-токен
+      description: |
+        Публичный роут. Токен отдаётся один раз и хранится на сервере только как SHA-256 (A-01).
+        Ответ на неизвестный email и на неверный пароль одинаков — `401 INVALID_CREDENTIALS`.
+        Лимитер: 10 попыток / 5 минут на IP и 20 / час на email (A-09).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Токен выдан
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { $ref: '#/components/schemas/LoginResponse' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401': { $ref: '#/components/responses/InvalidCredentials' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Отозвать текущую сессию
+      description: Доступно любой роли. Токен из заголовка становится недействительным немедленно.
+      responses:
+        '204': { description: Сессия отозвана }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/v1/auth/sessions:
+    get:
+      operationId: listSessions
+      tags: [auth]
+      summary: Активные сессии текущего пользователя
+      description: Доступно любой роли; чужие сессии не видны даже админу.
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Offset' }
+      responses:
+        '200':
+          description: Список сессий
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Session' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/v1/auth/sessions/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/PathID' }
+    delete:
+      operationId: revokeSession
+      tags: [auth]
+      summary: Отозвать сессию
+      description: Только собственная сессия текущего пользователя; чужая — `404`.
+      responses:
+        '204': { description: Сессия отозвана }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/me:
+    get:
+      operationId: getCurrentUser
+      tags: [me]
+      summary: Текущий пользователь
+      description: Доступно любой роли.
+      responses:
+        '200': { $ref: '#/components/responses/UserOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      operationId: updateCurrentUser
+      tags: [me]
+      summary: Изменить имя и email
+      description: Доступно любой роли. Роль и `is_active` через этот роут не меняются.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateUserRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/UserOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /api/v1/me/password:
+    put:
+      operationId: changePassword
+      tags: [me]
+      summary: Сменить свой пароль
+      description: |
+        Доступно любой роли. Успешная смена отзывает все сессии пользователя, кроме текущей (A-01).
+        Неверный `current_password` — `401`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+      responses:
+        '204': { description: Пароль изменён }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /api/v1/family:
+    get:
+      operationId: getFamily
+      tags: [family]
+      summary: Данные семьи
+      description: Доступно любой роли.
+      responses:
+        '200': { $ref: '#/components/responses/FamilyOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      operationId: updateFamily
+      tags: [family]
+      summary: Изменить семью
+      description: |
+        Только admin. Смена `currency` при наличии транзакций запрещена — `409 CURRENCY_LOCKED` (A-05).
+        `timezone` — IANA-имя, в нём считаются «сегодня» и границы периодов (A-06).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateFamilyRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/FamilyOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /api/v1/users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: Пользователи семьи
+      description: Только admin.
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Offset' }
+      responses:
+        '200':
+          description: Список пользователей
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/User' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Создать пользователя
+      description: |
+        Только admin. Инвайтов нет: админ задаёт пароль и сообщает его лично,
+        пользователь меняет его через `PUT /api/v1/me/password` (A-03).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateUserRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/UserOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /api/v1/users/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/PathID' }
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Пользователь по id
+      description: Только admin.
+      responses:
+        '200': { $ref: '#/components/responses/UserOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updateUser
+      tags: [users]
+      summary: Изменить имя и email пользователя
+      description: Только admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateUserRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/UserOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    patch:
+      operationId: patchUser
+      tags: [users]
+      summary: Изменить роль или активность
+      description: |
+        Только admin. Деактивация (`is_active: false`) отзывает все сессии пользователя (A-04).
+        Понижение роли или деактивация последнего активного админа — `409 LAST_ADMIN`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatchUserRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/UserOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      deprecated: true
+      summary: Устаревшее «удаление» пользователя
+      description: |
+        Только admin. Роут существует в текущем коде и на деле выполняет `is_active = 0`
+        (`user_repository_sqlite.go:315`) — настоящее удаление невозможно, транзакции ссылаются
+        на пользователя `ON DELETE RESTRICT`. В целевом контракте деактивация делается
+        через `PATCH /api/v1/users/{id}`; этот роут удаляется в плане 03.
+      responses:
+        '204': { description: Пользователь деактивирован }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/v1/users/{id}/password:
+    parameters:
+      - { $ref: '#/components/parameters/PathID' }
+    put:
+      operationId: setUserPassword
+      tags: [users]
+      summary: Задать пароль пользователю
+      description: Только admin. Текущий пароль не требуется; все сессии пользователя отзываются.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetPasswordRequest' }
+      responses:
+        '204': { description: Пароль задан }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /api/v1/categories:
+    get:
+      operationId: listCategories
+      tags: [categories]
+      summary: Категории семьи
+      description: admin и member.
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Offset' }
+        - name: type
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/CategoryType' }
+        - name: is_active
+          in: query
+          required: false
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Список категорий
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Category' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createCategory
+      tags: [categories]
+      summary: Создать категорию
+      description: admin и member. Повтор с тем же `id` возвращает `200` с существующей категорией (A-07).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCategoryRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/CategoryOk' }
+        '200': { $ref: '#/components/responses/CategoryOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /api/v1/categories/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/PathID' }
+    get:
+      operationId: getCategory
+      tags: [categories]
+      summary: Категория по id
+      description: admin и member.
+      responses:
+        '200': { $ref: '#/components/responses/CategoryOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updateCategory
+      tags: [categories]
+      summary: Изменить категорию
+      description: admin и member. Тип категории не меняется — у неё уже есть транзакции.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCategoryRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/CategoryOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      operationId: deleteCategory
+      tags: [categories]
+      summary: Удалить категорию
+      description: |
+        Только admin: через API удаление необратимо и не имеет подтверждения, которое есть в UI.
+        Категория с транзакциями не удаляется — `409`.
+      responses:
+        '204': { description: Категория удалена }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/v1/transactions:
+    get:
+      operationId: listTransactions
+      tags: [transactions]
+      summary: Транзакции семьи
+      description: admin и member. Сортировка — по `date` убыванием, затем по `created_at`.
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Offset' }
+        - name: user_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: category_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: type
+          in: query
+          schema: { $ref: '#/components/schemas/TransactionType' }
+        - name: date_from
+          in: query
+          description: Включительно, календарная дата в часовом поясе семьи
+          schema: { $ref: '#/components/schemas/CalendarDate' }
+        - name: date_to
+          in: query
+          description: Включительно
+          schema: { $ref: '#/components/schemas/CalendarDate' }
+        - name: amount_from_minor
+          in: query
+          schema: { $ref: '#/components/schemas/Money' }
+        - name: amount_to_minor
+          in: query
+          schema: { $ref: '#/components/schemas/Money' }
+        - name: description
+          in: query
+          description: Подстрока в описании, регистронезависимо
+          schema: { type: string }
+      responses:
+        '200':
+          description: Список транзакций
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Transaction' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    post:
+      operationId: createTransaction
+      tags: [transactions]
+      summary: Создать транзакцию
+      description: |
+        admin и member. Автор берётся из токена — `user_id` в теле игнорируется.
+        Повтор с тем же `id` возвращает `200` с существующей транзакцией (A-07).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTransactionRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/TransactionOk' }
+        '200': { $ref: '#/components/responses/TransactionOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /api/v1/transactions/bulk-delete:
+    post:
+      operationId: bulkDeleteTransactions
+      tags: [transactions]
+      summary: Удалить несколько транзакций
+      description: |
+        admin и member. Неизвестные id пропускаются — ответ несёт число фактически удалённых
+        записей, повтор того же запроса возвращает `0`. Чужих id не бывает: семья одна.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BulkDeleteRequest' }
+      responses:
+        '200':
+          description: Транзакции удалены
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: object
+                    required: [deleted]
+                    properties:
+                      deleted: { type: integer, description: Число удалённых транзакций }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /api/v1/transactions/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/PathID' }
+    get:
+      operationId: getTransaction
+      tags: [transactions]
+      summary: Транзакция по id
+      description: admin и member.
+      responses:
+        '200': { $ref: '#/components/responses/TransactionOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updateTransaction
+      tags: [transactions]
+      summary: Изменить транзакцию
+      description: admin и member; редактировать можно и чужую запись — данные общие для семьи.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTransactionRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/TransactionOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      operationId: deleteTransaction
+      tags: [transactions]
+      summary: Удалить транзакцию
+      description: admin и member.
+      responses:
+        '204': { description: Транзакция удалена }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/budgets:
+    get:
+      operationId: listBudgets
+      tags: [budgets]
+      summary: Бюджеты семьи
+      description: admin и member.
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Offset' }
+        - name: is_active
+          in: query
+          schema: { type: boolean }
+        - name: category_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Список бюджетов
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Budget' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createBudget
+      tags: [budgets]
+      summary: Создать бюджет
+      description: admin и member. Повтор с тем же `id` возвращает `200` с существующим бюджетом (A-07).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateBudgetRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/BudgetOk' }
+        '200': { $ref: '#/components/responses/BudgetOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /api/v1/budgets/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/PathID' }
+    get:
+      operationId: getBudget
+      tags: [budgets]
+      summary: Бюджет по id
+      description: admin и member. `spent_minor` считается по транзакциям периода на момент запроса.
+      responses:
+        '200': { $ref: '#/components/responses/BudgetOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updateBudget
+      tags: [budgets]
+      summary: Изменить бюджет
+      description: admin и member.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateBudgetRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/BudgetOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      operationId: deleteBudget
+      tags: [budgets]
+      summary: Удалить бюджет
+      description: admin и member. Транзакции периода не затрагиваются.
+      responses:
+        '204': { description: Бюджет удалён }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/reports:
+    get:
+      operationId: listReports
+      tags: [reports]
+      summary: Сохранённые отчёты
+      description: admin и member.
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Offset' }
+        - name: type
+          in: query
+          schema: { $ref: '#/components/schemas/ReportType' }
+      responses:
+        '200':
+          description: Список отчётов без тела `data` каждого отчёта
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ReportSummary' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createReport
+      tags: [reports]
+      summary: Сгенерировать отчёт
+      description: |
+        admin и member. Владелец берётся из токена — `user_id` в теле игнорируется.
+        До плана 02 роут отвечает `501 NOT_IMPLEMENTED`: генерация есть только в веб-интерфейсе.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateReportRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/ReportOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '501':
+          description: Генерация ещё не перенесена в сервисный слой (снимается планом 02)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/v1/reports/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/PathID' }
+    get:
+      operationId: getReport
+      tags: [reports]
+      summary: Отчёт с данными
+      description: admin и member.
+      responses:
+        '200': { $ref: '#/components/responses/ReportOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteReport
+      tags: [reports]
+      summary: Удалить отчёт
+      description: admin и member.
+      responses:
+        '204': { description: Отчёт удалён }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/reports/{id}/export:
+    parameters:
+      - { $ref: '#/components/parameters/PathID' }
+    get:
+      operationId: exportReport
+      tags: [reports]
+      summary: Выгрузить отчёт в CSV
+      description: |
+        admin и member. Разделитель — запятая, кодировка UTF-8 с BOM (Excel),
+        суммы — в основных единицах с двумя знаками.
+      responses:
+        '200':
+          description: CSV-файл
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+              description: '`attachment; filename="report-<id>.csv"`'
+          content:
+            text/csv:
+              schema: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/stats/summary:
+    get:
+      operationId: getStatsSummary
+      tags: [stats]
+      summary: Сводка за период
+      description: |
+        admin и member. Заменяет дашборд веб-интерфейса. Без параметров — текущий месяц
+        в часовом поясе семьи (A-06).
+      parameters:
+        - name: from
+          in: query
+          description: Начало периода включительно; по умолчанию первое число текущего месяца
+          schema: { $ref: '#/components/schemas/CalendarDate' }
+        - name: to
+          in: query
+          description: Конец периода включительно; по умолчанию сегодня
+          schema: { $ref: '#/components/schemas/CalendarDate' }
+      responses:
+        '200':
+          description: Сводка
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { $ref: '#/components/schemas/StatsSummary' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /api/v1/backups:
+    get:
+      operationId: listBackups
+      tags: [backups]
+      summary: Список бэкапов
+      description: Только admin.
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Offset' }
+      responses:
+        '200':
+          description: Список файлов бэкапа в `BACKUP_DIR`
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Backup' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createBackup
+      tags: [backups]
+      summary: Создать бэкап
+      description: |
+        Только admin. Синхронная операция (`VACUUM INTO`), тела запроса нет.
+        Восстановление через API не предусмотрено — только по ssh (A-11).
+      responses:
+        '201':
+          description: Бэкап создан
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { $ref: '#/components/schemas/Backup' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500':
+          description: Бэкап не создан
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/v1/backups/{name}:
+    parameters:
+      - { $ref: '#/components/parameters/BackupName' }
+    delete:
+      operationId: deleteBackup
+      tags: [backups]
+      summary: Удалить бэкап
+      description: Только admin.
+      responses:
+        '204': { description: Файл удалён }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/backups/{name}/download:
+    parameters:
+      - { $ref: '#/components/parameters/BackupName' }
+    get:
+      operationId: downloadBackup
+      tags: [backups]
+      summary: Скачать бэкап
+      description: Только admin. Имя проверяется на выход за пределы каталога бэкапов.
+      responses:
+        '200':
+          description: Файл БД SQLite
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Непрозрачный токен из `POST /api/v1/auth/login` (A-01): 32 байта `crypto/rand` в base64url.
+        Не JWT — сервер хранит SHA-256 и проверяет срок и активность пользователя на каждом запросе.
+        Скользящий срок — 30 дней без активности, потолок — 180 дней от выдачи.
+
+  parameters:
+    PathID:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    BackupName:
+      name: name
+      in: path
+      required: true
+      description: Имя файла бэкапа из `GET /api/v1/backups`
+      schema: { type: string, pattern: '^[A-Za-z0-9._-]+$' }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    Offset:
+      name: offset
+      in: query
+      required: false
+      schema: { type: integer, minimum: 0, default: 0 }
+
+  responses:
+    Unauthorized:
+      description: Токена нет, он истёк или отозван (`UNAUTHORIZED`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    InvalidCredentials:
+      description: Неверный email или пароль (`INVALID_CREDENTIALS`); ответ одинаков для обоих случаев
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Роль не даёт доступа к операции (`FORBIDDEN`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Объект не найден (`NOT_FOUND`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: |
+        Состояние не допускает операцию: `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`,
+        `EMAIL_TAKEN`, `CATEGORY_IN_USE`
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ValidationFailed:
+      description: Тело или параметры не прошли валидацию (`VALIDATION_ERROR`); поля — в `error.details`
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    TooManyRequests:
+      description: Сработал лимитер (`RATE_LIMITED`)
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Секунды до следующей разрешённой попытки
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    UserOk:
+      description: Пользователь
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data, meta]
+            properties:
+              data: { $ref: '#/components/schemas/User' }
+              meta: { $ref: '#/components/schemas/Meta' }
+    FamilyOk:
+      description: Семья
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data, meta]
+            properties:
+              data: { $ref: '#/components/schemas/Family' }
+              meta: { $ref: '#/components/schemas/Meta' }
+    CategoryOk:
+      description: Категория
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data, meta]
+            properties:
+              data: { $ref: '#/components/schemas/Category' }
+              meta: { $ref: '#/components/schemas/Meta' }
+    TransactionOk:
+      description: Транзакция
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data, meta]
+            properties:
+              data: { $ref: '#/components/schemas/Transaction' }
+              meta: { $ref: '#/components/schemas/Meta' }
+    BudgetOk:
+      description: Бюджет
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data, meta]
+            properties:
+              data: { $ref: '#/components/schemas/Budget' }
+              meta: { $ref: '#/components/schemas/Meta' }
+    ReportOk:
+      description: Отчёт
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data, meta]
+            properties:
+              data: { $ref: '#/components/schemas/Report' }
+              meta: { $ref: '#/components/schemas/Meta' }
+
+  schemas:
+    Money:
+      type: integer
+      format: int64
+      description: |
+        Сумма в минимальных единицах валюты семьи (копейки для RUB, центы для EUR/USD).
+        Поддерживаются только валюты с двумя знаками после запятой (A-05).
+      examples: [125000]
+    CalendarDate:
+      type: string
+      format: date
+      description: Календарная дата без времени в часовом поясе семьи (A-06)
+      examples: ['2026-09-04']
+    Timestamp:
+      type: string
+      format: date-time
+      description: Служебная метка времени, RFC3339 UTC
+
+    Meta:
+      type: object
+      required: [request_id, timestamp]
+      properties:
+        request_id:
+          type: string
+          description: Значение заголовка `X-Request-ID` — тот же id в логах сервера
+        timestamp: { $ref: '#/components/schemas/Timestamp' }
+        version:
+          type: string
+          description: Версия сборки, как в `/health`
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+    ListMeta:
+      allOf:
+        - { $ref: '#/components/schemas/Meta' }
+        - type: object
+          required: [pagination]
+          properties:
+            pagination: { $ref: '#/components/schemas/Pagination' }
+    Pagination:
+      type: object
+      required: [limit, offset, total]
+      description: Присутствует только в ответах-списках (A-08)
+      properties:
+        limit: { type: integer, minimum: 1, maximum: 200 }
+        offset: { type: integer, minimum: 0 }
+        total:
+          type: integer
+          description: Общее число записей, подходящих под фильтр, без учёта limit/offset
+    Error:
+      type: object
+      required: [error, meta]
+      description: Единственная форма ошибки во всём API (A-08)
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Машиночитаемый код, `SCREAMING_SNAKE_CASE`
+              examples: ['VALIDATION_ERROR']
+            message:
+              type: string
+              description: Сообщение для человека; не предназначено для показа пользователю без перевода
+            details:
+              type: array
+              description: Заполняется при `VALIDATION_ERROR` — по элементу на поле
+              items: { $ref: '#/components/schemas/ErrorDetail' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    ErrorDetail:
+      type: object
+      required: [field, message, code]
+      properties:
+        field:
+          type: string
+          description: Путь к полю в теле запроса или имя query-параметра
+          examples: ['amount_minor']
+        message: { type: string }
+        code:
+          type: string
+          examples: ['required']
+
+    Health:
+      type: object
+      required: [status, version, setup_complete, timestamp]
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        version:
+          type: string
+          description: '`git describe --tags --always --dirty`; `dev` для сборки без `-ldflags`'
+          examples: ['v0.4.1-3-gabc1234']
+        setup_complete:
+          type: boolean
+          description: false — семья ещё не создана CLI `setup`, логин ответит `409 SETUP_REQUIRED` (A-02)
+        timestamp: { $ref: '#/components/schemas/Timestamp' }
+        uptime:
+          type: integer
+          format: int64
+          description: Время с запуска процесса в наносекундах (`time.Duration`)
+          examples: [1018947743]
+        checks:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              status: { type: string }
+              message: { type: string }
+
+    Role:
+      type: string
+      enum: [admin, member]
+      description: '`admin` — пользователи, семья, бэкапы; `member` — всё финансовое (A-04)'
+    CategoryType:
+      type: string
+      enum: [income, expense]
+    TransactionType:
+      type: string
+      enum: [income, expense]
+    BudgetPeriod:
+      type: string
+      enum: [weekly, monthly, yearly, custom]
+    ReportType:
+      type: string
+      enum: [expenses, income, budget, cash_flow, category_breakdown]
+    ReportPeriod:
+      type: string
+      enum: [daily, weekly, monthly, yearly, custom]
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 10, maxLength: 72 }
+        device_name:
+          type: string
+          maxLength: 64
+          description: Показывается в `GET /api/v1/auth/sessions`, например «Pixel 8»
+    LoginResponse:
+      type: object
+      required: [token, expires_at, user]
+      properties:
+        token:
+          type: string
+          description: Отдаётся один раз; сервер хранит только SHA-256
+        expires_at: { $ref: '#/components/schemas/Timestamp' }
+        user: { $ref: '#/components/schemas/User' }
+    Session:
+      type: object
+      required: [id, created_at, last_used_at, expires_at, current]
+      properties:
+        id: { type: string, format: uuid }
+        device_name: { type: string }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        last_used_at:
+          allOf: [{ $ref: '#/components/schemas/Timestamp' }]
+          description: Обновляется не чаще раза в час — запись на каждый запрос сериализовала бы чтения SQLite
+        expires_at: { $ref: '#/components/schemas/Timestamp' }
+        current:
+          type: boolean
+          description: true у сессии, чьим токеном сделан запрос
+    ChangePasswordRequest:
+      type: object
+      required: [current_password, new_password]
+      properties:
+        current_password: { type: string }
+        new_password: { type: string, minLength: 10, maxLength: 72 }
+    SetPasswordRequest:
+      type: object
+      required: [new_password]
+      properties:
+        new_password: { type: string, minLength: 10, maxLength: 72 }
+
+    User:
+      type: object
+      required: [id, email, first_name, last_name, role, is_active, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        first_name: { type: string }
+        last_name: { type: string }
+        role: { $ref: '#/components/schemas/Role' }
+        is_active:
+          type: boolean
+          description: false — вход запрещён, сессии отозваны; записи пользователя остаются (A-04)
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    CreateUserRequest:
+      type: object
+      required: [email, password, first_name, last_name, role]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 10, maxLength: 72 }
+        first_name: { type: string, minLength: 1, maxLength: 50 }
+        last_name: { type: string, minLength: 1, maxLength: 50 }
+        role: { $ref: '#/components/schemas/Role' }
+    UpdateUserRequest:
+      type: object
+      minProperties: 1
+      description: Полей нет — ошибка `VALIDATION_ERROR`
+      properties:
+        email: { type: string, format: email }
+        first_name: { type: string, minLength: 1, maxLength: 50 }
+        last_name: { type: string, minLength: 1, maxLength: 50 }
+    PatchUserRequest:
+      type: object
+      minProperties: 1
+      description: Меняет только роль и активность; хотя бы одно поле обязательно
+      properties:
+        role: { $ref: '#/components/schemas/Role' }
+        is_active: { type: boolean }
+
+    Family:
+      type: object
+      required: [id, name, currency, timezone, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        currency:
+          type: string
+          description: ISO 4217, только валюты с двумя знаками
+          pattern: '^[A-Z]{3}$'
+          examples: ['RUB']
+        timezone:
+          type: string
+          description: IANA-имя; в нём считаются «сегодня» и границы периодов (A-06)
+          examples: ['Europe/Moscow']
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    UpdateFamilyRequest:
+      type: object
+      minProperties: 1
+      description: Хотя бы одно поле обязательно
+      properties:
+        name: { type: string, minLength: 2, maxLength: 100 }
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          description: Меняется только пока в семье нет транзакций, иначе `409 CURRENCY_LOCKED`
+        timezone: { type: string }
+
+    Category:
+      type: object
+      required: [id, name, type, color, icon, is_active, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { $ref: '#/components/schemas/CategoryType' }
+        color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+        icon: { type: string }
+        parent_id:
+          oneOf:
+            - { type: string, format: uuid }
+            - { type: 'null' }
+          description: Родительская категория для подкатегории
+        is_active: { type: boolean }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    CreateCategoryRequest:
+      type: object
+      required: [name, type, color, icon]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Необязательный клиентский UUID v4 для идемпотентного повтора (A-07)
+        name: { type: string, minLength: 2, maxLength: 50 }
+        type: { $ref: '#/components/schemas/CategoryType' }
+        color: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
+        icon: { type: string }
+        parent_id: { type: string, format: uuid }
+    UpdateCategoryRequest:
+      type: object
+      minProperties: 1
+      description: Тип категории не меняется. Хотя бы одно поле обязательно
+      properties:
+        name: { type: string, minLength: 2, maxLength: 50 }
+        color: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
+        icon: { type: string }
+        is_active: { type: boolean }
+
+    Transaction:
+      type: object
+      required: [id, amount_minor, type, description, category_id, user_id, date, tags, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        amount_minor: { $ref: '#/components/schemas/Money' }
+        type: { $ref: '#/components/schemas/TransactionType' }
+        description: { type: string }
+        category_id: { type: string, format: uuid }
+        user_id:
+          type: string
+          format: uuid
+          description: Автор записи; проставляется из токена
+        date: { $ref: '#/components/schemas/CalendarDate' }
+        tags:
+          type: array
+          items: { type: string }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    CreateTransactionRequest:
+      type: object
+      required: [amount_minor, type, description, category_id, date]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Необязательный клиентский UUID v4 для идемпотентного повтора (A-07)
+        amount_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          minimum: 1
+        type: { $ref: '#/components/schemas/TransactionType' }
+        description: { type: string, minLength: 2, maxLength: 200 }
+        category_id: { type: string, format: uuid }
+        date: { $ref: '#/components/schemas/CalendarDate' }
+        tags:
+          type: array
+          items: { type: string }
+    UpdateTransactionRequest:
+      type: object
+      minProperties: 1
+      description: Хотя бы одно поле обязательно
+      properties:
+        amount_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          minimum: 1
+        type: { $ref: '#/components/schemas/TransactionType' }
+        description: { type: string, minLength: 2, maxLength: 200 }
+        category_id: { type: string, format: uuid }
+        date: { $ref: '#/components/schemas/CalendarDate' }
+        tags:
+          type: array
+          items: { type: string }
+    BulkDeleteRequest:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items: { type: string, format: uuid }
+
+    Budget:
+      type: object
+      required: [id, name, amount_minor, spent_minor, remaining_minor, period, start_date, end_date, is_active, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        amount_minor: { $ref: '#/components/schemas/Money' }
+        spent_minor: { $ref: '#/components/schemas/Money' }
+        remaining_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: '`amount_minor - spent_minor`; отрицательное при перерасходе'
+        utilization:
+          type: number
+          format: double
+          description: Доля израсходованного, 0…N (проценты остаются float — A-05)
+        period: { $ref: '#/components/schemas/BudgetPeriod' }
+        category_id:
+          oneOf:
+            - { type: string, format: uuid }
+            - { type: 'null' }
+          description: null — бюджет на все категории
+        start_date: { $ref: '#/components/schemas/CalendarDate' }
+        end_date: { $ref: '#/components/schemas/CalendarDate' }
+        is_active: { type: boolean }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    CreateBudgetRequest:
+      type: object
+      required: [name, amount_minor, period, start_date, end_date]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Необязательный клиентский UUID v4 для идемпотентного повтора (A-07)
+        name: { type: string, minLength: 2, maxLength: 100 }
+        amount_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          minimum: 1
+        period: { $ref: '#/components/schemas/BudgetPeriod' }
+        category_id: { type: string, format: uuid }
+        start_date: { $ref: '#/components/schemas/CalendarDate' }
+        end_date: { $ref: '#/components/schemas/CalendarDate' }
+    UpdateBudgetRequest:
+      type: object
+      minProperties: 1
+      description: Хотя бы одно поле обязательно
+      properties:
+        name: { type: string, minLength: 2, maxLength: 100 }
+        amount_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          minimum: 1
+        start_date: { $ref: '#/components/schemas/CalendarDate' }
+        end_date: { $ref: '#/components/schemas/CalendarDate' }
+        is_active: { type: boolean }
+
+    ReportSummary:
+      type: object
+      required: [id, name, type, period, user_id, start_date, end_date, generated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { $ref: '#/components/schemas/ReportType' }
+        period: { $ref: '#/components/schemas/ReportPeriod' }
+        user_id: { type: string, format: uuid }
+        start_date: { $ref: '#/components/schemas/CalendarDate' }
+        end_date: { $ref: '#/components/schemas/CalendarDate' }
+        generated_at: { $ref: '#/components/schemas/Timestamp' }
+    Report:
+      allOf:
+        - { $ref: '#/components/schemas/ReportSummary' }
+        - type: object
+          required: [data]
+          properties:
+            data: { $ref: '#/components/schemas/ReportData' }
+    ReportData:
+      type: object
+      required: [total_income_minor, total_expenses_minor, net_income_minor]
+      properties:
+        total_income_minor: { $ref: '#/components/schemas/Money' }
+        total_expenses_minor: { $ref: '#/components/schemas/Money' }
+        net_income_minor: { $ref: '#/components/schemas/Money' }
+        category_breakdown:
+          type: array
+          items: { $ref: '#/components/schemas/CategoryBreakdownItem' }
+        daily_breakdown:
+          type: array
+          items: { $ref: '#/components/schemas/DailyBreakdownItem' }
+        top_expenses:
+          type: array
+          items: { $ref: '#/components/schemas/TopExpenseItem' }
+        budget_comparison:
+          type: array
+          items: { $ref: '#/components/schemas/BudgetComparisonItem' }
+    CreateReportRequest:
+      type: object
+      required: [name, type, period, start_date, end_date]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 100 }
+        type: { $ref: '#/components/schemas/ReportType' }
+        period: { $ref: '#/components/schemas/ReportPeriod' }
+        start_date: { $ref: '#/components/schemas/CalendarDate' }
+        end_date: { $ref: '#/components/schemas/CalendarDate' }
+    CategoryBreakdownItem:
+      type: object
+      required: [category_id, category_name, amount_minor, share, count]
+      properties:
+        category_id: { type: string, format: uuid }
+        category_name: { type: string }
+        amount_minor: { $ref: '#/components/schemas/Money' }
+        share:
+          type: number
+          format: double
+          description: Доля категории в сумме периода, 0…1
+        count: { type: integer }
+    DailyBreakdownItem:
+      type: object
+      required: [date, income_minor, expenses_minor, balance_minor]
+      properties:
+        date: { $ref: '#/components/schemas/CalendarDate' }
+        income_minor: { $ref: '#/components/schemas/Money' }
+        expenses_minor: { $ref: '#/components/schemas/Money' }
+        balance_minor: { $ref: '#/components/schemas/Money' }
+    TopExpenseItem:
+      type: object
+      required: [id, amount_minor, description, category_name, date]
+      properties:
+        id: { type: string, format: uuid }
+        amount_minor: { $ref: '#/components/schemas/Money' }
+        description: { type: string }
+        category_name: { type: string }
+        date: { $ref: '#/components/schemas/CalendarDate' }
+    BudgetComparisonItem:
+      type: object
+      required: [budget_id, budget_name, planned_minor, actual_minor, difference_minor]
+      properties:
+        budget_id: { type: string, format: uuid }
+        budget_name: { type: string }
+        planned_minor: { $ref: '#/components/schemas/Money' }
+        actual_minor: { $ref: '#/components/schemas/Money' }
+        difference_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: '`planned_minor - actual_minor`'
+        utilization: { type: number, format: double }
+
+    StatsSummary:
+      type: object
+      required: [from, to, income_minor, expenses_minor, net_minor, transaction_count]
+      properties:
+        from: { $ref: '#/components/schemas/CalendarDate' }
+        to: { $ref: '#/components/schemas/CalendarDate' }
+        income_minor: { $ref: '#/components/schemas/Money' }
+        expenses_minor: { $ref: '#/components/schemas/Money' }
+        net_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: '`income_minor - expenses_minor`'
+        transaction_count: { type: integer }
+        expenses_delta:
+          type: number
+          format: double
+          description: Изменение расходов к предыдущему периоду той же длины, доля (0.12 = +12%)
+        categories:
+          type: array
+          description: Разбивка расходов по категориям, по убыванию суммы
+          items: { $ref: '#/components/schemas/CategoryBreakdownItem' }
+        budgets:
+          type: array
+          description: Бюджеты, пересекающиеся с периодом
+          items: { $ref: '#/components/schemas/BudgetComparisonItem' }
+        recent:
+          type: array
+          description: Последние операции периода, по убыванию даты
+          items: { $ref: '#/components/schemas/RecentTransactionItem' }
+    RecentTransactionItem:
+      type: object
+      required: [id, type, amount_minor, description, category_name, date]
+      properties:
+        id: { type: string, format: uuid }
+        type: { $ref: '#/components/schemas/TransactionType' }
+        amount_minor: { $ref: '#/components/schemas/Money' }
+        description: { type: string }
+        category_name: { type: string }
+        date: { $ref: '#/components/schemas/CalendarDate' }
+
+    Backup:
+      type: object
+      required: [name, size_bytes, created_at]
+      properties:
+        name:
+          type: string
+          description: Имя файла; используется в `{name}` для скачивания и удаления
+          examples: ['budget-20260904-030000.db']
+        size_bytes: { type: integer, format: int64 }
+        created_at: { $ref: '#/components/schemas/Timestamp' }

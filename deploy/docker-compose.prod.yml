@@ -12,6 +12,8 @@ services:
     build:
       context: ${BUILD_CONTEXT:-..}
       dockerfile: docker/Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
     container_name: family-budget
     restart: unless-stopped
     ports:

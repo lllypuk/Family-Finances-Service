@@ -17,6 +17,8 @@ services:
       # Относительно project directory (корень репозитория, см. комментарий выше).
       context: .
       dockerfile: docker/Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
     container_name: family-budget-service
     restart: unless-stopped
     ports:

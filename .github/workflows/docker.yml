@@ -58,6 +58,24 @@ jobs:
             type=semver,pattern={{major}}
             type=raw,value=latest,enable={{is_default_branch}}
 
+      # Ссылка на образ берётся из metadata-action: env.IMAGE_NAME = github.repository
+      # содержит заглавные буквы (Family-Finances-Service), а docker отвергает такой
+      # reference — «repository name must be lowercase».
+      - name: Resolve image reference
+        id: image
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          META_VERSION: ${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+        run: |
+          printf 'ref=%s\n' "$(printf '%s\n' "$TAGS" | head -n1)" >> "$GITHUB_OUTPUT"
+          # /health должен отдавать ту же строку, что даёт `git describe` в Makefile и
+          # deploy-скриптах, — с ведущим v; metadata-action его у semver-тега срезает.
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            printf 'version=%s\n' "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          else
+            printf 'version=%s\n' "$META_VERSION" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build and push Docker image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
@@ -73,13 +91,13 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             BUILDTIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
-            VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+            VERSION=${{ steps.image.outputs.version }}
             REVISION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.revision'] }}
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+          image-ref: ${{ steps.image.outputs.ref }}
           format: "sarif"
           output: "trivy-results.sarif"
 
@@ -89,21 +107,47 @@ jobs:
         with:
           sarif_file: "trivy-results.sarif"
 
+      # Сборка мультиплатформенная и push-only, в локальный демон образ не попадает:
+      # `docker image inspect` тут всегда падал с "No such image". Размер считаем по
+      # манифесту linux/amd64 — это сжатые слои, порог соответственно мягче.
       - name: Check image size
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.ref }}
         run: |
-          docker images ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
-          IMAGE_SIZE=$(docker image inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }} --format='{{.Size}}')
-          echo "Docker image size: $(($IMAGE_SIZE/1024/1024)) MB"
+          digest=$(docker buildx imagetools inspect "$IMAGE_REF" --raw |
+            jq -r '.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest')
+          image_size=$(docker buildx imagetools inspect "${IMAGE_REF%:*}@$digest" --raw |
+            jq '[.config.size] + [.layers[].size] | add')
+          echo "Compressed image size: $((image_size / 1024 / 1024)) MB"
 
-          # Fail if image is larger than 50MB
-          if [ $IMAGE_SIZE -gt 52428800 ]; then
-            echo "Error: Docker image is too large ($(($IMAGE_SIZE/1024/1024)) MB > 50 MB)"
+          if [ "$image_size" -gt 52428800 ]; then
+            echo "Error: Docker image is too large ($((image_size / 1024 / 1024)) MB > 50 MB)"
             exit 1
           fi
 
+      # `docker run --rm <image> -health-check` запускал только клиент healthcheck в пустом
+      # контейнере: сервера внутри нет, connection refused, exit 1. Поднимаем контейнер и
+      # проверяем сам /health, а бинарь healthcheck (его же зовёт HEALTHCHECK) — через exec.
       - name: Test Docker image
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.ref }}
         run: |
-          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }} -health-check
+          docker run -d --name smoke-container -p 8080:8080 \
+            -e SESSION_SECRET="$(openssl rand -base64 32)" \
+            -e CSRF_SECRET="$(openssl rand -base64 32)" \
+            "$IMAGE_REF"
+          for _ in $(seq 1 20); do
+            body=$(curl -fsS localhost:8080/health) && break
+            sleep 1
+          done
+          docker logs smoke-container
+          echo "$body"
+          echo "$body" | grep -q '"version"'
+          docker exec smoke-container /app/family-budget-service -health-check
+
+      - name: Remove smoke container
+        if: always()
+        run: docker rm -f smoke-container || true
 
   security-scan:
     name: Security Scan

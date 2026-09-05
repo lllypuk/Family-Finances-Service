@@ -342,7 +342,8 @@ build_new_version() {
 
     cd "${INSTALL_DIR}"
 
-    if docker compose -f "${COMPOSE_FILE}" build app; then
+    if VERSION="$(git -C "${SRC_DIR}" describe --tags --always --dirty 2>/dev/null || echo dev)" \
+        docker compose -f "${COMPOSE_FILE}" build app; then
         log_success "Successfully built version: ${TARGET_VERSION}"
     else
         log_error "Failed to build new version"

@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,7 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"family-budget-service/internal/observability"
 	"family-budget-service/internal/testhelpers"
+	"family-budget-service/internal/version"
 )
 
 // TestSetupHTTPServer_WebLayerRegistered — тест-страж для testhelpers.SetupHTTPServer.
@@ -136,5 +139,11 @@ func TestSetupPage_RendersOnEmptyDatabase(t *testing.T) {
 		testServer.Server.Echo().ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
+
+		var body map[string]string
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+		assert.Equal(t, version.String(), body["version"])
+		assert.Equal(t, observability.HealthStatusHealthy, body["status"])
+		assert.NotEmpty(t, body["timestamp"])
 	})
 }

@@ -14,6 +14,7 @@ import (
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/observability"
 	"family-budget-service/internal/services"
+	"family-budget-service/internal/version"
 	"family-budget-service/internal/web"
 )
 
@@ -267,10 +268,14 @@ func (s *HTTPServer) buildNetHTTPServer(address string) *http.Server {
 	}
 }
 
+// healthCheck — резервный /health, когда сервер собран без observability.
+// Ответ — подмножество схемы Health из docs/api/openapi.yaml: setup_complete
+// добавляет план 03.
 func (s *HTTPServer) healthCheck(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{
-		"status": "ok",
-		"time":   time.Now().Format(time.RFC3339),
+		"status":    observability.HealthStatusHealthy,
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"version":   version.String(),
 	})
 }
 

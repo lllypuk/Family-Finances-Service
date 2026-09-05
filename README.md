@@ -4,6 +4,11 @@
 
 ## 🎯 Project Status: IN DEVELOPMENT 🚧
 
+> **Direction (September 2026):** the service is being turned into an API-only JSON backend for an
+> Android app; the web interface is scheduled for removal. Decisions and the five implementation
+> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). The sections
+> below describe the code as it is today.
+
 This project is in **active development** with the following achievements:
 
 - ✅ Complete web interface (HTMX v2.0.4 + PicoCSS v2.1.1)
@@ -35,6 +40,11 @@ This project is in **active development** with the following achievements:
 - 🌐 **Multi-Platform Ready**: REST API, web interface, mobile-ready design
 
 ## API Readiness (Ready / Experimental)
+
+The **target** contract lives in [`docs/api/openapi.yaml`](docs/api/openapi.yaml) (OpenAPI 3.1, hand-written,
+see [`docs/api/README.md`](docs/api/README.md)) — bearer tokens, `limit/offset`, money in minor units. It is what
+the Android client generates from, not a description of today's server; the gap is closed by plans 02–04 of
+[spec 005](docs/specs/005-api-only-redesign.md). The sections below describe the API **as it behaves now**.
 
 ### Authentication is required — read this first
 
@@ -570,7 +580,9 @@ sudo ./deploy/scripts/setup-fail2ban.sh
 - **REST API** covering users, categories, transactions, budgets, and stored reports
 - Request/response shapes live in `internal/application/handlers/types.go`; the error
   envelope is in `internal/application/handlers/errors.go`
-- There is **no** OpenAPI spec, `/api/docs` endpoint, or Postman collection yet
+- **Target contract**: [docs/api/openapi.yaml](docs/api/openapi.yaml) (OpenAPI 3.1) — describes the API
+  after plans 02–04, not today's server; see [docs/api/README.md](docs/api/README.md)
+- There is no `/api/docs` endpoint or Postman collection
 
 ## License
 
