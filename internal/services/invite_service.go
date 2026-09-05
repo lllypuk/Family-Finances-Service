@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 
+	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services/dto"
 )
@@ -152,6 +152,10 @@ func (s *inviteService) GetInviteByToken(ctx context.Context, token string) (*us
 
 // AcceptInvite accepts an invite and creates a new user
 func (s *inviteService) AcceptInvite(ctx context.Context, token string, req dto.AcceptInviteDTO) (*user.User, error) {
+	if err := auth.ValidatePassword(req.Password); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrValidationFailed, err)
+	}
+
 	// Get invite by token
 	invite, err := s.GetInviteByToken(ctx, token)
 	if err != nil {
@@ -189,9 +193,9 @@ func (s *inviteService) AcceptInvite(ctx context.Context, token string, req dto.
 	newUser := user.NewUser(invite.Email, req.Name, req.Name, invite.Role)
 
 	// Hash password before storing
-	hashedPassword, err := hashPassword(req.Password)
+	hashedPassword, err := auth.HashPassword(req.Password)
 	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %w", err)
+		return nil, err
 	}
 	newUser.Password = hashedPassword
 
@@ -283,13 +287,4 @@ func (s *inviteService) DeleteExpiredInvites(ctx context.Context) error {
 		return fmt.Errorf("failed to delete expired invites: %w", err)
 	}
 	return nil
-}
-
-// hashPassword hashes a password using bcrypt
-func hashPassword(password string) (string, error) {
-	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
-	}
-	return string(hashedBytes), nil
 }

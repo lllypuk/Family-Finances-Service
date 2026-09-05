@@ -15,7 +15,7 @@ import (
 	"family-budget-service/internal/testhelpers"
 )
 
-// Ошибки, не дошедшие до хендлера (404 роутера, 405, отбитый CSRF), тоже обязаны
+// Ошибки, не дошедшие до хендлера (404 роутера, 405, отказ middleware), тоже обязаны
 // приходить в общем envelope: раньше клиент API получал на них HTML-страницу
 // ошибки или строку plain text и не мог прочитать error.code (A-08).
 func TestAPIErrorEnvelope_ErrorsOutsideHandlers(t *testing.T) {
@@ -31,9 +31,19 @@ func TestAPIErrorEnvelope_ErrorsOutsideHandlers(t *testing.T) {
 		code     string
 	}{
 		{"UnknownRoute", http.MethodGet, "/api/v1/does-not-exist", true, http.StatusNotFound, handlers.ErrCodeNotFound},
+		{"UnknownRouteOutsideAPI", http.MethodGet, "/login", false, http.StatusNotFound, handlers.ErrCodeNotFound},
+		// Внутри /api/v1 405 недостижим: catch-all группы перехватывает любой метод.
 		{
-			name: "WriteWithoutCSRFToken", method: http.MethodPost, target: "/api/v1/transactions", withAuth: false,
-			status: http.StatusForbidden, code: handlers.ErrCodeCSRFTokenInvalid,
+			"MethodNotAllowed",
+			http.MethodPost,
+			"/health",
+			false,
+			http.StatusMethodNotAllowed,
+			handlers.ErrCodeMethodNotAllowed,
+		},
+		{
+			name: "WriteWithoutToken", method: http.MethodPost, target: "/api/v1/transactions", withAuth: false,
+			status: http.StatusUnauthorized, code: handlers.ErrCodeUnauthorized,
 		},
 	}
 

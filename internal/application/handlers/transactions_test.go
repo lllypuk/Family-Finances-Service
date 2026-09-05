@@ -19,9 +19,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
-	"family-budget-service/internal/web/middleware"
 )
 
 // MockTransactionRepository is a mock implementation of transaction repository
@@ -146,11 +146,10 @@ func createValidTransactionRequest() handlers.CreateTransactionRequest {
 	}
 }
 
-// withSessionUser кладёт в контекст данные сессии ровно так же, как это делает
-// middleware.RequireAPIAuth на группе /api/v1: ключ "user", значение
-// *middleware.SessionData. Без него API-хендлеры не знают автора записи.
+// withSessionUser кладёт в контекст владельца токена так же, как auth.RequireBearer
+// на группе /api/v1. Без него API-хендлеры не знают автора записи.
 func withSessionUser(c echo.Context, userID uuid.UUID) {
-	c.Set("user", &middleware.SessionData{
+	c.Set(auth.ContextKey, &auth.Principal{
 		UserID: userID,
 		Role:   user.RoleAdmin,
 		Email:  "session@example.com",

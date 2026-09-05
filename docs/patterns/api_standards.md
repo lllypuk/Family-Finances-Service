@@ -4,9 +4,9 @@
 [`docs/api/openapi.yaml`](../api/openapi.yaml); здесь только соглашения, которые в нём не видны.
 Решения A-01, A-05…A-09 — в [spec 005](../specs/005-api-only-redesign.md).
 
-Документ описывает **целевое** состояние. До конца плана 04 код отличается двумя вещами:
-аутентификация — cookie-сессия и CSRF, деньги — `float64`. Пагинация `limit/offset/total`
-и конверт ошибок уже соответствуют этому документу (план 02).
+Документ описывает **целевое** состояние. До конца плана 04 код отличается одним: деньги — `float64`.
+Пагинация `limit/offset/total`, конверт ошибок (план 02) и bearer-аутентификация (план 03) уже
+соответствуют этому документу.
 
 ## Общие принципы
 
@@ -58,7 +58,7 @@ DELETE /api/v1/transactions/{id}
 | 400 | Тело не парсится (не валидация — она `422`) |
 | 401 | `UNAUTHORIZED` / `INVALID_CREDENTIALS` |
 | 403 | `FORBIDDEN` — роль не подходит |
-| 404 | `NOT_FOUND` |
+| 404 | `NOT_FOUND` (неизвестный путь) / `<ENTITY>_NOT_FOUND` (нет записи) |
 | 409 | `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`, `EMAIL_TAKEN`, `CATEGORY_IN_USE` |
 | 422 | `VALIDATION_ERROR` — поля в `error.details` |
 | 429 | `RATE_LIMITED` + `Retry-After` |

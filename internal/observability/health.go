@@ -17,13 +17,18 @@ const (
 	HealthStatusUnhealthy = "unhealthy"
 )
 
+// setupCheckName — ключ проверки настройки в HealthStatus.Checks.
+const setupCheckName = "setup"
+
 // HealthStatus представляет статус health check
 type HealthStatus struct {
-	Status    string                 `json:"status"`
-	Timestamp time.Time              `json:"timestamp"`
-	Version   string                 `json:"version"`
-	Checks    map[string]CheckResult `json:"checks"`
-	Uptime    time.Duration          `json:"uptime"`
+	Status    string    `json:"status"`
+	Timestamp time.Time `json:"timestamp"`
+	Version   string    `json:"version"`
+	// SetupComplete — семья создана; false означает, что логин ответит 409 SETUP_REQUIRED.
+	SetupComplete bool                   `json:"setup_complete"`
+	Checks        map[string]CheckResult `json:"checks"`
+	Uptime        time.Duration          `json:"uptime"`
 }
 
 // CheckResult результат индивидуальной проверки
@@ -40,11 +45,15 @@ type HealthChecker interface {
 	Name() string
 }
 
+// SetupCheckFunc сообщает, создана ли семья; реализация — FamilyService.IsSetupComplete.
+type SetupCheckFunc func(ctx context.Context) (bool, error)
+
 // HealthService управляет health checks
 type HealthService struct {
-	checkers  []HealthChecker
-	version   string
-	startTime time.Time
+	checkers   []HealthChecker
+	setupCheck SetupCheckFunc
+	version    string
+	startTime  time.Time
 }
 
 // NewHealthService создает новый HealthService
@@ -59,6 +68,11 @@ func NewHealthService(version string) *HealthService {
 // AddChecker добавляет новый checker
 func (hs *HealthService) AddChecker(checker HealthChecker) {
 	hs.checkers = append(hs.checkers, checker)
+}
+
+// SetSetupChecker включает поле setup_complete и проверку "setup".
+func (hs *HealthService) SetSetupChecker(check SetupCheckFunc) {
+	hs.setupCheck = check
 }
 
 // CheckHealth выполняет все проверки
@@ -76,13 +90,43 @@ func (hs *HealthService) CheckHealth(ctx context.Context) HealthStatus {
 		}
 	}
 
-	return HealthStatus{
-		Status:    overallStatus,
-		Timestamp: time.Now(),
-		Version:   hs.version,
-		Checks:    checks,
-		Uptime:    time.Since(hs.startTime),
+	setupComplete := false
+	if hs.setupCheck != nil {
+		var result CheckResult
+		setupComplete, result = hs.checkSetup(ctx)
+		checks[setupCheckName] = result
+		if result.Status != HealthStatusHealthy {
+			overallStatus = HealthStatusUnhealthy
+		}
 	}
+
+	return HealthStatus{
+		Status:        overallStatus,
+		Timestamp:     time.Now(),
+		Version:       hs.version,
+		SetupComplete: setupComplete,
+		Checks:        checks,
+		Uptime:        time.Since(hs.startTime),
+	}
+}
+
+// checkSetup — «семьи нет» до setup здорово; нездоров только сбой самого запроса.
+func (hs *HealthService) checkSetup(ctx context.Context) (bool, CheckResult) {
+	start := time.Now()
+	checkCtx, cancel := context.WithTimeout(ctx, HealthCheckTimeout)
+	defer cancel()
+
+	complete, err := hs.setupCheck(checkCtx)
+	result := CheckResult{Status: HealthStatusHealthy, Duration: time.Since(start), Timestamp: time.Now()}
+	if err != nil {
+		result.Status = HealthStatusUnhealthy
+		result.Message = err.Error()
+		return false, result
+	}
+	if !complete {
+		result.Message = "family not created; run the setup command"
+	}
+	return complete, result
 }
 
 // HealthHandler создает HTTP handler для health check

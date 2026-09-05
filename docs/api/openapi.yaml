@@ -18,9 +18,9 @@ info:
     - Ошибка всегда одной формы: `{"error": {...}, "meta": {...}}` (A-08).
 
     Коды ошибок: `INVALID_REQUEST` / `INVALID_ID` (400 — тело или id не разобрались),
-    `UNAUTHORIZED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404),
+    `UNAUTHORIZED` (401), `FORBIDDEN` (403), `NOT_FOUND` / `<ENTITY>_NOT_FOUND` (404),
     `VALIDATION_ERROR` (422 — тело или query-параметры не прошли проверку, поля в `error.details`),
-    `SETUP_REQUIRED` / `CURRENCY_LOCKED` / `LAST_ADMIN` (409),
+    `SETUP_REQUIRED` / `CURRENCY_LOCKED` / `LAST_ADMIN` / `CANNOT_DEACTIVATE_SELF` (409),
     `RATE_LIMITED` (429, с `Retry-After`), `INTERNAL_ERROR` (500).
   license:
     name: MIT
@@ -188,7 +188,8 @@ paths:
       summary: Сменить свой пароль
       description: |
         Доступно любой роли. Успешная смена отзывает все сессии пользователя, кроме текущей (A-01).
-        Неверный `current_password` — `401`.
+        Неверный `current_password` — `401 INVALID_CREDENTIALS`; сессия при этом жива,
+        разлогинивать клиента не нужно.
       requestBody:
         required: true
         content:
@@ -196,7 +197,13 @@ paths:
             schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
       responses:
         '204': { description: Пароль изменён }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+        '401':
+          description: |
+            `UNAUTHORIZED` — токен отсутствует, просрочен или отозван;
+            `INVALID_CREDENTIALS` — неверный `current_password`. Различать по `error.code`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
 
   /api/v1/family:
@@ -306,7 +313,10 @@ paths:
       summary: Изменить роль или активность
       description: |
         Только admin. Деактивация (`is_active: false`) отзывает все сессии пользователя (A-04).
-        Понижение роли или деактивация последнего активного админа — `409 LAST_ADMIN`.
+        Понижение роли или деактивация последнего активного админа — `409 LAST_ADMIN`;
+        деактивация себя — `409 CANNOT_DEACTIVATE_SELF`. Оба поля в одном запросе
+        применяются по очереди: сначала роль, затем активность; если второй шаг отвечает
+        `409`, изменение роли уже сохранено — ответ описывает только не применённый шаг.
       requestBody:
         required: true
         content:
@@ -319,22 +329,6 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
-    delete:
-      operationId: deleteUser
-      tags: [users]
-      deprecated: true
-      summary: Устаревшее «удаление» пользователя
-      description: |
-        Только admin. Роут существует в текущем коде и на деле выполняет `is_active = 0`
-        (`user_repository_sqlite.go:315`) — настоящее удаление невозможно, транзакции ссылаются
-        на пользователя `ON DELETE RESTRICT`. В целевом контракте деактивация делается
-        через `PATCH /api/v1/users/{id}`; этот роут удаляется в плане 03.
-      responses:
-        '204': { description: Пользователь деактивирован }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
 
   /api/v1/users/{id}/password:
     parameters:
@@ -948,14 +942,16 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     NotFound:
-      description: Объект не найден (`NOT_FOUND`)
+      description: |
+        Объект не найден: `NOT_FOUND` для неизвестного пути, `<ENTITY>_NOT_FOUND`
+        (`USER_NOT_FOUND`, `SESSION_NOT_FOUND`, `CATEGORY_NOT_FOUND`, …) для отсутствующей записи
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     Conflict:
       description: |
         Состояние не допускает операцию: `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`,
-        `EMAIL_TAKEN`, `CATEGORY_IN_USE`
+        `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN`, `CATEGORY_IN_USE`
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1138,6 +1134,9 @@ components:
           examples: [1018947743]
         checks:
           type: object
+          description: |
+            Проверки по имени (`sqlite`, `setup`, …). `setup` здоров и при отсутствии семьи —
+            нездоров только сбой самой проверки; результат читается из `setup_complete`.
           additionalProperties:
             type: object
             properties:
@@ -1169,7 +1168,10 @@ components:
       required: [email, password]
       properties:
         email: { type: string, format: email }
-        password: { type: string, minLength: 10, maxLength: 72 }
+        password:
+          type: string
+          maxLength: 72
+          description: Политика длины проверяется при установке пароля, не при входе
         device_name:
           type: string
           maxLength: 64

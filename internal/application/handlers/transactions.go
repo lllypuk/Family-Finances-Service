@@ -12,10 +12,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
+	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
-	"family-budget-service/internal/web/middleware"
 )
 
 type TransactionHandler struct {
@@ -45,16 +45,16 @@ func NewTransactionHandler(
 }
 
 func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
-	// Автор записи — владелец сессии, которую RequireAPIAuth кладёт в контекст.
+	// Автор записи — владелец токена, которого RequireBearer кладёт в контекст.
 	// Единственный допустимый источник: тело запроса им быть не может, иначе
 	// аутентифицированный клиент пишет от чужого имени (S-01,
 	// docs/specs/002-security-audit.md). Проверяем до разбора тела: без сессии
 	// транзакцию всё равно не от кого создавать.
-	sessionData, sessionErr := middleware.GetUserFromContext(c)
-	if sessionErr != nil {
+	principal, principalErr := auth.FromContext(c)
+	if principalErr != nil {
 		return respondUnauthorized(c)
 	}
-	userID := sessionData.UserID
+	userID := principal.UserID
 
 	var req CreateTransactionRequest
 	if err := c.Bind(&req); err != nil {

@@ -4,11 +4,11 @@
 
 ## 🎯 Текущий статус проекта: SELF-HOSTED READY
 
-**Проект представляет собой self-hosted решение** — один Docker-образ (~50MB) со встроенной SQLite базой данных. Включает веб-интерфейс, REST API и систему безопасности.
+**Проект представляет собой self-hosted решение** — один Docker-образ (~50MB) со встроенной SQLite базой данных: JSON API для Android-приложения, bearer-аутентификация, CLI для первичной настройки.
 
-> **Направление с сентября 2026:** сервис становится API-only бэкендом для Android-приложения,
-> веб-интерфейс удаляется. Решения и порядок работ — [specs/005-api-only-redesign.md](specs/005-api-only-redesign.md),
-> планы `plans/20260904-0*.md`. Разделы ниже описывают текущее состояние кода и обновляются по мере выполнения планов.
+> **Направление с сентября 2026:** API-only бэкенд для Android-приложения. Решения и порядок работ —
+> [specs/005-api-only-redesign.md](specs/005-api-only-redesign.md); планы 01–03 выполнены (веб-интерфейс удалён),
+> 04–05 — в `plans/`. Разделы ниже описывают текущее состояние кода.
 
 ## 🚀 Быстрый старт
 
@@ -33,20 +33,16 @@
 - **HTTP server** с Echo framework
 - **Configuration management** через переменные окружения
 
-### ✅ Web Interface (HTMX + PicoCSS)
-- **Authentication & Authorization** с role-based access
-- **Dashboard** с family financial overview
-- **CRUD interfaces** для всех entities
-- **Forms validation** и error handling
-- **Responsive design** для mobile/desktop
-- **HTMX dynamic updates** без page reload
+### ✅ API и аутентификация
+- **`/api/v1`** — единственный интерфейс, контракт в `api/openapi.yaml`
+- **Bearer-токены** с серверными сессиями, отзыв по одной и всех разом
+- **CLI `setup` / `reset-password`** — bootstrap семьи и сброс пароля без HTTP
+- **Лимитер логина** в приложении, `TRUSTED_PROXIES` для реального IP
 
 ### ✅ Security
-- **Session management** с CSRF protection
-- **Password hashing** (bcrypt)
-- **Input validation** и sanitization
-- **Authorization middleware** с role checks
-- **Security headers** и best practices
+- **Password hashing** (bcrypt cost 12), единая политика пароля
+- **Input validation** и один JSON-конверт ошибок
+- **Authorization middleware** с ролями из БД на каждом запросе
 
 ### ✅ Testing & Quality
 - **Unit tests** с mocking и table-driven patterns
@@ -83,7 +79,6 @@
 - **[specs/README.md](specs/README.md)** - Навигация по аудитам
 - **[001-project-assessment.md](specs/001-project-assessment.md)** - Общая оценка проекта
 - **[002-security-audit.md](specs/002-security-audit.md)** - Аудит безопасности (S-01…S-05, со статусами)
-- **[003-ui-ux-audit.md](specs/003-ui-ux-audit.md)** - Аудит интерфейса (U-01…U-05)
 - **[004-deployment-readiness.md](specs/004-deployment-readiness.md)** - Готовность к развёртыванию (D-01…D-04)
 - **[005-api-only-redesign.md](specs/005-api-only-redesign.md)** - Переход на API-only для Android (решения A-01…A-12)
 

@@ -10,13 +10,26 @@ import (
 
 	"github.com/google/uuid"
 
+	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/infrastructure/validation"
 )
 
+// CategoryInserter — репозиторий категорий; Bootstrap выполняет его INSERT в своей транзакции.
+type CategoryInserter interface {
+	CreateWithTransaction(ctx context.Context, tx *sql.Tx, familyID uuid.UUID, c *category.Category) error
+}
+
+// Inserter — репозиторий пользователей; Bootstrap выполняет его INSERT в своей транзакции.
+type Inserter interface {
+	CreateWithTransaction(ctx context.Context, tx *sql.Tx, u *user.User) error
+}
+
 // SQLiteFamilyRepository implements family repository using SQLite
 type SQLiteFamilyRepository struct {
-	db *sql.DB
+	db         *sql.DB
+	categories CategoryInserter
+	users      Inserter
 }
 
 // FamilyStatistics holds family statistics
@@ -35,9 +48,11 @@ type FamilyStatistics struct {
 }
 
 // NewSQLiteFamilyRepository creates a new SQLite family repository
-func NewSQLiteFamilyRepository(db *sql.DB) *SQLiteFamilyRepository {
+func NewSQLiteFamilyRepository(db *sql.DB, categories CategoryInserter, users Inserter) *SQLiteFamilyRepository {
 	return &SQLiteFamilyRepository{
-		db: db,
+		db:         db,
+		categories: categories,
+		users:      users,
 	}
 }
 
@@ -254,6 +269,50 @@ func (r *SQLiteFamilyRepository) CreateWithTransaction(ctx context.Context, tx *
 	if err != nil {
 		return fmt.Errorf("failed to create family: %w", err)
 	}
+
+	return nil
+}
+
+// Bootstrap создаёт семью, стартовые категории и админа одной транзакцией.
+// Повторный вызов падает на UNIQUE families.singleton → user.ErrFamilyExists.
+func (r *SQLiteFamilyRepository) Bootstrap(
+	ctx context.Context,
+	family *user.Family,
+	categories []*category.Category,
+	admin *user.User,
+) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	rollbackNeeded := true
+	defer func() {
+		if rollbackNeeded {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if err = r.CreateWithTransaction(ctx, tx, family); err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed: families.singleton") {
+			return user.ErrFamilyExists
+		}
+		return err
+	}
+
+	for _, c := range categories {
+		if err = r.categories.CreateWithTransaction(ctx, tx, family.ID, c); err != nil {
+			return err
+		}
+	}
+
+	if err = r.users.CreateWithTransaction(ctx, tx, admin); err != nil {
+		return err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	rollbackNeeded = false
 
 	return nil
 }

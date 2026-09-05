@@ -38,10 +38,12 @@ services:
 
       # Application Configuration
       ENVIRONMENT: ${ENVIRONMENT:-production}
-      COOKIE_SECURE: ${COOKIE_SECURE:-false}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required - generate one with `openssl rand -base64 32`}
-      CSRF_SECRET: ${CSRF_SECRET:?CSRF_SECRET is required - generate one with `openssl rand -base64 32`}
+      # CIDR через запятую, чьи X-Forwarded-For определяют IP клиента для лимитера логина.
+      # Пусто — реальный IP неизвестен, лимит только по email (без обратного прокси так и надо).
+      # За Caddy/nginx в этой же сети compose — подсеть сети, например 172.20.0.0/16
+      # (`docker network inspect`), иначе за прокси корзина IP была бы общей на всех.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
 
     volumes:
       # Persistent volume for SQLite database
@@ -50,8 +52,7 @@ services:
     networks:
       - family-budget-network
     healthcheck:
-      # `--spider` шлёт HEAD, а зарегистрирован только GET /health — HEAD уходит
-      # в редирект на /login и healthcheck падает. Поэтому обычный GET в /dev/null.
+      # GET /health: HEAD не зарегистрирован, поэтому не `--spider`.
       test: ["CMD", "wget", "--quiet", "--tries=1", "-O", "/dev/null", "http://localhost:8080/health"]
       interval: 30s
       timeout: 3s

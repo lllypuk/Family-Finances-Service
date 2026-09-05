@@ -118,8 +118,6 @@ jobs:
         run: |
           docker run -d --name test-container -p 8080:8080 \
             -e ENVIRONMENT=production \
-            -e SESSION_SECRET="$(openssl rand -base64 32)" \
-            -e CSRF_SECRET="$(openssl rand -base64 32)" \
             family-budget-service:test
           for _ in $(seq 1 20); do
             body=$(curl -fsS localhost:8080/health) && break

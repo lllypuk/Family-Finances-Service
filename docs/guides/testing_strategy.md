@@ -232,16 +232,16 @@ func TestFamilyRepository_WithSQLite(t *testing.T) {
 
 ### Контракт интеграционных тестов (`tests/integration/`)
 
-`testhelpers.SetupHTTPServer(t)` поднимает **полный стек**: репозитории, сервисы и
-`application.HTTPServer` вместе с веб-слоем (сессии, CSRF, `RequireSetup`). Из этого следуют
-два обязательных шага для любого запроса к `/api/v1`:
+`testhelpers.SetupHTTPServer(t)` поднимает **полный стек**: репозитории, `auth.Service`, сервисы и
+`application.HTTPServer` с настоящими `RequireBearer`, ролевыми гейтами, лимитером логина и JSON
+error handler. Любой запрос к `/api/v1` нужен с токеном:
 
-- **Нужна сессия.** `ts.Auth(t)` возвращает сессию администратора тестовой семьи (создаёт
-  семью и пользователя при первом вызове), `ts.AuthAs(t, role)` — нового пользователя с
-  указанной ролью в той же семье. Без сессии группа `/api/v1` отвечает `401`.
-- **Записи требуют CSRF-токена.** `sess.Apply(req)` навешивает на запрос cookie сессии и
-  заголовок `X-Csrf-Token`. Без него `POST`/`PUT`/`DELETE` получат `403` от глобального
-  CSRF-middleware.
+- `ts.Auth(t)` — токен администратора тестовой семьи (семья и пользователь создаются при первом
+  вызове; без семьи логин отвечал бы `SETUP_REQUIRED`), `ts.AuthAs(t, role)` — новый пользователь
+  с указанной ролью в той же семье, `testhelpers.LoginAs(t, ts, u)` — токен для любого
+  пользователя: пишет строку в `sessions` напрямую, потому что у пользователей из фабрик вместо
+  хеша пароля заглушка. `RequireBearer` при этом проверяет токен по-настоящему.
+- `sess.Apply(req)` ставит `Authorization: Bearer`. Без него — `401`, cookie и CSRF в стеке нет.
 
 ```go
 func TestTransactionAPI_Create(t *testing.T) {
@@ -250,7 +250,7 @@ func TestTransactionAPI_Create(t *testing.T) {
 
     req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1/transactions", body)
     req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-    sess.Apply(req) // cookie сессии + X-Csrf-Token
+    sess.Apply(req) // Authorization: Bearer
 
     rec := httptest.NewRecorder()
     ts.Server.Echo().ServeHTTP(rec, req)

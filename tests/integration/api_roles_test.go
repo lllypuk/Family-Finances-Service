@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 
 	"family-budget-service/internal/domain/user"
@@ -20,8 +22,8 @@ import (
 //
 // До задачи 6 группа /api/v1 была закрыта только RequireAPIAuth, то есть любой
 // аутентифицированный пользователь — включая роль child — мог удалить чужого
-// пользователя или категорию. В вебе те же действия закрыты RequireAdmin
-// (internal/web/web.go:132) и RequireAdminOrMember (там же, финансовые разделы).
+// пользователя или категорию. В удалённом вебе те же действия были закрыты
+// RequireAdmin и RequireAdminOrMember (финансовые разделы).
 //
 // TDD, красная фаза (`go test ./tests/integration -run TestAPIRoles`):
 //
@@ -52,9 +54,17 @@ func TestAPIRoles_DestructiveRoutesRequireAdmin(t *testing.T) {
 
 	cases := []apiRoleCase{
 		{
-			name:    "delete user",
-			method:  http.MethodDelete,
+			name:    "deactivate user",
+			method:  http.MethodPatch,
 			path:    func(f apiFixtures) string { return "/api/v1/users/" + f.userID.String() },
+			body:    func(_ *testing.T, _ apiFixtures) string { return `{"is_active":false}` },
+			adminOK: http.StatusOK,
+		},
+		{
+			name:    "set user password",
+			method:  http.MethodPut,
+			path:    func(f apiFixtures) string { return "/api/v1/users/" + f.userID.String() + "/password" },
+			body:    func(_ *testing.T, _ apiFixtures) string { return `{"new_password":"Sup3rSecret!!"}` },
 			adminOK: http.StatusNoContent,
 		},
 		{
@@ -117,8 +127,8 @@ func TestAPIRoles_DestructiveRoutesRequireAdmin(t *testing.T) {
 
 			for _, rc := range roleCases {
 				t.Run(rc.role, func(t *testing.T) {
-					// Свежие фикстуры на каждый прогон: успешный DELETE админа
-					// действительно удаляет запись.
+					// Свежие фикстуры на каждый прогон: успешная деактивация админом
+					// действительно меняет запись.
 					fixtures := createAPIFixtures(t, testServer)
 
 					rec := doRoleRequest(t, testServer, tc, fixtures, rc.auth)
@@ -132,10 +142,8 @@ func TestAPIRoles_DestructiveRoutesRequireAdmin(t *testing.T) {
 	}
 }
 
-// TestAPIRoles_ChildHasNoAccessToFinanceRoutes сверяет API с ролевой моделью
-// веба: разделы транзакций, бюджетов, категорий и отчётов закрыты
-// RequireAdminOrMember (internal/web/web.go:158-208), значит и в API роль child
-// не должна их видеть — иначе поведение двух поверхностей расходится.
+// TestAPIRoles_ChildHasNoAccessToFinanceRoutes — разделы транзакций, бюджетов,
+// категорий и отчётов закрыты для роли child (RequireRole admin|member).
 func TestAPIRoles_ChildHasNoAccessToFinanceRoutes(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 
@@ -313,7 +321,9 @@ func TestAPIRoles_ForbiddenResponseIsJSON(t *testing.T) {
 	_, childAuth := testServer.AuthAs(t, user.RoleChild)
 	fixtures := createAPIFixtures(t, testServer)
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/users/"+fixtures.userID.String(), nil)
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/users/"+fixtures.userID.String(),
+		strings.NewReader(`{"role":"admin"}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	childAuth.Apply(req)
 	rec := httptest.NewRecorder()
 

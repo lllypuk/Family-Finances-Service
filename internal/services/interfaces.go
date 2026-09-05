@@ -21,7 +21,8 @@ type UserService interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (*user.User, error)
 	GetUsers(ctx context.Context) ([]*user.User, error)
 	UpdateUser(ctx context.Context, id uuid.UUID, req dto.UpdateUserDTO) (*user.User, error)
-	DeleteUser(ctx context.Context, id, actorID uuid.UUID) error
+	// SetActive — деактивация отзывает сессии; себя и последнего активного админа выключить нельзя.
+	SetActive(ctx context.Context, id uuid.UUID, active bool, actorID uuid.UUID) error
 
 	// Business Operations
 	ChangeUserRole(ctx context.Context, userID uuid.UUID, role user.Role) error
@@ -53,7 +54,6 @@ type CategoryService interface {
 	GetCategoryHierarchy(ctx context.Context) ([]*category.Category, error)
 	ValidateCategoryHierarchy(ctx context.Context, categoryID, parentID uuid.UUID) error
 	CheckCategoryUsage(ctx context.Context, categoryID uuid.UUID) (bool, error)
-	CreateDefaultCategories(ctx context.Context) error
 }
 
 // TransactionService defines business operations for transaction management

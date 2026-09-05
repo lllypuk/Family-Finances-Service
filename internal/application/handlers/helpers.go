@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
+	"family-budget-service/internal/auth"
 	"family-budget-service/internal/services"
 )
 
@@ -34,6 +35,7 @@ type pageParams struct {
 // из json-тега, иначе клиент получал бы имя поля Go (StartDate вместо start_date).
 func newAPIValidator() *validator.Validate {
 	v := validator.New()
+	auth.RegisterPasswordValidation(v)
 	v.RegisterTagNameFunc(func(field reflect.StructField) string {
 		name := strings.Split(field.Tag.Get("json"), ",")[0]
 		if name == "" || name == "-" {
@@ -80,6 +82,12 @@ func respondError(
 // bodyDetail — деталь для ошибки, не привязанной к конкретному полю запроса.
 func bodyDetail(code, message string) ErrorDetail {
 	return ErrorDetail{Field: fieldBody, Message: message, Code: code}
+}
+
+// respondBindError — 400 на тело, которое не разобралось; текст ошибки Bind — в details.
+func respondBindError(c echo.Context, err error) error {
+	return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
+		bodyDetail(ErrCodeInvalidRequest, err.Error()))
 }
 
 // parsePagination разбирает limit/offset. При выходе за границы ответ 422 уже записан,
@@ -157,7 +165,7 @@ func pageSlice[T any](items []T, page pageParams) []T {
 }
 
 // RespondAPIError пишет общий envelope для ошибки, не дошедшей до хендлера
-// (404 роутера, 405, отбитый CSRF); пустой code выводится из статуса.
+// (404 роутера, 405, отказ middleware); пустой code выводится из статуса.
 func RespondAPIError(c echo.Context, status int, code, message string) error {
 	if code == "" {
 		code = ErrorCodeForStatus(status)
@@ -166,7 +174,8 @@ func RespondAPIError(c echo.Context, status int, code, message string) error {
 	return respondError(c, status, code, message)
 }
 
-// ErrorCodeForStatus — error.code, соответствующий HTTP-статусу.
+// ErrorCodeForStatus — error.code, соответствующий HTTP-статусу; неизвестный статус
+// (503 от таймаута, 413 и т. п.) получает код из http.StatusText, чтобы код и статус не расходились.
 func ErrorCodeForStatus(status int) string {
 	switch status {
 	case http.StatusBadRequest:
@@ -181,13 +190,20 @@ func ErrorCodeForStatus(status int) string {
 		return ErrCodeMethodNotAllowed
 	case http.StatusUnprocessableEntity:
 		return ErrCodeValidationError
-	default:
+	case http.StatusTooManyRequests:
+		return ErrCodeRateLimited
+	case http.StatusInternalServerError:
 		return ErrCodeInternal
 	}
+	text := http.StatusText(status)
+	if text == "" {
+		return ErrCodeInternal
+	}
+	return strings.ToUpper(strings.ReplaceAll(text, " ", "_"))
 }
 
-// respondUnauthorized отдаёт 401 в общем формате ошибок API: так отвечает
-// RequireAPIAuth и хендлеры, которым без сессии нечего делать.
+// respondUnauthorized отдаёт 401 в общем формате ошибок API хендлерам,
+// которым без владельца токена нечего делать.
 func respondUnauthorized(c echo.Context) error {
 	return respondError(c, http.StatusUnauthorized, ErrCodeUnauthorized, ErrMessageUnauthorized)
 }
@@ -221,6 +237,8 @@ func validationMessage(fieldErr validator.FieldError) string {
 		return "must be one of: " + fieldErr.Param()
 	case "email":
 		return "must be a valid email"
+	case auth.PasswordTag:
+		return auth.ErrInvalidPassword.Error()
 	}
 
 	if fieldErr.Param() != "" {
@@ -239,6 +257,12 @@ func respondValidationErrors(c echo.Context, err error) error {
 		ErrMessageValidationFailed,
 		buildValidationErrors(err)...,
 	)
+}
+
+// respondPasswordPolicyError — 422 на new_password, не прошедший auth.ValidatePassword в сервисе.
+func respondPasswordPolicyError(c echo.Context) error {
+	return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		ErrorDetail{Field: fieldNewPassword, Message: auth.ErrInvalidPassword.Error(), Code: ErrCodeValidationError})
 }
 
 // isNotFoundError отличает «сущности нет» от настоящего сбоя: спека требует 404, а не 500.

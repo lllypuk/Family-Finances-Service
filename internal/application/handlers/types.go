@@ -48,7 +48,7 @@ type APIError struct {
 // CreateUserRequest represents the request payload for creating a new user
 type CreateUserRequest struct {
 	Email     string `json:"email"      validate:"required,email"`
-	Password  string `json:"password"   validate:"required,min=6"`
+	Password  string `json:"password"   validate:"required,password"`
 	FirstName string `json:"first_name" validate:"required"`
 	LastName  string `json:"last_name"  validate:"required"`
 	Role      string `json:"role"       validate:"required,oneof=admin member child"`
@@ -60,9 +60,15 @@ type UpdateUserRequest struct {
 	Email     *string `json:"email,omitempty"      validate:"omitempty,email"`
 }
 
-// PatchUserRequest меняет только роль; is_active появится вместе с полем в домене (план 04).
+// PatchUserRequest меняет роль и/или активность; хотя бы одно поле обязательно.
 type PatchUserRequest struct {
-	Role *string `json:"role,omitempty" validate:"omitempty,oneof=admin member child"`
+	Role     *string `json:"role,omitempty"      validate:"omitempty,oneof=admin member child"`
+	IsActive *bool   `json:"is_active,omitempty"`
+}
+
+// SetPasswordRequest — тело PUT /users/{id}/password (admin, без текущего пароля).
+type SetPasswordRequest struct {
+	NewPassword string `json:"new_password" validate:"required,password"`
 }
 
 type UserResponse struct {
@@ -71,8 +77,40 @@ type UserResponse struct {
 	FirstName string    `json:"first_name"`
 	LastName  string    `json:"last_name"`
 	Role      string    `json:"role"`
+	IsActive  bool      `json:"is_active"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// LoginRequest — тело POST /auth/login; device_name показывается в списке сессий.
+// Пароль здесь не проверяется на политику: её ужесточение не должно запирать существующих пользователей.
+type LoginRequest struct {
+	Email      string `json:"email"       validate:"required,email"`
+	Password   string `json:"password"    validate:"required,max=72"`
+	DeviceName string `json:"device_name" validate:"max=64"`
+}
+
+// LoginResponse — токен отдаётся один раз, сервер хранит только его хеш.
+type LoginResponse struct {
+	Token     string       `json:"token"`
+	ExpiresAt time.Time    `json:"expires_at"`
+	User      UserResponse `json:"user"`
+}
+
+// SessionResponse — элемент GET /auth/sessions; Current — сессия, чьим токеном сделан запрос.
+type SessionResponse struct {
+	ID         uuid.UUID `json:"id"`
+	DeviceName string    `json:"device_name"`
+	CreatedAt  time.Time `json:"created_at"`
+	LastUsedAt time.Time `json:"last_used_at"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	Current    bool      `json:"current"`
+}
+
+// ChangePasswordRequest — тело PUT /me/password.
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password" validate:"required"`
+	NewPassword     string `json:"new_password"     validate:"required,password"`
 }
 
 type UpdateFamilyRequest struct {
@@ -124,7 +162,7 @@ type CategoryResponse struct {
 
 // CreateTransactionRequest represents the request payload for creating a new transaction.
 // Поля user_id здесь нет намеренно: автор записи берётся из сессии
-// (CreateTransaction читает её через middleware.GetUserFromContext),
+// (CreateTransaction читает её через auth.FromContext),
 // иначе клиент писал бы от чужого имени — S-01.
 type CreateTransactionRequest struct {
 	Amount      float64   `json:"amount"         validate:"required,gt=0"`

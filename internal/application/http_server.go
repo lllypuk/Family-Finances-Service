@@ -3,6 +3,8 @@ package application
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
@@ -11,21 +13,16 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/observability"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/version"
-	"family-budget-service/internal/web"
 )
 
 const (
 	// HTTPRequestTimeout timeout for HTTP requests
 	HTTPRequestTimeout = 30 * time.Second
-
-	// DefaultTemplatesDir — путь к шаблонам по умолчанию (относительно CWD процесса)
-	DefaultTemplatesDir = "internal/web/templates"
-	// DefaultStaticDir — путь к статике по умолчанию (относительно CWD процесса)
-	DefaultStaticDir = "internal/web/static"
 )
 
 type HTTPServer struct {
@@ -34,8 +31,11 @@ type HTTPServer struct {
 	services             *services.Services
 	config               *Config
 	observabilityService *observability.Service
+	healthService        *observability.HealthService
 
 	// API Handlers
+	authHandler        *handlers.AuthHandler
+	meHandler          *handlers.MeHandler
 	userHandler        *handlers.UserHandler
 	familyHandler      *handlers.FamilyHandler
 	categoryHandler    *handlers.CategoryHandler
@@ -44,31 +44,19 @@ type HTTPServer struct {
 	reportHandler      *handlers.ReportHandler
 	statsHandler       *handlers.StatsHandler
 	backupHandler      *handlers.BackupHandler
-
-	// Web Interface
-	webServer        *web.Server
-	webServerInitErr error
 }
 
 type Config struct {
-	Port          string
-	Host          string
-	ReadTimeout   time.Duration
-	WriteTimeout  time.Duration
-	IdleTimeout   time.Duration
-	SessionSecret string
-	// CookieSecure — флаг Secure на session-cookie (и на flash-cookie).
-	// Обычно совпадает с production, но управляется отдельно (COOKIE_SECURE):
-	// на http:// origin браузер выбрасывает Secure-cookie, и вход становится
-	// невозможен — см. internal/config.go.
-	CookieSecure bool
-
-	// TemplatesDir — путь к каталогу HTML-шаблонов. Пустое значение означает
-	// DefaultTemplatesDir, который резолвится относительно рабочего каталога процесса.
-	TemplatesDir string
-	// StaticDir — путь к каталогу статики (css/js/img). Пустое значение означает
-	// DefaultStaticDir, который так же резолвится относительно CWD процесса.
-	StaticDir string
+	Port         string
+	Host         string
+	ReadTimeout  time.Duration
+	WriteTimeout time.Duration
+	IdleTimeout  time.Duration
+	// TrustedProxies — сети, чей X-Forwarded-For определяет c.RealIP(); пусто — только RemoteAddr.
+	TrustedProxies []*net.IPNet
+	// LoginLimiter — лимитер POST /auth/login; nil — auth.NewRateLimiter, причём без TrustedProxies
+	// корзина per-IP отключена: за прокси все клиенты — один адрес, лимит закрывал бы вход всей семье.
+	LoginLimiter *auth.RateLimiter
 }
 
 // NewHTTPServer создает HTTP сервер без observability (для обратной совместимости)
@@ -85,12 +73,30 @@ func NewHTTPServerWithObservability(
 ) *HTTPServer {
 	e := echo.New()
 
-	// Настройка валидации
+	// Без observability /health всё равно отвечает по схеме Health (в том числе setup_complete).
+	healthService := observability.NewHealthService(version.String())
+	logger := slog.Default()
+	if obsService != nil {
+		healthService = obsService.HealthService
+		logger = obsService.Logger
+	}
+	healthService.SetSetupChecker(services.Family.IsSetupComplete)
+
+	limiter := config.LoginLimiter
+	if limiter == nil {
+		var opts []auth.LimiterOption
+		if len(config.TrustedProxies) == 0 {
+			opts = append(opts, auth.WithoutIPLimit())
+		}
+		limiter = auth.NewRateLimiter(nil, opts...)
+	}
+
 	e.Validator = &CustomValidator{validator: validator.New()}
+	e.IPExtractor = auth.IPExtractor(config.TrustedProxies)
+	e.HTTPErrorHandler = newAPIErrorHandler(logger)
 
 	// Базовые middleware
 	e.Use(middleware.Recover())
-	e.Use(middleware.CORS())
 	e.Use(middleware.RequestID())
 
 	// Timeout для всех запросов
@@ -125,9 +131,12 @@ func NewHTTPServerWithObservability(
 		services:             services,
 		config:               config,
 		observabilityService: obsService,
+		healthService:        healthService,
 
 		// Инициализация API handlers
-		userHandler:        handlers.NewUserHandler(repositories, services.User),
+		authHandler:        handlers.NewAuthHandler(services.Auth, limiter, logger),
+		meHandler:          handlers.NewMeHandler(services.User, services.Auth),
+		userHandler:        handlers.NewUserHandler(services.User, services.Auth),
 		familyHandler:      handlers.NewFamilyHandler(services.Family),
 		categoryHandler:    handlers.NewCategoryHandler(repositories, services.Category),
 		transactionHandler: handlers.NewTransactionHandler(repositories, services.Transaction),
@@ -135,35 +144,6 @@ func NewHTTPServerWithObservability(
 		reportHandler:      handlers.NewReportHandler(repositories, services.Report),
 		statsHandler:       handlers.NewStatsHandler(services.Stats),
 		backupHandler:      handlers.NewBackupHandler(services.Backup),
-	}
-
-	// Инициализация веб-интерфейса
-	templatesDir := config.TemplatesDir
-	if templatesDir == "" {
-		templatesDir = DefaultTemplatesDir
-	}
-
-	staticDir := config.StaticDir
-	if staticDir == "" {
-		staticDir = DefaultStaticDir
-	}
-
-	webServer, err := web.NewWebServer(
-		e, repositories, services,
-		web.Paths{TemplatesDir: templatesDir, StaticDir: staticDir},
-		config.SessionSecret, config.CookieSecure,
-	)
-	if err != nil {
-		// Не прерываем работу сервера, но ошибку обязательно логируем и сохраняем,
-		// чтобы вызывающий код (в том числе тестовый хелпер) мог её увидеть.
-		server.webServerInitErr = err
-		if obsService != nil {
-			obsService.Logger.Error("Failed to initialize web server", "error", err)
-		} else {
-			e.Logger.Errorf("Failed to initialize web server (templates dir %q): %v", templatesDir, err)
-		}
-	} else {
-		server.webServer = webServer
 	}
 
 	server.setupRoutes()
@@ -175,60 +155,46 @@ func (s *HTTPServer) Echo() *echo.Echo {
 	return s.echo
 }
 
-// WebServerInitError возвращает ошибку инициализации веб-интерфейса, если она была.
-// nil означает, что веб-слой (сессии, CSRF, HTML-маршруты) зарегистрирован.
-func (s *HTTPServer) WebServerInitError() error {
-	return s.webServerInitErr
+func (s *HTTPServer) setupRoutes() {
+	s.echo.GET("/health", s.healthService.HealthHandler())
+
+	// Единственный публичный маршрут API. Зарегистрирован мимо группы, поэтому
+	// RequireBearer его не касается.
+	s.echo.POST("/api/v1/auth/login", s.authHandler.Login)
+
+	api := s.echo.Group("/api/v1", auth.RequireBearer(s.services.Auth))
+
+	api.POST("/auth/logout", s.authHandler.Logout)
+	api.GET("/auth/sessions", s.authHandler.ListSessions)
+	api.DELETE("/auth/sessions/:id", s.authHandler.RevokeSession)
+
+	api.GET("/me", s.meHandler.GetMe)
+	api.PUT("/me", s.meHandler.UpdateMe)
+	api.PUT("/me/password", s.meHandler.ChangePassword)
+
+	s.setupResourceRoutes(api)
 }
 
-func (s *HTTPServer) setupRoutes() {
-	// Health check endpoints
-	if s.observabilityService != nil {
-		s.echo.GET("/health", s.observabilityService.HealthService.HealthHandler())
-	} else {
-		// Fallback health check
-		s.echo.GET("/health", s.healthCheck)
-	}
-
-	// Веб-интерфейс маршруты
-	if s.webServer != nil {
-		s.webServer.SetupRoutes()
-	}
-
-	// API версионирование.
-	// RequireAPIAuth закрывает всю группу: без валидной сессии — 401 и JSON-ошибка
-	// (находка S-01). /health и веб-маршруты регистрируются выше и не задеты.
-	// Та же перепроверка сессии по БД, что и в вебе: роль для RequireAPIRole
-	// берётся из БД, а не из подписанной cookie. Условной регистрации здесь нет
-	// намеренно — иначе конфигурация без сервисов молча теряла бы проверку.
-	api := s.echo.Group("/api/v1",
-		handlers.RequireAPIAuth(),
-		handlers.RequireAPIActiveUser(s.services.User),
-	)
-
-	// Ролевая модель API повторяет веб (internal/web/web.go):
-	// управление пользователями — только админ (там RequireAdmin), финансовые
-	// разделы — админ и member (там RequireAdminOrMember), роль child к ним не
-	// допущена. Удаление категории дополнительно закрыто до админа: через API
-	// оно необратимо и не имеет подтверждения, которое есть в UI.
-	adminOnly := handlers.RequireAPIRole(user.RoleAdmin)
-	financeAccess := handlers.RequireAPIRole(user.RoleAdmin, user.RoleMember)
+// setupResourceRoutes — ролевая модель: управление пользователями — только админ,
+// финансовые разделы — админ и member, роль child к ним не допущена. Удаление
+// категории закрыто до админа: через API оно необратимо и без подтверждения.
+func (s *HTTPServer) setupResourceRoutes(api *echo.Group) {
+	adminOnly := auth.RequireRole(user.RoleAdmin)
+	financeAccess := auth.RequireRole(user.RoleAdmin, user.RoleMember)
 
 	// Семья: читают все роли, меняет только админ.
 	family := api.Group("/family")
 	family.GET("", s.familyHandler.GetFamily)
 	family.PUT("", s.familyHandler.UpdateFamily, adminOnly)
 
-	// Маршруты для пользователей — целиком под админом, как /users в вебе.
 	users := api.Group("/users", adminOnly)
 	users.POST("", s.userHandler.CreateUser)
 	users.GET("", s.userHandler.GetUsers)
 	users.GET("/:id", s.userHandler.GetUserByID)
 	users.PUT("/:id", s.userHandler.UpdateUser)
 	users.PATCH("/:id", s.userHandler.PatchUser)
-	users.DELETE("/:id", s.userHandler.DeleteUser)
+	users.PUT("/:id/password", s.userHandler.SetUserPassword)
 
-	// Маршруты для категорий
 	categories := api.Group("/categories", financeAccess)
 	categories.POST("", s.categoryHandler.CreateCategory)
 	categories.GET("", s.categoryHandler.GetCategories)
@@ -236,7 +202,6 @@ func (s *HTTPServer) setupRoutes() {
 	categories.PUT("/:id", s.categoryHandler.UpdateCategory)
 	categories.DELETE("/:id", s.categoryHandler.DeleteCategory, adminOnly)
 
-	// Маршруты для транзакций
 	transactions := api.Group("/transactions", financeAccess)
 	transactions.POST("", s.transactionHandler.CreateTransaction)
 	transactions.GET("", s.transactionHandler.GetTransactions)
@@ -245,7 +210,6 @@ func (s *HTTPServer) setupRoutes() {
 	transactions.PUT("/:id", s.transactionHandler.UpdateTransaction)
 	transactions.DELETE("/:id", s.transactionHandler.DeleteTransaction)
 
-	// Маршруты для бюджетов
 	budgets := api.Group("/budgets", financeAccess)
 	budgets.POST("", s.budgetHandler.CreateBudget)
 	budgets.GET("", s.budgetHandler.GetBudgets)
@@ -253,7 +217,6 @@ func (s *HTTPServer) setupRoutes() {
 	budgets.PUT("/:id", s.budgetHandler.UpdateBudget)
 	budgets.DELETE("/:id", s.budgetHandler.DeleteBudget)
 
-	// Маршруты для отчетов
 	reports := api.Group("/reports", financeAccess)
 	reports.POST("", s.reportHandler.CreateReport)
 	reports.GET("", s.reportHandler.GetReports)
@@ -261,11 +224,9 @@ func (s *HTTPServer) setupRoutes() {
 	reports.GET("/:id/export", s.reportHandler.ExportReport)
 	reports.DELETE("/:id", s.reportHandler.DeleteReport)
 
-	// Статистика — та же ролевая модель, что у финансовых разделов.
 	stats := api.Group("/stats", financeAccess)
 	stats.GET("/summary", s.statsHandler.GetSummary)
 
-	// Backups routes (admin only)
 	backups := api.Group("/backups", adminOnly)
 	backups.POST("", s.backupHandler.CreateBackup)
 	backups.GET("", s.backupHandler.ListBackups)
@@ -292,17 +253,6 @@ func (s *HTTPServer) buildNetHTTPServer(address string) *http.Server {
 		WriteTimeout: s.config.WriteTimeout,
 		IdleTimeout:  s.config.IdleTimeout,
 	}
-}
-
-// healthCheck — резервный /health, когда сервер собран без observability.
-// Ответ — подмножество схемы Health из docs/api/openapi.yaml: setup_complete
-// добавляет план 03.
-func (s *HTTPServer) healthCheck(c echo.Context) error {
-	return c.JSON(http.StatusOK, map[string]string{
-		"status":    observability.HealthStatusHealthy,
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
-		"version":   version.String(),
-	})
 }
 
 // CustomValidator wraps go-playground/validator for Echo

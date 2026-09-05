@@ -50,10 +50,6 @@ COPY --from=builder /app/family-budget-service /app/family-budget-service
 # Копирование миграций базы данных
 COPY --from=builder /app/migrations /app/migrations
 
-# Копирование web templates и static файлов
-COPY --from=builder /app/internal/web/templates /app/internal/web/templates
-COPY --from=builder /app/internal/web/static /app/internal/web/static
-
 # Создание директорий для данных SQLite, бэкапов и логов
 # (deploy/docker-compose.*.yml монтируют /backups и /logs с хоста)
 RUN mkdir -p /data /backups /logs && \
@@ -75,9 +71,7 @@ ENV DATABASE_PATH=/data/budget.db \
 # Открытие порта
 EXPOSE 8080
 
-# Healthcheck для проверки состояния приложения.
-# `--spider` шлёт HEAD, а зарегистрирован только GET /health — HEAD уходит
-# в редирект на /login и healthcheck падает. Поэтому обычный GET в /dev/null.
+# Healthcheck: GET /health (HEAD не зарегистрирован, поэтому не `--spider`).
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget -q -O /dev/null http://localhost:8080/health || exit 1
 

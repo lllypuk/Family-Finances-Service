@@ -2,6 +2,13 @@
 -- This file combines all migrations in REVERSE chronological order
 
 -- ==============================================================================
+-- Migration 006 Down: Drop bearer sessions
+-- ==============================================================================
+
+DROP INDEX IF EXISTS idx_sessions_user_id;
+DROP TABLE IF EXISTS sessions;
+
+-- ==============================================================================
 -- Migration 005 Down: Drop invites table
 -- ==============================================================================
 
@@ -58,10 +65,6 @@ DROP TRIGGER IF EXISTS update_users_updated_at;
 DROP TRIGGER IF EXISTS update_families_updated_at;
 
 -- Drop indexes
-DROP INDEX IF EXISTS idx_user_sessions_expires;
-DROP INDEX IF EXISTS idx_user_sessions_user_id;
-DROP INDEX IF EXISTS idx_user_sessions_token;
-
 DROP INDEX IF EXISTS idx_reports_cached;
 DROP INDEX IF EXISTS idx_reports_date_range;
 DROP INDEX IF EXISTS idx_reports_generated_by;
@@ -91,7 +94,6 @@ DROP INDEX IF EXISTS idx_users_email_active;
 DROP INDEX IF EXISTS idx_users_family_id;
 
 -- Drop tables in reverse order of dependencies
-DROP TABLE IF EXISTS user_sessions;
 DROP TABLE IF EXISTS reports;
 DROP TABLE IF EXISTS budget_alerts;
 DROP TABLE IF EXISTS budgets;

@@ -2,9 +2,10 @@ package application_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -74,8 +75,8 @@ func (m *MockUserService) UpdateUser(ctx context.Context, id uuid.UUID, req dto.
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
-func (m *MockUserService) DeleteUser(ctx context.Context, id, actorID uuid.UUID) error {
-	args := m.Called(ctx, id, actorID)
+func (m *MockUserService) SetActive(ctx context.Context, id uuid.UUID, active bool, actorID uuid.UUID) error {
+	args := m.Called(ctx, id, active, actorID)
 	return args.Error(0)
 }
 
@@ -187,11 +188,6 @@ func (m *MockCategoryService) ValidateCategoryHierarchy(ctx context.Context, cat
 //nolint:revive // test mock
 func (m *MockCategoryService) CheckCategoryUsage(ctx context.Context, categoryID uuid.UUID) (bool, error) {
 	return false, nil
-}
-
-//nolint:revive // test mock
-func (m *MockCategoryService) CreateDefaultCategories(ctx context.Context) error {
-	return nil
 }
 
 // MockTransactionService is a mock for transaction service
@@ -500,11 +496,18 @@ func (m *MockReportService) GenerateTrendAnalysis(
 	return nil, nil //nolint:nilnil // test mock
 }
 
+// newMockFamilyService — семья «создана»: /health спрашивает IsSetupComplete на каждом запросе.
+func newMockFamilyService() *MockFamilyService {
+	family := &MockFamilyService{}
+	family.On("IsSetupComplete", mock.Anything).Return(true, nil).Maybe()
+	return family
+}
+
 // Create a services struct that satisfies the services.Services interface
 func NewMockServices() *services.Services {
 	return &services.Services{
 		User:        &MockUserService{},
-		Family:      &MockFamilyService{},
+		Family:      newMockFamilyService(),
 		Category:    &MockCategoryService{},
 		Transaction: &MockTransactionService{},
 		Budget:      &MockBudgetService{},
@@ -552,51 +555,6 @@ func TestNewHTTPServerWithObservability(t *testing.T) {
 	assert.NotNil(t, server.Echo())
 }
 
-// TestNewHTTPServer_BrokenTemplatesDir_ReportsInitError — сервер не падает,
-// когда шаблоны не читаются, но обязан сохранить ошибку: на неё смотрит
-// testhelpers.SetupHTTPServer и вызывающий код в internal/run.go, иначе тесты
-// молча работают без сессий, CSRF и веб-маршрутов.
-func TestNewHTTPServer_BrokenTemplatesDir_ReportsInitError(t *testing.T) {
-	repos := NewMockRepositories()
-	mockServices := NewMockServices()
-	config := &application.Config{
-		Port:          "8080",
-		Host:          "localhost",
-		SessionSecret: "test-session-secret",
-		TemplatesDir:  filepath.Join(t.TempDir(), "no-such-templates"),
-	}
-
-	server := application.NewHTTPServer(&repos.Repositories, mockServices, config)
-
-	require.Error(t, server.WebServerInitError(), "битый каталог шаблонов обязан оставить ошибку инициализации")
-
-	// Веб-слой не зарегистрирован — /login отсутствует, а /health и API живы.
-	loginRec := httptest.NewRecorder()
-	server.Echo().ServeHTTP(loginRec, httptest.NewRequest(http.MethodGet, "/login", nil))
-	assert.Equal(t, http.StatusNotFound, loginRec.Code)
-
-	healthRec := httptest.NewRecorder()
-	server.Echo().ServeHTTP(healthRec, httptest.NewRequest(http.MethodGet, "/health", nil))
-	assert.Equal(t, http.StatusOK, healthRec.Code)
-}
-
-// TestNewHTTPServer_ValidTemplatesDir_NoInitError — зеркало предыдущего теста:
-// с настоящим каталогом шаблонов ошибки быть не должно.
-func TestNewHTTPServer_ValidTemplatesDir_NoInitError(t *testing.T) {
-	repos := NewMockRepositories()
-	mockServices := NewMockServices()
-	config := &application.Config{
-		Port:          "8080",
-		Host:          "localhost",
-		SessionSecret: "test-session-secret",
-		TemplatesDir:  filepath.Join("..", "web", "templates"),
-	}
-
-	server := application.NewHTTPServer(&repos.Repositories, mockServices, config)
-
-	require.NoError(t, server.WebServerInitError())
-}
-
 func TestHTTPServer_Echo(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
@@ -630,6 +588,7 @@ func TestHTTPServer_HealthEndpoint(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), `"status":"healthy"`)
 	assert.Contains(t, rec.Body.String(), `"timestamp"`)
+	assert.Contains(t, rec.Body.String(), `"setup_complete":true`)
 }
 
 func TestHTTPServer_RoutesSetup(t *testing.T) {
@@ -652,9 +611,10 @@ func TestHTTPServer_RoutesSetup(t *testing.T) {
 	// Health endpoints
 	assert.True(t, routePaths["GET /health"])
 
-	// Web interface routes (if web server is initialized)
-	// Note: Web routes are only available when observability is enabled
-	// In basic HTTP server (without observability), web interface is not initialized
+	// Bearer-маршруты (план 03)
+	assert.True(t, routePaths["POST /api/v1/auth/login"])
+	assert.True(t, routePaths["POST /api/v1/auth/logout"])
+	assert.True(t, routePaths["GET /api/v1/me"])
 
 	// API endpoints - check for some key endpoints
 	assert.True(t, routePaths["POST /api/v1/users"])
@@ -667,6 +627,15 @@ func TestHTTPServer_RoutesSetup(t *testing.T) {
 	assert.True(t, routePaths["GET /api/v1/budgets"])
 	assert.True(t, routePaths["POST /api/v1/reports"])
 	assert.True(t, routePaths["GET /api/v1/reports"])
+
+	// Кроме /health ничего вне /api/v1 нет: веб-слой удалён (план 03, задача 8).
+	for _, route := range routes {
+		if route.Path == "/health" || route.Method == echo.RouteNotFound {
+			continue
+		}
+		assert.True(t, strings.HasPrefix(route.Path, "/api/v1"),
+			"маршрут вне API: %s %s", route.Method, route.Path)
+	}
 }
 
 func TestHTTPServer_MiddlewareSetup(t *testing.T) {
@@ -768,7 +737,7 @@ func TestHTTPServer_IntegrationWithRealEndpoints(t *testing.T) {
 
 	mockServices := &services.Services{
 		User:        &MockUserService{},
-		Family:      &MockFamilyService{},
+		Family:      newMockFamilyService(),
 		Category:    mockCategoryService,
 		Transaction: &MockTransactionService{},
 		Budget:      &MockBudgetService{},
@@ -783,11 +752,10 @@ func TestHTTPServer_IntegrationWithRealEndpoints(t *testing.T) {
 		expected int
 	}{
 		{"GET", "/health", http.StatusOK},
-		{"GET", "/", http.StatusNotFound}, // Dashboard not available without observability
-		// Группа /api/v1 закрыта RequireAPIAuth (S-01). Этот сервер собран на моках
-		// без веб-слоя, поэтому сессии здесь нет и любой запрос к API — 401.
-		// Аутентифицированный путь (200) проверяется на полном стеке:
-		// tests/integration/api_auth_test.go, TestAPIAuth_AuthenticatedRequestsAllowed.
+		{"GET", "/", http.StatusNotFound},
+		// Группа /api/v1 закрыта RequireBearer (S-01). Этот сервер собран на моках,
+		// токена здесь нет и любой запрос к API — 401. Аутентифицированный путь (200)
+		// проверяется на полном стеке: tests/integration/api_auth_test.go.
 		{"GET", "/api/v1/categories", http.StatusUnauthorized},
 		// Несуществующий путь внутри группы тоже отдаёт 401: Echo вешает
 		// group-middleware на catch-all маршрут группы, и это правильно — анонимный
@@ -807,21 +775,40 @@ func TestHTTPServer_IntegrationWithRealEndpoints(t *testing.T) {
 	}
 }
 
-func TestHTTPServer_CORSEnabled(t *testing.T) {
-	// Setup
+// TestHTTPServer_UnknownPath_Returns404JSON — HTTPErrorHandler отдаёт любую ошибку вне
+// хендлера в общем envelope: HTML-страницы ошибок больше нет (план 03, задача 8).
+func TestHTTPServer_UnknownPath_Returns404JSON(t *testing.T) {
 	repos := NewMockRepositories()
 	config := &application.Config{Port: "8080", Host: "localhost"}
-	mockServices := NewMockServices()
-	server := application.NewHTTPServer(&repos.Repositories, mockServices, config)
+	server := application.NewHTTPServer(&repos.Repositories, NewMockServices(), config)
 
-	// Test CORS preflight request
-	req := httptest.NewRequest(http.MethodOptions, "/api/v1/categories", nil)
-	req.Header.Set("Origin", "http://localhost:3000")
-	req.Header.Set("Access-Control-Request-Method", "GET")
-	rec := httptest.NewRecorder()
+	cases := []struct {
+		name   string
+		method string
+		path   string
+		status int
+		code   string
+	}{
+		{"unknown path", http.MethodGet, "/login", http.StatusNotFound, handlers.ErrCodeNotFound},
+		{"wrong method", http.MethodPost, "/health", http.StatusMethodNotAllowed, handlers.ErrCodeMethodNotAllowed},
+		{"no token", http.MethodGet, "/api/v1/me", http.StatusUnauthorized, handlers.ErrCodeUnauthorized},
+	}
 
-	server.Echo().ServeHTTP(rec, req)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			rec := httptest.NewRecorder()
 
-	// Assert CORS headers are present
-	assert.NotEmpty(t, rec.Header().Get("Access-Control-Allow-Origin"))
+			server.Echo().ServeHTTP(rec, req)
+
+			require.Equal(t, tc.status, rec.Code, rec.Body.String())
+			assert.Contains(t, rec.Header().Get(echo.HeaderContentType), echo.MIMEApplicationJSON)
+
+			var body handlers.ErrorResponse
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body), rec.Body.String())
+			assert.Equal(t, tc.code, body.Error.Code)
+			assert.NotEmpty(t, body.Error.Message)
+			assert.NotEmpty(t, body.Meta.Version)
+		})
+	}
 }

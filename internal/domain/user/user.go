@@ -9,12 +9,17 @@ import (
 
 // ErrNotFound — пользователя нет в хранилище.
 //
-// Репозиторий оборачивает его через %w, а сервисный слой проверяет через
-// errors.Is: только так вызывающий отличает «строки нет» от сбоя инфраструктуры
-// (таймаут контекста, SQLITE_BUSY). Разница принципиальна для middleware
-// перепроверки сессии: «нет пользователя» — разлогинить, «БД недоступна» — 500,
-// иначе временный сбой БД гасил бы cookie всем работающим пользователям.
+// Репозиторий оборачивает его через %w, а вызывающие проверяют через errors.Is:
+// только так «строки нет» (401 на логине, 404 в API) отличается от сбоя
+// инфраструктуры (таймаут контекста, SQLITE_BUSY → 500).
 var ErrNotFound = errors.New("user not found")
+
+// ErrFamilyExists — семья уже создана; единственность держит UNIQUE families.singleton.
+var ErrFamilyExists = errors.New("family already exists")
+
+// ErrLastAdmin — запись оставила бы семью без активного администратора.
+// Проверяется в транзакции репозитория: два параллельных PATCH иначе понижали бы друг друга.
+var ErrLastAdmin = errors.New("last active admin")
 
 type User struct {
 	ID        uuid.UUID `json:"id"         bson:"_id"`
@@ -23,6 +28,8 @@ type User struct {
 	FirstName string    `json:"first_name" bson:"first_name"`
 	LastName  string    `json:"last_name"  bson:"last_name"`
 	Role      Role      `json:"role"       bson:"role"`
+	// IsActive — false запрещает вход и отзывает сессии; записи пользователя остаются (A-04).
+	IsActive  bool      `json:"is_active"  bson:"is_active"`
 	CreatedAt time.Time `json:"created_at" bson:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" bson:"updated_at"`
 }
@@ -50,6 +57,7 @@ func NewUser(email, firstName, lastName string, role Role) *User {
 		FirstName: firstName,
 		LastName:  lastName,
 		Role:      role,
+		IsActive:  true,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}

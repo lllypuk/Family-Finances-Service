@@ -1,41 +1,34 @@
 package testhelpers
 
 import (
-	"crypto/rand"
 	"database/sql"
-	"encoding/base64"
 	"errors"
 	"log/slog"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
-	"github.com/gorilla/sessions"
+	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/application"
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/user"
+	authrepo "family-budget-service/internal/infrastructure/auth"
 	budgetrepo "family-budget-service/internal/infrastructure/budget"
 	categoryrepo "family-budget-service/internal/infrastructure/category"
 	reportrepo "family-budget-service/internal/infrastructure/report"
 	transactionrepo "family-budget-service/internal/infrastructure/transaction"
 	userrepo "family-budget-service/internal/infrastructure/user"
 	"family-budget-service/internal/services"
-	"family-budget-service/internal/web/middleware"
 )
 
-const (
-	// TestSessionSecret — секрет подписи сессий тестового сервера.
-	// LoginAs использует его же, чтобы собрать валидную cookie.
-	TestSessionSecret = "test-session-secret-for-integration-tests"
-
-	// testCSRFTokenLength — длина случайного CSRF-токена в байтах.
-	testCSRFTokenLength = 32
-)
+// testDeviceName — device_name сессий, выданных LoginAs.
+const testDeviceName = "integration-test"
 
 // TestServer represents a test HTTP server setup
 type TestServer struct {
@@ -51,8 +44,19 @@ type TestServer struct {
 	authSession *AuthSession
 }
 
+// ServerOption настраивает application.Config тестового сервера.
+type ServerOption func(*application.Config)
+
+// WithTrustedProxies — CIDR, чьи X-Forwarded-For сервер принимает за адрес клиента.
+func WithTrustedProxies(t *testing.T, cidrs string) ServerOption {
+	t.Helper()
+	ranges, err := auth.ParseTrustedProxies(cidrs)
+	require.NoError(t, err)
+	return func(cfg *application.Config) { cfg.TrustedProxies = ranges }
+}
+
 // SetupHTTPServer creates a test HTTP server with real database connections
-func SetupHTTPServer(t *testing.T) *TestServer {
+func SetupHTTPServer(t *testing.T, opts ...ServerOption) *TestServer {
 	// Setup SQLite in-memory database
 	container := SetupSQLiteTestDB(t)
 
@@ -60,15 +64,20 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 	db := container.DB
 
 	// Create repositories
+	userRepo := userrepo.NewSQLiteRepository(db)
+	categoryRepo := categoryrepo.NewSQLiteRepository(db)
 	repos := &handlers.Repositories{
-		User:        userrepo.NewSQLiteRepository(db),
-		Family:      userrepo.NewSQLiteFamilyRepository(db),
+		User:        userRepo,
+		Family:      userrepo.NewSQLiteFamilyRepository(db, categoryRepo, userRepo),
 		Budget:      budgetrepo.NewSQLiteRepository(db),
-		Category:    categoryrepo.NewSQLiteRepository(db),
+		Category:    categoryRepo,
 		Transaction: transactionrepo.NewSQLiteRepository(db),
 		Report:      reportrepo.NewSQLiteRepository(db),
 		Invite:      userrepo.NewInviteSQLiteRepository(db),
+		Session:     authrepo.NewSessionSQLiteRepository(db),
 	}
+
+	authService := auth.NewService(repos.Session, repos.User, repos.Family)
 
 	// Create BackupService for testing with in-memory database.
 	// Каталог бэкапов — временный: иначе сервис пишет ./backups в каталог пакета.
@@ -85,26 +94,20 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 		repos.Report,      // reportRepo
 		repos.Invite,      // inviteRepo
 		backupService,     // backupService
+		authService,       // authService
 		slog.Default(),    // logger
 	)
 
-	// Create HTTP server configuration for testing.
-	// Путь к шаблонам резолвится от корня репозитория, а не от cwd теста, иначе
-	// веб-слой (сессии, CSRF, HTML-маршруты) не поднимется.
 	config := &application.Config{
-		Port:          "8080",
-		Host:          "localhost",
-		SessionSecret: TestSessionSecret,
-		CookieSecure:  false,
-		TemplatesDir:  filepath.Join(RepoRoot(t), "internal", "web", "templates"),
-		StaticDir:     filepath.Join(RepoRoot(t), "internal", "web", "static"),
+		Port: "8080",
+		Host: "localhost",
+	}
+	for _, opt := range opts {
+		opt(config)
 	}
 
 	// Create HTTP server without observability for testing
 	httpServer := application.NewHTTPServer(repos, servicesContainer, config)
-	if err := httpServer.WebServerInitError(); err != nil {
-		t.Fatalf("web server initialization failed, test server has no session/CSRF/web routes: %v", err)
-	}
 
 	testServer := &TestServer{
 		Repos:     repos,
@@ -119,7 +122,7 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 }
 
 // RepoRoot возвращает абсолютный путь к корню репозитория.
-// Нужен потому, что шаблоны, статика и миграции резолвятся относительно cwd,
+// Нужен потому, что миграции резолвятся относительно cwd,
 // а cwd у `go test` — каталог тестируемого пакета.
 func RepoRoot(t *testing.T) string {
 	t.Helper()
@@ -144,67 +147,31 @@ func RepoRoot(t *testing.T) string {
 	}
 }
 
-// AuthSession — аутентифицированная сессия для интеграционных тестов:
-// подписанная cookie сессии плюс CSRF-токен, лежащий в той же сессии.
+// AuthSession — bearer-токен для запросов интеграционных тестов.
 type AuthSession struct {
-	Cookie    *http.Cookie
-	CSRFToken string
+	Token string
 }
 
-// Apply добавляет к запросу cookie сессии и CSRF-токен в заголовке.
+// Apply ставит заголовок Authorization: Bearer.
 func (s *AuthSession) Apply(req *http.Request) {
-	req.AddCookie(s.Cookie)
-	req.Header.Set(middleware.CSRFHeaderKey, s.CSRFToken)
+	req.Header.Set(echo.HeaderAuthorization, "Bearer "+s.Token)
 }
 
-// LoginAs собирает валидную сессию для указанного пользователя без прохода
-// через форму входа: cookie подписывается тем же секретом, что и у тестового
-// сервера, поэтому SessionStore её принимает.
-func LoginAs(t *testing.T, u *user.User) *AuthSession {
+// LoginAs выдаёт токен указанному пользователю, минуя проверку пароля:
+// у пользователей из фабрик вместо хеша заглушка, через Service.Login не пройти.
+// Сессия пишется в БД тестового сервера, поэтому RequireBearer принимает её как настоящую.
+func LoginAs(t *testing.T, ts *TestServer, u *user.User) *AuthSession {
 	t.Helper()
 
-	store := sessions.NewCookieStore([]byte(TestSessionSecret))
-	store.Options = &sessions.Options{
-		Path:     "/",
-		MaxAge:   int(middleware.SessionTimeout.Seconds()),
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	}
+	plain, hash := auth.GenerateToken()
+	require.NoError(t, ts.Repos.Session.Create(t.Context(), auth.NewSession(u.ID, hash, testDeviceName, time.Now())))
 
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
-	sess, err := store.New(req, middleware.SessionName)
-	require.NoError(t, err)
-
-	csrfToken := randomCSRFToken(t)
-	sess.Values[middleware.SessionUserKey] = u.ID
-	sess.Values[middleware.SessionRoleKey] = u.Role
-	sess.Values[middleware.SessionEmailKey] = u.Email
-	sess.Values[middleware.CSRFTokenKey] = csrfToken
-
-	rec := httptest.NewRecorder()
-	require.NoError(t, sess.Save(req, rec))
-
-	cookies := (&http.Response{Header: rec.Header()}).Cookies()
-	require.NotEmpty(t, cookies, "session cookie was not written")
-
-	return &AuthSession{Cookie: cookies[0], CSRFToken: csrfToken}
-}
-
-// randomCSRFToken генерирует токен в том же формате, что и middleware.
-func randomCSRFToken(t *testing.T) string {
-	t.Helper()
-
-	buf := make([]byte, testCSRFTokenLength)
-	_, err := rand.Read(buf)
-	require.NoError(t, err)
-
-	return base64.URLEncoding.EncodeToString(buf)
+	return &AuthSession{Token: plain}
 }
 
 // Auth возвращает сессию администратора тестовой семьи, создавая семью и
-// пользователя в БД при первом обращении. Нужна интеграционным тестам, потому
-// что тестовый сервер несёт полный веб-слой: RequireSetup требует существующей
-// семьи, а CSRFProtection — токена на каждый запрос записи.
+// пользователя в БД при первом обращении. Семья нужна и без запросов к API:
+// без неё логин отвечает SETUP_REQUIRED.
 func (ts *TestServer) Auth(t *testing.T) *AuthSession {
 	t.Helper()
 
@@ -220,7 +187,7 @@ func (ts *TestServer) Auth(t *testing.T) *AuthSession {
 
 	ts.AuthFamily = family
 	ts.AuthUser = admin
-	ts.authSession = LoginAs(t, admin)
+	ts.authSession = LoginAs(t, ts, admin)
 
 	return ts.authSession
 }
@@ -240,7 +207,7 @@ func (ts *TestServer) AuthAs(t *testing.T, role user.Role) (*user.User, *AuthSes
 	member.Role = role
 	require.NoError(t, ts.Repos.User.Create(t.Context(), member))
 
-	return member, LoginAs(t, member)
+	return member, LoginAs(t, ts, member)
 }
 
 // ensureFamily возвращает уже существующую семью или создаёт новую.

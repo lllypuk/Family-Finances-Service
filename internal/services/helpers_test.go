@@ -50,6 +50,16 @@ func (m *MockFamilyRepository) Exists(ctx context.Context) (bool, error) {
 	return args.Bool(0), args.Error(1)
 }
 
+func (m *MockFamilyRepository) Bootstrap(
+	ctx context.Context,
+	family *user.Family,
+	categories []*category.Category,
+	admin *user.User,
+) error {
+	args := m.Called(ctx, family, categories, admin)
+	return args.Error(0)
+}
+
 // MockUserRepository is a mock implementation of UserRepository
 type MockUserRepository struct {
 	mock.Mock
@@ -95,8 +105,28 @@ func (m *MockUserRepository) Update(ctx context.Context, user *user.User) error 
 	return args.Error(0)
 }
 
-func (m *MockUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockUserRepository) UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error {
+	args := m.Called(ctx, id, passwordHash)
+	return args.Error(0)
+}
+
+func (m *MockUserRepository) UpdateRole(ctx context.Context, id uuid.UUID, role user.Role) error {
+	args := m.Called(ctx, id, role)
+	return args.Error(0)
+}
+
+func (m *MockUserRepository) SetActive(ctx context.Context, id uuid.UUID, active bool) error {
+	args := m.Called(ctx, id, active)
+	return args.Error(0)
+}
+
+// MockSessionRevoker — заглушка services.SessionRevoker.
+type MockSessionRevoker struct {
+	mock.Mock
+}
+
+func (m *MockSessionRevoker) RevokeAllSessions(ctx context.Context, userID uuid.UUID) error {
+	args := m.Called(ctx, userID)
 	return args.Error(0)
 }
 
@@ -670,11 +700,6 @@ func (m *MockCategoryService) ValidateCategoryHierarchy(ctx context.Context, cat
 func (m *MockCategoryService) CheckCategoryUsage(ctx context.Context, categoryID uuid.UUID) (bool, error) {
 	args := m.Called(ctx, categoryID)
 	return args.Get(0).(bool), args.Error(1)
-}
-
-func (m *MockCategoryService) CreateDefaultCategories(ctx context.Context) error {
-	args := m.Called(ctx)
-	return args.Error(0)
 }
 
 // Common Test Helper Functions

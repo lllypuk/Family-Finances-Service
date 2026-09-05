@@ -24,7 +24,7 @@ build:
 .PHONY: run
 run:
 	@echo "Running $(APP_NAME)..."
-	@go run -ldflags="$(VERSION_LDFLAGS)" ./cmd/server/main.go
+	@go run -ldflags="$(VERSION_LDFLAGS)" ./cmd/server
 
 # Запуск с локальными переменными окружения для SQLite
 .PHONY: run-local
@@ -34,10 +34,9 @@ run-local:
 	@SERVER_PORT=8080 \
 	 SERVER_HOST=localhost \
 	 DATABASE_PATH=$(DATA_DIR)/budget.db \
-	 SESSION_SECRET=your-super-secret-session-key-for-local-dev \
 	 LOG_LEVEL=debug \
 	 ENVIRONMENT=development \
-	 go run -ldflags="$(VERSION_LDFLAGS)" ./cmd/server/main.go
+	 go run -ldflags="$(VERSION_LDFLAGS)" ./cmd/server
 
 # Тесты с SQLite (in-memory)
 .PHONY: test
@@ -102,6 +101,13 @@ clean:
 	@rm -rf $(BUILD_DIR)
 	@rm -f coverage.out coverage.html
 
+# Пересоздание локальной БД: golang-migrate хранит только номер версии,
+# поэтому правка уже применённой 001 без удаления файла — no-op
+.PHONY: db-reset
+db-reset:
+	@echo "Removing $(DATA_DIR)/budget.db*"
+	@rm -f $(DATA_DIR)/budget.db $(DATA_DIR)/budget.db-wal $(DATA_DIR)/budget.db-shm
+
 # Docker команды
 .PHONY: docker-build
 docker-build:
@@ -130,14 +136,11 @@ docker-logs:
 	@echo "Showing Docker logs..."
 	@$(DOCKER_COMPOSE) logs -f
 
-# Проверка синтаксиса и интерполяции всех compose-файлов — в два прохода:
-#   1) с фиктивными секретами — ловит опечатки в YAML и `${VAR:?…}`;
-#   2) без секретов — проверяет, что `${SESSION_SECRET:?…}` / `${CSRF_SECRET:?…}`
-#      действительно на месте и compose отказывается стартовать (регрессия D-01).
-# `--env-file /dev/null` во втором проходе нужен, чтобы локальный `.env`
-# разработчика не подставил секреты и не сделал проверку бессмысленной.
+# Проверка синтаксиса и интерполяции всех compose-файлов.
 # deploy/*.yml запускаются на месте, из `deploy/` — project directory там своя,
 # поэтому `--project-directory .` для них не нужен (в отличие от docker/*.yml).
+# SESSION_SECRET/CSRF_SECRET приложение больше не читает; deploy/*.yml требуют их
+# через `${VAR:?}` до плана 05, который заменит эти файлы целиком.
 DEPLOY_COMPOSE_FILES=deploy/docker-compose.prod.yml \
 	deploy/docker-compose.nginx.yml \
 	deploy/docker-compose.caddy.yml \
@@ -148,19 +151,10 @@ COMPOSE_VALIDATE_ENV=SESSION_SECRET=validate CSRF_SECRET=validate DOMAIN=example
 compose-config:
 	@echo "Validating compose files..."
 	@echo "  $(DOCKER_COMPOSE_FILE)"
-	@$(COMPOSE_VALIDATE_ENV) $(DOCKER_COMPOSE) config -q
+	@$(DOCKER_COMPOSE) config -q
 	@for f in $(DEPLOY_COMPOSE_FILES); do \
 		echo "  $$f"; \
 		$(COMPOSE_VALIDATE_ENV) docker compose -f $$f config -q || exit 1; \
-	done
-	@echo "Checking that compose refuses to start without secrets..."
-	@for f in $(DOCKER_COMPOSE_FILE) $(DEPLOY_COMPOSE_FILES); do \
-		echo "  $$f"; \
-		if env -u SESSION_SECRET -u CSRF_SECRET \
-			docker compose --env-file /dev/null -f $$f config -q >/dev/null 2>&1; then \
-			echo "ERROR: $$f validates without SESSION_SECRET/CSRF_SECRET (D-01 regression)"; \
-			exit 1; \
-		fi; \
 	done
 	@echo "All compose files are valid"
 
@@ -208,7 +202,7 @@ migrate-create:
 	@echo "Steps to add a migration:"
 	@echo "  1. Add new tables/indexes/triggers to the UP file"
 	@echo "  2. Add corresponding DROP statements to the DOWN file (in reverse order)"
-	@echo "  3. Test with: make clean && make run-local"
+	@echo "  3. Test with: make db-reset && make run-local (an already-migrated DB ignores edits to 001)"
 
 # Безопасность и валидация
 .PHONY: security-check
@@ -253,6 +247,7 @@ help:
 	@echo "Dependencies and Maintenance:"
 	@echo "  deps             - Download and tidy Go modules"
 	@echo "  clean            - Remove build artifacts and coverage reports"
+	@echo "  db-reset         - Delete ./data/budget.db* (schema changes in 001 need a fresh DB)"
 	@echo "  generate         - Generate OpenAPI code"
 	@echo "  docs             - Start documentation server"
 	@echo ""

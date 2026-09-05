@@ -52,17 +52,6 @@ func (r *SQLiteRepository) getSingleFamilyID(ctx context.Context) (uuid.UUID, er
 
 // Create creates a new category in the database
 func (r *SQLiteRepository) Create(ctx context.Context, c *category.Category) error {
-	// Validate category parameters before creating
-	if err := validation.ValidateUUID(c.ID); err != nil {
-		return fmt.Errorf("invalid category ID: %w", err)
-	}
-	if err := validation.ValidateCategoryType(c.Type); err != nil {
-		return fmt.Errorf("invalid category type: %w", err)
-	}
-	if err := validation.ValidateCategoryName(c.Name); err != nil {
-		return fmt.Errorf("invalid category name: %w", err)
-	}
-
 	// Get single family ID
 	familyID, err := r.getSingleFamilyID(ctx)
 	if err != nil {
@@ -81,7 +70,36 @@ func (r *SQLiteRepository) Create(ctx context.Context, c *category.Category) err
 		}
 	}
 
-	// Set timestamps
+	return insertCategory(ctx, r.db, familyID, c)
+}
+
+// CreateWithTransaction вставляет категорию в открытой транзакции (bootstrap семьи);
+// parent_id здесь не проверяется — стартовые категории плоские.
+func (r *SQLiteRepository) CreateWithTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	familyID uuid.UUID,
+	c *category.Category,
+) error {
+	return insertCategory(ctx, tx, familyID, c)
+}
+
+// execer — *sql.DB или *sql.Tx.
+type execer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
+func insertCategory(ctx context.Context, db execer, familyID uuid.UUID, c *category.Category) error {
+	if err := validation.ValidateUUID(c.ID); err != nil {
+		return fmt.Errorf("invalid category ID: %w", err)
+	}
+	if err := validation.ValidateCategoryType(c.Type); err != nil {
+		return fmt.Errorf("invalid category type: %w", err)
+	}
+	if err := validation.ValidateCategoryName(c.Name); err != nil {
+		return fmt.Errorf("invalid category name: %w", err)
+	}
+
 	now := time.Now()
 	c.CreatedAt = now
 	c.UpdatedAt = now
@@ -91,7 +109,7 @@ func (r *SQLiteRepository) Create(ctx context.Context, c *category.Category) err
 			id, name, type, description, parent_id, family_id, is_active, created_at, updated_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	_, err = r.db.ExecContext(ctx, query,
+	_, err := db.ExecContext(ctx, query,
 		sqlitehelpers.UUIDToString(c.ID),
 		c.Name,
 		string(c.Type),
@@ -102,13 +120,11 @@ func (r *SQLiteRepository) Create(ctx context.Context, c *category.Category) err
 		c.CreatedAt,
 		c.UpdatedAt,
 	)
-
 	if err != nil {
-		// Check for unique constraint violation
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			return fmt.Errorf("category with name '%s' already exists in this family", c.Name)
 		}
-		return fmt.Errorf("failed to create category: %w", err)
+		return fmt.Errorf("failed to create category %q: %w", c.Name, err)
 	}
 
 	return nil

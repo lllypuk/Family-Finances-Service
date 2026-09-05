@@ -1,7 +1,9 @@
 package observability
 
 import (
+	"errors"
 	"log/slog"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -28,23 +30,37 @@ func LoggingMiddleware(logger *slog.Logger) echo.MiddlewareFunc {
 			// Логируем результат
 			duration := time.Since(start)
 
+			// Ошибку из middleware (401/403 от RequireBearer) HTTPErrorHandler пишет уже после
+			// нас, поэтому статус берём из самой ошибки, а не из ещё не записанного ответа.
+			status := c.Response().Status
+			var he *echo.HTTPError
+			if errors.As(err, &he) {
+				status = he.Code
+			} else if err != nil {
+				status = http.StatusInternalServerError
+			}
+
 			logArgs := []any{
 				slog.String("request_id", requestID),
 				slog.String("method", c.Request().Method),
 				slog.String("path", c.Request().URL.Path),
 				slog.String("remote_addr", c.RealIP()),
 				slog.String("user_agent", c.Request().UserAgent()),
-				slog.Int("status", c.Response().Status),
+				slog.Int("status", status),
 				slog.Duration("duration", duration),
 				slog.Int64("bytes_in", c.Request().ContentLength),
 				slog.Int64("bytes_out", c.Response().Size),
 			}
 
-			if err != nil {
+			switch {
+			case err == nil:
+				logger.InfoContext(c.Request().Context(), "HTTP request completed", logArgs...)
+			case status < http.StatusInternalServerError:
+				logArgs = append(logArgs, slog.String("error", err.Error()))
+				logger.WarnContext(c.Request().Context(), "HTTP request rejected", logArgs...)
+			default:
 				logArgs = append(logArgs, slog.String("error", err.Error()))
 				logger.ErrorContext(c.Request().Context(), "HTTP request failed", logArgs...)
-			} else {
-				logger.InfoContext(c.Request().Context(), "HTTP request completed", logArgs...)
 			}
 
 			return err

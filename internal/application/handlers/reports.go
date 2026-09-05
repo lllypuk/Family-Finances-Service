@@ -9,10 +9,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
+	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
-	"family-budget-service/internal/web/middleware"
 )
 
 const (
@@ -45,8 +45,8 @@ func NewReportHandler(
 // CreateReport генерирует отчёт и сохраняет его. Автор берётся из сессии:
 // user_id в теле запроса нет намеренно (S-01).
 func (h *ReportHandler) CreateReport(c echo.Context) error {
-	sessionData, sessionErr := middleware.GetUserFromContext(c)
-	if sessionErr != nil {
+	principal, principalErr := auth.FromContext(c)
+	if principalErr != nil {
 		return respondUnauthorized(c)
 	}
 
@@ -69,7 +69,7 @@ func (h *ReportHandler) CreateReport(c echo.Context) error {
 		Name:      req.Name,
 		Type:      report.Type(req.Type),
 		Period:    report.Period(req.Period),
-		UserID:    sessionData.UserID,
+		UserID:    principal.UserID,
 		StartDate: req.StartDate,
 		EndDate:   req.EndDate,
 	})

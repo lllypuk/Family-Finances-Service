@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -13,6 +14,7 @@ import (
 
 	"family-budget-service/internal/application"
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/auth"
 	"family-budget-service/internal/infrastructure"
 	"family-budget-service/internal/observability"
 	"family-budget-service/internal/services"
@@ -29,7 +31,7 @@ type Application struct {
 	repositories         *handlers.Repositories
 	services             *services.Services
 	httpServer           *application.HTTPServer
-	sqliteConn           *infrastructure.SQLiteConnection
+	db                   *sql.DB
 	observabilityService *observability.Service
 }
 
@@ -37,7 +39,6 @@ func NewApplication() (*Application, error) {
 	// Загрузка конфигурации
 	config := LoadConfig()
 
-	// Валидация конфигурации (включая проверку production secrets)
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
@@ -59,31 +60,25 @@ func NewApplication() (*Application, error) {
 		observabilityService: observabilityService,
 	}
 
-	// Подключение к SQLite
-	sqliteConn, err := infrastructure.NewSQLiteConnection(config.Database.Path)
+	db, err := OpenDatabase(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to SQLite: %w", err)
+		return nil, err
 	}
-	app.sqliteConn = sqliteConn
-
-	// Запуск миграций
-	dbURL := fmt.Sprintf("sqlite://%s", config.Database.Path)
-	migrationManager := infrastructure.NewMigrationManager(dbURL, "./migrations")
-	if err = migrationManager.Up(); err != nil {
-		return nil, fmt.Errorf("failed to run migrations: %w", err)
-	}
+	app.db = db
 
 	// Добавляем health check для SQLite
-	app.observabilityService.AddCustomHealthCheck("sqlite", sqliteConn.HealthCheck)
+	app.observabilityService.AddCustomHealthCheck("sqlite", db.PingContext)
 
 	// Инициализация репозиториев
-	app.repositories = infrastructure.NewRepositoriesSQLite(sqliteConn.DB())
+	app.repositories = infrastructure.NewRepositoriesSQLite(db)
 
 	// Получаем logger из observability service
 	logger := app.observabilityService.Logger
 
 	// Инициализация BackupService
-	backupService := services.NewBackupService(sqliteConn.DB(), config.Database.Path, config.GetBackupDir(), logger)
+	backupService := services.NewBackupService(db, config.Database.Path, config.GetBackupDir(), logger)
+
+	authService := auth.NewService(app.repositories.Session, app.repositories.User, app.repositories.Family)
 
 	// Инициализация сервисов
 	app.services = services.NewServices(
@@ -96,18 +91,28 @@ func NewApplication() (*Application, error) {
 		app.repositories.Report,
 		app.repositories.Invite,
 		backupService,
+		authService,
 		logger,
 	)
 
+	trustedProxies, err := config.TrustedProxyRanges()
+	if err != nil {
+		return nil, err
+	}
+	if config.IsProduction() && len(trustedProxies) == 0 {
+		logger.WarnContext(context.Background(),
+			"TRUSTED_PROXIES is empty: X-Forwarded-For is ignored and the login limiter counts only per email; "+
+				"list the reverse proxy network to enable the per-IP limit")
+	}
+
 	// Создание HTTP сервера с observability
 	serverConfig := &application.Config{
-		Port:          config.Server.Port,
-		Host:          config.Server.Host,
-		ReadTimeout:   config.Server.ReadTimeout,
-		WriteTimeout:  config.Server.WriteTimeout,
-		IdleTimeout:   config.Server.IdleTimeout,
-		SessionSecret: config.Web.SessionSecret,
-		CookieSecure:  config.Web.CookieSecure,
+		Port:           config.Server.Port,
+		Host:           config.Server.Host,
+		ReadTimeout:    config.Server.ReadTimeout,
+		WriteTimeout:   config.Server.WriteTimeout,
+		IdleTimeout:    config.Server.IdleTimeout,
+		TrustedProxies: trustedProxies,
 	}
 	app.httpServer = application.NewHTTPServerWithObservability(
 		app.repositories,
@@ -115,15 +120,6 @@ func NewApplication() (*Application, error) {
 		serverConfig,
 		app.observabilityService,
 	)
-
-	// Без веб-слоя не поднимаются ни сессии, ни CSRF, ни один HTML-маршрут, а
-	// /health всё равно отвечает 200 — docker healthcheck и verify_health в
-	// deploy-скриптах считали бы такую установку исправной. Реальная причина —
-	// неверный CWD или отсутствующий каталог шаблонов в образе, и молча
-	// продолжать работу здесь нельзя.
-	if err = app.httpServer.WebServerInitError(); err != nil {
-		return nil, fmt.Errorf("failed to initialize web interface: %w", err)
-	}
 
 	return app, nil
 }
@@ -174,8 +170,8 @@ func (a *Application) shutdown() error {
 	}
 
 	// Закрытие подключения к SQLite
-	if a.sqliteConn != nil {
-		if closeErr := a.sqliteConn.Close(); closeErr != nil {
+	if a.db != nil {
+		if closeErr := a.db.Close(); closeErr != nil {
 			a.observabilityService.Logger.ErrorContext(
 				ctx,
 				"SQLite close error",

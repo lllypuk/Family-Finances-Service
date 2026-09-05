@@ -56,20 +56,29 @@ func (r *SQLiteRepository) getSingleFamilyIDWithTx(ctx context.Context, tx *sql.
 	return id, nil
 }
 
-// scanUser is a helper function to scan user from rows and handle UUID parsing
-func scanUser(rows *sql.Rows) (*user.User, error) {
+// userColumns — список колонок в порядке, который ожидает scanUser.
+const userColumns = `id, email, password_hash, first_name, last_name, role, family_id,
+			   is_active, last_login, created_at, updated_at`
+
+// rowScanner — общее для *sql.Row и *sql.Rows.
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+// scanUser читает пользователя из строки userColumns.
+func scanUser(row rowScanner) (*user.User, error) {
 	var u user.User
 	var idStr, familyIDStr string // familyIDStr unused - single family model
 	var roleStr string
 	var isActive int
 	var lastLogin sql.NullTime
 
-	err := rows.Scan(
+	err := row.Scan(
 		&idStr, &u.Email, &u.Password, &u.FirstName, &u.LastName,
 		&roleStr, &familyIDStr, &isActive, &lastLogin, &u.CreatedAt, &u.UpdatedAt,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to scan user: %w", err)
+		return nil, err
 	}
 
 	// Parse UUID
@@ -79,7 +88,15 @@ func scanUser(rows *sql.Rows) (*user.User, error) {
 	}
 
 	u.Role = user.Role(roleStr)
+	u.IsActive = isActive == 1
 	return &u, nil
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // Create creates a new user in the database
@@ -107,6 +124,7 @@ func (r *SQLiteRepository) Create(ctx context.Context, u *user.User) error {
 	now := time.Now()
 	u.CreatedAt = now
 	u.UpdatedAt = now
+	u.IsActive = true
 
 	query := `
 		INSERT INTO users (
@@ -130,30 +148,14 @@ func (r *SQLiteRepository) Create(ctx context.Context, u *user.User) error {
 	return nil
 }
 
-// GetByID retrieves a user by their ID
+// GetByID retrieves a user by their ID; неактивные тоже возвращаются — активность проверяет auth.
 func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*user.User, error) {
 	// Validate UUID parameter to prevent injection attacks
 	if err := validation.ValidateUUID(id); err != nil {
 		return nil, fmt.Errorf("invalid id parameter: %w", err)
 	}
 
-	query := `
-		SELECT id, email, password_hash, first_name, last_name, role, family_id,
-			   is_active, last_login, created_at, updated_at
-		FROM users
-		WHERE id = ? AND is_active = 1`
-
-	var u user.User
-	var idStr, familyIDStr string // familyIDStr unused - single family model
-	var roleStr string
-	var isActive int
-	var lastLogin sql.NullTime
-
-	err := r.db.QueryRowContext(ctx, query, id.String()).Scan(
-		&idStr, &u.Email, &u.Password, &u.FirstName, &u.LastName,
-		&roleStr, &familyIDStr, &isActive, &lastLogin, &u.CreatedAt, &u.UpdatedAt,
-	)
-
+	u, err := scanUser(r.db.QueryRowContext(ctx, `SELECT `+userColumns+` FROM users WHERE id = ?`, id.String()))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("user with id %s: %w", id, user.ErrNotFound)
@@ -161,58 +163,29 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*user.Use
 		return nil, fmt.Errorf("failed to get user by id: %w", err)
 	}
 
-	// Parse UUID
-	u.ID, err = uuid.Parse(idStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse user ID: %w", err)
-	}
-
-	u.Role = user.Role(roleStr)
-	return &u, nil
+	return u, nil
 }
 
 // GetByEmail retrieves a user by their email address
 func (r *SQLiteRepository) GetByEmail(ctx context.Context, email string) (*user.User, error) {
-	// Validate email to prevent injection attacks
+	// Адрес, который Create не принял бы, не может быть в таблице — это «не найден», а не сбой:
+	// иначе логин с таким email отвечал бы 500 вместо 401.
 	if err := validation.ValidateEmail(email); err != nil {
-		return nil, fmt.Errorf("invalid email parameter: %w", err)
+		return nil, fmt.Errorf("%w: invalid email parameter: %w", user.ErrNotFound, err)
 	}
 
 	// Sanitize email for consistent querying
 	sanitizedEmail := validation.SanitizeEmail(email)
 
-	query := `
-		SELECT id, email, password_hash, first_name, last_name, role, family_id,
-			   is_active, last_login, created_at, updated_at
-		FROM users
-		WHERE email = ? AND is_active = 1`
-
-	var u user.User
-	var idStr, familyIDStr string // familyIDStr unused - single family model
-	var roleStr string
-	var isActive int
-	var lastLogin sql.NullTime
-
-	err := r.db.QueryRowContext(ctx, query, sanitizedEmail).Scan(
-		&idStr, &u.Email, &u.Password, &u.FirstName, &u.LastName,
-		&roleStr, &familyIDStr, &isActive, &lastLogin, &u.CreatedAt, &u.UpdatedAt,
-	)
-
+	u, err := scanUser(r.db.QueryRowContext(ctx, `SELECT `+userColumns+` FROM users WHERE email = ?`, sanitizedEmail))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("user with email %s not found", sanitizedEmail)
+			return nil, fmt.Errorf("user with email %s: %w", sanitizedEmail, user.ErrNotFound)
 		}
 		return nil, fmt.Errorf("failed to get user by email: %w", err)
 	}
 
-	// Parse UUID
-	u.ID, err = uuid.Parse(idStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse user ID: %w", err)
-	}
-
-	u.Role = user.Role(roleStr)
-	return &u, nil
+	return u, nil
 }
 
 // GetAll retrieves all users in the single family
@@ -228,10 +201,9 @@ func (r *SQLiteRepository) GetAll(ctx context.Context) ([]*user.User, error) {
 	}
 
 	query := `
-		SELECT id, email, password_hash, first_name, last_name, role, family_id,
-			   is_active, last_login, created_at, updated_at
+		SELECT ` + userColumns + `
 		FROM users
-		WHERE family_id = ? AND is_active = 1
+		WHERE family_id = ?
 		ORDER BY role, first_name, last_name`
 
 	rows, err := r.db.QueryContext(ctx, query, familyID.String())
@@ -244,7 +216,7 @@ func (r *SQLiteRepository) GetAll(ctx context.Context) ([]*user.User, error) {
 	for rows.Next() {
 		u, scanErr := scanUser(rows)
 		if scanErr != nil {
-			return nil, scanErr
+			return nil, fmt.Errorf("failed to scan user: %w", scanErr)
 		}
 		users = append(users, u)
 	}
@@ -256,43 +228,24 @@ func (r *SQLiteRepository) GetAll(ctx context.Context) ([]*user.User, error) {
 	return users, nil
 }
 
-// Update updates an existing user
+// Update записывает профиль: email, first_name, last_name. Пароль, роль и активность пишут
+// свои методы — иначе параллельная смена пароля или PATCH откатывались бы значениями,
+// прочитанными в начале запроса.
 func (r *SQLiteRepository) Update(ctx context.Context, u *user.User) error {
-	// Validate UUID parameters to prevent injection attacks
 	if err := validation.ValidateUUID(u.ID); err != nil {
 		return fmt.Errorf("invalid user ID: %w", err)
 	}
-
-	// Get single family ID
-	familyID, err := r.getSingleFamilyID(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get family ID: %w", err)
+	if err := validation.ValidateEmail(u.Email); err != nil {
+		return fmt.Errorf("invalid user email: %w", err)
 	}
-
-	// Validate email to prevent injection attacks
-	if validationErr := validation.ValidateEmail(u.Email); validationErr != nil {
-		return fmt.Errorf("invalid user email: %w", validationErr)
-	}
-
-	// Sanitize email before updating
 	u.Email = validation.SanitizeEmail(u.Email)
-
-	// Update timestamp
 	u.UpdatedAt = time.Now()
 
-	query := `
-		UPDATE users
-		SET email = ?, password_hash = ?, first_name = ?, last_name = ?,
-			role = ?, family_id = ?, updated_at = ?
-		WHERE id = ? AND is_active = 1`
-
-	result, err := r.db.ExecContext(ctx, query,
-		u.Email, u.Password, u.FirstName, u.LastName,
-		string(u.Role), familyID.String(), u.UpdatedAt, u.ID.String(),
+	result, err := r.db.ExecContext(ctx,
+		`UPDATE users SET email = ?, first_name = ?, last_name = ?, updated_at = ? WHERE id = ?`,
+		u.Email, u.FirstName, u.LastName, u.UpdatedAt, u.ID.String(),
 	)
-
 	if err != nil {
-		// Check for unique constraint violation (email already exists)
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			return fmt.Errorf("user with email %s already exists", u.Email)
 		}
@@ -303,44 +256,106 @@ func (r *SQLiteRepository) Update(ctx context.Context, u *user.User) error {
 	if err != nil {
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
-
 	if rowsAffected == 0 {
-		return fmt.Errorf("user with id %s not found", u.ID)
+		return fmt.Errorf("user with id %s: %w", u.ID, user.ErrNotFound)
 	}
 
 	return nil
 }
 
-// Delete soft deletes a user (sets is_active to false)
-func (r *SQLiteRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	// Validate UUID parameters to prevent injection attacks
+// UpdateRole меняет роль; понижение последнего активного администратора — user.ErrLastAdmin.
+func (r *SQLiteRepository) UpdateRole(ctx context.Context, id uuid.UUID, role user.Role) error {
+	return r.updateGuarded(ctx, id, role != user.RoleAdmin,
+		`UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, string(role), id.String())
+}
+
+// SetActive включает или выключает пользователя; выключение последнего активного
+// администратора — user.ErrLastAdmin.
+func (r *SQLiteRepository) SetActive(ctx context.Context, id uuid.UUID, active bool) error {
+	return r.updateGuarded(ctx, id, !active,
+		`UPDATE users SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, boolToInt(active), id.String())
+}
+
+// updateGuarded выполняет query в одной транзакции с проверкой «последний активный админ»
+// (только при dropsAdmin). _txlock=immediate берёт write-lock уже на BeginTx, поэтому два
+// параллельных вызова видят результат друг друга.
+func (r *SQLiteRepository) updateGuarded(
+	ctx context.Context, id uuid.UUID, dropsAdmin bool, query string, args ...any,
+) error {
 	if err := validation.ValidateUUID(id); err != nil {
 		return fmt.Errorf("invalid id parameter: %w", err)
 	}
 
-	// Get single family ID
-	familyID, err := r.getSingleFamilyID(ctx)
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to get family ID: %w", err)
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if dropsAdmin {
+		last, lastErr := isLastActiveAdmin(ctx, tx, id)
+		if lastErr != nil {
+			return lastErr
+		}
+		if last {
+			return user.ErrLastAdmin
+		}
 	}
 
-	query := `
-		UPDATE users
-		SET is_active = 0, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ? AND family_id = ? AND is_active = 1`
-
-	result, err := r.db.ExecContext(ctx, query, id.String(), familyID.String())
+	result, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
-		return fmt.Errorf("failed to delete user: %w", err)
+		return fmt.Errorf("failed to update user: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("user with id %s: %w", id, user.ErrNotFound)
+	}
+
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	return nil
+}
+
+// isLastActiveAdmin — строка id активный администратор, а других активных администраторов нет.
+func isLastActiveAdmin(ctx context.Context, tx *sql.Tx, id uuid.UUID) (bool, error) {
+	var self, others int
+	err := tx.QueryRowContext(ctx, `
+		SELECT
+			(SELECT COUNT(*) FROM users WHERE id = ? AND role = ? AND is_active = 1),
+			(SELECT COUNT(*) FROM users WHERE id != ? AND role = ? AND is_active = 1)`,
+		id.String(), string(user.RoleAdmin), id.String(), string(user.RoleAdmin),
+	).Scan(&self, &others)
+	if err != nil {
+		return false, fmt.Errorf("failed to count active admins: %w", err)
+	}
+	return self == 1 && others == 0, nil
+}
+
+// UpdatePassword записывает новый хеш пароля; активность не проверяется — админ может
+// сбросить пароль и деактивированному пользователю.
+func (r *SQLiteRepository) UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error {
+	if err := validation.ValidateUUID(id); err != nil {
+		return fmt.Errorf("invalid id parameter: %w", err)
+	}
+
+	result, err := r.db.ExecContext(ctx,
+		`UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+		passwordHash, id.String(),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
-
 	if rowsAffected == 0 {
-		return fmt.Errorf("user with id %s not found", id)
+		return fmt.Errorf("user with id %s: %w", id, user.ErrNotFound)
 	}
 
 	return nil
@@ -381,8 +396,7 @@ func (r *SQLiteRepository) GetUsersByRole(
 	role user.Role,
 ) ([]*user.User, error) {
 	query := `
-		SELECT id, email, password_hash, first_name, last_name, role, family_id,
-			   is_active, last_login, created_at, updated_at
+		SELECT ` + userColumns + `
 		FROM users
 		WHERE role = ? AND is_active = 1
 		ORDER BY first_name, last_name`
@@ -397,7 +411,7 @@ func (r *SQLiteRepository) GetUsersByRole(
 	for rows.Next() {
 		u, scanErr := scanUser(rows)
 		if scanErr != nil {
-			return nil, scanErr
+			return nil, fmt.Errorf("failed to scan user: %w", scanErr)
 		}
 		users = append(users, u)
 	}
@@ -434,6 +448,7 @@ func (r *SQLiteRepository) CreateWithTransaction(ctx context.Context, tx *sql.Tx
 	now := time.Now()
 	u.CreatedAt = now
 	u.UpdatedAt = now
+	u.IsActive = true
 
 	query := `
 		INSERT INTO users (

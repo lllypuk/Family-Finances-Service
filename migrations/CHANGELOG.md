@@ -13,7 +13,7 @@ All notable changes to database migrations will be documented in this file.
 ### Migration History Consolidated
 
 #### Migration 001: Initial Schema
-- Created base tables: `families`, `users`, `categories`, `transactions`, `budgets`, `budget_alerts`, `reports`, `user_sessions`
+- Created base tables: `families`, `users`, `categories`, `transactions`, `budgets`, `budget_alerts`, `reports`, `user_sessions` (replaced by `sessions` in 2026-09, see below)
 - Created performance indexes for all tables
 - Created triggers for automatic `updated_at` timestamp updates
 - Enabled foreign key constraints with `PRAGMA foreign_keys = ON`
@@ -81,10 +81,16 @@ The following individual migration files were consolidated:
 
 ---
 
+## [2026-09-05] - Bearer auth (plan 03)
+
+- `user_sessions` dropped; `sessions` (token hash, device, idle/absolute expiry) added with `idx_sessions_user_id`
+- `families.singleton` UNIQUE — one family per instance, enforced by the schema
+- Existing databases must be recreated: `make db-reset && make run-local` (an already-applied `001` is not re-run)
+
 ## Future Changes
 
 When adding new database changes:
 1. Add SQL statements to end of `001_consolidated.up.sql`
 2. Add corresponding DROP statements to beginning of `001_consolidated.down.sql`
-3. Test with `make clean && make run-local`
+3. Test with `make db-reset && make run-local`
 4. Document changes in this CHANGELOG

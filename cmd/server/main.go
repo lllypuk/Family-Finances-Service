@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -24,10 +25,18 @@ const (
 const healthCheckFlag = "-health-check"
 
 func main() {
-	// Проверка флага healthcheck
-	if len(os.Args) > 1 && os.Args[1] == healthCheckFlag {
-		healthCheck()
-		return
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case healthCheckFlag:
+			healthCheck()
+			return
+		case cmdSetup:
+			runCommand(cmdSetup, runSetup)
+			return
+		case cmdResetPassword:
+			runCommand(cmdResetPassword, runResetPassword)
+			return
+		}
 	}
 
 	app, err := internal.NewApplication()
@@ -38,6 +47,14 @@ func main() {
 	err = app.Run()
 	if err != nil {
 		log.Fatalf("Failed to run application: %v", err)
+	}
+}
+
+type command func(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer) error
+
+func runCommand(name string, cmd command) {
+	if err := cmd(context.Background(), os.Args[2:], os.Stdin, os.Stdout); err != nil {
+		log.Fatalf("%s failed: %v", name, err)
 	}
 }
 

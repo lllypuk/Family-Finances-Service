@@ -453,26 +453,12 @@ linters:
           - testpackage
           - govet # Allow shadow variables in test setup
           - revive # Allow unused parameters in test functions
-      # Exclude testpackage for web handlers - they need internal access
-      - path: "internal/web/handlers/"
-        linters:
-          - testpackage
       # Exclude linters for DTO tests - they test data structures
       - path: "internal/services/dto/"
         linters:
           - testpackage
           - govet # Allow unused field writes in test data structures
           - testifylint # Allow direct float comparisons for test data
-      # Exclude goconst for web handlers and models: their code is dominated by
-      # template data maps and HTML option labels where every literal key/value
-      # naturally repeats but extracting them into named constants adds noise
-      # without making the code easier to reason about.
-      - path: "internal/web/handlers/"
-        linters:
-          - goconst
-      - path: "internal/web/models/"
-        linters:
-          - goconst
       # internal/version.Version подставляется линкером через -ldflags -X,
       # поэтому обязана быть package-level var, а не константой.
       - path: "internal/version/"

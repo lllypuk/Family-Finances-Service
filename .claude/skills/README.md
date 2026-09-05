@@ -6,25 +6,6 @@ This directory contains custom skills for Claude Code that extend its capabiliti
 
 ### Development & Testing
 
-#### `/test-frontend`
-
-**Description**: Test the web frontend using agent-browser for interactive testing, HTMX verification, and screenshot
-capture
-
-**When to use**:
-
-- Validate login flows and authentication
-- Test HTMX dynamic updates
-- Verify form submissions and validations
-- Check session management
-- Generate screenshots for documentation
-
-**Example**:
-
-```
-/test-frontend /login
-```
-
 #### `/pre-commit`
 
 **Description**: Run comprehensive pre-commit checks (format, test, lint) before committing code
@@ -195,7 +176,7 @@ Control invocation behavior with frontmatter:
 
 ## Best Practices
 
-1. **Descriptive names**: Use lowercase with hyphens (e.g., `test-frontend`)
+1. **Descriptive names**: Use lowercase with hyphens (e.g., `db-backup`)
 2. **Clear descriptions**: Help Claude know when to use the skill
 3. **Focused purpose**: One skill = one clear responsibility
 4. **Include examples**: Show common usage patterns

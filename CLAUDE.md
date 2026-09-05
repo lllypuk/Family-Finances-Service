@@ -16,22 +16,24 @@ make lint             # golangci-lint run --fix
 make pre-commit       # fmt + test + lint
 make security-check   # gosec + govulncheck
 make deps             # go mod download && go mod tidy
+make db-reset         # rm ./data/budget.db* — required after any schema change (see "Database & migrations")
 ```
 
 Run a single test / package:
 
 ```bash
-go test ./internal/services -run TestInviteService_CreateInvite -v
-go test ./tests/integration -run TestInviteFlow_FullCycle -v
-go test ./internal/web/handlers -run 'TestAdminHandler_.*' -v
+go test ./internal/auth -run TestService_Login_Success -v
+go test ./tests/integration -run TestAuth_BearerFullCycle -v
+go test ./internal/application/handlers -run 'TestAuthHandler_.*' -v
 ```
 
 Docker: `make docker-up` / `docker-up-d` / `docker-down` / `docker-logs` — all use `docker/docker-compose.yml`
-(builds `docker/Dockerfile`; **both** `SESSION_SECRET` and `CSRF_SECRET` are required via `${VAR:?}` and compose
-refuses to start without them). Compose is invoked as `docker compose --project-directory .` (the `DOCKER_COMPOSE`
-variable in the Makefile) so that `.env` is read from the repo root — hence `build.context: .` inside
-`docker/docker-compose.yml`. `make compose-config` validates all five compose files (`docker/` + the four
-`deploy/*.yml`) and runs in CI.
+(builds `docker/Dockerfile`; no secrets are required). Compose is invoked as `docker compose --project-directory .`
+(the `DOCKER_COMPOSE` variable in the Makefile) so that `.env` is read from the repo root — hence `build.context: .`
+inside `docker/docker-compose.yml`. `make compose-config` validates all five compose files (`docker/` + the four
+`deploy/*.yml`) and runs in CI; `COMPOSE_VALIDATE_ENV` still feeds dummy `SESSION_SECRET`/`CSRF_SECRET` to the
+`deploy/*.yml` pass because those files demand them via `${VAR:?}` until plan 05 replaces them — the application
+does not read either variable.
 
 SQLite: `make sqlite-shell`, `make sqlite-stats`, `make sqlite-backup`,
 `make sqlite-restore BACKUP_FILE=./backups/<file>.db`.
@@ -43,26 +45,37 @@ linter name and an explanation (`nolintlint` enforces both).
 ### Local testing notes
 
 - Curl the local server with `--noproxy '*'`: `curl -s --noproxy '*' 127.0.0.1:8080/health`
-- Test credentials for the local setup flow: `admin@test.com` / `Admin123!`, family `Test Family`
-- Project skills in `.claude/skills/`: `/test-frontend` (drives `agent-browser` against a running `make run-local`
-  instance), `/pre-commit`, `/db-backup`, `/db-shell`, `/docker-up`, `/migrate-create`, `/memory-update`
+- The family is created from the CLI, not over HTTP. From the repo root, with the same `DATABASE_PATH` the server
+  uses (`./data/budget.db` is the default for both):
+
+  ```bash
+  printf 'Admin1234!\n' | go run ./cmd/server setup --family 'Test Family' --currency RUB \
+      --timezone Europe/Moscow --email admin@test.com --first-name Admin --last-name Test --password-stdin
+  curl -s --noproxy '*' -X POST 127.0.0.1:8080/api/v1/auth/login \
+      -H 'Content-Type: application/json' -d '{"email":"admin@test.com","password":"Admin1234!"}'
+  curl -s --noproxy '*' 127.0.0.1:8080/api/v1/me -H "Authorization: Bearer $TOKEN"
+  ```
+
+  `go run ./cmd/server reset-password --email … --password-stdin` sets a new password and revokes every session.
+- Project skills in `.claude/skills/`: `/pre-commit`, `/db-backup`, `/db-shell`, `/docker-up`, `/migrate-create`,
+  `/memory-update`
 
 ## Architecture
 
 Layered/Clean architecture, single Go module `family-budget-service`. Wiring happens in one place —
 `internal/run.go` (`NewApplication`) — in this order:
 
-1. `LoadConfig()` + `Validate()` (`internal/config.go`) — all config is env vars, no config files.
-   `BACKUP_DIR` is optional: empty means `<dir(DATABASE_PATH)>/backups`, resolved by `Config.GetBackupDir()` and
-   passed to `NewBackupService` (compose mounts `/backups`).
-2. `infrastructure.NewSQLiteConnection(path)` then `infrastructure.NewMigrationManager(dbURL, "./migrations").Up()`
-   — migrations run automatically at startup via golang-migrate.
+1. `LoadConfig()` + `Validate()` (`internal/config.go`) — all config is env vars, no config files:
+   `SERVER_*`, `DATABASE_PATH`, `BACKUP_DIR`, `LOG_*`, `ENVIRONMENT`, `TRUSTED_PROXIES`. There are no secrets.
+   `BACKUP_DIR` empty means `<dir(DATABASE_PATH)>/backups` (`Config.GetBackupDir()`, compose mounts `/backups`).
+2. `internal.OpenDatabase(cfg)` (`internal/bootstrap.go`) — `infrastructure.NewSQLiteConnection` + golang-migrate
+   `Up()` from `./migrations`. The CLI subcommands open the DB through the same function.
 3. `infrastructure.NewRepositoriesSQLite(db)` → `*handlers.Repositories` (one struct holding every repo).
-4. `services.NewServices(...)` → `*services.Services` (one struct holding every service). `StatsService.Summary(ctx,
-   from, to)` owns the dashboard arithmetic (totals, deltas to the previous period, category shares, budget progress,
-   recent activity) and feeds both `GET /api/v1/stats/summary` and the web dashboard; the handler only formats.
-5. `application.NewHTTPServerWithObservability(...)` — builds the Echo instance, registers `/api/v1` handlers, and
-   calls `web.NewWebServer(...)` which mounts the HTML/HTMX interface onto the *same* Echo instance.
+4. `auth.NewService(repos.Session, repos.User, repos.Family)` — built here and handed to
+   `services.NewServices(...)` → `*services.Services` (`Services.Auth`). `StatsService.Summary(ctx, from, to)` owns
+   the dashboard arithmetic behind `GET /api/v1/stats/summary`; the handler only formats.
+5. `application.NewHTTPServerWithObservability(...)` — builds the Echo instance and registers `/health` and
+   `/api/v1`. Nothing else is served: no HTML, no static files, no CORS.
 
 The version reported by `/health` comes from `internal/version` (`version.String()` → `observability.NewHealthService`).
 `Version` is the one package-level var allowed by `.golangci.yml` (file-scoped `gochecknoglobals` exclusion); it
@@ -74,59 +87,73 @@ Every build path that matters passes it: the Makefile `export`s `VERSION` so com
 symbol that does not exist is silently dropped by the linker, so keep the full package path in sync.
 `go build ./...` without `-ldflags` reports `dev`, which is correct, not a bug.
 
-Dependency direction: `web`/`application/handlers` → `services` → repository interfaces → `infrastructure`.
+Dependency direction: `application/handlers` → `services` → repository interfaces → `infrastructure`.
 Repository interfaces are declared in `internal/services/interfaces.go`;
 `internal/application/handlers/repositories.go` re-exports them as type aliases (plus one handler-only extra method
 on `TransactionRepository`). Add a new repo method to the service-layer interface, not to the handler alias.
 
+`internal/auth` sits beside that chain and imports neither `services` nor `application`: it declares the narrow
+interfaces it needs (`SessionRepository`, `UserLookup`, `SetupChecker`), and the SQLite repositories satisfy them.
+`services` imports `auth` only for the password helpers (`HashPassword`, `ValidatePassword`,
+`RegisterPasswordValidation`) and for `SessionRevoker`, which `*auth.Service` implements so that `UserService`
+can revoke sessions on deactivation without knowing about tokens.
+
 ### Single-family model
 
-The deployment serves exactly **one** family. `middleware.RequireSetup` is registered globally: if no family exists,
-every path redirects to `/setup`; once it exists, `/setup` redirects to `/login`. `FamilyService.SetupFamily` is the
-bootstrap path that creates the family plus the first admin user. New members join through the invite system
-(`/invite/:token`), not through open registration — there is no `/register` route or template.
+The deployment serves exactly **one** family; `families.singleton UNIQUE` in the schema is the only guard.
+There is no HTTP bootstrap: `cmd/server setup` (`cmd/server/setup.go` → `internal.Setup`) creates the family, the
+default categories and the first admin in one `BEGIN IMMEDIATE` transaction (`FamilyRepository.Bootstrap`);
+a second run fails with `ErrFamilyAlreadyExists`. Until it has run, `POST /api/v1/auth/login` answers
+`409 SETUP_REQUIRED` and `/health` reports `setup_complete: false` while staying `200` (the docker healthcheck
+must pass pre-setup). Passwords reach the CLI only through `--password-stdin` (first line of stdin), never argv.
+`--timezone` is required and validated but **not persisted** — `user.Family` gets the column in plan 04.
+`InviteService` still exists in `internal/services` but has no route; plan 04 deletes it.
 
-`RequireSetup` details worth knowing (`internal/web/middleware/setup.go`): it matches on `c.Request().URL.Path`, not
-`c.Path()` (which is the *route pattern*, e.g. `/static*`); `isSetupExempt` lets `/health`, `/favicon.ico` and
-`/static/…` through **before** any DB call, so styles load on `/setup` and health checks work pre-setup; a completed
-setup is cached in an `atomic.Bool` inside the closure. Only `true` is cached — a DB error or `false` is not, so the
-setup→ready transition needs no restart.
+### One HTTP surface: `/api/v1` + `GET /health`
 
-### Two HTTP surfaces on one Echo instance
+Two public routes: `GET /health` and `POST /api/v1/auth/login`. Everything else lives in
+`s.echo.Group("/api/v1", auth.RequireBearer(s.services.Auth))` (`internal/application/http_server.go`): the
+login route is registered on the bare Echo instance so the group middleware never sees it, and because the group
+has a catch-all, an unknown `/api/v1/...` path is `401` without a token and `404` JSON with one.
 
-- **Web UI** (`internal/web/`): session cookie auth. `middleware.SessionStore` (gorilla/sessions cookie store,
-  session name `family-budget-session`) + `middleware.CSRFProtection`. Routes are grouped in `web.go`:
-  `RequireAuth()` + `RequireActiveUser(services.User)` for the protected group, `RequireAdmin()` for `/users` and
-  `/admin`, `RequireAdminOrMember()` for finance pages. Session data lands in the Echo context under
-  `middleware.ContextUserKey` (`"user"`) — one exported constant shared with the API middleware; read it back with
-  `middleware.GetUserFromContext`. `RequireActiveUser` re-reads the session owner from the DB on every protected
-  request (`middleware.RevalidateSessionUser`): the cookie store has no server-side session id, so without it a
-  deleted or downgraded user kept access for the full 24h `SessionTimeout`. The role used by the role gates therefore
-  comes from the DB, not from the signed cookie. `SessionStore`'s `Secure` flag is `COOKIE_SECURE`
-  (`config.Web.CookieSecure` → `application.Config.CookieSecure`), defaulting to true in production — set it to
-  `false` when serving over plain HTTP, otherwise the browser drops the cookie and login loops.
-- **REST API** (`internal/application/handlers/`):
-  `/api/v1/{users,family,categories,transactions,budgets,reports,stats,backups}`.
-  The group is registered as `s.echo.Group("/api/v1", RequireAPIAuth(), RequireAPIActiveUser(services.User))` —
-  the *same* session cookie as the web
-  UI is the only credential; there are no API tokens. No session → `401` + JSON
-  `{"error":{"code":"UNAUTHORIZED",…},"meta":{…}}`. Per-route role gates mirror the web and are built from a single
-  `RequireAPIRole(roles ...user.Role)`: `http_server.go` declares `adminOnly := RequireAPIRole(user.RoleAdmin)` for
-  the `/api/v1/users` group and `DELETE /api/v1/categories/:id`, and
-  `financeAccess := RequireAPIRole(user.RoleAdmin, user.RoleMember)` for the
-  categories/transactions/budgets/reports/stats groups (wrong role → `403 FORBIDDEN`); `/api/v1/backups` and
-  `PUT /api/v1/family` are `adminOnly` too, while `GET /api/v1/family` is deliberately ungated (any role, `child`
-  included). All three API middlewares live in
-  `internal/application/handlers/api_auth.go` and reuse the session primitives from `internal/web/middleware`.
-  **Middleware order matters:** the global `CSRFProtection` (`e.Use` in `web.go`) runs *before* the group
-  middleware, so an anonymous write without `X-Csrf-Token` is `403`, and `401` only once a valid token is present.
-  Handlers take the author from the session (`middleware.GetUserFromContext`, see `TransactionHandler.CreateTransaction`)
-  — `UserID` is **not** a field
-  of `CreateTransactionRequest`/`CreateReportRequest`, so sending it in the body does nothing.
+- **Tokens** (`internal/auth`): 32 random bytes, base64url on the wire, `hex(sha256)` in the `sessions` table.
+  `IdleTTL` 30 days sliding, `AbsoluteTTL` 180 days from creation; `last_used_at` is written at most once per
+  `TouchInterval` (1h) so reads do not turn into SQLite writes. `Service.Authenticate` re-reads the owner on every
+  request (one `JOIN users`), so a deactivated user or a changed role takes effect on the next request — there is
+  nothing cached client-side to invalidate. Password change (`PUT /me/password`) keeps the current session and
+  revokes the rest; `PUT /users/:id/password`, `reset-password` and deactivation revoke all.
+- **Login** returns `{token, expires_at, user}`; unknown email and wrong password are the same
+  `401 INVALID_CREDENTIALS` (an unknown email still runs bcrypt against `Service.dummyHash`). Passwords are
+  10…72 bytes, enforced by the `password` validator tag (`auth.RegisterPasswordValidation`) in both
+  `services.newValidator()` and `handlers.newAPIValidator()`; bcrypt cost 12. `LoginRequest` checks only
+  `max=72` — policy lives on the password-setting paths, so tightening it never locks existing users out.
+- **Rate limiter** (`internal/auth/ratelimit.go`, in-memory sliding window): 10 attempts per IP per 5 min, 20 per
+  email per hour, `429 RATE_LIMITED` + `Retry-After`; a successful login resets the email counter, a blocked
+  attempt is not counted. The IP comes from `e.IPExtractor = auth.IPExtractor(config.TrustedProxies)`.
+  **With `TRUSTED_PROXIES` empty the per-IP bucket is off** (`auth.WithoutIPLimit()`, wired in
+  `NewHTTPServerWithObservability` when `Config.LoginLimiter` is nil): behind a proxy every client would share
+  the proxy's address and ten stray failures would lock the whole family out, so only the per-email limit
+  applies until the proxy CIDR is listed. Integration tests that need the IP limit pass
+  `testhelpers.WithTrustedProxies(t, "192.0.2.0/24")` (httptest's `RemoteAddr`).
+- **Role gates** are built from `auth.RequireRole(roles...)`: `adminOnly` for `/api/v1/users`,
+  `DELETE /api/v1/categories/:id`, `/api/v1/backups` and `PUT /api/v1/family`; `financeAccess` (admin or member)
+  for categories/transactions/budgets/reports/stats; `GET /api/v1/family` and the `/auth/*`, `/me*` routes are
+  open to any authenticated role. Wrong role → `403 FORBIDDEN`.
+- **User writes are column-scoped.** `UserRepository.Update` writes only `email`/`first_name`/`last_name`;
+  password, role and `is_active` go through `UpdatePassword`, `UpdateRole`, `SetActive`, so an overlapping
+  `PUT /me` cannot write a stale hash or `is_active` back. `UpdateRole`/`SetActive` run the "last active admin"
+  check and the write in one `BeginTx` (`_txlock=immediate` serialises them) and return `user.ErrLastAdmin`
+  (= `services.ErrLastAdmin`) — there is no read-then-check in the service any more.
+- **Errors outside handlers** (`internal/application/error_handler.go`, `newAPIErrorHandler`): `RequireBearer` and
+  `RequireRole` return `*echo.HTTPError` (they cannot import `handlers` — cycle), and the error handler renders
+  the JSON envelope for every error, router 404 and panics included. A non-`*echo.HTTPError` becomes a bare
+  `500` — the text goes to the log only, so read the server log when debugging one.
+- Handlers take the author from `auth.FromContext(c)` → `*auth.Principal{SessionID, UserID, Email, Role}`
+  (see `TransactionHandler.CreateTransaction`); `UserID` is **not** a field of
+  `CreateTransactionRequest`/`CreateReportRequest`, so sending it in the body does nothing.
   `POST /api/v1/reports` generates the report through `ReportService.GenerateReport` and stores it (`201`);
-  `GET /api/v1/reports/:id/export` returns CSV from `ReportService.ExportReport` — the web handler calls the same
-  service, no CSV writing lives in `internal/web`.
-  **One error envelope, one pagination shape** (`internal/application/handlers/helpers.go`): answer with
+  `GET /api/v1/reports/:id/export` returns CSV from `ReportService.ExportReport`.
+- **One error envelope, one pagination shape** (`internal/application/handlers/helpers.go`): answer with
   `respondAPI`/`respondError(c, status, code, message, details...)`, never a hand-built `ResponseMeta`; validation
   failures are `422 VALIDATION_ERROR` with `error.details[{field, message, code}]`, while broken JSON and an
   unparseable id stay `400`. Every list runs its query params through `parsePagination(c)` (`defaultLimit=50`,
@@ -138,66 +165,30 @@ setup→ready transition needs no restart.
   len(all))`. The `field` in `error.details` is the json name (`start_date`), because every handler validator comes
   from `newAPIValidator()` — plain `validator.New()` would report Go field names.
 
-### Templates
-
-`internal/web/renderer.go` parses `templates/layouts/*.html`, `templates/components/*.html`,
-`templates/admin/*.html` (ParseGlob) and walks `templates/pages/**` (ParseFiles) into one `template.Template`;
-`Render` executes by **template name**, so `{{define "..."}}` names must be unique across the whole tree.
-Custom funcs (`formatCurrency`, `dict`/`map`, `formatBytes`, `safe`, …) are registered in `createTemplateFuncMap`.
-
-**Page data is a struct, not a map.** The transactions/categories/budgets/reports handlers pass a named struct that
-**embeds `*PageData`** (`internal/web/handlers/base.go`), built by `BaseHandler.buildPageData(c, title)` — or
-`formPageData(c, title, errors)` when re-rendering a form. `buildPageData` fills `Title`, flash `Messages`,
-`CSRFToken` and `CurrentUser` (name/surname are read via `services.User.GetUserByID`; `middleware.SessionData` has
-no such fields). Because the embedded field is still called `PageData`, existing `{{.PageData.X}}` keeps working
-while `{{if .CurrentUser}}` and `{{.CSRFToken}}` now resolve at the template root — that omission was the U-02 bug.
-Two consequences when adding a field to a page:
-
-- a template reading a field the struct does not have is a **runtime error (500)**, where a map silently rendered
-  `<no value>`. Add the field to the struct instead of hoping.
-- page titles are Russian constants in `base.go` (`titleTransactions`, `titleNewBudget`, …) — do not inline the
-  literals. `renderXxxFormWithErrors` picks the template from the entity it was given (`existing != nil`,
-  `budgetID != ""`), never from the title string.
-
-Older/simpler pages still pass `map[string]any`; keys for those are constants in
-`internal/web/handlers/template_keys.go` — reuse them instead of new string literals (`goconst`).
-
-**Rendering fails loudly.** `TemplateRenderer.Render` executes into a buffer and only then writes the response, so a
-template reading a missing field returns an error instead of a truncated `200`; `customHTTPErrorHandler` renders the
-error page with the real status code (`c.HTMLBlob(code, …)`). Both were silent before: broken pages looked like
-successful responses, and every 404/500 page was served as `200`.
-
-**Working directory matters:** `./migrations` is resolved relative to the process CWD, so the server must be started
-from the repo root. Templates and static files default to `internal/web/templates` / `internal/web/static` but both
-paths are overridable through `application.Config.TemplatesDir` / `Config.StaticDir` (passed on to `web.Paths`) —
-that is how the test helper stays cwd-independent.
-
-### Frontend rules (hard requirements)
-
-- HTMX **v2.0.4+** and PicoCSS **v2.1.1+** only — never downgrade to HTMX 1.x.
-- No custom JavaScript for interactivity; use `hx-*` attributes and server-rendered partials.
-- Handlers branch on HTMX via `BaseHandler.IsHTMXRequest` / the `Hx-Request` header, and redirect with the
-  `Hx-Redirect` response header (see `internal/web/handlers/base.go`).
+**Working directory matters:** `./migrations` is resolved relative to the process CWD (`migrationsDir` in
+`internal/bootstrap.go`), so both the server and the CLI subcommands must be started from the repo root.
 
 ### Known rough edges (verified, not fixed)
 
-Do not treat these as regressions you introduced, and do not paper over them with a `nolint` or a template guard:
+Do not treat these as regressions you introduced:
 
-- **No rate limiting on login** ([S-03](docs/specs/002-security-audit.md#s-03)) — protection exists only in the
-  nginx/Caddy configs and fail2ban, i.e. not at all for `docker-compose.minimal.yml` or a bare systemd deployment.
-- **The error page never shows the raw error for a non-`*echo.HTTPError`** (`customHTTPErrorHandler` in
-  `web.go`): it logs the detail and renders a generic title. If you are debugging a 500, read the server log —
-  the page will not tell you anything.
-- **`internal/config.go` still defaults `SESSION_SECRET`/`CSRF_SECRET` to known placeholders** and `Validate()`
-  compares against those exact strings, so a secret of `123` passes. The compose files now demand both via `${VAR:?}`,
-  which covers the documented paths but not `go run ./cmd/server` with `ENVIRONMENT=development`.
+- **`deploy/**` is stale until plan 05**: the four `deploy/*.yml`, `deploy/.env.production.example` and the
+  nginx/Caddy/fail2ban configs still require `SESSION_SECRET`/`CSRF_SECRET` and rate-limit a `/login` page that
+  no longer exists. Do not fix them piecemeal; plan 05 replaces the directory.
+- **`--timezone` is accepted and dropped** (see "Single-family model") until plan 04 adds the column.
 
 ## Database & migrations
 
 All schema lives in **two consolidated files**: `migrations/001_consolidated.up.sql` and `001_consolidated.down.sql`
-(tables: families, users, categories, transactions, budgets, budget_alerts, reports, user_sessions, invites).
+(tables: families, users, categories, transactions, budgets, budget_alerts, reports, invites, sessions).
 There is no per-change migration file; append new DDL to the end of the `.up.sql` and the matching `DROP` to the
 front of the `.down.sql`. See `migrations/README.md`, and `make migrate-create` for the reminder.
+
+**Editing `001` does not touch an existing database.** golang-migrate stores only the version number, so on a DB
+that already has version 1 `Up()` returns `ErrNoChange` and the new DDL is skipped silently; the test path starts
+from an empty in-memory DB and will not show this. Until the first release the schema changes by rewriting `001`,
+and local and server databases are recreated: `make db-reset` (deletes `./data/budget.db*`) then `make run-local`
+and `setup` again.
 
 Two independent code paths apply migrations, and **both must keep working**:
 
@@ -206,31 +197,30 @@ Two independent code paths apply migrations, and **both must keep working**:
 
 `testhelpers.SQLiteTestDB.CleanTables` has a hardcoded, FK-ordered table list — add any new table to it.
 
+SQLite is opened with `_txlock=immediate` (`infrastructure.NewSQLiteConnection`), so every `BeginTx` takes the
+write lock up front; with `MaxOpenConns=1` this is invisible, but do not "optimise" it away — `Bootstrap` relies
+on it.
+
 ## Testing
 
 - In-memory SQLite (`:memory:?_foreign_keys=ON&_journal_mode=WAL`), no Docker, no sockets. Prefer keeping it that way.
 - `testhelpers.SetupSQLiteTestDB(t)` — fresh migrated DB with automatic `t.Cleanup`.
-- `testhelpers.SetupHTTPServer(t)` — full repo + service + `application.HTTPServer` stack over an in-memory DB,
-  **including the whole web layer**: `SessionStore`, `CSRFProtection`, `RequireSetup` and the HTML routes, rendered
-  from the real templates. This is the entry point for `tests/integration/*`.
-  - Templates are resolved cwd-independently: the helper walks up to `go.mod` (`testhelpers.RepoRoot(t)`) and passes
-    the absolute path as `application.Config.TemplatesDir`. Do not reintroduce a cwd-relative default here — `go test`
-    runs with cwd = the package directory.
-  - A web-layer init failure is no longer swallowed: `HTTPServer.WebServerInitError()` surfaces it and the helper
-    calls `t.Fatalf`. If a test suddenly dies on "web server initialization failed", a template failed to parse.
-    In production the same check is fatal — `NewApplication` (`internal/run.go`) returns the error and the process
-    exits non-zero, instead of serving a 200 `/health` with no sessions, no CSRF and no HTML routes.
-  - Because the real middleware is in play, integration requests need a session **and** a CSRF token on writes:
-    `ts.Auth(t)` (admin of the test family, memoized), `ts.AuthAs(t, role)` (extra user in the *same* family),
-    or `testhelpers.LoginAs(t, u)` (signs the cookie itself, no DB access). All return an `*AuthSession{Cookie, CSRFToken}`; call `sess.Apply(req)`.
-    `ts.AuthUser` / `ts.AuthFamily` hold what `Auth` created.
+- `testhelpers.SetupHTTPServer(t)` — full repo + `auth.Service` + services + `application.HTTPServer` stack over
+  an in-memory DB, with the real `RequireBearer`, role gates, rate limiter and error handler. This is the entry
+  point for `tests/integration/*`.
+  - Every `/api/v1` request needs a token: `ts.Auth(t)` (admin of the test family, memoized),
+    `ts.AuthAs(t, role)` (extra user in the *same* family — a second family cannot exist), or
+    `testhelpers.LoginAs(t, ts, u)`, which writes a `sessions` row for `u` directly because factory users carry a
+    placeholder password hash. All return an `*AuthSession{Token}`; call `sess.Apply(req)` to set
+    `Authorization: Bearer`. `ts.AuthUser` / `ts.AuthFamily` hold what `Auth` created.
+  - `testhelpers.RepoRoot(t)` walks up to `go.mod`; use it for anything cwd-relative (`openapi.yaml`, migrations
+    in `bootstrap_test.go` via `t.Chdir`) — `go test` runs with cwd = the package directory.
 - `testhelpers/factories.go` — `CreateTestFamily`, `CreateTestUser`, etc.
+- Handler unit tests put a `*auth.Principal` into the context under `auth.ContextKey` — see `principalContext`
+  in `internal/application/handlers/auth_test.go` and reuse it rather than hand-rolling contexts.
 - Naming: `TestXxx_Method_Scenario` (e.g. `TestTransactionService_CreateTransaction_Success`).
 - `testpackage` is enabled: use an external `package foo_test` unless the path is excluded in `.golangci.yml`
-  (`internal/web/handlers/`, `internal/observability/`, `internal/services/dto/`, `tests/`).
-- Web handler tests bypass real sessions: `RequireAuth`/`GetSessionData` honor the context keys
-  `mock_session_data` and `mock_session_error`. See `internal/web/handlers/testhelpers_test.go`
-  (`newTestContext`, `withSession`, `withHTMX`) — reuse those helpers rather than hand-rolling contexts.
+  (`internal/observability/`, `internal/services/dto/`, `tests/`).
 - Use testify `require` for fatal preconditions, `assert` for the rest (`testifylint` enforces correct usage).
 
 ## Linter constraints worth knowing up front
@@ -253,35 +243,36 @@ Two independent code paths apply migrations, and **both must keep working**:
 - File names are snake_case-ish and descriptive: `transaction_service.go`, `user_repository_sqlite.go`.
 - Keep handlers thin — business logic belongs in `internal/services/`.
 - Commit prefixes in use: `feat:`, `fix:`, `docs:`, `refactor:`, `security:`, `deps(deps):`.
-- PRs: summary + rationale, link to `docs/backlog.md` item when applicable, test evidence, screenshots for UI changes.
+- PRs: summary + rationale, link to `docs/backlog.md` item when applicable, test evidence.
 
 ## Reference docs
 
 Project documentation lives in `docs/` (this replaced the older `.memory_bank/` directory that some docs still
 reference): `docs/README.md` (navigation), `docs/product_brief.md`, `docs/tech_stack.md`, `docs/backlog.md`,
 `docs/guides/{coding_standards,testing_strategy}.md`, `docs/patterns/{api_standards,error_handling}.md`.
-`docs/specs/` holds the audit findings (project assessment, security, UI/UX, deployment readiness) with per-finding
+`docs/specs/` holds the audit findings (project assessment, security, deployment readiness) with per-finding
 status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the finished ones.
 
-**Current direction:** `docs/specs/005-api-only-redesign.md` — the service becomes an API-only backend for an
-Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans `docs/plans/20260904-0[2-5]-*.md`
-run in order (01 is done, in `docs/plans/completed/`); the web layer described above survives only until plan 03. Do not invest in the web UI.
+**Current direction:** `docs/specs/005-api-only-redesign.md` — the service is an API-only backend for an
+Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–03 are done
+(`docs/plans/completed/`); `docs/plans/20260904-0[4-5]-*.md` run next, in order.
 
 `docs/api/openapi.yaml` is the target contract for `/api/v1` (plus `GET /health`) — the Android client generates
-from it, plans 02–04 bring the code up to it. **A registered route with no operation in the spec fails
-`make test`** (`tests/integration/openapi_coverage_test.go`: `TestOpenAPISpec_CoversRegisteredRoutes`, plus
+from it. **A registered route with no operation in the spec fails `make test`**
+(`tests/integration/openapi_coverage_test.go`: `TestOpenAPISpec_CoversRegisteredRoutes`, plus
 `TestOpenAPISpec_OperationsHaveIDAndErrorResponse` requiring an `operationId` and a 4xx `$ref: Error` on every
 operation). The reverse — described but not implemented — is allowed until plan 04. See `docs/api/README.md`.
 Self-hosted deployment (install/upgrade/backup scripts, nginx & Caddy configs, systemd units, fail2ban) is in
-`deploy/` — see `deploy/README.md`.
+`deploy/` — see `deploy/README.md` and the "Known rough edges" note above.
 
 When runtime/dev commands disagree between documents, `Makefile` + this file win.
 
 ## Stack versions (keep in sync with go.mod)
 
 Go **1.26.7** (also pinned as `GO_VERSION` in `.github/workflows/ci.yml`), Echo **v4.15.4**,
-`modernc.org/sqlite` (pure Go, no CGO), golang-migrate v4, gorilla/sessions, go-playground/validator v10,
-testify, `go.yaml.in/yaml/v3` (test-only: parses `docs/api/openapi.yaml` in the coverage test). Frontend: HTMX 2.0.4, PicoCSS 2.1.1.
+`modernc.org/sqlite` (pure Go, no CGO), golang-migrate v4, `golang.org/x/crypto` (bcrypt),
+go-playground/validator v10, testify, `go.yaml.in/yaml/v3` (test-only: parses `docs/api/openapi.yaml` in the
+coverage test).
 
 CI (`.github/workflows/ci.yml`) runs golangci-lint, `govulncheck`, `make test-coverage`, `make build`, and a Docker
 build/run smoke test. Additional workflows: `docker.yml`, `security.yml` (CodeQL, Semgrep, TruffleHog, OSV),

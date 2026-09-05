@@ -2,11 +2,8 @@
 
 ## Отложенные обновления зависимостей
 
-- **github.com/labstack/echo-contrib** — текущая v0.17.1. PR #66 закрыт как obsolete 2026-08.
-  Используется в `internal/web/middleware/{session,csrf}.go` для cookie-сессий и CSRF.
-  Делать осознанно отдельным коммитом после проверки API `session.Middleware`/`session.Store`
-  и CSRF-хелперов между v0.17 и v0.50. Версия должна быть привязана к используемой версии
-  Echo (в проекте используется `labstack/echo/v4 v4.15.4`).
+- **github.com/labstack/echo-contrib** — PR #66 закрыт как obsolete 2026-08; зависимость ушла
+  вместе с веб-слоем (план 03), бампить нечего.
 
 - **modernc.org/sqlite** — PR #77 закрыт как obsolete 2026-08, бамп до v1.48.1 применён
   коммитом `013d9e0` напрямую на main (Go modules batch bump).
@@ -23,42 +20,32 @@
 ## Открытые находки аудита (август 2026)
 
 Полные описания и шаги воспроизведения — в [docs/specs/](specs/README.md).
-План [03-bearer-auth-web-removal](plans/20260904-03-bearer-auth-web-removal.md) закрывает
-S-03, `CSRF_SECRET`, бамп `echo-contrib` (зависимость уходит) и долг `application → web`
-одним заходом — отдельные планы на них не нужны.
-
-- **S-03 — нет rate limiting на логин** ([002-security-audit.md](specs/002-security-audit.md#s-03)).
-  Защита от перебора живёт только в конфигурациях nginx/Caddy и fail2ban, значит
-  `docker-compose.minimal.yml` и native systemd не покрыты. Нужен отдельный план для защиты
-  на уровне приложения.
+План [03-bearer-auth-web-removal](plans/completed/20260904-03-bearer-auth-web-removal.md) закрыл
+S-03 (лимитер логина в `internal/auth/ratelimit.go`), `CSRF_SECRET` (вместе со всем cookie-конфигом),
+`echo-contrib` и долг `application → web`.
 
 - **Тег `v0.1.0` не поставлен** — действие владельца репозитория. `docker.yml` и `release.yml`
   уже указывают `file: docker/Dockerfile`, блокера нет. Ставить тег имеет смысл после перехода
-  на API-only ([005](specs/005-api-only-redesign.md)), иначе первый релиз — образ с веб-интерфейсом,
-  который тут же удаляется.
-
-- **`CSRF_SECRET` — конфигурационная ручка, которую никто не читает.** `internal/config.go`
-  объявляет и валидирует `Web.CSRFSecret` (в production — не плейсхолдер и не короче 32 символов),
-  но CSRF-токены генерируются случайно и хранятся в сессии, которую подписывает `SESSION_SECRET`,
-  так что значение переменной ни на что не влияет. Либо использовать её для подписи токенов, либо
-  убрать из конфига, compose-файлов и документации.
+  на API-only ([005](specs/005-api-only-redesign.md)) — после плана 04, когда контракт денег и дат
+  совпадёт с `openapi.yaml`.
 
 ## Технический долг
 
-- **`internal/application/handlers` импортирует `internal/web/middleware`.** Направление
-  зависимостей, записанное в CLAUDE.md («Architecture»), — `web`/`application/handlers` →
-  `services` → репозитории; обратного ребра `application → web` там нет. Сейчас его создают
-  `api_auth.go`, `users.go` и `transactions.go`, которым нужны примитивы сессии
-  (`SessionData`, `GetSessionData`, `GetUserFromContext`, `SessionUserLookup`,
-  `RevalidateSessionUser`, `ContextUserKey`). Это не веб-специфика, а общая инфраструктура
-  аутентификации, и правильное решение — вынести её в нейтральный пакет
-  (`internal/session` или `internal/auth`), который импортируют оба слоя.
+- **`deploy/**` до плана 05 описывает прежнюю веб-сборку**: compose-файлы требуют
+  `SESSION_SECRET`/`CSRF_SECRET`, которые приложение не читает (Makefile `COMPOSE_VALIDATE_ENV`
+  подставляет заглушки ради `make compose-config`), nginx/Caddy/fail2ban ограничивают `/login`.
+  Чинить точечно не нужно — план 05 заменяет каталог целиком.
 
-  Не сделано осознанно: переезд затрагивает ~110 обращений к `middleware.*` в ~26 файлах
-  (весь `internal/web/handlers`, `web.go`, `testhelpers`, тесты), то есть это сплошное
-  переименование, а не точечная правка, и делать его в конце длинной ветки — риск без
-  выигрыша. Общий ключ контекста уже экспортирован (`middleware.ContextUserKey`), так что
-  «совпадают по случайности» два пакета больше не могут.
+- **Инвайты живут без вызывающих**: `Repositories.Invite`, `Services.Invite`, `InviteService`,
+  `user.InviteRepository` и таблица `invites` после удаления веб-слоя нужны только своим тестам.
+  Удаляет план 04, задача 2.
+
+- **`--timezone` в CLI `setup` принимается и не сохраняется** — у `user.Family` нет колонки до плана 04.
+
+- **`deploy/docker-compose.{caddy,nginx,prod}.yml` не задают `TRUSTED_PROXIES`**: за прокси реальный IP
+  неизвестен, и лимитер логина работает только по email (корзина per-IP выключается автоматически, иначе
+  десять чужих неудач закрывали бы вход всей семье). Закрывает план 05, задача 2 — единый compose с
+  `TRUSTED_PROXIES=172.20.0.0/16` и явной подсетью.
 
 - **Комментарии в `deploy/scripts/{install,upgrade}.sh` двуязычны.** Пояснения, добавленные
   в августе 2026, написаны по-русски поверх англоязычных скриптов (47 и 71 строка

@@ -16,11 +16,9 @@ const (
 	ErrCodeFamilyNotFound = "FAMILY_NOT_FOUND"
 	// ErrCodeCategoryNotFound signals that the requested category does not exist.
 	ErrCodeCategoryNotFound = "CATEGORY_NOT_FOUND"
-	// ErrCodeUnauthorized signals a request without a valid session
-	// (returned by RequireAPIAuth, see api_auth.go).
+	// ErrCodeUnauthorized signals a request without a valid bearer token (auth.RequireBearer).
 	ErrCodeUnauthorized = "UNAUTHORIZED"
-	// ErrCodeForbidden signals a session whose role is not allowed on the route
-	// (returned by RequireAPIRole, see api_auth.go).
+	// ErrCodeForbidden signals a token whose role is not allowed on the route (auth.RequireRole).
 	ErrCodeForbidden = "FORBIDDEN"
 	// ErrCodeNotFound signals an unknown route or a missing resource (404 outside a handler).
 	ErrCodeNotFound = "NOT_FOUND"
@@ -28,14 +26,15 @@ const (
 	ErrCodeMethodNotAllowed = "METHOD_NOT_ALLOWED"
 	// ErrCodeBadRequest signals a request rejected before reaching a handler.
 	ErrCodeBadRequest = "BAD_REQUEST"
-	// ErrCodeCSRFTokenInvalid signals a missing or mismatched X-Csrf-Token on a write.
-	//nolint:gosec // G101: это код ошибки в ответе API, а не учётные данные.
-	ErrCodeCSRFTokenInvalid = "CSRF_TOKEN_INVALID"
 	// ErrCodeInternal signals a server-side failure; details stay in the log only.
 	ErrCodeInternal = "INTERNAL_ERROR"
-	// ErrCodeCannotDeleteSelf signals an attempt to delete the session's own user.
-	ErrCodeCannotDeleteSelf = "CANNOT_DELETE_SELF"
-	// ErrCodeLastAdmin signals an attempt to delete the last remaining admin.
+	// entityUser — имя сущности для HandleNotFoundError: USER_NOT_FOUND / "User not found".
+	entityUser = "User"
+	// ErrCodeEmailTaken signals that another user already has the requested email.
+	ErrCodeEmailTaken = "EMAIL_TAKEN"
+	// ErrCodeCannotDeactivateSelf signals an attempt to deactivate the session's own user.
+	ErrCodeCannotDeactivateSelf = "CANNOT_DEACTIVATE_SELF"
+	// ErrCodeLastAdmin signals an attempt to deactivate or demote the last active admin.
 	ErrCodeLastAdmin = "LAST_ADMIN"
 	// ErrCodeCurrencyLocked signals a currency change on a family that already has transactions.
 	ErrCodeCurrencyLocked = "CURRENCY_LOCKED"
@@ -53,6 +52,13 @@ const (
 	ErrCodeBackupNotFound = "BACKUP_NOT_FOUND"
 	// ErrCodeBackupFailed signals that a backup could not be created.
 	ErrCodeBackupFailed = "BACKUP_FAILED"
+	// ErrCodeInvalidCredentials — неверный email или пароль; ответ одинаков для обоих случаев.
+	//nolint:gosec // G101: это код ошибки в ответе API, а не учётные данные.
+	ErrCodeInvalidCredentials = "INVALID_CREDENTIALS"
+	// ErrCodeSetupRequired — семья ещё не создана CLI `setup`, логин невозможен.
+	ErrCodeSetupRequired = "SETUP_REQUIRED"
+	// ErrCodeRateLimited — сработал лимитер логина; секунды до повтора — в Retry-After.
+	ErrCodeRateLimited = "RATE_LIMITED"
 
 	// Standard error messages paired with the codes above. Kept as constants
 	// so changes propagate to API consumers in lockstep with code updates.
@@ -65,17 +71,24 @@ const (
 	ErrMessageInvalidCategoryRef = "Invalid category, user, or family ID"
 	ErrMessageFamilyNotFound     = "Family not found"
 	ErrMessageInternal           = "Internal server error"
-	ErrMessageCannotDeleteSelf   = "Cannot delete your own account"
-	ErrMessageLastAdmin          = "Cannot delete the last administrator"
+	ErrMessageCannotDeactivate   = "Cannot deactivate your own account"
+	ErrMessageEmailTaken         = "Email already exists"
+	ErrMessageLastAdmin          = "Cannot deactivate or demote the last administrator"
 	ErrMessageCurrencyLocked     = "Currency cannot be changed while transactions exist"
 	ErrMessageInvalidBackupName  = "Invalid backup filename"
 	ErrMessageBackupNotFound     = "Backup not found"
 	ErrMessageBackupFailed       = "Failed to create backup"
 	ErrMessageValidationFailed   = "Validation failed"
 	ErrMessageCategoryNotFound   = "Category not found"
+	ErrMessageInvalidCredentials = "Invalid email or password"
+	ErrMessageSetupRequired      = "Family is not set up yet"
+	ErrMessageRateLimited        = "Too many login attempts"
+	// ErrMessageNoFields — деталь 422 для частичного обновления без единого поля.
+	ErrMessageNoFields = "at least one field is required"
 
 	// fieldBody — значение ErrorDetail.Field для ошибок, не привязанных к полю.
-	fieldBody     = "body"
-	fieldRole     = "role"
-	fieldCurrency = "currency"
+	fieldBody        = "body"
+	fieldRole        = "role"
+	fieldNewPassword = "new_password"
+	fieldCurrency    = "currency"
 )

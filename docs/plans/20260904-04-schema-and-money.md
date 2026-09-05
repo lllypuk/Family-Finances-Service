@@ -31,7 +31,7 @@ A-03…A-07). Продовых данных нет, поэтому `001_consolid
   (`internal/infrastructure/budget/budget_repository_sqlite.go:617,673`) и тип `Alert` (`:39`)
   читают и пишут таблицу; заглушки — только веб-обработчики.
 - Триггеры `updated_at` — `migrations/001_consolidated.up.sql:198-227`.
-- `CleanTables` (`internal/testhelpers/sqlite.go:76-85`) уже сейчас не содержит `invites`.
+- `CleanTables` (`internal/testhelpers/sqlite.go`) после плана 03 содержит `sessions` и `invites`.
 - Соединение к SQLite одно (`internal/infrastructure/sqlite.go:46`) — check-then-insert
   внутри одного запроса не гоняется с другим.
 
@@ -86,7 +86,7 @@ A-03…A-07). Продовых данных нет, поэтому `001_consolid
 | `budgets` | `amount_minor`, `spent_minor INTEGER NOT NULL DEFAULT 0`; `start_date`/`end_date` → `TEXT` дата |
 | `reports` | `start_date`/`end_date` → `TEXT` дата; `data` JSON с `*_minor` |
 | `sessions` | из плана 03 |
-| удалить | `user_sessions`, `budget_alerts`, `invites` и их индексы |
+| удалить | `budget_alerts`, `invites` и их индексы (`user_sessions` уже удалена планом 03) |
 
 JSON: `amount_minor` (int64), `date` (`"2026-09-04"`), `currency` и `timezone` в `Family`.
 Фильтры транзакций: `amount_from_minor`, `amount_to_minor`, `date_from`, `date_to` (даты).
@@ -105,7 +105,7 @@ JSON: `amount_minor` (int64), `date` (`"2026-09-04"`), `currency` и `timezone` 
 
 - [ ] переписать `.up.sql` по таблице выше одним файлом; `.down.sql` — `DROP` в обратном порядке; триггеры `updated_at` сохранить
 - [ ] `migrations/README.md`: описание новой схемы; напоминание про `make db-reset`
-- [ ] `CleanTables` — актуальный список (в том числе убрать `budget_alerts`, `user_sessions`; `invites` там и не было)
+- [ ] `CleanTables` — актуальный список (убрать `budget_alerts`, `invites`)
 - [ ] удалить `budget.Alert`, `GetAlerts`/`CreateAlert`/`Alert` из репозитория бюджетов и из `BudgetRepository` в `interfaces.go`; их тесты — тоже
 - [ ] тесты: обе ветки миграций поднимаются на пустой БД; вставка второй семьи и роли `child` падают на UNIQUE/CHECK (тест репозитория)
 - [ ] `make fmt && make test && make lint` — зелёные (сборка ломается на `child` и инвайтах — их чинят задачи 2–3; до этого держать старые CHECK на роли и таблицу `invites` в миграции и убрать их в задаче 3)

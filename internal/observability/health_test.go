@@ -2,6 +2,7 @@ package observability_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -100,6 +101,22 @@ func TestHealthHandlers(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 		assert.Contains(t, rec.Body.String(), "healthy")
 		assert.Contains(t, rec.Body.String(), "test-version")
+	})
+
+	// Единственный реальный источник 503 для docker healthcheck — упавшая проверка setup.
+	t.Run("HealthHandler_SetupCheckFails_503", func(t *testing.T) {
+		hs := observability.NewHealthService("v")
+		hs.SetSetupChecker(func(context.Context) (bool, error) { return false, errors.New("db down") })
+		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		rec := httptest.NewRecorder()
+
+		require.NoError(t, hs.HealthHandler()(e.NewContext(req, rec)))
+
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+		var status observability.HealthStatus
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &status))
+		assert.Equal(t, observability.HealthStatusUnhealthy, status.Status)
+		assert.False(t, status.SetupComplete)
 	})
 }
 
@@ -240,5 +257,51 @@ func BenchmarkHealthService(b *testing.B) {
 			c := e.NewContext(req, rec)
 			handler(c)
 		}
+	})
+}
+
+// TestHealthService_SetupChecker — setup_complete и проверка "setup": отсутствие семьи не
+// делает сервис нездоровым, а сбой проверки — делает.
+func TestHealthService_SetupChecker(t *testing.T) {
+	t.Run("WithoutChecker", func(t *testing.T) {
+		service := observability.NewHealthService("v")
+
+		health := service.CheckHealth(context.Background())
+
+		assert.False(t, health.SetupComplete)
+		assert.NotContains(t, health.Checks, "setup")
+	})
+
+	t.Run("SetupNotDone_StaysHealthy", func(t *testing.T) {
+		service := observability.NewHealthService("v")
+		service.SetSetupChecker(func(context.Context) (bool, error) { return false, nil })
+
+		health := service.CheckHealth(context.Background())
+
+		assert.Equal(t, observability.HealthStatusHealthy, health.Status)
+		assert.False(t, health.SetupComplete)
+		assert.Equal(t, observability.HealthStatusHealthy, health.Checks["setup"].Status)
+		assert.NotEmpty(t, health.Checks["setup"].Message)
+	})
+
+	t.Run("SetupDone", func(t *testing.T) {
+		service := observability.NewHealthService("v")
+		service.SetSetupChecker(func(context.Context) (bool, error) { return true, nil })
+
+		health := service.CheckHealth(context.Background())
+
+		assert.True(t, health.SetupComplete)
+		assert.Empty(t, health.Checks["setup"].Message)
+	})
+
+	t.Run("CheckFails_Unhealthy", func(t *testing.T) {
+		service := observability.NewHealthService("v")
+		service.SetSetupChecker(func(context.Context) (bool, error) { return false, errors.New("db down") })
+
+		health := service.CheckHealth(context.Background())
+
+		assert.Equal(t, observability.HealthStatusUnhealthy, health.Status)
+		assert.False(t, health.SetupComplete)
+		assert.Equal(t, "db down", health.Checks["setup"].Message)
 	})
 }

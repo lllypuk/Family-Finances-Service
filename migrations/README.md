@@ -22,7 +22,7 @@ This project uses a **consolidated migration approach** with two files:
 
 Contains all database objects in order of dependencies:
 
-1. **Tables**: families, users, categories, transactions, budgets, budget_alerts, reports, user_sessions, invites
+1. **Tables**: families, users, categories, transactions, budgets, budget_alerts, reports, invites, sessions
 2. **Indexes**: Performance optimization indexes for all tables
 3. **Triggers**: Automatic timestamp updates for all tables
 4. **Analytics**: Statistics updates (ANALYZE)
@@ -83,11 +83,17 @@ DROP TABLE IF EXISTS your_new_table;
 -- ... rest of existing down migrations ...
 ```
 
-### 3. Test Your Migration
+### 3. Recreate Existing Databases
+
+golang-migrate records only the applied version number (`schema_migrations`), so editing the already-applied
+`001` has **no effect** on an existing database: `Up()` returns `ErrNoChange` and the new DDL is silently
+skipped. The test path (`internal/testhelpers/sqlite.go`) always starts from an empty in-memory DB and will not
+reveal this. Until the first release the schema evolves by rewriting `001`, and every local and server database
+is recreated from scratch:
 
 ```bash
-# Clean database and test migration
-make clean
+# Local: delete ./data/budget.db* and let the server migrate a fresh file
+make db-reset
 make run-local
 
 # Or test with Docker
@@ -102,10 +108,9 @@ make docker-up
 Migrations run automatically when the application starts:
 
 ```go
-// In internal/run.go
-migrationManager := infrastructure.NewMigrationManager(dbURL, "./migrations")
-if err := migrationManager.Up(); err != nil {
-    return fmt.Errorf("migration failed: %w", err)
+// internal/bootstrap.go — internal.OpenDatabase, общий для сервера и CLI (setup, reset-password)
+if err = infrastructure.NewMigrationManager(dbURL, migrationsDir).Up(); err != nil {
+    return nil, fmt.Errorf("failed to run migrations: %w", err)
 }
 ```
 
@@ -188,8 +193,7 @@ migrate -path ./migrations -database "sqlite://./data/budget.db" force 1
 
 ```bash
 # Complete reset
-make clean
-rm -f data/budget.db
+make db-reset
 make run-local
 ```
 
@@ -213,6 +217,7 @@ SELECT * FROM schema_migrations;
 | | - Performance indexes | |
 | | - Automatic timestamp triggers | |
 | | - User invitation system | |
+| 001 | Bearer auth (plan 03): `sessions` replaces `user_sessions`; `families.singleton` UNIQUE | 2026-09-05 |
 
 ## See Also
 

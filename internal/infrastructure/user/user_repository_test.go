@@ -277,34 +277,146 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		assert.Equal(t, "newemail@example.com", retrievedUser.Email)
 	})
 
-	t.Run("Delete_Success", func(t *testing.T) {
+	// Update пишет только профиль: параллельная смена пароля/роли/активности не откатывается
+	// значениями, прочитанными до неё.
+	t.Run("Update_LeavesPasswordRoleActiveUntouched", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
 		repo := userrepo.NewSQLiteRepository(db)
 
-		// Create test family and user
+		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
+		require.NoError(t, err)
+
+		stale := &user.User{
+			ID: uuid.New(), Email: "stale@example.com", Password: "old-hash",
+			FirstName: "Old", LastName: "Name", Role: user.RoleAdmin,
+		}
+		require.NoError(t, repo.Create(ctx, stale))
+		other := &user.User{
+			ID:        uuid.New(),
+			Email:     "other@example.com",
+			Password:  "x",
+			FirstName: "O",
+			LastName:  "T",
+			Role:      user.RoleAdmin,
+		}
+		require.NoError(t, repo.Create(ctx, other))
+
+		require.NoError(t, repo.UpdatePassword(ctx, stale.ID, "new-hash"))
+		require.NoError(t, repo.UpdateRole(ctx, stale.ID, user.RoleMember))
+		require.NoError(t, repo.SetActive(ctx, stale.ID, false))
+
+		stale.FirstName = "New"
+		require.NoError(t, repo.Update(ctx, stale))
+
+		got, err := repo.GetByID(ctx, stale.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "New", got.FirstName)
+		assert.Equal(t, "new-hash", got.Password, "Update откатил смену пароля")
+		assert.Equal(t, user.RoleMember, got.Role, "Update откатил смену роли")
+		assert.False(t, got.IsActive, "Update откатил деактивацию")
+	})
+
+	t.Run("Update_NotFound", func(t *testing.T) {
+		repo := userrepo.NewSQLiteRepository(container.GetTestDatabase(t))
+		err := repo.Update(ctx, &user.User{ID: uuid.New(), Email: "ghost@example.com"})
+		require.ErrorIs(t, err, user.ErrNotFound)
+	})
+
+	// Неактивный пользователь остаётся видимым: активность решает auth, а не репозиторий.
+	t.Run("SetActive_Deactivate_StillVisible", func(t *testing.T) {
+		db := container.GetTestDatabase(t)
+		repo := userrepo.NewSQLiteRepository(db)
+
 		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
 		testUser := &user.User{
 			ID:        uuid.New(),
-			Email:     "remove@example.com",
+			Email:     "inactive@example.com",
 			Password:  "hashed_password",
-			FirstName: "Delete",
-			LastName:  "Me",
+			FirstName: "Off",
+			LastName:  "Line",
 			Role:      user.RoleMember,
 		}
+		require.NoError(t, repo.Create(ctx, testUser))
+		assert.True(t, testUser.IsActive, "Create всегда заводит активного пользователя")
 
-		err = repo.Create(ctx, testUser)
+		require.NoError(t, repo.SetActive(ctx, testUser.ID, false))
+
+		byID, err := repo.GetByID(ctx, testUser.ID)
 		require.NoError(t, err)
+		assert.False(t, byID.IsActive)
 
-		// Delete user (soft delete)
-		err = repo.Delete(ctx, testUser.ID)
+		byEmail, err := repo.GetByEmail(ctx, testUser.Email)
 		require.NoError(t, err)
+		assert.False(t, byEmail.IsActive)
 
-		// Verify user is not found (soft deleted)
-		_, err = repo.GetByID(ctx, testUser.ID)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "not found")
+		all, err := repo.GetAll(ctx)
+		require.NoError(t, err)
+		found := false
+		for _, u := range all {
+			if u.ID == testUser.ID {
+				found = true
+				assert.False(t, u.IsActive)
+			}
+		}
+		assert.True(t, found, "GetAll скрыл неактивного пользователя")
+
+		require.NoError(t, repo.SetActive(ctx, testUser.ID, true))
+		byID, err = repo.GetByID(ctx, testUser.ID)
+		require.NoError(t, err)
+		assert.True(t, byID.IsActive)
+	})
+
+	// Проверка «последний активный админ» и запись — одна транзакция: неактивные админы
+	// не считаются, повышение и правки не-админов не проверяются.
+	t.Run("GuardedWrites_LastAdmin", func(t *testing.T) {
+		db := container.GetTestDatabase(t)
+		repo := userrepo.NewSQLiteRepository(db)
+
+		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
+		require.NoError(t, err)
+		newAdmin := func(email string) *user.User {
+			u := &user.User{
+				ID:        uuid.New(),
+				Email:     email,
+				Password:  "x",
+				FirstName: "A",
+				LastName:  "D",
+				Role:      user.RoleAdmin,
+			}
+			require.NoError(t, repo.Create(ctx, u))
+			return u
+		}
+		first := newAdmin("first@example.com")
+		second := newAdmin("second@example.com")
+		member := &user.User{
+			ID:        uuid.New(),
+			Email:     "member@example.com",
+			Password:  "x",
+			FirstName: "M",
+			LastName:  "B",
+			Role:      user.RoleMember,
+		}
+		require.NoError(t, repo.Create(ctx, member))
+
+		require.NoError(t, repo.UpdateRole(ctx, member.ID, user.RoleChild), "правка не-админа не проверяется")
+		require.NoError(t, repo.SetActive(ctx, first.ID, false), "второй админ остаётся")
+		require.ErrorIs(t, repo.SetActive(ctx, second.ID, false), user.ErrLastAdmin,
+			"неактивный первый админ не считается")
+		require.ErrorIs(t, repo.UpdateRole(ctx, second.ID, user.RoleMember), user.ErrLastAdmin)
+		require.NoError(t, repo.UpdateRole(ctx, second.ID, user.RoleAdmin), "повышение/та же роль не проверяется")
+
+		got, err := repo.GetByID(ctx, second.ID)
+		require.NoError(t, err)
+		assert.Equal(t, user.RoleAdmin, got.Role)
+		assert.True(t, got.IsActive, "отклонённая запись не должна была ничего изменить")
+
+		require.NoError(t, repo.SetActive(ctx, first.ID, true))
+		require.NoError(t, repo.UpdateRole(ctx, second.ID, user.RoleMember), "первый админ снова активен")
+
+		require.ErrorIs(t, repo.UpdateRole(ctx, uuid.New(), user.RoleMember), user.ErrNotFound)
+		require.ErrorIs(t, repo.SetActive(ctx, uuid.New(), false), user.ErrNotFound)
 	})
 
 	t.Run("GetUsersByRole_Success", func(t *testing.T) {
@@ -385,5 +497,40 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		retrievedUser, err := repo.GetByID(ctx, testUser.ID)
 		require.NoError(t, err)
 		assert.Equal(t, testUser.ID, retrievedUser.ID)
+	})
+
+	t.Run("UpdatePassword", func(t *testing.T) {
+		db := container.GetTestDatabase(t)
+		repo := userrepo.NewSQLiteRepository(db)
+
+		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
+		require.NoError(t, err)
+
+		testUser := &user.User{
+			ID:        uuid.New(),
+			Email:     "password@example.com",
+			Password:  "old_hash",
+			FirstName: "Pass",
+			LastName:  "Word",
+			Role:      user.RoleMember,
+		}
+		require.NoError(t, repo.Create(ctx, testUser))
+
+		require.NoError(t, repo.UpdatePassword(ctx, testUser.ID, "new_hash"))
+
+		retrievedUser, err := repo.GetByID(ctx, testUser.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "new_hash", retrievedUser.Password)
+
+		err = repo.UpdatePassword(ctx, uuid.New(), "hash")
+		require.ErrorIs(t, err, user.ErrNotFound)
+	})
+
+	t.Run("GetByEmail_NotFound", func(t *testing.T) {
+		db := container.GetTestDatabase(t)
+		repo := userrepo.NewSQLiteRepository(db)
+
+		_, err := repo.GetByEmail(ctx, "nobody@example.com")
+		require.ErrorIs(t, err, user.ErrNotFound)
 	})
 }
