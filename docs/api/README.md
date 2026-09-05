@@ -2,7 +2,7 @@
 
 `openapi.yaml` (OpenAPI 3.1, один файл) — единственное описание HTTP-контракта сервиса.
 Он описывает **целевое** состояние из [spec 005](../specs/005-api-only-redesign.md); код приводят
-к нему планы [02](../plans/20260904-02-api-completeness.md)–[04](../plans/20260904-04-schema-and-money.md).
+к нему планы [02](../plans/completed/20260904-02-api-completeness.md)–[04](../plans/20260904-04-schema-and-money.md).
 До конца плана 04 расхождения ожидаемы: деньги ещё `float64`, даты — RFC3339, аутентификация — cookie.
 
 ## Как читать

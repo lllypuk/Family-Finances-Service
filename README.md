@@ -33,13 +33,13 @@ This project is in **active development** with the following achievements:
 - 📈 **Real-Time Analytics**: Interactive dashboards with live updates
 - 🎯 **Financial Goals Tracking**: Savings goals with progress visualization
 - 🔐 **Enterprise Security**: Session management, CSRF protection, input validation
-- 📊 **Reporting (mixed readiness)**: Web UI supports preview/save/view/delete and CSV export for reports; public report-generation REST API is still in progress
+- 📊 **Reporting**: generate, store, view, delete reports and export CSV — over REST API and in the web UI
 - 📨 **Invite System**: Secure registration via links with role control and expiration
 - 💾 **Backup Management**: Create, download, restore DB with auto-cleanup (up to 10 backups)
 - 🛠️ **Admin Panel**: User, invite, and backup management
 - 🌐 **Multi-Platform Ready**: REST API, web interface, mobile-ready design
 
-## API Readiness (Ready / Experimental)
+## API Readiness
 
 The **target** contract lives in [`docs/api/openapi.yaml`](docs/api/openapi.yaml) (OpenAPI 3.1, hand-written,
 see [`docs/api/README.md`](docs/api/README.md)) — bearer tokens, `limit/offset`, money in minor units. It is what
@@ -60,9 +60,10 @@ and there are no API tokens yet: **the only credential is the web session cookie
 
 Role model mirrors the web UI:
 
-- the whole `/api/v1/users` group (including `GET /api/v1/users/:id`) and
+- the whole `/api/v1/users` and `/api/v1/backups` groups, `PUT /api/v1/family` and
   `DELETE /api/v1/categories/:id` — **admin only**
-- `/api/v1/{categories,transactions,budgets,reports}` — **admin or member** (`child` gets `403`)
+- `/api/v1/{categories,transactions,budgets,reports,stats}` and `GET /api/v1/family` —
+  **admin or member** (`child` gets `403`)
 
 The author of a record is taken from the session: `user_id` is no longer part of
 `CreateTransactionRequest` / `CreateReportRequest`, so sending it in the body has no effect.
@@ -73,20 +74,28 @@ working `curl` walkthrough.
 
 ### Ready (current behavior)
 
-- Core REST API for users, categories, transactions, budgets — session-authenticated, role-gated
-- Invite, admin, and backup management APIs/web flows
-- Stored reports API endpoints: list, get by ID, delete
-- Web reports UI: generate preview/save/view/delete/export CSV for expense, income, budget, cash-flow, and category-breakdown reports
-- Web UI for day-to-day finance workflows
+- Core REST API for users, categories, transactions, budgets, reports — session-authenticated, role-gated
+- `POST /api/v1/reports` generates and stores a report (expense, income, budget, cash-flow,
+  category-breakdown); `GET /api/v1/reports/:id/export` returns CSV
+- `GET /api/v1/stats/summary?from=YYYY-MM-DD&to=YYYY-MM-DD` — dashboard summary (totals, deltas to the
+  previous period, top categories, budget progress, recent transactions); defaults to the current month
+- `GET /api/v1/users`, `PATCH /api/v1/users/:id` (role change), `GET`/`PUT /api/v1/family`
+- Backups over API: `POST`/`GET /api/v1/backups`, `GET /api/v1/backups/:name/download`,
+  `DELETE /api/v1/backups/:name`
+- `POST /api/v1/transactions/bulk-delete`
+- Every list answers with `meta.pagination {limit, offset, total}` — `limit` defaults to 50, max 200
+- One error envelope everywhere: `{"error":{"code","message","details"},"meta":{...}}`;
+  validation fails with `422 VALIDATION_ERROR` and per-field `details`
+- Invite and admin web flows, web UI for day-to-day finance workflows
 
-### Experimental / In Progress
+### Not available yet
 
 - **No API tokens.** Session cookies only — fine for a browser or a scripted cookie jar,
-  awkward for a headless integration. Token auth is a separate, not-yet-written plan
-- `POST /api/v1/reports` currently returns `501 Not Implemented` (report generation API is not exposed yet)
-- Advanced analytics/report-generation features described in roadmap-style text are not fully available via public API
-- Scheduled reports, forecasts, insights, and benchmark analytics remain hidden/placeholder service capabilities
-- Treat "comprehensive reporting" as partial readiness: storage/retrieval is available, generation is pending
+  awkward for a headless integration. Bearer auth is [plan 03](docs/plans/20260904-03-bearer-auth-web-removal.md)
+- Login, logout, setup and invites are web-only routes; the API has no equivalents until plan 03
+- Money is still `float64` (minor units land in plan 04, together with the rest of the `openapi.yaml` gap)
+- Backup **restore** is deliberately not exposed over the API — use the web admin panel or `make sqlite-restore`
+- Scheduled reports, forecasts, insights and benchmarks were placeholder service methods and have been removed
 
 ## 🏗️ Architecture and Technology Stack
 

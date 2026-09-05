@@ -192,10 +192,11 @@
 
 ### Task 9: [Final] Update documentation
 
-- [ ] `README.md`: раздел «API Readiness» — убрать «Experimental»/501, перечислить новые группы
-- [ ] `CLAUDE.md`: `StatsService`, `GenerateReport`, `BACKUP_DIR`, единый envelope, пагинация
-- [ ] `docs/backlog.md`: закрыть пункт про `POST /api/v1/reports` → 501
-- [ ] переместить план в `docs/plans/completed/`
+- [x] `README.md`: раздел «API Readiness» — убрать «Experimental»/501, перечислить новые группы
+- [x] `CLAUDE.md`: `StatsService`, `GenerateReport`, `BACKUP_DIR`, единый envelope, пагинация
+- [x] `docs/backlog.md`: пункта про `POST /api/v1/reports` → 501 в бэклоге нет — 501 упоминался только
+      в `README.md`, `CLAUDE.md` и снимке состояния в spec 005 (таблица «Полнота API»); первые два обновлены
+- [x] переместить план в `docs/plans/completed/` (ссылки в spec 005 и `docs/api/README.md` обновлены)
 
 ## Post-Completion
 
