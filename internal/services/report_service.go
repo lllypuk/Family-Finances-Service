@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -430,7 +431,14 @@ func (s *reportService) GenerateReport(ctx context.Context, req dto.ReportReques
 		return nil, fmt.Errorf("failed to convert report data: %w", err)
 	}
 
-	newReport := report.NewReport(req.Name, req.Type, req.Period, req.UserID, req.StartDate, req.EndDate)
+	// Отчёты по периоду считаются от календарного периода, а не от дат запроса:
+	// сохранять надо те границы, по которым реально посчитаны данные.
+	startDate, endDate := req.StartDate, req.EndDate
+	if req.Type == report.TypeBudget || req.Type == report.TypeCategoryBreak {
+		startDate, endDate = s.calculatePeriodDates(req.Period)
+	}
+
+	newReport := report.NewReport(req.Name, req.Type, req.Period, req.UserID, startDate, endDate)
 	newReport.Data = data
 
 	return newReport, nil
@@ -869,13 +877,46 @@ func (s *reportService) generateBudgetAlerts(_ []dto.BudgetCategoryComparisonDTO
 	return []dto.BudgetAlertReportDTO{}
 }
 
+// generateDailyCashFlow сводит операции по календарным дням периода; Balance —
+// нарастающий итог от openingBalance. Дни без операций пропускаются.
 func (s *reportService) generateDailyCashFlow(
-	_ []*transaction.Transaction,
-	_ float64,
+	transactions []*transaction.Transaction,
+	openingBalance float64,
 	_, _ time.Time,
 ) []dto.DailyCashFlowDTO {
-	// ROADMAP: daily cash-flow calculation with running balance.
-	return []dto.DailyCashFlowDTO{}
+	byDay := make(map[time.Time]*dto.DailyCashFlowDTO)
+	for _, tx := range transactions {
+		day := time.Date(tx.Date.Year(), tx.Date.Month(), tx.Date.Day(), 0, 0, 0, 0, tx.Date.Location())
+		item, ok := byDay[day]
+		if !ok {
+			item = &dto.DailyCashFlowDTO{Date: day}
+			byDay[day] = item
+		}
+
+		switch tx.Type {
+		case transaction.TypeIncome:
+			item.Inflow += tx.Amount
+		case transaction.TypeExpense:
+			item.Outflow += tx.Amount
+		}
+	}
+
+	days := make([]dto.DailyCashFlowDTO, 0, len(byDay))
+	for _, item := range byDay {
+		days = append(days, *item)
+	}
+	slices.SortFunc(days, func(a, b dto.DailyCashFlowDTO) int {
+		return a.Date.Compare(b.Date)
+	})
+
+	balance := openingBalance
+	for i := range days {
+		days[i].NetFlow = days[i].Inflow - days[i].Outflow
+		balance += days[i].NetFlow
+		days[i].Balance = balance
+	}
+
+	return days
 }
 
 func (s *reportService) generateWeeklyCashFlow(_ []dto.DailyCashFlowDTO) []dto.WeeklyCashFlowDTO {

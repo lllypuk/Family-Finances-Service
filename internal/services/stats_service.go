@@ -18,9 +18,12 @@ import (
 var ErrInvalidStatsPeriod = errors.New("stats period end is before start")
 
 const (
-	// statsTransactionLimit — потолок выборки транзакций за период.
+	// statsTransactionLimit — размер страницы выборки транзакций за период.
 	statsTransactionLimit = 1000
-	statsRecentLimit      = 10
+	// statsMaxTransactions — потолок суммируемых за период операций: страховка от
+	// бесконечного цикла, если источник данных не уважает offset.
+	statsMaxTransactions = 20000
+	statsRecentLimit     = 10
 
 	budgetNearLimitShare = 0.8
 	budgetOverLimitShare = 1.0
@@ -102,17 +105,26 @@ func (s *statsService) transactionsBetween(
 	ctx context.Context,
 	from, to time.Time,
 ) ([]*transaction.Transaction, error) {
-	filter := dto.TransactionFilterDTO{
-		DateFrom: &from,
-		DateTo:   &to,
-		Limit:    statsTransactionLimit,
-	}
+	// Постранично: суммы периода должны сходиться, а не обрываться на первой странице.
+	var all []*transaction.Transaction
+	for offset := 0; ; offset += statsTransactionLimit {
+		filter := dto.TransactionFilterDTO{
+			DateFrom: &from,
+			DateTo:   &to,
+			Limit:    statsTransactionLimit,
+			Offset:   offset,
+		}
 
-	transactions, err := s.transactions.GetAllTransactions(ctx, filter)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get transactions for period: %w", err)
+		page, err := s.transactions.GetAllTransactions(ctx, filter)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get transactions for period: %w", err)
+		}
+
+		all = append(all, page...)
+		if len(page) < statsTransactionLimit || len(all) >= statsMaxTransactions {
+			return all, nil
+		}
 	}
-	return transactions, nil
 }
 
 // previousTotals возвращает суммы за предыдущий период; ошибка выборки означает «данных нет».
@@ -215,9 +227,11 @@ func (s *statsService) categoryShares(
 	totals dto.PeriodTotals,
 ) ([]dto.CategoryShare, []dto.CategoryShare) {
 	type bucket struct {
-		share    dto.CategoryShare
-		income   float64
-		expenses float64
+		share         dto.CategoryShare
+		income        float64
+		expenses      float64
+		incomeCount   int
+		expensesCount int
 	}
 
 	var expenses, income []dto.CategoryShare
@@ -238,21 +252,22 @@ func (s *statsService) categoryShares(
 			buckets[tx.CategoryID] = b
 		}
 
-		b.share.TransactionCount++
 		switch tx.Type {
 		case transaction.TypeIncome:
 			b.income += tx.Amount
+			b.incomeCount++
 		case transaction.TypeExpense:
 			b.expenses += tx.Amount
+			b.expensesCount++
 		}
 	}
 
 	for _, b := range buckets {
 		if b.expenses > 0 {
-			expenses = append(expenses, withAmount(b.share, b.expenses, totals.Expenses))
+			expenses = append(expenses, withAmount(b.share, b.expenses, b.expensesCount, totals.Expenses))
 		}
 		if b.income > 0 {
-			income = append(income, withAmount(b.share, b.income, totals.Income))
+			income = append(income, withAmount(b.share, b.income, b.incomeCount, totals.Income))
 		}
 	}
 
@@ -316,8 +331,9 @@ func periodDeltas(current, previous dto.PeriodTotals, hasPrevious bool) (float64
 	return incomeDelta, expensesDelta
 }
 
-func withAmount(share dto.CategoryShare, amount, total float64) dto.CategoryShare {
+func withAmount(share dto.CategoryShare, amount float64, count int, total float64) dto.CategoryShare {
 	share.Amount = amount
+	share.TransactionCount = count
 	if total > 0 {
 		share.Share = amount / total
 	}

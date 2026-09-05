@@ -37,7 +37,7 @@ func NewReportHandler(
 
 	return &ReportHandler{
 		repositories:  repositories,
-		validator:     validator.New(),
+		validator:     newAPIValidator(),
 		reportService: reportService,
 	}
 }

@@ -568,3 +568,27 @@ func TestTransactionService_ValidateTransactionLimits_NoBudget(t *testing.T) {
 
 	budgetRepo.AssertExpectations(t)
 }
+
+func TestTransactionService_BulkDelete_DeduplicatesIDs(t *testing.T) {
+	service, txRepo, budgetRepo, _, _ := setupTransactionService()
+	ctx := context.Background()
+
+	categoryID := uuid.New()
+	existingTx := createTestTransaction(uuid.New(), 100.50, transaction.TypeExpense, time.Now())
+	existingTx.CategoryID = categoryID
+	testBudget := createTestBudget(uuid.New(), 500.00, categoryID)
+
+	txRepo.On("GetByID", ctx, existingTx.ID).Return(existingTx, nil).Once()
+	txRepo.On("DeleteBulk", ctx, []uuid.UUID{existingTx.ID}).Return(1, nil)
+	budgetRepo.On("GetActiveBudgets", ctx).Return([]*budget.Budget{testBudget}, nil).Once()
+	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil).Once()
+
+	deleted, err := service.BulkDelete(ctx, []uuid.UUID{existingTx.ID, existingTx.ID})
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, deleted)
+	assert.InDelta(t, -existingTx.Amount, testBudget.Spent, 0.001)
+
+	txRepo.AssertExpectations(t)
+	budgetRepo.AssertExpectations(t)
+}

@@ -70,16 +70,26 @@ func TestStatsHandler_GetSummary_DefaultPeriod(t *testing.T) {
 	mockService := &MockStatsService{}
 	handler := handlers.NewStatsHandler(mockService)
 
-	now := time.Now()
-	expectedFrom := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-	expectedTo := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, now.Location())
-
-	mockService.On("Summary", mock.Anything, expectedFrom, expectedTo).Return(&dto.StatsSummary{}, nil)
+	// Границы читаются из вызова, а не пересчитываются здесь: на смене суток
+	// между двумя time.Now() ожидание бы не совпало.
+	var gotFrom, gotTo time.Time
+	mockService.On("Summary", mock.Anything, mock.AnythingOfType("time.Time"), mock.AnythingOfType("time.Time")).
+		Run(func(args mock.Arguments) {
+			gotFrom, _ = args.Get(1).(time.Time)
+			gotTo, _ = args.Get(2).(time.Time)
+		}).
+		Return(&dto.StatsSummary{}, nil)
 
 	c, rec := statsRequest("/stats/summary")
 
 	require.NoError(t, handler.GetSummary(c))
 	assert.Equal(t, http.StatusOK, rec.Code)
+
+	assert.Equal(t, time.Date(gotTo.Year(), gotTo.Month(), 1, 0, 0, 0, 0, gotTo.Location()), gotFrom)
+	assert.Equal(t, 23, gotTo.Hour())
+	assert.Equal(t, 59, gotTo.Minute())
+	assert.Equal(t, 59, gotTo.Second())
+	assert.WithinDuration(t, time.Now(), gotTo, 25*time.Hour)
 
 	mockService.AssertExpectations(t)
 }

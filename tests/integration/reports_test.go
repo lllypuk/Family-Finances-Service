@@ -98,7 +98,7 @@ func TestReportHandler_Integration(t *testing.T) {
 					StartDate: time.Now().AddDate(0, -1, 0),
 					EndDate:   time.Now(),
 				},
-				field: "Name",
+				field: "name",
 			},
 			{
 				name: "invalid_type",
@@ -109,7 +109,7 @@ func TestReportHandler_Integration(t *testing.T) {
 					StartDate: time.Now().AddDate(0, -1, 0),
 					EndDate:   time.Now(),
 				},
-				field: "Type",
+				field: "type",
 			},
 			{
 				name: "invalid_period",
@@ -120,7 +120,7 @@ func TestReportHandler_Integration(t *testing.T) {
 					StartDate: time.Now().AddDate(0, -1, 0),
 					EndDate:   time.Now(),
 				},
-				field: "Period",
+				field: "period",
 			},
 		}
 
@@ -567,4 +567,30 @@ func TestStatsAPI_Summary_InvalidDate(t *testing.T) {
 	assert.Equal(t, handlers.ErrCodeValidationError, response.Error.Code)
 	require.Len(t, response.Error.Details, 1)
 	assert.Equal(t, "from", response.Error.Details[0].Field)
+}
+
+// Перевёрнутый диапазон дат раньше давал 201 и пустой отчёт.
+func TestReportAPI_CreateReport_RejectsInvertedDateRange(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+
+	body := mustJSON(t, map[string]any{
+		"name":       "Inverted",
+		"type":       "expenses",
+		"period":     "monthly",
+		"start_date": "2026-03-31T00:00:00Z",
+		"end_date":   "2026-03-01T00:00:00Z",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/reports", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	testServer.Auth(t).Apply(req)
+	rec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.NotEmpty(t, response.Error.Details)
+	assert.Equal(t, "end_date", response.Error.Details[0].Field)
 }

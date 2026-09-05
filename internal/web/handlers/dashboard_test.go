@@ -1209,7 +1209,7 @@ func TestDashboardHandler_HTMXEndpoints(t *testing.T) {
 
 // TestDashboardHandler_ConcurrentRequests tests concurrent access
 func TestDashboardHandler_ConcurrentRequests(t *testing.T) {
-	t.Run("multiple simultaneous requests", func(_ *testing.T) {
+	t.Run("multiple simultaneous requests", func(t *testing.T) {
 		handler, mockTxService, mockBudgetService, _, _ := setupDashboardHandler()
 
 		mockTxService.On("GetAllTransactions", mock.Anything, mock.Anything).
@@ -1219,21 +1219,19 @@ func TestDashboardHandler_ConcurrentRequests(t *testing.T) {
 			Return([]*budget.Budget{}, nil).Maybe()
 
 		// Simulate 10 concurrent requests
-		done := make(chan bool, 10)
+		errs := make(chan error, 10)
 		for range 10 {
 			go func() {
 				c, _ := newTestContext("GET", "/dashboard/stats", "")
 				withSession(c, uuid.New(), user.RoleAdmin)
 				withHTMX(c)
 
-				_ = handler.DashboardStats(c)
-				done <- true
+				errs <- handler.DashboardStats(c)
 			}()
 		}
 
-		// Wait for all to complete
 		for range 10 {
-			<-done
+			require.NoError(t, <-errs)
 		}
 	})
 }
@@ -1259,4 +1257,26 @@ func TestDashboardHandler_StatsFailure(t *testing.T) {
 		require.ErrorAs(t, err, &httpErr)
 		assert.Equal(t, http.StatusInternalServerError, httpErr.Code)
 	})
+}
+
+// Перевёрнутый пользовательский диапазон раньше доходил до StatsService и
+// превращался в 500: страница должна отрисоваться за период по умолчанию.
+func TestDashboardHandler_Dashboard_InvalidCustomRangeFallsBackToPeriod(t *testing.T) {
+	handler, mockTxService, mockBudgetService, _, mockUserService := setupDashboardHandler()
+
+	mockTxService.On("GetAllTransactions", mock.Anything, mock.Anything).
+		Return([]*transaction.Transaction{}, nil)
+	mockTxService.On("CountTransactions", mock.Anything, mock.Anything).Return(0, nil)
+	mockBudgetService.On("GetActiveBudgets", mock.Anything, mock.Anything).
+		Return([]*budget.Budget{}, nil)
+	mockUserService.On("GetUserByID", mock.Anything, mock.Anything).
+		Return(nil, errors.New("not needed")).Maybe()
+
+	c, rec := newTestContext("GET", "/?start_date=2026-05-01T00:00:00Z&end_date=2026-04-01T00:00:00Z", "")
+	withSession(c, uuid.New(), user.RoleAdmin)
+
+	err := handler.Dashboard(c)
+
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
 }

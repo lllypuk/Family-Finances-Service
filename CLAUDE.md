@@ -115,7 +115,8 @@ setup→ready transition needs no restart.
   the `/api/v1/users` group and `DELETE /api/v1/categories/:id`, and
   `financeAccess := RequireAPIRole(user.RoleAdmin, user.RoleMember)` for the
   categories/transactions/budgets/reports/stats groups (wrong role → `403 FORBIDDEN`); `/api/v1/backups` and
-  `PUT /api/v1/family` are `adminOnly` too. All three API middlewares live in
+  `PUT /api/v1/family` are `adminOnly` too, while `GET /api/v1/family` is deliberately ungated (any role, `child`
+  included). All three API middlewares live in
   `internal/application/handlers/api_auth.go` and reuse the session primitives from `internal/web/middleware`.
   **Middleware order matters:** the global `CSRFProtection` (`e.Use` in `web.go`) runs *before* the group
   middleware, so an anonymous write without `X-Csrf-Token` is `403`, and `401` only once a valid token is present.
@@ -131,6 +132,11 @@ setup→ready transition needs no restart.
   unparseable id stay `400`. Every list runs its query params through `parsePagination(c)` (`defaultLimit=50`,
   `maxLimit=200`, out-of-range → `422`) and reports `meta.pagination {limit, offset, total}` — including the short
   lists, because the Android client generates from a `ListMeta` where `pagination` is required.
+  `parsePagination` **writes the 422 itself** and returns the `errResponseAlreadyWritten` sentinel: callers return
+  `ignoreWritten(err)`, never the raw error, or Echo's error handler writes a second response over it. Lists the
+  repository returns whole are windowed with `pageSlice(items, page)` and answered by `respondList(c, items, page,
+  len(all))`. The `field` in `error.details` is the json name (`start_date`), because every handler validator comes
+  from `newAPIValidator()` — plain `validator.New()` would report Go field names.
 
 ### Templates
 

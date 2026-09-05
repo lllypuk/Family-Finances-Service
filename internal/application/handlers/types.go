@@ -159,7 +159,7 @@ type TransactionResponse struct {
 
 // BulkDeleteRequest — тело POST /transactions/bulk-delete; неизвестные id игнорируются.
 type BulkDeleteRequest struct {
-	IDs []uuid.UUID `json:"ids" validate:"required,min=1,max=200"`
+	IDs []uuid.UUID `json:"ids" validate:"required,min=1,max=200,dive,required"`
 }
 
 type BulkDeleteResponse struct {
@@ -220,7 +220,7 @@ type CreateReportRequest struct {
 	Type      string    `json:"type"       validate:"required,oneof=expenses income budget cash_flow category_breakdown"`
 	Period    string    `json:"period"     validate:"required,oneof=daily weekly monthly yearly custom"`
 	StartDate time.Time `json:"start_date" validate:"required"`
-	EndDate   time.Time `json:"end_date"   validate:"required"`
+	EndDate   time.Time `json:"end_date"   validate:"required,gtefield=StartDate"`
 }
 
 type ReportResponse struct {

@@ -210,3 +210,115 @@ func TestAPIBulkDelete_Transactions_EmptyIDsRejected(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 }
+
+// Нулевой UUID в списке раньше доходил до репозитория и ронял весь запрос в 500,
+// не удалив ничего: валидация ловит его как ошибку поля.
+func TestAPIBulkDelete_Transactions_NilIDRejected(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	created := seedTransactions(t, testServer, 1)
+
+	body := fmt.Sprintf(`{"ids":["%s","%s"]}`, uuid.Nil, created[0].ID)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions/bulk-delete", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	testServer.Auth(t).Apply(req)
+	rec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
+
+	code, _ := getJSON[handlers.APIResponse[handlers.TransactionResponse]](
+		t, testServer, fmt.Sprintf("/api/v1/transactions/%s", created[0].ID),
+	)
+	assert.Equal(t, http.StatusOK, code, "ничего не должно быть удалено")
+}
+
+// Дубликат id удаляет строку один раз и один раз откатывает бюджет.
+func TestAPIBulkDelete_Transactions_DuplicateIDCountedOnce(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	created := seedTransactions(t, testServer, 1)
+
+	body := fmt.Sprintf(`{"ids":["%s","%s"]}`, created[0].ID, created[0].ID)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions/bulk-delete", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	testServer.Auth(t).Apply(req)
+	rec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
+
+	var response handlers.APIResponse[handlers.BulkDeleteResponse]
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, 1, response.Data.Deleted)
+}
+
+// limit=200 — общий потолок API: DTO бюджетов и maxLimit хендлеров должны совпадать.
+func TestAPIPagination_Budgets_MaxLimitAccepted(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	testServer.Auth(t)
+
+	code, response := getJSON[handlers.APIResponse[[]handlers.BudgetResponse]](
+		t, testServer, "/api/v1/budgets?limit=200",
+	)
+
+	require.Equal(t, http.StatusOK, code)
+	require.NotNil(t, response.Meta.Pagination)
+	assert.Equal(t, 200, response.Meta.Pagination.Limit)
+}
+
+// Списки, которые репозиторий отдаёт целиком, проверяют limit/offset тем же parsePagination.
+func TestAPIPagination_ListsRejectOutOfRangeParams(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	testServer.Auth(t)
+
+	paths := []string{"/api/v1/categories", "/api/v1/users", "/api/v1/reports", "/api/v1/backups"}
+	queries := []string{"?limit=0", "?limit=500", "?offset=-1"}
+
+	for _, path := range paths {
+		for _, query := range queries {
+			t.Run(path+query, func(t *testing.T) {
+				req := httptest.NewRequest(http.MethodGet, path+query, nil)
+				testServer.Auth(t).Apply(req)
+				rec := httptest.NewRecorder()
+				testServer.Server.Echo().ServeHTTP(rec, req)
+
+				assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
+			})
+		}
+	}
+}
+
+func TestAPIBulkDelete_Transactions_RejectsBadBodies(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+
+	tooMany := make([]string, 0, 201)
+	for range 201 {
+		tooMany = append(tooMany, uuid.New().String())
+	}
+	tooManyBody, err := json.Marshal(map[string]any{"ids": tooMany})
+	require.NoError(t, err)
+
+	cases := []struct {
+		name string
+		body string
+		want int
+	}{
+		{name: "broken json", body: `{"ids":`, want: http.StatusBadRequest},
+		{name: "above max", body: string(tooManyBody), want: http.StatusUnprocessableEntity},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(
+				http.MethodPost,
+				"/api/v1/transactions/bulk-delete",
+				bytes.NewBufferString(tc.body),
+			)
+			req.Header.Set("Content-Type", "application/json")
+			testServer.Auth(t).Apply(req)
+			rec := httptest.NewRecorder()
+			testServer.Server.Echo().ServeHTTP(rec, req)
+
+			assert.Equal(t, tc.want, rec.Code, "тело: %s", rec.Body.String())
+		})
+	}
+}

@@ -36,10 +36,6 @@ func (h *StatsHandler) GetSummary(c echo.Context) error {
 			ErrMessageValidationFailed, *detail)
 	}
 
-	if h.statsService == nil {
-		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
-	}
-
 	summary, err := h.statsService.Summary(c.Request().Context(), from, to)
 	if err != nil {
 		if errors.Is(err, services.ErrInvalidStatsPeriod) {

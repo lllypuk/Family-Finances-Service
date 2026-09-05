@@ -97,7 +97,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 					CategoryID:  uuid.New(),
 					Date:        time.Now(),
 				},
-				field: "Amount",
+				field: "amount",
 			},
 			{
 				name: "invalid_type",
@@ -108,7 +108,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 					CategoryID:  uuid.New(),
 					Date:        time.Now(),
 				},
-				field: "Type",
+				field: "type",
 			},
 			{
 				name: "empty_description",
@@ -119,7 +119,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 					CategoryID:  uuid.New(),
 					Date:        time.Now(),
 				},
-				field: "Description",
+				field: "description",
 			},
 		}
 

@@ -26,7 +26,7 @@ func NewUserHandler(repositories *Repositories, userService services.UserService
 	return &UserHandler{
 		repositories: repositories,
 		userService:  userService,
-		validator:    validator.New(),
+		validator:    newAPIValidator(),
 	}
 }
 

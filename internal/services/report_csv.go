@@ -28,9 +28,9 @@ func reportToCSV(data report.Data, reportType report.Type) ([]byte, error) {
 	case report.TypeBudget:
 		err = writeBudgetComparisonCSV(writer, data)
 	case report.TypeExpenses, report.TypeIncome, report.TypeCategoryBreak:
-		err = writeCategoryBreakdownCSV(writer, data)
+		err = writeCategoryBreakdownCSV(writer, data, reportType)
 	default:
-		err = writeCategoryBreakdownCSV(writer, data)
+		err = writeCategoryBreakdownCSV(writer, data, reportType)
 	}
 	if err != nil {
 		return nil, err
@@ -44,7 +44,7 @@ func reportToCSV(data report.Data, reportType report.Type) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func writeCategoryBreakdownCSV(writer *csv.Writer, data report.Data) error {
+func writeCategoryBreakdownCSV(writer *csv.Writer, data report.Data, reportType report.Type) error {
 	if err := writer.Write([]string{"Category", "Amount", "Percentage", "Transaction Count"}); err != nil {
 		return fmt.Errorf("failed to write csv header: %w", err)
 	}
@@ -61,12 +61,36 @@ func writeCategoryBreakdownCSV(writer *csv.Writer, data report.Data) error {
 		}
 	}
 
-	total := []string{"TOTAL", fmt.Sprintf("%.2f", data.TotalExpenses), "100.0%", ""}
+	total := []string{"TOTAL", fmt.Sprintf("%.2f", categoryBreakdownTotal(data, reportType)), "100.0%", ""}
 	if err := writer.Write(total); err != nil {
 		return fmt.Errorf("failed to write csv row: %w", err)
 	}
 
 	return nil
+}
+
+// categoryBreakdownTotal выбирает итог по типу отчёта: income-отчёт заполняет только
+// TotalIncome, category_breakdown — ни одного из них, там итог считается по строкам.
+func categoryBreakdownTotal(data report.Data, reportType report.Type) float64 {
+	switch reportType {
+	case report.TypeIncome:
+		return data.TotalIncome
+	case report.TypeExpenses, report.TypeBudget, report.TypeCashFlow:
+		return data.TotalExpenses
+	case report.TypeCategoryBreak:
+		return sumCategoryAmounts(data)
+	default:
+		return sumCategoryAmounts(data)
+	}
+}
+
+func sumCategoryAmounts(data report.Data) float64 {
+	total := 0.0
+	for _, item := range data.CategoryBreakdown {
+		total += item.Amount
+	}
+
+	return total
 }
 
 func writeDailyBreakdownCSV(writer *csv.Writer, data report.Data) error {

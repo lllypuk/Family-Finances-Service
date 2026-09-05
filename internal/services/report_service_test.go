@@ -393,10 +393,11 @@ func TestReportService_GenerateReport(t *testing.T) {
 	}
 
 	tests := []struct {
-		name       string
-		reportType report.Type
-		setup      func(ctx context.Context, m reportServiceMocks)
-		assertData func(t *testing.T, rep *report.Report)
+		name        string
+		reportType  report.Type
+		setup       func(ctx context.Context, m reportServiceMocks)
+		assertData  func(t *testing.T, rep *report.Report)
+		assertDates func(t *testing.T, rep *report.Report)
 	}{
 		{
 			name:       "expenses",
@@ -440,6 +441,10 @@ func TestReportService_GenerateReport(t *testing.T) {
 				// Разбивка по бюджетам пока пустая: generateBudgetCategoryComparisons — заглушка.
 				assert.Empty(t, rep.Data.BudgetComparison)
 			},
+			assertDates: func(t *testing.T, rep *report.Report) {
+				assert.True(t, rep.StartDate.After(time.Now().AddDate(0, -2, 0)),
+					"сохранены границы периода, а не даты запроса: %s", rep.StartDate)
+			},
 		},
 		{
 			name:       "cash_flow",
@@ -451,8 +456,15 @@ func TestReportService_GenerateReport(t *testing.T) {
 				assert.InEpsilon(t, 3000.0, rep.Data.TotalIncome, 0.01)
 				assert.InEpsilon(t, 1200.0, rep.Data.TotalExpenses, 0.01)
 				assert.InEpsilon(t, 1800.0, rep.Data.NetIncome, 0.01)
-				// generateDailyCashFlow — заглушка, поэтому дневной разбивки нет.
-				assert.Empty(t, rep.Data.DailyBreakdown)
+
+				// Дни идут по возрастанию, Balance — нарастающий итог.
+				require.Len(t, rep.Data.DailyBreakdown, 2)
+				first, second := rep.Data.DailyBreakdown[0], rep.Data.DailyBreakdown[1]
+				assert.True(t, first.Date.Before(second.Date))
+				assert.InEpsilon(t, 3000.0, first.Income, 0.01)
+				assert.InEpsilon(t, 3000.0, first.Balance, 0.01)
+				assert.InEpsilon(t, 1200.0, second.Expenses, 0.01)
+				assert.InEpsilon(t, 1800.0, second.Balance, 0.01)
 			},
 		},
 		{
@@ -464,6 +476,11 @@ func TestReportService_GenerateReport(t *testing.T) {
 			},
 			assertData: func(t *testing.T, rep *report.Report) {
 				assert.Empty(t, rep.Data.CategoryBreakdown)
+			},
+			assertDates: func(t *testing.T, rep *report.Report) {
+				// Данные считаются по календарному периоду, значит и границы отчёта — его.
+				assert.True(t, rep.StartDate.After(time.Now().AddDate(0, -2, 0)),
+					"сохранены границы периода, а не даты запроса: %s", rep.StartDate)
 			},
 		},
 	}
@@ -497,6 +514,12 @@ func TestReportService_GenerateReport(t *testing.T) {
 			assert.Equal(t, tt.reportType, result.Type)
 			assert.Equal(t, req.UserID, result.UserID)
 			tt.assertData(t, result)
+			if tt.assertDates != nil {
+				tt.assertDates(t, result)
+			} else {
+				assert.Equal(t, req.StartDate, result.StartDate)
+				assert.Equal(t, req.EndDate, result.EndDate)
+			}
 
 			// Генерация не сохраняет отчёт — это делает SaveReport.
 			mockReportRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)

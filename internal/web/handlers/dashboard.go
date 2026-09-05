@@ -182,7 +182,8 @@ func (h *DashboardHandler) summary(
 	filters *webModels.DashboardFilters,
 ) (*dto.StatsSummary, error) {
 	from, to := filters.GetPeriodDates()
-	if filters.StartDate != nil && filters.EndDate != nil {
+	// Негодный пользовательский диапазон не роняет страницу в 500: возвращаемся к периоду.
+	if filters.StartDate != nil && filters.EndDate != nil && filters.ValidateCustomDateRange() == nil {
 		from, to = *filters.StartDate, *filters.EndDate
 	}
 

@@ -39,7 +39,7 @@ func NewTransactionHandler(
 	return &TransactionHandler{
 		repositories:       repositories,
 		transactionService: transactionService,
-		validator:          validator.New(),
+		validator:          newAPIValidator(),
 		logger:             slog.Default(),
 	}
 }
@@ -305,7 +305,7 @@ func (h *TransactionHandler) parseOptionalFilters(c echo.Context, filters *Trans
 	if userIDParam := c.QueryParam("user_id"); userIDParam != "" {
 		userID, parseErr := uuid.Parse(userIDParam)
 		if parseErr != nil {
-			return h.writeInvalidQueryParamError(c, "user_id", userIDParam, "must be a valid UUID")
+			return writeInvalidQueryParam(c, "user_id", userIDParam, "must be a valid UUID")
 		}
 		filters.UserID = &userID
 	}
@@ -313,7 +313,7 @@ func (h *TransactionHandler) parseOptionalFilters(c echo.Context, filters *Trans
 	if categoryIDParam := c.QueryParam("category_id"); categoryIDParam != "" {
 		categoryID, parseErr := uuid.Parse(categoryIDParam)
 		if parseErr != nil {
-			return h.writeInvalidQueryParamError(c, "category_id", categoryIDParam, "must be a valid UUID")
+			return writeInvalidQueryParam(c, "category_id", categoryIDParam, "must be a valid UUID")
 		}
 		filters.CategoryID = &categoryID
 	}
@@ -325,7 +325,7 @@ func (h *TransactionHandler) parseOptionalFilters(c echo.Context, filters *Trans
 	if dateFromParam := c.QueryParam("date_from"); dateFromParam != "" {
 		dateFrom, parseErr := time.Parse(time.RFC3339, dateFromParam)
 		if parseErr != nil {
-			return h.writeInvalidQueryParamError(c, "date_from", dateFromParam, "must be RFC3339 datetime")
+			return writeInvalidQueryParam(c, "date_from", dateFromParam, "must be RFC3339 datetime")
 		}
 		filters.DateFrom = &dateFrom
 	}
@@ -333,7 +333,7 @@ func (h *TransactionHandler) parseOptionalFilters(c echo.Context, filters *Trans
 	if dateToParam := c.QueryParam("date_to"); dateToParam != "" {
 		dateTo, parseErr := time.Parse(time.RFC3339, dateToParam)
 		if parseErr != nil {
-			return h.writeInvalidQueryParamError(c, "date_to", dateToParam, "must be RFC3339 datetime")
+			return writeInvalidQueryParam(c, "date_to", dateToParam, "must be RFC3339 datetime")
 		}
 		filters.DateTo = &dateTo
 	}
@@ -341,7 +341,7 @@ func (h *TransactionHandler) parseOptionalFilters(c echo.Context, filters *Trans
 	if amountFromParam := c.QueryParam("amount_from"); amountFromParam != "" {
 		amountFrom, parseErr := strconv.ParseFloat(amountFromParam, 64)
 		if parseErr != nil {
-			return h.writeInvalidQueryParamError(c, "amount_from", amountFromParam, "must be a valid number")
+			return writeInvalidQueryParam(c, "amount_from", amountFromParam, "must be a valid number")
 		}
 		filters.AmountFrom = &amountFrom
 	}
@@ -349,7 +349,7 @@ func (h *TransactionHandler) parseOptionalFilters(c echo.Context, filters *Trans
 	if amountToParam := c.QueryParam("amount_to"); amountToParam != "" {
 		amountTo, parseErr := strconv.ParseFloat(amountToParam, 64)
 		if parseErr != nil {
-			return h.writeInvalidQueryParamError(c, "amount_to", amountToParam, "must be a valid number")
+			return writeInvalidQueryParam(c, "amount_to", amountToParam, "must be a valid number")
 		}
 		filters.AmountTo = &amountTo
 	}
@@ -371,13 +371,6 @@ func (h *TransactionHandler) parsePaginationParams(c echo.Context, filters *Tran
 	filters.Offset = page.Offset
 
 	return nil
-}
-
-func (h *TransactionHandler) writeInvalidQueryParamError(
-	c echo.Context,
-	param, value, reason string,
-) error {
-	return writeInvalidQueryParam(c, param, value, reason)
 }
 
 func (h *TransactionHandler) validateTransactionFilters(c echo.Context, filters TransactionFilterParams) error {

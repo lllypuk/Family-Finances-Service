@@ -343,6 +343,8 @@ DOMAIN=budget.example.com
 
 # Database
 DATABASE_PATH=/data/budget.db
+# Backups land in the mounted ./backups volume, not inside the database volume
+BACKUP_DIR=/backups
 
 # Build context: path to the source checkout, relative to /opt/family-budget
 BUILD_CONTEXT=./src

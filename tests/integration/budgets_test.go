@@ -94,7 +94,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 					StartDate: time.Now(),
 					EndDate:   time.Now().AddDate(0, 1, 0),
 				},
-				field: "Amount",
+				field: "amount",
 			},
 			{
 				name: "invalid_period",
@@ -105,7 +105,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 					StartDate: time.Now(),
 					EndDate:   time.Now().AddDate(0, 1, 0),
 				},
-				field: "Period",
+				field: "period",
 			},
 			{
 				name: "empty_name",
@@ -116,7 +116,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 					StartDate: time.Now(),
 					EndDate:   time.Now().AddDate(0, 1, 0),
 				},
-				field: "Name",
+				field: "name",
 			},
 		}
 

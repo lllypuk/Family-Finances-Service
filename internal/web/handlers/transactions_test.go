@@ -396,3 +396,59 @@ func TestTransactionHandler_List_HTMX(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
+
+// HTMX-ветка предупреждает о ненайденных id — единственное место, где число
+// удалённых отличает частичный успех от полного.
+func TestTransactionHandler_BulkDelete_HTMXWarnsAboutMissing(t *testing.T) {
+	handler, mockTxService, _, _ := setupTransactionHandler()
+
+	mockTxService.On("BulkDelete", mock.Anything, mock.Anything).Return(2, nil).Once()
+
+	formData := url.Values{}
+	for range 3 {
+		formData.Add("transaction_ids", uuid.New().String())
+	}
+
+	c, rec := newTestContext(http.MethodPost, "/transactions/bulk-delete", formData.Encode())
+	renderer := &capturingRenderer{}
+	c.Echo().Renderer = renderer
+	withSession(c, uuid.New(), user.RoleAdmin)
+	withHTMX(c)
+
+	err := handler.BulkDelete(c)
+
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	alert, ok := renderer.data.(map[string]any)
+	require.True(t, ok, "alert рендерится из map с Type/Message")
+	assert.Equal(t, "warning", alert["Type"])
+	assert.Contains(t, alert["Message"], "Not found: 1")
+}
+
+func TestTransactionHandler_BulkDelete_HTMXAllDeleted(t *testing.T) {
+	handler, mockTxService, _, _ := setupTransactionHandler()
+
+	mockTxService.On("BulkDelete", mock.Anything, mock.Anything).Return(3, nil).Once()
+
+	formData := url.Values{}
+	for range 3 {
+		formData.Add("transaction_ids", uuid.New().String())
+	}
+
+	c, rec := newTestContext(http.MethodPost, "/transactions/bulk-delete", formData.Encode())
+	renderer := &capturingRenderer{}
+	c.Echo().Renderer = renderer
+	withSession(c, uuid.New(), user.RoleAdmin)
+	withHTMX(c)
+
+	err := handler.BulkDelete(c)
+
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	alert, ok := renderer.data.(map[string]any)
+	require.True(t, ok, "alert рендерится из map с Type/Message")
+	assert.Equal(t, "success", alert["Type"])
+	assert.NotContains(t, alert["Message"], "Not found")
+}

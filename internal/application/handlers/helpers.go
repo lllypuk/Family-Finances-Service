@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +26,22 @@ const (
 type pageParams struct {
 	Limit  int
 	Offset int
+}
+
+// newAPIValidator — валидатор всех API-хендлеров: имя поля в error.details берётся
+// из json-тега, иначе клиент получал бы имя поля Go (StartDate вместо start_date).
+func newAPIValidator() *validator.Validate {
+	v := validator.New()
+	v.RegisterTagNameFunc(func(field reflect.StructField) string {
+		name := strings.Split(field.Tag.Get("json"), ",")[0]
+		if name == "" || name == "-" {
+			return field.Name
+		}
+
+		return name
+	})
+
+	return v
 }
 
 func apiResponseMeta(c echo.Context) ResponseMeta {
@@ -155,12 +172,30 @@ func buildValidationErrors(err error) []ErrorDetail {
 	for _, fieldErr := range fieldErrs {
 		details = append(details, ErrorDetail{
 			Field:   fieldErr.Field(),
-			Message: fieldErr.Tag(),
+			Message: validationMessage(fieldErr),
 			Code:    ErrCodeValidationError,
 		})
 	}
 
 	return details
+}
+
+// validationMessage переводит правило валидатора в текст для клиента.
+func validationMessage(fieldErr validator.FieldError) string {
+	switch fieldErr.Tag() {
+	case "required":
+		return "is required"
+	case "oneof":
+		return "must be one of: " + fieldErr.Param()
+	case "email":
+		return "must be a valid email"
+	}
+
+	if fieldErr.Param() != "" {
+		return "must satisfy " + fieldErr.Tag() + "=" + fieldErr.Param()
+	}
+
+	return "must satisfy " + fieldErr.Tag()
 }
 
 // respondValidationErrors — единственный вход для 422: тело или параметры не прошли проверку.

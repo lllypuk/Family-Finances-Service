@@ -1525,7 +1525,7 @@ components:
           description: '`planned_minor - actual_minor`'
         utilization: { type: number, format: double }
 
-    StatsSummary:
+    PeriodTotals:
       type: object
       required: [from, to, income_minor, expenses_minor, net_minor, transaction_count]
       properties:
@@ -1537,25 +1537,89 @@ components:
           allOf: [{ $ref: '#/components/schemas/Money' }]
           description: '`income_minor - expenses_minor`'
         transaction_count: { type: integer }
+    CategoryShare:
+      type: object
+      required: [category_id, name, amount_minor, transaction_count, share]
+      properties:
+        category_id: { type: string, format: uuid }
+        name: { type: string }
+        color: { type: string }
+        icon: { type: string }
+        amount_minor: { $ref: '#/components/schemas/Money' }
+        transaction_count:
+          type: integer
+          description: Число операций категории **того же типа**, что и список
+        share:
+          type: number
+          format: double
+          description: Доля в сумме периода (0.25 = 25%)
+    BudgetProgress:
+      type: object
+      required:
+        [id, name, amount_minor, spent_minor, remaining_minor, utilization, period,
+         start_date, end_date, days_remaining, is_active, is_over_budget, is_near_limit]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        category_name: { type: string }
+        amount_minor: { $ref: '#/components/schemas/Money' }
+        spent_minor: { $ref: '#/components/schemas/Money' }
+        remaining_minor: { $ref: '#/components/schemas/Money' }
+        utilization:
+          type: number
+          format: double
+          description: '`spent_minor / amount_minor`, доля (1.0 = лимит выбран)'
+        period: { $ref: '#/components/schemas/BudgetPeriod' }
+        start_date: { $ref: '#/components/schemas/CalendarDate' }
+        end_date: { $ref: '#/components/schemas/CalendarDate' }
+        days_remaining: { type: integer }
+        is_active: { type: boolean }
+        is_over_budget: { type: boolean }
+        is_near_limit: { type: boolean }
+    StatsSummary:
+      type: object
+      required: [from, to, current, previous, has_previous_data, income_delta, expenses_delta,
+                 expense_categories, income_categories, budgets, recent, transactions_total]
+      properties:
+        from: { $ref: '#/components/schemas/CalendarDate' }
+        to: { $ref: '#/components/schemas/CalendarDate' }
+        current: { $ref: '#/components/schemas/PeriodTotals' }
+        previous:
+          allOf: [{ $ref: '#/components/schemas/PeriodTotals' }]
+          description: Предыдущий период той же длины; заполнен нулями, если данных нет
+        has_previous_data:
+          type: boolean
+          description: false — сравнивать с `previous` нельзя, дельты равны нулю
+        income_delta:
+          type: number
+          format: double
+          description: Изменение доходов к предыдущему периоду, доля (0.12 = +12%)
         expenses_delta:
           type: number
           format: double
-          description: Изменение расходов к предыдущему периоду той же длины, доля (0.12 = +12%)
-        categories:
+          description: Изменение расходов к предыдущему периоду, доля (0.12 = +12%)
+        expense_categories:
           type: array
           description: Разбивка расходов по категориям, по убыванию суммы
-          items: { $ref: '#/components/schemas/CategoryBreakdownItem' }
+          items: { $ref: '#/components/schemas/CategoryShare' }
+        income_categories:
+          type: array
+          description: Разбивка доходов по категориям, по убыванию суммы
+          items: { $ref: '#/components/schemas/CategoryShare' }
         budgets:
           type: array
-          description: Бюджеты, пересекающиеся с периодом
-          items: { $ref: '#/components/schemas/BudgetComparisonItem' }
+          description: Бюджеты, активные на момент запроса (не на границы периода), по убыванию утилизации
+          items: { $ref: '#/components/schemas/BudgetProgress' }
         recent:
           type: array
-          description: Последние операции периода, по убыванию даты
+          description: Последние операции семьи, по убыванию даты; не ограничены периодом
           items: { $ref: '#/components/schemas/RecentTransactionItem' }
+        transactions_total:
+          type: integer
+          description: Общее число операций семьи за всё время, а не за период
     RecentTransactionItem:
       type: object
-      required: [id, type, amount_minor, description, category_name, date]
+      required: [id, type, amount_minor, description, date, created_at]
       properties:
         id: { type: string, format: uuid }
         type: { $ref: '#/components/schemas/TransactionType' }
@@ -1563,6 +1627,7 @@ components:
         description: { type: string }
         category_name: { type: string }
         date: { $ref: '#/components/schemas/CalendarDate' }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
 
     Backup:
       type: object

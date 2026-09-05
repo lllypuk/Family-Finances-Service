@@ -23,7 +23,7 @@ func NewCategoryHandler(repositories *Repositories, categoryService services.Cat
 	return &CategoryHandler{
 		repositories:    repositories,
 		categoryService: categoryService,
-		validator:       validator.New(),
+		validator:       newAPIValidator(),
 	}
 }
 

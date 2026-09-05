@@ -376,3 +376,74 @@ func TestStatsService_Summary_CountError(t *testing.T) {
 	require.Error(t, err)
 	assert.Nil(t, summary)
 }
+
+// pageFilter матчит страницу выборки за период: страницы отличаются только offset.
+func pageFilter(from, to time.Time, offset int) any {
+	return mock.MatchedBy(func(f dto.TransactionFilterDTO) bool {
+		return f.DateFrom != nil && f.DateTo != nil &&
+			f.DateFrom.Equal(from) && f.DateTo.Equal(to) && f.Offset == offset
+	})
+}
+
+func TestStatsService_Summary_SumsBeyondFirstPage(t *testing.T) {
+	svc, m := newStatsService()
+	from := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2026, time.March, 31, 23, 59, 59, 0, time.UTC)
+	prevFrom, prevTo := previousPeriod(from, to)
+
+	foodID := uuid.New()
+	firstPage := make([]*transaction.Transaction, 0, 1000)
+	for range 1000 {
+		firstPage = append(firstPage, statsTransaction(10, transaction.TypeExpense, foodID))
+	}
+	secondPage := []*transaction.Transaction{statsTransaction(25, transaction.TypeExpense, foodID)}
+
+	m.transactions.On("GetAllTransactions", mock.Anything, pageFilter(from, to, 0)).Return(firstPage, nil)
+	m.transactions.On("GetAllTransactions", mock.Anything, pageFilter(from, to, 1000)).Return(secondPage, nil)
+	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(prevFrom, prevTo)).
+		Return([]*transaction.Transaction{}, nil)
+	m.transactions.On("GetAllTransactions", mock.Anything, recentFilter()).
+		Return([]*transaction.Transaction{}, nil)
+	m.transactions.On("CountTransactions", mock.Anything, mock.Anything).Return(1001, nil)
+	m.budgets.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil)
+	m.categories.On("GetCategoryByID", mock.Anything, foodID).Return(statsCategory(foodID, "Еда"), nil)
+
+	summary, err := svc.Summary(t.Context(), from, to)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1001, summary.Current.TransactionCount)
+	assert.InDelta(t, 10025.0, summary.Current.Expenses, 0.001)
+	require.Len(t, summary.ExpenseCategories, 1)
+	assert.Equal(t, 1001, summary.ExpenseCategories[0].TransactionCount)
+}
+
+func TestStatsService_Summary_CategoryCountsSplitByType(t *testing.T) {
+	svc, m := newStatsService()
+	from := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
+	to := from.AddDate(0, 1, 0)
+	prevFrom, prevTo := previousPeriod(from, to)
+
+	mixedID := uuid.New()
+	current := []*transaction.Transaction{
+		statsTransaction(100, transaction.TypeExpense, mixedID),
+		statsTransaction(200, transaction.TypeExpense, mixedID),
+		statsTransaction(50, transaction.TypeIncome, mixedID),
+	}
+
+	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).Return(current, nil)
+	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(prevFrom, prevTo)).
+		Return([]*transaction.Transaction{}, nil)
+	m.transactions.On("GetAllTransactions", mock.Anything, recentFilter()).
+		Return([]*transaction.Transaction{}, nil)
+	m.transactions.On("CountTransactions", mock.Anything, mock.Anything).Return(3, nil)
+	m.budgets.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil)
+	m.categories.On("GetCategoryByID", mock.Anything, mixedID).Return(statsCategory(mixedID, "Разное"), nil)
+
+	summary, err := svc.Summary(t.Context(), from, to)
+	require.NoError(t, err)
+
+	require.Len(t, summary.ExpenseCategories, 1)
+	require.Len(t, summary.IncomeCategories, 1)
+	assert.Equal(t, 2, summary.ExpenseCategories[0].TransactionCount)
+	assert.Equal(t, 1, summary.IncomeCategories[0].TransactionCount)
+}

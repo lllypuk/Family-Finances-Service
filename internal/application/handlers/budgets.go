@@ -33,7 +33,7 @@ func NewBudgetHandler(
 
 	return &BudgetHandler{
 		repositories:  repositories,
-		validator:     validator.New(),
+		validator:     newAPIValidator(),
 		budgetService: budgetService,
 	}
 }

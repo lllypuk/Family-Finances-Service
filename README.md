@@ -62,8 +62,8 @@ Role model mirrors the web UI:
 
 - the whole `/api/v1/users` and `/api/v1/backups` groups, `PUT /api/v1/family` and
   `DELETE /api/v1/categories/:id` — **admin only**
-- `/api/v1/{categories,transactions,budgets,reports,stats}` and `GET /api/v1/family` —
-  **admin or member** (`child` gets `403`)
+- `/api/v1/{categories,transactions,budgets,reports,stats}` — **admin or member** (`child` gets `403`)
+- `GET /api/v1/family` — any authenticated role, including `child`
 
 The author of a record is taken from the session: `user_id` is no longer part of
 `CreateTransactionRequest` / `CreateReportRequest`, so sending it in the body has no effect.
@@ -95,7 +95,8 @@ working `curl` walkthrough.
 - Login, logout, setup and invites are web-only routes; the API has no equivalents until plan 03
 - Money is still `float64` (minor units land in plan 04, together with the rest of the `openapi.yaml` gap)
 - Backup **restore** is deliberately not exposed over the API — use the web admin panel or `make sqlite-restore`
-- Scheduled reports, forecasts, insights and benchmarks were placeholder service methods and have been removed
+- Scheduled reports, spending forecast and benchmarks were placeholder service methods and have been
+  removed; financial insights and trend analysis stay hidden stubs in `ReportService` with no route
 
 ## 🏗️ Architecture and Technology Stack
 
@@ -252,7 +253,7 @@ The project follows **Clean Architecture** principles with production-ready impl
 - **Invite System**: Secure tokens, expiration, role control
 - **Backup Management**: Create, restore, download with auto-cleanup
 - **Admin Panel**: User, invite, and backup management
-- **Reports (UI-first)**: interactive preview generation and CSV export for saved reports
+- **Reports**: generation and CSV export live in `ReportService`, reachable over REST and the web UI
 - **Data Validation**: Comprehensive input validation with go-playground/validator
 - **Error Handling**: Structured error responses with proper HTTP status codes
 - **Security**: CSRF protection, password hashing, input sanitization, path traversal protection
@@ -272,6 +273,7 @@ The application uses environment variables for configuration. Key variables:
 | `SERVER_WRITE_TIMEOUT` | `15s`                                                | HTTP server write timeout                             |
 | `SERVER_IDLE_TIMEOUT`  | `60s`                                                | HTTP server idle timeout                              |
 | `DATABASE_PATH`        | `./data/budget.db`                                   | SQLite database file path                             |
+| `BACKUP_DIR`           | empty → `<dir(DATABASE_PATH)>/backups`               | Where `POST /api/v1/backups` and the admin panel write backups. Docker compose sets `/backups` so `VACUUM INTO` copies do not land inside the database volume |
 | `ENVIRONMENT`          | `development`                                        | App environment (`development`, `production`, `test`) |
 | `LOG_LEVEL`            | `info`                                               | Logging level                                         |
 | `LOG_FORMAT`           | `json`                                               | Log format                                            |
@@ -288,6 +290,9 @@ The application uses environment variables for configuration. Key variables:
 `SESSION_SECRET` and `CSRF_SECRET` are mandatory: the compose file declares them as
 `${VAR:?...}`, so an unset or empty value aborts the command with an explicit message
 instead of silently booting with a well-known default.
+
+`docker/docker-compose.yml` bind-mounts `${DATA_DIR:-.}/backups`; a bind volume does not create
+its source directory, so create it before the first `up` (`make docker-up` does it for you).
 
 `.env` belongs in the **repository root**. Compose v2 resolves `.env` (and relative
 paths such as `DATA_DIR`) against the *project directory*, which defaults to the

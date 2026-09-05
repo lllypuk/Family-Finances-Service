@@ -20,7 +20,7 @@ type FamilyHandler struct {
 func NewFamilyHandler(familyService services.FamilyService) *FamilyHandler {
 	return &FamilyHandler{
 		familyService: familyService,
-		validator:     validator.New(),
+		validator:     newAPIValidator(),
 	}
 }
 

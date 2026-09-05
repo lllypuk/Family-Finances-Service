@@ -373,8 +373,19 @@ func (s *TransactionServiceImpl) BulkDelete(ctx context.Context, ids []uuid.UUID
 		return 0, nil
 	}
 
-	expenses := make([]*transaction.Transaction, 0, len(ids))
+	// Дубликат в запросе удалил бы строку один раз, но откатил бюджет дважды.
+	unique := make([]uuid.UUID, 0, len(ids))
+	seen := make(map[uuid.UUID]struct{}, len(ids))
 	for _, id := range ids {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+
+	expenses := make([]*transaction.Transaction, 0, len(unique))
+	for _, id := range unique {
 		existingTx, err := s.transactionRepo.GetByID(ctx, id)
 		if err != nil {
 			continue
@@ -384,7 +395,7 @@ func (s *TransactionServiceImpl) BulkDelete(ctx context.Context, ids []uuid.UUID
 		}
 	}
 
-	deleted, err := s.transactionRepo.DeleteBulk(ctx, ids)
+	deleted, err := s.transactionRepo.DeleteBulk(ctx, unique)
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete transactions: %w", err)
 	}

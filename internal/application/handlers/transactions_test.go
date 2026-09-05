@@ -280,14 +280,17 @@ func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
 	handler, _ := setupTransactionHandler()
 
 	tests := []struct {
-		name        string
-		requestBody any
-		expectedMsg string
+		name           string
+		requestBody    any
+		expectedStatus int
+		expectedCode   string
+		expectedField  string
 	}{
 		{
-			name:        "Invalid JSON",
-			requestBody: "invalid json",
-			expectedMsg: "Invalid request body",
+			name:           "Invalid JSON",
+			requestBody:    "invalid json",
+			expectedStatus: http.StatusBadRequest,
+			expectedCode:   handlers.ErrCodeInvalidRequest,
 		},
 		{
 			name: "Missing amount",
@@ -299,7 +302,9 @@ func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
 				"family_id":   uuid.New().String(),
 				"date":        time.Now(),
 			},
-			expectedMsg: "",
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedCode:   handlers.ErrCodeValidationError,
+			expectedField:  "amount",
 		},
 		{
 			name: "Negative amount",
@@ -312,7 +317,9 @@ func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
 				"family_id":   uuid.New().String(),
 				"date":        time.Now(),
 			},
-			expectedMsg: "",
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedCode:   handlers.ErrCodeValidationError,
+			expectedField:  "amount",
 		},
 		{
 			name: "Invalid type",
@@ -325,7 +332,9 @@ func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
 				"family_id":   uuid.New().String(),
 				"date":        time.Now(),
 			},
-			expectedMsg: "",
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedCode:   handlers.ErrCodeValidationError,
+			expectedField:  "type",
 		},
 	}
 
@@ -351,13 +360,17 @@ func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
 			// Act
 			err = handler.CreateTransaction(c)
 
-			// Assert: битый JSON — 400, непрошедшее валидацию тело — 422.
+			// Assert: битый JSON — 400, непрошедшее валидацию тело — 422 с деталями по полям.
 			require.NoError(t, err)
-			expectedStatus := http.StatusUnprocessableEntity
-			if tt.expectedMsg != "" {
-				expectedStatus = http.StatusBadRequest
+			assert.Equal(t, tt.expectedStatus, rec.Code)
+
+			var response handlers.ErrorResponse
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+			assert.Equal(t, tt.expectedCode, response.Error.Code)
+			if tt.expectedField != "" {
+				require.NotEmpty(t, response.Error.Details)
+				assert.Equal(t, tt.expectedField, response.Error.Details[0].Field)
 			}
-			assert.Equal(t, expectedStatus, rec.Code)
 		})
 	}
 }
