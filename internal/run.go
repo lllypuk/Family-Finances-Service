@@ -78,10 +78,7 @@ func NewApplication() (*Application, error) {
 	// Инициализация BackupService
 	backupService := services.NewBackupService(db, config.Database.Path, config.GetBackupDir(), logger)
 
-	authService, err := auth.NewService(app.repositories.Session, app.repositories.User, app.repositories.Family)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize auth service: %w", err)
-	}
+	authService := auth.NewService(app.repositories.Session, app.repositories.User, app.repositories.Family)
 
 	// Инициализация сервисов
 	app.services = services.NewServices(
@@ -98,10 +95,13 @@ func NewApplication() (*Application, error) {
 		logger,
 	)
 
-	// Validate уже проверил список, здесь ошибка невозможна.
-	trustedProxies, err := config.TrustedProxyRanges()
-	if err != nil {
-		return nil, fmt.Errorf("invalid TRUSTED_PROXIES: %w", err)
+	trustedProxies := config.TrustedProxyRanges()
+	if config.IsProduction() && len(trustedProxies) == 0 {
+		// За прокси без TRUSTED_PROXIES все клиенты видны как один IP, и лимитер логина
+		// блокирует всех разом.
+		logger.WarnContext(context.Background(),
+			"TRUSTED_PROXIES is empty: X-Forwarded-For is ignored, the login limiter counts every client "+
+				"behind a reverse proxy as one IP")
 	}
 
 	// Создание HTTP сервера с observability

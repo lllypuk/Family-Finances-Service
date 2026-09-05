@@ -87,34 +87,24 @@ func (r *SessionSQLiteRepository) FindByTokenHash(
 	return &s, &u, nil
 }
 
-// Touch продлевает сессию активностью в момент at.
-func (r *SessionSQLiteRepository) Touch(ctx context.Context, id uuid.UUID, at time.Time) error {
+// Touch записывает продление сессии одним UPDATE; исчезнувшая строка → ErrSessionNotFound.
+func (r *SessionSQLiteRepository) Touch(
+	ctx context.Context,
+	id uuid.UUID,
+	lastUsedAt, expiresAt time.Time,
+) error {
 	if err := validation.ValidateUUID(id); err != nil {
 		return fmt.Errorf("invalid session ID: %w", err)
 	}
 
-	var createdAt string
-	err := r.db.QueryRowContext(ctx, `SELECT created_at FROM sessions WHERE id = ?`, id.String()).Scan(&createdAt)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return auth.ErrSessionNotFound
-		}
-		return fmt.Errorf("failed to read session: %w", err)
-	}
-
-	s := auth.Session{}
-	if s.CreatedAt, err = parseTime(createdAt, "created_at"); err != nil {
-		return err
-	}
-
-	_, err = r.db.ExecContext(ctx,
+	result, err := r.db.ExecContext(ctx,
 		`UPDATE sessions SET last_used_at = ?, expires_at = ? WHERE id = ?`,
-		formatTime(at), formatTime(s.ExpiryAfter(at)), id.String(),
+		formatTime(lastUsedAt), formatTime(expiresAt), id.String(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to touch session: %w", err)
 	}
-	return nil
+	return requireAffected(result)
 }
 
 // Delete удаляет сессию по id.
@@ -127,7 +117,28 @@ func (r *SessionSQLiteRepository) Delete(ctx context.Context, id uuid.UUID) erro
 	if err != nil {
 		return fmt.Errorf("failed to delete session: %w", err)
 	}
+	return requireAffected(result)
+}
 
+// DeleteOwned удаляет сессию, только если она принадлежит userID.
+func (r *SessionSQLiteRepository) DeleteOwned(ctx context.Context, userID, id uuid.UUID) error {
+	if err := validation.ValidateUUID(id); err != nil {
+		return fmt.Errorf("invalid session ID: %w", err)
+	}
+	if err := validation.ValidateUUID(userID); err != nil {
+		return fmt.Errorf("invalid user ID: %w", err)
+	}
+
+	result, err := r.db.ExecContext(ctx,
+		`DELETE FROM sessions WHERE id = ? AND user_id = ?`, id.String(), userID.String())
+	if err != nil {
+		return fmt.Errorf("failed to delete session: %w", err)
+	}
+	return requireAffected(result)
+}
+
+// requireAffected — ErrSessionNotFound, если запрос не задел ни одной строки.
+func requireAffected(result sql.Result) error {
 	affected, err := result.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("failed to get rows affected: %w", err)

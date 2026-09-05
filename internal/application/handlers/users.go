@@ -17,28 +17,17 @@ import (
 var ErrFamilyNotFound = errors.New("family not found")
 
 type UserHandler struct {
-	repositories *Repositories
-	userService  services.UserService
-	authService  AuthService
-	validator    *validator.Validate
+	userService services.UserService
+	authService AuthService
+	validator   *validator.Validate
 }
 
-func NewUserHandler(
-	repositories *Repositories,
-	userService services.UserService,
-	authService AuthService,
-) *UserHandler {
+func NewUserHandler(userService services.UserService, authService AuthService) *UserHandler {
 	return &UserHandler{
-		repositories: repositories,
-		userService:  userService,
-		authService:  authService,
-		validator:    newAPIValidator(),
+		userService: userService,
+		authService: authService,
+		validator:   newAPIValidator(),
 	}
-}
-
-// handleServiceError converts service errors to HTTP responses.
-func (h *UserHandler) handleServiceError(c echo.Context, err error) error {
-	return respondUserServiceError(c, err)
 }
 
 // respondUserServiceError — ошибки UserService в envelope; общая для /users и /me.
@@ -50,13 +39,11 @@ func respondUserServiceError(c echo.Context, err error) error {
 		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, err.Error()))
 	case errors.Is(err, services.ErrEmailAlreadyExists):
-		return respondError(c, http.StatusConflict, "EMAIL_EXISTS", "Email already exists")
+		return respondError(c, http.StatusConflict, ErrCodeEmailTaken, ErrMessageEmailTaken)
 	case errors.Is(err, services.ErrUserNotFound):
-		return respondError(c, http.StatusNotFound, "USER_NOT_FOUND", "User not found")
+		return HandleNotFoundError(c, entityUser)
 	case errors.Is(err, services.ErrFamilyNotFound):
 		return respondError(c, http.StatusBadRequest, ErrCodeFamilyNotFound, ErrMessageFamilyNotFound)
-	case errors.Is(err, services.ErrUnauthorized):
-		return respondError(c, http.StatusForbidden, ErrCodeForbidden, ErrMessageForbidden)
 	case errors.Is(err, services.ErrCannotDeactivateSelf):
 		return respondError(c, http.StatusConflict, ErrCodeCannotDeactivateSelf, ErrMessageCannotDeactivate)
 	case errors.Is(err, services.ErrLastAdmin):
@@ -92,7 +79,7 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 	// Call service
 	createdUser, err := h.userService.CreateUser(c.Request().Context(), userDTO)
 	if err != nil {
-		return h.handleServiceError(c, err)
+		return respondUserServiceError(c, err)
 	}
 
 	// Convert to API response
@@ -111,7 +98,7 @@ func (h *UserHandler) GetUserByID(c echo.Context) error {
 	// Call service
 	foundUser, err := h.userService.GetUserByID(c.Request().Context(), id)
 	if err != nil {
-		return h.handleServiceError(c, err)
+		return respondUserServiceError(c, err)
 	}
 
 	// Convert to API response
@@ -146,7 +133,7 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 	// Call service
 	updatedUser, err := h.userService.UpdateUser(c.Request().Context(), id, updateDTO)
 	if err != nil {
-		return h.handleServiceError(c, err)
+		return respondUserServiceError(c, err)
 	}
 
 	// Convert to API response
@@ -178,7 +165,7 @@ func (h *UserHandler) GetUsers(c echo.Context) error {
 
 	users, err := h.userService.GetUsers(c.Request().Context())
 	if err != nil {
-		return h.handleServiceError(c, err)
+		return respondUserServiceError(c, err)
 	}
 
 	response := make([]UserResponse, 0, page.Limit)
@@ -221,18 +208,18 @@ func (h *UserHandler) PatchUser(c echo.Context) error {
 	ctx := c.Request().Context()
 	if req.Role != nil {
 		if roleErr := h.userService.ChangeUserRole(ctx, id, user.Role(*req.Role)); roleErr != nil {
-			return h.handleServiceError(c, roleErr)
+			return respondUserServiceError(c, roleErr)
 		}
 	}
 	if req.IsActive != nil {
 		if activeErr := h.userService.SetActive(ctx, id, *req.IsActive, principal.UserID); activeErr != nil {
-			return h.handleServiceError(c, activeErr)
+			return respondUserServiceError(c, activeErr)
 		}
 	}
 
 	updatedUser, err := h.userService.GetUserByID(ctx, id)
 	if err != nil {
-		return h.handleServiceError(c, err)
+		return respondUserServiceError(c, err)
 	}
 
 	return respondAPI(c, http.StatusOK, toUserResponse(updatedUser))
@@ -256,7 +243,7 @@ func (h *UserHandler) SetUserPassword(c echo.Context) error {
 	if err = h.authService.AdminSetPassword(c.Request().Context(), id, req.NewPassword); err != nil {
 		switch {
 		case errors.Is(err, user.ErrNotFound):
-			return respondError(c, http.StatusNotFound, "USER_NOT_FOUND", "User not found")
+			return HandleNotFoundError(c, entityUser)
 		case errors.Is(err, auth.ErrInvalidPassword):
 			return respondError(
 				c,

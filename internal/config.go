@@ -33,8 +33,10 @@ type ServerConfig struct {
 	WriteTimeout time.Duration
 	IdleTimeout  time.Duration
 	// TrustedProxies — TRUSTED_PROXIES как есть: CIDR через запятую, чьи X-Forwarded-For принимаются.
-	// Пусто — доверять только RemoteAddr; разбирается TrustedProxyRanges.
+	// Пусто — доверять только RemoteAddr; разбирает Validate, результат отдаёт TrustedProxyRanges.
 	TrustedProxies string
+
+	trustedProxyRanges []*net.IPNet
 }
 
 type DatabaseConfig struct {
@@ -110,17 +112,17 @@ func (c *Config) Validate() error {
 		return errors.New("database path is required")
 	}
 
-	_, err := c.TrustedProxyRanges()
-	return err
-}
-
-// TrustedProxyRanges — разобранный TRUSTED_PROXIES для echo.IPExtractor.
-func (c *Config) TrustedProxyRanges() ([]*net.IPNet, error) {
 	ranges, err := auth.ParseTrustedProxies(c.Server.TrustedProxies)
 	if err != nil {
-		return nil, fmt.Errorf("TRUSTED_PROXIES: %w", err)
+		return fmt.Errorf("TRUSTED_PROXIES: %w", err)
 	}
-	return ranges, nil
+	c.Server.trustedProxyRanges = ranges
+	return nil
+}
+
+// TrustedProxyRanges — разобранный TRUSTED_PROXIES для echo.IPExtractor; заполняет Validate.
+func (c *Config) TrustedProxyRanges() []*net.IPNet {
+	return c.Server.trustedProxyRanges
 }
 
 // GetBackupDir returns the backup directory, falling back to <dir(database)>/backups.

@@ -12,6 +12,7 @@ import (
 
 	"family-budget-service/internal"
 	"family-budget-service/internal/auth"
+	"family-budget-service/internal/services/dto"
 )
 
 const (
@@ -65,11 +66,11 @@ func runResetPassword(ctx context.Context, args []string, stdin io.Reader, stdou
 	return err
 }
 
-func parseSetupArgs(args []string, stdin io.Reader) (internal.SetupParams, error) {
+func parseSetupArgs(args []string, stdin io.Reader) (dto.SetupFamilyDTO, error) {
 	fs := flag.NewFlagSet(cmdSetup, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 
-	var p internal.SetupParams
+	var p dto.SetupFamilyDTO
 	var passwordStdin bool
 	fs.StringVar(&p.FamilyName, "family", "", "family name (required)")
 	fs.StringVar(&p.Currency, "currency", "", "ISO 4217 currency code, e.g. RUB (required)")
@@ -80,7 +81,7 @@ func parseSetupArgs(args []string, stdin io.Reader) (internal.SetupParams, error
 	fs.BoolVar(&passwordStdin, "password-stdin", false, "read admin password from the first line of stdin")
 
 	if err := fs.Parse(args); err != nil {
-		return internal.SetupParams{}, fmt.Errorf("%s: %w", cmdSetup, err)
+		return dto.SetupFamilyDTO{}, fmt.Errorf("%s: %w", cmdSetup, err)
 	}
 
 	required := map[string]string{
@@ -92,12 +93,12 @@ func parseSetupArgs(args []string, stdin io.Reader) (internal.SetupParams, error
 		"last-name":  p.LastName,
 	}
 	if err := requireFlags(cmdSetup, required); err != nil {
-		return internal.SetupParams{}, err
+		return dto.SetupFamilyDTO{}, err
 	}
 
 	password, err := readPassword(passwordStdin, stdin)
 	if err != nil {
-		return internal.SetupParams{}, fmt.Errorf("%s: %w", cmdSetup, err)
+		return dto.SetupFamilyDTO{}, fmt.Errorf("%s: %w", cmdSetup, err)
 	}
 	p.Password = password
 

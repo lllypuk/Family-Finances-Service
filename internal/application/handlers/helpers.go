@@ -168,7 +168,8 @@ func RespondAPIError(c echo.Context, status int, code, message string) error {
 	return respondError(c, status, code, message)
 }
 
-// ErrorCodeForStatus — error.code, соответствующий HTTP-статусу.
+// ErrorCodeForStatus — error.code, соответствующий HTTP-статусу; неизвестный статус
+// (503 от таймаута, 413 и т. п.) получает код из http.StatusText, чтобы код и статус не расходились.
 func ErrorCodeForStatus(status int) string {
 	switch status {
 	case http.StatusBadRequest:
@@ -183,9 +184,16 @@ func ErrorCodeForStatus(status int) string {
 		return ErrCodeMethodNotAllowed
 	case http.StatusUnprocessableEntity:
 		return ErrCodeValidationError
-	default:
+	case http.StatusTooManyRequests:
+		return ErrCodeRateLimited
+	case http.StatusInternalServerError:
 		return ErrCodeInternal
 	}
+	text := http.StatusText(status)
+	if text == "" {
+		return ErrCodeInternal
+	}
+	return strings.ToUpper(strings.ReplaceAll(text, " ", "_"))
 }
 
 // respondUnauthorized отдаёт 401 в общем формате ошибок API хендлерам,

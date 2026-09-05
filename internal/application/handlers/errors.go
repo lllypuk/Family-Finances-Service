@@ -28,6 +28,10 @@ const (
 	ErrCodeBadRequest = "BAD_REQUEST"
 	// ErrCodeInternal signals a server-side failure; details stay in the log only.
 	ErrCodeInternal = "INTERNAL_ERROR"
+	// entityUser — имя сущности для HandleNotFoundError: USER_NOT_FOUND / "User not found".
+	entityUser = "User"
+	// ErrCodeEmailTaken signals that another user already has the requested email.
+	ErrCodeEmailTaken = "EMAIL_TAKEN"
 	// ErrCodeCannotDeactivateSelf signals an attempt to deactivate the session's own user.
 	ErrCodeCannotDeactivateSelf = "CANNOT_DEACTIVATE_SELF"
 	// ErrCodeLastAdmin signals an attempt to deactivate or demote the last active admin.
@@ -68,6 +72,7 @@ const (
 	ErrMessageFamilyNotFound     = "Family not found"
 	ErrMessageInternal           = "Internal server error"
 	ErrMessageCannotDeactivate   = "Cannot deactivate your own account"
+	ErrMessageEmailTaken         = "Email already exists"
 	ErrMessageLastAdmin          = "Cannot deactivate or demote the last administrator"
 	ErrMessageCurrencyLocked     = "Currency cannot be changed while transactions exist"
 	ErrMessageInvalidBackupName  = "Invalid backup filename"

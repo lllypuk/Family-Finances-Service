@@ -18,32 +18,19 @@ const ContextKey = "principal"
 
 const bearerScheme = "bearer"
 
-// ErrForbidden — роль владельца токена не допущена к маршруту.
-var ErrForbidden = errors.New("forbidden")
-
 // Authenticator проверяет bearer-токен; реализация — *Service.
 type Authenticator interface {
 	Authenticate(ctx context.Context, token string) (*Principal, error)
 }
 
-// BearerToken — токен из Authorization: Bearer <token>; false, если заголовок не bearer или пуст.
-func BearerToken(r *http.Request) (string, bool) {
+// bearerToken — токен из Authorization: Bearer <token>; false, если заголовок не bearer или пуст.
+func bearerToken(r *http.Request) (string, bool) {
 	scheme, token, found := strings.Cut(r.Header.Get(echo.HeaderAuthorization), " ")
 	if !found || !strings.EqualFold(scheme, bearerScheme) {
 		return "", false
 	}
 	token = strings.TrimSpace(token)
 	return token, token != ""
-}
-
-// AuthenticateRequest проверяет bearer-токен запроса.
-// Без заголовка или с неизвестным токеном — ErrUnauthorized; прочие ошибки — сбой хранилища.
-func AuthenticateRequest(c echo.Context, a Authenticator) (*Principal, error) {
-	token, ok := BearerToken(c.Request())
-	if !ok {
-		return nil, ErrUnauthorized
-	}
-	return a.Authenticate(c.Request().Context(), token)
 }
 
 // FromContext — владелец токена, положенный RequireBearer; без него ErrUnauthorized.
@@ -57,10 +44,15 @@ func FromContext(c echo.Context) (*Principal, error) {
 
 // RequireBearer — 401 без валидного токена, иначе *Principal в контексте.
 // Сбой хранилища — 500, а не 401: клиент не должен выбрасывать рабочий токен.
+// Internal у 401 — ErrUnauthorized, чтобы вызывающий отличал отказ от сбоя через errors.Is.
 func RequireBearer(a Authenticator) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			p, err := AuthenticateRequest(c, a)
+			token, ok := bearerToken(c.Request())
+			if !ok {
+				return echo.NewHTTPError(http.StatusUnauthorized).SetInternal(ErrUnauthorized)
+			}
+			p, err := a.Authenticate(c.Request().Context(), token)
 			if err != nil {
 				if errors.Is(err, ErrUnauthorized) {
 					return echo.NewHTTPError(http.StatusUnauthorized).SetInternal(err)
@@ -83,7 +75,7 @@ func RequireRole(roles ...user.Role) echo.MiddlewareFunc {
 				return echo.NewHTTPError(http.StatusUnauthorized).SetInternal(err)
 			}
 			if !slices.Contains(roles, p.Role) {
-				return echo.NewHTTPError(http.StatusForbidden).SetInternal(ErrForbidden)
+				return echo.NewHTTPError(http.StatusForbidden)
 			}
 			return next(c)
 		}

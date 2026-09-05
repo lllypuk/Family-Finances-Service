@@ -17,8 +17,8 @@ import (
 
 var (
 	ErrFamilyNotFound = errors.New("family not found")
-	// ErrUserNotFound — тот же sentinel, что и user.ErrNotFound: слой middleware
-	// проверяет его через errors.Is, не импортируя пакет services.
+	// ErrUserNotFound — тот же sentinel, что и user.ErrNotFound: хендлеры и auth.Service
+	// проверяют его через errors.Is, не завися от пакета services.
 	ErrUserNotFound       = user.ErrNotFound
 	ErrEmailAlreadyExists = errors.New("email already exists")
 	ErrInvalidRole        = errors.New("invalid user role")
@@ -124,9 +124,8 @@ func (s *userService) CreateUser(ctx context.Context, req dto.CreateUserDTO) (*u
 // GetUserByID retrieves a user by ID.
 //
 // Сбой инфраструктуры (таймаут контекста, SQLITE_BUSY) НЕ схлопывается в
-// ErrUserNotFound: вызывающему нужно отличать удалённого пользователя от
-// временно недоступной БД — middleware перепроверки сессии в первом случае
-// гасит cookie, а во втором обязано вернуть 500 и сессию не трогать.
+// ErrUserNotFound: вызывающему нужно отличать удалённого пользователя (404)
+// от временно недоступной БД (500).
 func (s *userService) GetUserByID(ctx context.Context, id uuid.UUID) (*user.User, error) {
 	foundUser, err := s.userRepo.GetByID(ctx, id)
 	if err != nil {

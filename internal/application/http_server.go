@@ -112,9 +112,7 @@ func NewHTTPServerWithObservability(
 		healthService = obsService.HealthService
 		logger = obsService.Logger
 	}
-	healthService.SetSetupChecker(func(ctx context.Context) (bool, error) {
-		return services.Family.IsSetupComplete(ctx)
-	})
+	healthService.SetSetupChecker(services.Family.IsSetupComplete)
 
 	server := &HTTPServer{
 		echo:                 e,
@@ -127,7 +125,7 @@ func NewHTTPServerWithObservability(
 		// Инициализация API handlers
 		authHandler:        handlers.NewAuthHandler(services.Auth, auth.NewRateLimiter(nil), logger),
 		meHandler:          handlers.NewMeHandler(services.User, services.Auth),
-		userHandler:        handlers.NewUserHandler(repositories, services.User, services.Auth),
+		userHandler:        handlers.NewUserHandler(services.User, services.Auth),
 		familyHandler:      handlers.NewFamilyHandler(services.Family),
 		categoryHandler:    handlers.NewCategoryHandler(repositories, services.Category),
 		transactionHandler: handlers.NewTransactionHandler(repositories, services.Transaction),

@@ -30,17 +30,6 @@ type UserFilterDTO struct {
 	Email *string
 }
 
-// UserResponseDTO represents the data transfer object for user responses
-type UserResponseDTO struct {
-	ID        uuid.UUID `json:"id"`
-	Email     string    `json:"email"`
-	FirstName string    `json:"first_name"`
-	LastName  string    `json:"last_name"`
-	Role      user.Role `json:"role"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
 // SetupFamilyDTO represents the data for initial family setup (bootstrap)
 type SetupFamilyDTO struct {
 	// Family data
@@ -48,7 +37,7 @@ type SetupFamilyDTO struct {
 	// Currency is a 3-character ISO currency code, for example "USD"
 	Currency string `validate:"required,len=3"`
 	// Timezone — IANA-имя; проверяется здесь, в Family попадает с планом 04 (A-06).
-	Timezone string `validate:"omitempty,timezone"`
+	Timezone string `validate:"required,timezone"`
 	// First user (admin) data
 	Email     string `validate:"required,email,max=254"`
 	FirstName string `validate:"required,min=2,max=50"`
@@ -61,15 +50,6 @@ type SetupFamilyDTO struct {
 type UpdateFamilyDTO struct {
 	Name     *string `validate:"omitempty,min=2,max=100"`
 	Currency *string `validate:"omitempty,len=3"`
-}
-
-// FamilyResponseDTO represents the data transfer object for family responses
-type FamilyResponseDTO struct {
-	ID        uuid.UUID `json:"id"`
-	Name      string    `json:"name"`
-	Currency  string    `json:"currency"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // CreateInviteDTO represents the data for creating a new invite

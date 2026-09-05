@@ -168,9 +168,10 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*user.Use
 
 // GetByEmail retrieves a user by their email address
 func (r *SQLiteRepository) GetByEmail(ctx context.Context, email string) (*user.User, error) {
-	// Validate email to prevent injection attacks
+	// Адрес, который Create не принял бы, не может быть в таблице — это «не найден», а не сбой:
+	// иначе логин с таким email отвечал бы 500 вместо 401.
 	if err := validation.ValidateEmail(email); err != nil {
-		return nil, fmt.Errorf("invalid email parameter: %w", err)
+		return nil, fmt.Errorf("invalid email parameter %w: %w", user.ErrNotFound, err)
 	}
 
 	// Sanitize email for consistent querying

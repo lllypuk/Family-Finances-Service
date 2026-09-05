@@ -12,7 +12,7 @@ import (
 
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/user"
-	"family-budget-service/internal/infrastructure/sqlitehelpers"
+	categoryrepo "family-budget-service/internal/infrastructure/category"
 	"family-budget-service/internal/infrastructure/validation"
 )
 
@@ -286,8 +286,9 @@ func (r *SQLiteFamilyRepository) Bootstrap(
 		return err
 	}
 
+	categoryRepo := categoryrepo.NewSQLiteRepository(r.db)
 	for _, c := range categories {
-		if err = insertCategoryTx(ctx, tx, family.ID, c); err != nil {
+		if err = categoryRepo.CreateWithTransaction(ctx, tx, family.ID, c); err != nil {
 			return err
 		}
 	}
@@ -300,44 +301,6 @@ func (r *SQLiteFamilyRepository) Bootstrap(
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 	rollbackNeeded = false
-
-	return nil
-}
-
-func insertCategoryTx(ctx context.Context, tx *sql.Tx, familyID uuid.UUID, c *category.Category) error {
-	if err := validation.ValidateUUID(c.ID); err != nil {
-		return fmt.Errorf("invalid category ID: %w", err)
-	}
-	if err := validation.ValidateCategoryType(c.Type); err != nil {
-		return fmt.Errorf("invalid category type: %w", err)
-	}
-	if err := validation.ValidateCategoryName(c.Name); err != nil {
-		return fmt.Errorf("invalid category name: %w", err)
-	}
-
-	now := time.Now()
-	c.CreatedAt = now
-	c.UpdatedAt = now
-
-	query := `
-		INSERT INTO categories (
-			id, name, type, description, parent_id, family_id, is_active, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-
-	_, err := tx.ExecContext(ctx, query,
-		sqlitehelpers.UUIDToString(c.ID),
-		c.Name,
-		string(c.Type),
-		"",
-		sqlitehelpers.UUIDPtrToString(c.ParentID),
-		familyID.String(),
-		sqlitehelpers.BoolToInt(c.IsActive),
-		c.CreatedAt,
-		c.UpdatedAt,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create category %q: %w", c.Name, err)
-	}
 
 	return nil
 }

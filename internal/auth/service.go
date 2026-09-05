@@ -20,6 +20,10 @@ var (
 	ErrUnauthorized = errors.New("unauthorized")
 )
 
+// dummyHash — bcrypt cost 12 от случайной строки, прообраз выброшен. Сравнивается с паролем
+// при неизвестном email, чтобы ответ занимал столько же времени, сколько с настоящим хешем.
+const dummyHash = "$2a$12$wFOQnJ9KhOwd9WIJUrpp8ObKeCKCr/1xA9YA2i6HiWBSqN5G4T4/S"
+
 // UserLookup — доступ к пользователям; реализация в internal/infrastructure/user.
 type UserLookup interface {
 	GetByEmail(ctx context.Context, email string) (*user.User, error)
@@ -47,44 +51,30 @@ type LoginResult struct {
 	User    *user.User
 }
 
-// Option настраивает Service.
-type Option func(*Service)
-
-// WithClock подменяет источник времени (для тестов).
-func WithClock(now func() time.Time) Option {
-	return func(s *Service) { s.now = now }
-}
-
 // Service выдаёт, проверяет и отзывает bearer-токены.
 type Service struct {
 	sessions SessionRepository
 	users    UserLookup
 	setup    SetupChecker
 	now      func() time.Time
-	// dummyHash сравнивается с паролем при неизвестном email, чтобы ответ занимал столько же времени.
-	dummyHash string
 }
 
-// NewService создаёт сервис; считает dummyHash (cost 12), поэтому вызывается один раз при старте.
-func NewService(sessions SessionRepository, users UserLookup, setup SetupChecker, opts ...Option) (*Service, error) {
-	dummy, err := HashPassword(uuid.NewString())
-	if err != nil {
-		return nil, err
+// NewService создаёт сервис.
+func NewService(sessions SessionRepository, users UserLookup, setup SetupChecker) *Service {
+	return &Service{
+		sessions: sessions,
+		users:    users,
+		setup:    setup,
+		now:      time.Now,
 	}
-	s := &Service{
-		sessions:  sessions,
-		users:     users,
-		setup:     setup,
-		now:       time.Now,
-		dummyHash: dummy,
-	}
-	for _, opt := range opts {
-		opt(s)
-	}
-	return s, nil
 }
 
-// Login проверяет пароль и выдаёт токен новой сессии.
+// SetClock подменяет источник времени (для тестов).
+func (s *Service) SetClock(now func() time.Time) {
+	s.now = now
+}
+
+// Login проверяет пароль и выдаёт токен новой сессии; попутно чистит истёкшие сессии.
 func (s *Service) Login(ctx context.Context, email, password, device string) (*LoginResult, error) {
 	exists, err := s.setup.Exists(ctx)
 	if err != nil {
@@ -97,7 +87,7 @@ func (s *Service) Login(ctx context.Context, email, password, device string) (*L
 	u, err := s.users.GetByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, user.ErrNotFound) {
-			ComparePassword(s.dummyHash, password)
+			ComparePassword(dummyHash, password)
 			return nil, ErrInvalidCredentials
 		}
 		return nil, fmt.Errorf("failed to get user: %w", err)
@@ -106,8 +96,13 @@ func (s *Service) Login(ctx context.Context, email, password, device string) (*L
 		return nil, ErrInvalidCredentials
 	}
 
+	now := s.now()
+	if err = s.sessions.DeleteExpired(ctx, now); err != nil {
+		return nil, fmt.Errorf("failed to delete expired sessions: %w", err)
+	}
+
 	plain, hash := GenerateToken()
-	sess := NewSession(u.ID, hash, device, s.now())
+	sess := NewSession(u.ID, hash, device, now)
 	if err = s.sessions.Create(ctx, sess); err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
@@ -136,7 +131,11 @@ func (s *Service) Authenticate(ctx context.Context, token string) (*Principal, e
 		return nil, ErrUnauthorized
 	}
 	if now.Sub(sess.LastUsedAt) > TouchInterval {
-		if err = s.sessions.Touch(ctx, sess.ID, now); err != nil {
+		// Отзыв между FindByTokenHash и Touch — сессии уже нет, это 401, а не сбой.
+		if err = s.sessions.Touch(ctx, sess.ID, now, sess.ExpiryAfter(now)); err != nil {
+			if errors.Is(err, ErrSessionNotFound) {
+				return nil, ErrUnauthorized
+			}
 			return nil, fmt.Errorf("failed to touch session: %w", err)
 		}
 	}
@@ -154,23 +153,25 @@ func (s *Service) RevokeAllSessions(ctx context.Context, userID uuid.UUID) error
 	return s.sessions.DeleteByUser(ctx, userID, uuid.Nil)
 }
 
-// ListSessions — сессии пользователя, новые первыми.
+// ListSessions — живые сессии пользователя, новые первыми; истёкшие лежат в БД до ближайшего логина.
 func (s *Service) ListSessions(ctx context.Context, userID uuid.UUID) ([]*Session, error) {
-	return s.sessions.ListByUser(ctx, userID)
+	all, err := s.sessions.ListByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	now := s.now()
+	live := make([]*Session, 0, len(all))
+	for _, sess := range all {
+		if now.Before(sess.ExpiresAt) {
+			live = append(live, sess)
+		}
+	}
+	return live, nil
 }
 
 // RevokeSession удаляет сессию пользователя; чужая или неизвестная → ErrSessionNotFound.
 func (s *Service) RevokeSession(ctx context.Context, userID, sessionID uuid.UUID) error {
-	list, err := s.sessions.ListByUser(ctx, userID)
-	if err != nil {
-		return err
-	}
-	for _, sess := range list {
-		if sess.ID == sessionID {
-			return s.sessions.Delete(ctx, sessionID)
-		}
-	}
-	return ErrSessionNotFound
+	return s.sessions.DeleteOwned(ctx, userID, sessionID)
 }
 
 // ChangePassword меняет пароль по текущему и отзывает все сессии, кроме keepSessionID.

@@ -24,7 +24,7 @@ build:
 .PHONY: run
 run:
 	@echo "Running $(APP_NAME)..."
-	@go run -ldflags="$(VERSION_LDFLAGS)" ./cmd/server/main.go
+	@go run -ldflags="$(VERSION_LDFLAGS)" ./cmd/server
 
 # Запуск с локальными переменными окружения для SQLite
 .PHONY: run-local
@@ -36,7 +36,7 @@ run-local:
 	 DATABASE_PATH=$(DATA_DIR)/budget.db \
 	 LOG_LEVEL=debug \
 	 ENVIRONMENT=development \
-	 go run -ldflags="$(VERSION_LDFLAGS)" ./cmd/server/main.go
+	 go run -ldflags="$(VERSION_LDFLAGS)" ./cmd/server
 
 # Тесты с SQLite (in-memory)
 .PHONY: test

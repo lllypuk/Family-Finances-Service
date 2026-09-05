@@ -364,20 +364,3 @@ func DefaultCategories() []*category.Category {
 	}
 	return result
 }
-
-// CreateDefaultCategories creates default categories for a newly created family
-func (s *categoryService) CreateDefaultCategories(ctx context.Context) error {
-	for _, c := range DefaultCategories() {
-		categoryDTO := dto.CreateCategoryDTO{
-			Name:  c.Name,
-			Type:  c.Type,
-			Color: c.Color,
-			Icon:  c.Icon,
-		}
-		if _, err := s.CreateCategory(ctx, categoryDTO); err != nil {
-			return fmt.Errorf("failed to create default category %s: %w", c.Name, err)
-		}
-	}
-
-	return nil
-}

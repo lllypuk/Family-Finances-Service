@@ -44,8 +44,19 @@ type TestServer struct {
 	authSession *AuthSession
 }
 
+// ServerOption настраивает application.Config тестового сервера.
+type ServerOption func(*application.Config)
+
+// WithTrustedProxies — CIDR, чьи X-Forwarded-For сервер принимает за адрес клиента.
+func WithTrustedProxies(t *testing.T, cidrs string) ServerOption {
+	t.Helper()
+	ranges, err := auth.ParseTrustedProxies(cidrs)
+	require.NoError(t, err)
+	return func(cfg *application.Config) { cfg.TrustedProxies = ranges }
+}
+
 // SetupHTTPServer creates a test HTTP server with real database connections
-func SetupHTTPServer(t *testing.T) *TestServer {
+func SetupHTTPServer(t *testing.T, opts ...ServerOption) *TestServer {
 	// Setup SQLite in-memory database
 	container := SetupSQLiteTestDB(t)
 
@@ -64,8 +75,7 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 		Session:     authrepo.NewSessionSQLiteRepository(db),
 	}
 
-	authService, err := auth.NewService(repos.Session, repos.User, repos.Family)
-	require.NoError(t, err)
+	authService := auth.NewService(repos.Session, repos.User, repos.Family)
 
 	// Create BackupService for testing with in-memory database.
 	// Каталог бэкапов — временный: иначе сервис пишет ./backups в каталог пакета.
@@ -89,6 +99,9 @@ func SetupHTTPServer(t *testing.T) *TestServer {
 	config := &application.Config{
 		Port: "8080",
 		Host: "localhost",
+	}
+	for _, opt := range opts {
+		opt(config)
 	}
 
 	// Create HTTP server without observability for testing
