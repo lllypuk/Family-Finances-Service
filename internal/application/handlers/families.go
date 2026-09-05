@@ -79,6 +79,8 @@ func (h *FamilyHandler) handleServiceError(c echo.Context, err error) error {
 	switch {
 	case errors.Is(err, services.ErrFamilyNotFound):
 		return respondError(c, http.StatusNotFound, ErrCodeFamilyNotFound, ErrMessageFamilyNotFound)
+	case errors.Is(err, services.ErrCurrencyLocked):
+		return respondError(c, http.StatusConflict, ErrCodeCurrencyLocked, ErrMessageCurrencyLocked)
 	case errors.Is(err, services.ErrValidationFailed):
 		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, err.Error()))

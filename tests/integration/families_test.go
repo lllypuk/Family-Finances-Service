@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/testhelpers"
 )
@@ -138,5 +140,31 @@ func TestFamilyAPI_Integration(t *testing.T) {
 	t.Run("UpdateFamily_BlankName", func(t *testing.T) {
 		rec := do(t, http.MethodPut, `{"name":"  "}`, adminAuth)
 		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
+	})
+
+	// Подтест идёт последним: он заводит транзакцию, после которой валюта заперта навсегда.
+	t.Run("UpdateFamily_CurrencyLockedWithTransactions", func(t *testing.T) {
+		ctx := context.Background()
+		testCategory := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+		require.NoError(t, testServer.Repos.Category.Create(ctx, testCategory))
+		testTransaction := testhelpers.CreateTestTransaction(
+			testServer.AuthFamily.ID, testServer.AuthUser.ID, testCategory.ID, transaction.TypeExpense,
+		)
+		require.NoError(t, testServer.Repos.Transaction.Create(ctx, testTransaction))
+
+		rec := do(t, http.MethodPut, `{"currency":"RUB"}`, adminAuth)
+		require.Equal(t, http.StatusConflict, rec.Code, "тело: %s", rec.Body.String())
+
+		var response handlers.ErrorResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		assert.Equal(t, handlers.ErrCodeCurrencyLocked, response.Error.Code)
+
+		stored, err := testServer.Repos.Family.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, "USD", stored.Currency)
+
+		// Имя меняется и при запертой валюте, в том числе вместе с той же валютой.
+		rec = do(t, http.MethodPut, `{"name":"Still Renamable","currency":"USD"}`, adminAuth)
+		require.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
 	})
 }

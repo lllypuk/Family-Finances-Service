@@ -393,11 +393,10 @@ func TestReportService_GenerateReport(t *testing.T) {
 	}
 
 	tests := []struct {
-		name        string
-		reportType  report.Type
-		setup       func(ctx context.Context, m reportServiceMocks)
-		assertData  func(t *testing.T, rep *report.Report)
-		assertDates func(t *testing.T, rep *report.Report)
+		name       string
+		reportType report.Type
+		setup      func(ctx context.Context, m reportServiceMocks)
+		assertData func(t *testing.T, rep *report.Report)
 	}{
 		{
 			name:       "expenses",
@@ -441,10 +440,6 @@ func TestReportService_GenerateReport(t *testing.T) {
 				// Разбивка по бюджетам пока пустая: generateBudgetCategoryComparisons — заглушка.
 				assert.Empty(t, rep.Data.BudgetComparison)
 			},
-			assertDates: func(t *testing.T, rep *report.Report) {
-				assert.True(t, rep.StartDate.After(time.Now().AddDate(0, -2, 0)),
-					"сохранены границы периода, а не даты запроса: %s", rep.StartDate)
-			},
 		},
 		{
 			name:       "cash_flow",
@@ -476,11 +471,6 @@ func TestReportService_GenerateReport(t *testing.T) {
 			},
 			assertData: func(t *testing.T, rep *report.Report) {
 				assert.Empty(t, rep.Data.CategoryBreakdown)
-			},
-			assertDates: func(t *testing.T, rep *report.Report) {
-				// Данные считаются по календарному периоду, значит и границы отчёта — его.
-				assert.True(t, rep.StartDate.After(time.Now().AddDate(0, -2, 0)),
-					"сохранены границы периода, а не даты запроса: %s", rep.StartDate)
 			},
 		},
 	}
@@ -514,12 +504,8 @@ func TestReportService_GenerateReport(t *testing.T) {
 			assert.Equal(t, tt.reportType, result.Type)
 			assert.Equal(t, req.UserID, result.UserID)
 			tt.assertData(t, result)
-			if tt.assertDates != nil {
-				tt.assertDates(t, result)
-			} else {
-				assert.Equal(t, req.StartDate, result.StartDate)
-				assert.Equal(t, req.EndDate, result.EndDate)
-			}
+			assert.Equal(t, req.StartDate, result.StartDate)
+			assert.Equal(t, req.EndDate, result.EndDate)
 
 			// Генерация не сохраняет отчёт — это делает SaveReport.
 			mockReportRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)

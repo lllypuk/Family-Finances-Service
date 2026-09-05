@@ -10,18 +10,23 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
+	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services/dto"
 )
 
 var (
 	ErrFamilyAlreadyExists = errors.New("family already exists")
+	// ErrCurrencyLocked — валюту нельзя сменить, пока есть транзакции: суммы хранятся
+	// в валюте семьи, и смена молча переименовала бы всю историю (A-05).
+	ErrCurrencyLocked = errors.New("currency cannot be changed while transactions exist")
 )
 
 // familyService implements FamilyService interface
 type familyService struct {
 	familyRepo      FamilyRepository
 	userRepo        UserRepository // manages user entities, including creating the bootstrap admin user during initial family setup
+	transactionRepo TransactionRepository
 	categoryService CategoryService
 	validator       *validator.Validate
 }
@@ -30,11 +35,13 @@ type familyService struct {
 func NewFamilyService(
 	familyRepo FamilyRepository,
 	userRepo UserRepository,
+	transactionRepo TransactionRepository,
 	categoryService CategoryService,
 ) FamilyService {
 	return &familyService{
 		familyRepo:      familyRepo,
 		userRepo:        userRepo,
+		transactionRepo: transactionRepo,
 		categoryService: categoryService,
 		validator:       validator.New(),
 	}
@@ -121,7 +128,14 @@ func (s *familyService) UpdateFamily(ctx context.Context, req dto.UpdateFamilyDT
 	if req.Name != nil {
 		existingFamily.Name = *req.Name
 	}
-	if req.Currency != nil {
+	if req.Currency != nil && *req.Currency != existingFamily.Currency {
+		locked, lockErr := s.hasTransactions(ctx)
+		if lockErr != nil {
+			return nil, lockErr
+		}
+		if locked {
+			return nil, ErrCurrencyLocked
+		}
 		existingFamily.Currency = *req.Currency
 	}
 	existingFamily.UpdatedAt = time.Now()
@@ -132,6 +146,15 @@ func (s *familyService) UpdateFamily(ctx context.Context, req dto.UpdateFamilyDT
 	}
 
 	return existingFamily, nil
+}
+
+func (s *familyService) hasTransactions(ctx context.Context) (bool, error) {
+	count, err := s.transactionRepo.CountByFilter(ctx, transaction.Filter{})
+	if err != nil {
+		return false, fmt.Errorf("failed to count transactions: %w", err)
+	}
+
+	return count > 0, nil
 }
 
 // IsSetupComplete checks if the initial setup has been done

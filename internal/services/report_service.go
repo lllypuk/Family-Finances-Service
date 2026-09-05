@@ -447,14 +447,7 @@ func (s *reportService) GenerateReport(ctx context.Context, req dto.ReportReques
 		return nil, fmt.Errorf("failed to convert report data: %w", err)
 	}
 
-	// Отчёты по периоду считаются от календарного периода, а не от дат запроса:
-	// сохранять надо те границы, по которым реально посчитаны данные.
-	startDate, endDate := req.StartDate, req.EndDate
-	if req.Type == report.TypeBudget || req.Type == report.TypeCategoryBreak {
-		startDate, endDate = s.requestPeriodDates(req)
-	}
-
-	newReport := report.NewReport(req.Name, req.Type, req.Period, req.UserID, startDate, endDate)
+	newReport := report.NewReport(req.Name, req.Type, req.Period, req.UserID, req.StartDate, req.EndDate)
 	newReport.Data = data
 
 	return newReport, nil
@@ -467,15 +460,11 @@ func (s *reportService) generateReportData(ctx context.Context, req dto.ReportRe
 	case report.TypeIncome:
 		return s.GenerateIncomeReport(ctx, req)
 	case report.TypeBudget:
-		start, end := s.requestPeriodDates(req)
-
-		return s.budgetComparisonReport(ctx, req.Period, start, end)
+		return s.budgetComparisonReport(ctx, req.Period, req.StartDate, req.EndDate)
 	case report.TypeCashFlow:
 		return s.GenerateCashFlowReport(ctx, req.StartDate, req.EndDate)
 	case report.TypeCategoryBreak:
-		start, end := s.requestPeriodDates(req)
-
-		return s.categoryBreakdownReport(ctx, req.Period, start, end)
+		return s.categoryBreakdownReport(ctx, req.Period, req.StartDate, req.EndDate)
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedReportType, req.Type)
 	}
@@ -798,15 +787,6 @@ func (s *reportService) getTopTransactions(
 	}
 
 	return result
-}
-
-// requestPeriodDates: у period=custom границы задаёт сам запрос, иначе они считаются от календаря.
-func (s *reportService) requestPeriodDates(req dto.ReportRequestDTO) (time.Time, time.Time) {
-	if req.Period == report.PeriodCustom {
-		return req.StartDate, req.EndDate
-	}
-
-	return s.calculatePeriodDates(req.Period)
 }
 
 func (s *reportService) calculatePeriodDates(period report.Period) (time.Time, time.Time) {

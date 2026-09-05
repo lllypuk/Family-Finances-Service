@@ -28,6 +28,8 @@ const (
 	ErrCodeCannotDeleteSelf = "CANNOT_DELETE_SELF"
 	// ErrCodeLastAdmin signals an attempt to delete the last remaining admin.
 	ErrCodeLastAdmin = "LAST_ADMIN"
+	// ErrCodeCurrencyLocked signals a currency change on a family that already has transactions.
+	ErrCodeCurrencyLocked = "CURRENCY_LOCKED"
 	// ErrCodeInvalidQueryParam маркирует деталь ошибки 422 по query-параметру.
 	ErrCodeInvalidQueryParam = "INVALID_QUERY_PARAM"
 	// ErrCodeGenerationFailed signals a failed report generation.
@@ -56,6 +58,7 @@ const (
 	ErrMessageInternal           = "Internal server error"
 	ErrMessageCannotDeleteSelf   = "Cannot delete your own account"
 	ErrMessageLastAdmin          = "Cannot delete the last administrator"
+	ErrMessageCurrencyLocked     = "Currency cannot be changed while transactions exist"
 	ErrMessageInvalidBackupName  = "Invalid backup filename"
 	ErrMessageBackupNotFound     = "Backup not found"
 	ErrMessageBackupFailed       = "Failed to create backup"

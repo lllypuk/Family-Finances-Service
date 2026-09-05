@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"family-budget-service/internal/domain/report"
 )
@@ -13,6 +14,18 @@ import (
 const csvUTF8BOM = "\ufeff"
 
 const csvDateLayout = "2006-01-02"
+
+// csvFormulaPrefixes — с этих символов Excel/LibreOffice/Sheets начинают разбирать ячейку
+// как формулу, поэтому имена из БД экранируются апострофом (CWE-1236).
+const csvFormulaPrefixes = "=+-@\t\r"
+
+func csvSafeText(value string) string {
+	if value == "" || !strings.ContainsRune(csvFormulaPrefixes, rune(value[0])) {
+		return value
+	}
+
+	return "'" + value
+}
 
 // reportToCSV собирает CSV отчёта; набор колонок зависит от типа отчёта.
 func reportToCSV(data report.Data, reportType report.Type) ([]byte, error) {
@@ -51,7 +64,7 @@ func writeCategoryBreakdownCSV(writer *csv.Writer, data report.Data, reportType 
 
 	for _, item := range data.CategoryBreakdown {
 		row := []string{
-			item.CategoryName,
+			csvSafeText(item.CategoryName),
 			fmt.Sprintf("%.2f", item.Amount),
 			fmt.Sprintf("%.1f%%", item.Percentage),
 			strconv.Itoa(item.Count),
@@ -120,7 +133,7 @@ func writeBudgetComparisonCSV(writer *csv.Writer, data report.Data) error {
 
 	for _, item := range data.BudgetComparison {
 		row := []string{
-			item.BudgetName,
+			csvSafeText(item.BudgetName),
 			fmt.Sprintf("%.2f", item.Planned),
 			fmt.Sprintf("%.2f", item.Actual),
 			fmt.Sprintf("%.2f", item.Difference),

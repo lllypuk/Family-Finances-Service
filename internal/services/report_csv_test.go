@@ -111,3 +111,17 @@ func TestReportService_ExportReportData_Formats(t *testing.T) {
 	_, err = service.ExportReportData(t.Context(), data, "xml", dto.ExportOptionsDTO{})
 	require.Error(t, err)
 }
+
+// Имена категорий и бюджетов приходят из БД: ведущий =/+/-/@ Excel считает формулой.
+func TestReportService_ExportReportData_EscapesFormulaPrefix(t *testing.T) {
+	service, _, _, _, _, _ := setupReportService()
+	data := report.Data{
+		CategoryBreakdown: []report.CategoryReportItem{
+			{CategoryName: `=HYPERLINK("http://evil","x")`, Amount: 1, Percentage: 100, Count: 1},
+		},
+	}
+
+	csvBytes, err := service.ExportReportData(t.Context(), data, "csv", dto.ExportOptionsDTO{})
+	require.NoError(t, err)
+	assert.Contains(t, string(csvBytes), `"'=HYPERLINK(""http://evil"",""x"")"`)
+}

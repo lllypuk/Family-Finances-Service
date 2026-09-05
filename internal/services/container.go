@@ -50,7 +50,7 @@ func NewServices(
 	// Create core services first
 	userService := NewUserService(userRepo, familyRepo)
 	categoryService := NewCategoryService(categoryRepo, familyRepo, usageChecker)
-	familyService := NewFamilyService(familyRepo, userRepo, categoryService)
+	familyService := NewFamilyService(familyRepo, userRepo, transactionRepo, categoryService)
 	transactionService := NewTransactionServiceWithLogger(transactionRepo, budgetRepo, categoryRepo, userRepo, logger)
 	budgetService := NewBudgetServiceWithLogger(fullBudgetRepo, transactionRepo, logger)
 	inviteService := NewInviteService(inviteRepo, userRepo, familyRepo, logger)

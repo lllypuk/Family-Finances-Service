@@ -121,6 +121,9 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
 			bodyDetail(ErrCodeInvalidRequest, bindErr.Error()))
 	}
+	if validationErr := h.validator.Struct(&req); validationErr != nil {
+		return respondValidationErrors(c, validationErr)
+	}
 
 	// Convert API request to DTO
 	updateDTO := dto.UpdateUserDTO{
