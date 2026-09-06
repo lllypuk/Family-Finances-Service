@@ -30,13 +30,13 @@ go test ./internal/application/handlers -run 'TestAuthHandler_.*' -v
 Docker: `make docker-up` / `docker-up-d` / `docker-down` / `docker-logs` — all use `docker/docker-compose.yml`
 (builds `docker/Dockerfile`; no secrets are required). Compose is invoked as `docker compose --project-directory .`
 (the `DOCKER_COMPOSE` variable in the Makefile) so that `.env` is read from the repo root — hence `build.context: .`
-inside `docker/docker-compose.yml`. `make compose-config` validates all five compose files (`docker/` + the four
-`deploy/*.yml`) and runs in CI; `COMPOSE_VALIDATE_ENV` still feeds dummy `SESSION_SECRET`/`CSRF_SECRET` to the
-`deploy/*.yml` pass because those files demand them via `${VAR:?}` until plan 05 replaces them — the application
-does not read either variable.
+inside `docker/docker-compose.yml`. `make compose-config` validates both compose files (`docker/` and
+`deploy/docker-compose.yml`) and runs in CI; neither needs any variable set, there are no secrets.
+`make caddy-validate` checks `deploy/caddy/Caddyfile` with the Caddy image taken out of the deploy compose
+(so the digest lives in one place).
 
-SQLite: `make sqlite-shell`, `make sqlite-stats`, `make sqlite-backup`,
-`make sqlite-restore BACKUP_FILE=./backups/<file>.db`.
+SQLite: `make sqlite-shell`, `make sqlite-stats`, `make sqlite-backup` (runs `go run ./cmd/server backup`),
+`make sqlite-restore BACKUP_FILE=./backups/<file>.db` (dev-only `cp`; in production restore is manual over ssh).
 
 **Mandatory before handing off any code change: `make fmt`, `make test`, `make lint` — `make lint` must report
 0 issues.** The linter config is strict (see "Linter constraints" below); do not add `//nolint` without a specific
@@ -84,7 +84,7 @@ The version reported by `/health` comes from `internal/version` (`version.String
 defaults to `dev` and is overwritten at link time by `-ldflags "-X family-budget-service/internal/version.Version=…"`
 — `VERSION` in the `Makefile` (`git describe --tags --always --dirty`) and `ARG VERSION` in `docker/Dockerfile`.
 Every build path that matters passes it: the Makefile `export`s `VERSION` so compose forwards it as a build-arg
-(`args: VERSION: ${VERSION:-dev}` in all five compose files), `deploy/scripts/{install,upgrade}.sh` set it from
+(`args: VERSION: ${VERSION:-dev}` in both compose files), `deploy/scripts/{install,upgrade}.sh` set it from
 `git describe` in `./src`, and `docker.yml`/`release.yml` pass `--build-arg`/`-ldflags`. A `-X` flag naming a
 symbol that does not exist is silently dropped by the linker, so keep the full package path in sync.
 `go build ./...` without `-ldflags` reports `dev`, which is correct, not a bug.
@@ -172,14 +172,6 @@ has a catch-all, an unknown `/api/v1/...` path is `401` without a token and `404
 
 **Working directory matters:** `./migrations` is resolved relative to the process CWD (`migrationsDir` in
 `internal/bootstrap.go`), so both the server and the CLI subcommands must be started from the repo root.
-
-### Known rough edges (verified, not fixed)
-
-Do not treat these as regressions you introduced:
-
-- **`deploy/**` is stale until plan 05**: the four `deploy/*.yml`, `deploy/.env.production.example` and the
-  nginx/Caddy/fail2ban configs still require `SESSION_SECRET`/`CSRF_SECRET` and rate-limit a `/login` page that
-  no longer exists. Do not fix them piecemeal; plan 05 replaces the directory.
 
 ## Database & migrations
 
@@ -273,7 +265,7 @@ status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the fi
 
 **Current direction:** `docs/specs/005-api-only-redesign.md` — the service is an API-only backend for an
 Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–04 are done
-(`docs/plans/completed/`); `docs/plans/20260904-05-deploy-ffs.md` runs next.
+(`docs/plans/completed/`); `docs/plans/20260904-05-deploy-ffs.md` is the current one.
 
 `docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates
 from it, and code and spec now match. **A registered route with no operation in the spec fails `make test`**
@@ -281,8 +273,9 @@ from it, and code and spec now match. **A registered route with no operation in 
 `TestOpenAPISpec_OperationsHaveIDAndErrorResponse` requiring an `operationId` and a 4xx `$ref: Error` on every
 operation). The reverse also fails it (`TestOpenAPISpec_DescribesOnlyRegisteredRoutes`): spec and routes match
 exactly, with no exceptions. See `docs/api/README.md`.
-Self-hosted deployment (install/upgrade/backup scripts, nginx & Caddy configs, systemd units, fail2ban) is in
-`deploy/` — see `deploy/README.md` and the "Known rough edges" note above.
+Self-hosted deployment is `deploy/`: one compose (`app` + Caddy), `caddy/Caddyfile`, `.env.example` and the
+`install`/`upgrade`/`uninstall`/`health-check` scripts — see `deploy/README.md`. Backups in production are the
+`backup` subcommand from a host cron job; restore is manual over ssh.
 
 When runtime/dev commands disagree between documents, `Makefile` + this file win.
 

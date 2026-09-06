@@ -33,8 +33,8 @@
 - **Контейнеризация**: Docker & Docker Compose
 - **Multi-platform**: linux/amd64, linux/arm64
 - **CI/CD**: GitHub Actions (ci, docker, security, release)
-- **Registry**: не используется — образ собирается локально из `docker/Dockerfile`
-  (релизов нет, в GHCR ничего не опубликовано; см. [004-deployment-readiness.md](specs/004-deployment-readiness.md#d-02))
+- **Registry**: GHCR, публикация по тегу `v*` (`.github/workflows/docker.yml`). Тега пока нет,
+  поэтому и `docker/`, и `deploy/` собирают образ из `docker/Dockerfile` на месте
 - **Security Scanning**: CodeQL, Semgrep, TruffleHog, OSV Scanner
 
 ### Документация API

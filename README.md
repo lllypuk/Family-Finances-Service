@@ -17,10 +17,10 @@ API for the Android client. One instance = one family.
 - ✅ CI/CD pipelines with GitHub Actions
 - ✅ Single Docker container, built from source (`docker/Dockerfile`)
 - ✅ Money as integer minor units (`amount_minor`), calendar `YYYY-MM-DD` dates, idempotent `POST`
+- ✅ Self-hosted deployment: one compose (`deploy/`) with Caddy, Let's Encrypt and daily CLI backups
 - 🚧 Multi-platform builds (linux/amd64, linux/arm64) — the workflow exists, but no release has been tagged yet,
-  so nothing is published to GHCR. Every compose file builds locally instead of pulling; see
+  so nothing is published to GHCR. Both compose files build locally instead of pulling; see
   [docs/specs/004-deployment-readiness.md](docs/specs/004-deployment-readiness.md#d-02)
-- 🚧 `deploy/` still targets the old web build — plan 05
 
 ## API
 
@@ -183,7 +183,7 @@ make help             # Show all commands
 ├── migrations/              # 001_consolidated.{up,down}.sql — the whole schema
 ├── tests/integration/       # HTTP tests over the full stack, OpenAPI coverage test
 ├── docs/                    # Product brief, tech stack, audits (specs/), plans, API contract
-├── deploy/                  # Self-hosted deployment (stale until plan 05)
+├── deploy/                  # Self-hosted deployment: compose + Caddy + install/upgrade scripts
 ├── docker/                  # Dockerfile + docker-compose.yml
 └── .github/workflows/       # CI/CD pipelines (ci, docker, security, scorecard, release)
 ```
@@ -249,11 +249,8 @@ make lint              # Code quality checks
 
 ## 🏠 Self-Hosted Deployment
 
-> `deploy/` still targets the previous web build: its compose files require `SESSION_SECRET`/`CSRF_SECRET`
-> that the application no longer reads, and the nginx/Caddy/fail2ban rules watch a `/login` page that no
-> longer exists. Plan 05 replaces the directory with one compose + Caddy setup for `ffs.shatrov.tech`
-> ([docs/plans/20260904-05-deploy-ffs.md](docs/plans/20260904-05-deploy-ffs.md)). Until then the notes below
-> describe what the scripts do, not a recommended path.
+One topology: the application and Caddy in a single compose, Let's Encrypt certificates, no secrets
+to generate. Point an A record at the server, forward 80/443, then:
 
 ```bash
 git clone https://github.com/lllypuk/Family-Finances-Service.git
@@ -270,10 +267,14 @@ into `/opt/family-budget/src` (`REPO_GIT_URL` / `REPO_REF` env vars, default: up
 and builds the Docker image on the server, so the machine needs `git` and outbound network access; the
 512MB RAM floor is sized for that build, not for the running service (128–256MB).
 
-Supported: Ubuntu 22.04/24.04, Debian 11/12, Rocky/AlmaLinux 9. Options: Docker + Caddy (automatic SSL),
-Docker + Nginx (Certbot), native systemd. Scripts in `deploy/scripts/`: `install.sh`, `upgrade.sh`
-(`--version <ref>`, `rollback`), `uninstall.sh --keep-data`, `backup.sh`, `health-check.sh`,
-`setup-ssl-{nginx,caddy}.sh`, `setup-fail2ban.sh`. Details: [deploy/README.md](deploy/README.md) and
+The family and the first admin are created afterwards over ssh (`docker compose exec app
+/app/family-budget-service setup …`), the second user through `POST /api/v1/users`; backups are a host
+cron job running the `backup` subcommand.
+
+Supported: Ubuntu 22.04/24.04, Debian 11/12, Rocky/AlmaLinux 9. Scripts in `deploy/scripts/`:
+`install.sh` (`--domain`, `--email`, `--dry-run`, `--reinstall`), `upgrade.sh` (`--version <ref>`,
+`rollback`), `uninstall.sh --keep-data`, `health-check.sh`. Details:
+[deploy/README.md](deploy/README.md) and
 [docs/specs/004-deployment-readiness.md](docs/specs/004-deployment-readiness.md).
 
 ## 📚 Documentation
