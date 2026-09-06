@@ -176,7 +176,6 @@ type BackupService interface {
 	ListBackups(ctx context.Context) ([]*BackupInfo, error)
 	GetBackup(ctx context.Context, filename string) (*BackupInfo, error)
 	DeleteBackup(ctx context.Context, filename string) error
-	RestoreBackup(ctx context.Context, filename string) error
 	GetBackupFilePath(filename string) string
 }
 

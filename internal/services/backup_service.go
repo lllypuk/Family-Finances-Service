@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	maxBackups          = 10
+	// DefaultBackupKeep — сколько последних файлов бэкапа хранить, если BACKUP_KEEP не задан.
+	DefaultBackupKeep   = 30
 	backupDirPerm       = 0750
 	backupFilenameRegex = `^backup_\d{8}_\d{9}\.db$` // Updated for milliseconds
 )
@@ -34,21 +35,24 @@ var (
 // backupService implements BackupService interface
 type backupService struct {
 	db        *sql.DB
-	dbPath    string
 	backupDir string
+	keep      int
 	logger    *slog.Logger
 }
 
 // NewBackupService creates a new BackupService instance.
-// Пустой backupDir означает <dir(dbPath)>/backups.
-func NewBackupService(db *sql.DB, dbPath, backupDir string, logger *slog.Logger) BackupService {
+// Пустой backupDir означает <dir(dbPath)>/backups, keep <= 0 — DefaultBackupKeep.
+func NewBackupService(db *sql.DB, dbPath, backupDir string, keep int, logger *slog.Logger) BackupService {
 	if backupDir == "" {
 		backupDir = filepath.Join(filepath.Dir(dbPath), "backups")
 	}
+	if keep <= 0 {
+		keep = DefaultBackupKeep
+	}
 	return &backupService{
 		db:        db,
-		dbPath:    dbPath,
 		backupDir: backupDir,
+		keep:      keep,
 		logger:    logger,
 	}
 }
@@ -253,40 +257,6 @@ func (s *backupService) DeleteBackup(_ context.Context, filename string) error {
 	return nil
 }
 
-// RestoreBackup restores database from a backup file
-// WARNING: This is a dangerous operation that replaces the current database
-func (s *backupService) RestoreBackup(_ context.Context, filename string) error {
-	backupPath, err := s.safePath(filename)
-	if err != nil {
-		return err
-	}
-
-	// Check if backup file exists
-	// #nosec G304 -- Path is validated by safePath() to prevent traversal attacks
-	if _, statErr := os.Stat(backupPath); statErr != nil {
-		if os.IsNotExist(statErr) {
-			return ErrBackupNotFound
-		}
-		return fmt.Errorf("failed to access backup file: %w", statErr)
-	}
-
-	// Copy backup file to main database location
-	// Note: In production, this should close all database connections first
-	// This implementation assumes the application will be restarted after restore
-	// #nosec G304 -- Path is validated by safePath() to prevent traversal attacks
-	data, readErr := os.ReadFile(backupPath)
-	if readErr != nil {
-		return fmt.Errorf("failed to read backup file: %w", readErr)
-	}
-
-	//nolint:gosec // File permissions 0640 are required for database file
-	if writeErr := os.WriteFile(s.dbPath, data, 0640); writeErr != nil {
-		return fmt.Errorf("failed to restore backup: %w", writeErr)
-	}
-
-	return nil
-}
-
 // GetBackupFilePath returns the full path to a backup file
 func (s *backupService) GetBackupFilePath(filename string) string {
 	backupPath, err := s.safePath(filename)
@@ -296,19 +266,19 @@ func (s *backupService) GetBackupFilePath(filename string) string {
 	return backupPath
 }
 
-// cleanupOldBackups removes oldest backups if maxBackups limit is exceeded
+// cleanupOldBackups removes oldest backups if the keep limit is exceeded
 func (s *backupService) cleanupOldBackups(ctx context.Context) error {
 	backups, err := s.ListBackups(ctx)
 	if err != nil {
 		return err
 	}
 
-	if len(backups) <= maxBackups {
+	if len(backups) <= s.keep {
 		return nil
 	}
 
 	// Delete oldest backups
-	for i := maxBackups; i < len(backups); i++ {
+	for i := s.keep; i < len(backups); i++ {
 		if deleteErr := s.DeleteBackup(ctx, backups[i].Filename); deleteErr != nil {
 			// Continue deleting others even if one fails
 			continue

@@ -52,7 +52,7 @@ func TestCreateBackup_Success(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", slog.Default())
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
 	ctx := context.Background()
 
 	// Create backup
@@ -75,7 +75,7 @@ func TestListBackups_Empty(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", slog.Default())
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
 	ctx := context.Background()
 
 	// List backups when none exist
@@ -90,7 +90,7 @@ func TestListBackups_Multiple(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", slog.Default())
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
 	ctx := context.Background()
 
 	// Create multiple backups
@@ -118,7 +118,7 @@ func TestDeleteBackup_Success(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", slog.Default())
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
 	ctx := context.Background()
 
 	// Create backup
@@ -139,7 +139,7 @@ func TestDeleteBackup_NotFound(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", slog.Default())
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
 	ctx := context.Background()
 
 	// Try to delete non-existent backup
@@ -154,7 +154,7 @@ func TestDeleteBackup_InvalidFilename(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", slog.Default())
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
 	ctx := context.Background()
 
 	testCases := []struct {
@@ -180,7 +180,7 @@ func TestGetBackup_Success(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", slog.Default())
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
 	ctx := context.Background()
 
 	// Create backup
@@ -200,7 +200,7 @@ func TestGetBackup_NotFound(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", slog.Default())
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
 	ctx := context.Background()
 
 	// Try to get non-existent backup
@@ -265,56 +265,30 @@ func TestIsValidBackupPath(t *testing.T) {
 	}
 }
 
-func TestRestoreBackup(t *testing.T) {
-	db, dbPath, cleanup := setupTestDB(t)
-	defer cleanup()
-
-	service := NewBackupService(db, dbPath, "", slog.Default())
-	ctx := context.Background()
-
-	// Create backup
-	backupInfo, err := service.CreateBackup(ctx)
-	require.NoError(t, err)
-
-	// Modify database (insert more data)
-	_, err = db.Exec("INSERT INTO test_table (name) VALUES (?)", "test4")
-	require.NoError(t, err)
-
-	// Restore from backup
-	err = service.RestoreBackup(ctx, backupInfo.Filename)
-	require.NoError(t, err)
-
-	// Note: In real scenario, we would need to reconnect to database
-	// For this test, we just verify the restore operation succeeded
-}
-
 func TestCleanupOldBackups(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", slog.Default())
+	const keep = 3
+	service := NewBackupService(db, dbPath, "", keep, slog.Default())
 	ctx := context.Background()
 
-	// Create more than maxBackups (10) backups
-	for range 12 {
+	for range keep + 2 {
 		_, err := service.CreateBackup(ctx)
 		require.NoError(t, err)
 		time.Sleep(10 * time.Millisecond) // Ensure different timestamps
 	}
 
-	// List backups
 	backups, err := service.ListBackups(ctx)
 	require.NoError(t, err)
-
-	// Should have only maxBackups (10) backups
-	assert.LessOrEqual(t, len(backups), maxBackups)
+	assert.Len(t, backups, keep)
 }
 
 func TestGetBackupFilePath_InvalidFilename(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", slog.Default())
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
 
 	// Try with invalid filename
 	path := service.GetBackupFilePath("../../../etc/passwd")
@@ -327,7 +301,7 @@ func TestSafePath_PathTraversalProtection(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", slog.Default()).(*backupService)
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default()).(*backupService)
 
 	tests := []struct {
 		name        string
@@ -390,7 +364,7 @@ func TestNewBackupService_ExplicitBackupDir(t *testing.T) {
 	defer cleanup()
 
 	backupDir := filepath.Join(t.TempDir(), "external")
-	service := NewBackupService(db, dbPath, backupDir, slog.Default())
+	service := NewBackupService(db, dbPath, backupDir, DefaultBackupKeep, slog.Default())
 
 	info, err := service.CreateBackup(context.Background())
 	require.NoError(t, err)

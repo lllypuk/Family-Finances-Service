@@ -162,9 +162,7 @@ compose-config:
 .PHONY: sqlite-backup
 sqlite-backup:
 	@echo "Creating SQLite backup..."
-	@mkdir -p ./backups
-	@cp $(DATA_DIR)/budget.db ./backups/budget_$(shell date +%Y%m%d_%H%M%S).db
-	@echo "Backup created in ./backups/"
+	@go run ./cmd/server backup
 
 .PHONY: sqlite-restore
 sqlite-restore:
@@ -252,8 +250,8 @@ help:
 	@echo "  docs             - Start documentation server"
 	@echo ""
 	@echo "SQLite Database:"
-	@echo "  sqlite-backup    - Create SQLite backup"
-	@echo "  sqlite-restore   - Restore from backup (BACKUP_FILE=path required)"
+	@echo "  sqlite-backup    - Create SQLite backup (VACUUM INTO via the backup subcommand)"
+	@echo "  sqlite-restore   - Restore from backup, dev only (BACKUP_FILE=path required)"
 	@echo "  sqlite-shell     - Open SQLite interactive shell"
 	@echo "  sqlite-stats     - Show database statistics"
 	@echo ""

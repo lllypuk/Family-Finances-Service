@@ -66,8 +66,10 @@ Layered/Clean architecture, single Go module `family-budget-service`. Wiring hap
 `internal/run.go` (`NewApplication`) — in this order:
 
 1. `LoadConfig()` + `Validate()` (`internal/config.go`) — all config is env vars, no config files:
-   `SERVER_*`, `DATABASE_PATH`, `BACKUP_DIR`, `LOG_*`, `ENVIRONMENT`, `TRUSTED_PROXIES`. There are no secrets.
-   `BACKUP_DIR` empty means `<dir(DATABASE_PATH)>/backups` (`Config.GetBackupDir()`, compose mounts `/backups`).
+   `SERVER_*`, `DATABASE_PATH`, `BACKUP_DIR`, `BACKUP_KEEP`, `LOG_*`, `ENVIRONMENT`, `TRUSTED_PROXIES`.
+   There are no secrets. `BACKUP_DIR` empty means `<dir(DATABASE_PATH)>/backups` (`Config.GetBackupDir()`,
+   compose mounts `/backups`); `BACKUP_KEEP` (default 30) is the retention shared by `POST /api/v1/backups`
+   and the `backup` subcommand.
 2. `internal.OpenDatabase(cfg)` (`internal/bootstrap.go`) — `infrastructure.NewSQLiteConnection` + golang-migrate
    `Up()` from `./migrations`. The CLI subcommands open the DB through the same function.
 3. `infrastructure.NewRepositoriesSQLite(db)` → `*handlers.Repositories` (one struct holding every repo).

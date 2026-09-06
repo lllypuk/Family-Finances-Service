@@ -51,10 +51,6 @@ func (m *MockBackupService) DeleteBackup(ctx context.Context, filename string) e
 	return m.Called(ctx, filename).Error(0)
 }
 
-func (m *MockBackupService) RestoreBackup(ctx context.Context, filename string) error {
-	return m.Called(ctx, filename).Error(0)
-}
-
 func (m *MockBackupService) GetBackupFilePath(filename string) string {
 	return m.Called(filename).String(0)
 }

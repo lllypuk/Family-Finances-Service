@@ -40,6 +40,9 @@ func main() {
 		case cmdResetPassword:
 			runCommand(cmdResetPassword, runResetPassword)
 			return
+		case cmdBackup:
+			runCommand(cmdBackup, runBackup)
+			return
 		}
 	}
 

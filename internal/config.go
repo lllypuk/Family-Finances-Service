@@ -6,9 +6,11 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"family-budget-service/internal/auth"
+	"family-budget-service/internal/services"
 )
 
 // Configuration constants
@@ -44,6 +46,8 @@ type DatabaseConfig struct {
 	// <dir(Path)>/backups; в контейнере каталог смонтирован отдельным томом,
 	// поэтому путь задаётся явно.
 	BackupDir string
+	// BackupKeep — BACKUP_KEEP: сколько последних файлов бэкапа хранить.
+	BackupKeep int
 }
 
 type LoggingConfig struct {
@@ -78,8 +82,9 @@ func LoadConfig() *Config {
 			TrustedProxies: getEnv("TRUSTED_PROXIES", ""),
 		},
 		Database: DatabaseConfig{
-			Path:      getEnv("DATABASE_PATH", "./data/budget.db"),
-			BackupDir: getEnv("BACKUP_DIR", ""),
+			Path:       getEnv("DATABASE_PATH", "./data/budget.db"),
+			BackupDir:  getEnv("BACKUP_DIR", ""),
+			BackupKeep: getIntEnv("BACKUP_KEEP", services.DefaultBackupKeep),
 		},
 		Logging: LoggingConfig{
 			Level:      getEnv("LOG_LEVEL", "info"),
@@ -139,6 +144,16 @@ func (c *Config) GetDatabasePath() string {
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
+	}
+	return defaultValue
+}
+
+// getIntEnv — неразбираемое или неположительное значение считается незаданным.
+func getIntEnv(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil && parsed > 0 {
+			return parsed
+		}
 	}
 	return defaultValue
 }
