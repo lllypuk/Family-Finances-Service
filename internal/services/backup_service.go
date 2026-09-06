@@ -233,10 +233,12 @@ func (s *backupService) CreateBackup(ctx context.Context) (*BackupInfo, error) {
 		return nil, fmt.Errorf("failed to stat backup file: %w", err)
 	}
 
+	// Время файла, а не `now`: ListBackups/GetBackup отдают ModTime, и на долгом
+	// VACUUM один и тот же бэкап приходил бы клиенту с двумя разными created_at.
 	backupInfo := &BackupInfo{
 		Filename:  filename,
 		Size:      info.Size(),
-		CreatedAt: now,
+		CreatedAt: info.ModTime(),
 	}
 
 	// Clean up old backups if limit exceeded

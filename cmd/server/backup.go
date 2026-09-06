@@ -14,7 +14,7 @@ import (
 const cmdBackup = "backup"
 
 // runBackup — подкоманда `backup`: VACUUM INTO в BACKUP_DIR и удаление лишних файлов.
-// Запускается по cron хоста через `docker compose exec`, поэтому итог печатается в stdout
+// Запускается по cron хоста через `docker compose run --rm`, поэтому итог печатается в stdout
 // (логгер собирается ради самого сервиса: он пишет туда же, в os.Stdout).
 func runBackup(ctx context.Context, args []string, _ io.Reader, stdout io.Writer) error {
 	keep, err := parseBackupArgs(args)

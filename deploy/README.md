@@ -60,7 +60,7 @@ builds there. `VERSION` comes from `git describe` in that checkout and ends up i
 5. Add the daily backup to the host crontab:
 
    ```cron
-   0 3 * * * cd /opt/family-budget && docker compose exec -T app /app/family-budget-service backup
+   0 3 * * * cd /opt/family-budget && docker compose run --rm --no-deps -T app backup
    ```
 
    `exec` bypasses the ENTRYPOINT, hence the full path to the binary.

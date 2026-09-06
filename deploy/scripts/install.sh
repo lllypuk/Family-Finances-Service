@@ -39,6 +39,8 @@ REINSTALL=false
 DEPLOY_DIR=""
 # Повторный запуск переписывает Caddyfile у уже работающей установки; set by copy_deploy_files.
 CADDYFILE_CHANGED=false
+# Копия работающего Caddyfile на время замены (см. copy_deploy_files/reload_caddy).
+CADDYFILE_BACKUP="${INSTALL_DIR}/caddy/Caddyfile.prev"
 
 # In --dry-run every mutating command is printed instead of executed.
 run() {
@@ -119,6 +121,14 @@ EOF
 }
 
 prompt_configuration() {
+    # Дефолты берутся из уже установленного .env: запуск без --domain не должен
+    # молча вернуть домен к DEFAULT_DOMAIN, а с --domain — обязан его сменить.
+    local env_file="${INSTALL_DIR}/.env"
+    if [[ -f "${env_file}" && "${REINSTALL}" != "true" ]]; then
+        DOMAIN="${DOMAIN:-$(env_value "${env_file}" DOMAIN)}"
+        ACME_EMAIL="${ACME_EMAIL:-$(env_value "${env_file}" ACME_EMAIL)}"
+    fi
+
     if [[ "${NON_INTERACTIVE}" != "true" ]]; then
         echo ""
         log_info "=== Configuration ==="
@@ -199,6 +209,10 @@ copy_deploy_files() {
 
     if [[ -f "${INSTALL_DIR}/caddy/Caddyfile" ]] && ! cmp -s "${caddyfile_src}" "${INSTALL_DIR}/caddy/Caddyfile"; then
         CADDYFILE_CHANGED=true
+        # Новый конфиг проверяется только после того, как ляжет на место; без
+        # этой копии невалидный файл остался бы примонтированным и убил бы Caddy
+        # на первом же пересоздании контейнера.
+        run cp "${INSTALL_DIR}/caddy/Caddyfile" "${CADDYFILE_BACKUP}"
     fi
 
     run cp "${compose_src}" "${INSTALL_DIR}/docker-compose.yml"
@@ -222,9 +236,15 @@ reload_caddy() {
     # отдаёт успех и на контейнере, который вышел сразу после старта.
     if ! docker compose run --rm --no-deps --entrypoint caddy \
         caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
-        log_error "New Caddyfile is invalid, not applying it: ${INSTALL_DIR}/caddy/Caddyfile"
+        log_error "New Caddyfile is invalid: ${INSTALL_DIR}/caddy/Caddyfile"
+        if [[ -f "${CADDYFILE_BACKUP}" ]]; then
+            cp "${CADDYFILE_BACKUP}" "${INSTALL_DIR}/caddy/Caddyfile"
+            log_error "Restored the previous config; Caddy keeps serving it"
+        fi
         exit 1
     fi
+
+    rm -f "${CADDYFILE_BACKUP}"
 
     if docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
         log_success "Caddy config reloaded"
@@ -240,6 +260,14 @@ reload_caddy() {
     log_success "Caddy restarted"
 }
 
+# Значение ключа в env-файле; пусто, если ключа (или файла) нет.
+env_value() {
+    local file=$1 key=$2
+
+    [[ -f "${file}" ]] || return 0
+    sed -n "s|^${key}=||p" "${file}" | tail -1
+}
+
 # Дописать ключ, если его в файле нет; существующее значение не трогаем.
 ensure_env_key() {
     local file=$1 key=$2 value=$3
@@ -253,7 +281,33 @@ ensure_env_key() {
     fi
 
     log_info "Adding the missing ${key} to ${file}"
+    # Файл без завершающего перевода строки склеил бы новый ключ с последним.
+    if [[ -s "${file}" && -n "$(tail -c1 "${file}")" ]]; then
+        echo >> "${file}"
+    fi
     echo "${key}=${value}" >> "${file}"
+}
+
+# Записать ключ, переписав отличающееся значение: домен и почта приходят из
+# аргументов, и повторный запуск с новым --domain обязан их обновить, иначе
+# Caddy продолжит обслуживать старое имя, а установщик отчитается о новом.
+set_env_key() {
+    local file=$1 key=$2 value=$3
+
+    if [[ "$(env_value "${file}" "${key}")" == "${value}" ]]; then
+        return 0
+    fi
+    if ! grep -q "^${key}=" "${file}"; then
+        ensure_env_key "${file}" "${key}" "${value}"
+        return 0
+    fi
+    if [[ "${DRY_RUN}" == "true" ]]; then
+        log_info "[dry-run] would set ${key}=${value} in ${file}"
+        return 0
+    fi
+
+    log_info "Updating ${key} in ${file}"
+    sed -i "s|^${key}=.*|${key}=${value}|" "${file}"
 }
 
 # Write .env from .env.example, substituting the domain and the ACME e-mail.
@@ -270,8 +324,8 @@ create_env_file() {
         ensure_env_key "${env_file}" DATABASE_PATH /data/budget.db
         ensure_env_key "${env_file}" BACKUP_DIR /backups
         ensure_env_key "${env_file}" BACKUP_KEEP 30
-        ensure_env_key "${env_file}" DOMAIN "${DOMAIN}"
-        ensure_env_key "${env_file}" ACME_EMAIL "${ACME_EMAIL}"
+        set_env_key "${env_file}" DOMAIN "${DOMAIN}"
+        set_env_key "${env_file}" ACME_EMAIL "${ACME_EMAIL}"
         return 0
     fi
 
@@ -344,6 +398,21 @@ deploy_application() {
     log_success "Application deployed"
 }
 
+# Caddy падает на битом конфиге и на пустом ACME_EMAIL, а restart: unless-stopped
+# прячет это от `up -d`: без явной проверки установка отчитывается об успехе,
+# пока ingress крутится в перезапусках.
+verify_caddy() {
+    local state
+    state="$(docker inspect --format '{{.State.Status}}' family-budget-caddy 2>/dev/null || echo missing)"
+    if [[ "${state}" == "running" ]]; then
+        return 0
+    fi
+
+    log_error "Caddy is not running (state: ${state}); the API is not reachable over HTTPS"
+    docker compose -f "${INSTALL_DIR}/docker-compose.yml" logs --tail 50 caddy
+    exit 1
+}
+
 verify_installation() {
     if [[ "${DRY_RUN}" == "true" ]]; then
         log_info "[dry-run] would wait for the app container to become healthy"
@@ -358,6 +427,7 @@ verify_installation() {
         status="$(docker inspect --format '{{.State.Health.Status}}' family-budget-app 2>/dev/null || echo missing)"
         if [[ "${status}" == "healthy" ]]; then
             log_success "Application is healthy"
+            verify_caddy
             return 0
         fi
         attempt=$((attempt + 1))
@@ -385,7 +455,7 @@ EOF
     log_info "2. Add the daily backup to the host crontab (retention: BACKUP_KEEP in .env):"
     cat <<EOF
 
-   0 3 * * * cd ${INSTALL_DIR} && docker compose exec -T app /app/family-budget-service backup
+   0 3 * * * cd ${INSTALL_DIR} && docker compose run --rm --no-deps -T app backup
 
 EOF
     log_info "Second user: POST /api/v1/users as the admin. API: https://${DOMAIN}/api/v1"

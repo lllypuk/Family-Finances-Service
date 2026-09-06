@@ -225,17 +225,28 @@ create_database_backup() {
 
     cd "${INSTALL_DIR}" || return 1
 
-    if ! docker compose -f "${COMPOSE_FILE}" run --rm --no-deps app backup; then
+    local output
+    if ! output=$(docker compose -f "${COMPOSE_FILE}" run --rm --no-deps -T app backup 2>&1); then
         log_error "The backup subcommand failed"
+        printf '%s\n' "${output}" >&2
         return 1
     fi
 
-    # The subcommand writes into BACKUP_DIR under its own timestamped name.
-    local latest
-    # shellcheck disable=SC2012 # имена файлов задаёт сам сервис: backup_<дата>_<время>.db
-    latest=$(ls -t "${BACKUP_DIR}"/backup_*.db 2>/dev/null | head -1)
-    if [[ -z "${latest}" ]]; then
-        log_error "No backup file appeared in ${BACKUP_DIR}"
+    # Имя берётся из вывода подкоманды, а не из `ls -t` по каталогу: BACKUP_DIR
+    # внутри контейнера задаёт .env и может не совпасть с ${BACKUP_DIR} на хосте —
+    # тогда самым свежим здесь оказался бы файл с прошлого раза, и откат вернул бы
+    # старую базу, отчитавшись об успехе.
+    local filename
+    filename=$(printf '%s\n' "${output}" | tr -d '\r' | sed -n 's/^backup \(.*\) created (.*/\1/p' | tail -1)
+    if [[ -z "${filename}" ]]; then
+        log_error "The backup subcommand printed no file name"
+        printf '%s\n' "${output}" >&2
+        return 1
+    fi
+
+    local latest="${BACKUP_DIR}/${filename}"
+    if [[ ! -f "${latest}" ]]; then
+        log_error "Backup ${filename} is not in ${BACKUP_DIR}; check BACKUP_DIR in ${INSTALL_DIR}/.env"
         return 1
     fi
 
@@ -848,6 +859,11 @@ handle_upgrade_failure() {
 
 manual_rollback() {
     log_info "=== Manual Rollback ==="
+
+    # Те же предполётные проверки, что и у upgrade(): парсер аргументов ведёт сюда
+    # напрямую, минуя upgrade().
+    check_root
+    check_installation
 
     # Find most recent upgrade backup
     local latest_backup

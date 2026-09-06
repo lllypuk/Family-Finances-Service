@@ -272,7 +272,8 @@ main() {
     check_root
     confirm_uninstall
     # Сначала стоп, потом копия: приложение сливает WAL только при штатном
-    # завершении, а backup_data копирует один budget.db без -wal/-shm.
+    # завершении, иначе копия -wal рядом с budget.db — единственный шанс на
+    # последние транзакции.
     stop_services
     backup_data
     remove_images
