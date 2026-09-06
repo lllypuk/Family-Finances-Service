@@ -89,7 +89,6 @@ func NewApplication() (*Application, error) {
 		app.repositories.Budget, // BudgetRepositoryForTransactions
 		app.repositories.Budget, // BudgetRepository
 		app.repositories.Report,
-		app.repositories.Invite,
 		backupService,
 		authService,
 		logger,

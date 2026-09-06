@@ -2,6 +2,24 @@
 
 All notable changes to database migrations will be documented in this file.
 
+## [2026-09-06] - Plan 04: money, dates, roles
+
+### Changed
+- `001_consolidated.up.sql` rewritten as one file; `.down.sql` drops in reverse order
+- `transactions.amount REAL` → `amount_minor INTEGER NOT NULL CHECK (amount_minor > 0)`;
+  `budgets` gains `amount_minor` / `spent_minor`
+- `transactions.date`, `budgets.start_date/end_date`, `reports.start_date/end_date` → `TEXT`
+  `'YYYY-MM-DD'` with a `CHECK … GLOB` guard
+- `families` gains `timezone TEXT NOT NULL` (IANA); `users.role` CHECK narrowed to `admin`/`member`
+
+### Removed
+- Tables `budget_alerts` and `invites` with their indexes and triggers
+
+## [2026-09-05] - Plan 03: bearer auth
+
+### Changed
+- `user_sessions` replaced by `sessions` (token hash only); `families.singleton` UNIQUE added
+
 ## [2025-01-12] - Consolidated Migrations
 
 ### Changed
@@ -77,7 +95,7 @@ The following individual migration files were consolidated:
 
 - See [README.md](./README.md) for detailed migration guide
 - See [../CLAUDE.md](../CLAUDE.md) for development workflow
-- See [../.memory_bank/tech_stack.md](../docs/tech_stack.md) for architecture details
+- See [../docs/tech_stack.md](../docs/tech_stack.md) for architecture details
 
 ---
 

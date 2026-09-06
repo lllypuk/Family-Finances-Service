@@ -8,7 +8,6 @@ import (
 
 	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/report"
-	"family-budget-service/internal/domain/user"
 )
 
 // ReportRepository defines the interface for report data access
@@ -29,7 +28,6 @@ type Services struct {
 	Budget      BudgetService
 	Stats       StatsService
 	Report      ReportService
-	Invite      InviteService
 	Backup      BackupService
 	// Auth — bearer-сессии; собирается снаружи, как и Backup: ему нужны репозитории, а не сервисы.
 	Auth *auth.Service
@@ -44,7 +42,6 @@ func NewServices(
 	budgetRepo BudgetRepositoryForTransactions,
 	fullBudgetRepo BudgetRepository,
 	reportRepo ReportRepository,
-	inviteRepo user.InviteRepository,
 	backupService BackupService,
 	authService *auth.Service,
 	logger *slog.Logger,
@@ -57,9 +54,8 @@ func NewServices(
 	familyService := NewFamilyService(familyRepo, transactionRepo)
 	transactionService := NewTransactionServiceWithLogger(transactionRepo, budgetRepo, categoryRepo, userRepo, logger)
 	budgetService := NewBudgetServiceWithLogger(fullBudgetRepo, transactionRepo, logger)
-	inviteService := NewInviteService(inviteRepo, userRepo, familyRepo, logger)
 
-	statsService := NewStatsService(transactionService, budgetService, categoryService)
+	statsService := NewStatsService(transactionService, budgetService, categoryService, familyService)
 
 	// Create report service with dependencies on other services
 	reportService := NewReportService(
@@ -68,8 +64,8 @@ func NewServices(
 		fullBudgetRepo,
 		categoryRepo,
 		userRepo,
+		familyRepo,
 		transactionService,
-		budgetService,
 		categoryService,
 	)
 
@@ -81,7 +77,6 @@ func NewServices(
 		Budget:      budgetService,
 		Stats:       statsService,
 		Report:      reportService,
-		Invite:      inviteService,
 		Backup:      backupService,
 		Auth:        authService,
 	}

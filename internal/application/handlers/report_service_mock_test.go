@@ -2,11 +2,11 @@ package handlers_test
 
 import (
 	"context"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 
+	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/services/dto"
 )
@@ -51,7 +51,7 @@ func (m *MockReportService) GenerateBudgetComparisonReport(
 
 func (m *MockReportService) GenerateCashFlowReport(
 	ctx context.Context,
-	from, to time.Time,
+	from, to date.Date,
 ) (*dto.CashFlowReportDTO, error) {
 	args := m.Called(ctx, from, to)
 	if args.Get(0) == nil {

@@ -5,12 +5,17 @@ import (
 
 	"github.com/google/uuid"
 
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 )
 
 // TransactionRepositoryForUsage defines minimal interface for checking category usage
 type TransactionRepositoryForUsage interface {
-	GetTotalByCategory(ctx context.Context, categoryID uuid.UUID, transactionType transaction.Type) (float64, error)
+	GetTotalByCategory(
+		ctx context.Context,
+		categoryID uuid.UUID,
+		transactionType transaction.Type,
+	) (money.Minor, error)
 }
 
 // CategoryUsageCheckerImpl implements CategoryUsageChecker interface

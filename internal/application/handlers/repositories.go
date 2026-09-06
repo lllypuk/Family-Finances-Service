@@ -5,7 +5,6 @@ import (
 
 	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/transaction"
-	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services"
 )
 
@@ -16,7 +15,6 @@ type Repositories struct {
 	Transaction TransactionRepository
 	Budget      BudgetRepository
 	Report      ReportRepository
-	Invite      user.InviteRepository
 	Session     auth.SessionRepository
 }
 

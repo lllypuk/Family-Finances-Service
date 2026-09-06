@@ -1,10 +1,6 @@
 package dto
 
 import (
-	"time"
-
-	"github.com/google/uuid"
-
 	"family-budget-service/internal/domain/user"
 )
 
@@ -14,7 +10,7 @@ type CreateUserDTO struct {
 	FirstName string    `validate:"required,min=2,max=50"`
 	LastName  string    `validate:"required,min=2,max=50"`
 	Password  string    `validate:"required,password"`
-	Role      user.Role `validate:"required"`
+	Role      user.Role `validate:"required,oneof=admin member"`
 }
 
 // UpdateUserDTO represents the data transfer object for updating a user
@@ -36,7 +32,7 @@ type SetupFamilyDTO struct {
 	FamilyName string `validate:"required,min=2,max=100"`
 	// Currency is a 3-character ISO currency code, for example "USD"
 	Currency string `validate:"required,len=3"`
-	// Timezone — IANA-имя; проверяется здесь, в Family попадает с планом 04 (A-06).
+	// Timezone — IANA-имя; тег timezone проверяет его через time.LoadLocation.
 	Timezone string `validate:"required,timezone"`
 	// First user (admin) data
 	Email     string `validate:"required,email,max=254"`
@@ -50,28 +46,5 @@ type SetupFamilyDTO struct {
 type UpdateFamilyDTO struct {
 	Name     *string `validate:"omitempty,min=2,max=100"`
 	Currency *string `validate:"omitempty,len=3"`
-}
-
-// CreateInviteDTO represents the data for creating a new invite
-type CreateInviteDTO struct {
-	Email string `validate:"required,email,max=254"`
-	Role  string `validate:"required,oneof=admin member child"`
-}
-
-// AcceptInviteDTO represents the data for accepting an invite
-type AcceptInviteDTO struct {
-	Email    string `validate:"required,email,max=254"`
-	Name     string `validate:"required,min=2,max=100"`
-	Password string `validate:"required"`
-}
-
-// InviteResponseDTO represents the data transfer object for invite responses
-type InviteResponseDTO struct {
-	ID         uuid.UUID  `json:"id"`
-	Email      string     `json:"email"`
-	Role       string     `json:"role"`
-	Status     string     `json:"status"`
-	ExpiresAt  time.Time  `json:"expires_at"`
-	CreatedAt  time.Time  `json:"created_at"`
-	AcceptedAt *time.Time `json:"accepted_at,omitempty"`
+	Timezone *string `validate:"omitempty,timezone"`
 }

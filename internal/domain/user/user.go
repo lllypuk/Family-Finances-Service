@@ -39,13 +39,19 @@ type Role string
 const (
 	RoleAdmin  Role = "admin"  // Главный пользователь семьи
 	RoleMember Role = "member" // Обычный член семьи
-	RoleChild  Role = "child"  // Ребенок с ограниченными правами
 )
 
+// IsValid сообщает, что роль — одна из известных.
+func (r Role) IsValid() bool {
+	return r == RoleAdmin || r == RoleMember
+}
+
 type Family struct {
-	ID        uuid.UUID `json:"id"         bson:"_id"`
-	Name      string    `json:"name"       bson:"name"`
-	Currency  string    `json:"currency"   bson:"currency"` // USD, RUB, EUR и т.д.
+	ID       uuid.UUID `json:"id"       bson:"_id"`
+	Name     string    `json:"name"     bson:"name"`
+	Currency string    `json:"currency" bson:"currency"` // USD, RUB, EUR и т.д.
+	// Timezone — IANA-зона семьи: по ней считаются границы периодов («текущий месяц»).
+	Timezone  string    `json:"timezone"`
 	CreatedAt time.Time `json:"created_at" bson:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" bson:"updated_at"`
 }
@@ -63,12 +69,24 @@ func NewUser(email, firstName, lastName string, role Role) *User {
 	}
 }
 
-func NewFamily(name, currency string) *Family {
+func NewFamily(name, currency, timezone string) *Family {
 	return &Family{
 		ID:        uuid.New(),
 		Name:      name,
 		Currency:  currency,
+		Timezone:  timezone,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
+}
+
+// Location возвращает зону семьи. Колонка NOT NULL и оба пути записи валидируют зону,
+// так что UTC здесь — не режим работы, а последний рубеж при отсутствующей tzdata.
+func (f *Family) Location() *time.Location {
+	loc, err := time.LoadLocation(f.Timezone)
+	if err != nil {
+		return time.UTC
+	}
+
+	return loc
 }

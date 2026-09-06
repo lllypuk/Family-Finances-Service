@@ -22,10 +22,23 @@ This project uses a **consolidated migration approach** with two files:
 
 Contains all database objects in order of dependencies:
 
-1. **Tables**: families, users, categories, transactions, budgets, budget_alerts, reports, invites, sessions
-2. **Indexes**: Performance optimization indexes for all tables
-3. **Triggers**: Automatic timestamp updates for all tables
+1. **Tables** (in FK order):
+
+   | Table | Notes |
+   |---|---|
+   | `families` | `singleton` UNIQUE — ровно одна семья на инсталляцию; `timezone` (IANA) |
+   | `users` | `role` CHECK (`admin`/`member`), `is_active` |
+   | `categories` | `income`/`expense`, самоссылка `parent_id`, `color`/`icon` для клиента |
+   | `transactions` | `amount_minor INTEGER > 0`, `date TEXT 'YYYY-MM-DD'` (CHECK GLOB) |
+   | `budgets` | `amount_minor`, `spent_minor`, период `start_date`/`end_date` — `TEXT`-даты |
+   | `reports` | период `start_date`/`end_date` — `TEXT`-даты, `data` — JSON отчёта с суммами `*_minor` |
+   | `sessions` | bearer-токены: только `token_hash` |
+
+2. **Indexes**: только те, что закрывают реальные запросы (семья+дата, категория, автор)
+3. **Triggers**: `updated_at` для families, users, categories, transactions, budgets
 4. **Analytics**: Statistics updates (ANALYZE)
+
+`budget_alerts`, `invites` и `user_sessions` удалены; таблицу `schema_migrations` ведёт golang-migrate.
 
 ### `001_consolidated.down.sql`
 
@@ -141,10 +154,9 @@ migrate -path ./migrations -database "sqlite://./data/budget.db" down
 
 ### ❌ DON'T
 
-- Remove existing migration code (only add new)
-- Modify existing tables without considering backwards compatibility
+- Add a second migration file — схема живёт в `001`, правится на месте
 - Forget to update the DOWN migration
-- Add breaking changes without a migration path
+- Forget `make db-reset` after editing `001` (уже применённая версия не переигрывается)
 - Use database-specific features (keep it SQLite compatible)
 
 ## SQLite-Specific Considerations
@@ -173,7 +185,8 @@ migrate -path ./migrations -database "sqlite://./data/budget.db" down
 |------------|--------|-------|
 | `UUID` | `TEXT` | Store as string |
 | `ENUM` | `TEXT` + `CHECK` | Validate with constraints |
-| `DECIMAL` | `REAL` | Floating point |
+| `DECIMAL` (деньги) | `INTEGER` | Минимальные единицы, колонки `*_minor` |
+| `DATE` | `TEXT` | `YYYY-MM-DD`, CHECK GLOB |
 | `TIMESTAMP WITH TIME ZONE` | `DATETIME` | UTC recommended |
 | `SERIAL` | Not needed | Use TEXT for UUIDs |
 | `BOOLEAN` | `INTEGER` | 0 = false, 1 = true |
@@ -218,6 +231,7 @@ SELECT * FROM schema_migrations;
 | | - Automatic timestamp triggers | |
 | | - User invitation system | |
 | 001 | Bearer auth (plan 03): `sessions` replaces `user_sessions`; `families.singleton` UNIQUE | 2026-09-05 |
+| 001 | Plan 04: файл переписан одним куском; `*_minor INTEGER` вместо `REAL`, даты — `TEXT`, `families.timezone`, роль только `admin`/`member`; `budget_alerts` и `invites` удалены | 2026-09-06 |
 
 ## See Also
 

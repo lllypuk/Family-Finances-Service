@@ -2,9 +2,7 @@ package dto
 
 import (
 	"testing"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
 	"family-budget-service/internal/domain/user"
@@ -116,65 +114,4 @@ func TestUpdateFamilyDTO_PartialUpdate(t *testing.T) {
 	assert.NotNil(t, dto.Name)
 	assert.Equal(t, "New Name", *dto.Name)
 	assert.Nil(t, dto.Currency)
-}
-
-func TestCreateInviteDTO_AllFields(t *testing.T) {
-	dto := CreateInviteDTO{
-		Email: "invite@example.com",
-		Role:  "member",
-	}
-
-	assert.Equal(t, "invite@example.com", dto.Email)
-	assert.Equal(t, "member", dto.Role)
-}
-
-func TestAcceptInviteDTO_AllFields(t *testing.T) {
-	dto := AcceptInviteDTO{
-		Email:    "accept@example.com",
-		Name:     "New User",
-		Password: "password123",
-	}
-
-	assert.Equal(t, "accept@example.com", dto.Email)
-	assert.Equal(t, "New User", dto.Name)
-	assert.Equal(t, "password123", dto.Password)
-}
-
-func TestInviteResponseDTO_AllFields(t *testing.T) {
-	now := time.Now()
-	inviteID := uuid.New()
-	acceptedAt := time.Now().Add(time.Hour)
-
-	response := InviteResponseDTO{
-		ID:         inviteID,
-		Email:      "invite@example.com",
-		Role:       "member",
-		Status:     "pending",
-		ExpiresAt:  now.Add(7 * 24 * time.Hour),
-		CreatedAt:  now,
-		AcceptedAt: &acceptedAt,
-	}
-
-	assert.Equal(t, inviteID, response.ID)
-	assert.Equal(t, "invite@example.com", response.Email)
-	assert.Equal(t, "member", response.Role)
-	assert.Equal(t, "pending", response.Status)
-	assert.NotNil(t, response.AcceptedAt)
-	assert.Equal(t, acceptedAt, *response.AcceptedAt)
-}
-
-func TestInviteResponseDTO_WithoutAcceptedAt(t *testing.T) {
-	now := time.Now()
-	inviteID := uuid.New()
-
-	response := InviteResponseDTO{
-		ID:        inviteID,
-		Email:     "invite@example.com",
-		Role:      "member",
-		Status:    "pending",
-		ExpiresAt: now.Add(7 * 24 * time.Hour),
-		CreatedAt: now,
-	}
-
-	assert.Nil(t, response.AcceptedAt)
 }

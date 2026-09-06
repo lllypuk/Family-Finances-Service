@@ -176,8 +176,8 @@ func (s *HTTPServer) setupRoutes() {
 }
 
 // setupResourceRoutes — ролевая модель: управление пользователями — только админ,
-// финансовые разделы — админ и member, роль child к ним не допущена. Удаление
-// категории закрыто до админа: через API оно необратимо и без подтверждения.
+// финансовые разделы — админ и member. Удаление категории закрыто до админа:
+// через API оно необратимо и без подтверждения.
 func (s *HTTPServer) setupResourceRoutes(api *echo.Group) {
 	adminOnly := auth.RequireRole(user.RoleAdmin)
 	financeAccess := auth.RequireRole(user.RoleAdmin, user.RoleMember)

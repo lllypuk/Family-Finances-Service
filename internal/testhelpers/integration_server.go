@@ -73,7 +73,6 @@ func SetupHTTPServer(t *testing.T, opts ...ServerOption) *TestServer {
 		Category:    categoryRepo,
 		Transaction: transactionrepo.NewSQLiteRepository(db),
 		Report:      reportrepo.NewSQLiteRepository(db),
-		Invite:      userrepo.NewInviteSQLiteRepository(db),
 		Session:     authrepo.NewSessionSQLiteRepository(db),
 	}
 
@@ -92,7 +91,6 @@ func SetupHTTPServer(t *testing.T, opts ...ServerOption) *TestServer {
 		repos.Budget,      // budgetRepo for transactions
 		repos.Budget,      // fullBudgetRepo
 		repos.Report,      // reportRepo
-		repos.Invite,      // inviteRepo
 		backupService,     // backupService
 		authService,       // authService
 		slog.Default(),    // logger

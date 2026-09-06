@@ -1,13 +1,16 @@
 package observability_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"family-budget-service/internal/domain/money"
 	observability "family-budget-service/internal/observability"
 )
 
@@ -88,18 +91,27 @@ func TestBusinessLogger(t *testing.T) {
 	})
 
 	t.Run("LogTransactionEvent", func(t *testing.T) {
-		businessLogger.LogTransactionEvent(
+		var buf bytes.Buffer
+		captured := observability.NewBusinessLogger(
+			slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})),
+		)
+
+		captured.LogTransactionEvent(
 			context.Background(),
 			"tx123",
 			"user123",
 			"family123",
 			"created",
-			100.50,
+			money.Minor(10050),
 			"USD",
 		)
 
-		// Verify no panic occurred
-		assert.NotNil(t, businessLogger)
+		var record map[string]any
+		require.NoError(t, json.Unmarshal(buf.Bytes(), &record))
+		assert.InDelta(t, 10050.0, record["amount_minor"], 0.0)
+		assert.Equal(t, "tx123", record["transaction_id"])
+		assert.Equal(t, "USD", record["currency"])
+		assert.NotContains(t, record, "amount")
 	})
 
 	t.Run("LogBudgetEvent", func(t *testing.T) {
@@ -238,7 +250,15 @@ func TestBusinessLoggerIntegration(t *testing.T) {
 			"ip": "192.168.1.1",
 		})
 
-		service.BusinessLogger.LogTransactionEvent(ctx, "tx123", "user123", "family123", "created", 75.50, "USD")
+		service.BusinessLogger.LogTransactionEvent(
+			ctx,
+			"tx123",
+			"user123",
+			"family123",
+			"created",
+			money.Minor(7550),
+			"USD",
+		)
 
 		service.BusinessLogger.LogBudgetEvent(
 			ctx,
@@ -311,7 +331,15 @@ func BenchmarkLogging(b *testing.B) {
 
 		b.ResetTimer()
 		for b.Loop() {
-			businessLogger.LogTransactionEvent(ctx, "tx123", "user123", "family123", "created", 100.0, "USD")
+			businessLogger.LogTransactionEvent(
+				ctx,
+				"tx123",
+				"user123",
+				"family123",
+				"created",
+				money.Minor(10000),
+				"USD",
+			)
 		}
 	})
 }

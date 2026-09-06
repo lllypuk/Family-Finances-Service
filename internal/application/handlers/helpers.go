@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"reflect"
@@ -13,6 +14,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/auth"
+	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/services"
 )
 
@@ -33,8 +35,10 @@ type pageParams struct {
 
 // newAPIValidator — валидатор всех API-хендлеров: имя поля в error.details берётся
 // из json-тега, иначе клиент получал бы имя поля Go (StartDate вместо start_date).
+// WithRequiredStructEnabled обязателен: без него `required` на вложенной структуре
+// (date.Date) молча ничего не проверяет и пропущенная дата доходит до репозитория как 500.
 func newAPIValidator() *validator.Validate {
-	v := validator.New()
+	v := validator.New(validator.WithRequiredStructEnabled())
 	auth.RegisterPasswordValidation(v)
 	v.RegisterTagNameFunc(func(field reflect.StructField) string {
 		name := strings.Split(field.Tag.Get("json"), ",")[0]
@@ -79,13 +83,75 @@ func respondError(
 	})
 }
 
+// familyToday — сегодняшняя дата в часовом поясе семьи (A-06). Семья не прочиталась —
+// UTC: в единственном месте вызова это выбор набора активных бюджетов, не отказ запроса.
+func familyToday(ctx context.Context, families FamilyRepository) date.Date {
+	if families == nil {
+		return date.Today(time.UTC)
+	}
+
+	family, err := families.Get(ctx)
+	if err != nil || family == nil {
+		return date.Today(time.UTC)
+	}
+
+	return date.Today(family.Location())
+}
+
+// isNilClientID — клиентский id из одних нулей: идемпотентный поиск по нему ничего
+// не находит, а репозиторий отбивает такой id уже как 500.
+func isNilClientID(id *uuid.UUID) bool {
+	return id != nil && *id == uuid.Nil
+}
+
+// respondNilClientID — 422 на клиентский id из одних нулей.
+func respondNilClientID(c echo.Context) error {
+	return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		ErrorDetail{Field: fieldID, Message: "must not be the nil UUID", Code: ErrCodeValidationError})
+}
+
+// respondClientID — контракт идемпотентного POST (A-07), общий для транзакций, бюджетов
+// и категорий: id из одних нулей — 422, уже созданная запись — 200 с ней. Первое значение
+// true означает, что ответ записан и создавать запись нельзя.
+func respondClientID[E, R any](
+	c echo.Context,
+	id *uuid.UUID,
+	find func(echo.Context, uuid.UUID) (E, bool),
+	build func(E) R,
+) (bool, error) {
+	if isNilClientID(id) {
+		return true, respondNilClientID(c)
+	}
+
+	if id == nil {
+		return false, nil
+	}
+
+	existing, found := find(c, *id)
+	if !found {
+		return false, nil
+	}
+
+	return true, respondAPI(c, http.StatusOK, build(existing))
+}
+
 // bodyDetail — деталь для ошибки, не привязанной к конкретному полю запроса.
 func bodyDetail(code, message string) ErrorDetail {
 	return ErrorDetail{Field: fieldBody, Message: message, Code: code}
 }
 
 // respondBindError — 400 на тело, которое не разобралось; текст ошибки Bind — в details.
+// Непонятная дата — ошибка поля, а не сломанный JSON, поэтому 422.
 func respondBindError(c echo.Context, err error) error {
+	if field, ok := date.JSONField(err); ok {
+		if field == "" {
+			field = fieldDate
+		}
+
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+			ErrorDetail{Field: field, Message: "must be a date in YYYY-MM-DD format", Code: ErrCodeValidationError})
+	}
+
 	return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
 		bodyDetail(ErrCodeInvalidRequest, err.Error()))
 }
@@ -369,11 +435,6 @@ func HandleIDParseError(c echo.Context, entityType string) error {
 	)
 }
 
-// HandleBindError returns standardized bind error response
-func HandleBindError(c echo.Context) error {
-	return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest)
-}
-
 // UpdateEntityHelper provides common update functionality for all handlers
 type UpdateEntityHelper[TRequest any, TEntity any, TResponse any] struct {
 	ParseID       func(echo.Context, string) (uuid.UUID, error)
@@ -432,7 +493,7 @@ func (h *UpdateEntityHelper[TRequest, TEntity, TResponse]) Execute(c echo.Contex
 	// Bind request
 	var req TRequest
 	if bindErr := h.BindRequest(c, &req); bindErr != nil {
-		return HandleBindError(c)
+		return respondBindError(c, bindErr)
 	}
 
 	// Validate request

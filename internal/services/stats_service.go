@@ -5,11 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"time"
 
 	"github.com/google/uuid"
 
 	"family-budget-service/internal/domain/budget"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/services/dto"
 )
@@ -27,8 +28,6 @@ const (
 
 	budgetNearLimitShare = 0.8
 	budgetOverLimitShare = 1.0
-
-	statsHoursInDay = 24
 )
 
 // statsService считает агрегаты поверх остальных сервисов, без прямого доступа к репозиториям.
@@ -36,6 +35,7 @@ type statsService struct {
 	transactions TransactionService
 	budgets      BudgetService
 	categories   CategoryService
+	families     FamilyService
 }
 
 // NewStatsService создаёт сервис статистики
@@ -43,26 +43,43 @@ func NewStatsService(
 	transactions TransactionService,
 	budgets BudgetService,
 	categories CategoryService,
+	families FamilyService,
 ) StatsService {
 	return &statsService{
 		transactions: transactions,
 		budgets:      budgets,
 		categories:   categories,
+		families:     families,
 	}
 }
 
-// Summary собирает сводку за период [from, to] включительно
-func (s *statsService) Summary(ctx context.Context, from, to time.Time) (*dto.StatsSummary, error) {
-	if to.Before(from) {
-		return nil, ErrInvalidStatsPeriod
-	}
-
-	current, err := s.transactionsBetween(ctx, from, to)
+// Summary собирает сводку за период [from, to] включительно; nil-границы — текущий месяц
+// по часовому поясу семьи (A-06).
+func (s *statsService) Summary(ctx context.Context, from, to *date.Date) (*dto.StatsSummary, error) {
+	family, err := s.families.GetFamily(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	budgets, err := s.budgetProgress(ctx)
+	today := date.Today(family.Location())
+	start, _ := today.MonthBounds()
+	end := today
+	if from != nil {
+		start = *from
+	}
+	if to != nil {
+		end = *to
+	}
+	if end.Before(start) {
+		return nil, ErrInvalidStatsPeriod
+	}
+
+	current, err := s.transactionsBetween(ctx, start, end)
+	if err != nil {
+		return nil, err
+	}
+
+	budgets, err := s.budgetProgress(ctx, today)
 	if err != nil {
 		return nil, err
 	}
@@ -78,16 +95,16 @@ func (s *statsService) Summary(ctx context.Context, from, to time.Time) (*dto.St
 		return nil, fmt.Errorf("failed to count transactions: %w", err)
 	}
 
-	totals := periodTotals(from, to, current)
-	previousFrom, previousTo := previousPeriod(from, to)
+	totals := periodTotals(start, end, current)
+	previousFrom, previousTo := previousPeriod(start, end)
 	previous, hasPrevious := s.previousTotals(ctx, previousFrom, previousTo)
 	expenseCategories, incomeCategories := s.categoryShares(ctx, current, totals)
 
 	incomeDelta, expensesDelta := periodDeltas(totals, previous, hasPrevious)
 
 	return &dto.StatsSummary{
-		From:              from,
-		To:                to,
+		From:              start,
+		To:                end,
 		Current:           totals,
 		Previous:          previous,
 		HasPreviousData:   hasPrevious,
@@ -103,7 +120,7 @@ func (s *statsService) Summary(ctx context.Context, from, to time.Time) (*dto.St
 
 func (s *statsService) transactionsBetween(
 	ctx context.Context,
-	from, to time.Time,
+	from, to date.Date,
 ) ([]*transaction.Transaction, error) {
 	// Постранично: суммы периода должны сходиться, а не обрываться на первой странице.
 	var all []*transaction.Transaction
@@ -128,11 +145,7 @@ func (s *statsService) transactionsBetween(
 }
 
 // previousTotals возвращает суммы за предыдущий период; ошибка выборки означает «данных нет».
-func (s *statsService) previousTotals(ctx context.Context, from, to time.Time) (dto.PeriodTotals, bool) {
-	if from.IsZero() || to.IsZero() {
-		return dto.PeriodTotals{}, false
-	}
-
+func (s *statsService) previousTotals(ctx context.Context, from, to date.Date) (dto.PeriodTotals, bool) {
 	transactions, err := s.transactionsBetween(ctx, from, to)
 	if err != nil || len(transactions) == 0 {
 		return dto.PeriodTotals{From: from, To: to}, false
@@ -141,17 +154,15 @@ func (s *statsService) previousTotals(ctx context.Context, from, to time.Time) (
 	return periodTotals(from, to, transactions), true
 }
 
-func (s *statsService) budgetProgress(ctx context.Context) ([]dto.BudgetProgress, error) {
-	now := time.Now()
-
-	activeBudgets, err := s.budgets.GetActiveBudgets(ctx, now)
+func (s *statsService) budgetProgress(ctx context.Context, today date.Date) ([]dto.BudgetProgress, error) {
+	activeBudgets, err := s.budgets.GetActiveBudgets(ctx, today)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active budgets: %w", err)
 	}
 
 	progress := make([]dto.BudgetProgress, 0, len(activeBudgets))
 	for _, b := range activeBudgets {
-		progress = append(progress, s.budgetProgressItem(ctx, b, now))
+		progress = append(progress, s.budgetProgressItem(ctx, b, today))
 	}
 
 	slices.SortFunc(progress, func(a, b dto.BudgetProgress) int {
@@ -171,30 +182,27 @@ func (s *statsService) budgetProgress(ctx context.Context) ([]dto.BudgetProgress
 func (s *statsService) budgetProgressItem(
 	ctx context.Context,
 	b *budget.Budget,
-	now time.Time,
+	today date.Date,
 ) dto.BudgetProgress {
-	utilization := 0.0
-	if b.Amount > 0 {
-		utilization = b.Spent / b.Amount
-	}
+	utilization := b.GetSpentShare()
 
 	isOverBudget := utilization >= budgetOverLimitShare
 
 	return dto.BudgetProgress{
-		ID:            b.ID,
-		Name:          b.Name,
-		CategoryName:  s.categoryName(ctx, b.CategoryID),
-		Amount:        b.Amount,
-		Spent:         b.Spent,
-		Remaining:     b.Amount - b.Spent,
-		Utilization:   utilization,
-		Period:        b.Period,
-		StartDate:     b.StartDate,
-		EndDate:       b.EndDate,
-		DaysRemaining: max(int(b.EndDate.Sub(now).Hours()/statsHoursInDay), 0),
-		IsActive:      b.IsActive,
-		IsOverBudget:  isOverBudget,
-		IsNearLimit:   utilization >= budgetNearLimitShare && !isOverBudget,
+		ID:             b.ID,
+		Name:           b.Name,
+		CategoryName:   s.categoryName(ctx, b.CategoryID),
+		AmountMinor:    b.AmountMinor,
+		SpentMinor:     b.SpentMinor,
+		RemainingMinor: b.GetRemainingAmount(),
+		Utilization:    utilization,
+		Period:         b.Period,
+		StartDate:      b.StartDate,
+		EndDate:        b.EndDate,
+		DaysRemaining:  max(date.DaysBetween(today, b.EndDate), 0),
+		IsActive:       b.IsActive,
+		IsOverBudget:   isOverBudget,
+		IsNearLimit:    utilization >= budgetNearLimitShare && !isOverBudget,
 	}
 }
 
@@ -209,7 +217,7 @@ func (s *statsService) recentTransactions(ctx context.Context) ([]dto.RecentTran
 		recent = append(recent, dto.RecentTransaction{
 			ID:           tx.ID,
 			Description:  tx.Description,
-			Amount:       tx.Amount,
+			AmountMinor:  tx.AmountMinor,
 			Type:         tx.Type,
 			CategoryName: s.categoryName(ctx, &tx.CategoryID),
 			Date:         tx.Date,
@@ -228,13 +236,15 @@ func (s *statsService) categoryShares(
 ) ([]dto.CategoryShare, []dto.CategoryShare) {
 	type bucket struct {
 		share         dto.CategoryShare
-		income        float64
-		expenses      float64
+		income        money.Minor
+		expenses      money.Minor
 		incomeCount   int
 		expensesCount int
 	}
 
-	var expenses, income []dto.CategoryShare
+	// Пустые, а не nil: в контракте оба поля — обязательные массивы (openapi StatsSummary).
+	expenses := make([]dto.CategoryShare, 0)
+	income := make([]dto.CategoryShare, 0)
 	buckets := make(map[uuid.UUID]*bucket)
 	for _, tx := range transactions {
 		b, ok := buckets[tx.CategoryID]
@@ -254,20 +264,20 @@ func (s *statsService) categoryShares(
 
 		switch tx.Type {
 		case transaction.TypeIncome:
-			b.income += tx.Amount
+			b.income += tx.AmountMinor
 			b.incomeCount++
 		case transaction.TypeExpense:
-			b.expenses += tx.Amount
+			b.expenses += tx.AmountMinor
 			b.expensesCount++
 		}
 	}
 
 	for _, b := range buckets {
 		if b.expenses > 0 {
-			expenses = append(expenses, withAmount(b.share, b.expenses, b.expensesCount, totals.Expenses))
+			expenses = append(expenses, withAmount(b.share, b.expenses, b.expensesCount, totals.ExpensesMinor))
 		}
 		if b.income > 0 {
-			income = append(income, withAmount(b.share, b.income, b.incomeCount, totals.Income))
+			income = append(income, withAmount(b.share, b.income, b.incomeCount, totals.IncomeMinor))
 		}
 	}
 
@@ -290,7 +300,7 @@ func (s *statsService) categoryName(ctx context.Context, categoryID *uuid.UUID) 
 	return category.Name
 }
 
-func periodTotals(from, to time.Time, transactions []*transaction.Transaction) dto.PeriodTotals {
+func periodTotals(from, to date.Date, transactions []*transaction.Transaction) dto.PeriodTotals {
 	totals := dto.PeriodTotals{
 		From:             from,
 		To:               to,
@@ -300,20 +310,21 @@ func periodTotals(from, to time.Time, transactions []*transaction.Transaction) d
 	for _, tx := range transactions {
 		switch tx.Type {
 		case transaction.TypeIncome:
-			totals.Income += tx.Amount
+			totals.IncomeMinor += tx.AmountMinor
 		case transaction.TypeExpense:
-			totals.Expenses += tx.Amount
+			totals.ExpensesMinor += tx.AmountMinor
 		}
 	}
-	totals.Net = totals.Income - totals.Expenses
+	totals.NetMinor = totals.IncomeMinor - totals.ExpensesMinor
 
 	return totals
 }
 
 // previousPeriod — период той же длины, вплотную перед [from, to].
-func previousPeriod(from, to time.Time) (time.Time, time.Time) {
-	previousTo := from.Add(-time.Second)
-	return previousTo.Add(-to.Sub(from)), previousTo
+func previousPeriod(from, to date.Date) (date.Date, date.Date) {
+	previousTo := from.AddDays(-1)
+
+	return previousTo.AddDays(-date.DaysBetween(from, to)), previousTo
 }
 
 func periodDeltas(current, previous dto.PeriodTotals, hasPrevious bool) (float64, float64) {
@@ -321,31 +332,27 @@ func periodDeltas(current, previous dto.PeriodTotals, hasPrevious bool) (float64
 		return 0, 0
 	}
 
-	var incomeDelta, expensesDelta float64
-	if previous.Income > 0 {
-		incomeDelta = (current.Income - previous.Income) / previous.Income
-	}
-	if previous.Expenses > 0 {
-		expensesDelta = (current.Expenses - previous.Expenses) / previous.Expenses
-	}
+	// Share сам возвращает 0 при нулевой базе, поэтому отдельной проверки нет.
+	incomeDelta := (current.IncomeMinor - previous.IncomeMinor).Share(previous.IncomeMinor)
+	expensesDelta := (current.ExpensesMinor - previous.ExpensesMinor).Share(previous.ExpensesMinor)
+
 	return incomeDelta, expensesDelta
 }
 
-func withAmount(share dto.CategoryShare, amount float64, count int, total float64) dto.CategoryShare {
-	share.Amount = amount
+func withAmount(share dto.CategoryShare, amount money.Minor, count int, total money.Minor) dto.CategoryShare {
+	share.AmountMinor = amount
 	share.TransactionCount = count
-	if total > 0 {
-		share.Share = amount / total
-	}
+	share.Share = amount.Share(total)
+
 	return share
 }
 
 func sortCategoryShares(shares []dto.CategoryShare) {
 	slices.SortFunc(shares, func(a, b dto.CategoryShare) int {
 		switch {
-		case a.Amount > b.Amount:
+		case a.AmountMinor > b.AmountMinor:
 			return -1
-		case a.Amount < b.Amount:
+		case a.AmountMinor < b.AmountMinor:
 			return 1
 		default:
 			return 0

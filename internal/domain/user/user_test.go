@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/domain/user"
 )
@@ -35,15 +36,17 @@ func TestNewUser(t *testing.T) {
 func TestNewFamily(t *testing.T) {
 	// Test data
 	name := "Test Family"
-	currency := "USD"
+	currency := "RUB"
+	timezone := "Europe/Moscow"
 
 	// Execute
-	family := user.NewFamily(name, currency)
+	family := user.NewFamily(name, currency, timezone)
 
 	// Assert
 	assert.NotEqual(t, uuid.Nil, family.ID)
 	assert.Equal(t, name, family.Name)
 	assert.Equal(t, currency, family.Currency)
+	assert.Equal(t, timezone, family.Timezone)
 	assert.False(t, family.CreatedAt.IsZero())
 	assert.False(t, family.UpdatedAt.IsZero())
 	assert.WithinDuration(t, time.Now(), family.CreatedAt, time.Second)
@@ -54,7 +57,14 @@ func TestRole_Constants(t *testing.T) {
 	// Test that role constants have expected values
 	assert.Equal(t, "admin", string(user.RoleAdmin))
 	assert.Equal(t, "member", string(user.RoleMember))
-	assert.Equal(t, "child", string(user.RoleChild))
+}
+
+func TestRole_IsValid(t *testing.T) {
+	assert.True(t, user.RoleAdmin.IsValid())
+	assert.True(t, user.RoleMember.IsValid())
+	assert.False(t, user.Role("child").IsValid(), "роль child удалена планом 04")
+	assert.False(t, user.Role("").IsValid())
+	assert.False(t, user.Role("Admin").IsValid(), "регистр значим")
 }
 
 func TestUser_StructFields(t *testing.T) {
@@ -106,7 +116,6 @@ func TestNewUser_DifferentRoles(t *testing.T) {
 	}{
 		{"Admin Role", user.RoleAdmin},
 		{"Member Role", user.RoleMember},
-		{"Child Role", user.RoleChild},
 	}
 
 	for _, tt := range tests {
@@ -122,7 +131,7 @@ func TestNewFamily_DifferentCurrencies(t *testing.T) {
 
 	for _, currency := range currencies {
 		t.Run("Currency_"+currency, func(t *testing.T) {
-			family := user.NewFamily("Test Family", currency)
+			family := user.NewFamily("Test Family", currency, "UTC")
 			assert.Equal(t, currency, family.Currency)
 		})
 	}
@@ -150,7 +159,7 @@ func TestFamily_TimestampGeneration(t *testing.T) {
 	beforeTime := time.Now()
 
 	// Create family
-	family := user.NewFamily("Test Family", "USD")
+	family := user.NewFamily("Test Family", "USD", "UTC")
 
 	// Record time after creating family
 	afterTime := time.Now()
@@ -160,4 +169,17 @@ func TestFamily_TimestampGeneration(t *testing.T) {
 	assert.True(t, family.CreatedAt.Before(afterTime) || family.CreatedAt.Equal(afterTime))
 	assert.True(t, family.UpdatedAt.After(beforeTime) || family.UpdatedAt.Equal(beforeTime))
 	assert.True(t, family.UpdatedAt.Before(afterTime) || family.UpdatedAt.Equal(afterTime))
+}
+
+func TestFamily_Location(t *testing.T) {
+	moscow := user.Family{Timezone: "Europe/Moscow"}
+	loc := moscow.Location()
+	require.NotNil(t, loc)
+	assert.Equal(t, "Europe/Moscow", loc.String())
+
+	// Пустая и неизвестная зона — UTC: отчёт строится, а не падает.
+	empty := user.Family{}
+	unknown := user.Family{Timezone: "Mars/Olympus"}
+	assert.Equal(t, time.UTC, empty.Location())
+	assert.Equal(t, time.UTC, unknown.Location())
 }

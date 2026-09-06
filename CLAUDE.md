@@ -106,8 +106,9 @@ default categories and the first admin in one `BEGIN IMMEDIATE` transaction (`Fa
 a second run fails with `ErrFamilyAlreadyExists`. Until it has run, `POST /api/v1/auth/login` answers
 `409 SETUP_REQUIRED` and `/health` reports `setup_complete: false` while staying `200` (the docker healthcheck
 must pass pre-setup). Passwords reach the CLI only through `--password-stdin` (first line of stdin), never argv.
-`--timezone` is required and validated but **not persisted** — `user.Family` gets the column in plan 04.
-`InviteService` still exists in `internal/services` but has no route; plan 04 deletes it.
+`--timezone` is required, validated by the `timezone` validator tag (`time.LoadLocation`) and stored in
+`families.timezone`; `Family.Location()` falls back to UTC on an unknown zone, and `StatsService` derives
+"current month" from it. Invites are gone: a user is created by an admin over `POST /api/v1/users`.
 
 ### One HTTP surface: `/api/v1` + `GET /health`
 
@@ -156,7 +157,9 @@ has a catch-all, an unknown `/api/v1/...` path is `401` without a token and `404
 - **One error envelope, one pagination shape** (`internal/application/handlers/helpers.go`): answer with
   `respondAPI`/`respondError(c, status, code, message, details...)`, never a hand-built `ResponseMeta`; validation
   failures are `422 VALIDATION_ERROR` with `error.details[{field, message, code}]`, while broken JSON and an
-  unparseable id stay `400`. Every list runs its query params through `parsePagination(c)` (`defaultLimit=50`,
+  unparseable id stay `400`. The one carve-out: a body date that does not parse is a field error, so
+  `respondBindError` answers `422` and names the offending field (`date`, `start_date`, …) — `date.JSONField`
+  digs the name out of the `*json.UnmarshalTypeError` that `date.Date.UnmarshalJSON` returns for that purpose. Every list runs its query params through `parsePagination(c)` (`defaultLimit=50`,
   `maxLimit=200`, out-of-range → `422`) and reports `meta.pagination {limit, offset, total}` — including the short
   lists, because the Android client generates from a `ListMeta` where `pagination` is required.
   `parsePagination` **writes the 422 itself** and returns the `errResponseAlreadyWritten` sentinel: callers return
@@ -175,12 +178,11 @@ Do not treat these as regressions you introduced:
 - **`deploy/**` is stale until plan 05**: the four `deploy/*.yml`, `deploy/.env.production.example` and the
   nginx/Caddy/fail2ban configs still require `SESSION_SECRET`/`CSRF_SECRET` and rate-limit a `/login` page that
   no longer exists. Do not fix them piecemeal; plan 05 replaces the directory.
-- **`--timezone` is accepted and dropped** (see "Single-family model") until plan 04 adds the column.
 
 ## Database & migrations
 
 All schema lives in **two consolidated files**: `migrations/001_consolidated.up.sql` and `001_consolidated.down.sql`
-(tables: families, users, categories, transactions, budgets, budget_alerts, reports, invites, sessions).
+(tables: families, users, categories, transactions, budgets, reports, sessions).
 There is no per-change migration file; append new DDL to the end of the `.up.sql` and the matching `DROP` to the
 front of the `.down.sql`. See `migrations/README.md`, and `make migrate-create` for the reminder.
 
@@ -239,6 +241,20 @@ on it.
 
 ## Conventions
 
+- **Money is `money.Minor`** (`internal/domain/money`) — `int64` in minor units, `amount_minor`/`spent_minor`
+  in JSON and in the DB. No `float64` sums anywhere: percentages come from `Minor.Percent(total)`, averages
+  from `Minor.DivRound(n)` (half-up), and SQL does `SUM`, never `AVG`. The currency is the family's;
+  `PUT /api/v1/family` refuses to change it once a transaction exists (`services.ErrCurrencyLocked` →
+  `409 CURRENCY_LOCKED`).
+- **A transaction date is `date.Date`** (`internal/domain/date`) — a calendar `YYYY-MM-DD` with no time or zone,
+  `TEXT` in SQLite (CHECK GLOB). Only `created_at`/`updated_at`/`expires_at` stay RFC3339 UTC. Period bounds
+  ("current month") are computed in `family.Timezone`, not in the server's zone.
+- **`POST` of a transaction, budget or category is idempotent** when the body carries a client-generated
+  `id` (any valid UUID): an existing record answers `200` with itself and the repeated body is ignored — the id is
+  the only thing compared. The check is a plain read-then-insert; two simultaneous retries can still collide.
+- **Fractions come in two units.** Shares (`share`, `*_delta`, `stats.budgets[].utilization`) are 0…1; fields named
+  `percentage` and `budgets[].utilization` on `/budgets` are percent 0…100. Both are documented per field in
+  `docs/api/openapi.yaml`.
 - Comments and log messages are a mix of Russian and English; match the surrounding file rather than converting it.
 - File names are snake_case-ish and descriptive: `transaction_service.go`, `user_repository_sqlite.go`.
 - Keep handlers thin — business logic belongs in `internal/services/`.
@@ -254,14 +270,15 @@ reference): `docs/README.md` (navigation), `docs/product_brief.md`, `docs/tech_s
 status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the finished ones.
 
 **Current direction:** `docs/specs/005-api-only-redesign.md` — the service is an API-only backend for an
-Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–03 are done
-(`docs/plans/completed/`); `docs/plans/20260904-0[4-5]-*.md` run next, in order.
+Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–04 are done
+(`docs/plans/completed/`); `docs/plans/20260904-05-deploy-ffs.md` runs next.
 
-`docs/api/openapi.yaml` is the target contract for `/api/v1` (plus `GET /health`) — the Android client generates
-from it. **A registered route with no operation in the spec fails `make test`**
+`docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates
+from it, and code and spec now match. **A registered route with no operation in the spec fails `make test`**
 (`tests/integration/openapi_coverage_test.go`: `TestOpenAPISpec_CoversRegisteredRoutes`, plus
 `TestOpenAPISpec_OperationsHaveIDAndErrorResponse` requiring an `operationId` and a 4xx `$ref: Error` on every
-operation). The reverse — described but not implemented — is allowed until plan 04. See `docs/api/README.md`.
+operation). The reverse also fails it (`TestOpenAPISpec_DescribesOnlyRegisteredRoutes`): spec and routes match
+exactly, with no exceptions. See `docs/api/README.md`.
 Self-hosted deployment (install/upgrade/backup scripts, nginx & Caddy configs, systemd units, fail2ban) is in
 `deploy/` — see `deploy/README.md` and the "Known rough edges" note above.
 

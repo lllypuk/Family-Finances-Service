@@ -13,6 +13,8 @@ import (
 
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
 	budgetrepo "family-budget-service/internal/infrastructure/budget"
@@ -41,6 +43,7 @@ func TestFullWorkflowIntegration(t *testing.T) {
 		ID:       uuid.New(),
 		Name:     "Smith Family",
 		Currency: "USD",
+		Timezone: "Europe/Moscow",
 	}
 
 	err := familyRepo.Create(ctx, family)
@@ -129,27 +132,27 @@ func TestFullWorkflowIntegration(t *testing.T) {
 
 	// Step 4: Create budgets
 	monthlyFoodBudget := &budget.Budget{
-		ID:         uuid.New(),
-		Name:       "Monthly Food Budget",
-		Amount:     800.00,
-		Spent:      0.00,
-		Period:     budget.PeriodMonthly,
-		CategoryID: &foodCategory.ID,
-		StartDate:  time.Now().Truncate(24 * time.Hour),
-		EndDate:    time.Now().AddDate(0, 1, 0).Truncate(24 * time.Hour),
-		IsActive:   true,
+		ID:          uuid.New(),
+		Name:        "Monthly Food Budget",
+		AmountMinor: 80_000,
+		SpentMinor:  0,
+		Period:      budget.PeriodMonthly,
+		CategoryID:  &foodCategory.ID,
+		StartDate:   date.Today(time.UTC),
+		EndDate:     date.Today(time.UTC).AddDays(30),
+		IsActive:    true,
 	}
 
 	monthlyTransportBudget := &budget.Budget{
-		ID:         uuid.New(),
-		Name:       "Monthly Transport Budget",
-		Amount:     300.00,
-		Spent:      0.00,
-		Period:     budget.PeriodMonthly,
-		CategoryID: &transportCategory.ID,
-		StartDate:  time.Now().Truncate(24 * time.Hour),
-		EndDate:    time.Now().AddDate(0, 1, 0).Truncate(24 * time.Hour),
-		IsActive:   true,
+		ID:          uuid.New(),
+		Name:        "Monthly Transport Budget",
+		AmountMinor: 30_000,
+		SpentMinor:  0,
+		Period:      budget.PeriodMonthly,
+		CategoryID:  &transportCategory.ID,
+		StartDate:   date.Today(time.UTC),
+		EndDate:     date.Today(time.UTC).AddDays(30),
+		IsActive:    true,
 	}
 
 	err = budgetRepo.Create(ctx, monthlyFoodBudget)
@@ -158,51 +161,51 @@ func TestFullWorkflowIntegration(t *testing.T) {
 	require.NoError(t, err)
 
 	// Step 5: Create transactions
-	now := time.Now()
+	now := date.Today(time.UTC)
 	transactions := []*transaction.Transaction{
 		{
 			ID:          uuid.New(),
-			Amount:      3000.00,
+			AmountMinor: 300_000,
 			Type:        transaction.TypeIncome,
 			Description: "Monthly salary",
 			CategoryID:  salaryCategory.ID,
 			UserID:      adminUser.ID,
-			Date:        now.AddDate(0, 0, -1),
+			Date:        now.AddDays(-1),
 			Tags:        []string{"salary", "monthly"},
 		},
 		{
 			ID:          uuid.New(),
-			Amount:      2000.00,
+			AmountMinor: 200_000,
 			Type:        transaction.TypeIncome,
 			Description: "Spouse salary",
 			CategoryID:  salaryCategory.ID,
 			UserID:      memberUser.ID,
-			Date:        now.AddDate(0, 0, -1),
+			Date:        now.AddDays(-1),
 			Tags:        []string{"salary", "monthly"},
 		},
 		{
 			ID:          uuid.New(),
-			Amount:      120.50,
+			AmountMinor: 12_050,
 			Type:        transaction.TypeExpense,
 			Description: "Weekly groceries",
 			CategoryID:  groceryCategory.ID,
 			UserID:      memberUser.ID,
-			Date:        now.AddDate(0, 0, -2),
+			Date:        now.AddDays(-2),
 			Tags:        []string{"grocery", "weekly", "food"},
 		},
 		{
 			ID:          uuid.New(),
-			Amount:      85.00,
+			AmountMinor: 8_500,
 			Type:        transaction.TypeExpense,
 			Description: "Gas station",
 			CategoryID:  gasCategory.ID,
 			UserID:      adminUser.ID,
-			Date:        now.AddDate(0, 0, -3),
+			Date:        now.AddDays(-3),
 			Tags:        []string{"gas", "car", "transport"},
 		},
 		{
 			ID:          uuid.New(),
-			Amount:      45.75,
+			AmountMinor: 4_575,
 			Type:        transaction.TypeExpense,
 			Description: "Coffee and snacks",
 			CategoryID:  foodCategory.ID,
@@ -257,8 +260,8 @@ func TestFullWorkflowIntegration(t *testing.T) {
 
 		// Filter by date range
 		filter.Tags = nil
-		dateFrom := now.AddDate(0, 0, -2)
-		dateTo := now.AddDate(0, 0, 1)
+		dateFrom := now.AddDays(-2)
+		dateTo := now.AddDays(1)
 		filter.DateFrom = &dateFrom
 		filter.DateTo = &dateTo
 		recentTransactions, err := transactionRepo.GetByFilter(ctx, filter)
@@ -266,27 +269,9 @@ func TestFullWorkflowIntegration(t *testing.T) {
 		assert.Len(t, recentTransactions, 4) // Monthly salary, Spouse salary, Weekly groceries, Coffee and snacks
 	})
 
-	// Test transaction summary
-	t.Run("VerifyTransactionSummary", func(t *testing.T) {
-		startDate := now.AddDate(0, 0, -7)
-		endDate := now.AddDate(0, 0, 1)
-
-		summary, err := transactionRepo.GetSummary(ctx, startDate, endDate)
-		require.NoError(t, err)
-
-		assert.Equal(t, 5, summary.TotalCount)
-		assert.Equal(t, 2, summary.IncomeCount)
-		assert.Equal(t, 3, summary.ExpenseCount)
-		assert.InEpsilon(t, 5000.00, summary.TotalIncome, 0.01)  // 3000 + 2000
-		assert.InEpsilon(t, 251.25, summary.TotalExpenses, 0.01) // 120.50 + 85.00 + 45.75
-		assert.InEpsilon(t, 4748.75, summary.Balance, 0.01)      // 5000 - 251.25
-		assert.InEpsilon(t, 2500.00, summary.AvgIncome, 0.01)    // 5000 / 2
-		assert.InEpsilon(t, 83.75, summary.AvgExpense, 0.01)     // 251.25 / 3
-	})
-
 	// Test budget tracking
 	t.Run("VerifyBudgetTracking", func(t *testing.T) {
-		budgets, err := budgetRepo.GetActiveBudgets(ctx)
+		budgets, err := budgetRepo.GetActiveBudgets(ctx, date.Today(time.UTC))
 		require.NoError(t, err)
 		assert.Len(t, budgets, 2)
 
@@ -306,10 +291,10 @@ func TestFullWorkflowIntegration(t *testing.T) {
 		require.NotNil(t, foodBudgetStats)
 
 		// Food budget should have some spending (only direct food category transactions, not subcategories)
-		expectedFoodSpending := 45.75 // Coffee only, groceries are in subcategory
-		assert.InDelta(t, expectedFoodSpending, foodBudgetStats.SpentAmount, 0.01)
-		assert.InDelta(t, 800.00-expectedFoodSpending, foodBudgetStats.RemainingAmount, 0.01)
-		expectedPercentage := (expectedFoodSpending / 800.00) * 100
+		expectedFoodSpending := money.Minor(4_575) // Coffee only, groceries are in subcategory
+		assert.Equal(t, expectedFoodSpending, foodBudgetStats.SpentAmountMinor)
+		assert.Equal(t, money.Minor(80_000)-expectedFoodSpending, foodBudgetStats.RemainingAmountMinor)
+		expectedPercentage := expectedFoodSpending.Percent(money.Minor(80_000))
 		assert.InDelta(t, expectedPercentage, foodBudgetStats.UsagePercentage, 0.01)
 	})
 
@@ -335,19 +320,13 @@ func TestFullWorkflowIntegration(t *testing.T) {
 		assert.Equal(t, 5, familyStats.TransactionCount)
 		assert.Equal(t, 2, familyStats.BudgetCount)
 		// Expected values: 2 income transactions (3000 + 2000) and 3 expense transactions (120.50 + 85.00 + 45.75)
-		assert.InEpsilon(t, 5000.00, familyStats.TotalIncome, 0.01)
-		assert.InEpsilon(t, 251.25, familyStats.TotalExpenses, 0.01)
-		assert.InEpsilon(t, 4748.75, familyStats.Balance, 0.01)
+		assert.Equal(t, money.Minor(500_000), familyStats.TotalIncomeMinor)
+		assert.Equal(t, money.Minor(25_125), familyStats.TotalExpensesMinor)
+		assert.Equal(t, money.Minor(474_875), familyStats.BalanceMinor)
 	})
 
 	// Test complex queries and edge cases
 	t.Run("VerifyComplexQueries", func(t *testing.T) {
-		// Test monthly summary
-		now := time.Now()
-		monthlySummary, err := transactionRepo.GetMonthlySummary(ctx, now.Year(), int(now.Month()))
-		require.NoError(t, err)
-		assert.NotEmpty(t, monthlySummary)
-
 		// Test categories by type
 		expenseCategories, err := categoryRepo.GetByType(ctx, category.TypeExpense)
 		require.NoError(t, err)

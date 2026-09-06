@@ -6,8 +6,9 @@ API for the Android client. One instance = one family.
 ## 🎯 Project Status: IN DEVELOPMENT 🚧
 
 > **Direction (September 2026):** API-only backend for an Android app. Decisions and the five implementation
-> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–03 are done: the
-> web interface, cookie sessions and CSRF are gone; the sections below describe the code as it is today.
+> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–04 are done: the
+> web interface, cookie sessions and CSRF are gone, money is integer minor units and dates are calendar dates;
+> the sections below describe the code as it is today.
 
 - ✅ REST API for family, users, categories, transactions, budgets, reports, stats, backups
 - ✅ Bearer-token authentication with server-side sessions and a login rate limiter
@@ -15,16 +16,17 @@ API for the Android client. One instance = one family.
 - ✅ Lightweight SQLite database, migrations applied at startup
 - ✅ CI/CD pipelines with GitHub Actions
 - ✅ Single Docker container, built from source (`docker/Dockerfile`)
+- ✅ Money as integer minor units (`amount_minor`), calendar `YYYY-MM-DD` dates, idempotent `POST`
 - 🚧 Multi-platform builds (linux/amd64, linux/arm64) — the workflow exists, but no release has been tagged yet,
   so nothing is published to GHCR. Every compose file builds locally instead of pulling; see
   [docs/specs/004-deployment-readiness.md](docs/specs/004-deployment-readiness.md#d-02)
-- 🚧 Money is still `float64` and `deploy/` still targets the old web build — plans 04 and 05
+- 🚧 `deploy/` still targets the old web build — plan 05
 
 ## API
 
-The **target** contract lives in [`docs/api/openapi.yaml`](docs/api/openapi.yaml) (OpenAPI 3.1, hand-written,
-see [`docs/api/README.md`](docs/api/README.md)); the Android client generates from it. Authentication and the
-error/pagination envelope already match it; money in minor units and calendar dates land in plan 04.
+The contract lives in [`docs/api/openapi.yaml`](docs/api/openapi.yaml) (OpenAPI 3.1, hand-written,
+see [`docs/api/README.md`](docs/api/README.md)); the Android client generates from it. Code and spec match
+exactly — `make test` fails on a route missing from the spec **and** on an operation with no route.
 
 ### Authentication
 
@@ -44,10 +46,11 @@ Tokens are opaque (32 random bytes; the server stores only a SHA-256), slide 30 
 manage the rest; changing your own password keeps the current session and revokes the others, an admin
 password reset or deactivation revokes all.
 
-Roles:
+There are two roles, `admin` and `member`; both see all of the family's data. There are no invites — an admin
+creates a user with `POST /api/v1/users`.
 
 - `/api/v1/users` and `/api/v1/backups`, `PUT /api/v1/family`, `DELETE /api/v1/categories/:id` — **admin only**
-- `/api/v1/{categories,transactions,budgets,reports,stats}` — **admin or member** (`child` gets `403`)
+- `/api/v1/{categories,transactions,budgets,reports,stats}` — **admin or member**
 - `GET /api/v1/family`, `/api/v1/me*`, `/api/v1/auth/*` — any authenticated role
 
 The author of a record is taken from the token, so `user_id` in a request body is ignored.
@@ -63,16 +66,20 @@ The author of a record is taken from the token, so `user_id` in a request body i
 - Backups over API: `POST`/`GET /api/v1/backups`, `GET /api/v1/backups/:name/download`,
   `DELETE /api/v1/backups/:name`
 - `POST /api/v1/transactions/bulk-delete`
+- Money is `amount_minor` — an integer in the family's minor units (kopeks/cents); percentages and utilization
+  stay fractional. `PUT /api/v1/family` returns `409 CURRENCY_LOCKED` if a transaction already exists
+- Transaction, budget and report dates are calendar `YYYY-MM-DD`; period bounds use the family's `timezone`
+- `POST` of a transaction, budget or category accepts a client-generated `id` (any valid UUID): a retry with the same
+  `id` answers `200` with the existing record instead of creating a duplicate
 - Every list answers with `meta.pagination {limit, offset, total}` — `limit` defaults to 50, max 200
 - One error envelope everywhere: `{"error":{"code","message","details"},"meta":{...}}`;
   validation fails with `422 VALIDATION_ERROR` and per-field `details`
 
 ### Not available yet
 
-- Money is still `float64` (minor units land in plan 04, together with the rest of the `openapi.yaml` gap)
 - Users are never deleted, only deactivated (`PATCH /users/:id {"is_active": false}`)
 - Backup **restore** is deliberately not exposed over the API — use `make sqlite-restore`
-- Invites have no route any more and are removed for good in plan 04
+- More than one currency: a family has exactly one, and it can no longer be changed once a transaction exists
 
 ## 🏗️ Architecture and Technology Stack
 
@@ -221,7 +228,8 @@ docker compose --project-directory . -f docker/docker-compose.yml down         #
 - Unit tests for domain, services, repositories, `internal/auth` (tokens, limiter, middleware) and handlers
 - Integration tests in `tests/integration/` run the real HTTP stack — bearer middleware, role gates, rate
   limiter, JSON error handler — over an in-memory SQLite database
-- A registered route with no operation in `docs/api/openapi.yaml` fails `make test`
+- `docs/api/openapi.yaml` is checked both ways by `make test`: a route with no operation, and an operation
+  with no route, both fail
 - golangci-lint with 50+ linters, 0 issues required; CodeQL, Semgrep, TruffleHog, OSV Scanner in CI; Dependabot
 
 ```bash
@@ -236,7 +244,7 @@ make lint              # Code quality checks
   180-day lifetime, per-session revocation
 - Login rate limiter in the application (per IP and per email), `TRUSTED_PROXIES` for the real client IP
 - Passwords: bcrypt cost 12, 10–72 bytes, never on the command line
-- Role-based access (Admin, Member, Child), input validation on every endpoint
+- Role-based access (`admin`, `member`), input validation on every endpoint
 - Backups protected from path traversal with filename validation
 
 ## 🏠 Self-Hosted Deployment

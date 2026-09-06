@@ -16,6 +16,7 @@ import (
 
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/testhelpers"
@@ -333,7 +334,7 @@ func TestAPIPagination_Reports_TotalBeyondRepositoryLimit(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	testServer.Auth(t)
 
-	start := time.Now().AddDate(0, 0, -1)
+	start := date.Today(time.UTC).AddDays(-1)
 	for i := range reportsBeyondRepoLimit {
 		rep := report.NewReport(
 			fmt.Sprintf("Report %d", i),
@@ -341,7 +342,7 @@ func TestAPIPagination_Reports_TotalBeyondRepositoryLimit(t *testing.T) {
 			report.PeriodMonthly,
 			testServer.AuthUser.ID,
 			start,
-			start.AddDate(0, 0, 1),
+			start.AddDays(1),
 		)
 		require.NoError(t, testServer.Repos.Report.Create(t.Context(), rep))
 	}

@@ -338,8 +338,8 @@ func TestCategoryService_UpdateCategory_Success(t *testing.T) {
 	mockCategoryRepo.AssertExpectations(t)
 }
 
-func TestCategoryService_DeleteCategory_SoftDelete(t *testing.T) {
-	service, mockCategoryRepo, _, mockUsageChecker := setupCategoryService()
+func TestCategoryService_DeleteCategory_Success(t *testing.T) {
+	service, mockCategoryRepo, _, _ := setupCategoryService()
 
 	categoryID := uuid.New()
 	existingCategory := &category.Category{
@@ -349,46 +349,47 @@ func TestCategoryService_DeleteCategory_SoftDelete(t *testing.T) {
 		IsActive: true,
 	}
 
-	// Setup mocks - category is used in transactions
 	mockCategoryRepo.On("GetByID", mock.Anything, categoryID).Return(existingCategory, nil)
-	mockUsageChecker.On("IsCategoryUsed", mock.Anything, categoryID).Return(true, nil)
-	mockCategoryRepo.On("GetAll", mock.Anything).Return([]*category.Category{}, nil)
-	mockCategoryRepo.On("Update", mock.Anything, mock.AnythingOfType("*category.Category")).Return(nil)
-
-	// Execute
-	err := service.DeleteCategory(context.Background(), categoryID)
-
-	// Assert
-	require.NoError(t, err)
-
-	mockCategoryRepo.AssertExpectations(t)
-	mockUsageChecker.AssertExpectations(t)
-}
-
-func TestCategoryService_DeleteCategory_HardDelete(t *testing.T) {
-	service, mockCategoryRepo, _, mockUsageChecker := setupCategoryService()
-
-	categoryID := uuid.New()
-	existingCategory := &category.Category{
-		ID:       categoryID,
-		Name:     "Test Category",
-		Type:     category.TypeExpense,
-		IsActive: true,
-	}
-
-	// Setup mocks - category is not used in transactions
-	mockCategoryRepo.On("GetByID", mock.Anything, categoryID).Return(existingCategory, nil)
-	mockUsageChecker.On("IsCategoryUsed", mock.Anything, categoryID).Return(false, nil)
 	mockCategoryRepo.On("GetAll", mock.Anything).Return([]*category.Category{}, nil)
 	mockCategoryRepo.On("Delete", mock.Anything, categoryID).Return(nil)
 
-	// Execute
 	err := service.DeleteCategory(context.Background(), categoryID)
 
-	// Assert
 	require.NoError(t, err)
-
 	mockCategoryRepo.AssertExpectations(t)
+	mockCategoryRepo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
+}
+
+func TestCategoryService_DeleteCategory_AlreadyInactive_NotFound(t *testing.T) {
+	service, mockCategoryRepo, _, _ := setupCategoryService()
+
+	categoryID := uuid.New()
+	existingCategory := &category.Category{
+		ID:       categoryID,
+		Name:     "Test Category",
+		Type:     category.TypeExpense,
+		IsActive: false,
+	}
+
+	mockCategoryRepo.On("GetByID", mock.Anything, categoryID).Return(existingCategory, nil)
+
+	err := service.DeleteCategory(context.Background(), categoryID)
+
+	require.ErrorIs(t, err, services.ErrCategoryNotFound)
+	mockCategoryRepo.AssertExpectations(t)
+	mockCategoryRepo.AssertNotCalled(t, "Delete", mock.Anything, mock.Anything)
+}
+
+func TestCategoryService_CheckCategoryUsage_Success(t *testing.T) {
+	service, _, _, mockUsageChecker := setupCategoryService()
+
+	categoryID := uuid.New()
+	mockUsageChecker.On("IsCategoryUsed", mock.Anything, categoryID).Return(true, nil)
+
+	used, err := service.CheckCategoryUsage(context.Background(), categoryID)
+
+	require.NoError(t, err)
+	assert.True(t, used)
 	mockUsageChecker.AssertExpectations(t)
 }
 

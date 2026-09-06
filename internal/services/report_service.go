@@ -14,6 +14,8 @@ import (
 
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
 
@@ -26,6 +28,7 @@ const (
 	percentageMultiplier        = 100.0
 	hoursPerDay                 = 24
 	daysPerWeek                 = 7
+	lastDayOfDecember           = 31
 	reportTransactionQueryLimit = 1000 // Maximum transactions to query for reports
 
 	exportFormatCSV = "csv"
@@ -44,10 +47,10 @@ type reportService struct {
 	budgetRepo      BudgetRepository
 	categoryRepo    CategoryRepository
 	userRepo        UserRepository
+	familyRepo      FamilyRepository
 
 	// Service dependencies for complex calculations
 	transactionService TransactionService
-	budgetService      BudgetService
 	categoryService    CategoryService
 }
 
@@ -58,8 +61,8 @@ func NewReportService(
 	budgetRepo BudgetRepository,
 	categoryRepo CategoryRepository,
 	userRepo UserRepository,
+	familyRepo FamilyRepository,
 	transactionService TransactionService,
-	budgetService BudgetService,
 	categoryService CategoryService,
 ) ReportService {
 	return &reportService{
@@ -68,8 +71,8 @@ func NewReportService(
 		budgetRepo:         budgetRepo,
 		categoryRepo:       categoryRepo,
 		userRepo:           userRepo,
+		familyRepo:         familyRepo,
 		transactionService: transactionService,
-		budgetService:      budgetService,
 		categoryService:    categoryService,
 	}
 }
@@ -81,8 +84,8 @@ func reportFeatureHiddenStubError(feature string) error {
 // transactionReportData contains common data for transaction reports
 type transactionReportData struct {
 	transactions      []*transaction.Transaction
-	totalAmount       float64
-	averageDaily      float64
+	totalAmount       money.Minor
+	averageDaily      money.Minor
 	categoryBreakdown []dto.CategoryBreakdownItemDTO
 	topTransactions   []dto.TransactionSummaryDTO
 }
@@ -177,20 +180,20 @@ func (s *reportService) GenerateExpenseReport(
 	}
 
 	return &dto.ExpenseReportDTO{
-		ID:                uuid.New(),
-		Name:              req.Name,
-		UserID:            req.UserID,
-		Period:            req.Period,
-		StartDate:         req.StartDate,
-		EndDate:           req.EndDate,
-		TotalExpenses:     reportData.totalAmount,
-		AverageDaily:      reportData.averageDaily,
-		CategoryBreakdown: reportData.categoryBreakdown,
-		DailyBreakdown:    reportData.dailyBreakdownExpense,
-		TopExpenses:       reportData.topTransactions,
-		Trends:            reportData.expenseTrends,
-		Comparisons:       reportData.expenseComparisons,
-		GeneratedAt:       time.Now(),
+		ID:                 uuid.New(),
+		Name:               req.Name,
+		UserID:             req.UserID,
+		Period:             req.Period,
+		StartDate:          req.StartDate,
+		EndDate:            req.EndDate,
+		TotalExpensesMinor: reportData.totalAmount,
+		AverageDailyMinor:  reportData.averageDaily,
+		CategoryBreakdown:  reportData.categoryBreakdown,
+		DailyBreakdown:     reportData.dailyBreakdownExpense,
+		TopExpenses:        reportData.topTransactions,
+		Trends:             reportData.expenseTrends,
+		Comparisons:        reportData.expenseComparisons,
+		GeneratedAt:        time.Now(),
 	}, nil
 }
 
@@ -211,8 +214,8 @@ func (s *reportService) GenerateIncomeReport(
 		Period:            req.Period,
 		StartDate:         req.StartDate,
 		EndDate:           req.EndDate,
-		TotalIncome:       reportData.totalAmount,
-		AverageDaily:      reportData.averageDaily,
+		TotalIncomeMinor:  reportData.totalAmount,
+		AverageDailyMinor: reportData.averageDaily,
 		CategoryBreakdown: reportData.categoryBreakdown,
 		DailyBreakdown:    reportData.dailyBreakdownIncome,
 		TopSources:        reportData.topTransactions,
@@ -227,7 +230,7 @@ func (s *reportService) GenerateBudgetComparisonReport(
 	ctx context.Context,
 	period report.Period,
 ) (*dto.BudgetComparisonDTO, error) {
-	startDate, endDate := s.calculatePeriodDates(period)
+	startDate, endDate := s.calculatePeriodDates(ctx, period)
 
 	return s.budgetComparisonReport(ctx, period, startDate, endDate)
 }
@@ -235,36 +238,33 @@ func (s *reportService) GenerateBudgetComparisonReport(
 func (s *reportService) budgetComparisonReport(
 	ctx context.Context,
 	period report.Period,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 ) (*dto.BudgetComparisonDTO, error) {
-	// Get active budgets for the period
-	budgets, err := s.budgetService.GetActiveBudgets(ctx, startDate)
+	// Бюджеты, пересекающиеся с периодом целиком: начатый в середине месяца тратит в том же
+	// TotalSpentMinor, поэтому выборка «активные на первый день» не сходилась со строками отчёта.
+	budgets, err := s.budgetRepo.GetByPeriod(ctx, startDate, endDate)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get active budgets: %w", err)
+		return nil, fmt.Errorf("failed to get budgets for period: %w", err)
 	}
 
 	if len(budgets) == 0 {
 		return &dto.BudgetComparisonDTO{
-			ID:            uuid.New(),
-			Name:          fmt.Sprintf("Budget Comparison - %s", period),
-			Period:        period,
-			StartDate:     startDate,
-			EndDate:       endDate,
-			TotalBudget:   0,
-			TotalSpent:    0,
-			TotalVariance: 0,
-			Utilization:   0,
-			Categories:    []dto.BudgetCategoryComparisonDTO{},
-			Timeline:      []dto.BudgetTimelineDTO{},
-			Alerts:        []dto.BudgetAlertReportDTO{},
-			GeneratedAt:   time.Now(),
+			ID:          uuid.New(),
+			Name:        fmt.Sprintf("Budget Comparison - %s", period),
+			Period:      period,
+			StartDate:   startDate,
+			EndDate:     endDate,
+			Categories:  []dto.BudgetCategoryComparisonDTO{},
+			Timeline:    []dto.BudgetTimelineDTO{},
+			Alerts:      []dto.BudgetAlertReportDTO{},
+			GeneratedAt: time.Now(),
 		}, nil
 	}
 
 	// Calculate totals
-	totalBudget := 0.0
+	var totalBudget money.Minor
 	for _, b := range budgets {
-		totalBudget += b.Amount
+		totalBudget += b.AmountMinor
 	}
 
 	// Get actual spending for the same period
@@ -281,16 +281,9 @@ func (s *reportService) budgetComparisonReport(
 
 	totalSpent := s.calculateTotalAmount(expenseTransactions)
 	totalVariance := totalBudget - totalSpent
-	utilization := 0.0
-	if totalBudget > 0 {
-		utilization = (totalSpent / totalBudget) * percentageMultiplier
-	}
+	utilization := totalSpent.Percent(totalBudget)
 
-	// Generate category comparisons
-	categoryComparisons, err := s.generateBudgetCategoryComparisons(ctx, budgets, expenseTransactions)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate category comparisons: %w", err)
-	}
+	categoryComparisons := s.generateBudgetCategoryComparisons(ctx, budgets, expenseTransactions)
 
 	// Generate timeline
 	timeline := s.generateBudgetTimeline(expenseTransactions, totalBudget, startDate, endDate)
@@ -299,26 +292,26 @@ func (s *reportService) budgetComparisonReport(
 	alerts := s.generateBudgetAlerts(categoryComparisons)
 
 	return &dto.BudgetComparisonDTO{
-		ID:            uuid.New(),
-		Name:          fmt.Sprintf("Budget Comparison - %s", period),
-		Period:        period,
-		StartDate:     startDate,
-		EndDate:       endDate,
-		TotalBudget:   totalBudget,
-		TotalSpent:    totalSpent,
-		TotalVariance: totalVariance,
-		Utilization:   utilization,
-		Categories:    categoryComparisons,
-		Timeline:      timeline,
-		Alerts:        alerts,
-		GeneratedAt:   time.Now(),
+		ID:                 uuid.New(),
+		Name:               fmt.Sprintf("Budget Comparison - %s", period),
+		Period:             period,
+		StartDate:          startDate,
+		EndDate:            endDate,
+		TotalBudgetMinor:   totalBudget,
+		TotalSpentMinor:    totalSpent,
+		TotalVarianceMinor: totalVariance,
+		Utilization:        utilization,
+		Categories:         categoryComparisons,
+		Timeline:           timeline,
+		Alerts:             alerts,
+		GeneratedAt:        time.Now(),
 	}, nil
 }
 
 // GenerateCashFlowReport generates cash flow analysis report
 func (s *reportService) GenerateCashFlowReport(
 	ctx context.Context,
-	from, to time.Time,
+	from, to date.Date,
 ) (*dto.CashFlowReportDTO, error) {
 	// Get all transactions for the period
 	allTransactions, err := s.getTransactionsForPeriod(ctx, from, to, "", nil)
@@ -335,11 +328,11 @@ func (s *reportService) GenerateCashFlowReport(
 	netCashFlow := totalInflows - totalOutflows
 
 	// ROADMAP: opening balance must be calculated from prior periods or stored snapshots.
-	openingBalance := 0.0
+	var openingBalance money.Minor
 	closingBalance := openingBalance + netCashFlow
 
 	// Generate daily cash flow
-	dailyFlow := s.generateDailyCashFlow(allTransactions, openingBalance, from, to)
+	dailyFlow := s.generateDailyCashFlow(allTransactions, openingBalance)
 
 	// Generate weekly and monthly aggregations
 	weeklyFlow := s.generateWeeklyCashFlow(dailyFlow)
@@ -352,21 +345,21 @@ func (s *reportService) GenerateCashFlowReport(
 	}
 
 	return &dto.CashFlowReportDTO{
-		ID:             uuid.New(),
-		Name:           fmt.Sprintf("Cash Flow Report - %s to %s", from.Format("2006-01-02"), to.Format("2006-01-02")),
-		Period:         report.PeriodCustom,
-		StartDate:      from,
-		EndDate:        to,
-		OpeningBalance: openingBalance,
-		ClosingBalance: closingBalance,
-		NetCashFlow:    netCashFlow,
-		TotalInflows:   totalInflows,
-		TotalOutflows:  totalOutflows,
-		DailyFlow:      dailyFlow,
-		WeeklyFlow:     weeklyFlow,
-		MonthlyFlow:    monthlyFlow,
-		Projections:    projections,
-		GeneratedAt:    time.Now(),
+		ID:                  uuid.New(),
+		Name:                fmt.Sprintf("Cash Flow Report - %s to %s", from, to),
+		Period:              report.PeriodCustom,
+		StartDate:           from,
+		EndDate:             to,
+		OpeningBalanceMinor: openingBalance,
+		ClosingBalanceMinor: closingBalance,
+		NetCashFlowMinor:    netCashFlow,
+		TotalInflowsMinor:   totalInflows,
+		TotalOutflowsMinor:  totalOutflows,
+		DailyFlow:           dailyFlow,
+		WeeklyFlow:          weeklyFlow,
+		MonthlyFlow:         monthlyFlow,
+		Projections:         projections,
+		GeneratedAt:         time.Now(),
 	}, nil
 }
 
@@ -375,7 +368,7 @@ func (s *reportService) GenerateCategoryBreakdownReport(
 	ctx context.Context,
 	period report.Period,
 ) (*dto.CategoryBreakdownDTO, error) {
-	startDate, endDate := s.calculatePeriodDates(period)
+	startDate, endDate := s.calculatePeriodDates(ctx, period)
 
 	return s.categoryBreakdownReport(ctx, period, startDate, endDate)
 }
@@ -383,10 +376,11 @@ func (s *reportService) GenerateCategoryBreakdownReport(
 func (s *reportService) categoryBreakdownReport(
 	ctx context.Context,
 	period report.Period,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 ) (*dto.CategoryBreakdownDTO, error) {
-	// Get all transactions for the period
-	transactions, err := s.getTransactionsForPeriod(ctx, startDate, endDate, "", nil)
+	// Только расходы: доли считаются от одного знаменателя, а income и expense в общей сумме
+	// давали категории процент от «доходы + расходы», который ничего не значит.
+	transactions, err := s.getTransactionsForPeriod(ctx, startDate, endDate, transaction.TypeExpense, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get transactions: %w", err)
 	}
@@ -397,11 +391,7 @@ func (s *reportService) categoryBreakdownReport(
 		return nil, fmt.Errorf("failed to get category hierarchy: %w", err)
 	}
 
-	// Generate detailed category analysis
-	categoryAnalysis, err := s.generateDetailedCategoryAnalysis(ctx, transactions, categories, startDate, endDate)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate category analysis: %w", err)
-	}
+	categoryAnalysis := s.generateDetailedCategoryAnalysis(ctx, transactions, categories, startDate, endDate)
 
 	// Generate category hierarchy with amounts
 	hierarchy := s.generateCategoryHierarchy(categoryAnalysis, categories)
@@ -447,7 +437,10 @@ func (s *reportService) GenerateReport(ctx context.Context, req dto.ReportReques
 		return nil, fmt.Errorf("failed to convert report data: %w", err)
 	}
 
-	newReport := report.NewReport(req.Name, req.Type, req.Period, req.UserID, req.StartDate, req.EndDate)
+	newReport := report.NewReport(
+		req.Name, req.Type, req.Period, req.UserID,
+		req.StartDate, req.EndDate,
+	)
 	newReport.Data = data
 
 	return newReport, nil
@@ -521,7 +514,7 @@ func (s *reportService) ExportReport(
 	// Тип отчёта известен только здесь: ExportReportData получает голые данные,
 	// а колонки CSV зависят от типа.
 	if strings.EqualFold(format, exportFormatCSV) {
-		return reportToCSV(reportEntity.Data, reportEntity.Type)
+		return reportToCSV(reportEntity.Data, reportEntity.Type, s.currency(ctx))
 	}
 
 	return s.ExportReportData(ctx, reportEntity.Data, format, options)
@@ -552,7 +545,7 @@ func (s *reportService) ExportReportData(
 
 func (s *reportService) getTransactionsForPeriod(
 	ctx context.Context,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 	transactionType transaction.Type,
 	filters *dto.ReportFilters,
 ) ([]*transaction.Transaction, error) {
@@ -574,8 +567,8 @@ func (s *reportService) getTransactionsForPeriod(
 		if len(filters.UserIDs) > 0 {
 			filter.UserID = &filters.UserIDs[0] // Take first user for now
 		}
-		filter.AmountFrom = filters.MinAmount
-		filter.AmountTo = filters.MaxAmount
+		filter.AmountFromMinor = filters.MinAmountMinor
+		filter.AmountToMinor = filters.MaxAmountMinor
 		if filters.Description != "" {
 			filter.Description = &filters.Description
 		}
@@ -584,20 +577,22 @@ func (s *reportService) getTransactionsForPeriod(
 	return s.transactionService.GetAllTransactions(ctx, filter)
 }
 
-func (s *reportService) calculateTotalAmount(transactions []*transaction.Transaction) float64 {
-	total := 0.0
+func (s *reportService) calculateTotalAmount(transactions []*transaction.Transaction) money.Minor {
+	var total money.Minor
 	for _, t := range transactions {
-		total += t.Amount
+		total += t.AmountMinor
 	}
 	return total
 }
 
-func (s *reportService) calculateAverageDaily(total float64, startDate, endDate time.Time) float64 {
-	days := endDate.Sub(startDate).Hours() / hoursPerDay
+// calculateAverageDaily делит сумму на число суток периода включительно; деление —
+// money.DivRound, чтобы копейка не терялась по-разному в каждом вызове.
+func (s *reportService) calculateAverageDaily(total money.Minor, startDate, endDate date.Date) money.Minor {
+	days := date.DaysBetween(startDate, endDate) + 1
 	if days <= 0 {
 		return 0
 	}
-	return total / days
+	return total.DivRound(int64(days))
 }
 
 func (s *reportService) generateCategoryBreakdown(
@@ -605,15 +600,15 @@ func (s *reportService) generateCategoryBreakdown(
 	transactions []*transaction.Transaction,
 ) []dto.CategoryBreakdownItemDTO {
 	// Group transactions by category
-	categoryTotals := make(map[uuid.UUID]float64)
+	categoryTotals := make(map[uuid.UUID]money.Minor)
 	categoryCounts := make(map[uuid.UUID]int)
 
-	total := 0.0
+	var total money.Minor
 	for _, t := range transactions {
 		if t.CategoryID != uuid.Nil {
-			categoryTotals[t.CategoryID] += t.Amount
+			categoryTotals[t.CategoryID] += t.AmountMinor
 			categoryCounts[t.CategoryID]++
-			total += t.Amount
+			total += t.AmountMinor
 		}
 	}
 
@@ -625,76 +620,44 @@ func (s *reportService) generateCategoryBreakdown(
 			continue // Skip if category not found
 		}
 
-		percentage := 0.0
-		if total > 0 {
-			percentage = (amount / total) * percentageMultiplier
-		}
-
-		avgAmount := 0.0
+		var avgAmount money.Minor
 		if count := categoryCounts[categoryID]; count > 0 {
-			avgAmount = amount / float64(count)
+			avgAmount = amount.DivRound(int64(count))
 		}
 
 		result = append(result, dto.CategoryBreakdownItemDTO{
-			CategoryID:    categoryID,
-			CategoryName:  cat.Name,
-			CategoryType:  string(cat.Type),
-			Amount:        amount,
-			Percentage:    percentage,
-			Count:         categoryCounts[categoryID],
-			AverageAmount: avgAmount,
-			ParentID:      cat.ParentID,
+			CategoryID:         categoryID,
+			CategoryName:       cat.Name,
+			CategoryType:       string(cat.Type),
+			AmountMinor:        amount,
+			Percentage:         amount.Percent(total),
+			Count:              categoryCounts[categoryID],
+			AverageAmountMinor: avgAmount,
+			ParentID:           cat.ParentID,
 		})
 	}
 
 	// Sort by amount descending
 	sort.Slice(result, func(i, j int) bool {
-		return result[i].Amount > result[j].Amount
+		return result[i].AmountMinor > result[j].AmountMinor
 	})
 
 	return result
 }
 
 func (s *reportService) generateDailyExpenseBreakdown(transactions []*transaction.Transaction) []dto.DailyExpenseDTO {
-	dailyMap := make(map[string]struct {
-		amount     float64
-		count      int
-		categories map[string]int
-	})
+	daily := aggregateByDay(transactions)
 
-	for _, t := range transactions {
-		day := t.Date.Format("2006-01-02")
-		if _, exists := dailyMap[day]; !exists {
-			dailyMap[day] = struct {
-				amount     float64
-				count      int
-				categories map[string]int
-			}{
-				amount:     0,
-				count:      0,
-				categories: make(map[string]int),
-			}
-		}
-
-		entry := dailyMap[day]
-		entry.amount += t.Amount
-		entry.count++
-		// Note: Would need category name lookup for categories
-		dailyMap[day] = entry
-	}
-
-	var result []dto.DailyExpenseDTO
-	for dateStr, data := range dailyMap {
-		date, _ := time.Parse("2006-01-02", dateStr)
+	result := make([]dto.DailyExpenseDTO, 0, len(daily))
+	for day, data := range daily {
 		result = append(result, dto.DailyExpenseDTO{
-			Date:   date,
-			Amount: data.amount,
-			Count:  data.count,
+			Date:        day,
+			AmountMinor: data.amount,
+			Count:       data.count,
 			// Categories would be populated with actual category names
 		})
 	}
 
-	// Sort by date
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].Date.Before(result[j].Date)
 	})
@@ -702,45 +665,37 @@ func (s *reportService) generateDailyExpenseBreakdown(transactions []*transactio
 	return result
 }
 
-func (s *reportService) generateDailyIncomeBreakdown(transactions []*transaction.Transaction) []dto.DailyIncomeDTO {
-	dailyMap := make(map[string]struct {
-		amount  float64
-		count   int
-		sources map[string]int
-	})
+// dayTotal — сумма и число операций одного календарного дня.
+type dayTotal struct {
+	amount money.Minor
+	count  int
+}
 
+func aggregateByDay(transactions []*transaction.Transaction) map[date.Date]dayTotal {
+	daily := make(map[date.Date]dayTotal, len(transactions))
 	for _, t := range transactions {
-		day := t.Date.Format("2006-01-02")
-		if _, exists := dailyMap[day]; !exists {
-			dailyMap[day] = struct {
-				amount  float64
-				count   int
-				sources map[string]int
-			}{
-				amount:  0,
-				count:   0,
-				sources: make(map[string]int),
-			}
-		}
-
-		entry := dailyMap[day]
-		entry.amount += t.Amount
+		entry := daily[t.Date]
+		entry.amount += t.AmountMinor
 		entry.count++
-		dailyMap[day] = entry
+		daily[t.Date] = entry
 	}
 
-	var result []dto.DailyIncomeDTO
-	for dateStr, data := range dailyMap {
-		date, _ := time.Parse("2006-01-02", dateStr)
+	return daily
+}
+
+func (s *reportService) generateDailyIncomeBreakdown(transactions []*transaction.Transaction) []dto.DailyIncomeDTO {
+	daily := aggregateByDay(transactions)
+
+	result := make([]dto.DailyIncomeDTO, 0, len(daily))
+	for day, data := range daily {
 		result = append(result, dto.DailyIncomeDTO{
-			Date:    date,
-			Amount:  data.amount,
-			Count:   data.count,
-			Sources: []string{}, // Would be populated with actual source names
+			Date:        day,
+			AmountMinor: data.amount,
+			Count:       data.count,
+			Sources:     []string{}, // Would be populated with actual source names
 		})
 	}
 
-	// Sort by date
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].Date.Before(result[j].Date)
 	})
@@ -755,7 +710,7 @@ func (s *reportService) getTopTransactions(
 ) []dto.TransactionSummaryDTO {
 	// Sort by amount descending
 	sort.Slice(transactions, func(i, j int) bool {
-		return transactions[i].Amount > transactions[j].Amount
+		return transactions[i].AmountMinor > transactions[j].AmountMinor
 	})
 
 	var result []dto.TransactionSummaryDTO
@@ -778,7 +733,7 @@ func (s *reportService) getTopTransactions(
 
 		result = append(result, dto.TransactionSummaryDTO{
 			ID:          t.ID,
-			Amount:      t.Amount,
+			AmountMinor: t.AmountMinor,
 			Description: t.Description,
 			Category:    categoryName,
 			Date:        t.Date,
@@ -789,30 +744,29 @@ func (s *reportService) getTopTransactions(
 	return result
 }
 
-func (s *reportService) calculatePeriodDates(period report.Period) (time.Time, time.Time) {
-	now := time.Now()
+// calculatePeriodDates возвращает включительные границы периода в зоне семьи;
+// при недоступной семье — UTC, отчёт важнее точной полуночи.
+func (s *reportService) calculatePeriodDates(ctx context.Context, period report.Period) (date.Date, date.Date) {
+	loc := time.UTC
+	if family, err := s.familyRepo.Get(ctx); err == nil && family != nil {
+		loc = family.Location()
+	}
+
+	today := date.Today(loc)
+	firstOfMonth, lastOfMonth := today.MonthBounds()
+
 	switch period {
 	case report.PeriodDaily:
-		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-		return start, start.AddDate(0, 0, 1)
+		return today, today
 	case report.PeriodWeekly:
-		weekday := int(now.Weekday())
-		start := now.AddDate(0, 0, -weekday).Truncate(hoursPerDay * time.Hour)
-		return start, start.AddDate(0, 0, daysPerWeek)
-	case report.PeriodMonthly:
-		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-		return start, start.AddDate(0, 1, 0)
+		start := today.AddDays(-int(today.In(loc).Weekday()))
+		return start, start.AddDays(daysPerWeek - 1)
+	case report.PeriodMonthly, report.PeriodCustom:
+		return firstOfMonth, lastOfMonth
 	case report.PeriodYearly:
-		start := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location())
-		return start, start.AddDate(1, 0, 0)
-	case report.PeriodCustom:
-		// For custom periods, return current month as default
-		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-		return start, start.AddDate(0, 1, 0)
+		return date.New(today.Year, time.January, 1), date.New(today.Year, time.December, lastDayOfDecember)
 	default:
-		// Default to current month
-		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-		return start, start.AddDate(0, 1, 0)
+		return firstOfMonth, lastOfMonth
 	}
 }
 
@@ -829,13 +783,19 @@ func (s *reportService) filterTransactionsByType(
 	return result
 }
 
+const (
+	budgetStatusUnderBudget = "under_budget"
+	budgetStatusOnTrack     = "on_track"
+	budgetStatusOverBudget  = "over_budget"
+)
+
 // ROADMAP placeholders for advanced calculations used by implemented report flows.
 // They intentionally return zero-values to keep current report generation stable while
 // signaling missing depth in analytics/report details.
 
 func (s *reportService) generateExpenseTrends(
 	_ context.Context,
-	_, _ time.Time,
+	_, _ date.Date,
 ) (dto.ExpenseTrendsDTO, error) {
 	// ROADMAP: implement sophisticated expense trend analysis.
 	return dto.ExpenseTrendsDTO{}, nil
@@ -843,8 +803,8 @@ func (s *reportService) generateExpenseTrends(
 
 func (s *reportService) generateExpenseComparisons(
 	_ context.Context,
-	_ float64,
-	_, _ time.Time,
+	_ money.Minor,
+	_, _ date.Date,
 ) (dto.ExpenseComparisonsDTO, error) {
 	// ROADMAP: compare expenses with previous periods.
 	return dto.ExpenseComparisonsDTO{}, nil
@@ -852,7 +812,7 @@ func (s *reportService) generateExpenseComparisons(
 
 func (s *reportService) generateIncomeTrends(
 	_ context.Context,
-	_, _ time.Time,
+	_, _ date.Date,
 ) (dto.IncomeTrendsDTO, error) {
 	// ROADMAP: implement income trend analysis.
 	return dto.IncomeTrendsDTO{}, nil
@@ -860,26 +820,80 @@ func (s *reportService) generateIncomeTrends(
 
 func (s *reportService) generateIncomeComparisons(
 	_ context.Context,
-	_ float64,
-	_, _ time.Time,
+	_ money.Minor,
+	_, _ date.Date,
 ) (dto.IncomeComparisonsDTO, error) {
 	// ROADMAP: compare income with previous periods.
 	return dto.IncomeComparisonsDTO{}, nil
 }
 
+// generateBudgetCategoryComparisons сводит план и факт по каждому активному бюджету периода.
+// Бюджет без категории сравнивается со всеми расходами периода — таким его и задавали.
 func (s *reportService) generateBudgetCategoryComparisons(
-	_ context.Context,
-	_ []*budget.Budget,
-	_ []*transaction.Transaction,
-) ([]dto.BudgetCategoryComparisonDTO, error) {
-	// ROADMAP: budget-vs-actual comparison by category.
-	return []dto.BudgetCategoryComparisonDTO{}, nil
+	ctx context.Context,
+	budgets []*budget.Budget,
+	expenses []*transaction.Transaction,
+) []dto.BudgetCategoryComparisonDTO {
+	spentByCategory := make(map[uuid.UUID]money.Minor, len(expenses))
+	var totalSpent money.Minor
+	for _, tx := range expenses {
+		spentByCategory[tx.CategoryID] += tx.AmountMinor
+		totalSpent += tx.AmountMinor
+	}
+
+	result := make([]dto.BudgetCategoryComparisonDTO, 0, len(budgets))
+	for _, b := range budgets {
+		item := dto.BudgetCategoryComparisonDTO{
+			BudgetID:          b.ID,
+			BudgetName:        b.Name,
+			CategoryName:      b.Name,
+			BudgetAmountMinor: b.AmountMinor,
+			ActualAmountMinor: totalSpent,
+		}
+		if b.CategoryID != nil {
+			item.CategoryID = *b.CategoryID
+			item.ActualAmountMinor = spentByCategory[*b.CategoryID]
+			if cat, err := s.categoryService.GetCategoryByID(ctx, *b.CategoryID); err == nil {
+				item.CategoryName = cat.Name
+			}
+		}
+		item.VarianceMinor = item.BudgetAmountMinor - item.ActualAmountMinor
+		item.Utilization = item.ActualAmountMinor.Percent(item.BudgetAmountMinor)
+		item.Status = budgetComparisonStatus(item.Utilization)
+
+		result = append(result, item)
+	}
+
+	slices.SortFunc(result, func(a, b dto.BudgetCategoryComparisonDTO) int {
+		switch {
+		case a.ActualAmountMinor > b.ActualAmountMinor:
+			return -1
+		case a.ActualAmountMinor < b.ActualAmountMinor:
+			return 1
+		default:
+			return 0
+		}
+	})
+
+	return result
+}
+
+// budgetComparisonStatus — under_budget | on_track | over_budget по проценту утилизации.
+func budgetComparisonStatus(utilization float64) string {
+	switch {
+	case utilization > dto.BudgetAlertOverBudget:
+		return budgetStatusOverBudget
+	case utilization >= dto.BudgetAlertNearLimit:
+		return budgetStatusOnTrack
+	default:
+		return budgetStatusUnderBudget
+	}
 }
 
 func (s *reportService) generateBudgetTimeline(
 	_ []*transaction.Transaction,
-	_ float64,
-	_, _ time.Time,
+	_ money.Minor,
+	_, _ date.Date,
 ) []dto.BudgetTimelineDTO {
 	// ROADMAP: budget timeline generation.
 	return []dto.BudgetTimelineDTO{}
@@ -894,23 +908,21 @@ func (s *reportService) generateBudgetAlerts(_ []dto.BudgetCategoryComparisonDTO
 // нарастающий итог от openingBalance. Дни без операций пропускаются.
 func (s *reportService) generateDailyCashFlow(
 	transactions []*transaction.Transaction,
-	openingBalance float64,
-	_, _ time.Time,
+	openingBalance money.Minor,
 ) []dto.DailyCashFlowDTO {
-	byDay := make(map[time.Time]*dto.DailyCashFlowDTO)
+	byDay := make(map[date.Date]*dto.DailyCashFlowDTO)
 	for _, tx := range transactions {
-		day := time.Date(tx.Date.Year(), tx.Date.Month(), tx.Date.Day(), 0, 0, 0, 0, tx.Date.Location())
-		item, ok := byDay[day]
+		item, ok := byDay[tx.Date]
 		if !ok {
-			item = &dto.DailyCashFlowDTO{Date: day}
-			byDay[day] = item
+			item = &dto.DailyCashFlowDTO{Date: tx.Date}
+			byDay[tx.Date] = item
 		}
 
 		switch tx.Type {
 		case transaction.TypeIncome:
-			item.Inflow += tx.Amount
+			item.InflowMinor += tx.AmountMinor
 		case transaction.TypeExpense:
-			item.Outflow += tx.Amount
+			item.OutflowMinor += tx.AmountMinor
 		}
 	}
 
@@ -919,14 +931,14 @@ func (s *reportService) generateDailyCashFlow(
 		days = append(days, *item)
 	}
 	slices.SortFunc(days, func(a, b dto.DailyCashFlowDTO) int {
-		return a.Date.Compare(b.Date)
+		return a.Date.In(time.UTC).Compare(b.Date.In(time.UTC))
 	})
 
 	balance := openingBalance
 	for i := range days {
-		days[i].NetFlow = days[i].Inflow - days[i].Outflow
-		balance += days[i].NetFlow
-		days[i].Balance = balance
+		days[i].NetFlowMinor = days[i].InflowMinor - days[i].OutflowMinor
+		balance += days[i].NetFlowMinor
+		days[i].BalanceMinor = balance
 	}
 
 	return days
@@ -950,14 +962,32 @@ func (s *reportService) generateCashFlowProjections(
 	return dto.CashFlowProjectionsDTO{}, nil
 }
 
+// generateDetailedCategoryAnalysis раскладывает операции периода по категориям тем же
+// счётом, что и отчёты по расходам и доходам. Тренды, подкатегории и разбивка по месяцам
+// остаются пустыми: для них нужны предыдущие периоды (ROADMAP).
 func (s *reportService) generateDetailedCategoryAnalysis(
-	_ context.Context,
-	_ []*transaction.Transaction,
+	ctx context.Context,
+	transactions []*transaction.Transaction,
 	_ []*category.Category,
-	_, _ time.Time,
-) ([]dto.CategoryAnalysisDTO, error) {
-	// ROADMAP: detailed category analysis.
-	return []dto.CategoryAnalysisDTO{}, nil
+	_, _ date.Date,
+) []dto.CategoryAnalysisDTO {
+	items := s.generateCategoryBreakdown(ctx, transactions)
+
+	result := make([]dto.CategoryAnalysisDTO, 0, len(items))
+	for _, item := range items {
+		result = append(result, dto.CategoryAnalysisDTO{
+			CategoryID:         item.CategoryID,
+			CategoryName:       item.CategoryName,
+			CategoryType:       item.CategoryType,
+			TotalAmountMinor:   item.AmountMinor,
+			Percentage:         item.Percentage,
+			TransactionCount:   item.Count,
+			AverageAmountMinor: item.AverageAmountMinor,
+			MonthlyBreakdown:   []dto.MonthlyCategoryDTO{},
+		})
+	}
+
+	return result
 }
 
 func (s *reportService) generateCategoryHierarchy(
@@ -970,7 +1000,7 @@ func (s *reportService) generateCategoryHierarchy(
 
 func (s *reportService) generateCategoryTrends(
 	_ context.Context,
-	_, _ time.Time,
+	_, _ date.Date,
 ) (dto.CategoryTrendsDTO, error) {
 	// ROADMAP: category trend analysis.
 	return dto.CategoryTrendsDTO{}, nil
@@ -979,7 +1009,7 @@ func (s *reportService) generateCategoryTrends(
 func (s *reportService) generateCategoryComparisons(
 	_ context.Context,
 	_ []dto.CategoryAnalysisDTO,
-	_, _ time.Time,
+	_, _ date.Date,
 ) (dto.CategoryComparisonsDTO, error) {
 	// ROADMAP: category comparison analysis.
 	return dto.CategoryComparisonsDTO{}, nil
@@ -993,9 +1023,9 @@ func (s *reportService) convertToReportData(reportData any, reportType report.Ty
 			return report.Data{}, fmt.Errorf("expected *dto.ExpenseReportDTO, got %T", reportData)
 		}
 		return report.Data{
-			TotalExpenses:     expenseReport.TotalExpenses,
-			CategoryBreakdown: convertCategoryBreakdownItemsToReportData(expenseReport.CategoryBreakdown),
-			TopExpenses:       convertTransactionSummaryItemsToReportData(expenseReport.TopExpenses),
+			TotalExpensesMinor: expenseReport.TotalExpensesMinor,
+			CategoryBreakdown:  convertCategoryBreakdownItemsToReportData(expenseReport.CategoryBreakdown),
+			TopExpenses:        convertTransactionSummaryItemsToReportData(expenseReport.TopExpenses),
 		}, nil
 
 	case report.TypeIncome:
@@ -1005,7 +1035,7 @@ func (s *reportService) convertToReportData(reportData any, reportType report.Ty
 		}
 		// Persist top sources in TopExpenses generic field for unified rendering/storage.
 		return report.Data{
-			TotalIncome:       incomeReport.TotalIncome,
+			TotalIncomeMinor:  incomeReport.TotalIncomeMinor,
 			CategoryBreakdown: convertCategoryBreakdownItemsToReportData(incomeReport.CategoryBreakdown),
 			TopExpenses:       convertTransactionSummaryItemsToReportData(incomeReport.TopSources),
 		}, nil
@@ -1016,8 +1046,8 @@ func (s *reportService) convertToReportData(reportData any, reportType report.Ty
 			return report.Data{}, fmt.Errorf("expected *dto.BudgetComparisonDTO, got %T", reportData)
 		}
 		return report.Data{
-			TotalExpenses:    budgetReport.TotalSpent,
-			BudgetComparison: convertBudgetComparisonItemsToReportData(budgetReport.Categories),
+			TotalExpensesMinor: budgetReport.TotalSpentMinor,
+			BudgetComparison:   convertBudgetComparisonItemsToReportData(budgetReport.Categories),
 		}, nil
 
 	case report.TypeCashFlow:
@@ -1026,10 +1056,10 @@ func (s *reportService) convertToReportData(reportData any, reportType report.Ty
 			return report.Data{}, fmt.Errorf("expected *dto.CashFlowReportDTO, got %T", reportData)
 		}
 		return report.Data{
-			TotalIncome:    cashFlowReport.TotalInflows,
-			TotalExpenses:  cashFlowReport.TotalOutflows,
-			NetIncome:      cashFlowReport.NetCashFlow,
-			DailyBreakdown: convertDailyCashFlowItemsToReportData(cashFlowReport.DailyFlow),
+			TotalIncomeMinor:   cashFlowReport.TotalInflowsMinor,
+			TotalExpensesMinor: cashFlowReport.TotalOutflowsMinor,
+			NetIncomeMinor:     cashFlowReport.NetCashFlowMinor,
+			DailyBreakdown:     convertDailyCashFlowItemsToReportData(cashFlowReport.DailyFlow),
 		}, nil
 
 	case report.TypeCategoryBreak:
@@ -1056,7 +1086,7 @@ func convertCategoryBreakdownItemsToReportData(items []dto.CategoryBreakdownItem
 		result[i] = report.CategoryReportItem{
 			CategoryID:   item.CategoryID,
 			CategoryName: item.CategoryName,
-			Amount:       item.Amount,
+			AmountMinor:  item.AmountMinor,
 			Percentage:   item.Percentage,
 			Count:        item.Count,
 		}
@@ -1074,7 +1104,7 @@ func convertCategoryAnalysisItemsToReportData(items []dto.CategoryAnalysisDTO) [
 		result[i] = report.CategoryReportItem{
 			CategoryID:   item.CategoryID,
 			CategoryName: item.CategoryName,
-			Amount:       item.TotalAmount,
+			AmountMinor:  item.TotalAmountMinor,
 			Percentage:   item.Percentage,
 			Count:        item.TransactionCount,
 		}
@@ -1091,7 +1121,7 @@ func convertTransactionSummaryItemsToReportData(items []dto.TransactionSummaryDT
 	for i, item := range items {
 		result[i] = report.TransactionReportItem{
 			ID:          item.ID,
-			Amount:      item.Amount,
+			AmountMinor: item.AmountMinor,
 			Description: item.Description,
 			Category:    item.Category,
 			Date:        item.Date,
@@ -1108,12 +1138,12 @@ func convertBudgetComparisonItemsToReportData(items []dto.BudgetCategoryComparis
 	result := make([]report.BudgetComparisonItem, len(items))
 	for i, item := range items {
 		result[i] = report.BudgetComparisonItem{
-			BudgetID:   item.CategoryID, // Generic report.Data has no category-specific budget key.
-			BudgetName: item.CategoryName,
-			Planned:    item.BudgetAmount,
-			Actual:     item.ActualAmount,
-			Difference: item.Variance,
-			Percentage: item.Utilization,
+			BudgetID:        item.BudgetID,
+			BudgetName:      item.BudgetName,
+			PlannedMinor:    item.BudgetAmountMinor,
+			ActualMinor:     item.ActualAmountMinor,
+			DifferenceMinor: item.VarianceMinor,
+			Percentage:      item.Utilization,
 		}
 	}
 	return result
@@ -1127,23 +1157,33 @@ func convertDailyCashFlowItemsToReportData(items []dto.DailyCashFlowDTO) []repor
 	result := make([]report.DailyReportItem, len(items))
 	for i, item := range items {
 		result[i] = report.DailyReportItem{
-			Date:     item.Date,
-			Income:   item.Inflow,
-			Expenses: item.Outflow,
-			Balance:  item.Balance,
+			Date:          item.Date,
+			IncomeMinor:   item.InflowMinor,
+			ExpensesMinor: item.OutflowMinor,
+			BalanceMinor:  item.BalanceMinor,
 		}
 	}
 	return result
 }
 
 // exportToCSV принимает только report.Data: для прочих структур набор колонок неизвестен.
-func (s *reportService) exportToCSV(reportData any, _ dto.ExportOptionsDTO) ([]byte, error) {
+func (s *reportService) exportToCSV(reportData any, options dto.ExportOptionsDTO) ([]byte, error) {
 	data, ok := reportData.(report.Data)
 	if !ok {
 		return nil, ErrUnsupportedCSVData
 	}
 
-	return reportToCSV(data, "")
+	return reportToCSV(data, "", options.Currency)
+}
+
+// currency — код валюты семьи для колонки CSV; при недоступной семье пусто.
+func (s *reportService) currency(ctx context.Context) string {
+	family, err := s.familyRepo.Get(ctx)
+	if err != nil || family == nil {
+		return ""
+	}
+
+	return family.Currency
 }
 
 func (s *reportService) exportToExcel(_ any, _ dto.ExportOptionsDTO) ([]byte, error) {

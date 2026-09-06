@@ -281,9 +281,9 @@ credential is the same session cookie the web UI uses — there are no API token
 The `403`-before-`401` ordering is deliberate: CSRF protection is global middleware
 and runs before the API group's auth middleware.
 
-Role gates mirror the web UI: user management (`POST`/`PUT`/`DELETE /api/v1/users`)
-and `DELETE /api/v1/categories/:id` are admin-only; the categories, transactions,
-budgets and reports groups are admin-or-member, so the `child` role gets `403`.
+User management (`POST`/`PUT`/`DELETE /api/v1/users`) and `DELETE /api/v1/categories/:id`
+are admin-only; the categories, transactions, budgets and reports groups are
+admin-or-member. There are only two roles, `admin` and `member`.
 
 ### Programmatic API clients
 

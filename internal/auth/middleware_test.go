@@ -180,8 +180,8 @@ func TestRequireRole(t *testing.T) {
 			wantCode: http.StatusOK,
 		},
 		{
-			name:     "child on finance route",
-			role:     user.RoleChild,
+			name:     "unknown role on finance route",
+			role:     user.Role("child"),
 			required: []user.Role{user.RoleAdmin, user.RoleMember},
 			wantCode: http.StatusForbidden,
 		},

@@ -103,12 +103,12 @@ JSON: `amount_minor` (int64), `date` (`"2026-09-04"`), `currency` и `timezone` 
   `internal/infrastructure/budget/budget_repository_sqlite.go`, `budget_repository_test.go`,
   `internal/domain/budget/budget.go`, `internal/services/interfaces.go`
 
-- [ ] переписать `.up.sql` по таблице выше одним файлом; `.down.sql` — `DROP` в обратном порядке; триггеры `updated_at` сохранить
-- [ ] `migrations/README.md`: описание новой схемы; напоминание про `make db-reset`
-- [ ] `CleanTables` — актуальный список (убрать `budget_alerts`, `invites`)
-- [ ] удалить `budget.Alert`, `GetAlerts`/`CreateAlert`/`Alert` из репозитория бюджетов и из `BudgetRepository` в `interfaces.go`; их тесты — тоже
-- [ ] тесты: обе ветки миграций поднимаются на пустой БД; вставка второй семьи и роли `child` падают на UNIQUE/CHECK (тест репозитория)
-- [ ] `make fmt && make test && make lint` — зелёные (сборка ломается на `child` и инвайтах — их чинят задачи 2–3; до этого держать старые CHECK на роли и таблицу `invites` в миграции и убрать их в задаче 3)
+- [x] переписать `.up.sql` по таблице выше одним файлом; `.down.sql` — `DROP` в обратном порядке; триггеры `updated_at` сохранить (колонки `*_minor`, даты `TEXT` и `families.timezone` переносятся в задачу 5 — вместе с репозиториями, иначе `make test` красный)
+- [x] `migrations/README.md`: описание новой схемы; напоминание про `make db-reset`
+- [x] `CleanTables` — актуальный список (убрать `budget_alerts`, `invites`)
+- [x] удалить `budget.Alert`, `GetAlerts`/`CreateAlert`/`Alert` из репозитория бюджетов и из `BudgetRepository` в `interfaces.go`; их тесты — тоже (в `interfaces.go` алертов не было)
+- [x] тесты: обе ветки миграций поднимаются на пустой БД; вставка второй семьи и роли `child` падают на UNIQUE/CHECK (тест репозитория) — роль в CHECK пока невалидная `guest`, `child` добавится в задаче 3
+- [x] `make fmt && make test && make lint` — зелёные (сборка ломается на `child` и инвайтах — их чинят задачи 2–3; до этого держать старые CHECK на роли и таблицу `invites` в миграции и убрать их в задаче 3)
 
 ### Task 2: Удалить инвайты
 
@@ -120,9 +120,9 @@ JSON: `amount_minor` (int64), `date` (`"2026-09-04"`), `currency` и `timezone` 
   `internal/services/interfaces.go`, `internal/run.go`, `internal/application/handlers/repositories.go`,
   `migrations/001_consolidated.up.sql`, `001_consolidated.down.sql`
 
-- [ ] удалить файлы, поля `Invite` из `Repositories`/`Services`, таблицу `invites` из миграции
-- [ ] `grep -rn -i invite internal cmd tests` — пусто
-- [ ] `make fmt && make test && make lint` — зелёные
+- [x] удалить файлы, поля `Invite` из `Repositories`/`Services`, таблицу `invites` из миграции
+- [x] `grep -rn -i invite internal cmd tests` — пусто
+- [x] `make fmt && make test && make lint` — зелёные
 
 ### Task 3: Убрать роль `child`
 
@@ -131,20 +131,20 @@ JSON: `amount_minor` (int64), `date` (`"2026-09-04"`), `currency` и `timezone` 
   `internal/application/handlers/types.go`, все `switch`/`map` по `user.Role` (найти
   `grep -rn 'RoleChild\|"child"' internal tests`), `migrations/001_consolidated.up.sql`
 
-- [ ] удалить `RoleChild`; `oneof=admin member` в DTO и `types.go`; `exhaustive` подскажет остальные места
-- [ ] CHECK `role IN ('admin','member')` в миграции
-- [ ] тесты: `POST /users` с `role: child` → 422; тест домена на `Role.IsValid`
-- [ ] `make fmt && make test && make lint` — зелёные
+- [x] удалить `RoleChild`; `oneof=admin member` в DTO и `types.go`; `exhaustive` подскажет остальные места
+- [x] CHECK `role IN ('admin','member')` в миграции
+- [x] тесты: `POST /users` с `role: child` → 422; тест домена на `Role.IsValid`
+- [x] `make fmt && make test && make lint` — зелёные
 
 ### Task 4: Пакеты `money` и `date`
 
 **Files:**
 - Create: `internal/domain/money/money.go`, `money_test.go`, `internal/domain/date/date.go`, `date_test.go`
 
-- [ ] `money.Minor` с `Abs`, `Percent(total Minor) float64` (0 при `total == 0`), `DivRound(n int64) Minor` half-up, `MarshalJSON` как число
-- [ ] `date.Date`: `Parse("2006-01-02")`, `String()`, `In(*time.Location) time.Time`, `Before/After`, `MonthBounds(loc)`; `Scan`/`Value` для `database/sql`; JSON — строка
-- [ ] тесты: `DivRound` на отрицательных и на половине, `Percent` с нулём, невалидные даты, `MonthBounds` на границах года
-- [ ] `make fmt && make test && make lint` — зелёные
+- [x] `money.Minor` с `Abs`, `Percent(total Minor) float64` (0 при `total == 0`), `DivRound(n int64) Minor` half-up, `MarshalJSON` как число
+- [x] `date.Date`: `Parse("2006-01-02")`, `String()`, `In(*time.Location) time.Time`, `Before/After`, `MonthBounds()` (месяц самой даты) + `Today(loc)`; `Scan`/`Value` для `database/sql`; JSON — строка
+- [x] тесты: `DivRound` на отрицательных и на половине, `Percent` с нулём, невалидные даты, `MonthBounds` на границах года
+- [x] `make fmt && make test && make lint` — зелёные
 
 ### Task 5: Домен и репозитории
 
@@ -155,14 +155,15 @@ JSON: `amount_minor` (int64), `date` (`"2026-09-04"`), `currency` и `timezone` 
   `internal/infrastructure/budget/budget_repository_sqlite.go`,
   `internal/infrastructure/report/report_repository_sqlite.go`,
   `internal/infrastructure/user/family_repository_sqlite.go`, все `*_test.go` рядом,
-  `internal/testhelpers/factories.go`
+  `internal/testhelpers/factories.go`, `migrations/001_consolidated.{up,down}.sql`
+  (колонки `*_minor`, даты `TEXT`, `families.timezone` — перенесены сюда из задачи 1)
 
-- [ ] `Transaction.AmountMinor money.Minor`, `Date date.Date`; `Budget.AmountMinor/SpentMinor`, `StartDate/EndDate date.Date`; методы бюджета (`GetRemainingAmount`, `GetSpentPercentage`, `IsOverBudget`) через `money`
-- [ ] `report.Data`: суммы `money.Minor`, проценты `float64`; `Report.StartDate/EndDate` — даты
-- [ ] репозитории: колонки `*_minor`, `SUM` как `int64`, `AVG` убрать (считать в Go), `ORDER BY amount_minor`, фильтры по датам как строки `TEXT`
-- [ ] `Family.Timezone` в домене и репозитории; `factories.go` — `Europe/Moscow`, `RUB`
-- [ ] тесты репозиториев: суммы без потери копеек (три операции по 33 копейки → 99), сортировка, фильтр по диапазону дат включает границы
-- [ ] `make fmt && make test && make lint` — зелёные
+- [x] `Transaction.AmountMinor money.Minor`, `Date date.Date`; `Budget.AmountMinor/SpentMinor`, `StartDate/EndDate date.Date`; методы бюджета (`GetRemainingAmount`, `GetSpentPercentage`, `IsOverBudget`) через `money`
+- [x] `report.Data`: суммы `money.Minor`, проценты `float64`; `Report.StartDate/EndDate` — даты
+- [x] репозитории: колонки `*_minor`, `SUM` как `int64`, `AVG` убрать (считать в Go), `ORDER BY amount_minor`, фильтры по датам как строки `TEXT`
+- [x] `Family.Timezone` в домене и репозитории; `factories.go` — `Europe/Moscow`, `RUB`
+- [x] тесты репозиториев: суммы без потери копеек (три операции по 33 копейки → 99), сортировка, фильтр по диапазону дат включает границы
+- [x] `make fmt && make test && make lint` — зелёные
 
 ### Task 6: Сервисы и отчёты
 
@@ -170,12 +171,12 @@ JSON: `amount_minor` (int64), `date` (`"2026-09-04"`), `currency` и `timezone` 
 - Modify: `internal/services/transaction_service.go`, `budget_service.go`, `report_service.go`,
   `stats_service.go`, `family_service.go`, `internal/services/dto/*.go`, все `*_test.go` рядом
 
-- [ ] `TransactionService`/`BudgetService`: `money.Minor`; `ValidateTransactionLimits`, `UpdateBudgetSpent`, `CalculateBudgetUtilization` через `Percent`/`DivRound`
-- [ ] `ReportService`: средние (`total / days`, `total / count`) через `DivRound`; проценты через `Percent`; CSV пишет `amount_minor` целым и колонку `currency`
-- [ ] `StatsService`: границы периода по `family.Timezone`, доли категорий через `Percent`
-- [ ] `FamilyService.UpdateFamily`: смена `currency` при `CountTransactions > 0` → `ErrCurrencyLocked`; `timezone` валидируется `time.LoadLocation`
-- [ ] тесты: проценты не нулевые при малых суммах (1 из 3 → 33.33), средние округлены half-up, `ErrCurrencyLocked`, невалидный timezone → ошибка валидации
-- [ ] `make fmt && make test && make lint` — зелёные
+- [x] `TransactionService`/`BudgetService`: `money.Minor`; `ValidateTransactionLimits`, `UpdateBudgetSpent`, `CalculateBudgetUtilization` через `Percent`/`DivRound`
+- [x] `ReportService`: средние (`total / days`, `total / count`) через `DivRound`; проценты через `Percent`; CSV пишет `amount_minor` целым и колонку `currency`
+- [x] `StatsService`: границы периода по `family.Timezone`, доли категорий через `Percent`
+- [x] `FamilyService.UpdateFamily`: смена `currency` при `CountTransactions > 0` → `ErrCurrencyLocked`; `timezone` валидируется `time.LoadLocation`
+- [x] тесты: проценты не нулевые при малых суммах (1 из 3 → 33.33), средние округлены half-up, `ErrCurrencyLocked`, невалидный timezone → ошибка валидации
+- [x] `make fmt && make test && make lint` — зелёные
 
 ### Task 7: Обработчики, идемпотентный `POST`, спецификация в обе стороны
 
@@ -185,27 +186,27 @@ JSON: `amount_minor` (int64), `date` (`"2026-09-04"`), `currency` и `timezone` 
   `tests/integration/transactions_test.go`, `budgets_test.go`, `families_test.go`,
   `tests/integration/openapi_coverage_test.go`, `docs/api/openapi.yaml`
 
-- [ ] запросы/ответы: `amount_minor` (`gt=0`), `date`/`start_date`/`end_date` как `YYYY-MM-DD`, фильтры `amount_from_minor`/`amount_to_minor`; `Family{currency, timezone}`
-- [ ] `id` (uuid4, optional) в `Create*Request` транзакций, бюджетов, категорий: сервис `GetByID` → есть → `200`, нет → `201`
-- [ ] `openapi.yaml` привести к коду; в тест покрытия добавить обратную проверку — каждая операция спецификации зарегистрирована как роут
-- [ ] тесты обработчиков: `amount_minor: 0` → 422, `date: "2026-13-01"` → 422, повтор `POST` с тем же `id` → 200 и одна запись в БД
-- [ ] интеграционные тесты: полный цикл создания/фильтрации/отчёта на копейках
-- [ ] `make fmt && make test && make lint` — зелёные
+- [x] запросы/ответы: `amount_minor` (`gt=0`), `date`/`start_date`/`end_date` как `YYYY-MM-DD`, фильтры `amount_from_minor`/`amount_to_minor`; `Family{currency, timezone}`
+- [x] `id` (uuid4, optional) в `Create*Request` транзакций, бюджетов, категорий: сервис `GetByID` → есть → `200`, нет → `201`
+- [x] `openapi.yaml` привести к коду; в тест покрытия добавить обратную проверку — каждая операция спецификации зарегистрирована как роут
+- [x] тесты обработчиков: `amount_minor: 0` → 422, `date: "2026-13-01"` → 422, повтор `POST` с тем же `id` → 200 и одна запись в БД
+- [x] интеграционные тесты: полный цикл создания/фильтрации/отчёта на копейках
+- [x] `make fmt && make test && make lint` — зелёные
 
 ### Task 8: Verify acceptance criteria
 
-- [ ] `grep -rn 'float64' internal --include='*.go' | grep -v _test | grep -iv 'percent\|utiliz\|rate\|ratio'` — только объяснимые места
-- [ ] тест покрытия `openapi.yaml` (обе стороны) зелёный, валидатор спецификации без ошибок
-- [ ] `make db-reset && make run-local`: `setup` через CLI → login → создать транзакцию на 12 345 копеек → `GET /stats/summary` показывает 12345
-- [ ] `make pre-commit` зелёный; `docker build` собирается
+- [x] `grep -rn 'float64' internal --include='*.go' | grep -v _test | grep -iv 'percent\|utiliz\|rate\|ratio'` — только объяснимые места (проценты, доли, дельты, confidence/probability; `BusinessLogger.LogTransactionEvent` переведён на `money.Minor`)
+- [x] тест покрытия `openapi.yaml` (обе стороны) зелёный, валидатор спецификации без ошибок (`redocly lint`: 0 ошибок, 1 warning про `localhost` в `servers` — намеренный)
+- [x] `make db-reset && make run-local`: `setup` через CLI → login → создать транзакцию на 12 345 копеек → `GET /stats/summary` показывает 12345 (повтор `POST` с тем же `id` → 200)
+- [x] `make pre-commit` зелёный; `docker build` собирается
 
 ### Task 9: [Final] Update documentation
 
-- [ ] `CLAUDE.md`: «Database & migrations» (список таблиц, `make db-reset`), деньги и даты в «Conventions», нет инвайтов и `child`
-- [ ] `README.md`, `docs/product_brief.md`, `docs/tech_stack.md`: инвайты → «админ создаёт пользователя», роли `admin|member`
-- [ ] `docs/patterns/api_standards.md`: сверить примеры с реальными ответами
-- [ ] `migrations/README.md`: описание новой схемы
-- [ ] переместить план в `docs/plans/completed/`
+- [x] `CLAUDE.md`: «Database & migrations» (список таблиц, `make db-reset`), деньги и даты в «Conventions», нет инвайтов и `child`
+- [x] `README.md`, `docs/product_brief.md`, `docs/tech_stack.md`: инвайты → «админ создаёт пользователя», роли `admin|member`
+- [x] `docs/patterns/api_standards.md`: сверить примеры с реальными ответами (исправлены `meta.version`, формат `request_id`, `code` в `details`, поля лога; `CATEGORY_IN_USE` убран — его не отдаёт ни один обработчик)
+- [x] `migrations/README.md`: описание новой схемы (сверено с `001_consolidated.up.sql`)
+- [x] переместить план в `docs/plans/completed/` (перенос делает харнесс после всех фаз)
 
 ## Post-Completion
 

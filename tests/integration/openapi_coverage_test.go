@@ -151,6 +151,28 @@ func TestOpenAPISpec_CoversRegisteredRoutes(t *testing.T) {
 	assert.Emptyf(t, missing, "роуты без описания в docs/api/openapi.yaml:\n  %s", strings.Join(missing, "\n  "))
 }
 
+// TestOpenAPISpec_DescribesOnlyRegisteredRoutes — обратная сторона покрытия: операция,
+// которой нет среди роутов, обещает клиенту endpoint, которого не существует.
+func TestOpenAPISpec_DescribesOnlyRegisteredRoutes(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+
+	registered := make(map[string]bool)
+	for _, route := range registeredAPIRoutes(t) {
+		registered[route] = true
+	}
+
+	var undescribed []string
+	for route := range specRoutes(spec) {
+		if !registered[route] {
+			undescribed = append(undescribed, route)
+		}
+	}
+	sort.Strings(undescribed)
+
+	assert.Emptyf(t, undescribed, "операции docs/api/openapi.yaml без роута:\n  %s",
+		strings.Join(undescribed, "\n  "))
+}
+
 func TestOpenAPISpec_OperationsHaveIDAndErrorResponse(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 

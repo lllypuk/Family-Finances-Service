@@ -12,7 +12,10 @@ import (
 
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
+	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
 )
@@ -23,6 +26,7 @@ type statsMocks struct {
 	transactions *MockTransactionService
 	budgets      *MockBudgetService
 	categories   *MockCategoryService
+	families     *MockFamilyService
 }
 
 func newStatsService() (services.StatsService, *statsMocks) {
@@ -30,14 +34,18 @@ func newStatsService() (services.StatsService, *statsMocks) {
 		transactions: new(MockTransactionService),
 		budgets:      new(MockBudgetService),
 		categories:   new(MockCategoryService),
+		families:     new(MockFamilyService),
 	}
-	return services.NewStatsService(m.transactions, m.budgets, m.categories), m
+	m.families.On("GetFamily", mock.Anything).
+		Return(&user.Family{Currency: "RUB", Timezone: "Europe/Moscow"}, nil).Maybe()
+
+	return services.NewStatsService(m.transactions, m.budgets, m.categories, m.families), m
 }
 
 // periodFilter матчит выборку транзакций за конкретный период.
-func periodFilter(from, to time.Time) any {
+func periodFilter(from, to date.Date) any {
 	return mock.MatchedBy(func(f dto.TransactionFilterDTO) bool {
-		return f.DateFrom != nil && f.DateTo != nil && f.DateFrom.Equal(from) && f.DateTo.Equal(to)
+		return f.DateFrom != nil && f.DateTo != nil && *f.DateFrom == from && *f.DateTo == to
 	})
 }
 
@@ -48,19 +56,21 @@ func recentFilter() any {
 	})
 }
 
-func previousPeriod(from, to time.Time) (time.Time, time.Time) {
-	previousTo := from.Add(-time.Second)
-	return previousTo.Add(-to.Sub(from)), previousTo
+func previousPeriod(from, to date.Date) (date.Date, date.Date) {
+	previousTo := from.AddDays(-1)
+	days := int(to.In(time.UTC).Sub(from.In(time.UTC)).Hours() / 24)
+
+	return previousTo.AddDays(-days), previousTo
 }
 
-func statsTransaction(amount float64, txType transaction.Type, categoryID uuid.UUID) *transaction.Transaction {
+func statsTransaction(amount money.Minor, txType transaction.Type, categoryID uuid.UUID) *transaction.Transaction {
 	return &transaction.Transaction{
 		ID:          uuid.New(),
 		CategoryID:  categoryID,
-		Amount:      amount,
+		AmountMinor: amount,
 		Type:        txType,
 		Description: "test",
-		Date:        time.Now(),
+		Date:        date.Today(time.UTC),
 		CreatedAt:   time.Now(),
 	}
 }
@@ -76,19 +86,19 @@ func statsCategory(id uuid.UUID, name string) *category.Category {
 
 func TestStatsService_Summary_Success(t *testing.T) {
 	svc, m := newStatsService()
-	from := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
-	to := time.Date(2026, time.March, 31, 23, 59, 59, 0, time.UTC)
+	from := date.New(2026, time.March, 1)
+	to := date.New(2026, time.March, 31)
 	prevFrom, prevTo := previousPeriod(from, to)
 
 	foodID, salaryID := uuid.New(), uuid.New()
 	current := []*transaction.Transaction{
-		statsTransaction(1000, transaction.TypeIncome, salaryID),
-		statsTransaction(400, transaction.TypeExpense, foodID),
-		statsTransaction(100, transaction.TypeExpense, foodID),
+		statsTransaction(100000, transaction.TypeIncome, salaryID),
+		statsTransaction(40000, transaction.TypeExpense, foodID),
+		statsTransaction(10000, transaction.TypeExpense, foodID),
 	}
 	previous := []*transaction.Transaction{
-		statsTransaction(800, transaction.TypeIncome, salaryID),
-		statsTransaction(250, transaction.TypeExpense, foodID),
+		statsTransaction(80000, transaction.TypeIncome, salaryID),
+		statsTransaction(25000, transaction.TypeExpense, foodID),
 	}
 
 	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).Return(current, nil)
@@ -99,23 +109,23 @@ func TestStatsService_Summary_Success(t *testing.T) {
 	m.categories.On("GetCategoryByID", mock.Anything, foodID).Return(statsCategory(foodID, "Еда"), nil)
 	m.categories.On("GetCategoryByID", mock.Anything, salaryID).Return(statsCategory(salaryID, "Зарплата"), nil)
 
-	summary, err := svc.Summary(t.Context(), from, to)
+	summary, err := svc.Summary(t.Context(), &from, &to)
 	require.NoError(t, err)
 
-	assert.InDelta(t, 1000.0, summary.Current.Income, 0.001)
-	assert.InDelta(t, 500.0, summary.Current.Expenses, 0.001)
-	assert.InDelta(t, 500.0, summary.Current.Net, 0.001)
+	assert.Equal(t, money.Minor(100_000), summary.Current.IncomeMinor)
+	assert.Equal(t, money.Minor(50_000), summary.Current.ExpensesMinor)
+	assert.Equal(t, money.Minor(50_000), summary.Current.NetMinor)
 	assert.Equal(t, 3, summary.Current.TransactionCount)
 	assert.Equal(t, 42, summary.TransactionsTotal)
 
 	assert.True(t, summary.HasPreviousData)
-	assert.InDelta(t, 800.0, summary.Previous.Income, 0.001)
+	assert.Equal(t, money.Minor(80_000), summary.Previous.IncomeMinor)
 	assert.InDelta(t, 0.25, summary.IncomeDelta, 0.001)  // (1000-800)/800
 	assert.InDelta(t, 1.0, summary.ExpensesDelta, 0.001) // (500-250)/250
 
 	require.Len(t, summary.ExpenseCategories, 1)
 	assert.Equal(t, "Еда", summary.ExpenseCategories[0].Name)
-	assert.InDelta(t, 500.0, summary.ExpenseCategories[0].Amount, 0.001)
+	assert.Equal(t, money.Minor(50_000), summary.ExpenseCategories[0].AmountMinor)
 	assert.InDelta(t, 1.0, summary.ExpenseCategories[0].Share, 0.001)
 	assert.Equal(t, 2, summary.ExpenseCategories[0].TransactionCount)
 
@@ -128,14 +138,14 @@ func TestStatsService_Summary_Success(t *testing.T) {
 
 func TestStatsService_Summary_CategoriesSortedByAmount(t *testing.T) {
 	svc, m := newStatsService()
-	from := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
-	to := from.AddDate(0, 1, 0)
+	from := date.New(2026, time.March, 1)
+	to := from.AddDays(30)
 	prevFrom, prevTo := previousPeriod(from, to)
 
 	smallID, bigID := uuid.New(), uuid.New()
 	current := []*transaction.Transaction{
-		statsTransaction(100, transaction.TypeExpense, smallID),
-		statsTransaction(300, transaction.TypeExpense, bigID),
+		statsTransaction(10000, transaction.TypeExpense, smallID),
+		statsTransaction(30000, transaction.TypeExpense, bigID),
 	}
 
 	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).Return(current, nil)
@@ -148,7 +158,7 @@ func TestStatsService_Summary_CategoriesSortedByAmount(t *testing.T) {
 	m.categories.On("GetCategoryByID", mock.Anything, smallID).Return(statsCategory(smallID, "Мелочь"), nil)
 	m.categories.On("GetCategoryByID", mock.Anything, bigID).Return(statsCategory(bigID, "Крупное"), nil)
 
-	summary, err := svc.Summary(t.Context(), from, to)
+	summary, err := svc.Summary(t.Context(), &from, &to)
 	require.NoError(t, err)
 
 	require.Len(t, summary.ExpenseCategories, 2)
@@ -159,12 +169,12 @@ func TestStatsService_Summary_CategoriesSortedByAmount(t *testing.T) {
 
 func TestStatsService_Summary_UnknownCategorySkipped(t *testing.T) {
 	svc, m := newStatsService()
-	from := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
-	to := from.AddDate(0, 1, 0)
+	from := date.New(2026, time.March, 1)
+	to := from.AddDays(30)
 	prevFrom, prevTo := previousPeriod(from, to)
 
 	unknownID := uuid.New()
-	current := []*transaction.Transaction{statsTransaction(100, transaction.TypeExpense, unknownID)}
+	current := []*transaction.Transaction{statsTransaction(10000, transaction.TypeExpense, unknownID)}
 
 	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).Return(current, nil)
 	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(prevFrom, prevTo)).
@@ -174,35 +184,35 @@ func TestStatsService_Summary_UnknownCategorySkipped(t *testing.T) {
 	m.budgets.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil)
 	m.categories.On("GetCategoryByID", mock.Anything, unknownID).Return(nil, errors.New("not found"))
 
-	summary, err := svc.Summary(t.Context(), from, to)
+	summary, err := svc.Summary(t.Context(), &from, &to)
 	require.NoError(t, err)
 
 	assert.Empty(t, summary.ExpenseCategories)
-	assert.InDelta(t, 100.0, summary.Current.Expenses, 0.001)
+	assert.Equal(t, money.Minor(10_000), summary.Current.ExpensesMinor)
 	require.Len(t, summary.Recent, 1)
 	assert.Empty(t, summary.Recent[0].CategoryName)
 }
 
 func TestStatsService_Summary_BudgetProgress(t *testing.T) {
 	svc, m := newStatsService()
-	from := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
-	to := from.AddDate(0, 1, 0)
+	from := date.New(2026, time.March, 1)
+	to := from.AddDays(30)
 	prevFrom, prevTo := previousPeriod(from, to)
 
 	categoryID := uuid.New()
-	now := time.Now()
+	now := date.Today(time.UTC)
 	budgets := []*budget.Budget{
 		{
-			ID: uuid.New(), Name: "Норма", Amount: 1000, Spent: 100, IsActive: true,
-			Period: budget.PeriodMonthly, StartDate: now, EndDate: now.AddDate(0, 0, 10),
+			ID: uuid.New(), Name: "Норма", AmountMinor: 100_000, SpentMinor: 10_000, IsActive: true,
+			Period: budget.PeriodMonthly, StartDate: now, EndDate: now.AddDays(10),
 		},
 		{
-			ID: uuid.New(), Name: "На пределе", Amount: 1000, Spent: 850, IsActive: true,
-			CategoryID: &categoryID, Period: budget.PeriodMonthly, StartDate: now, EndDate: now.AddDate(0, 0, 5),
+			ID: uuid.New(), Name: "На пределе", AmountMinor: 100_000, SpentMinor: 85_000, IsActive: true,
+			CategoryID: &categoryID, Period: budget.PeriodMonthly, StartDate: now, EndDate: now.AddDays(5),
 		},
 		{
-			ID: uuid.New(), Name: "Превышен", Amount: 1000, Spent: 1200, IsActive: false,
-			Period: budget.PeriodMonthly, StartDate: now, EndDate: now.AddDate(0, 0, -1),
+			ID: uuid.New(), Name: "Превышен", AmountMinor: 100_000, SpentMinor: 120_000, IsActive: false,
+			Period: budget.PeriodMonthly, StartDate: now, EndDate: now.AddDays(-1),
 		},
 	}
 
@@ -216,7 +226,7 @@ func TestStatsService_Summary_BudgetProgress(t *testing.T) {
 	m.budgets.On("GetActiveBudgets", mock.Anything, mock.Anything).Return(budgets, nil)
 	m.categories.On("GetCategoryByID", mock.Anything, categoryID).Return(statsCategory(categoryID, "Еда"), nil)
 
-	summary, err := svc.Summary(t.Context(), from, to)
+	summary, err := svc.Summary(t.Context(), &from, &to)
 	require.NoError(t, err)
 
 	require.Len(t, summary.Budgets, 3)
@@ -231,7 +241,7 @@ func TestStatsService_Summary_BudgetProgress(t *testing.T) {
 	assert.True(t, summary.Budgets[1].IsNearLimit)
 	assert.Equal(t, "Еда", summary.Budgets[1].CategoryName)
 	assert.InDelta(t, 0.85, summary.Budgets[1].Utilization, 0.001)
-	assert.InDelta(t, 150.0, summary.Budgets[1].Remaining, 0.001)
+	assert.Equal(t, money.Minor(15_000), summary.Budgets[1].RemainingMinor)
 
 	assert.Equal(t, "Норма", summary.Budgets[2].Name)
 	assert.False(t, summary.Budgets[2].IsNearLimit)
@@ -240,8 +250,8 @@ func TestStatsService_Summary_BudgetProgress(t *testing.T) {
 
 func TestStatsService_Summary_EmptyPeriod(t *testing.T) {
 	svc, m := newStatsService()
-	from := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
-	to := from.AddDate(0, 1, 0)
+	from := date.New(2026, time.March, 1)
+	to := from.AddDays(30)
 	prevFrom, prevTo := previousPeriod(from, to)
 
 	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).
@@ -253,11 +263,11 @@ func TestStatsService_Summary_EmptyPeriod(t *testing.T) {
 	m.transactions.On("CountTransactions", mock.Anything, mock.Anything).Return(0, nil)
 	m.budgets.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil)
 
-	summary, err := svc.Summary(t.Context(), from, to)
+	summary, err := svc.Summary(t.Context(), &from, &to)
 	require.NoError(t, err)
 
 	assert.Zero(t, summary.Current.TransactionCount)
-	assert.InDelta(t, 0.0, summary.Current.Net, 0.001)
+	assert.Zero(t, summary.Current.NetMinor)
 	assert.False(t, summary.HasPreviousData)
 	assert.InDelta(t, 0.0, summary.IncomeDelta, 0.001)
 	assert.InDelta(t, 0.0, summary.ExpensesDelta, 0.001)
@@ -269,13 +279,13 @@ func TestStatsService_Summary_EmptyPeriod(t *testing.T) {
 // Деление на ноль: предыдущий период есть, но одна из сумм в нём нулевая.
 func TestStatsService_Summary_ZeroPreviousAmount(t *testing.T) {
 	svc, m := newStatsService()
-	from := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
-	to := from.AddDate(0, 1, 0)
+	from := date.New(2026, time.March, 1)
+	to := from.AddDays(30)
 	prevFrom, prevTo := previousPeriod(from, to)
 
 	categoryID := uuid.New()
-	current := []*transaction.Transaction{statsTransaction(500, transaction.TypeIncome, categoryID)}
-	previous := []*transaction.Transaction{statsTransaction(200, transaction.TypeExpense, categoryID)}
+	current := []*transaction.Transaction{statsTransaction(50000, transaction.TypeIncome, categoryID)}
+	previous := []*transaction.Transaction{statsTransaction(20000, transaction.TypeExpense, categoryID)}
 
 	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).Return(current, nil)
 	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(prevFrom, prevTo)).Return(previous, nil)
@@ -285,7 +295,7 @@ func TestStatsService_Summary_ZeroPreviousAmount(t *testing.T) {
 	m.budgets.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil)
 	m.categories.On("GetCategoryByID", mock.Anything, categoryID).Return(statsCategory(categoryID, "Еда"), nil)
 
-	summary, err := svc.Summary(t.Context(), from, to)
+	summary, err := svc.Summary(t.Context(), &from, &to)
 	require.NoError(t, err)
 
 	assert.True(t, summary.HasPreviousData)
@@ -295,9 +305,10 @@ func TestStatsService_Summary_ZeroPreviousAmount(t *testing.T) {
 
 func TestStatsService_Summary_InvalidPeriod(t *testing.T) {
 	svc, _ := newStatsService()
-	from := time.Date(2026, time.March, 31, 0, 0, 0, 0, time.UTC)
+	from := date.New(2026, time.March, 31)
+	to := from.AddDays(-1)
 
-	summary, err := svc.Summary(t.Context(), from, from.AddDate(0, 0, -1))
+	summary, err := svc.Summary(t.Context(), &from, &to)
 
 	require.ErrorIs(t, err, services.ErrInvalidStatsPeriod)
 	assert.Nil(t, summary)
@@ -305,13 +316,13 @@ func TestStatsService_Summary_InvalidPeriod(t *testing.T) {
 
 func TestStatsService_Summary_TransactionServiceError(t *testing.T) {
 	svc, m := newStatsService()
-	from := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
-	to := from.AddDate(0, 1, 0)
+	from := date.New(2026, time.March, 1)
+	to := from.AddDays(30)
 
 	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).
 		Return(nil, errors.New("database error"))
 
-	summary, err := svc.Summary(t.Context(), from, to)
+	summary, err := svc.Summary(t.Context(), &from, &to)
 
 	require.Error(t, err)
 	assert.Nil(t, summary)
@@ -319,14 +330,14 @@ func TestStatsService_Summary_TransactionServiceError(t *testing.T) {
 
 func TestStatsService_Summary_BudgetServiceError(t *testing.T) {
 	svc, m := newStatsService()
-	from := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
-	to := from.AddDate(0, 1, 0)
+	from := date.New(2026, time.March, 1)
+	to := from.AddDays(30)
 
 	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).
 		Return([]*transaction.Transaction{}, nil)
 	m.budgets.On("GetActiveBudgets", mock.Anything, mock.Anything).Return(nil, errors.New("budget service down"))
 
-	summary, err := svc.Summary(t.Context(), from, to)
+	summary, err := svc.Summary(t.Context(), &from, &to)
 
 	require.Error(t, err)
 	assert.Nil(t, summary)
@@ -335,12 +346,12 @@ func TestStatsService_Summary_BudgetServiceError(t *testing.T) {
 // Ошибка выборки предыдущего периода не роняет сводку — данных для сравнения просто нет.
 func TestStatsService_Summary_PreviousPeriodErrorIgnored(t *testing.T) {
 	svc, m := newStatsService()
-	from := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
-	to := from.AddDate(0, 1, 0)
+	from := date.New(2026, time.March, 1)
+	to := from.AddDays(30)
 	prevFrom, prevTo := previousPeriod(from, to)
 
 	categoryID := uuid.New()
-	current := []*transaction.Transaction{statsTransaction(500, transaction.TypeIncome, categoryID)}
+	current := []*transaction.Transaction{statsTransaction(50000, transaction.TypeIncome, categoryID)}
 
 	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).Return(current, nil)
 	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(prevFrom, prevTo)).
@@ -351,17 +362,17 @@ func TestStatsService_Summary_PreviousPeriodErrorIgnored(t *testing.T) {
 	m.budgets.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil)
 	m.categories.On("GetCategoryByID", mock.Anything, categoryID).Return(statsCategory(categoryID, "Еда"), nil)
 
-	summary, err := svc.Summary(t.Context(), from, to)
+	summary, err := svc.Summary(t.Context(), &from, &to)
 	require.NoError(t, err)
 
 	assert.False(t, summary.HasPreviousData)
-	assert.InDelta(t, 500.0, summary.Current.Income, 0.001)
+	assert.Equal(t, money.Minor(50_000), summary.Current.IncomeMinor)
 }
 
 func TestStatsService_Summary_CountError(t *testing.T) {
 	svc, m := newStatsService()
-	from := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
-	to := from.AddDate(0, 1, 0)
+	from := date.New(2026, time.March, 1)
+	to := from.AddDays(30)
 
 	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).
 		Return([]*transaction.Transaction{}, nil)
@@ -371,32 +382,32 @@ func TestStatsService_Summary_CountError(t *testing.T) {
 		Return(0, errors.New("database error"))
 	m.budgets.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil)
 
-	summary, err := svc.Summary(t.Context(), from, to)
+	summary, err := svc.Summary(t.Context(), &from, &to)
 
 	require.Error(t, err)
 	assert.Nil(t, summary)
 }
 
 // pageFilter матчит страницу выборки за период: страницы отличаются только offset.
-func pageFilter(from, to time.Time, offset int) any {
+func pageFilter(from, to date.Date, offset int) any {
 	return mock.MatchedBy(func(f dto.TransactionFilterDTO) bool {
 		return f.DateFrom != nil && f.DateTo != nil &&
-			f.DateFrom.Equal(from) && f.DateTo.Equal(to) && f.Offset == offset
+			*f.DateFrom == from && *f.DateTo == to && f.Offset == offset
 	})
 }
 
 func TestStatsService_Summary_SumsBeyondFirstPage(t *testing.T) {
 	svc, m := newStatsService()
-	from := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
-	to := time.Date(2026, time.March, 31, 23, 59, 59, 0, time.UTC)
+	from := date.New(2026, time.March, 1)
+	to := date.New(2026, time.March, 31)
 	prevFrom, prevTo := previousPeriod(from, to)
 
 	foodID := uuid.New()
 	firstPage := make([]*transaction.Transaction, 0, 1000)
 	for range 1000 {
-		firstPage = append(firstPage, statsTransaction(10, transaction.TypeExpense, foodID))
+		firstPage = append(firstPage, statsTransaction(1000, transaction.TypeExpense, foodID))
 	}
-	secondPage := []*transaction.Transaction{statsTransaction(25, transaction.TypeExpense, foodID)}
+	secondPage := []*transaction.Transaction{statsTransaction(2500, transaction.TypeExpense, foodID)}
 
 	m.transactions.On("GetAllTransactions", mock.Anything, pageFilter(from, to, 0)).Return(firstPage, nil)
 	m.transactions.On("GetAllTransactions", mock.Anything, pageFilter(from, to, 1000)).Return(secondPage, nil)
@@ -408,26 +419,26 @@ func TestStatsService_Summary_SumsBeyondFirstPage(t *testing.T) {
 	m.budgets.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil)
 	m.categories.On("GetCategoryByID", mock.Anything, foodID).Return(statsCategory(foodID, "Еда"), nil)
 
-	summary, err := svc.Summary(t.Context(), from, to)
+	summary, err := svc.Summary(t.Context(), &from, &to)
 	require.NoError(t, err)
 
 	assert.Equal(t, 1001, summary.Current.TransactionCount)
-	assert.InDelta(t, 10025.0, summary.Current.Expenses, 0.001)
+	assert.Equal(t, money.Minor(1_002_500), summary.Current.ExpensesMinor)
 	require.Len(t, summary.ExpenseCategories, 1)
 	assert.Equal(t, 1001, summary.ExpenseCategories[0].TransactionCount)
 }
 
 func TestStatsService_Summary_CategoryCountsSplitByType(t *testing.T) {
 	svc, m := newStatsService()
-	from := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
-	to := from.AddDate(0, 1, 0)
+	from := date.New(2026, time.March, 1)
+	to := from.AddDays(30)
 	prevFrom, prevTo := previousPeriod(from, to)
 
 	mixedID := uuid.New()
 	current := []*transaction.Transaction{
-		statsTransaction(100, transaction.TypeExpense, mixedID),
-		statsTransaction(200, transaction.TypeExpense, mixedID),
-		statsTransaction(50, transaction.TypeIncome, mixedID),
+		statsTransaction(10000, transaction.TypeExpense, mixedID),
+		statsTransaction(20000, transaction.TypeExpense, mixedID),
+		statsTransaction(5000, transaction.TypeIncome, mixedID),
 	}
 
 	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).Return(current, nil)
@@ -439,11 +450,61 @@ func TestStatsService_Summary_CategoryCountsSplitByType(t *testing.T) {
 	m.budgets.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil)
 	m.categories.On("GetCategoryByID", mock.Anything, mixedID).Return(statsCategory(mixedID, "Разное"), nil)
 
-	summary, err := svc.Summary(t.Context(), from, to)
+	summary, err := svc.Summary(t.Context(), &from, &to)
 	require.NoError(t, err)
 
 	require.Len(t, summary.ExpenseCategories, 1)
 	require.Len(t, summary.IncomeCategories, 1)
 	assert.Equal(t, 2, summary.ExpenseCategories[0].TransactionCount)
 	assert.Equal(t, 1, summary.IncomeCategories[0].TransactionCount)
+}
+
+// TestStatsService_Summary_DefaultPeriodUsesFamilyTimezone — nil-границы означают текущий
+// месяц в зоне семьи, а не в зоне процесса (A-06).
+func TestStatsService_Summary_DefaultPeriodUsesFamilyTimezone(t *testing.T) {
+	svc, m := newStatsService()
+
+	loc, err := time.LoadLocation("Europe/Moscow")
+	require.NoError(t, err)
+	today := date.Today(loc)
+	from, _ := today.MonthBounds()
+	prevFrom, prevTo := previousPeriod(from, today)
+
+	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, today)).
+		Return([]*transaction.Transaction{}, nil)
+	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(prevFrom, prevTo)).
+		Return([]*transaction.Transaction{}, nil)
+	m.transactions.On("GetAllTransactions", mock.Anything, recentFilter()).
+		Return([]*transaction.Transaction{}, nil)
+	m.transactions.On("CountTransactions", mock.Anything, mock.Anything).Return(0, nil)
+	m.budgets.On("GetActiveBudgets", mock.Anything, today).Return([]*budget.Budget{}, nil)
+
+	summary, err := svc.Summary(t.Context(), nil, nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, from, summary.From)
+	assert.Equal(t, today, summary.To)
+	// Пустой период отдаёт массивы, а не null: оба поля обязательны в контракте.
+	assert.NotNil(t, summary.ExpenseCategories)
+	assert.NotNil(t, summary.IncomeCategories)
+	assert.Empty(t, summary.ExpenseCategories)
+	assert.Empty(t, summary.IncomeCategories)
+	m.families.AssertCalled(t, "GetFamily", mock.Anything)
+	m.budgets.AssertExpectations(t)
+}
+
+func TestStatsService_Summary_FamilyError(t *testing.T) {
+	m := &statsMocks{
+		transactions: new(MockTransactionService),
+		budgets:      new(MockBudgetService),
+		categories:   new(MockCategoryService),
+		families:     new(MockFamilyService),
+	}
+	m.families.On("GetFamily", mock.Anything).Return(nil, errors.New("family repository down"))
+	svc := services.NewStatsService(m.transactions, m.budgets, m.categories, m.families)
+
+	summary, err := svc.Summary(t.Context(), nil, nil)
+
+	require.Error(t, err)
+	assert.Nil(t, summary)
 }

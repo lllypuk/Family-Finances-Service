@@ -10,6 +10,8 @@ import (
 
 // CreateCategoryDTO represents the data transfer object for creating a category
 type CreateCategoryDTO struct {
+	// ID — необязательный клиентский идентификатор; пустой означает «сгенерировать».
+	ID       *uuid.UUID    `validate:"omitempty"`
 	Name     string        `validate:"required,min=2,max=50"`
 	Type     category.Type `validate:"required"`
 	Color    string        `validate:"required,hexcolor"`

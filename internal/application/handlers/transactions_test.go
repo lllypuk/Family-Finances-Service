@@ -20,6 +20,8 @@ import (
 
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/auth"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
 )
@@ -78,30 +80,30 @@ func (m *MockTransactionRepository) DeleteBulk(ctx context.Context, ids []uuid.U
 
 func (m *MockTransactionRepository) GetTotalByDateRange(
 	ctx context.Context,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 	transactionType transaction.Type,
-) (float64, error) {
+) (money.Minor, error) {
 	args := m.Called(ctx, startDate, endDate, transactionType)
-	return args.Get(0).(float64), args.Error(1)
+	return args.Get(0).(money.Minor), args.Error(1)
 }
 
 func (m *MockTransactionRepository) GetTotalByCategory(
 	ctx context.Context,
 	categoryID uuid.UUID,
 	transactionType transaction.Type,
-) (float64, error) {
+) (money.Minor, error) {
 	args := m.Called(ctx, categoryID, transactionType)
-	return args.Get(0).(float64), args.Error(1)
+	return args.Get(0).(money.Minor), args.Error(1)
 }
 
 func (m *MockTransactionRepository) GetTotalByCategoryAndDateRange(
 	ctx context.Context,
 	categoryID uuid.UUID,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 	transactionType transaction.Type,
-) (float64, error) {
+) (money.Minor, error) {
 	args := m.Called(ctx, categoryID, startDate, endDate, transactionType)
-	return args.Get(0).(float64), args.Error(1)
+	return args.Get(0).(money.Minor), args.Error(1)
 }
 
 func (m *MockTransactionRepository) GetAll(ctx context.Context, limit, offset int) ([]*transaction.Transaction, error) {
@@ -137,11 +139,11 @@ func setupTransactionHandler() (*handlers.TransactionHandler, *MockTransactionRe
 // createValidTransactionRequest creates a valid transaction request for testing
 func createValidTransactionRequest() handlers.CreateTransactionRequest {
 	return handlers.CreateTransactionRequest{
-		Amount:      100.50,
+		AmountMinor: 10_050,
 		Type:        "expense",
 		Description: "Test transaction",
 		CategoryID:  uuid.New(),
-		Date:        time.Now(),
+		Date:        date.Today(time.UTC),
 		Tags:        []string{"test", "expense"},
 	}
 }
@@ -186,7 +188,7 @@ func TestTransactionHandler_CreateTransaction_Success(t *testing.T) {
 	err = json.Unmarshal(rec.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.InDelta(t, req.Amount, response.Data.Amount, 0.01)
+	assert.Equal(t, req.AmountMinor, response.Data.AmountMinor)
 	assert.Equal(t, req.Type, response.Data.Type)
 	assert.Equal(t, req.Description, response.Data.Description)
 	assert.Equal(t, req.CategoryID, response.Data.CategoryID)
@@ -214,12 +216,12 @@ func TestTransactionHandler_CreateTransaction_IgnoresBodyUserID(t *testing.T) {
 		Return(nil)
 
 	body, err := json.Marshal(map[string]any{
-		"amount":      100.50,
-		"type":        "expense",
-		"description": "Impersonation attempt",
-		"category_id": uuid.New().String(),
-		"user_id":     victimUserID.String(),
-		"date":        time.Now(),
+		"amount_minor": 10_050,
+		"type":         "expense",
+		"description":  "Impersonation attempt",
+		"category_id":  uuid.New().String(),
+		"user_id":      victimUserID.String(),
+		"date":         date.Today(time.UTC),
 	})
 	require.NoError(t, err)
 
@@ -292,44 +294,64 @@ func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
 			expectedCode:   handlers.ErrCodeInvalidRequest,
 		},
 		{
-			name: "Missing amount",
+			name: "Missing amount_minor",
 			requestBody: map[string]any{
 				"type":        "expense",
 				"description": "Test",
 				"category_id": uuid.New().String(),
-				"user_id":     uuid.New().String(),
-				"family_id":   uuid.New().String(),
-				"date":        time.Now(),
+				"date":        "2026-01-15",
 			},
 			expectedStatus: http.StatusUnprocessableEntity,
 			expectedCode:   handlers.ErrCodeValidationError,
-			expectedField:  "amount",
+			expectedField:  "amount_minor",
 		},
 		{
-			name: "Negative amount",
+			name: "Zero amount_minor",
 			requestBody: map[string]any{
-				"amount":      -100.0,
-				"type":        "expense",
-				"description": "Test",
-				"category_id": uuid.New().String(),
-				"user_id":     uuid.New().String(),
-				"family_id":   uuid.New().String(),
-				"date":        time.Now(),
+				"amount_minor": 0,
+				"type":         "expense",
+				"description":  "Test",
+				"category_id":  uuid.New().String(),
+				"date":         "2026-01-15",
 			},
 			expectedStatus: http.StatusUnprocessableEntity,
 			expectedCode:   handlers.ErrCodeValidationError,
-			expectedField:  "amount",
+			expectedField:  "amount_minor",
+		},
+		{
+			name: "Negative amount_minor",
+			requestBody: map[string]any{
+				"amount_minor": -10_000,
+				"type":         "expense",
+				"description":  "Test",
+				"category_id":  uuid.New().String(),
+				"date":         "2026-01-15",
+			},
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedCode:   handlers.ErrCodeValidationError,
+			expectedField:  "amount_minor",
+		},
+		{
+			name: "Nonexistent calendar date",
+			requestBody: map[string]any{
+				"amount_minor": 10_000,
+				"type":         "expense",
+				"description":  "Test",
+				"category_id":  uuid.New().String(),
+				"date":         "2026-13-01",
+			},
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedCode:   handlers.ErrCodeValidationError,
+			expectedField:  "date",
 		},
 		{
 			name: "Invalid type",
 			requestBody: map[string]any{
-				"amount":      100.0,
-				"type":        "invalid",
-				"description": "Test",
-				"category_id": uuid.New().String(),
-				"user_id":     uuid.New().String(),
-				"family_id":   uuid.New().String(),
-				"date":        time.Now(),
+				"amount_minor": 10_000,
+				"type":         "invalid",
+				"description":  "Test",
+				"category_id":  uuid.New().String(),
+				"date":         "2026-01-15",
 			},
 			expectedStatus: http.StatusUnprocessableEntity,
 			expectedCode:   handlers.ErrCodeValidationError,
@@ -414,24 +436,24 @@ func TestTransactionHandler_GetTransactions_Success(t *testing.T) {
 	expectedTransactions := []*transaction.Transaction{
 		{
 			ID:          uuid.New(),
-			Amount:      100.0,
+			AmountMinor: 10_000,
 			Type:        transaction.TypeExpense,
 			Description: "Test transaction 1",
 			CategoryID:  uuid.New(),
 			UserID:      uuid.New(),
-			Date:        time.Now(),
+			Date:        date.Today(time.UTC),
 			Tags:        []string{"test"},
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
 		},
 		{
 			ID:          uuid.New(),
-			Amount:      200.0,
+			AmountMinor: 20_000,
 			Type:        transaction.TypeIncome,
 			Description: "Test transaction 2",
 			CategoryID:  uuid.New(),
 			UserID:      uuid.New(),
-			Date:        time.Now(),
+			Date:        date.Today(time.UTC),
 			Tags:        []string{"test"},
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
@@ -460,8 +482,8 @@ func TestTransactionHandler_GetTransactions_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Len(t, response.Data, 2)
-	assert.InDelta(t, expectedTransactions[0].Amount, response.Data[0].Amount, 0.01)
-	assert.InDelta(t, expectedTransactions[1].Amount, response.Data[1].Amount, 0.01)
+	assert.Equal(t, expectedTransactions[0].AmountMinor, response.Data[0].AmountMinor)
+	assert.Equal(t, expectedTransactions[1].AmountMinor, response.Data[1].AmountMinor)
 
 	mockRepo.AssertExpectations(t)
 }
@@ -521,8 +543,8 @@ func TestTransactionHandler_GetTransactions_WithFilters(t *testing.T) {
 	familyID := uuid.New()
 	userID := uuid.New()
 	categoryID := uuid.New()
-	dateFrom := time.Now().AddDate(0, -1, 0).Format(time.RFC3339)
-	dateTo := time.Now().Format(time.RFC3339)
+	dateFrom := date.Today(time.UTC).AddDays(-30).String()
+	dateTo := date.Today(time.UTC).String()
 
 	mockRepo.On("GetByFilter", mock.Anything, mock.AnythingOfType("transaction.Filter")).
 		Return([]*transaction.Transaction{}, nil)
@@ -565,13 +587,13 @@ func TestTransactionHandler_GetTransactions_InvalidQueryParams(t *testing.T) {
 		},
 		{
 			name:          "invalid date_from",
-			query:         "/transactions?date_from=2026-01-01",
+			query:         "/transactions?date_from=2026-13-01",
 			expectedParam: "date_from",
 		},
 		{
-			name:          "invalid amount_from",
-			query:         "/transactions?amount_from=abc",
-			expectedParam: "amount_from",
+			name:          "invalid amount_from_minor",
+			query:         "/transactions?amount_from_minor=abc",
+			expectedParam: "amount_from_minor",
 		},
 		{
 			name:          "invalid limit number",
@@ -614,12 +636,12 @@ func TestTransactionHandler_GetTransactionByID_Success(t *testing.T) {
 	transactionID := uuid.New()
 	expectedTransaction := &transaction.Transaction{
 		ID:          transactionID,
-		Amount:      150.0,
+		AmountMinor: 15_000,
 		Type:        transaction.TypeExpense,
 		Description: "Test transaction",
 		CategoryID:  uuid.New(),
 		UserID:      uuid.New(),
-		Date:        time.Now(),
+		Date:        date.Today(time.UTC),
 		Tags:        []string{"test"},
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
@@ -646,7 +668,7 @@ func TestTransactionHandler_GetTransactionByID_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, expectedTransaction.ID, response.Data.ID)
-	assert.InDelta(t, expectedTransaction.Amount, response.Data.Amount, 0.01)
+	assert.Equal(t, expectedTransaction.AmountMinor, response.Data.AmountMinor)
 	assert.Equal(t, string(expectedTransaction.Type), response.Data.Type)
 
 	mockRepo.AssertExpectations(t)
@@ -711,19 +733,19 @@ func TestTransactionHandler_UpdateTransaction_Success(t *testing.T) {
 	transactionID := uuid.New()
 	existingTransaction := &transaction.Transaction{
 		ID:          transactionID,
-		Amount:      100.0,
+		AmountMinor: 10_000,
 		Type:        transaction.TypeExpense,
 		Description: "Old description",
 		CategoryID:  uuid.New(),
 		UserID:      uuid.New(),
-		Date:        time.Now(),
+		Date:        date.Today(time.UTC),
 		Tags:        []string{"old"},
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
 
 	updateReq := handlers.UpdateTransactionRequest{
-		Amount:      new(200.0),
+		AmountMinor: new(money.Minor(20_000)),
 		Description: new("Updated description"),
 		Tags:        []string{"updated", "test"},
 	}
@@ -731,7 +753,7 @@ func TestTransactionHandler_UpdateTransaction_Success(t *testing.T) {
 	mockRepo.On("GetByID", mock.Anything, transactionID).Return(existingTransaction, nil)
 	mockRepo.On("Update", mock.Anything, mock.MatchedBy(func(tx *transaction.Transaction) bool {
 		return tx.ID == transactionID &&
-			tx.Amount == 200.0 &&
+			tx.AmountMinor == money.Minor(20_000) &&
 			tx.Description == "Updated description" &&
 			len(tx.Tags) == 2 &&
 			tx.Tags[0] == "updated" &&
@@ -762,7 +784,7 @@ func TestTransactionHandler_UpdateTransaction_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, transactionID, response.Data.ID)
-	assert.InDelta(t, 200.0, response.Data.Amount, 0.01)
+	assert.Equal(t, money.Minor(20_000), response.Data.AmountMinor)
 	assert.Equal(t, "Updated description", response.Data.Description)
 
 	mockRepo.AssertExpectations(t)
@@ -887,4 +909,45 @@ func BenchmarkTransactionHandler_GetTransactions(b *testing.B) {
 
 		handler.GetTransactions(c)
 	}
+}
+
+// TestTransactionHandler_CreateTransaction_ExistingClientID — запись с присланным id уже
+// есть: отвечаем 200 и не пишем второй раз (A-07).
+func TestTransactionHandler_CreateTransaction_ExistingClientID(t *testing.T) {
+	handler, mockRepo := setupTransactionHandler()
+
+	clientID := uuid.New()
+	existing := &transaction.Transaction{
+		ID:          clientID,
+		AmountMinor: 12_345,
+		Type:        transaction.TypeExpense,
+		Description: "Уже создана",
+		CategoryID:  uuid.New(),
+		UserID:      uuid.New(),
+		Date:        date.Today(time.UTC),
+	}
+	mockRepo.On("GetByID", mock.Anything, clientID).Return(existing, nil).Once()
+
+	req := createValidTransactionRequest()
+	req.ID = &clientID
+	body, err := json.Marshal(req)
+	require.NoError(t, err)
+
+	e := echo.New()
+	httpReq := httptest.NewRequest(http.MethodPost, "/transactions", bytes.NewBuffer(body))
+	httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httpReq, rec)
+	withSessionUser(c, uuid.New())
+
+	require.NoError(t, handler.CreateTransaction(c))
+	assert.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
+
+	var response handlers.APIResponse[handlers.TransactionResponse]
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, clientID, response.Data.ID)
+	assert.Equal(t, money.Minor(12_345), response.Data.AmountMinor)
+
+	mockRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+	mockRepo.AssertExpectations(t)
 }

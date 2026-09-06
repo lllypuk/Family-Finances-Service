@@ -234,7 +234,7 @@ func (s *userService) SetActive(ctx context.Context, id uuid.UUID, active bool, 
 
 // ChangeUserRole changes a user's role; понижение последнего активного администратора — ErrLastAdmin.
 func (s *userService) ChangeUserRole(ctx context.Context, userID uuid.UUID, role user.Role) error {
-	if !s.isValidRole(role) {
+	if !role.IsValid() {
 		return ErrInvalidRole
 	}
 
@@ -273,9 +273,4 @@ func (s *userService) GetUserByEmail(ctx context.Context, email string) (*user.U
 	}
 
 	return foundUser, nil
-}
-
-// isValidRole checks if a role is valid
-func (s *userService) isValidRole(role user.Role) bool {
-	return role == user.RoleAdmin || role == user.RoleMember || role == user.RoleChild
 }

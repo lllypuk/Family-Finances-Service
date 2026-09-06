@@ -1,28 +1,31 @@
 package budget
 
 import (
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
+
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 )
 
-const (
-	// PercentageBase base value for percentage calculations
-	PercentageBase = 100
-)
+// ErrNameExists — нарушение UNIQUE (family_id, name, start_date, end_date): бюджет
+// с таким именем на этот период уже есть.
+var ErrNameExists = errors.New("budget with this name already exists for this period")
 
 type Budget struct {
-	ID         uuid.UUID  `json:"id"          bson:"_id"`
-	Name       string     `json:"name"        bson:"name"`
-	Amount     float64    `json:"amount"      bson:"amount"` // Лимит бюджета
-	Spent      float64    `json:"spent"       bson:"spent"`  // Потрачено
-	Period     Period     `json:"period"      bson:"period"`
-	CategoryID *uuid.UUID `json:"category_id" bson:"category_id,omitempty"` // Для конкретной категории
-	StartDate  time.Time  `json:"start_date"  bson:"start_date"`
-	EndDate    time.Time  `json:"end_date"    bson:"end_date"`
-	IsActive   bool       `json:"is_active"   bson:"is_active"`
-	CreatedAt  time.Time  `json:"created_at"  bson:"created_at"`
-	UpdatedAt  time.Time  `json:"updated_at"  bson:"updated_at"`
+	ID          uuid.UUID   `json:"id"`
+	Name        string      `json:"name"`
+	AmountMinor money.Minor `json:"amount_minor"` // Лимит бюджета
+	SpentMinor  money.Minor `json:"spent_minor"`  // Потрачено
+	Period      Period      `json:"period"`
+	CategoryID  *uuid.UUID  `json:"category_id"` // Для конкретной категории
+	StartDate   date.Date   `json:"start_date"`
+	EndDate     date.Date   `json:"end_date"`
+	IsActive    bool        `json:"is_active"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
 }
 
 type Period string
@@ -34,51 +37,26 @@ const (
 	PeriodCustom  Period = "custom"
 )
 
-type Alert struct {
-	ID          uuid.UUID  `json:"id"           bson:"_id"`
-	BudgetID    uuid.UUID  `json:"budget_id"    bson:"budget_id"`
-	Threshold   float64    `json:"threshold"    bson:"threshold"` // Процент (50, 80, 100)
-	IsTriggered bool       `json:"is_triggered" bson:"is_triggered"`
-	TriggeredAt *time.Time `json:"triggered_at" bson:"triggered_at,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"   bson:"created_at"`
+func (b *Budget) GetRemainingAmount() money.Minor {
+	return b.AmountMinor - b.SpentMinor
 }
 
-func NewBudget(
-	name string,
-	amount float64,
-	period Period,
-	startDate, endDate time.Time,
-) *Budget {
-	return &Budget{
-		ID:        uuid.New(),
-		Name:      name,
-		Amount:    amount,
-		Spent:     0,
-		Period:    period,
-		StartDate: startDate,
-		EndDate:   endDate,
-		IsActive:  true,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-}
-
-func (b *Budget) GetRemainingAmount() float64 {
-	return b.Amount - b.Spent
-}
-
+// GetSpentPercentage возвращает долю потраченного в процентах; при нулевом лимите — 0.
 func (b *Budget) GetSpentPercentage() float64 {
-	if b.Amount == 0 {
-		return 0
-	}
-	return (b.Spent / b.Amount) * PercentageBase
+	return b.SpentMinor.Percent(b.AmountMinor)
+}
+
+// GetSpentShare — та же доля, что GetSpentPercentage, но в единице 0..1, в которой
+// доли уходят в API.
+func (b *Budget) GetSpentShare() float64 {
+	return b.SpentMinor.Share(b.AmountMinor)
 }
 
 func (b *Budget) IsOverBudget() bool {
-	return b.Spent > b.Amount
+	return b.SpentMinor > b.AmountMinor
 }
 
-func (b *Budget) UpdateSpent(amount float64) {
-	b.Spent += amount
+func (b *Budget) UpdateSpent(amountMinor money.Minor) {
+	b.SpentMinor += amountMinor
 	b.UpdatedAt = time.Now()
 }

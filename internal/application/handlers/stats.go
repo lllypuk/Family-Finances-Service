@@ -3,20 +3,11 @@ package handlers
 import (
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/labstack/echo/v4"
 
+	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/services"
-)
-
-const (
-	// statsDateLayout — формат from/to в query: календарная дата без времени.
-	statsDateLayout = "2006-01-02"
-
-	lastHourOfDay      = 23
-	lastMinuteOfHour   = 59
-	lastSecondOfMinute = 59
 )
 
 // StatsHandler отдаёт агрегаты дашборда через API.
@@ -28,7 +19,8 @@ func NewStatsHandler(statsService services.StatsService) *StatsHandler {
 	return &StatsHandler{statsService: statsService}
 }
 
-// GetSummary отдаёт сводку за период [from, to]; без параметров — текущий месяц.
+// GetSummary отдаёт сводку за период [from, to]; без параметров — текущий месяц
+// по часовому поясу семьи, границы считает сервис.
 func (h *StatsHandler) GetSummary(c echo.Context) error {
 	from, to, detail := parseStatsPeriod(c)
 	if detail != nil {
@@ -48,36 +40,34 @@ func (h *StatsHandler) GetSummary(c echo.Context) error {
 	return respondAPI(c, http.StatusOK, summary)
 }
 
-// parseStatsPeriod разбирает from/to. Границы включительные: to расширяется до конца суток,
-// иначе операции сегодняшнего дня выпадают из выборки.
-func parseStatsPeriod(c echo.Context) (time.Time, time.Time, *ErrorDetail) {
-	now := time.Now()
-	from := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-	to := endOfDay(now)
-
-	if raw := c.QueryParam("from"); raw != "" {
-		parsed, err := time.ParseInLocation(statsDateLayout, raw, now.Location())
-		if err != nil {
-			return time.Time{}, time.Time{}, &ErrorDetail{
-				Field: "from", Message: "must be a date in YYYY-MM-DD format", Code: ErrCodeInvalidQueryParam,
-			}
-		}
-		from = parsed
+// parseStatsPeriod разбирает from/to как календарные даты; отсутствующая граница — nil,
+// её подставляет сервис по зоне семьи. Обе границы включительные.
+func parseStatsPeriod(c echo.Context) (*date.Date, *date.Date, *ErrorDetail) {
+	from, detail := parseStatsDate(c, "from")
+	if detail != nil {
+		return nil, nil, detail
 	}
 
-	if raw := c.QueryParam("to"); raw != "" {
-		parsed, err := time.ParseInLocation(statsDateLayout, raw, now.Location())
-		if err != nil {
-			return time.Time{}, time.Time{}, &ErrorDetail{
-				Field: "to", Message: "must be a date in YYYY-MM-DD format", Code: ErrCodeInvalidQueryParam,
-			}
-		}
-		to = endOfDay(parsed)
+	to, detail := parseStatsDate(c, "to")
+	if detail != nil {
+		return nil, nil, detail
 	}
 
 	return from, to, nil
 }
 
-func endOfDay(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), lastHourOfDay, lastMinuteOfHour, lastSecondOfMinute, 0, t.Location())
+func parseStatsDate(c echo.Context, param string) (*date.Date, *ErrorDetail) {
+	raw := c.QueryParam(param)
+	if raw == "" {
+		return nil, nil
+	}
+
+	parsed, err := date.Parse(raw)
+	if err != nil {
+		return nil, &ErrorDetail{
+			Field: param, Message: "must be a date in YYYY-MM-DD format", Code: ErrCodeInvalidQueryParam,
+		}
+	}
+
+	return &parsed, nil
 }

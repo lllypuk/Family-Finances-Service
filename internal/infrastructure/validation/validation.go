@@ -10,6 +10,7 @@ import (
 
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
 )
@@ -17,9 +18,7 @@ import (
 // Validation constants
 const (
 	maxEmailLength        = 254
-	maxBudgetAmount       = 999999999.99
 	maxBudgetNameLength   = 255
-	maxTransactionAmount  = 999999999.99
 	maxDescriptionLength  = 1000
 	maxCategoryNameLength = 255
 	maxReportNameLength   = 255
@@ -96,11 +95,11 @@ func ValidateBudgetPeriod(period budget.Period) error {
 }
 
 // ValidateBudgetAmount validates budget amount
-func ValidateBudgetAmount(amount float64) error {
+func ValidateBudgetAmount(amount money.Minor) error {
 	if amount <= 0 {
 		return errors.New("budget amount must be positive")
 	}
-	if amount > maxBudgetAmount {
+	if amount > money.MaxAmount {
 		return errors.New("budget amount too large")
 	}
 	return nil
@@ -119,11 +118,11 @@ func ValidateBudgetName(name string) error {
 }
 
 // ValidateAmount validates transaction amount
-func ValidateAmount(amount float64) error {
+func ValidateAmount(amount money.Minor) error {
 	if amount <= 0 {
 		return errors.New("amount must be positive")
 	}
-	if amount > maxTransactionAmount {
+	if amount > money.MaxAmount {
 		return errors.New("amount too large")
 	}
 	return nil
@@ -210,8 +209,10 @@ func ValidateCurrency(currency string) error {
 	// Known limitation: hardcoded whitelist limits extensibility
 	// To add support for additional currencies, update this map
 	// Future improvement: consider loading from configuration or database
+	// Только валюты с двумя знаками после запятой: amount_minor — сотые доли основной
+	// единицы (см. docs/api/openapi.yaml, схема Money), поэтому JPY здесь быть не может.
 	validCurrencies := map[string]bool{
-		"USD": true, "EUR": true, "GBP": true, "JPY": true, "RUB": true,
+		"USD": true, "EUR": true, "GBP": true, "RUB": true,
 		"CNY": true, "CAD": true, "AUD": true, "CHF": true, "SEK": true,
 		"NOK": true, "DKK": true, "PLN": true, "CZK": true, "HUF": true,
 	}

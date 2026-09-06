@@ -13,6 +13,8 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/auth"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
@@ -58,12 +60,15 @@ func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
 
 	var req CreateTransactionRequest
 	if err := c.Bind(&req); err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
-			bodyDetail(ErrCodeInvalidRequest, err.Error()))
+		return respondBindError(c, err)
 	}
 
 	if err := h.validator.Struct(req); err != nil {
 		return respondValidationErrors(c, err)
+	}
+
+	if handled, err := respondClientID(c, req.ID, h.findTransaction, h.buildTransactionResponse); handled {
+		return err
 	}
 
 	if h.transactionService != nil {
@@ -75,7 +80,8 @@ func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
 	if err := h.repositories.Transaction.Create(c.Request().Context(), newTransaction); err != nil {
 		// Check if it's a foreign key constraint error
 		if h.isForeignKeyConstraintError(err) {
-			return respondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid category, user, or family ID")
+			return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError,
+				ErrMessageInvalidCategoryRef, bodyDetail(ErrCodeValidationError, ErrMessageInvalidCategoryRef))
 		}
 
 		return respondError(c, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create transaction")
@@ -87,13 +93,29 @@ func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
 	return respondAPI(c, http.StatusCreated, response)
 }
 
+// findTransaction ищет запись по клиентскому id; ошибка репозитория здесь означает
+// «не найдено» — создание всё равно упрётся в неё повторно.
+func (h *TransactionHandler) findTransaction(c echo.Context, id uuid.UUID) (*transaction.Transaction, bool) {
+	ctx := c.Request().Context()
+	if h.transactionService != nil {
+		tx, err := h.transactionService.GetTransactionByID(ctx, id)
+
+		return tx, err == nil
+	}
+
+	tx, err := h.repositories.Transaction.GetByID(ctx, id)
+
+	return tx, err == nil
+}
+
 func (h *TransactionHandler) createTransactionViaService(
 	c echo.Context,
 	req CreateTransactionRequest,
 	userID uuid.UUID,
 ) error {
 	createdTx, err := h.transactionService.CreateTransaction(c.Request().Context(), dto.CreateTransactionDTO{
-		Amount:      req.Amount,
+		ID:          req.ID,
+		AmountMinor: req.AmountMinor,
 		Type:        transaction.Type(req.Type),
 		Description: req.Description,
 		CategoryID:  req.CategoryID,
@@ -126,6 +148,8 @@ func (h *TransactionHandler) handleCreateTransactionServiceError(c echo.Context,
 	case errors.Is(err, services.ErrInsufficientBudget),
 		errors.Is(err, services.ErrInvalidTransactionAmount),
 		errors.Is(err, services.ErrInvalidTransactionType),
+		errors.Is(err, services.ErrTransactionAmountTooLarge),
+		errors.Is(err, services.ErrTransactionDateOutOfRange),
 		errors.Is(err, services.ErrCategoryNotInFamily),
 		errors.Is(err, services.ErrUserNotInFamily),
 		strings.Contains(err.Error(), "validation failed"),
@@ -143,8 +167,8 @@ func (h *TransactionHandler) buildTransaction(
 	userID uuid.UUID,
 ) *transaction.Transaction {
 	return &transaction.Transaction{
-		ID:          uuid.New(),
-		Amount:      req.Amount,
+		ID:          dto.EntityID(req.ID),
+		AmountMinor: req.AmountMinor,
 		Type:        transaction.Type(req.Type),
 		Description: req.Description,
 		CategoryID:  req.CategoryID,
@@ -166,7 +190,7 @@ func (h *TransactionHandler) updateBudgetIfNeeded(c echo.Context, tx *transactio
 		return
 	}
 
-	budgets, err := h.repositories.Budget.GetActiveBudgets(c.Request().Context())
+	budgets, err := h.repositories.Budget.GetActiveBudgets(c.Request().Context(), tx.Date)
 	if err != nil {
 		if h.logger != nil {
 			h.logger.WarnContext(
@@ -182,7 +206,7 @@ func (h *TransactionHandler) updateBudgetIfNeeded(c echo.Context, tx *transactio
 
 	for _, b := range budgets {
 		if b.CategoryID != nil && *b.CategoryID == tx.CategoryID {
-			b.Spent += tx.Amount
+			b.SpentMinor += tx.AmountMinor
 			b.UpdatedAt = time.Now()
 			if updateErr := h.repositories.Budget.Update(c.Request().Context(), b); updateErr != nil {
 				if h.logger != nil {
@@ -200,16 +224,22 @@ func (h *TransactionHandler) updateBudgetIfNeeded(c echo.Context, tx *transactio
 	}
 }
 
+// buildTransactionResponse — tags в контракте обязательный массив, поэтому nil становится [].
 func (h *TransactionHandler) buildTransactionResponse(tx *transaction.Transaction) TransactionResponse {
+	tags := tx.Tags
+	if tags == nil {
+		tags = []string{}
+	}
+
 	return TransactionResponse{
 		ID:          tx.ID,
-		Amount:      tx.Amount,
+		AmountMinor: tx.AmountMinor,
 		Type:        string(tx.Type),
 		Description: tx.Description,
 		CategoryID:  tx.CategoryID,
 		UserID:      tx.UserID,
 		Date:        tx.Date,
-		Tags:        tx.Tags,
+		Tags:        tags,
 		CreatedAt:   tx.CreatedAt,
 		UpdatedAt:   tx.UpdatedAt,
 	}
@@ -322,40 +352,62 @@ func (h *TransactionHandler) parseOptionalFilters(c echo.Context, filters *Trans
 		filters.Type = &typeParam
 	}
 
-	if dateFromParam := c.QueryParam("date_from"); dateFromParam != "" {
-		dateFrom, parseErr := time.Parse(time.RFC3339, dateFromParam)
-		if parseErr != nil {
-			return writeInvalidQueryParam(c, "date_from", dateFromParam, "must be RFC3339 datetime")
-		}
-		filters.DateFrom = &dateFrom
+	if err := h.parseDateFilters(c, filters); err != nil {
+		return err
 	}
 
-	if dateToParam := c.QueryParam("date_to"); dateToParam != "" {
-		dateTo, parseErr := time.Parse(time.RFC3339, dateToParam)
-		if parseErr != nil {
-			return writeInvalidQueryParam(c, "date_to", dateToParam, "must be RFC3339 datetime")
-		}
-		filters.DateTo = &dateTo
-	}
-
-	if amountFromParam := c.QueryParam("amount_from"); amountFromParam != "" {
-		amountFrom, parseErr := strconv.ParseFloat(amountFromParam, 64)
-		if parseErr != nil {
-			return writeInvalidQueryParam(c, "amount_from", amountFromParam, "must be a valid number")
-		}
-		filters.AmountFrom = &amountFrom
-	}
-
-	if amountToParam := c.QueryParam("amount_to"); amountToParam != "" {
-		amountTo, parseErr := strconv.ParseFloat(amountToParam, 64)
-		if parseErr != nil {
-			return writeInvalidQueryParam(c, "amount_to", amountToParam, "must be a valid number")
-		}
-		filters.AmountTo = &amountTo
+	if err := h.parseAmountFilters(c, filters); err != nil {
+		return err
 	}
 
 	if descriptionParam := c.QueryParam("description"); descriptionParam != "" {
 		filters.Description = &descriptionParam
+	}
+
+	return nil
+}
+
+// parseDateFilters — обе границы календарные и включительные.
+func (h *TransactionHandler) parseDateFilters(c echo.Context, filters *TransactionFilterParams) error {
+	for _, bound := range []struct {
+		param string
+		dst   **date.Date
+	}{
+		{"date_from", &filters.DateFrom},
+		{"date_to", &filters.DateTo},
+	} {
+		raw := c.QueryParam(bound.param)
+		if raw == "" {
+			continue
+		}
+		parsed, parseErr := date.Parse(raw)
+		if parseErr != nil {
+			return writeInvalidQueryParam(c, bound.param, raw, "must be a date in YYYY-MM-DD format")
+		}
+		*bound.dst = &parsed
+	}
+
+	return nil
+}
+
+func (h *TransactionHandler) parseAmountFilters(c echo.Context, filters *TransactionFilterParams) error {
+	for _, bound := range []struct {
+		param string
+		dst   **money.Minor
+	}{
+		{"amount_from_minor", &filters.AmountFromMinor},
+		{"amount_to_minor", &filters.AmountToMinor},
+	} {
+		raw := c.QueryParam(bound.param)
+		if raw == "" {
+			continue
+		}
+		parsed, parseErr := strconv.ParseInt(raw, 10, 64)
+		if parseErr != nil {
+			return writeInvalidQueryParam(c, bound.param, raw, "must be an integer amount in minor units")
+		}
+		amount := money.Minor(parsed)
+		*bound.dst = &amount
 	}
 
 	return nil
@@ -391,8 +443,8 @@ func (h *TransactionHandler) buildTransactionServiceFilter(filters TransactionFi
 	}
 	filter.DateFrom = filters.DateFrom
 	filter.DateTo = filters.DateTo
-	filter.AmountFrom = filters.AmountFrom
-	filter.AmountTo = filters.AmountTo
+	filter.AmountFromMinor = filters.AmountFromMinor
+	filter.AmountToMinor = filters.AmountToMinor
 	filter.Description = filters.Description
 	filter.Limit = filters.Limit
 	filter.Offset = filters.Offset
@@ -407,13 +459,13 @@ func (h *TransactionHandler) buildRepositoryFilter(filters TransactionFilterPara
 	}
 
 	return transaction.Filter{
-		UserID:     filters.UserID,
-		CategoryID: filters.CategoryID,
-		Type:       typeFilter,
-		DateFrom:   filters.DateFrom,
-		DateTo:     filters.DateTo,
-		AmountFrom: filters.AmountFrom,
-		AmountTo:   filters.AmountTo,
+		UserID:          filters.UserID,
+		CategoryID:      filters.CategoryID,
+		Type:            typeFilter,
+		DateFrom:        filters.DateFrom,
+		DateTo:          filters.DateTo,
+		AmountFromMinor: filters.AmountFromMinor,
+		AmountToMinor:   filters.AmountToMinor,
 		Description: func() string {
 			if filters.Description != nil {
 				return *filters.Description
@@ -430,18 +482,7 @@ func (h *TransactionHandler) buildTransactionListResponse(
 ) []TransactionResponse {
 	response := make([]TransactionResponse, 0, len(transactions))
 	for _, tx := range transactions {
-		response = append(response, TransactionResponse{
-			ID:          tx.ID,
-			Amount:      tx.Amount,
-			Type:        string(tx.Type),
-			Description: tx.Description,
-			CategoryID:  tx.CategoryID,
-			UserID:      tx.UserID,
-			Date:        tx.Date,
-			Tags:        tx.Tags,
-			CreatedAt:   tx.CreatedAt,
-			UpdatedAt:   tx.UpdatedAt,
-		})
+		response = append(response, h.buildTransactionResponse(tx))
 	}
 	return response
 }
@@ -462,20 +503,7 @@ func (h *TransactionHandler) GetTransactionByID(c echo.Context) error {
 		return HandleNotFoundError(c, "Transaction")
 	}
 
-	response := TransactionResponse{
-		ID:          foundTransaction.ID,
-		Amount:      foundTransaction.Amount,
-		Type:        string(foundTransaction.Type),
-		Description: foundTransaction.Description,
-		CategoryID:  foundTransaction.CategoryID,
-		UserID:      foundTransaction.UserID,
-		Date:        foundTransaction.Date,
-		Tags:        foundTransaction.Tags,
-		CreatedAt:   foundTransaction.CreatedAt,
-		UpdatedAt:   foundTransaction.UpdatedAt,
-	}
-
-	return respondAPI(c, http.StatusOK, response)
+	return respondAPI(c, http.StatusOK, h.buildTransactionResponse(foundTransaction))
 }
 
 func (h *TransactionHandler) getTransactionByIDViaService(c echo.Context) error {
@@ -530,19 +558,19 @@ func (h *TransactionHandler) updateTransactionViaService(c echo.Context) error {
 
 	var req UpdateTransactionRequest
 	if bindErr := c.Bind(&req); bindErr != nil {
-		return HandleBindError(c)
+		return respondBindError(c, bindErr)
 	}
 	if validationErr := h.validator.Struct(req); validationErr != nil {
 		return respondValidationErrors(c, validationErr)
 	}
 
 	serviceReq := dto.UpdateTransactionDTO{
-		Amount:      req.Amount,
 		Description: req.Description,
 		CategoryID:  req.CategoryID,
-		Date:        req.Date,
 		Tags:        req.Tags,
 	}
+	serviceReq.AmountMinor = req.AmountMinor
+	serviceReq.Date = req.Date
 	if req.Type != nil {
 		txType := transaction.Type(*req.Type)
 		serviceReq.Type = &txType
@@ -557,8 +585,8 @@ func (h *TransactionHandler) updateTransactionViaService(c echo.Context) error {
 }
 
 func (h *TransactionHandler) updateTransactionFields(tx *transaction.Transaction, req *UpdateTransactionRequest) {
-	if req.Amount != nil {
-		tx.Amount = *req.Amount
+	if req.AmountMinor != nil {
+		tx.AmountMinor = *req.AmountMinor
 	}
 	if req.Type != nil {
 		tx.Type = transaction.Type(*req.Type)
@@ -605,8 +633,7 @@ func (h *TransactionHandler) DeleteTransaction(c echo.Context) error {
 func (h *TransactionHandler) BulkDeleteTransactions(c echo.Context) error {
 	var req BulkDeleteRequest
 	if err := c.Bind(&req); err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
-			bodyDetail(ErrCodeInvalidRequest, err.Error()))
+		return respondBindError(c, err)
 	}
 
 	if err := h.validator.Struct(req); err != nil {
@@ -632,6 +659,8 @@ func (h *TransactionHandler) handleUpdateTransactionServiceError(c echo.Context,
 	case errors.Is(err, services.ErrInsufficientBudget),
 		errors.Is(err, services.ErrInvalidTransactionAmount),
 		errors.Is(err, services.ErrInvalidTransactionType),
+		errors.Is(err, services.ErrTransactionAmountTooLarge),
+		errors.Is(err, services.ErrTransactionDateOutOfRange),
 		errors.Is(err, dto.ErrInvalidDateRange),
 		errors.Is(err, dto.ErrInvalidAmountRange),
 		strings.Contains(err.Error(), "validation failed"),

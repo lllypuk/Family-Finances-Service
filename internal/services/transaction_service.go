@@ -12,6 +12,8 @@ import (
 
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services/dto"
@@ -28,7 +30,19 @@ var (
 	ErrTransactionUpdateFailed   = errors.New("failed to update transaction")
 	ErrTransactionDeleteFailed   = errors.New("failed to delete transaction")
 	ErrBulkCategorizePartialFail = errors.New("some transactions failed to update during bulk categorization")
+	ErrTransactionAmountTooLarge = errors.New("transaction amount exceeds the maximum")
+	ErrTransactionDateOutOfRange = transaction.ErrDateOutOfRange
 )
+
+// validateTransactionBounds — границы суммы и даты; здесь они нужны, чтобы клиент
+// получил 422, а не 500 из слоя данных.
+func validateTransactionBounds(amount money.Minor, on date.Date) error {
+	if amount > money.MaxAmount {
+		return fmt.Errorf("%w: %d", ErrTransactionAmountTooLarge, amount)
+	}
+
+	return transaction.ValidateDate(on)
+}
 
 // TransactionRepository defines the data access operations for transactions
 type TransactionRepository interface {
@@ -41,18 +55,22 @@ type TransactionRepository interface {
 	// DeleteBulk удаляет переданные id одним запросом и возвращает число удалённых строк;
 	// отсутствующие id молча пропускаются.
 	DeleteBulk(ctx context.Context, ids []uuid.UUID) (int, error)
-	GetTotalByCategory(ctx context.Context, categoryID uuid.UUID, transactionType transaction.Type) (float64, error)
+	GetTotalByCategory(
+		ctx context.Context,
+		categoryID uuid.UUID,
+		transactionType transaction.Type,
+	) (money.Minor, error)
 	GetTotalByDateRange(
 		ctx context.Context,
-		startDate, endDate time.Time,
+		startDate, endDate date.Date,
 		transactionType transaction.Type,
-	) (float64, error)
+	) (money.Minor, error)
 	GetTotalByCategoryAndDateRange(
 		ctx context.Context,
 		categoryID uuid.UUID,
-		startDate, endDate time.Time,
+		startDate, endDate date.Date,
 		transactionType transaction.Type,
-	) (float64, error)
+	) (money.Minor, error)
 	// Note: UpdateBulkCategory may need to be implemented in the repository
 	// For now, we'll use individual updates in a transaction
 }
@@ -65,7 +83,7 @@ type TransactionRepositoryAtomicCreateWithBudget interface {
 
 // BudgetRepositoryForTransactions defines the budget operations needed for transaction service
 type BudgetRepositoryForTransactions interface {
-	GetActiveBudgets(ctx context.Context) ([]*budget.Budget, error)
+	GetActiveBudgets(ctx context.Context, on date.Date) ([]*budget.Budget, error)
 	Update(ctx context.Context, budget *budget.Budget) error
 	// Note: GetByCategoryAndFamily may need to be added to budget repository
 	// For now, we'll iterate through active budgets to find the right one
@@ -119,7 +137,7 @@ func NewTransactionServiceWithLogger(
 		budgetRepo:      budgetRepo,
 		categoryRepo:    categoryRepo,
 		userRepo:        userRepo,
-		validator:       validator.New(),
+		validator:       newValidator(),
 		logger:          logger,
 	}
 }
@@ -131,6 +149,10 @@ func (s *TransactionServiceImpl) CreateTransaction(
 ) (*transaction.Transaction, error) {
 	if err := s.validator.Struct(req); err != nil {
 		return nil, fmt.Errorf("validation failed: %w", err)
+	}
+
+	if err := validateTransactionBounds(req.AmountMinor, req.Date); err != nil {
+		return nil, err
 	}
 
 	// Validate user exists (single-family model - no family validation needed)
@@ -145,15 +167,15 @@ func (s *TransactionServiceImpl) CreateTransaction(
 
 	// For expense transactions, check budget limits
 	if req.Type == transaction.TypeExpense {
-		if err := s.ValidateTransactionLimits(ctx, req.CategoryID, req.Amount, req.Type); err != nil {
+		if err := s.ValidateTransactionLimits(ctx, req.CategoryID, req.AmountMinor, req.Type, req.Date); err != nil {
 			return nil, err
 		}
 	}
 
 	// Create transaction
 	newTransaction := &transaction.Transaction{
-		ID:          uuid.New(),
-		Amount:      req.Amount,
+		ID:          dto.EntityID(req.ID),
+		AmountMinor: req.AmountMinor,
 		Type:        req.Type,
 		Description: req.Description,
 		CategoryID:  req.CategoryID,
@@ -181,7 +203,7 @@ func (s *TransactionServiceImpl) CreateTransaction(
 	// Fallback non-atomic budget update path for repositories without atomic support.
 	// Return error if budget sync fails to avoid reporting success with inconsistent state.
 	if req.Type == transaction.TypeExpense {
-		if budgetErr := s.updateBudgetSpent(ctx, req.CategoryID, req.Amount); budgetErr != nil {
+		if budgetErr := s.updateBudgetSpent(ctx, req.CategoryID, req.AmountMinor, req.Date); budgetErr != nil {
 			return nil, fmt.Errorf("failed to update budget after transaction create: %w", budgetErr)
 		}
 	}
@@ -275,13 +297,14 @@ func (s *TransactionServiceImpl) UpdateTransaction(
 	}
 
 	// Store original values for budget adjustment
-	originalAmount := existingTx.Amount
+	originalAmount := existingTx.AmountMinor
 	originalType := existingTx.Type
 	originalCategoryID := existingTx.CategoryID
+	originalDate := existingTx.Date
 
 	// Update fields if provided
-	if req.Amount != nil {
-		existingTx.Amount = *req.Amount
+	if req.AmountMinor != nil {
+		existingTx.AmountMinor = *req.AmountMinor
 	}
 	if req.Type != nil {
 		existingTx.Type = *req.Type
@@ -300,16 +323,14 @@ func (s *TransactionServiceImpl) UpdateTransaction(
 	}
 	existingTx.UpdatedAt = time.Now()
 
-	// Validate budget limits for new values if it's an expense
-	if existingTx.Type == transaction.TypeExpense {
-		if limitErr := s.ValidateTransactionLimits(
-			ctx,
-			existingTx.CategoryID,
-			existingTx.Amount,
-			existingTx.Type,
-		); limitErr != nil {
-			return nil, limitErr
-		}
+	if err = validateTransactionBounds(existingTx.AmountMinor, existingTx.Date); err != nil {
+		return nil, err
+	}
+
+	if limitErr := s.validateUpdatedTransactionLimits(
+		ctx, existingTx, originalAmount, originalType, originalCategoryID, originalDate,
+	); limitErr != nil {
+		return nil, limitErr
 	}
 
 	// Update transaction
@@ -323,6 +344,7 @@ func (s *TransactionServiceImpl) UpdateTransaction(
 		originalAmount,
 		originalType,
 		originalCategoryID,
+		originalDate,
 		existingTx,
 	); budgetErr != nil {
 		s.warnBudgetAdjustment(ctx, "failed to adjust budgets after transaction update",
@@ -352,7 +374,8 @@ func (s *TransactionServiceImpl) DeleteTransaction(ctx context.Context, id uuid.
 		if budgetErr := s.updateBudgetSpent(
 			ctx,
 			existingTx.CategoryID,
-			-existingTx.Amount,
+			-existingTx.AmountMinor,
+			existingTx.Date,
 		); budgetErr != nil {
 			s.warnBudgetAdjustment(ctx, "failed to reverse budget spent after transaction delete",
 				slog.String("transaction_id", existingTx.ID.String()),
@@ -401,7 +424,7 @@ func (s *TransactionServiceImpl) BulkDelete(ctx context.Context, ids []uuid.UUID
 	}
 
 	for _, tx := range expenses {
-		if budgetErr := s.updateBudgetSpent(ctx, tx.CategoryID, -tx.Amount); budgetErr != nil {
+		if budgetErr := s.updateBudgetSpent(ctx, tx.CategoryID, -tx.AmountMinor, tx.Date); budgetErr != nil {
 			s.warnBudgetAdjustment(ctx, "failed to reverse budget spent after bulk delete",
 				slog.String("transaction_id", tx.ID.String()),
 				slog.String("category_id", tx.CategoryID.String()),
@@ -445,7 +468,7 @@ const (
 // GetTransactionsByDateRange retrieves transactions within a date range
 func (s *TransactionServiceImpl) GetTransactionsByDateRange(
 	ctx context.Context,
-	from, to time.Time,
+	from, to date.Date,
 ) ([]*transaction.Transaction, error) {
 	if to.Before(from) {
 		return nil, dto.ErrInvalidDateRange
@@ -552,7 +575,7 @@ func (s *TransactionServiceImpl) updateSingleTransactionCategory(
 
 	// Adjust budgets for category changes (only for expense transactions)
 	if tx.Type == transaction.TypeExpense {
-		s.adjustBudgetsForCategoryChange(ctx, originalCategoryID, newCategoryID, tx.Amount)
+		s.adjustBudgetsForCategoryChange(ctx, originalCategoryID, newCategoryID, tx.AmountMinor, tx.Date)
 	}
 
 	return nil
@@ -561,22 +584,23 @@ func (s *TransactionServiceImpl) updateSingleTransactionCategory(
 func (s *TransactionServiceImpl) adjustBudgetsForCategoryChange(
 	ctx context.Context,
 	oldCategoryID, newCategoryID uuid.UUID,
-	amount float64,
+	amount money.Minor,
+	on date.Date,
 ) {
 	// Remove from old category budget
-	if budgetErr := s.updateBudgetSpent(ctx, oldCategoryID, -amount); budgetErr != nil {
+	if budgetErr := s.updateBudgetSpent(ctx, oldCategoryID, -amount, on); budgetErr != nil {
 		s.warnBudgetAdjustment(ctx, "failed to decrease old category budget after recategorization",
 			slog.String("old_category_id", oldCategoryID.String()),
-			slog.Float64("amount", amount),
+			slog.Int64("amount_minor", int64(amount)),
 			slog.String("error", budgetErr.Error()),
 		)
 	}
 
 	// Add to new category budget
-	if budgetErr := s.updateBudgetSpent(ctx, newCategoryID, amount); budgetErr != nil {
+	if budgetErr := s.updateBudgetSpent(ctx, newCategoryID, amount, on); budgetErr != nil {
 		s.warnBudgetAdjustment(ctx, "failed to increase new category budget after recategorization",
 			slog.String("new_category_id", newCategoryID.String()),
-			slog.Float64("amount", amount),
+			slog.Int64("amount_minor", int64(amount)),
 			slog.String("error", budgetErr.Error()),
 		)
 	}
@@ -602,8 +626,9 @@ func attrsToAny(attrs []slog.Attr) []any {
 func (s *TransactionServiceImpl) ValidateTransactionLimits(
 	ctx context.Context,
 	categoryID uuid.UUID,
-	amount float64,
+	amount money.Minor,
 	transactionType transaction.Type,
+	on date.Date,
 ) error {
 	// Only check limits for expense transactions
 	if transactionType != transaction.TypeExpense {
@@ -611,16 +636,53 @@ func (s *TransactionServiceImpl) ValidateTransactionLimits(
 	}
 
 	// Get active budget for the category
-	budget, err := s.findBudgetByCategory(ctx, categoryID)
+	budget, err := s.findBudgetByCategory(ctx, categoryID, on)
 	if err != nil {
 		// No budget means no limit - allow the transaction
 		return nil //nolint:nilerr // No budget found is acceptable, not an error condition
 	}
 
 	// Check if adding this transaction would exceed the budget limit
-	if budget.Spent+amount > budget.Amount {
-		return fmt.Errorf("%w: budget amount %.2f, current spent %.2f, transaction amount %.2f",
-			ErrInsufficientBudget, budget.Amount, budget.Spent, amount)
+	if budget.SpentMinor+amount > budget.AmountMinor {
+		return fmt.Errorf("%w: budget amount %d, current spent %d, transaction amount %d",
+			ErrInsufficientBudget, budget.AmountMinor, budget.SpentMinor, amount)
+	}
+
+	return nil
+}
+
+// validateUpdatedTransactionLimits — проверка лимита при правке операции. Сохранённая
+// версия уже сидит в budget.SpentMinor, поэтому её вклад вычитается: иначе операция
+// переставала бы редактироваться, как только съедала половину бюджета.
+func (s *TransactionServiceImpl) validateUpdatedTransactionLimits(
+	ctx context.Context,
+	updated *transaction.Transaction,
+	originalAmount money.Minor,
+	originalType transaction.Type,
+	originalCategoryID uuid.UUID,
+	originalDate date.Date,
+) error {
+	if updated.Type != transaction.TypeExpense {
+		return nil
+	}
+
+	target, err := s.findBudgetByCategory(ctx, updated.CategoryID, updated.Date)
+	if err != nil {
+		// Нет бюджета — нет лимита.
+		return nil //nolint:nilerr // No budget found is acceptable, not an error condition
+	}
+
+	spent := target.SpentMinor
+	if originalType == transaction.TypeExpense {
+		original, origErr := s.findBudgetByCategory(ctx, originalCategoryID, originalDate)
+		if origErr == nil && original.ID == target.ID {
+			spent -= originalAmount
+		}
+	}
+
+	if spent+updated.AmountMinor > target.AmountMinor {
+		return fmt.Errorf("%w: budget amount %d, current spent %d, transaction amount %d",
+			ErrInsufficientBudget, target.AmountMinor, spent, updated.AmountMinor)
 	}
 
 	return nil
@@ -649,15 +711,16 @@ func (s *TransactionServiceImpl) validateCategoryExists(ctx context.Context, cat
 func (s *TransactionServiceImpl) updateBudgetSpent(
 	ctx context.Context,
 	categoryID uuid.UUID,
-	amount float64,
+	amount money.Minor,
+	on date.Date,
 ) error {
-	budget, err := s.findBudgetByCategory(ctx, categoryID)
+	budget, err := s.findBudgetByCategory(ctx, categoryID, on)
 	if err != nil {
 		// No budget found - this is acceptable, not all categories need budgets
 		return nil //nolint:nilerr // No budget found is acceptable, not an error condition
 	}
 
-	budget.Spent += amount
+	budget.SpentMinor += amount
 	budget.UpdatedAt = time.Now()
 
 	return s.budgetRepo.Update(ctx, budget)
@@ -666,9 +729,11 @@ func (s *TransactionServiceImpl) updateBudgetSpent(
 func (s *TransactionServiceImpl) findBudgetByCategory(
 	ctx context.Context,
 	categoryID uuid.UUID,
+	on date.Date,
 ) (*budget.Budget, error) {
-	// Get active budgets (single family model - repository handles family ID internally)
-	budgets, err := s.budgetRepo.GetActiveBudgets(ctx)
+	// Бюджет выбирается по дате самой операции, а не по «сегодня»: иначе правка
+	// прошлого месяца попала бы в текущий бюджет.
+	budgets, err := s.budgetRepo.GetActiveBudgets(ctx, on)
 	if err != nil {
 		return nil, err
 	}
@@ -684,21 +749,27 @@ func (s *TransactionServiceImpl) findBudgetByCategory(
 
 func (s *TransactionServiceImpl) adjustBudgetsForUpdate(
 	ctx context.Context,
-	originalAmount float64,
+	originalAmount money.Minor,
 	originalType transaction.Type,
 	originalCategoryID uuid.UUID,
+	originalDate date.Date,
 	newTransaction *transaction.Transaction,
 ) error {
 	// Reverse original budget impact if it was an expense
 	if originalType == transaction.TypeExpense {
-		if err := s.updateBudgetSpent(ctx, originalCategoryID, -originalAmount); err != nil {
+		if err := s.updateBudgetSpent(ctx, originalCategoryID, -originalAmount, originalDate); err != nil {
 			return err
 		}
 	}
 
 	// Apply new budget impact if it's an expense
 	if newTransaction.Type == transaction.TypeExpense {
-		if err := s.updateBudgetSpent(ctx, newTransaction.CategoryID, newTransaction.Amount); err != nil {
+		if err := s.updateBudgetSpent(
+			ctx,
+			newTransaction.CategoryID,
+			newTransaction.AmountMinor,
+			newTransaction.Date,
+		); err != nil {
 			return err
 		}
 	}
@@ -710,13 +781,14 @@ func (s *TransactionServiceImpl) convertDTOFilterToRepoFilter(filter dto.Transac
 	repoFilter := transaction.Filter{
 		UserID:     filter.UserID,
 		CategoryID: filter.CategoryID,
-		DateFrom:   filter.DateFrom,
-		DateTo:     filter.DateTo,
-		AmountFrom: filter.AmountFrom,
-		AmountTo:   filter.AmountTo,
 		Limit:      filter.Limit,
 		Offset:     filter.Offset,
 	}
+
+	repoFilter.DateFrom = filter.DateFrom
+	repoFilter.DateTo = filter.DateTo
+	repoFilter.AmountFromMinor = filter.AmountFromMinor
+	repoFilter.AmountToMinor = filter.AmountToMinor
 
 	if filter.Type != nil {
 		repoFilter.Type = filter.Type

@@ -8,6 +8,7 @@ import (
 
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/infrastructure/validation"
@@ -374,32 +375,32 @@ func TestValidateBudgetPeriod(t *testing.T) {
 func TestValidateBudgetAmount(t *testing.T) {
 	tests := []struct {
 		name    string
-		amount  float64
+		amount  money.Minor
 		wantErr bool
 	}{
 		{
 			name:    "positive integer",
-			amount:  100.00,
+			amount:  10_000,
 			wantErr: false,
 		},
 		{
 			name:    "positive decimal",
-			amount:  99.99,
+			amount:  9_999,
 			wantErr: false,
 		},
 		{
 			name:    "small amount",
-			amount:  0.01,
+			amount:  1,
 			wantErr: false,
 		},
 		{
 			name:    "large amount",
-			amount:  999999.99,
+			amount:  99_999_999,
 			wantErr: false,
 		},
 		{
 			name:    "maximum valid amount",
-			amount:  999999999.99,
+			amount:  99_999_999_999,
 			wantErr: false,
 		},
 
@@ -411,17 +412,17 @@ func TestValidateBudgetAmount(t *testing.T) {
 		},
 		{
 			name:    "negative",
-			amount:  -100,
+			amount:  -10_000,
 			wantErr: true,
 		},
 		{
 			name:    "too large",
-			amount:  999999999.99 + 0.01,
+			amount:  99_999_999_999 + 1,
 			wantErr: true,
 		},
 		{
 			name:    "extremely large",
-			amount:  999999999999.99,
+			amount:  99_999_999_999_999,
 			wantErr: true,
 		},
 	}
@@ -499,32 +500,32 @@ func TestValidateBudgetName(t *testing.T) {
 func TestValidateAmount(t *testing.T) {
 	tests := []struct {
 		name    string
-		amount  float64
+		amount  money.Minor
 		wantErr bool
 	}{
 		{
 			name:    "positive integer",
-			amount:  100.00,
+			amount:  10_000,
 			wantErr: false,
 		},
 		{
 			name:    "positive decimal",
-			amount:  99.99,
+			amount:  9_999,
 			wantErr: false,
 		},
 		{
 			name:    "small amount",
-			amount:  0.01,
+			amount:  1,
 			wantErr: false,
 		},
 		{
 			name:    "large amount",
-			amount:  999999.99,
+			amount:  99_999_999,
 			wantErr: false,
 		},
 		{
 			name:    "maximum valid amount",
-			amount:  999999999.99,
+			amount:  99_999_999_999,
 			wantErr: false,
 		},
 
@@ -536,12 +537,12 @@ func TestValidateAmount(t *testing.T) {
 		},
 		{
 			name:    "negative",
-			amount:  -100,
+			amount:  -10_000,
 			wantErr: true,
 		},
 		{
 			name:    "too large",
-			amount:  999999999.99 + 0.01,
+			amount:  99_999_999_999 + 1,
 			wantErr: true,
 		},
 	}
@@ -884,9 +885,10 @@ func TestValidateCurrency(t *testing.T) {
 			wantErr:  false,
 		},
 		{
-			name:     "JPY",
+			// Валюта без сотых долей: amount_minor для неё не определён.
+			name:     "JPY rejected",
 			currency: "JPY",
-			wantErr:  false,
+			wantErr:  true,
 		},
 		{
 			name:     "RUB",
@@ -1096,27 +1098,27 @@ func TestValidateCategoryName_SecurityEdgeCases(t *testing.T) {
 func TestValidateAmount_BoundaryValues(t *testing.T) {
 	tests := []struct {
 		name    string
-		amount  float64
+		amount  money.Minor
 		wantErr bool
 	}{
 		{
 			name:    "minimum positive value",
-			amount:  0.00001,
+			amount:  1,
 			wantErr: false,
 		},
 		{
 			name:    "just below zero",
-			amount:  -0.00001,
+			amount:  -1,
 			wantErr: true,
 		},
 		{
 			name:    "exactly at max boundary",
-			amount:  999999999.99,
+			amount:  99_999_999_999,
 			wantErr: false,
 		},
 		{
 			name:    "just above max boundary",
-			amount:  1000000000.00,
+			amount:  100_000_000_000,
 			wantErr: true,
 		},
 	}
@@ -1179,7 +1181,7 @@ func BenchmarkValidateEmail(b *testing.B) {
 }
 
 func BenchmarkValidateAmount(b *testing.B) {
-	amount := 100.50
+	amount := money.Minor(10_050)
 	for range b.N {
 		_ = validation.ValidateAmount(amount)
 	}

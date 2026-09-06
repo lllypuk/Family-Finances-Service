@@ -8,6 +8,8 @@ import (
 
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
@@ -81,18 +83,20 @@ type TransactionService interface {
 	) ([]*transaction.Transaction, error)
 	GetTransactionsByDateRange(
 		ctx context.Context,
-		from, to time.Time,
+		from, to date.Date,
 	) ([]*transaction.Transaction, error)
 	BulkCategorizeTransactions(
 		ctx context.Context,
 		transactionIDs []uuid.UUID,
 		categoryID uuid.UUID,
 	) error
+	// ValidateTransactionLimits — бюджет ищется по календарной дате операции on.
 	ValidateTransactionLimits(
 		ctx context.Context,
 		categoryID uuid.UUID,
-		amount float64,
+		amount money.Minor,
 		transactionType transaction.Type,
+		on date.Date,
 	) error
 }
 
@@ -108,23 +112,24 @@ type BudgetService interface {
 	DeleteBudget(ctx context.Context, id uuid.UUID) error
 
 	// Business Operations
-	GetActiveBudgets(ctx context.Context, date time.Time) ([]*budget.Budget, error) // Single family
-	UpdateBudgetSpent(ctx context.Context, budgetID uuid.UUID, amount float64) error
-	CheckBudgetLimits(ctx context.Context, categoryID uuid.UUID, amount float64) error // Single family
+	GetActiveBudgets(ctx context.Context, on date.Date) ([]*budget.Budget, error) // Single family
+	UpdateBudgetSpent(ctx context.Context, budgetID uuid.UUID, amount money.Minor) error
+	CheckBudgetLimits(ctx context.Context, categoryID uuid.UUID, amount money.Minor, on date.Date) error
 	GetBudgetStatus(ctx context.Context, budgetID uuid.UUID) (*dto.BudgetStatusDTO, error)
 	CalculateBudgetUtilization(ctx context.Context, budgetID uuid.UUID) (*dto.BudgetUtilizationDTO, error)
 	GetBudgetsByCategory(ctx context.Context, categoryID uuid.UUID) ([]*budget.Budget, error) // Single family
 	ValidateBudgetPeriod(
 		ctx context.Context,
 		categoryID *uuid.UUID,
-		startDate, endDate time.Time,
+		startDate, endDate date.Date,
 	) error
 	RecalculateBudgetSpent(ctx context.Context, budgetID uuid.UUID) error
 }
 
-// StatsService defines aggregated statistics over a period (dashboard, GET /stats/summary)
+// StatsService defines aggregated statistics over a period (dashboard, GET /stats/summary).
+// Пустые границы означают текущий месяц по часовому поясу семьи.
 type StatsService interface {
-	Summary(ctx context.Context, from, to time.Time) (*dto.StatsSummary, error)
+	Summary(ctx context.Context, from, to *date.Date) (*dto.StatsSummary, error)
 }
 
 // ReportService defines business operations for report generation and analytics
@@ -136,7 +141,7 @@ type ReportService interface {
 		ctx context.Context,
 		period report.Period,
 	) (*dto.BudgetComparisonDTO, error)
-	GenerateCashFlowReport(ctx context.Context, from, to time.Time) (*dto.CashFlowReportDTO, error)
+	GenerateCashFlowReport(ctx context.Context, from, to date.Date) (*dto.CashFlowReportDTO, error)
 	GenerateCategoryBreakdownReport(
 		ctx context.Context,
 		period report.Period,

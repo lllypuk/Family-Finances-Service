@@ -238,6 +238,27 @@ func TestUserHandler_CreateUser(t *testing.T) {
 			},
 		},
 		{
+			// Роль child удалена планом 04 (A-03): от старого клиента она приходит как обычная опечатка.
+			name: "Error - Removed role child",
+			requestBody: handlers.CreateUserRequest{
+				Email:     "test@example.com",
+				Password:  "password123",
+				FirstName: "John",
+				LastName:  "Doe",
+				Role:      "child",
+			},
+			mockSetup:      func(_ *MockUserService, _ uuid.UUID) {},
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedBody: func(t *testing.T, body string) {
+				var response handlers.ErrorResponse
+				err := json.Unmarshal([]byte(body), &response)
+				require.NoError(t, err)
+				assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
+				require.Len(t, response.Error.Details, 1)
+				assert.Equal(t, "role", response.Error.Details[0].Field)
+			},
+		},
+		{
 			name: "Error - Repository creation fails",
 			requestBody: handlers.CreateUserRequest{
 				Email:     "test@example.com",
@@ -664,9 +685,9 @@ func TestUserHandler_PatchUser_InvalidID(t *testing.T) {
 func TestUserHandler_PatchUser_UserNotFound(t *testing.T) {
 	service := &MockUserService{}
 	targetID := uuid.New()
-	service.On("ChangeUserRole", mock.Anything, targetID, user.RoleChild).Return(services.ErrUserNotFound)
+	service.On("ChangeUserRole", mock.Anything, targetID, user.RoleAdmin).Return(services.ErrUserNotFound)
 
-	rec := patchUserRequest(t, service, targetID.String(), `{"role":"child"}`, uuid.New())
+	rec := patchUserRequest(t, service, targetID.String(), `{"role":"admin"}`, uuid.New())
 
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 

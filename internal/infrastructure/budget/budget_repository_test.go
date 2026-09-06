@@ -12,6 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/domain/budget"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	budgetrepo "family-budget-service/internal/infrastructure/budget"
 )
 
@@ -28,14 +30,14 @@ func TestBudgetRepositorySQLite_Create(t *testing.T) {
 		require.NoError(t, err)
 
 		testBudget := &budget.Budget{
-			ID:        uuid.New(),
-			Name:      "Monthly Budget",
-			Amount:    1000.0,
-			Spent:     0,
-			Period:    budget.PeriodMonthly,
-			StartDate: time.Now(),
-			EndDate:   time.Now().AddDate(0, 1, 0),
-			IsActive:  true,
+			ID:          uuid.New(),
+			Name:        "Monthly Budget",
+			AmountMinor: 100_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			StartDate:   date.Today(time.UTC),
+			EndDate:     date.Today(time.UTC).AddDays(30),
+			IsActive:    true,
 		}
 
 		err = repo.Create(ctx, testBudget)
@@ -45,7 +47,7 @@ func TestBudgetRepositorySQLite_Create(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, testBudget.ID, retrieved.ID)
 		assert.Equal(t, testBudget.Name, retrieved.Name)
-		assert.InDelta(t, testBudget.Amount, retrieved.Amount, 0.01)
+		assert.Equal(t, testBudget.AmountMinor, retrieved.AmountMinor)
 		assert.Equal(t, testBudget.Period, retrieved.Period)
 
 		_ = familyID // suppress unused warning
@@ -63,15 +65,15 @@ func TestBudgetRepositorySQLite_Create(t *testing.T) {
 
 		catUUID := uuid.MustParse(categoryID)
 		testBudget := &budget.Budget{
-			ID:         uuid.New(),
-			Name:       "Food Budget",
-			Amount:     500.0,
-			Spent:      0,
-			Period:     budget.PeriodMonthly,
-			CategoryID: &catUUID,
-			StartDate:  time.Now(),
-			EndDate:    time.Now().AddDate(0, 1, 0),
-			IsActive:   true,
+			ID:          uuid.New(),
+			Name:        "Food Budget",
+			AmountMinor: 50_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			CategoryID:  &catUUID,
+			StartDate:   date.Today(time.UTC),
+			EndDate:     date.Today(time.UTC).AddDays(30),
+			IsActive:    true,
 		}
 
 		err = repo.Create(ctx, testBudget)
@@ -90,32 +92,32 @@ func TestBudgetRepositorySQLite_Create(t *testing.T) {
 		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-		endDate := time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC)
+		startDate := date.New(2024, time.January, 1)
+		endDate := date.New(2024, time.January, 31)
 
 		testBudget := &budget.Budget{
-			ID:        uuid.New(),
-			Name:      "Duplicate Budget",
-			Amount:    1000.0,
-			Spent:     0,
-			Period:    budget.PeriodMonthly,
-			StartDate: startDate,
-			EndDate:   endDate,
-			IsActive:  true,
+			ID:          uuid.New(),
+			Name:        "Duplicate Budget",
+			AmountMinor: 100_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			StartDate:   startDate,
+			EndDate:     endDate,
+			IsActive:    true,
 		}
 
 		err = repo.Create(ctx, testBudget)
 		require.NoError(t, err)
 
 		duplicateBudget := &budget.Budget{
-			ID:        uuid.New(),
-			Name:      "Duplicate Budget",
-			Amount:    2000.0,
-			Spent:     0,
-			Period:    budget.PeriodMonthly,
-			StartDate: startDate,
-			EndDate:   endDate,
-			IsActive:  true,
+			ID:          uuid.New(),
+			Name:        "Duplicate Budget",
+			AmountMinor: 200_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			StartDate:   startDate,
+			EndDate:     endDate,
+			IsActive:    true,
 		}
 
 		err = repo.Create(ctx, duplicateBudget)
@@ -131,14 +133,14 @@ func TestBudgetRepositorySQLite_Create(t *testing.T) {
 		require.NoError(t, err)
 
 		testBudget := &budget.Budget{
-			ID:        uuid.Nil,
-			Name:      "Invalid ID Budget",
-			Amount:    1000.0,
-			Spent:     0,
-			Period:    budget.PeriodMonthly,
-			StartDate: time.Now(),
-			EndDate:   time.Now().AddDate(0, 1, 0),
-			IsActive:  true,
+			ID:          uuid.Nil,
+			Name:        "Invalid ID Budget",
+			AmountMinor: 100_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			StartDate:   date.Today(time.UTC),
+			EndDate:     date.Today(time.UTC).AddDays(30),
+			IsActive:    true,
 		}
 
 		err = repo.Create(ctx, testBudget)
@@ -154,14 +156,14 @@ func TestBudgetRepositorySQLite_Create(t *testing.T) {
 		require.NoError(t, err)
 
 		testBudget := &budget.Budget{
-			ID:        uuid.New(),
-			Name:      "Invalid Period Budget",
-			Amount:    1000.0,
-			Spent:     0,
-			Period:    budget.Period("invalid"),
-			StartDate: time.Now(),
-			EndDate:   time.Now().AddDate(0, 1, 0),
-			IsActive:  true,
+			ID:          uuid.New(),
+			Name:        "Invalid Period Budget",
+			AmountMinor: 100_000,
+			SpentMinor:  0,
+			Period:      budget.Period("invalid"),
+			StartDate:   date.Today(time.UTC),
+			EndDate:     date.Today(time.UTC).AddDays(30),
+			IsActive:    true,
 		}
 
 		err = repo.Create(ctx, testBudget)
@@ -177,14 +179,14 @@ func TestBudgetRepositorySQLite_Create(t *testing.T) {
 		require.NoError(t, err)
 
 		testBudget := &budget.Budget{
-			ID:        uuid.New(),
-			Name:      "Invalid Amount Budget",
-			Amount:    -100.0,
-			Spent:     0,
-			Period:    budget.PeriodMonthly,
-			StartDate: time.Now(),
-			EndDate:   time.Now().AddDate(0, 1, 0),
-			IsActive:  true,
+			ID:          uuid.New(),
+			Name:        "Invalid Amount Budget",
+			AmountMinor: -10_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			StartDate:   date.Today(time.UTC),
+			EndDate:     date.Today(time.UTC).AddDays(30),
+			IsActive:    true,
 		}
 
 		err = repo.Create(ctx, testBudget)
@@ -200,14 +202,14 @@ func TestBudgetRepositorySQLite_Create(t *testing.T) {
 		require.NoError(t, err)
 
 		testBudget := &budget.Budget{
-			ID:        uuid.New(),
-			Name:      "Invalid Date Range Budget",
-			Amount:    1000.0,
-			Spent:     0,
-			Period:    budget.PeriodMonthly,
-			StartDate: time.Now(),
-			EndDate:   time.Now().AddDate(0, -1, 0),
-			IsActive:  true,
+			ID:          uuid.New(),
+			Name:        "Invalid Date Range Budget",
+			AmountMinor: 100_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			StartDate:   date.Today(time.UTC),
+			EndDate:     date.Today(time.UTC).AddDays(-30),
+			IsActive:    true,
 		}
 
 		err = repo.Create(ctx, testBudget)
@@ -228,7 +230,7 @@ func TestBudgetRepositorySQLite_GetByID(t *testing.T) {
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		budgetID, err := helper.CreateTestBudget(ctx, "Test Budget", 1000.0, "monthly", familyID, nil)
+		budgetID, err := helper.CreateTestBudget(ctx, "Test Budget", 100_000, "monthly", familyID, nil)
 		require.NoError(t, err)
 
 		retrieved, err := repo.GetByID(ctx, uuid.MustParse(budgetID))
@@ -287,13 +289,13 @@ func TestBudgetRepositorySQLite_GetAll(t *testing.T) {
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		_, err = helper.CreateTestBudget(ctx, "Budget 1", 1000.0, "monthly", familyID, nil)
+		_, err = helper.CreateTestBudget(ctx, "Budget 1", 100_000, "monthly", familyID, nil)
 		require.NoError(t, err)
 
-		_, err = helper.CreateTestBudget(ctx, "Budget 2", 2000.0, "monthly", familyID, nil)
+		_, err = helper.CreateTestBudget(ctx, "Budget 2", 200_000, "monthly", familyID, nil)
 		require.NoError(t, err)
 
-		_, err = helper.CreateTestBudget(ctx, "Budget 3", 3000.0, "yearly", familyID, nil)
+		_, err = helper.CreateTestBudget(ctx, "Budget 3", 300_000, "yearly", familyID, nil)
 		require.NoError(t, err)
 
 		budgets, err := repo.GetAll(ctx)
@@ -308,10 +310,10 @@ func TestBudgetRepositorySQLite_GetAll(t *testing.T) {
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		budgetID1, err := helper.CreateTestBudget(ctx, "Active Budget", 1000.0, "monthly", familyID, nil)
+		budgetID1, err := helper.CreateTestBudget(ctx, "Active Budget", 100_000, "monthly", familyID, nil)
 		require.NoError(t, err)
 
-		budgetID2, err := helper.CreateTestBudget(ctx, "To Delete Budget", 2000.0, "monthly", familyID, nil)
+		budgetID2, err := helper.CreateTestBudget(ctx, "To Delete Budget", 200_000, "monthly", familyID, nil)
 		require.NoError(t, err)
 
 		err = repo.Delete(ctx, uuid.MustParse(budgetID2))
@@ -336,15 +338,15 @@ func TestBudgetRepositorySQLite_Update(t *testing.T) {
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		budgetID, err := helper.CreateTestBudget(ctx, "Original Budget", 1000.0, "monthly", familyID, nil)
+		budgetID, err := helper.CreateTestBudget(ctx, "Original Budget", 100_000, "monthly", familyID, nil)
 		require.NoError(t, err)
 
 		retrieved, err := repo.GetByID(ctx, uuid.MustParse(budgetID))
 		require.NoError(t, err)
 
 		retrieved.Name = "Updated Budget"
-		retrieved.Amount = 2000.0
-		retrieved.Spent = 500.0
+		retrieved.AmountMinor = 200_000
+		retrieved.SpentMinor = 50_000
 
 		err = repo.Update(ctx, retrieved)
 		require.NoError(t, err)
@@ -352,8 +354,8 @@ func TestBudgetRepositorySQLite_Update(t *testing.T) {
 		updated, err := repo.GetByID(ctx, uuid.MustParse(budgetID))
 		require.NoError(t, err)
 		assert.Equal(t, "Updated Budget", updated.Name)
-		assert.InDelta(t, 2000.0, updated.Amount, 0.01)
-		assert.InDelta(t, 500.0, updated.Spent, 0.01)
+		assert.Equal(t, money.Minor(200_000), updated.AmountMinor)
+		assert.Equal(t, money.Minor(50_000), updated.SpentMinor)
 	})
 
 	t.Run("Error_NonExistentBudget", func(t *testing.T) {
@@ -364,14 +366,14 @@ func TestBudgetRepositorySQLite_Update(t *testing.T) {
 		require.NoError(t, err)
 
 		nonExistentBudget := &budget.Budget{
-			ID:        uuid.New(),
-			Name:      "Non Existent",
-			Amount:    1000.0,
-			Spent:     0,
-			Period:    budget.PeriodMonthly,
-			StartDate: time.Now(),
-			EndDate:   time.Now().AddDate(0, 1, 0),
-			IsActive:  true,
+			ID:          uuid.New(),
+			Name:        "Non Existent",
+			AmountMinor: 100_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			StartDate:   date.Today(time.UTC),
+			EndDate:     date.Today(time.UTC).AddDays(30),
+			IsActive:    true,
 		}
 
 		err = repo.Update(ctx, nonExistentBudget)
@@ -387,14 +389,14 @@ func TestBudgetRepositorySQLite_Update(t *testing.T) {
 		require.NoError(t, err)
 
 		invalidBudget := &budget.Budget{
-			ID:        uuid.Nil,
-			Name:      "Invalid",
-			Amount:    1000.0,
-			Spent:     0,
-			Period:    budget.PeriodMonthly,
-			StartDate: time.Now(),
-			EndDate:   time.Now().AddDate(0, 1, 0),
-			IsActive:  true,
+			ID:          uuid.Nil,
+			Name:        "Invalid",
+			AmountMinor: 100_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			StartDate:   date.Today(time.UTC),
+			EndDate:     date.Today(time.UTC).AddDays(30),
+			IsActive:    true,
 		}
 
 		err = repo.Update(ctx, invalidBudget)
@@ -415,7 +417,7 @@ func TestBudgetRepositorySQLite_Delete(t *testing.T) {
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		budgetID, err := helper.CreateTestBudget(ctx, "To Delete", 1000.0, "monthly", familyID, nil)
+		budgetID, err := helper.CreateTestBudget(ctx, "To Delete", 100_000, "monthly", familyID, nil)
 		require.NoError(t, err)
 
 		err = repo.Delete(ctx, uuid.MustParse(budgetID))
@@ -463,51 +465,57 @@ func TestBudgetRepositorySQLite_GetActiveBudgets(t *testing.T) {
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		now := time.Now()
+		now := date.Today(time.UTC)
 
 		activeBudget := &budget.Budget{
-			ID:        uuid.New(),
-			Name:      "Active Budget",
-			Amount:    1000.0,
-			Spent:     0,
-			Period:    budget.PeriodMonthly,
-			StartDate: now.AddDate(0, 0, -5),
-			EndDate:   now.AddDate(0, 0, 5),
-			IsActive:  true,
+			ID:          uuid.New(),
+			Name:        "Active Budget",
+			AmountMinor: 100_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			StartDate:   now.AddDays(-5),
+			EndDate:     now.AddDays(5),
+			IsActive:    true,
 		}
 		err = repo.Create(ctx, activeBudget)
 		require.NoError(t, err)
 
 		pastBudget := &budget.Budget{
-			ID:        uuid.New(),
-			Name:      "Past Budget",
-			Amount:    1000.0,
-			Spent:     0,
-			Period:    budget.PeriodMonthly,
-			StartDate: now.AddDate(0, -2, 0),
-			EndDate:   now.AddDate(0, -1, 0),
-			IsActive:  true,
+			ID:          uuid.New(),
+			Name:        "Past Budget",
+			AmountMinor: 100_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			StartDate:   now.AddDays(-60),
+			EndDate:     now.AddDays(-30),
+			IsActive:    true,
 		}
 		err = repo.Create(ctx, pastBudget)
 		require.NoError(t, err)
 
 		futureBudget := &budget.Budget{
-			ID:        uuid.New(),
-			Name:      "Future Budget",
-			Amount:    1000.0,
-			Spent:     0,
-			Period:    budget.PeriodMonthly,
-			StartDate: now.AddDate(0, 1, 0),
-			EndDate:   now.AddDate(0, 2, 0),
-			IsActive:  true,
+			ID:          uuid.New(),
+			Name:        "Future Budget",
+			AmountMinor: 100_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			StartDate:   now.AddDays(30),
+			EndDate:     now.AddDays(60),
+			IsActive:    true,
 		}
 		err = repo.Create(ctx, futureBudget)
 		require.NoError(t, err)
 
-		budgets, err := repo.GetActiveBudgets(ctx)
+		budgets, err := repo.GetActiveBudgets(ctx, now)
 		require.NoError(t, err)
 		assert.Len(t, budgets, 1)
 		assert.Equal(t, "Active Budget", budgets[0].Name)
+
+		// Дата, а не «сегодня»: отчёт за прошлый период должен видеть бюджет того периода.
+		past, err := repo.GetActiveBudgets(ctx, now.AddDays(-45))
+		require.NoError(t, err)
+		assert.Len(t, past, 1)
+		assert.Equal(t, "Past Budget", past[0].Name)
 
 		_ = familyID
 	})
@@ -519,17 +527,17 @@ func TestBudgetRepositorySQLite_GetActiveBudgets(t *testing.T) {
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		now := time.Now()
+		now := date.Today(time.UTC)
 
 		activeBudget := &budget.Budget{
-			ID:        uuid.New(),
-			Name:      "Active Budget",
-			Amount:    1000.0,
-			Spent:     0,
-			Period:    budget.PeriodMonthly,
-			StartDate: now.AddDate(0, 0, -5),
-			EndDate:   now.AddDate(0, 0, 5),
-			IsActive:  true,
+			ID:          uuid.New(),
+			Name:        "Active Budget",
+			AmountMinor: 100_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			StartDate:   now.AddDays(-5),
+			EndDate:     now.AddDays(5),
+			IsActive:    true,
 		}
 		err = repo.Create(ctx, activeBudget)
 		require.NoError(t, err)
@@ -537,7 +545,7 @@ func TestBudgetRepositorySQLite_GetActiveBudgets(t *testing.T) {
 		err = repo.Delete(ctx, activeBudget.ID)
 		require.NoError(t, err)
 
-		budgets, err := repo.GetActiveBudgets(ctx)
+		budgets, err := repo.GetActiveBudgets(ctx, now)
 		require.NoError(t, err)
 		assert.Empty(t, budgets)
 
@@ -557,16 +565,16 @@ func TestBudgetRepositorySQLite_GetUsageStats(t *testing.T) {
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		now := time.Now()
+		now := date.Today(time.UTC)
 		testBudget := &budget.Budget{
-			ID:        uuid.New(),
-			Name:      "Zero Usage",
-			Amount:    1000.0,
-			Spent:     0,
-			Period:    budget.PeriodMonthly,
-			StartDate: now.AddDate(0, 0, -5),
-			EndDate:   now.AddDate(0, 0, 25),
-			IsActive:  true,
+			ID:          uuid.New(),
+			Name:        "Zero Usage",
+			AmountMinor: 100_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			StartDate:   now.AddDays(-5),
+			EndDate:     now.AddDays(25),
+			IsActive:    true,
 		}
 		err = repo.Create(ctx, testBudget)
 		require.NoError(t, err)
@@ -591,23 +599,23 @@ func TestBudgetRepositorySQLite_GetUsageStats(t *testing.T) {
 		userID, err := helper.CreateTestUser(ctx, "test@example.com", "John", "Doe", "admin", familyID)
 		require.NoError(t, err)
 
-		now := time.Now()
+		now := date.Today(time.UTC)
 		catUUID := uuid.MustParse(categoryID)
 		testBudget := &budget.Budget{
-			ID:         uuid.New(),
-			Name:       "50% Usage",
-			Amount:     1000.0,
-			Spent:      0,
-			Period:     budget.PeriodMonthly,
-			CategoryID: &catUUID,
-			StartDate:  now.AddDate(0, 0, -5),
-			EndDate:    now.AddDate(0, 0, 25),
-			IsActive:   true,
+			ID:          uuid.New(),
+			Name:        "50% Usage",
+			AmountMinor: 100_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			CategoryID:  &catUUID,
+			StartDate:   now.AddDays(-5),
+			EndDate:     now.AddDays(25),
+			IsActive:    true,
 		}
 		err = repo.Create(ctx, testBudget)
 		require.NoError(t, err)
 
-		_, err = helper.CreateTestTransaction(ctx, 500.0, "Test transaction", "expense", categoryID, userID, familyID)
+		_, err = helper.CreateTestTransaction(ctx, 50_000, "Test transaction", "expense", categoryID, userID, familyID)
 		require.NoError(t, err)
 
 		stats, err := repo.GetUsageStats(ctx, uuid.MustParse(familyID))
@@ -630,26 +638,42 @@ func TestBudgetRepositorySQLite_GetUsageStats(t *testing.T) {
 		userID, err := helper.CreateTestUser(ctx, "test@example.com", "John", "Doe", "admin", familyID)
 		require.NoError(t, err)
 
-		now := time.Now()
+		now := date.Today(time.UTC)
 		catUUID := uuid.MustParse(categoryID)
 		testBudget := &budget.Budget{
-			ID:         uuid.New(),
-			Name:       "100% Usage",
-			Amount:     1000.0,
-			Spent:      0,
-			Period:     budget.PeriodMonthly,
-			CategoryID: &catUUID,
-			StartDate:  now.AddDate(0, 0, -5),
-			EndDate:    now.AddDate(0, 0, 25),
-			IsActive:   true,
+			ID:          uuid.New(),
+			Name:        "100% Usage",
+			AmountMinor: 100_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			CategoryID:  &catUUID,
+			StartDate:   now.AddDays(-5),
+			EndDate:     now.AddDays(25),
+			IsActive:    true,
 		}
 		err = repo.Create(ctx, testBudget)
 		require.NoError(t, err)
 
-		_, err = helper.CreateTestTransaction(ctx, 600.0, "Test transaction 1", "expense", categoryID, userID, familyID)
+		_, err = helper.CreateTestTransaction(
+			ctx,
+			60_000,
+			"Test transaction 1",
+			"expense",
+			categoryID,
+			userID,
+			familyID,
+		)
 		require.NoError(t, err)
 
-		_, err = helper.CreateTestTransaction(ctx, 400.0, "Test transaction 2", "expense", categoryID, userID, familyID)
+		_, err = helper.CreateTestTransaction(
+			ctx,
+			40_000,
+			"Test transaction 2",
+			"expense",
+			categoryID,
+			userID,
+			familyID,
+		)
 		require.NoError(t, err)
 
 		stats, err := repo.GetUsageStats(ctx, uuid.MustParse(familyID))
@@ -672,26 +696,42 @@ func TestBudgetRepositorySQLite_GetUsageStats(t *testing.T) {
 		userID, err := helper.CreateTestUser(ctx, "test@example.com", "John", "Doe", "admin", familyID)
 		require.NoError(t, err)
 
-		now := time.Now()
+		now := date.Today(time.UTC)
 		catUUID := uuid.MustParse(categoryID)
 		testBudget := &budget.Budget{
-			ID:         uuid.New(),
-			Name:       "Over Budget",
-			Amount:     1000.0,
-			Spent:      0,
-			Period:     budget.PeriodMonthly,
-			CategoryID: &catUUID,
-			StartDate:  now.AddDate(0, 0, -5),
-			EndDate:    now.AddDate(0, 0, 25),
-			IsActive:   true,
+			ID:          uuid.New(),
+			Name:        "Over Budget",
+			AmountMinor: 100_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			CategoryID:  &catUUID,
+			StartDate:   now.AddDays(-5),
+			EndDate:     now.AddDays(25),
+			IsActive:    true,
 		}
 		err = repo.Create(ctx, testBudget)
 		require.NoError(t, err)
 
-		_, err = helper.CreateTestTransaction(ctx, 800.0, "Test transaction 1", "expense", categoryID, userID, familyID)
+		_, err = helper.CreateTestTransaction(
+			ctx,
+			80_000,
+			"Test transaction 1",
+			"expense",
+			categoryID,
+			userID,
+			familyID,
+		)
 		require.NoError(t, err)
 
-		_, err = helper.CreateTestTransaction(ctx, 500.0, "Test transaction 2", "expense", categoryID, userID, familyID)
+		_, err = helper.CreateTestTransaction(
+			ctx,
+			50_000,
+			"Test transaction 2",
+			"expense",
+			categoryID,
+			userID,
+			familyID,
+		)
 		require.NoError(t, err)
 
 		stats, err := repo.GetUsageStats(ctx, uuid.MustParse(familyID))
@@ -708,16 +748,16 @@ func TestBudgetRepositorySQLite_GetUsageStats(t *testing.T) {
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		now := time.Now()
+		now := date.Today(time.UTC)
 		testBudget := &budget.Budget{
-			ID:        uuid.New(),
-			Name:      "Zero Amount",
-			Amount:    0.01,
-			Spent:     0,
-			Period:    budget.PeriodMonthly,
-			StartDate: now.AddDate(0, 0, -5),
-			EndDate:   now.AddDate(0, 0, 25),
-			IsActive:  true,
+			ID:          uuid.New(),
+			Name:        "Zero Amount",
+			AmountMinor: 1,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			StartDate:   now.AddDays(-5),
+			EndDate:     now.AddDays(25),
+			IsActive:    true,
 		}
 		err = repo.Create(ctx, testBudget)
 		require.NoError(t, err)
@@ -741,15 +781,15 @@ func TestBudgetRepositorySQLite_UpdateSpentAmount(t *testing.T) {
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		budgetID, err := helper.CreateTestBudget(ctx, "Test Budget", 1000.0, "monthly", familyID, nil)
+		budgetID, err := helper.CreateTestBudget(ctx, "Test Budget", 100_000, "monthly", familyID, nil)
 		require.NoError(t, err)
 
-		err = repo.UpdateSpentAmount(ctx, uuid.MustParse(budgetID), 500.0)
+		err = repo.UpdateSpentAmount(ctx, uuid.MustParse(budgetID), 50000)
 		require.NoError(t, err)
 
 		retrieved, err := repo.GetByID(ctx, uuid.MustParse(budgetID))
 		require.NoError(t, err)
-		assert.InDelta(t, 500.0, retrieved.Spent, 0.01)
+		assert.Equal(t, money.Minor(50_000), retrieved.SpentMinor)
 	})
 
 	t.Run("Error_NegativeAmount", func(t *testing.T) {
@@ -759,10 +799,10 @@ func TestBudgetRepositorySQLite_UpdateSpentAmount(t *testing.T) {
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		budgetID, err := helper.CreateTestBudget(ctx, "Test Budget", 1000.0, "monthly", familyID, nil)
+		budgetID, err := helper.CreateTestBudget(ctx, "Test Budget", 100_000, "monthly", familyID, nil)
 		require.NoError(t, err)
 
-		err = repo.UpdateSpentAmount(ctx, uuid.MustParse(budgetID), -100.0)
+		err = repo.UpdateSpentAmount(ctx, uuid.MustParse(budgetID), -10000)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "cannot be negative")
 	})
@@ -774,7 +814,7 @@ func TestBudgetRepositorySQLite_UpdateSpentAmount(t *testing.T) {
 		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		err = repo.UpdateSpentAmount(ctx, uuid.Nil, 500.0)
+		err = repo.UpdateSpentAmount(ctx, uuid.Nil, 50000)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid budget ID")
 	})
@@ -786,7 +826,7 @@ func TestBudgetRepositorySQLite_UpdateSpentAmount(t *testing.T) {
 		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		err = repo.UpdateSpentAmount(ctx, uuid.New(), 500.0)
+		err = repo.UpdateSpentAmount(ctx, uuid.New(), 50000)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
@@ -810,10 +850,10 @@ func TestBudgetRepositorySQLite_RecalculateSpent(t *testing.T) {
 		userID, err := helper.CreateTestUser(ctx, "test@example.com", "John", "Doe", "admin", familyID)
 		require.NoError(t, err)
 
-		budgetID, err := helper.CreateTestBudget(ctx, "Test Budget", 1000.0, "monthly", familyID, &categoryID)
+		budgetID, err := helper.CreateTestBudget(ctx, "Test Budget", 100_000, "monthly", familyID, &categoryID)
 		require.NoError(t, err)
 
-		_, err = helper.CreateTestTransaction(ctx, 300.0, "Test transaction", "expense", categoryID, userID, familyID)
+		_, err = helper.CreateTestTransaction(ctx, 30_000, "Test transaction", "expense", categoryID, userID, familyID)
 		require.NoError(t, err)
 
 		err = repo.RecalculateSpent(ctx, uuid.MustParse(budgetID))
@@ -821,7 +861,7 @@ func TestBudgetRepositorySQLite_RecalculateSpent(t *testing.T) {
 
 		retrieved, err := repo.GetByID(ctx, uuid.MustParse(budgetID))
 		require.NoError(t, err)
-		assert.InDelta(t, 300.0, retrieved.Spent, 0.01)
+		assert.Equal(t, money.Minor(30_000), retrieved.SpentMinor)
 	})
 
 	t.Run("Success_MultipleTransactions", func(t *testing.T) {
@@ -837,16 +877,16 @@ func TestBudgetRepositorySQLite_RecalculateSpent(t *testing.T) {
 		userID, err := helper.CreateTestUser(ctx, "test@example.com", "John", "Doe", "admin", familyID)
 		require.NoError(t, err)
 
-		budgetID, err := helper.CreateTestBudget(ctx, "Test Budget", 1000.0, "monthly", familyID, &categoryID)
+		budgetID, err := helper.CreateTestBudget(ctx, "Test Budget", 100_000, "monthly", familyID, &categoryID)
 		require.NoError(t, err)
 
-		_, err = helper.CreateTestTransaction(ctx, 200.0, "Transaction 1", "expense", categoryID, userID, familyID)
+		_, err = helper.CreateTestTransaction(ctx, 20_000, "Transaction 1", "expense", categoryID, userID, familyID)
 		require.NoError(t, err)
 
-		_, err = helper.CreateTestTransaction(ctx, 300.0, "Transaction 2", "expense", categoryID, userID, familyID)
+		_, err = helper.CreateTestTransaction(ctx, 30_000, "Transaction 2", "expense", categoryID, userID, familyID)
 		require.NoError(t, err)
 
-		_, err = helper.CreateTestTransaction(ctx, 150.0, "Transaction 3", "expense", categoryID, userID, familyID)
+		_, err = helper.CreateTestTransaction(ctx, 15_000, "Transaction 3", "expense", categoryID, userID, familyID)
 		require.NoError(t, err)
 
 		err = repo.RecalculateSpent(ctx, uuid.MustParse(budgetID))
@@ -854,7 +894,7 @@ func TestBudgetRepositorySQLite_RecalculateSpent(t *testing.T) {
 
 		retrieved, err := repo.GetByID(ctx, uuid.MustParse(budgetID))
 		require.NoError(t, err)
-		assert.InDelta(t, 650.0, retrieved.Spent, 0.01)
+		assert.Equal(t, money.Minor(65_000), retrieved.SpentMinor)
 	})
 
 	t.Run("Success_NoTransactions", func(t *testing.T) {
@@ -864,7 +904,7 @@ func TestBudgetRepositorySQLite_RecalculateSpent(t *testing.T) {
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		budgetID, err := helper.CreateTestBudget(ctx, "Test Budget", 1000.0, "monthly", familyID, nil)
+		budgetID, err := helper.CreateTestBudget(ctx, "Test Budget", 100_000, "monthly", familyID, nil)
 		require.NoError(t, err)
 
 		err = repo.RecalculateSpent(ctx, uuid.MustParse(budgetID))
@@ -872,7 +912,7 @@ func TestBudgetRepositorySQLite_RecalculateSpent(t *testing.T) {
 
 		retrieved, err := repo.GetByID(ctx, uuid.MustParse(budgetID))
 		require.NoError(t, err)
-		assert.InDelta(t, 0.0, retrieved.Spent, 0.01)
+		assert.Equal(t, money.Minor(0), retrieved.SpentMinor)
 	})
 
 	t.Run("Error_InvalidBudgetID", func(t *testing.T) {
@@ -915,18 +955,18 @@ func TestBudgetRepositorySQLite_FindBudgetsAffectedByTransaction(t *testing.T) {
 		categoryID, err := helper.CreateTestCategory(ctx, "Food", "expense", familyID, nil)
 		require.NoError(t, err)
 
-		now := time.Now()
+		now := date.Today(time.UTC)
 		catUUID := uuid.MustParse(categoryID)
 		testBudget := &budget.Budget{
-			ID:         uuid.New(),
-			Name:       "Food Budget",
-			Amount:     1000.0,
-			Spent:      0,
-			Period:     budget.PeriodMonthly,
-			CategoryID: &catUUID,
-			StartDate:  now.AddDate(0, 0, -5),
-			EndDate:    now.AddDate(0, 0, 25),
-			IsActive:   true,
+			ID:          uuid.New(),
+			Name:        "Food Budget",
+			AmountMinor: 100_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			CategoryID:  &catUUID,
+			StartDate:   now.AddDays(-5),
+			EndDate:     now.AddDays(25),
+			IsActive:    true,
 		}
 		err = repo.Create(ctx, testBudget)
 		require.NoError(t, err)
@@ -952,32 +992,32 @@ func TestBudgetRepositorySQLite_FindBudgetsAffectedByTransaction(t *testing.T) {
 		categoryID, err := helper.CreateTestCategory(ctx, "Food", "expense", familyID, nil)
 		require.NoError(t, err)
 
-		now := time.Now()
+		now := date.Today(time.UTC)
 		catUUID := uuid.MustParse(categoryID)
 
 		budget1 := &budget.Budget{
-			ID:         uuid.New(),
-			Name:       "Food Budget 1",
-			Amount:     1000.0,
-			Spent:      0,
-			Period:     budget.PeriodMonthly,
-			CategoryID: &catUUID,
-			StartDate:  now.AddDate(0, 0, -5),
-			EndDate:    now.AddDate(0, 0, 25),
-			IsActive:   true,
+			ID:          uuid.New(),
+			Name:        "Food Budget 1",
+			AmountMinor: 100_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			CategoryID:  &catUUID,
+			StartDate:   now.AddDays(-5),
+			EndDate:     now.AddDays(25),
+			IsActive:    true,
 		}
 		err = repo.Create(ctx, budget1)
 		require.NoError(t, err)
 
 		budget2 := &budget.Budget{
-			ID:        uuid.New(),
-			Name:      "General Budget",
-			Amount:    5000.0,
-			Spent:     0,
-			Period:    budget.PeriodMonthly,
-			StartDate: now.AddDate(0, 0, -5),
-			EndDate:   now.AddDate(0, 0, 25),
-			IsActive:  true,
+			ID:          uuid.New(),
+			Name:        "General Budget",
+			AmountMinor: 500_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			StartDate:   now.AddDays(-5),
+			EndDate:     now.AddDays(25),
+			IsActive:    true,
 		}
 		err = repo.Create(ctx, budget2)
 		require.NoError(t, err)
@@ -1006,7 +1046,7 @@ func TestBudgetRepositorySQLite_FindBudgetsAffectedByTransaction(t *testing.T) {
 			ctx,
 			uuid.MustParse(familyID),
 			uuid.MustParse(categoryID),
-			time.Now(),
+			date.Today(time.UTC),
 		)
 		require.NoError(t, err)
 		assert.Empty(t, affectedBudgets)
@@ -1023,7 +1063,7 @@ func TestBudgetRepositorySQLite_FindBudgetsAffectedByTransaction(t *testing.T) {
 			ctx,
 			uuid.Nil,
 			uuid.New(),
-			time.Now(),
+			date.Today(time.UTC),
 		)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid family ID")
@@ -1040,7 +1080,7 @@ func TestBudgetRepositorySQLite_FindBudgetsAffectedByTransaction(t *testing.T) {
 			ctx,
 			uuid.MustParse(familyID),
 			uuid.Nil,
-			time.Now(),
+			date.Today(time.UTC),
 		)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid category ID")
@@ -1062,7 +1102,7 @@ func TestBudgetRepositorySQLite_GetByCategory(t *testing.T) {
 		categoryID, err := helper.CreateTestCategory(ctx, "Food", "expense", familyID, nil)
 		require.NoError(t, err)
 
-		_, err = helper.CreateTestBudget(ctx, "Food Budget", 1000.0, "monthly", familyID, &categoryID)
+		_, err = helper.CreateTestBudget(ctx, "Food Budget", 100_000, "monthly", familyID, &categoryID)
 		require.NoError(t, err)
 
 		catUUID := uuid.MustParse(categoryID)
@@ -1079,7 +1119,7 @@ func TestBudgetRepositorySQLite_GetByCategory(t *testing.T) {
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		_, err = helper.CreateTestBudget(ctx, "General Budget", 1000.0, "monthly", familyID, nil)
+		_, err = helper.CreateTestBudget(ctx, "General Budget", 100_000, "monthly", familyID, nil)
 		require.NoError(t, err)
 
 		budgets, err := repo.GetByCategory(ctx, nil)
@@ -1126,21 +1166,21 @@ func TestBudgetRepositorySQLite_GetByPeriod(t *testing.T) {
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		now := time.Now()
+		now := date.Today(time.UTC)
 		testBudget := &budget.Budget{
-			ID:        uuid.New(),
-			Name:      "Monthly Budget",
-			Amount:    1000.0,
-			Spent:     0,
-			Period:    budget.PeriodMonthly,
-			StartDate: now.AddDate(0, 0, -5),
-			EndDate:   now.AddDate(0, 0, 25),
-			IsActive:  true,
+			ID:          uuid.New(),
+			Name:        "Monthly Budget",
+			AmountMinor: 100_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			StartDate:   now.AddDays(-5),
+			EndDate:     now.AddDays(25),
+			IsActive:    true,
 		}
 		err = repo.Create(ctx, testBudget)
 		require.NoError(t, err)
 
-		budgets, err := repo.GetByPeriod(ctx, now.AddDate(0, 0, -10), now.AddDate(0, 0, 30))
+		budgets, err := repo.GetByPeriod(ctx, now.AddDays(-10), now.AddDays(30))
 		require.NoError(t, err)
 		assert.Len(t, budgets, 1)
 		assert.Equal(t, "Monthly Budget", budgets[0].Name)
@@ -1155,18 +1195,18 @@ func TestBudgetRepositorySQLite_GetByPeriod(t *testing.T) {
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-		end := time.Date(2024, 3, 31, 23, 59, 59, 0, time.UTC)
+		start := date.New(2024, time.January, 1)
+		end := date.New(2024, time.March, 31)
 
 		testBudget := &budget.Budget{
-			ID:        uuid.New(),
-			Name:      "Q1 Budget",
-			Amount:    5000.0,
-			Spent:     0,
-			Period:    budget.PeriodCustom,
-			StartDate: start,
-			EndDate:   end,
-			IsActive:  true,
+			ID:          uuid.New(),
+			Name:        "Q1 Budget",
+			AmountMinor: 500_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodCustom,
+			StartDate:   start,
+			EndDate:     end,
+			IsActive:    true,
 		}
 		err = repo.Create(ctx, testBudget)
 		require.NoError(t, err)
@@ -1186,228 +1226,11 @@ func TestBudgetRepositorySQLite_GetByPeriod(t *testing.T) {
 		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		pastStart := time.Now().AddDate(-2, 0, 0)
-		pastEnd := time.Now().AddDate(-1, 0, 0)
+		pastStart := date.Today(time.UTC).AddDays(-730)
+		pastEnd := date.Today(time.UTC).AddDays(-365)
 
 		budgets, err := repo.GetByPeriod(ctx, pastStart, pastEnd)
 		require.NoError(t, err)
 		assert.Empty(t, budgets)
-	})
-}
-
-func TestBudgetRepositorySQLite_GetAlerts(t *testing.T) {
-	container := testutils.SetupSQLiteTestDB(t)
-	helper := testutils.NewTestDataHelper(container.DB)
-	ctx := context.Background()
-
-	t.Run("Success_NoAlerts", func(t *testing.T) {
-		db := container.GetTestDatabase(t)
-		repo := budgetrepo.NewSQLiteRepository(db)
-
-		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
-		require.NoError(t, err)
-
-		budgetID, err := helper.CreateTestBudget(ctx, "Test Budget", 1000.0, "monthly", familyID, nil)
-		require.NoError(t, err)
-
-		alerts, err := repo.GetAlerts(ctx, uuid.MustParse(budgetID))
-		require.NoError(t, err)
-		assert.Empty(t, alerts)
-	})
-
-	t.Run("Success_MultipleAlerts", func(t *testing.T) {
-		db := container.GetTestDatabase(t)
-		repo := budgetrepo.NewSQLiteRepository(db)
-
-		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
-		require.NoError(t, err)
-
-		budgetID, err := helper.CreateTestBudget(ctx, "Test Budget", 1000.0, "monthly", familyID, nil)
-		require.NoError(t, err)
-
-		budgetUUID := uuid.MustParse(budgetID)
-
-		alert1 := &budgetrepo.Alert{
-			ID:                  uuid.New(),
-			BudgetID:            budgetUUID,
-			ThresholdPercentage: 50,
-			IsTriggered:         false,
-		}
-		err = repo.CreateAlert(ctx, alert1)
-		require.NoError(t, err)
-
-		alert2 := &budgetrepo.Alert{
-			ID:                  uuid.New(),
-			BudgetID:            budgetUUID,
-			ThresholdPercentage: 80,
-			IsTriggered:         false,
-		}
-		err = repo.CreateAlert(ctx, alert2)
-		require.NoError(t, err)
-
-		alerts, err := repo.GetAlerts(ctx, budgetUUID)
-		require.NoError(t, err)
-		assert.Len(t, alerts, 2)
-	})
-
-	t.Run("Error_InvalidBudgetID", func(t *testing.T) {
-		db := container.GetTestDatabase(t)
-		repo := budgetrepo.NewSQLiteRepository(db)
-
-		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
-		require.NoError(t, err)
-
-		_, err = repo.GetAlerts(ctx, uuid.Nil)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid budget ID parameter")
-	})
-}
-
-func TestBudgetRepositorySQLite_CreateAlert(t *testing.T) {
-	container := testutils.SetupSQLiteTestDB(t)
-	helper := testutils.NewTestDataHelper(container.DB)
-	ctx := context.Background()
-
-	t.Run("Success_ValidAlert", func(t *testing.T) {
-		db := container.GetTestDatabase(t)
-		repo := budgetrepo.NewSQLiteRepository(db)
-
-		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
-		require.NoError(t, err)
-
-		budgetID, err := helper.CreateTestBudget(ctx, "Test Budget", 1000.0, "monthly", familyID, nil)
-		require.NoError(t, err)
-
-		alert := &budgetrepo.Alert{
-			ID:                  uuid.New(),
-			BudgetID:            uuid.MustParse(budgetID),
-			ThresholdPercentage: 80,
-			IsTriggered:         false,
-		}
-
-		err = repo.CreateAlert(ctx, alert)
-		require.NoError(t, err)
-
-		alerts, err := repo.GetAlerts(ctx, uuid.MustParse(budgetID))
-		require.NoError(t, err)
-		assert.Len(t, alerts, 1)
-		assert.Equal(t, 80, alerts[0].ThresholdPercentage)
-	})
-
-	t.Run("Error_DuplicateThreshold", func(t *testing.T) {
-		db := container.GetTestDatabase(t)
-		repo := budgetrepo.NewSQLiteRepository(db)
-
-		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
-		require.NoError(t, err)
-
-		budgetID, err := helper.CreateTestBudget(ctx, "Test Budget", 1000.0, "monthly", familyID, nil)
-		require.NoError(t, err)
-
-		budgetUUID := uuid.MustParse(budgetID)
-
-		alert1 := &budgetrepo.Alert{
-			ID:                  uuid.New(),
-			BudgetID:            budgetUUID,
-			ThresholdPercentage: 80,
-			IsTriggered:         false,
-		}
-		err = repo.CreateAlert(ctx, alert1)
-		require.NoError(t, err)
-
-		alert2 := &budgetrepo.Alert{
-			ID:                  uuid.New(),
-			BudgetID:            budgetUUID,
-			ThresholdPercentage: 80,
-			IsTriggered:         false,
-		}
-		err = repo.CreateAlert(ctx, alert2)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "already exists")
-	})
-
-	t.Run("Error_InvalidAlertID", func(t *testing.T) {
-		db := container.GetTestDatabase(t)
-		repo := budgetrepo.NewSQLiteRepository(db)
-
-		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
-		require.NoError(t, err)
-
-		budgetID, err := helper.CreateTestBudget(ctx, "Test Budget", 1000.0, "monthly", familyID, nil)
-		require.NoError(t, err)
-
-		alert := &budgetrepo.Alert{
-			ID:                  uuid.Nil,
-			BudgetID:            uuid.MustParse(budgetID),
-			ThresholdPercentage: 80,
-			IsTriggered:         false,
-		}
-
-		err = repo.CreateAlert(ctx, alert)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid alert ID")
-	})
-
-	t.Run("Error_InvalidBudgetID", func(t *testing.T) {
-		db := container.GetTestDatabase(t)
-		repo := budgetrepo.NewSQLiteRepository(db)
-
-		_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
-		require.NoError(t, err)
-
-		alert := &budgetrepo.Alert{
-			ID:                  uuid.New(),
-			BudgetID:            uuid.Nil,
-			ThresholdPercentage: 80,
-			IsTriggered:         false,
-		}
-
-		err = repo.CreateAlert(ctx, alert)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid budget ID")
-	})
-
-	t.Run("Error_InvalidThresholdZero", func(t *testing.T) {
-		db := container.GetTestDatabase(t)
-		repo := budgetrepo.NewSQLiteRepository(db)
-
-		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
-		require.NoError(t, err)
-
-		budgetID, err := helper.CreateTestBudget(ctx, "Test Budget", 1000.0, "monthly", familyID, nil)
-		require.NoError(t, err)
-
-		alert := &budgetrepo.Alert{
-			ID:                  uuid.New(),
-			BudgetID:            uuid.MustParse(budgetID),
-			ThresholdPercentage: 0,
-			IsTriggered:         false,
-		}
-
-		err = repo.CreateAlert(ctx, alert)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "must be between 1 and 100")
-	})
-
-	t.Run("Error_InvalidThresholdOver100", func(t *testing.T) {
-		db := container.GetTestDatabase(t)
-		repo := budgetrepo.NewSQLiteRepository(db)
-
-		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
-		require.NoError(t, err)
-
-		budgetID, err := helper.CreateTestBudget(ctx, "Test Budget", 1000.0, "monthly", familyID, nil)
-		require.NoError(t, err)
-
-		alert := &budgetrepo.Alert{
-			ID:                  uuid.New(),
-			BudgetID:            uuid.MustParse(budgetID),
-			ThresholdPercentage: 150,
-			IsTriggered:         false,
-		}
-
-		err = repo.CreateAlert(ctx, alert)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "must be between 1 and 100")
 	})
 }

@@ -52,12 +52,16 @@ func (h *ReportHandler) CreateReport(c echo.Context) error {
 
 	var req CreateReportRequest
 	if err := c.Bind(&req); err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
-			bodyDetail(ErrCodeInvalidRequest, err.Error()))
+		return respondBindError(c, err)
 	}
 
 	if err := h.validator.Struct(req); err != nil {
 		return respondValidationErrors(c, err)
+	}
+
+	if req.EndDate.Before(req.StartDate) {
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+			ErrorDetail{Field: fieldEndDate, Message: "must not be before start_date", Code: ErrCodeValidationError})
 	}
 
 	if h.reportService == nil {
@@ -130,7 +134,7 @@ func (h *ReportHandler) GetReports(c echo.Context) error {
 	if userIDParam != "" {
 		userID, parseErr := uuid.Parse(userIDParam)
 		if parseErr != nil {
-			return respondError(c, http.StatusBadRequest, "INVALID_USER_ID", "Invalid user ID format")
+			return ignoreWritten(writeInvalidQueryParam(c, "user_id", userIDParam, "must be a valid UUID"))
 		}
 		reports, err = h.repositories.Report.GetByUserID(c.Request().Context(), userID)
 	} else {
@@ -185,7 +189,7 @@ func (h *ReportHandler) getReportsViaService(c echo.Context, page pageParams) er
 	if userIDParam != "" {
 		userID, parseErr := uuid.Parse(userIDParam)
 		if parseErr != nil {
-			return respondError(c, http.StatusBadRequest, "INVALID_USER_ID", "Invalid user ID format")
+			return ignoreWritten(writeInvalidQueryParam(c, "user_id", userIDParam, "must be a valid UUID"))
 		}
 		reports, err = h.reportService.GetReportsByUserID(c.Request().Context(), userID)
 	} else {

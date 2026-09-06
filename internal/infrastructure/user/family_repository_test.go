@@ -17,7 +17,7 @@ import (
 )
 
 func bootstrapFixtures() (*user.Family, []*category.Category, *user.User) {
-	family := &user.Family{ID: uuid.New(), Name: "Bootstrap Family", Currency: "RUB"}
+	family := &user.Family{ID: uuid.New(), Name: "Bootstrap Family", Currency: "RUB", Timezone: "Europe/Moscow"}
 	categories := []*category.Category{
 		category.NewCategory("Продукты", category.TypeExpense),
 		category.NewCategory("Зарплата", category.TypeIncome),
@@ -106,4 +106,60 @@ func TestFamilyRepository_Bootstrap(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, exists)
 	})
+}
+
+func TestFamilyRepository_SchemaConstraints(t *testing.T) {
+	container := testutils.SetupSQLiteTestDB(t)
+	ctx := context.Background()
+
+	t.Run("second family violates singleton UNIQUE", func(t *testing.T) {
+		db := container.GetTestDatabase(t)
+		family, categories, admin := bootstrapFixtures()
+		require.NoError(t, newFamilyRepo(db).Bootstrap(ctx, family, categories, admin))
+
+		_, err := db.ExecContext(ctx,
+			`INSERT INTO families (id, name, currency) VALUES (?, 'Second', 'RUB')`, uuid.New().String())
+		require.ErrorContains(t, err, "UNIQUE constraint failed")
+		assert.Equal(t, 1, countRows(t, db, "families"))
+	})
+
+	t.Run("role child violates CHECK", func(t *testing.T) {
+		db := container.GetTestDatabase(t)
+		family, categories, admin := bootstrapFixtures()
+		require.NoError(t, newFamilyRepo(db).Bootstrap(ctx, family, categories, admin))
+
+		_, err := db.ExecContext(ctx,
+			`INSERT INTO users (id, email, password_hash, first_name, last_name, role, family_id)
+			 VALUES (?, 'child@example.com', 'hashed', 'Child', 'User', 'child', ?)`,
+			uuid.New().String(), family.ID.String())
+		require.ErrorContains(t, err, "CHECK constraint failed")
+		assert.Equal(t, 1, countRows(t, db, "users"))
+	})
+}
+
+// Часовой пояс переживает запись и чтение: по нему считаются границы периодов,
+// а пустая колонка отбивается CHECK-ом.
+func TestFamilyRepository_TimezoneRoundTrip(t *testing.T) {
+	container := testutils.SetupSQLiteTestDB(t)
+	ctx := context.Background()
+	db := container.GetTestDatabase(t)
+	repo := newFamilyRepo(db)
+
+	family := &user.Family{ID: uuid.New(), Name: "TZ Family", Currency: "RUB", Timezone: "Europe/Moscow"}
+	require.NoError(t, repo.Create(ctx, family))
+
+	stored, err := repo.Get(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "Europe/Moscow", stored.Timezone)
+	assert.Equal(t, "Europe/Moscow", stored.Location().String())
+
+	stored.Timezone = "UTC"
+	require.NoError(t, repo.Update(ctx, stored))
+
+	updated, err := repo.Get(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "UTC", updated.Timezone)
+
+	_, err = db.ExecContext(ctx, "UPDATE families SET timezone = '' WHERE id = ?", family.ID.String())
+	require.ErrorContains(t, err, "CHECK constraint failed", "пустая зона обязана отбиваться CHECK-ом")
 }

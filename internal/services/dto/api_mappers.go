@@ -20,6 +20,16 @@ type CategoryAPIResponse struct {
 	UpdatedAt time.Time  `json:"updated_at"`
 }
 
+// EntityID возвращает клиентский id, если он задан, иначе новый.
+// Клиентский id на создании делает повтор POST идемпотентным (A-07).
+func EntityID(clientID *uuid.UUID) uuid.UUID {
+	if clientID != nil {
+		return *clientID
+	}
+
+	return uuid.New()
+}
+
 // ToCategoryAPIResponse converts domain Category to API CategoryResponse
 func ToCategoryAPIResponse(c *category.Category) CategoryAPIResponse {
 	return CategoryAPIResponse{

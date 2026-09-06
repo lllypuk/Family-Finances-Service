@@ -15,6 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
 )
@@ -23,7 +25,7 @@ type MockStatsService struct {
 	mock.Mock
 }
 
-func (m *MockStatsService) Summary(ctx context.Context, from, to time.Time) (*dto.StatsSummary, error) {
+func (m *MockStatsService) Summary(ctx context.Context, from, to *date.Date) (*dto.StatsSummary, error) {
 	args := m.Called(ctx, from, to)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -43,14 +45,16 @@ func TestStatsHandler_GetSummary_Success(t *testing.T) {
 	mockService := &MockStatsService{}
 	handler := handlers.NewStatsHandler(mockService)
 
-	from := time.Date(2025, 3, 1, 0, 0, 0, 0, time.Local)
-	to := time.Date(2025, 3, 31, 23, 59, 59, 0, time.Local)
+	from := date.New(2025, time.March, 1)
+	to := date.New(2025, time.March, 31)
 	summary := &dto.StatsSummary{
-		From:    from,
-		To:      to,
-		Current: dto.PeriodTotals{Income: 500, Expenses: 200, Net: 300, TransactionCount: 3},
+		From: from,
+		To:   to,
+		Current: dto.PeriodTotals{
+			IncomeMinor: 50_000, ExpensesMinor: 20_000, NetMinor: 30_000, TransactionCount: 3,
+		},
 	}
-	mockService.On("Summary", mock.Anything, from, to).Return(summary, nil)
+	mockService.On("Summary", mock.Anything, &from, &to).Return(summary, nil)
 
 	c, rec := statsRequest("/stats/summary?from=2025-03-01&to=2025-03-31")
 
@@ -59,37 +63,25 @@ func TestStatsHandler_GetSummary_Success(t *testing.T) {
 
 	var response handlers.APIResponse[dto.StatsSummary]
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-	assert.InDelta(t, 500.0, response.Data.Current.Income, 0.001)
+	assert.Equal(t, money.Minor(50_000), response.Data.Current.IncomeMinor)
 	assert.Equal(t, 3, response.Data.Current.TransactionCount)
 
 	mockService.AssertExpectations(t)
 }
 
-// TestStatsHandler_GetSummary_DefaultPeriod — без параметров период равен текущему месяцу.
+// TestStatsHandler_GetSummary_DefaultPeriod — без параметров границы не задаются:
+// текущий месяц по зоне семьи считает сервис.
 func TestStatsHandler_GetSummary_DefaultPeriod(t *testing.T) {
 	mockService := &MockStatsService{}
 	handler := handlers.NewStatsHandler(mockService)
 
-	// Границы читаются из вызова, а не пересчитываются здесь: на смене суток
-	// между двумя time.Now() ожидание бы не совпало.
-	var gotFrom, gotTo time.Time
-	mockService.On("Summary", mock.Anything, mock.AnythingOfType("time.Time"), mock.AnythingOfType("time.Time")).
-		Run(func(args mock.Arguments) {
-			gotFrom, _ = args.Get(1).(time.Time)
-			gotTo, _ = args.Get(2).(time.Time)
-		}).
+	mockService.On("Summary", mock.Anything, (*date.Date)(nil), (*date.Date)(nil)).
 		Return(&dto.StatsSummary{}, nil)
 
 	c, rec := statsRequest("/stats/summary")
 
 	require.NoError(t, handler.GetSummary(c))
 	assert.Equal(t, http.StatusOK, rec.Code)
-
-	assert.Equal(t, time.Date(gotTo.Year(), gotTo.Month(), 1, 0, 0, 0, 0, gotTo.Location()), gotFrom)
-	assert.Equal(t, 23, gotTo.Hour())
-	assert.Equal(t, 59, gotTo.Minute())
-	assert.Equal(t, 59, gotTo.Second())
-	assert.WithinDuration(t, time.Now(), gotTo, 25*time.Hour)
 
 	mockService.AssertExpectations(t)
 }

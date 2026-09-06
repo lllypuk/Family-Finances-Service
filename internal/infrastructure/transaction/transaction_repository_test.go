@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 	transactionrepo "family-budget-service/internal/infrastructure/transaction"
 )
@@ -39,12 +41,12 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		// Create transaction
 		testTransaction := &transaction.Transaction{
 			ID:          uuid.New(),
-			Amount:      150.50,
+			AmountMinor: 15_050,
 			Type:        transaction.TypeExpense,
 			Description: "Weekly groceries",
 			CategoryID:  uuid.MustParse(categoryID),
 			UserID:      uuid.MustParse(userID),
-			Date:        time.Now().AddDate(0, 0, -1), // Yesterday
+			Date:        date.Today(time.UTC).AddDays(-1), // Yesterday
 			Tags:        []string{"grocery", "weekly"},
 		}
 
@@ -55,7 +57,7 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		retrievedTransaction, err := repo.GetByID(ctx, testTransaction.ID)
 		require.NoError(t, err)
 		assert.Equal(t, testTransaction.ID, retrievedTransaction.ID)
-		assert.InEpsilon(t, testTransaction.Amount, retrievedTransaction.Amount, 0.01)
+		assert.Equal(t, testTransaction.AmountMinor, retrievedTransaction.AmountMinor)
 		assert.Equal(t, testTransaction.Type, retrievedTransaction.Type)
 		assert.Equal(t, testTransaction.Description, retrievedTransaction.Description)
 		assert.Equal(t, testTransaction.CategoryID, retrievedTransaction.CategoryID)
@@ -76,17 +78,17 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		categoryID, err := helper.CreateTestCategory(ctx, "Food", "expense", familyID, nil)
 		require.NoError(t, err)
 
-		budgetID, err := helper.CreateTestBudget(ctx, "Food Budget", 500, "monthly", familyID, &categoryID)
+		budgetID, err := helper.CreateTestBudget(ctx, "Food Budget", 50_000, "monthly", familyID, &categoryID)
 		require.NoError(t, err)
 
 		testTransaction := &transaction.Transaction{
 			ID:          uuid.New(),
-			Amount:      125.25,
+			AmountMinor: 12_525,
 			Type:        transaction.TypeExpense,
 			Description: "Atomic create",
 			CategoryID:  uuid.MustParse(categoryID),
 			UserID:      uuid.MustParse(userID),
-			Date:        time.Now(),
+			Date:        date.Today(time.UTC),
 			Tags:        []string{"atomic"},
 		}
 
@@ -96,12 +98,12 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		createdTx, err := repo.GetByID(ctx, testTransaction.ID)
 		require.NoError(t, err)
 		require.NotNil(t, createdTx)
-		assert.InEpsilon(t, 125.25, createdTx.Amount, 0.01)
+		assert.Equal(t, money.Minor(12_525), createdTx.AmountMinor)
 
-		var spent float64
-		err = db.QueryRowContext(ctx, "SELECT spent FROM budgets WHERE id = ?", budgetID).Scan(&spent)
+		var spent money.Minor
+		err = db.QueryRowContext(ctx, "SELECT spent_minor FROM budgets WHERE id = ?", budgetID).Scan(&spent)
 		require.NoError(t, err)
-		assert.InEpsilon(t, 125.25, spent, 0.01)
+		assert.Equal(t, money.Minor(12_525), spent)
 	})
 
 	t.Run("GetByFilter_DateRange", func(t *testing.T) {
@@ -119,31 +121,31 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create transactions on different dates
-		now := time.Now()
+		now := date.Today(time.UTC)
 		transactions := []*transaction.Transaction{
 			{
 				ID:          uuid.New(),
-				Amount:      100.00,
+				AmountMinor: 10_000,
 				Type:        transaction.TypeExpense,
 				Description: "Old transaction",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				Date:        now.AddDate(0, 0, -10), // 10 days ago
+				Date:        now.AddDays(-10), // 10 days ago
 				Tags:        []string{"old"},
 			},
 			{
 				ID:          uuid.New(),
-				Amount:      200.00,
+				AmountMinor: 20_000,
 				Type:        transaction.TypeExpense,
 				Description: "Recent transaction",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				Date:        now.AddDate(0, 0, -2), // 2 days ago
+				Date:        now.AddDays(-2), // 2 days ago
 				Tags:        []string{"recent"},
 			},
 			{
 				ID:          uuid.New(),
-				Amount:      300.00,
+				AmountMinor: 30_000,
 				Type:        transaction.TypeIncome,
 				Description: "Today income",
 				CategoryID:  uuid.MustParse(categoryID),
@@ -160,8 +162,8 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		}
 
 		// Filter by date range (last 5 days)
-		dateFrom := now.AddDate(0, 0, -5)
-		dateTo := now.AddDate(0, 0, 1) // Include today
+		dateFrom := now.AddDays(-5)
+		dateTo := now.AddDays(1) // Include today
 		filter := transaction.Filter{
 			DateFrom: &dateFrom,
 			DateTo:   &dateTo,
@@ -173,7 +175,7 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		assert.Len(t, results, 2) // Should exclude the 10-day-old transaction
 
 		// Results should be sorted by date DESC
-		assert.True(t, results[0].Date.After(results[1].Date) || results[0].Date.Equal(results[1].Date))
+		assert.False(t, results[0].Date.Before(results[1].Date))
 	})
 
 	t.Run("GetByFilter_TypeAndAmount", func(t *testing.T) {
@@ -194,30 +196,30 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		transactions := []*transaction.Transaction{
 			{
 				ID:          uuid.New(),
-				Amount:      50.00,
+				AmountMinor: 5_000,
 				Type:        transaction.TypeExpense,
 				Description: "Small expense",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				Date:        time.Now(),
+				Date:        date.Today(time.UTC),
 			},
 			{
 				ID:          uuid.New(),
-				Amount:      150.00,
+				AmountMinor: 15_000,
 				Type:        transaction.TypeExpense,
 				Description: "Medium expense",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				Date:        time.Now(),
+				Date:        date.Today(time.UTC),
 			},
 			{
 				ID:          uuid.New(),
-				Amount:      1000.00,
+				AmountMinor: 100_000,
 				Type:        transaction.TypeIncome,
 				Description: "Large income",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				Date:        time.Now(),
+				Date:        date.Today(time.UTC),
 			},
 		}
 
@@ -229,19 +231,19 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 
 		// Filter expenses between 100-200
 		expenseType := transaction.TypeExpense
-		amountFrom := 100.0
-		amountTo := 200.0
+		amountFrom := money.Minor(10_000)
+		amountTo := money.Minor(20_000)
 		filter := transaction.Filter{
-			Type:       &expenseType,
-			AmountFrom: &amountFrom,
-			AmountTo:   &amountTo,
-			Limit:      10,
+			Type:            &expenseType,
+			AmountFromMinor: &amountFrom,
+			AmountToMinor:   &amountTo,
+			Limit:           10,
 		}
 
 		results, err := repo.GetByFilter(ctx, filter)
 		require.NoError(t, err)
 		assert.Len(t, results, 1) // Should only get the 150.00 expense
-		assert.InEpsilon(t, 150.00, results[0].Amount, 0.01)
+		assert.Equal(t, money.Minor(15_000), results[0].AmountMinor)
 		assert.Equal(t, transaction.TypeExpense, results[0].Type)
 	})
 
@@ -263,32 +265,32 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		transactions := []*transaction.Transaction{
 			{
 				ID:          uuid.New(),
-				Amount:      100.00,
+				AmountMinor: 10_000,
 				Type:        transaction.TypeExpense,
 				Description: "Grocery shopping",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				Date:        time.Now(),
+				Date:        date.Today(time.UTC),
 				Tags:        []string{"grocery", "food", "weekly"},
 			},
 			{
 				ID:          uuid.New(),
-				Amount:      200.00,
+				AmountMinor: 20_000,
 				Type:        transaction.TypeExpense,
 				Description: "Gas station",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				Date:        time.Now(),
+				Date:        date.Today(time.UTC),
 				Tags:        []string{"gas", "car", "transport"},
 			},
 			{
 				ID:          uuid.New(),
-				Amount:      50.00,
+				AmountMinor: 5_000,
 				Type:        transaction.TypeExpense,
 				Description: "Weekly grocery",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				Date:        time.Now(),
+				Date:        date.Today(time.UTC),
 				Tags:        []string{"grocery", "weekly"},
 			},
 		}
@@ -334,23 +336,23 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		for i := range 3 {
 			require.NoError(t, repo.Create(ctx, &transaction.Transaction{
 				ID:          uuid.New(),
-				Amount:      100.00,
+				AmountMinor: 10_000,
 				Type:        expenseType,
 				Description: "Counted expense",
 				CategoryID:  uuid.MustParse(categoryID),
 				UserID:      uuid.MustParse(userID),
-				Date:        time.Now().AddDate(0, 0, -i),
+				Date:        date.Today(time.UTC).AddDays(-i),
 				Tags:        []string{},
 			}))
 		}
 		require.NoError(t, repo.Create(ctx, &transaction.Transaction{
 			ID:          uuid.New(),
-			Amount:      500.00,
+			AmountMinor: 50_000,
 			Type:        transaction.TypeIncome,
 			Description: "Not counted income",
 			CategoryID:  uuid.MustParse(categoryID),
 			UserID:      uuid.MustParse(userID),
-			Date:        time.Now(),
+			Date:        date.Today(time.UTC),
 			Tags:        []string{},
 		}))
 
@@ -363,74 +365,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		total, err := repo.CountByFilter(ctx, filter)
 		require.NoError(t, err)
 		assert.Equal(t, 3, total, "счётчик обязан игнорировать LIMIT/OFFSET и фильтровать по типу")
-	})
-
-	t.Run("GetTransactionSummary", func(t *testing.T) {
-		db := container.GetTestDatabase(t)
-		repo := transactionrepo.NewSQLiteRepository(db)
-
-		// Create test data
-		familyID, err := helper.CreateTestFamily(ctx, "Summary Test Family", "USD")
-		require.NoError(t, err)
-
-		userID, err := helper.CreateTestUser(ctx, "summary@example.com", "Summary", "Test", "admin", familyID)
-		require.NoError(t, err)
-
-		categoryID, err := helper.CreateTestCategory(ctx, "Test Category", "expense", familyID, nil)
-		require.NoError(t, err)
-
-		// Create mixed transactions
-		now := time.Now()
-		transactions := []*transaction.Transaction{
-			{
-				ID:          uuid.New(),
-				Amount:      1000.00,
-				Type:        transaction.TypeIncome,
-				Description: "Salary",
-				CategoryID:  uuid.MustParse(categoryID),
-				UserID:      uuid.MustParse(userID),
-				Date:        now,
-			},
-			{
-				ID:          uuid.New(),
-				Amount:      200.00,
-				Type:        transaction.TypeExpense,
-				Description: "Groceries",
-				CategoryID:  uuid.MustParse(categoryID),
-				UserID:      uuid.MustParse(userID),
-				Date:        now,
-			},
-			{
-				ID:          uuid.New(),
-				Amount:      300.00,
-				Type:        transaction.TypeExpense,
-				Description: "Utilities",
-				CategoryID:  uuid.MustParse(categoryID),
-				UserID:      uuid.MustParse(userID),
-				Date:        now,
-			},
-		}
-
-		// Create all transactions
-		for _, tx := range transactions {
-			err = repo.Create(ctx, tx)
-			require.NoError(t, err)
-		}
-
-		// Get summary
-		startDate := now.AddDate(0, 0, -1)
-		endDate := now.AddDate(0, 0, 1)
-		summary, err := repo.GetSummary(ctx, startDate, endDate)
-		require.NoError(t, err)
-
-		assert.Equal(t, 3, summary.TotalCount)
-		assert.Equal(t, 1, summary.IncomeCount)
-		assert.Equal(t, 2, summary.ExpenseCount)
-		assert.InEpsilon(t, 1000.00, summary.TotalIncome, 0.01)
-		assert.InEpsilon(t, 500.00, summary.TotalExpenses, 0.01) // 200 + 300
-		assert.InEpsilon(t, 500.00, summary.Balance, 0.01)       // 1000 - 500
-		assert.InEpsilon(t, 1000.00, summary.AvgIncome, 0.01)
-		assert.InEpsilon(t, 250.00, summary.AvgExpense, 0.01) // (200 + 300) / 2
 	})
 
 	t.Run("Update_Success", func(t *testing.T) {
@@ -453,12 +387,12 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		// Create transaction
 		testTransaction := &transaction.Transaction{
 			ID:          uuid.New(),
-			Amount:      100.00,
+			AmountMinor: 10_000,
 			Type:        transaction.TypeExpense,
 			Description: "Original description",
 			CategoryID:  uuid.MustParse(categoryID),
 			UserID:      uuid.MustParse(userID),
-			Date:        time.Now().AddDate(0, 0, -1),
+			Date:        date.Today(time.UTC).AddDays(-1),
 			Tags:        []string{"original"},
 		}
 
@@ -466,7 +400,7 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Update transaction
-		testTransaction.Amount = 150.00
+		testTransaction.AmountMinor = 15_000
 		testTransaction.Description = "Updated description"
 		testTransaction.CategoryID = uuid.MustParse(newCategoryID)
 		testTransaction.Tags = []string{"updated", "modified"}
@@ -477,7 +411,7 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		// Verify update
 		retrievedTransaction, err := repo.GetByID(ctx, testTransaction.ID)
 		require.NoError(t, err)
-		assert.InEpsilon(t, 150.00, retrievedTransaction.Amount, 0.01)
+		assert.Equal(t, money.Minor(15_000), retrievedTransaction.AmountMinor)
 		assert.Equal(t, "Updated description", retrievedTransaction.Description)
 		assert.Equal(t, uuid.MustParse(newCategoryID), retrievedTransaction.CategoryID)
 		assert.Equal(t, []string{"updated", "modified"}, retrievedTransaction.Tags)
@@ -500,12 +434,12 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		// Create transaction
 		testTransaction := &transaction.Transaction{
 			ID:          uuid.New(),
-			Amount:      100.00,
+			AmountMinor: 10_000,
 			Type:        transaction.TypeExpense,
 			Description: "To be deleted",
 			CategoryID:  uuid.MustParse(categoryID),
 			UserID:      uuid.MustParse(userID),
-			Date:        time.Now(),
+			Date:        date.Today(time.UTC),
 		}
 
 		err = repo.Create(ctx, testTransaction)
@@ -519,5 +453,68 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		_, err = repo.GetByID(ctx, testTransaction.ID)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
+	})
+}
+
+// Копейки не теряются на агрегатах, границы диапазона дат включаются, сортировка идёт
+// по календарной дате — три свойства, которые float-колонка и DATETIME ломали молча.
+func TestTransactionRepositorySQLite_MinorUnitsAndDateBounds(t *testing.T) {
+	container := testutils.SetupSQLiteTestDB(t)
+	helper := testutils.NewTestDataHelper(container.DB)
+	ctx := context.Background()
+
+	db := container.GetTestDatabase(t)
+	repo := transactionrepo.NewSQLiteRepository(db)
+
+	familyID, err := helper.CreateTestFamily(ctx, "Minor Family", "RUB")
+	require.NoError(t, err)
+	userID, err := helper.CreateTestUser(ctx, "minor@example.com", "Minor", "User", "admin", familyID)
+	require.NoError(t, err)
+	categoryID, err := helper.CreateTestCategory(ctx, "Coffee", "expense", familyID, nil)
+	require.NoError(t, err)
+
+	days := []date.Date{
+		date.New(2026, time.March, 1),
+		date.New(2026, time.March, 2),
+		date.New(2026, time.March, 3),
+	}
+	for i, day := range days {
+		tx := &transaction.Transaction{
+			ID:          uuid.New(),
+			AmountMinor: 33,
+			Type:        transaction.TypeExpense,
+			Description: "Kopeyki " + day.String(),
+			CategoryID:  uuid.MustParse(categoryID),
+			UserID:      uuid.MustParse(userID),
+			Date:        day,
+			Tags:        []string{"minor"},
+		}
+		require.NoError(t, repo.Create(ctx, tx), "transaction %d", i)
+	}
+
+	t.Run("SumKeepsMinorUnits", func(t *testing.T) {
+		total, totalErr := repo.GetTotalByCategoryAndDateRange(
+			ctx, uuid.MustParse(categoryID), days[0], days[2], transaction.TypeExpense,
+		)
+		require.NoError(t, totalErr)
+		assert.Equal(t, money.Minor(99), total)
+	})
+
+	t.Run("DateRangeIncludesBounds", func(t *testing.T) {
+		from, to := days[0], days[2]
+		results, filterErr := repo.GetByFilter(ctx, transaction.Filter{DateFrom: &from, DateTo: &to, Limit: 10})
+		require.NoError(t, filterErr)
+		require.Len(t, results, 3)
+		// ORDER BY date DESC — самая поздняя операция первой.
+		assert.Equal(t, days[2], results[0].Date)
+		assert.Equal(t, days[0], results[2].Date)
+	})
+
+	t.Run("DateRangeExcludesOutside", func(t *testing.T) {
+		from, to := days[1], days[1]
+		results, filterErr := repo.GetByFilter(ctx, transaction.Filter{DateFrom: &from, DateTo: &to, Limit: 10})
+		require.NoError(t, filterErr)
+		require.Len(t, results, 1)
+		assert.Equal(t, days[1], results[0].Date)
 	})
 }

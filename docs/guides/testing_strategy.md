@@ -121,28 +121,28 @@ func TestTransactionService_CalculateMonthlyTotal(t *testing.T) {
     tests := []struct {
         name         string
         transactions []Transaction
-        expected     decimal.Decimal
+        expected     money.Minor
     }{
         {
             name:         "empty transactions",
             transactions: []Transaction{},
-            expected:     decimal.Zero,
+            expected:     money.Minor(0),
         },
         {
             name: "single transaction",
             transactions: []Transaction{
-                {Amount: decimal.NewFromFloat(100.50), Type: "income"},
+                {AmountMinor: money.Minor(10050), Type: "income"},
             },
-            expected: decimal.NewFromFloat(100.50),
+            expected: money.Minor(10050),
         },
         {
             name: "mixed transactions",
             transactions: []Transaction{
-                {Amount: decimal.NewFromFloat(1000), Type: "income"},
-                {Amount: decimal.NewFromFloat(200), Type: "expense"},
-                {Amount: decimal.NewFromFloat(300), Type: "expense"},
+                {AmountMinor: money.Minor(100000), Type: "income"},
+                {AmountMinor: money.Minor(20000), Type: "expense"},
+                {AmountMinor: money.Minor(30000), Type: "expense"},
             },
-            expected: decimal.NewFromFloat(500), // 1000 - 200 - 300
+            expected: money.Minor(50000), // 1000 - 200 - 300
         },
     }
 
@@ -396,7 +396,7 @@ func CreateTestTransaction(familyID string) *Transaction {
     return &Transaction{
         ID:          "tx-test-1",
         FamilyID:    familyID,
-        Amount:      decimal.NewFromFloat(100.50),
+        AmountMinor: money.Minor(10050),
         Type:        TransactionTypeExpense,
         Category:    "food",
         Description: "Grocery shopping",

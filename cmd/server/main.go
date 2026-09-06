@@ -12,6 +12,10 @@ import (
 	"strings"
 	"time"
 
+	// tzdata встраивается в бинарь: часовой пояс семьи не должен зависеть от того,
+	// есть ли база зон в образе (docker/Dockerfile ставит tzdata, scratch — нет).
+	_ "time/tzdata"
+
 	"family-budget-service/internal"
 )
 
