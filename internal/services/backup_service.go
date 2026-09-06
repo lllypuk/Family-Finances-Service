@@ -23,6 +23,10 @@ const (
 	// Имя различает бэкапы только до миллисекунды, поэтому одновременные вызовы
 	// (API и cron) могут выбрать один путь, а публикация имени отказывает на занятом.
 	backupNameAttempts = 5
+	tempBackupPrefix   = ".tmp-"
+	// Снимок пишется одним VACUUM INTO и живёт секунды; всё, что старше, брошено
+	// упавшим процессом.
+	staleTempAge = time.Hour
 )
 
 // validPathRegex validates that backup path contains only safe characters.
@@ -89,7 +93,7 @@ func backupFilename(t time.Time) string {
 // Имя намеренно не подходит под backupFilenameRegex: недописанный файл не должен
 // попасть ни в листинг, ни в счётчик ретеншена.
 func tempBackupName() string {
-	return fmt.Sprintf(".tmp-%d-%s.db", os.Getpid(), rand.Text())
+	return fmt.Sprintf("%s%d-%s.db", tempBackupPrefix, os.Getpid(), rand.Text())
 }
 
 // isValidBackupPath checks that a backup path contains only safe characters.
@@ -340,8 +344,37 @@ func (s *backupService) GetBackupFilePath(filename string) string {
 	return backupPath
 }
 
+// sweepStaleTemps удаляет временные снимки, брошенные упавшим процессом:
+// под backupFilenameRegex они не подходят, поэтому ретеншен их не видит,
+// а размер у каждого — как у всей базы.
+func (s *backupService) sweepStaleTemps(ctx context.Context) {
+	entries, err := os.ReadDir(s.backupDir)
+	if err != nil {
+		s.logger.WarnContext(ctx, "failed to read backup directory",
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	deadline := time.Now().Add(-staleTempAge)
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasPrefix(entry.Name(), tempBackupPrefix) {
+			continue
+		}
+
+		info, infoErr := entry.Info()
+		if infoErr != nil || info.ModTime().After(deadline) {
+			continue
+		}
+
+		s.removeTemp(ctx, filepath.Join(s.backupDir, entry.Name()))
+	}
+}
+
 // cleanupOldBackups removes oldest backups if the keep limit is exceeded
 func (s *backupService) cleanupOldBackups(ctx context.Context) error {
+	s.sweepStaleTemps(ctx)
+
 	backups, err := s.ListBackups(ctx)
 	if err != nil {
 		return err

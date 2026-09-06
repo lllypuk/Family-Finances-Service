@@ -440,3 +440,26 @@ func TestCreateBackup_FailureIsNotRetried(t *testing.T) {
 	require.NoError(t, listErr)
 	assert.Empty(t, backups)
 }
+
+func TestCreateBackup_SweepsStaleTempFiles(t *testing.T) {
+	db, dbPath, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	backupDir := filepath.Join(filepath.Dir(dbPath), "backups")
+	require.NoError(t, os.MkdirAll(backupDir, backupDirPerm))
+
+	stale := filepath.Join(backupDir, tempBackupName())
+	fresh := filepath.Join(backupDir, tempBackupName())
+	require.NoError(t, os.WriteFile(stale, []byte("abandoned"), 0o600))
+	require.NoError(t, os.WriteFile(fresh, []byte("in flight"), 0o600))
+
+	old := time.Now().Add(-staleTempAge - time.Minute)
+	require.NoError(t, os.Chtimes(stale, old, old))
+
+	service := NewBackupService(db, dbPath, "", 0, slog.Default())
+	_, err := service.CreateBackup(context.Background())
+	require.NoError(t, err)
+
+	assert.NoFileExists(t, stale)
+	assert.FileExists(t, fresh)
+}

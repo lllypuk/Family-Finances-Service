@@ -37,6 +37,8 @@ DRY_RUN=false
 REINSTALL=false
 # Directory holding the deploy/ files (compose, Caddyfile, .env.example); set by fetch_sources.
 DEPLOY_DIR=""
+# Повторный запуск переписывает Caddyfile у уже работающей установки; set by copy_deploy_files.
+CADDYFILE_CHANGED=false
 
 # In --dry-run every mutating command is printed instead of executed.
 run() {
@@ -195,9 +197,47 @@ copy_deploy_files() {
         exit 1
     fi
 
+    if [[ -f "${INSTALL_DIR}/caddy/Caddyfile" ]] && ! cmp -s "${caddyfile_src}" "${INSTALL_DIR}/caddy/Caddyfile"; then
+        CADDYFILE_CHANGED=true
+    fi
+
     run cp "${compose_src}" "${INSTALL_DIR}/docker-compose.yml"
     run cp "${caddyfile_src}" "${INSTALL_DIR}/caddy/Caddyfile"
     log_success "Deployment files copied"
+}
+
+# Перечитать конфиг Caddy, если файл заменён на повторном запуске: `up -d`
+# пересоздаёт контейнер по изменению сервиса в compose, а не содержимого
+# примонтированного файла.
+reload_caddy() {
+    [[ "${CADDYFILE_CHANGED}" == "true" ]] || return 0
+    if [[ "${DRY_RUN}" == "true" ]]; then
+        log_info "[dry-run] would reload the Caddy config"
+        return 0
+    fi
+
+    log_info "Caddyfile changed, reloading Caddy..."
+
+    # Валидация до применения: битый конфиг иначе доходит до restart, а тот
+    # отдаёт успех и на контейнере, который вышел сразу после старта.
+    if ! docker compose run --rm --no-deps --entrypoint caddy \
+        caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+        log_error "New Caddyfile is invalid, not applying it: ${INSTALL_DIR}/caddy/Caddyfile"
+        exit 1
+    fi
+
+    if docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+        log_success "Caddy config reloaded"
+        return 0
+    fi
+
+    log_warning "Caddy config reload failed, restarting Caddy..."
+    if ! docker compose restart caddy; then
+        log_error "Caddy restart failed; check ${INSTALL_DIR}/caddy/Caddyfile"
+        exit 1
+    fi
+
+    log_success "Caddy restarted"
 }
 
 # Дописать ключ, если его в файле нет; существующее значение не трогаем.
@@ -298,6 +338,8 @@ deploy_application() {
 
     log_info "Starting services..."
     run docker compose up -d
+
+    reload_caddy
 
     log_success "Application deployed"
 }
