@@ -26,8 +26,8 @@ S-03 (лимитер логина в `internal/auth/ratelimit.go`), `CSRF_SECRET
 
 - **Тег `v0.1.0` не поставлен** — действие владельца репозитория. `docker.yml` и `release.yml`
   уже указывают `file: docker/Dockerfile`, блокера нет. Ставить тег имеет смысл после перехода
-  на API-only ([005](specs/005-api-only-redesign.md)) — после плана 04, когда контракт денег и дат
-  совпадёт с `openapi.yaml`.
+  на API-only ([005](specs/005-api-only-redesign.md)): план 04 закрыт, контракт денег и дат совпадает
+  с `openapi.yaml`.
 
 ## Технический долг
 
@@ -35,12 +35,6 @@ S-03 (лимитер логина в `internal/auth/ratelimit.go`), `CSRF_SECRET
   `SESSION_SECRET`/`CSRF_SECRET`, которые приложение не читает (Makefile `COMPOSE_VALIDATE_ENV`
   подставляет заглушки ради `make compose-config`), nginx/Caddy/fail2ban ограничивают `/login`.
   Чинить точечно не нужно — план 05 заменяет каталог целиком.
-
-- **Инвайты живут без вызывающих**: `Repositories.Invite`, `Services.Invite`, `InviteService`,
-  `user.InviteRepository` и таблица `invites` после удаления веб-слоя нужны только своим тестам.
-  Удаляет план 04, задача 2.
-
-- **`--timezone` в CLI `setup` принимается и не сохраняется** — у `user.Family` нет колонки до плана 04.
 
 - **`deploy/docker-compose.{caddy,nginx,prod}.yml` не задают `TRUSTED_PROXIES`**: за прокси реальный IP
   неизвестен, и лимитер логина работает только по email (корзина per-IP выключается автоматически, иначе

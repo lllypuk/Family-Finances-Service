@@ -98,15 +98,13 @@ Family-Finances-Service/
 
 ### Основные таблицы
 ```sql
-families       -- Семейные профили
-users          -- Пользователи (члены семей)
-transactions   -- Финансовые транзакции
+families       -- Профиль семьи (одна строка: singleton UNIQUE), валюта и IANA-timezone
+users          -- Пользователи семьи, роль admin|member
 categories     -- Категории доходов/расходов
-budgets        -- Бюджеты и планы
-reports        -- Сгенерированные отчеты
-invites        -- Приглашения пользователей
+transactions   -- Операции: amount_minor INTEGER, date TEXT 'YYYY-MM-DD'
+budgets        -- Бюджеты: amount_minor/spent_minor, период start_date/end_date (TEXT-даты)
+reports        -- Сгенерированные отчёты, data — JSON с суммами *_minor
 sessions       -- Bearer-сессии (хеш токена, устройство, сроки)
-budget_alerts  -- Оповещения о бюджете
 ```
 
 ### Управление миграциями
@@ -133,7 +131,8 @@ budget_alerts  -- Оповещения о бюджете
 ### Аутентификация и авторизация
 - **Схема**: `Authorization: Bearer <token>`; токен непрозрачный, в БД — SHA-256; 30 дней без
   активности, не дольше 180 дней. Cookie и CSRF нет
-- **Роли**: Admin, Member, Child; проверяются на каждом запросе из БД, а не из токена
+- **Роли**: `admin` и `member`; проверяются на каждом запросе из БД, а не из токена. Приглашений нет —
+  пользователя заводит администратор через `POST /api/v1/users`
 - **Bootstrap**: семьи и первого администратора — только CLI `setup`; логин до него — `409 SETUP_REQUIRED`
 - **Лимитер логина**: 10 попыток с IP за 5 минут, 20 на email за час, `429` + `Retry-After`;
   IP из `X-Forwarded-For` только от `TRUSTED_PROXIES`

@@ -31,7 +31,7 @@ Contains all database objects in order of dependencies:
    | `categories` | `income`/`expense`, самоссылка `parent_id` |
    | `transactions` | `amount_minor INTEGER > 0`, `date TEXT 'YYYY-MM-DD'` (CHECK GLOB) |
    | `budgets` | `amount_minor`, `spent_minor`, период `start_date`/`end_date` — `TEXT`-даты |
-   | `reports` | `data` — JSON отчёта |
+   | `reports` | период `start_date`/`end_date` — `TEXT`-даты, `data` — JSON отчёта с суммами `*_minor` |
    | `sessions` | bearer-токены: только `token_hash` |
 
 2. **Indexes**: только те, что закрывают реальные запросы (семья+дата, категория, автор)
@@ -231,7 +231,7 @@ SELECT * FROM schema_migrations;
 | | - Automatic timestamp triggers | |
 | | - User invitation system | |
 | 001 | Bearer auth (plan 03): `sessions` replaces `user_sessions`; `families.singleton` UNIQUE | 2026-09-05 |
-| 001 | Plan 04: файл переписан одним куском, `budget_alerts` удалена, индексы сокращены | 2026-09-06 |
+| 001 | Plan 04: файл переписан одним куском; `*_minor INTEGER` вместо `REAL`, даты — `TEXT`, `families.timezone`, роль только `admin`/`member`; `budget_alerts` и `invites` удалены | 2026-09-06 |
 
 ## See Also
 

@@ -202,11 +202,11 @@ JSON: `amount_minor` (int64), `date` (`"2026-09-04"`), `currency` и `timezone` 
 
 ### Task 9: [Final] Update documentation
 
-- [ ] `CLAUDE.md`: «Database & migrations» (список таблиц, `make db-reset`), деньги и даты в «Conventions», нет инвайтов и `child`
-- [ ] `README.md`, `docs/product_brief.md`, `docs/tech_stack.md`: инвайты → «админ создаёт пользователя», роли `admin|member`
-- [ ] `docs/patterns/api_standards.md`: сверить примеры с реальными ответами
-- [ ] `migrations/README.md`: описание новой схемы
-- [ ] переместить план в `docs/plans/completed/`
+- [x] `CLAUDE.md`: «Database & migrations» (список таблиц, `make db-reset`), деньги и даты в «Conventions», нет инвайтов и `child`
+- [x] `README.md`, `docs/product_brief.md`, `docs/tech_stack.md`: инвайты → «админ создаёт пользователя», роли `admin|member`
+- [x] `docs/patterns/api_standards.md`: сверить примеры с реальными ответами (исправлены `meta.version`, формат `request_id`, `code` в `details`, поля лога; `CATEGORY_IN_USE` убран — его не отдаёт ни один обработчик)
+- [x] `migrations/README.md`: описание новой схемы (сверено с `001_consolidated.up.sql`)
+- [x] переместить план в `docs/plans/completed/` (перенос делает харнесс после всех фаз)
 
 ## Post-Completion
 

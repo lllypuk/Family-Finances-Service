@@ -946,7 +946,7 @@ components:
     Conflict:
       description: |
         Состояние не допускает операцию: `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`,
-        `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN`, `CATEGORY_IN_USE`
+        `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN`
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }

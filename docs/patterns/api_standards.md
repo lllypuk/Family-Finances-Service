@@ -4,15 +4,14 @@
 [`docs/api/openapi.yaml`](../api/openapi.yaml); здесь только соглашения, которые в нём не видны.
 Решения A-01, A-05…A-09 — в [spec 005](../specs/005-api-only-redesign.md).
 
-Документ описывает **целевое** состояние. До конца плана 04 код отличается одним: деньги — `float64`.
-Пагинация `limit/offset/total`, конверт ошибок (план 02) и bearer-аутентификация (план 03) уже
-соответствуют этому документу.
+Код соответствует документу: планы 02–04 привели к нему пагинацию, конверт ошибок,
+bearer-аутентификацию, деньги в минимальных единицах и календарные даты.
 
 ## Общие принципы
 
 - API — единственный интерфейс сервиса: клиент один (Android), HTML-интерфейса нет.
-- Спецификация пишется до реализации; зарегистрированный роут без описания в `openapi.yaml`
-  роняет `make test` (`tests/integration/openapi_coverage_test.go`).
+- Спецификация пишется до реализации; `make test` сверяет её с роутами в обе стороны
+  (`tests/integration/openapi_coverage_test.go`): и роут без описания, и описание без роута — красный тест.
 - Stateless: состояние запроса — только bearer-токен, никаких серверных сессий в памяти.
 
 ## URL Design
@@ -59,7 +58,7 @@ DELETE /api/v1/transactions/{id}
 | 401 | `UNAUTHORIZED` / `INVALID_CREDENTIALS` |
 | 403 | `FORBIDDEN` — роль не подходит |
 | 404 | `NOT_FOUND` (неизвестный путь) / `<ENTITY>_NOT_FOUND` (нет записи) |
-| 409 | `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`, `EMAIL_TAKEN`, `CATEGORY_IN_USE` |
+| 409 | `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`, `EMAIL_TAKEN`, `CANNOT_DEACTIVATE_SELF` |
 | 422 | `VALIDATION_ERROR` — поля в `error.details` |
 | 429 | `RATE_LIMITED` + `Retry-After` |
 | 500 | `INTERNAL_ERROR` |
@@ -73,14 +72,16 @@ DELETE /api/v1/transactions/{id}
 {
   "data": { },
   "meta": {
-    "request_id": "req_abc123",
+    "request_id": "kFqYmT3xPjW8sN2bL9cVdR6hZ4gA7uEy",
     "timestamp": "2026-09-04T10:30:00Z",
+    "version": "v1",
     "pagination": { "limit": 50, "offset": 0, "total": 150 }
   }
 }
 ```
 
-`meta.pagination` присутствует только в ответах-списках.
+`meta.pagination` присутствует только в ответах-списках; `request_id` и `version` — в каждом.
+`request_id` совпадает с заголовком `X-Request-ID`.
 
 ### Ошибка — одна форма на весь API (A-08)
 
@@ -88,16 +89,21 @@ DELETE /api/v1/transactions/{id}
 {
   "error": {
     "code": "VALIDATION_ERROR",
-    "message": "Validation failed for request",
+    "message": "Validation failed",
     "details": [
-      { "field": "amount_minor", "message": "must be greater than 0", "code": "min" }
+      { "field": "amount_minor", "message": "must satisfy gt=0", "code": "VALIDATION_ERROR" }
     ]
   },
-  "meta": { "request_id": "req_abc123", "timestamp": "2026-09-04T10:30:00Z" }
+  "meta": {
+    "request_id": "kFqYmT3xPjW8sN2bL9cVdR6hZ4gA7uEy",
+    "timestamp": "2026-09-04T10:30:00Z",
+    "version": "v1"
+  }
 }
 ```
 
-`details` заполняется только при `VALIDATION_ERROR`. Других форм ошибки нет: клиент разбирает
+`details` заполняется только при `VALIDATION_ERROR`; `field` — имя из json-тега, `code` — всегда
+`VALIDATION_ERROR` (тег валидатора виден в `message`). Других форм ошибки нет: клиент разбирает
 любой не-2xx одним типом.
 
 ## Пагинация (A-08)
@@ -190,16 +196,21 @@ GET /api/v1/transactions?category_id=…&type=expense&date_from=2026-01-01&amoun
 
 ```json
 {
-  "timestamp": "2026-09-04T10:30:00Z",
+  "time": "2026-09-04T10:30:00Z",
   "level": "INFO",
-  "request_id": "req_abc123",
+  "msg": "HTTP request completed",
+  "request_id": "kFqYmT3xPjW8sN2bL9cVdR6hZ4gA7uEy",
   "method": "GET",
   "path": "/api/v1/transactions",
+  "remote_addr": "10.0.0.7",
   "status": 200,
-  "duration_ms": 45,
-  "user_id": "0b7f1f2c-4e63-4a09-9b1e-2c1c0a5d9f10"
+  "duration": 45000000,
+  "bytes_in": 0,
+  "bytes_out": 1024
 }
 ```
+
+Автора запроса в этой записи нет — он берётся из токена уже в обработчике.
 
 ## Чек-лист для нового роута
 
