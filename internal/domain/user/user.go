@@ -39,8 +39,12 @@ type Role string
 const (
 	RoleAdmin  Role = "admin"  // Главный пользователь семьи
 	RoleMember Role = "member" // Обычный член семьи
-	RoleChild  Role = "child"  // Ребенок с ограниченными правами
 )
+
+// IsValid сообщает, что роль — одна из известных.
+func (r Role) IsValid() bool {
+	return r == RoleAdmin || r == RoleMember
+}
 
 type Family struct {
 	ID        uuid.UUID `json:"id"         bson:"_id"`

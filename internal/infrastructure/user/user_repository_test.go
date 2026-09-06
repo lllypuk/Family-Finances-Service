@@ -207,19 +207,19 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 			},
 			{
 				ID:        uuid.New(),
-				Email:     "member@family.com",
+				Email:     "zoe@family.com",
 				Password:  "hashed_password",
-				FirstName: "Member",
+				FirstName: "Zoe",
 				LastName:  "User",
 				Role:      user.RoleMember,
 			},
 			{
 				ID:        uuid.New(),
-				Email:     "child@family.com",
+				Email:     "anna@family.com",
 				Password:  "hashed_password",
-				FirstName: "Child",
+				FirstName: "Anna",
 				LastName:  "User",
-				Role:      user.RoleChild,
+				Role:      user.RoleMember,
 			},
 		}
 
@@ -235,10 +235,10 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		assert.Len(t, allUsers, 3)
 
 		// Verify users are sorted by role, first name, last name
-		// Role ordering is alphabetical: admin, child, member
+		// Role ordering is alphabetical: admin, member
 		assert.Equal(t, user.RoleAdmin, allUsers[0].Role)
-		assert.Equal(t, user.RoleChild, allUsers[1].Role)
-		assert.Equal(t, user.RoleMember, allUsers[2].Role)
+		assert.Equal(t, "Anna", allUsers[1].FirstName)
+		assert.Equal(t, "Zoe", allUsers[2].FirstName)
 	})
 
 	t.Run("Update_Success", func(t *testing.T) {
@@ -400,7 +400,7 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		}
 		require.NoError(t, repo.Create(ctx, member))
 
-		require.NoError(t, repo.UpdateRole(ctx, member.ID, user.RoleChild), "правка не-админа не проверяется")
+		require.NoError(t, repo.UpdateRole(ctx, member.ID, user.RoleMember), "правка не-админа не проверяется")
 		require.NoError(t, repo.SetActive(ctx, first.ID, false), "второй админ остаётся")
 		require.ErrorIs(t, repo.SetActive(ctx, second.ID, false), user.ErrLastAdmin,
 			"неактивный первый админ не считается")
@@ -463,10 +463,10 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		assert.Len(t, memberUsers, 1)
 		assert.Equal(t, user.RoleMember, memberUsers[0].Role)
 
-		// Get child users (should be empty)
-		childUsers, err := repo.GetUsersByRole(ctx, user.RoleChild)
+		// Неизвестная роль (child удалена планом 04) — пустая выборка
+		unknownUsers, err := repo.GetUsersByRole(ctx, user.Role("child"))
 		require.NoError(t, err)
-		assert.Empty(t, childUsers)
+		assert.Empty(t, unknownUsers)
 	})
 
 	t.Run("UpdateLastLogin_Success", func(t *testing.T) {

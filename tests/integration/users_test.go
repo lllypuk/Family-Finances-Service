@@ -92,6 +92,39 @@ func TestUserHandler_Integration(t *testing.T) {
 		t.Logf("Validation error details: %s", response.Error.Details)
 	})
 
+	// Роль child удалена планом 04 (A-03): запрос старого клиента отбивается валидатором.
+	t.Run("CreateUser_RoleChildRejected", func(t *testing.T) {
+		requestBody, err := json.Marshal(handlers.CreateUserRequest{
+			Email:     "child@example.com",
+			Password:  "password123",
+			FirstName: "Kid",
+			LastName:  "Doe",
+			Role:      "child",
+		})
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewBuffer(requestBody))
+		testServer.Auth(t).Apply(req)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		require.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
+
+		var response handlers.ErrorResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
+		require.Len(t, response.Error.Details, 1)
+		assert.Equal(t, "role", response.Error.Details[0].Field)
+
+		users, listErr := testServer.Repos.User.GetAll(context.Background())
+		require.NoError(t, listErr)
+		for _, u := range users {
+			assert.NotEqual(t, "child@example.com", u.Email)
+		}
+	})
+
 	t.Run("GetUserByID_Success", func(t *testing.T) {
 		// families.singleton: вторую семью не создать, пользователь добавляется в существующую
 		testServer.Auth(t)

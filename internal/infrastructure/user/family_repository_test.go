@@ -123,14 +123,14 @@ func TestFamilyRepository_SchemaConstraints(t *testing.T) {
 		assert.Equal(t, 1, countRows(t, db, "families"))
 	})
 
-	t.Run("unknown role violates CHECK", func(t *testing.T) {
+	t.Run("role child violates CHECK", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
 		family, categories, admin := bootstrapFixtures()
 		require.NoError(t, newFamilyRepo(db).Bootstrap(ctx, family, categories, admin))
 
 		_, err := db.ExecContext(ctx,
 			`INSERT INTO users (id, email, password_hash, first_name, last_name, role, family_id)
-			 VALUES (?, 'guest@example.com', 'hashed', 'Guest', 'User', 'guest', ?)`,
+			 VALUES (?, 'child@example.com', 'hashed', 'Child', 'User', 'child', ?)`,
 			uuid.New().String(), family.ID.String())
 		require.ErrorContains(t, err, "CHECK constraint failed")
 		assert.Equal(t, 1, countRows(t, db, "users"))

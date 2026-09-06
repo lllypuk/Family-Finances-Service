@@ -131,10 +131,10 @@ JSON: `amount_minor` (int64), `date` (`"2026-09-04"`), `currency` и `timezone` 
   `internal/application/handlers/types.go`, все `switch`/`map` по `user.Role` (найти
   `grep -rn 'RoleChild\|"child"' internal tests`), `migrations/001_consolidated.up.sql`
 
-- [ ] удалить `RoleChild`; `oneof=admin member` в DTO и `types.go`; `exhaustive` подскажет остальные места
-- [ ] CHECK `role IN ('admin','member')` в миграции
-- [ ] тесты: `POST /users` с `role: child` → 422; тест домена на `Role.IsValid`
-- [ ] `make fmt && make test && make lint` — зелёные
+- [x] удалить `RoleChild`; `oneof=admin member` в DTO и `types.go`; `exhaustive` подскажет остальные места
+- [x] CHECK `role IN ('admin','member')` в миграции
+- [x] тесты: `POST /users` с `role: child` → 422; тест домена на `Role.IsValid`
+- [x] `make fmt && make test && make lint` — зелёные
 
 ### Task 4: Пакеты `money` и `date`
 

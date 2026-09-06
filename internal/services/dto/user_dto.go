@@ -10,7 +10,7 @@ type CreateUserDTO struct {
 	FirstName string    `validate:"required,min=2,max=50"`
 	LastName  string    `validate:"required,min=2,max=50"`
 	Password  string    `validate:"required,password"`
-	Role      user.Role `validate:"required"`
+	Role      user.Role `validate:"required,oneof=admin member"`
 }
 
 // UpdateUserDTO represents the data transfer object for updating a user

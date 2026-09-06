@@ -49,20 +49,20 @@ func TestFromCreateUserWebRequest(t *testing.T) {
 			},
 		},
 		{
-			name: "child user",
+			name: "admin user",
 			request: CreateUserWebRequest{
-				Email:     "child@example.com",
+				Email:     "admin@example.com",
 				Password:  "password123",
-				FirstName: "Child",
+				FirstName: "Admin",
 				LastName:  "User",
-				Role:      "child",
+				Role:      "admin",
 			},
 			expected: CreateUserDTO{
-				Email:     "child@example.com",
+				Email:     "admin@example.com",
 				Password:  "password123",
-				FirstName: "Child",
+				FirstName: "Admin",
 				LastName:  "User",
-				Role:      user.RoleChild,
+				Role:      user.RoleAdmin,
 			},
 		},
 	}

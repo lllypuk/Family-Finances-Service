@@ -54,7 +54,14 @@ func TestRole_Constants(t *testing.T) {
 	// Test that role constants have expected values
 	assert.Equal(t, "admin", string(user.RoleAdmin))
 	assert.Equal(t, "member", string(user.RoleMember))
-	assert.Equal(t, "child", string(user.RoleChild))
+}
+
+func TestRole_IsValid(t *testing.T) {
+	assert.True(t, user.RoleAdmin.IsValid())
+	assert.True(t, user.RoleMember.IsValid())
+	assert.False(t, user.Role("child").IsValid(), "роль child удалена планом 04")
+	assert.False(t, user.Role("").IsValid())
+	assert.False(t, user.Role("Admin").IsValid(), "регистр значим")
 }
 
 func TestUser_StructFields(t *testing.T) {
@@ -106,7 +113,6 @@ func TestNewUser_DifferentRoles(t *testing.T) {
 	}{
 		{"Admin Role", user.RoleAdmin},
 		{"Member Role", user.RoleMember},
-		{"Child Role", user.RoleChild},
 	}
 
 	for _, tt := range tests {

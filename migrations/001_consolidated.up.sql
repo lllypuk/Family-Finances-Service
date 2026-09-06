@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS users (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
-    CHECK (role IN ('admin', 'member', 'child')),
+    CHECK (role IN ('admin', 'member')),
     CHECK (email LIKE '%_@__%.__%'),
     CHECK (LENGTH(TRIM(first_name)) > 0),
     CHECK (LENGTH(TRIM(last_name)) > 0),

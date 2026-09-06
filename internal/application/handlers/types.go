@@ -51,7 +51,7 @@ type CreateUserRequest struct {
 	Password  string `json:"password"   validate:"required,password"`
 	FirstName string `json:"first_name" validate:"required"`
 	LastName  string `json:"last_name"  validate:"required"`
-	Role      string `json:"role"       validate:"required,oneof=admin member child"`
+	Role      string `json:"role"       validate:"required,oneof=admin member"`
 }
 
 type UpdateUserRequest struct {
@@ -62,7 +62,7 @@ type UpdateUserRequest struct {
 
 // PatchUserRequest меняет роль и/или активность; хотя бы одно поле обязательно.
 type PatchUserRequest struct {
-	Role     *string `json:"role,omitempty"      validate:"omitempty,oneof=admin member child"`
+	Role     *string `json:"role,omitempty"      validate:"omitempty,oneof=admin member"`
 	IsActive *bool   `json:"is_active,omitempty"`
 }
 

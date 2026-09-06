@@ -136,10 +136,13 @@ func TestAPIUsers_PatchValidation(t *testing.T) {
 	rec := adminJSON(t, ts, admin, http.MethodPatch, path, `{}`)
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
 
-	rec = adminJSON(t, ts, admin, http.MethodPatch, path, `{"role":"child","is_active":false}`)
+	rec = adminJSON(t, ts, admin, http.MethodPatch, path, `{"role":"guest","is_active":false}`)
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
+
+	rec = adminJSON(t, ts, admin, http.MethodPatch, path, `{"role":"admin","is_active":false}`)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	got := decodeUser(t, rec)
-	assert.Equal(t, "child", got.Role)
+	assert.Equal(t, "admin", got.Role)
 	assert.False(t, got.IsActive)
 }
 

@@ -37,18 +37,18 @@ func TestSessionRevalidation_DeactivatedUserLosesAccess(t *testing.T) {
 }
 
 // TestSessionRevalidation_RoleDowngradeTakesEffect — роль берётся из БД, а не
-// из токена: понижение до child закрывает финансовые разделы на следующем запросе.
+// из токена: понижение admin → member закрывает /users на следующем запросе.
 func TestSessionRevalidation_RoleDowngradeTakesEffect(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
-	testServer.Auth(t)
+	testServer.Auth(t) // первый админ остаётся активным: понижение второго проходит
 
-	member, memberAuth := testServer.AuthAs(t, user.RoleMember)
+	second, secondAuth := testServer.AuthAs(t, user.RoleAdmin)
 
-	require.Equal(t, http.StatusOK, doAuthedGET(t, testServer, memberAuth, "/api/v1/transactions"))
+	require.Equal(t, http.StatusOK, doAuthedGET(t, testServer, secondAuth, "/api/v1/users"))
 
-	require.NoError(t, testServer.Repos.User.UpdateRole(context.Background(), member.ID, user.RoleChild))
+	require.NoError(t, testServer.Repos.User.UpdateRole(context.Background(), second.ID, user.RoleMember))
 
-	assert.Equal(t, http.StatusForbidden, doAuthedGET(t, testServer, memberAuth, "/api/v1/transactions"),
+	assert.Equal(t, http.StatusForbidden, doAuthedGET(t, testServer, secondAuth, "/api/v1/users"),
 		"роль всё ещё читается из выданного токена, а не из БД")
 }
 

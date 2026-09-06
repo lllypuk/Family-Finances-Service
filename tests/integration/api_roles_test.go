@@ -21,20 +21,16 @@ import (
 // docs/plans/20260816-deployment-blockers.md).
 //
 // До задачи 6 группа /api/v1 была закрыта только RequireAPIAuth, то есть любой
-// аутентифицированный пользователь — включая роль child — мог удалить чужого
-// пользователя или категорию. В удалённом вебе те же действия были закрыты
-// RequireAdmin и RequireAdminOrMember (финансовые разделы).
+// аутентифицированный пользователь мог удалить чужого пользователя или
+// категорию. В удалённом вебе те же действия были закрыты RequireAdmin и
+// RequireAdminOrMember (финансовые разделы).
 //
 // TDD, красная фаза (`go test ./tests/integration -run TestAPIRoles`):
 //
 //	--- FAIL: TestAPIRoles_DestructiveRoutesRequireAdmin/delete_user/member   actual: 204
-//	--- FAIL: TestAPIRoles_DestructiveRoutesRequireAdmin/delete_user/child    actual: 204
 //	--- FAIL: TestAPIRoles_DestructiveRoutesRequireAdmin/create_user/member   actual: 201
-//	--- FAIL: TestAPIRoles_DestructiveRoutesRequireAdmin/create_user/child    actual: 201
 //	--- FAIL: TestAPIRoles_DestructiveRoutesRequireAdmin/update_user/member   actual: 200
-//	--- FAIL: TestAPIRoles_DestructiveRoutesRequireAdmin/update_user/child    actual: 200
 //	--- FAIL: TestAPIRoles_DestructiveRoutesRequireAdmin/delete_category/*    actual: 204
-//	--- FAIL: TestAPIRoles_ChildHasNoAccessToFinanceRoutes/*                  actual: 200/201
 
 // apiRoleCase — один разрушающий маршрут API и код успеха для админа.
 type apiRoleCase struct {
@@ -50,7 +46,6 @@ func TestAPIRoles_DestructiveRoutesRequireAdmin(t *testing.T) {
 
 	adminAuth := testServer.Auth(t)
 	_, memberAuth := testServer.AuthAs(t, user.RoleMember)
-	_, childAuth := testServer.AuthAs(t, user.RoleChild)
 
 	cases := []apiRoleCase{
 		{
@@ -99,12 +94,12 @@ func TestAPIRoles_DestructiveRoutesRequireAdmin(t *testing.T) {
 			name:    "patch user role",
 			method:  http.MethodPatch,
 			path:    func(f apiFixtures) string { return "/api/v1/users/" + f.userID.String() },
-			body:    func(_ *testing.T, _ apiFixtures) string { return `{"role":"child"}` },
+			body:    func(_ *testing.T, _ apiFixtures) string { return `{"role":"admin"}` },
 			adminOK: http.StatusOK,
 		},
 		// Чтение карточки пользователя закрыто наравне с остальными
 		// операциями над /users: в вебе весь раздел под RequireAdmin,
-		// и API не должен отдавать member/child чужие email и роли.
+		// и API не должен отдавать member чужие email и роли.
 		{
 			name:    "get user",
 			method:  http.MethodGet,
@@ -122,7 +117,6 @@ func TestAPIRoles_DestructiveRoutesRequireAdmin(t *testing.T) {
 			}{
 				{role: "admin", auth: adminAuth, want: tc.adminOK},
 				{role: "member", auth: memberAuth, want: http.StatusForbidden},
-				{role: "child", auth: childAuth, want: http.StatusForbidden},
 			}
 
 			for _, rc := range roleCases {
@@ -140,81 +134,6 @@ func TestAPIRoles_DestructiveRoutesRequireAdmin(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestAPIRoles_ChildHasNoAccessToFinanceRoutes — разделы транзакций, бюджетов,
-// категорий и отчётов закрыты для роли child (RequireRole admin|member).
-func TestAPIRoles_ChildHasNoAccessToFinanceRoutes(t *testing.T) {
-	testServer := testhelpers.SetupHTTPServer(t)
-
-	adminAuth := testServer.Auth(t)
-	_, childAuth := testServer.AuthAs(t, user.RoleChild)
-	fixtures := createAPIFixtures(t, testServer)
-
-	financePaths := []string{
-		"/api/v1/categories",
-		"/api/v1/transactions",
-		"/api/v1/budgets",
-		"/api/v1/reports",
-		"/api/v1/stats/summary",
-	}
-
-	for _, path := range financePaths {
-		t.Run("child "+path, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, path, nil)
-			childAuth.Apply(req)
-			rec := httptest.NewRecorder()
-
-			testServer.Server.Echo().ServeHTTP(rec, req)
-
-			assert.Equal(t, http.StatusForbidden, rec.Code,
-				"роль child не имеет доступа к %s в вебе, значит и в API, тело: %s", path, rec.Body.String())
-		})
-
-		t.Run("admin "+path, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, path, nil)
-			adminAuth.Apply(req)
-			rec := httptest.NewRecorder()
-
-			testServer.Server.Echo().ServeHTTP(rec, req)
-
-			assert.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
-		})
-	}
-
-	// Массовое удаление — тот же financeAccess, что и остальные операции с транзакциями.
-	t.Run("child bulk delete transactions", func(t *testing.T) {
-		body := mustJSON(t, map[string]any{"ids": []string{uuid.New().String()}})
-
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions/bulk-delete", bytes.NewBuffer(body))
-		req.Header.Set("Content-Type", "application/json")
-		childAuth.Apply(req)
-		rec := httptest.NewRecorder()
-
-		testServer.Server.Echo().ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusForbidden, rec.Code, "тело: %s", rec.Body.String())
-	})
-
-	// Запись под ролью child закрыта так же, как чтение.
-	t.Run("child create transaction", func(t *testing.T) {
-		body := mustJSON(t, map[string]any{
-			"amount":      10.0,
-			"type":        "expense",
-			"description": "child write attempt",
-			"category_id": fixtures.freeCategoryID,
-			"date":        "2026-01-01T00:00:00Z",
-		})
-
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", bytes.NewBuffer(body))
-		req.Header.Set("Content-Type", "application/json")
-		childAuth.Apply(req)
-		rec := httptest.NewRecorder()
-
-		testServer.Server.Echo().ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusForbidden, rec.Code, "тело: %s", rec.Body.String())
-	})
 }
 
 // TestAPIRoles_MemberHasAccessToFinanceRoutes — обратная сторона предыдущего
@@ -318,13 +237,13 @@ func TestAPIRoles_ForbiddenResponseIsJSON(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 
 	testServer.Auth(t)
-	_, childAuth := testServer.AuthAs(t, user.RoleChild)
+	_, memberAuth := testServer.AuthAs(t, user.RoleMember)
 	fixtures := createAPIFixtures(t, testServer)
 
 	req := httptest.NewRequest(http.MethodPatch, "/api/v1/users/"+fixtures.userID.String(),
 		strings.NewReader(`{"role":"admin"}`))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	childAuth.Apply(req)
+	memberAuth.Apply(req)
 	rec := httptest.NewRecorder()
 
 	testServer.Server.Echo().ServeHTTP(rec, req)
