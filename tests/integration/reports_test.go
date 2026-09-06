@@ -659,3 +659,23 @@ func TestReportAPI_CreateReport_RejectsMissingStartDate(t *testing.T) {
 	require.Len(t, response.Error.Details, 1)
 	assert.Equal(t, "start_date", response.Error.Details[0].Field)
 }
+
+// Кривой user_id — такая же 422 VALIDATION_ERROR/INVALID_QUERY_PARAM, как у остальных
+// query-параметров: 400 INVALID_USER_ID в openapi.yaml не описан.
+func TestReportAPI_ListReports_InvalidUserID(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/reports?user_id=garbage", nil)
+	testServer.Auth(t).Apply(req)
+	rec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
+	require.Len(t, response.Error.Details, 1)
+	assert.Equal(t, "user_id", response.Error.Details[0].Field)
+	assert.Equal(t, "INVALID_QUERY_PARAM", response.Error.Details[0].Code)
+}

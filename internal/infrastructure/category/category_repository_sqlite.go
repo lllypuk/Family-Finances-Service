@@ -106,13 +106,15 @@ func insertCategory(ctx context.Context, db execer, familyID uuid.UUID, c *categ
 
 	query := `
 		INSERT INTO categories (
-			id, name, type, description, parent_id, family_id, is_active, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			id, name, type, color, icon, description, parent_id, family_id, is_active, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	_, err := db.ExecContext(ctx, query,
 		sqlitehelpers.UUIDToString(c.ID),
 		c.Name,
 		string(c.Type),
+		c.Color,
+		c.Icon,
 		"",
 		sqlitehelpers.UUIDPtrToString(c.ParentID),
 		familyID.String(),
@@ -138,7 +140,7 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*category
 	}
 
 	query := `
-		SELECT id, name, type, description, parent_id, family_id, is_active, created_at, updated_at
+		SELECT id, name, type, color, icon, description, parent_id, family_id, is_active, created_at, updated_at
 		FROM categories
 		WHERE id = ?`
 
@@ -148,7 +150,7 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*category
 	var isActiveInt int
 
 	err := r.db.QueryRowContext(ctx, query, sqlitehelpers.UUIDToString(id)).Scan(
-		&idStr, &c.Name, &typeStr, &description, &parentIDStr, &familyIDStr,
+		&idStr, &c.Name, &typeStr, &c.Color, &c.Icon, &description, &parentIDStr, &familyIDStr,
 		&isActiveInt, &c.CreatedAt, &c.UpdatedAt,
 	)
 
@@ -182,7 +184,7 @@ func (r *SQLiteRepository) scanCategories(rows *sql.Rows, errorContext string) (
 		var isActiveInt int
 
 		err := rows.Scan(
-			&idStr, &c.Name, &typeStr, &description, &parentIDStr, &familyIDStr,
+			&idStr, &c.Name, &typeStr, &c.Color, &c.Icon, &description, &parentIDStr, &familyIDStr,
 			&isActiveInt, &c.CreatedAt, &c.UpdatedAt,
 		)
 		if err != nil {
@@ -217,7 +219,7 @@ func (r *SQLiteRepository) GetAll(ctx context.Context) ([]*category.Category, er
 	}
 
 	query := `
-		SELECT id, name, type, description, parent_id, family_id, is_active, created_at, updated_at
+		SELECT id, name, type, color, icon, description, parent_id, family_id, is_active, created_at, updated_at
 		FROM categories
 		WHERE family_id = ? AND is_active = 1
 		ORDER BY type, parent_id NULLS FIRST, name`
@@ -246,7 +248,7 @@ func (r *SQLiteRepository) GetByFamilyIDAndType(
 	}
 
 	query := `
-		SELECT id, name, type, description, parent_id, family_id, is_active, created_at, updated_at
+		SELECT id, name, type, color, icon, description, parent_id, family_id, is_active, created_at, updated_at
 		FROM categories
 		WHERE family_id = ? AND type = ? AND is_active = 1
 		ORDER BY parent_id NULLS FIRST, name`
@@ -396,12 +398,14 @@ func (r *SQLiteRepository) Update(ctx context.Context, c *category.Category) err
 
 	query := `
 		UPDATE categories
-		SET name = ?, type = ?, parent_id = ?, updated_at = ?
+		SET name = ?, type = ?, color = ?, icon = ?, parent_id = ?, updated_at = ?
 		WHERE id = ? AND family_id = ? AND is_active = 1`
 
 	result, err := r.db.ExecContext(ctx, query,
 		c.Name,
 		string(c.Type),
+		c.Color,
+		c.Icon,
 		sqlitehelpers.UUIDPtrToString(c.ParentID),
 		c.UpdatedAt,
 		sqlitehelpers.UUIDToString(c.ID),

@@ -640,9 +640,13 @@ func TestCategoryAPI_CreateWithClientID_Idempotent(t *testing.T) {
 	second := post(t)
 	require.Equal(t, http.StatusOK, second.Code, "тело: %s", second.Body.String())
 
-	var repeated handlers.APIResponse[dto.CategoryAPIResponse]
+	var created, repeated handlers.APIResponse[dto.CategoryAPIResponse]
+	require.NoError(t, json.Unmarshal(first.Body.Bytes(), &created))
 	require.NoError(t, json.Unmarshal(second.Body.Bytes(), &repeated))
 	assert.Equal(t, clientID, repeated.Data.ID)
+	assert.Equal(t, created.Data, repeated.Data, "повтор обязан отдать то же тело, что и 201")
+	assert.Equal(t, "#FF00FF", repeated.Data.Color)
+	assert.Equal(t, "repeat", repeated.Data.Icon)
 
 	stored, err := testServer.Repos.Category.GetAll(context.Background())
 	require.NoError(t, err)

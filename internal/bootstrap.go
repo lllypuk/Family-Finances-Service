@@ -45,6 +45,7 @@ func verifySchema(db *sql.DB) error {
 		"SELECT amount_minor, date FROM transactions LIMIT 0",
 		"SELECT amount_minor, spent_minor, start_date, end_date FROM budgets LIMIT 0",
 		"SELECT timezone FROM families LIMIT 0",
+		"SELECT color, icon FROM categories LIMIT 0",
 	}
 
 	for _, probe := range probes {

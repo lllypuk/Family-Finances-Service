@@ -481,3 +481,74 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		assert.Empty(t, response.Data)
 	})
 }
+
+// Цвет и иконка обязательны в API и должны переживать запись в БД: до появления
+// колонок color/icon они молча терялись, и GET возвращал пустые строки.
+func TestCategoryAPI_ColorAndIcon_SurviveRoundTrip(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+
+	body := mustJSON(t, map[string]any{
+		"name":  "Кафе",
+		"type":  "expense",
+		"color": "#FF5733",
+		"icon":  "utensils",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/categories", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	session.Apply(req)
+	rec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusCreated, rec.Code, "тело: %s", rec.Body.String())
+
+	var created handlers.APIResponse[handlers.CategoryResponse]
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &created))
+
+	fetched := getCategory(t, testServer, session, created.Data.ID)
+	assert.Equal(t, "#FF5733", fetched.Color)
+	assert.Equal(t, "utensils", fetched.Icon)
+
+	for _, item := range listCategories(t, testServer) {
+		if item.ID == created.Data.ID {
+			assert.Equal(t, "#FF5733", item.Color)
+			assert.Equal(t, "utensils", item.Icon)
+		}
+	}
+
+	update := mustJSON(t, map[string]any{"color": "#00FF00", "icon": "coffee"})
+	req = httptest.NewRequest(
+		http.MethodPut,
+		"/api/v1/categories/"+created.Data.ID.String(),
+		bytes.NewBuffer(update),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	session.Apply(req)
+	rec = httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
+
+	updated := getCategory(t, testServer, session, created.Data.ID)
+	assert.Equal(t, "#00FF00", updated.Color)
+	assert.Equal(t, "coffee", updated.Icon)
+}
+
+func getCategory(
+	t *testing.T,
+	testServer *testhelpers.TestServer,
+	session *testhelpers.AuthSession,
+	id uuid.UUID,
+) handlers.CategoryResponse {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/categories/"+id.String(), nil)
+	session.Apply(req)
+	rec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
+
+	var response handlers.APIResponse[handlers.CategoryResponse]
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+
+	return response.Data
+}

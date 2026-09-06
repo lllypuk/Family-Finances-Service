@@ -134,7 +134,7 @@ func (h *ReportHandler) GetReports(c echo.Context) error {
 	if userIDParam != "" {
 		userID, parseErr := uuid.Parse(userIDParam)
 		if parseErr != nil {
-			return respondError(c, http.StatusBadRequest, "INVALID_USER_ID", "Invalid user ID format")
+			return ignoreWritten(writeInvalidQueryParam(c, "user_id", userIDParam, "must be a valid UUID"))
 		}
 		reports, err = h.repositories.Report.GetByUserID(c.Request().Context(), userID)
 	} else {
@@ -189,7 +189,7 @@ func (h *ReportHandler) getReportsViaService(c echo.Context, page pageParams) er
 	if userIDParam != "" {
 		userID, parseErr := uuid.Parse(userIDParam)
 		if parseErr != nil {
-			return respondError(c, http.StatusBadRequest, "INVALID_USER_ID", "Invalid user ID format")
+			return ignoreWritten(writeInvalidQueryParam(c, "user_id", userIDParam, "must be a valid UUID"))
 		}
 		reports, err = h.reportService.GetReportsByUserID(c.Request().Context(), userID)
 	} else {

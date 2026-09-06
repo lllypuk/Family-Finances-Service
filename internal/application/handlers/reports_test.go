@@ -543,12 +543,15 @@ func TestReportHandler_GetReports_InvalidUserID(t *testing.T) {
 
 	// Assert
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
 	var response handlers.ErrorResponse
 	err = json.Unmarshal(rec.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.Equal(t, "INVALID_USER_ID", response.Error.Code)
+	assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
+	require.Len(t, response.Error.Details, 1)
+	assert.Equal(t, "user_id", response.Error.Details[0].Field)
+	assert.Equal(t, "INVALID_QUERY_PARAM", response.Error.Details[0].Code)
 }
 
 func TestReportHandler_GetReportByID_Success(t *testing.T) {

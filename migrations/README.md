@@ -28,7 +28,7 @@ Contains all database objects in order of dependencies:
    |---|---|
    | `families` | `singleton` UNIQUE — ровно одна семья на инсталляцию; `timezone` (IANA) |
    | `users` | `role` CHECK (`admin`/`member`), `is_active` |
-   | `categories` | `income`/`expense`, самоссылка `parent_id` |
+   | `categories` | `income`/`expense`, самоссылка `parent_id`, `color`/`icon` для клиента |
    | `transactions` | `amount_minor INTEGER > 0`, `date TEXT 'YYYY-MM-DD'` (CHECK GLOB) |
    | `budgets` | `amount_minor`, `spent_minor`, период `start_date`/`end_date` — `TEXT`-даты |
    | `reports` | период `start_date`/`end_date` — `TEXT`-даты, `data` — JSON отчёта с суммами `*_minor` |

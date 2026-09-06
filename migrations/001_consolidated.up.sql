@@ -49,6 +49,8 @@ CREATE TABLE IF NOT EXISTS categories (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     type TEXT NOT NULL,
+    color TEXT NOT NULL DEFAULT '',
+    icon TEXT NOT NULL DEFAULT '',
     description TEXT,
     parent_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
     family_id TEXT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
