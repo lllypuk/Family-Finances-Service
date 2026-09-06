@@ -264,8 +264,9 @@ reference): `docs/README.md` (navigation), `docs/product_brief.md`, `docs/tech_s
 status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the finished ones.
 
 **Current direction:** `docs/specs/005-api-only-redesign.md` — the service is an API-only backend for an
-Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–04 are done
-(`docs/plans/completed/`); `docs/plans/20260904-05-deploy-ffs.md` is the current one.
+Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–05 are done
+(`docs/plans/completed/`); what is left is the owner's work on the server (DNS, `install.sh`, `setup`, backup
+cron, the `v0.1.0` tag).
 
 `docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates
 from it, and code and spec now match. **A registered route with no operation in the spec fails `make test`**

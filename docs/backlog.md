@@ -26,8 +26,8 @@ S-03 (лимитер логина в `internal/auth/ratelimit.go`), `CSRF_SECRET
 
 - **Тег `v0.1.0` не поставлен** — действие владельца репозитория. `docker.yml` и `release.yml`
   уже указывают `file: docker/Dockerfile`, блокера нет. Ставить тег имеет смысл после перехода
-  на API-only ([005](specs/005-api-only-redesign.md)): план 04 закрыт, контракт денег и дат совпадает
-  с `openapi.yaml`.
+  на API-only ([005](specs/005-api-only-redesign.md)): все пять планов закрыты, код и `openapi.yaml`
+  совпадают, деплой — один compose с Caddy.
 
 ## Инфраструктура Dependabot
 

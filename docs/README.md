@@ -7,8 +7,9 @@
 **Проект представляет собой self-hosted решение** — один Docker-образ (~50MB) со встроенной SQLite базой данных: JSON API для Android-приложения, bearer-аутентификация, CLI для первичной настройки.
 
 > **Направление с сентября 2026:** API-only бэкенд для Android-приложения. Решения и порядок работ —
-> [specs/005-api-only-redesign.md](specs/005-api-only-redesign.md); планы 01–04 выполнены (веб-интерфейс удалён,
-> деньги в минимальных единицах, календарные даты), 05 — следующий. Разделы ниже описывают текущее состояние кода.
+> [specs/005-api-only-redesign.md](specs/005-api-only-redesign.md); планы 01–05 выполнены (веб-интерфейс удалён,
+> деньги в минимальных единицах, календарные даты, деплой одним compose с Caddy). Разделы ниже описывают
+> текущее состояние кода.
 
 ## 🚀 Быстрый старт
 
@@ -54,7 +55,9 @@
 - **Health checks** (/health эндпоинт)
 
 ### ✅ CI/CD & DevOps
-- **GitHub Actions** workflows (ci.yml, docker.yml, security.yml, release.yml)
+- **GitHub Actions** workflows (ci.yml, docker.yml, security.yml, release.yml, scorecard.yml)
+- **Один прод-compose** ([deploy/](../deploy/README.md)): `app` + Caddy с автоматическим TLS,
+  скрипты `install`/`upgrade`/`uninstall`/`health-check`, бэкап подкомандой `backup` из cron
 - **Multi-platform Docker builds** (linux/amd64, linux/arm64)
 - **Security scanning** (CodeQL, Semgrep, TruffleHog)
 - **Dependency management** (Dependabot)
