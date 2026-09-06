@@ -458,3 +458,53 @@ func TestStatsService_Summary_CategoryCountsSplitByType(t *testing.T) {
 	assert.Equal(t, 2, summary.ExpenseCategories[0].TransactionCount)
 	assert.Equal(t, 1, summary.IncomeCategories[0].TransactionCount)
 }
+
+// TestStatsService_Summary_DefaultPeriodUsesFamilyTimezone — nil-границы означают текущий
+// месяц в зоне семьи, а не в зоне процесса (A-06).
+func TestStatsService_Summary_DefaultPeriodUsesFamilyTimezone(t *testing.T) {
+	svc, m := newStatsService()
+
+	loc, err := time.LoadLocation("Europe/Moscow")
+	require.NoError(t, err)
+	today := date.Today(loc)
+	from, _ := today.MonthBounds()
+	prevFrom, prevTo := previousPeriod(from, today)
+
+	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, today)).
+		Return([]*transaction.Transaction{}, nil)
+	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(prevFrom, prevTo)).
+		Return([]*transaction.Transaction{}, nil)
+	m.transactions.On("GetAllTransactions", mock.Anything, recentFilter()).
+		Return([]*transaction.Transaction{}, nil)
+	m.transactions.On("CountTransactions", mock.Anything, mock.Anything).Return(0, nil)
+	m.budgets.On("GetActiveBudgets", mock.Anything, today).Return([]*budget.Budget{}, nil)
+
+	summary, err := svc.Summary(t.Context(), nil, nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, from, summary.From)
+	assert.Equal(t, today, summary.To)
+	// Пустой период отдаёт массивы, а не null: оба поля обязательны в контракте.
+	assert.NotNil(t, summary.ExpenseCategories)
+	assert.NotNil(t, summary.IncomeCategories)
+	assert.Empty(t, summary.ExpenseCategories)
+	assert.Empty(t, summary.IncomeCategories)
+	m.families.AssertCalled(t, "GetFamily", mock.Anything)
+	m.budgets.AssertExpectations(t)
+}
+
+func TestStatsService_Summary_FamilyError(t *testing.T) {
+	m := &statsMocks{
+		transactions: new(MockTransactionService),
+		budgets:      new(MockBudgetService),
+		categories:   new(MockCategoryService),
+		families:     new(MockFamilyService),
+	}
+	m.families.On("GetFamily", mock.Anything).Return(nil, errors.New("family repository down"))
+	svc := services.NewStatsService(m.transactions, m.budgets, m.categories, m.families)
+
+	summary, err := svc.Summary(t.Context(), nil, nil)
+
+	require.Error(t, err)
+	assert.Nil(t, summary)
+}

@@ -159,4 +159,7 @@ func TestFamilyRepository_TimezoneRoundTrip(t *testing.T) {
 	updated, err := repo.Get(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "UTC", updated.Timezone)
+
+	_, err = db.ExecContext(ctx, "UPDATE families SET timezone = '' WHERE id = ?", family.ID.String())
+	require.ErrorContains(t, err, "CHECK constraint failed", "пустая зона обязана отбиваться CHECK-ом")
 }

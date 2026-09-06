@@ -56,7 +56,7 @@ func NewCategoryService(
 		categoryRepo: categoryRepo,
 		familyRepo:   familyRepo,
 		usageChecker: usageChecker,
-		validator:    validator.New(),
+		validator:    newValidator(),
 	}
 }
 

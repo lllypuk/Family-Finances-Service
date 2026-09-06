@@ -80,8 +80,8 @@ func NewFamily(name, currency, timezone string) *Family {
 	}
 }
 
-// Location возвращает зону семьи; при пустой или неизвестной зоне — UTC,
-// чтобы отчёты строились даже на записи, созданной до появления колонки.
+// Location возвращает зону семьи. Колонка NOT NULL и оба пути записи валидируют зону,
+// так что UTC здесь — не режим работы, а последний рубеж при отсутствующей tzdata.
 func (f *Family) Location() *time.Location {
 	loc, err := time.LoadLocation(f.Timezone)
 	if err != nil {

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"family-budget-service/internal/domain/budget"
-	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/services"
@@ -48,6 +47,10 @@ func (h *BudgetHandler) CreateBudget(c echo.Context) error {
 
 	if err := h.validator.Struct(req); err != nil {
 		return respondValidationErrors(c, err)
+	}
+
+	if isNilClientID(req.ID) {
+		return respondNilClientID(c)
 	}
 
 	// Клиентский id уже созданной записи — повтор POST после разрыва связи (A-07).
@@ -108,7 +111,10 @@ func (h *BudgetHandler) GetBudgets(c echo.Context) error {
 
 	var budgets []*budget.Budget
 	if c.QueryParam("active_only") == "true" {
-		budgets, err = h.repositories.Budget.GetActiveBudgets(c.Request().Context())
+		budgets, err = h.repositories.Budget.GetActiveBudgets(
+			c.Request().Context(),
+			familyToday(c.Request().Context(), h.repositories.Family),
+		)
 	} else {
 		budgets, err = h.repositories.Budget.GetAll(c.Request().Context())
 	}
@@ -271,7 +277,10 @@ func (h *BudgetHandler) getBudgetsViaService(c echo.Context, page pageParams) er
 
 	if c.QueryParam("active_only") == "true" {
 		var active []*budget.Budget
-		active, err = h.budgetService.GetActiveBudgets(c.Request().Context(), date.Today(time.UTC))
+		active, err = h.budgetService.GetActiveBudgets(
+			c.Request().Context(),
+			familyToday(c.Request().Context(), h.repositories.Family),
+		)
 		total = len(active)
 		budgets = pageSlice(active, page)
 	} else {
@@ -350,11 +359,9 @@ func (h *BudgetHandler) handleBudgetServiceError(c echo.Context, err error, oper
 		return nil
 	case errors.Is(err, services.ErrBudgetNotFoundService), errors.Is(err, services.ErrBudgetNotFound):
 		return HandleNotFoundError(c, "Budget")
-	case operation == "create" &&
-		(errors.Is(err, dto.ErrInvalidBudgetPeriod) || errors.Is(err, dto.ErrInvalidDateRange)):
-		return respondError(c, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create budget")
 	case errors.Is(err, services.ErrBudgetOverlapExists),
 		errors.Is(err, services.ErrBudgetAlreadyExceeded),
+		errors.Is(err, services.ErrBudgetAmountTooLarge),
 		errors.Is(err, dto.ErrInvalidBudgetPeriod),
 		errors.Is(err, dto.ErrInvalidBudgetAmount),
 		errors.Is(err, dto.ErrInvalidDateRange),

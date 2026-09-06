@@ -161,8 +161,8 @@ func (m *MockBudgetRepository) GetAll(ctx context.Context) ([]*budget.Budget, er
 	return args.Get(0).([]*budget.Budget), args.Error(1)
 }
 
-func (m *MockBudgetRepository) GetActiveBudgets(ctx context.Context) ([]*budget.Budget, error) {
-	args := m.Called(ctx)
+func (m *MockBudgetRepository) GetActiveBudgets(ctx context.Context, on date.Date) ([]*budget.Budget, error) {
+	args := m.Called(ctx, on)
 	if args.Error(1) != nil {
 		return nil, args.Error(1)
 	}
@@ -493,8 +493,9 @@ func (m *MockTransactionService) ValidateTransactionLimits(
 	categoryID uuid.UUID,
 	amount money.Minor,
 	transactionType transaction.Type,
+	on date.Date,
 ) error {
-	args := m.Called(ctx, categoryID, amount, transactionType)
+	args := m.Called(ctx, categoryID, amount, transactionType, on)
 	return args.Error(0)
 }
 
@@ -574,13 +575,13 @@ func (m *MockBudgetService) UpdateBudgetSpent(ctx context.Context, budgetID uuid
 	return args.Error(0)
 }
 
-// Updated: CheckBudgetLimits no longer takes familyID
 func (m *MockBudgetService) CheckBudgetLimits(
 	ctx context.Context,
 	categoryID uuid.UUID,
 	amount money.Minor,
+	on date.Date,
 ) error {
-	args := m.Called(ctx, categoryID, amount)
+	args := m.Called(ctx, categoryID, amount, on)
 	return args.Error(0)
 }
 

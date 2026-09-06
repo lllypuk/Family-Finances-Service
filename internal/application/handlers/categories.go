@@ -37,6 +37,10 @@ func (h *CategoryHandler) CreateCategory(c echo.Context) error {
 		return respondValidationErrors(c, validationErr)
 	}
 
+	if isNilClientID(req.ID) {
+		return respondNilClientID(c)
+	}
+
 	// Клиентский id уже созданной записи — повтор POST после разрыва связи (A-07).
 	if req.ID != nil {
 		if existing, getErr := h.categoryService.GetCategoryByID(c.Request().Context(), *req.ID); getErr == nil {

@@ -45,8 +45,8 @@ func (m *MockBudgetRepository) GetAll(ctx context.Context) ([]*budget.Budget, er
 	return args.Get(0).([]*budget.Budget), args.Error(1)
 }
 
-func (m *MockBudgetRepository) GetActiveBudgets(ctx context.Context) ([]*budget.Budget, error) {
-	args := m.Called(ctx)
+func (m *MockBudgetRepository) GetActiveBudgets(ctx context.Context, on date.Date) ([]*budget.Budget, error) {
+	args := m.Called(ctx, on)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

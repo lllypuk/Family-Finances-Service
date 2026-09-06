@@ -1,7 +1,9 @@
 package observability_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"log/slog"
 	"testing"
 
@@ -89,7 +91,12 @@ func TestBusinessLogger(t *testing.T) {
 	})
 
 	t.Run("LogTransactionEvent", func(t *testing.T) {
-		businessLogger.LogTransactionEvent(
+		var buf bytes.Buffer
+		captured := observability.NewBusinessLogger(
+			slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})),
+		)
+
+		captured.LogTransactionEvent(
 			context.Background(),
 			"tx123",
 			"user123",
@@ -99,8 +106,12 @@ func TestBusinessLogger(t *testing.T) {
 			"USD",
 		)
 
-		// Verify no panic occurred
-		assert.NotNil(t, businessLogger)
+		var record map[string]any
+		require.NoError(t, json.Unmarshal(buf.Bytes(), &record))
+		assert.InDelta(t, 10050.0, record["amount_minor"], 0.0)
+		assert.Equal(t, "tx123", record["transaction_id"])
+		assert.Equal(t, "USD", record["currency"])
+		assert.NotContains(t, record, "amount")
 	})
 
 	t.Run("LogBudgetEvent", func(t *testing.T) {

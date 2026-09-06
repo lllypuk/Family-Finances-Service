@@ -88,6 +88,7 @@ const (
 
 	// fieldBody — значение ErrorDetail.Field для ошибок, не привязанных к полю.
 	fieldBody        = "body"
+	fieldID          = "id"
 	fieldRole        = "role"
 	fieldNewPassword = "new_password"
 	fieldCurrency    = "currency"

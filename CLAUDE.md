@@ -157,7 +157,9 @@ has a catch-all, an unknown `/api/v1/...` path is `401` without a token and `404
 - **One error envelope, one pagination shape** (`internal/application/handlers/helpers.go`): answer with
   `respondAPI`/`respondError(c, status, code, message, details...)`, never a hand-built `ResponseMeta`; validation
   failures are `422 VALIDATION_ERROR` with `error.details[{field, message, code}]`, while broken JSON and an
-  unparseable id stay `400`. Every list runs its query params through `parsePagination(c)` (`defaultLimit=50`,
+  unparseable id stay `400`. The one carve-out: a body date that does not parse is a field error, so
+  `respondBindError` answers `422` and names the offending field (`date`, `start_date`, …) — `date.JSONField`
+  digs the name out of the `*json.UnmarshalTypeError` that `date.Date.UnmarshalJSON` returns for that purpose. Every list runs its query params through `parsePagination(c)` (`defaultLimit=50`,
   `maxLimit=200`, out-of-range → `422`) and reports `meta.pagination {limit, offset, total}` — including the short
   lists, because the Android client generates from a `ListMeta` where `pagination` is required.
   `parsePagination` **writes the 422 itself** and returns the `errResponseAlreadyWritten` sentinel: callers return
@@ -248,8 +250,11 @@ on it.
   `TEXT` in SQLite (CHECK GLOB). Only `created_at`/`updated_at`/`expires_at` stay RFC3339 UTC. Period bounds
   ("current month") are computed in `family.Timezone`, not in the server's zone.
 - **`POST` of a transaction, budget or category is idempotent** when the body carries a client-generated
-  `id` (uuid4): an existing record answers `200` with itself instead of `201`. The single SQLite connection
-  serialises the read and the insert, so no lock is needed.
+  `id` (any valid UUID): an existing record answers `200` with itself and the repeated body is ignored — the id is
+  the only thing compared. The check is a plain read-then-insert; two simultaneous retries can still collide.
+- **Fractions come in two units.** Shares (`share`, `*_delta`, `stats.budgets[].utilization`) are 0…1; fields named
+  `percentage` and `budgets[].utilization` on `/budgets` are percent 0…100. Both are documented per field in
+  `docs/api/openapi.yaml`.
 - Comments and log messages are a mix of Russian and English; match the surrounding file rather than converting it.
 - File names are snake_case-ish and descriptive: `transaction_service.go`, `user_repository_sqlite.go`.
 - Keep handlers thin — business logic belongs in `internal/services/`.
@@ -265,11 +270,11 @@ reference): `docs/README.md` (navigation), `docs/product_brief.md`, `docs/tech_s
 status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the finished ones.
 
 **Current direction:** `docs/specs/005-api-only-redesign.md` — the service is an API-only backend for an
-Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–03 are done
-(`docs/plans/completed/`); `docs/plans/20260904-0[4-5]-*.md` run next, in order.
+Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–04 are done
+(`docs/plans/completed/`); `docs/plans/20260904-05-deploy-ffs.md` runs next.
 
-`docs/api/openapi.yaml` is the target contract for `/api/v1` (plus `GET /health`) — the Android client generates
-from it. **A registered route with no operation in the spec fails `make test`**
+`docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates
+from it, and code and spec now match. **A registered route with no operation in the spec fails `make test`**
 (`tests/integration/openapi_coverage_test.go`: `TestOpenAPISpec_CoversRegisteredRoutes`, plus
 `TestOpenAPISpec_OperationsHaveIDAndErrorResponse` requiring an `operationId` and a 4xx `$ref: Error` on every
 operation). The reverse also fails it (`TestOpenAPISpec_DescribesOnlyRegisteredRoutes`): spec and routes match

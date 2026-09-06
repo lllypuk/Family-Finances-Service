@@ -93,3 +93,18 @@ func TestMinor_SumKeepsKopecks(t *testing.T) {
 
 	assert.Equal(t, money.Minor(99), total)
 }
+
+func TestMinor_ValueAndScan(t *testing.T) {
+	value, err := money.Minor(12345).Value()
+	require.NoError(t, err)
+	assert.Equal(t, int64(12345), value)
+
+	var m money.Minor
+	require.NoError(t, m.Scan(int64(-99)))
+	assert.Equal(t, money.Minor(-99), m)
+
+	require.NoError(t, m.Scan(nil))
+	assert.Equal(t, money.Minor(0), m)
+
+	require.Error(t, m.Scan("12345"))
+}

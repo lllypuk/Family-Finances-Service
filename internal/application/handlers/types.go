@@ -211,17 +211,19 @@ type BulkDeleteResponse struct {
 	Deleted int `json:"deleted"`
 }
 
+// TransactionFilterParams заполняется вручную в parseOptionalFilters, а не c.Bind:
+// date.Date и money.Minor не реализуют BindUnmarshaler, поэтому тегов query здесь нет.
 type TransactionFilterParams struct {
-	UserID          *uuid.UUID   `query:"user_id"`
-	CategoryID      *uuid.UUID   `query:"category_id"`
-	Type            *string      `query:"type"`
-	DateFrom        *date.Date   `query:"date_from"`
-	DateTo          *date.Date   `query:"date_to"`
-	AmountFromMinor *money.Minor `query:"amount_from_minor"`
-	AmountToMinor   *money.Minor `query:"amount_to_minor"`
-	Description     *string      `query:"description"`
-	Limit           int          `query:"limit"             validate:"min=1,max=1000"`
-	Offset          int          `query:"offset"            validate:"min=0"`
+	UserID          *uuid.UUID
+	CategoryID      *uuid.UUID
+	Type            *string
+	DateFrom        *date.Date
+	DateTo          *date.Date
+	AmountFromMinor *money.Minor
+	AmountToMinor   *money.Minor
+	Description     *string
+	Limit           int `validate:"min=1,max=1000"`
+	Offset          int `validate:"min=0"`
 }
 
 // CreateBudgetRequest represents the request payload for creating a new budget

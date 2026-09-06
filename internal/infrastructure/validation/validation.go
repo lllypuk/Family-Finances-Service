@@ -211,8 +211,10 @@ func ValidateCurrency(currency string) error {
 	// Known limitation: hardcoded whitelist limits extensibility
 	// To add support for additional currencies, update this map
 	// Future improvement: consider loading from configuration or database
+	// Только валюты с двумя знаками после запятой: amount_minor — сотые доли основной
+	// единицы (см. docs/api/openapi.yaml, схема Money), поэтому JPY здесь быть не может.
 	validCurrencies := map[string]bool{
-		"USD": true, "EUR": true, "GBP": true, "JPY": true, "RUB": true,
+		"USD": true, "EUR": true, "GBP": true, "RUB": true,
 		"CNY": true, "CAD": true, "AUD": true, "CHF": true, "SEK": true,
 		"NOK": true, "DKK": true, "PLN": true, "CZK": true, "HUF": true,
 	}

@@ -124,3 +124,22 @@ func TestResetPassword(t *testing.T) {
 		require.NoError(t, loginErr)
 	})
 }
+
+// Миграция 001 переписывается на месте, поэтому на старой БД golang-migrate ничего не делает:
+// без пробы схемы сервис поднялся бы и отвечал 500 на каждый запрос.
+func TestOpenDatabase_RejectsOutdatedSchema(t *testing.T) {
+	t.Chdir(testhelpers.RepoRoot(t))
+	cfg := internal.LoadConfig()
+	cfg.Database.Path = filepath.Join(t.TempDir(), "outdated.db")
+
+	db, err := internal.OpenDatabase(cfg)
+	require.NoError(t, err)
+	// Схема до плана 04: деньги во float-колонке amount.
+	_, err = db.ExecContext(context.Background(), "ALTER TABLE transactions RENAME COLUMN amount_minor TO amount")
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	_, err = internal.OpenDatabase(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "outdated database schema")
+}

@@ -285,11 +285,7 @@ func (s *reportService) budgetComparisonReport(
 	totalVariance := totalBudget - totalSpent
 	utilization := totalSpent.Percent(totalBudget)
 
-	// Generate category comparisons
-	categoryComparisons, err := s.generateBudgetCategoryComparisons(ctx, budgets, expenseTransactions)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate category comparisons: %w", err)
-	}
+	categoryComparisons := s.generateBudgetCategoryComparisons(ctx, budgets, expenseTransactions)
 
 	// Generate timeline
 	timeline := s.generateBudgetTimeline(expenseTransactions, totalBudget, startDate, endDate)
@@ -396,11 +392,7 @@ func (s *reportService) categoryBreakdownReport(
 		return nil, fmt.Errorf("failed to get category hierarchy: %w", err)
 	}
 
-	// Generate detailed category analysis
-	categoryAnalysis, err := s.generateDetailedCategoryAnalysis(ctx, transactions, categories, startDate, endDate)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate category analysis: %w", err)
-	}
+	categoryAnalysis := s.generateDetailedCategoryAnalysis(ctx, transactions, categories, startDate, endDate)
 
 	// Generate category hierarchy with amounts
 	hierarchy := s.generateCategoryHierarchy(categoryAnalysis, categories)
@@ -792,6 +784,12 @@ func (s *reportService) filterTransactionsByType(
 	return result
 }
 
+const (
+	budgetStatusUnderBudget = "under_budget"
+	budgetStatusOnTrack     = "on_track"
+	budgetStatusOverBudget  = "over_budget"
+)
+
 // ROADMAP placeholders for advanced calculations used by implemented report flows.
 // They intentionally return zero-values to keep current report generation stable while
 // signaling missing depth in analytics/report details.
@@ -830,13 +828,58 @@ func (s *reportService) generateIncomeComparisons(
 	return dto.IncomeComparisonsDTO{}, nil
 }
 
+// generateBudgetCategoryComparisons сводит план и факт по каждому активному бюджету периода.
+// Бюджет без категории сравнивается со всеми расходами периода — таким его и задавали.
 func (s *reportService) generateBudgetCategoryComparisons(
-	_ context.Context,
-	_ []*budget.Budget,
-	_ []*transaction.Transaction,
-) ([]dto.BudgetCategoryComparisonDTO, error) {
-	// ROADMAP: budget-vs-actual comparison by category.
-	return []dto.BudgetCategoryComparisonDTO{}, nil
+	ctx context.Context,
+	budgets []*budget.Budget,
+	expenses []*transaction.Transaction,
+) []dto.BudgetCategoryComparisonDTO {
+	spentByCategory := make(map[uuid.UUID]money.Minor, len(expenses))
+	var totalSpent money.Minor
+	for _, tx := range expenses {
+		spentByCategory[tx.CategoryID] += tx.AmountMinor
+		totalSpent += tx.AmountMinor
+	}
+
+	result := make([]dto.BudgetCategoryComparisonDTO, 0, len(budgets))
+	for _, b := range budgets {
+		item := dto.BudgetCategoryComparisonDTO{
+			CategoryName:      b.Name,
+			BudgetAmountMinor: b.AmountMinor,
+			ActualAmountMinor: totalSpent,
+		}
+		if b.CategoryID != nil {
+			item.CategoryID = *b.CategoryID
+			item.ActualAmountMinor = spentByCategory[*b.CategoryID]
+			if cat, err := s.categoryService.GetCategoryByID(ctx, *b.CategoryID); err == nil {
+				item.CategoryName = cat.Name
+			}
+		}
+		item.VarianceMinor = item.BudgetAmountMinor - item.ActualAmountMinor
+		item.Utilization = item.ActualAmountMinor.Percent(item.BudgetAmountMinor)
+		item.Status = budgetComparisonStatus(item.Utilization)
+
+		result = append(result, item)
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].ActualAmountMinor > result[j].ActualAmountMinor
+	})
+
+	return result
+}
+
+// budgetComparisonStatus — under_budget | on_track | over_budget по проценту утилизации.
+func budgetComparisonStatus(utilization float64) string {
+	switch {
+	case utilization > dto.BudgetAlertOverBudget:
+		return budgetStatusOverBudget
+	case utilization >= dto.BudgetAlertNearLimit:
+		return budgetStatusOnTrack
+	default:
+		return budgetStatusUnderBudget
+	}
 }
 
 func (s *reportService) generateBudgetTimeline(
@@ -911,14 +954,32 @@ func (s *reportService) generateCashFlowProjections(
 	return dto.CashFlowProjectionsDTO{}, nil
 }
 
+// generateDetailedCategoryAnalysis раскладывает операции периода по категориям тем же
+// счётом, что и отчёты по расходам и доходам. Тренды, подкатегории и разбивка по месяцам
+// остаются пустыми: для них нужны предыдущие периоды (ROADMAP).
 func (s *reportService) generateDetailedCategoryAnalysis(
-	_ context.Context,
-	_ []*transaction.Transaction,
+	ctx context.Context,
+	transactions []*transaction.Transaction,
 	_ []*category.Category,
 	_, _ date.Date,
-) ([]dto.CategoryAnalysisDTO, error) {
-	// ROADMAP: detailed category analysis.
-	return []dto.CategoryAnalysisDTO{}, nil
+) []dto.CategoryAnalysisDTO {
+	items := s.generateCategoryBreakdown(ctx, transactions)
+
+	result := make([]dto.CategoryAnalysisDTO, 0, len(items))
+	for _, item := range items {
+		result = append(result, dto.CategoryAnalysisDTO{
+			CategoryID:         item.CategoryID,
+			CategoryName:       item.CategoryName,
+			CategoryType:       item.CategoryType,
+			TotalAmountMinor:   item.AmountMinor,
+			Percentage:         item.Percentage,
+			TransactionCount:   item.Count,
+			AverageAmountMinor: item.AverageAmountMinor,
+			MonthlyBreakdown:   []dto.MonthlyCategoryDTO{},
+		})
+	}
+
+	return result
 }
 
 func (s *reportService) generateCategoryHierarchy(

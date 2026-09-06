@@ -269,27 +269,9 @@ func TestFullWorkflowIntegration(t *testing.T) {
 		assert.Len(t, recentTransactions, 4) // Monthly salary, Spouse salary, Weekly groceries, Coffee and snacks
 	})
 
-	// Test transaction summary
-	t.Run("VerifyTransactionSummary", func(t *testing.T) {
-		startDate := now.AddDays(-7)
-		endDate := now.AddDays(1)
-
-		summary, err := transactionRepo.GetSummary(ctx, startDate, endDate)
-		require.NoError(t, err)
-
-		assert.Equal(t, 5, summary.TotalCount)
-		assert.Equal(t, 2, summary.IncomeCount)
-		assert.Equal(t, 3, summary.ExpenseCount)
-		assert.Equal(t, money.Minor(500_000), summary.TotalIncomeMinor)  // 3000 + 2000
-		assert.Equal(t, money.Minor(25_125), summary.TotalExpensesMinor) // 120.50 + 85.00 + 45.75
-		assert.Equal(t, money.Minor(474_875), summary.BalanceMinor)      // 5000 - 251.25
-		assert.Equal(t, money.Minor(250_000), summary.AvgIncomeMinor)    // 5000 / 2
-		assert.Equal(t, money.Minor(8_375), summary.AvgExpenseMinor)     // 25125 / 3 half-up
-	})
-
 	// Test budget tracking
 	t.Run("VerifyBudgetTracking", func(t *testing.T) {
-		budgets, err := budgetRepo.GetActiveBudgets(ctx)
+		budgets, err := budgetRepo.GetActiveBudgets(ctx, date.Today(time.UTC))
 		require.NoError(t, err)
 		assert.Len(t, budgets, 2)
 
@@ -345,12 +327,6 @@ func TestFullWorkflowIntegration(t *testing.T) {
 
 	// Test complex queries and edge cases
 	t.Run("VerifyComplexQueries", func(t *testing.T) {
-		// Test monthly summary
-		now := date.Today(time.UTC)
-		monthlySummary, err := transactionRepo.GetMonthlySummary(ctx, now.Year, int(now.Month))
-		require.NoError(t, err)
-		assert.NotEmpty(t, monthlySummary)
-
 		// Test categories by type
 		expenseCategories, err := categoryRepo.GetByType(ctx, category.TypeExpense)
 		require.NoError(t, err)

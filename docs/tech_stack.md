@@ -210,8 +210,8 @@ github.com/stretchr/testify       # Testing utilities
 ## 🔄 Планы развития
 
 ### Ближайшие обновления
-- [ ] Переход на API-only для Android: планы 01–03 выполнены (bearer, удаление веб-слоя), 04–05 в
-  `docs/plans/` — деньги в минимальных единицах, один compose с Caddy; решения в
+- [ ] Переход на API-only для Android: планы 01–04 выполнены (bearer, удаление веб-слоя, деньги в
+  минимальных единицах и календарные даты), остался 05 — один compose с Caddy; решения в
   [specs/005-api-only-redesign.md](specs/005-api-only-redesign.md)
 - [ ] Улучшение аналитики и отчетов
 

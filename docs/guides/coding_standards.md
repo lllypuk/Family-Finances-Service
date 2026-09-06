@@ -264,7 +264,7 @@ func (s *TransactionService) CategorizeTransaction(transaction *Transaction) err
     // Пытаемся определить категорию по описанию и сумме
     suggestedCategory, confidence := s.categorizer.SuggestCategory(
         transaction.Description,
-        transaction.Amount,
+        transaction.AmountMinor,
     )
 
     // Устанавливаем категорию только если уверенность > 80%
@@ -284,7 +284,7 @@ func (s *TransactionService) CategorizeTransaction(transaction *Transaction) err
     }
 
     // получаем категорию
-    cat, conf := s.categorizer.SuggestCategory(transaction.Description, transaction.Amount)
+    cat, conf := s.categorizer.SuggestCategory(transaction.Description, transaction.AmountMinor)
 
     // устанавливаем если хорошая
     if conf > 0.8 {

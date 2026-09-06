@@ -173,9 +173,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		err := testServer.Repos.Family.Create(context.Background(), family)
 		require.NoError(t, err)
 
-		// Create budget where start_date > end_date
-		// Note: This test validates that the budget can be created even with invalid date logic
-		// since date validation is not implemented at the handler level
+		// Порядок дат — ошибка ввода, а не сбой: 422, не 500.
 		startDate := date.Today(time.UTC)
 		endDate := startDate.AddDays(-30)
 
@@ -197,19 +195,13 @@ func TestBudgetHandler_Integration(t *testing.T) {
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
 
-		// Date validation is implemented at repository level, so this should fail
-		if rec.Code != http.StatusInternalServerError {
-			t.Logf("Date validation test failed with status %d, response: %s", rec.Code, rec.Body.String())
-		}
-		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
 
 		var response handlers.ErrorResponse
 		err = json.Unmarshal(rec.Body.Bytes(), &response)
 		require.NoError(t, err)
 
-		// Should have CREATE_FAILED error for invalid date range
-		assert.Equal(t, "CREATE_FAILED", response.Error.Code)
-		assert.Equal(t, "Failed to create budget", response.Error.Message)
+		assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
 	})
 
 	t.Run("GetBudgetByID_Success", func(t *testing.T) {
@@ -661,4 +653,127 @@ func TestCategoryAPI_CreateWithClientID_Idempotent(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 1, matching, "повтор POST не должен создавать вторую категорию")
+}
+
+// TestBudgetAPI_UtilizationIsPercent — utilization на /budgets — проценты 0…100,
+// в отличие от доли 0…1 в /stats/summary. Ошибка в 100 раз должна ронять тест.
+func TestBudgetAPI_UtilizationIsPercent(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+	ctx := context.Background()
+
+	testCategory := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(ctx, testCategory))
+
+	today := date.Today(testServer.AuthFamily.Location())
+	body := mustJSON(t, map[string]any{
+		"name":         "Бюджет с тратами",
+		"amount_minor": 100_000,
+		"period":       "monthly",
+		"category_id":  testCategory.ID,
+		"start_date":   today.String(),
+		"end_date":     today.AddDays(30).String(),
+	})
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/budgets", bytes.NewBuffer(body))
+	createReq.Header.Set("Content-Type", "application/json")
+	session.Apply(createReq)
+	createRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(createRec, createReq)
+	require.Equal(t, http.StatusCreated, createRec.Code, "тело: %s", createRec.Body.String())
+
+	var created handlers.APIResponse[handlers.BudgetResponse]
+	require.NoError(t, json.Unmarshal(createRec.Body.Bytes(), &created))
+
+	txBody := mustJSON(t, map[string]any{
+		"amount_minor": 25_000,
+		"type":         "expense",
+		"description":  "Трата в бюджете",
+		"category_id":  testCategory.ID,
+		"date":         today.String(),
+	})
+	txReq := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", bytes.NewBuffer(txBody))
+	txReq.Header.Set("Content-Type", "application/json")
+	session.Apply(txReq)
+	txRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(txRec, txReq)
+	require.Equal(t, http.StatusCreated, txRec.Code, "тело: %s", txRec.Body.String())
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/budgets/"+created.Data.ID.String(), nil)
+	session.Apply(getReq)
+	getRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(getRec, getReq)
+	require.Equal(t, http.StatusOK, getRec.Code, "тело: %s", getRec.Body.String())
+
+	var fetched handlers.APIResponse[handlers.BudgetResponse]
+	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &fetched))
+	assert.Equal(t, money.Minor(25_000), fetched.Data.SpentMinor)
+	assert.Equal(t, money.Minor(75_000), fetched.Data.RemainingMinor)
+	assert.InDelta(t, 25.0, fetched.Data.Utilization, 0.001)
+}
+
+// TestBudgetAPI_CreateInvalidStartDate — неразобранная дата в теле называет своё поле,
+// а не общее "date".
+func TestBudgetAPI_CreateInvalidStartDate(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+
+	body := []byte(`{"name":"Плохая дата","amount_minor":100,"period":"monthly",` +
+		`"start_date":"2026-13-01","end_date":"2026-12-31"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/budgets", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	session.Apply(req)
+	rec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Error.Details, 1)
+	assert.Equal(t, "start_date", response.Error.Details[0].Field)
+}
+
+// TestBudgetAPI_CreateMissingStartDate — пропущенная дата отбивается валидатором (422),
+// а не доезжает до репозитория как 500: `required` на date.Date работает только с
+// validator.WithRequiredStructEnabled.
+func TestBudgetAPI_CreateMissingStartDate(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+
+	body := []byte(`{"name":"Без начала","amount_minor":100,"period":"monthly","end_date":"2026-12-31"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/budgets", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	session.Apply(req)
+	rec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Error.Details, 1)
+	assert.Equal(t, "start_date", response.Error.Details[0].Field)
+}
+
+// TestBudgetAPI_CreateAmountAboveMaximum — сумма выше потолка Money из openapi отбивается
+// сервисом (422), а не валидацией репозитория (500).
+func TestBudgetAPI_CreateAmountAboveMaximum(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+
+	today := date.Today(time.UTC)
+	body := mustJSON(t, map[string]any{
+		"name":         "Слишком большой",
+		"amount_minor": 100_000_000_000,
+		"period":       "monthly",
+		"start_date":   today.String(),
+		"end_date":     today.AddDays(30).String(),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/budgets", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	session.Apply(req)
+	rec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
 }

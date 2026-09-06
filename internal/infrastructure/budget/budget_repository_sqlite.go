@@ -244,15 +244,14 @@ func (r *SQLiteRepository) GetAll(ctx context.Context) ([]*budget.Budget, error)
 	return budgets, nil
 }
 
-// GetActiveBudgets retrieves all active budgets for the single family
-func (r *SQLiteRepository) GetActiveBudgets(ctx context.Context) ([]*budget.Budget, error) {
+// GetActiveBudgets retrieves budgets whose period covers the given calendar date.
+func (r *SQLiteRepository) GetActiveBudgets(ctx context.Context, on date.Date) ([]*budget.Budget, error) {
 	// Get single family ID
 	familyID, err := r.getSingleFamilyID(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("invalid familyID parameter: %w", err)
 	}
 
-	today := date.Today(time.UTC)
 	query := `
 		SELECT id, name, amount_minor, spent_minor, period, start_date, end_date,
 			   category_id, family_id, is_active, created_at, updated_at
@@ -261,7 +260,7 @@ func (r *SQLiteRepository) GetActiveBudgets(ctx context.Context) ([]*budget.Budg
 		AND start_date <= ? AND end_date >= ?
 		ORDER BY start_date DESC, name`
 
-	rows, err := r.db.QueryContext(ctx, query, sqlitehelpers.UUIDToString(familyID), today, today)
+	rows, err := r.db.QueryContext(ctx, query, sqlitehelpers.UUIDToString(familyID), on, on)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active budgets: %w", err)
 	}

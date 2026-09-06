@@ -2,6 +2,7 @@ package date_test
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -68,10 +69,14 @@ func TestDate_BeforeAfter(t *testing.T) {
 	earlier := date.New(2025, time.December, 31)
 	later := date.New(2026, time.January, 1)
 	sameMonth := date.New(2026, time.January, 2)
+	sameYear := date.New(2026, time.February, 1)
 
 	assert.True(t, earlier.Before(later))
 	assert.True(t, later.After(earlier))
 	assert.True(t, later.Before(sameMonth))
+	// Разные месяцы одного года: день меньше, но дата позже.
+	assert.True(t, sameMonth.Before(sameYear))
+	assert.True(t, sameYear.After(sameMonth))
 	assert.False(t, later.Before(later))
 	assert.False(t, later.After(later))
 }
@@ -194,4 +199,47 @@ func TestDate_UnmarshalJSON_Invalid(t *testing.T) {
 
 	require.Error(t, json.Unmarshal([]byte(`{"date":"2026-13-01"}`), &decoded))
 	require.Error(t, json.Unmarshal([]byte(`{"date":20260904}`), &decoded))
+}
+
+func TestDate_JSON_Zero(t *testing.T) {
+	payload := struct {
+		Date date.Date `json:"date"`
+	}{}
+
+	encoded, err := json.Marshal(payload)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"date":null}`, string(encoded))
+
+	decoded := struct {
+		Date date.Date `json:"date"`
+	}{Date: date.New(2026, time.September, 4)}
+	require.NoError(t, json.Unmarshal(encoded, &decoded))
+	assert.True(t, decoded.Date.IsZero())
+}
+
+// TestDate_JSONField — имя поля берётся из ошибки разбора, иначе клиенту подсветят чужое поле.
+func TestDate_JSONField(t *testing.T) {
+	var decoded struct {
+		StartDate date.Date `json:"start_date"`
+	}
+
+	err := json.Unmarshal([]byte(`{"start_date":"2026-13-01"}`), &decoded)
+	require.Error(t, err)
+
+	field, ok := date.JSONField(err)
+	require.True(t, ok)
+	assert.Equal(t, "start_date", field)
+
+	_, ok = date.JSONField(errors.New("unrelated"))
+	assert.False(t, ok)
+}
+
+// TestDate_Value_Zero — незаполненная дата не должна доезжать до CHECK колонки.
+func TestDate_Value_Zero(t *testing.T) {
+	_, err := date.Date{}.Value()
+	require.ErrorIs(t, err, date.ErrInvalidDate)
+
+	value, err := date.New(2026, time.September, 4).Value()
+	require.NoError(t, err)
+	assert.Equal(t, "2026-09-04", value)
 }

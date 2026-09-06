@@ -254,6 +254,7 @@ func (m *MockTransactionService) ValidateTransactionLimits(
 	categoryID uuid.UUID,
 	amount money.Minor,
 	transactionType transaction.Type,
+	on date.Date,
 ) error {
 	return nil
 }
@@ -348,7 +349,12 @@ func (m *MockBudgetService) ValidateBudgetPeriod(
 }
 
 //nolint:revive // test mock
-func (m *MockBudgetService) CheckBudgetLimits(ctx context.Context, categoryID uuid.UUID, amount money.Minor) error {
+func (m *MockBudgetService) CheckBudgetLimits(
+	ctx context.Context,
+	categoryID uuid.UUID,
+	amount money.Minor,
+	on date.Date,
+) error {
 	return nil
 }
 

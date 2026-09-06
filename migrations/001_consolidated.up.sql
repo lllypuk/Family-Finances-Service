@@ -73,7 +73,6 @@ CREATE TABLE IF NOT EXISTS transactions (
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     family_id TEXT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
     tags TEXT DEFAULT '[]',
-    receipt_url TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
@@ -103,6 +102,8 @@ CREATE TABLE IF NOT EXISTS budgets (
     CHECK (spent_minor >= 0),
     CHECK (start_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
     CHECK (end_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+    -- Строго больше: бюджет на один день бессмыслен, и то же требует budget.ValidatePeriod.
+    -- У отчётов ниже стоит >=, там однодневный период допустим.
     CHECK (end_date > start_date),
     CHECK (is_active IN (0, 1)),
     UNIQUE (family_id, name, start_date, end_date)
@@ -118,8 +119,6 @@ CREATE TABLE IF NOT EXISTS reports (
     data TEXT NOT NULL,
     family_id TEXT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
     generated_by TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    is_cached INTEGER DEFAULT 0,
-    cache_expires_at DATETIME,
     generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
     CHECK (type IN ('expenses', 'income', 'budget', 'cash_flow', 'category_breakdown')),
@@ -127,8 +126,7 @@ CREATE TABLE IF NOT EXISTS reports (
     CHECK (LENGTH(TRIM(name)) > 0),
     CHECK (start_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
     CHECK (end_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
-    CHECK (end_date >= start_date),
-    CHECK (is_cached IN (0, 1))
+    CHECK (end_date >= start_date)
 );
 
 -- Только хеш токена; срок продлевается активностью (см. internal/auth/session.go)

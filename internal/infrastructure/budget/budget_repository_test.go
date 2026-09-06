@@ -506,10 +506,16 @@ func TestBudgetRepositorySQLite_GetActiveBudgets(t *testing.T) {
 		err = repo.Create(ctx, futureBudget)
 		require.NoError(t, err)
 
-		budgets, err := repo.GetActiveBudgets(ctx)
+		budgets, err := repo.GetActiveBudgets(ctx, now)
 		require.NoError(t, err)
 		assert.Len(t, budgets, 1)
 		assert.Equal(t, "Active Budget", budgets[0].Name)
+
+		// Дата, а не «сегодня»: отчёт за прошлый период должен видеть бюджет того периода.
+		past, err := repo.GetActiveBudgets(ctx, now.AddDays(-45))
+		require.NoError(t, err)
+		assert.Len(t, past, 1)
+		assert.Equal(t, "Past Budget", past[0].Name)
 
 		_ = familyID
 	})
@@ -539,7 +545,7 @@ func TestBudgetRepositorySQLite_GetActiveBudgets(t *testing.T) {
 		err = repo.Delete(ctx, activeBudget.ID)
 		require.NoError(t, err)
 
-		budgets, err := repo.GetActiveBudgets(ctx)
+		budgets, err := repo.GetActiveBudgets(ctx, now)
 		require.NoError(t, err)
 		assert.Empty(t, budgets)
 

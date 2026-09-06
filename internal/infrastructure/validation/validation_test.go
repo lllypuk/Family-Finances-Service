@@ -885,9 +885,10 @@ func TestValidateCurrency(t *testing.T) {
 			wantErr:  false,
 		},
 		{
-			name:     "JPY",
+			// Валюта без сотых долей: amount_minor для неё не определён.
+			name:     "JPY rejected",
 			currency: "JPY",
-			wantErr:  false,
+			wantErr:  true,
 		},
 		{
 			name:     "RUB",

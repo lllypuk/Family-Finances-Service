@@ -67,6 +67,10 @@ func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
 		return respondValidationErrors(c, err)
 	}
 
+	if isNilClientID(req.ID) {
+		return respondNilClientID(c)
+	}
+
 	// Клиентский id уже созданной записи — повтор POST после разрыва связи (A-07).
 	if req.ID != nil {
 		if existing, found := h.findTransaction(c, *req.ID); found {
@@ -150,6 +154,8 @@ func (h *TransactionHandler) handleCreateTransactionServiceError(c echo.Context,
 	case errors.Is(err, services.ErrInsufficientBudget),
 		errors.Is(err, services.ErrInvalidTransactionAmount),
 		errors.Is(err, services.ErrInvalidTransactionType),
+		errors.Is(err, services.ErrTransactionAmountTooLarge),
+		errors.Is(err, services.ErrTransactionDateOutOfRange),
 		errors.Is(err, services.ErrCategoryNotInFamily),
 		errors.Is(err, services.ErrUserNotInFamily),
 		strings.Contains(err.Error(), "validation failed"),
@@ -190,7 +196,7 @@ func (h *TransactionHandler) updateBudgetIfNeeded(c echo.Context, tx *transactio
 		return
 	}
 
-	budgets, err := h.repositories.Budget.GetActiveBudgets(c.Request().Context())
+	budgets, err := h.repositories.Budget.GetActiveBudgets(c.Request().Context(), tx.Date)
 	if err != nil {
 		if h.logger != nil {
 			h.logger.WarnContext(
@@ -224,7 +230,13 @@ func (h *TransactionHandler) updateBudgetIfNeeded(c echo.Context, tx *transactio
 	}
 }
 
+// buildTransactionResponse — tags в контракте обязательный массив, поэтому nil становится [].
 func (h *TransactionHandler) buildTransactionResponse(tx *transaction.Transaction) TransactionResponse {
+	tags := tx.Tags
+	if tags == nil {
+		tags = []string{}
+	}
+
 	return TransactionResponse{
 		ID:          tx.ID,
 		AmountMinor: tx.AmountMinor,
@@ -233,7 +245,7 @@ func (h *TransactionHandler) buildTransactionResponse(tx *transaction.Transactio
 		CategoryID:  tx.CategoryID,
 		UserID:      tx.UserID,
 		Date:        tx.Date,
-		Tags:        tx.Tags,
+		Tags:        tags,
 		CreatedAt:   tx.CreatedAt,
 		UpdatedAt:   tx.UpdatedAt,
 	}
@@ -655,6 +667,8 @@ func (h *TransactionHandler) handleUpdateTransactionServiceError(c echo.Context,
 	case errors.Is(err, services.ErrInsufficientBudget),
 		errors.Is(err, services.ErrInvalidTransactionAmount),
 		errors.Is(err, services.ErrInvalidTransactionType),
+		errors.Is(err, services.ErrTransactionAmountTooLarge),
+		errors.Is(err, services.ErrTransactionDateOutOfRange),
 		errors.Is(err, dto.ErrInvalidDateRange),
 		errors.Is(err, dto.ErrInvalidAmountRange),
 		strings.Contains(err.Error(), "validation failed"),

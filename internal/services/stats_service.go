@@ -154,7 +154,7 @@ func (s *statsService) transactionsBetween(
 // previousTotals возвращает суммы за предыдущий период; ошибка выборки означает «данных нет».
 func (s *statsService) previousTotals(ctx context.Context, from, to date.Date) (dto.PeriodTotals, bool) {
 	if from.IsZero() || to.IsZero() {
-		return dto.PeriodTotals{}, false
+		return dto.PeriodTotals{From: from, To: to}, false
 	}
 
 	transactions, err := s.transactionsBetween(ctx, from, to)
@@ -253,7 +253,9 @@ func (s *statsService) categoryShares(
 		expensesCount int
 	}
 
-	var expenses, income []dto.CategoryShare
+	// Пустые, а не nil: в контракте оба поля — обязательные массивы (openapi StatsSummary).
+	expenses := make([]dto.CategoryShare, 0)
+	income := make([]dto.CategoryShare, 0)
 	buckets := make(map[uuid.UUID]*bucket)
 	for _, tx := range transactions {
 		b, ok := buckets[tx.CategoryID]
@@ -346,14 +348,10 @@ func periodDeltas(current, previous dto.PeriodTotals, hasPrevious bool) (float64
 		return 0, 0
 	}
 
-	var incomeDelta, expensesDelta float64
-	if previous.IncomeMinor > 0 {
-		incomeDelta = (current.IncomeMinor - previous.IncomeMinor).Percent(previous.IncomeMinor) / percentToShare
-	}
-	if previous.ExpensesMinor > 0 {
-		expensesDelta = (current.ExpensesMinor - previous.ExpensesMinor).
-			Percent(previous.ExpensesMinor) / percentToShare
-	}
+	// Percent сам возвращает 0 при нулевой базе, поэтому отдельной проверки нет.
+	incomeDelta := (current.IncomeMinor - previous.IncomeMinor).Percent(previous.IncomeMinor) / percentToShare
+	expensesDelta := (current.ExpensesMinor - previous.ExpensesMinor).Percent(previous.ExpensesMinor) / percentToShare
+
 	return incomeDelta, expensesDelta
 }
 

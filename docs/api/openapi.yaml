@@ -5,15 +5,18 @@ info:
   description: |
     Целевой контракт `/api/v1` для Android-клиента (spec 005, решения A-01…A-09).
 
-    Это описание **целевого** состояния: планы 02–04 приводят код в соответствие с ним.
-    Обратное направление держит тест `tests/integration/openapi_coverage_test.go` —
-    зарегистрированный роут без описания здесь роняет `make test`.
+    Код и спецификация совпадают: `tests/integration/openapi_coverage_test.go` проверяет
+    обе стороны — и зарегистрированный роут без описания здесь, и описанную операцию без
+    роута роняют `make test`.
 
     Соглашения:
     - Деньги — целые в минимальных единицах валюты семьи (`amount_minor`, int64). Валюта — у семьи (A-05).
     - Дата операции — календарная `YYYY-MM-DD` без времени; служебные метки — RFC3339 UTC (A-06).
-    - `POST` для транзакций, бюджетов и категорий принимает клиентский `id` (UUID v4);
-      повтор с тем же `id` возвращает `200` с существующей записью (A-07).
+    - `POST` для транзакций, бюджетов и категорий принимает клиентский `id` (любой валидный UUID);
+      повтор с тем же `id` возвращает `200` с существующей записью, тело при этом игнорируется (A-07).
+    - Дробные числа в двух единицах: доли 0…1 — `share`, `*_delta` и `utilization` в
+      `StatsSummary.budgets[]` (`BudgetProgress`); проценты 0…100 — `percentage` и `utilization`
+      в `Budget` (`GET /api/v1/budgets`).
     - Списки: `limit` (по умолчанию 50, максимум 200) и `offset`; `meta.pagination.total` — общее число (A-08).
     - Ошибка всегда одной формы: `{"error": {...}, "meta": {...}}` (A-08).
 
@@ -104,6 +107,7 @@ paths:
                 properties:
                   data: { $ref: '#/components/schemas/LoginResponse' }
                   meta: { $ref: '#/components/schemas/Meta' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/InvalidCredentials' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
@@ -153,6 +157,7 @@ paths:
       description: Только собственная сессия текущего пользователя; чужая — `404`.
       responses:
         '204': { description: Сессия отозвана }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -177,6 +182,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateUserRequest' }
       responses:
         '200': { $ref: '#/components/responses/UserOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
@@ -197,6 +203,7 @@ paths:
             schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
       responses:
         '204': { description: Пароль изменён }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401':
           description: |
             `UNAUTHORIZED` — токен отсутствует, просрочен или отозван;
@@ -229,6 +236,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateFamilyRequest' }
       responses:
         '200': { $ref: '#/components/responses/FamilyOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -273,6 +281,7 @@ paths:
             schema: { $ref: '#/components/schemas/CreateUserRequest' }
       responses:
         '201': { $ref: '#/components/responses/UserOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -288,6 +297,7 @@ paths:
       description: Только admin.
       responses:
         '200': { $ref: '#/components/responses/UserOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -303,6 +313,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateUserRequest' }
       responses:
         '200': { $ref: '#/components/responses/UserOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -324,6 +335,7 @@ paths:
             schema: { $ref: '#/components/schemas/PatchUserRequest' }
       responses:
         '200': { $ref: '#/components/responses/UserOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -345,6 +357,7 @@ paths:
             schema: { $ref: '#/components/schemas/SetPasswordRequest' }
       responses:
         '204': { description: Пароль задан }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -383,7 +396,8 @@ paths:
       operationId: createCategory
       tags: [categories]
       summary: Создать категорию
-      description: admin и member. Повтор с тем же `id` возвращает `200` с существующей категорией (A-07).
+      description: admin и member. Повтор с тем же `id` возвращает `200` с существующей
+        категорией; остальное тело при этом игнорируется (A-07).
       requestBody:
         required: true
         content:
@@ -392,6 +406,7 @@ paths:
       responses:
         '201': { $ref: '#/components/responses/CategoryOk' }
         '200': { $ref: '#/components/responses/CategoryOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
@@ -406,6 +421,7 @@ paths:
       description: admin и member.
       responses:
         '200': { $ref: '#/components/responses/CategoryOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -421,6 +437,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateCategoryRequest' }
       responses:
         '200': { $ref: '#/components/responses/CategoryOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -430,14 +447,15 @@ paths:
       tags: [categories]
       summary: Удалить категорию
       description: |
-        Только admin: через API удаление необратимо и не имеет подтверждения, которое есть в UI.
-        Категория с транзакциями не удаляется — `409`.
+        Только admin. Категория без транзакций удаляется физически; категория с транзакциями
+        помечается неактивной (`is_active: false`) и перестаёт выводиться в списке — ответ в обоих
+        случаях `204`. Подкатегории обрабатываются так же.
       responses:
         '204': { description: Категория удалена }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
 
   /api/v1/transactions:
     get:
@@ -497,7 +515,8 @@ paths:
       summary: Создать транзакцию
       description: |
         admin и member. Автор берётся из токена — `user_id` в теле игнорируется.
-        Повтор с тем же `id` возвращает `200` с существующей транзакцией (A-07).
+        Повтор с тем же `id` возвращает `200` с существующей транзакцией; остальное тело
+        при этом игнорируется (A-07).
       requestBody:
         required: true
         content:
@@ -506,6 +525,7 @@ paths:
       responses:
         '201': { $ref: '#/components/responses/TransactionOk' }
         '200': { $ref: '#/components/responses/TransactionOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
@@ -538,6 +558,7 @@ paths:
                     properties:
                       deleted: { type: integer, description: Число удалённых транзакций }
                   meta: { $ref: '#/components/schemas/Meta' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
@@ -552,6 +573,7 @@ paths:
       description: admin и member.
       responses:
         '200': { $ref: '#/components/responses/TransactionOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -567,6 +589,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateTransactionRequest' }
       responses:
         '200': { $ref: '#/components/responses/TransactionOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -578,6 +601,7 @@ paths:
       description: admin и member.
       responses:
         '204': { description: Транзакция удалена }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -615,7 +639,8 @@ paths:
       operationId: createBudget
       tags: [budgets]
       summary: Создать бюджет
-      description: admin и member. Повтор с тем же `id` возвращает `200` с существующим бюджетом (A-07).
+      description: admin и member. Повтор с тем же `id` возвращает `200` с существующим
+        бюджетом; остальное тело при этом игнорируется (A-07).
       requestBody:
         required: true
         content:
@@ -624,6 +649,7 @@ paths:
       responses:
         '201': { $ref: '#/components/responses/BudgetOk' }
         '200': { $ref: '#/components/responses/BudgetOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
@@ -638,6 +664,7 @@ paths:
       description: admin и member. `spent_minor` считается по транзакциям периода на момент запроса.
       responses:
         '200': { $ref: '#/components/responses/BudgetOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -653,6 +680,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateBudgetRequest' }
       responses:
         '200': { $ref: '#/components/responses/BudgetOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -664,6 +692,7 @@ paths:
       description: admin и member. Транзакции периода не затрагиваются.
       responses:
         '204': { description: Бюджет удалён }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -710,6 +739,7 @@ paths:
             schema: { $ref: '#/components/schemas/CreateReportRequest' }
       responses:
         '201': { $ref: '#/components/responses/ReportOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
@@ -724,6 +754,7 @@ paths:
       description: admin и member.
       responses:
         '200': { $ref: '#/components/responses/ReportOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -734,6 +765,7 @@ paths:
       description: admin и member.
       responses:
         '204': { description: Отчёт удалён }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -758,6 +790,7 @@ paths:
           content:
             text/csv:
               schema: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -921,6 +954,13 @@ components:
       schema: { type: integer, minimum: 0, default: 0 }
 
   responses:
+    BadRequest:
+      description: |
+        Тело или идентификатор не разобрались: `INVALID_REQUEST` (сломанный JSON или неверный
+        тип поля), `INVALID_ID` (в пути не UUID). Ошибки валидации значений — это `422`.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
     Unauthorized:
       description: Токена нет, он истёк или отозван (`UNAUTHORIZED`)
       content:
@@ -1029,6 +1069,7 @@ components:
     Money:
       type: integer
       format: int64
+      maximum: 99999999999
       description: |
         Сумма в минимальных единицах валюты семьи (копейки для RUB, центы для EUR/USD).
         Поддерживаются только валюты с двумя знаками после запятой (A-05).
@@ -1300,7 +1341,7 @@ components:
         id:
           type: string
           format: uuid
-          description: Необязательный клиентский UUID v4 для идемпотентного повтора (A-07)
+          description: Необязательный клиентский UUID для идемпотентного повтора; тело повтора игнорируется (A-07)
         name: { type: string, minLength: 2, maxLength: 50 }
         type: { $ref: '#/components/schemas/CategoryType' }
         color: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
@@ -1341,7 +1382,7 @@ components:
         id:
           type: string
           format: uuid
-          description: Необязательный клиентский UUID v4 для идемпотентного повтора (A-07)
+          description: Необязательный клиентский UUID для идемпотентного повтора; тело повтора игнорируется (A-07)
         amount_minor:
           allOf: [{ $ref: '#/components/schemas/Money' }]
           minimum: 1
@@ -1411,7 +1452,7 @@ components:
         id:
           type: string
           format: uuid
-          description: Необязательный клиентский UUID v4 для идемпотентного повтора (A-07)
+          description: Необязательный клиентский UUID для идемпотентного повтора; тело повтора игнорируется (A-07)
         name: { type: string, minLength: 2, maxLength: 100 }
         amount_minor:
           allOf: [{ $ref: '#/components/schemas/Money' }]

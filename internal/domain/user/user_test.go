@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/domain/user"
 )
@@ -168,4 +169,17 @@ func TestFamily_TimestampGeneration(t *testing.T) {
 	assert.True(t, family.CreatedAt.Before(afterTime) || family.CreatedAt.Equal(afterTime))
 	assert.True(t, family.UpdatedAt.After(beforeTime) || family.UpdatedAt.Equal(beforeTime))
 	assert.True(t, family.UpdatedAt.Before(afterTime) || family.UpdatedAt.Equal(afterTime))
+}
+
+func TestFamily_Location(t *testing.T) {
+	moscow := user.Family{Timezone: "Europe/Moscow"}
+	loc := moscow.Location()
+	require.NotNil(t, loc)
+	assert.Equal(t, "Europe/Moscow", loc.String())
+
+	// Пустая и неизвестная зона — UTC: отчёт строится, а не падает.
+	empty := user.Family{}
+	unknown := user.Family{Timezone: "Mars/Olympus"}
+	assert.Equal(t, time.UTC, empty.Location())
+	assert.Equal(t, time.UTC, unknown.Location())
 }

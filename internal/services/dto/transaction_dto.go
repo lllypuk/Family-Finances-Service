@@ -63,7 +63,7 @@ type TransactionFilterDTO struct {
 	Offset int `validate:"min=0"`
 
 	// Sorting
-	SortBy    *string `validate:"omitempty,oneof=date amount created_at updated_at"`
+	SortBy    *string `validate:"omitempty,oneof=date amount_minor created_at updated_at"`
 	SortOrder *string `validate:"omitempty,oneof=asc desc"`
 }
 

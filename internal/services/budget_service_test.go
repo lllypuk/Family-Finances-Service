@@ -45,8 +45,11 @@ func (m *MockBudgetRepositoryForService) GetAll(ctx context.Context) ([]*budget.
 	return args.Get(0).([]*budget.Budget), args.Error(1)
 }
 
-func (m *MockBudgetRepositoryForService) GetActiveBudgets(ctx context.Context) ([]*budget.Budget, error) {
-	args := m.Called(ctx)
+func (m *MockBudgetRepositoryForService) GetActiveBudgets(
+	ctx context.Context,
+	on date.Date,
+) ([]*budget.Budget, error) {
+	args := m.Called(ctx, on)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -392,7 +395,7 @@ func TestBudgetService_GetActiveBudgets_Success(t *testing.T) {
 	allBudgets := []*budget.Budget{activeBudget, inactiveBudget}
 
 	// Setup expectations
-	budgetRepo.On("GetActiveBudgets", ctx).Return(allBudgets, nil)
+	budgetRepo.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).Return(allBudgets, nil)
 	txRepo.On(
 		"GetTotalByCategoryAndDateRange",
 		ctx,
@@ -441,7 +444,7 @@ func TestBudgetService_CheckBudgetLimits_WithinLimit(t *testing.T) {
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
 
 	// Execute
-	err := service.CheckBudgetLimits(ctx, categoryID, amount)
+	err := service.CheckBudgetLimits(ctx, categoryID, amount, date.Today(time.UTC))
 
 	// Assert
 	require.NoError(t, err)
@@ -475,7 +478,7 @@ func TestBudgetService_CheckBudgetLimits_ExceedsLimit(t *testing.T) {
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
 
 	// Execute
-	err := service.CheckBudgetLimits(ctx, categoryID, amount)
+	err := service.CheckBudgetLimits(ctx, categoryID, amount, date.Today(time.UTC))
 
 	// Assert
 	require.Error(t, err)
@@ -517,6 +520,9 @@ func TestBudgetService_GetBudgetStatus_Success(t *testing.T) {
 	assert.Equal(t, money.Minor(25_000), result.SpentAmountMinor)
 	assert.Equal(t, money.Minor(75_000), result.RemainingAmountMinor)
 	assert.InDelta(t, 25.0, result.UtilizationPercent, 0.1)
+	assert.Equal(t, 30, result.DaysTotal)
+	// 100000 на 30 дней — 3333 с округлением половины от нуля, не 3333.33 и не 3334.
+	assert.Equal(t, money.Minor(3_333), result.DailyBudgetMinor)
 	assert.False(t, result.IsNearLimit)
 	assert.False(t, result.IsOverBudget)
 	assert.Equal(t, dto.BudgetStatusHealthy, result.Status)
@@ -556,7 +562,8 @@ func TestBudgetService_CalculateBudgetUtilization_Success(t *testing.T) {
 	assert.Equal(t, testBudget.ID, result.BudgetID)
 	assert.Equal(t, string(testBudget.Period), result.Period)
 	assert.InDelta(t, 25.0, result.UtilizationPercent, 0.1)
-	assert.Positive(t, result.SpendingVelocityMinor)
+	// 25000 копеек за 10 прошедших дней — ровно 2500 в день, без «просто больше нуля».
+	assert.Equal(t, money.Minor(2_500), result.SpendingVelocityMinor)
 	assert.NotEmpty(t, result.Recommendations)
 
 	budgetRepo.AssertExpectations(t)
@@ -682,10 +689,35 @@ func TestBudgetService_CheckBudgetLimits_NoBudgets(t *testing.T) {
 	budgetRepo.On("GetByCategory", ctx, &categoryID).Return([]*budget.Budget{}, nil)
 
 	// Execute
-	err := service.CheckBudgetLimits(ctx, categoryID, amount)
+	err := service.CheckBudgetLimits(ctx, categoryID, amount, date.Today(time.UTC))
 
 	// Assert
 	require.NoError(t, err) // No budgets means no limit
 
 	budgetRepo.AssertExpectations(t)
+}
+
+// TestBudgetService_UpdateBudget_EndDateBeforeStoredStart — обновление одной границы
+// проверяется по уже применённым значениям, иначе ошибка всплывала бы CHECK-ом в БД.
+func TestBudgetService_UpdateBudget_EndDateBeforeStoredStart(t *testing.T) {
+	service, budgetRepo, txRepo := setupBudgetService(t)
+	ctx := context.Background()
+
+	testBudget := createTestBudgetForService()
+	budgetRepo.On("GetByID", ctx, testBudget.ID).Return(testBudget, nil)
+	txRepo.On(
+		"GetTotalByCategoryAndDateRange",
+		ctx,
+		*testBudget.CategoryID,
+		mock.AnythingOfType("date.Date"),
+		mock.AnythingOfType("date.Date"),
+		transaction.TypeExpense,
+	).Return(money.Minor(0), nil).Maybe()
+	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil).Maybe()
+
+	earlierEnd := testBudget.StartDate.AddDays(-1)
+	result, err := service.UpdateBudget(ctx, testBudget.ID, dto.UpdateBudgetDTO{EndDate: &earlierEnd})
+
+	require.ErrorIs(t, err, dto.ErrInvalidBudgetPeriod)
+	assert.Nil(t, result)
 }

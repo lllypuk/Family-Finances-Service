@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"reflect"
@@ -34,8 +35,10 @@ type pageParams struct {
 
 // newAPIValidator — валидатор всех API-хендлеров: имя поля в error.details берётся
 // из json-тега, иначе клиент получал бы имя поля Go (StartDate вместо start_date).
+// WithRequiredStructEnabled обязателен: без него `required` на вложенной структуре
+// (date.Date) молча ничего не проверяет и пропущенная дата доходит до репозитория как 500.
 func newAPIValidator() *validator.Validate {
-	v := validator.New()
+	v := validator.New(validator.WithRequiredStructEnabled())
 	auth.RegisterPasswordValidation(v)
 	v.RegisterTagNameFunc(func(field reflect.StructField) string {
 		name := strings.Split(field.Tag.Get("json"), ",")[0]
@@ -80,6 +83,33 @@ func respondError(
 	})
 }
 
+// familyToday — сегодняшняя дата в часовом поясе семьи (A-06). Семья не прочиталась —
+// UTC: в единственном месте вызова это выбор набора активных бюджетов, не отказ запроса.
+func familyToday(ctx context.Context, families FamilyRepository) date.Date {
+	if families == nil {
+		return date.Today(time.UTC)
+	}
+
+	family, err := families.Get(ctx)
+	if err != nil || family == nil {
+		return date.Today(time.UTC)
+	}
+
+	return date.Today(family.Location())
+}
+
+// isNilClientID — клиентский id из одних нулей: идемпотентный поиск по нему ничего
+// не находит, а репозиторий отбивает такой id уже как 500.
+func isNilClientID(id *uuid.UUID) bool {
+	return id != nil && *id == uuid.Nil
+}
+
+// respondNilClientID — 422 на клиентский id из одних нулей.
+func respondNilClientID(c echo.Context) error {
+	return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		ErrorDetail{Field: fieldID, Message: "must not be the nil UUID", Code: ErrCodeValidationError})
+}
+
 // bodyDetail — деталь для ошибки, не привязанной к конкретному полю запроса.
 func bodyDetail(code, message string) ErrorDetail {
 	return ErrorDetail{Field: fieldBody, Message: message, Code: code}
@@ -88,9 +118,13 @@ func bodyDetail(code, message string) ErrorDetail {
 // respondBindError — 400 на тело, которое не разобралось; текст ошибки Bind — в details.
 // Непонятная дата — ошибка поля, а не сломанный JSON, поэтому 422.
 func respondBindError(c echo.Context, err error) error {
-	if errors.Is(err, date.ErrInvalidDate) {
+	if field, ok := date.JSONField(err); ok {
+		if field == "" {
+			field = fieldDate
+		}
+
 		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
-			ErrorDetail{Field: fieldDate, Message: "must be a date in YYYY-MM-DD format", Code: ErrCodeValidationError})
+			ErrorDetail{Field: field, Message: "must be a date in YYYY-MM-DD format", Code: ErrCodeValidationError})
 	}
 
 	return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,

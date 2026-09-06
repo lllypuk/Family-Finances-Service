@@ -204,8 +204,8 @@ nginx, certbot, fail2ban, `minimal`/`prod`/`nginx` compose-варианты и n
 | 01 | [api-contract](../plans/completed/20260904-01-api-contract.md) | `openapi.yaml`, тест покрытия роутов, версия сборки, `api_standards.md` |
 | 02 | [api-completeness](../plans/completed/20260904-02-api-completeness.md) | `StatsService`, генерация отчётов, бэкапы, список пользователей, единый envelope и пагинация |
 | 03 | [bearer-auth-web-removal](../plans/completed/20260904-03-bearer-auth-web-removal.md) | `internal/auth`, `/auth/*`, `/me`, CLI setup, лимитер, удаление `internal/web`, чистка конфига |
-| 04 | [schema-and-money](../plans/20260904-04-schema-and-money.md) | переписанная `001_consolidated`, `amount_minor`, календарные даты, часовой пояс, удаление инвайтов и `child` |
+| 04 | [schema-and-money](../plans/completed/20260904-04-schema-and-money.md) | переписанная `001_consolidated`, `amount_minor`, календарные даты, часовой пояс, удаление инвайтов и `child` |
 | 05 | [deploy-ffs](../plans/20260904-05-deploy-ffs.md) | compose + Caddy для `ffs.shatrov.tech`, CLI `backup`, чистка `deploy/` |
 
-Android-приложение стоит начинать после плана 04: до него контракт денег и дат не совпадает с
-`openapi.yaml`.
+План 04 закрыт: контракт денег и дат совпадает с `openapi.yaml`, Android-приложение можно
+начинать.

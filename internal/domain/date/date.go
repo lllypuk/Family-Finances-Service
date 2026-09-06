@@ -3,8 +3,10 @@ package date
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 )
 
@@ -85,8 +87,13 @@ func (d Date) MonthBounds() (Date, Date) {
 	return first, last
 }
 
-// Value пишет дату в БД строкой; незаполненная дата даёт текст, который не пройдёт CHECK колонки.
+// Value пишет дату в БД строкой; незаполненная дата — ошибка здесь, а не нарушение
+// CHECK на колонке: "-0001-11-30" всплыл бы как 500 из репозитория.
 func (d Date) Value() (driver.Value, error) {
+	if d.IsZero() {
+		return nil, fmt.Errorf("%w: zero date", ErrInvalidDate)
+	}
+
 	return d.String(), nil
 }
 
@@ -118,6 +125,8 @@ func (d Date) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + d.String() + `"`), nil
 }
 
+// UnmarshalJSON отдаёт *json.UnmarshalTypeError намеренно: только этот тип
+// encoding/json дополняет именем поля, иначе ошибка «start_date» неотличима от «date».
 func (d *Date) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
 		*d = Date{}
@@ -127,10 +136,29 @@ func (d *Date) UnmarshalJSON(data []byte) error {
 
 	const quoted = 2
 	if len(data) < quoted || data[0] != '"' || data[len(data)-1] != '"' {
-		return fmt.Errorf("%w: expected string, got %s", ErrInvalidDate, data)
+		return jsonTypeError(string(data))
 	}
 
-	return d.parseInto(string(data[1 : len(data)-1]))
+	if err := d.parseInto(string(data[1 : len(data)-1])); err != nil {
+		return jsonTypeError(string(data))
+	}
+
+	return nil
+}
+
+func jsonTypeError(value string) error {
+	return &json.UnmarshalTypeError{Value: value, Type: reflect.TypeOf(Date{})}
+}
+
+// JSONField возвращает имя JSON-поля, на котором дата не разобралась; второе значение
+// false, если ошибка не про дату. Пустое имя — дата на верхнем уровне.
+func JSONField(err error) (string, bool) {
+	var typeErr *json.UnmarshalTypeError
+	if !errors.As(err, &typeErr) || typeErr.Type != reflect.TypeOf(Date{}) {
+		return "", false
+	}
+
+	return typeErr.Field, true
 }
 
 func (d Date) compare(other Date) int {

@@ -69,7 +69,7 @@ The author of a record is taken from the token, so `user_id` in a request body i
 - Money is `amount_minor` — an integer in the family's minor units (kopeks/cents); percentages and utilization
   stay fractional. `PUT /api/v1/family` returns `409 CURRENCY_LOCKED` if a transaction already exists
 - Transaction, budget and report dates are calendar `YYYY-MM-DD`; period bounds use the family's `timezone`
-- `POST` of a transaction, budget or category accepts a client-generated `id` (uuid4): a retry with the same
+- `POST` of a transaction, budget or category accepts a client-generated `id` (any valid UUID): a retry with the same
   `id` answers `200` with the existing record instead of creating a duplicate
 - Every list answers with `meta.pagination {limit, offset, total}` — `limit` defaults to 50, max 200
 - One error envelope everywhere: `{"error":{"code","message","details"},"meta":{...}}`;

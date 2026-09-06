@@ -616,11 +616,13 @@ func TestTransactionAPI_MinorUnitsLifecycle(t *testing.T) {
 	require.NoError(t, testServer.Repos.Category.Create(ctx, testCategory))
 
 	today := date.Today(time.UTC)
-	for i := range 3 {
+	create := func(t *testing.T, amountMinor int, description string) {
+		t.Helper()
+
 		body := mustJSON(t, map[string]any{
-			"amount_minor": 33,
+			"amount_minor": amountMinor,
 			"type":         "expense",
-			"description":  fmt.Sprintf("Копейка %d", i),
+			"description":  description,
 			"category_id":  testCategory.ID,
 			"date":         today,
 		})
@@ -631,6 +633,12 @@ func TestTransactionAPI_MinorUnitsLifecycle(t *testing.T) {
 		testServer.Server.Echo().ServeHTTP(rec, req)
 		require.Equal(t, http.StatusCreated, rec.Code, "тело: %s", rec.Body.String())
 	}
+
+	for i := range 3 {
+		create(t, 33, fmt.Sprintf("Копейка %d", i))
+	}
+	// Операция вне диапазона: без неё фильтр по сумме нечем отличить от его отсутствия.
+	create(t, 5_000, "Вне диапазона")
 
 	query := url.Values{}
 	query.Set("date_from", today.String())
@@ -656,6 +664,22 @@ func TestTransactionAPI_MinorUnitsLifecycle(t *testing.T) {
 	}
 	assert.Equal(t, money.Minor(99), total)
 
+	// Тот же период без фильтра по сумме отдаёт все четыре операции.
+	unfiltered := url.Values{}
+	unfiltered.Set("date_from", today.String())
+	unfiltered.Set("date_to", today.String())
+	allReq := httptest.NewRequest(http.MethodGet, "/api/v1/transactions?"+unfiltered.Encode(), nil)
+	session.Apply(allReq)
+	allRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(allRec, allReq)
+	require.Equal(t, http.StatusOK, allRec.Code, "тело: %s", allRec.Body.String())
+
+	var all handlers.APIResponse[[]handlers.TransactionResponse]
+	require.NoError(t, json.Unmarshal(allRec.Body.Bytes(), &all))
+	assert.Len(t, all.Data, 4)
+	// tags — обязательный массив контракта, а не null.
+	assert.NotNil(t, all.Data[0].Tags)
+
 	reportBody := mustJSON(t, map[string]any{
 		"name":       "Копейки",
 		"type":       "expenses",
@@ -676,7 +700,8 @@ func TestTransactionAPI_MinorUnitsLifecycle(t *testing.T) {
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(reportRec.Body.Bytes(), &created))
-	assert.Equal(t, money.Minor(99), created.Data.Data.TotalExpensesMinor)
+	// 33*3 + 5000: копейки не теряются и не округляются по дороге в отчёт.
+	assert.Equal(t, money.Minor(5_099), created.Data.Data.TotalExpensesMinor)
 }
 
 // TestTransactionAPI_CreateWithClientID_Idempotent — повтор POST с тем же id
@@ -722,7 +747,129 @@ func TestTransactionAPI_CreateWithClientID_Idempotent(t *testing.T) {
 	assert.Equal(t, clientID, repeated.Data.ID)
 	assert.Equal(t, money.Minor(12_345), repeated.Data.AmountMinor)
 
+	// Повтор с другим телом: сравнивается только id, новое тело игнорируется (A-07).
+	conflicting := mustJSON(t, map[string]any{
+		"id":           clientID,
+		"amount_minor": 99_999,
+		"type":         "expense",
+		"description":  "Другое тело",
+		"category_id":  testCategory.ID,
+		"date":         date.Today(time.UTC),
+	})
+	conflictReq := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", bytes.NewBuffer(conflicting))
+	conflictReq.Header.Set("Content-Type", "application/json")
+	session.Apply(conflictReq)
+	conflictRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(conflictRec, conflictReq)
+	require.Equal(t, http.StatusOK, conflictRec.Code, "тело: %s", conflictRec.Body.String())
+
+	var ignored handlers.APIResponse[handlers.TransactionResponse]
+	require.NoError(t, json.Unmarshal(conflictRec.Body.Bytes(), &ignored))
+	assert.Equal(t, money.Minor(12_345), ignored.Data.AmountMinor)
+	assert.Equal(t, "Повторяемая операция", ignored.Data.Description)
+
 	stored, err := testServer.Repos.Transaction.GetByFilter(ctx, transaction.Filter{Limit: 100})
 	require.NoError(t, err)
 	assert.Len(t, stored, 1, "повтор POST не должен создавать вторую запись")
+}
+
+// TestTransactionAPI_UpdateCountsAgainstBudgetOnce — правка операции не должна упираться
+// в её собственный вклад: он уже сидит в budgets.spent_minor.
+func TestTransactionAPI_UpdateCountsAgainstBudgetOnce(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+	ctx := context.Background()
+
+	testCategory := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(ctx, testCategory))
+
+	testBudget := testhelpers.CreateTestBudget(testServer.AuthFamily.ID, testCategory.ID)
+	testBudget.AmountMinor = 100_000
+	require.NoError(t, testServer.Repos.Budget.Create(ctx, testBudget))
+
+	// 60% лимита: повторный учёт той же суммы вывел бы проверку за 100%.
+	createBody := mustJSON(t, map[string]any{
+		"amount_minor": 60_000,
+		"type":         "expense",
+		"description":  "Крупная покупка",
+		"category_id":  testCategory.ID,
+		"date":         date.Today(time.UTC),
+	})
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", bytes.NewBuffer(createBody))
+	createReq.Header.Set("Content-Type", "application/json")
+	session.Apply(createReq)
+	createRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(createRec, createReq)
+	require.Equal(t, http.StatusCreated, createRec.Code, "тело: %s", createRec.Body.String())
+
+	var created handlers.APIResponse[handlers.TransactionResponse]
+	require.NoError(t, json.Unmarshal(createRec.Body.Bytes(), &created))
+
+	storedBudget, err := testServer.Repos.Budget.GetByID(ctx, testBudget.ID)
+	require.NoError(t, err)
+	require.Equal(t, money.Minor(60_000), storedBudget.SpentMinor, "создание списывает сумму в бюджет")
+
+	update := func(t *testing.T, body map[string]any) *httptest.ResponseRecorder {
+		t.Helper()
+
+		req := httptest.NewRequest(
+			http.MethodPut,
+			fmt.Sprintf("/api/v1/transactions/%s", created.Data.ID),
+			bytes.NewBuffer(mustJSON(t, body)),
+		)
+		req.Header.Set("Content-Type", "application/json")
+		session.Apply(req)
+		rec := httptest.NewRecorder()
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		return rec
+	}
+
+	// Правка описания сумму не меняет — лимит не может быть нарушен.
+	descRec := update(t, map[string]any{"description": "Исправленное описание"})
+	require.Equal(t, http.StatusOK, descRec.Code, "тело: %s", descRec.Body.String())
+
+	// Уменьшение суммы тем более.
+	lowerRec := update(t, map[string]any{"amount_minor": 40_000})
+	require.Equal(t, http.StatusOK, lowerRec.Code, "тело: %s", lowerRec.Body.String())
+
+	storedBudget, err = testServer.Repos.Budget.GetByID(ctx, testBudget.ID)
+	require.NoError(t, err)
+	assert.Equal(t, money.Minor(40_000), storedBudget.SpentMinor)
+
+	// Сумма сверх лимита по-прежнему отбивается.
+	overRec := update(t, map[string]any{"amount_minor": 140_000})
+	assert.Equal(t, http.StatusUnprocessableEntity, overRec.Code, "тело: %s", overRec.Body.String())
+}
+
+// TestTransactionAPI_CreateWithNilClientID — id из одних нулей не идентификатор: 422,
+// а не 500 из репозитория.
+func TestTransactionAPI_CreateWithNilClientID(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+	ctx := context.Background()
+
+	testCategory := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(ctx, testCategory))
+
+	body := mustJSON(t, map[string]any{
+		"id":           uuid.Nil,
+		"amount_minor": 1_000,
+		"type":         "expense",
+		"description":  "Нулевой id",
+		"category_id":  testCategory.ID,
+		"date":         date.Today(time.UTC),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	session.Apply(req)
+	rec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
+
+	var errResp handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &errResp))
+	require.Len(t, errResp.Error.Details, 1)
+	assert.Equal(t, "id", errResp.Error.Details[0].Field)
 }

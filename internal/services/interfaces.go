@@ -90,11 +90,13 @@ type TransactionService interface {
 		transactionIDs []uuid.UUID,
 		categoryID uuid.UUID,
 	) error
+	// ValidateTransactionLimits — бюджет ищется по календарной дате операции on.
 	ValidateTransactionLimits(
 		ctx context.Context,
 		categoryID uuid.UUID,
 		amount money.Minor,
 		transactionType transaction.Type,
+		on date.Date,
 	) error
 }
 
@@ -112,7 +114,7 @@ type BudgetService interface {
 	// Business Operations
 	GetActiveBudgets(ctx context.Context, on date.Date) ([]*budget.Budget, error) // Single family
 	UpdateBudgetSpent(ctx context.Context, budgetID uuid.UUID, amount money.Minor) error
-	CheckBudgetLimits(ctx context.Context, categoryID uuid.UUID, amount money.Minor) error // Single family
+	CheckBudgetLimits(ctx context.Context, categoryID uuid.UUID, amount money.Minor, on date.Date) error
 	GetBudgetStatus(ctx context.Context, budgetID uuid.UUID) (*dto.BudgetStatusDTO, error)
 	CalculateBudgetUtilization(ctx context.Context, budgetID uuid.UUID) (*dto.BudgetUtilizationDTO, error)
 	GetBudgetsByCategory(ctx context.Context, categoryID uuid.UUID) ([]*budget.Budget, error) // Single family

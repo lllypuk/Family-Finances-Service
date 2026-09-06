@@ -367,74 +367,6 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		assert.Equal(t, 3, total, "счётчик обязан игнорировать LIMIT/OFFSET и фильтровать по типу")
 	})
 
-	t.Run("GetTransactionSummary", func(t *testing.T) {
-		db := container.GetTestDatabase(t)
-		repo := transactionrepo.NewSQLiteRepository(db)
-
-		// Create test data
-		familyID, err := helper.CreateTestFamily(ctx, "Summary Test Family", "USD")
-		require.NoError(t, err)
-
-		userID, err := helper.CreateTestUser(ctx, "summary@example.com", "Summary", "Test", "admin", familyID)
-		require.NoError(t, err)
-
-		categoryID, err := helper.CreateTestCategory(ctx, "Test Category", "expense", familyID, nil)
-		require.NoError(t, err)
-
-		// Create mixed transactions
-		now := date.Today(time.UTC)
-		transactions := []*transaction.Transaction{
-			{
-				ID:          uuid.New(),
-				AmountMinor: 100_000,
-				Type:        transaction.TypeIncome,
-				Description: "Salary",
-				CategoryID:  uuid.MustParse(categoryID),
-				UserID:      uuid.MustParse(userID),
-				Date:        now,
-			},
-			{
-				ID:          uuid.New(),
-				AmountMinor: 20_000,
-				Type:        transaction.TypeExpense,
-				Description: "Groceries",
-				CategoryID:  uuid.MustParse(categoryID),
-				UserID:      uuid.MustParse(userID),
-				Date:        now,
-			},
-			{
-				ID:          uuid.New(),
-				AmountMinor: 30_000,
-				Type:        transaction.TypeExpense,
-				Description: "Utilities",
-				CategoryID:  uuid.MustParse(categoryID),
-				UserID:      uuid.MustParse(userID),
-				Date:        now,
-			},
-		}
-
-		// Create all transactions
-		for _, tx := range transactions {
-			err = repo.Create(ctx, tx)
-			require.NoError(t, err)
-		}
-
-		// Get summary
-		startDate := now.AddDays(-1)
-		endDate := now.AddDays(1)
-		summary, err := repo.GetSummary(ctx, startDate, endDate)
-		require.NoError(t, err)
-
-		assert.Equal(t, 3, summary.TotalCount)
-		assert.Equal(t, 1, summary.IncomeCount)
-		assert.Equal(t, 2, summary.ExpenseCount)
-		assert.Equal(t, money.Minor(100_000), summary.TotalIncomeMinor)
-		assert.Equal(t, money.Minor(50_000), summary.TotalExpensesMinor) // 200 + 300
-		assert.Equal(t, money.Minor(50_000), summary.BalanceMinor)       // 1000 - 500
-		assert.Equal(t, money.Minor(100_000), summary.AvgIncomeMinor)
-		assert.Equal(t, money.Minor(25_000), summary.AvgExpenseMinor) // (200 + 300) / 2
-	})
-
 	t.Run("Update_Success", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
 		repo := transactionrepo.NewSQLiteRepository(db)
@@ -566,13 +498,6 @@ func TestTransactionRepositorySQLite_MinorUnitsAndDateBounds(t *testing.T) {
 		)
 		require.NoError(t, totalErr)
 		assert.Equal(t, money.Minor(99), total)
-	})
-
-	t.Run("SummaryAverageRoundsHalfUp", func(t *testing.T) {
-		summary, summaryErr := repo.GetSummary(ctx, days[0], days[2])
-		require.NoError(t, summaryErr)
-		assert.Equal(t, money.Minor(99), summary.TotalExpensesMinor)
-		assert.Equal(t, money.Minor(33), summary.AvgExpenseMinor)
 	})
 
 	t.Run("DateRangeIncludesBounds", func(t *testing.T) {

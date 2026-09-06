@@ -311,41 +311,6 @@ func BenchmarkTransactionRepository_GetByFilter_Pagination(b *testing.B) {
 	}
 }
 
-// BenchmarkTransactionRepository_GetTransactionSummary tests summary calculation performance
-func BenchmarkTransactionRepository_GetTransactionSummary(b *testing.B) {
-	setupBenchmarkData(b)
-	repo := transactionrepo.NewSQLiteRepository(testContainer.DB)
-	ctx := context.Background()
-
-	startDate := date.Today(time.UTC).AddDays(-benchmarkDateRangeDays)
-	endDate := date.Today(time.UTC)
-
-	for b.Loop() {
-		_, err := repo.GetSummary(ctx, startDate, endDate)
-		if err != nil {
-			b.Fatalf("Failed to get transaction summary: %v", err)
-		}
-	}
-}
-
-// BenchmarkTransactionRepository_GetMonthlySummary tests monthly aggregation performance
-func BenchmarkTransactionRepository_GetMonthlySummary(b *testing.B) {
-	setupBenchmarkData(b)
-	repo := transactionrepo.NewSQLiteRepository(testContainer.DB)
-	ctx := context.Background()
-
-	now := date.Today(time.UTC)
-	year := now.Year
-	month := int(now.Month)
-
-	for b.Loop() {
-		_, err := repo.GetMonthlySummary(ctx, year, month)
-		if err != nil {
-			b.Fatalf("Failed to get monthly summary: %v", err)
-		}
-	}
-}
-
 // BenchmarkTransactionRepository_Create tests transaction creation performance
 func BenchmarkTransactionRepository_Create(b *testing.B) {
 	setupBenchmarkData(b)

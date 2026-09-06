@@ -66,7 +66,7 @@ type BudgetFilterDTO struct {
 	Offset int `validate:"min=0"`
 
 	// Sorting
-	SortBy    *string `validate:"omitempty,oneof=name amount spent remaining created_at updated_at start_date end_date"`
+	SortBy    *string `validate:"omitempty,oneof=name amount_minor spent_minor created_at updated_at start_date end_date"`
 	SortOrder *string `validate:"omitempty,oneof=asc desc"`
 }
 

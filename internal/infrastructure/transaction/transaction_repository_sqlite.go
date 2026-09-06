@@ -30,30 +30,6 @@ type sqlExecer interface {
 // minTransactionYear — нижняя граница даты операции; всё раньше почти наверняка опечатка.
 const minTransactionYear = 1900
 
-// Summary holds transaction summary statistics
-type Summary struct {
-	FamilyID           uuid.UUID   `json:"family_id"`
-	StartDate          date.Date   `json:"start_date"`
-	EndDate            date.Date   `json:"end_date"`
-	TotalCount         int         `json:"total_count"`
-	IncomeCount        int         `json:"income_count"`
-	ExpenseCount       int         `json:"expense_count"`
-	TotalIncomeMinor   money.Minor `json:"total_income_minor"`
-	TotalExpensesMinor money.Minor `json:"total_expenses_minor"`
-	BalanceMinor       money.Minor `json:"balance_minor"`
-	AvgIncomeMinor     money.Minor `json:"avg_income_minor"`
-	AvgExpenseMinor    money.Minor `json:"avg_expense_minor"`
-}
-
-// MonthlySummaryItem holds monthly summary by category
-type MonthlySummaryItem struct {
-	CategoryName     string           `json:"category_name"`
-	Type             transaction.Type `json:"type"`
-	TransactionCount int              `json:"transaction_count"`
-	TotalAmountMinor money.Minor      `json:"total_amount_minor"`
-	AvgAmountMinor   money.Minor      `json:"avg_amount_minor"`
-}
-
 // NewSQLiteRepository creates a new SQLite transaction repository
 func NewSQLiteRepository(db *sql.DB) *SQLiteRepository {
 	return &SQLiteRepository{
@@ -161,7 +137,8 @@ func (r *SQLiteRepository) CreateWithBudgetUpdate(ctx context.Context, t *transa
 	}
 
 	if t.Type == transaction.TypeExpense {
-		if err = r.updateMatchingActiveBudgetSpentTx(ctx, tx, familyID, t.CategoryID, t.AmountMinor); err != nil {
+		err = r.updateMatchingActiveBudgetSpentTx(ctx, tx, familyID, t.CategoryID, t.AmountMinor, t.Date)
+		if err != nil {
 			return fmt.Errorf("failed to update budget after transaction create: %w", err)
 		}
 	}
@@ -187,6 +164,8 @@ func (r *SQLiteRepository) createWithFamilyID(
 	if err := prepareTransactionForCreate(t); err != nil {
 		return err
 	}
+
+	t.Tags = normalizeTags(t.Tags)
 
 	tagsJSON, err := json.Marshal(t.Tags)
 	if err != nil {
@@ -242,6 +221,15 @@ func validateTransactionForCreate(t *transaction.Transaction) error {
 	return nil
 }
 
+// normalizeTags превращает nil в пустой список: колонка и JSON-контракт держат массив, не null.
+func normalizeTags(tags []string) []string {
+	if tags == nil {
+		return []string{}
+	}
+
+	return tags
+}
+
 func prepareTransactionForCreate(t *transaction.Transaction) error {
 	if t.Date.After(date.FromTime(time.Now().AddDate(1, 0, 0))) {
 		return errors.New("transaction date cannot be more than 1 year in the future")
@@ -263,11 +251,12 @@ func (r *SQLiteRepository) updateMatchingActiveBudgetSpentTx(
 	familyID uuid.UUID,
 	categoryID uuid.UUID,
 	amountMinor money.Minor,
+	on date.Date,
 ) error {
 	now := time.Now()
-	today := date.FromTime(now)
 
-	// Match current service semantics: only currently active budgets and first matching category.
+	// Бюджет выбирается по дате операции, а не по «сегодня»: зона процесса не обязана
+	// совпадать с зоной семьи, а операция может быть задним числом.
 	var budgetID string
 	selectQuery := `
 		SELECT id
@@ -278,7 +267,7 @@ func (r *SQLiteRepository) updateMatchingActiveBudgetSpentTx(
 		ORDER BY start_date DESC, name
 		LIMIT 1`
 
-	err := tx.QueryRowContext(ctx, selectQuery, familyID.String(), today, today, sqlitehelpers.UUIDToString(categoryID)).
+	err := tx.QueryRowContext(ctx, selectQuery, familyID.String(), on, on, sqlitehelpers.UUIDToString(categoryID)).
 		Scan(&budgetID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -540,7 +529,8 @@ func (r *SQLiteRepository) Update(ctx context.Context, t *transaction.Transactio
 	// Update timestamp
 	t.UpdatedAt = time.Now()
 
-	// Convert tags to JSON
+	t.Tags = normalizeTags(t.Tags)
+
 	tagsJSON, err := json.Marshal(t.Tags)
 	if err != nil {
 		return fmt.Errorf("failed to marshal tags: %w", err)
@@ -649,104 +639,6 @@ func (r *SQLiteRepository) DeleteBulk(ctx context.Context, ids []uuid.UUID) (int
 	}
 
 	return int(rowsAffected), nil
-}
-
-// GetSummary returns transaction summary for a family
-func (r *SQLiteRepository) GetSummary(
-	ctx context.Context,
-	startDate, endDate date.Date,
-) (*Summary, error) {
-	// Get the single family ID
-	familyID, err := r.getSingleFamilyID(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get family ID: %w", err)
-	}
-
-	query := `
-		SELECT
-			COUNT(*) as total_count,
-			COUNT(CASE WHEN type = 'income' THEN 1 END) as income_count,
-			COUNT(CASE WHEN type = 'expense' THEN 1 END) as expense_count,
-			COALESCE(SUM(CASE WHEN type = 'income' THEN amount_minor ELSE 0 END), 0) as total_income,
-			COALESCE(SUM(CASE WHEN type = 'expense' THEN amount_minor ELSE 0 END), 0) as total_expenses
-		FROM transactions
-		WHERE family_id = ? AND date BETWEEN ? AND ?`
-
-	// Средние считаются здесь, а не через SQL AVG: тот вернул бы дробь,
-	// и каждый вызывающий округлял бы её по-своему.
-	var summary Summary
-	err = r.db.QueryRowContext(ctx, query, sqlitehelpers.UUIDToString(familyID), startDate, endDate).Scan(
-		&summary.TotalCount, &summary.IncomeCount, &summary.ExpenseCount,
-		&summary.TotalIncomeMinor, &summary.TotalExpensesMinor,
-	)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to get transaction summary: %w", err)
-	}
-
-	summary.BalanceMinor = summary.TotalIncomeMinor - summary.TotalExpensesMinor
-	summary.AvgIncomeMinor = summary.TotalIncomeMinor.DivRound(int64(summary.IncomeCount))
-	summary.AvgExpenseMinor = summary.TotalExpensesMinor.DivRound(int64(summary.ExpenseCount))
-	summary.FamilyID = familyID
-	summary.StartDate = startDate
-	summary.EndDate = endDate
-
-	return &summary, nil
-}
-
-// GetMonthlySummary returns monthly transaction summary
-func (r *SQLiteRepository) GetMonthlySummary(
-	ctx context.Context,
-	year, month int,
-) ([]*MonthlySummaryItem, error) {
-	// Get single family ID
-	familyID, err := r.getSingleFamilyID(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get family ID: %w", err)
-	}
-
-	// SQLite date extraction using substr for dates with timezones
-	// substr extracts date components directly from ISO 8601 format (YYYY-MM-DD...)
-	query := `
-		SELECT
-			c.name as category_name,
-			t.type,
-			COUNT(*) as transaction_count,
-			SUM(t.amount_minor) as total_amount
-		FROM transactions t
-		JOIN categories c ON t.category_id = c.id
-		WHERE t.family_id = ?
-		AND CAST(substr(t.date, 1, 4) AS INTEGER) = ?
-		AND CAST(substr(t.date, 6, 2) AS INTEGER) = ?
-		GROUP BY c.id, c.name, t.type
-		ORDER BY total_amount DESC`
-
-	rows, err := r.db.QueryContext(ctx, query, sqlitehelpers.UUIDToString(familyID), year, month)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get monthly summary: %w", err)
-	}
-	defer rows.Close()
-
-	var summaries []*MonthlySummaryItem
-	for rows.Next() {
-		var item MonthlySummaryItem
-		var typeStr string
-
-		err = rows.Scan(&item.CategoryName, &typeStr, &item.TransactionCount, &item.TotalAmountMinor)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan monthly summary item: %w", err)
-		}
-
-		item.Type = transaction.Type(typeStr)
-		item.AvgAmountMinor = item.TotalAmountMinor.DivRound(int64(item.TransactionCount))
-		summaries = append(summaries, &item)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration error: %w", err)
-	}
-
-	return summaries, nil
 }
 
 // GetAll retrieves transactions for the family with pagination

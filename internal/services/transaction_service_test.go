@@ -50,7 +50,7 @@ func TestTransactionService_CreateTransaction_Success(t *testing.T) {
 	// Setup expectations
 	userRepo.On("GetByID", ctx, userID).Return(testUser, nil)
 	categoryRepo.On("GetByID", ctx, categoryID).Return(testCategory, nil)
-	budgetRepo.On("GetActiveBudgets", ctx).Return([]*budget.Budget{testBudget}, nil)
+	budgetRepo.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).Return([]*budget.Budget{testBudget}, nil)
 	txRepo.On("Create", ctx, mock.AnythingOfType("*transaction.Transaction")).Return(nil)
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
 
@@ -130,7 +130,7 @@ func TestTransactionService_CreateTransaction_ExceedsBudget(t *testing.T) {
 	// Setup expectations
 	userRepo.On("GetByID", ctx, userID).Return(testUser, nil)
 	categoryRepo.On("GetByID", ctx, categoryID).Return(testCategory, nil)
-	budgetRepo.On("GetActiveBudgets", ctx).Return([]*budget.Budget{testBudget}, nil)
+	budgetRepo.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).Return([]*budget.Budget{testBudget}, nil)
 
 	// Execute
 	result, err := service.CreateTransaction(ctx, req)
@@ -295,7 +295,9 @@ func TestTransactionService_UpdateTransaction_Success(t *testing.T) {
 
 	// Setup expectations - UpdateTransaction doesn't validate category existence
 	txRepo.On("GetByID", ctx, testTx.ID).Return(testTx, nil)
-	budgetRepo.On("GetActiveBudgets", ctx).Return([]*budget.Budget{testBudget, oldBudget}, nil).Maybe()
+	budgetRepo.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).
+		Return([]*budget.Budget{testBudget, oldBudget}, nil).
+		Maybe()
 	txRepo.On("Update", ctx, mock.AnythingOfType("*transaction.Transaction")).Return(nil)
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil).Maybe()
 
@@ -330,7 +332,7 @@ func TestTransactionService_DeleteTransaction_Success(t *testing.T) {
 	// Setup expectations
 	txRepo.On("GetByID", ctx, existingTx.ID).Return(existingTx, nil)
 	txRepo.On("Delete", ctx, existingTx.ID).Return(nil)
-	budgetRepo.On("GetActiveBudgets", ctx).Return([]*budget.Budget{testBudget}, nil)
+	budgetRepo.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).Return([]*budget.Budget{testBudget}, nil)
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
 
 	// Execute
@@ -358,7 +360,7 @@ func TestTransactionService_BulkDelete_SkipsUnknownIDs(t *testing.T) {
 	txRepo.On("GetByID", ctx, existingTx.ID).Return(existingTx, nil)
 	txRepo.On("GetByID", ctx, missingID).Return(nil, errors.New("not found"))
 	txRepo.On("DeleteBulk", ctx, ids).Return(1, nil)
-	budgetRepo.On("GetActiveBudgets", ctx).Return([]*budget.Budget{testBudget}, nil)
+	budgetRepo.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).Return([]*budget.Budget{testBudget}, nil)
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
 
 	deleted, err := service.BulkDelete(ctx, ids)
@@ -422,7 +424,9 @@ func TestTransactionService_BulkCategorizeTransactions_Success(t *testing.T) {
 	txRepo.On("GetByID", ctx, tx2.ID).Return(tx2, nil)
 	categoryRepo.On("GetByID", ctx, newCategoryID).Return(testCategory, nil).Once() // Called once for validation
 	txRepo.On("Update", ctx, mock.AnythingOfType("*transaction.Transaction")).Return(nil).Times(2)
-	budgetRepo.On("GetActiveBudgets", ctx).Return([]*budget.Budget{oldBudget, newBudget}, nil).Maybe()
+	budgetRepo.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).
+		Return([]*budget.Budget{oldBudget, newBudget}, nil).
+		Maybe()
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).
 		Return(nil).
 		Maybe()
@@ -504,10 +508,10 @@ func TestTransactionService_ValidateTransactionLimits_WithinBudget(t *testing.T)
 	testBudget.SpentMinor = 10000
 
 	// Setup expectations
-	budgetRepo.On("GetActiveBudgets", ctx).Return([]*budget.Budget{testBudget}, nil)
+	budgetRepo.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).Return([]*budget.Budget{testBudget}, nil)
 
 	// Execute
-	err := service.ValidateTransactionLimits(ctx, categoryID, amount, transaction.TypeExpense)
+	err := service.ValidateTransactionLimits(ctx, categoryID, amount, transaction.TypeExpense, date.Today(time.UTC))
 
 	// Assert
 	require.NoError(t, err)
@@ -526,10 +530,10 @@ func TestTransactionService_ValidateTransactionLimits_ExceedsBudget(t *testing.T
 	testBudget.SpentMinor = 10000
 
 	// Setup expectations
-	budgetRepo.On("GetActiveBudgets", ctx).Return([]*budget.Budget{testBudget}, nil)
+	budgetRepo.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).Return([]*budget.Budget{testBudget}, nil)
 
 	// Execute
-	err := service.ValidateTransactionLimits(ctx, categoryID, amount, transaction.TypeExpense)
+	err := service.ValidateTransactionLimits(ctx, categoryID, amount, transaction.TypeExpense, date.Today(time.UTC))
 
 	// Assert
 	require.Error(t, err)
@@ -546,7 +550,7 @@ func TestTransactionService_ValidateTransactionLimits_IncomeTransaction(t *testi
 	amount := money.Minor(100_000)
 
 	// Execute - income transactions should not check budget limits
-	err := service.ValidateTransactionLimits(ctx, categoryID, amount, transaction.TypeIncome)
+	err := service.ValidateTransactionLimits(ctx, categoryID, amount, transaction.TypeIncome, date.Today(time.UTC))
 
 	// Assert
 	require.NoError(t, err)
@@ -560,10 +564,10 @@ func TestTransactionService_ValidateTransactionLimits_NoBudget(t *testing.T) {
 	amount := money.Minor(100_000)
 
 	// Setup expectations - no budget found
-	budgetRepo.On("GetActiveBudgets", ctx).Return([]*budget.Budget{}, nil)
+	budgetRepo.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).Return([]*budget.Budget{}, nil)
 
 	// Execute
-	err := service.ValidateTransactionLimits(ctx, categoryID, amount, transaction.TypeExpense)
+	err := service.ValidateTransactionLimits(ctx, categoryID, amount, transaction.TypeExpense, date.Today(time.UTC))
 
 	// Assert
 	require.NoError(t, err) // No budget means no limit
@@ -582,7 +586,9 @@ func TestTransactionService_BulkDelete_DeduplicatesIDs(t *testing.T) {
 
 	txRepo.On("GetByID", ctx, existingTx.ID).Return(existingTx, nil).Once()
 	txRepo.On("DeleteBulk", ctx, []uuid.UUID{existingTx.ID}).Return(1, nil)
-	budgetRepo.On("GetActiveBudgets", ctx).Return([]*budget.Budget{testBudget}, nil).Once()
+	budgetRepo.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).
+		Return([]*budget.Budget{testBudget}, nil).
+		Once()
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil).Once()
 
 	deleted, err := service.BulkDelete(ctx, []uuid.UUID{existingTx.ID, existingTx.ID})

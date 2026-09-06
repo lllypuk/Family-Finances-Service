@@ -471,16 +471,18 @@ func TestReportAPI_GenerateAndExport(t *testing.T) {
 	tx := testhelpers.CreateTestTransaction(
 		testServer.AuthFamily.ID, testServer.AuthUser.ID, cat.ID, transaction.TypeExpense,
 	)
+	// Дата — в зоне семьи: границы периода отчёта сервис считает по ней, а не по зоне процесса.
+	today := date.Today(testServer.AuthFamily.Location())
 	tx.AmountMinor = 15_050
-	tx.Date = date.Today(time.UTC).AddDays(-1)
+	tx.Date = today
 	require.NoError(t, testServer.Repos.Transaction.Create(ctx, tx))
 
 	request := handlers.CreateReportRequest{
 		Name:      "Export Report",
 		Type:      "expenses",
 		Period:    "monthly",
-		StartDate: date.Today(time.UTC).AddDays(-7),
-		EndDate:   date.Today(time.UTC),
+		StartDate: today.AddDays(-7),
+		EndDate:   today,
 	}
 	body, err := json.Marshal(request)
 	require.NoError(t, err)
@@ -515,7 +517,12 @@ func TestReportAPI_GenerateAndExport(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, rows)
 	assert.Equal(t, []string{"Category", "Amount Minor", "Currency", "Percentage", "Transaction Count"}, rows[0])
+	require.Len(t, rows, 3, "заголовок, одна категория и TOTAL: %v", rows)
+	assert.Equal(t, cat.Name, rows[1][0])
+	assert.Equal(t, "15050", rows[1][1])
+	assert.Equal(t, testServer.AuthFamily.Currency, rows[1][2])
 	assert.Equal(t, "TOTAL", rows[len(rows)-1][0])
+	assert.Equal(t, "15050", rows[len(rows)-1][1])
 }
 
 // TestReportAPI_CreateReport_CustomPeriodKeepsDates — при period=custom границы берутся из запроса,
@@ -563,7 +570,8 @@ func TestStatsAPI_Summary(t *testing.T) {
 		testServer.AuthFamily.ID, testServer.AuthUser.ID, expenseCat.ID, transaction.TypeExpense,
 	)
 	expense.AmountMinor = 20_000
-	expense.Date = date.Today(time.UTC)
+	// Зона семьи, не UTC: сервис считает текущий месяц по family.Timezone.
+	expense.Date = date.Today(testServer.AuthFamily.Location())
 	require.NoError(t, testServer.Repos.Transaction.Create(ctx, expense))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/summary", nil)
@@ -624,4 +632,30 @@ func TestReportAPI_CreateReport_RejectsInvertedDateRange(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 	require.NotEmpty(t, response.Error.Details)
 	assert.Equal(t, "end_date", response.Error.Details[0].Field)
+}
+
+// TestReportAPI_CreateReport_RejectsMissingStartDate — пропущенная граница периода
+// отбивается валидатором (422), а не превращается в 500 в фильтре транзакций.
+func TestReportAPI_CreateReport_RejectsMissingStartDate(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+
+	body := mustJSON(t, map[string]any{
+		"name":     "Без начала",
+		"type":     "expenses",
+		"period":   "monthly",
+		"end_date": "2026-03-31",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/reports", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	testServer.Auth(t).Apply(req)
+	rec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Error.Details, 1)
+	assert.Equal(t, "start_date", response.Error.Details[0].Field)
 }

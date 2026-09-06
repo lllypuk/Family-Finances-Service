@@ -25,7 +25,21 @@ var (
 	ErrBudgetAlreadyExceeded   = errors.New("cannot update budget: amount is less than already spent")
 	ErrBudgetCalculationFailed = errors.New("failed to calculate budget metrics")
 	ErrInsufficientBudgetFunds = errors.New("insufficient budget funds")
+	ErrBudgetAmountTooLarge    = errors.New("budget amount exceeds the maximum")
 )
+
+// maxBudgetAmountMinor — тот же потолок, что в репозитории и в openapi (Money.maximum);
+// здесь он нужен, чтобы клиент получил 422, а не 500 из слоя данных.
+const maxBudgetAmountMinor = money.Minor(99_999_999_999)
+
+// validateBudgetAmountBounds — верхняя граница суммы бюджета.
+func validateBudgetAmountBounds(amount money.Minor) error {
+	if amount > maxBudgetAmountMinor {
+		return fmt.Errorf("%w: %d", ErrBudgetAmountTooLarge, amount)
+	}
+
+	return nil
+}
 
 // Repository interfaces needed for BudgetService
 
@@ -33,7 +47,7 @@ type BudgetRepository interface {
 	Create(ctx context.Context, budget *budget.Budget) error
 	GetByID(ctx context.Context, id uuid.UUID) (*budget.Budget, error)
 	GetAll(ctx context.Context) ([]*budget.Budget, error)
-	GetActiveBudgets(ctx context.Context) ([]*budget.Budget, error)
+	GetActiveBudgets(ctx context.Context, on date.Date) ([]*budget.Budget, error)
 	Update(ctx context.Context, budget *budget.Budget) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetByCategory(ctx context.Context, categoryID *uuid.UUID) ([]*budget.Budget, error)
@@ -88,7 +102,7 @@ func NewBudgetServiceWithLogger(
 	return &BudgetServiceImpl{
 		budgetRepo:      budgetRepo,
 		transactionRepo: transactionRepo,
-		validator:       validator.New(),
+		validator:       newValidator(),
 		logger:          logger,
 	}
 }
@@ -101,6 +115,10 @@ func (s *BudgetServiceImpl) CreateBudget(ctx context.Context, req dto.CreateBudg
 
 	// Validate budget period
 	if err := req.ValidatePeriod(); err != nil {
+		return nil, err
+	}
+
+	if err := validateBudgetAmountBounds(req.AmountMinor); err != nil {
 		return nil, err
 	}
 
@@ -206,11 +224,6 @@ func (s *BudgetServiceImpl) UpdateBudget(
 		return nil, fmt.Errorf("validation failed: %w", err)
 	}
 
-	// Validate period if both dates are being updated
-	if err := req.ValidatePeriod(); err != nil {
-		return nil, err
-	}
-
 	// Get existing budget
 	existingBudget, err := s.budgetRepo.GetByID(ctx, id)
 	if err != nil {
@@ -222,39 +235,17 @@ func (s *BudgetServiceImpl) UpdateBudget(
 		s.logRecalculationWarning(ctx, "update_budget", existingBudget.ID, recalcErr)
 	}
 
-	// Store original values for validation
 	originalStartDate := existingBudget.StartDate
 	originalEndDate := existingBudget.EndDate
 
-	// Update fields if provided
-	if req.Name != nil {
-		existingBudget.Name = *req.Name
+	if err = applyBudgetUpdate(existingBudget, req); err != nil {
+		return nil, err
 	}
-	if req.AmountMinor != nil {
-		// Validate that new amount is not less than already spent
-		if *req.AmountMinor < existingBudget.SpentMinor {
-			return nil, fmt.Errorf("%w: new amount %d is less than spent %d",
-				ErrBudgetAlreadyExceeded, *req.AmountMinor, existingBudget.SpentMinor)
-		}
-		existingBudget.AmountMinor = *req.AmountMinor
-	}
-	if req.StartDate != nil {
-		existingBudget.StartDate = *req.StartDate
-	}
-	if req.EndDate != nil {
-		existingBudget.EndDate = *req.EndDate
-	}
-	if req.IsActive != nil {
-		existingBudget.IsActive = *req.IsActive
-	}
-	existingBudget.UpdatedAt = time.Now()
 
 	// If dates changed, validate period overlap
-	if req.StartDate != nil || req.EndDate != nil {
-		if existingBudget.StartDate != originalStartDate || existingBudget.EndDate != originalEndDate {
-			if validateErr := s.validateBudgetPeriodForUpdate(ctx, existingBudget); validateErr != nil {
-				return nil, validateErr
-			}
+	if existingBudget.StartDate != originalStartDate || existingBudget.EndDate != originalEndDate {
+		if validateErr := s.validateBudgetPeriodForUpdate(ctx, existingBudget); validateErr != nil {
+			return nil, validateErr
 		}
 	}
 
@@ -264,6 +255,40 @@ func (s *BudgetServiceImpl) UpdateBudget(
 	}
 
 	return existingBudget, nil
+}
+
+// applyBudgetUpdate переносит заданные поля в бюджет. Порядок дат проверяется по уже
+// применённым значениям: обновление одной границы иначе упало бы на CHECK в БД.
+func applyBudgetUpdate(b *budget.Budget, req dto.UpdateBudgetDTO) error {
+	if req.Name != nil {
+		b.Name = *req.Name
+	}
+	if req.AmountMinor != nil {
+		if *req.AmountMinor < b.SpentMinor {
+			return fmt.Errorf("%w: new amount %d is less than spent %d",
+				ErrBudgetAlreadyExceeded, *req.AmountMinor, b.SpentMinor)
+		}
+		if err := validateBudgetAmountBounds(*req.AmountMinor); err != nil {
+			return err
+		}
+		b.AmountMinor = *req.AmountMinor
+	}
+	if req.StartDate != nil {
+		b.StartDate = *req.StartDate
+	}
+	if req.EndDate != nil {
+		b.EndDate = *req.EndDate
+	}
+	if req.IsActive != nil {
+		b.IsActive = *req.IsActive
+	}
+	b.UpdatedAt = time.Now()
+
+	if !b.EndDate.After(b.StartDate) {
+		return dto.ErrInvalidBudgetPeriod
+	}
+
+	return nil
 }
 
 // DeleteBudget deletes a budget
@@ -287,7 +312,7 @@ func (s *BudgetServiceImpl) GetActiveBudgets(
 	ctx context.Context,
 	on date.Date,
 ) ([]*budget.Budget, error) {
-	allBudgets, err := s.budgetRepo.GetActiveBudgets(ctx)
+	allBudgets, err := s.budgetRepo.GetActiveBudgets(ctx, on)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active budgets: %w", err)
 	}
@@ -325,6 +350,7 @@ func (s *BudgetServiceImpl) CheckBudgetLimits(
 	ctx context.Context,
 	categoryID uuid.UUID,
 	amount money.Minor,
+	on date.Date,
 ) error {
 	budgets, err := s.GetBudgetsByCategory(ctx, categoryID)
 	if err != nil {
@@ -334,7 +360,7 @@ func (s *BudgetServiceImpl) CheckBudgetLimits(
 
 	// Check each active budget for the category
 	for _, b := range budgets {
-		if !s.isBudgetActiveOnDate(b, date.Today(time.UTC)) {
+		if !s.isBudgetActiveOnDate(b, on) {
 			continue
 		}
 

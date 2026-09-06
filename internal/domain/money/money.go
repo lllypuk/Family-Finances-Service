@@ -1,7 +1,11 @@
 // Package money хранит суммы в минимальных единицах валюты (копейки) целым числом.
 package money
 
-import "strconv"
+import (
+	"database/sql/driver"
+	"fmt"
+	"strconv"
+)
 
 const (
 	percentBase = 100
@@ -9,10 +13,9 @@ const (
 	half        = 2
 )
 
-// Subunits — сколько минимальных единиц в основной (копеек в рубле).
-const Subunits = 100
-
 // Minor — сумма в минимальных единицах валюты. Сложение и вычитание — обычными операторами.
+//
+//nolint:recvcheck // Scan обязан быть на указателе, остальное — значение
 type Minor int64
 
 // Abs возвращает модуль суммы.
@@ -57,4 +60,26 @@ func (m Minor) DivRound(n int64) Minor {
 // MarshalJSON пишет сумму числом, а не строкой.
 func (m Minor) MarshalJSON() ([]byte, error) {
 	return []byte(strconv.FormatInt(int64(m), decimalBase)), nil
+}
+
+// Value пишет сумму в БД целым: без него запись зависела бы от того, что каждый
+// вызов не забыл привести к int64.
+func (m Minor) Value() (driver.Value, error) {
+	return int64(m), nil
+}
+
+// Scan читает INTEGER-колонку.
+func (m *Minor) Scan(src any) error {
+	switch v := src.(type) {
+	case nil:
+		*m = 0
+	case int64:
+		*m = Minor(v)
+	case float64:
+		*m = Minor(v)
+	default:
+		return fmt.Errorf("money: unsupported source type %T", src)
+	}
+
+	return nil
 }

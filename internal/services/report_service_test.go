@@ -214,7 +214,7 @@ func TestReportService_GenerateIncomeReport(t *testing.T) {
 
 // Tests for GenerateBudgetComparisonReport
 func TestReportService_GenerateBudgetComparisonReport(t *testing.T) {
-	service, _, _, mockTransactionService, mockBudgetService, _ := setupReportService()
+	service, _, _, mockTransactionService, mockBudgetService, mockCategoryService := setupReportService()
 	ctx := context.Background()
 
 	categoryID := uuid.New()
@@ -227,14 +227,18 @@ func TestReportService_GenerateBudgetComparisonReport(t *testing.T) {
 
 	// Create test expense transactions
 	transactions := []*transaction.Transaction{
-		createTestTransaction(uuid.New(), 30000, transaction.TypeExpense, date.Today(time.UTC).AddDays(-10)),
-		createTestTransaction(uuid.New(), 25000, transaction.TypeExpense, date.Today(time.UTC).AddDays(-5)),
+		createTestTransactionWithCategory(
+			uuid.New(), categoryID, 30000, transaction.TypeExpense, date.Today(time.UTC).AddDays(-10)),
+		createTestTransactionWithCategory(
+			uuid.New(), categoryID, 25000, transaction.TypeExpense, date.Today(time.UTC).AddDays(-5)),
 	}
 
 	// Setup mock expectations
 	mockBudgetService.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).Return(budgets, nil)
 	mockTransactionService.On("GetAllTransactions", ctx, mock.AnythingOfType("dto.TransactionFilterDTO")).
 		Return(transactions, nil)
+	mockCategoryService.On("GetCategoryByID", ctx, categoryID).
+		Return(&category.Category{ID: categoryID, Name: "Groceries", Type: category.TypeExpense}, nil)
 
 	// Execute
 	result, err := service.GenerateBudgetComparisonReport(ctx, period)
@@ -248,8 +252,19 @@ func TestReportService_GenerateBudgetComparisonReport(t *testing.T) {
 	assert.Equal(t, money.Minor(45_000), result.TotalVarianceMinor) // 1000 - 550
 	assert.InDelta(t, 55.0, result.Utilization, 0.01)               // (550/1000) * 100
 
+	require.Len(t, result.Categories, 1)
+	comparison := result.Categories[0]
+	assert.Equal(t, categoryID, comparison.CategoryID)
+	assert.Equal(t, "Groceries", comparison.CategoryName)
+	assert.Equal(t, money.Minor(100_000), comparison.BudgetAmountMinor)
+	assert.Equal(t, money.Minor(55_000), comparison.ActualAmountMinor)
+	assert.Equal(t, money.Minor(45_000), comparison.VarianceMinor)
+	assert.InDelta(t, 55.0, comparison.Utilization, 0.01)
+	assert.Equal(t, "under_budget", comparison.Status)
+
 	mockBudgetService.AssertExpectations(t)
 	mockTransactionService.AssertExpectations(t)
+	mockCategoryService.AssertExpectations(t)
 }
 
 func TestReportService_GenerateBudgetComparisonReport_NoBudgets(t *testing.T) {
@@ -436,11 +451,17 @@ func TestReportService_GenerateReport(t *testing.T) {
 				budgets := []*budget.Budget{createTestBudget(uuid.New(), 100000, categoryID)}
 				m.budget.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).Return(budgets, nil)
 				expectTransactions(ctx, m.transaction, expenses)
+				expectCategory(ctx, m.category, categoryID, "Groceries", category.TypeExpense)
 			},
 			assertData: func(t *testing.T, rep *report.Report) {
 				assert.Equal(t, money.Minor(50000), rep.Data.TotalExpensesMinor)
-				// Разбивка по бюджетам пока пустая: generateBudgetCategoryComparisons — заглушка.
-				assert.Empty(t, rep.Data.BudgetComparison)
+				require.Len(t, rep.Data.BudgetComparison, 1)
+				comparison := rep.Data.BudgetComparison[0]
+				assert.Equal(t, "Groceries", comparison.BudgetName)
+				assert.Equal(t, money.Minor(100_000), comparison.PlannedMinor)
+				assert.Equal(t, money.Minor(50_000), comparison.ActualMinor)
+				assert.Equal(t, money.Minor(50_000), comparison.DifferenceMinor)
+				assert.InDelta(t, 50.0, comparison.Percentage, 0.01)
 			},
 		},
 		{
@@ -469,10 +490,16 @@ func TestReportService_GenerateReport(t *testing.T) {
 			reportType: report.TypeCategoryBreak,
 			setup: func(ctx context.Context, m reportServiceMocks) {
 				expectTransactions(ctx, m.transaction, expenses)
+				expectCategory(ctx, m.category, categoryID, "Groceries", category.TypeExpense)
 				m.category.On("GetCategoryHierarchy", ctx).Return([]*category.Category{}, nil)
 			},
 			assertData: func(t *testing.T, rep *report.Report) {
-				assert.Empty(t, rep.Data.CategoryBreakdown)
+				require.Len(t, rep.Data.CategoryBreakdown, 1)
+				item := rep.Data.CategoryBreakdown[0]
+				assert.Equal(t, "Groceries", item.CategoryName)
+				assert.Equal(t, money.Minor(50_000), item.AmountMinor)
+				assert.Equal(t, 2, item.Count)
+				assert.InDelta(t, 100.0, item.Percentage, 0.01)
 			},
 		},
 	}
@@ -784,4 +811,46 @@ func TestReportService_GenerateExpenseReport_SmallAmounts(t *testing.T) {
 	require.Len(t, result.CategoryBreakdown, 2)
 	assert.InDelta(t, 66.67, result.CategoryBreakdown[0].Percentage, 0.01)
 	assert.InDelta(t, 33.33, result.CategoryBreakdown[1].Percentage, 0.01)
+}
+
+// TestReportService_PeriodBoundsPerPeriod — границы каждого периода считаются в зоне семьи;
+// неделя начинается с воскресенья, год — с 1 января.
+func TestReportService_PeriodBoundsPerPeriod(t *testing.T) {
+	loc, err := time.LoadLocation("Europe/Moscow")
+	require.NoError(t, err)
+	today := date.Today(loc)
+	firstOfMonth, lastOfMonth := today.MonthBounds()
+	weekStart := today.AddDays(-int(today.In(loc).Weekday()))
+
+	tests := []struct {
+		name   string
+		period report.Period
+		from   date.Date
+		to     date.Date
+	}{
+		{"daily", report.PeriodDaily, today, today},
+		{"weekly", report.PeriodWeekly, weekStart, weekStart.AddDays(6)},
+		{"monthly", report.PeriodMonthly, firstOfMonth, lastOfMonth},
+		{
+			"yearly",
+			report.PeriodYearly,
+			date.New(today.Year, time.January, 1),
+			date.New(today.Year, time.December, 31),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service, _, _, _, mockBudgetService, _ := setupReportService()
+			ctx := context.Background()
+			mockBudgetService.On("GetActiveBudgets", ctx, tt.from).Return([]*budget.Budget{}, nil)
+
+			result, reportErr := service.GenerateBudgetComparisonReport(ctx, tt.period)
+
+			require.NoError(t, reportErr)
+			assert.Equal(t, tt.from, result.StartDate)
+			assert.Equal(t, tt.to, result.EndDate)
+			mockBudgetService.AssertExpectations(t)
+		})
+	}
 }

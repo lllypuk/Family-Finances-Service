@@ -29,7 +29,34 @@ func OpenDatabase(cfg *Config) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
+	if err = verifySchema(conn.DB()); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+
 	return conn.DB(), nil
+}
+
+// verifySchema отбивает старт на БД со старой схемой. Миграция 001 переписывается на месте
+// (migrations/README.md), а golang-migrate помнит только номер версии: на уже размеченной БД
+// Up() молча возвращает ErrNoChange, и без этой пробы сервис поднялся бы, отвечая 500 на всё.
+func verifySchema(db *sql.DB) error {
+	probes := []string{
+		"SELECT amount_minor, date FROM transactions LIMIT 0",
+		"SELECT amount_minor, spent_minor, start_date, end_date FROM budgets LIMIT 0",
+		"SELECT timezone FROM families LIMIT 0",
+	}
+
+	for _, probe := range probes {
+		if _, err := db.ExecContext(context.Background(), probe); err != nil {
+			return fmt.Errorf(
+				"outdated database schema (%w): recreate the database — make db-reset, then `setup` again",
+				err,
+			)
+		}
+	}
+
+	return nil
 }
 
 // Setup создаёт семью, категории и админа одной транзакцией.
