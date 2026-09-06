@@ -110,6 +110,9 @@ func (s *familyService) UpdateFamily(ctx context.Context, req dto.UpdateFamilyDT
 		}
 		existingFamily.Currency = *req.Currency
 	}
+	if req.Timezone != nil {
+		existingFamily.Timezone = *req.Timezone
+	}
 	existingFamily.UpdatedAt = time.Now()
 
 	// Save to database

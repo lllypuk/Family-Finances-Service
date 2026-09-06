@@ -171,12 +171,12 @@ JSON: `amount_minor` (int64), `date` (`"2026-09-04"`), `currency` и `timezone` 
 - Modify: `internal/services/transaction_service.go`, `budget_service.go`, `report_service.go`,
   `stats_service.go`, `family_service.go`, `internal/services/dto/*.go`, все `*_test.go` рядом
 
-- [ ] `TransactionService`/`BudgetService`: `money.Minor`; `ValidateTransactionLimits`, `UpdateBudgetSpent`, `CalculateBudgetUtilization` через `Percent`/`DivRound`
-- [ ] `ReportService`: средние (`total / days`, `total / count`) через `DivRound`; проценты через `Percent`; CSV пишет `amount_minor` целым и колонку `currency`
-- [ ] `StatsService`: границы периода по `family.Timezone`, доли категорий через `Percent`
-- [ ] `FamilyService.UpdateFamily`: смена `currency` при `CountTransactions > 0` → `ErrCurrencyLocked`; `timezone` валидируется `time.LoadLocation`
-- [ ] тесты: проценты не нулевые при малых суммах (1 из 3 → 33.33), средние округлены half-up, `ErrCurrencyLocked`, невалидный timezone → ошибка валидации
-- [ ] `make fmt && make test && make lint` — зелёные
+- [x] `TransactionService`/`BudgetService`: `money.Minor`; `ValidateTransactionLimits`, `UpdateBudgetSpent`, `CalculateBudgetUtilization` через `Percent`/`DivRound`
+- [x] `ReportService`: средние (`total / days`, `total / count`) через `DivRound`; проценты через `Percent`; CSV пишет `amount_minor` целым и колонку `currency`
+- [x] `StatsService`: границы периода по `family.Timezone`, доли категорий через `Percent`
+- [x] `FamilyService.UpdateFamily`: смена `currency` при `CountTransactions > 0` → `ErrCurrencyLocked`; `timezone` валидируется `time.LoadLocation`
+- [x] тесты: проценты не нулевые при малых суммах (1 из 3 → 33.33), средние округлены half-up, `ErrCurrencyLocked`, невалидный timezone → ошибка валидации
+- [x] `make fmt && make test && make lint` — зелёные
 
 ### Task 7: Обработчики, идемпотентный `POST`, спецификация в обе стороны
 

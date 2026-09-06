@@ -95,12 +95,12 @@ func (h *TransactionHandler) createTransactionViaService(
 	userID uuid.UUID,
 ) error {
 	createdTx, err := h.transactionService.CreateTransaction(c.Request().Context(), dto.CreateTransactionDTO{
-		Amount:      req.Amount,
+		AmountMinor: money.FromFloat(req.Amount),
 		Type:        transaction.Type(req.Type),
 		Description: req.Description,
 		CategoryID:  req.CategoryID,
 		UserID:      userID,
-		Date:        req.Date,
+		Date:        date.FromTime(req.Date),
 		Tags:        req.Tags,
 	})
 	if err != nil {
@@ -391,10 +391,22 @@ func (h *TransactionHandler) buildTransactionServiceFilter(filters TransactionFi
 		t := transaction.Type(*filters.Type)
 		filter.Type = &t
 	}
-	filter.DateFrom = filters.DateFrom
-	filter.DateTo = filters.DateTo
-	filter.AmountFrom = filters.AmountFrom
-	filter.AmountTo = filters.AmountTo
+	if filters.DateFrom != nil {
+		from := date.FromTime(*filters.DateFrom)
+		filter.DateFrom = &from
+	}
+	if filters.DateTo != nil {
+		to := date.FromTime(*filters.DateTo)
+		filter.DateTo = &to
+	}
+	if filters.AmountFrom != nil {
+		from := money.FromFloat(*filters.AmountFrom)
+		filter.AmountFromMinor = &from
+	}
+	if filters.AmountTo != nil {
+		to := money.FromFloat(*filters.AmountTo)
+		filter.AmountToMinor = &to
+	}
 	filter.Description = filters.Description
 	filter.Limit = filters.Limit
 	filter.Offset = filters.Offset
@@ -557,11 +569,17 @@ func (h *TransactionHandler) updateTransactionViaService(c echo.Context) error {
 	}
 
 	serviceReq := dto.UpdateTransactionDTO{
-		Amount:      req.Amount,
 		Description: req.Description,
 		CategoryID:  req.CategoryID,
-		Date:        req.Date,
 		Tags:        req.Tags,
+	}
+	if req.Amount != nil {
+		amount := money.FromFloat(*req.Amount)
+		serviceReq.AmountMinor = &amount
+	}
+	if req.Date != nil {
+		txDate := date.FromTime(*req.Date)
+		serviceReq.Date = &txDate
 	}
 	if req.Type != nil {
 		txType := transaction.Type(*req.Type)

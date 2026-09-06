@@ -55,7 +55,7 @@ func NewServices(
 	transactionService := NewTransactionServiceWithLogger(transactionRepo, budgetRepo, categoryRepo, userRepo, logger)
 	budgetService := NewBudgetServiceWithLogger(fullBudgetRepo, transactionRepo, logger)
 
-	statsService := NewStatsService(transactionService, budgetService, categoryService)
+	statsService := NewStatsService(transactionService, budgetService, categoryService, familyService)
 
 	// Create report service with dependencies on other services
 	reportService := NewReportService(
@@ -64,6 +64,7 @@ func NewServices(
 		fullBudgetRepo,
 		categoryRepo,
 		userRepo,
+		familyRepo,
 		transactionService,
 		budgetService,
 		categoryService,

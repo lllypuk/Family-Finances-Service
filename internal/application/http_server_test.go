@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -19,6 +18,8 @@ import (
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
@@ -251,7 +252,7 @@ func (m *MockTransactionService) BulkCategorizeTransactions(
 func (m *MockTransactionService) ValidateTransactionLimits(
 	ctx context.Context,
 	categoryID uuid.UUID,
-	amount float64,
+	amount money.Minor,
 	transactionType transaction.Type,
 ) error {
 	return nil
@@ -285,7 +286,7 @@ func (m *MockTransactionService) GetTransactionsByCategory(
 //nolint:revive // test mock
 func (m *MockTransactionService) GetTransactionsByDateRange(
 	ctx context.Context,
-	from, to time.Time,
+	from, to date.Date,
 ) ([]*transaction.Transaction, error) {
 	return nil, nil
 }
@@ -341,13 +342,13 @@ func (m *MockBudgetService) GetBudgetsByCategory(ctx context.Context, categoryID
 func (m *MockBudgetService) ValidateBudgetPeriod(
 	ctx context.Context,
 	categoryID *uuid.UUID,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 ) error {
 	return nil
 }
 
 //nolint:revive // test mock
-func (m *MockBudgetService) CheckBudgetLimits(ctx context.Context, categoryID uuid.UUID, amount float64) error {
+func (m *MockBudgetService) CheckBudgetLimits(ctx context.Context, categoryID uuid.UUID, amount money.Minor) error {
 	return nil
 }
 
@@ -357,12 +358,12 @@ func (m *MockBudgetService) GetBudgetStatus(ctx context.Context, budgetID uuid.U
 }
 
 //nolint:revive // test mock
-func (m *MockBudgetService) GetActiveBudgets(ctx context.Context, date time.Time) ([]*budget.Budget, error) {
+func (m *MockBudgetService) GetActiveBudgets(ctx context.Context, on date.Date) ([]*budget.Budget, error) {
 	return nil, nil
 }
 
 //nolint:revive // test mock
-func (m *MockBudgetService) UpdateBudgetSpent(ctx context.Context, budgetID uuid.UUID, amount float64) error {
+func (m *MockBudgetService) UpdateBudgetSpent(ctx context.Context, budgetID uuid.UUID, amount money.Minor) error {
 	return nil
 }
 
@@ -416,7 +417,7 @@ func (m *MockReportService) GenerateBudgetComparisonReport(
 //nolint:revive // test mock
 func (m *MockReportService) GenerateCashFlowReport(
 	ctx context.Context,
-	from, to time.Time,
+	from, to date.Date,
 ) (*dto.CashFlowReportDTO, error) {
 	return nil, nil //nolint:nilnil // test mock
 }

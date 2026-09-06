@@ -32,7 +32,7 @@ type SetupFamilyDTO struct {
 	FamilyName string `validate:"required,min=2,max=100"`
 	// Currency is a 3-character ISO currency code, for example "USD"
 	Currency string `validate:"required,len=3"`
-	// Timezone — IANA-имя; проверяется здесь, в Family попадает с планом 04 (A-06).
+	// Timezone — IANA-имя; тег timezone проверяет его через time.LoadLocation.
 	Timezone string `validate:"required,timezone"`
 	// First user (admin) data
 	Email     string `validate:"required,email,max=254"`
@@ -46,4 +46,5 @@ type SetupFamilyDTO struct {
 type UpdateFamilyDTO struct {
 	Name     *string `validate:"omitempty,min=2,max=100"`
 	Currency *string `validate:"omitempty,len=3"`
+	Timezone *string `validate:"omitempty,timezone"`
 }

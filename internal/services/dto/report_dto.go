@@ -5,6 +5,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/report"
 )
 
@@ -14,37 +16,37 @@ type ReportRequestDTO struct {
 	Type      report.Type    `json:"type"              validate:"required,oneof=expenses income budget cash_flow category_break"`
 	Period    report.Period  `json:"period"            validate:"required,oneof=daily weekly monthly yearly custom"`
 	UserID    uuid.UUID      `json:"user_id"           validate:"required"`
-	StartDate time.Time      `json:"start_date"        validate:"required"`
-	EndDate   time.Time      `json:"end_date"          validate:"required,gtfield=StartDate"`
+	StartDate date.Date      `json:"start_date"        validate:"required"`
+	EndDate   date.Date      `json:"end_date"          validate:"required"`
 	Filters   *ReportFilters `json:"filters,omitempty"`
 }
 
 // ReportFilters contains optional filters for report generation
 type ReportFilters struct {
-	CategoryIDs    []uuid.UUID `json:"category_ids,omitempty"`
-	UserIDs        []uuid.UUID `json:"user_ids,omitempty"`
-	MinAmount      *float64    `json:"min_amount,omitempty"   validate:"omitempty,min=0"`
-	MaxAmount      *float64    `json:"max_amount,omitempty"   validate:"omitempty,min=0"`
-	Description    string      `json:"description,omitempty"`
-	IncludeSubcats bool        `json:"include_subcategories"`
+	CategoryIDs    []uuid.UUID  `json:"category_ids,omitempty"`
+	UserIDs        []uuid.UUID  `json:"user_ids,omitempty"`
+	MinAmountMinor *money.Minor `json:"min_amount_minor,omitempty" validate:"omitempty,min=0"`
+	MaxAmountMinor *money.Minor `json:"max_amount_minor,omitempty" validate:"omitempty,min=0"`
+	Description    string       `json:"description,omitempty"`
+	IncludeSubcats bool         `json:"include_subcategories"`
 }
 
 // ExpenseReportDTO contains detailed expense report data
 type ExpenseReportDTO struct {
-	ID                uuid.UUID                  `json:"id"`
-	Name              string                     `json:"name"`
-	UserID            uuid.UUID                  `json:"user_id"`
-	Period            report.Period              `json:"period"`
-	StartDate         time.Time                  `json:"start_date"`
-	EndDate           time.Time                  `json:"end_date"`
-	TotalExpenses     float64                    `json:"total_expenses"`
-	AverageDaily      float64                    `json:"average_daily"`
-	CategoryBreakdown []CategoryBreakdownItemDTO `json:"category_breakdown"`
-	DailyBreakdown    []DailyExpenseDTO          `json:"daily_breakdown"`
-	TopExpenses       []TransactionSummaryDTO    `json:"top_expenses"`
-	Trends            ExpenseTrendsDTO           `json:"trends"`
-	Comparisons       ExpenseComparisonsDTO      `json:"comparisons"`
-	GeneratedAt       time.Time                  `json:"generated_at"`
+	ID                 uuid.UUID                  `json:"id"`
+	Name               string                     `json:"name"`
+	UserID             uuid.UUID                  `json:"user_id"`
+	Period             report.Period              `json:"period"`
+	StartDate          date.Date                  `json:"start_date"`
+	EndDate            date.Date                  `json:"end_date"`
+	TotalExpensesMinor money.Minor                `json:"total_expenses_minor"`
+	AverageDailyMinor  money.Minor                `json:"average_daily_minor"`
+	CategoryBreakdown  []CategoryBreakdownItemDTO `json:"category_breakdown"`
+	DailyBreakdown     []DailyExpenseDTO          `json:"daily_breakdown"`
+	TopExpenses        []TransactionSummaryDTO    `json:"top_expenses"`
+	Trends             ExpenseTrendsDTO           `json:"trends"`
+	Comparisons        ExpenseComparisonsDTO      `json:"comparisons"`
+	GeneratedAt        time.Time                  `json:"generated_at"`
 }
 
 // IncomeReportDTO contains detailed income report data
@@ -53,10 +55,10 @@ type IncomeReportDTO struct {
 	Name              string                     `json:"name"`
 	UserID            uuid.UUID                  `json:"user_id"`
 	Period            report.Period              `json:"period"`
-	StartDate         time.Time                  `json:"start_date"`
-	EndDate           time.Time                  `json:"end_date"`
-	TotalIncome       float64                    `json:"total_income"`
-	AverageDaily      float64                    `json:"average_daily"`
+	StartDate         date.Date                  `json:"start_date"`
+	EndDate           date.Date                  `json:"end_date"`
+	TotalIncomeMinor  money.Minor                `json:"total_income_minor"`
+	AverageDailyMinor money.Minor                `json:"average_daily_minor"`
 	CategoryBreakdown []CategoryBreakdownItemDTO `json:"category_breakdown"`
 	DailyBreakdown    []DailyIncomeDTO           `json:"daily_breakdown"`
 	TopSources        []TransactionSummaryDTO    `json:"top_sources"`
@@ -67,40 +69,40 @@ type IncomeReportDTO struct {
 
 // BudgetComparisonDTO contains budget vs actual spending comparison
 type BudgetComparisonDTO struct {
-	ID            uuid.UUID                     `json:"id"`
-	Name          string                        `json:"name"`
-	UserID        uuid.UUID                     `json:"user_id"`
-	Period        report.Period                 `json:"period"`
-	StartDate     time.Time                     `json:"start_date"`
-	EndDate       time.Time                     `json:"end_date"`
-	TotalBudget   float64                       `json:"total_budget"`
-	TotalSpent    float64                       `json:"total_spent"`
-	TotalVariance float64                       `json:"total_variance"`
-	Utilization   float64                       `json:"utilization_percentage"`
-	Categories    []BudgetCategoryComparisonDTO `json:"categories"`
-	Timeline      []BudgetTimelineDTO           `json:"timeline"`
-	Alerts        []BudgetAlertReportDTO        `json:"alerts"`
-	GeneratedAt   time.Time                     `json:"generated_at"`
+	ID                 uuid.UUID                     `json:"id"`
+	Name               string                        `json:"name"`
+	UserID             uuid.UUID                     `json:"user_id"`
+	Period             report.Period                 `json:"period"`
+	StartDate          date.Date                     `json:"start_date"`
+	EndDate            date.Date                     `json:"end_date"`
+	TotalBudgetMinor   money.Minor                   `json:"total_budget_minor"`
+	TotalSpentMinor    money.Minor                   `json:"total_spent_minor"`
+	TotalVarianceMinor money.Minor                   `json:"total_variance_minor"`
+	Utilization        float64                       `json:"utilization_percentage"`
+	Categories         []BudgetCategoryComparisonDTO `json:"categories"`
+	Timeline           []BudgetTimelineDTO           `json:"timeline"`
+	Alerts             []BudgetAlertReportDTO        `json:"alerts"`
+	GeneratedAt        time.Time                     `json:"generated_at"`
 }
 
 // CashFlowReportDTO contains cash flow analysis
 type CashFlowReportDTO struct {
-	ID             uuid.UUID              `json:"id"`
-	Name           string                 `json:"name"`
-	UserID         uuid.UUID              `json:"user_id"`
-	Period         report.Period          `json:"period"`
-	StartDate      time.Time              `json:"start_date"`
-	EndDate        time.Time              `json:"end_date"`
-	OpeningBalance float64                `json:"opening_balance"`
-	ClosingBalance float64                `json:"closing_balance"`
-	NetCashFlow    float64                `json:"net_cash_flow"`
-	TotalInflows   float64                `json:"total_inflows"`
-	TotalOutflows  float64                `json:"total_outflows"`
-	DailyFlow      []DailyCashFlowDTO     `json:"daily_flow"`
-	WeeklyFlow     []WeeklyCashFlowDTO    `json:"weekly_flow"`
-	MonthlyFlow    []MonthlyCashFlowDTO   `json:"monthly_flow"`
-	Projections    CashFlowProjectionsDTO `json:"projections"`
-	GeneratedAt    time.Time              `json:"generated_at"`
+	ID                  uuid.UUID              `json:"id"`
+	Name                string                 `json:"name"`
+	UserID              uuid.UUID              `json:"user_id"`
+	Period              report.Period          `json:"period"`
+	StartDate           date.Date              `json:"start_date"`
+	EndDate             date.Date              `json:"end_date"`
+	OpeningBalanceMinor money.Minor            `json:"opening_balance_minor"`
+	ClosingBalanceMinor money.Minor            `json:"closing_balance_minor"`
+	NetCashFlowMinor    money.Minor            `json:"net_cash_flow_minor"`
+	TotalInflowsMinor   money.Minor            `json:"total_inflows_minor"`
+	TotalOutflowsMinor  money.Minor            `json:"total_outflows_minor"`
+	DailyFlow           []DailyCashFlowDTO     `json:"daily_flow"`
+	WeeklyFlow          []WeeklyCashFlowDTO    `json:"weekly_flow"`
+	MonthlyFlow         []MonthlyCashFlowDTO   `json:"monthly_flow"`
+	Projections         CashFlowProjectionsDTO `json:"projections"`
+	GeneratedAt         time.Time              `json:"generated_at"`
 }
 
 // CategoryBreakdownDTO contains category-based spending breakdown
@@ -109,8 +111,8 @@ type CategoryBreakdownDTO struct {
 	Name        string                       `json:"name"`
 	UserID      uuid.UUID                    `json:"user_id"`
 	Period      report.Period                `json:"period"`
-	StartDate   time.Time                    `json:"start_date"`
-	EndDate     time.Time                    `json:"end_date"`
+	StartDate   date.Date                    `json:"start_date"`
+	EndDate     date.Date                    `json:"end_date"`
 	Categories  []CategoryAnalysisDTO        `json:"categories"`
 	Hierarchy   []CategoryHierarchyReportDTO `json:"hierarchy"`
 	Trends      CategoryTrendsDTO            `json:"trends"`
@@ -121,77 +123,77 @@ type CategoryBreakdownDTO struct {
 // Supporting DTOs for detailed breakdown
 
 type CategoryBreakdownItemDTO struct {
-	CategoryID    uuid.UUID  `json:"category_id"`
-	CategoryName  string     `json:"category_name"`
-	CategoryType  string     `json:"category_type"`
-	Amount        float64    `json:"amount"`
-	Percentage    float64    `json:"percentage"`
-	Count         int        `json:"transaction_count"`
-	AverageAmount float64    `json:"average_amount"`
-	ParentID      *uuid.UUID `json:"parent_id,omitempty"`
+	CategoryID         uuid.UUID   `json:"category_id"`
+	CategoryName       string      `json:"category_name"`
+	CategoryType       string      `json:"category_type"`
+	AmountMinor        money.Minor `json:"amount_minor"`
+	Percentage         float64     `json:"percentage"`
+	Count              int         `json:"transaction_count"`
+	AverageAmountMinor money.Minor `json:"average_amount_minor"`
+	ParentID           *uuid.UUID  `json:"parent_id,omitempty"`
 }
 
 type DailyExpenseDTO struct {
-	Date       time.Time `json:"date"`
-	Amount     float64   `json:"amount"`
-	Count      int       `json:"transaction_count"`
-	Categories []string  `json:"top_categories"`
+	Date        date.Date   `json:"date"`
+	AmountMinor money.Minor `json:"amount_minor"`
+	Count       int         `json:"transaction_count"`
+	Categories  []string    `json:"top_categories"`
 }
 
 type DailyIncomeDTO struct {
-	Date    time.Time `json:"date"`
-	Amount  float64   `json:"amount"`
-	Count   int       `json:"transaction_count"`
-	Sources []string  `json:"top_sources"`
+	Date        date.Date   `json:"date"`
+	AmountMinor money.Minor `json:"amount_minor"`
+	Count       int         `json:"transaction_count"`
+	Sources     []string    `json:"top_sources"`
 }
 
 type DailyCashFlowDTO struct {
-	Date    time.Time `json:"date"`
-	Inflow  float64   `json:"inflow"`
-	Outflow float64   `json:"outflow"`
-	NetFlow float64   `json:"net_flow"`
-	Balance float64   `json:"running_balance"`
+	Date         date.Date   `json:"date"`
+	InflowMinor  money.Minor `json:"inflow_minor"`
+	OutflowMinor money.Minor `json:"outflow_minor"`
+	NetFlowMinor money.Minor `json:"net_flow_minor"`
+	BalanceMinor money.Minor `json:"running_balance_minor"`
 }
 
 type WeeklyCashFlowDTO struct {
-	WeekStart time.Time `json:"week_start"`
-	WeekEnd   time.Time `json:"week_end"`
-	Inflow    float64   `json:"inflow"`
-	Outflow   float64   `json:"outflow"`
-	NetFlow   float64   `json:"net_flow"`
+	WeekStart    date.Date   `json:"week_start"`
+	WeekEnd      date.Date   `json:"week_end"`
+	InflowMinor  money.Minor `json:"inflow_minor"`
+	OutflowMinor money.Minor `json:"outflow_minor"`
+	NetFlowMinor money.Minor `json:"net_flow_minor"`
 }
 
 type MonthlyCashFlowDTO struct {
-	Month   time.Time `json:"month"`
-	Inflow  float64   `json:"inflow"`
-	Outflow float64   `json:"outflow"`
-	NetFlow float64   `json:"net_flow"`
+	Month        date.Date   `json:"month"`
+	InflowMinor  money.Minor `json:"inflow_minor"`
+	OutflowMinor money.Minor `json:"outflow_minor"`
+	NetFlowMinor money.Minor `json:"net_flow_minor"`
 }
 
 type TransactionSummaryDTO struct {
-	ID          uuid.UUID `json:"id"`
-	Amount      float64   `json:"amount"`
-	Description string    `json:"description"`
-	Category    string    `json:"category"`
-	Date        time.Time `json:"date"`
-	UserName    string    `json:"user_name"`
+	ID          uuid.UUID   `json:"id"`
+	AmountMinor money.Minor `json:"amount_minor"`
+	Description string      `json:"description"`
+	Category    string      `json:"category"`
+	Date        date.Date   `json:"date"`
+	UserName    string      `json:"user_name"`
 }
 
 type BudgetCategoryComparisonDTO struct {
-	CategoryID   uuid.UUID `json:"category_id"`
-	CategoryName string    `json:"category_name"`
-	BudgetAmount float64   `json:"budget_amount"`
-	ActualAmount float64   `json:"actual_amount"`
-	Variance     float64   `json:"variance"`
-	Utilization  float64   `json:"utilization_percentage"`
-	Status       string    `json:"status"` // under_budget, over_budget, on_track
+	CategoryID        uuid.UUID   `json:"category_id"`
+	CategoryName      string      `json:"category_name"`
+	BudgetAmountMinor money.Minor `json:"budget_amount_minor"`
+	ActualAmountMinor money.Minor `json:"actual_amount_minor"`
+	VarianceMinor     money.Minor `json:"variance_minor"`
+	Utilization       float64     `json:"utilization_percentage"`
+	Status            string      `json:"status"` // under_budget, over_budget, on_track
 }
 
 type BudgetTimelineDTO struct {
-	Date         time.Time `json:"date"`
-	PlannedSpent float64   `json:"planned_spent"`
-	ActualSpent  float64   `json:"actual_spent"`
-	Variance     float64   `json:"variance"`
+	Date              date.Date   `json:"date"`
+	PlannedSpentMinor money.Minor `json:"planned_spent_minor"`
+	ActualSpentMinor  money.Minor `json:"actual_spent_minor"`
+	VarianceMinor     money.Minor `json:"variance_minor"`
 }
 
 type BudgetAlertReportDTO struct {
@@ -205,34 +207,34 @@ type BudgetAlertReportDTO struct {
 }
 
 type CategoryAnalysisDTO struct {
-	CategoryID       uuid.UUID             `json:"category_id"`
-	CategoryName     string                `json:"category_name"`
-	CategoryType     string                `json:"category_type"`
-	TotalAmount      float64               `json:"total_amount"`
-	Percentage       float64               `json:"percentage"`
-	TransactionCount int                   `json:"transaction_count"`
-	AverageAmount    float64               `json:"average_amount"`
-	MinAmount        float64               `json:"min_amount"`
-	MaxAmount        float64               `json:"max_amount"`
-	Trend            string                `json:"trend"` // increasing, decreasing, stable
-	TrendPercentage  float64               `json:"trend_percentage"`
-	Subcategories    []CategoryAnalysisDTO `json:"subcategories,omitempty"`
-	MonthlyBreakdown []MonthlyCategoryDTO  `json:"monthly_breakdown"`
+	CategoryID         uuid.UUID             `json:"category_id"`
+	CategoryName       string                `json:"category_name"`
+	CategoryType       string                `json:"category_type"`
+	TotalAmountMinor   money.Minor           `json:"total_amount_minor"`
+	Percentage         float64               `json:"percentage"`
+	TransactionCount   int                   `json:"transaction_count"`
+	AverageAmountMinor money.Minor           `json:"average_amount_minor"`
+	MinAmountMinor     money.Minor           `json:"min_amount_minor"`
+	MaxAmountMinor     money.Minor           `json:"max_amount_minor"`
+	Trend              string                `json:"trend"` // increasing, decreasing, stable
+	TrendPercentage    float64               `json:"trend_percentage"`
+	Subcategories      []CategoryAnalysisDTO `json:"subcategories,omitempty"`
+	MonthlyBreakdown   []MonthlyCategoryDTO  `json:"monthly_breakdown"`
 }
 
 type CategoryHierarchyReportDTO struct {
 	CategoryID   uuid.UUID                    `json:"category_id"`
 	CategoryName string                       `json:"category_name"`
 	Level        int                          `json:"level"`
-	Amount       float64                      `json:"amount"`
+	AmountMinor  money.Minor                  `json:"amount_minor"`
 	Percentage   float64                      `json:"percentage"`
 	Children     []CategoryHierarchyReportDTO `json:"children,omitempty"`
 }
 
 type MonthlyCategoryDTO struct {
-	Month  time.Time `json:"month"`
-	Amount float64   `json:"amount"`
-	Count  int       `json:"transaction_count"`
+	Month       date.Date   `json:"month"`
+	AmountMinor money.Minor `json:"amount_minor"`
+	Count       int         `json:"transaction_count"`
 }
 
 // Trend Analysis DTOs
@@ -267,33 +269,33 @@ type TrendAnalysisDTO struct {
 }
 
 type CategoryTrendDTO struct {
-	CategoryID     uuid.UUID        `json:"category_id"`
-	CategoryName   string           `json:"category_name"`
-	Trend          TrendAnalysisDTO `json:"trend"`
-	CurrentAmount  float64          `json:"current_amount"`
-	PreviousAmount float64          `json:"previous_amount"`
+	CategoryID          uuid.UUID        `json:"category_id"`
+	CategoryName        string           `json:"category_name"`
+	Trend               TrendAnalysisDTO `json:"trend"`
+	CurrentAmountMinor  money.Minor      `json:"current_amount_minor"`
+	PreviousAmountMinor money.Minor      `json:"previous_amount_minor"`
 }
 
 type SeasonalPatternDTO struct {
-	Season      string  `json:"season"` // spring, summer, fall, winter
-	Amount      float64 `json:"amount"`
-	Percentage  float64 `json:"percentage"`
-	Description string  `json:"description"`
+	Season      string      `json:"season"` // spring, summer, fall, winter
+	AmountMinor money.Minor `json:"amount_minor"`
+	Percentage  float64     `json:"percentage"`
+	Description string      `json:"description"`
 }
 
 type WeekdayPatternDTO struct {
-	Weekday    string  `json:"weekday"`
-	Amount     float64 `json:"amount"`
-	Percentage float64 `json:"percentage"`
-	Count      int     `json:"transaction_count"`
+	Weekday     string      `json:"weekday"`
+	AmountMinor money.Minor `json:"amount_minor"`
+	Percentage  float64     `json:"percentage"`
+	Count       int         `json:"transaction_count"`
 }
 
 type ForecastDTO struct {
-	Date       time.Time `json:"date"`
-	Amount     float64   `json:"predicted_amount"`
-	Confidence float64   `json:"confidence"`
-	Lower      float64   `json:"lower_bound"`
-	Upper      float64   `json:"upper_bound"`
+	Date        date.Date   `json:"date"`
+	AmountMinor money.Minor `json:"predicted_amount_minor"`
+	Confidence  float64     `json:"confidence"`
+	LowerMinor  money.Minor `json:"lower_bound_minor"`
+	UpperMinor  money.Minor `json:"upper_bound_minor"`
 }
 
 // Comparison DTOs
@@ -316,29 +318,29 @@ type CategoryComparisonsDTO struct {
 }
 
 type PeriodComparisonDTO struct {
-	CurrentAmount    float64 `json:"current_amount"`
-	PreviousAmount   float64 `json:"previous_amount"`
-	Difference       float64 `json:"difference"`
-	PercentageChange float64 `json:"percentage_change"`
-	Description      string  `json:"description"`
+	CurrentAmountMinor  money.Minor `json:"current_amount_minor"`
+	PreviousAmountMinor money.Minor `json:"previous_amount_minor"`
+	DifferenceMinor     money.Minor `json:"difference_minor"`
+	PercentageChange    float64     `json:"percentage_change"`
+	Description         string      `json:"description"`
 }
 
 type BenchmarkComparisonDTO struct {
-	UserAmount       float64 `json:"user_amount"`
-	BenchmarkAmount  float64 `json:"benchmark_amount"`
-	Difference       float64 `json:"difference"`
-	PercentageChange float64 `json:"percentage_change"`
-	Status           string  `json:"status"` // below, above, average
-	Description      string  `json:"description"`
+	UserAmountMinor      money.Minor `json:"user_amount_minor"`
+	BenchmarkAmountMinor money.Minor `json:"benchmark_amount_minor"`
+	DifferenceMinor      money.Minor `json:"difference_minor"`
+	PercentageChange     float64     `json:"percentage_change"`
+	Status               string      `json:"status"` // below, above, average
+	Description          string      `json:"description"`
 }
 
 type CategoryComparisonDTO struct {
-	CategoryID       uuid.UUID `json:"category_id"`
-	CategoryName     string    `json:"category_name"`
-	CurrentAmount    float64   `json:"current_amount"`
-	PreviousAmount   float64   `json:"previous_amount"`
-	Difference       float64   `json:"difference"`
-	PercentageChange float64   `json:"percentage_change"`
+	CategoryID          uuid.UUID   `json:"category_id"`
+	CategoryName        string      `json:"category_name"`
+	CurrentAmountMinor  money.Minor `json:"current_amount_minor"`
+	PreviousAmountMinor money.Minor `json:"previous_amount_minor"`
+	DifferenceMinor     money.Minor `json:"difference_minor"`
+	PercentageChange    float64     `json:"percentage_change"`
 }
 
 // Cash Flow Projections
@@ -352,31 +354,31 @@ type CashFlowProjectionsDTO struct {
 }
 
 type ProjectionDTO struct {
-	Period           string    `json:"period"`
-	StartDate        time.Time `json:"start_date"`
-	EndDate          time.Time `json:"end_date"`
-	ProjectedInflow  float64   `json:"projected_inflow"`
-	ProjectedOutflow float64   `json:"projected_outflow"`
-	ProjectedBalance float64   `json:"projected_balance"`
-	Confidence       float64   `json:"confidence"`
-	Assumptions      []string  `json:"assumptions"`
+	Period                string      `json:"period"`
+	StartDate             date.Date   `json:"start_date"`
+	EndDate               date.Date   `json:"end_date"`
+	ProjectedInflowMinor  money.Minor `json:"projected_inflow_minor"`
+	ProjectedOutflowMinor money.Minor `json:"projected_outflow_minor"`
+	ProjectedBalanceMinor money.Minor `json:"projected_balance_minor"`
+	Confidence            float64     `json:"confidence"`
+	Assumptions           []string    `json:"assumptions"`
 }
 
 type ScenarioDTO struct {
-	Name            string  `json:"name"`
-	Description     string  `json:"description"`
-	Probability     float64 `json:"probability"`
-	Impact          string  `json:"impact"` // positive, negative, neutral
-	ProjectedChange float64 `json:"projected_change"`
+	Name                 string      `json:"name"`
+	Description          string      `json:"description"`
+	Probability          float64     `json:"probability"`
+	Impact               string      `json:"impact"` // positive, negative, neutral
+	ProjectedChangeMinor money.Minor `json:"projected_change_minor"`
 }
 
 type RecommendationDTO struct {
-	Type        string  `json:"type"`     // saving, spending, investment
-	Priority    string  `json:"priority"` // high, medium, low
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	Impact      float64 `json:"estimated_impact"`
-	Effort      string  `json:"effort"` // easy, medium, hard
+	Type        string      `json:"type"`     // saving, spending, investment
+	Priority    string      `json:"priority"` // high, medium, low
+	Title       string      `json:"title"`
+	Description string      `json:"description"`
+	ImpactMinor money.Minor `json:"estimated_impact_minor"`
+	Effort      string      `json:"effort"` // easy, medium, hard
 }
 
 // Export DTOs

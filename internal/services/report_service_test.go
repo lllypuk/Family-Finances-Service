@@ -28,8 +28,8 @@ func TestReportService_GenerateExpenseReport(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
-	startDate := time.Now().AddDate(0, 0, -30)
-	endDate := time.Now()
+	startDate := date.Today(time.UTC).AddDays(-30)
+	endDate := date.Today(time.UTC)
 
 	req := dto.ReportRequestDTO{
 		Name:      "Test Expense Report",
@@ -48,21 +48,21 @@ func TestReportService_GenerateExpenseReport(t *testing.T) {
 			categoryID,
 			10000,
 			transaction.TypeExpense,
-			date.FromTime(startDate).AddDays(1),
+			startDate.AddDays(1),
 		),
 		createTestTransactionWithCategory(
 			uuid.New(),
 			categoryID,
 			20000,
 			transaction.TypeExpense,
-			date.FromTime(startDate).AddDays(2),
+			startDate.AddDays(2),
 		),
 		createTestTransactionWithCategory(
 			uuid.New(),
 			categoryID,
 			15000,
 			transaction.TypeExpense,
-			date.FromTime(startDate).AddDays(3),
+			startDate.AddDays(3),
 		),
 	}
 
@@ -94,8 +94,8 @@ func TestReportService_GenerateExpenseReport(t *testing.T) {
 	assert.Equal(t, req.Name, result.Name)
 	assert.Equal(t, req.UserID, result.UserID)
 	assert.Equal(t, req.Period, result.Period)
-	assert.InEpsilon(t, 450.0, result.TotalExpenses, 0.01) // 100 + 200 + 150
-	assert.Positive(t, result.AverageDaily)
+	assert.Equal(t, money.Minor(45_000), result.TotalExpensesMinor) // 100 + 200 + 150
+	assert.Positive(t, result.AverageDailyMinor)
 	assert.Len(t, result.CategoryBreakdown, 1) // All transactions have same category
 	assert.Len(t, result.DailyBreakdown, 3)    // 3 different days
 	assert.Len(t, result.TopExpenses, 3)       // All 3 transactions
@@ -110,8 +110,8 @@ func TestReportService_GenerateExpenseReport_NoTransactions(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
-	startDate := time.Now().AddDate(0, 0, -30)
-	endDate := time.Now()
+	startDate := date.Today(time.UTC).AddDays(-30)
+	endDate := date.Today(time.UTC)
 
 	req := dto.ReportRequestDTO{
 		Name:      "Empty Expense Report",
@@ -132,8 +132,8 @@ func TestReportService_GenerateExpenseReport_NoTransactions(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Zero(t, result.TotalExpenses)
-	assert.Zero(t, result.AverageDaily)
+	assert.Zero(t, result.TotalExpensesMinor)
+	assert.Zero(t, result.AverageDailyMinor)
 	assert.Empty(t, result.CategoryBreakdown)
 	assert.Empty(t, result.DailyBreakdown)
 	assert.Empty(t, result.TopExpenses)
@@ -147,8 +147,8 @@ func TestReportService_GenerateIncomeReport(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
-	startDate := time.Now().AddDate(0, 0, -30)
-	endDate := time.Now()
+	startDate := date.Today(time.UTC).AddDays(-30)
+	endDate := date.Today(time.UTC)
 
 	req := dto.ReportRequestDTO{
 		Name:      "Test Income Report",
@@ -167,14 +167,14 @@ func TestReportService_GenerateIncomeReport(t *testing.T) {
 			categoryID,
 			500000,
 			transaction.TypeIncome,
-			date.FromTime(startDate).AddDays(1),
+			startDate.AddDays(1),
 		),
 		createTestTransactionWithCategory(
 			uuid.New(),
 			categoryID,
 			100000,
 			transaction.TypeIncome,
-			date.FromTime(startDate).AddDays(15),
+			startDate.AddDays(15),
 		),
 	}
 
@@ -204,8 +204,8 @@ func TestReportService_GenerateIncomeReport(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Equal(t, req.Name, result.Name)
-	assert.InEpsilon(t, 6000.0, result.TotalIncome, 0.01) // 5000 + 1000
-	assert.Positive(t, result.AverageDaily)
+	assert.Equal(t, money.Minor(600_000), result.TotalIncomeMinor) // 5000 + 1000
+	assert.Positive(t, result.AverageDailyMinor)
 
 	mockTransactionService.AssertExpectations(t)
 	mockCategoryService.AssertExpectations(t)
@@ -232,7 +232,7 @@ func TestReportService_GenerateBudgetComparisonReport(t *testing.T) {
 	}
 
 	// Setup mock expectations
-	mockBudgetService.On("GetActiveBudgets", ctx, mock.AnythingOfType("time.Time")).Return(budgets, nil)
+	mockBudgetService.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).Return(budgets, nil)
 	mockTransactionService.On("GetAllTransactions", ctx, mock.AnythingOfType("dto.TransactionFilterDTO")).
 		Return(transactions, nil)
 
@@ -243,10 +243,10 @@ func TestReportService_GenerateBudgetComparisonReport(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Equal(t, period, result.Period)
-	assert.InEpsilon(t, 1000.0, result.TotalBudget, 0.01)
-	assert.InEpsilon(t, 550.0, result.TotalSpent, 0.01)    // 300 + 250
-	assert.InEpsilon(t, 450.0, result.TotalVariance, 0.01) // 1000 - 550
-	assert.InDelta(t, 55.0, result.Utilization, 0.01)      // (550/1000) * 100
+	assert.Equal(t, money.Minor(100_000), result.TotalBudgetMinor)
+	assert.Equal(t, money.Minor(55_000), result.TotalSpentMinor)    // 300 + 250
+	assert.Equal(t, money.Minor(45_000), result.TotalVarianceMinor) // 1000 - 550
+	assert.InDelta(t, 55.0, result.Utilization, 0.01)               // (550/1000) * 100
 
 	mockBudgetService.AssertExpectations(t)
 	mockTransactionService.AssertExpectations(t)
@@ -259,7 +259,7 @@ func TestReportService_GenerateBudgetComparisonReport_NoBudgets(t *testing.T) {
 	period := report.PeriodMonthly
 
 	// Setup mock expectations - no budgets
-	mockBudgetService.On("GetActiveBudgets", ctx, mock.AnythingOfType("time.Time")).
+	mockBudgetService.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).
 		Return([]*budget.Budget{}, nil)
 
 	// Execute
@@ -268,9 +268,9 @@ func TestReportService_GenerateBudgetComparisonReport_NoBudgets(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Zero(t, result.TotalBudget)
-	assert.Zero(t, result.TotalSpent)
-	assert.Zero(t, result.TotalVariance)
+	assert.Zero(t, result.TotalBudgetMinor)
+	assert.Zero(t, result.TotalSpentMinor)
+	assert.Zero(t, result.TotalVarianceMinor)
 	assert.Zero(t, result.Utilization)
 
 	mockBudgetService.AssertExpectations(t)
@@ -281,15 +281,15 @@ func TestReportService_GenerateCashFlowReport(t *testing.T) {
 	service, _, _, mockTransactionService, _, _ := setupReportService()
 	ctx := context.Background()
 
-	from := time.Now().AddDate(0, 0, -30)
-	to := time.Now()
+	from := date.Today(time.UTC).AddDays(-30)
+	to := date.Today(time.UTC)
 
 	// Create mixed transactions
 	transactions := []*transaction.Transaction{
-		createTestTransaction(uuid.New(), 500000, transaction.TypeIncome, date.FromTime(from).AddDays(1)),
-		createTestTransaction(uuid.New(), 30000, transaction.TypeExpense, date.FromTime(from).AddDays(2)),
-		createTestTransaction(uuid.New(), 20000, transaction.TypeExpense, date.FromTime(from).AddDays(3)),
-		createTestTransaction(uuid.New(), 100000, transaction.TypeIncome, date.FromTime(from).AddDays(15)),
+		createTestTransaction(uuid.New(), 500000, transaction.TypeIncome, from.AddDays(1)),
+		createTestTransaction(uuid.New(), 30000, transaction.TypeExpense, from.AddDays(2)),
+		createTestTransaction(uuid.New(), 20000, transaction.TypeExpense, from.AddDays(3)),
+		createTestTransaction(uuid.New(), 100000, transaction.TypeIncome, from.AddDays(15)),
 	}
 
 	// Setup mock expectations
@@ -302,9 +302,9 @@ func TestReportService_GenerateCashFlowReport(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.InEpsilon(t, 6000.0, result.TotalInflows, 0.01) // 5000 + 1000
-	assert.InEpsilon(t, 500.0, result.TotalOutflows, 0.01) // 300 + 200
-	assert.InEpsilon(t, 5500.0, result.NetCashFlow, 0.01)  // 6000 - 500
+	assert.Equal(t, money.Minor(600_000), result.TotalInflowsMinor) // 5000 + 1000
+	assert.Equal(t, money.Minor(50_000), result.TotalOutflowsMinor) // 300 + 200
+	assert.Equal(t, money.Minor(550_000), result.NetCashFlowMinor)  // 6000 - 500
 
 	mockTransactionService.AssertExpectations(t)
 }
@@ -434,7 +434,7 @@ func TestReportService_GenerateReport(t *testing.T) {
 			reportType: report.TypeBudget,
 			setup: func(ctx context.Context, m reportServiceMocks) {
 				budgets := []*budget.Budget{createTestBudget(uuid.New(), 100000, categoryID)}
-				m.budget.On("GetActiveBudgets", ctx, mock.AnythingOfType("time.Time")).Return(budgets, nil)
+				m.budget.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).Return(budgets, nil)
 				expectTransactions(ctx, m.transaction, expenses)
 			},
 			assertData: func(t *testing.T, rep *report.Report) {
@@ -494,8 +494,8 @@ func TestReportService_GenerateReport(t *testing.T) {
 				Type:      tt.reportType,
 				Period:    report.PeriodMonthly,
 				UserID:    uuid.New(),
-				StartDate: time.Now().AddDate(0, 0, -30),
-				EndDate:   time.Now(),
+				StartDate: date.Today(time.UTC).AddDays(-30),
+				EndDate:   date.Today(time.UTC),
 			}
 
 			result, err := service.GenerateReport(ctx, req)
@@ -506,8 +506,8 @@ func TestReportService_GenerateReport(t *testing.T) {
 			assert.Equal(t, tt.reportType, result.Type)
 			assert.Equal(t, req.UserID, result.UserID)
 			tt.assertData(t, result)
-			assert.Equal(t, date.FromTime(req.StartDate), result.StartDate)
-			assert.Equal(t, date.FromTime(req.EndDate), result.EndDate)
+			assert.Equal(t, req.StartDate, result.StartDate)
+			assert.Equal(t, req.EndDate, result.EndDate)
 
 			// Генерация не сохраняет отчёт — это делает SaveReport.
 			mockReportRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
@@ -524,8 +524,8 @@ func TestReportService_GenerateReport_UnsupportedType(t *testing.T) {
 		Type:      report.Type("unknown"),
 		Period:    report.PeriodMonthly,
 		UserID:    uuid.New(),
-		StartDate: time.Now().AddDate(0, 0, -30),
-		EndDate:   time.Now(),
+		StartDate: date.Today(time.UTC).AddDays(-30),
+		EndDate:   date.Today(time.UTC),
 	}
 
 	result, err := service.GenerateReport(ctx, req)
@@ -546,8 +546,8 @@ func TestReportService_GenerateReport_GenerationError(t *testing.T) {
 		Type:      report.TypeExpenses,
 		Period:    report.PeriodMonthly,
 		UserID:    uuid.New(),
-		StartDate: time.Now().AddDate(0, 0, -30),
-		EndDate:   time.Now(),
+		StartDate: date.Today(time.UTC).AddDays(-30),
+		EndDate:   date.Today(time.UTC),
 	}
 
 	result, err := service.GenerateReport(ctx, req)
@@ -690,8 +690,8 @@ func TestReportService_GenerateExpenseReport_ValidatesFilterLimit(t *testing.T) 
 	ctx := context.Background()
 
 	userID := uuid.New()
-	startDate := time.Now().AddDate(0, 0, -7)
-	endDate := time.Now()
+	startDate := date.Today(time.UTC).AddDays(-7)
+	endDate := date.Today(time.UTC)
 
 	req := dto.ReportRequestDTO{
 		Name:      "Test Report - Filter Validation",
@@ -710,7 +710,7 @@ func TestReportService_GenerateExpenseReport_ValidatesFilterLimit(t *testing.T) 
 			categoryID,
 			5000,
 			transaction.TypeExpense,
-			date.FromTime(startDate).AddDays(1),
+			startDate.AddDays(1),
 		),
 	}
 
@@ -742,4 +742,46 @@ func TestReportService_GenerateExpenseReport_ValidatesFilterLimit(t *testing.T) 
 	mockTransactionService.AssertExpectations(t)
 	mockCategoryService.AssertExpectations(t)
 	mockUserRepo.AssertExpectations(t)
+}
+
+// Копейки не должны схлопываться в ноль: доля 1 из 3 — это 33.33%, а не 0,
+// а среднее за период округляется half-up (3 копейки за 2 дня → 2).
+func TestReportService_GenerateExpenseReport_SmallAmounts(t *testing.T) {
+	service, _, mockUserRepo, mockTransactionService, _, mockCategoryService := setupReportService()
+	ctx := context.Background()
+
+	startDate := date.Today(time.UTC).AddDays(-1)
+	endDate := date.Today(time.UTC)
+
+	cheapID, pricyID := uuid.New(), uuid.New()
+	transactions := []*transaction.Transaction{
+		createTestTransactionWithCategory(uuid.New(), cheapID, 1, transaction.TypeExpense, startDate),
+		createTestTransactionWithCategory(uuid.New(), pricyID, 2, transaction.TypeExpense, endDate),
+	}
+
+	mockTransactionService.On("GetAllTransactions", ctx, mock.AnythingOfType("dto.TransactionFilterDTO")).
+		Return(transactions, nil)
+	mockCategoryService.On("GetCategoryByID", ctx, cheapID).
+		Return(createTestCategory(cheapID, "Мелочь", category.TypeExpense), nil)
+	mockCategoryService.On("GetCategoryByID", ctx, pricyID).
+		Return(createTestCategory(pricyID, "Крупное", category.TypeExpense), nil)
+	mockUserRepo.On("GetByID", ctx, mock.AnythingOfType("uuid.UUID")).
+		Return(&user.User{FirstName: "Test", LastName: "User"}, nil)
+
+	result, err := service.GenerateExpenseReport(ctx, dto.ReportRequestDTO{
+		Name:      "Копейки",
+		Type:      report.TypeExpenses,
+		Period:    report.PeriodCustom,
+		UserID:    uuid.New(),
+		StartDate: startDate,
+		EndDate:   endDate,
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, money.Minor(3), result.TotalExpensesMinor)
+	assert.Equal(t, money.Minor(2), result.AverageDailyMinor) // 3/2 = 1.5 → 2
+
+	require.Len(t, result.CategoryBreakdown, 2)
+	assert.InDelta(t, 66.67, result.CategoryBreakdown[0].Percentage, 0.01)
+	assert.InDelta(t, 33.33, result.CategoryBreakdown[1].Percentage, 0.01)
 }

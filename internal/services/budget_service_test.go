@@ -152,12 +152,12 @@ func createTestBudgetForService() *budget.Budget {
 func createTestBudgetDTO() dto.CreateBudgetDTO {
 	categoryID := uuid.New()
 	return dto.CreateBudgetDTO{
-		Name:       "Test Budget",
-		Amount:     1000.0,
-		Period:     budget.PeriodMonthly,
-		CategoryID: &categoryID,
-		StartDate:  time.Now(),
-		EndDate:    time.Now().AddDate(0, 1, 0),
+		Name:        "Test Budget",
+		AmountMinor: 100_000,
+		Period:      budget.PeriodMonthly,
+		CategoryID:  &categoryID,
+		StartDate:   date.Today(time.UTC),
+		EndDate:     date.Today(time.UTC).AddDays(30),
 	}
 }
 
@@ -194,7 +194,7 @@ func TestBudgetService_CreateBudget_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Equal(t, req.Name, result.Name)
-	assert.Equal(t, money.FromFloat(req.Amount), result.AmountMinor)
+	assert.Equal(t, req.AmountMinor, result.AmountMinor)
 	assert.Equal(t, req.Period, result.Period)
 
 	budgetRepo.AssertExpectations(t)
@@ -206,7 +206,7 @@ func TestBudgetService_CreateBudget_InvalidPeriod(t *testing.T) {
 	ctx := context.Background()
 
 	req := createTestBudgetDTO()
-	req.EndDate = req.StartDate.AddDate(0, 0, -1) // End before start
+	req.EndDate = req.StartDate.AddDays(-1) // End before start
 
 	// Execute
 	result, err := service.CreateBudget(ctx, req)
@@ -225,8 +225,8 @@ func TestBudgetService_CreateBudget_PeriodOverlap(t *testing.T) {
 
 	existingBudget := createTestBudgetForService()
 	existingBudget.CategoryID = req.CategoryID
-	existingBudget.StartDate = date.FromTime(req.StartDate).AddDays(-5) // Overlapping period
-	existingBudget.EndDate = date.FromTime(req.StartDate).AddDays(5)
+	existingBudget.StartDate = req.StartDate.AddDays(-5) // Overlapping period
+	existingBudget.EndDate = req.StartDate.AddDays(5)
 
 	// Setup expectations
 	budgetRepo.On(
@@ -302,12 +302,12 @@ func TestBudgetService_UpdateBudget_Success(t *testing.T) {
 	ctx := context.Background()
 
 	testBudget := createTestBudgetForService()
-	newAmount := 1500.0
+	newAmount := money.Minor(150_000)
 	newName := "Updated Budget"
 
 	req := dto.UpdateBudgetDTO{
-		Name:   &newName,
-		Amount: &newAmount,
+		Name:        &newName,
+		AmountMinor: &newAmount,
 	}
 
 	// Setup expectations
@@ -330,7 +330,7 @@ func TestBudgetService_UpdateBudget_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Equal(t, newName, result.Name)
-	assert.Equal(t, money.FromFloat(newAmount), result.AmountMinor)
+	assert.Equal(t, newAmount, result.AmountMinor)
 
 	budgetRepo.AssertExpectations(t)
 	txRepo.AssertExpectations(t)
@@ -343,10 +343,10 @@ func TestBudgetService_UpdateBudget_AmountLessThanSpent(t *testing.T) {
 	testBudget := createTestBudgetForService()
 	testBudget.SpentMinor = 50000
 
-	newAmount := 400.0 // Less than spent amount
+	newAmount := money.Minor(40_000) // Less than spent amount
 
 	req := dto.UpdateBudgetDTO{
-		Amount: &newAmount,
+		AmountMinor: &newAmount,
 	}
 
 	// Setup expectations
@@ -404,7 +404,7 @@ func TestBudgetService_GetActiveBudgets_Success(t *testing.T) {
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
 
 	// Execute
-	result, err := service.GetActiveBudgets(ctx, on.In(time.UTC))
+	result, err := service.GetActiveBudgets(ctx, on)
 
 	// Assert
 	require.NoError(t, err)
@@ -421,7 +421,7 @@ func TestBudgetService_CheckBudgetLimits_WithinLimit(t *testing.T) {
 	ctx := context.Background()
 
 	categoryID := uuid.New()
-	amount := 100.0
+	amount := money.Minor(10_000)
 
 	testBudget := createTestBudgetForService()
 	testBudget.CategoryID = &categoryID
@@ -455,7 +455,7 @@ func TestBudgetService_CheckBudgetLimits_ExceedsLimit(t *testing.T) {
 	ctx := context.Background()
 
 	categoryID := uuid.New()
-	amount := 800.0 // Would exceed limit (300 + 800 > 1000)
+	amount := money.Minor(80_000) // Would exceed limit (300 + 800 > 1000)
 
 	testBudget := createTestBudgetForService()
 	testBudget.CategoryID = &categoryID
@@ -514,8 +514,8 @@ func TestBudgetService_GetBudgetStatus_Success(t *testing.T) {
 	assert.NotNil(t, result)
 	assert.Equal(t, testBudget.ID, result.BudgetID)
 	assert.Equal(t, testBudget.Name, result.Name)
-	assert.InDelta(t, 250.0, result.SpentAmount, 0.01)
-	assert.InDelta(t, 750.0, result.RemainingAmount, 0.01)
+	assert.Equal(t, money.Minor(25_000), result.SpentAmountMinor)
+	assert.Equal(t, money.Minor(75_000), result.RemainingAmountMinor)
 	assert.InDelta(t, 25.0, result.UtilizationPercent, 0.1)
 	assert.False(t, result.IsNearLimit)
 	assert.False(t, result.IsOverBudget)
@@ -556,7 +556,7 @@ func TestBudgetService_CalculateBudgetUtilization_Success(t *testing.T) {
 	assert.Equal(t, testBudget.ID, result.BudgetID)
 	assert.Equal(t, string(testBudget.Period), result.Period)
 	assert.InDelta(t, 25.0, result.UtilizationPercent, 0.1)
-	assert.Greater(t, result.SpendingVelocity, 0.0)
+	assert.Positive(t, result.SpendingVelocityMinor)
 	assert.NotEmpty(t, result.Recommendations)
 
 	budgetRepo.AssertExpectations(t)
@@ -569,7 +569,7 @@ func TestBudgetService_UpdateBudgetSpent_Success(t *testing.T) {
 	ctx := context.Background()
 
 	testBudget := createTestBudgetForService()
-	amount := 50.0
+	amount := money.Minor(5_000)
 
 	// Setup expectations
 	budgetRepo.On("GetByID", ctx, testBudget.ID).Return(testBudget, nil)
@@ -676,7 +676,7 @@ func TestBudgetService_CheckBudgetLimits_NoBudgets(t *testing.T) {
 	ctx := context.Background()
 
 	categoryID := uuid.New()
-	amount := 1000.0
+	amount := money.Minor(100_000)
 
 	// Setup expectations - no budgets found
 	budgetRepo.On("GetByCategory", ctx, &categoryID).Return([]*budget.Budget{}, nil)

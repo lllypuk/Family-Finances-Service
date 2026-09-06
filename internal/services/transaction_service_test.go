@@ -31,12 +31,12 @@ func TestTransactionService_CreateTransaction_Success(t *testing.T) {
 	categoryID := uuid.New()
 
 	req := dto.CreateTransactionDTO{
-		Amount:      100.50,
+		AmountMinor: 10_050,
 		Type:        transaction.TypeExpense,
 		Description: "Test expense",
 		CategoryID:  categoryID,
 		UserID:      userID,
-		Date:        time.Now(),
+		Date:        date.Today(time.UTC),
 		Tags:        []string{"test"},
 	}
 
@@ -60,7 +60,7 @@ func TestTransactionService_CreateTransaction_Success(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Equal(t, money.FromFloat(req.Amount), result.AmountMinor)
+	assert.Equal(t, req.AmountMinor, result.AmountMinor)
 	assert.Equal(t, req.Type, result.Type)
 	assert.Equal(t, req.Description, result.Description)
 	assert.Equal(t, req.CategoryID, result.CategoryID)
@@ -81,12 +81,12 @@ func TestTransactionService_CreateTransaction_UserNotFound(t *testing.T) {
 	categoryID := uuid.New()
 
 	req := dto.CreateTransactionDTO{
-		Amount:      100.50,
+		AmountMinor: 10_050,
 		Type:        transaction.TypeExpense,
 		Description: "Test expense",
 		CategoryID:  categoryID,
 		UserID:      userID,
-		Date:        time.Now(),
+		Date:        date.Today(time.UTC),
 		Tags:        []string{"test"},
 	}
 
@@ -111,12 +111,12 @@ func TestTransactionService_CreateTransaction_ExceedsBudget(t *testing.T) {
 	categoryID := uuid.New()
 
 	req := dto.CreateTransactionDTO{
-		Amount:      500.00, // This exceeds the remaining budget (500 - 100 = 400)
+		AmountMinor: 50_000, // This exceeds the remaining budget (500 - 100 = 400)
 		Type:        transaction.TypeExpense,
 		Description: "Large expense",
 		CategoryID:  categoryID,
 		UserID:      userID,
-		Date:        time.Now(),
+		Date:        date.Today(time.UTC),
 	}
 
 	testUser := createTestUser(uuid.Nil)
@@ -153,12 +153,12 @@ func TestTransactionService_CreateTransaction_IncomeNoLimitCheck(t *testing.T) {
 	categoryID := uuid.New()
 
 	req := dto.CreateTransactionDTO{
-		Amount:      300.00, // Income transaction
+		AmountMinor: 30_000, // Income transaction
 		Type:        transaction.TypeIncome,
 		Description: "Test income",
 		CategoryID:  categoryID,
 		UserID:      userID,
-		Date:        time.Now(),
+		Date:        date.Today(time.UTC),
 		Tags:        []string{"test"},
 	}
 
@@ -178,7 +178,7 @@ func TestTransactionService_CreateTransaction_IncomeNoLimitCheck(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Equal(t, money.FromFloat(req.Amount), result.AmountMinor)
+	assert.Equal(t, req.AmountMinor, result.AmountMinor)
 	assert.Equal(t, req.Type, result.Type)
 
 	userRepo.AssertExpectations(t)
@@ -281,11 +281,11 @@ func TestTransactionService_UpdateTransaction_Success(t *testing.T) {
 	testTx := createTestTransaction(uuid.New(), 10050, transaction.TypeExpense, date.Today(time.UTC))
 	testTx.CategoryID = categoryID
 
-	newAmount := 150.75
+	newAmount := money.Minor(15_075)
 	newDescription := "Updated expense"
 
 	req := dto.UpdateTransactionDTO{
-		Amount:      &newAmount,
+		AmountMinor: &newAmount,
 		Description: &newDescription,
 		CategoryID:  &newCategoryID,
 	}
@@ -308,7 +308,7 @@ func TestTransactionService_UpdateTransaction_Success(t *testing.T) {
 	}
 	require.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Equal(t, money.FromFloat(newAmount), result.AmountMinor)
+	assert.Equal(t, newAmount, result.AmountMinor)
 	assert.Equal(t, newDescription, result.Description)
 	assert.Equal(t, newCategoryID, result.CategoryID)
 
@@ -455,8 +455,8 @@ func TestTransactionService_GetTransactionsByDateRange_Success(t *testing.T) {
 	service, txRepo, _, _, _ := setupTransactionService()
 	ctx := context.Background()
 
-	from := time.Now().AddDate(0, 0, -7)
-	to := time.Now()
+	from := date.Today(time.UTC).AddDays(-7)
+	to := date.Today(time.UTC)
 
 	testTxs := []*transaction.Transaction{
 		createTestTransaction(uuid.New(), 10000, transaction.TypeExpense, date.Today(time.UTC)),
@@ -480,8 +480,8 @@ func TestTransactionService_GetTransactionsByDateRange_EmptyResult(t *testing.T)
 	service, _, _, _, _ := setupTransactionService()
 	ctx := context.Background()
 
-	from := time.Now()
-	to := time.Now().AddDate(0, 0, -7) // to is before from
+	from := date.Today(time.UTC)
+	to := from.AddDays(-7) // to is before from
 
 	// Execute
 	result, err := service.GetTransactionsByDateRange(ctx, from, to)
@@ -498,7 +498,7 @@ func TestTransactionService_ValidateTransactionLimits_WithinBudget(t *testing.T)
 	ctx := context.Background()
 
 	categoryID := uuid.New()
-	amount := 200.0 // Within budget (500 - 100 = 400 remaining)
+	amount := money.Minor(20_000) // Within budget (500 - 100 = 400 remaining)
 
 	testBudget := createTestBudget(uuid.New(), 50000, categoryID)
 	testBudget.SpentMinor = 10000
@@ -520,7 +520,7 @@ func TestTransactionService_ValidateTransactionLimits_ExceedsBudget(t *testing.T
 	ctx := context.Background()
 
 	categoryID := uuid.New()
-	amount := 500.0 // Exceeds budget (500 - 100 = 400 remaining)
+	amount := money.Minor(50_000) // Exceeds budget (500 - 100 = 400 remaining)
 
 	testBudget := createTestBudget(uuid.New(), 50000, categoryID)
 	testBudget.SpentMinor = 10000
@@ -543,7 +543,7 @@ func TestTransactionService_ValidateTransactionLimits_IncomeTransaction(t *testi
 	ctx := context.Background()
 
 	categoryID := uuid.New()
-	amount := 1000.0
+	amount := money.Minor(100_000)
 
 	// Execute - income transactions should not check budget limits
 	err := service.ValidateTransactionLimits(ctx, categoryID, amount, transaction.TypeIncome)
@@ -557,7 +557,7 @@ func TestTransactionService_ValidateTransactionLimits_NoBudget(t *testing.T) {
 	ctx := context.Background()
 
 	categoryID := uuid.New()
-	amount := 1000.0
+	amount := money.Minor(100_000)
 
 	// Setup expectations - no budget found
 	budgetRepo.On("GetActiveBudgets", ctx).Return([]*budget.Budget{}, nil)

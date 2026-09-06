@@ -19,6 +19,7 @@ import (
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/services/dto"
@@ -516,7 +517,7 @@ func TestReportAPI_GenerateAndExport(t *testing.T) {
 	rows, err := csv.NewReader(strings.NewReader(csvBody)).ReadAll()
 	require.NoError(t, err)
 	require.NotEmpty(t, rows)
-	assert.Equal(t, []string{"Category", "Amount", "Percentage", "Transaction Count"}, rows[0])
+	assert.Equal(t, []string{"Category", "Amount Minor", "Currency", "Percentage", "Transaction Count"}, rows[0])
 	assert.Equal(t, "TOTAL", rows[len(rows)-1][0])
 }
 
@@ -577,7 +578,7 @@ func TestStatsAPI_Summary(t *testing.T) {
 
 	var response handlers.APIResponse[dto.StatsSummary]
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-	assert.InDelta(t, 200.0, response.Data.Current.Expenses, 0.001)
+	assert.Equal(t, money.Minor(20_000), response.Data.Current.ExpensesMinor)
 	assert.Equal(t, 1, response.Data.Current.TransactionCount)
 	require.Len(t, response.Data.ExpenseCategories, 1)
 	assert.Equal(t, expenseCat.Name, response.Data.ExpenseCategories[0].Name)

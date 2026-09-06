@@ -115,3 +115,62 @@ func TestDefaultCategories(t *testing.T) {
 	// каждый вызов — новые ID, иначе второй bootstrap упал бы на PK, а не на singleton
 	assert.NotEqual(t, defaults[0].ID, services.DefaultCategories()[0].ID)
 }
+
+func TestFamilyService_UpdateFamily_CurrencyLockedByTransactions(t *testing.T) {
+	familyRepo := new(MockFamilyRepository)
+	txRepo := new(MockTransactionRepository)
+	svc := services.NewFamilyService(familyRepo, txRepo)
+
+	familyRepo.On("Get", mock.Anything).
+		Return(&user.Family{Name: "Test", Currency: "RUB", Timezone: "Europe/Moscow"}, nil)
+	txRepo.On("CountByFilter", mock.Anything, mock.Anything).Return(1, nil)
+
+	usd := "USD"
+	_, err := svc.UpdateFamily(context.Background(), dto.UpdateFamilyDTO{Currency: &usd})
+
+	require.ErrorIs(t, err, services.ErrCurrencyLocked)
+	familyRepo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
+}
+
+func TestFamilyService_UpdateFamily_CurrencyChangedWithoutTransactions(t *testing.T) {
+	familyRepo := new(MockFamilyRepository)
+	txRepo := new(MockTransactionRepository)
+	svc := services.NewFamilyService(familyRepo, txRepo)
+
+	familyRepo.On("Get", mock.Anything).
+		Return(&user.Family{Name: "Test", Currency: "RUB", Timezone: "Europe/Moscow"}, nil)
+	txRepo.On("CountByFilter", mock.Anything, mock.Anything).Return(0, nil)
+	familyRepo.On("Update", mock.Anything, mock.AnythingOfType("*user.Family")).Return(nil)
+
+	usd := "USD"
+	updated, err := svc.UpdateFamily(context.Background(), dto.UpdateFamilyDTO{Currency: &usd})
+
+	require.NoError(t, err)
+	assert.Equal(t, "USD", updated.Currency)
+}
+
+func TestFamilyService_UpdateFamily_Timezone(t *testing.T) {
+	familyRepo := new(MockFamilyRepository)
+	svc := services.NewFamilyService(familyRepo, new(MockTransactionRepository))
+
+	familyRepo.On("Get", mock.Anything).
+		Return(&user.Family{Name: "Test", Currency: "RUB", Timezone: "Europe/Moscow"}, nil)
+	familyRepo.On("Update", mock.Anything, mock.AnythingOfType("*user.Family")).Return(nil)
+
+	tz := "Asia/Novosibirsk"
+	updated, err := svc.UpdateFamily(context.Background(), dto.UpdateFamilyDTO{Timezone: &tz})
+
+	require.NoError(t, err)
+	assert.Equal(t, tz, updated.Timezone)
+}
+
+func TestFamilyService_UpdateFamily_InvalidTimezone(t *testing.T) {
+	familyRepo := new(MockFamilyRepository)
+	svc := services.NewFamilyService(familyRepo, new(MockTransactionRepository))
+
+	tz := "Mars/Olympus"
+	_, err := svc.UpdateFamily(context.Background(), dto.UpdateFamilyDTO{Timezone: &tz})
+
+	require.ErrorIs(t, err, services.ErrValidationFailed)
+	familyRepo.AssertNotCalled(t, "Get", mock.Anything)
+}

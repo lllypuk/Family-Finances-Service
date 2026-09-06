@@ -256,12 +256,12 @@ func (h *BudgetHandler) DeleteBudget(c echo.Context) error {
 
 func (h *BudgetHandler) createBudgetViaService(c echo.Context, req CreateBudgetRequest) error {
 	createdBudget, err := h.budgetService.CreateBudget(c.Request().Context(), dto.CreateBudgetDTO{
-		Name:       req.Name,
-		Amount:     req.Amount,
-		Period:     budget.Period(req.Period),
-		CategoryID: req.CategoryID,
-		StartDate:  req.StartDate,
-		EndDate:    req.EndDate,
+		Name:        req.Name,
+		AmountMinor: money.FromFloat(req.Amount),
+		Period:      budget.Period(req.Period),
+		CategoryID:  req.CategoryID,
+		StartDate:   date.FromTime(req.StartDate),
+		EndDate:     date.FromTime(req.EndDate),
 	})
 	if err != nil {
 		return h.handleBudgetServiceError(c, err, "create")
@@ -277,7 +277,7 @@ func (h *BudgetHandler) getBudgetsViaService(c echo.Context, page pageParams) er
 
 	if c.QueryParam("active_only") == "true" {
 		var active []*budget.Budget
-		active, err = h.budgetService.GetActiveBudgets(c.Request().Context(), time.Now())
+		active, err = h.budgetService.GetActiveBudgets(c.Request().Context(), date.Today(time.UTC))
 		total = len(active)
 		budgets = pageSlice(active, page)
 	} else {
@@ -334,13 +334,21 @@ func (h *BudgetHandler) updateBudgetViaService(c echo.Context) error {
 		return respondValidationErrors(c, validationErr)
 	}
 
-	updatedBudget, err := h.budgetService.UpdateBudget(c.Request().Context(), id, dto.UpdateBudgetDTO{
-		Name:      req.Name,
-		Amount:    req.Amount,
-		StartDate: req.StartDate,
-		EndDate:   req.EndDate,
-		IsActive:  req.IsActive,
-	})
+	serviceReq := dto.UpdateBudgetDTO{Name: req.Name, IsActive: req.IsActive}
+	if req.Amount != nil {
+		amount := money.FromFloat(*req.Amount)
+		serviceReq.AmountMinor = &amount
+	}
+	if req.StartDate != nil {
+		start := date.FromTime(*req.StartDate)
+		serviceReq.StartDate = &start
+	}
+	if req.EndDate != nil {
+		end := date.FromTime(*req.EndDate)
+		serviceReq.EndDate = &end
+	}
+
+	updatedBudget, err := h.budgetService.UpdateBudget(c.Request().Context(), id, serviceReq)
 	if err != nil {
 		return h.handleBudgetServiceError(c, err, "update")
 	}

@@ -113,12 +113,12 @@ func (s *BudgetServiceImpl) CreateBudget(ctx context.Context, req dto.CreateBudg
 	newBudget := &budget.Budget{
 		ID:          uuid.New(),
 		Name:        req.Name,
-		AmountMinor: money.FromFloat(req.Amount),
+		AmountMinor: req.AmountMinor,
 		SpentMinor:  0, // Always starts with 0
 		Period:      req.Period,
 		CategoryID:  req.CategoryID,
-		StartDate:   date.FromTime(req.StartDate),
-		EndDate:     date.FromTime(req.EndDate),
+		StartDate:   req.StartDate,
+		EndDate:     req.EndDate,
 		IsActive:    true,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
@@ -230,19 +230,19 @@ func (s *BudgetServiceImpl) UpdateBudget(
 	if req.Name != nil {
 		existingBudget.Name = *req.Name
 	}
-	if req.Amount != nil {
+	if req.AmountMinor != nil {
 		// Validate that new amount is not less than already spent
-		if money.FromFloat(*req.Amount) < existingBudget.SpentMinor {
-			return nil, fmt.Errorf("%w: new amount %.2f is less than spent %.2f",
-				ErrBudgetAlreadyExceeded, *req.Amount, existingBudget.SpentMinor.Float())
+		if *req.AmountMinor < existingBudget.SpentMinor {
+			return nil, fmt.Errorf("%w: new amount %d is less than spent %d",
+				ErrBudgetAlreadyExceeded, *req.AmountMinor, existingBudget.SpentMinor)
 		}
-		existingBudget.AmountMinor = money.FromFloat(*req.Amount)
+		existingBudget.AmountMinor = *req.AmountMinor
 	}
 	if req.StartDate != nil {
-		existingBudget.StartDate = date.FromTime(*req.StartDate)
+		existingBudget.StartDate = *req.StartDate
 	}
 	if req.EndDate != nil {
-		existingBudget.EndDate = date.FromTime(*req.EndDate)
+		existingBudget.EndDate = *req.EndDate
 	}
 	if req.IsActive != nil {
 		existingBudget.IsActive = *req.IsActive
@@ -285,7 +285,7 @@ func (s *BudgetServiceImpl) DeleteBudget(ctx context.Context, id uuid.UUID) erro
 // GetActiveBudgets retrieves active budgets on a specific date
 func (s *BudgetServiceImpl) GetActiveBudgets(
 	ctx context.Context,
-	on time.Time,
+	on date.Date,
 ) ([]*budget.Budget, error) {
 	allBudgets, err := s.budgetRepo.GetActiveBudgets(ctx)
 	if err != nil {
@@ -295,7 +295,7 @@ func (s *BudgetServiceImpl) GetActiveBudgets(
 	// Filter budgets active on the specified date
 	var activeBudgets []*budget.Budget
 	for _, b := range allBudgets {
-		if s.isBudgetActiveOnDate(b, date.FromTime(on)) {
+		if s.isBudgetActiveOnDate(b, on) {
 			// Recalculate spent amount
 			if recalcErr := s.recalculateAndUpdateSpent(ctx, b); recalcErr != nil {
 				s.logRecalculationWarning(ctx, "get_active_budgets", b.ID, recalcErr)
@@ -308,13 +308,13 @@ func (s *BudgetServiceImpl) GetActiveBudgets(
 }
 
 // UpdateBudgetSpent updates the spent amount for a budget
-func (s *BudgetServiceImpl) UpdateBudgetSpent(ctx context.Context, budgetID uuid.UUID, amount float64) error {
+func (s *BudgetServiceImpl) UpdateBudgetSpent(ctx context.Context, budgetID uuid.UUID, amount money.Minor) error {
 	budget, err := s.budgetRepo.GetByID(ctx, budgetID)
 	if err != nil {
 		return ErrBudgetNotFoundService
 	}
 
-	budget.SpentMinor += money.FromFloat(amount)
+	budget.SpentMinor += amount
 	budget.UpdatedAt = time.Now()
 
 	return s.budgetRepo.Update(ctx, budget)
@@ -324,7 +324,7 @@ func (s *BudgetServiceImpl) UpdateBudgetSpent(ctx context.Context, budgetID uuid
 func (s *BudgetServiceImpl) CheckBudgetLimits(
 	ctx context.Context,
 	categoryID uuid.UUID,
-	amount float64,
+	amount money.Minor,
 ) error {
 	budgets, err := s.GetBudgetsByCategory(ctx, categoryID)
 	if err != nil {
@@ -344,9 +344,9 @@ func (s *BudgetServiceImpl) CheckBudgetLimits(
 		}
 
 		// Check if adding this amount would exceed the budget
-		if b.SpentMinor+money.FromFloat(amount) > b.AmountMinor {
-			return fmt.Errorf("%w: budget '%s' limit %.2f, current spent %.2f, transaction amount %.2f",
-				ErrInsufficientBudgetFunds, b.Name, b.AmountMinor.Float(), b.SpentMinor.Float(), amount)
+		if b.SpentMinor+amount > b.AmountMinor {
+			return fmt.Errorf("%w: budget '%s' limit %d, current spent %d, transaction amount %d",
+				ErrInsufficientBudgetFunds, b.Name, b.AmountMinor, b.SpentMinor, amount)
 		}
 	}
 
@@ -410,16 +410,15 @@ func (s *BudgetServiceImpl) GetBudgetsByCategory(
 func (s *BudgetServiceImpl) ValidateBudgetPeriod(
 	ctx context.Context,
 	categoryID *uuid.UUID,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 ) error {
-	from, to := date.FromTime(startDate), date.FromTime(endDate)
-	existingBudgets, err := s.budgetRepo.GetByPeriod(ctx, from, to)
+	existingBudgets, err := s.budgetRepo.GetByPeriod(ctx, startDate, endDate)
 	if err != nil {
 		return fmt.Errorf("failed to validate budget period: %w", err)
 	}
 
 	for _, existing := range existingBudgets {
-		if s.budgetPeriodsOverlap(existing, categoryID, from, to) {
+		if s.budgetPeriodsOverlap(existing, categoryID, startDate, endDate) {
 			return fmt.Errorf("%w: overlaps with budget '%s'", ErrBudgetOverlapExists, existing.Name)
 		}
 	}
@@ -494,18 +493,18 @@ func (s *BudgetServiceImpl) budgetMatchesFilter(b *budget.Budget, filter dto.Bud
 	}
 
 	// Date range filters
-	if filter.DateFrom != nil && b.EndDate.Before(date.FromTime(*filter.DateFrom)) {
+	if filter.DateFrom != nil && b.EndDate.Before(*filter.DateFrom) {
 		return false
 	}
-	if filter.DateTo != nil && b.StartDate.After(date.FromTime(*filter.DateTo)) {
+	if filter.DateTo != nil && b.StartDate.After(*filter.DateTo) {
 		return false
 	}
 
 	// Amount filters
-	if filter.AmountFrom != nil && b.AmountMinor < money.FromFloat(*filter.AmountFrom) {
+	if filter.AmountFromMinor != nil && b.AmountMinor < *filter.AmountFromMinor {
 		return false
 	}
-	if filter.AmountTo != nil && b.AmountMinor > money.FromFloat(*filter.AmountTo) {
+	if filter.AmountToMinor != nil && b.AmountMinor > *filter.AmountToMinor {
 		return false
 	}
 
@@ -608,7 +607,6 @@ func (s *BudgetServiceImpl) validateBudgetPeriodForUpdate(ctx context.Context, b
 }
 
 func (s *BudgetServiceImpl) calculateBudgetStatus(b *budget.Budget) *dto.BudgetStatusDTO {
-	amount, spent := b.AmountMinor.Float(), b.SpentMinor.Float()
 	utilizationPercent := b.GetSpentPercentage()
 	startDate, endDate := b.StartDate.In(time.UTC), b.EndDate.In(time.UTC)
 	daysTotal := int(endDate.Sub(startDate).Hours() / dto.HoursPerDay)
@@ -616,34 +614,34 @@ func (s *BudgetServiceImpl) calculateBudgetStatus(b *budget.Budget) *dto.BudgetS
 	daysRemaining := dto.CalculateDaysRemaining(endDate)
 
 	status := &dto.BudgetStatusDTO{
-		BudgetID:           b.ID,
-		Name:               b.Name,
-		TotalAmount:        amount,
-		SpentAmount:        spent,
-		RemainingAmount:    b.GetRemainingAmount().Float(),
-		UtilizationPercent: utilizationPercent,
-		DaysTotal:          daysTotal,
-		DaysElapsed:        daysElapsed,
-		DaysRemaining:      daysRemaining,
-		IsOverBudget:       utilizationPercent >= dto.BudgetAlertOverBudget,
-		IsNearLimit:        utilizationPercent >= dto.BudgetAlertNearLimit,
-		IsCriticalLimit:    utilizationPercent >= dto.BudgetAlertCritical,
-		Status:             dto.DetermineBudgetStatus(utilizationPercent),
+		BudgetID:             b.ID,
+		Name:                 b.Name,
+		TotalAmountMinor:     b.AmountMinor,
+		SpentAmountMinor:     b.SpentMinor,
+		RemainingAmountMinor: b.GetRemainingAmount(),
+		UtilizationPercent:   utilizationPercent,
+		DaysTotal:            daysTotal,
+		DaysElapsed:          daysElapsed,
+		DaysRemaining:        daysRemaining,
+		IsOverBudget:         utilizationPercent >= dto.BudgetAlertOverBudget,
+		IsNearLimit:          utilizationPercent >= dto.BudgetAlertNearLimit,
+		IsCriticalLimit:      utilizationPercent >= dto.BudgetAlertCritical,
+		Status:               dto.DetermineBudgetStatus(utilizationPercent),
 	}
 
 	// Calculate daily metrics
 	if daysTotal > 0 {
-		status.DailyBudget = b.AmountMinor.DivRound(int64(daysTotal)).Float()
+		status.DailyBudgetMinor = b.AmountMinor.DivRound(int64(daysTotal))
 	}
 	if daysElapsed > 0 {
-		status.DailySpent = b.SpentMinor.DivRound(int64(daysElapsed)).Float()
+		status.DailySpentMinor = b.SpentMinor.DivRound(int64(daysElapsed))
 	}
 
 	// Calculate projected overrun
-	if status.DailySpent > 0 && daysRemaining > 0 {
-		projectedTotal := spent + (status.DailySpent * float64(daysRemaining))
-		if projectedTotal > amount {
-			status.ProjectedOverrun = projectedTotal - amount
+	if status.DailySpentMinor > 0 && daysRemaining > 0 {
+		projectedTotal := b.SpentMinor + status.DailySpentMinor*money.Minor(daysRemaining)
+		if projectedTotal > b.AmountMinor {
+			status.ProjectedOverrunMinor = projectedTotal - b.AmountMinor
 		}
 	}
 
@@ -663,14 +661,14 @@ func (s *BudgetServiceImpl) calculateBudgetUtilization(b *budget.Budget) *dto.Bu
 
 	// Calculate spending velocity
 	if daysElapsed > 0 {
-		utilization.SpendingVelocity = b.SpentMinor.DivRound(int64(daysElapsed)).Float()
+		utilization.SpendingVelocityMinor = b.SpentMinor.DivRound(int64(daysElapsed))
 	}
 
 	// Calculate projected completion
-	if utilization.SpendingVelocity > 0 {
-		daysToCompletion := b.GetRemainingAmount().Float() / utilization.SpendingVelocity
+	if utilization.SpendingVelocityMinor > 0 {
+		daysToCompletion := b.GetRemainingAmount().DivRound(int64(utilization.SpendingVelocityMinor))
 		if daysToCompletion > 0 {
-			completionDate := time.Now().Add(time.Duration(daysToCompletion) * 24 * time.Hour)
+			completionDate := time.Now().AddDate(0, 0, int(daysToCompletion))
 			utilization.ProjectedCompletion = &completionDate
 		}
 	}

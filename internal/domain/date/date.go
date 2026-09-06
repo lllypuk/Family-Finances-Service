@@ -108,11 +108,23 @@ func (d *Date) Scan(src any) error {
 	return nil
 }
 
+// MarshalJSON пишет дату строкой; незаполненная дата — null: её String() дал бы
+// "-0001-11-30", который не разбирается обратно.
 func (d Date) MarshalJSON() ([]byte, error) {
+	if d.IsZero() {
+		return []byte("null"), nil
+	}
+
 	return []byte(`"` + d.String() + `"`), nil
 }
 
 func (d *Date) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		*d = Date{}
+
+		return nil
+	}
+
 	const quoted = 2
 	if len(data) < quoted || data[0] != '"' || data[len(data)-1] != '"' {
 		return fmt.Errorf("%w: expected string, got %s", ErrInvalidDate, data)

@@ -470,7 +470,7 @@ func (m *MockTransactionService) GetTransactionsByCategory(
 
 func (m *MockTransactionService) GetTransactionsByDateRange(
 	ctx context.Context,
-	from, to time.Time,
+	from, to date.Date,
 ) ([]*transaction.Transaction, error) {
 	args := m.Called(ctx, from, to)
 	if args.Get(0) == nil {
@@ -491,7 +491,7 @@ func (m *MockTransactionService) BulkCategorizeTransactions(
 func (m *MockTransactionService) ValidateTransactionLimits(
 	ctx context.Context,
 	categoryID uuid.UUID,
-	amount float64,
+	amount money.Minor,
 	transactionType transaction.Type,
 ) error {
 	args := m.Called(ctx, categoryID, amount, transactionType)
@@ -560,16 +560,16 @@ func (m *MockBudgetService) DeleteBudget(ctx context.Context, id uuid.UUID) erro
 // Updated: GetActiveBudgets signature (no familyID)
 func (m *MockBudgetService) GetActiveBudgets(
 	ctx context.Context,
-	date time.Time,
+	on date.Date,
 ) ([]*budget.Budget, error) {
-	args := m.Called(ctx, date)
+	args := m.Called(ctx, on)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*budget.Budget), args.Error(1)
 }
 
-func (m *MockBudgetService) UpdateBudgetSpent(ctx context.Context, budgetID uuid.UUID, amount float64) error {
+func (m *MockBudgetService) UpdateBudgetSpent(ctx context.Context, budgetID uuid.UUID, amount money.Minor) error {
 	args := m.Called(ctx, budgetID, amount)
 	return args.Error(0)
 }
@@ -578,7 +578,7 @@ func (m *MockBudgetService) UpdateBudgetSpent(ctx context.Context, budgetID uuid
 func (m *MockBudgetService) CheckBudgetLimits(
 	ctx context.Context,
 	categoryID uuid.UUID,
-	amount float64,
+	amount money.Minor,
 ) error {
 	args := m.Called(ctx, categoryID, amount)
 	return args.Error(0)
@@ -600,7 +600,7 @@ func (m *MockBudgetService) GetBudgetsByCategory(
 func (m *MockBudgetService) ValidateBudgetPeriod(
 	ctx context.Context,
 	categoryID *uuid.UUID,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 ) error {
 	args := m.Called(ctx, categoryID, startDate, endDate)
 	return args.Error(0)
@@ -789,6 +789,9 @@ func setupReportService() (
 	mockBudgetRepo := &MockBudgetRepository{}
 	mockCategoryRepo := &MockCategoryRepository{}
 	mockUserRepo := &MockUserRepository{}
+	mockFamilyRepo := &MockFamilyRepository{}
+	mockFamilyRepo.On("Get", mock.Anything).
+		Return(&user.Family{Currency: "RUB", Timezone: "Europe/Moscow"}, nil).Maybe()
 	mockTransactionService := &MockTransactionService{}
 	mockBudgetService := &MockBudgetService{}
 	mockCategoryService := &MockCategoryService{}
@@ -799,6 +802,7 @@ func setupReportService() (
 		mockBudgetRepo,
 		mockCategoryRepo,
 		mockUserRepo,
+		mockFamilyRepo,
 		mockTransactionService,
 		mockBudgetService,
 		mockCategoryService,
@@ -823,4 +827,38 @@ func setupTransactionService() (
 	service := services.NewTransactionService(txRepo, budgetRepo, categoryRepo, userRepo)
 
 	return service, txRepo, budgetRepo, categoryRepo, userRepo
+}
+
+// MockFamilyService is a mock implementation of FamilyService
+type MockFamilyService struct {
+	mock.Mock
+}
+
+func (m *MockFamilyService) SetupFamily(ctx context.Context, req dto.SetupFamilyDTO) (*user.Family, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*user.Family), args.Error(1)
+}
+
+func (m *MockFamilyService) GetFamily(ctx context.Context) (*user.Family, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*user.Family), args.Error(1)
+}
+
+func (m *MockFamilyService) UpdateFamily(ctx context.Context, req dto.UpdateFamilyDTO) (*user.Family, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*user.Family), args.Error(1)
+}
+
+func (m *MockFamilyService) IsSetupComplete(ctx context.Context) (bool, error) {
+	args := m.Called(ctx)
+	return args.Bool(0), args.Error(1)
 }

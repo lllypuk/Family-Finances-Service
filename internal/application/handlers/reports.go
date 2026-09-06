@@ -11,6 +11,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/auth"
+	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
@@ -71,8 +72,8 @@ func (h *ReportHandler) CreateReport(c echo.Context) error {
 		Type:      report.Type(req.Type),
 		Period:    report.Period(req.Period),
 		UserID:    principal.UserID,
-		StartDate: req.StartDate,
-		EndDate:   req.EndDate,
+		StartDate: date.FromTime(req.StartDate),
+		EndDate:   date.FromTime(req.EndDate),
 	})
 	if err != nil {
 		if errors.Is(err, services.ErrUnsupportedReportType) {
