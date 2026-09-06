@@ -65,7 +65,9 @@ services:
       - "443:443/udp"  # HTTP/3
     environment:
       DOMAIN: ${DOMAIN:-localhost}
-      ACME_EMAIL: ${ACME_EMAIL:-}
+      # Пусто — Caddy не стартовал бы вовсе: директива `email` требует аргумент.
+      # Дефолт тот же, что подставляет install.sh при запуске без `--email`.
+      ACME_EMAIL: ${ACME_EMAIL:-admin@${DOMAIN:-localhost}}
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
