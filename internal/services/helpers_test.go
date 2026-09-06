@@ -9,6 +9,8 @@ import (
 
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
@@ -190,7 +192,7 @@ func (m *MockBudgetRepository) GetByCategory(
 
 func (m *MockBudgetRepository) GetByPeriod(
 	ctx context.Context,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 ) ([]*budget.Budget, error) {
 	args := m.Called(ctx, startDate, endDate)
 	if args.Error(1) != nil {
@@ -318,30 +320,30 @@ func (m *MockTransactionRepository) GetTotalByCategory(
 	ctx context.Context,
 	categoryID uuid.UUID,
 	txType transaction.Type,
-) (float64, error) {
+) (money.Minor, error) {
 	args := m.Called(ctx, categoryID, txType)
-	return args.Get(0).(float64), args.Error(1)
+	return args.Get(0).(money.Minor), args.Error(1)
 }
 
 // Added: GetTotalByCategoryAndDateRange to match TransactionRepository interface
 func (m *MockTransactionRepository) GetTotalByCategoryAndDateRange(
 	ctx context.Context,
 	categoryID uuid.UUID,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 	txType transaction.Type,
-) (float64, error) {
+) (money.Minor, error) {
 	args := m.Called(ctx, categoryID, startDate, endDate, txType)
-	return args.Get(0).(float64), args.Error(1)
+	return args.Get(0).(money.Minor), args.Error(1)
 }
 
 // Updated: GetTotalByDateRange replaces GetTotalByFamilyAndDateRange
 func (m *MockTransactionRepository) GetTotalByDateRange(
 	ctx context.Context,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 	txType transaction.Type,
-) (float64, error) {
+) (money.Minor, error) {
 	args := m.Called(ctx, startDate, endDate, txType)
-	return args.Get(0).(float64), args.Error(1)
+	return args.Get(0).(money.Minor), args.Error(1)
 }
 
 // MockReportRepository is a mock implementation of ReportRepository
@@ -707,30 +709,30 @@ func (m *MockCategoryService) CheckCategoryUsage(ctx context.Context, categoryID
 // createTestTransaction creates a test transaction with all required parameters
 func createTestTransaction(
 	id uuid.UUID,
-	amount float64,
+	amountMinor money.Minor,
 	transactionType transaction.Type,
-	date time.Time,
+	on date.Date,
 ) *transaction.Transaction {
 	categoryID := uuid.New()
-	return createTestTransactionWithCategory(id, categoryID, amount, transactionType, date)
+	return createTestTransactionWithCategory(id, categoryID, amountMinor, transactionType, on)
 }
 
 // createTestTransactionWithCategory creates a test transaction with specific category
 func createTestTransactionWithCategory(
 	id uuid.UUID,
 	categoryID uuid.UUID,
-	amount float64,
+	amountMinor money.Minor,
 	transactionType transaction.Type,
-	date time.Time,
+	on date.Date,
 ) *transaction.Transaction {
 	return &transaction.Transaction{
 		ID:          id,
-		Amount:      amount,
+		AmountMinor: amountMinor,
 		Description: "Test transaction",
 		Type:        transactionType,
 		CategoryID:  categoryID,
 		UserID:      uuid.New(),
-		Date:        date,
+		Date:        on,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
@@ -748,17 +750,17 @@ func createTestCategory(id uuid.UUID, name string, categoryType category.Type) *
 }
 
 // createTestBudget creates a test budget with all required parameters
-func createTestBudget(id uuid.UUID, amount float64, categoryID uuid.UUID) *budget.Budget {
+func createTestBudget(id uuid.UUID, amountMinor money.Minor, categoryID uuid.UUID) *budget.Budget {
 	return &budget.Budget{
-		ID:         id,
-		Name:       "Test Budget",
-		Amount:     amount,
-		CategoryID: &categoryID,
-		StartDate:  time.Now().AddDate(0, 0, -30),
-		EndDate:    time.Now().AddDate(0, 0, 30),
-		IsActive:   true,
-		CreatedAt:  time.Now(),
-		UpdatedAt:  time.Now(),
+		ID:          id,
+		Name:        "Test Budget",
+		AmountMinor: amountMinor,
+		CategoryID:  &categoryID,
+		StartDate:   date.Today(time.UTC).AddDays(-30),
+		EndDate:     date.Today(time.UTC).AddDays(30),
+		IsActive:    true,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
 	}
 }
 

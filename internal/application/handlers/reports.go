@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
@@ -232,8 +233,8 @@ func newReportResponse(r *report.Report) ReportResponse {
 		Type:        string(r.Type),
 		Period:      string(r.Period),
 		UserID:      r.UserID,
-		StartDate:   r.StartDate,
-		EndDate:     r.EndDate,
+		StartDate:   r.StartDate.In(time.UTC),
+		EndDate:     r.EndDate.In(time.UTC),
 		Data:        r.Data,
 		GeneratedAt: r.GeneratedAt,
 	}

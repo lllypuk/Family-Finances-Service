@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/infrastructure/validation"
 )
@@ -34,17 +35,18 @@ type SQLiteFamilyRepository struct {
 
 // FamilyStatistics holds family statistics
 type FamilyStatistics struct {
-	ID               uuid.UUID `json:"id"`
-	Name             string    `json:"name"`
-	Currency         string    `json:"currency"`
-	CreatedAt        time.Time `json:"created_at"`
-	UserCount        int       `json:"user_count"`
-	CategoryCount    int       `json:"category_count"`
-	TransactionCount int       `json:"transaction_count"`
-	BudgetCount      int       `json:"budget_count"`
-	TotalIncome      float64   `json:"total_income"`
-	TotalExpenses    float64   `json:"total_expenses"`
-	Balance          float64   `json:"balance"`
+	ID                 uuid.UUID   `json:"id"`
+	Name               string      `json:"name"`
+	Currency           string      `json:"currency"`
+	Timezone           string      `json:"timezone"`
+	CreatedAt          time.Time   `json:"created_at"`
+	UserCount          int         `json:"user_count"`
+	CategoryCount      int         `json:"category_count"`
+	TransactionCount   int         `json:"transaction_count"`
+	BudgetCount        int         `json:"budget_count"`
+	TotalIncomeMinor   money.Minor `json:"total_income_minor"`
+	TotalExpensesMinor money.Minor `json:"total_expenses_minor"`
+	BalanceMinor       money.Minor `json:"balance_minor"`
 }
 
 // NewSQLiteFamilyRepository creates a new SQLite family repository
@@ -83,11 +85,11 @@ func (r *SQLiteFamilyRepository) Create(ctx context.Context, family *user.Family
 	family.UpdatedAt = now
 
 	query := `
-		INSERT INTO families (id, name, currency, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?)`
+		INSERT INTO families (id, name, currency, timezone, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)`
 
 	_, err := r.db.ExecContext(ctx, query,
-		family.ID.String(), family.Name, family.Currency, family.CreatedAt, family.UpdatedAt,
+		family.ID.String(), family.Name, family.Currency, family.Timezone, family.CreatedAt, family.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create family: %w", err)
@@ -99,7 +101,7 @@ func (r *SQLiteFamilyRepository) Create(ctx context.Context, family *user.Family
 // Get retrieves the single family from the database
 func (r *SQLiteFamilyRepository) Get(ctx context.Context) (*user.Family, error) {
 	query := `
-		SELECT id, name, currency, created_at, updated_at
+		SELECT id, name, currency, timezone, created_at, updated_at
 		FROM families
 		LIMIT 1`
 
@@ -107,7 +109,7 @@ func (r *SQLiteFamilyRepository) Get(ctx context.Context) (*user.Family, error) 
 	var idStr string
 
 	err := r.db.QueryRowContext(ctx, query).Scan(
-		&idStr, &family.Name, &family.Currency, &family.CreatedAt, &family.UpdatedAt,
+		&idStr, &family.Name, &family.Currency, &family.Timezone, &family.CreatedAt, &family.UpdatedAt,
 	)
 
 	if err != nil {
@@ -152,11 +154,11 @@ func (r *SQLiteFamilyRepository) Update(ctx context.Context, family *user.Family
 
 	query := `
 		UPDATE families
-		SET name = ?, currency = ?, updated_at = ?
+		SET name = ?, currency = ?, timezone = ?, updated_at = ?
 		WHERE id = ?`
 
 	result, err := r.db.ExecContext(ctx, query,
-		family.Name, family.Currency, family.UpdatedAt, family.ID.String(),
+		family.Name, family.Currency, family.Timezone, family.UpdatedAt, family.ID.String(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update family: %w", err)
@@ -195,13 +197,16 @@ func (r *SQLiteFamilyRepository) GetFamilyStatistics(ctx context.Context) (*Fami
 			f.id,
 			f.name,
 			f.currency,
+			f.timezone,
 			f.created_at,
 			(SELECT COUNT(DISTINCT u.id) FROM users u WHERE u.is_active = 1) as user_count,
 			(SELECT COUNT(DISTINCT c.id) FROM categories c WHERE c.is_active = 1) as category_count,
 			(SELECT COUNT(DISTINCT t.id) FROM transactions t) as transaction_count,
 			(SELECT COUNT(DISTINCT b.id) FROM budgets b WHERE b.is_active = 1) as budget_count,
-			COALESCE((SELECT SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END) FROM transactions t), 0) as total_income,
-			COALESCE((SELECT SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END) FROM transactions t), 0) as total_expenses
+			COALESCE((SELECT SUM(CASE WHEN t.type = 'income' THEN t.amount_minor ELSE 0 END)
+				FROM transactions t), 0) as total_income,
+			COALESCE((SELECT SUM(CASE WHEN t.type = 'expense' THEN t.amount_minor ELSE 0 END)
+				FROM transactions t), 0) as total_expenses
 		FROM families f
 		ORDER BY f.created_at ASC
 		LIMIT 1`
@@ -210,9 +215,9 @@ func (r *SQLiteFamilyRepository) GetFamilyStatistics(ctx context.Context) (*Fami
 	var idStr string
 
 	err := r.db.QueryRowContext(ctx, query).Scan(
-		&idStr, &stats.Name, &stats.Currency, &stats.CreatedAt,
+		&idStr, &stats.Name, &stats.Currency, &stats.Timezone, &stats.CreatedAt,
 		&stats.UserCount, &stats.CategoryCount, &stats.TransactionCount,
-		&stats.BudgetCount, &stats.TotalIncome, &stats.TotalExpenses,
+		&stats.BudgetCount, &stats.TotalIncomeMinor, &stats.TotalExpensesMinor,
 	)
 
 	if err != nil {
@@ -228,7 +233,7 @@ func (r *SQLiteFamilyRepository) GetFamilyStatistics(ctx context.Context) (*Fami
 		return nil, fmt.Errorf("failed to parse family ID: %w", err)
 	}
 
-	stats.Balance = stats.TotalIncome - stats.TotalExpenses
+	stats.BalanceMinor = stats.TotalIncomeMinor - stats.TotalExpensesMinor
 
 	return &stats, nil
 }
@@ -260,11 +265,11 @@ func (r *SQLiteFamilyRepository) CreateWithTransaction(ctx context.Context, tx *
 	family.UpdatedAt = now
 
 	query := `
-		INSERT INTO families (id, name, currency, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?)`
+		INSERT INTO families (id, name, currency, timezone, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)`
 
 	_, err := tx.ExecContext(ctx, query,
-		family.ID.String(), family.Name, family.Currency, family.CreatedAt, family.UpdatedAt,
+		family.ID.String(), family.Name, family.Currency, family.Timezone, family.CreatedAt, family.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create family: %w", err)

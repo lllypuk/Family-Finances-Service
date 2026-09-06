@@ -26,11 +26,11 @@ Contains all database objects in order of dependencies:
 
    | Table | Notes |
    |---|---|
-   | `families` | `singleton` UNIQUE — ровно одна семья на инсталляцию |
-   | `users` | `role` CHECK, `is_active` |
+   | `families` | `singleton` UNIQUE — ровно одна семья на инсталляцию; `timezone` (IANA) |
+   | `users` | `role` CHECK (`admin`/`member`), `is_active` |
    | `categories` | `income`/`expense`, самоссылка `parent_id` |
-   | `transactions` | `amount > 0`, `date` |
-   | `budgets` | `amount`, `spent`, период `start_date`/`end_date` |
+   | `transactions` | `amount_minor INTEGER > 0`, `date TEXT 'YYYY-MM-DD'` (CHECK GLOB) |
+   | `budgets` | `amount_minor`, `spent_minor`, период `start_date`/`end_date` — `TEXT`-даты |
    | `reports` | `data` — JSON отчёта |
    | `sessions` | bearer-токены: только `token_hash` |
 
@@ -185,7 +185,8 @@ migrate -path ./migrations -database "sqlite://./data/budget.db" down
 |------------|--------|-------|
 | `UUID` | `TEXT` | Store as string |
 | `ENUM` | `TEXT` + `CHECK` | Validate with constraints |
-| `DECIMAL` | `REAL` | Floating point |
+| `DECIMAL` (деньги) | `INTEGER` | Минимальные единицы, колонки `*_minor` |
+| `DATE` | `TEXT` | `YYYY-MM-DD`, CHECK GLOB |
 | `TIMESTAMP WITH TIME ZONE` | `DATETIME` | UTC recommended |
 | `SERIAL` | Not needed | Use TEXT for UUIDs |
 | `BOOLEAN` | `INTEGER` | 0 = false, 1 = true |

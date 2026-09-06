@@ -10,6 +10,8 @@ import (
 
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 	budgetrepo "family-budget-service/internal/infrastructure/budget"
 	categoryrepo "family-budget-service/internal/infrastructure/category"
@@ -150,15 +152,15 @@ func createTestBudgets(b *testing.B, ctx context.Context) {
 	budgetRepo := budgetrepo.NewSQLiteRepository(testContainer.DB)
 	for i := range 5 {
 		budgetObj := &budget.Budget{
-			ID:         uuid.New(),
-			Name:       fmt.Sprintf("Budget %d", i+1),
-			Amount:     1000.00,
-			Spent:      0.00,
-			Period:     budget.PeriodMonthly,
-			CategoryID: &testCategories[i%len(testCategories)].ID,
+			ID:          uuid.New(),
+			Name:        fmt.Sprintf("Budget %d", i+1),
+			AmountMinor: 100_000,
+			SpentMinor:  0,
+			Period:      budget.PeriodMonthly,
+			CategoryID:  &testCategories[i%len(testCategories)].ID,
 
-			StartDate: time.Now().AddDate(0, 0, -benchmarkBudgetStartOffsetDays),
-			EndDate:   time.Now().AddDate(0, benchmarkBudgetEndOffsetMonths, 0),
+			StartDate: date.Today(time.UTC).AddDays(-benchmarkBudgetStartOffsetDays),
+			EndDate:   date.Today(time.UTC).AddDays(30 * benchmarkBudgetEndOffsetMonths),
 			IsActive:  true,
 		}
 		err := budgetRepo.Create(ctx, budgetObj)
@@ -171,18 +173,18 @@ func createTestBudgets(b *testing.B, ctx context.Context) {
 // createTestTransactions creates test transactions
 func createTestTransactions(b *testing.B, ctx context.Context) {
 	transactionRepo := transactionrepo.NewSQLiteRepository(testContainer.DB)
-	now := time.Now()
+	now := date.Today(time.UTC)
 
 	for i := range 1000 {
 		tx := &transaction.Transaction{
 			ID:          uuid.New(),
-			Amount:      float64(10 + (i % 500)),
+			AmountMinor: money.Minor(1_000 + (i%500)*100),
 			Type:        transaction.TypeExpense,
 			Description: fmt.Sprintf("Benchmark transaction %d", i+1),
 			CategoryID:  testCategories[i%len(testCategories)].ID,
 			UserID:      testUserID,
 
-			Date: now.AddDate(0, 0, -(i % benchmarkTransactionSpreadDays)),
+			Date: now.AddDays(-(i % benchmarkTransactionSpreadDays)),
 			Tags: []string{fmt.Sprintf("tag%d", i%10), "benchmark"},
 		}
 
@@ -265,20 +267,19 @@ func BenchmarkTransactionRepository_GetByFilter_Complex(b *testing.B) {
 	ctx := context.Background()
 
 	expenseType := transaction.TypeExpense
-	amountFrom := 50.0
-	amountTo := 200.0
-	dateFrom := time.Now().AddDate(0, 0, -benchmarkDateRangeDays) // Last 30 days
-	dateTo := time.Now()
+	amountFrom := money.Minor(5_000)
+	amountTo := money.Minor(20_000)
+	dateFrom := date.Today(time.UTC).AddDays(-benchmarkDateRangeDays) // Last 30 days
+	dateTo := date.Today(time.UTC)
 
 	filter := transaction.Filter{
-
-		Type:       &expenseType,
-		AmountFrom: &amountFrom,
-		AmountTo:   &amountTo,
-		DateFrom:   &dateFrom,
-		DateTo:     &dateTo,
-		Tags:       []string{"benchmark"},
-		Limit:      50,
+		Type:            &expenseType,
+		AmountFromMinor: &amountFrom,
+		AmountToMinor:   &amountTo,
+		DateFrom:        &dateFrom,
+		DateTo:          &dateTo,
+		Tags:            []string{"benchmark"},
+		Limit:           50,
 	}
 
 	for b.Loop() {
@@ -316,8 +317,8 @@ func BenchmarkTransactionRepository_GetTransactionSummary(b *testing.B) {
 	repo := transactionrepo.NewSQLiteRepository(testContainer.DB)
 	ctx := context.Background()
 
-	startDate := time.Now().AddDate(0, 0, -benchmarkDateRangeDays)
-	endDate := time.Now()
+	startDate := date.Today(time.UTC).AddDays(-benchmarkDateRangeDays)
+	endDate := date.Today(time.UTC)
 
 	for b.Loop() {
 		_, err := repo.GetSummary(ctx, startDate, endDate)
@@ -333,9 +334,9 @@ func BenchmarkTransactionRepository_GetMonthlySummary(b *testing.B) {
 	repo := transactionrepo.NewSQLiteRepository(testContainer.DB)
 	ctx := context.Background()
 
-	now := time.Now()
-	year := now.Year()
-	month := int(now.Month())
+	now := date.Today(time.UTC)
+	year := now.Year
+	month := int(now.Month)
 
 	for b.Loop() {
 		_, err := repo.GetMonthlySummary(ctx, year, month)
@@ -354,13 +355,13 @@ func BenchmarkTransactionRepository_Create(b *testing.B) {
 	for i := 0; b.Loop(); i++ {
 		tx := &transaction.Transaction{
 			ID:          uuid.New(),
-			Amount:      float64(10 + (i % 100)),
+			AmountMinor: money.Minor(1_000 + (i%100)*100),
 			Type:        transaction.TypeExpense,
 			Description: fmt.Sprintf("Benchmark create transaction %d", i),
 			CategoryID:  testCategories[i%len(testCategories)].ID,
 			UserID:      testUserID,
 
-			Date: time.Now(),
+			Date: date.Today(time.UTC),
 			Tags: []string{"create-benchmark"},
 		}
 
@@ -380,13 +381,13 @@ func BenchmarkTransactionRepository_Update(b *testing.B) {
 	// Create a transaction to update
 	tx := &transaction.Transaction{
 		ID:          uuid.New(),
-		Amount:      100.00,
+		AmountMinor: 10_000,
 		Type:        transaction.TypeExpense,
 		Description: "Transaction to update",
 		CategoryID:  testCategories[0].ID,
 		UserID:      testUserID,
 
-		Date: time.Now(),
+		Date: date.Today(time.UTC),
 		Tags: []string{"update-benchmark"},
 	}
 
@@ -396,7 +397,7 @@ func BenchmarkTransactionRepository_Update(b *testing.B) {
 	}
 
 	for i := 0; b.Loop(); i++ {
-		tx.Amount = float64(100 + i)
+		tx.AmountMinor = money.Minor(10_000 + i)
 		tx.Description = fmt.Sprintf("Updated transaction %d", i)
 
 		err := repo.Update(ctx, tx)

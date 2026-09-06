@@ -10,13 +10,10 @@ import (
 
 	"github.com/google/uuid"
 
+	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/infrastructure/sqlitehelpers"
 	"family-budget-service/internal/infrastructure/validation"
-)
-
-const (
-	percentageMultiplier = 100
 )
 
 // SQLiteRepository implements report repository using SQLite
@@ -62,11 +59,11 @@ func scanReportRow(rows *sql.Rows) (*report.Report, error) {
 	var rep report.Report
 	var idStr, typeStr, periodStr, familyIDStr, userIDStr string
 	var dataJSON string
-	var startDateStr, endDateStr, generatedAtStr string
+	var generatedAtStr string
 
 	err := rows.Scan(
 		&idStr, &rep.Name, &typeStr, &periodStr,
-		&startDateStr, &endDateStr, &dataJSON,
+		&rep.StartDate, &rep.EndDate, &dataJSON,
 		&familyIDStr, &userIDStr, &generatedAtStr,
 	)
 	if err != nil {
@@ -81,9 +78,6 @@ func scanReportRow(rows *sql.Rows) (*report.Report, error) {
 	rep.Type = report.Type(typeStr)
 	rep.Period = report.Period(periodStr)
 
-	// Parse timestamps
-	rep.StartDate, _ = time.Parse(time.RFC3339, startDateStr)
-	rep.EndDate, _ = time.Parse(time.RFC3339, endDateStr)
 	rep.GeneratedAt, _ = time.Parse(time.RFC3339, generatedAtStr)
 
 	// Parse data from JSON
@@ -121,7 +115,7 @@ func (r *SQLiteRepository) Create(ctx context.Context, rep *report.Report) error
 	}
 
 	// Validate date range
-	if !rep.EndDate.After(rep.StartDate) && !rep.EndDate.Equal(rep.StartDate) {
+	if rep.EndDate.Before(rep.StartDate) {
 		return errors.New("end date must be after or equal to start date")
 	}
 
@@ -145,8 +139,8 @@ func (r *SQLiteRepository) Create(ctx context.Context, rep *report.Report) error
 		rep.Name,
 		string(rep.Type),
 		string(rep.Period),
-		rep.StartDate.Format(time.RFC3339),
-		rep.EndDate.Format(time.RFC3339),
+		rep.StartDate,
+		rep.EndDate,
 		string(dataJSON),
 		familyID.String(),
 		sqlitehelpers.UUIDToString(rep.UserID),
@@ -176,11 +170,11 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*report.R
 	var rep report.Report
 	var idStr, typeStr, periodStr, familyIDStr, userIDStr string
 	var dataJSON string
-	var startDateStr, endDateStr, generatedAtStr string
+	var generatedAtStr string
 
 	err := r.db.QueryRowContext(ctx, query, sqlitehelpers.UUIDToString(id)).Scan(
 		&idStr, &rep.Name, &typeStr, &periodStr,
-		&startDateStr, &endDateStr, &dataJSON,
+		&rep.StartDate, &rep.EndDate, &dataJSON,
 		&familyIDStr, &userIDStr, &generatedAtStr,
 	)
 
@@ -199,9 +193,6 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*report.R
 	rep.Type = report.Type(typeStr)
 	rep.Period = report.Period(periodStr)
 
-	// Parse timestamps
-	rep.StartDate, _ = time.Parse(time.RFC3339, startDateStr)
-	rep.EndDate, _ = time.Parse(time.RFC3339, endDateStr)
 	rep.GeneratedAt, _ = time.Parse(time.RFC3339, generatedAtStr)
 
 	// Parse data from JSON
@@ -342,7 +333,7 @@ func (r *SQLiteRepository) GetByUserID(ctx context.Context, userID uuid.UUID) ([
 func (r *SQLiteRepository) GenerateExpenseReport(
 	ctx context.Context,
 	familyID uuid.UUID,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 ) (*report.Data, error) {
 	// Validate parameters
 	if err := validation.ValidateUUID(familyID); err != nil {
@@ -353,13 +344,13 @@ func (r *SQLiteRepository) GenerateExpenseReport(
 
 	// Get total expenses
 	expenseQuery := `
-		SELECT COALESCE(SUM(amount), 0) as total_expenses
+		SELECT COALESCE(SUM(amount_minor), 0) as total_expenses
 		FROM transactions
 		WHERE family_id = ? AND type = 'expense'
 		AND date BETWEEN ? AND ?`
 
 	err := r.db.QueryRowContext(ctx, expenseQuery, sqlitehelpers.UUIDToString(familyID), startDate, endDate).
-		Scan(&data.TotalExpenses)
+		Scan(&data.TotalExpensesMinor)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get total expenses: %w", err)
 	}
@@ -368,7 +359,7 @@ func (r *SQLiteRepository) GenerateExpenseReport(
 	categoryQuery := `
 		SELECT
 			c.id, c.name,
-			COALESCE(SUM(t.amount), 0) as total_amount,
+			COALESCE(SUM(t.amount_minor), 0) as total_amount,
 			COUNT(t.id) as transaction_count
 		FROM categories c
 		LEFT JOIN transactions t ON c.id = t.category_id
@@ -376,7 +367,7 @@ func (r *SQLiteRepository) GenerateExpenseReport(
 			AND t.date BETWEEN ? AND ?
 		WHERE c.family_id = ? AND c.type = 'expense' AND c.is_active = 1
 		GROUP BY c.id, c.name
-		HAVING COALESCE(SUM(t.amount), 0) > 0
+		HAVING COALESCE(SUM(t.amount_minor), 0) > 0
 		ORDER BY total_amount DESC`
 
 	rows, err := r.db.QueryContext(
@@ -396,17 +387,13 @@ func (r *SQLiteRepository) GenerateExpenseReport(
 	for rows.Next() {
 		var item report.CategoryReportItem
 		var categoryIDStr string
-		err = rows.Scan(&categoryIDStr, &item.CategoryName, &item.Amount, &item.Count)
+		err = rows.Scan(&categoryIDStr, &item.CategoryName, &item.AmountMinor, &item.Count)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan category item: %w", err)
 		}
 
 		item.CategoryID, _ = uuid.Parse(categoryIDStr)
-
-		// Calculate percentage
-		if data.TotalExpenses > 0 {
-			item.Percentage = (item.Amount / data.TotalExpenses) * percentageMultiplier
-		}
+		item.Percentage = item.AmountMinor.Percent(data.TotalExpensesMinor)
 
 		categoryBreakdown = append(categoryBreakdown, item)
 	}
@@ -419,12 +406,12 @@ func (r *SQLiteRepository) GenerateExpenseReport(
 
 	// Get top expenses
 	topExpensesQuery := `
-		SELECT t.id, t.amount, t.description, c.name, t.date
+		SELECT t.id, t.amount_minor, t.description, c.name, t.date
 		FROM transactions t
 		JOIN categories c ON t.category_id = c.id
 		WHERE t.family_id = ? AND t.type = 'expense'
 		AND t.date BETWEEN ? AND ?
-		ORDER BY t.amount DESC
+		ORDER BY t.amount_minor DESC
 		LIMIT 10`
 
 	topRows, err := r.db.QueryContext(ctx, topExpensesQuery, sqlitehelpers.UUIDToString(familyID), startDate, endDate)
@@ -437,7 +424,7 @@ func (r *SQLiteRepository) GenerateExpenseReport(
 	for topRows.Next() {
 		var item report.TransactionReportItem
 		var idStr string
-		err = topRows.Scan(&idStr, &item.Amount, &item.Description, &item.Category, &item.Date)
+		err = topRows.Scan(&idStr, &item.AmountMinor, &item.Description, &item.Category, &item.Date)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan top expense item: %w", err)
 		}
@@ -458,7 +445,7 @@ func (r *SQLiteRepository) GenerateExpenseReport(
 func (r *SQLiteRepository) GenerateIncomeReport(
 	ctx context.Context,
 	familyID uuid.UUID,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 ) (*report.Data, error) {
 	// Validate parameters
 	if err := validation.ValidateUUID(familyID); err != nil {
@@ -469,13 +456,13 @@ func (r *SQLiteRepository) GenerateIncomeReport(
 
 	// Get total income
 	incomeQuery := `
-		SELECT COALESCE(SUM(amount), 0) as total_income
+		SELECT COALESCE(SUM(amount_minor), 0) as total_income
 		FROM transactions
 		WHERE family_id = ? AND type = 'income'
 		AND date BETWEEN ? AND ?`
 
 	err := r.db.QueryRowContext(ctx, incomeQuery, sqlitehelpers.UUIDToString(familyID), startDate, endDate).
-		Scan(&data.TotalIncome)
+		Scan(&data.TotalIncomeMinor)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get total income: %w", err)
 	}
@@ -484,7 +471,7 @@ func (r *SQLiteRepository) GenerateIncomeReport(
 	categoryQuery := `
 		SELECT
 			c.id, c.name,
-			COALESCE(SUM(t.amount), 0) as total_amount,
+			COALESCE(SUM(t.amount_minor), 0) as total_amount,
 			COUNT(t.id) as transaction_count
 		FROM categories c
 		LEFT JOIN transactions t ON c.id = t.category_id
@@ -492,7 +479,7 @@ func (r *SQLiteRepository) GenerateIncomeReport(
 			AND t.date BETWEEN ? AND ?
 		WHERE c.family_id = ? AND c.type = 'income' AND c.is_active = 1
 		GROUP BY c.id, c.name
-		HAVING COALESCE(SUM(t.amount), 0) > 0
+		HAVING COALESCE(SUM(t.amount_minor), 0) > 0
 		ORDER BY total_amount DESC`
 
 	rows, err := r.db.QueryContext(
@@ -512,17 +499,13 @@ func (r *SQLiteRepository) GenerateIncomeReport(
 	for rows.Next() {
 		var item report.CategoryReportItem
 		var categoryIDStr string
-		err = rows.Scan(&categoryIDStr, &item.CategoryName, &item.Amount, &item.Count)
+		err = rows.Scan(&categoryIDStr, &item.CategoryName, &item.AmountMinor, &item.Count)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan income category item: %w", err)
 		}
 
 		item.CategoryID, _ = uuid.Parse(categoryIDStr)
-
-		// Calculate percentage
-		if data.TotalIncome > 0 {
-			item.Percentage = (item.Amount / data.TotalIncome) * percentageMultiplier
-		}
+		item.Percentage = item.AmountMinor.Percent(data.TotalIncomeMinor)
 
 		categoryBreakdown = append(categoryBreakdown, item)
 	}
@@ -540,7 +523,7 @@ func (r *SQLiteRepository) GenerateIncomeReport(
 func (r *SQLiteRepository) GenerateCashFlowReport(
 	ctx context.Context,
 	familyID uuid.UUID,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 ) (*report.Data, error) {
 	// Validate parameters
 	if err := validation.ValidateUUID(familyID); err != nil {
@@ -552,25 +535,25 @@ func (r *SQLiteRepository) GenerateCashFlowReport(
 	// Get totals
 	totalsQuery := `
 		SELECT
-			COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as total_income,
-			COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as total_expenses
+			COALESCE(SUM(CASE WHEN type = 'income' THEN amount_minor ELSE 0 END), 0) as total_income,
+			COALESCE(SUM(CASE WHEN type = 'expense' THEN amount_minor ELSE 0 END), 0) as total_expenses
 		FROM transactions
 		WHERE family_id = ? AND date BETWEEN ? AND ?`
 
 	err := r.db.QueryRowContext(ctx, totalsQuery, sqlitehelpers.UUIDToString(familyID), startDate, endDate).
-		Scan(&data.TotalIncome, &data.TotalExpenses)
+		Scan(&data.TotalIncomeMinor, &data.TotalExpensesMinor)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get totals: %w", err)
 	}
 
-	data.NetIncome = data.TotalIncome - data.TotalExpenses
+	data.NetIncomeMinor = data.TotalIncomeMinor - data.TotalExpensesMinor
 
 	// Get daily breakdown
 	dailyQuery := `
 		SELECT
 			date,
-			COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as daily_income,
-			COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as daily_expenses
+			COALESCE(SUM(CASE WHEN type = 'income' THEN amount_minor ELSE 0 END), 0) as daily_income,
+			COALESCE(SUM(CASE WHEN type = 'expense' THEN amount_minor ELSE 0 END), 0) as daily_expenses
 		FROM transactions
 		WHERE family_id = ? AND date BETWEEN ? AND ?
 		GROUP BY date
@@ -585,11 +568,11 @@ func (r *SQLiteRepository) GenerateCashFlowReport(
 	var dailyBreakdown []report.DailyReportItem
 	for rows.Next() {
 		var item report.DailyReportItem
-		err = rows.Scan(&item.Date, &item.Income, &item.Expenses)
+		err = rows.Scan(&item.Date, &item.IncomeMinor, &item.ExpensesMinor)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan daily item: %w", err)
 		}
-		item.Balance = item.Income - item.Expenses
+		item.BalanceMinor = item.IncomeMinor - item.ExpensesMinor
 		dailyBreakdown = append(dailyBreakdown, item)
 	}
 
@@ -606,7 +589,7 @@ func (r *SQLiteRepository) GenerateCashFlowReport(
 func (r *SQLiteRepository) GenerateBudgetComparisonReport(
 	ctx context.Context,
 	familyID uuid.UUID,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 ) (*report.Data, error) {
 	// Validate parameters
 	if err := validation.ValidateUUID(familyID); err != nil {
@@ -620,8 +603,8 @@ func (r *SQLiteRepository) GenerateBudgetComparisonReport(
 		SELECT
 			b.id,
 			b.name,
-			b.amount as planned,
-			b.spent as actual
+			b.amount_minor as planned,
+			b.spent_minor as actual
 		FROM budgets b
 		WHERE b.family_id = ? AND b.is_active = 1
 		AND (
@@ -651,16 +634,14 @@ func (r *SQLiteRepository) GenerateBudgetComparisonReport(
 	for rows.Next() {
 		var item report.BudgetComparisonItem
 		var budgetIDStr string
-		err = rows.Scan(&budgetIDStr, &item.BudgetName, &item.Planned, &item.Actual)
+		err = rows.Scan(&budgetIDStr, &item.BudgetName, &item.PlannedMinor, &item.ActualMinor)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan budget comparison item: %w", err)
 		}
 
 		item.BudgetID, _ = uuid.Parse(budgetIDStr)
-		item.Difference = item.Actual - item.Planned
-		if item.Planned > 0 {
-			item.Percentage = (item.Actual / item.Planned) * percentageMultiplier
-		}
+		item.DifferenceMinor = item.ActualMinor - item.PlannedMinor
+		item.Percentage = item.ActualMinor.Percent(item.PlannedMinor)
 
 		budgetComparison = append(budgetComparison, item)
 	}

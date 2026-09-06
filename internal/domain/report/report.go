@@ -4,6 +4,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 )
 
 type Report struct {
@@ -12,8 +15,8 @@ type Report struct {
 	Type        Type      `json:"type"         bson:"type"`
 	Period      Period    `json:"period"       bson:"period"`
 	UserID      uuid.UUID `json:"user_id"      bson:"user_id"` // Кто создал отчет
-	StartDate   time.Time `json:"start_date"   bson:"start_date"`
-	EndDate     time.Time `json:"end_date"     bson:"end_date"`
+	StartDate   date.Date `json:"start_date"   bson:"start_date"`
+	EndDate     date.Date `json:"end_date"     bson:"end_date"`
 	Data        Data      `json:"data"         bson:"data"`
 	GeneratedAt time.Time `json:"generated_at" bson:"generated_at"`
 }
@@ -39,45 +42,45 @@ const (
 )
 
 type Data struct {
-	TotalIncome       float64                 `json:"total_income"       bson:"total_income"`
-	TotalExpenses     float64                 `json:"total_expenses"     bson:"total_expenses"`
-	NetIncome         float64                 `json:"net_income"         bson:"net_income"`
-	CategoryBreakdown []CategoryReportItem    `json:"category_breakdown" bson:"category_breakdown"`
-	DailyBreakdown    []DailyReportItem       `json:"daily_breakdown"    bson:"daily_breakdown"`
-	TopExpenses       []TransactionReportItem `json:"top_expenses"       bson:"top_expenses"`
-	BudgetComparison  []BudgetComparisonItem  `json:"budget_comparison"  bson:"budget_comparison"`
+	TotalIncomeMinor   money.Minor             `json:"total_income_minor"   bson:"total_income_minor"`
+	TotalExpensesMinor money.Minor             `json:"total_expenses_minor" bson:"total_expenses_minor"`
+	NetIncomeMinor     money.Minor             `json:"net_income_minor"     bson:"net_income_minor"`
+	CategoryBreakdown  []CategoryReportItem    `json:"category_breakdown"   bson:"category_breakdown"`
+	DailyBreakdown     []DailyReportItem       `json:"daily_breakdown"      bson:"daily_breakdown"`
+	TopExpenses        []TransactionReportItem `json:"top_expenses"         bson:"top_expenses"`
+	BudgetComparison   []BudgetComparisonItem  `json:"budget_comparison"    bson:"budget_comparison"`
 }
 
 type CategoryReportItem struct {
-	CategoryID   uuid.UUID `json:"category_id"   bson:"category_id"`
-	CategoryName string    `json:"category_name" bson:"category_name"`
-	Amount       float64   `json:"amount"        bson:"amount"`
-	Percentage   float64   `json:"percentage"    bson:"percentage"`
-	Count        int       `json:"count"         bson:"count"`
+	CategoryID   uuid.UUID   `json:"category_id"   bson:"category_id"`
+	CategoryName string      `json:"category_name" bson:"category_name"`
+	AmountMinor  money.Minor `json:"amount_minor"  bson:"amount_minor"`
+	Percentage   float64     `json:"percentage"    bson:"percentage"`
+	Count        int         `json:"count"         bson:"count"`
 }
 
 type DailyReportItem struct {
-	Date     time.Time `json:"date"     bson:"date"`
-	Income   float64   `json:"income"   bson:"income"`
-	Expenses float64   `json:"expenses" bson:"expenses"`
-	Balance  float64   `json:"balance"  bson:"balance"`
+	Date          date.Date   `json:"date"           bson:"date"`
+	IncomeMinor   money.Minor `json:"income_minor"   bson:"income_minor"`
+	ExpensesMinor money.Minor `json:"expenses_minor" bson:"expenses_minor"`
+	BalanceMinor  money.Minor `json:"balance_minor"  bson:"balance_minor"`
 }
 
 type TransactionReportItem struct {
-	ID          uuid.UUID `json:"id"          bson:"id"`
-	Amount      float64   `json:"amount"      bson:"amount"`
-	Description string    `json:"description" bson:"description"`
-	Category    string    `json:"category"    bson:"category"`
-	Date        time.Time `json:"date"        bson:"date"`
+	ID          uuid.UUID   `json:"id"           bson:"id"`
+	AmountMinor money.Minor `json:"amount_minor" bson:"amount_minor"`
+	Description string      `json:"description"  bson:"description"`
+	Category    string      `json:"category"     bson:"category"`
+	Date        date.Date   `json:"date"         bson:"date"`
 }
 
 type BudgetComparisonItem struct {
-	BudgetID   uuid.UUID `json:"budget_id"   bson:"budget_id"`
-	BudgetName string    `json:"budget_name" bson:"budget_name"`
-	Planned    float64   `json:"planned"     bson:"planned"`
-	Actual     float64   `json:"actual"      bson:"actual"`
-	Difference float64   `json:"difference"  bson:"difference"`
-	Percentage float64   `json:"percentage"  bson:"percentage"`
+	BudgetID        uuid.UUID   `json:"budget_id"        bson:"budget_id"`
+	BudgetName      string      `json:"budget_name"      bson:"budget_name"`
+	PlannedMinor    money.Minor `json:"planned_minor"    bson:"planned_minor"`
+	ActualMinor     money.Minor `json:"actual_minor"     bson:"actual_minor"`
+	DifferenceMinor money.Minor `json:"difference_minor" bson:"difference_minor"`
+	Percentage      float64     `json:"percentage"       bson:"percentage"`
 }
 
 func NewReport(
@@ -85,7 +88,7 @@ func NewReport(
 	reportType Type,
 	period Period,
 	userID uuid.UUID,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 ) *Report {
 	return &Report{
 		ID:          uuid.New(),

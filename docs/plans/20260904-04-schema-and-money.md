@@ -158,12 +158,12 @@ JSON: `amount_minor` (int64), `date` (`"2026-09-04"`), `currency` и `timezone` 
   `internal/testhelpers/factories.go`, `migrations/001_consolidated.{up,down}.sql`
   (колонки `*_minor`, даты `TEXT`, `families.timezone` — перенесены сюда из задачи 1)
 
-- [ ] `Transaction.AmountMinor money.Minor`, `Date date.Date`; `Budget.AmountMinor/SpentMinor`, `StartDate/EndDate date.Date`; методы бюджета (`GetRemainingAmount`, `GetSpentPercentage`, `IsOverBudget`) через `money`
-- [ ] `report.Data`: суммы `money.Minor`, проценты `float64`; `Report.StartDate/EndDate` — даты
-- [ ] репозитории: колонки `*_minor`, `SUM` как `int64`, `AVG` убрать (считать в Go), `ORDER BY amount_minor`, фильтры по датам как строки `TEXT`
-- [ ] `Family.Timezone` в домене и репозитории; `factories.go` — `Europe/Moscow`, `RUB`
-- [ ] тесты репозиториев: суммы без потери копеек (три операции по 33 копейки → 99), сортировка, фильтр по диапазону дат включает границы
-- [ ] `make fmt && make test && make lint` — зелёные
+- [x] `Transaction.AmountMinor money.Minor`, `Date date.Date`; `Budget.AmountMinor/SpentMinor`, `StartDate/EndDate date.Date`; методы бюджета (`GetRemainingAmount`, `GetSpentPercentage`, `IsOverBudget`) через `money`
+- [x] `report.Data`: суммы `money.Minor`, проценты `float64`; `Report.StartDate/EndDate` — даты
+- [x] репозитории: колонки `*_minor`, `SUM` как `int64`, `AVG` убрать (считать в Go), `ORDER BY amount_minor`, фильтры по датам как строки `TEXT`
+- [x] `Family.Timezone` в домене и репозитории; `factories.go` — `Europe/Moscow`, `RUB`
+- [x] тесты репозиториев: суммы без потери копеек (три операции по 33 копейки → 99), сортировка, фильтр по диапазону дат включает границы
+- [x] `make fmt && make test && make lint` — зелёные
 
 ### Task 6: Сервисы и отчёты
 

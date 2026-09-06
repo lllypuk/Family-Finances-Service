@@ -228,7 +228,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 
 		assert.Equal(t, testBudget.ID, response.Data.ID)
 		assert.Equal(t, testBudget.Name, response.Data.Name)
-		assert.InEpsilon(t, testBudget.Amount, response.Data.Amount, 0.001)
+		assert.InEpsilon(t, testBudget.AmountMinor.Float(), response.Data.Amount, 0.001)
 		assert.Equal(t, string(testBudget.Period), response.Data.Period)
 		assert.Equal(t, testBudget.CategoryID, response.Data.CategoryID)
 		assert.Equal(t, testBudget.IsActive, response.Data.IsActive)
@@ -450,9 +450,9 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, testBudget.ID, response.Data.ID)
-		assert.Equal(t, newName, response.Data.Name)                        // updated
-		assert.InEpsilon(t, testBudget.Amount, response.Data.Amount, 0.001) // unchanged
-		assert.Equal(t, testBudget.CategoryID, response.Data.CategoryID)    // unchanged
+		assert.Equal(t, newName, response.Data.Name)                                     // updated
+		assert.InEpsilon(t, testBudget.AmountMinor.Float(), response.Data.Amount, 0.001) // unchanged
+		assert.Equal(t, testBudget.CategoryID, response.Data.CategoryID)                 // unchanged
 	})
 
 	t.Run("UpdateBudget_ToggleActive", func(t *testing.T) {
@@ -502,9 +502,9 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, testBudget.ID, response.Data.ID)
-		assert.Equal(t, newIsActive, response.Data.IsActive)                // updated
-		assert.Equal(t, testBudget.Name, response.Data.Name)                // unchanged
-		assert.InEpsilon(t, testBudget.Amount, response.Data.Amount, 0.001) // unchanged
+		assert.Equal(t, newIsActive, response.Data.IsActive)                             // updated
+		assert.Equal(t, testBudget.Name, response.Data.Name)                             // unchanged
+		assert.InEpsilon(t, testBudget.AmountMinor.Float(), response.Data.Amount, 0.001) // unchanged
 	})
 
 	t.Run("DeleteBudget_Success", func(t *testing.T) {

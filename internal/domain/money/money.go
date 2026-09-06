@@ -1,13 +1,19 @@
 // Package money хранит суммы в минимальных единицах валюты (копейки) целым числом.
 package money
 
-import "strconv"
+import (
+	"math"
+	"strconv"
+)
 
 const (
 	percentBase = 100
 	decimalBase = 10
 	half        = 2
 )
+
+// Subunits — сколько минимальных единиц в основной (копеек в рубле).
+const Subunits = 100
 
 // Minor — сумма в минимальных единицах валюты. Сложение и вычитание — обычными операторами.
 type Minor int64
@@ -49,6 +55,19 @@ func (m Minor) DivRound(n int64) Minor {
 	}
 
 	return Minor(quotient)
+}
+
+// FromFloat переводит сумму из основных единиц в минимальные, округляя half-up.
+//
+// Мост для слоёв, которые до задач 6-7 плана 04 всё ещё держат деньги в float64
+// (DTO, обработчики); удаляется вместе с ними.
+func FromFloat(v float64) Minor {
+	return Minor(math.Round(v * Subunits))
+}
+
+// Float возвращает сумму в основных единицах. Мост, см. FromFloat.
+func (m Minor) Float() float64 {
+	return float64(m) / Subunits
 }
 
 // MarshalJSON пишет сумму числом, а не строкой.

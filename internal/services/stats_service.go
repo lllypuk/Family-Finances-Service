@@ -29,6 +29,9 @@ const (
 	budgetOverLimitShare = 1.0
 
 	statsHoursInDay = 24
+	// percentToShare переводит проценты из money.Percent в долю 0..1, в которой
+	// dto.BudgetProgress держит Utilization.
+	percentToShare = 100.0
 )
 
 // statsService считает агрегаты поверх остальных сервисов, без прямого доступа к репозиториям.
@@ -173,10 +176,7 @@ func (s *statsService) budgetProgressItem(
 	b *budget.Budget,
 	now time.Time,
 ) dto.BudgetProgress {
-	utilization := 0.0
-	if b.Amount > 0 {
-		utilization = b.Spent / b.Amount
-	}
+	utilization := b.GetSpentPercentage() / percentToShare
 
 	isOverBudget := utilization >= budgetOverLimitShare
 
@@ -184,14 +184,14 @@ func (s *statsService) budgetProgressItem(
 		ID:            b.ID,
 		Name:          b.Name,
 		CategoryName:  s.categoryName(ctx, b.CategoryID),
-		Amount:        b.Amount,
-		Spent:         b.Spent,
-		Remaining:     b.Amount - b.Spent,
+		Amount:        b.AmountMinor.Float(),
+		Spent:         b.SpentMinor.Float(),
+		Remaining:     b.GetRemainingAmount().Float(),
 		Utilization:   utilization,
 		Period:        b.Period,
-		StartDate:     b.StartDate,
-		EndDate:       b.EndDate,
-		DaysRemaining: max(int(b.EndDate.Sub(now).Hours()/statsHoursInDay), 0),
+		StartDate:     b.StartDate.In(time.UTC),
+		EndDate:       b.EndDate.In(time.UTC),
+		DaysRemaining: max(int(b.EndDate.In(time.UTC).Sub(now).Hours()/statsHoursInDay), 0),
 		IsActive:      b.IsActive,
 		IsOverBudget:  isOverBudget,
 		IsNearLimit:   utilization >= budgetNearLimitShare && !isOverBudget,
@@ -209,10 +209,10 @@ func (s *statsService) recentTransactions(ctx context.Context) ([]dto.RecentTran
 		recent = append(recent, dto.RecentTransaction{
 			ID:           tx.ID,
 			Description:  tx.Description,
-			Amount:       tx.Amount,
+			Amount:       tx.AmountMinor.Float(),
 			Type:         tx.Type,
 			CategoryName: s.categoryName(ctx, &tx.CategoryID),
-			Date:         tx.Date,
+			Date:         tx.Date.In(time.UTC),
 			CreatedAt:    tx.CreatedAt,
 		})
 	}
@@ -254,10 +254,10 @@ func (s *statsService) categoryShares(
 
 		switch tx.Type {
 		case transaction.TypeIncome:
-			b.income += tx.Amount
+			b.income += tx.AmountMinor.Float()
 			b.incomeCount++
 		case transaction.TypeExpense:
-			b.expenses += tx.Amount
+			b.expenses += tx.AmountMinor.Float()
 			b.expensesCount++
 		}
 	}
@@ -300,9 +300,9 @@ func periodTotals(from, to time.Time, transactions []*transaction.Transaction) d
 	for _, tx := range transactions {
 		switch tx.Type {
 		case transaction.TypeIncome:
-			totals.Income += tx.Amount
+			totals.Income += tx.AmountMinor.Float()
 		case transaction.TypeExpense:
-			totals.Expenses += tx.Amount
+			totals.Expenses += tx.AmountMinor.Float()
 		}
 	}
 	totals.Net = totals.Income - totals.Expenses

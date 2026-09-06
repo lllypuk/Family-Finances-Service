@@ -10,6 +10,7 @@ import (
 
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
 )
@@ -17,9 +18,9 @@ import (
 // Validation constants
 const (
 	maxEmailLength        = 254
-	maxBudgetAmount       = 999999999.99
+	maxBudgetAmountMinor  = money.Minor(99_999_999_999)
 	maxBudgetNameLength   = 255
-	maxTransactionAmount  = 999999999.99
+	maxAmountMinor        = money.Minor(99_999_999_999)
 	maxDescriptionLength  = 1000
 	maxCategoryNameLength = 255
 	maxReportNameLength   = 255
@@ -96,11 +97,11 @@ func ValidateBudgetPeriod(period budget.Period) error {
 }
 
 // ValidateBudgetAmount validates budget amount
-func ValidateBudgetAmount(amount float64) error {
+func ValidateBudgetAmount(amount money.Minor) error {
 	if amount <= 0 {
 		return errors.New("budget amount must be positive")
 	}
-	if amount > maxBudgetAmount {
+	if amount > maxBudgetAmountMinor {
 		return errors.New("budget amount too large")
 	}
 	return nil
@@ -119,11 +120,11 @@ func ValidateBudgetName(name string) error {
 }
 
 // ValidateAmount validates transaction amount
-func ValidateAmount(amount float64) error {
+func ValidateAmount(amount money.Minor) error {
 	if amount <= 0 {
 		return errors.New("amount must be positive")
 	}
-	if amount > maxTransactionAmount {
+	if amount > maxAmountMinor {
 		return errors.New("amount too large")
 	}
 	return nil

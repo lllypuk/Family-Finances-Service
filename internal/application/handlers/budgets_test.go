@@ -16,6 +16,8 @@ import (
 
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/budget"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 )
 
 type MockBudgetRepository struct {
@@ -71,7 +73,7 @@ func (m *MockBudgetRepository) GetByCategory(ctx context.Context, categoryID *uu
 
 func (m *MockBudgetRepository) GetByPeriod(
 	ctx context.Context,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 ) ([]*budget.Budget, error) {
 	args := m.Called(ctx, startDate, endDate)
 	if args.Get(0) == nil {
@@ -96,20 +98,20 @@ func TestBudgetHandler_GetBudgetByID_UsesCategoryDateRangeSpent(t *testing.T) {
 
 	budgetID := uuid.New()
 	categoryID := uuid.New()
-	startDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	endDate := time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC)
+	startDate := date.New(2026, time.January, 1)
+	endDate := date.New(2026, time.January, 31)
 	foundBudget := &budget.Budget{
-		ID:         budgetID,
-		Name:       "Food",
-		Amount:     1000,
-		Spent:      50,
-		Period:     budget.PeriodMonthly,
-		CategoryID: &categoryID,
-		StartDate:  startDate,
-		EndDate:    endDate,
-		IsActive:   true,
-		CreatedAt:  startDate,
-		UpdatedAt:  startDate,
+		ID:          budgetID,
+		Name:        "Food",
+		AmountMinor: 100_000,
+		SpentMinor:  5_000,
+		Period:      budget.PeriodMonthly,
+		CategoryID:  &categoryID,
+		StartDate:   startDate,
+		EndDate:     endDate,
+		IsActive:    true,
+		CreatedAt:   startDate.In(time.UTC),
+		UpdatedAt:   startDate.In(time.UTC),
 	}
 
 	mockBudgetRepo.On("GetByID", mock.Anything, budgetID).Return(foundBudget, nil).Once()
@@ -120,7 +122,7 @@ func TestBudgetHandler_GetBudgetByID_UsesCategoryDateRangeSpent(t *testing.T) {
 		startDate,
 		endDate,
 		mock.Anything,
-	).Return(275.25, nil).Once()
+	).Return(money.Minor(27_525), nil).Once()
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/budgets/"+budgetID.String(), nil)
@@ -148,19 +150,19 @@ func TestBudgetHandler_GetBudgetByID_FamilyBudgetUsesDateRangeSpent(t *testing.T
 	handler, mockBudgetRepo, mockTxRepo := setupBudgetHandler()
 
 	budgetID := uuid.New()
-	startDate := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
-	endDate := time.Date(2026, 2, 28, 23, 59, 59, 0, time.UTC)
+	startDate := date.New(2026, time.February, 1)
+	endDate := date.New(2026, time.February, 28)
 	foundBudget := &budget.Budget{
-		ID:        budgetID,
-		Name:      "Family Budget",
-		Amount:    2000,
-		Spent:     10,
-		Period:    budget.PeriodMonthly,
-		StartDate: startDate,
-		EndDate:   endDate,
-		IsActive:  true,
-		CreatedAt: startDate,
-		UpdatedAt: startDate,
+		ID:          budgetID,
+		Name:        "Family Budget",
+		AmountMinor: 200_000,
+		SpentMinor:  1_000,
+		Period:      budget.PeriodMonthly,
+		StartDate:   startDate,
+		EndDate:     endDate,
+		IsActive:    true,
+		CreatedAt:   startDate.In(time.UTC),
+		UpdatedAt:   startDate.In(time.UTC),
 	}
 
 	mockBudgetRepo.On("GetByID", mock.Anything, budgetID).Return(foundBudget, nil).Once()
@@ -170,7 +172,7 @@ func TestBudgetHandler_GetBudgetByID_FamilyBudgetUsesDateRangeSpent(t *testing.T
 		startDate,
 		endDate,
 		mock.Anything,
-	).Return(800.0, nil).Once()
+	).Return(money.Minor(80_000), nil).Once()
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/budgets/"+budgetID.String(), nil)

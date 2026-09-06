@@ -35,15 +35,17 @@ func TestNewUser(t *testing.T) {
 func TestNewFamily(t *testing.T) {
 	// Test data
 	name := "Test Family"
-	currency := "USD"
+	currency := "RUB"
+	timezone := "Europe/Moscow"
 
 	// Execute
-	family := user.NewFamily(name, currency)
+	family := user.NewFamily(name, currency, timezone)
 
 	// Assert
 	assert.NotEqual(t, uuid.Nil, family.ID)
 	assert.Equal(t, name, family.Name)
 	assert.Equal(t, currency, family.Currency)
+	assert.Equal(t, timezone, family.Timezone)
 	assert.False(t, family.CreatedAt.IsZero())
 	assert.False(t, family.UpdatedAt.IsZero())
 	assert.WithinDuration(t, time.Now(), family.CreatedAt, time.Second)
@@ -128,7 +130,7 @@ func TestNewFamily_DifferentCurrencies(t *testing.T) {
 
 	for _, currency := range currencies {
 		t.Run("Currency_"+currency, func(t *testing.T) {
-			family := user.NewFamily("Test Family", currency)
+			family := user.NewFamily("Test Family", currency, "UTC")
 			assert.Equal(t, currency, family.Currency)
 		})
 	}
@@ -156,7 +158,7 @@ func TestFamily_TimestampGeneration(t *testing.T) {
 	beforeTime := time.Now()
 
 	// Create family
-	family := user.NewFamily("Test Family", "USD")
+	family := user.NewFamily("Test Family", "USD", "UTC")
 
 	// Record time after creating family
 	afterTime := time.Now()

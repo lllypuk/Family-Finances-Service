@@ -20,6 +20,8 @@ import (
 
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/auth"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
 )
@@ -78,30 +80,30 @@ func (m *MockTransactionRepository) DeleteBulk(ctx context.Context, ids []uuid.U
 
 func (m *MockTransactionRepository) GetTotalByDateRange(
 	ctx context.Context,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 	transactionType transaction.Type,
-) (float64, error) {
+) (money.Minor, error) {
 	args := m.Called(ctx, startDate, endDate, transactionType)
-	return args.Get(0).(float64), args.Error(1)
+	return args.Get(0).(money.Minor), args.Error(1)
 }
 
 func (m *MockTransactionRepository) GetTotalByCategory(
 	ctx context.Context,
 	categoryID uuid.UUID,
 	transactionType transaction.Type,
-) (float64, error) {
+) (money.Minor, error) {
 	args := m.Called(ctx, categoryID, transactionType)
-	return args.Get(0).(float64), args.Error(1)
+	return args.Get(0).(money.Minor), args.Error(1)
 }
 
 func (m *MockTransactionRepository) GetTotalByCategoryAndDateRange(
 	ctx context.Context,
 	categoryID uuid.UUID,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 	transactionType transaction.Type,
-) (float64, error) {
+) (money.Minor, error) {
 	args := m.Called(ctx, categoryID, startDate, endDate, transactionType)
-	return args.Get(0).(float64), args.Error(1)
+	return args.Get(0).(money.Minor), args.Error(1)
 }
 
 func (m *MockTransactionRepository) GetAll(ctx context.Context, limit, offset int) ([]*transaction.Transaction, error) {
@@ -414,24 +416,24 @@ func TestTransactionHandler_GetTransactions_Success(t *testing.T) {
 	expectedTransactions := []*transaction.Transaction{
 		{
 			ID:          uuid.New(),
-			Amount:      100.0,
+			AmountMinor: 10_000,
 			Type:        transaction.TypeExpense,
 			Description: "Test transaction 1",
 			CategoryID:  uuid.New(),
 			UserID:      uuid.New(),
-			Date:        time.Now(),
+			Date:        date.Today(time.UTC),
 			Tags:        []string{"test"},
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
 		},
 		{
 			ID:          uuid.New(),
-			Amount:      200.0,
+			AmountMinor: 20_000,
 			Type:        transaction.TypeIncome,
 			Description: "Test transaction 2",
 			CategoryID:  uuid.New(),
 			UserID:      uuid.New(),
-			Date:        time.Now(),
+			Date:        date.Today(time.UTC),
 			Tags:        []string{"test"},
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
@@ -460,8 +462,8 @@ func TestTransactionHandler_GetTransactions_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Len(t, response.Data, 2)
-	assert.InDelta(t, expectedTransactions[0].Amount, response.Data[0].Amount, 0.01)
-	assert.InDelta(t, expectedTransactions[1].Amount, response.Data[1].Amount, 0.01)
+	assert.InDelta(t, expectedTransactions[0].AmountMinor.Float(), response.Data[0].Amount, 0.01)
+	assert.InDelta(t, expectedTransactions[1].AmountMinor.Float(), response.Data[1].Amount, 0.01)
 
 	mockRepo.AssertExpectations(t)
 }
@@ -614,12 +616,12 @@ func TestTransactionHandler_GetTransactionByID_Success(t *testing.T) {
 	transactionID := uuid.New()
 	expectedTransaction := &transaction.Transaction{
 		ID:          transactionID,
-		Amount:      150.0,
+		AmountMinor: 15_000,
 		Type:        transaction.TypeExpense,
 		Description: "Test transaction",
 		CategoryID:  uuid.New(),
 		UserID:      uuid.New(),
-		Date:        time.Now(),
+		Date:        date.Today(time.UTC),
 		Tags:        []string{"test"},
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
@@ -646,7 +648,7 @@ func TestTransactionHandler_GetTransactionByID_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, expectedTransaction.ID, response.Data.ID)
-	assert.InDelta(t, expectedTransaction.Amount, response.Data.Amount, 0.01)
+	assert.InDelta(t, expectedTransaction.AmountMinor.Float(), response.Data.Amount, 0.01)
 	assert.Equal(t, string(expectedTransaction.Type), response.Data.Type)
 
 	mockRepo.AssertExpectations(t)
@@ -711,12 +713,12 @@ func TestTransactionHandler_UpdateTransaction_Success(t *testing.T) {
 	transactionID := uuid.New()
 	existingTransaction := &transaction.Transaction{
 		ID:          transactionID,
-		Amount:      100.0,
+		AmountMinor: 10_000,
 		Type:        transaction.TypeExpense,
 		Description: "Old description",
 		CategoryID:  uuid.New(),
 		UserID:      uuid.New(),
-		Date:        time.Now(),
+		Date:        date.Today(time.UTC),
 		Tags:        []string{"old"},
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
@@ -731,7 +733,7 @@ func TestTransactionHandler_UpdateTransaction_Success(t *testing.T) {
 	mockRepo.On("GetByID", mock.Anything, transactionID).Return(existingTransaction, nil)
 	mockRepo.On("Update", mock.Anything, mock.MatchedBy(func(tx *transaction.Transaction) bool {
 		return tx.ID == transactionID &&
-			tx.Amount == 200.0 &&
+			tx.AmountMinor == money.Minor(20_000) &&
 			tx.Description == "Updated description" &&
 			len(tx.Tags) == 2 &&
 			tx.Tags[0] == "updated" &&
@@ -762,7 +764,7 @@ func TestTransactionHandler_UpdateTransaction_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, transactionID, response.Data.ID)
-	assert.InDelta(t, 200.0, response.Data.Amount, 0.01)
+	assert.InDelta(t, 200.0, response.Data.Amount, 0.001)
 	assert.Equal(t, "Updated description", response.Data.Description)
 
 	mockRepo.AssertExpectations(t)

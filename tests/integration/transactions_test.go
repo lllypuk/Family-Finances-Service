@@ -17,6 +17,7 @@ import (
 
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/testhelpers"
 )
@@ -232,7 +233,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, testTransaction.ID, response.Data.ID)
-		assert.InEpsilon(t, testTransaction.Amount, response.Data.Amount, 0.001)
+		assert.InEpsilon(t, testTransaction.AmountMinor.Float(), response.Data.Amount, 0.001)
 		assert.Equal(t, string(testTransaction.Type), response.Data.Type)
 		assert.Equal(t, testTransaction.Description, response.Data.Description)
 		assert.Equal(t, testTransaction.CategoryID, response.Data.CategoryID)
@@ -416,9 +417,9 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, testTransaction.ID, response.Data.ID)
-		assert.InEpsilon(t, testTransaction.Amount, response.Data.Amount, 0.001) // unchanged
-		assert.Equal(t, newDescription, response.Data.Description)               // updated
-		assert.Equal(t, testTransaction.CategoryID, response.Data.CategoryID)    // unchanged
+		assert.InEpsilon(t, testTransaction.AmountMinor.Float(), response.Data.Amount, 0.001) // unchanged
+		assert.Equal(t, newDescription, response.Data.Description)                            // updated
+		assert.Equal(t, testTransaction.CategoryID, response.Data.CategoryID)                 // unchanged
 	})
 
 	t.Run("DeleteTransaction_Success", func(t *testing.T) {
@@ -504,16 +505,16 @@ func TestTransactionHandler_Integration_Filters(t *testing.T) {
 	expenseTransaction := testhelpers.CreateTestTransaction(
 		family.ID, user.ID, expenseCategory.ID, transaction.TypeExpense,
 	)
-	expenseTransaction.Amount = 100.0
-	expenseTransaction.Date = time.Now().AddDate(0, 0, -1) // yesterday
+	expenseTransaction.AmountMinor = 10_000
+	expenseTransaction.Date = date.Today(time.UTC).AddDays(-1) // yesterday
 	err = testServer.Repos.Transaction.Create(context.Background(), expenseTransaction)
 	require.NoError(t, err)
 
 	incomeTransaction := testhelpers.CreateTestTransaction(
 		family.ID, user.ID, incomeCategory.ID, transaction.TypeIncome,
 	)
-	incomeTransaction.Amount = 500.0
-	incomeTransaction.Date = time.Now().AddDate(0, 0, -2) // 2 days ago
+	incomeTransaction.AmountMinor = 50_000
+	incomeTransaction.Date = date.Today(time.UTC).AddDays(-2) // 2 days ago
 	err = testServer.Repos.Transaction.Create(context.Background(), incomeTransaction)
 	require.NoError(t, err)
 

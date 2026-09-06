@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/report"
 	reportrepo "family-budget-service/internal/infrastructure/report"
 )
@@ -36,10 +38,10 @@ func TestReportRepositorySQLite_Create(t *testing.T) {
 			Type:      report.TypeExpenses,
 			Period:    report.PeriodMonthly,
 			UserID:    uuid.MustParse(userID),
-			StartDate: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
-			EndDate:   time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC),
+			StartDate: date.New(2024, time.Month(1), 1),
+			EndDate:   date.New(2024, time.Month(1), 31),
 			Data: report.Data{
-				TotalExpenses: 1000.0,
+				TotalExpensesMinor: 100_000,
 			},
 		}
 
@@ -52,7 +54,7 @@ func TestReportRepositorySQLite_Create(t *testing.T) {
 		assert.Equal(t, testReport.Name, retrieved.Name)
 		assert.Equal(t, testReport.Type, retrieved.Type)
 		assert.Equal(t, testReport.Period, retrieved.Period)
-		assert.InDelta(t, testReport.Data.TotalExpenses, retrieved.Data.TotalExpenses, 0.01)
+		assert.Equal(t, testReport.Data.TotalExpensesMinor, retrieved.Data.TotalExpensesMinor)
 	})
 
 	t.Run("Error_InvalidReportID", func(t *testing.T) {
@@ -68,8 +70,8 @@ func TestReportRepositorySQLite_Create(t *testing.T) {
 			Type:      report.TypeExpenses,
 			Period:    report.PeriodMonthly,
 			UserID:    uuid.New(),
-			StartDate: time.Now(),
-			EndDate:   time.Now().AddDate(0, 1, 0),
+			StartDate: date.Today(time.UTC),
+			EndDate:   date.Today(time.UTC).AddDays(30),
 		}
 
 		err = repo.Create(ctx, testReport)
@@ -90,8 +92,8 @@ func TestReportRepositorySQLite_Create(t *testing.T) {
 			Type:      report.TypeExpenses,
 			Period:    report.PeriodMonthly,
 			UserID:    uuid.Nil,
-			StartDate: time.Now(),
-			EndDate:   time.Now().AddDate(0, 1, 0),
+			StartDate: date.Today(time.UTC),
+			EndDate:   date.Today(time.UTC).AddDays(30),
 		}
 
 		err = repo.Create(ctx, testReport)
@@ -115,8 +117,8 @@ func TestReportRepositorySQLite_Create(t *testing.T) {
 			Type:      report.Type("invalid"),
 			Period:    report.PeriodMonthly,
 			UserID:    uuid.MustParse(userID),
-			StartDate: time.Now(),
-			EndDate:   time.Now().AddDate(0, 1, 0),
+			StartDate: date.Today(time.UTC),
+			EndDate:   date.Today(time.UTC).AddDays(30),
 		}
 
 		err = repo.Create(ctx, testReport)
@@ -140,8 +142,8 @@ func TestReportRepositorySQLite_Create(t *testing.T) {
 			Type:      report.TypeExpenses,
 			Period:    report.PeriodMonthly,
 			UserID:    uuid.MustParse(userID),
-			StartDate: time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
-			EndDate:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			StartDate: date.New(2024, time.Month(2), 1),
+			EndDate:   date.New(2024, time.Month(1), 1),
 		}
 
 		err = repo.Create(ctx, testReport)
@@ -171,10 +173,10 @@ func TestReportRepositorySQLite_GetByID(t *testing.T) {
 			Type:      report.TypeIncome,
 			Period:    report.PeriodMonthly,
 			UserID:    uuid.MustParse(userID),
-			StartDate: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
-			EndDate:   time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC),
+			StartDate: date.New(2024, time.Month(1), 1),
+			EndDate:   date.New(2024, time.Month(1), 31),
 			Data: report.Data{
-				TotalIncome: 5000.0,
+				TotalIncomeMinor: 500_000,
 			},
 		}
 
@@ -185,7 +187,7 @@ func TestReportRepositorySQLite_GetByID(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, testReport.ID, retrieved.ID)
 		assert.Equal(t, testReport.Name, retrieved.Name)
-		assert.InDelta(t, testReport.Data.TotalIncome, retrieved.Data.TotalIncome, 0.01)
+		assert.Equal(t, testReport.Data.TotalIncomeMinor, retrieved.Data.TotalIncomeMinor)
 	})
 
 	t.Run("Error_NonExistentReport", func(t *testing.T) {
@@ -246,8 +248,8 @@ func TestReportRepositorySQLite_GetAll(t *testing.T) {
 				Type:      report.TypeExpenses,
 				Period:    report.PeriodMonthly,
 				UserID:    uuid.MustParse(userID),
-				StartDate: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
-				EndDate:   time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC),
+				StartDate: date.New(2024, time.Month(1), 1),
+				EndDate:   date.New(2024, time.Month(1), 31),
 				Data:      report.Data{},
 			}
 			err = repo.Create(ctx, testReport)
@@ -284,8 +286,8 @@ func TestReportRepositorySQLite_GetByFamilyIDWithPagination(t *testing.T) {
 				Type:      report.TypeExpenses,
 				Period:    report.PeriodMonthly,
 				UserID:    uuid.MustParse(userID),
-				StartDate: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
-				EndDate:   time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC),
+				StartDate: date.New(2024, time.Month(1), 1),
+				EndDate:   date.New(2024, time.Month(1), 31),
 				Data:      report.Data{},
 			}
 			err = repo.Create(ctx, testReport)
@@ -316,8 +318,8 @@ func TestReportRepositorySQLite_GetByFamilyIDWithPagination(t *testing.T) {
 				Type:      report.TypeExpenses,
 				Period:    report.PeriodMonthly,
 				UserID:    uuid.MustParse(userID),
-				StartDate: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
-				EndDate:   time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC),
+				StartDate: date.New(2024, time.Month(1), 1),
+				EndDate:   date.New(2024, time.Month(1), 31),
 				Data:      report.Data{},
 			}
 			err = repo.Create(ctx, testReport)
@@ -375,8 +377,8 @@ func TestReportRepositorySQLite_GetByUserID(t *testing.T) {
 				Type:      report.TypeExpenses,
 				Period:    report.PeriodMonthly,
 				UserID:    uuid.MustParse(userID),
-				StartDate: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
-				EndDate:   time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC),
+				StartDate: date.New(2024, time.Month(1), 1),
+				EndDate:   date.New(2024, time.Month(1), 31),
 				Data:      report.Data{},
 			}
 			err = repo.Create(ctx, testReport)
@@ -432,8 +434,8 @@ func TestReportRepositorySQLite_Delete(t *testing.T) {
 			Type:      report.TypeExpenses,
 			Period:    report.PeriodMonthly,
 			UserID:    uuid.MustParse(userID),
-			StartDate: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
-			EndDate:   time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC),
+			StartDate: date.New(2024, time.Month(1), 1),
+			EndDate:   date.New(2024, time.Month(1), 31),
 			Data:      report.Data{},
 		}
 
@@ -500,8 +502,8 @@ func TestReportRepositorySQLite_GetSummary(t *testing.T) {
 				Type:      reportType,
 				Period:    report.PeriodMonthly,
 				UserID:    uuid.MustParse(userID),
-				StartDate: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
-				EndDate:   time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC),
+				StartDate: date.New(2024, time.Month(1), 1),
+				EndDate:   date.New(2024, time.Month(1), 31),
 				Data:      report.Data{},
 			}
 			err = repo.Create(ctx, testReport)
@@ -566,13 +568,13 @@ func TestReportRepositorySQLite_GenerateExpenseReport(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create transactions
-		startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-		endDate := time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC)
+		startDate := date.New(2024, time.January, 1)
+		endDate := date.New(2024, time.January, 31)
 
 		// Food: 800 (500 + 300)
 		_, err = helper.CreateTestTransactionWithDate(
 			ctx,
-			500.0,
+			50_000,
 			"Groceries",
 			"expense",
 			foodCatID,
@@ -583,7 +585,7 @@ func TestReportRepositorySQLite_GenerateExpenseReport(t *testing.T) {
 		require.NoError(t, err)
 		_, err = helper.CreateTestTransactionWithDate(
 			ctx,
-			300.0,
+			30_000,
 			"Restaurant",
 			"expense",
 			foodCatID,
@@ -596,7 +598,7 @@ func TestReportRepositorySQLite_GenerateExpenseReport(t *testing.T) {
 		// Transport: 200
 		_, err = helper.CreateTestTransactionWithDate(
 			ctx,
-			200.0,
+			20_000,
 			"Gas",
 			"expense",
 			transportCatID,
@@ -608,7 +610,7 @@ func TestReportRepositorySQLite_GenerateExpenseReport(t *testing.T) {
 
 		data, err := repo.GenerateExpenseReport(ctx, uuid.MustParse(familyID), startDate, endDate)
 		require.NoError(t, err)
-		assert.InDelta(t, 1000.0, data.TotalExpenses, 0.01)
+		assert.Equal(t, money.Minor(100_000), data.TotalExpensesMinor)
 		assert.Len(t, data.CategoryBreakdown, 2)
 
 		// Verify Food category
@@ -620,7 +622,7 @@ func TestReportRepositorySQLite_GenerateExpenseReport(t *testing.T) {
 			}
 		}
 		require.NotNil(t, foodItem)
-		assert.InDelta(t, 800.0, foodItem.Amount, 0.01)
+		assert.Equal(t, money.Minor(80_000), foodItem.AmountMinor)
 		assert.InDelta(t, 80.0, foodItem.Percentage, 0.01)
 		assert.Equal(t, 2, foodItem.Count)
 
@@ -636,12 +638,12 @@ func TestReportRepositorySQLite_GenerateExpenseReport(t *testing.T) {
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-		endDate := time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC)
+		startDate := date.New(2024, time.January, 1)
+		endDate := date.New(2024, time.January, 31)
 
 		data, err := repo.GenerateExpenseReport(ctx, uuid.MustParse(familyID), startDate, endDate)
 		require.NoError(t, err)
-		assert.InDelta(t, 0.0, data.TotalExpenses, 0.01)
+		assert.Equal(t, money.Minor(0), data.TotalExpensesMinor)
 		assert.Empty(t, data.CategoryBreakdown)
 		assert.Empty(t, data.TopExpenses)
 	})
@@ -662,7 +664,7 @@ func TestReportRepositorySQLite_GenerateExpenseReport(t *testing.T) {
 		// Transaction in January
 		_, err = helper.CreateTestTransactionWithDate(
 			ctx,
-			500.0,
+			50_000,
 			"January",
 			"expense",
 			foodCatID,
@@ -675,7 +677,7 @@ func TestReportRepositorySQLite_GenerateExpenseReport(t *testing.T) {
 		// Transaction in February (should be excluded)
 		_, err = helper.CreateTestTransactionWithDate(
 			ctx,
-			300.0,
+			30_000,
 			"February",
 			"expense",
 			foodCatID,
@@ -685,20 +687,20 @@ func TestReportRepositorySQLite_GenerateExpenseReport(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-		endDate := time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC)
+		startDate := date.New(2024, time.January, 1)
+		endDate := date.New(2024, time.January, 31)
 
 		data, err := repo.GenerateExpenseReport(ctx, uuid.MustParse(familyID), startDate, endDate)
 		require.NoError(t, err)
-		assert.InDelta(t, 500.0, data.TotalExpenses, 0.01)
+		assert.Equal(t, money.Minor(50_000), data.TotalExpensesMinor)
 	})
 
 	t.Run("Error_InvalidFamilyID", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
 		repo := reportrepo.NewSQLiteRepository(db)
 
-		startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-		endDate := time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC)
+		startDate := date.New(2024, time.January, 1)
+		endDate := date.New(2024, time.January, 31)
 
 		_, err := repo.GenerateExpenseReport(ctx, uuid.Nil, startDate, endDate)
 		require.Error(t, err)
@@ -728,13 +730,13 @@ func TestReportRepositorySQLite_GenerateIncomeReport(t *testing.T) {
 		freelanceCatID, err := helper.CreateTestCategory(ctx, "Freelance", "income", familyID, nil)
 		require.NoError(t, err)
 
-		startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-		endDate := time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC)
+		startDate := date.New(2024, time.January, 1)
+		endDate := date.New(2024, time.January, 31)
 
 		// Salary: 5000
 		_, err = helper.CreateTestTransactionWithDate(
 			ctx,
-			5000.0,
+			500_000,
 			"Monthly salary",
 			"income",
 			salaryCatID,
@@ -747,7 +749,7 @@ func TestReportRepositorySQLite_GenerateIncomeReport(t *testing.T) {
 		// Freelance: 1000
 		_, err = helper.CreateTestTransactionWithDate(
 			ctx,
-			1000.0,
+			100_000,
 			"Project payment",
 			"income",
 			freelanceCatID,
@@ -759,7 +761,7 @@ func TestReportRepositorySQLite_GenerateIncomeReport(t *testing.T) {
 
 		data, err := repo.GenerateIncomeReport(ctx, uuid.MustParse(familyID), startDate, endDate)
 		require.NoError(t, err)
-		assert.InDelta(t, 6000.0, data.TotalIncome, 0.01)
+		assert.Equal(t, money.Minor(600_000), data.TotalIncomeMinor)
 		assert.Len(t, data.CategoryBreakdown, 2)
 
 		// Verify Salary category
@@ -771,7 +773,7 @@ func TestReportRepositorySQLite_GenerateIncomeReport(t *testing.T) {
 			}
 		}
 		require.NotNil(t, salaryItem)
-		assert.InDelta(t, 5000.0, salaryItem.Amount, 0.01)
+		assert.Equal(t, money.Minor(500_000), salaryItem.AmountMinor)
 		assert.InDelta(t, 83.33, salaryItem.Percentage, 0.01)
 		assert.Equal(t, 1, salaryItem.Count)
 	})
@@ -783,12 +785,12 @@ func TestReportRepositorySQLite_GenerateIncomeReport(t *testing.T) {
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-		endDate := time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC)
+		startDate := date.New(2024, time.January, 1)
+		endDate := date.New(2024, time.January, 31)
 
 		data, err := repo.GenerateIncomeReport(ctx, uuid.MustParse(familyID), startDate, endDate)
 		require.NoError(t, err)
-		assert.InDelta(t, 0.0, data.TotalIncome, 0.01)
+		assert.Equal(t, money.Minor(0), data.TotalIncomeMinor)
 		assert.Empty(t, data.CategoryBreakdown)
 	})
 
@@ -796,8 +798,8 @@ func TestReportRepositorySQLite_GenerateIncomeReport(t *testing.T) {
 		db := container.GetTestDatabase(t)
 		repo := reportrepo.NewSQLiteRepository(db)
 
-		startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-		endDate := time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC)
+		startDate := date.New(2024, time.January, 1)
+		endDate := date.New(2024, time.January, 31)
 
 		_, err := repo.GenerateIncomeReport(ctx, uuid.Nil, startDate, endDate)
 		require.Error(t, err)
@@ -826,13 +828,13 @@ func TestReportRepositorySQLite_GenerateCashFlowReport(t *testing.T) {
 		expenseCatID, err := helper.CreateTestCategory(ctx, "Food", "expense", familyID, nil)
 		require.NoError(t, err)
 
-		startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-		endDate := time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC)
+		startDate := date.New(2024, time.January, 1)
+		endDate := date.New(2024, time.January, 31)
 
 		// Income: 5000
 		_, err = helper.CreateTestTransactionWithDate(
 			ctx,
-			5000.0,
+			500_000,
 			"Salary",
 			"income",
 			incomeCatID,
@@ -845,7 +847,7 @@ func TestReportRepositorySQLite_GenerateCashFlowReport(t *testing.T) {
 		// Expenses: 3000
 		_, err = helper.CreateTestTransactionWithDate(
 			ctx,
-			3000.0,
+			300_000,
 			"Food",
 			"expense",
 			expenseCatID,
@@ -857,9 +859,9 @@ func TestReportRepositorySQLite_GenerateCashFlowReport(t *testing.T) {
 
 		data, err := repo.GenerateCashFlowReport(ctx, uuid.MustParse(familyID), startDate, endDate)
 		require.NoError(t, err)
-		assert.InDelta(t, 5000.0, data.TotalIncome, 0.01)
-		assert.InDelta(t, 3000.0, data.TotalExpenses, 0.01)
-		assert.InDelta(t, 2000.0, data.NetIncome, 0.01)
+		assert.Equal(t, money.Minor(500_000), data.TotalIncomeMinor)
+		assert.Equal(t, money.Minor(300_000), data.TotalExpensesMinor)
+		assert.Equal(t, money.Minor(200_000), data.NetIncomeMinor)
 	})
 
 	t.Run("Success_NegativeFlow", func(t *testing.T) {
@@ -878,13 +880,13 @@ func TestReportRepositorySQLite_GenerateCashFlowReport(t *testing.T) {
 		expenseCatID, err := helper.CreateTestCategory(ctx, "Food", "expense", familyID, nil)
 		require.NoError(t, err)
 
-		startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-		endDate := time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC)
+		startDate := date.New(2024, time.January, 1)
+		endDate := date.New(2024, time.January, 31)
 
 		// Income: 3000
 		_, err = helper.CreateTestTransactionWithDate(
 			ctx,
-			3000.0,
+			300_000,
 			"Salary",
 			"income",
 			incomeCatID,
@@ -897,7 +899,7 @@ func TestReportRepositorySQLite_GenerateCashFlowReport(t *testing.T) {
 		// Expenses: 5000
 		_, err = helper.CreateTestTransactionWithDate(
 			ctx,
-			5000.0,
+			500_000,
 			"Food",
 			"expense",
 			expenseCatID,
@@ -909,9 +911,9 @@ func TestReportRepositorySQLite_GenerateCashFlowReport(t *testing.T) {
 
 		data, err := repo.GenerateCashFlowReport(ctx, uuid.MustParse(familyID), startDate, endDate)
 		require.NoError(t, err)
-		assert.InDelta(t, 3000.0, data.TotalIncome, 0.01)
-		assert.InDelta(t, 5000.0, data.TotalExpenses, 0.01)
-		assert.InDelta(t, -2000.0, data.NetIncome, 0.01)
+		assert.Equal(t, money.Minor(300_000), data.TotalIncomeMinor)
+		assert.Equal(t, money.Minor(500_000), data.TotalExpensesMinor)
+		assert.Equal(t, money.Minor(-200_000), data.NetIncomeMinor)
 	})
 
 	t.Run("Success_ZeroFlow", func(t *testing.T) {
@@ -930,13 +932,13 @@ func TestReportRepositorySQLite_GenerateCashFlowReport(t *testing.T) {
 		expenseCatID, err := helper.CreateTestCategory(ctx, "Food", "expense", familyID, nil)
 		require.NoError(t, err)
 
-		startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-		endDate := time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC)
+		startDate := date.New(2024, time.January, 1)
+		endDate := date.New(2024, time.January, 31)
 
 		// Income: 3000
 		_, err = helper.CreateTestTransactionWithDate(
 			ctx,
-			3000.0,
+			300_000,
 			"Salary",
 			"income",
 			incomeCatID,
@@ -949,7 +951,7 @@ func TestReportRepositorySQLite_GenerateCashFlowReport(t *testing.T) {
 		// Expenses: 3000
 		_, err = helper.CreateTestTransactionWithDate(
 			ctx,
-			3000.0,
+			300_000,
 			"Food",
 			"expense",
 			expenseCatID,
@@ -961,9 +963,9 @@ func TestReportRepositorySQLite_GenerateCashFlowReport(t *testing.T) {
 
 		data, err := repo.GenerateCashFlowReport(ctx, uuid.MustParse(familyID), startDate, endDate)
 		require.NoError(t, err)
-		assert.InDelta(t, 3000.0, data.TotalIncome, 0.01)
-		assert.InDelta(t, 3000.0, data.TotalExpenses, 0.01)
-		assert.InDelta(t, 0.0, data.NetIncome, 0.01)
+		assert.Equal(t, money.Minor(300_000), data.TotalIncomeMinor)
+		assert.Equal(t, money.Minor(300_000), data.TotalExpensesMinor)
+		assert.Equal(t, money.Minor(0), data.NetIncomeMinor)
 	})
 
 	t.Run("Success_DailyBreakdown", func(t *testing.T) {
@@ -982,13 +984,13 @@ func TestReportRepositorySQLite_GenerateCashFlowReport(t *testing.T) {
 		expenseCatID, err := helper.CreateTestCategory(ctx, "Food", "expense", familyID, nil)
 		require.NoError(t, err)
 
-		startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-		endDate := time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC)
+		startDate := date.New(2024, time.January, 1)
+		endDate := date.New(2024, time.January, 31)
 
 		// Day 1: Income 1000
 		_, err = helper.CreateTestTransactionWithDate(
 			ctx,
-			1000.0,
+			100_000,
 			"Income Day 1",
 			"income",
 			incomeCatID,
@@ -1001,7 +1003,7 @@ func TestReportRepositorySQLite_GenerateCashFlowReport(t *testing.T) {
 		// Day 2: Expense 500
 		_, err = helper.CreateTestTransactionWithDate(
 			ctx,
-			500.0,
+			50_000,
 			"Expense Day 2",
 			"expense",
 			expenseCatID,
@@ -1018,7 +1020,7 @@ func TestReportRepositorySQLite_GenerateCashFlowReport(t *testing.T) {
 
 		// Verify daily balances
 		for _, daily := range data.DailyBreakdown {
-			assert.InDelta(t, daily.Income-daily.Expenses, daily.Balance, 0.01)
+			assert.Equal(t, daily.IncomeMinor-daily.ExpensesMinor, daily.BalanceMinor)
 		}
 	})
 
@@ -1026,8 +1028,8 @@ func TestReportRepositorySQLite_GenerateCashFlowReport(t *testing.T) {
 		db := container.GetTestDatabase(t)
 		repo := reportrepo.NewSQLiteRepository(db)
 
-		startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-		endDate := time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC)
+		startDate := date.New(2024, time.January, 1)
+		endDate := date.New(2024, time.January, 31)
 
 		_, err := repo.GenerateCashFlowReport(ctx, uuid.Nil, startDate, endDate)
 		require.Error(t, err)
@@ -1051,8 +1053,8 @@ func TestReportRepositorySQLite_GenerateBudgetComparisonReport(t *testing.T) {
 		budgetID, err := helper.CreateTestBudgetWithDates(
 			ctx,
 			"Food Budget",
-			1000.0,
-			800.0,
+			100_000,
+			80_000,
 			"monthly",
 			familyID,
 			"2024-01-01",
@@ -1061,8 +1063,8 @@ func TestReportRepositorySQLite_GenerateBudgetComparisonReport(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-		endDate := time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC)
+		startDate := date.New(2024, time.January, 1)
+		endDate := date.New(2024, time.January, 31)
 
 		data, err := repo.GenerateBudgetComparisonReport(ctx, uuid.MustParse(familyID), startDate, endDate)
 		require.NoError(t, err)
@@ -1077,9 +1079,9 @@ func TestReportRepositorySQLite_GenerateBudgetComparisonReport(t *testing.T) {
 			}
 		}
 		require.NotNil(t, budgetItem)
-		assert.InDelta(t, 1000.0, budgetItem.Planned, 0.01)
-		assert.InDelta(t, 800.0, budgetItem.Actual, 0.01)
-		assert.InDelta(t, -200.0, budgetItem.Difference, 0.01)
+		assert.Equal(t, money.Minor(100_000), budgetItem.PlannedMinor)
+		assert.Equal(t, money.Minor(80_000), budgetItem.ActualMinor)
+		assert.Equal(t, money.Minor(-20_000), budgetItem.DifferenceMinor)
 		assert.InDelta(t, 80.0, budgetItem.Percentage, 0.01)
 	})
 
@@ -1094,8 +1096,8 @@ func TestReportRepositorySQLite_GenerateBudgetComparisonReport(t *testing.T) {
 		_, err = helper.CreateTestBudgetWithDates(
 			ctx,
 			"Transport Budget",
-			500.0,
-			700.0,
+			50_000,
+			70_000,
 			"monthly",
 			familyID,
 			"2024-01-01",
@@ -1104,17 +1106,17 @@ func TestReportRepositorySQLite_GenerateBudgetComparisonReport(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-		endDate := time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC)
+		startDate := date.New(2024, time.January, 1)
+		endDate := date.New(2024, time.January, 31)
 
 		data, err := repo.GenerateBudgetComparisonReport(ctx, uuid.MustParse(familyID), startDate, endDate)
 		require.NoError(t, err)
 		assert.NotEmpty(t, data.BudgetComparison)
 
 		item := data.BudgetComparison[0]
-		assert.InDelta(t, 500.0, item.Planned, 0.01)
-		assert.InDelta(t, 700.0, item.Actual, 0.01)
-		assert.InDelta(t, 200.0, item.Difference, 0.01)
+		assert.Equal(t, money.Minor(50_000), item.PlannedMinor)
+		assert.Equal(t, money.Minor(70_000), item.ActualMinor)
+		assert.Equal(t, money.Minor(20_000), item.DifferenceMinor)
 		assert.InDelta(t, 140.0, item.Percentage, 0.01)
 	})
 
@@ -1129,8 +1131,8 @@ func TestReportRepositorySQLite_GenerateBudgetComparisonReport(t *testing.T) {
 		_, err = helper.CreateTestBudgetWithDates(
 			ctx,
 			"Entertainment Budget",
-			300.0,
-			300.0,
+			30_000,
+			30_000,
 			"monthly",
 			familyID,
 			"2024-01-01",
@@ -1139,17 +1141,17 @@ func TestReportRepositorySQLite_GenerateBudgetComparisonReport(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-		endDate := time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC)
+		startDate := date.New(2024, time.January, 1)
+		endDate := date.New(2024, time.January, 31)
 
 		data, err := repo.GenerateBudgetComparisonReport(ctx, uuid.MustParse(familyID), startDate, endDate)
 		require.NoError(t, err)
 		assert.NotEmpty(t, data.BudgetComparison)
 
 		item := data.BudgetComparison[0]
-		assert.InDelta(t, 300.0, item.Planned, 0.01)
-		assert.InDelta(t, 300.0, item.Actual, 0.01)
-		assert.InDelta(t, 0.0, item.Difference, 0.01)
+		assert.Equal(t, money.Minor(30_000), item.PlannedMinor)
+		assert.Equal(t, money.Minor(30_000), item.ActualMinor)
+		assert.Equal(t, money.Minor(0), item.DifferenceMinor)
 		assert.InDelta(t, 100.0, item.Percentage, 0.01)
 	})
 
@@ -1160,8 +1162,8 @@ func TestReportRepositorySQLite_GenerateBudgetComparisonReport(t *testing.T) {
 		familyID, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
 		require.NoError(t, err)
 
-		startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-		endDate := time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC)
+		startDate := date.New(2024, time.January, 1)
+		endDate := date.New(2024, time.January, 31)
 
 		data, err := repo.GenerateBudgetComparisonReport(ctx, uuid.MustParse(familyID), startDate, endDate)
 		require.NoError(t, err)
@@ -1172,8 +1174,8 @@ func TestReportRepositorySQLite_GenerateBudgetComparisonReport(t *testing.T) {
 		db := container.GetTestDatabase(t)
 		repo := reportrepo.NewSQLiteRepository(db)
 
-		startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-		endDate := time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC)
+		startDate := date.New(2024, time.January, 1)
+		endDate := date.New(2024, time.January, 31)
 
 		_, err := repo.GenerateBudgetComparisonReport(ctx, uuid.Nil, startDate, endDate)
 		require.Error(t, err)

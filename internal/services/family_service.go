@@ -53,6 +53,7 @@ func (s *familyService) SetupFamily(ctx context.Context, req dto.SetupFamilyDTO)
 		ID:        uuid.New(),
 		Name:      req.FamilyName,
 		Currency:  req.Currency,
+		Timezone:  req.Timezone,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}

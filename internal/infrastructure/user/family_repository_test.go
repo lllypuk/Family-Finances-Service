@@ -17,7 +17,7 @@ import (
 )
 
 func bootstrapFixtures() (*user.Family, []*category.Category, *user.User) {
-	family := &user.Family{ID: uuid.New(), Name: "Bootstrap Family", Currency: "RUB"}
+	family := &user.Family{ID: uuid.New(), Name: "Bootstrap Family", Currency: "RUB", Timezone: "Europe/Moscow"}
 	categories := []*category.Category{
 		category.NewCategory("Продукты", category.TypeExpense),
 		category.NewCategory("Зарплата", category.TypeIncome),
@@ -135,4 +135,28 @@ func TestFamilyRepository_SchemaConstraints(t *testing.T) {
 		require.ErrorContains(t, err, "CHECK constraint failed")
 		assert.Equal(t, 1, countRows(t, db, "users"))
 	})
+}
+
+// Часовой пояс переживает запись и чтение: по нему считаются границы периодов,
+// а пустая колонка отбивается CHECK-ом.
+func TestFamilyRepository_TimezoneRoundTrip(t *testing.T) {
+	container := testutils.SetupSQLiteTestDB(t)
+	ctx := context.Background()
+	db := container.GetTestDatabase(t)
+	repo := newFamilyRepo(db)
+
+	family := &user.Family{ID: uuid.New(), Name: "TZ Family", Currency: "RUB", Timezone: "Europe/Moscow"}
+	require.NoError(t, repo.Create(ctx, family))
+
+	stored, err := repo.Get(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "Europe/Moscow", stored.Timezone)
+	assert.Equal(t, "Europe/Moscow", stored.Location().String())
+
+	stored.Timezone = "UTC"
+	require.NoError(t, repo.Update(ctx, stored))
+
+	updated, err := repo.Get(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "UTC", updated.Timezone)
 }

@@ -12,6 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/domain/budget"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
@@ -74,7 +76,7 @@ func (m *MockBudgetRepositoryForService) GetByCategory(
 
 func (m *MockBudgetRepositoryForService) GetByPeriod(
 	ctx context.Context,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 ) ([]*budget.Budget, error) {
 	args := m.Called(ctx, startDate, endDate)
 	if args.Get(0) == nil {
@@ -91,28 +93,28 @@ func (m *MockTransactionRepositoryForBudgets) GetTotalByCategory(
 	ctx context.Context,
 	categoryID uuid.UUID,
 	txType transaction.Type,
-) (float64, error) {
+) (money.Minor, error) {
 	args := m.Called(ctx, categoryID, txType)
-	return args.Get(0).(float64), args.Error(1)
+	return args.Get(0).(money.Minor), args.Error(1)
 }
 
 func (m *MockTransactionRepositoryForBudgets) GetTotalByDateRange(
 	ctx context.Context,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 	txType transaction.Type,
-) (float64, error) {
+) (money.Minor, error) {
 	args := m.Called(ctx, startDate, endDate, txType)
-	return args.Get(0).(float64), args.Error(1)
+	return args.Get(0).(money.Minor), args.Error(1)
 }
 
 func (m *MockTransactionRepositoryForBudgets) GetTotalByCategoryAndDateRange(
 	ctx context.Context,
 	categoryID uuid.UUID,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 	txType transaction.Type,
-) (float64, error) {
+) (money.Minor, error) {
 	args := m.Called(ctx, categoryID, startDate, endDate, txType)
-	return args.Get(0).(float64), args.Error(1)
+	return args.Get(0).(money.Minor), args.Error(1)
 }
 
 // Test fixtures
@@ -133,17 +135,17 @@ func setupBudgetService(t *testing.T) (
 
 func createTestBudgetForService() *budget.Budget {
 	return &budget.Budget{
-		ID:         uuid.New(),
-		Name:       "Test Budget",
-		Amount:     1000.00,
-		Spent:      300.00,
-		Period:     budget.PeriodMonthly,
-		CategoryID: func() *uuid.UUID { id := uuid.New(); return &id }(),
-		StartDate:  time.Now(),
-		EndDate:    time.Now().AddDate(0, 1, 0),
-		IsActive:   true,
-		CreatedAt:  time.Now(),
-		UpdatedAt:  time.Now(),
+		ID:          uuid.New(),
+		Name:        "Test Budget",
+		AmountMinor: 100_000,
+		SpentMinor:  30_000,
+		Period:      budget.PeriodMonthly,
+		CategoryID:  func() *uuid.UUID { id := uuid.New(); return &id }(),
+		StartDate:   date.Today(time.UTC),
+		EndDate:     date.Today(time.UTC).AddDays(30),
+		IsActive:    true,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
 	}
 }
 
@@ -151,7 +153,7 @@ func createTestBudgetDTO() dto.CreateBudgetDTO {
 	categoryID := uuid.New()
 	return dto.CreateBudgetDTO{
 		Name:       "Test Budget",
-		Amount:     1000.00,
+		Amount:     1000.0,
 		Period:     budget.PeriodMonthly,
 		CategoryID: &categoryID,
 		StartDate:  time.Now(),
@@ -170,8 +172,8 @@ func TestBudgetService_CreateBudget_Success(t *testing.T) {
 	budgetRepo.On(
 		"GetByPeriod",
 		ctx,
-		mock.AnythingOfType("time.Time"),
-		mock.AnythingOfType("time.Time"),
+		mock.AnythingOfType("date.Date"),
+		mock.AnythingOfType("date.Date"),
 	).Return([]*budget.Budget{}, nil)
 	budgetRepo.On("Create", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
 	budgetRepo.On("GetByID", ctx, mock.AnythingOfType("uuid.UUID")).Return(createTestBudgetForService(), nil)
@@ -179,10 +181,10 @@ func TestBudgetService_CreateBudget_Success(t *testing.T) {
 		"GetTotalByCategoryAndDateRange",
 		ctx,
 		mock.AnythingOfType("uuid.UUID"),
-		mock.AnythingOfType("time.Time"),
-		mock.AnythingOfType("time.Time"),
+		mock.AnythingOfType("date.Date"),
+		mock.AnythingOfType("date.Date"),
 		transaction.TypeExpense,
-	).Return(150.0, nil)
+	).Return(money.Minor(15000), nil)
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
 
 	// Execute
@@ -192,7 +194,7 @@ func TestBudgetService_CreateBudget_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Equal(t, req.Name, result.Name)
-	assert.InDelta(t, req.Amount, result.Amount, 0.01)
+	assert.Equal(t, money.FromFloat(req.Amount), result.AmountMinor)
 	assert.Equal(t, req.Period, result.Period)
 
 	budgetRepo.AssertExpectations(t)
@@ -223,15 +225,15 @@ func TestBudgetService_CreateBudget_PeriodOverlap(t *testing.T) {
 
 	existingBudget := createTestBudgetForService()
 	existingBudget.CategoryID = req.CategoryID
-	existingBudget.StartDate = req.StartDate.AddDate(0, 0, -5) // Overlapping period
-	existingBudget.EndDate = req.StartDate.AddDate(0, 0, 5)
+	existingBudget.StartDate = date.FromTime(req.StartDate).AddDays(-5) // Overlapping period
+	existingBudget.EndDate = date.FromTime(req.StartDate).AddDays(5)
 
 	// Setup expectations
 	budgetRepo.On(
 		"GetByPeriod",
 		ctx,
-		mock.AnythingOfType("time.Time"),
-		mock.AnythingOfType("time.Time"),
+		mock.AnythingOfType("date.Date"),
+		mock.AnythingOfType("date.Date"),
 	).Return([]*budget.Budget{existingBudget}, nil)
 
 	// Execute
@@ -258,10 +260,10 @@ func TestBudgetService_GetBudgetByID_Success(t *testing.T) {
 		"GetTotalByCategoryAndDateRange",
 		ctx,
 		*testBudget.CategoryID,
-		mock.AnythingOfType("time.Time"),
-		mock.AnythingOfType("time.Time"),
+		mock.AnythingOfType("date.Date"),
+		mock.AnythingOfType("date.Date"),
 		transaction.TypeExpense,
-	).Return(250.0, nil) // Different from budget.Spent (300.0) to trigger update
+	).Return(money.Minor(25000), nil) // Different from budget.Spent (300.0) to trigger update
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
 
 	// Execute
@@ -314,10 +316,10 @@ func TestBudgetService_UpdateBudget_Success(t *testing.T) {
 		"GetTotalByCategoryAndDateRange",
 		ctx,
 		*testBudget.CategoryID,
-		mock.AnythingOfType("time.Time"),
-		mock.AnythingOfType("time.Time"),
+		mock.AnythingOfType("date.Date"),
+		mock.AnythingOfType("date.Date"),
 		transaction.TypeExpense,
-	).Return(250.0, nil) // Different from budget.Spent (300.0) to trigger update
+	).Return(money.Minor(25000), nil) // Different from budget.Spent (300.0) to trigger update
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).
 		Return(nil).Times(2) // Once for recalc, once for update
 
@@ -328,7 +330,7 @@ func TestBudgetService_UpdateBudget_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Equal(t, newName, result.Name)
-	assert.InDelta(t, newAmount, result.Amount, 0.01)
+	assert.Equal(t, money.FromFloat(newAmount), result.AmountMinor)
 
 	budgetRepo.AssertExpectations(t)
 	txRepo.AssertExpectations(t)
@@ -339,7 +341,7 @@ func TestBudgetService_UpdateBudget_AmountLessThanSpent(t *testing.T) {
 	ctx := context.Background()
 
 	testBudget := createTestBudgetForService()
-	testBudget.Spent = 500.0
+	testBudget.SpentMinor = 50000
 
 	newAmount := 400.0 // Less than spent amount
 
@@ -353,10 +355,10 @@ func TestBudgetService_UpdateBudget_AmountLessThanSpent(t *testing.T) {
 		"GetTotalByCategoryAndDateRange",
 		ctx,
 		*testBudget.CategoryID,
-		mock.AnythingOfType("time.Time"),
-		mock.AnythingOfType("time.Time"),
+		mock.AnythingOfType("date.Date"),
+		mock.AnythingOfType("date.Date"),
 		transaction.TypeExpense,
-	).Return(450.0, nil) // Different from testBudget.Spent (500.0) to trigger update
+	).Return(money.Minor(45000), nil) // Different from testBudget.Spent (500.0) to trigger update
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil) // For recalc
 
 	// Execute
@@ -377,15 +379,15 @@ func TestBudgetService_GetActiveBudgets_Success(t *testing.T) {
 	service, budgetRepo, txRepo := setupBudgetService(t)
 	ctx := context.Background()
 
-	date := time.Now()
+	on := date.Today(time.UTC)
 
 	activeBudget := createTestBudgetForService()
-	activeBudget.StartDate = date.AddDate(0, 0, -5)
-	activeBudget.EndDate = date.AddDate(0, 0, 5)
+	activeBudget.StartDate = on.AddDays(-5)
+	activeBudget.EndDate = on.AddDays(5)
 
 	inactiveBudget := createTestBudgetForService()
-	inactiveBudget.StartDate = date.AddDate(0, 0, -20)
-	inactiveBudget.EndDate = date.AddDate(0, 0, -10) // Expired
+	inactiveBudget.StartDate = on.AddDays(-20)
+	inactiveBudget.EndDate = on.AddDays(-10) // Expired
 
 	allBudgets := []*budget.Budget{activeBudget, inactiveBudget}
 
@@ -395,14 +397,14 @@ func TestBudgetService_GetActiveBudgets_Success(t *testing.T) {
 		"GetTotalByCategoryAndDateRange",
 		ctx,
 		*activeBudget.CategoryID,
-		mock.AnythingOfType("time.Time"),
-		mock.AnythingOfType("time.Time"),
+		mock.AnythingOfType("date.Date"),
+		mock.AnythingOfType("date.Date"),
 		transaction.TypeExpense,
-	).Return(200.0, nil)
+	).Return(money.Minor(20000), nil)
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
 
 	// Execute
-	result, err := service.GetActiveBudgets(ctx, date)
+	result, err := service.GetActiveBudgets(ctx, on.In(time.UTC))
 
 	// Assert
 	require.NoError(t, err)
@@ -423,8 +425,8 @@ func TestBudgetService_CheckBudgetLimits_WithinLimit(t *testing.T) {
 
 	testBudget := createTestBudgetForService()
 	testBudget.CategoryID = &categoryID
-	testBudget.Spent = 300.0
-	testBudget.Amount = 1000.0
+	testBudget.SpentMinor = 30000
+	testBudget.AmountMinor = 100000
 
 	// Setup expectations
 	budgetRepo.On("GetByCategory", ctx, &categoryID).Return([]*budget.Budget{testBudget}, nil)
@@ -432,10 +434,10 @@ func TestBudgetService_CheckBudgetLimits_WithinLimit(t *testing.T) {
 		"GetTotalByCategoryAndDateRange",
 		ctx,
 		categoryID,
-		mock.AnythingOfType("time.Time"),
-		mock.AnythingOfType("time.Time"),
+		mock.AnythingOfType("date.Date"),
+		mock.AnythingOfType("date.Date"),
 		transaction.TypeExpense,
-	).Return(250.0, nil)
+	).Return(money.Minor(25000), nil)
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
 
 	// Execute
@@ -457,8 +459,8 @@ func TestBudgetService_CheckBudgetLimits_ExceedsLimit(t *testing.T) {
 
 	testBudget := createTestBudgetForService()
 	testBudget.CategoryID = &categoryID
-	testBudget.Spent = 300.0
-	testBudget.Amount = 1000.0
+	testBudget.SpentMinor = 30000
+	testBudget.AmountMinor = 100000
 
 	// Setup expectations
 	budgetRepo.On("GetByCategory", ctx, &categoryID).Return([]*budget.Budget{testBudget}, nil)
@@ -466,10 +468,10 @@ func TestBudgetService_CheckBudgetLimits_ExceedsLimit(t *testing.T) {
 		"GetTotalByCategoryAndDateRange",
 		ctx,
 		categoryID,
-		mock.AnythingOfType("time.Time"),
-		mock.AnythingOfType("time.Time"),
+		mock.AnythingOfType("date.Date"),
+		mock.AnythingOfType("date.Date"),
 		transaction.TypeExpense,
-	).Return(250.0, nil)
+	).Return(money.Minor(25000), nil)
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
 
 	// Execute
@@ -489,8 +491,8 @@ func TestBudgetService_GetBudgetStatus_Success(t *testing.T) {
 	ctx := context.Background()
 
 	testBudget := createTestBudgetForService()
-	testBudget.Spent = 800.0 // 80% utilization
-	testBudget.Amount = 1000.0
+	testBudget.SpentMinor = 80000 // 80% utilization
+	testBudget.AmountMinor = 100000
 
 	// Setup expectations
 	budgetRepo.On("GetByID", ctx, testBudget.ID).Return(testBudget, nil)
@@ -498,10 +500,10 @@ func TestBudgetService_GetBudgetStatus_Success(t *testing.T) {
 		"GetTotalByCategoryAndDateRange",
 		ctx,
 		*testBudget.CategoryID,
-		mock.AnythingOfType("time.Time"),
-		mock.AnythingOfType("time.Time"),
+		mock.AnythingOfType("date.Date"),
+		mock.AnythingOfType("date.Date"),
 		transaction.TypeExpense,
-	).Return(250.0, nil)
+	).Return(money.Minor(25000), nil)
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
 
 	// Execute
@@ -529,9 +531,9 @@ func TestBudgetService_CalculateBudgetUtilization_Success(t *testing.T) {
 	ctx := context.Background()
 
 	testBudget := createTestBudgetForService()
-	testBudget.Spent = 700.0
-	testBudget.Amount = 1000.0
-	testBudget.StartDate = time.Now().AddDate(0, 0, -10) // 10 days ago
+	testBudget.SpentMinor = 70000
+	testBudget.AmountMinor = 100000
+	testBudget.StartDate = date.Today(time.UTC).AddDays(-10) // 10 days ago
 
 	// Setup expectations
 	budgetRepo.On("GetByID", ctx, testBudget.ID).Return(testBudget, nil)
@@ -539,10 +541,10 @@ func TestBudgetService_CalculateBudgetUtilization_Success(t *testing.T) {
 		"GetTotalByCategoryAndDateRange",
 		ctx,
 		*testBudget.CategoryID,
-		mock.AnythingOfType("time.Time"),
-		mock.AnythingOfType("time.Time"),
+		mock.AnythingOfType("date.Date"),
+		mock.AnythingOfType("date.Date"),
 		transaction.TypeExpense,
-	).Return(250.0, nil)
+	).Return(money.Minor(25000), nil)
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
 
 	// Execute
@@ -618,10 +620,10 @@ func TestBudgetService_GetAllBudgets_Success(t *testing.T) {
 			"GetTotalByCategoryAndDateRange",
 			ctx,
 			*b.CategoryID,
-			mock.AnythingOfType("time.Time"),
-			mock.AnythingOfType("time.Time"),
+			mock.AnythingOfType("date.Date"),
+			mock.AnythingOfType("date.Date"),
 			transaction.TypeExpense,
-		).Return(200.0, nil)
+		).Return(money.Minor(20000), nil)
 		budgetRepo.On("Update", ctx, mock.MatchedBy(func(budget *budget.Budget) bool {
 			return budget.ID == b.ID
 		})).Return(nil)
@@ -644,7 +646,7 @@ func TestBudgetService_RecalculateBudgetSpent_Success(t *testing.T) {
 	ctx := context.Background()
 
 	testBudget := createTestBudgetForService()
-	actualSpent := 450.0
+	actualSpent := money.Minor(45_000)
 
 	// Setup expectations
 	budgetRepo.On("GetByID", ctx, testBudget.ID).Return(testBudget, nil)
@@ -652,8 +654,8 @@ func TestBudgetService_RecalculateBudgetSpent_Success(t *testing.T) {
 		"GetTotalByCategoryAndDateRange",
 		ctx,
 		*testBudget.CategoryID,
-		mock.AnythingOfType("time.Time"),
-		mock.AnythingOfType("time.Time"),
+		mock.AnythingOfType("date.Date"),
+		mock.AnythingOfType("date.Date"),
 		transaction.TypeExpense,
 	).Return(actualSpent, nil)
 	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)

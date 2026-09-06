@@ -11,6 +11,8 @@ import (
 	"github.com/google/uuid"
 
 	"family-budget-service/internal/domain/budget"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/infrastructure/sqlitehelpers"
 	"family-budget-service/internal/infrastructure/validation"
 )
@@ -22,18 +24,18 @@ type SQLiteRepository struct {
 
 // UsageStats holds budget usage statistics
 type UsageStats struct {
-	BudgetID        uuid.UUID     `json:"budget_id"`
-	BudgetName      string        `json:"budget_name"`
-	BudgetAmount    float64       `json:"budget_amount"`
-	SpentAmount     float64       `json:"spent_amount"`
-	RemainingAmount float64       `json:"remaining_amount"`
-	UsagePercentage float64       `json:"usage_percentage"`
-	Period          budget.Period `json:"period"`
-	StartDate       time.Time     `json:"start_date"`
-	EndDate         time.Time     `json:"end_date"`
-	DaysRemaining   int           `json:"days_remaining"`
-	Status          string        `json:"status"` // 'safe', 'on_track', 'warning', 'over_budget'
-	CategoryName    string        `json:"category_name,omitempty"`
+	BudgetID             uuid.UUID     `json:"budget_id"`
+	BudgetName           string        `json:"budget_name"`
+	BudgetAmountMinor    money.Minor   `json:"budget_amount_minor"`
+	SpentAmountMinor     money.Minor   `json:"spent_amount_minor"`
+	RemainingAmountMinor money.Minor   `json:"remaining_amount_minor"`
+	UsagePercentage      float64       `json:"usage_percentage"`
+	Period               budget.Period `json:"period"`
+	StartDate            date.Date     `json:"start_date"`
+	EndDate              date.Date     `json:"end_date"`
+	DaysRemaining        int           `json:"days_remaining"`
+	Status               string        `json:"status"` // 'safe', 'on_track', 'warning', 'over_budget'
+	CategoryName         string        `json:"category_name,omitempty"`
 }
 
 // NewSQLiteRepository creates a new SQLite budget repository
@@ -66,7 +68,7 @@ func scanBudgetRow(rows *sql.Rows) (*budget.Budget, error) {
 	var isActiveInt int
 
 	err := rows.Scan(
-		&idStr, &b.Name, &b.Amount, &b.Spent, &periodStr,
+		&idStr, &b.Name, &b.AmountMinor, &b.SpentMinor, &periodStr,
 		&b.StartDate, &b.EndDate, &categoryIDStr, &familyIDStr,
 		&isActiveInt, &b.CreatedAt, &b.UpdatedAt,
 	)
@@ -103,7 +105,7 @@ func (r *SQLiteRepository) Create(ctx context.Context, b *budget.Budget) error {
 	if validationErr := validation.ValidateBudgetPeriod(b.Period); validationErr != nil {
 		return fmt.Errorf("invalid period: %w", validationErr)
 	}
-	if validationErr := validation.ValidateBudgetAmount(b.Amount); validationErr != nil {
+	if validationErr := validation.ValidateBudgetAmount(b.AmountMinor); validationErr != nil {
 		return fmt.Errorf("invalid amount: %w", validationErr)
 	}
 	if validationErr := validation.ValidateBudgetName(b.Name); validationErr != nil {
@@ -129,15 +131,15 @@ func (r *SQLiteRepository) Create(ctx context.Context, b *budget.Budget) error {
 
 	query := `
 		INSERT INTO budgets (
-			id, name, amount, spent, period, start_date, end_date,
+			id, name, amount_minor, spent_minor, period, start_date, end_date,
 			category_id, family_id, is_active, created_at, updated_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	_, err = r.db.ExecContext(ctx, query,
 		sqlitehelpers.UUIDToString(b.ID),
 		b.Name,
-		b.Amount,
-		b.Spent,
+		int64(b.AmountMinor),
+		int64(b.SpentMinor),
 		string(b.Period),
 		b.StartDate,
 		b.EndDate,
@@ -167,7 +169,7 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*budget.B
 	}
 
 	query := `
-		SELECT id, name, amount, spent, period, start_date, end_date,
+		SELECT id, name, amount_minor, spent_minor, period, start_date, end_date,
 			   category_id, family_id, is_active, created_at, updated_at
 		FROM budgets
 		WHERE id = ?`
@@ -178,7 +180,7 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*budget.B
 	var isActiveInt int
 
 	err := r.db.QueryRowContext(ctx, query, sqlitehelpers.UUIDToString(id)).Scan(
-		&idStr, &b.Name, &b.Amount, &b.Spent, &periodStr,
+		&idStr, &b.Name, &b.AmountMinor, &b.SpentMinor, &periodStr,
 		&b.StartDate, &b.EndDate, &categoryIDStr, &familyIDStr,
 		&isActiveInt, &b.CreatedAt, &b.UpdatedAt,
 	)
@@ -213,7 +215,7 @@ func (r *SQLiteRepository) GetAll(ctx context.Context) ([]*budget.Budget, error)
 	}
 
 	query := `
-		SELECT id, name, amount, spent, period, start_date, end_date,
+		SELECT id, name, amount_minor, spent_minor, period, start_date, end_date,
 			   category_id, family_id, is_active, created_at, updated_at
 		FROM budgets
 		WHERE family_id = ? AND is_active = 1
@@ -250,16 +252,16 @@ func (r *SQLiteRepository) GetActiveBudgets(ctx context.Context) ([]*budget.Budg
 		return nil, fmt.Errorf("invalid familyID parameter: %w", err)
 	}
 
-	now := time.Now()
+	today := date.Today(time.UTC)
 	query := `
-		SELECT id, name, amount, spent, period, start_date, end_date,
+		SELECT id, name, amount_minor, spent_minor, period, start_date, end_date,
 			   category_id, family_id, is_active, created_at, updated_at
 		FROM budgets
 		WHERE family_id = ? AND is_active = 1
 		AND start_date <= ? AND end_date >= ?
 		ORDER BY start_date DESC, name`
 
-	rows, err := r.db.QueryContext(ctx, query, sqlitehelpers.UUIDToString(familyID), now, now)
+	rows, err := r.db.QueryContext(ctx, query, sqlitehelpers.UUIDToString(familyID), today, today)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active budgets: %w", err)
 	}
@@ -292,16 +294,13 @@ func (r *SQLiteRepository) GetUsageStats(
 		return nil, fmt.Errorf("invalid familyID parameter: %w", err)
 	}
 
-	now := time.Now()
-	// SQLite uses julianday for date calculations
-	// Format dates to ISO 8601 for proper SQLite comparison
-	nowStr := now.Format(time.RFC3339)
+	today := date.Today(time.UTC)
 	// Calculate spent dynamically using CTE to avoid code duplication
 	query := `
 		WITH budget_spent AS (
 			SELECT
 				b.id,
-				COALESCE(SUM(t.amount), 0) as spent
+				COALESCE(SUM(t.amount_minor), 0) as spent
 			FROM budgets b
 			LEFT JOIN transactions t ON
 				t.type = 'expense'
@@ -315,18 +314,19 @@ func (r *SQLiteRepository) GetUsageStats(
 		SELECT
 			b.id,
 			b.name,
-			b.amount,
+			b.amount_minor,
 			bs.spent,
 			b.period,
 			b.start_date,
 			b.end_date,
-			(b.amount - bs.spent) as remaining_amount,
-			CASE WHEN b.amount > 0 THEN ROUND((bs.spent / b.amount * 100), 2) ELSE 0 END as usage_percentage,
-			CAST((julianday(substr(b.end_date, 1, 10)) - julianday('now')) AS INTEGER) as days_remaining,
+			(b.amount_minor - bs.spent) as remaining_amount,
+			CASE WHEN b.amount_minor > 0 THEN ROUND((CAST(bs.spent AS REAL) / b.amount_minor * 100), 2) ELSE 0 END
+				as usage_percentage,
+			CAST((julianday(b.end_date) - julianday('now')) AS INTEGER) as days_remaining,
 			CASE
-				WHEN bs.spent > b.amount THEN 'over_budget'
-				WHEN bs.spent > (b.amount * 0.8) THEN 'warning'
-				WHEN bs.spent > (b.amount * 0.5) THEN 'on_track'
+				WHEN bs.spent > b.amount_minor THEN 'over_budget'
+				WHEN bs.spent > (b.amount_minor * 0.8) THEN 'warning'
+				WHEN bs.spent > (b.amount_minor * 0.5) THEN 'on_track'
 				ELSE 'safe'
 			END as status,
 			c.name as category_name
@@ -335,7 +335,7 @@ func (r *SQLiteRepository) GetUsageStats(
 		LEFT JOIN categories c ON b.category_id = c.id
 		ORDER BY usage_percentage DESC`
 
-	rows, err := r.db.QueryContext(ctx, query, sqlitehelpers.UUIDToString(familyID), nowStr)
+	rows, err := r.db.QueryContext(ctx, query, sqlitehelpers.UUIDToString(familyID), today)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get budget usage stats: %w", err)
 	}
@@ -348,8 +348,8 @@ func (r *SQLiteRepository) GetUsageStats(
 		var categoryName *string
 
 		err = rows.Scan(
-			&budgetIDStr, &stat.BudgetName, &stat.BudgetAmount, &stat.SpentAmount,
-			&periodStr, &stat.StartDate, &stat.EndDate, &stat.RemainingAmount,
+			&budgetIDStr, &stat.BudgetName, &stat.BudgetAmountMinor, &stat.SpentAmountMinor,
+			&periodStr, &stat.StartDate, &stat.EndDate, &stat.RemainingAmountMinor,
 			&stat.UsagePercentage, &stat.DaysRemaining, &stat.Status, &categoryName,
 		)
 		if err != nil {
@@ -387,7 +387,7 @@ func (r *SQLiteRepository) Update(ctx context.Context, b *budget.Budget) error {
 	if validationErr := validation.ValidateBudgetPeriod(b.Period); validationErr != nil {
 		return fmt.Errorf("invalid period: %w", validationErr)
 	}
-	if validationErr := validation.ValidateBudgetAmount(b.Amount); validationErr != nil {
+	if validationErr := validation.ValidateBudgetAmount(b.AmountMinor); validationErr != nil {
 		return fmt.Errorf("invalid amount: %w", validationErr)
 	}
 	if validationErr := validation.ValidateBudgetName(b.Name); validationErr != nil {
@@ -406,14 +406,14 @@ func (r *SQLiteRepository) Update(ctx context.Context, b *budget.Budget) error {
 
 	query := `
 		UPDATE budgets
-		SET name = ?, amount = ?, spent = ?, period = ?,
+		SET name = ?, amount_minor = ?, spent_minor = ?, period = ?,
 			start_date = ?, end_date = ?, category_id = ?, is_active = ?, updated_at = ?
 		WHERE id = ? AND family_id = ?`
 
 	result, err := r.db.ExecContext(ctx, query,
 		b.Name,
-		b.Amount,
-		b.Spent,
+		int64(b.AmountMinor),
+		int64(b.SpentMinor),
 		string(b.Period),
 		b.StartDate,
 		b.EndDate,
@@ -445,21 +445,25 @@ func (r *SQLiteRepository) Update(ctx context.Context, b *budget.Budget) error {
 }
 
 // UpdateSpentAmount updates the spent amount for a budget
-func (r *SQLiteRepository) UpdateSpentAmount(ctx context.Context, budgetID uuid.UUID, spentAmount float64) error {
+func (r *SQLiteRepository) UpdateSpentAmount(
+	ctx context.Context,
+	budgetID uuid.UUID,
+	spentAmountMinor money.Minor,
+) error {
 	// Validate parameters
 	if err := validation.ValidateUUID(budgetID); err != nil {
 		return fmt.Errorf("invalid budget ID: %w", err)
 	}
-	if spentAmount < 0 {
+	if spentAmountMinor < 0 {
 		return errors.New("spent amount cannot be negative")
 	}
 
 	query := `
 		UPDATE budgets
-		SET spent = ?, updated_at = CURRENT_TIMESTAMP
+		SET spent_minor = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ? AND is_active = 1`
 
-	result, err := r.db.ExecContext(ctx, query, spentAmount, sqlitehelpers.UUIDToString(budgetID))
+	result, err := r.db.ExecContext(ctx, query, int64(spentAmountMinor), sqlitehelpers.UUIDToString(budgetID))
 	if err != nil {
 		return fmt.Errorf("failed to update spent amount: %w", err)
 	}
@@ -487,8 +491,8 @@ func (r *SQLiteRepository) RecalculateSpent(ctx context.Context, budgetID uuid.U
 	// Recalculate spent amount from transactions
 	query := `
 		UPDATE budgets
-		SET spent = (
-			SELECT COALESCE(SUM(t.amount), 0)
+		SET spent_minor = (
+			SELECT COALESCE(SUM(t.amount_minor), 0)
 			FROM transactions t
 			WHERE t.type = 'expense'
 			AND t.date BETWEEN budgets.start_date AND budgets.end_date
@@ -521,7 +525,7 @@ func (r *SQLiteRepository) FindBudgetsAffectedByTransaction(
 	ctx context.Context,
 	familyID uuid.UUID,
 	categoryID uuid.UUID,
-	transactionDate time.Time,
+	transactionDate date.Date,
 ) ([]uuid.UUID, error) {
 	// Validate parameters
 	if err := validation.ValidateUUID(familyID); err != nil {
@@ -623,7 +627,7 @@ func (r *SQLiteRepository) GetByCategory(
 		}
 
 		query = `
-			SELECT id, name, amount, spent, period, start_date, end_date,
+			SELECT id, name, amount_minor, spent_minor, period, start_date, end_date,
 				   category_id, family_id, is_active, created_at, updated_at
 			FROM budgets
 			WHERE family_id = ? AND category_id = ? AND is_active = 1
@@ -631,7 +635,7 @@ func (r *SQLiteRepository) GetByCategory(
 		args = []any{sqlitehelpers.UUIDToString(familyID), sqlitehelpers.UUIDToString(*categoryID)}
 	} else {
 		query = `
-			SELECT id, name, amount, spent, period, start_date, end_date,
+			SELECT id, name, amount_minor, spent_minor, period, start_date, end_date,
 				   category_id, family_id, is_active, created_at, updated_at
 			FROM budgets
 			WHERE family_id = ? AND is_active = 1
@@ -665,7 +669,7 @@ func (r *SQLiteRepository) GetByCategory(
 // GetByPeriod retrieves budgets by family ID and date range
 func (r *SQLiteRepository) GetByPeriod(
 	ctx context.Context,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 ) ([]*budget.Budget, error) {
 	// Get single family ID
 	familyID, err := r.getSingleFamilyID(ctx)
@@ -674,7 +678,7 @@ func (r *SQLiteRepository) GetByPeriod(
 	}
 
 	query := `
-		SELECT id, name, amount, spent, period, start_date, end_date,
+		SELECT id, name, amount_minor, spent_minor, period, start_date, end_date,
 			   category_id, family_id, is_active, created_at, updated_at
 		FROM budgets
 		WHERE family_id = ? AND is_active = 1

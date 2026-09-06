@@ -13,6 +13,8 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/auth"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
@@ -144,12 +146,12 @@ func (h *TransactionHandler) buildTransaction(
 ) *transaction.Transaction {
 	return &transaction.Transaction{
 		ID:          uuid.New(),
-		Amount:      req.Amount,
+		AmountMinor: money.FromFloat(req.Amount),
 		Type:        transaction.Type(req.Type),
 		Description: req.Description,
 		CategoryID:  req.CategoryID,
 		UserID:      userID,
-		Date:        req.Date,
+		Date:        date.FromTime(req.Date),
 		Tags:        req.Tags,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
@@ -182,7 +184,7 @@ func (h *TransactionHandler) updateBudgetIfNeeded(c echo.Context, tx *transactio
 
 	for _, b := range budgets {
 		if b.CategoryID != nil && *b.CategoryID == tx.CategoryID {
-			b.Spent += tx.Amount
+			b.SpentMinor += tx.AmountMinor
 			b.UpdatedAt = time.Now()
 			if updateErr := h.repositories.Budget.Update(c.Request().Context(), b); updateErr != nil {
 				if h.logger != nil {
@@ -203,12 +205,12 @@ func (h *TransactionHandler) updateBudgetIfNeeded(c echo.Context, tx *transactio
 func (h *TransactionHandler) buildTransactionResponse(tx *transaction.Transaction) TransactionResponse {
 	return TransactionResponse{
 		ID:          tx.ID,
-		Amount:      tx.Amount,
+		Amount:      tx.AmountMinor.Float(),
 		Type:        string(tx.Type),
 		Description: tx.Description,
 		CategoryID:  tx.CategoryID,
 		UserID:      tx.UserID,
-		Date:        tx.Date,
+		Date:        tx.Date.In(time.UTC),
 		Tags:        tx.Tags,
 		CreatedAt:   tx.CreatedAt,
 		UpdatedAt:   tx.UpdatedAt,
@@ -406,14 +408,10 @@ func (h *TransactionHandler) buildRepositoryFilter(filters TransactionFilterPara
 		typeFilter = &t
 	}
 
-	return transaction.Filter{
+	repoFilter := transaction.Filter{
 		UserID:     filters.UserID,
 		CategoryID: filters.CategoryID,
 		Type:       typeFilter,
-		DateFrom:   filters.DateFrom,
-		DateTo:     filters.DateTo,
-		AmountFrom: filters.AmountFrom,
-		AmountTo:   filters.AmountTo,
 		Description: func() string {
 			if filters.Description != nil {
 				return *filters.Description
@@ -423,6 +421,28 @@ func (h *TransactionHandler) buildRepositoryFilter(filters TransactionFilterPara
 		Limit:  filters.Limit,
 		Offset: filters.Offset,
 	}
+
+	if filters.DateFrom != nil {
+		from := date.FromTime(*filters.DateFrom)
+		repoFilter.DateFrom = &from
+	}
+
+	if filters.DateTo != nil {
+		to := date.FromTime(*filters.DateTo)
+		repoFilter.DateTo = &to
+	}
+
+	if filters.AmountFrom != nil {
+		from := money.FromFloat(*filters.AmountFrom)
+		repoFilter.AmountFromMinor = &from
+	}
+
+	if filters.AmountTo != nil {
+		to := money.FromFloat(*filters.AmountTo)
+		repoFilter.AmountToMinor = &to
+	}
+
+	return repoFilter
 }
 
 func (h *TransactionHandler) buildTransactionListResponse(
@@ -432,12 +452,12 @@ func (h *TransactionHandler) buildTransactionListResponse(
 	for _, tx := range transactions {
 		response = append(response, TransactionResponse{
 			ID:          tx.ID,
-			Amount:      tx.Amount,
+			Amount:      tx.AmountMinor.Float(),
 			Type:        string(tx.Type),
 			Description: tx.Description,
 			CategoryID:  tx.CategoryID,
 			UserID:      tx.UserID,
-			Date:        tx.Date,
+			Date:        tx.Date.In(time.UTC),
 			Tags:        tx.Tags,
 			CreatedAt:   tx.CreatedAt,
 			UpdatedAt:   tx.UpdatedAt,
@@ -464,12 +484,12 @@ func (h *TransactionHandler) GetTransactionByID(c echo.Context) error {
 
 	response := TransactionResponse{
 		ID:          foundTransaction.ID,
-		Amount:      foundTransaction.Amount,
+		Amount:      foundTransaction.AmountMinor.Float(),
 		Type:        string(foundTransaction.Type),
 		Description: foundTransaction.Description,
 		CategoryID:  foundTransaction.CategoryID,
 		UserID:      foundTransaction.UserID,
-		Date:        foundTransaction.Date,
+		Date:        foundTransaction.Date.In(time.UTC),
 		Tags:        foundTransaction.Tags,
 		CreatedAt:   foundTransaction.CreatedAt,
 		UpdatedAt:   foundTransaction.UpdatedAt,
@@ -558,7 +578,7 @@ func (h *TransactionHandler) updateTransactionViaService(c echo.Context) error {
 
 func (h *TransactionHandler) updateTransactionFields(tx *transaction.Transaction, req *UpdateTransactionRequest) {
 	if req.Amount != nil {
-		tx.Amount = *req.Amount
+		tx.AmountMinor = money.FromFloat(*req.Amount)
 	}
 	if req.Type != nil {
 		tx.Type = transaction.Type(*req.Type)
@@ -570,7 +590,7 @@ func (h *TransactionHandler) updateTransactionFields(tx *transaction.Transaction
 		tx.CategoryID = *req.CategoryID
 	}
 	if req.Date != nil {
-		tx.Date = *req.Date
+		tx.Date = date.FromTime(*req.Date)
 	}
 	if req.Tags != nil {
 		tx.Tags = req.Tags

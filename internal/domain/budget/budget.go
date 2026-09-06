@@ -4,25 +4,23 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-)
 
-const (
-	// PercentageBase base value for percentage calculations
-	PercentageBase = 100
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 )
 
 type Budget struct {
-	ID         uuid.UUID  `json:"id"          bson:"_id"`
-	Name       string     `json:"name"        bson:"name"`
-	Amount     float64    `json:"amount"      bson:"amount"` // Лимит бюджета
-	Spent      float64    `json:"spent"       bson:"spent"`  // Потрачено
-	Period     Period     `json:"period"      bson:"period"`
-	CategoryID *uuid.UUID `json:"category_id" bson:"category_id,omitempty"` // Для конкретной категории
-	StartDate  time.Time  `json:"start_date"  bson:"start_date"`
-	EndDate    time.Time  `json:"end_date"    bson:"end_date"`
-	IsActive   bool       `json:"is_active"   bson:"is_active"`
-	CreatedAt  time.Time  `json:"created_at"  bson:"created_at"`
-	UpdatedAt  time.Time  `json:"updated_at"  bson:"updated_at"`
+	ID          uuid.UUID   `json:"id"           bson:"_id"`
+	Name        string      `json:"name"         bson:"name"`
+	AmountMinor money.Minor `json:"amount_minor" bson:"amount_minor"` // Лимит бюджета
+	SpentMinor  money.Minor `json:"spent_minor"  bson:"spent_minor"`  // Потрачено
+	Period      Period      `json:"period"       bson:"period"`
+	CategoryID  *uuid.UUID  `json:"category_id"  bson:"category_id,omitempty"` // Для конкретной категории
+	StartDate   date.Date   `json:"start_date"   bson:"start_date"`
+	EndDate     date.Date   `json:"end_date"     bson:"end_date"`
+	IsActive    bool        `json:"is_active"    bson:"is_active"`
+	CreatedAt   time.Time   `json:"created_at"   bson:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"   bson:"updated_at"`
 }
 
 type Period string
@@ -36,40 +34,38 @@ const (
 
 func NewBudget(
 	name string,
-	amount float64,
+	amountMinor money.Minor,
 	period Period,
-	startDate, endDate time.Time,
+	startDate, endDate date.Date,
 ) *Budget {
 	return &Budget{
-		ID:        uuid.New(),
-		Name:      name,
-		Amount:    amount,
-		Spent:     0,
-		Period:    period,
-		StartDate: startDate,
-		EndDate:   endDate,
-		IsActive:  true,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID:          uuid.New(),
+		Name:        name,
+		AmountMinor: amountMinor,
+		SpentMinor:  0,
+		Period:      period,
+		StartDate:   startDate,
+		EndDate:     endDate,
+		IsActive:    true,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
 	}
 }
 
-func (b *Budget) GetRemainingAmount() float64 {
-	return b.Amount - b.Spent
+func (b *Budget) GetRemainingAmount() money.Minor {
+	return b.AmountMinor - b.SpentMinor
 }
 
+// GetSpentPercentage возвращает долю потраченного в процентах; при нулевом лимите — 0.
 func (b *Budget) GetSpentPercentage() float64 {
-	if b.Amount == 0 {
-		return 0
-	}
-	return (b.Spent / b.Amount) * PercentageBase
+	return b.SpentMinor.Percent(b.AmountMinor)
 }
 
 func (b *Budget) IsOverBudget() bool {
-	return b.Spent > b.Amount
+	return b.SpentMinor > b.AmountMinor
 }
 
-func (b *Budget) UpdateSpent(amount float64) {
-	b.Spent += amount
+func (b *Budget) UpdateSpent(amountMinor money.Minor) {
+	b.SpentMinor += amountMinor
 	b.UpdatedAt = time.Now()
 }

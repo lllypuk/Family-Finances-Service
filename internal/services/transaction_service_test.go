@@ -13,6 +13,8 @@ import (
 
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services/dto"
@@ -43,7 +45,7 @@ func TestTransactionService_CreateTransaction_Success(t *testing.T) {
 
 	testCategory := createTestCategory(categoryID, "Test Category", category.TypeExpense)
 
-	testBudget := createTestBudget(uuid.New(), 500.00, categoryID)
+	testBudget := createTestBudget(uuid.New(), 50000, categoryID)
 
 	// Setup expectations
 	userRepo.On("GetByID", ctx, userID).Return(testUser, nil)
@@ -58,7 +60,7 @@ func TestTransactionService_CreateTransaction_Success(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.InDelta(t, req.Amount, result.Amount, 0.01)
+	assert.Equal(t, money.FromFloat(req.Amount), result.AmountMinor)
 	assert.Equal(t, req.Type, result.Type)
 	assert.Equal(t, req.Description, result.Description)
 	assert.Equal(t, req.CategoryID, result.CategoryID)
@@ -122,8 +124,8 @@ func TestTransactionService_CreateTransaction_ExceedsBudget(t *testing.T) {
 
 	testCategory := createTestCategory(categoryID, "Test Category", category.TypeExpense)
 
-	testBudget := createTestBudget(uuid.New(), 500.00, categoryID)
-	testBudget.Spent = 100.00 // Already spent 100 out of 500 budget
+	testBudget := createTestBudget(uuid.New(), 50000, categoryID)
+	testBudget.SpentMinor = 10000 // Already spent 100 out of 500 budget
 
 	// Setup expectations
 	userRepo.On("GetByID", ctx, userID).Return(testUser, nil)
@@ -151,7 +153,7 @@ func TestTransactionService_CreateTransaction_IncomeNoLimitCheck(t *testing.T) {
 	categoryID := uuid.New()
 
 	req := dto.CreateTransactionDTO{
-		Amount:      300.0, // Income transaction
+		Amount:      300.00, // Income transaction
 		Type:        transaction.TypeIncome,
 		Description: "Test income",
 		CategoryID:  categoryID,
@@ -176,7 +178,7 @@ func TestTransactionService_CreateTransaction_IncomeNoLimitCheck(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.InEpsilon(t, req.Amount, result.Amount, 0.01)
+	assert.Equal(t, money.FromFloat(req.Amount), result.AmountMinor)
 	assert.Equal(t, req.Type, result.Type)
 
 	userRepo.AssertExpectations(t)
@@ -189,7 +191,7 @@ func TestTransactionService_GetTransactionByID_Success(t *testing.T) {
 	service, txRepo, _, _, _ := setupTransactionService()
 	ctx := context.Background()
 
-	testTx := createTestTransaction(uuid.New(), 100.50, transaction.TypeExpense, time.Now())
+	testTx := createTestTransaction(uuid.New(), 10050, transaction.TypeExpense, date.Today(time.UTC))
 
 	// Setup expectations
 	txRepo.On("GetByID", ctx, testTx.ID).Return(testTx, nil)
@@ -231,8 +233,8 @@ func TestTransactionService_GetAllTransactions_Success(t *testing.T) {
 	filter := dto.NewTransactionFilterDTO()
 
 	testTxs := []*transaction.Transaction{
-		createTestTransaction(uuid.New(), 100.0, transaction.TypeExpense, time.Now()),
-		createTestTransaction(uuid.New(), 200.0, transaction.TypeExpense, time.Now()),
+		createTestTransaction(uuid.New(), 10000, transaction.TypeExpense, date.Today(time.UTC)),
+		createTestTransaction(uuid.New(), 20000, transaction.TypeExpense, date.Today(time.UTC)),
 	}
 
 	// Setup expectations
@@ -276,7 +278,7 @@ func TestTransactionService_UpdateTransaction_Success(t *testing.T) {
 	categoryID := uuid.New()
 	newCategoryID := uuid.New()
 
-	testTx := createTestTransaction(uuid.New(), 100.50, transaction.TypeExpense, time.Now())
+	testTx := createTestTransaction(uuid.New(), 10050, transaction.TypeExpense, date.Today(time.UTC))
 	testTx.CategoryID = categoryID
 
 	newAmount := 150.75
@@ -288,8 +290,8 @@ func TestTransactionService_UpdateTransaction_Success(t *testing.T) {
 		CategoryID:  &newCategoryID,
 	}
 
-	testBudget := createTestBudget(uuid.New(), 500.00, newCategoryID)
-	oldBudget := createTestBudget(uuid.New(), 500.00, categoryID)
+	testBudget := createTestBudget(uuid.New(), 50000, newCategoryID)
+	oldBudget := createTestBudget(uuid.New(), 50000, categoryID)
 
 	// Setup expectations - UpdateTransaction doesn't validate category existence
 	txRepo.On("GetByID", ctx, testTx.ID).Return(testTx, nil)
@@ -306,7 +308,7 @@ func TestTransactionService_UpdateTransaction_Success(t *testing.T) {
 	}
 	require.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.InDelta(t, newAmount, result.Amount, 0.01)
+	assert.Equal(t, money.FromFloat(newAmount), result.AmountMinor)
 	assert.Equal(t, newDescription, result.Description)
 	assert.Equal(t, newCategoryID, result.CategoryID)
 
@@ -321,9 +323,9 @@ func TestTransactionService_DeleteTransaction_Success(t *testing.T) {
 	ctx := context.Background()
 
 	categoryID := uuid.New()
-	existingTx := createTestTransaction(uuid.New(), 100.50, transaction.TypeExpense, time.Now())
+	existingTx := createTestTransaction(uuid.New(), 10050, transaction.TypeExpense, date.Today(time.UTC))
 	existingTx.CategoryID = categoryID
-	testBudget := createTestBudget(uuid.New(), 500.00, categoryID)
+	testBudget := createTestBudget(uuid.New(), 50000, categoryID)
 
 	// Setup expectations
 	txRepo.On("GetByID", ctx, existingTx.ID).Return(existingTx, nil)
@@ -346,10 +348,10 @@ func TestTransactionService_BulkDelete_SkipsUnknownIDs(t *testing.T) {
 	ctx := context.Background()
 
 	categoryID := uuid.New()
-	existingTx := createTestTransaction(uuid.New(), 100.50, transaction.TypeExpense, time.Now())
+	existingTx := createTestTransaction(uuid.New(), 10050, transaction.TypeExpense, date.Today(time.UTC))
 	existingTx.CategoryID = categoryID
 	missingID := uuid.New()
-	testBudget := createTestBudget(uuid.New(), 500.00, categoryID)
+	testBudget := createTestBudget(uuid.New(), 50000, categoryID)
 
 	ids := []uuid.UUID{existingTx.ID, missingID}
 
@@ -363,7 +365,7 @@ func TestTransactionService_BulkDelete_SkipsUnknownIDs(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, 1, deleted)
-	assert.InDelta(t, -existingTx.Amount, testBudget.Spent, 0.001)
+	assert.Equal(t, -existingTx.AmountMinor, testBudget.SpentMinor)
 
 	txRepo.AssertExpectations(t)
 	budgetRepo.AssertExpectations(t)
@@ -402,18 +404,18 @@ func TestTransactionService_BulkCategorizeTransactions_Success(t *testing.T) {
 	oldCategoryID := uuid.New()
 	newCategoryID := uuid.New()
 
-	tx1 := createTestTransaction(uuid.New(), 100.50, transaction.TypeExpense, time.Now())
+	tx1 := createTestTransaction(uuid.New(), 10050, transaction.TypeExpense, date.Today(time.UTC))
 	tx1.CategoryID = oldCategoryID
 
-	tx2 := createTestTransaction(uuid.New(), 200.00, transaction.TypeExpense, time.Now())
+	tx2 := createTestTransaction(uuid.New(), 20000, transaction.TypeExpense, date.Today(time.UTC))
 	tx2.CategoryID = oldCategoryID
 
 	transactionIDs := []uuid.UUID{tx1.ID, tx2.ID}
 
 	testCategory := createTestCategory(newCategoryID, "Test Category", category.TypeExpense)
 
-	oldBudget := createTestBudget(uuid.New(), 500.00, oldCategoryID)
-	newBudget := createTestBudget(uuid.New(), 300.00, newCategoryID)
+	oldBudget := createTestBudget(uuid.New(), 50000, oldCategoryID)
+	newBudget := createTestBudget(uuid.New(), 30000, newCategoryID)
 
 	// Setup expectations
 	txRepo.On("GetByID", ctx, tx1.ID).Return(tx1, nil)
@@ -457,7 +459,7 @@ func TestTransactionService_GetTransactionsByDateRange_Success(t *testing.T) {
 	to := time.Now()
 
 	testTxs := []*transaction.Transaction{
-		createTestTransaction(uuid.New(), 100.0, transaction.TypeExpense, time.Now()),
+		createTestTransaction(uuid.New(), 10000, transaction.TypeExpense, date.Today(time.UTC)),
 	}
 
 	// Setup expectations
@@ -498,8 +500,8 @@ func TestTransactionService_ValidateTransactionLimits_WithinBudget(t *testing.T)
 	categoryID := uuid.New()
 	amount := 200.0 // Within budget (500 - 100 = 400 remaining)
 
-	testBudget := createTestBudget(uuid.New(), 500.00, categoryID)
-	testBudget.Spent = 100.0
+	testBudget := createTestBudget(uuid.New(), 50000, categoryID)
+	testBudget.SpentMinor = 10000
 
 	// Setup expectations
 	budgetRepo.On("GetActiveBudgets", ctx).Return([]*budget.Budget{testBudget}, nil)
@@ -520,8 +522,8 @@ func TestTransactionService_ValidateTransactionLimits_ExceedsBudget(t *testing.T
 	categoryID := uuid.New()
 	amount := 500.0 // Exceeds budget (500 - 100 = 400 remaining)
 
-	testBudget := createTestBudget(uuid.New(), 500.00, categoryID)
-	testBudget.Spent = 100.0
+	testBudget := createTestBudget(uuid.New(), 50000, categoryID)
+	testBudget.SpentMinor = 10000
 
 	// Setup expectations
 	budgetRepo.On("GetActiveBudgets", ctx).Return([]*budget.Budget{testBudget}, nil)
@@ -574,9 +576,9 @@ func TestTransactionService_BulkDelete_DeduplicatesIDs(t *testing.T) {
 	ctx := context.Background()
 
 	categoryID := uuid.New()
-	existingTx := createTestTransaction(uuid.New(), 100.50, transaction.TypeExpense, time.Now())
+	existingTx := createTestTransaction(uuid.New(), 10050, transaction.TypeExpense, date.Today(time.UTC))
 	existingTx.CategoryID = categoryID
-	testBudget := createTestBudget(uuid.New(), 500.00, categoryID)
+	testBudget := createTestBudget(uuid.New(), 50000, categoryID)
 
 	txRepo.On("GetByID", ctx, existingTx.ID).Return(existingTx, nil).Once()
 	txRepo.On("DeleteBulk", ctx, []uuid.UUID{existingTx.ID}).Return(1, nil)
@@ -587,7 +589,7 @@ func TestTransactionService_BulkDelete_DeduplicatesIDs(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, 1, deleted)
-	assert.InDelta(t, -existingTx.Amount, testBudget.Spent, 0.001)
+	assert.Equal(t, -existingTx.AmountMinor, testBudget.SpentMinor)
 
 	txRepo.AssertExpectations(t)
 	budgetRepo.AssertExpectations(t)

@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"family-budget-service/internal/domain/budget"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
@@ -55,17 +57,17 @@ func (h *BudgetHandler) CreateBudget(c echo.Context) error {
 
 	// Создаем новый бюджет
 	newBudget := &budget.Budget{
-		ID:         uuid.New(),
-		Name:       req.Name,
-		Amount:     req.Amount,
-		Spent:      0.0, // Начальная потраченная сумма
-		Period:     budget.Period(req.Period),
-		CategoryID: req.CategoryID,
-		StartDate:  req.StartDate,
-		EndDate:    req.EndDate,
-		IsActive:   true,
-		CreatedAt:  time.Now(),
-		UpdatedAt:  time.Now(),
+		ID:          uuid.New(),
+		Name:        req.Name,
+		AmountMinor: money.FromFloat(req.Amount),
+		SpentMinor:  0, // Начальная потраченная сумма
+		Period:      budget.Period(req.Period),
+		CategoryID:  req.CategoryID,
+		StartDate:   date.FromTime(req.StartDate),
+		EndDate:     date.FromTime(req.EndDate),
+		IsActive:    true,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
 	}
 
 	if err := h.repositories.Budget.Create(c.Request().Context(), newBudget); err != nil {
@@ -75,13 +77,13 @@ func (h *BudgetHandler) CreateBudget(c echo.Context) error {
 	response := BudgetResponse{
 		ID:         newBudget.ID,
 		Name:       newBudget.Name,
-		Amount:     newBudget.Amount,
-		Spent:      newBudget.Spent,
-		Remaining:  newBudget.Amount - newBudget.Spent,
+		Amount:     newBudget.AmountMinor.Float(),
+		Spent:      newBudget.SpentMinor.Float(),
+		Remaining:  newBudget.GetRemainingAmount().Float(),
 		Period:     string(newBudget.Period),
 		CategoryID: newBudget.CategoryID,
-		StartDate:  newBudget.StartDate,
-		EndDate:    newBudget.EndDate,
+		StartDate:  newBudget.StartDate.In(time.UTC),
+		EndDate:    newBudget.EndDate.In(time.UTC),
 		IsActive:   newBudget.IsActive,
 		CreatedAt:  newBudget.CreatedAt,
 		UpdatedAt:  newBudget.UpdatedAt,
@@ -137,7 +139,7 @@ func (h *BudgetHandler) GetBudgetByID(c echo.Context) error {
 	}
 
 	// Вычисляем сумму расходов по бюджету (по категории и семье)
-	var spent float64
+	var spent money.Minor
 	if foundBudget.CategoryID != nil {
 		// Получаем сумму расходов по категории бюджета в пределах периода бюджета
 		spent, err = h.repositories.Transaction.GetTotalByCategoryAndDateRange(
@@ -159,20 +161,20 @@ func (h *BudgetHandler) GetBudgetByID(c echo.Context) error {
 			transaction.TypeExpense,
 		)
 		if err != nil {
-			spent = foundBudget.Spent
+			spent = foundBudget.SpentMinor
 		}
 	}
 
 	response := BudgetResponse{
 		ID:         foundBudget.ID,
 		Name:       foundBudget.Name,
-		Amount:     foundBudget.Amount,
-		Spent:      spent,
-		Remaining:  foundBudget.Amount - spent,
+		Amount:     foundBudget.AmountMinor.Float(),
+		Spent:      spent.Float(),
+		Remaining:  (foundBudget.AmountMinor - spent).Float(),
 		Period:     string(foundBudget.Period),
 		CategoryID: foundBudget.CategoryID,
-		StartDate:  foundBudget.StartDate,
-		EndDate:    foundBudget.EndDate,
+		StartDate:  foundBudget.StartDate.In(time.UTC),
+		EndDate:    foundBudget.EndDate.In(time.UTC),
 		IsActive:   foundBudget.IsActive,
 		CreatedAt:  foundBudget.CreatedAt,
 		UpdatedAt:  foundBudget.UpdatedAt,
@@ -208,13 +210,13 @@ func (h *BudgetHandler) updateBudgetFields(budget *budget.Budget, req *UpdateBud
 		budget.Name = *req.Name
 	}
 	if req.Amount != nil {
-		budget.Amount = *req.Amount
+		budget.AmountMinor = money.FromFloat(*req.Amount)
 	}
 	if req.StartDate != nil {
-		budget.StartDate = *req.StartDate
+		budget.StartDate = date.FromTime(*req.StartDate)
 	}
 	if req.EndDate != nil {
-		budget.EndDate = *req.EndDate
+		budget.EndDate = date.FromTime(*req.EndDate)
 	}
 	if req.IsActive != nil {
 		budget.IsActive = *req.IsActive
@@ -226,13 +228,13 @@ func (h *BudgetHandler) buildBudgetResponse(b *budget.Budget) BudgetResponse {
 	return BudgetResponse{
 		ID:         b.ID,
 		Name:       b.Name,
-		Amount:     b.Amount,
-		Spent:      b.Spent,
-		Remaining:  b.Amount - b.Spent,
+		Amount:     b.AmountMinor.Float(),
+		Spent:      b.SpentMinor.Float(),
+		Remaining:  b.GetRemainingAmount().Float(),
 		Period:     string(b.Period),
 		CategoryID: b.CategoryID,
-		StartDate:  b.StartDate,
-		EndDate:    b.EndDate,
+		StartDate:  b.StartDate.In(time.UTC),
+		EndDate:    b.EndDate.In(time.UTC),
 		IsActive:   b.IsActive,
 		CreatedAt:  b.CreatedAt,
 		UpdatedAt:  b.UpdatedAt,

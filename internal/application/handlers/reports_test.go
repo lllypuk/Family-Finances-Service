@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
@@ -86,10 +87,10 @@ func generatedTestReport(userID uuid.UUID) *report.Report {
 		report.TypeExpenses,
 		report.PeriodMonthly,
 		userID,
-		time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-		time.Date(2025, 1, 31, 23, 59, 59, 0, time.UTC),
+		date.New(2025, time.January, 1),
+		date.New(2025, time.January, 31),
 	)
-	generated.Data = report.Data{TotalExpenses: 100}
+	generated.Data = report.Data{TotalExpensesMinor: 10_000}
 	return generated
 }
 
@@ -115,7 +116,7 @@ func createValidReportRequest() handlers.CreateReportRequest {
 		Type:      "expenses",
 		Period:    "monthly",
 		StartDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-		EndDate:   time.Date(2025, 1, 31, 23, 59, 59, 0, time.UTC),
+		EndDate:   time.Date(2025, 1, 31, 0, 0, 0, 0, time.UTC),
 	}
 }
 
@@ -385,8 +386,8 @@ func TestReportHandler_GetReports_ByFamily_Success(t *testing.T) {
 			Type:        report.TypeExpenses,
 			Period:      report.PeriodMonthly,
 			UserID:      uuid.New(),
-			StartDate:   time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-			EndDate:     time.Date(2025, 1, 31, 23, 59, 59, 0, time.UTC),
+			StartDate:   date.New(2025, time.Month(1), 1),
+			EndDate:     date.New(2025, time.Month(1), 31),
 			Data:        report.Data{},
 			GeneratedAt: time.Now(),
 		},
@@ -396,8 +397,8 @@ func TestReportHandler_GetReports_ByFamily_Success(t *testing.T) {
 			Type:        report.TypeIncome,
 			Period:      report.PeriodWeekly,
 			UserID:      uuid.New(),
-			StartDate:   time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-			EndDate:     time.Date(2025, 1, 7, 23, 59, 59, 0, time.UTC),
+			StartDate:   date.New(2025, time.Month(1), 1),
+			EndDate:     date.New(2025, time.Month(1), 7),
 			Data:        report.Data{},
 			GeneratedAt: time.Now(),
 		},
@@ -443,8 +444,8 @@ func TestReportHandler_GetReports_ByUser_Success(t *testing.T) {
 			Type:        report.TypeExpenses,
 			Period:      report.PeriodMonthly,
 			UserID:      userID,
-			StartDate:   time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-			EndDate:     time.Date(2025, 1, 31, 23, 59, 59, 0, time.UTC),
+			StartDate:   date.New(2025, time.Month(1), 1),
+			EndDate:     date.New(2025, time.Month(1), 31),
 			Data:        report.Data{},
 			GeneratedAt: time.Now(),
 		},
@@ -561,12 +562,12 @@ func TestReportHandler_GetReportByID_Success(t *testing.T) {
 		Type:      report.TypeBudget,
 		Period:    report.PeriodMonthly,
 		UserID:    uuid.New(),
-		StartDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-		EndDate:   time.Date(2025, 1, 31, 23, 59, 59, 0, time.UTC),
+		StartDate: date.New(2025, time.Month(1), 1),
+		EndDate:   date.New(2025, time.Month(1), 31),
 		Data: report.Data{
-			TotalIncome:   5000.0,
-			TotalExpenses: 3500.0,
-			NetIncome:     1500.0,
+			TotalIncomeMinor:   500_000,
+			TotalExpensesMinor: 350_000,
+			NetIncomeMinor:     150_000,
 		},
 		GeneratedAt: time.Now(),
 	}

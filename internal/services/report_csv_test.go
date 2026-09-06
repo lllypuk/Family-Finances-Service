@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
@@ -18,7 +19,10 @@ func exportSavedReport(t *testing.T, reportType report.Type, data report.Data) s
 	t.Helper()
 
 	service, mockReportRepo, _, _, _, _ := setupReportService()
-	saved := report.NewReport("csv", reportType, report.PeriodMonthly, uuid.New(), time.Now(), time.Now())
+	saved := report.NewReport(
+		"csv", reportType, report.PeriodMonthly, uuid.New(),
+		date.Today(time.UTC), date.Today(time.UTC),
+	)
 	saved.Data = data
 	mockReportRepo.On("GetByID", t.Context(), saved.ID).Return(saved, nil)
 
@@ -30,10 +34,10 @@ func exportSavedReport(t *testing.T, reportType report.Type, data report.Data) s
 
 func TestReportService_ExportReport_IncomeCSVTotalFromIncome(t *testing.T) {
 	csvText := exportSavedReport(t, report.TypeIncome, report.Data{
-		TotalIncome: 1500,
+		TotalIncomeMinor: 150_000,
 		CategoryBreakdown: []report.CategoryReportItem{
-			{CategoryName: "Зарплата", Amount: 1200, Percentage: 80, Count: 1},
-			{CategoryName: "Подработка", Amount: 300, Percentage: 20, Count: 2},
+			{CategoryName: "Зарплата", AmountMinor: 120_000, Percentage: 80, Count: 1},
+			{CategoryName: "Подработка", AmountMinor: 30_000, Percentage: 20, Count: 2},
 		},
 	})
 
@@ -45,8 +49,8 @@ func TestReportService_ExportReport_IncomeCSVTotalFromIncome(t *testing.T) {
 func TestReportService_ExportReport_CategoryBreakdownTotalFromRows(t *testing.T) {
 	csvText := exportSavedReport(t, report.TypeCategoryBreak, report.Data{
 		CategoryBreakdown: []report.CategoryReportItem{
-			{CategoryName: "Еда", Amount: 400, Percentage: 40, Count: 3},
-			{CategoryName: "Транспорт", Amount: 600, Percentage: 60, Count: 1},
+			{CategoryName: "Еда", AmountMinor: 40_000, Percentage: 40, Count: 3},
+			{CategoryName: "Транспорт", AmountMinor: 60_000, Percentage: 60, Count: 1},
 		},
 	})
 
@@ -55,9 +59,9 @@ func TestReportService_ExportReport_CategoryBreakdownTotalFromRows(t *testing.T)
 
 func TestReportService_ExportReport_ExpensesCSVTotalFromExpenses(t *testing.T) {
 	csvText := exportSavedReport(t, report.TypeExpenses, report.Data{
-		TotalExpenses: 900,
+		TotalExpensesMinor: 90_000,
 		CategoryBreakdown: []report.CategoryReportItem{
-			{CategoryName: "Еда", Amount: 900, Percentage: 100, Count: 4},
+			{CategoryName: "Еда", AmountMinor: 90_000, Percentage: 100, Count: 4},
 		},
 	})
 
@@ -65,10 +69,10 @@ func TestReportService_ExportReport_ExpensesCSVTotalFromExpenses(t *testing.T) {
 }
 
 func TestReportService_ExportReport_CashFlowCSVRows(t *testing.T) {
-	day := time.Date(2026, time.March, 2, 0, 0, 0, 0, time.UTC)
+	day := date.New(2026, time.March, 2)
 	csvText := exportSavedReport(t, report.TypeCashFlow, report.Data{
 		DailyBreakdown: []report.DailyReportItem{
-			{Date: day, Income: 100, Expenses: 40, Balance: 60},
+			{Date: day, IncomeMinor: 10_000, ExpensesMinor: 4_000, BalanceMinor: 6_000},
 		},
 	})
 
@@ -79,7 +83,13 @@ func TestReportService_ExportReport_CashFlowCSVRows(t *testing.T) {
 func TestReportService_ExportReport_BudgetCSVRows(t *testing.T) {
 	csvText := exportSavedReport(t, report.TypeBudget, report.Data{
 		BudgetComparison: []report.BudgetComparisonItem{
-			{BudgetName: "Еда", Planned: 1000, Actual: 750, Difference: 250, Percentage: 75},
+			{
+				BudgetName:      "Еда",
+				PlannedMinor:    100_000,
+				ActualMinor:     75_000,
+				DifferenceMinor: 25_000,
+				Percentage:      75,
+			},
 		},
 	})
 
@@ -93,7 +103,7 @@ func TestReportService_ExportReportData_Formats(t *testing.T) {
 	service, _, _, _, _, _ := setupReportService()
 	data := report.Data{
 		CategoryBreakdown: []report.CategoryReportItem{
-			{CategoryName: "Еда", Amount: 250, Percentage: 100, Count: 1},
+			{CategoryName: "Еда", AmountMinor: 25_000, Percentage: 100, Count: 1},
 		},
 	}
 
@@ -117,7 +127,7 @@ func TestReportService_ExportReportData_EscapesFormulaPrefix(t *testing.T) {
 	service, _, _, _, _, _ := setupReportService()
 	data := report.Data{
 		CategoryBreakdown: []report.CategoryReportItem{
-			{CategoryName: `=HYPERLINK("http://evil","x")`, Amount: 1, Percentage: 100, Count: 1},
+			{CategoryName: `=HYPERLINK("http://evil","x")`, AmountMinor: 100, Percentage: 100, Count: 1},
 		},
 	}
 

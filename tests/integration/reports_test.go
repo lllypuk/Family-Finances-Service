@@ -18,6 +18,7 @@ import (
 
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/services/dto"
@@ -472,8 +473,8 @@ func TestReportAPI_GenerateAndExport(t *testing.T) {
 	tx := testhelpers.CreateTestTransaction(
 		testServer.AuthFamily.ID, testServer.AuthUser.ID, cat.ID, transaction.TypeExpense,
 	)
-	tx.Amount = 150.5
-	tx.Date = time.Now().AddDate(0, 0, -1)
+	tx.AmountMinor = 15_050
+	tx.Date = date.Today(time.UTC).AddDays(-1)
 	require.NoError(t, testServer.Repos.Transaction.Create(ctx, tx))
 
 	request := handlers.CreateReportRequest{
@@ -563,8 +564,8 @@ func TestStatsAPI_Summary(t *testing.T) {
 	expense := testhelpers.CreateTestTransaction(
 		testServer.AuthFamily.ID, testServer.AuthUser.ID, expenseCat.ID, transaction.TypeExpense,
 	)
-	expense.Amount = 200
-	expense.Date = time.Now()
+	expense.AmountMinor = 20_000
+	expense.Date = date.Today(time.UTC)
 	require.NoError(t, testServer.Repos.Transaction.Create(ctx, expense))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/summary", nil)

@@ -12,6 +12,8 @@ import (
 
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services/dto"
@@ -41,18 +43,22 @@ type TransactionRepository interface {
 	// DeleteBulk удаляет переданные id одним запросом и возвращает число удалённых строк;
 	// отсутствующие id молча пропускаются.
 	DeleteBulk(ctx context.Context, ids []uuid.UUID) (int, error)
-	GetTotalByCategory(ctx context.Context, categoryID uuid.UUID, transactionType transaction.Type) (float64, error)
+	GetTotalByCategory(
+		ctx context.Context,
+		categoryID uuid.UUID,
+		transactionType transaction.Type,
+	) (money.Minor, error)
 	GetTotalByDateRange(
 		ctx context.Context,
-		startDate, endDate time.Time,
+		startDate, endDate date.Date,
 		transactionType transaction.Type,
-	) (float64, error)
+	) (money.Minor, error)
 	GetTotalByCategoryAndDateRange(
 		ctx context.Context,
 		categoryID uuid.UUID,
-		startDate, endDate time.Time,
+		startDate, endDate date.Date,
 		transactionType transaction.Type,
-	) (float64, error)
+	) (money.Minor, error)
 	// Note: UpdateBulkCategory may need to be implemented in the repository
 	// For now, we'll use individual updates in a transaction
 }
@@ -153,12 +159,12 @@ func (s *TransactionServiceImpl) CreateTransaction(
 	// Create transaction
 	newTransaction := &transaction.Transaction{
 		ID:          uuid.New(),
-		Amount:      req.Amount,
+		AmountMinor: money.FromFloat(req.Amount),
 		Type:        req.Type,
 		Description: req.Description,
 		CategoryID:  req.CategoryID,
 		UserID:      req.UserID,
-		Date:        req.Date,
+		Date:        date.FromTime(req.Date),
 		Tags:        req.Tags,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
@@ -275,13 +281,13 @@ func (s *TransactionServiceImpl) UpdateTransaction(
 	}
 
 	// Store original values for budget adjustment
-	originalAmount := existingTx.Amount
+	originalAmount := existingTx.AmountMinor.Float()
 	originalType := existingTx.Type
 	originalCategoryID := existingTx.CategoryID
 
 	// Update fields if provided
 	if req.Amount != nil {
-		existingTx.Amount = *req.Amount
+		existingTx.AmountMinor = money.FromFloat(*req.Amount)
 	}
 	if req.Type != nil {
 		existingTx.Type = *req.Type
@@ -293,7 +299,7 @@ func (s *TransactionServiceImpl) UpdateTransaction(
 		existingTx.CategoryID = *req.CategoryID
 	}
 	if req.Date != nil {
-		existingTx.Date = *req.Date
+		existingTx.Date = date.FromTime(*req.Date)
 	}
 	if req.Tags != nil {
 		existingTx.Tags = req.Tags
@@ -305,7 +311,7 @@ func (s *TransactionServiceImpl) UpdateTransaction(
 		if limitErr := s.ValidateTransactionLimits(
 			ctx,
 			existingTx.CategoryID,
-			existingTx.Amount,
+			existingTx.AmountMinor.Float(),
 			existingTx.Type,
 		); limitErr != nil {
 			return nil, limitErr
@@ -352,7 +358,7 @@ func (s *TransactionServiceImpl) DeleteTransaction(ctx context.Context, id uuid.
 		if budgetErr := s.updateBudgetSpent(
 			ctx,
 			existingTx.CategoryID,
-			-existingTx.Amount,
+			-existingTx.AmountMinor.Float(),
 		); budgetErr != nil {
 			s.warnBudgetAdjustment(ctx, "failed to reverse budget spent after transaction delete",
 				slog.String("transaction_id", existingTx.ID.String()),
@@ -401,7 +407,7 @@ func (s *TransactionServiceImpl) BulkDelete(ctx context.Context, ids []uuid.UUID
 	}
 
 	for _, tx := range expenses {
-		if budgetErr := s.updateBudgetSpent(ctx, tx.CategoryID, -tx.Amount); budgetErr != nil {
+		if budgetErr := s.updateBudgetSpent(ctx, tx.CategoryID, -tx.AmountMinor.Float()); budgetErr != nil {
 			s.warnBudgetAdjustment(ctx, "failed to reverse budget spent after bulk delete",
 				slog.String("transaction_id", tx.ID.String()),
 				slog.String("category_id", tx.CategoryID.String()),
@@ -552,7 +558,7 @@ func (s *TransactionServiceImpl) updateSingleTransactionCategory(
 
 	// Adjust budgets for category changes (only for expense transactions)
 	if tx.Type == transaction.TypeExpense {
-		s.adjustBudgetsForCategoryChange(ctx, originalCategoryID, newCategoryID, tx.Amount)
+		s.adjustBudgetsForCategoryChange(ctx, originalCategoryID, newCategoryID, tx.AmountMinor.Float())
 	}
 
 	return nil
@@ -618,9 +624,9 @@ func (s *TransactionServiceImpl) ValidateTransactionLimits(
 	}
 
 	// Check if adding this transaction would exceed the budget limit
-	if budget.Spent+amount > budget.Amount {
+	if budget.SpentMinor+money.FromFloat(amount) > budget.AmountMinor {
 		return fmt.Errorf("%w: budget amount %.2f, current spent %.2f, transaction amount %.2f",
-			ErrInsufficientBudget, budget.Amount, budget.Spent, amount)
+			ErrInsufficientBudget, budget.AmountMinor.Float(), budget.SpentMinor.Float(), amount)
 	}
 
 	return nil
@@ -657,7 +663,7 @@ func (s *TransactionServiceImpl) updateBudgetSpent(
 		return nil //nolint:nilerr // No budget found is acceptable, not an error condition
 	}
 
-	budget.Spent += amount
+	budget.SpentMinor += money.FromFloat(amount)
 	budget.UpdatedAt = time.Now()
 
 	return s.budgetRepo.Update(ctx, budget)
@@ -698,7 +704,7 @@ func (s *TransactionServiceImpl) adjustBudgetsForUpdate(
 
 	// Apply new budget impact if it's an expense
 	if newTransaction.Type == transaction.TypeExpense {
-		if err := s.updateBudgetSpent(ctx, newTransaction.CategoryID, newTransaction.Amount); err != nil {
+		if err := s.updateBudgetSpent(ctx, newTransaction.CategoryID, newTransaction.AmountMinor.Float()); err != nil {
 			return err
 		}
 	}
@@ -710,12 +716,28 @@ func (s *TransactionServiceImpl) convertDTOFilterToRepoFilter(filter dto.Transac
 	repoFilter := transaction.Filter{
 		UserID:     filter.UserID,
 		CategoryID: filter.CategoryID,
-		DateFrom:   filter.DateFrom,
-		DateTo:     filter.DateTo,
-		AmountFrom: filter.AmountFrom,
-		AmountTo:   filter.AmountTo,
 		Limit:      filter.Limit,
 		Offset:     filter.Offset,
+	}
+
+	if filter.DateFrom != nil {
+		from := date.FromTime(*filter.DateFrom)
+		repoFilter.DateFrom = &from
+	}
+
+	if filter.DateTo != nil {
+		to := date.FromTime(*filter.DateTo)
+		repoFilter.DateTo = &to
+	}
+
+	if filter.AmountFrom != nil {
+		from := money.FromFloat(*filter.AmountFrom)
+		repoFilter.AmountFromMinor = &from
+	}
+
+	if filter.AmountTo != nil {
+		to := money.FromFloat(*filter.AmountTo)
+		repoFilter.AmountToMinor = &to
 	}
 
 	if filter.Type != nil {

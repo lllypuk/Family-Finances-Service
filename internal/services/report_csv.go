@@ -13,8 +13,6 @@ import (
 // csvUTF8BOM — Excel распознаёт UTF-8 в CSV только по BOM (docs/api/openapi.yaml).
 const csvUTF8BOM = "\ufeff"
 
-const csvDateLayout = "2006-01-02"
-
 // csvFormulaPrefixes — с этих символов Excel/LibreOffice/Sheets начинают разбирать ячейку
 // как формулу, поэтому имена из БД экранируются апострофом (CWE-1236).
 const csvFormulaPrefixes = "=+-@\t\r"
@@ -65,7 +63,7 @@ func writeCategoryBreakdownCSV(writer *csv.Writer, data report.Data, reportType 
 	for _, item := range data.CategoryBreakdown {
 		row := []string{
 			csvSafeText(item.CategoryName),
-			fmt.Sprintf("%.2f", item.Amount),
+			fmt.Sprintf("%.2f", item.AmountMinor.Float()),
 			fmt.Sprintf("%.1f%%", item.Percentage),
 			strconv.Itoa(item.Count),
 		}
@@ -87,9 +85,9 @@ func writeCategoryBreakdownCSV(writer *csv.Writer, data report.Data, reportType 
 func categoryBreakdownTotal(data report.Data, reportType report.Type) float64 {
 	switch reportType {
 	case report.TypeIncome:
-		return data.TotalIncome
+		return data.TotalIncomeMinor.Float()
 	case report.TypeExpenses, report.TypeBudget, report.TypeCashFlow:
-		return data.TotalExpenses
+		return data.TotalExpensesMinor.Float()
 	case report.TypeCategoryBreak:
 		return sumCategoryAmounts(data)
 	default:
@@ -100,7 +98,7 @@ func categoryBreakdownTotal(data report.Data, reportType report.Type) float64 {
 func sumCategoryAmounts(data report.Data) float64 {
 	total := 0.0
 	for _, item := range data.CategoryBreakdown {
-		total += item.Amount
+		total += item.AmountMinor.Float()
 	}
 
 	return total
@@ -113,10 +111,10 @@ func writeDailyBreakdownCSV(writer *csv.Writer, data report.Data) error {
 
 	for _, item := range data.DailyBreakdown {
 		row := []string{
-			item.Date.Format(csvDateLayout),
-			fmt.Sprintf("%.2f", item.Income),
-			fmt.Sprintf("%.2f", item.Expenses),
-			fmt.Sprintf("%.2f", item.Balance),
+			item.Date.String(),
+			fmt.Sprintf("%.2f", item.IncomeMinor.Float()),
+			fmt.Sprintf("%.2f", item.ExpensesMinor.Float()),
+			fmt.Sprintf("%.2f", item.BalanceMinor.Float()),
 		}
 		if err := writer.Write(row); err != nil {
 			return fmt.Errorf("failed to write csv row: %w", err)
@@ -134,9 +132,9 @@ func writeBudgetComparisonCSV(writer *csv.Writer, data report.Data) error {
 	for _, item := range data.BudgetComparison {
 		row := []string{
 			csvSafeText(item.BudgetName),
-			fmt.Sprintf("%.2f", item.Planned),
-			fmt.Sprintf("%.2f", item.Actual),
-			fmt.Sprintf("%.2f", item.Difference),
+			fmt.Sprintf("%.2f", item.PlannedMinor.Float()),
+			fmt.Sprintf("%.2f", item.ActualMinor.Float()),
+			fmt.Sprintf("%.2f", item.DifferenceMinor.Float()),
 			fmt.Sprintf("%.1f%%", item.Percentage),
 		}
 		if err := writer.Write(row); err != nil {

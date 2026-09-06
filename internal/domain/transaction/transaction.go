@@ -5,19 +5,22 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 )
 
 type Transaction struct {
-	ID          uuid.UUID `json:"id"          bson:"_id"`
-	Amount      float64   `json:"amount"      bson:"amount"`
-	Type        Type      `json:"type"        bson:"type"`
-	Description string    `json:"description" bson:"description"`
-	CategoryID  uuid.UUID `json:"category_id" bson:"category_id"`
-	UserID      uuid.UUID `json:"user_id"     bson:"user_id"` // Кто создал транзакцию
-	Date        time.Time `json:"date"        bson:"date"`    // Дата транзакции
-	Tags        []string  `json:"tags"        bson:"tags"`    // Теги для поиска
-	CreatedAt   time.Time `json:"created_at"  bson:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"  bson:"updated_at"`
+	ID          uuid.UUID   `json:"id"           bson:"_id"`
+	AmountMinor money.Minor `json:"amount_minor" bson:"amount_minor"`
+	Type        Type        `json:"type"         bson:"type"`
+	Description string      `json:"description"  bson:"description"`
+	CategoryID  uuid.UUID   `json:"category_id"  bson:"category_id"`
+	UserID      uuid.UUID   `json:"user_id"      bson:"user_id"` // Кто создал транзакцию
+	Date        date.Date   `json:"date"         bson:"date"`    // Календарная дата операции
+	Tags        []string    `json:"tags"         bson:"tags"`    // Теги для поиска
+	CreatedAt   time.Time   `json:"created_at"   bson:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"   bson:"updated_at"`
 }
 
 type Type string
@@ -28,34 +31,34 @@ const (
 )
 
 type Filter struct {
-	UserID      *uuid.UUID
-	CategoryID  *uuid.UUID
-	Type        *Type
-	DateFrom    *time.Time
-	DateTo      *time.Time
-	AmountFrom  *float64
-	AmountTo    *float64
-	Tags        []string
-	Description string
-	Limit       int
-	Offset      int
+	UserID          *uuid.UUID
+	CategoryID      *uuid.UUID
+	Type            *Type
+	DateFrom        *date.Date
+	DateTo          *date.Date
+	AmountFromMinor *money.Minor
+	AmountToMinor   *money.Minor
+	Tags            []string
+	Description     string
+	Limit           int
+	Offset          int
 }
 
 func NewTransaction(
-	amount float64,
+	amountMinor money.Minor,
 	transactionType Type,
 	description string,
 	categoryID, userID uuid.UUID,
-	date time.Time,
+	on date.Date,
 ) *Transaction {
 	return &Transaction{
 		ID:          uuid.New(),
-		Amount:      amount,
+		AmountMinor: amountMinor,
 		Type:        transactionType,
 		Description: description,
 		CategoryID:  categoryID,
 		UserID:      userID,
-		Date:        date,
+		Date:        on,
 		Tags:        []string{},
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),

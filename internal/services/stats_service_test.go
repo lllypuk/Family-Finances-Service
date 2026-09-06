@@ -12,6 +12,8 @@ import (
 
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
@@ -57,10 +59,10 @@ func statsTransaction(amount float64, txType transaction.Type, categoryID uuid.U
 	return &transaction.Transaction{
 		ID:          uuid.New(),
 		CategoryID:  categoryID,
-		Amount:      amount,
+		AmountMinor: money.FromFloat(amount),
 		Type:        txType,
 		Description: "test",
-		Date:        time.Now(),
+		Date:        date.Today(time.UTC),
 		CreatedAt:   time.Now(),
 	}
 }
@@ -190,19 +192,19 @@ func TestStatsService_Summary_BudgetProgress(t *testing.T) {
 	prevFrom, prevTo := previousPeriod(from, to)
 
 	categoryID := uuid.New()
-	now := time.Now()
+	now := date.Today(time.UTC)
 	budgets := []*budget.Budget{
 		{
-			ID: uuid.New(), Name: "Норма", Amount: 1000, Spent: 100, IsActive: true,
-			Period: budget.PeriodMonthly, StartDate: now, EndDate: now.AddDate(0, 0, 10),
+			ID: uuid.New(), Name: "Норма", AmountMinor: 100_000, SpentMinor: 10_000, IsActive: true,
+			Period: budget.PeriodMonthly, StartDate: now, EndDate: now.AddDays(10),
 		},
 		{
-			ID: uuid.New(), Name: "На пределе", Amount: 1000, Spent: 850, IsActive: true,
-			CategoryID: &categoryID, Period: budget.PeriodMonthly, StartDate: now, EndDate: now.AddDate(0, 0, 5),
+			ID: uuid.New(), Name: "На пределе", AmountMinor: 100_000, SpentMinor: 85_000, IsActive: true,
+			CategoryID: &categoryID, Period: budget.PeriodMonthly, StartDate: now, EndDate: now.AddDays(5),
 		},
 		{
-			ID: uuid.New(), Name: "Превышен", Amount: 1000, Spent: 1200, IsActive: false,
-			Period: budget.PeriodMonthly, StartDate: now, EndDate: now.AddDate(0, 0, -1),
+			ID: uuid.New(), Name: "Превышен", AmountMinor: 100_000, SpentMinor: 120_000, IsActive: false,
+			Period: budget.PeriodMonthly, StartDate: now, EndDate: now.AddDays(-1),
 		},
 	}
 

@@ -12,13 +12,16 @@ CREATE TABLE IF NOT EXISTS families (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     currency TEXT NOT NULL DEFAULT 'USD',
+    -- timezone: IANA-зона семьи, по ней считаются границы периодов (A-06)
+    timezone TEXT NOT NULL DEFAULT 'UTC',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     -- singleton: ровно одна семья на инсталляцию (A-02) — вторая INSERT падает на UNIQUE
     singleton INTEGER NOT NULL DEFAULT 1 CHECK (singleton = 1) UNIQUE,
 
     CHECK (LENGTH(TRIM(name)) > 0),
-    CHECK (LENGTH(currency) = 3 AND currency = UPPER(currency))
+    CHECK (LENGTH(currency) = 3 AND currency = UPPER(currency)),
+    CHECK (LENGTH(TRIM(timezone)) > 0)
 );
 
 CREATE TABLE IF NOT EXISTS users (
@@ -62,9 +65,9 @@ CREATE TABLE IF NOT EXISTS categories (
 
 CREATE TABLE IF NOT EXISTS transactions (
     id TEXT PRIMARY KEY,
-    amount REAL NOT NULL,
+    amount_minor INTEGER NOT NULL,
     description TEXT NOT NULL,
-    date DATE NOT NULL,
+    date TEXT NOT NULL,
     type TEXT NOT NULL,
     category_id TEXT NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -75,19 +78,19 @@ CREATE TABLE IF NOT EXISTS transactions (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
     CHECK (type IN ('income', 'expense')),
-    CHECK (amount > 0),
+    CHECK (amount_minor > 0),
     CHECK (LENGTH(TRIM(description)) > 0),
-    CHECK (date >= '1900-01-01')
+    CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')
 );
 
 CREATE TABLE IF NOT EXISTS budgets (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
-    amount REAL NOT NULL,
-    spent REAL DEFAULT 0,
+    amount_minor INTEGER NOT NULL,
+    spent_minor INTEGER NOT NULL DEFAULT 0,
     period TEXT NOT NULL,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
     category_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
     family_id TEXT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
     is_active INTEGER DEFAULT 1,
@@ -96,8 +99,10 @@ CREATE TABLE IF NOT EXISTS budgets (
 
     CHECK (period IN ('weekly', 'monthly', 'yearly', 'custom')),
     CHECK (LENGTH(TRIM(name)) > 0),
-    CHECK (amount > 0),
-    CHECK (spent >= 0),
+    CHECK (amount_minor > 0),
+    CHECK (spent_minor >= 0),
+    CHECK (start_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+    CHECK (end_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
     CHECK (end_date > start_date),
     CHECK (is_active IN (0, 1)),
     UNIQUE (family_id, name, start_date, end_date)
@@ -108,8 +113,8 @@ CREATE TABLE IF NOT EXISTS reports (
     name TEXT NOT NULL,
     type TEXT NOT NULL,
     period TEXT NOT NULL,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
     data TEXT NOT NULL,
     family_id TEXT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
     generated_by TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -120,6 +125,8 @@ CREATE TABLE IF NOT EXISTS reports (
     CHECK (type IN ('expenses', 'income', 'budget', 'cash_flow', 'category_breakdown')),
     CHECK (period IN ('daily', 'weekly', 'monthly', 'yearly', 'custom')),
     CHECK (LENGTH(TRIM(name)) > 0),
+    CHECK (start_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+    CHECK (end_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
     CHECK (end_date >= start_date),
     CHECK (is_cached IN (0, 1))
 );

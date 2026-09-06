@@ -13,6 +13,8 @@ import (
 
 	"github.com/google/uuid"
 	_ "modernc.org/sqlite" // Pure Go SQLite driver
+
+	"family-budget-service/internal/domain/money"
 )
 
 // Test configuration constants
@@ -152,8 +154,8 @@ func NewTestDataHelper(db *sql.DB) *TestDataHelper {
 func (h *TestDataHelper) CreateTestFamily(ctx context.Context, name, currency string) (string, error) {
 	id := generateUUID()
 	query := `
-		INSERT INTO families (id, name, currency, created_at, updated_at)
-		VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+		INSERT INTO families (id, name, currency, timezone, created_at, updated_at)
+		VALUES (?, ?, ?, 'Europe/Moscow', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
 
 	_, err := h.DB.ExecContext(ctx, query, id, name, currency)
 	return id, err
@@ -191,31 +193,39 @@ func (h *TestDataHelper) CreateTestCategory(
 // CreateTestTransaction creates a test transaction and returns its ID
 func (h *TestDataHelper) CreateTestTransaction(
 	ctx context.Context,
-	amount float64,
+	amountMinor money.Minor,
 	description, transactionType, categoryID, userID, familyID string,
 ) (string, error) {
 	id := generateUUID()
 	query := `
-		INSERT INTO transactions (id, amount, description, type, category_id, user_id, family_id, date, tags, created_at, updated_at)
+		INSERT INTO transactions (
+			id, amount_minor, description, type, category_id, user_id, family_id, date, tags, created_at, updated_at
+		)
 		VALUES (?, ?, ?, ?, ?, ?, ?, DATE('now'), '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
 
-	_, err := h.DB.ExecContext(ctx, query, id, amount, description, transactionType, categoryID, userID, familyID)
+	_, err := h.DB.ExecContext(
+		ctx, query, id, int64(amountMinor), description, transactionType, categoryID, userID, familyID,
+	)
 	return id, err
 }
 
 // CreateTestTransactionWithDate creates a test transaction with custom date and returns its ID
 func (h *TestDataHelper) CreateTestTransactionWithDate(
 	ctx context.Context,
-	amount float64,
+	amountMinor money.Minor,
 	description, transactionType, categoryID, userID, familyID string,
 	date string,
 ) (string, error) {
 	id := generateUUID()
 	query := `
-		INSERT INTO transactions (id, amount, description, type, category_id, user_id, family_id, date, tags, created_at, updated_at)
+		INSERT INTO transactions (
+			id, amount_minor, description, type, category_id, user_id, family_id, date, tags, created_at, updated_at
+		)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
 
-	_, err := h.DB.ExecContext(ctx, query, id, amount, description, transactionType, categoryID, userID, familyID, date)
+	_, err := h.DB.ExecContext(
+		ctx, query, id, int64(amountMinor), description, transactionType, categoryID, userID, familyID, date,
+	)
 	return id, err
 }
 
@@ -223,16 +233,19 @@ func (h *TestDataHelper) CreateTestTransactionWithDate(
 func (h *TestDataHelper) CreateTestBudget(
 	ctx context.Context,
 	name string,
-	amount float64,
+	amountMinor money.Minor,
 	period, familyID string,
 	categoryID *string,
 ) (string, error) {
 	id := generateUUID()
 	query := `
-		INSERT INTO budgets (id, name, amount, spent, period, start_date, end_date, category_id, family_id, is_active, created_at, updated_at)
+		INSERT INTO budgets (
+			id, name, amount_minor, spent_minor, period, start_date, end_date,
+			category_id, family_id, is_active, created_at, updated_at
+		)
 		VALUES (?, ?, ?, 0, ?, DATE('now'), DATE('now', '+1 month'), ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
 
-	_, err := h.DB.ExecContext(ctx, query, id, name, amount, period, categoryID, familyID)
+	_, err := h.DB.ExecContext(ctx, query, id, name, int64(amountMinor), period, categoryID, familyID)
 	return id, err
 }
 
@@ -240,16 +253,21 @@ func (h *TestDataHelper) CreateTestBudget(
 func (h *TestDataHelper) CreateTestBudgetWithDates(
 	ctx context.Context,
 	name string,
-	amount, spent float64,
+	amountMinor, spentMinor money.Minor,
 	period, familyID, startDate, endDate string,
 	categoryID *string,
 ) (string, error) {
 	id := generateUUID()
 	query := `
-		INSERT INTO budgets (id, name, amount, spent, period, start_date, end_date, category_id, family_id, is_active, created_at, updated_at)
+		INSERT INTO budgets (
+			id, name, amount_minor, spent_minor, period, start_date, end_date,
+			category_id, family_id, is_active, created_at, updated_at
+		)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
 
-	_, err := h.DB.ExecContext(ctx, query, id, name, amount, spent, period, startDate, endDate, categoryID, familyID)
+	_, err := h.DB.ExecContext(
+		ctx, query, id, name, int64(amountMinor), int64(spentMinor), period, startDate, endDate, categoryID, familyID,
+	)
 	return id, err
 }
 

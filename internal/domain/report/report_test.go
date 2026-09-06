@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/report"
 )
 
@@ -17,8 +19,8 @@ func TestNewReport_Success(t *testing.T) {
 	reportType := report.TypeExpenses
 	period := report.PeriodMonthly
 	userID := uuid.New()
-	startDate := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	endDate := time.Date(2025, 1, 31, 23, 59, 59, 0, time.UTC)
+	startDate := date.New(2025, time.January, 1)
+	endDate := date.New(2025, time.January, 31)
 
 	// Act
 	reportItem := report.NewReport(name, reportType, period, userID, startDate, endDate)
@@ -36,9 +38,9 @@ func TestNewReport_Success(t *testing.T) {
 
 	// Проверяем что Data инициализирована пустой структурой
 	assert.NotNil(t, reportItem.Data)
-	assert.InDelta(t, 0.0, reportItem.Data.TotalIncome, 0.01)
-	assert.InDelta(t, 0.0, reportItem.Data.TotalExpenses, 0.01)
-	assert.InDelta(t, 0.0, reportItem.Data.NetIncome, 0.01)
+	assert.Equal(t, money.Minor(0), reportItem.Data.TotalIncomeMinor)
+	assert.Equal(t, money.Minor(0), reportItem.Data.TotalExpensesMinor)
+	assert.Equal(t, money.Minor(0), reportItem.Data.NetIncomeMinor)
 	assert.Empty(t, reportItem.Data.CategoryBreakdown)
 	assert.Empty(t, reportItem.Data.DailyBreakdown)
 	assert.Empty(t, reportItem.Data.TopExpenses)
@@ -69,69 +71,69 @@ func TestCategoryReportItem_Structure(t *testing.T) {
 	item := report.CategoryReportItem{
 		CategoryID:   categoryID,
 		CategoryName: "Groceries",
-		Amount:       1500.75,
+		AmountMinor:  150_075,
 		Percentage:   35.5,
 		Count:        25,
 	}
 
 	assert.Equal(t, categoryID, item.CategoryID)
 	assert.Equal(t, "Groceries", item.CategoryName)
-	assert.InDelta(t, 1500.75, item.Amount, 0.01)
+	assert.Equal(t, money.Minor(150_075), item.AmountMinor)
 	assert.InDelta(t, 35.5, item.Percentage, 0.01)
 	assert.Equal(t, 25, item.Count)
 }
 
 func TestDailyReportItem_Structure(t *testing.T) {
-	date := time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)
+	on := date.New(2025, time.January, 15)
 
 	item := report.DailyReportItem{
-		Date:     date,
-		Income:   2500.00,
-		Expenses: 800.50,
-		Balance:  1699.50,
+		Date:          on,
+		IncomeMinor:   250_000,
+		ExpensesMinor: 80_050,
+		BalanceMinor:  169_950,
 	}
 
-	assert.Equal(t, date, item.Date)
-	assert.InDelta(t, 2500.00, item.Income, 0.01)
-	assert.InDelta(t, 800.50, item.Expenses, 0.01)
-	assert.InDelta(t, 1699.50, item.Balance, 0.01)
+	assert.Equal(t, on, item.Date)
+	assert.Equal(t, money.Minor(250_000), item.IncomeMinor)
+	assert.Equal(t, money.Minor(80_050), item.ExpensesMinor)
+	assert.Equal(t, money.Minor(169_950), item.BalanceMinor)
 }
 
 func TestTransactionReportItem_Structure(t *testing.T) {
 	transactionID := uuid.New()
-	date := time.Date(2025, 1, 15, 14, 30, 0, 0, time.UTC)
+	on := date.New(2025, time.January, 15)
 
 	item := report.TransactionReportItem{
 		ID:          transactionID,
-		Amount:      125.50,
+		AmountMinor: 12_550,
 		Description: "Grocery shopping",
 		Category:    "Groceries",
-		Date:        date,
+		Date:        on,
 	}
 
 	assert.Equal(t, transactionID, item.ID)
-	assert.InDelta(t, 125.50, item.Amount, 0.01)
+	assert.Equal(t, money.Minor(12_550), item.AmountMinor)
 	assert.Equal(t, "Grocery shopping", item.Description)
 	assert.Equal(t, "Groceries", item.Category)
-	assert.Equal(t, date, item.Date)
+	assert.Equal(t, on, item.Date)
 }
 
 func TestBudgetComparisonItem_Structure(t *testing.T) {
 	budgetID := uuid.New()
 
 	item := report.BudgetComparisonItem{
-		BudgetID:   budgetID,
-		BudgetName: "Monthly Groceries",
-		Planned:    800.0,
-		Actual:     650.75,
-		Difference: 149.25,
-		Percentage: 81.34,
+		BudgetID:        budgetID,
+		BudgetName:      "Monthly Groceries",
+		PlannedMinor:    80_000,
+		ActualMinor:     65_075,
+		DifferenceMinor: 14_925,
+		Percentage:      81.34,
 	}
 
 	assert.Equal(t, budgetID, item.BudgetID)
 	assert.Equal(t, "Monthly Groceries", item.BudgetName)
-	assert.InDelta(t, 800.0, item.Planned, 0.01)
-	assert.InDelta(t, 650.75, item.Actual, 0.01)
-	assert.InDelta(t, 149.25, item.Difference, 0.01)
+	assert.Equal(t, money.Minor(80_000), item.PlannedMinor)
+	assert.Equal(t, money.Minor(65_075), item.ActualMinor)
+	assert.Equal(t, money.Minor(14_925), item.DifferenceMinor)
 	assert.InDelta(t, 81.34, item.Percentage, 0.01)
 }
