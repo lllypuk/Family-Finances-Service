@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 
 	"family-budget-service/internal"
 	"family-budget-service/internal/observability"
@@ -25,6 +26,12 @@ func runBackup(ctx context.Context, args []string, _ io.Reader, stdout io.Writer
 	cfg := internal.LoadConfig()
 	if keep <= 0 {
 		keep = cfg.Database.BackupKeep
+	}
+
+	// Открытие создало бы пустую БД по неверному пути, и cron годами рапортовал бы
+	// об успехе, вычищая по BACKUP_KEEP настоящие копии.
+	if _, statErr := os.Stat(cfg.Database.Path); statErr != nil {
+		return fmt.Errorf("%s: database %s: %w", cmdBackup, cfg.Database.Path, statErr)
 	}
 
 	db, err := internal.OpenDatabaseNoMigrate(cfg)

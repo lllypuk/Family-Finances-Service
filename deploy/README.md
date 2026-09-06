@@ -116,9 +116,9 @@ It records the current ref, takes a database copy with `docker compose run --rm 
 `deploy/docker-compose.yml` and `deploy/caddy/Caddyfile` from the new checkout over the installed
 copies (the image is rebuilt from `src/`, the topology lives next to it and would otherwise stay on
 the previous release), rebuilds, restarts and waits for `/health`. A changed Caddyfile is applied with
-`caddy reload` — a bind-mounted file changing does not recreate the container. The copy is taken **before** the rebuild on purpose: the subcommand applies
-migrations when it opens the database, so a copy taken with the new image would already carry the new
-schema and there would be nothing to roll back to. A failed health check rolls back the ref, the database, `.env`, the compose file and the Caddyfile automatically;
+`caddy reload` — a bind-mounted file changing does not recreate the container. The copy is taken **before** the rebuild on purpose: after it, `compose run` would
+start the *new* image, and a database the new release has already migrated is not what a rollback
+needs. A failed health check rolls back the ref, the database, `.env`, the compose file and the Caddyfile automatically;
 `--no-rollback` disables that, and `upgrade.sh rollback` replays the most recent
 `backups/upgrade_<ts>/` by hand. If the rollback cannot rebuild the previous image or restore the
 deploy files, it leaves the service **stopped**: the failed upgrade's image over the restored

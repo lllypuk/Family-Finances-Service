@@ -11,10 +11,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"family-budget-service/internal"
 	"family-budget-service/internal/testhelpers"
 )
 
 // backupEnv — CWD корня репозитория (там ./migrations) и отдельные каталоги БД и бэкапов.
+// БД создаётся здесь: подкоманда backup отказывается работать с отсутствующим файлом.
 func backupEnv(t *testing.T) string {
 	t.Helper()
 	t.Chdir(testhelpers.RepoRoot(t))
@@ -22,6 +24,11 @@ func backupEnv(t *testing.T) string {
 	t.Setenv("DATABASE_PATH", filepath.Join(dir, "backup-cli.db"))
 	backupDir := filepath.Join(dir, "backups")
 	t.Setenv("BACKUP_DIR", backupDir)
+
+	db, err := internal.OpenDatabase(internal.LoadConfig())
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
 	return backupDir
 }
 
@@ -77,6 +84,17 @@ func TestRunBackup_DatabaseOpenError(t *testing.T) {
 	t.Chdir(testhelpers.RepoRoot(t))
 	// Каталог вместо файла: SQLite не откроет такую «БД».
 	t.Setenv("DATABASE_PATH", t.TempDir())
+
+	var out bytes.Buffer
+	require.Error(t, runBackup(context.Background(), nil, nil, &out))
+	assert.Empty(t, out.String())
+}
+
+// Отсутствующий файл БД — ошибка, а не пустой бэкап: иначе cron рапортует об успехе
+// по неверному DATABASE_PATH и вычищает настоящие копии.
+func TestRunBackup_DatabaseMissing(t *testing.T) {
+	t.Chdir(testhelpers.RepoRoot(t))
+	t.Setenv("DATABASE_PATH", filepath.Join(t.TempDir(), "absent.db"))
 
 	var out bytes.Buffer
 	require.Error(t, runBackup(context.Background(), nil, nil, &out))

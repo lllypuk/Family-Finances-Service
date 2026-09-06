@@ -39,6 +39,18 @@ install_ufw() {
     log_success "UFW installed"
 }
 
+# Порты sshd читаем из конфига: на нестандартном порту жёстко зашитый 22
+# запер бы оператора снаружи, а консоли у домашнего мини-сервера может не быть.
+detect_ssh_ports() {
+    local ports=()
+    mapfile -t ports < <(sed -nE 's/^[[:space:]]*Port[[:space:]]+([0-9]+).*/\1/p' \
+        /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null | sort -u)
+    if [[ ${#ports[@]} -eq 0 ]]; then
+        ports=(22)
+    fi
+    printf '%s\n' "${ports[@]}"
+}
+
 # Configure UFW firewall.
 # Правила не сбрасываются: `ufw --force reset` снёс бы разрешения, выданные
 # оператором для всего остального на этом хосте, а нужные нам allow идемпотентны.
@@ -49,14 +61,8 @@ setup_ufw_firewall() {
     ufw default deny incoming
     ufw default allow outgoing
 
-    # Порт sshd читаем из конфига: на нестандартном порту жёстко зашитый 22
-    # запер бы оператора снаружи, а консоли у домашнего мини-сервера может не быть.
     local ssh_ports=()
-    mapfile -t ssh_ports < <(sed -nE 's/^[[:space:]]*Port[[:space:]]+([0-9]+).*/\1/p' \
-        /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null | sort -u)
-    if [[ ${#ssh_ports[@]} -eq 0 ]]; then
-        ssh_ports=(22)
-    fi
+    mapfile -t ssh_ports < <(detect_ssh_ports)
 
     local port
     for port in "${ssh_ports[@]}"; do
@@ -83,23 +89,40 @@ setup_ufw_firewall() {
 # Configure firewalld (for RHEL-based systems)
 setup_firewalld() {
     log_info "Configuring firewalld..."
-    
+
+    local ssh_ports=()
+    mapfile -t ssh_ports < <(detect_ssh_ports)
+
+    local port
+    # Зона public по умолчанию пускает только ssh/22, поэтому на нестандартном порту старт
+    # демона оборвал бы текущую сессию: правила для sshd пишем ДО `systemctl start`.
+    if ! systemctl is-active --quiet firewalld && command -v firewall-offline-cmd &>/dev/null; then
+        for port in "${ssh_ports[@]}"; do
+            firewall-offline-cmd --add-port="${port}/tcp" >/dev/null
+        done
+    fi
+
     # Start and enable firewalld
     systemctl start firewalld
     systemctl enable firewalld
-    
+
+    for port in "${ssh_ports[@]}"; do
+        firewall-cmd --permanent --add-port="${port}/tcp"
+        log_info "Allowed SSH (${port}/tcp)"
+    done
+
     # Allow HTTP and HTTPS
     firewall-cmd --permanent --add-service=http
     firewall-cmd --permanent --add-service=https
     # HTTP/3: службы https в firewalld только TCP, порт публикуется и по UDP.
     firewall-cmd --permanent --add-port=443/udp
     log_info "Allowed HTTP and HTTPS (incl. 443/udp for HTTP/3)"
-    
+
     # Reload firewall
     firewall-cmd --reload
-    
+
     log_success "Firewalld configured and enabled"
-    
+
     # Show status
     firewall-cmd --list-all
 }
