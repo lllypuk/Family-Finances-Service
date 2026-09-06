@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"os"
 	"time"
+
+	"family-budget-service/internal/domain/money"
 )
 
 // LogConfig конфигурация для логгера
@@ -88,7 +90,7 @@ func (bl *BusinessLogger) LogUserAction(
 func (bl *BusinessLogger) LogTransactionEvent(
 	ctx context.Context,
 	transactionID, userID, familyID, eventType string,
-	amount float64,
+	amountMinor money.Minor,
 	currency string,
 ) {
 	bl.Logger.InfoContext(ctx, "Transaction event",
@@ -97,7 +99,7 @@ func (bl *BusinessLogger) LogTransactionEvent(
 		slog.String("user_id", userID),
 		slog.String("family_id", familyID),
 		slog.String("event_type", eventType),
-		slog.Float64("amount", amount),
+		slog.Int64("amount_minor", int64(amountMinor)),
 		slog.String("currency", currency),
 	)
 }

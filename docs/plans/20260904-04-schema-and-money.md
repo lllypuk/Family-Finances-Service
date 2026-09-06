@@ -195,10 +195,10 @@ JSON: `amount_minor` (int64), `date` (`"2026-09-04"`), `currency` и `timezone` 
 
 ### Task 8: Verify acceptance criteria
 
-- [ ] `grep -rn 'float64' internal --include='*.go' | grep -v _test | grep -iv 'percent\|utiliz\|rate\|ratio'` — только объяснимые места
-- [ ] тест покрытия `openapi.yaml` (обе стороны) зелёный, валидатор спецификации без ошибок
-- [ ] `make db-reset && make run-local`: `setup` через CLI → login → создать транзакцию на 12 345 копеек → `GET /stats/summary` показывает 12345
-- [ ] `make pre-commit` зелёный; `docker build` собирается
+- [x] `grep -rn 'float64' internal --include='*.go' | grep -v _test | grep -iv 'percent\|utiliz\|rate\|ratio'` — только объяснимые места (проценты, доли, дельты, confidence/probability; `BusinessLogger.LogTransactionEvent` переведён на `money.Minor`)
+- [x] тест покрытия `openapi.yaml` (обе стороны) зелёный, валидатор спецификации без ошибок (`redocly lint`: 0 ошибок, 1 warning про `localhost` в `servers` — намеренный)
+- [x] `make db-reset && make run-local`: `setup` через CLI → login → создать транзакцию на 12 345 копеек → `GET /stats/summary` показывает 12345 (повтор `POST` с тем же `id` → 200)
+- [x] `make pre-commit` зелёный; `docker build` собирается
 
 ### Task 9: [Final] Update documentation
 

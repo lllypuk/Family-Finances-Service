@@ -201,9 +201,9 @@ type BudgetAlertReportDTO struct {
 	CategoryID uuid.UUID `json:"category_id"`
 	Category   string    `json:"category"`
 	Message    string    `json:"message"`
-	Threshold  float64   `json:"threshold"`
-	Current    float64   `json:"current"`
-	Severity   int       `json:"severity"` // 1-10
+	Threshold  float64   `json:"threshold"` // процент утилизации бюджета
+	Current    float64   `json:"current"`   // процент утилизации бюджета
+	Severity   int       `json:"severity"`  // 1-10
 }
 
 type CategoryAnalysisDTO struct {
