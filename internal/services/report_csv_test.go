@@ -42,8 +42,8 @@ func TestReportService_ExportReport_IncomeCSVTotalFromIncome(t *testing.T) {
 	})
 
 	assert.True(t, strings.HasPrefix(csvText, "\ufeff"), "CSV должен начинаться с BOM")
-	assert.Contains(t, csvText, "Зарплата,120000,RUB,80.0%,1")
-	assert.Contains(t, csvText, "TOTAL,150000,RUB,100.0%,")
+	assert.Contains(t, csvText, "Зарплата,RUB,120000,80.0%,1")
+	assert.Contains(t, csvText, "TOTAL,RUB,150000,100.0%,")
 }
 
 func TestReportService_ExportReport_CategoryBreakdownTotalFromRows(t *testing.T) {
@@ -54,7 +54,7 @@ func TestReportService_ExportReport_CategoryBreakdownTotalFromRows(t *testing.T)
 		},
 	})
 
-	assert.Contains(t, csvText, "TOTAL,100000,RUB,100.0%,")
+	assert.Contains(t, csvText, "TOTAL,RUB,100000,100.0%,")
 }
 
 func TestReportService_ExportReport_ExpensesCSVTotalFromExpenses(t *testing.T) {
@@ -65,7 +65,7 @@ func TestReportService_ExportReport_ExpensesCSVTotalFromExpenses(t *testing.T) {
 		},
 	})
 
-	assert.Contains(t, csvText, "TOTAL,90000,RUB,100.0%,")
+	assert.Contains(t, csvText, "TOTAL,RUB,90000,100.0%,")
 }
 
 func TestReportService_ExportReport_CashFlowCSVRows(t *testing.T) {
@@ -109,7 +109,7 @@ func TestReportService_ExportReportData_Formats(t *testing.T) {
 
 	csvBytes, err := service.ExportReportData(t.Context(), data, "csv", dto.ExportOptionsDTO{Currency: "RUB"})
 	require.NoError(t, err)
-	assert.Contains(t, string(csvBytes), "TOTAL,25000,RUB,100.0%,")
+	assert.Contains(t, string(csvBytes), "TOTAL,RUB,25000,100.0%,")
 
 	jsonBytes, err := service.ExportReportData(t.Context(), data, "json", dto.ExportOptionsDTO{})
 	require.NoError(t, err)

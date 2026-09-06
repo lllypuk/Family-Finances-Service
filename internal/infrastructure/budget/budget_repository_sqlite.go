@@ -138,8 +138,8 @@ func (r *SQLiteRepository) Create(ctx context.Context, b *budget.Budget) error {
 	_, err = r.db.ExecContext(ctx, query,
 		sqlitehelpers.UUIDToString(b.ID),
 		b.Name,
-		int64(b.AmountMinor),
-		int64(b.SpentMinor),
+		b.AmountMinor,
+		b.SpentMinor,
 		string(b.Period),
 		b.StartDate,
 		b.EndDate,
@@ -153,7 +153,7 @@ func (r *SQLiteRepository) Create(ctx context.Context, b *budget.Budget) error {
 	if err != nil {
 		// Check for unique constraint violation
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			return fmt.Errorf("budget with name '%s' already exists for this period", b.Name)
+			return fmt.Errorf("%w: %s", budget.ErrNameExists, b.Name)
 		}
 		return fmt.Errorf("failed to create budget: %w", err)
 	}
@@ -411,8 +411,8 @@ func (r *SQLiteRepository) Update(ctx context.Context, b *budget.Budget) error {
 
 	result, err := r.db.ExecContext(ctx, query,
 		b.Name,
-		int64(b.AmountMinor),
-		int64(b.SpentMinor),
+		b.AmountMinor,
+		b.SpentMinor,
 		string(b.Period),
 		b.StartDate,
 		b.EndDate,
@@ -426,7 +426,7 @@ func (r *SQLiteRepository) Update(ctx context.Context, b *budget.Budget) error {
 	if err != nil {
 		// Check for unique constraint violation
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			return fmt.Errorf("budget with name '%s' already exists for this period", b.Name)
+			return fmt.Errorf("%w: %s", budget.ErrNameExists, b.Name)
 		}
 		return fmt.Errorf("failed to update budget: %w", err)
 	}
@@ -462,7 +462,7 @@ func (r *SQLiteRepository) UpdateSpentAmount(
 		SET spent_minor = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ? AND is_active = 1`
 
-	result, err := r.db.ExecContext(ctx, query, int64(spentAmountMinor), sqlitehelpers.UUIDToString(budgetID))
+	result, err := r.db.ExecContext(ctx, query, spentAmountMinor, sqlitehelpers.UUIDToString(budgetID))
 	if err != nil {
 		return fmt.Errorf("failed to update spent amount: %w", err)
 	}

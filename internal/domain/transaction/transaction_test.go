@@ -6,38 +6,20 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 )
 
-func TestNewTransaction(t *testing.T) {
-	// Test data
-	amount := money.Minor(10_050)
-	transactionType := transaction.TypeExpense
-	description := "Grocery shopping"
-	categoryID := uuid.New()
-	userID := uuid.New()
-	on := date.Today(time.UTC)
+func TestValidateDate(t *testing.T) {
+	today := date.Today(time.UTC)
 
-	// Execute
-	txn := transaction.NewTransaction(amount, transactionType, description, categoryID, userID, on)
-
-	// Assert
-	assert.NotEqual(t, uuid.Nil, txn.ID)
-	assert.Equal(t, amount, txn.AmountMinor)
-	assert.Equal(t, transactionType, txn.Type)
-	assert.Equal(t, description, txn.Description)
-	assert.Equal(t, categoryID, txn.CategoryID)
-	assert.Equal(t, userID, txn.UserID)
-	assert.Equal(t, on, txn.Date)
-	assert.NotNil(t, txn.Tags)
-	assert.Empty(t, txn.Tags)
-	assert.False(t, txn.CreatedAt.IsZero())
-	assert.False(t, txn.UpdatedAt.IsZero())
-	assert.WithinDuration(t, time.Now(), txn.CreatedAt, time.Second)
-	assert.WithinDuration(t, time.Now(), txn.UpdatedAt, time.Second)
+	require.NoError(t, transaction.ValidateDate(today))
+	require.NoError(t, transaction.ValidateDate(date.New(1900, time.January, 1)))
+	require.ErrorIs(t, transaction.ValidateDate(date.New(1899, time.December, 31)), transaction.ErrDateOutOfRange)
+	require.ErrorIs(t, transaction.ValidateDate(today.AddDays(400)), transaction.ErrDateOutOfRange)
 }
 
 func TestTransactionType_Constants(t *testing.T) {
@@ -48,14 +30,7 @@ func TestTransactionType_Constants(t *testing.T) {
 
 func TestTransaction_AddTag(t *testing.T) {
 	// Setup
-	txn := transaction.NewTransaction(
-		money.Minor(10_000),
-		transaction.TypeExpense,
-		"Test",
-		uuid.New(),
-		uuid.New(),
-		date.Today(time.UTC),
-	)
+	txn := newTransaction(transaction.TypeExpense, uuid.New(), uuid.New(), date.Today(time.UTC))
 	originalUpdateTime := txn.UpdatedAt
 
 	// Wait a bit to ensure UpdatedAt changes
@@ -72,14 +47,7 @@ func TestTransaction_AddTag(t *testing.T) {
 
 func TestTransaction_AddTag_Duplicate(t *testing.T) {
 	// Setup
-	txn := transaction.NewTransaction(
-		money.Minor(10_000),
-		transaction.TypeExpense,
-		"Test",
-		uuid.New(),
-		uuid.New(),
-		date.Today(time.UTC),
-	)
+	txn := newTransaction(transaction.TypeExpense, uuid.New(), uuid.New(), date.Today(time.UTC))
 	txn.AddTag("food")
 	originalUpdateTime := txn.UpdatedAt
 
@@ -97,14 +65,7 @@ func TestTransaction_AddTag_Duplicate(t *testing.T) {
 
 func TestTransaction_RemoveTag(t *testing.T) {
 	// Setup
-	txn := transaction.NewTransaction(
-		money.Minor(10_000),
-		transaction.TypeExpense,
-		"Test",
-		uuid.New(),
-		uuid.New(),
-		date.Today(time.UTC),
-	)
+	txn := newTransaction(transaction.TypeExpense, uuid.New(), uuid.New(), date.Today(time.UTC))
 	txn.AddTag("food")
 	txn.AddTag("grocery")
 	originalUpdateTime := txn.UpdatedAt
@@ -124,14 +85,7 @@ func TestTransaction_RemoveTag(t *testing.T) {
 
 func TestTransaction_RemoveTag_NonExistent(t *testing.T) {
 	// Setup
-	txn := transaction.NewTransaction(
-		money.Minor(10_000),
-		transaction.TypeExpense,
-		"Test",
-		uuid.New(),
-		uuid.New(),
-		date.Today(time.UTC),
-	)
+	txn := newTransaction(transaction.TypeExpense, uuid.New(), uuid.New(), date.Today(time.UTC))
 	txn.AddTag("food")
 	originalUpdateTime := txn.UpdatedAt
 
@@ -217,7 +171,7 @@ func TestFilter_StructFields(t *testing.T) {
 	assert.Equal(t, 0, filter.Offset)
 }
 
-func TestNewTransaction_DifferentTypes(t *testing.T) {
+func TestTransaction_DifferentTypes(t *testing.T) {
 	categoryID := uuid.New()
 	userID := uuid.New()
 	on := date.Today(time.UTC)
@@ -232,7 +186,7 @@ func TestNewTransaction_DifferentTypes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			txn := transaction.NewTransaction(money.Minor(10_000), tt.transactionType, "Test", categoryID, userID, on)
+			txn := newTransaction(tt.transactionType, categoryID, userID, on)
 			assert.Equal(t, tt.transactionType, txn.Type)
 		})
 	}
@@ -240,14 +194,7 @@ func TestNewTransaction_DifferentTypes(t *testing.T) {
 
 func TestTransaction_TagOperations_Sequence(t *testing.T) {
 	// Setup
-	txn := transaction.NewTransaction(
-		money.Minor(10_000),
-		transaction.TypeExpense,
-		"Test",
-		uuid.New(),
-		uuid.New(),
-		date.Today(time.UTC),
-	)
+	txn := newTransaction(transaction.TypeExpense, uuid.New(), uuid.New(), date.Today(time.UTC))
 
 	// Test adding multiple tags
 	txn.AddTag("food")
@@ -285,14 +232,7 @@ func TestTransaction_TimestampGeneration(t *testing.T) {
 	beforeTime := time.Now()
 
 	// Create transaction
-	txn := transaction.NewTransaction(
-		money.Minor(10_000),
-		transaction.TypeExpense,
-		"Test",
-		uuid.New(),
-		uuid.New(),
-		date.Today(time.UTC),
-	)
+	txn := newTransaction(transaction.TypeExpense, uuid.New(), uuid.New(), date.Today(time.UTC))
 
 	// Record time after creating transaction
 	afterTime := time.Now()
@@ -302,4 +242,25 @@ func TestTransaction_TimestampGeneration(t *testing.T) {
 	assert.True(t, txn.CreatedAt.Before(afterTime) || txn.CreatedAt.Equal(afterTime))
 	assert.True(t, txn.UpdatedAt.After(beforeTime) || txn.UpdatedAt.Equal(beforeTime))
 	assert.True(t, txn.UpdatedAt.Before(afterTime) || txn.UpdatedAt.Equal(afterTime))
+}
+
+// newTransaction — то, что раньше давал конструктор домена: он ушёл, продакшен собирает
+// структуру литералом.
+func newTransaction(
+	transactionType transaction.Type,
+	categoryID, userID uuid.UUID,
+	on date.Date,
+) *transaction.Transaction {
+	return &transaction.Transaction{
+		ID:          uuid.New(),
+		AmountMinor: money.Minor(10_000),
+		Type:        transactionType,
+		Description: "Test",
+		CategoryID:  categoryID,
+		UserID:      userID,
+		Date:        on,
+		Tags:        []string{},
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
 }

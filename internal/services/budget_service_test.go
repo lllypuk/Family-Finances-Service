@@ -388,14 +388,9 @@ func TestBudgetService_GetActiveBudgets_Success(t *testing.T) {
 	activeBudget.StartDate = on.AddDays(-5)
 	activeBudget.EndDate = on.AddDays(5)
 
-	inactiveBudget := createTestBudgetForService()
-	inactiveBudget.StartDate = on.AddDays(-20)
-	inactiveBudget.EndDate = on.AddDays(-10) // Expired
-
-	allBudgets := []*budget.Budget{activeBudget, inactiveBudget}
-
-	// Setup expectations
-	budgetRepo.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).Return(allBudgets, nil)
+	// Отбор по датам делает запрос репозитория; сервис только пересчитывает spent.
+	budgetRepo.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).
+		Return([]*budget.Budget{activeBudget}, nil)
 	txRepo.On(
 		"GetTotalByCategoryAndDateRange",
 		ctx,
@@ -411,8 +406,9 @@ func TestBudgetService_GetActiveBudgets_Success(t *testing.T) {
 
 	// Assert
 	require.NoError(t, err)
-	assert.Len(t, result, 1) // Only active budget should be returned
+	assert.Len(t, result, 1)
 	assert.Equal(t, activeBudget.ID, result[0].ID)
+	assert.Equal(t, money.Minor(20000), result[0].SpentMinor)
 
 	budgetRepo.AssertExpectations(t)
 	txRepo.AssertExpectations(t)

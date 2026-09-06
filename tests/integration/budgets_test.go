@@ -777,3 +777,48 @@ func TestBudgetAPI_CreateAmountAboveMaximum(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
 }
+
+// TestBudgetAPI_CreateDuplicateNameSamePeriod — UNIQUE (family_id, name, start_date, end_date)
+// достижим с календарными датами: второй бюджет с тем же именем и периодом отбивается 422,
+// а не 500 из репозитория. Категории разные, иначе сработает проверка пересечения периодов.
+func TestBudgetAPI_CreateDuplicateNameSamePeriod(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+	ctx := context.Background()
+
+	first := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(ctx, first))
+
+	second := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	second.Name = "Другая категория"
+	require.NoError(t, testServer.Repos.Category.Create(ctx, second))
+
+	today := date.Today(time.UTC)
+	post := func(categoryID uuid.UUID) *httptest.ResponseRecorder {
+		body := mustJSON(t, map[string]any{
+			"name":         "Один и тот же бюджет",
+			"amount_minor": 50_000,
+			"period":       "monthly",
+			"category_id":  categoryID.String(),
+			"start_date":   today.String(),
+			"end_date":     today.AddDays(30).String(),
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/budgets", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		session.Apply(req)
+		rec := httptest.NewRecorder()
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		return rec
+	}
+
+	require.Equal(t, http.StatusCreated, post(first.ID).Code)
+
+	rec := post(second.ID)
+	require.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Error.Details, 1)
+	assert.Contains(t, response.Error.Details[0].Message, "already exists for this period")
+}

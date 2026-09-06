@@ -61,10 +61,6 @@ type TransactionFilterDTO struct {
 	// Pagination
 	Limit  int `validate:"min=1,max=1000"`
 	Offset int `validate:"min=0"`
-
-	// Sorting
-	SortBy    *string `validate:"omitempty,oneof=date amount_minor created_at updated_at"`
-	SortOrder *string `validate:"omitempty,oneof=asc desc"`
 }
 
 // BulkCategorizeDTO represents data for bulk categorization of transactions
@@ -77,19 +73,13 @@ type BulkCategorizeDTO struct {
 const (
 	// DefaultTransactionLimit is the default number of transactions to return
 	DefaultTransactionLimit = 50
-	// DefaultSortByDate is the default sort field for transactions
-	DefaultSortByDate = "date"
-	// DefaultSortOrderDesc is the default sort order for transactions
-	DefaultSortOrderDesc = "desc"
 )
 
 // NewTransactionFilterDTO creates a new TransactionFilterDTO with default values
 func NewTransactionFilterDTO() TransactionFilterDTO {
 	return TransactionFilterDTO{
-		Limit:     DefaultTransactionLimit,
-		Offset:    0,
-		SortBy:    new(DefaultSortByDate),
-		SortOrder: new(DefaultSortOrderDesc),
+		Limit:  DefaultTransactionLimit,
+		Offset: 0,
 	}
 }
 

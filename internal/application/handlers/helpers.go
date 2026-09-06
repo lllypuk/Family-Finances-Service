@@ -110,6 +110,31 @@ func respondNilClientID(c echo.Context) error {
 		ErrorDetail{Field: fieldID, Message: "must not be the nil UUID", Code: ErrCodeValidationError})
 }
 
+// respondClientID — контракт идемпотентного POST (A-07), общий для транзакций, бюджетов
+// и категорий: id из одних нулей — 422, уже созданная запись — 200 с ней. Первое значение
+// true означает, что ответ записан и создавать запись нельзя.
+func respondClientID[E, R any](
+	c echo.Context,
+	id *uuid.UUID,
+	find func(echo.Context, uuid.UUID) (E, bool),
+	build func(E) R,
+) (bool, error) {
+	if isNilClientID(id) {
+		return true, respondNilClientID(c)
+	}
+
+	if id == nil {
+		return false, nil
+	}
+
+	existing, found := find(c, *id)
+	if !found {
+		return false, nil
+	}
+
+	return true, respondAPI(c, http.StatusOK, build(existing))
+}
+
 // bodyDetail — деталь для ошибки, не привязанной к конкретному полю запроса.
 func bodyDetail(code, message string) ErrorDetail {
 	return ErrorDetail{Field: fieldBody, Message: message, Code: code}
@@ -408,11 +433,6 @@ func HandleIDParseError(c echo.Context, entityType string) error {
 		ErrCodeInvalidID,
 		"Invalid "+strings.ToLower(entityType)+" ID format",
 	)
-}
-
-// HandleBindError returns standardized bind error response
-func HandleBindError(c echo.Context) error {
-	return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest)
 }
 
 // UpdateEntityHelper provides common update functionality for all handlers

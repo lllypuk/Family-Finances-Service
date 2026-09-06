@@ -51,7 +51,7 @@ type Family struct {
 	Name     string    `json:"name"     bson:"name"`
 	Currency string    `json:"currency" bson:"currency"` // USD, RUB, EUR и т.д.
 	// Timezone — IANA-зона семьи: по ней считаются границы периодов («текущий месяц»).
-	Timezone  string    `json:"timezone"   bson:"timezone"`
+	Timezone  string    `json:"timezone"`
 	CreatedAt time.Time `json:"created_at" bson:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" bson:"updated_at"`
 }

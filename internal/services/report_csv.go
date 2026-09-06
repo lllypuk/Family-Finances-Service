@@ -26,14 +26,9 @@ func csvSafeText(value string) string {
 	return "'" + value
 }
 
-// csvCurrencyColumn — валюта вынесена в колонку, суммы в строках целые (A-05).
+// csvCurrencyColumn — валюта вынесена во вторую колонку каждого листа, суммы в строках
+// целые (A-05).
 const csvCurrencyColumn = "Currency"
-
-func csvMinor(amount money.Minor) string {
-	const decimalBase = 10
-
-	return strconv.FormatInt(int64(amount), decimalBase)
-}
 
 // reportToCSV собирает CSV отчёта; набор колонок зависит от типа отчёта.
 // Суммы — целые минимальные единицы, валюта вынесена в отдельную колонку.
@@ -72,7 +67,7 @@ func writeCategoryBreakdownCSV(
 	reportType report.Type,
 	currency string,
 ) error {
-	header := []string{"Category", "Amount Minor", csvCurrencyColumn, "Percentage", "Transaction Count"}
+	header := []string{"Category", csvCurrencyColumn, "Amount Minor", "Percentage", "Transaction Count"}
 	if err := writer.Write(header); err != nil {
 		return fmt.Errorf("failed to write csv header: %w", err)
 	}
@@ -80,8 +75,8 @@ func writeCategoryBreakdownCSV(
 	for _, item := range data.CategoryBreakdown {
 		row := []string{
 			csvSafeText(item.CategoryName),
-			csvMinor(item.AmountMinor),
 			currency,
+			item.AmountMinor.String(),
 			fmt.Sprintf("%.1f%%", item.Percentage),
 			strconv.Itoa(item.Count),
 		}
@@ -92,8 +87,8 @@ func writeCategoryBreakdownCSV(
 
 	total := []string{
 		"TOTAL",
-		csvMinor(categoryBreakdownTotal(data, reportType)),
 		currency,
+		categoryBreakdownTotal(data, reportType).String(),
 		"100.0%",
 		"",
 	}
@@ -138,9 +133,9 @@ func writeDailyBreakdownCSV(writer *csv.Writer, data report.Data, currency strin
 		row := []string{
 			item.Date.String(),
 			currency,
-			csvMinor(item.IncomeMinor),
-			csvMinor(item.ExpensesMinor),
-			csvMinor(item.BalanceMinor),
+			item.IncomeMinor.String(),
+			item.ExpensesMinor.String(),
+			item.BalanceMinor.String(),
 		}
 		if err := writer.Write(row); err != nil {
 			return fmt.Errorf("failed to write csv row: %w", err)
@@ -160,9 +155,9 @@ func writeBudgetComparisonCSV(writer *csv.Writer, data report.Data, currency str
 		row := []string{
 			csvSafeText(item.BudgetName),
 			currency,
-			csvMinor(item.PlannedMinor),
-			csvMinor(item.ActualMinor),
-			csvMinor(item.DifferenceMinor),
+			item.PlannedMinor.String(),
+			item.ActualMinor.String(),
+			item.DifferenceMinor.String(),
 			fmt.Sprintf("%.1f%%", item.Percentage),
 		}
 		if err := writer.Write(row); err != nil {

@@ -17,10 +17,6 @@ func TestNewTransactionFilterDTO(t *testing.T) {
 
 	assert.Equal(t, DefaultTransactionLimit, filter.Limit)
 	assert.Equal(t, 0, filter.Offset)
-	assert.NotNil(t, filter.SortBy)
-	assert.Equal(t, DefaultSortByDate, *filter.SortBy)
-	assert.NotNil(t, filter.SortOrder)
-	assert.Equal(t, DefaultSortOrderDesc, *filter.SortOrder)
 }
 
 func TestTransactionFilterDTO_ValidateDateRange_Valid(t *testing.T) {
@@ -84,8 +80,6 @@ func TestTransactionFilterDTO_ComplexFilter(t *testing.T) {
 	amountFrom := money.Minor(1_000)
 	amountTo := money.Minor(100_000)
 	description := "groceries"
-	sortBy := "date"
-	sortOrder := "desc"
 
 	filter := TransactionFilterDTO{
 		UserID:          &userID,
@@ -99,8 +93,6 @@ func TestTransactionFilterDTO_ComplexFilter(t *testing.T) {
 		Tags:            []string{"food", "weekly"},
 		Limit:           100,
 		Offset:          0,
-		SortBy:          &sortBy,
-		SortOrder:       &sortOrder,
 	}
 
 	assert.NotNil(t, filter.UserID)

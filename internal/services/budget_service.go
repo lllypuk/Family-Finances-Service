@@ -26,15 +26,15 @@ var (
 	ErrBudgetCalculationFailed = errors.New("failed to calculate budget metrics")
 	ErrInsufficientBudgetFunds = errors.New("insufficient budget funds")
 	ErrBudgetAmountTooLarge    = errors.New("budget amount exceeds the maximum")
+	// ErrBudgetNameExists — тот же сентинел, что возвращает репозиторий на UNIQUE:
+	// проверку делает БД, а не сервис.
+	ErrBudgetNameExists = budget.ErrNameExists
 )
 
-// maxBudgetAmountMinor — тот же потолок, что в репозитории и в openapi (Money.maximum);
-// здесь он нужен, чтобы клиент получил 422, а не 500 из слоя данных.
-const maxBudgetAmountMinor = money.Minor(99_999_999_999)
-
-// validateBudgetAmountBounds — верхняя граница суммы бюджета.
+// validateBudgetAmountBounds — верхняя граница суммы бюджета; здесь она нужна, чтобы
+// клиент получил 422, а не 500 из слоя данных.
 func validateBudgetAmountBounds(amount money.Minor) error {
-	if amount > maxBudgetAmountMinor {
+	if amount > money.MaxAmount {
 		return fmt.Errorf("%w: %d", ErrBudgetAmountTooLarge, amount)
 	}
 
@@ -312,20 +312,15 @@ func (s *BudgetServiceImpl) GetActiveBudgets(
 	ctx context.Context,
 	on date.Date,
 ) ([]*budget.Budget, error) {
-	allBudgets, err := s.budgetRepo.GetActiveBudgets(ctx, on)
+	// Отбор по датам и is_active делает сам запрос; здесь остаётся только пересчёт spent.
+	activeBudgets, err := s.budgetRepo.GetActiveBudgets(ctx, on)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active budgets: %w", err)
 	}
 
-	// Filter budgets active on the specified date
-	var activeBudgets []*budget.Budget
-	for _, b := range allBudgets {
-		if s.isBudgetActiveOnDate(b, on) {
-			// Recalculate spent amount
-			if recalcErr := s.recalculateAndUpdateSpent(ctx, b); recalcErr != nil {
-				s.logRecalculationWarning(ctx, "get_active_budgets", b.ID, recalcErr)
-			}
-			activeBudgets = append(activeBudgets, b)
+	for _, b := range activeBudgets {
+		if recalcErr := s.recalculateAndUpdateSpent(ctx, b); recalcErr != nil {
+			s.logRecalculationWarning(ctx, "get_active_budgets", b.ID, recalcErr)
 		}
 	}
 
@@ -634,10 +629,9 @@ func (s *BudgetServiceImpl) validateBudgetPeriodForUpdate(ctx context.Context, b
 
 func (s *BudgetServiceImpl) calculateBudgetStatus(b *budget.Budget) *dto.BudgetStatusDTO {
 	utilizationPercent := b.GetSpentPercentage()
-	startDate, endDate := b.StartDate.In(time.UTC), b.EndDate.In(time.UTC)
-	daysTotal := int(endDate.Sub(startDate).Hours() / dto.HoursPerDay)
-	daysElapsed := int(time.Since(startDate).Hours() / dto.HoursPerDay)
-	daysRemaining := dto.CalculateDaysRemaining(endDate)
+	daysTotal := date.DaysBetween(b.StartDate, b.EndDate)
+	daysElapsed := date.DaysBetween(b.StartDate, date.Today(time.UTC))
+	daysRemaining := dto.CalculateDaysRemaining(b.EndDate)
 
 	status := &dto.BudgetStatusDTO{
 		BudgetID:             b.ID,
@@ -676,7 +670,7 @@ func (s *BudgetServiceImpl) calculateBudgetStatus(b *budget.Budget) *dto.BudgetS
 
 func (s *BudgetServiceImpl) calculateBudgetUtilization(b *budget.Budget) *dto.BudgetUtilizationDTO {
 	utilizationPercent := b.GetSpentPercentage()
-	daysElapsed := int(time.Since(b.StartDate.In(time.UTC)).Hours() / dto.HoursPerDay)
+	daysElapsed := date.DaysBetween(b.StartDate, date.Today(time.UTC))
 
 	utilization := &dto.BudgetUtilizationDTO{
 		BudgetID:           b.ID,
@@ -723,7 +717,7 @@ func (s *BudgetServiceImpl) generateBudgetRecommendations(b *budget.Budget, util
 	}
 
 	// Time-based recommendations
-	daysRemaining := dto.CalculateDaysRemaining(b.EndDate.In(time.UTC))
+	daysRemaining := dto.CalculateDaysRemaining(b.EndDate)
 	if daysRemaining <= 7 && utilizationPercent < 50 {
 		recommendations = append(
 			recommendations,

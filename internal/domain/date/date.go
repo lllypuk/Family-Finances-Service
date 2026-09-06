@@ -66,6 +66,13 @@ func (d Date) In(loc *time.Location) time.Time {
 	return time.Date(d.Year, d.Month, d.Day, 0, 0, 0, 0, loc)
 }
 
+// DaysBetween — число суток от from до to; отрицательное, если to раньше from.
+func DaysBetween(from, to Date) int {
+	const day = 24 * time.Hour
+
+	return int(to.In(time.UTC).Sub(from.In(time.UTC)) / day)
+}
+
 // AddDays сдвигает дату на n дней с переносом через границы месяцев и лет.
 func (d Date) AddDays(n int) Date {
 	return FromTime(d.In(time.UTC).AddDate(0, 0, n))

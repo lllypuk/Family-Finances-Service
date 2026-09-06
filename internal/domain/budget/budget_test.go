@@ -6,85 +6,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/money"
 )
-
-func TestNewBudget_Success(t *testing.T) {
-	// Arrange
-	name := "Monthly Groceries"
-	amount := money.Minor(100_000)
-	period := budget.PeriodMonthly
-	startDate := date.New(2025, time.January, 1)
-	endDate := date.New(2025, time.January, 31)
-
-	// Act
-	budgetItem := budget.NewBudget(name, amount, period, startDate, endDate)
-
-	// Assert
-	require.NotNil(t, budgetItem)
-	assert.NotEqual(t, uuid.Nil, budgetItem.ID)
-	assert.Equal(t, name, budgetItem.Name)
-	assert.Equal(t, amount, budgetItem.AmountMinor)
-	assert.Equal(t, money.Minor(0), budgetItem.SpentMinor)
-	assert.Equal(t, period, budgetItem.Period)
-	assert.Equal(t, startDate, budgetItem.StartDate)
-	assert.Equal(t, endDate, budgetItem.EndDate)
-	assert.False(t, budgetItem.CreatedAt.IsZero())
-	assert.False(t, budgetItem.UpdatedAt.IsZero())
-	assert.Nil(t, budgetItem.CategoryID) // Должен быть nil по умолчанию
-}
-
-func TestNewBudget_ValidationScenarios(t *testing.T) {
-	tests := []struct {
-		name       string
-		budgetName string
-		amount     money.Minor
-		period     budget.Period
-	}{
-		{
-			name:       "Valid budget with positive amount",
-			budgetName: "Food Budget",
-			amount:     50_000,
-			period:     budget.PeriodMonthly,
-		},
-		{
-			name:       "Zero amount budget",
-			budgetName: "Zero Budget",
-			amount:     0,
-			period:     budget.PeriodWeekly,
-		},
-		{
-			name:       "Negative amount budget",
-			budgetName: "Negative Budget",
-			amount:     -10_000,
-			period:     budget.PeriodYearly,
-		},
-		{
-			name:       "Empty name budget",
-			budgetName: "",
-			amount:     100_000,
-			period:     budget.PeriodCustom,
-		},
-	}
-
-	startDate := date.New(2025, time.January, 1)
-	endDate := date.New(2025, time.February, 1)
-
-	// Конструктор не валидирует: проверки живут в репозитории и в DTO.
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			budgetItem := budget.NewBudget(tt.budgetName, tt.amount, tt.period, startDate, endDate)
-
-			require.NotNil(t, budgetItem)
-			assert.Equal(t, tt.budgetName, budgetItem.Name)
-			assert.Equal(t, tt.amount, budgetItem.AmountMinor)
-		})
-	}
-}
 
 func TestBudget_GetRemainingAmount(t *testing.T) {
 	tests := []struct {
@@ -187,7 +113,7 @@ func TestBudget_UpdateSpent(t *testing.T) {
 
 func TestUpdateSpent_MultipleOperations(t *testing.T) {
 	// Arrange
-	budgetItem := budget.NewBudget(
+	budgetItem := newBudget(
 		"Monthly Budget",
 		100_000,
 		budget.PeriodMonthly,
@@ -211,6 +137,14 @@ func TestUpdateSpent_MultipleOperations(t *testing.T) {
 	assert.InDelta(t, 12.5, budgetItem.GetSpentPercentage(), 0.01)
 }
 
+func TestBudget_GetSpentShare(t *testing.T) {
+	budgetItem := &budget.Budget{AmountMinor: 80_000, SpentMinor: 20_000}
+	assert.InDelta(t, 0.25, budgetItem.GetSpentShare(), 1e-9)
+
+	empty := &budget.Budget{}
+	assert.InDelta(t, 0.0, empty.GetSpentShare(), 1e-9)
+}
+
 func TestPeriod_Constants(t *testing.T) {
 	// Проверяем что все константы периодов определены корректно
 	assert.Equal(t, budget.PeriodWeekly, budget.Period("weekly"))
@@ -225,7 +159,7 @@ func TestBudget_RealWorldScenarios(t *testing.T) {
 		endDate := date.New(2025, time.August, 31)
 
 		// Создаем месячный бюджет на продукты
-		groceryBudget := budget.NewBudget("Grocery Budget", 80_000, budget.PeriodMonthly, startDate, endDate)
+		groceryBudget := newBudget("Grocery Budget", 80_000, budget.PeriodMonthly, startDate, endDate)
 
 		// Первая покупка
 		groceryBudget.UpdateSpent(12_050)
@@ -254,7 +188,7 @@ func TestBudget_RealWorldScenarios(t *testing.T) {
 		startDate := date.New(2025, time.August, 11) // Понедельник
 		endDate := date.New(2025, time.August, 17)   // Воскресенье
 
-		entertainmentBudget := budget.NewBudget(
+		entertainmentBudget := newBudget(
 			"Entertainment",
 			20_000,
 			budget.PeriodWeekly,
@@ -276,7 +210,7 @@ func TestBudget_RealWorldScenarios(t *testing.T) {
 
 func TestBudget_EdgeCases(t *testing.T) {
 	t.Run("Very small amounts", func(t *testing.T) {
-		budgetItem := budget.NewBudget(
+		budgetItem := newBudget(
 			"Micro Budget",
 			2, // две минимальные единицы
 			budget.PeriodCustom,
@@ -292,4 +226,25 @@ func TestBudget_EdgeCases(t *testing.T) {
 		budgetItem.UpdateSpent(2)
 		assert.True(t, budgetItem.IsOverBudget())
 	})
+}
+
+// newBudget — то, что раньше давал конструктор домена: он ушёл, продакшен собирает
+// структуру литералом.
+func newBudget(
+	name string,
+	amountMinor money.Minor,
+	period budget.Period,
+	startDate, endDate date.Date,
+) *budget.Budget {
+	return &budget.Budget{
+		ID:          uuid.New(),
+		Name:        name,
+		AmountMinor: amountMinor,
+		Period:      period,
+		StartDate:   startDate,
+		EndDate:     endDate,
+		IsActive:    true,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
 }

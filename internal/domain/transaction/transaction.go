@@ -1,6 +1,8 @@
 package transaction
 
 import (
+	"errors"
+	"fmt"
 	"slices"
 	"time"
 
@@ -11,16 +13,16 @@ import (
 )
 
 type Transaction struct {
-	ID          uuid.UUID   `json:"id"           bson:"_id"`
-	AmountMinor money.Minor `json:"amount_minor" bson:"amount_minor"`
-	Type        Type        `json:"type"         bson:"type"`
-	Description string      `json:"description"  bson:"description"`
-	CategoryID  uuid.UUID   `json:"category_id"  bson:"category_id"`
-	UserID      uuid.UUID   `json:"user_id"      bson:"user_id"` // Кто создал транзакцию
-	Date        date.Date   `json:"date"         bson:"date"`    // Календарная дата операции
-	Tags        []string    `json:"tags"         bson:"tags"`    // Теги для поиска
-	CreatedAt   time.Time   `json:"created_at"   bson:"created_at"`
-	UpdatedAt   time.Time   `json:"updated_at"   bson:"updated_at"`
+	ID          uuid.UUID   `json:"id"`
+	AmountMinor money.Minor `json:"amount_minor"`
+	Type        Type        `json:"type"`
+	Description string      `json:"description"`
+	CategoryID  uuid.UUID   `json:"category_id"`
+	UserID      uuid.UUID   `json:"user_id"` // Кто создал транзакцию
+	Date        date.Date   `json:"date"`    // Календарная дата операции
+	Tags        []string    `json:"tags"`    // Теги для поиска
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
 }
 
 type Type string
@@ -44,27 +46,6 @@ type Filter struct {
 	Offset          int
 }
 
-func NewTransaction(
-	amountMinor money.Minor,
-	transactionType Type,
-	description string,
-	categoryID, userID uuid.UUID,
-	on date.Date,
-) *Transaction {
-	return &Transaction{
-		ID:          uuid.New(),
-		AmountMinor: amountMinor,
-		Type:        transactionType,
-		Description: description,
-		CategoryID:  categoryID,
-		UserID:      userID,
-		Date:        on,
-		Tags:        []string{},
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
-}
-
 func (t *Transaction) AddTag(tag string) {
 	if slices.Contains(t.Tags, tag) {
 		return // Тег уже существует
@@ -81,4 +62,25 @@ func (t *Transaction) RemoveTag(tag string) {
 			return
 		}
 	}
+}
+
+const (
+	// minYear — операция раньше этого года почти наверняка опечатка.
+	minYear = 1900
+	// maxFutureYears — операция дальше этого срока в будущем тоже опечатка.
+	maxFutureYears = 1
+)
+
+// ErrDateOutOfRange — дата операции вне допустимого окна.
+var ErrDateOutOfRange = errors.New("transaction date is out of the allowed range")
+
+// ValidateDate — единственное место, где живут границы даты операции: сервис
+// превращает отказ в 422, репозиторий не даёт записи пройти мимо сервиса.
+func ValidateDate(on date.Date) error {
+	if on.Before(date.New(minYear, time.January, 1)) ||
+		on.After(date.FromTime(time.Now().AddDate(maxFutureYears, 0, 0))) {
+		return fmt.Errorf("%w: %s", ErrDateOutOfRange, on)
+	}
+
+	return nil
 }

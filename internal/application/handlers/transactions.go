@@ -67,15 +67,8 @@ func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
 		return respondValidationErrors(c, err)
 	}
 
-	if isNilClientID(req.ID) {
-		return respondNilClientID(c)
-	}
-
-	// Клиентский id уже созданной записи — повтор POST после разрыва связи (A-07).
-	if req.ID != nil {
-		if existing, found := h.findTransaction(c, *req.ID); found {
-			return respondAPI(c, http.StatusOK, h.buildTransactionResponse(existing))
-		}
+	if handled, err := respondClientID(c, req.ID, h.findTransaction, h.buildTransactionResponse); handled {
+		return err
 	}
 
 	if h.transactionService != nil {
@@ -87,7 +80,8 @@ func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
 	if err := h.repositories.Transaction.Create(c.Request().Context(), newTransaction); err != nil {
 		// Check if it's a foreign key constraint error
 		if h.isForeignKeyConstraintError(err) {
-			return respondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid category, user, or family ID")
+			return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError,
+				ErrMessageInvalidCategoryRef, bodyDetail(ErrCodeValidationError, ErrMessageInvalidCategoryRef))
 		}
 
 		return respondError(c, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create transaction")
@@ -464,7 +458,7 @@ func (h *TransactionHandler) buildRepositoryFilter(filters TransactionFilterPara
 		typeFilter = &t
 	}
 
-	repoFilter := transaction.Filter{
+	return transaction.Filter{
 		UserID:          filters.UserID,
 		CategoryID:      filters.CategoryID,
 		Type:            typeFilter,
@@ -481,8 +475,6 @@ func (h *TransactionHandler) buildRepositoryFilter(filters TransactionFilterPara
 		Limit:  filters.Limit,
 		Offset: filters.Offset,
 	}
-
-	return repoFilter
 }
 
 func (h *TransactionHandler) buildTransactionListResponse(

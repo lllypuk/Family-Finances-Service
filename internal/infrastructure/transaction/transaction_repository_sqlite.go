@@ -27,9 +27,6 @@ type sqlExecer interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
-// minTransactionYear — нижняя граница даты операции; всё раньше почти наверняка опечатка.
-const minTransactionYear = 1900
-
 // NewSQLiteRepository creates a new SQLite transaction repository
 func NewSQLiteRepository(db *sql.DB) *SQLiteRepository {
 	return &SQLiteRepository{
@@ -180,7 +177,7 @@ func (r *SQLiteRepository) createWithFamilyID(
 
 	_, err = execer.ExecContext(ctx, query,
 		sqlitehelpers.UUIDToString(t.ID),
-		int64(t.AmountMinor),
+		t.AmountMinor,
 		t.Description,
 		t.Date,
 		string(t.Type),
@@ -231,11 +228,8 @@ func normalizeTags(tags []string) []string {
 }
 
 func prepareTransactionForCreate(t *transaction.Transaction) error {
-	if t.Date.After(date.FromTime(time.Now().AddDate(1, 0, 0))) {
-		return errors.New("transaction date cannot be more than 1 year in the future")
-	}
-	if t.Date.Before(date.New(minTransactionYear, time.January, 1)) {
-		return errors.New("transaction date too old")
+	if err := transaction.ValidateDate(t.Date); err != nil {
+		return err
 	}
 
 	now := time.Now()
@@ -281,7 +275,7 @@ func (r *SQLiteRepository) updateMatchingActiveBudgetSpentTx(
 		SET spent_minor = spent_minor + ?, updated_at = ?
 		WHERE id = ? AND family_id = ?`
 
-	result, err := tx.ExecContext(ctx, updateQuery, int64(amountMinor), now, budgetID, familyID.String())
+	result, err := tx.ExecContext(ctx, updateQuery, amountMinor, now, budgetID, familyID.String())
 	if err != nil {
 		return fmt.Errorf("failed to update budget spent: %w", err)
 	}
@@ -396,12 +390,12 @@ func (r *SQLiteRepository) buildFilterConditions(
 
 	if filter.AmountFromMinor != nil {
 		conditions = append(conditions, "amount_minor >= ?")
-		args = append(args, int64(*filter.AmountFromMinor))
+		args = append(args, *filter.AmountFromMinor)
 	}
 
 	if filter.AmountToMinor != nil {
 		conditions = append(conditions, "amount_minor <= ?")
-		args = append(args, int64(*filter.AmountToMinor))
+		args = append(args, *filter.AmountToMinor)
 	}
 
 	if filter.Description != "" {
@@ -543,7 +537,7 @@ func (r *SQLiteRepository) Update(ctx context.Context, t *transaction.Transactio
 		WHERE id = ? AND family_id = ?`
 
 	result, err := r.db.ExecContext(ctx, query,
-		int64(t.AmountMinor),
+		t.AmountMinor,
 		t.Description,
 		t.Date,
 		string(t.Type),

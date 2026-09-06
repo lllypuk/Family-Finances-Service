@@ -31,31 +31,17 @@ var (
 	ErrTransactionDeleteFailed   = errors.New("failed to delete transaction")
 	ErrBulkCategorizePartialFail = errors.New("some transactions failed to update during bulk categorization")
 	ErrTransactionAmountTooLarge = errors.New("transaction amount exceeds the maximum")
-	ErrTransactionDateOutOfRange = errors.New("transaction date is out of the allowed range")
+	ErrTransactionDateOutOfRange = transaction.ErrDateOutOfRange
 )
 
-const (
-	// maxTransactionAmountMinor — тот же потолок, что стоит в репозитории; здесь он
-	// нужен, чтобы клиент получил 422, а не 500 из слоя данных.
-	maxTransactionAmountMinor = money.Minor(99_999_999_999)
-	// minTransactionYear — всё раньше почти наверняка опечатка.
-	minTransactionYear = 1900
-	// maxTransactionFutureYears — операции далеко в будущем тоже опечатка.
-	maxTransactionFutureYears = 1
-)
-
-// validateTransactionBounds — границы суммы и даты; те же проверки повторяет репозиторий,
-// но там они превращаются в 500.
+// validateTransactionBounds — границы суммы и даты; здесь они нужны, чтобы клиент
+// получил 422, а не 500 из слоя данных.
 func validateTransactionBounds(amount money.Minor, on date.Date) error {
-	if amount > maxTransactionAmountMinor {
+	if amount > money.MaxAmount {
 		return fmt.Errorf("%w: %d", ErrTransactionAmountTooLarge, amount)
 	}
-	if on.Before(date.New(minTransactionYear, time.January, 1)) ||
-		on.After(date.FromTime(time.Now().AddDate(maxTransactionFutureYears, 0, 0))) {
-		return fmt.Errorf("%w: %s", ErrTransactionDateOutOfRange, on)
-	}
 
-	return nil
+	return transaction.ValidateDate(on)
 }
 
 // TransactionRepository defines the data access operations for transactions

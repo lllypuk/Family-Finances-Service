@@ -49,15 +49,8 @@ func (h *BudgetHandler) CreateBudget(c echo.Context) error {
 		return respondValidationErrors(c, err)
 	}
 
-	if isNilClientID(req.ID) {
-		return respondNilClientID(c)
-	}
-
-	// Клиентский id уже созданной записи — повтор POST после разрыва связи (A-07).
-	if req.ID != nil {
-		if existing, found := h.findBudget(c, *req.ID); found {
-			return respondAPI(c, http.StatusOK, h.buildBudgetResponse(existing))
-		}
+	if handled, err := respondClientID(c, req.ID, h.findBudget, h.buildBudgetResponse); handled {
+		return err
 	}
 
 	if h.budgetService != nil {
@@ -79,7 +72,7 @@ func (h *BudgetHandler) CreateBudget(c echo.Context) error {
 	}
 
 	if err := h.repositories.Budget.Create(c.Request().Context(), newBudget); err != nil {
-		return respondError(c, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create budget")
+		return h.handleBudgetServiceError(c, err, "create")
 	}
 
 	return respondAPI(c, http.StatusCreated, h.buildBudgetResponse(newBudget))
@@ -362,6 +355,7 @@ func (h *BudgetHandler) handleBudgetServiceError(c echo.Context, err error, oper
 	case errors.Is(err, services.ErrBudgetOverlapExists),
 		errors.Is(err, services.ErrBudgetAlreadyExceeded),
 		errors.Is(err, services.ErrBudgetAmountTooLarge),
+		errors.Is(err, services.ErrBudgetNameExists),
 		errors.Is(err, dto.ErrInvalidBudgetPeriod),
 		errors.Is(err, dto.ErrInvalidBudgetAmount),
 		errors.Is(err, dto.ErrInvalidDateRange),

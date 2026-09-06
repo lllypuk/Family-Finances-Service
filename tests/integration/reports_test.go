@@ -516,13 +516,13 @@ func TestReportAPI_GenerateAndExport(t *testing.T) {
 	rows, err := csv.NewReader(strings.NewReader(csvBody)).ReadAll()
 	require.NoError(t, err)
 	require.NotEmpty(t, rows)
-	assert.Equal(t, []string{"Category", "Amount Minor", "Currency", "Percentage", "Transaction Count"}, rows[0])
+	assert.Equal(t, []string{"Category", "Currency", "Amount Minor", "Percentage", "Transaction Count"}, rows[0])
 	require.Len(t, rows, 3, "заголовок, одна категория и TOTAL: %v", rows)
 	assert.Equal(t, cat.Name, rows[1][0])
-	assert.Equal(t, "15050", rows[1][1])
-	assert.Equal(t, testServer.AuthFamily.Currency, rows[1][2])
+	assert.Equal(t, testServer.AuthFamily.Currency, rows[1][1])
+	assert.Equal(t, "15050", rows[1][2])
 	assert.Equal(t, "TOTAL", rows[len(rows)-1][0])
-	assert.Equal(t, "15050", rows[len(rows)-1][1])
+	assert.Equal(t, "15050", rows[len(rows)-1][2])
 }
 
 // TestReportAPI_CreateReport_CustomPeriodKeepsDates — при period=custom границы берутся из запроса,

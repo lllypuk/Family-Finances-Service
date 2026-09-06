@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -29,12 +28,6 @@ const (
 
 	budgetNearLimitShare = 0.8
 	budgetOverLimitShare = 1.0
-
-	statsHoursInDay = 24
-
-	// percentToShare переводит проценты из money.Percent в долю 0..1, в которой
-	// dto держит Share и Utilization.
-	percentToShare = 100.0
 )
 
 // statsService считает агрегаты поверх остальных сервисов, без прямого доступа к репозиториям.
@@ -153,10 +146,6 @@ func (s *statsService) transactionsBetween(
 
 // previousTotals возвращает суммы за предыдущий период; ошибка выборки означает «данных нет».
 func (s *statsService) previousTotals(ctx context.Context, from, to date.Date) (dto.PeriodTotals, bool) {
-	if from.IsZero() || to.IsZero() {
-		return dto.PeriodTotals{From: from, To: to}, false
-	}
-
 	transactions, err := s.transactionsBetween(ctx, from, to)
 	if err != nil || len(transactions) == 0 {
 		return dto.PeriodTotals{From: from, To: to}, false
@@ -195,7 +184,7 @@ func (s *statsService) budgetProgressItem(
 	b *budget.Budget,
 	today date.Date,
 ) dto.BudgetProgress {
-	utilization := b.SpentMinor.Percent(b.AmountMinor) / percentToShare
+	utilization := b.GetSpentShare()
 
 	isOverBudget := utilization >= budgetOverLimitShare
 
@@ -210,7 +199,7 @@ func (s *statsService) budgetProgressItem(
 		Period:         b.Period,
 		StartDate:      b.StartDate,
 		EndDate:        b.EndDate,
-		DaysRemaining:  max(daysBetween(today, b.EndDate), 0),
+		DaysRemaining:  max(date.DaysBetween(today, b.EndDate), 0),
 		IsActive:       b.IsActive,
 		IsOverBudget:   isOverBudget,
 		IsNearLimit:    utilization >= budgetNearLimitShare && !isOverBudget,
@@ -335,12 +324,7 @@ func periodTotals(from, to date.Date, transactions []*transaction.Transaction) d
 func previousPeriod(from, to date.Date) (date.Date, date.Date) {
 	previousTo := from.AddDays(-1)
 
-	return previousTo.AddDays(-daysBetween(from, to)), previousTo
-}
-
-// daysBetween — число суток от from до to; отрицательное, если to раньше from.
-func daysBetween(from, to date.Date) int {
-	return int(to.In(time.UTC).Sub(from.In(time.UTC)).Hours() / statsHoursInDay)
+	return previousTo.AddDays(-date.DaysBetween(from, to)), previousTo
 }
 
 func periodDeltas(current, previous dto.PeriodTotals, hasPrevious bool) (float64, float64) {
@@ -348,9 +332,9 @@ func periodDeltas(current, previous dto.PeriodTotals, hasPrevious bool) (float64
 		return 0, 0
 	}
 
-	// Percent сам возвращает 0 при нулевой базе, поэтому отдельной проверки нет.
-	incomeDelta := (current.IncomeMinor - previous.IncomeMinor).Percent(previous.IncomeMinor) / percentToShare
-	expensesDelta := (current.ExpensesMinor - previous.ExpensesMinor).Percent(previous.ExpensesMinor) / percentToShare
+	// Share сам возвращает 0 при нулевой базе, поэтому отдельной проверки нет.
+	incomeDelta := (current.IncomeMinor - previous.IncomeMinor).Share(previous.IncomeMinor)
+	expensesDelta := (current.ExpensesMinor - previous.ExpensesMinor).Share(previous.ExpensesMinor)
 
 	return incomeDelta, expensesDelta
 }
@@ -358,7 +342,7 @@ func periodDeltas(current, previous dto.PeriodTotals, hasPrevious bool) (float64
 func withAmount(share dto.CategoryShare, amount money.Minor, count int, total money.Minor) dto.CategoryShare {
 	share.AmountMinor = amount
 	share.TransactionCount = count
-	share.Share = amount.Percent(total) / percentToShare
+	share.Share = amount.Share(total)
 
 	return share
 }

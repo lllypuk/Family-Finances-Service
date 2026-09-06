@@ -204,7 +204,7 @@ func (h *TestDataHelper) CreateTestTransaction(
 		VALUES (?, ?, ?, ?, ?, ?, ?, DATE('now'), '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
 
 	_, err := h.DB.ExecContext(
-		ctx, query, id, int64(amountMinor), description, transactionType, categoryID, userID, familyID,
+		ctx, query, id, amountMinor, description, transactionType, categoryID, userID, familyID,
 	)
 	return id, err
 }
@@ -224,7 +224,7 @@ func (h *TestDataHelper) CreateTestTransactionWithDate(
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
 
 	_, err := h.DB.ExecContext(
-		ctx, query, id, int64(amountMinor), description, transactionType, categoryID, userID, familyID, date,
+		ctx, query, id, amountMinor, description, transactionType, categoryID, userID, familyID, date,
 	)
 	return id, err
 }
@@ -245,7 +245,7 @@ func (h *TestDataHelper) CreateTestBudget(
 		)
 		VALUES (?, ?, ?, 0, ?, DATE('now'), DATE('now', '+1 month'), ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
 
-	_, err := h.DB.ExecContext(ctx, query, id, name, int64(amountMinor), period, categoryID, familyID)
+	_, err := h.DB.ExecContext(ctx, query, id, name, amountMinor, period, categoryID, familyID)
 	return id, err
 }
 
@@ -266,7 +266,7 @@ func (h *TestDataHelper) CreateTestBudgetWithDates(
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
 
 	_, err := h.DB.ExecContext(
-		ctx, query, id, name, int64(amountMinor), int64(spentMinor), period, startDate, endDate, categoryID, familyID,
+		ctx, query, id, name, amountMinor, spentMinor, period, startDate, endDate, categoryID, familyID,
 	)
 	return id, err
 }

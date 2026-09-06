@@ -64,10 +64,6 @@ type BudgetFilterDTO struct {
 	// Pagination
 	Limit  int `validate:"min=1,max=200"`
 	Offset int `validate:"min=0"`
-
-	// Sorting
-	SortBy    *string `validate:"omitempty,oneof=name amount_minor spent_minor created_at updated_at start_date end_date"`
-	SortOrder *string `validate:"omitempty,oneof=asc desc"`
 }
 
 // BudgetStatusDTO represents detailed budget status information
@@ -140,18 +136,13 @@ const (
 
 	// DefaultBudgetLimit default pagination limit for budget queries
 	DefaultBudgetLimit = 20
-
-	// HoursPerDay number of hours in a day
-	HoursPerDay = 24
 )
 
 // NewBudgetFilterDTO creates a new BudgetFilterDTO with default values
 func NewBudgetFilterDTO() BudgetFilterDTO {
 	return BudgetFilterDTO{
-		Limit:     DefaultBudgetLimit,
-		Offset:    0,
-		SortBy:    new("created_at"),
-		SortOrder: new("desc"),
+		Limit:  DefaultBudgetLimit,
+		Offset: 0,
 	}
 }
 
@@ -183,16 +174,6 @@ func (c *CreateBudgetDTO) ValidatePeriod() error {
 	return nil
 }
 
-// ValidatePeriod validates that budget end date is after start date for updates
-func (u *UpdateBudgetDTO) ValidatePeriod() error {
-	if u.StartDate != nil && u.EndDate != nil {
-		if !u.EndDate.After(*u.StartDate) {
-			return ErrInvalidBudgetPeriod
-		}
-	}
-	return nil
-}
-
 // DetermineBudgetStatus determines budget status based on utilization
 func DetermineBudgetStatus(utilizationPercent float64) string {
 	switch {
@@ -208,10 +189,6 @@ func DetermineBudgetStatus(utilizationPercent float64) string {
 }
 
 // CalculateDaysRemaining calculates days remaining in budget period
-func CalculateDaysRemaining(endDate time.Time) int {
-	now := time.Now()
-	if endDate.Before(now) {
-		return 0
-	}
-	return int(endDate.Sub(now).Hours() / HoursPerDay)
+func CalculateDaysRemaining(endDate date.Date) int {
+	return max(date.DaysBetween(date.Today(time.UTC), endDate), 0)
 }

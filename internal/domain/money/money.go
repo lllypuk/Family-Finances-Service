@@ -13,6 +13,10 @@ const (
 	half        = 2
 )
 
+// MaxAmount — потолок суммы, единый для сервисов, репозиториев и openapi (Money.maximum):
+// выше него значение не влезает в контракт клиента.
+const MaxAmount = Minor(99_999_999_999)
+
 // Minor — сумма в минимальных единицах валюты. Сложение и вычитание — обычными операторами.
 //
 //nolint:recvcheck // Scan обязан быть на указателе, остальное — значение
@@ -34,6 +38,17 @@ func (m Minor) Percent(total Minor) float64 {
 	}
 
 	return float64(m) / float64(total) * percentBase
+}
+
+// Share возвращает долю m от total в 0..1 — единица, в которой доли уходят в API;
+// при total == 0 — 0.
+func (m Minor) Share(total Minor) float64 {
+	return m.Percent(total) / percentBase
+}
+
+// String печатает сумму десятичными цифрами — ровно то же, что уходит в JSON и в CSV.
+func (m Minor) String() string {
+	return strconv.FormatInt(int64(m), decimalBase)
 }
 
 // DivRound делит на n с округлением половины от нуля (half-up); при n == 0 возвращает 0.
@@ -59,7 +74,7 @@ func (m Minor) DivRound(n int64) Minor {
 
 // MarshalJSON пишет сумму числом, а не строкой.
 func (m Minor) MarshalJSON() ([]byte, error) {
-	return []byte(strconv.FormatInt(int64(m), decimalBase)), nil
+	return []byte(m.String()), nil
 }
 
 // Value пишет сумму в БД целым: без него запись зависела бы от того, что каждый
@@ -74,8 +89,6 @@ func (m *Minor) Scan(src any) error {
 	case nil:
 		*m = 0
 	case int64:
-		*m = Minor(v)
-	case float64:
 		*m = Minor(v)
 	default:
 		return fmt.Errorf("money: unsupported source type %T", src)

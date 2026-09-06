@@ -38,15 +38,8 @@ func (h *CategoryHandler) CreateCategory(c echo.Context) error {
 		return respondValidationErrors(c, validationErr)
 	}
 
-	if isNilClientID(req.ID) {
-		return respondNilClientID(c)
-	}
-
-	// Клиентский id уже созданной записи — повтор POST после разрыва связи (A-07).
-	if req.ID != nil {
-		if existing, getErr := h.categoryService.GetCategoryByID(c.Request().Context(), *req.ID); getErr == nil {
-			return respondAPI(c, http.StatusOK, dto.ToCategoryAPIResponse(existing))
-		}
+	if handled, err := respondClientID(c, req.ID, h.findCategory, dto.ToCategoryAPIResponse); handled {
+		return err
 	}
 
 	createDTO := dto.CreateCategoryDTO{
@@ -60,10 +53,17 @@ func (h *CategoryHandler) CreateCategory(c echo.Context) error {
 
 	newCategory, err := h.categoryService.CreateCategory(c.Request().Context(), createDTO)
 	if err != nil {
-		return handleCategoryServiceError(c, err, "create")
+		return handleCreateCategoryServiceError(c, err)
 	}
 
 	return respondAPI(c, http.StatusCreated, dto.ToCategoryAPIResponse(newCategory))
+}
+
+// findCategory ищет категорию по клиентскому id; ошибка означает «не найдена».
+func (h *CategoryHandler) findCategory(c echo.Context, id uuid.UUID) (*category.Category, bool) {
+	found, err := h.categoryService.GetCategoryByID(c.Request().Context(), id)
+
+	return found, err == nil
 }
 
 func (h *CategoryHandler) GetCategories(c echo.Context) error {
@@ -130,7 +130,7 @@ func (h *CategoryHandler) UpdateCategory(c echo.Context) error {
 
 	updatedCategory, err := h.categoryService.UpdateCategory(c.Request().Context(), id, updateDTO)
 	if err != nil {
-		return handleCategoryServiceError(c, err, "update")
+		return handleUpdateCategoryServiceError(c, err)
 	}
 
 	return respondAPI(c, http.StatusOK, dto.ToCategoryAPIResponse(updatedCategory))
@@ -143,15 +143,28 @@ func (h *CategoryHandler) DeleteCategory(c echo.Context) error {
 	}
 
 	if delErr := h.categoryService.DeleteCategory(c.Request().Context(), id); delErr != nil {
-		return handleCategoryServiceError(c, delErr, "delete")
+		return handleDeleteCategoryServiceError(c, delErr)
 	}
 
 	return c.NoContent(http.StatusNoContent)
 }
 
+func handleCreateCategoryServiceError(c echo.Context, err error) error {
+	return handleCategoryServiceError(c, err, "CREATE_FAILED", "Failed to create category")
+}
+
+func handleUpdateCategoryServiceError(c echo.Context, err error) error {
+	return handleCategoryServiceError(c, err, "UPDATE_FAILED", "Failed to update category")
+}
+
+func handleDeleteCategoryServiceError(c echo.Context, err error) error {
+	return handleCategoryServiceError(c, err, "DELETE_FAILED", "Failed to delete category")
+}
+
 // handleCategoryServiceError переводит ошибки CategoryService в ответ API: некорректный ввод
-// (несуществующий родитель, третий уровень иерархии, дубль имени) — 422, а не 500.
-func handleCategoryServiceError(c echo.Context, err error, operation string) error {
+// (несуществующий родитель, третий уровень иерархии, дубль имени) — 422, а не 500;
+// всё остальное — failCode/failMessage вызывающей операции.
+func handleCategoryServiceError(c echo.Context, err error, failCode, failMessage string) error {
 	switch {
 	case errors.Is(err, services.ErrCategoryNotFound):
 		return respondError(c, http.StatusNotFound, ErrCodeCategoryNotFound, ErrMessageCategoryNotFound)
@@ -165,13 +178,6 @@ func handleCategoryServiceError(c echo.Context, err error, operation string) err
 		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, err.Error()))
 	default:
-		switch operation {
-		case "create":
-			return respondError(c, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create category")
-		case "update":
-			return respondError(c, http.StatusInternalServerError, "UPDATE_FAILED", "Failed to update category")
-		default:
-			return respondError(c, http.StatusInternalServerError, "DELETE_FAILED", "Failed to delete category")
-		}
+		return respondError(c, http.StatusInternalServerError, failCode, failMessage)
 	}
 }

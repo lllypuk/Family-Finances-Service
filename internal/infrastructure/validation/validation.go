@@ -18,9 +18,7 @@ import (
 // Validation constants
 const (
 	maxEmailLength        = 254
-	maxBudgetAmountMinor  = money.Minor(99_999_999_999)
 	maxBudgetNameLength   = 255
-	maxAmountMinor        = money.Minor(99_999_999_999)
 	maxDescriptionLength  = 1000
 	maxCategoryNameLength = 255
 	maxReportNameLength   = 255
@@ -101,7 +99,7 @@ func ValidateBudgetAmount(amount money.Minor) error {
 	if amount <= 0 {
 		return errors.New("budget amount must be positive")
 	}
-	if amount > maxBudgetAmountMinor {
+	if amount > money.MaxAmount {
 		return errors.New("budget amount too large")
 	}
 	return nil
@@ -124,7 +122,7 @@ func ValidateAmount(amount money.Minor) error {
 	if amount <= 0 {
 		return errors.New("amount must be positive")
 	}
-	if amount > maxAmountMinor {
+	if amount > money.MaxAmount {
 		return errors.New("amount too large")
 	}
 	return nil

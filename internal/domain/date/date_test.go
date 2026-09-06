@@ -86,6 +86,14 @@ func TestDate_AddDays(t *testing.T) {
 	assert.Equal(t, date.New(2024, time.February, 29), date.New(2024, time.March, 1).AddDays(-1))
 }
 
+func TestDaysBetween(t *testing.T) {
+	assert.Equal(t, 30, date.DaysBetween(date.New(2026, time.January, 1), date.New(2026, time.January, 31)))
+	assert.Equal(t, -30, date.DaysBetween(date.New(2026, time.January, 31), date.New(2026, time.January, 1)))
+	assert.Equal(t, 0, date.DaysBetween(date.New(2026, time.March, 5), date.New(2026, time.March, 5)))
+	// Переход на летнее время не должен съедать сутки: счёт идёт в UTC.
+	assert.Equal(t, 366, date.DaysBetween(date.New(2024, time.January, 1), date.New(2025, time.January, 1)))
+}
+
 func TestDate_MonthBounds(t *testing.T) {
 	tests := []struct {
 		name  string

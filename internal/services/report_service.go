@@ -588,7 +588,7 @@ func (s *reportService) calculateTotalAmount(transactions []*transaction.Transac
 // calculateAverageDaily делит сумму на число суток периода включительно; деление —
 // money.DivRound, чтобы копейка не терялась по-разному в каждом вызове.
 func (s *reportService) calculateAverageDaily(total money.Minor, startDate, endDate date.Date) money.Minor {
-	days := daysBetween(startDate, endDate) + 1
+	days := date.DaysBetween(startDate, endDate) + 1
 	if days <= 0 {
 		return 0
 	}
@@ -864,8 +864,15 @@ func (s *reportService) generateBudgetCategoryComparisons(
 		result = append(result, item)
 	}
 
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].ActualAmountMinor > result[j].ActualAmountMinor
+	slices.SortFunc(result, func(a, b dto.BudgetCategoryComparisonDTO) int {
+		switch {
+		case a.ActualAmountMinor > b.ActualAmountMinor:
+			return -1
+		case a.ActualAmountMinor < b.ActualAmountMinor:
+			return 1
+		default:
+			return 0
+		}
 	})
 
 	return result

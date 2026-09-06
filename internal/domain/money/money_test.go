@@ -107,4 +107,18 @@ func TestMinor_ValueAndScan(t *testing.T) {
 	assert.Equal(t, money.Minor(0), m)
 
 	require.Error(t, m.Scan("12345"))
+	// float64 в колонке INTEGER означает старую схему: усечь его молча нельзя.
+	require.Error(t, m.Scan(123.45))
+}
+
+func TestMinor_Share(t *testing.T) {
+	assert.InDelta(t, 0.25, money.Minor(2_500).Share(10_000), 1e-9)
+	assert.InDelta(t, -0.5, money.Minor(-5_000).Share(10_000), 1e-9)
+	assert.InDelta(t, 0.0, money.Minor(100).Share(0), 1e-9)
+}
+
+func TestMinor_String(t *testing.T) {
+	assert.Equal(t, "12345", money.Minor(12345).String())
+	assert.Equal(t, "-1", money.Minor(-1).String())
+	assert.Equal(t, "0", money.Minor(0).String())
 }

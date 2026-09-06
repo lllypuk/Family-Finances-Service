@@ -17,10 +17,6 @@ func TestNewBudgetFilterDTO(t *testing.T) {
 
 	assert.Equal(t, DefaultBudgetLimit, filter.Limit)
 	assert.Equal(t, 0, filter.Offset)
-	assert.NotNil(t, filter.SortBy)
-	assert.Equal(t, "created_at", *filter.SortBy)
-	assert.NotNil(t, filter.SortOrder)
-	assert.Equal(t, "desc", *filter.SortOrder)
 }
 
 func TestBudgetFilterDTO_ValidateDateRange_Valid(t *testing.T) {
@@ -109,38 +105,6 @@ func TestCreateBudgetDTO_ValidatePeriod_Equal(t *testing.T) {
 	assert.Equal(t, ErrInvalidBudgetPeriod, dto.ValidatePeriod())
 }
 
-func TestUpdateBudgetDTO_ValidatePeriod_Valid(t *testing.T) {
-	startDate := date.New(2024, time.January, 1)
-	endDate := date.New(2024, time.January, 31)
-
-	dto := UpdateBudgetDTO{
-		StartDate: &startDate,
-		EndDate:   &endDate,
-	}
-
-	assert.NoError(t, dto.ValidatePeriod())
-}
-
-func TestUpdateBudgetDTO_ValidatePeriod_Invalid(t *testing.T) {
-	startDate := date.New(2024, time.January, 31)
-	endDate := date.New(2024, time.January, 1)
-
-	dto := UpdateBudgetDTO{
-		StartDate: &startDate,
-		EndDate:   &endDate,
-	}
-
-	assert.Equal(t, ErrInvalidBudgetPeriod, dto.ValidatePeriod())
-}
-
-func TestUpdateBudgetDTO_ValidatePeriod_OnlyStartDate(t *testing.T) {
-	startDate := date.New(2024, time.January, 1)
-
-	dto := UpdateBudgetDTO{StartDate: &startDate}
-
-	assert.NoError(t, dto.ValidatePeriod())
-}
-
 func TestDetermineBudgetStatus(t *testing.T) {
 	tests := []struct {
 		name               string
@@ -164,28 +128,21 @@ func TestDetermineBudgetStatus(t *testing.T) {
 }
 
 func TestCalculateDaysRemaining(t *testing.T) {
+	today := date.Today(time.UTC)
+
 	tests := []struct {
-		name        string
-		endDate     time.Time
-		expectRange struct{ min, max int }
+		name     string
+		endDate  date.Date
+		expected int
 	}{
-		{
-			name:        "future date",
-			endDate:     time.Now().Add(10 * 24 * time.Hour),
-			expectRange: struct{ min, max int }{9, 10},
-		},
-		{
-			name:        "past date",
-			endDate:     time.Now().Add(-5 * 24 * time.Hour),
-			expectRange: struct{ min, max int }{0, 0},
-		},
+		{name: "future date", endDate: today.AddDays(10), expected: 10},
+		{name: "today", endDate: today, expected: 0},
+		{name: "past date", endDate: today.AddDays(-5), expected: 0},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := CalculateDaysRemaining(tt.endDate)
-			assert.GreaterOrEqual(t, result, tt.expectRange.min)
-			assert.LessOrEqual(t, result, tt.expectRange.max)
+			assert.Equal(t, tt.expected, CalculateDaysRemaining(tt.endDate))
 		})
 	}
 }
@@ -196,8 +153,6 @@ func TestBudgetFilterDTO_ComplexFilter(t *testing.T) {
 	isActive := true
 	activeOn := date.New(2024, time.January, 15)
 	isOverBudget := false
-	sortBy := "amount"
-	sortOrder := "asc"
 
 	filter := BudgetFilterDTO{
 		CategoryID:   &categoryID,
@@ -207,8 +162,6 @@ func TestBudgetFilterDTO_ComplexFilter(t *testing.T) {
 		IsOverBudget: &isOverBudget,
 		Limit:        50,
 		Offset:       10,
-		SortBy:       &sortBy,
-		SortOrder:    &sortOrder,
 	}
 
 	assert.NotNil(t, filter.CategoryID)
