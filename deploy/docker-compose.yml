@@ -1,0 +1,94 @@
+# Единственный прод-compose: приложение + Caddy на домашнем мини-сервере.
+# Готового образа в GHCR для этой установки нет — образ собирается на месте.
+# `BUILD_CONTEXT` — путь к корню репозитория относительно project directory
+# (каталога этого файла). По умолчанию `..`, то есть запуск из клона репозитория;
+# install.sh кладёт compose в /opt/family-budget, клон — в /opt/family-budget/src
+# и выставляет BUILD_CONTEXT=./src.
+#
+# Каталоги bind-mount'ов нужно создать ДО первого `up` и отдать 1000:1000
+# (docker/Dockerfile: `USER 1000:1000`); недостающие Docker создаёт от root,
+# и SQLite не сможет создать БД:
+#   mkdir -p data backups logs/caddy && sudo chown -R 1000:1000 data backups logs
+
+services:
+  app:
+    build:
+      context: ${BUILD_CONTEXT:-..}
+      dockerfile: docker/Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+    container_name: family-budget-app
+    restart: unless-stopped
+    env_file:
+      # required: false — без него `docker compose config` (CI, make compose-config)
+      # падал бы в чистом клоне, где .env ещё не создан install.sh.
+      - path: .env
+        required: false
+    environment:
+      # Задано топологией, а не пользователем: внутри сети слушаем все интерфейсы
+      # (дефолт конфига — localhost, до него Caddy бы не достучался).
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 8080
+      # Подсеть этой сети (см. networks.internal ниже). Здесь и только здесь:
+      # `environment` перекрывает `env_file`, поэтому значение в .env было бы мёртвым.
+      # Пустой TRUSTED_PROXIES выключает корзину per-IP в лимитере логина, а за Caddy
+      # без него все клиенты выглядели бы одним адресом контейнера прокси.
+      TRUSTED_PROXIES: 172.20.0.0/16
+    volumes:
+      - ./data:/data
+      - ./backups:/backups
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "-O", "/dev/null", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,nodev,size=50M
+    cap_drop:
+      - ALL
+    # UID/GID из образа: иначе SQLite не откроет БД на bind-mount ./data (D-03).
+    user: "1000:1000"
+
+  caddy:
+    image: caddy:2.11-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+    container_name: family-budget-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"  # HTTP/3
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - ./logs/caddy:/var/log/caddy
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:
+    driver: bridge
+    ipam:
+      config:
+        # Подсеть задана явно: со случайной TRUSTED_PROXIES выше не совпал бы,
+        # IPExtractor откатился бы на адрес контейнера Caddy и оба пользователя
+        # делили бы одну корзину лимитера.
+        - subnet: 172.20.0.0/16

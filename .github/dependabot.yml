@@ -62,3 +62,22 @@ updates:
     labels:
       - "dependencies"
       - "docker"
+
+  # Compose прода: образ Caddy пришпилен дайджестом в deploy/docker-compose.yml
+  # и без отдельной экосистемы docker-compose не обновлялся бы (ecosystem docker
+  # смотрит только Dockerfile).
+  - package-ecosystem: "docker-compose"
+    directory: "/deploy"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "09:00"
+    open-pull-requests-limit: 3
+    assignees:
+      - "lllypuk"
+    commit-message:
+      prefix: "docker"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "docker"
