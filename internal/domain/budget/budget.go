@@ -34,15 +34,6 @@ const (
 	PeriodCustom  Period = "custom"
 )
 
-type Alert struct {
-	ID          uuid.UUID  `json:"id"           bson:"_id"`
-	BudgetID    uuid.UUID  `json:"budget_id"    bson:"budget_id"`
-	Threshold   float64    `json:"threshold"    bson:"threshold"` // Процент (50, 80, 100)
-	IsTriggered bool       `json:"is_triggered" bson:"is_triggered"`
-	TriggeredAt *time.Time `json:"triggered_at" bson:"triggered_at,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"   bson:"created_at"`
-}
-
 func NewBudget(
 	name string,
 	amount float64,

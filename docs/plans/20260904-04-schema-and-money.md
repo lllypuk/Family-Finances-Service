@@ -103,12 +103,12 @@ JSON: `amount_minor` (int64), `date` (`"2026-09-04"`), `currency` и `timezone` 
   `internal/infrastructure/budget/budget_repository_sqlite.go`, `budget_repository_test.go`,
   `internal/domain/budget/budget.go`, `internal/services/interfaces.go`
 
-- [ ] переписать `.up.sql` по таблице выше одним файлом; `.down.sql` — `DROP` в обратном порядке; триггеры `updated_at` сохранить
-- [ ] `migrations/README.md`: описание новой схемы; напоминание про `make db-reset`
-- [ ] `CleanTables` — актуальный список (убрать `budget_alerts`, `invites`)
-- [ ] удалить `budget.Alert`, `GetAlerts`/`CreateAlert`/`Alert` из репозитория бюджетов и из `BudgetRepository` в `interfaces.go`; их тесты — тоже
-- [ ] тесты: обе ветки миграций поднимаются на пустой БД; вставка второй семьи и роли `child` падают на UNIQUE/CHECK (тест репозитория)
-- [ ] `make fmt && make test && make lint` — зелёные (сборка ломается на `child` и инвайтах — их чинят задачи 2–3; до этого держать старые CHECK на роли и таблицу `invites` в миграции и убрать их в задаче 3)
+- [x] переписать `.up.sql` по таблице выше одним файлом; `.down.sql` — `DROP` в обратном порядке; триггеры `updated_at` сохранить (колонки `*_minor`, даты `TEXT` и `families.timezone` переносятся в задачу 5 — вместе с репозиториями, иначе `make test` красный)
+- [x] `migrations/README.md`: описание новой схемы; напоминание про `make db-reset`
+- [x] `CleanTables` — актуальный список (убрать `budget_alerts`, `invites`)
+- [x] удалить `budget.Alert`, `GetAlerts`/`CreateAlert`/`Alert` из репозитория бюджетов и из `BudgetRepository` в `interfaces.go`; их тесты — тоже (в `interfaces.go` алертов не было)
+- [x] тесты: обе ветки миграций поднимаются на пустой БД; вставка второй семьи и роли `child` падают на UNIQUE/CHECK (тест репозитория) — роль в CHECK пока невалидная `guest`, `child` добавится в задаче 3
+- [x] `make fmt && make test && make lint` — зелёные (сборка ломается на `child` и инвайтах — их чинят задачи 2–3; до этого держать старые CHECK на роли и таблицу `invites` в миграции и убрать их в задаче 3)
 
 ### Task 2: Удалить инвайты
 
@@ -155,7 +155,8 @@ JSON: `amount_minor` (int64), `date` (`"2026-09-04"`), `currency` и `timezone` 
   `internal/infrastructure/budget/budget_repository_sqlite.go`,
   `internal/infrastructure/report/report_repository_sqlite.go`,
   `internal/infrastructure/user/family_repository_sqlite.go`, все `*_test.go` рядом,
-  `internal/testhelpers/factories.go`
+  `internal/testhelpers/factories.go`, `migrations/001_consolidated.{up,down}.sql`
+  (колонки `*_minor`, даты `TEXT`, `families.timezone` — перенесены сюда из задачи 1)
 
 - [ ] `Transaction.AmountMinor money.Minor`, `Date date.Date`; `Budget.AmountMinor/SpentMinor`, `StartDate/EndDate date.Date`; методы бюджета (`GetRemainingAmount`, `GetSpentPercentage`, `IsOverBudget`) через `money`
 - [ ] `report.Data`: суммы `money.Minor`, проценты `float64`; `Report.StartDate/EndDate` — даты

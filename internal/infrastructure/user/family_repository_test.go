@@ -107,3 +107,32 @@ func TestFamilyRepository_Bootstrap(t *testing.T) {
 		assert.False(t, exists)
 	})
 }
+
+func TestFamilyRepository_SchemaConstraints(t *testing.T) {
+	container := testutils.SetupSQLiteTestDB(t)
+	ctx := context.Background()
+
+	t.Run("second family violates singleton UNIQUE", func(t *testing.T) {
+		db := container.GetTestDatabase(t)
+		family, categories, admin := bootstrapFixtures()
+		require.NoError(t, newFamilyRepo(db).Bootstrap(ctx, family, categories, admin))
+
+		_, err := db.ExecContext(ctx,
+			`INSERT INTO families (id, name, currency) VALUES (?, 'Second', 'RUB')`, uuid.New().String())
+		require.ErrorContains(t, err, "UNIQUE constraint failed")
+		assert.Equal(t, 1, countRows(t, db, "families"))
+	})
+
+	t.Run("unknown role violates CHECK", func(t *testing.T) {
+		db := container.GetTestDatabase(t)
+		family, categories, admin := bootstrapFixtures()
+		require.NoError(t, newFamilyRepo(db).Bootstrap(ctx, family, categories, admin))
+
+		_, err := db.ExecContext(ctx,
+			`INSERT INTO users (id, email, password_hash, first_name, last_name, role, family_id)
+			 VALUES (?, 'guest@example.com', 'hashed', 'Guest', 'User', 'guest', ?)`,
+			uuid.New().String(), family.ID.String())
+		require.ErrorContains(t, err, "CHECK constraint failed")
+		assert.Equal(t, 1, countRows(t, db, "users"))
+	})
+}

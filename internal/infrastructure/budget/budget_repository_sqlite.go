@@ -36,16 +36,6 @@ type UsageStats struct {
 	CategoryName    string        `json:"category_name,omitempty"`
 }
 
-// Alert represents a budget alert
-type Alert struct {
-	ID                  uuid.UUID  `json:"id"`
-	BudgetID            uuid.UUID  `json:"budget_id"`
-	ThresholdPercentage int        `json:"threshold_percentage"`
-	IsTriggered         bool       `json:"is_triggered"`
-	TriggeredAt         *time.Time `json:"triggered_at,omitempty"`
-	CreatedAt           time.Time  `json:"created_at"`
-}
-
 // NewSQLiteRepository creates a new SQLite budget repository
 func NewSQLiteRepository(db *sql.DB) *SQLiteRepository {
 	return &SQLiteRepository{
@@ -608,101 +598,6 @@ func (r *SQLiteRepository) Delete(ctx context.Context, id uuid.UUID) error {
 
 	if rowsAffected == 0 {
 		return fmt.Errorf("budget with id %s not found", id)
-	}
-
-	return nil
-}
-
-// GetAlerts retrieves all alerts for a budget
-func (r *SQLiteRepository) GetAlerts(ctx context.Context, budgetID uuid.UUID) ([]*Alert, error) {
-	// Validate UUID parameter
-	if err := validation.ValidateUUID(budgetID); err != nil {
-		return nil, fmt.Errorf("invalid budget ID parameter: %w", err)
-	}
-
-	query := `
-		SELECT id, budget_id, threshold_percentage, is_triggered, triggered_at, created_at
-		FROM budget_alerts
-		WHERE budget_id = ?
-		ORDER BY threshold_percentage ASC`
-
-	rows, err := r.db.QueryContext(ctx, query, sqlitehelpers.UUIDToString(budgetID))
-	if err != nil {
-		return nil, fmt.Errorf("failed to get budget alerts: %w", err)
-	}
-	defer rows.Close()
-
-	var alerts []*Alert
-	for rows.Next() {
-		var alert Alert
-		var idStr, budgetIDStr string
-		var isTriggeredInt int
-		var triggeredAtStr *string
-
-		err = rows.Scan(
-			&idStr, &budgetIDStr, &alert.ThresholdPercentage,
-			&isTriggeredInt, &triggeredAtStr, &alert.CreatedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan budget alert: %w", err)
-		}
-
-		alert.ID, _ = uuid.Parse(idStr)
-		alert.BudgetID, _ = uuid.Parse(budgetIDStr)
-		alert.IsTriggered = sqlitehelpers.IntToBool(isTriggeredInt)
-
-		// Parse triggered_at timestamp if present
-		if triggeredAtStr != nil && *triggeredAtStr != "" {
-			triggeredAt, parseErr := time.Parse(time.RFC3339, *triggeredAtStr)
-			if parseErr == nil {
-				alert.TriggeredAt = &triggeredAt
-			}
-		}
-
-		alerts = append(alerts, &alert)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration error: %w", err)
-	}
-
-	return alerts, nil
-}
-
-// CreateAlert creates a new budget alert
-func (r *SQLiteRepository) CreateAlert(ctx context.Context, alert *Alert) error {
-	// Validate parameters
-	if err := validation.ValidateUUID(alert.ID); err != nil {
-		return fmt.Errorf("invalid alert ID: %w", err)
-	}
-	if err := validation.ValidateUUID(alert.BudgetID); err != nil {
-		return fmt.Errorf("invalid budget ID: %w", err)
-	}
-	if alert.ThresholdPercentage <= 0 || alert.ThresholdPercentage > 100 {
-		return errors.New("threshold percentage must be between 1 and 100")
-	}
-
-	alert.CreatedAt = time.Now()
-
-	query := `
-		INSERT INTO budget_alerts (
-			id, budget_id, threshold_percentage, is_triggered, created_at
-		) VALUES (?, ?, ?, ?, ?)`
-
-	_, err := r.db.ExecContext(ctx, query,
-		sqlitehelpers.UUIDToString(alert.ID),
-		sqlitehelpers.UUIDToString(alert.BudgetID),
-		alert.ThresholdPercentage,
-		sqlitehelpers.BoolToInt(alert.IsTriggered),
-		alert.CreatedAt,
-	)
-
-	if err != nil {
-		// Check for unique constraint violation
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			return fmt.Errorf("alert with threshold %d%% already exists for this budget", alert.ThresholdPercentage)
-		}
-		return fmt.Errorf("failed to create budget alert: %w", err)
 	}
 
 	return nil
