@@ -7,6 +7,22 @@ set -euo pipefail
 # Configuration from environment or defaults.
 # Порт 8080 наружу не публикуется (снаружи слушает только Caddy), поэтому
 # по умолчанию опрашиваем домен; для DOMAIN=localhost нужен HEALTH_URL с http.
+INSTALL_DIR="${INSTALL_DIR:-/opt/family-budget}"
+
+# Одно значение из .env установки. Caddy обслуживает только настроенный домен,
+# поэтому дефолт localhost отправил бы проверку мимо сертификата и мимо сайта.
+read_env_var() {
+    local key=$1 file=$2 value
+    value="$(grep -E "^[[:space:]]*${key}=" "${file}" | tail -n1 | cut -d= -f2-)"
+    value="${value%\"}"; value="${value#\"}"
+    value="${value%\'}"; value="${value#\'}"
+    printf '%s' "${value}"
+}
+
+if [[ -z "${DOMAIN:-}" && -r "${INSTALL_DIR}/.env" ]]; then
+    DOMAIN="$(read_env_var DOMAIN "${INSTALL_DIR}/.env" || true)"
+fi
+
 DOMAIN="${DOMAIN:-localhost}"
 HEALTH_URL="${HEALTH_URL:-https://${DOMAIN}/health}"
 TIMEOUT="${HEALTH_TIMEOUT:-5}"

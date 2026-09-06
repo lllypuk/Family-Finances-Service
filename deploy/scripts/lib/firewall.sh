@@ -67,7 +67,9 @@ setup_ufw_firewall() {
     # Allow HTTP and HTTPS
     ufw allow 80/tcp comment 'HTTP'
     ufw allow 443/tcp comment 'HTTPS'
-    log_info "Allowed HTTP (80/tcp) and HTTPS (443/tcp)"
+    # 443/udp — HTTP/3: этот порт compose публикует наравне с TCP.
+    ufw allow 443/udp comment 'HTTPS (HTTP/3)'
+    log_info "Allowed HTTP (80/tcp) and HTTPS (443/tcp, 443/udp)"
     
     # Enable UFW
     ufw --force enable
@@ -89,7 +91,9 @@ setup_firewalld() {
     # Allow HTTP and HTTPS
     firewall-cmd --permanent --add-service=http
     firewall-cmd --permanent --add-service=https
-    log_info "Allowed HTTP and HTTPS"
+    # HTTP/3: службы https в firewalld только TCP, порт публикуется и по UDP.
+    firewall-cmd --permanent --add-port=443/udp
+    log_info "Allowed HTTP and HTTPS (incl. 443/udp for HTTP/3)"
     
     # Reload firewall
     firewall-cmd --reload

@@ -12,7 +12,7 @@ and proxies everything to `app:8080`; the service itself is never exposed on the
 | `scripts/install.sh` | first install: Docker, firewall, `.env`, build, `up` |
 | `scripts/upgrade.sh` | git ref → backup → rebuild → health, automatic rollback |
 | `scripts/uninstall.sh` | removal, `--keep-data` keeps the database and backups |
-| `scripts/health-check.sh` | `GET /health` with retries, for monitoring (`HEALTH_URL`, default `https://$DOMAIN/health`: port 8080 is not published) |
+| `scripts/health-check.sh` | `GET /health` with retries, for monitoring (`HEALTH_URL`, default `https://$DOMAIN/health` with `DOMAIN` read from `$INSTALL_DIR/.env`: port 8080 is not published) |
 
 There are **no secrets**: authentication is bearer tokens stored in the database.
 
@@ -120,7 +120,9 @@ the previous release), rebuilds, restarts and waits for `/health`. A changed Cad
 migrations when it opens the database, so a copy taken with the new image would already carry the new
 schema and there would be nothing to roll back to. A failed health check rolls back the ref, the database, `.env`, the compose file and the Caddyfile automatically;
 `--no-rollback` disables that, and `upgrade.sh rollback` replays the most recent
-`backups/upgrade_<ts>/` by hand.
+`backups/upgrade_<ts>/` by hand. If the rollback cannot rebuild the previous image or restore the
+deploy files, it leaves the service **stopped**: the failed upgrade's image over the restored
+database would migrate it and undo the rollback.
 
 ## Operations
 

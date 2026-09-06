@@ -384,3 +384,59 @@ func TestNewBackupService_ExplicitBackupDir(t *testing.T) {
 	assert.FileExists(t, filepath.Join(backupDir, info.Filename))
 	assert.NoFileExists(t, filepath.Join(filepath.Dir(dbPath), "backups", info.Filename))
 }
+
+// Классификация ошибок VACUUM INTO: только занятое имя берётся повтором,
+// всё остальное окончательно (и не оставляет файла в каталоге бэкапов).
+func TestVacuumInto_ErrorClassification(t *testing.T) {
+	db, dbPath, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	service, ok := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default()).(*backupService)
+	require.True(t, ok)
+	require.NoError(t, service.ensureBackupDir())
+	ctx := context.Background()
+
+	taken := filepath.Join(service.backupDir, "backup_20260101_120000000.db")
+	require.NoError(t, service.vacuumInto(ctx, taken))
+	require.ErrorIs(t, service.vacuumInto(ctx, taken), errBackupNameTaken)
+
+	unwritable := filepath.Join(service.backupDir, "missing", "backup_20260101_120000001.db")
+	err := service.vacuumInto(ctx, unwritable)
+	require.Error(t, err)
+	require.NotErrorIs(t, err, errBackupNameTaken)
+
+	// Ошибка не по занятому имени не должна уносить чужой готовый бэкап,
+	// лежащий по тому же пути.
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	require.Error(t, service.vacuumInto(canceled, taken))
+	assert.FileExists(t, taken)
+
+	backups, err := service.ListBackups(ctx)
+	require.NoError(t, err)
+	assert.Len(t, backups, 1)
+
+	// И временных файлов после всех отказов не остаётся.
+	entries, err := os.ReadDir(service.backupDir)
+	require.NoError(t, err)
+	assert.Len(t, entries, 1)
+}
+
+// Ошибка, не связанная с занятым именем, не повторяется и не выдаётся за успех.
+func TestCreateBackup_FailureIsNotRetried(t *testing.T) {
+	db, dbPath, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	backupInfo, err := service.CreateBackup(ctx)
+	require.Error(t, err)
+	assert.Nil(t, backupInfo)
+
+	backups, listErr := service.ListBackups(context.Background())
+	require.NoError(t, listErr)
+	assert.Empty(t, backups)
+}

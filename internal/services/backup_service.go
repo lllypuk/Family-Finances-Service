@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -18,7 +19,10 @@ const (
 	// DefaultBackupKeep — сколько последних файлов бэкапа хранить, если BACKUP_KEEP не задан.
 	DefaultBackupKeep   = 30
 	backupDirPerm       = 0750
-	backupFilenameRegex = `^backup_\d{8}_\d{9}\.db$` // Updated for milliseconds
+	backupFilenameRegex = `^backup_\d{8}_\d{9}\.db$` // backup_YYYYMMDD_HHMMSSmmm.db
+	// Имя различает бэкапы только до миллисекунды, поэтому одновременные вызовы
+	// (API и cron) могут выбрать один путь, а публикация имени отказывает на занятом.
+	backupNameAttempts = 5
 )
 
 // validPathRegex validates that backup path contains only safe characters.
@@ -30,6 +34,8 @@ var (
 	ErrBackupNotFound = errors.New("backup not found")
 	// ErrInvalidBackupFilename is returned when filename is invalid (path traversal protection)
 	ErrInvalidBackupFilename = errors.New("invalid backup filename")
+	// errBackupNameTaken — путь занял параллельный вызов, имя берётся заново.
+	errBackupNameTaken = errors.New("backup file name is already taken")
 )
 
 // backupService implements BackupService interface
@@ -67,6 +73,23 @@ func validateFilename(filename string) error {
 		return ErrInvalidBackupFilename
 	}
 	return nil
+}
+
+// backupFilename builds backup_YYYYMMDD_HHMMSSmmm.db — millisecond precision.
+func backupFilename(t time.Time) string {
+	const (
+		nanosToMillis  = 1e6
+		millisInSecond = 1000
+	)
+	milliseconds := t.UnixNano() / nanosToMillis % millisInSecond
+	return fmt.Sprintf("backup_%s%03d.db", t.Format("20060102_150405"), milliseconds)
+}
+
+// tempBackupName builds a per-operation temporary name.
+// Имя намеренно не подходит под backupFilenameRegex: недописанный файл не должен
+// попасть ни в листинг, ни в счётчик ретеншена.
+func tempBackupName() string {
+	return fmt.Sprintf(".tmp-%d-%s.db", os.Getpid(), rand.Text())
 }
 
 // isValidBackupPath checks that a backup path contains only safe characters.
@@ -110,6 +133,49 @@ func (s *backupService) ensureBackupDir() error {
 	return nil
 }
 
+// vacuumInto пишет снимок базы во временный файл и публикует его под backupPath
+// жёсткой ссылкой: link атомарно отказывает на занятом имени (errBackupNameTaken),
+// поэтому чужой готовый бэкап нельзя ни перезаписать, ни удалить своей уборкой —
+// удаляется только собственный временный файл.
+func (s *backupService) vacuumInto(ctx context.Context, backupPath string) error {
+	tmpPath := filepath.Join(s.backupDir, tempBackupName())
+	if !isValidBackupPath(tmpPath) {
+		return fmt.Errorf("unsafe backup path detected: %s", tmpPath)
+	}
+
+	// VACUUM INTO does not support parameterized queries in SQLite.
+	// The path is constructed entirely from controlled data (backupDir + generated name).
+	//nolint:gosec // tmpPath is generated here, not user input
+	query := fmt.Sprintf("VACUUM INTO '%s'", tmpPath)
+
+	if _, err := s.db.ExecContext(ctx, query); err != nil {
+		s.removeTemp(ctx, tmpPath)
+		return err
+	}
+
+	linkErr := os.Link(tmpPath, backupPath)
+	s.removeTemp(ctx, tmpPath)
+
+	switch {
+	case linkErr == nil:
+		return nil
+	case errors.Is(linkErr, os.ErrExist):
+		return errBackupNameTaken
+	default:
+		return linkErr
+	}
+}
+
+// removeTemp удаляет временный снимок; провал уборки не отменяет результат операции.
+func (s *backupService) removeTemp(ctx context.Context, tmpPath string) {
+	if err := os.Remove(tmpPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		s.logger.WarnContext(ctx, "failed to remove temporary backup file",
+			slog.String("path", tmpPath),
+			slog.String("error", err.Error()),
+		)
+	}
+}
+
 // CreateBackup creates a new backup using SQLite VACUUM INTO
 func (s *backupService) CreateBackup(ctx context.Context) (*BackupInfo, error) {
 	// Ensure backup directory exists
@@ -117,36 +183,44 @@ func (s *backupService) CreateBackup(ctx context.Context) (*BackupInfo, error) {
 		return nil, fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
-	// Generate backup filename with current timestamp (including nanoseconds for uniqueness)
-	now := time.Now()
-	timestamp := now.Format("20060102_150405")
-	const (
-		nanosToMillis  = 1e6
-		millisInSecond = 1000
+	// Занятость имени определяет сама публикация снимка: os.Stat заранее ничего
+	// не гарантирует — параллельный вызов успевает занять то же миллисекундное
+	// имя между проверкой и записью.
+	var (
+		now        time.Time
+		filename   string
+		backupPath string
+		lastErr    error
 	)
-	milliseconds := now.UnixNano() / nanosToMillis % millisInSecond // Get milliseconds part
-	filename := fmt.Sprintf("backup_%s%03d.db", timestamp, milliseconds)
 
-	// Validate the generated filename matches expected pattern
-	if err := validateFilename(filename); err != nil {
-		return nil, fmt.Errorf("generated invalid backup filename: %w", err)
+	for range backupNameAttempts {
+		now = time.Now()
+		filename = backupFilename(now)
+
+		// Validate the generated filename matches expected pattern
+		if err := validateFilename(filename); err != nil {
+			return nil, fmt.Errorf("generated invalid backup filename: %w", err)
+		}
+
+		backupPath = filepath.Join(s.backupDir, filepath.Base(filename))
+
+		// Validate path contains only safe characters (alphanumeric, underscores, dots, slashes)
+		if !isValidBackupPath(backupPath) {
+			return nil, fmt.Errorf("unsafe backup path detected: %s", backupPath)
+		}
+
+		lastErr = s.vacuumInto(ctx, backupPath)
+		if lastErr == nil {
+			break
+		}
+		if !errors.Is(lastErr, errBackupNameTaken) {
+			return nil, fmt.Errorf("failed to create backup: %w", lastErr)
+		}
+		time.Sleep(time.Millisecond)
 	}
 
-	backupPath := filepath.Join(s.backupDir, filepath.Base(filename))
-
-	// Validate path contains only safe characters (alphanumeric, underscores, dots, slashes)
-	if !isValidBackupPath(backupPath) {
-		return nil, fmt.Errorf("unsafe backup path detected: %s", backupPath)
-	}
-
-	// VACUUM INTO does not support parameterized queries in SQLite.
-	// The backupPath is constructed entirely from controlled data (timestamp + backupDir)
-	// and validated above. No user input reaches this query.
-	//nolint:gosec // backupPath is generated from timestamp, not user input
-	query := fmt.Sprintf("VACUUM INTO '%s'", backupPath)
-	_, err := s.db.ExecContext(ctx, query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create backup: %w", err)
+	if lastErr != nil {
+		return nil, fmt.Errorf("failed to create backup: %w", lastErr)
 	}
 
 	// Get file info

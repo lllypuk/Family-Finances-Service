@@ -175,6 +175,10 @@ sqlite-restore:
 		echo "Error: BACKUP_FILE is required"; \
 		exit 1; \
 	fi
+	@if [ ! -r "$(BACKUP_FILE)" ]; then \
+		echo "Error: $(BACKUP_FILE) does not exist or is not readable"; \
+		exit 1; \
+	fi
 	@rm -f $(DATA_DIR)/budget.db-wal $(DATA_DIR)/budget.db-shm
 	@cp $(BACKUP_FILE) $(DATA_DIR)/budget.db
 	@echo "Database restored from $(BACKUP_FILE)"
