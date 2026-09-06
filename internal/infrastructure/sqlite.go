@@ -52,6 +52,7 @@ func NewSQLiteConnection(dbPath string) (*SQLiteConnection, error) {
 	defer cancel()
 
 	if pingErr := db.PingContext(ctx); pingErr != nil {
+		_ = db.Close()
 		return nil, fmt.Errorf("failed to ping database: %w", pingErr)
 	}
 

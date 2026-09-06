@@ -2,6 +2,7 @@
 APP_NAME=family-budget-service
 BUILD_DIR=./build
 DATA_DIR=./data
+BACKUP_DIR=./backups
 DOCKER_COMPOSE_FILE=docker/docker-compose.yml
 # compose v2 берёт `.env` и относительные пути из project directory, которая по
 # умолчанию равна каталогу первого `-f` (то есть `docker/`). `--project-directory .`
@@ -136,44 +137,49 @@ docker-logs:
 	@echo "Showing Docker logs..."
 	@$(DOCKER_COMPOSE) logs -f
 
-# Проверка синтаксиса и интерполяции всех compose-файлов.
-# deploy/*.yml запускаются на месте, из `deploy/` — project directory там своя,
-# поэтому `--project-directory .` для них не нужен (в отличие от docker/*.yml).
-# SESSION_SECRET/CSRF_SECRET приложение больше не читает; deploy/*.yml требуют их
-# через `${VAR:?}` до плана 05, который заменит эти файлы целиком.
-DEPLOY_COMPOSE_FILES=deploy/docker-compose.prod.yml \
-	deploy/docker-compose.nginx.yml \
-	deploy/docker-compose.caddy.yml \
-	deploy/docker-compose.minimal.yml
-COMPOSE_VALIDATE_ENV=SESSION_SECRET=validate CSRF_SECRET=validate DOMAIN=example.com
+# Проверка синтаксиса и интерполяции обоих compose-файлов.
+# deploy/docker-compose.yml запускается на месте, из `deploy/` — project directory
+# там своя, поэтому `--project-directory .` ему не нужен (в отличие от docker/*.yml).
+DEPLOY_COMPOSE_FILE=deploy/docker-compose.yml
+CADDYFILE=deploy/caddy/Caddyfile
 
 .PHONY: compose-config
 compose-config:
 	@echo "Validating compose files..."
 	@echo "  $(DOCKER_COMPOSE_FILE)"
 	@$(DOCKER_COMPOSE) config -q
-	@for f in $(DEPLOY_COMPOSE_FILES); do \
-		echo "  $$f"; \
-		$(COMPOSE_VALIDATE_ENV) docker compose -f $$f config -q || exit 1; \
-	done
+	@echo "  $(DEPLOY_COMPOSE_FILE)"
+	@docker compose -f $(DEPLOY_COMPOSE_FILE) config -q
 	@echo "All compose files are valid"
+
+# Образ берётся из compose, чтобы дайджест жил в одном месте.
+.PHONY: caddy-validate
+caddy-validate:
+	@echo "Validating $(CADDYFILE)..."
+	@img=$$(awk '/^[[:space:]]*image:[[:space:]]*caddy/ {print $$2; exit}' $(DEPLOY_COMPOSE_FILE)); \
+		docker run --rm -e DOMAIN=localhost -e ACME_EMAIL=admin@localhost \
+			-v "$$PWD/$(CADDYFILE):/etc/caddy/Caddyfile:ro" \
+			"$$img" caddy validate --config /etc/caddy/Caddyfile
 
 # SQLite специфичные команды
 .PHONY: sqlite-backup
 sqlite-backup:
 	@echo "Creating SQLite backup..."
-	@mkdir -p ./backups
-	@cp $(DATA_DIR)/budget.db ./backups/budget_$(shell date +%Y%m%d_%H%M%S).db
-	@echo "Backup created in ./backups/"
+	@BACKUP_DIR=$(BACKUP_DIR) go run ./cmd/server backup
 
 .PHONY: sqlite-restore
 sqlite-restore:
 	@echo "Restoring SQLite from backup..."
-	@echo "Usage: make sqlite-restore BACKUP_FILE=./backups/budget_YYYYMMDD_HHMMSS.db"
+	@echo "Usage: make sqlite-restore BACKUP_FILE=$(BACKUP_DIR)/backup_YYYYMMDD_HHMMSSmmm.db"
 	@if [ -z "$(BACKUP_FILE)" ]; then \
 		echo "Error: BACKUP_FILE is required"; \
 		exit 1; \
 	fi
+	@if [ ! -r "$(BACKUP_FILE)" ]; then \
+		echo "Error: $(BACKUP_FILE) does not exist or is not readable"; \
+		exit 1; \
+	fi
+	@rm -f $(DATA_DIR)/budget.db-wal $(DATA_DIR)/budget.db-shm
 	@cp $(BACKUP_FILE) $(DATA_DIR)/budget.db
 	@echo "Database restored from $(BACKUP_FILE)"
 
@@ -252,8 +258,8 @@ help:
 	@echo "  docs             - Start documentation server"
 	@echo ""
 	@echo "SQLite Database:"
-	@echo "  sqlite-backup    - Create SQLite backup"
-	@echo "  sqlite-restore   - Restore from backup (BACKUP_FILE=path required)"
+	@echo "  sqlite-backup    - Create SQLite backup (VACUUM INTO via the backup subcommand)"
+	@echo "  sqlite-restore   - Restore from backup, dev only (BACKUP_FILE=path required)"
 	@echo "  sqlite-shell     - Open SQLite interactive shell"
 	@echo "  sqlite-stats     - Show database statistics"
 	@echo ""
@@ -267,6 +273,7 @@ help:
 	@echo "  docker-down      - Stop Docker containers"
 	@echo "  docker-logs      - View Docker container logs"
 	@echo "  compose-config   - Validate all docker-compose files"
+	@echo "  caddy-validate   - Validate deploy/caddy/Caddyfile"
 	@echo ""
 	@echo "Other commands:"
 	@echo "  help             - Show this help"

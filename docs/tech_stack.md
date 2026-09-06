@@ -5,7 +5,7 @@
 ### Общая архитектура
 - **Тип**: Self-hosted сервис (один Docker-образ ~50MB)
 - **Стиль**: RESTful API + Clean Architecture
-- **Развертывание**: Один Docker-контейнер
+- **Развертывание**: один compose — `app` + Caddy (TLS Let's Encrypt), см. `deploy/`
 - **База данных**: SQLite (встроенная, без внешних зависимостей)
 
 ### Архитектурные принципы
@@ -30,11 +30,13 @@
 - Android-приложение, генерируется из `docs/api/openapi.yaml`; HTML сервис не отдаёт
 
 ### Инфраструктура
-- **Контейнеризация**: Docker & Docker Compose
+- **Контейнеризация**: Docker & Docker Compose — `docker/docker-compose.yml` для разработки,
+  `deploy/docker-compose.yml` (`app` + Caddy, сеть `172.20.0.0/16`, `TRUSTED_PROXIES`) для сервера
+- **Reverse proxy / TLS**: Caddy, автоматический Let's Encrypt, конфиг `deploy/caddy/Caddyfile`
 - **Multi-platform**: linux/amd64, linux/arm64
 - **CI/CD**: GitHub Actions (ci, docker, security, release)
-- **Registry**: не используется — образ собирается локально из `docker/Dockerfile`
-  (релизов нет, в GHCR ничего не опубликовано; см. [004-deployment-readiness.md](specs/004-deployment-readiness.md#d-02))
+- **Registry**: GHCR, публикация по тегу `v*` (`.github/workflows/docker.yml`). Тега пока нет,
+  поэтому и `docker/`, и `deploy/` собирают образ из `docker/Dockerfile` на месте
 - **Security Scanning**: CodeQL, Semgrep, TruffleHog, OSV Scanner
 
 ### Документация API
@@ -58,7 +60,8 @@ Family-Finances-Service/
 │   └── run.go           # Bootstrap приложения
 ├── migrations/            # 001_consolidated.{up,down}.sql
 ├── docs/                 # Документация проекта (specs, plans, guides, patterns, api)
-├── docker/               # Dockerfile, docker-compose.yml
+├── docker/               # Dockerfile, docker-compose.yml для разработки
+├── deploy/               # прод: compose (app + Caddy), Caddyfile, install/upgrade/uninstall
 └── Makefile              # Автоматизация задач
 ```
 
@@ -156,7 +159,13 @@ make test
 
 ### Среды
 - **Development**: `make run-local` (localhost:8080, SQLite)
-- **Production**: Docker-контейнер (~50MB Alpine-based image)
+- **Production**: `deploy/scripts/install.sh --domain … --email …` — compose поднимает `app`
+  (~50MB Alpine-based image, собирается из исходников) и Caddy; первая семья создаётся
+  `docker compose exec app /app/family-budget-service setup …`. Подробности — [deploy/README.md](../deploy/README.md)
+
+### Бэкапы
+- `family-budget-service backup` из cron на хосте, ретеншен `BACKUP_KEEP` (по умолчанию 30);
+  восстановление — ручное по ssh
 
 ### Мониторинг
 - **Healthcheck**: /health эндпоинт
@@ -210,9 +219,10 @@ github.com/stretchr/testify       # Testing utilities
 ## 🔄 Планы развития
 
 ### Ближайшие обновления
-- [ ] Переход на API-only для Android: планы 01–04 выполнены (bearer, удаление веб-слоя, деньги в
-  минимальных единицах и календарные даты), остался 05 — один compose с Caddy; решения в
+- [x] Переход на API-only для Android: планы 01–05 выполнены (bearer, удаление веб-слоя, деньги в
+  минимальных единицах, календарные даты, один compose с Caddy); решения в
   [specs/005-api-only-redesign.md](specs/005-api-only-redesign.md)
+- [ ] Первый релиз `v0.1.0` и переход `deploy/` на образ из GHCR вместо сборки на сервере
 - [ ] Улучшение аналитики и отчетов
 
 ### Среднесрочные планы

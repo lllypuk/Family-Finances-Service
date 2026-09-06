@@ -96,7 +96,7 @@ func TestBackupService_PathTraversal(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			db, dbPath, cleanup := setupTestDB(t)
 			defer cleanup()
-			svc := NewBackupService(db, dbPath, "", slog.Default())
+			svc := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
 
 			// Test GetBackup
 			_, err := svc.GetBackup(context.Background(), tt.filename)
@@ -108,12 +108,6 @@ func TestBackupService_PathTraversal(t *testing.T) {
 			err = svc.DeleteBackup(context.Background(), tt.filename)
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr, "DeleteBackup should return expected error")
-			}
-
-			// Test RestoreBackup
-			err = svc.RestoreBackup(context.Background(), tt.filename)
-			if tt.wantErr != nil {
-				require.ErrorIs(t, err, tt.wantErr, "RestoreBackup should return expected error")
 			}
 
 			// Test GetBackupFilePath
@@ -129,7 +123,7 @@ func TestBackupService_SafePathDirectoryEscape(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	svc := NewBackupService(db, dbPath, "", slog.Default()).(*backupService)
+	svc := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default()).(*backupService)
 
 	tests := []struct {
 		name          string
@@ -349,7 +343,7 @@ func TestBackupService_ConcurrentPathTraversalAttempts(t *testing.T) {
 	db, dbPath, cleanup := setupTestDBSecurity(t)
 	defer cleanup()
 
-	svc := NewBackupService(db, dbPath, "", slog.Default())
+	svc := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
 	ctx := context.Background()
 
 	// Concurrent attempts to access invalid paths

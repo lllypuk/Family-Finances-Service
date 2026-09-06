@@ -1,0 +1,38 @@
+# Caddy терминирует TLS (Let's Encrypt автоматически) и проксирует всё на app:8080.
+# Ничего не ограничивает: лимитер логина живёт в приложении.
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# JSON-API: тела больше мегабайта не бывает, а логин доступен без токена —
+	# без лимита неавторизованный клиент раскачивает память приложения.
+	request_body {
+		max_size 1MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		# API отдаёт только JSON — ресурсы не грузятся ниоткуда.
+		Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+
+	@health path /health
+	log_skip @health
+
+	reverse_proxy app:8080
+
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 100mb
+			roll_keep 5
+			roll_keep_for 720h
+		}
+		format json
+	}
+}

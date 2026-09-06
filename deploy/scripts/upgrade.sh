@@ -4,7 +4,7 @@
 
 set -euo pipefail
 # -E: ловушка ERR наследуется функциями и подоболочками, иначе она не сработает
-# внутри start_service/create_upgrade_backup, ради которых и заведена.
+# внутри start_service/verify_health, ради которых и заведена.
 set -E
 
 # Configuration
@@ -15,7 +15,8 @@ DATA_DIR="${DATA_DIR:-${INSTALL_DIR}/data}"
 # поэтому «версия» — это git-ref в этом каталоге, а не тег образа.
 SRC_DIR="${SRC_DIR:-${INSTALL_DIR}/src}"
 COMPOSE_FILE="${COMPOSE_FILE:-${INSTALL_DIR}/docker-compose.yml}"
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8080/health}"
+CADDYFILE="${CADDYFILE:-${INSTALL_DIR}/caddy/Caddyfile}"
+HEALTH_URL="${HEALTH_URL:-http://localhost:8080/health}"
 HEALTH_CHECK_TIMEOUT=60
 HEALTH_CHECK_INTERVAL=2
 # UID/GID пользователя внутри образа (docker/Dockerfile: app = 1000:1000).
@@ -46,6 +47,10 @@ CURRENT_VERSION=""
 # git-ref (тег, ветка или коммит), из которого пересобирается образ.
 TARGET_VERSION="main"
 ROLLBACK_ON_FAILURE=true
+# Caddy перечитывает конфиг только по команде: bind-mount меняется молча.
+CADDYFILE_CHANGED=false
+# Коммит, из которого собран работающий образ (заполняется build_new_version).
+PREVIOUS_HEAD=""
 
 # Parse command line arguments
 parse_args() {
@@ -120,15 +125,6 @@ check_root() {
     fi
 }
 
-# git >= 2.35.2 отказывается работать с репозиторием, принадлежащим другому
-# пользователю ("dubious ownership"): install.sh отдаёт ${SRC_DIR} системному
-# пользователю приложения, а этот скрипт работает из-под root.
-ensure_git_safe_directory() {
-    if ! git config --global --get-all safe.directory 2>/dev/null | grep -qxF "${SRC_DIR}"; then
-        git config --global --add safe.directory "${SRC_DIR}"
-    fi
-}
-
 check_installation() {
     log_info "Checking installation..."
 
@@ -149,15 +145,14 @@ check_installation() {
         exit 1
     fi
 
-    ensure_git_safe_directory
-
     log_success "Installation directory found"
 }
 
 check_disk_space() {
     log_info "Checking disk space..."
 
-    local available=$(df -BM "${INSTALL_DIR}" | tail -1 | awk '{print $4}' | sed 's/M//')
+    local available
+    available=$(df -BM "${INSTALL_DIR}" | tail -1 | awk '{print $4}' | sed 's/M//')
     local required=500  # 500MB minimum
 
     if [[ ${available} -lt ${required} ]]; then
@@ -219,43 +214,51 @@ check_database_integrity() {
 # Backup Functions
 # ============================================
 
-# Снять копию базы на ХОСТЕ.
+# Take a database copy with the application's own `backup` subcommand
+# (VACUUM INTO, so a single self-contained file - no -wal/-shm to carry along).
 #
-# Раньше здесь был `docker exec … sqlite3 …`, но в рантайм-образе sqlite3 нет
-# (docker/Dockerfile ставит только ca-certificates/tzdata/wget), поэтому под
-# `set -euo pipefail` скрипт падал с кодом 127 на каждом реальном обновлении —
-# то есть бэкапа и материала для отката не было вовсе.
-#
-# Вызывается уже после stop_service, так что копия снимается с остановленной
-# базы. sqlite3 на хосте предпочтителен (`.backup` сворачивает WAL в один
-# файл); без него копируем файл вместе с -wal/-shm, иначе копия неполная.
-backup_database_file() {
-    local db_file=$1
-    local dest=$2
+# `docker compose run`, not `exec`: after a failed upgrade the app container may be
+# missing entirely, while `run` works whether the service is up or down. --no-deps
+# keeps compose from starting Caddy for a one-shot command.
+create_database_backup() {
+    local dest=$1
 
-    if command -v sqlite3 >/dev/null 2>&1; then
-        if sqlite3 "${db_file}" ".backup '${dest}'"; then
-            return 0
-        fi
-        log_warning "sqlite3 .backup failed, falling back to a plain file copy"
-    else
-        log_warning "sqlite3 is not installed on the host, copying database files as-is"
+    cd "${INSTALL_DIR}" || return 1
+
+    local output
+    if ! output=$(docker compose -f "${COMPOSE_FILE}" run --rm --no-deps -T app backup 2>&1); then
+        log_error "The backup subcommand failed"
+        printf '%s\n' "${output}" >&2
+        return 1
     fi
 
-    cp "${db_file}" "${dest}"
-    if [[ -f "${db_file}-wal" ]]; then
-        cp "${db_file}-wal" "${dest}-wal"
-    fi
-    if [[ -f "${db_file}-shm" ]]; then
-        cp "${db_file}-shm" "${dest}-shm"
+    # Имя берётся из вывода подкоманды, а не из `ls -t` по каталогу: BACKUP_DIR
+    # внутри контейнера задаёт .env и может не совпасть с ${BACKUP_DIR} на хосте —
+    # тогда самым свежим здесь оказался бы файл с прошлого раза, и откат вернул бы
+    # старую базу, отчитавшись об успехе.
+    local filename
+    filename=$(printf '%s\n' "${output}" | tr -d '\r' | sed -n 's/^backup \(.*\) created (.*/\1/p' | tail -1)
+    if [[ -z "${filename}" ]]; then
+        log_error "The backup subcommand printed no file name"
+        printf '%s\n' "${output}" >&2
+        return 1
     fi
 
-    return 0
+    local latest="${BACKUP_DIR}/${filename}"
+    if [[ ! -f "${latest}" ]]; then
+        log_error "Backup ${filename} is not in ${BACKUP_DIR}; check BACKUP_DIR in ${INSTALL_DIR}/.env"
+        return 1
+    fi
+
+    # Copied into the upgrade directory: retention (BACKUP_KEEP) prunes ${BACKUP_DIR},
+    # and rollback must still find the file it was promised.
+    cp "${latest}" "${dest}" || return 1
+    log_info "Backup taken from ${latest}"
 }
 
 # Снять предобновленческий бэкап. Каждая операция проверяется явно и возвращает
-# 1: сервис на этот момент уже остановлен, а `set -e` внутри функции, вызванной
-# в условии (`if ! create_upgrade_backup`), не работает — без явных проверок
+# 1: `set -e` внутри функции, вызванной в условии (`if ! create_upgrade_backup`),
+# не работает — без явных проверок
 # частично снятый бэкап считался бы удачным, и откат восстанавливал бы обрывок.
 create_upgrade_backup() {
     log_info "Creating pre-upgrade backup..."
@@ -263,11 +266,17 @@ create_upgrade_backup() {
     mkdir -p "${UPGRADE_BACKUP_DIR}" || return 1
 
     # Backup database if exists
+    # Маркер пишется всегда: по одному лишь отсутствию снимка откат не отличит
+    # «базы ещё не было» от «бэкап потерян», а это противоположные действия.
     local db_file="${DATA_DIR}/budget.db"
     if [[ -f "${db_file}" ]]; then
         log_info "Backing up database..."
-        backup_database_file "${db_file}" "${UPGRADE_BACKUP_DIR}/budget.db" || return 1
+        create_database_backup "${UPGRADE_BACKUP_DIR}/budget.db" || return 1
+        echo "yes" > "${UPGRADE_BACKUP_DIR}/db_present.txt" || return 1
         log_success "Database backed up"
+    else
+        echo "no" > "${UPGRADE_BACKUP_DIR}/db_present.txt" || return 1
+        log_info "No database at ${db_file}; nothing to back up"
     fi
 
     # Backup environment file
@@ -275,19 +284,25 @@ create_upgrade_backup() {
         log_info "Backing up environment file..."
         cp "${INSTALL_DIR}/.env" "${UPGRADE_BACKUP_DIR}/.env" || return 1
     fi
-    if [[ -f "${INSTALL_DIR}/config/.env" ]]; then
-        mkdir -p "${UPGRADE_BACKUP_DIR}/config" || return 1
-        cp "${INSTALL_DIR}/config/.env" "${UPGRADE_BACKUP_DIR}/config/.env" || return 1
+
+    # Compose и Caddyfile обновляются вместе с образом (sync_deploy_files),
+    # значит откат обязан вернуть и их.
+    # Маркер caddy_present.txt — по той же причине, что и db_present.txt: установка
+    # до перехода на Caddy идёт без Caddyfile, и откат не должен путать «его не было»
+    # с «снимок потерян».
+    cp "${COMPOSE_FILE}" "${UPGRADE_BACKUP_DIR}/docker-compose.yml" || return 1
+    if [[ -f "${CADDYFILE}" ]]; then
+        cp "${CADDYFILE}" "${UPGRADE_BACKUP_DIR}/Caddyfile" || return 1
+        echo "yes" > "${UPGRADE_BACKUP_DIR}/caddy_present.txt" || return 1
+    else
+        echo "no" > "${UPGRADE_BACKUP_DIR}/caddy_present.txt" || return 1
     fi
 
     # Save current version info
     echo "${CURRENT_VERSION}" > "${UPGRADE_BACKUP_DIR}/version.txt" || return 1
     date > "${UPGRADE_BACKUP_DIR}/backup_time.txt" || return 1
 
-    # Save container info if running
-    if docker ps --format '{{.Names}}' | grep -q 'family-budget'; then
-        docker inspect $(docker ps -q --filter "name=family-budget" | head -1) > "${UPGRADE_BACKUP_DIR}/container_info.json" 2>/dev/null || true
-    fi
+    docker inspect family-budget-app > "${UPGRADE_BACKUP_DIR}/container_info.json" 2>/dev/null || true
 
     log_success "Pre-upgrade backup created: ${UPGRADE_BACKUP_DIR}"
 }
@@ -306,15 +321,146 @@ restore_src_checkout() {
     local commit=$1
 
     if [[ -z "${commit}" || "${commit}" == "unknown" ]]; then
-        log_warning "Previous commit is unknown, leaving ${SRC_DIR} as is"
+        log_error "Previous commit is unknown, leaving ${SRC_DIR} as is"
+        return 1
+    fi
+
+    if ! git -C "${SRC_DIR}" checkout --force --detach "${commit}" 2>/dev/null; then
+        log_error "Failed to restore sources to ${commit}; ${SRC_DIR} is out of sync with the running image"
+        return 1
+    fi
+
+    log_info "Restored sources to ${commit}"
+}
+
+# Топология (compose, Caddyfile) живёт в ${INSTALL_DIR}, а не в образе: без этой
+# синхронизации новый релиз запускался бы на compose предыдущего — без новых
+# переменных, монтирований и с прежним digest'ом Caddy.
+sync_deploy_files() {
+    local compose_src="${SRC_DIR}/deploy/docker-compose.yml"
+    local caddy_src="${SRC_DIR}/deploy/caddy/Caddyfile"
+
+    if [[ ! -f "${compose_src}" || ! -f "${caddy_src}" ]]; then
+        log_error "Deployment files not found under ${SRC_DIR}/deploy"
+        return 1
+    fi
+
+    cp "${compose_src}" "${COMPOSE_FILE}" || return 1
+    mkdir -p "$(dirname "${CADDYFILE}")" || return 1
+    if ! cmp -s "${caddy_src}" "${CADDYFILE}"; then
+        CADDYFILE_CHANGED=true
+    fi
+    cp "${caddy_src}" "${CADDYFILE}" || return 1
+
+    log_info "Deployment files synced from ${SRC_DIR}/deploy"
+}
+
+# Вернуть compose и Caddyfile из предобновленческого бэкапа.
+# Пропавший снимок — отказ, а не «нечего восстанавливать»: compose снимается
+# всегда, поэтому его отсутствие (старый каталог бэкапа под `rollback`, обрыв
+# на полпути) означает, что топология осталась от целевой версии, и следующий
+# запуск примет её за развёрнутую. Про Caddyfile решает маркер caddy_present.txt:
+# если его не было, файл неудачного обновления удаляется — восстановленный
+# compose о нём не знает.
+restore_deploy_files() {
+    if [[ ! -f "${UPGRADE_BACKUP_DIR}/docker-compose.yml" ]]; then
+        log_error "No compose snapshot in ${UPGRADE_BACKUP_DIR}; the topology cannot be rolled back"
+        return 1
+    fi
+    if ! cp "${UPGRADE_BACKUP_DIR}/docker-compose.yml" "${COMPOSE_FILE}"; then
+        log_error "Failed to restore ${COMPOSE_FILE} from ${UPGRADE_BACKUP_DIR}"
+        return 1
+    fi
+
+    local caddy_present
+    caddy_present=$(cat "${UPGRADE_BACKUP_DIR}/caddy_present.txt" 2>/dev/null || echo "unknown")
+
+    case "${caddy_present}" in
+        yes)
+            if [[ ! -f "${UPGRADE_BACKUP_DIR}/Caddyfile" ]]; then
+                log_error "A Caddyfile existed before the upgrade, but its snapshot is missing in ${UPGRADE_BACKUP_DIR}"
+                return 1
+            fi
+            if ! cmp -s "${UPGRADE_BACKUP_DIR}/Caddyfile" "${CADDYFILE}"; then
+                CADDYFILE_CHANGED=true
+            fi
+            if ! cp "${UPGRADE_BACKUP_DIR}/Caddyfile" "${CADDYFILE}"; then
+                log_error "Failed to restore ${CADDYFILE} from ${UPGRADE_BACKUP_DIR}"
+                return 1
+            fi
+            ;;
+        no)
+            if [[ -e "${CADDYFILE}" ]] && ! rm -f "${CADDYFILE}"; then
+                log_error "Could not remove the Caddyfile created by the failed upgrade: ${CADDYFILE}"
+                return 1
+            fi
+            # sync_deploy_files взвёл флаг, когда клал Caddyfile в установку без него.
+            # Восстановленный compose сервиса caddy не знает, и reload_caddy утонул бы
+            # на `compose run caddy`, объявив удавшийся откат неудачным.
+            CADDYFILE_CHANGED=false
+            ;;
+        *)
+            log_error "Backup ${UPGRADE_BACKUP_DIR} does not record whether a Caddyfile existed before the upgrade"
+            log_error "Refusing to guess: check ${CADDYFILE} manually"
+            return 1
+            ;;
+    esac
+}
+
+# Полный откат состояния на диске к работающей версии. Возвращает 1, если хоть
+# одна половина не восстановлена: вызывающий не вправе сообщать об удачном откате.
+restore_running_state() {
+    local rc=0
+
+    restore_deploy_files || rc=1
+    restore_src_checkout "${PREVIOUS_HEAD}" || rc=1
+
+    return ${rc}
+}
+
+# Сообщить оператору, что откат к работающей версии не удался.
+log_restore_failure() {
+    log_error "FAILED to restore the running version on disk"
+    log_error "${SRC_DIR} and/or ${INSTALL_DIR} may still hold ${TARGET_VERSION}"
+    log_error "Restore them from ${UPGRADE_BACKUP_DIR} before running the upgrade again"
+}
+
+# Перечитать конфиг Caddy, если он изменился: `up -d` пересоздаёт контейнер по
+# изменению сервиса в compose, а не содержимого примонтированного файла.
+reload_caddy() {
+    [[ "${CADDYFILE_CHANGED}" == "true" ]] || return 0
+
+    cd "${INSTALL_DIR}" || return 1
+
+    # Валидация до применения: битый конфиг иначе доходит до restart, а тот
+    # отдаёт успех и на контейнере, который вышел сразу после старта.
+    # Одноразовый контейнер, а не `exec`: Caddy может и не работать.
+    if ! docker compose -f "${COMPOSE_FILE}" run --rm --no-deps --entrypoint caddy \
+        caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+        log_error "New Caddyfile is invalid, not applying it: ${CADDYFILE}"
+        return 1
+    fi
+
+    if docker compose -f "${COMPOSE_FILE}" exec -T caddy \
+        caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+        log_success "Caddy config reloaded"
         return 0
     fi
 
-    if git -C "${SRC_DIR}" checkout --force --detach "${commit}" 2>/dev/null; then
-        log_info "Restored sources to ${commit}"
-    else
-        log_warning "Failed to restore sources to ${commit}; ${SRC_DIR} may be out of sync with the running image"
+    log_warning "Caddy config reload failed, restarting Caddy..."
+    if ! docker compose -f "${COMPOSE_FILE}" restart caddy; then
+        log_error "Caddy restart failed; check ${CADDYFILE}"
+        return 1
     fi
+
+    sleep 5
+    if [[ "$(container_state caddy)" != "running" ]]; then
+        log_error "Caddy is not running after the restart; check ${CADDYFILE}"
+        return 1
+    fi
+
+    log_success "Caddy restarted"
+    return 0
 }
 
 # Обновить исходники и пересобрать образ.
@@ -323,9 +469,8 @@ build_new_version() {
     log_info "Fetching sources for: ${TARGET_VERSION}..."
 
     # Коммит, из которого собран работающий образ: на него откатываем дерево,
-    # если что-то ниже сломается.
-    local previous_head
-    previous_head=$(git -C "${SRC_DIR}" rev-parse HEAD 2>/dev/null || echo "unknown")
+    # если что-то ниже (вплоть до stop_service) сломается.
+    PREVIOUS_HEAD=$(git -C "${SRC_DIR}" rev-parse HEAD 2>/dev/null || echo "unknown")
 
     if ! git -C "${SRC_DIR}" fetch --tags --force origin "${TARGET_VERSION}"; then
         log_error "Failed to fetch ref: ${TARGET_VERSION}"
@@ -334,7 +479,12 @@ build_new_version() {
 
     if ! git -C "${SRC_DIR}" checkout --force --detach FETCH_HEAD; then
         log_error "Failed to check out ref: ${TARGET_VERSION}"
-        restore_src_checkout "${previous_head}"
+        restore_src_checkout "${PREVIOUS_HEAD}"
+        return 1
+    fi
+
+    if ! sync_deploy_files; then
+        restore_running_state || log_restore_failure
         return 1
     fi
 
@@ -349,7 +499,7 @@ build_new_version() {
         log_error "Failed to build new version"
         # Дерево возвращаем к работающему образу: иначе следующий запуск сочтёт
         # несобранный коммит текущей версией.
-        restore_src_checkout "${previous_head}"
+        restore_running_state || log_restore_failure
         return 1
     fi
 }
@@ -368,6 +518,64 @@ stop_service() {
 
     # Wait for graceful shutdown
     sleep 5
+
+    if ! app_container_stopped; then
+        log_error "app container is still running (or its state is unknown) after stop; aborting the upgrade"
+        log_error "Check: docker compose -f ${COMPOSE_FILE} ps"
+        # Дерево и deploy-файлы уже переключены на целевую версию, а работает
+        # прежний образ: без отката следующий запуск сочтёт цель развёрнутой.
+        if restore_running_state; then
+            log_error "Sources and deploy files restored to the running version; the database was not touched"
+        else
+            log_restore_failure
+            log_error "The database was not touched"
+        fi
+        log_warning "The image built for ${TARGET_VERSION} stays in the local docker cache"
+        exit 1
+    fi
+}
+
+# Состояние контейнера сервиса: running | stopped | unknown.
+# unknown — docker не ответил; отличать его обязательно: ошибка API, принятая
+# за "остановлен", открывает дорогу перезаписи живой базы.
+container_state() {
+    local service=$1 cid state rc
+
+    if ! cid="$(docker compose -f "${COMPOSE_FILE}" ps -aq "${service}" 2>/dev/null)"; then
+        echo "unknown"
+        return 0
+    fi
+    cid="${cid%%$'\n'*}"
+    if [[ -z "${cid}" ]]; then
+        echo "stopped"
+        return 0
+    fi
+
+    state="$(docker inspect -f '{{.State.Running}}' "${cid}" 2>&1)"
+    rc=$?
+    if (( rc != 0 )); then
+        # Контейнер удалён между ps и inspect — это "остановлен"; недоступный
+        # демон или таймаут API состоянием считать нельзя.
+        if [[ "${state}" == *"No such object"* ]]; then
+            echo "stopped"
+        else
+            echo "unknown"
+        fi
+        return 0
+    fi
+
+    if [[ "${state}" == "true" ]]; then
+        echo "running"
+    else
+        echo "stopped"
+    fi
+}
+
+# Перед перезаписью budget.db проверка обязательна: копия поверх открытой
+# SQLite-базы (и удалённый под ней -wal) её разрушает, поэтому неизвестное
+# состояние приравнивается к работающему контейнеру.
+app_container_stopped() {
+    [[ "$(container_state app)" == "stopped" ]]
 }
 
 start_service() {
@@ -375,31 +583,38 @@ start_service() {
 
     cd "${INSTALL_DIR}" || return 1
 
+    # Весь проект, а не `up -d app`: аварийная ветка stop_service гасит стек
+    # целиком (`down`), а Caddy зависит от app, не наоборот — с `up -d app` он
+    # так и остался бы лежать, и наружу никто бы не отвечал.
+    #
     # Явная проверка обязательна: `up -d` падает на занятом порте, на нехватке
     # места и на неверном .env, а вызывающая сторона обрабатывает только
     # ненулевой код возврата (внутри `if !` механизм `set -e` отключён).
-    docker compose -f "${COMPOSE_FILE}" up -d app || return 1
+    docker compose -f "${COMPOSE_FILE}" up -d || return 1
 
     # Wait for startup
     log_info "Waiting for service to start..."
     sleep 10
 }
 
+# Порт 8080 наружу не публикуется (наружу смотрит только Caddy), поэтому
+# /health опрашивается изнутри контейнера — wget есть в рантайм-образе.
 verify_health() {
     log_info "Verifying service health..."
 
     local elapsed=0
     local max_wait=${HEALTH_CHECK_TIMEOUT}
 
-    while [[ ${elapsed} -lt ${max_wait} ]]; do
-        local http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "${HEALTH_URL}" 2>/dev/null || echo "000")
+    cd "${INSTALL_DIR}" || return 1
 
-        if [[ "${http_code}" == "200" ]]; then
+    while [[ ${elapsed} -lt ${max_wait} ]]; do
+        if docker compose -f "${COMPOSE_FILE}" exec -T app \
+            wget -q -O /dev/null "${HEALTH_URL}" 2>/dev/null; then
             log_success "Health check passed!"
             return 0
         fi
 
-        log_info "Health check attempt (${elapsed}s/${max_wait}s): HTTP ${http_code}"
+        log_info "Health check attempt (${elapsed}s/${max_wait}s)"
         sleep ${HEALTH_CHECK_INTERVAL}
         elapsed=$((elapsed + HEALTH_CHECK_INTERVAL))
     done
@@ -437,6 +652,58 @@ restore_source_checkout() {
     git -C "${SRC_DIR}" checkout --force --detach "${commit}"
 }
 
+# Вернуть базу в предобновленческое состояние. Решение принимается по маркеру
+# db_present.txt, а не по наличию снимка: если базы не было, её мог создать и
+# смигрировать неудачный запуск, и старая версия поднялась бы на чужой схеме —
+# такую базу надо удалить, а не оставить. Пропавший снимок при db_present=yes
+# останавливает откат: восстанавливать нечем.
+# Осиротевшие -wal/-shm удаляются перед подменой файла — SQLite накатил бы их
+# поверх восстановленной базы и вернул данные неудачного обновления обратно.
+restore_database() {
+    local db_present
+    db_present=$(cat "${UPGRADE_BACKUP_DIR}/db_present.txt" 2>/dev/null || echo "unknown")
+
+    case "${db_present}" in
+        yes)
+            if [[ ! -f "${UPGRADE_BACKUP_DIR}/budget.db" ]]; then
+                log_error "The database existed before the upgrade, but its snapshot is missing in ${UPGRADE_BACKUP_DIR}"
+                log_error "Refusing to start the previous version over the failed upgrade's database"
+                return 1
+            fi
+            log_info "Restoring database from backup..."
+            if ! rm -f "${DATA_DIR}/budget.db-wal" "${DATA_DIR}/budget.db-shm"; then
+                log_error "Could not remove stale WAL/SHM files in ${DATA_DIR}"
+                return 1
+            fi
+            if ! cp "${UPGRADE_BACKUP_DIR}/budget.db" "${DATA_DIR}/budget.db"; then
+                log_error "Restoring the database failed; ${DATA_DIR}/budget.db may be incomplete"
+                return 1
+            fi
+
+            # Скрипт работает из-под root, а контейнер запущен как uid 1000: без chown
+            # откатанный сервис не откроет восстановленную базу на запись.
+            chown "${CONTAINER_UID}:${CONTAINER_GID}" "${DATA_DIR}/budget.db" 2>/dev/null || true
+
+            log_success "Database restored"
+            ;;
+        no)
+            if [[ -e "${DATA_DIR}/budget.db" || -e "${DATA_DIR}/budget.db-wal" ]]; then
+                log_info "No database existed before the upgrade; removing the one it created..."
+                if ! rm -f "${DATA_DIR}/budget.db" "${DATA_DIR}/budget.db-wal" "${DATA_DIR}/budget.db-shm"; then
+                    log_error "Could not remove the database created by the failed upgrade in ${DATA_DIR}"
+                    return 1
+                fi
+            fi
+            log_success "Database returned to its pre-upgrade state (absent)"
+            ;;
+        *)
+            log_error "Backup ${UPGRADE_BACKUP_DIR} does not record whether the database existed before the upgrade"
+            log_error "Refusing to guess: check ${DATA_DIR}/budget.db manually"
+            return 1
+            ;;
+    esac
+}
+
 rollback() {
     log_error "Upgrade failed, initiating automatic rollback..."
 
@@ -449,85 +716,119 @@ rollback() {
     # Stop current service
     log_info "Stopping failed upgrade..."
     cd "${INSTALL_DIR}"
-    docker compose -f "${COMPOSE_FILE}" stop app 2>/dev/null || true
+    if ! docker compose -f "${COMPOSE_FILE}" stop app 2>/dev/null; then
+        log_warning "Graceful stop failed, killing the container..."
+        docker compose -f "${COMPOSE_FILE}" kill app 2>/dev/null || true
+    fi
     sleep 3
 
-    # Restore database.
-    # Осиротевшие -wal/-shm от неудачного запуска обязательно удалить: SQLite
-    # накатил бы их поверх восстановленного файла и вернул данные обратно.
-    if [[ -f "${UPGRADE_BACKUP_DIR}/budget.db" ]]; then
-        log_info "Restoring database from backup..."
-        rm -f "${DATA_DIR}/budget.db-wal" "${DATA_DIR}/budget.db-shm"
-        cp "${UPGRADE_BACKUP_DIR}/budget.db" "${DATA_DIR}/budget.db"
-        if [[ -f "${UPGRADE_BACKUP_DIR}/budget.db-wal" ]]; then
-            cp "${UPGRADE_BACKUP_DIR}/budget.db-wal" "${DATA_DIR}/budget.db-wal"
-        fi
-        if [[ -f "${UPGRADE_BACKUP_DIR}/budget.db-shm" ]]; then
-            cp "${UPGRADE_BACKUP_DIR}/budget.db-shm" "${DATA_DIR}/budget.db-shm"
-        fi
+    if ! app_container_stopped; then
+        log_error "app container is still running (or its state is unknown); refusing to overwrite the live database"
+        log_error "Stop it manually and restore from ${UPGRADE_BACKUP_DIR}"
+        return 1
+    fi
 
-        # Скрипт работает из-под root. `cp` поверх существующего budget.db
-        # сохраняет его владельца, но -wal/-shm были удалены строкой выше, и
-        # копии создаются заново от root:root. Контейнер запущен как uid 1000,
-        # SQLite в режиме WAL пишет в оба файла — без chown откатанный сервис
-        # просто не открывает базу. Этот путь как раз штатный на хостах без
-        # sqlite3 (см. backup_database_file).
-        chown "${CONTAINER_UID}:${CONTAINER_GID}" \
-            "${DATA_DIR}/budget.db" \
-            "${DATA_DIR}/budget.db-wal" \
-            "${DATA_DIR}/budget.db-shm" 2>/dev/null || true
-
-        log_success "Database restored"
+    if ! restore_database; then
+        log_error "The service is left stopped. Restore manually from ${UPGRADE_BACKUP_DIR}"
+        return 1
     fi
 
     # Restore environment files
     if [[ -f "${UPGRADE_BACKUP_DIR}/.env" ]]; then
-        cp "${UPGRADE_BACKUP_DIR}/.env" "${INSTALL_DIR}/.env"
+        if ! cp "${UPGRADE_BACKUP_DIR}/.env" "${INSTALL_DIR}/.env"; then
+            log_error "Restoring .env failed; the service would start on the failed upgrade's config"
+            log_error "The service is left stopped. Restore manually from ${UPGRADE_BACKUP_DIR}"
+            return 1
+        fi
     fi
-    if [[ -f "${UPGRADE_BACKUP_DIR}/config/.env" ]]; then
-        cp "${UPGRADE_BACKUP_DIR}/config/.env" "${INSTALL_DIR}/config/.env"
-    fi
+
+    local deploy_restored=true
+    restore_deploy_files || deploy_restored=false
 
     # Restore previous version: откатываем исходники на сохранённый коммит и
     # пересобираем образ — готового образа для отката в реестре нет (D-02).
     # Если бэкап не успел записать version.txt (падение до этого шага), берём
     # версию, определённую в начале прогона: она и есть уже развёрнутая.
-    local prev_version=$(cat "${UPGRADE_BACKUP_DIR}/version.txt" 2>/dev/null || echo "")
+    local prev_version
+    prev_version=$(cat "${UPGRADE_BACKUP_DIR}/version.txt" 2>/dev/null || echo "")
     if [[ -z "${prev_version}" ]]; then
         prev_version="${CURRENT_VERSION:-unknown}"
     fi
     log_info "Restoring previous version: ${prev_version}"
 
+    # Отдельный флаг: /health отвечает и у неудачного обновления, поэтому «сервис
+    # поднялся» не означает «откатились». Ниже он решает, запускать ли сервис
+    # вообще.
+    local image_restored=true
+
     if [[ "${prev_version}" == "unknown" ]]; then
+        image_restored=false
         log_error "Previous commit is unknown; restarting with the image that is already built"
         log_error "(that image is the FAILED upgrade — verify the service manually)"
     elif restore_source_checkout "${prev_version}"; then
-        docker compose -f "${COMPOSE_FILE}" build app || log_error "Rebuild of previous version failed"
+        if ! VERSION="$(git -C "${SRC_DIR}" describe --tags --always --dirty 2>/dev/null || echo dev)" \
+            docker compose -f "${COMPOSE_FILE}" build app; then
+            image_restored=false
+            log_error "Rebuild of previous version failed; the image still contains the failed upgrade"
+        fi
     else
+        image_restored=false
         log_error "Could not restore sources at ${prev_version}; the image is NOT rebuilt"
         log_error "and still contains the failed upgrade. Restore manually from ${UPGRADE_BACKUP_DIR}"
     fi
 
-    docker compose -f "${COMPOSE_FILE}" up -d app
+    # Проверки до `up -d`, а не после: образ неудачного обновления, поднятый над
+    # уже восстановленной базой, накатит на неё свои миграции — это уничтожает
+    # результат отката. Сервис остаётся погашенным, пока оператор не вмешается.
+    if [[ "${deploy_restored}" != "true" ]]; then
+        log_error "Compose/Caddyfile were not fully restored from ${UPGRADE_BACKUP_DIR}"
+        log_error "The service is left STOPPED: starting it would run the failed upgrade's topology"
+        log_error "against the restored database. Fix it manually."
+        return 1
+    fi
+
+    if [[ "${image_restored}" != "true" ]]; then
+        log_error "Only the database and the config were rolled back: the built image is"
+        log_error "STILL the failed upgrade."
+        log_error "The service is left STOPPED: starting that image would write (and migrate) the"
+        log_error "restored database. Fix it manually."
+        log_error "Backup location: ${UPGRADE_BACKUP_DIR}"
+        return 1
+    fi
+
+    # --remove-orphans: откат на топологию без Caddy (caddy_present=no) оставляет
+    # контейнер Caddy от неудачного обновления жить на 80/443 — с уже удалённым
+    # конфигом и без апстрима, то есть публичный вход отдаёт 502 при «успешном» откате.
+    if ! docker compose -f "${COMPOSE_FILE}" up -d --remove-orphans; then
+        log_error "Rollback failed: the service did not start. Manual intervention required!"
+        log_error "Backup location: ${UPGRADE_BACKUP_DIR}"
+        return 1
+    fi
 
     sleep 10
 
-    if verify_health; then
-        log_success "Rollback successful! Service is running on previous version: ${prev_version}"
-        return 0
-    else
+    if ! verify_health; then
         log_error "Rollback failed! Manual intervention required!"
         log_error "Backup location: ${UPGRADE_BACKUP_DIR}"
         return 1
     fi
+
+    if ! reload_caddy; then
+        log_error "Rollback started the service, but Caddy did not pick up the restored config"
+        log_error "Public ingress may be down. Backup location: ${UPGRADE_BACKUP_DIR}"
+        return 1
+    fi
+
+    log_success "Rollback successful! Service is running on previous version: ${prev_version}"
+    return 0
 }
 
 # Единая точка обработки провала обновления после остановки сервиса.
 #
 # Раньше её не было: в rollback уходил только провал verify_health, а падение
-# create_upgrade_backup или `docker compose up -d` (диск, порт, битый .env)
-# просто завершало скрипт по `set -e` — сервис оставался погашенным, откат не
-# выполнялся, и оператор не получал даже инструкций по восстановлению.
+# `docker compose up -d` (диск, порт, битый .env) просто завершало скрипт по
+# `set -e` — сервис оставался погашенным, откат не выполнялся, и оператор не
+# получал даже инструкций по восстановлению.
 handle_upgrade_failure() {
     local reason=$1
 
@@ -559,10 +860,17 @@ handle_upgrade_failure() {
 manual_rollback() {
     log_info "=== Manual Rollback ==="
 
-    ensure_git_safe_directory
+    # Те же предполётные проверки, что и у upgrade(): парсер аргументов ведёт сюда
+    # напрямую, минуя upgrade().
+    check_root
+    check_installation
 
     # Find most recent upgrade backup
-    local latest_backup=$(ls -td "${BACKUP_DIR}"/upgrade_* 2>/dev/null | head -1)
+    local latest_backup
+    # shellcheck disable=SC2012 # каталоги создаёт этот же скрипт: upgrade_<дата>_<время>
+    # `|| true`: без совпадений ls выходит с 2, и под `set -e`/`pipefail` скрипт
+    # умер бы здесь, не напечатав сообщение ниже.
+    latest_backup=$(ls -td "${BACKUP_DIR}"/upgrade_* 2>/dev/null | head -1 || true)
     
     if [[ -z "${latest_backup}" ]]; then
         log_error "No upgrade backups found in ${BACKUP_DIR}"
@@ -605,10 +913,16 @@ upgrade() {
 
     check_database_integrity
 
-    # Fetch sources and rebuild the image.
-    # Делается ДО бэкапа намеренно: неудачная сборка ничего не меняет на диске,
-    # а бэкап снимается с уже остановленного сервиса (см. ниже) — так копия
-    # базы заведомо консистентна.
+    # Бэкап снимается ДО сборки: после неё `run --rm app backup` пойдёт уже новым
+    # образом, а откатываться нужно на схему работающей версии. VACUUM INTO даёт
+    # консистентный снимок и на живом сервисе.
+    if ! create_upgrade_backup; then
+        log_error "Failed to create the pre-upgrade backup"
+        log_error "Nothing has been changed; the service keeps running the current version"
+        exit 1
+    fi
+
+    # Fetch sources and rebuild the image: неудачная сборка ничего не меняет на диске.
     if ! build_new_version; then
         log_error "Failed to build new version"
         exit 1
@@ -622,11 +936,6 @@ upgrade() {
     # сервисом и без единой попытки отката (ROLLBACK_ON_FAILURE игнорируется).
     trap 'handle_upgrade_failure "unexpected error at line ${LINENO}"' ERR
 
-    # Create backup (сервис уже остановлен — база никем не пишется)
-    if ! create_upgrade_backup; then
-        handle_upgrade_failure "failed to create the pre-upgrade backup"
-    fi
-
     # Start with new version
     if ! start_service; then
         handle_upgrade_failure "failed to start the service with the new version"
@@ -635,6 +944,13 @@ upgrade() {
     # Verify health
     if verify_health; then
         trap - ERR
+        # Откат сюда не годится: приложение уже работает на новой версии, а лежит
+        # только ingress — чинится он перезапуском Caddy, а не возвратом схемы.
+        if ! reload_caddy; then
+            log_error "App upgraded to ${TARGET_VERSION}, but Caddy did not pick up the new config"
+            log_error "Public ingress may be down; check: docker compose -f ${COMPOSE_FILE} ps caddy"
+            exit 1
+        fi
         log_success "╔════════════════════════════════════════════════════════════════╗"
         log_success "║       Upgrade Successful!                                      ║"
         log_success "╚════════════════════════════════════════════════════════════════╝"
@@ -644,7 +960,7 @@ upgrade() {
         log_info "Backup location: ${UPGRADE_BACKUP_DIR}"
         log_info "Health check: PASSED"
         echo ""
-        log_info "Service is running at: ${HEALTH_URL}"
+        log_info "Service is running behind Caddy"
         echo ""
         exit 0
     else

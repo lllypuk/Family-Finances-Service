@@ -1,49 +1,65 @@
 #!/bin/bash
-# Family Budget Service - Installation Script
-# This script automates the deployment of Family Budget Service on a fresh Linux VM
+# Family Budget Service - installer for the single-host deployment (app + Caddy in one compose).
 
 set -euo pipefail
 
-# Constants
-INSTALL_DIR="/opt/family-budget"
+INSTALL_DIR="${INSTALL_DIR:-/opt/family-budget}"
 SRC_DIR="${INSTALL_DIR}/src"
-APP_USER="familybudget"
-REPO_URL="https://raw.githubusercontent.com/lllypuk/Family-Finances-Service/main"
 REPO_GIT_URL="${REPO_GIT_URL:-https://github.com/lllypuk/Family-Finances-Service.git}"
 REPO_REF="${REPO_REF:-main}"
-LOG_FILE="/var/log/family-budget-install.log"
+LOG_FILE="${LOG_FILE:-/var/log/family-budget-install.log}"
+DEFAULT_DOMAIN="ffs.shatrov.tech"
 
-# UID/GID пользователя внутри образа (docker/Dockerfile: user `app`).
-# Bind-mount ./data должен принадлежать именно ему, иначе SQLite не откроет БД (D-03).
+# UID/GID of the user inside the image (docker/Dockerfile: USER 1000:1000).
+# The bind-mounted data/ and backups/ must belong to it or SQLite cannot open the database (D-03).
 CONTAINER_UID=1000
 CONTAINER_GID=1000
 
-# Source library functions
+# Network left by an installation older than this script: it sits on the same
+# subnet as the new one, so `up` fails with "Pool overlaps" until it is gone.
+LEGACY_NETWORK="family-budget_family-budget-net"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=./lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=./lib/docker.sh
 source "${SCRIPT_DIR}/lib/docker.sh"
+# shellcheck source=./lib/firewall.sh
 source "${SCRIPT_DIR}/lib/firewall.sh"
 
-# Global variables
 DOMAIN=""
-ADMIN_EMAIL=""
+ACME_EMAIL=""
 NON_INTERACTIVE=false
-# --reinstall: явное согласие снести существующую установку (каталог целиком
-# уезжает в $INSTALL_DIR.backup.<ts>). Без флага повторный запуск сохраняет
-# данные и секреты — см. create_directories/generate_secrets.
+DRY_RUN=false
+# --reinstall: explicit consent to wipe an existing installation (the whole tree,
+# database included, is moved to ${INSTALL_DIR}.backup.<ts>). Without it a repeated
+# run keeps data/, backups/ and .env.
 REINSTALL=false
-SESSION_SECRET=""
-CSRF_SECRET=""
+# Directory holding the deploy/ files (compose, Caddyfile, .env.example); set by fetch_sources.
+DEPLOY_DIR=""
+# Повторный запуск переписывает Caddyfile у уже работающей установки; set by copy_deploy_files.
+CADDYFILE_CHANGED=false
+# Копия работающего Caddyfile на время замены (см. copy_deploy_files/reload_caddy).
+CADDYFILE_BACKUP="${INSTALL_DIR}/caddy/Caddyfile.prev"
 
-# Logging setup
-exec 1> >(tee -a "$LOG_FILE")
-exec 2>&1
+# In --dry-run every mutating command is printed instead of executed.
+run() {
+    if [[ "${DRY_RUN}" == "true" ]]; then
+        log_info "[dry-run] $*"
+        return 0
+    fi
+    "$@"
+}
 
-# Parse command line arguments
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
             --non-interactive)
+                NON_INTERACTIVE=true
+                shift
+                ;;
+            --dry-run)
+                DRY_RUN=true
                 NON_INTERACTIVE=true
                 shift
                 ;;
@@ -56,7 +72,7 @@ parse_args() {
                 shift 2
                 ;;
             --email)
-                ADMIN_EMAIL="$2"
+                ACME_EMAIL="$2"
                 shift 2
                 ;;
             --help|-h)
@@ -72,7 +88,6 @@ parse_args() {
     done
 }
 
-# Show help message
 show_help() {
     cat <<EOF
 Family Budget Service - Installation Script
@@ -80,442 +95,410 @@ Family Budget Service - Installation Script
 Usage: sudo ./install.sh [OPTIONS]
 
 OPTIONS:
-    --non-interactive       Run without user prompts
-    --domain DOMAIN        Set domain name (e.g., budget.example.com)
-    --email EMAIL          Set admin email for Let's Encrypt
-    --reinstall            DESTRUCTIVE. Move the existing $INSTALL_DIR aside
-                           (database, backups and config included) and install
-                           from scratch. Without this flag a repeated run keeps
-                           data/, backups/ and the secrets in config/.env.
-    --help, -h             Show this help message
+    --domain DOMAIN     Domain served by Caddy (default: ${DEFAULT_DOMAIN})
+    --email EMAIL       Contact e-mail for Let's Encrypt (default: admin@DOMAIN)
+    --non-interactive   Run without prompts
+    --dry-run           Print every mutating command instead of running it
+    --reinstall         DESTRUCTIVE. Move the existing ${INSTALL_DIR} aside
+                        (database and backups included) and install from scratch
+    --help, -h          Show this help message
 
 EXAMPLES:
-    # Interactive installation
-    sudo ./install.sh
-
-    # Non-interactive installation
-    sudo ./install.sh --non-interactive --domain budget.example.com --email admin@example.com
+    sudo ./install.sh --domain ${DEFAULT_DOMAIN} --email admin@example.com
+    sudo ./install.sh --non-interactive
 
 ENVIRONMENT:
-    REPO_GIT_URL           Repository to build from (default: upstream GitHub URL)
-    REPO_REF               Branch or tag to check out (default: main)
+    INSTALL_DIR         Installation directory (default: /opt/family-budget)
+    REPO_GIT_URL        Repository to build from (default: upstream GitHub URL)
+    REPO_REF            Branch or tag to check out (default: main)
 
 REQUIREMENTS:
     - Ubuntu 22.04/24.04, Debian 11/12, or Rocky Linux 9
-    - Minimum 512MB RAM (the service itself needs ~128-256MB; the rest is headroom
-      for the Docker image build). 1GB is recommended: below that the local
-      `go build` inside the image build may be OOM-killed — add swap if you stay
-      at 512MB
-    - Minimum 10GB disk space
-    - Root or sudo privileges
-    - Outbound network access (the image is built from source, see D-02)
-
+    - 1GB RAM recommended (the image is built locally; below 512MB \`go build\`
+      is OOM-killed), 10GB disk, root privileges, ports 80/443 free
+    - DNS A record pointing at this host: Caddy issues the certificate on first start
 EOF
 }
 
-# Prompt for configuration
 prompt_configuration() {
-    if [[ "$NON_INTERACTIVE" == "true" ]]; then
-        if [[ -z "$DOMAIN" ]]; then
-            DOMAIN="localhost"
-        fi
-        if [[ -z "$ADMIN_EMAIL" ]]; then
-            ADMIN_EMAIL="admin@localhost"
-        fi
-        return
+    # Дефолты берутся из уже установленного .env: запуск без --domain не должен
+    # молча вернуть домен к DEFAULT_DOMAIN, а с --domain — обязан его сменить.
+    local env_file="${INSTALL_DIR}/.env"
+    if [[ -f "${env_file}" && "${REINSTALL}" != "true" ]]; then
+        DOMAIN="${DOMAIN:-$(env_value "${env_file}" DOMAIN)}"
+        ACME_EMAIL="${ACME_EMAIL:-$(env_value "${env_file}" ACME_EMAIL)}"
     fi
-    
-    echo ""
-    log_info "=== Configuration ==="
-    echo ""
-    
-    prompt_input "Enter domain name (or 'localhost' for local testing)" "localhost" DOMAIN
-    
-    if [[ "$DOMAIN" != "localhost" ]]; then
-        prompt_input "Enter admin email for Let's Encrypt SSL" "admin@$DOMAIN" ADMIN_EMAIL
-    else
-        ADMIN_EMAIL="admin@localhost"
+
+    if [[ "${NON_INTERACTIVE}" != "true" ]]; then
+        echo ""
+        log_info "=== Configuration ==="
+        prompt_input "Domain served by Caddy" "${DOMAIN:-${DEFAULT_DOMAIN}}" DOMAIN
+        prompt_input "Contact e-mail for Let's Encrypt" "${ACME_EMAIL:-admin@${DOMAIN}}" ACME_EMAIL
     fi
-    
-    echo ""
-    log_info "Configuration summary:"
-    log_info "  Domain: $DOMAIN"
-    log_info "  Admin email: $ADMIN_EMAIL"
-    log_info "  Install directory: $INSTALL_DIR"
-    echo ""
-    
+
+    DOMAIN="${DOMAIN:-${DEFAULT_DOMAIN}}"
+    ACME_EMAIL="${ACME_EMAIL:-admin@${DOMAIN}}"
+
+    log_info "Domain: ${DOMAIN}"
+    log_info "ACME e-mail: ${ACME_EMAIL}"
+    log_info "Install directory: ${INSTALL_DIR}"
+
     if ! confirm_action "Proceed with installation?"; then
         log_info "Installation cancelled by user"
         exit 0
     fi
 }
 
-# Read a KEY=value entry out of the existing config/.env, if it is there.
-read_env_value() {
-    local key=$1
-    local env_file="$INSTALL_DIR/config/.env"
-
-    if [[ ! -f "$env_file" ]]; then
-        return 0
-    fi
-
-    sed -n "s/^${key}=//p" "$env_file" | tail -1
-}
-
-# Generate secrets.
-#
-# Повторный запуск НЕ перевыпускает секреты, если они уже есть в config/.env:
-# новый SESSION_SECRET разлогинил бы всех и превратил бы уже выданные cookie в
-# «битые» (см. ensureCSRFToken). Свежие значения генерируются только когда
-# файла нет — то есть при первой установке или после --reinstall.
-#
-# Вызывается ПОСЛЕ create_directories: только там становится понятно, остался
-# ли config/.env на месте.
-generate_secrets() {
-    SESSION_SECRET=$(read_env_value SESSION_SECRET)
-    CSRF_SECRET=$(read_env_value CSRF_SECRET)
-
-    if [[ -n "$SESSION_SECRET" && -n "$CSRF_SECRET" ]]; then
-        log_info "Reusing SESSION_SECRET and CSRF_SECRET from $INSTALL_DIR/config/.env"
-        return 0
-    fi
-
-    log_info "Generating secure secrets..."
-
-    if [[ -z "$SESSION_SECRET" ]]; then
-        SESSION_SECRET=$(generate_secret)
-    fi
-    if [[ -z "$CSRF_SECRET" ]]; then
-        CSRF_SECRET=$(generate_secret)
-    fi
-
-    log_success "Generated SESSION_SECRET and CSRF_SECRET"
-}
-
-# Create directory structure.
-#
-# Раньше здесь безусловно вызывался `backup_directory "$INSTALL_DIR"` (обычный
-# `mv`): второй запуск install.sh на живой установке уносил в сторону боевую
-# базу, бэкапы и config/.env, после чего сервис поднимался на пустом ./data с
-# новыми секретами — то есть выглядел как полная потеря данных. Теперь снос
-# требует явного --reinstall, а обычный повторный запуск идемпотентен.
 create_directories() {
     log_info "Creating directory structure..."
 
-    if [[ -d "$INSTALL_DIR" ]]; then
-        if [[ "$REINSTALL" == "true" ]]; then
-            log_warning "--reinstall: moving the existing installation aside"
-            # Контейнер держит открытым файл БД на bind-mount: сначала гасим.
-            if [[ -f "$INSTALL_DIR/docker-compose.yml" ]]; then
-                (cd "$INSTALL_DIR" && docker compose down 2>/dev/null) || true
-            fi
-            backup_directory "$INSTALL_DIR"
-        else
-            log_info "Existing installation found at $INSTALL_DIR - keeping data/, backups/ and config/.env"
-            log_info "Pass --reinstall to wipe it instead (the old tree is moved to ${INSTALL_DIR}.backup.<timestamp>)"
+    if [[ -d "${INSTALL_DIR}" && "${REINSTALL}" == "true" ]]; then
+        log_warning "--reinstall: moving the existing installation aside"
+        # The container holds the database file open on the bind mount: stop it first.
+        if [[ -f "${INSTALL_DIR}/docker-compose.yml" ]]; then
+            run bash -c "cd '${INSTALL_DIR}' && docker compose down 2>/dev/null" || true
         fi
+        run backup_directory "${INSTALL_DIR}"
+    elif [[ -d "${INSTALL_DIR}" ]]; then
+        log_info "Existing installation found - keeping data/, backups/ and .env"
+        log_info "Pass --reinstall to wipe it (the old tree moves to ${INSTALL_DIR}.backup.<timestamp>)"
     fi
 
-    # Create main directory
-    mkdir -p "$INSTALL_DIR"/{data,backups,config,logs}
-
-    log_success "Created directory structure at $INSTALL_DIR"
+    run mkdir -p "${INSTALL_DIR}/data" "${INSTALL_DIR}/backups" "${INSTALL_DIR}/caddy" "${INSTALL_DIR}/logs/caddy"
+    log_success "Directory structure ready at ${INSTALL_DIR}"
 }
 
-# Fetch application sources
-#
-# Публичного образа в GHCR нет (D-02), поэтому образ собирается на месте.
-# Для этого рядом с compose-файлом нужны исходники: $INSTALL_DIR/src.
+# There is no published image: the image is built on this host, so the sources
+# have to sit next to the compose file (compose sets BUILD_CONTEXT=./src).
 fetch_sources() {
-    log_info "Fetching application sources into $SRC_DIR..."
+    log_info "Fetching sources into ${SRC_DIR}..."
 
-    install_git
+    run install_git
 
-    # git >= 2.35.2 отказывается работать с репозиторием, принадлежащим другому
-    # пользователю ("dubious ownership"). set_file_permissions отдаёт $SRC_DIR
-    # пользователю $APP_USER, а install.sh/upgrade.sh работают из-под root.
-    if ! git config --global --get-all safe.directory 2>/dev/null | grep -qxF "$SRC_DIR"; then
-        git config --global --add safe.directory "$SRC_DIR"
+    if [[ "${DRY_RUN}" == "true" ]]; then
+        log_info "[dry-run] git clone --depth 1 --branch ${REPO_REF} ${REPO_GIT_URL} ${SRC_DIR}"
+        # Nothing was cloned, so take the deploy files from the checkout this script lives in.
+        DEPLOY_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+        log_info "[dry-run] using deploy files from ${DEPLOY_DIR}"
+        return 0
     fi
 
-    if [[ -d "$SRC_DIR/.git" ]]; then
-        log_info "Existing checkout found, updating..."
-        git -C "$SRC_DIR" fetch --depth 1 origin "$REPO_REF"
-        git -C "$SRC_DIR" checkout --detach FETCH_HEAD
+    if [[ -d "${SRC_DIR}/.git" ]]; then
+        git -C "${SRC_DIR}" fetch --depth 1 origin "${REPO_REF}"
+        git -C "${SRC_DIR}" checkout --force --detach FETCH_HEAD
     else
-        rm -rf "$SRC_DIR"
-        git clone --depth 1 --branch "$REPO_REF" "$REPO_GIT_URL" "$SRC_DIR"
+        rm -rf "${SRC_DIR}"
+        git clone --depth 1 --branch "${REPO_REF}" "${REPO_GIT_URL}" "${SRC_DIR}"
     fi
 
-    log_success "Sources ready at $SRC_DIR ($(git -C "$SRC_DIR" rev-parse --short HEAD))"
+    DEPLOY_DIR="${SRC_DIR}/deploy"
+    log_success "Sources ready at ${SRC_DIR} ($(git -C "${SRC_DIR}" rev-parse --short HEAD))"
 }
 
-# Download deployment files
-download_deployment_files() {
-    log_info "Preparing deployment files..."
+copy_deploy_files() {
+    log_info "Copying deployment files..."
 
-    cd "$INSTALL_DIR"
+    local compose_src="${DEPLOY_DIR}/docker-compose.yml"
+    local caddyfile_src="${DEPLOY_DIR}/caddy/Caddyfile"
 
-    # Единственный источник compose-файла — свежий checkout в $SRC_DIR
-    # (fetch_sources отработал выше). Встроенной копии здесь нет намеренно:
-    # она неизбежно расходится с deploy/docker-compose.prod.yml.
-    local compose_src="$SRC_DIR/deploy/docker-compose.prod.yml"
-
-    if [[ ! -f "$compose_src" ]]; then
-        log_error "Compose file not found: $compose_src"
-        log_error "The checkout at $SRC_DIR is incomplete (wrong REPO_GIT_URL/REPO_REF?)"
+    if [[ ! -f "${compose_src}" || ! -f "${caddyfile_src}" ]]; then
+        log_error "Deployment files not found under ${DEPLOY_DIR}"
+        log_error "The checkout is incomplete (wrong REPO_GIT_URL/REPO_REF?)"
         exit 1
     fi
 
-    cp "$compose_src" "$INSTALL_DIR/docker-compose.yml"
-    log_info "Copied docker-compose.prod.yml from $compose_src"
+    if [[ -f "${INSTALL_DIR}/caddy/Caddyfile" ]] && ! cmp -s "${caddyfile_src}" "${INSTALL_DIR}/caddy/Caddyfile"; then
+        CADDYFILE_CHANGED=true
+        # Новый конфиг проверяется только после того, как ляжет на место; без
+        # этой копии невалидный файл остался бы примонтированным и убил бы Caddy
+        # на первом же пересоздании контейнера.
+        run cp "${INSTALL_DIR}/caddy/Caddyfile" "${CADDYFILE_BACKUP}"
+    fi
 
-    log_success "Deployment files ready"
+    run cp "${compose_src}" "${INSTALL_DIR}/docker-compose.yml"
+    run cp "${caddyfile_src}" "${INSTALL_DIR}/caddy/Caddyfile"
+    log_success "Deployment files copied"
 }
 
-# Дописать KEY=value в config/.env, если такого ключа там ещё нет.
-# Существующие значения не трогаем: их правит оператор.
+# Перечитать конфиг Caddy, если файл заменён на повторном запуске: `up -d`
+# пересоздаёт контейнер по изменению сервиса в compose, а не содержимого
+# примонтированного файла.
+reload_caddy() {
+    [[ "${CADDYFILE_CHANGED}" == "true" ]] || return 0
+    if [[ "${DRY_RUN}" == "true" ]]; then
+        log_info "[dry-run] would reload the Caddy config"
+        return 0
+    fi
+
+    log_info "Caddyfile changed, reloading Caddy..."
+
+    # Валидация до применения: битый конфиг иначе доходит до restart, а тот
+    # отдаёт успех и на контейнере, который вышел сразу после старта.
+    if ! docker compose run --rm --no-deps --entrypoint caddy \
+        caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+        log_error "New Caddyfile is invalid: ${INSTALL_DIR}/caddy/Caddyfile"
+        if [[ -f "${CADDYFILE_BACKUP}" ]]; then
+            cp "${CADDYFILE_BACKUP}" "${INSTALL_DIR}/caddy/Caddyfile"
+            log_error "Restored the previous config; Caddy keeps serving it"
+        fi
+        exit 1
+    fi
+
+    rm -f "${CADDYFILE_BACKUP}"
+
+    if docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+        log_success "Caddy config reloaded"
+        return 0
+    fi
+
+    log_warning "Caddy config reload failed, restarting Caddy..."
+    if ! docker compose restart caddy; then
+        log_error "Caddy restart failed; check ${INSTALL_DIR}/caddy/Caddyfile"
+        exit 1
+    fi
+
+    log_success "Caddy restarted"
+}
+
+# Значение ключа в env-файле; пусто, если ключа (или файла) нет.
+env_value() {
+    local file=$1 key=$2
+
+    [[ -f "${file}" ]] || return 0
+    sed -n "s|^${key}=||p" "${file}" | tail -1
+}
+
+# Дописать ключ, если его в файле нет; существующее значение не трогаем.
 ensure_env_key() {
-    local key=$1
-    local value=$2
-    local env_file="$INSTALL_DIR/config/.env"
+    local file=$1 key=$2 value=$3
 
-    if grep -q "^${key}=" "$env_file"; then
+    if grep -q "^${key}=" "${file}"; then
+        return 0
+    fi
+    if [[ "${DRY_RUN}" == "true" ]]; then
+        log_info "[dry-run] would append ${key}=${value} to ${file}"
         return 0
     fi
 
-    printf '%s=%s\n' "$key" "$value" >> "$env_file"
-    log_info "Added missing $key to config/.env"
+    log_info "Adding the missing ${key} to ${file}"
+    # Файл без завершающего перевода строки склеил бы новый ключ с последним.
+    if [[ -s "${file}" && -n "$(tail -c1 "${file}")" ]]; then
+        echo >> "${file}"
+    fi
+    echo "${key}=${value}" >> "${file}"
 }
 
-# Create environment file.
-#
-# Повторный запуск НЕ перезаписывает существующий config/.env. Раньше здесь был
-# безусловный `cat >`, и второй прогон сбрасывал правки оператора: COOKIE_SECURE
-# возвращался в true (на плайн-HTTP браузер молча выбрасывает Secure-cookie, и
-# вход зацикливается на "CSRF token not found in session"), а DOMAIN, LOG_LEVEL и
-# ENVIRONMENT — к значениям промпта, которые в --non-interactive равны localhost.
-# Файл переписывается только при первой установке и при --reinstall; в остальных
-# случаях лишь дописываются ключи, появившиеся в новых версиях.
+# Записать ключ, переписав отличающееся значение: домен и почта приходят из
+# аргументов, и повторный запуск с новым --domain обязан их обновить, иначе
+# Caddy продолжит обслуживать старое имя, а установщик отчитается о новом.
+set_env_key() {
+    local file=$1 key=$2 value=$3
+
+    if [[ "$(env_value "${file}" "${key}")" == "${value}" ]]; then
+        return 0
+    fi
+    if ! grep -q "^${key}=" "${file}"; then
+        ensure_env_key "${file}" "${key}" "${value}"
+        return 0
+    fi
+    if [[ "${DRY_RUN}" == "true" ]]; then
+        log_info "[dry-run] would set ${key}=${value} in ${file}"
+        return 0
+    fi
+
+    log_info "Updating ${key} in ${file}"
+    sed -i "s|^${key}=.*|${key}=${value}|" "${file}"
+}
+
+# Write .env from .env.example, substituting the domain and the ACME e-mail.
+# A repeated run keeps the existing file: it is the operator's, not ours.
 create_env_file() {
-    local env_file="$INSTALL_DIR/config/.env"
+    local env_file="${INSTALL_DIR}/.env"
 
-    if [[ -f "$env_file" && "$REINSTALL" != "true" ]]; then
-        log_info "Keeping existing environment file $env_file"
-        log_info "Operator settings (COOKIE_SECURE, DOMAIN, LOG_LEVEL, ENVIRONMENT, ...) are preserved"
-
-        ensure_env_key SERVER_PORT 8080
-        ensure_env_key SERVER_HOST 0.0.0.0
-        ensure_env_key DOMAIN "$DOMAIN"
-        ensure_env_key DATABASE_PATH /data/budget.db
-        ensure_env_key BUILD_CONTEXT ./src
-        ensure_env_key SESSION_SECRET "$SESSION_SECRET"
-        ensure_env_key CSRF_SECRET "$CSRF_SECRET"
-        ensure_env_key LOG_LEVEL info
-        ensure_env_key ENVIRONMENT production
-        ensure_env_key COOKIE_SECURE true
-        ensure_env_key ADMIN_EMAIL "$ADMIN_EMAIL"
-
-        chmod 600 "$env_file"
-        log_success "Environment file is up to date"
+    if [[ -f "${env_file}" && "${REINSTALL}" != "true" ]]; then
+        log_info "Keeping existing ${env_file}"
+        # Файл может быть старше этого скрипта: без BUILD_CONTEXT сборка ушла бы
+        # в ${INSTALL_DIR}/.. (дефолт compose), без BACKUP_DIR бэкапы легли бы
+        # внутрь тома с базой, а не в ./backups.
+        ensure_env_key "${env_file}" BUILD_CONTEXT ./src
+        ensure_env_key "${env_file}" DATABASE_PATH /data/budget.db
+        ensure_env_key "${env_file}" BACKUP_DIR /backups
+        ensure_env_key "${env_file}" BACKUP_KEEP 30
+        set_env_key "${env_file}" DOMAIN "${DOMAIN}"
+        set_env_key "${env_file}" ACME_EMAIL "${ACME_EMAIL}"
         return 0
     fi
 
-    log_info "Creating environment file..."
+    log_info "Creating ${env_file}..."
 
-    cat > "$INSTALL_DIR/config/.env" <<EOF
-# Family Budget Service - Production Configuration
-# Generated on $(date)
+    if [[ "${DRY_RUN}" == "true" ]]; then
+        log_info "[dry-run] would render ${DEPLOY_DIR}/.env.example with DOMAIN=${DOMAIN}, ACME_EMAIL=${ACME_EMAIL}"
+        return 0
+    fi
 
-# Server Configuration
-SERVER_PORT=8080
-SERVER_HOST=0.0.0.0
-DOMAIN=$DOMAIN
+    sed -e "s|^DOMAIN=.*|DOMAIN=${DOMAIN}|" \
+        -e "s|^ACME_EMAIL=.*|ACME_EMAIL=${ACME_EMAIL}|" \
+        -e "s|^#BUILD_CONTEXT=|BUILD_CONTEXT=|" \
+        "${DEPLOY_DIR}/.env.example" > "${env_file}"
 
-# Database
-DATABASE_PATH=/data/budget.db
-
-# Build (образ собирается из исходников, D-02).
-# Путь к клону репозитория относительно $INSTALL_DIR.
-BUILD_CONTEXT=./src
-
-# Security
-SESSION_SECRET=$SESSION_SECRET
-CSRF_SECRET=$CSRF_SECRET
-
-# Logging
-LOG_LEVEL=info
-ENVIRONMENT=production
-
-# Флаг Secure на cookie сессии. За TLS-прокси оставить true.
-# Если сервис пока отдаётся по http:// (кроме localhost/SSH-туннеля), поставьте
-# false: браузер молча выбрасывает Secure-cookie на небезопасном origin, и вход
-# зацикливается на "CSRF token not found in session".
-COOKIE_SECURE=true
-
-# Admin Contact
-ADMIN_EMAIL=$ADMIN_EMAIL
-EOF
-    
-    chmod 600 "$INSTALL_DIR/config/.env"
-    log_success "Created environment file"
+    chmod 600 "${env_file}"
+    log_success "Created ${env_file}"
 }
 
-# Set permissions
 set_file_permissions() {
-    log_info "Setting file permissions..."
-    
-    # Create app user if doesn't exist
-    create_user "$APP_USER"
-    
-    # Set ownership
-    chown -R "$APP_USER:$APP_USER" "$INSTALL_DIR"
+    log_info "Setting permissions..."
 
-    # Каталоги, смонтированные в контейнер, должны принадлежать пользователю
-    # внутри образа (docker/Dockerfile: app = 1000:1000), иначе SQLite не
-    # откроет БД на bind-mount (D-03). $APP_USER — системный, его UID < 1000.
-    chown -R "$CONTAINER_UID:$CONTAINER_GID" \
-        "$INSTALL_DIR/data" "$INSTALL_DIR/backups" "$INSTALL_DIR/logs"
+    # The container runs as 1000:1000; without this SQLite cannot create the
+    # database on the bind mount and Caddy cannot write its access log (D-03).
+    run chown -R "${CONTAINER_UID}:${CONTAINER_GID}" \
+        "${INSTALL_DIR}/data" "${INSTALL_DIR}/backups" "${INSTALL_DIR}/logs"
+    run chmod 700 "${INSTALL_DIR}/data" "${INSTALL_DIR}/backups"
 
-    # Set directory permissions
-    chmod 755 "$INSTALL_DIR"
-    chmod 700 "$INSTALL_DIR/data"
-    chmod 700 "$INSTALL_DIR/backups"
-    chmod 700 "$INSTALL_DIR/config"
-    chmod 755 "$INSTALL_DIR/logs"
-
-    log_success "File permissions set"
+    log_success "Permissions set"
 }
 
-# Deploy application
-deploy_application() {
-    log_info "Deploying application..."
-    
-    cd "$INSTALL_DIR"
-    
-    # Create environment symlink for docker-compose
-    ln -sf config/.env .env
+# Compose refuses to create its network while the old one holds 172.20.0.0/16
+# ("Pool overlaps with other one on this address space").
+remove_legacy_network() {
+    if [[ "${DRY_RUN}" == "true" ]]; then
+        log_info "[dry-run] docker network rm ${LEGACY_NETWORK}"
+        return 0
+    fi
 
-    # Собираем образ из исходников в ./src — публичного образа нет (D-02),
-    # поэтому `docker compose pull` здесь не сработает.
-    log_info "Building Docker image from sources (this may take a few minutes)..."
-    VERSION="$(git -C "$SRC_DIR" describe --tags --always --dirty 2>/dev/null || echo dev)" \
+    if ! docker network inspect "${LEGACY_NETWORK}" &>/dev/null; then
+        return 0
+    fi
+
+    if docker network rm "${LEGACY_NETWORK}" 2>/dev/null; then
+        log_info "Removed the network of the previous installation: ${LEGACY_NETWORK}"
+        return 0
+    fi
+
+    # Сеть не удаляется, пока к ней подключены контейнеры, — `up` ниже упадёт
+    # на "Pool overlaps", поэтому показываем оператору, что именно её держит.
+    log_warning "Could not remove the legacy network ${LEGACY_NETWORK}; containers still attached:"
+    docker network inspect -f '{{range .Containers}}  {{.Name}}{{println}}{{end}}' "${LEGACY_NETWORK}" || true
+    log_warning "Stop and remove them (docker rm -f <name>), then re-run the installer"
+}
+
+deploy_application() {
+    log_info "Building the image (this takes a few minutes)..."
+
+    run cd "${INSTALL_DIR}"
+    run env VERSION="$(git -C "${SRC_DIR}" describe --tags --always --dirty 2>/dev/null || echo dev)" \
         docker compose build app
 
-    # Start services
+    remove_legacy_network
+
     log_info "Starting services..."
-    docker compose up -d
+    run docker compose up -d
+
+    reload_caddy
 
     log_success "Application deployed"
 }
 
-# Verify installation
-verify_installation() {
-    log_info "Verifying installation..."
-    
-    # Wait for application to start
-    sleep 5
-    
-    # Check if container is running
-    if ! docker ps | grep -q family-budget; then
-        log_error "Container is not running"
-        docker compose logs
-        exit 1
+# Caddy падает на битом конфиге и на пустом ACME_EMAIL, а restart: unless-stopped
+# прячет это от `up -d`: без явной проверки установка отчитывается об успехе,
+# пока ingress крутится в перезапусках.
+verify_caddy() {
+    local state
+    state="$(docker inspect --format '{{.State.Status}}' family-budget-caddy 2>/dev/null || echo missing)"
+    if [[ "${state}" == "running" ]]; then
+        return 0
     fi
-    log_success "Container is running"
-    
-    # Check health endpoint
-    local max_attempts=30
+
+    log_error "Caddy is not running (state: ${state}); the API is not reachable over HTTPS"
+    docker compose -f "${INSTALL_DIR}/docker-compose.yml" logs --tail 50 caddy
+    exit 1
+}
+
+verify_installation() {
+    if [[ "${DRY_RUN}" == "true" ]]; then
+        log_info "[dry-run] would wait for the app container to become healthy"
+        return 0
+    fi
+
+    log_info "Waiting for the application to become healthy..."
+
     local attempt=0
-    while [[ $attempt -lt $max_attempts ]]; do
-        if curl -sf http://localhost:8080/health &>/dev/null; then
-            log_success "Health check passed"
-            break
+    local status=""
+    while [[ ${attempt} -lt 30 ]]; do
+        status="$(docker inspect --format '{{.State.Health.Status}}' family-budget-app 2>/dev/null || echo missing)"
+        if [[ "${status}" == "healthy" ]]; then
+            log_success "Application is healthy"
+            verify_caddy
+            return 0
         fi
         attempt=$((attempt + 1))
         sleep 2
     done
-    
-    if [[ $attempt -eq $max_attempts ]]; then
-        log_error "Health check failed after $max_attempts attempts"
-        docker compose logs
-        exit 1
-    fi
+
+    log_error "Application did not become healthy (last status: ${status})"
+    docker compose -f "${INSTALL_DIR}/docker-compose.yml" logs --tail 50
+    exit 1
 }
 
-# Display completion message
 show_completion_message() {
     echo ""
-    log_success "╔════════════════════════════════════════════════════════════════╗"
-    log_success "║       Family Budget Service Installation Complete!            ║"
-    log_success "╚════════════════════════════════════════════════════════════════╝"
+    log_success "Family Budget Service installed at ${INSTALL_DIR}"
     echo ""
-    log_info "Installation directory: $INSTALL_DIR"
-    log_info "Application URL: http://$DOMAIN:8080"
-    echo ""
-    log_info "Next steps:"
-    log_info "  1. Set up reverse proxy with SSL (see deploy/README.md, 'Deployment Options')"
-    log_info "  2. Create your first admin user by accessing the application"
-    log_info "  3. Review logs: docker compose -f $INSTALL_DIR/docker-compose.yml logs -f"
-    log_info "  4. Check status: docker compose -f $INSTALL_DIR/docker-compose.yml ps"
-    echo ""
-    log_info "Sources (image is built from them): $SRC_DIR"
-    log_info "Database location: $INSTALL_DIR/data/budget.db"
-    log_info "Backups location: $INSTALL_DIR/backups/"
-    log_info "Installation log: $LOG_FILE"
-    echo ""
-    
-    if [[ "$DOMAIN" == "localhost" ]]; then
-        log_warning "You are using localhost. For production use, configure a proper domain and SSL."
-    fi
-    
+    log_info "1. Create the family and the first admin (the password is read from stdin):"
+    cat <<EOF
+
+   cd ${INSTALL_DIR} && printf 'YourPassword1!\\n' | docker compose exec -T app \\
+       /app/family-budget-service setup --family 'Family' --currency RUB \\
+       --timezone Europe/Moscow --email you@example.com \\
+       --first-name Name --last-name Surname --password-stdin
+
+EOF
+    log_info "2. Add the daily backup to the host crontab (retention: BACKUP_KEEP in .env):"
+    cat <<EOF
+
+   0 3 * * * cd ${INSTALL_DIR} && docker compose run --rm --no-deps -T app backup
+
+EOF
+    log_info "Second user: POST /api/v1/users as the admin. API: https://${DOMAIN}/api/v1"
+    log_info "Logs: docker compose -f ${INSTALL_DIR}/docker-compose.yml logs -f"
+    log_info "Database: ${INSTALL_DIR}/data/budget.db, backups: ${INSTALL_DIR}/backups/"
     echo ""
 }
 
-# Cleanup on error
-cleanup_on_error() {
-    log_error "Installation failed. Cleaning up..."
-    
-    if [[ -d "$INSTALL_DIR" ]] && docker compose -f "$INSTALL_DIR/docker-compose.yml" ps &>/dev/null; then
-        docker compose -f "$INSTALL_DIR/docker-compose.yml" down
-    fi
-    
-    log_info "Check the log file for details: $LOG_FILE"
-}
-
-# Main installation flow
 main() {
-    trap cleanup_on_error ERR
-    
-    echo ""
-    log_info "╔════════════════════════════════════════════════════════════════╗"
-    log_info "║       Family Budget Service - Installation Script             ║"
-    log_info "╚════════════════════════════════════════════════════════════════╝"
-    echo ""
-    
     parse_args "$@"
-    
+
+    if [[ "${DRY_RUN}" != "true" ]]; then
+        exec 1> >(tee -a "${LOG_FILE}")
+        exec 2>&1
+    fi
+
+    echo ""
+    log_info "Family Budget Service - installation"
+    echo ""
+
     check_root
     detect_os
-    check_system_requirements
-    check_ports
+
+    if [[ "${DRY_RUN}" == "true" ]]; then
+        log_warning "--dry-run: system checks are skipped, nothing is written"
+    else
+        check_system_requirements
+        check_ports
+    fi
+
     prompt_configuration
-    
-    install_docker
-    setup_firewall
-    # Порядок важен: create_directories решает, остаётся ли config/.env на
-    # месте, а generate_secrets переиспользует секреты именно оттуда.
+
+    run install_docker
+    run setup_firewall
     create_directories
-    generate_secrets
     fetch_sources
-    download_deployment_files
+    copy_deploy_files
     create_env_file
     set_file_permissions
     deploy_application
     verify_installation
-    
+
     show_completion_message
 }
 
-# Run main function
 main "$@"

@@ -1,20 +1,16 @@
 #!/bin/bash
-# Family Budget Service - Uninstall Script
-# Safely removes Family Budget Service with optional data preservation
+# Family Budget Service - uninstaller. Removes the compose deployment, optionally keeping data.
 
 set -euo pipefail
 
-# Configuration
 INSTALL_DIR="${INSTALL_DIR:-/opt/family-budget}"
-SERVICE_USER="familybudget"
-SYSTEMD_DIR="/etc/systemd/system"
+COMPOSE_FILE="${INSTALL_DIR}/docker-compose.yml"
 
-# Source common functions if available
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -f "${SCRIPT_DIR}/lib/common.sh" ]]; then
+    # shellcheck source=./lib/common.sh
     source "${SCRIPT_DIR}/lib/common.sh"
 else
-    # Define basic logging functions
     RED='\033[0;31m'
     GREEN='\033[0;32m'
     YELLOW='\033[1;33m'
@@ -25,14 +21,11 @@ else
     log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 fi
 
-# Command line options
 SKIP_CONFIRMATION=false
 KEEP_DATA=false
-REMOVE_USER=true
 
-# ============================================
-# Parse arguments
-# ============================================
+# Имена заданы в compose жёстко, поэтому контейнеры находятся и без compose-файла.
+CONTAINER_NAMES=(family-budget-app family-budget-caddy)
 
 parse_args() {
     while [[ $# -gt 0 ]]; do
@@ -43,10 +36,6 @@ parse_args() {
                 ;;
             --keep-data)
                 KEEP_DATA=true
-                shift
-                ;;
-            --keep-user)
-                REMOVE_USER=false
                 shift
                 ;;
             --help|-h)
@@ -69,27 +58,14 @@ Family Budget Service - Uninstall Script
 Usage: sudo ./uninstall.sh [OPTIONS]
 
 OPTIONS:
-    --yes, -y         Skip confirmation prompts
-    --keep-data       Keep database and backup files
-    --keep-user       Don't remove the service user
-    --help, -h        Show this help message
+    --yes, -y      Skip confirmation prompts (removes everything, no backup copy)
+    --keep-data    Keep ${INSTALL_DIR} (database, backups, .env) and the Caddy volumes
+    --help, -h     Show this help message
 
-EXAMPLES:
-    # Interactive uninstall (recommended)
-    sudo ./uninstall.sh
-
-    # Non-interactive with data backup
-    sudo ./uninstall.sh --yes --keep-data
-
-    # Complete removal
-    sudo ./uninstall.sh --yes
-
+ENVIRONMENT:
+    INSTALL_DIR    Installation directory (default: /opt/family-budget)
 EOF
 }
-
-# ============================================
-# Pre-uninstall checks
-# ============================================
 
 check_root() {
     if [[ $EUID -ne 0 ]]; then
@@ -104,323 +80,213 @@ confirm_uninstall() {
     fi
 
     echo ""
-    log_info "╔════════════════════════════════════════════════════════════════╗"
-    log_info "║       Family Budget Service - Uninstaller                     ║"
-    log_info "╚════════════════════════════════════════════════════════════════╝"
-    echo ""
-    log_warning "This will remove Family Budget Service from your system."
-    echo ""
-    log_info "Installation directory: ${INSTALL_DIR}"
-    log_info "Service user: ${SERVICE_USER}"
-    echo ""
-
-    read -p "Do you want to proceed with uninstall? (type 'yes' to confirm): " confirm
+    log_warning "This removes Family Budget Service from ${INSTALL_DIR}."
+    read -r -p "Do you want to proceed with uninstall? (type 'yes' to confirm): " confirm
     if [[ "${confirm}" != "yes" ]]; then
         log_info "Uninstall cancelled by user"
         exit 0
     fi
 }
 
-# ============================================
-# Data handling
-# ============================================
-
 backup_data() {
-    if [[ "${KEEP_DATA}" == "true" ]]; then
-        log_info "Data will be preserved in ${INSTALL_DIR}"
+    if [[ "${KEEP_DATA}" == "true" || "${SKIP_CONFIRMATION}" == "true" ]]; then
         return 0
     fi
 
-    local backup_dir="${HOME}/family-budget-backup-$(date +%Y%m%d_%H%M%S)"
-
-    if [[ "${SKIP_CONFIRMATION}" == "false" ]]; then
-        echo ""
-        read -p "Create backup before uninstalling? (yes/no): " backup_confirm
-    else
-        backup_confirm="no"
+    read -r -p "Copy database, backups and .env somewhere safe first? (yes/no): " backup_confirm
+    if [[ "${backup_confirm}" != "yes" ]]; then
+        return 0
     fi
 
-    if [[ "${backup_confirm}" == "yes" ]]; then
-        log_info "Creating backup at ${backup_dir}..."
-        mkdir -p "${backup_dir}"
+    local backup_dir
+    backup_dir="${HOME}/family-budget-backup-$(date +%Y%m%d_%H%M%S)"
+    log_info "Creating copy at ${backup_dir}..."
+    mkdir -p "${backup_dir}"
 
-        # Backup database
-        if [[ -f "${INSTALL_DIR}/data/budget.db" ]]; then
-            mkdir -p "${backup_dir}/data"
-            cp "${INSTALL_DIR}/data/budget.db" "${backup_dir}/data/"
-            log_success "Database backed up"
-        fi
-
-        # Backup configuration
-        if [[ -f "${INSTALL_DIR}/.env" ]]; then
-            cp "${INSTALL_DIR}/.env" "${backup_dir}/"
-        fi
-        if [[ -f "${INSTALL_DIR}/config/.env" ]]; then
-            mkdir -p "${backup_dir}/config"
-            cp "${INSTALL_DIR}/config/.env" "${backup_dir}/config/"
-        fi
-        log_success "Configuration backed up"
-
-        # Backup existing backups
-        if [[ -d "${INSTALL_DIR}/backups" ]] && ls "${INSTALL_DIR}/backups"/*.db &>/dev/null; then
-            mkdir -p "${backup_dir}/backups"
-            cp "${INSTALL_DIR}/backups"/*.db "${backup_dir}/backups/" 2>/dev/null || true
-            log_success "Existing backups preserved"
-        fi
-
-        log_success "Backup created at: ${backup_dir}"
+    if [[ -f "${INSTALL_DIR}/data/budget.db" ]]; then
+        cp "${INSTALL_DIR}/data/budget.db" "${backup_dir}/"
+        # -wal/-shm остаются, если контейнер завершился нештатно: без них копия
+        # теряет последние транзакции.
+        local suffix
+        for suffix in -wal -shm; do
+            if [[ -f "${INSTALL_DIR}/data/budget.db${suffix}" ]]; then
+                cp "${INSTALL_DIR}/data/budget.db${suffix}" "${backup_dir}/"
+            fi
+        done
     fi
+    if [[ -f "${INSTALL_DIR}/.env" ]]; then
+        cp "${INSTALL_DIR}/.env" "${backup_dir}/"
+    fi
+    if compgen -G "${INSTALL_DIR}/backups/*.db" > /dev/null; then
+        mkdir -p "${backup_dir}/backups"
+        cp "${INSTALL_DIR}"/backups/*.db "${backup_dir}/backups/"
+    fi
+
+    log_success "Copy created at: ${backup_dir}"
 }
 
-# ============================================
-# Stop services
-# ============================================
-
-stop_docker_services() {
-    log_info "Stopping Docker services..."
-
-    # Try various compose file names
-    local compose_files=(
-        "docker-compose.yml"
-        "docker-compose.prod.yml"
-        "docker-compose.nginx.yml"
-        "docker-compose.caddy.yml"
-    )
-
-    cd "${INSTALL_DIR}" 2>/dev/null || return 0
-
-    for compose_file in "${compose_files[@]}"; do
-        if [[ -f "${compose_file}" ]]; then
-            log_info "Stopping services from ${compose_file}..."
-            docker compose -f "${compose_file}" down --remove-orphans 2>/dev/null || true
+# Пропавший compose-файл не значит «ничего не запущено»: у повреждённой установки
+# контейнеры продолжают писать в bind-mount базу, которую дальше удаляет rm -rf.
+stop_containers_by_name() {
+    local name existing
+    for name in "${CONTAINER_NAMES[@]}"; do
+        if ! existing="$(docker ps -aq --filter "name=^/${name}$")"; then
+            log_error "docker ps failed; cannot tell whether ${name} is running"
+            log_error "Nothing was removed. Check: docker ps -a --filter name=family-budget"
+            exit 1
+        fi
+        if [[ -n "${existing}" ]]; then
+            log_info "Removing container ${name}..."
+            docker rm -f "${name}" >/dev/null || log_warning "Could not remove container ${name}"
         fi
     done
 
-    # Remove Docker volumes if requested
-    if [[ "${SKIP_CONFIRMATION}" == "false" && "${KEEP_DATA}" == "false" ]]; then
-        echo ""
-        read -p "Remove Docker volumes? This will delete all data in volumes. (yes/no): " remove_volumes
-    else
-        remove_volumes="no"
+    ensure_nothing_running "docker ps --filter name=family-budget"
+
+    log_warning "Named volumes (Caddy certificates) were not removed: no compose file to name them"
+}
+
+# Неудачный запрос к docker считается за «контейнеры живы»: цена ошибки в другую
+# сторону — rm -rf по базе под работающим приложением.
+ensure_nothing_running() {
+    local hint="$1" still_running
+    if ! still_running="$(running_containers)"; then
+        log_error "Cannot query docker; refusing to remove ${INSTALL_DIR}"
+        log_error "Check: ${hint}"
+        exit 1
+    fi
+    if [[ -n "${still_running}" ]]; then
+        log_error "Containers are still running; refusing to remove ${INSTALL_DIR}"
+        log_error "Check: ${hint}"
+        exit 1
+    fi
+}
+
+running_containers() {
+    local name filters=()
+    for name in "${CONTAINER_NAMES[@]}"; do
+        filters+=(--filter "name=^/${name}$")
+    done
+    docker ps -q "${filters[@]}"
+}
+
+stop_services() {
+    if [[ ! -f "${COMPOSE_FILE}" ]]; then
+        log_warning "No compose file at ${COMPOSE_FILE}; falling back to the fixed container names"
+        stop_containers_by_name
+        return 0
     fi
 
-    if [[ "${remove_volumes}" == "yes" || "${KEEP_DATA}" == "false" ]]; then
-        log_info "Removing Docker volumes..."
-        docker volume rm family-budget-data 2>/dev/null || true
-        docker volume rm family-budget-backups 2>/dev/null || true
-        docker volume rm family-budget-caddy-data 2>/dev/null || true
-        docker volume rm family-budget-caddy-config 2>/dev/null || true
-        docker volume rm family-budget-certbot-www 2>/dev/null || true
-        docker volume rm family-budget-certbot-conf 2>/dev/null || true
-        docker volume rm family-budget-nginx-cache 2>/dev/null || true
-        log_success "Docker volumes removed"
+    log_info "Stopping services..."
+    cd "${INSTALL_DIR}"
+
+    # Caddy volumes hold the issued certificates: dropping them makes the next
+    # install request new ones and burn Let's Encrypt rate limits for the domain.
+    local down_args=(--remove-orphans)
+    if [[ "${KEEP_DATA}" != "true" ]]; then
+        down_args+=(--volumes)
     fi
 
-    # Remove Docker images if requested
+    # Ошибку глушить нельзя: дальше идёт rm -rf ${INSTALL_DIR}, а удаление
+    # bind-mount базы из-под живого контейнера уничтожает её без копии.
+    if ! docker compose -f "${COMPOSE_FILE}" down "${down_args[@]}"; then
+        log_error "docker compose down failed; containers may still be running"
+        log_error "Nothing was removed. Check: docker compose -f ${COMPOSE_FILE} ps"
+        exit 1
+    fi
+
+    local compose_ps
+    if ! compose_ps="$(docker compose -f "${COMPOSE_FILE}" ps -q)"; then
+        log_error "docker compose ps failed after 'down'; refusing to remove ${INSTALL_DIR}"
+        log_error "Check: docker compose -f ${COMPOSE_FILE} ps"
+        exit 1
+    fi
+    if [[ -n "${compose_ps}" ]]; then
+        log_error "Containers are still running after 'down'; refusing to remove ${INSTALL_DIR}"
+        log_error "Check: docker compose -f ${COMPOSE_FILE} ps"
+        exit 1
+    fi
+    ensure_nothing_running "docker compose -f ${COMPOSE_FILE} ps"
+
+    log_success "Services stopped"
+}
+
+remove_images() {
     if [[ "${SKIP_CONFIRMATION}" == "false" ]]; then
-        read -p "Remove Docker images? (yes/no): " remove_images
-        if [[ "${remove_images}" == "yes" ]]; then
-            remove_docker_images
+        read -r -p "Remove the locally built Docker image? (yes/no): " remove_img
+        if [[ "${remove_img}" != "yes" ]]; then
+            return 0
         fi
     fi
-}
 
-# Публичного образа в GHCR нет (D-02) — образ собирается локально, и compose
-# называет его `<project>-<service>`, где project — имя каталога установки.
-# Имена GHCR оставлены для старых инсталляций, которые ещё тянули образ.
-remove_docker_images() {
+    # The image is built locally, so compose names it <project>-app, where the
+    # project is the name of the installation directory.
     local project
     project="$(basename "${INSTALL_DIR}")"
-
     docker rmi "${project}-app" 2>/dev/null || true
-    docker rmi "${project}_app" 2>/dev/null || true
-
-    local ghcr_images
-    ghcr_images="$(docker images -q 'ghcr.io/lllypuk/family-finances-service:*' 2>/dev/null || true)"
-    if [[ -n "${ghcr_images}" ]]; then
-        # shellcheck disable=SC2086 # список ID, нужен word splitting
-        docker rmi ${ghcr_images} 2>/dev/null || true
-    fi
-
-    log_success "Docker images removed"
-}
-
-stop_systemd_services() {
-    log_info "Stopping systemd services..."
-
-    # Stop and disable main service
-    if systemctl is-active family-budget.service &>/dev/null; then
-        systemctl stop family-budget.service
-        log_info "Stopped family-budget.service"
-    fi
-    if systemctl is-enabled family-budget.service &>/dev/null; then
-        systemctl disable family-budget.service
-        log_info "Disabled family-budget.service"
-    fi
-
-    # Stop and disable backup service
-    if systemctl is-active family-budget-backup.service &>/dev/null; then
-        systemctl stop family-budget-backup.service
-        log_info "Stopped family-budget-backup.service"
-    fi
-
-    # Stop and disable backup timer
-    if systemctl is-active family-budget-backup.timer &>/dev/null; then
-        systemctl stop family-budget-backup.timer
-        log_info "Stopped family-budget-backup.timer"
-    fi
-    if systemctl is-enabled family-budget-backup.timer &>/dev/null; then
-        systemctl disable family-budget-backup.timer
-        log_info "Disabled family-budget-backup.timer"
-    fi
-}
-
-# ============================================
-# Remove files
-# ============================================
-
-remove_systemd_units() {
-    log_info "Removing systemd units..."
-
-    rm -f "${SYSTEMD_DIR}/family-budget.service"
-    rm -f "${SYSTEMD_DIR}/family-budget-backup.service"
-    rm -f "${SYSTEMD_DIR}/family-budget-backup.timer"
-
-    systemctl daemon-reload
-
-    log_success "Systemd units removed"
+    log_success "Docker image removed"
 }
 
 remove_installation_directory() {
     if [[ "${KEEP_DATA}" == "true" ]]; then
-        log_info "Keeping installation directory: ${INSTALL_DIR}"
-        log_info "You can manually remove it later with: rm -rf ${INSTALL_DIR}"
+        log_info "Keeping ${INSTALL_DIR} (remove it later with: rm -rf ${INSTALL_DIR})"
         return 0
     fi
-
-    log_info "Removing installation directory..."
 
     if [[ -d "${INSTALL_DIR}" ]]; then
         rm -rf "${INSTALL_DIR}"
         log_success "Installation directory removed: ${INSTALL_DIR}"
-    else
-        log_info "Installation directory not found, skipping"
-    fi
-}
-
-remove_service_user() {
-    if [[ "${REMOVE_USER}" == "false" ]]; then
-        log_info "Keeping service user: ${SERVICE_USER}"
-        return 0
-    fi
-
-    log_info "Removing service user..."
-
-    if id "${SERVICE_USER}" &>/dev/null; then
-        userdel "${SERVICE_USER}" 2>/dev/null || true
-        log_success "Service user removed: ${SERVICE_USER}"
-    else
-        log_info "Service user not found, skipping"
     fi
 }
 
 remove_firewall_rules() {
     if [[ "${SKIP_CONFIRMATION}" == "false" ]]; then
-        echo ""
-        read -p "Remove firewall rules? (yes/no): " remove_fw
+        read -r -p "Remove firewall rules for 80/443? (yes/no): " remove_fw
+        if [[ "${remove_fw}" != "yes" ]]; then
+            return 0
+        fi
     else
-        remove_fw="no"
-    fi
-
-    if [[ "${remove_fw}" != "yes" ]]; then
         return 0
     fi
 
     log_info "Removing firewall rules..."
 
-    # UFW (Ubuntu/Debian)
     if command -v ufw &>/dev/null; then
         ufw delete allow 80/tcp 2>/dev/null || true
         ufw delete allow 443/tcp 2>/dev/null || true
-        ufw delete deny 8080/tcp 2>/dev/null || true
-        log_success "UFW rules removed"
+        ufw delete allow 443/udp 2>/dev/null || true
     fi
-
-    # Firewalld (RHEL-based)
     if command -v firewall-cmd &>/dev/null; then
         firewall-cmd --permanent --remove-service=http 2>/dev/null || true
         firewall-cmd --permanent --remove-service=https 2>/dev/null || true
+        firewall-cmd --permanent --remove-port=443/udp 2>/dev/null || true
         firewall-cmd --reload 2>/dev/null || true
-        log_success "Firewalld rules removed"
     fi
+
+    log_success "Firewall rules removed"
 }
-
-remove_fail2ban_config() {
-    if [[ "${SKIP_CONFIRMATION}" == "false" ]]; then
-        echo ""
-        read -p "Remove fail2ban configuration? (yes/no): " remove_f2b
-    else
-        remove_f2b="no"
-    fi
-
-    if [[ "${remove_f2b}" != "yes" ]]; then
-        return 0
-    fi
-
-    log_info "Removing fail2ban configuration..."
-
-    rm -f /etc/fail2ban/filter.d/family-budget.conf
-    rm -f /etc/fail2ban/jail.d/family-budget.local
-
-    if systemctl is-active fail2ban &>/dev/null; then
-        systemctl restart fail2ban
-    fi
-
-    log_success "Fail2ban configuration removed"
-}
-
-# ============================================
-# Main uninstall function
-# ============================================
-
-uninstall() {
-    echo ""
-    log_info "Starting uninstall process..."
-    echo ""
-
-    check_root
-    confirm_uninstall
-    backup_data
-
-    stop_docker_services
-    stop_systemd_services
-    remove_systemd_units
-    remove_installation_directory
-    remove_service_user
-    remove_firewall_rules
-    remove_fail2ban_config
-
-    echo ""
-    log_success "╔════════════════════════════════════════════════════════════════╗"
-    log_success "║       Family Budget Service Uninstalled Successfully!         ║"
-    log_success "╚════════════════════════════════════════════════════════════════╝"
-    echo ""
-
-    if [[ "${KEEP_DATA}" == "true" ]]; then
-        log_info "Data preserved in: ${INSTALL_DIR}"
-    fi
-
-    log_info "Thank you for using Family Budget Service!"
-    echo ""
-}
-
-# ============================================
-# Entry point
-# ============================================
 
 main() {
     parse_args "$@"
-    uninstall
+
+    check_root
+    confirm_uninstall
+    # Сначала стоп, потом копия: приложение сливает WAL только при штатном
+    # завершении, иначе копия -wal рядом с budget.db — единственный шанс на
+    # последние транзакции.
+    stop_services
+    backup_data
+    remove_images
+    remove_installation_directory
+    remove_firewall_rules
+
+    echo ""
+    log_success "Family Budget Service uninstalled"
+    if [[ "${KEEP_DATA}" == "true" ]]; then
+        log_info "Data preserved in: ${INSTALL_DIR}"
+    fi
+    log_warning "The host crontab entry for the daily backup is not touched: remove it with 'crontab -e'"
+    echo ""
 }
 
 main "$@"

@@ -15,14 +15,15 @@ Create and manage backups of the SQLite database.
 make sqlite-backup
 ```
 
-This creates a timestamped backup in `./backups/` directory:
-- Format: `budget_YYYYMMDD_HHMMSS.db`
-- Location: `./backups/budget_20260130_104530.db`
+This runs `go run ./cmd/server backup` (`VACUUM INTO`) with `BACKUP_DIR=./backups`:
+- Format: `backup_YYYYMMDD_HHMMSSmmm.db`
+- Location: `./backups/backup_20260130_104530123.db`
+- Retention: the newest `BACKUP_KEEP` files (default 30); older ones are deleted
 
 ## Restore from Backup
 
 ```bash
-make sqlite-restore BACKUP_FILE=./backups/budget_20260130_104530.db
+make sqlite-restore BACKUP_FILE=./backups/backup_20260130_104530123.db
 ```
 
 **⚠️ WARNING**: This will overwrite the current database at `./data/budget.db`

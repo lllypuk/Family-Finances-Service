@@ -30,13 +30,13 @@ go test ./internal/application/handlers -run 'TestAuthHandler_.*' -v
 Docker: `make docker-up` / `docker-up-d` / `docker-down` / `docker-logs` — all use `docker/docker-compose.yml`
 (builds `docker/Dockerfile`; no secrets are required). Compose is invoked as `docker compose --project-directory .`
 (the `DOCKER_COMPOSE` variable in the Makefile) so that `.env` is read from the repo root — hence `build.context: .`
-inside `docker/docker-compose.yml`. `make compose-config` validates all five compose files (`docker/` + the four
-`deploy/*.yml`) and runs in CI; `COMPOSE_VALIDATE_ENV` still feeds dummy `SESSION_SECRET`/`CSRF_SECRET` to the
-`deploy/*.yml` pass because those files demand them via `${VAR:?}` until plan 05 replaces them — the application
-does not read either variable.
+inside `docker/docker-compose.yml`. `make compose-config` validates both compose files (`docker/` and
+`deploy/docker-compose.yml`) and runs in CI; neither needs any variable set, there are no secrets.
+`make caddy-validate` checks `deploy/caddy/Caddyfile` with the Caddy image taken out of the deploy compose
+(so the digest lives in one place).
 
-SQLite: `make sqlite-shell`, `make sqlite-stats`, `make sqlite-backup`,
-`make sqlite-restore BACKUP_FILE=./backups/<file>.db`.
+SQLite: `make sqlite-shell`, `make sqlite-stats`, `make sqlite-backup` (runs `go run ./cmd/server backup`),
+`make sqlite-restore BACKUP_FILE=./backups/backup_<ts>.db` (dev-only `cp`; in production restore is manual over ssh).
 
 **Mandatory before handing off any code change: `make fmt`, `make test`, `make lint` — `make lint` must report
 0 issues.** The linter config is strict (see "Linter constraints" below); do not add `//nolint` without a specific
@@ -66,10 +66,14 @@ Layered/Clean architecture, single Go module `family-budget-service`. Wiring hap
 `internal/run.go` (`NewApplication`) — in this order:
 
 1. `LoadConfig()` + `Validate()` (`internal/config.go`) — all config is env vars, no config files:
-   `SERVER_*`, `DATABASE_PATH`, `BACKUP_DIR`, `LOG_*`, `ENVIRONMENT`, `TRUSTED_PROXIES`. There are no secrets.
-   `BACKUP_DIR` empty means `<dir(DATABASE_PATH)>/backups` (`Config.GetBackupDir()`, compose mounts `/backups`).
+   `SERVER_*`, `DATABASE_PATH`, `BACKUP_DIR`, `BACKUP_KEEP`, `LOG_*`, `ENVIRONMENT`, `TRUSTED_PROXIES`.
+   There are no secrets. `BACKUP_DIR` empty means `<dir(DATABASE_PATH)>/backups` (`Config.GetBackupDir()`,
+   compose mounts `/backups`); `BACKUP_KEEP` (default 30) is the retention shared by `POST /api/v1/backups`
+   and the `backup` subcommand.
 2. `internal.OpenDatabase(cfg)` (`internal/bootstrap.go`) — `infrastructure.NewSQLiteConnection` + golang-migrate
-   `Up()` from `./migrations`. The CLI subcommands open the DB through the same function.
+   `Up()` from `./migrations`. `setup`/`reset-password` open the DB through the same function;
+   `backup` uses `OpenDatabaseNoMigrate` — a copy must be possible from an outdated schema, and a cron
+   `compose run` must not migrate the live DB under the running container.
 3. `infrastructure.NewRepositoriesSQLite(db)` → `*handlers.Repositories` (one struct holding every repo).
 4. `auth.NewService(repos.Session, repos.User, repos.Family)` — built here and handed to
    `services.NewServices(...)` → `*services.Services` (`Services.Auth`). `StatsService.Summary(ctx, from, to)` owns
@@ -82,7 +86,7 @@ The version reported by `/health` comes from `internal/version` (`version.String
 defaults to `dev` and is overwritten at link time by `-ldflags "-X family-budget-service/internal/version.Version=…"`
 — `VERSION` in the `Makefile` (`git describe --tags --always --dirty`) and `ARG VERSION` in `docker/Dockerfile`.
 Every build path that matters passes it: the Makefile `export`s `VERSION` so compose forwards it as a build-arg
-(`args: VERSION: ${VERSION:-dev}` in all five compose files), `deploy/scripts/{install,upgrade}.sh` set it from
+(`args: VERSION: ${VERSION:-dev}` in both compose files), `deploy/scripts/{install,upgrade}.sh` set it from
 `git describe` in `./src`, and `docker.yml`/`release.yml` pass `--build-arg`/`-ldflags`. A `-X` flag naming a
 symbol that does not exist is silently dropped by the linker, so keep the full package path in sync.
 `go build ./...` without `-ldflags` reports `dev`, which is correct, not a bug.
@@ -170,14 +174,6 @@ has a catch-all, an unknown `/api/v1/...` path is `401` without a token and `404
 
 **Working directory matters:** `./migrations` is resolved relative to the process CWD (`migrationsDir` in
 `internal/bootstrap.go`), so both the server and the CLI subcommands must be started from the repo root.
-
-### Known rough edges (verified, not fixed)
-
-Do not treat these as regressions you introduced:
-
-- **`deploy/**` is stale until plan 05**: the four `deploy/*.yml`, `deploy/.env.production.example` and the
-  nginx/Caddy/fail2ban configs still require `SESSION_SECRET`/`CSRF_SECRET` and rate-limit a `/login` page that
-  no longer exists. Do not fix them piecemeal; plan 05 replaces the directory.
 
 ## Database & migrations
 
@@ -270,8 +266,9 @@ reference): `docs/README.md` (navigation), `docs/product_brief.md`, `docs/tech_s
 status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the finished ones.
 
 **Current direction:** `docs/specs/005-api-only-redesign.md` — the service is an API-only backend for an
-Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–04 are done
-(`docs/plans/completed/`); `docs/plans/20260904-05-deploy-ffs.md` runs next.
+Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–05 are done
+(`docs/plans/completed/`); what is left is the owner's work on the server (DNS, `install.sh`, `setup`, backup
+cron, the `v0.1.0` tag).
 
 `docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates
 from it, and code and spec now match. **A registered route with no operation in the spec fails `make test`**
@@ -279,8 +276,9 @@ from it, and code and spec now match. **A registered route with no operation in 
 `TestOpenAPISpec_OperationsHaveIDAndErrorResponse` requiring an `operationId` and a 4xx `$ref: Error` on every
 operation). The reverse also fails it (`TestOpenAPISpec_DescribesOnlyRegisteredRoutes`): spec and routes match
 exactly, with no exceptions. See `docs/api/README.md`.
-Self-hosted deployment (install/upgrade/backup scripts, nginx & Caddy configs, systemd units, fail2ban) is in
-`deploy/` — see `deploy/README.md` and the "Known rough edges" note above.
+Self-hosted deployment is `deploy/`: one compose (`app` + Caddy), `caddy/Caddyfile`, `.env.example` and the
+`install`/`upgrade`/`uninstall`/`health-check` scripts — see `deploy/README.md`. Backups in production are the
+`backup` subcommand from a host cron job; restore is manual over ssh.
 
 When runtime/dev commands disagree between documents, `Makefile` + this file win.
 
@@ -291,8 +289,9 @@ Go **1.26.7** (also pinned as `GO_VERSION` in `.github/workflows/ci.yml`), Echo 
 go-playground/validator v10, testify, `go.yaml.in/yaml/v3` (test-only: parses `docs/api/openapi.yaml` in the
 coverage test).
 
-CI (`.github/workflows/ci.yml`) runs golangci-lint, `govulncheck`, `make test-coverage`, `make build`, and a Docker
-build/run smoke test. Additional workflows: `docker.yml`, `security.yml` (CodeQL, Semgrep, TruffleHog, OSV),
+CI (`.github/workflows/ci.yml`) runs golangci-lint, `govulncheck`, `make test-coverage`, `make build`, a Docker
+build/run smoke test, `shellcheck -e SC1091` over `deploy/scripts/**` (SC1091 is off: the libs are sourced through
+a computed path) and `make compose-config` + `make caddy-validate`. Additional workflows: `docker.yml`, `security.yml` (CodeQL, Semgrep, TruffleHog, OSV),
 `scorecard.yml` (OSSF Scorecard), `release.yml`.
 
 `scorecard.yml` is deliberately a **separate file**: with `publish_results: true` the OSSF API rejects results from
@@ -302,7 +301,10 @@ do not add steps beyond the action's approved list (`actions/checkout`, `actions
 `github/codeql-action/upload-sarif`, `ossf/scorecard-action`, `step-security/harden-runner`).
 
 **Every `uses:` is pinned to a commit SHA** with the version as a trailing comment
-(`uses: actions/checkout@d23441a… # v6.1.0`), and both `FROM` lines in `docker/Dockerfile` are pinned by digest.
+(`uses: actions/checkout@d23441a… # v6.1.0`); both `FROM` lines in `docker/Dockerfile` and the `caddy` image in
+`deploy/docker-compose.yml` are pinned by digest (that one is watched by the `docker-compose` Dependabot ecosystem
+for `/deploy` — the `docker` ecosystem sees Dockerfiles only, and `make caddy-validate` reads the digest back out
+of the compose file).
 There are no exceptions. Do not reintroduce a tag or branch ref (`@v4`, `@main`, `@master`) — Dependabot updates
 the SHA and its comment together. `go install` in CI likewise pins exact tool versions, never `@latest`.
 

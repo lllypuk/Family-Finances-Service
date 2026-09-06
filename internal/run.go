@@ -76,7 +76,13 @@ func NewApplication() (*Application, error) {
 	logger := app.observabilityService.Logger
 
 	// Инициализация BackupService
-	backupService := services.NewBackupService(db, config.Database.Path, config.GetBackupDir(), logger)
+	backupService := services.NewBackupService(
+		db,
+		config.Database.Path,
+		config.GetBackupDir(),
+		config.Database.BackupKeep,
+		logger,
+	)
 
 	authService := auth.NewService(app.repositories.Session, app.repositories.User, app.repositories.Family)
 

@@ -80,7 +80,7 @@ func SetupHTTPServer(t *testing.T, opts ...ServerOption) *TestServer {
 
 	// Create BackupService for testing with in-memory database.
 	// Каталог бэкапов — временный: иначе сервис пишет ./backups в каталог пакета.
-	backupService := services.NewBackupService(db, ":memory:", t.TempDir(), slog.Default())
+	backupService := services.NewBackupService(db, ":memory:", t.TempDir(), services.DefaultBackupKeep, slog.Default())
 
 	// Create services for testing - use simplified version to avoid circular dependencies
 	servicesContainer := services.NewServices(

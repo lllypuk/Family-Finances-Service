@@ -7,7 +7,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 # Check if Docker is installed
 check_docker() {
     if command -v docker &>/dev/null; then
-        local docker_version=$(docker --version | awk '{print $3}' | sed 's/,//')
+        local docker_version
+        docker_version=$(docker --version | awk '{print $3}' | sed 's/,//')
         log_info "Docker is already installed: $docker_version"
         return 0
     fi
@@ -30,7 +31,7 @@ install_docker_debian() {
     
     # Add Docker's official GPG key
     install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/$OS/gpg | \
+    curl -fsSL "https://download.docker.com/linux/${OS}/gpg" | \
         gpg --dearmor -o /etc/apt/keyrings/docker.gpg
     chmod a+r /etc/apt/keyrings/docker.gpg
     
@@ -102,8 +103,9 @@ install_docker() {
         exit 1
     fi
     
-    local docker_version=$(docker --version)
-    local compose_version=$(docker compose version)
+    local docker_version compose_version
+    docker_version=$(docker --version)
+    compose_version=$(docker compose version)
     log_success "Docker installed: $docker_version"
     log_success "Docker Compose installed: $compose_version"
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal"
+	"family-budget-service/internal/services"
 )
 
 func productionConfig() *internal.Config {
@@ -50,6 +51,26 @@ func TestConfig_GetBackupDir(t *testing.T) {
 			}
 
 			assert.Equal(t, tt.want, cfg.GetBackupDir())
+		})
+	}
+}
+
+// BACKUP_KEEP: неразбираемое и неположительное значение считается незаданным,
+// иначе ретеншен молча удалил бы все файлы или сломался бы на опечатке.
+func TestLoadConfig_ReadsBackupKeep(t *testing.T) {
+	tests := map[string]int{
+		"7":   7,
+		"":    services.DefaultBackupKeep,
+		"abc": services.DefaultBackupKeep,
+		"0":   services.DefaultBackupKeep,
+		"-1":  services.DefaultBackupKeep,
+	}
+
+	for value, want := range tests {
+		t.Run("BACKUP_KEEP="+value, func(t *testing.T) {
+			t.Setenv("BACKUP_KEEP", value)
+
+			assert.Equal(t, want, internal.LoadConfig().Database.BackupKeep)
 		})
 	}
 }

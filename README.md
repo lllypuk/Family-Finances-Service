@@ -6,9 +6,9 @@ API for the Android client. One instance = one family.
 ## 🎯 Project Status: IN DEVELOPMENT 🚧
 
 > **Direction (September 2026):** API-only backend for an Android app. Decisions and the five implementation
-> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–04 are done: the
-> web interface, cookie sessions and CSRF are gone, money is integer minor units and dates are calendar dates;
-> the sections below describe the code as it is today.
+> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–05 are done: the
+> web interface, cookie sessions and CSRF are gone, money is integer minor units, dates are calendar dates and
+> the deployment is one compose with Caddy; the sections below describe the code as it is today.
 
 - ✅ REST API for family, users, categories, transactions, budgets, reports, stats, backups
 - ✅ Bearer-token authentication with server-side sessions and a login rate limiter
@@ -17,10 +17,10 @@ API for the Android client. One instance = one family.
 - ✅ CI/CD pipelines with GitHub Actions
 - ✅ Single Docker container, built from source (`docker/Dockerfile`)
 - ✅ Money as integer minor units (`amount_minor`), calendar `YYYY-MM-DD` dates, idempotent `POST`
+- ✅ Self-hosted deployment: one compose (`deploy/`) with Caddy, Let's Encrypt and daily CLI backups
 - 🚧 Multi-platform builds (linux/amd64, linux/arm64) — the workflow exists, but no release has been tagged yet,
-  so nothing is published to GHCR. Every compose file builds locally instead of pulling; see
+  so nothing is published to GHCR. Both compose files build locally instead of pulling; see
   [docs/specs/004-deployment-readiness.md](docs/specs/004-deployment-readiness.md#d-02)
-- 🚧 `deploy/` still targets the old web build — plan 05
 
 ## API
 
@@ -78,7 +78,8 @@ The author of a record is taken from the token, so `user_id` in a request body i
 ### Not available yet
 
 - Users are never deleted, only deactivated (`PATCH /users/:id {"is_active": false}`)
-- Backup **restore** is deliberately not exposed over the API — use `make sqlite-restore`
+- Backup **restore** is deliberately not exposed over the API and has no subcommand — in production it is
+  manual over ssh ([deploy/README.md](deploy/README.md)); `make sqlite-restore` is a dev-only `cp`
 - More than one currency: a family has exactly one, and it can no longer be changed once a transaction exists
 
 ## 🏗️ Architecture and Technology Stack
@@ -154,8 +155,8 @@ make docker-logs      # View logs
 make compose-config   # Validate all docker-compose files (docker/ + deploy/)
 
 # SQLite database
-make sqlite-backup    # Create backup
-make sqlite-restore   # Restore from backup
+make sqlite-backup    # Create backup in ./backups (go run ./cmd/server backup)
+make sqlite-restore   # Restore from backup (dev only)
 make sqlite-shell     # Open SQLite shell
 make sqlite-stats     # DB statistics
 make db-reset         # Delete ./data/budget.db* (required after editing the migration, see migrations/README.md)
@@ -168,7 +169,7 @@ make help             # Show all commands
 ## 🏛️ Project Structure
 
 ```
-├── cmd/server/              # Entry point: server, `-health-check`, `setup`, `reset-password`
+├── cmd/server/              # Entry point: server, `-health-check`, `setup`, `reset-password`, `backup`
 ├── internal/
 │   ├── domain/              # Business entities (User, Family, Transaction, Budget, Report, …)
 │   ├── auth/                # Bearer tokens, sessions, RequireBearer/RequireRole, login rate limiter
@@ -183,7 +184,7 @@ make help             # Show all commands
 ├── migrations/              # 001_consolidated.{up,down}.sql — the whole schema
 ├── tests/integration/       # HTTP tests over the full stack, OpenAPI coverage test
 ├── docs/                    # Product brief, tech stack, audits (specs/), plans, API contract
-├── deploy/                  # Self-hosted deployment (stale until plan 05)
+├── deploy/                  # Self-hosted deployment: compose + Caddy + install/upgrade scripts
 ├── docker/                  # Dockerfile + docker-compose.yml
 └── .github/workflows/       # CI/CD pipelines (ci, docker, security, scorecard, release)
 ```
@@ -201,7 +202,8 @@ All configuration is environment variables; there are no secrets.
 | `SERVER_IDLE_TIMEOUT`  | `60s`                                  | HTTP server idle timeout                                                    |
 | `TRUSTED_PROXIES`      | empty                                  | Comma-separated CIDRs whose `X-Forwarded-For` is trusted for the client IP (login rate limiter). Empty — the client IP is unknown and only the per-email limit applies; behind a reverse proxy set it to the proxy network (e.g. `172.20.0.0/16`) to enable the per-IP limit |
 | `DATABASE_PATH`        | `./data/budget.db`                     | SQLite database file path                                                   |
-| `BACKUP_DIR`           | empty → `<dir(DATABASE_PATH)>/backups` | Where `POST /api/v1/backups` writes. Docker compose sets `/backups` so `VACUUM INTO` copies do not land inside the database volume |
+| `BACKUP_DIR`           | empty → `<dir(DATABASE_PATH)>/backups` | Where `POST /api/v1/backups` and the `backup` subcommand write. Docker compose sets `/backups` so `VACUUM INTO` copies do not land inside the database volume |
+| `BACKUP_KEEP`          | `30`                                   | How many newest backup files to keep; shared by `POST /api/v1/backups` and the `backup` subcommand (`--keep N` overrides it). A non-numeric or non-positive value is ignored |
 | `ENVIRONMENT`          | `development`                          | App environment (`development`, `production`, `test`)                       |
 | `LOG_LEVEL`            | `info`                                 | Logging level                                                               |
 | `LOG_FORMAT`           | `json`                                 | Log format                                                                  |
@@ -249,11 +251,8 @@ make lint              # Code quality checks
 
 ## 🏠 Self-Hosted Deployment
 
-> `deploy/` still targets the previous web build: its compose files require `SESSION_SECRET`/`CSRF_SECRET`
-> that the application no longer reads, and the nginx/Caddy/fail2ban rules watch a `/login` page that no
-> longer exists. Plan 05 replaces the directory with one compose + Caddy setup for `ffs.shatrov.tech`
-> ([docs/plans/20260904-05-deploy-ffs.md](docs/plans/20260904-05-deploy-ffs.md)). Until then the notes below
-> describe what the scripts do, not a recommended path.
+One topology: the application and Caddy in a single compose, Let's Encrypt certificates, no secrets
+to generate. Point an A record at the server, forward 80/443, then:
 
 ```bash
 git clone https://github.com/lllypuk/Family-Finances-Service.git
@@ -270,10 +269,15 @@ into `/opt/family-budget/src` (`REPO_GIT_URL` / `REPO_REF` env vars, default: up
 and builds the Docker image on the server, so the machine needs `git` and outbound network access; the
 512MB RAM floor is sized for that build, not for the running service (128–256MB).
 
-Supported: Ubuntu 22.04/24.04, Debian 11/12, Rocky/AlmaLinux 9. Options: Docker + Caddy (automatic SSL),
-Docker + Nginx (Certbot), native systemd. Scripts in `deploy/scripts/`: `install.sh`, `upgrade.sh`
-(`--version <ref>`, `rollback`), `uninstall.sh --keep-data`, `backup.sh`, `health-check.sh`,
-`setup-ssl-{nginx,caddy}.sh`, `setup-fail2ban.sh`. Details: [deploy/README.md](deploy/README.md) and
+The family and the first admin are created afterwards over ssh (`docker compose exec app
+/app/family-budget-service setup …`), the second user through `POST /api/v1/users`; backups are a host
+cron job running the `backup` subcommand.
+
+Supported: Ubuntu 22.04/24.04, Debian 11/12, Rocky/AlmaLinux 9. Scripts in `deploy/scripts/`:
+`install.sh` (`--domain`, `--email`, `--non-interactive`, `--dry-run`, `--reinstall`), `upgrade.sh`
+(`--version <ref>`, `rollback`), `uninstall.sh --keep-data`, `health-check.sh` (`HEALTH_URL`, default
+`https://$DOMAIN/health`). Details:
+[deploy/README.md](deploy/README.md) and
 [docs/specs/004-deployment-readiness.md](docs/specs/004-deployment-readiness.md).
 
 ## 📚 Documentation
