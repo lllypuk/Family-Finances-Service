@@ -20,6 +20,7 @@ DROP INDEX IF EXISTS idx_transactions_category_id;
 DROP INDEX IF EXISTS idx_transactions_family_type_date;
 DROP INDEX IF EXISTS idx_transactions_family_date;
 
+DROP INDEX IF EXISTS idx_categories_unique_active;
 DROP INDEX IF EXISTS idx_categories_family_active;
 DROP INDEX IF EXISTS idx_categories_parent_id;
 DROP INDEX IF EXISTS idx_categories_family_type;

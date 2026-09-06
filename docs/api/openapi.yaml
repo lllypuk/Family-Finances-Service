@@ -418,7 +418,9 @@ paths:
       operationId: getCategory
       tags: [categories]
       summary: Категория по id
-      description: admin и member.
+      description: |
+        admin и member. Удалённая (`is_active: false`) категория по-прежнему отдаётся `200` —
+        по ней разрешается имя категории у сохранённых транзакций; из списка она исчезает.
       responses:
         '200': { $ref: '#/components/responses/CategoryOk' }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -429,7 +431,9 @@ paths:
       operationId: updateCategory
       tags: [categories]
       summary: Изменить категорию
-      description: admin и member. Тип категории не меняется — у неё уже есть транзакции.
+      description: |
+        admin и member. Тип категории не меняется — у неё уже есть транзакции.
+        Удалённая (`is_active: false`) категория не редактируется — `404`.
       requestBody:
         required: true
         content:
@@ -447,9 +451,9 @@ paths:
       tags: [categories]
       summary: Удалить категорию
       description: |
-        Только admin. Категория без транзакций удаляется физически; категория с транзакциями
-        помечается неактивной (`is_active: false`) и перестаёт выводиться в списке — ответ в обоих
-        случаях `204`. Подкатегории обрабатываются так же.
+        Только admin. Категория помечается неактивной (`is_active: false`) и перестаёт выводиться
+        в списке, ответ `204`; её транзакции сохраняются. Подкатегории деактивируются вместе
+        с родителем. Повторный `DELETE` уже неактивной категории — `404`.
       responses:
         '204': { description: Категория удалена }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -1195,6 +1199,9 @@ components:
     ReportType:
       type: string
       enum: [expenses, income, budget, cash_flow, category_breakdown]
+      description: |
+        `category_breakdown` считается только по расходам: доли категорий берутся от суммы
+        расходов периода, доходные категории в отчёт не попадают.
     ReportPeriod:
       type: string
       enum: [daily, weekly, monthly, yearly, custom]
@@ -1531,7 +1538,7 @@ components:
         percentage:
           type: number
           format: double
-          description: Доля категории в сумме периода в процентах
+          description: Доля категории в сумме расходов периода в процентах
         count: { type: integer }
     DailyBreakdownItem:
       type: object

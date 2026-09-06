@@ -180,6 +180,8 @@ type TransactionSummaryDTO struct {
 }
 
 type BudgetCategoryComparisonDTO struct {
+	BudgetID          uuid.UUID   `json:"budget_id"`
+	BudgetName        string      `json:"budget_name"`
 	CategoryID        uuid.UUID   `json:"category_id"`
 	CategoryName      string      `json:"category_name"`
 	BudgetAmountMinor money.Minor `json:"budget_amount_minor"`

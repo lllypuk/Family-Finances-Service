@@ -66,7 +66,6 @@ func NewServices(
 		userRepo,
 		familyRepo,
 		transactionService,
-		budgetService,
 		categoryService,
 	)
 

@@ -183,6 +183,12 @@ func (s *categoryService) UpdateCategory(
 		return nil, fmt.Errorf("%w: %w", ErrCategoryNotFound, err)
 	}
 
+	// GetByID не фильтрует is_active: без этой проверки PUT по удалённой категории дошёл бы
+	// до репозитория, где WHERE is_active = 1 не находит строку, и клиент получил бы 500 вместо 404.
+	if !existingCategory.IsActive {
+		return nil, ErrCategoryNotFound
+	}
+
 	// Check if category name already exists (if name is being updated)
 	if req.Name != nil && *req.Name != existingCategory.Name {
 		existingCategories, checkErr := s.categoryRepo.GetByType(ctx, existingCategory.Type)
@@ -216,36 +222,21 @@ func (s *categoryService) UpdateCategory(
 	return existingCategory, nil
 }
 
-// DeleteCategory performs soft delete of a category
+// DeleteCategory деактивирует категорию (is_active = 0) вместе с её подкатегориями.
 func (s *categoryService) DeleteCategory(ctx context.Context, id uuid.UUID) error {
-	// Get existing category
 	existingCategory, err := s.categoryRepo.GetByID(ctx, id)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrCategoryNotFound, err)
 	}
 
-	// Check if category is used in transactions
-	isUsed, err := s.CheckCategoryUsage(ctx, id)
-	if err != nil {
-		return fmt.Errorf("failed to check category usage: %w", err)
+	// GetByID не фильтрует is_active: без этой проверки повторный DELETE дошёл бы до репозитория,
+	// где WHERE is_active = 1 не находит строку, и клиент получил бы 500 вместо 404.
+	if !existingCategory.IsActive {
+		return ErrCategoryNotFound
 	}
 
-	if isUsed {
-		// Soft delete - mark as inactive
-		existingCategory.IsActive = false
-		existingCategory.UpdatedAt = time.Now()
-
-		if updateErr := s.categoryRepo.Update(ctx, existingCategory); updateErr != nil {
-			return fmt.Errorf("failed to soft delete category: %w", updateErr)
-		}
-	} else {
-		// Hard delete if not used
-		if deleteErr := s.categoryRepo.Delete(ctx, id); deleteErr != nil {
-			return fmt.Errorf("failed to hard delete category: %w", deleteErr)
-		}
-	}
-
-	// Also handle subcategories
+	// Подкатегории удаляются раньше родителя: репозиторий отказывает в удалении категории,
+	// у которой остались активные дети.
 	subcategories, err := s.getSubcategories(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to get subcategories: %w", err)
@@ -255,6 +246,12 @@ func (s *categoryService) DeleteCategory(ctx context.Context, id uuid.UUID) erro
 		if deleteErr := s.DeleteCategory(ctx, subcat.ID); deleteErr != nil {
 			return fmt.Errorf("failed to delete subcategory %s: %w", subcat.ID, deleteErr)
 		}
+	}
+
+	// Repository.Delete — soft delete, транзакции категории сохраняются в любом случае,
+	// поэтому отдельной ветки для «категория используется» нет.
+	if deleteErr := s.categoryRepo.Delete(ctx, id); deleteErr != nil {
+		return fmt.Errorf("failed to delete category: %w", deleteErr)
 	}
 
 	return nil

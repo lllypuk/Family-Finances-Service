@@ -51,7 +51,6 @@ type reportService struct {
 
 	// Service dependencies for complex calculations
 	transactionService TransactionService
-	budgetService      BudgetService
 	categoryService    CategoryService
 }
 
@@ -64,7 +63,6 @@ func NewReportService(
 	userRepo UserRepository,
 	familyRepo FamilyRepository,
 	transactionService TransactionService,
-	budgetService BudgetService,
 	categoryService CategoryService,
 ) ReportService {
 	return &reportService{
@@ -75,7 +73,6 @@ func NewReportService(
 		userRepo:           userRepo,
 		familyRepo:         familyRepo,
 		transactionService: transactionService,
-		budgetService:      budgetService,
 		categoryService:    categoryService,
 	}
 }
@@ -243,10 +240,11 @@ func (s *reportService) budgetComparisonReport(
 	period report.Period,
 	startDate, endDate date.Date,
 ) (*dto.BudgetComparisonDTO, error) {
-	// Get active budgets for the period
-	budgets, err := s.budgetService.GetActiveBudgets(ctx, startDate)
+	// Бюджеты, пересекающиеся с периодом целиком: начатый в середине месяца тратит в том же
+	// TotalSpentMinor, поэтому выборка «активные на первый день» не сходилась со строками отчёта.
+	budgets, err := s.budgetRepo.GetByPeriod(ctx, startDate, endDate)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get active budgets: %w", err)
+		return nil, fmt.Errorf("failed to get budgets for period: %w", err)
 	}
 
 	if len(budgets) == 0 {
@@ -380,8 +378,9 @@ func (s *reportService) categoryBreakdownReport(
 	period report.Period,
 	startDate, endDate date.Date,
 ) (*dto.CategoryBreakdownDTO, error) {
-	// Get all transactions for the period
-	transactions, err := s.getTransactionsForPeriod(ctx, startDate, endDate, "", nil)
+	// Только расходы: доли считаются от одного знаменателя, а income и expense в общей сумме
+	// давали категории процент от «доходы + расходы», который ничего не значит.
+	transactions, err := s.getTransactionsForPeriod(ctx, startDate, endDate, transaction.TypeExpense, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get transactions: %w", err)
 	}
@@ -845,6 +844,8 @@ func (s *reportService) generateBudgetCategoryComparisons(
 	result := make([]dto.BudgetCategoryComparisonDTO, 0, len(budgets))
 	for _, b := range budgets {
 		item := dto.BudgetCategoryComparisonDTO{
+			BudgetID:          b.ID,
+			BudgetName:        b.Name,
 			CategoryName:      b.Name,
 			BudgetAmountMinor: b.AmountMinor,
 			ActualAmountMinor: totalSpent,
@@ -1130,8 +1131,8 @@ func convertBudgetComparisonItemsToReportData(items []dto.BudgetCategoryComparis
 	result := make([]report.BudgetComparisonItem, len(items))
 	for i, item := range items {
 		result[i] = report.BudgetComparisonItem{
-			BudgetID:        item.CategoryID, // Generic report.Data has no category-specific budget key.
-			BudgetName:      item.CategoryName,
+			BudgetID:        item.BudgetID,
+			BudgetName:      item.BudgetName,
 			PlannedMinor:    item.BudgetAmountMinor,
 			ActualMinor:     item.ActualAmountMinor,
 			DifferenceMinor: item.VarianceMinor,

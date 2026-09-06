@@ -782,7 +782,7 @@ func setupReportService() (
 	*MockReportRepository,
 	*MockUserRepository,
 	*MockTransactionService,
-	*MockBudgetService,
+	*MockBudgetRepository,
 	*MockCategoryService,
 ) {
 	mockReportRepo := &MockReportRepository{}
@@ -794,7 +794,6 @@ func setupReportService() (
 	mockFamilyRepo.On("Get", mock.Anything).
 		Return(&user.Family{Currency: "RUB", Timezone: "Europe/Moscow"}, nil).Maybe()
 	mockTransactionService := &MockTransactionService{}
-	mockBudgetService := &MockBudgetService{}
 	mockCategoryService := &MockCategoryService{}
 
 	service := services.NewReportService(
@@ -805,11 +804,10 @@ func setupReportService() (
 		mockUserRepo,
 		mockFamilyRepo,
 		mockTransactionService,
-		mockBudgetService,
 		mockCategoryService,
 	)
 
-	return service, mockReportRepo, mockUserRepo, mockTransactionService, mockBudgetService, mockCategoryService
+	return service, mockReportRepo, mockUserRepo, mockTransactionService, mockBudgetRepo, mockCategoryService
 }
 
 // setupTransactionService creates a properly configured transaction service for testing

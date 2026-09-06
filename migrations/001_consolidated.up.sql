@@ -59,8 +59,9 @@ CREATE TABLE IF NOT EXISTS categories (
     CHECK (type IN ('income', 'expense')),
     CHECK (LENGTH(TRIM(name)) > 0),
     CHECK (id != parent_id),
-    CHECK (is_active IN (0, 1)),
-    UNIQUE (family_id, name, type, parent_id)
+    CHECK (is_active IN (0, 1))
+    -- Уникальность имени — частичный индекс idx_categories_unique_active ниже: табличный UNIQUE
+    -- не различал бы мягко удалённые строки, и имя подкатегории оставалось бы занятым навсегда.
 );
 
 CREATE TABLE IF NOT EXISTS transactions (
@@ -150,6 +151,8 @@ CREATE INDEX IF NOT EXISTS idx_users_email_active ON users(email, is_active);
 CREATE INDEX IF NOT EXISTS idx_categories_family_type ON categories(family_id, type);
 CREATE INDEX IF NOT EXISTS idx_categories_parent_id ON categories(parent_id);
 CREATE INDEX IF NOT EXISTS idx_categories_family_active ON categories(family_id, is_active);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_categories_unique_active
+    ON categories(family_id, name, type, parent_id) WHERE is_active = 1;
 
 CREATE INDEX IF NOT EXISTS idx_transactions_family_date ON transactions(family_id, date DESC);
 CREATE INDEX IF NOT EXISTS idx_transactions_family_type_date ON transactions(family_id, type, date);

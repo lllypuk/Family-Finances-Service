@@ -214,7 +214,7 @@ func TestReportService_GenerateIncomeReport(t *testing.T) {
 
 // Tests for GenerateBudgetComparisonReport
 func TestReportService_GenerateBudgetComparisonReport(t *testing.T) {
-	service, _, _, mockTransactionService, mockBudgetService, mockCategoryService := setupReportService()
+	service, _, _, mockTransactionService, mockBudgetRepo, mockCategoryService := setupReportService()
 	ctx := context.Background()
 
 	categoryID := uuid.New()
@@ -234,7 +234,8 @@ func TestReportService_GenerateBudgetComparisonReport(t *testing.T) {
 	}
 
 	// Setup mock expectations
-	mockBudgetService.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).Return(budgets, nil)
+	mockBudgetRepo.On("GetByPeriod", ctx, mock.AnythingOfType("date.Date"), mock.AnythingOfType("date.Date")).
+		Return(budgets, nil)
 	mockTransactionService.On("GetAllTransactions", ctx, mock.AnythingOfType("dto.TransactionFilterDTO")).
 		Return(transactions, nil)
 	mockCategoryService.On("GetCategoryByID", ctx, categoryID).
@@ -262,19 +263,19 @@ func TestReportService_GenerateBudgetComparisonReport(t *testing.T) {
 	assert.InDelta(t, 55.0, comparison.Utilization, 0.01)
 	assert.Equal(t, "under_budget", comparison.Status)
 
-	mockBudgetService.AssertExpectations(t)
+	mockBudgetRepo.AssertExpectations(t)
 	mockTransactionService.AssertExpectations(t)
 	mockCategoryService.AssertExpectations(t)
 }
 
 func TestReportService_GenerateBudgetComparisonReport_NoBudgets(t *testing.T) {
-	service, _, _, _, mockBudgetService, _ := setupReportService()
+	service, _, _, _, mockBudgetRepo, _ := setupReportService()
 	ctx := context.Background()
 
 	period := report.PeriodMonthly
 
 	// Setup mock expectations - no budgets
-	mockBudgetService.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).
+	mockBudgetRepo.On("GetByPeriod", ctx, mock.AnythingOfType("date.Date"), mock.AnythingOfType("date.Date")).
 		Return([]*budget.Budget{}, nil)
 
 	// Execute
@@ -288,7 +289,76 @@ func TestReportService_GenerateBudgetComparisonReport_NoBudgets(t *testing.T) {
 	assert.Zero(t, result.TotalVarianceMinor)
 	assert.Zero(t, result.Utilization)
 
-	mockBudgetService.AssertExpectations(t)
+	mockBudgetRepo.AssertExpectations(t)
+}
+
+// Бюджет без категории сравнивается со всеми расходами периода, но остаётся адресуемым:
+// budget_id — идентификатор бюджета, а не нулевой UUID вместо отсутствующей категории.
+func TestReportService_GenerateBudgetComparisonReport_FamilyWideBudget(t *testing.T) {
+	service, _, _, mockTransactionService, mockBudgetRepo, _ := setupReportService()
+	ctx := context.Background()
+
+	familyWide := &budget.Budget{
+		ID:          uuid.New(),
+		Name:        "Общий лимит",
+		AmountMinor: 100_000,
+		StartDate:   date.Today(time.UTC).AddDays(-30),
+		EndDate:     date.Today(time.UTC).AddDays(30),
+		IsActive:    true,
+	}
+	transactions := []*transaction.Transaction{
+		createTestTransactionWithCategory(
+			uuid.New(), uuid.New(), 30_000, transaction.TypeExpense, date.Today(time.UTC).AddDays(-1)),
+	}
+
+	mockBudgetRepo.On("GetByPeriod", ctx, mock.AnythingOfType("date.Date"), mock.AnythingOfType("date.Date")).
+		Return([]*budget.Budget{familyWide}, nil)
+	mockTransactionService.On("GetAllTransactions", ctx, mock.AnythingOfType("dto.TransactionFilterDTO")).
+		Return(transactions, nil)
+
+	result, err := service.GenerateBudgetComparisonReport(ctx, report.PeriodMonthly)
+
+	require.NoError(t, err)
+	require.Len(t, result.Categories, 1)
+	comparison := result.Categories[0]
+	assert.Equal(t, familyWide.ID, comparison.BudgetID)
+	assert.Equal(t, familyWide.Name, comparison.BudgetName)
+	assert.Equal(t, uuid.Nil, comparison.CategoryID)
+	assert.Equal(t, money.Minor(30_000), comparison.ActualAmountMinor)
+
+	mockBudgetRepo.AssertExpectations(t)
+}
+
+// Разбивка по категориям считается только по расходам: иначе доля категории меряется
+// от суммы доходов и расходов сразу.
+func TestReportService_GenerateCategoryBreakdownReport_ExpensesOnly(t *testing.T) {
+	service, _, _, mockTransactionService, _, mockCategoryService := setupReportService()
+	ctx := context.Background()
+
+	categoryID := uuid.New()
+	expenses := []*transaction.Transaction{
+		createTestTransactionWithCategory(
+			uuid.New(), categoryID, 40_000, transaction.TypeExpense, date.Today(time.UTC).AddDays(-2)),
+	}
+
+	var gotFilter dto.TransactionFilterDTO
+	mockTransactionService.On("GetAllTransactions", ctx, mock.AnythingOfType("dto.TransactionFilterDTO")).
+		Run(func(args mock.Arguments) {
+			gotFilter, _ = args.Get(1).(dto.TransactionFilterDTO)
+		}).
+		Return(expenses, nil)
+	mockCategoryService.On("GetCategoryHierarchy", ctx).Return([]*category.Category{}, nil)
+	expectCategory(ctx, mockCategoryService, categoryID, "Groceries", category.TypeExpense)
+
+	result, err := service.GenerateCategoryBreakdownReport(ctx, report.PeriodMonthly)
+
+	require.NoError(t, err)
+	require.NotNil(t, gotFilter.Type)
+	assert.Equal(t, transaction.TypeExpense, *gotFilter.Type)
+	require.Len(t, result.Categories, 1)
+	assert.InDelta(t, 100.0, result.Categories[0].Percentage, 0.01)
+
+	mockTransactionService.AssertExpectations(t)
 }
 
 // Tests for GenerateCashFlowReport
@@ -372,7 +442,7 @@ func TestReportService_SaveReport_RepositoryError(t *testing.T) {
 type reportServiceMocks struct {
 	userRepo    *MockUserRepository
 	transaction *MockTransactionService
-	budget      *MockBudgetService
+	budget      *MockBudgetRepository
 	category    *MockCategoryService
 }
 
@@ -408,6 +478,7 @@ func TestReportService_GenerateReport(t *testing.T) {
 		createTestTransaction(uuid.New(), 300000, transaction.TypeIncome, date.Today(time.UTC).AddDays(-6)),
 		createTestTransaction(uuid.New(), 120000, transaction.TypeExpense, date.Today(time.UTC).AddDays(-4)),
 	}
+	budgetForComparison := createTestBudget(uuid.New(), 100000, categoryID)
 
 	tests := []struct {
 		name       string
@@ -448,8 +519,9 @@ func TestReportService_GenerateReport(t *testing.T) {
 			name:       "budget",
 			reportType: report.TypeBudget,
 			setup: func(ctx context.Context, m reportServiceMocks) {
-				budgets := []*budget.Budget{createTestBudget(uuid.New(), 100000, categoryID)}
-				m.budget.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).Return(budgets, nil)
+				budgets := []*budget.Budget{budgetForComparison}
+				m.budget.On("GetByPeriod", ctx, mock.AnythingOfType("date.Date"), mock.AnythingOfType("date.Date")).
+					Return(budgets, nil)
 				expectTransactions(ctx, m.transaction, expenses)
 				expectCategory(ctx, m.category, categoryID, "Groceries", category.TypeExpense)
 			},
@@ -457,7 +529,8 @@ func TestReportService_GenerateReport(t *testing.T) {
 				assert.Equal(t, money.Minor(50000), rep.Data.TotalExpensesMinor)
 				require.Len(t, rep.Data.BudgetComparison, 1)
 				comparison := rep.Data.BudgetComparison[0]
-				assert.Equal(t, "Groceries", comparison.BudgetName)
+				assert.Equal(t, budgetForComparison.ID, comparison.BudgetID)
+				assert.Equal(t, budgetForComparison.Name, comparison.BudgetName)
 				assert.Equal(t, money.Minor(100_000), comparison.PlannedMinor)
 				assert.Equal(t, money.Minor(50_000), comparison.ActualMinor)
 				assert.Equal(t, money.Minor(50_000), comparison.DifferenceMinor)
@@ -506,13 +579,13 @@ func TestReportService_GenerateReport(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service, mockReportRepo, mockUserRepo, mockTxService, mockBudgetService, mockCategoryService := setupReportService()
+			service, mockReportRepo, mockUserRepo, mockTxService, mockBudgetRepo, mockCategoryService := setupReportService()
 			ctx := context.Background()
 
 			tt.setup(ctx, reportServiceMocks{
 				userRepo:    mockUserRepo,
 				transaction: mockTxService,
-				budget:      mockBudgetService,
+				budget:      mockBudgetRepo,
 				category:    mockCategoryService,
 			})
 
@@ -841,16 +914,16 @@ func TestReportService_PeriodBoundsPerPeriod(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service, _, _, _, mockBudgetService, _ := setupReportService()
+			service, _, _, _, mockBudgetRepo, _ := setupReportService()
 			ctx := context.Background()
-			mockBudgetService.On("GetActiveBudgets", ctx, tt.from).Return([]*budget.Budget{}, nil)
+			mockBudgetRepo.On("GetByPeriod", ctx, tt.from, tt.to).Return([]*budget.Budget{}, nil)
 
 			result, reportErr := service.GenerateBudgetComparisonReport(ctx, tt.period)
 
 			require.NoError(t, reportErr)
 			assert.Equal(t, tt.from, result.StartDate)
 			assert.Equal(t, tt.to, result.EndDate)
-			mockBudgetService.AssertExpectations(t)
+			mockBudgetRepo.AssertExpectations(t)
 		})
 	}
 }
