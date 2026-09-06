@@ -141,10 +141,10 @@ JSON: `amount_minor` (int64), `date` (`"2026-09-04"`), `currency` и `timezone` 
 **Files:**
 - Create: `internal/domain/money/money.go`, `money_test.go`, `internal/domain/date/date.go`, `date_test.go`
 
-- [ ] `money.Minor` с `Abs`, `Percent(total Minor) float64` (0 при `total == 0`), `DivRound(n int64) Minor` half-up, `MarshalJSON` как число
-- [ ] `date.Date`: `Parse("2006-01-02")`, `String()`, `In(*time.Location) time.Time`, `Before/After`, `MonthBounds(loc)`; `Scan`/`Value` для `database/sql`; JSON — строка
-- [ ] тесты: `DivRound` на отрицательных и на половине, `Percent` с нулём, невалидные даты, `MonthBounds` на границах года
-- [ ] `make fmt && make test && make lint` — зелёные
+- [x] `money.Minor` с `Abs`, `Percent(total Minor) float64` (0 при `total == 0`), `DivRound(n int64) Minor` half-up, `MarshalJSON` как число
+- [x] `date.Date`: `Parse("2006-01-02")`, `String()`, `In(*time.Location) time.Time`, `Before/After`, `MonthBounds()` (месяц самой даты) + `Today(loc)`; `Scan`/`Value` для `database/sql`; JSON — строка
+- [x] тесты: `DivRound` на отрицательных и на половине, `Percent` с нулём, невалидные даты, `MonthBounds` на границах года
+- [x] `make fmt && make test && make lint` — зелёные
 
 ### Task 5: Домен и репозитории
 
