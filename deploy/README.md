@@ -63,7 +63,7 @@ builds there. `VERSION` comes from `git describe` in that checkout and ends up i
    0 3 * * * cd /opt/family-budget && docker compose run --rm --no-deps -T app backup
    ```
 
-   `exec` bypasses the ENTRYPOINT, hence the full path to the binary.
+   `run` starts a throwaway container, so the job works whether `app` is up, down or unhealthy.
 
 ## Layout on the server
 

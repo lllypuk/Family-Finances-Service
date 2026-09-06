@@ -28,6 +28,9 @@ const (
 // and process exit (used by container orchestrators and CI smoke tests).
 const healthCheckFlag = "-health-check"
 
+// exitUsage is the exit code for an unrecognised command line.
+const exitUsage = 2
+
 func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
@@ -43,6 +46,11 @@ func main() {
 		case cmdBackup:
 			runCommand(cmdBackup, runBackup)
 			return
+		default:
+			// Без этой ветки опечатка в cron или запуск `backup` на старом образе,
+			// где подкоманды ещё нет, молча поднимают HTTP-сервер: команда висит
+			// в foreground вместо того, чтобы упасть.
+			usage(os.Args[1])
 		}
 	}
 
@@ -55,6 +63,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to run application: %v", err)
 	}
+}
+
+func usage(unknown string) {
+	fmt.Fprintf(os.Stderr, "unknown command %q\n", unknown)
+	fmt.Fprintf(os.Stderr, "usage: server [%s|%s|%s|%s]\n",
+		cmdSetup, cmdResetPassword, cmdBackup, healthCheckFlag)
+	os.Exit(exitUsage)
 }
 
 type command func(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer) error

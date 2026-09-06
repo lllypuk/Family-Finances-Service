@@ -868,7 +868,9 @@ manual_rollback() {
     # Find most recent upgrade backup
     local latest_backup
     # shellcheck disable=SC2012 # каталоги создаёт этот же скрипт: upgrade_<дата>_<время>
-    latest_backup=$(ls -td "${BACKUP_DIR}"/upgrade_* 2>/dev/null | head -1)
+    # `|| true`: без совпадений ls выходит с 2, и под `set -e`/`pipefail` скрипт
+    # умер бы здесь, не напечатав сообщение ниже.
+    latest_backup=$(ls -td "${BACKUP_DIR}"/upgrade_* 2>/dev/null | head -1 || true)
     
     if [[ -z "${latest_backup}" ]]; then
         log_error "No upgrade backups found in ${BACKUP_DIR}"
@@ -911,10 +913,9 @@ upgrade() {
 
     check_database_integrity
 
-    # Бэкап снимается ДО сборки: подкоманда `backup` открывает БД через
-    # OpenDatabase, а тот накатывает миграции. Снятый новым образом
-    # «предобновленческий» бэкап уже содержал бы новую схему, и откатывать было
-    # бы не на что. VACUUM INTO даёт консистентный снимок и на живом сервисе.
+    # Бэкап снимается ДО сборки: после неё `run --rm app backup` пойдёт уже новым
+    # образом, а откатываться нужно на схему работающей версии. VACUUM INTO даёт
+    # консистентный снимок и на живом сервисе.
     if ! create_upgrade_backup; then
         log_error "Failed to create the pre-upgrade backup"
         log_error "Nothing has been changed; the service keeps running the current version"
