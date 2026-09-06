@@ -71,7 +71,9 @@ Layered/Clean architecture, single Go module `family-budget-service`. Wiring hap
    compose mounts `/backups`); `BACKUP_KEEP` (default 30) is the retention shared by `POST /api/v1/backups`
    and the `backup` subcommand.
 2. `internal.OpenDatabase(cfg)` (`internal/bootstrap.go`) — `infrastructure.NewSQLiteConnection` + golang-migrate
-   `Up()` from `./migrations`. The CLI subcommands open the DB through the same function.
+   `Up()` from `./migrations`. `setup`/`reset-password` open the DB through the same function;
+   `backup` uses `OpenDatabaseNoMigrate` — a copy must be possible from an outdated schema, and a cron
+   `compose run` must not migrate the live DB under the running container.
 3. `infrastructure.NewRepositoriesSQLite(db)` → `*handlers.Repositories` (one struct holding every repo).
 4. `auth.NewService(repos.Session, repos.User, repos.Family)` — built here and handed to
    `services.NewServices(...)` → `*services.Services` (`Services.Auth`). `StatsService.Summary(ctx, from, to)` owns

@@ -16,22 +16,33 @@ import (
 // migrationsDir — относительно CWD: сервер и CLI запускаются из корня репозитория или образа.
 const migrationsDir = "./migrations"
 
-// OpenDatabase открывает SQLite и применяет миграции; общая точка входа сервера и CLI.
+// OpenDatabase открывает SQLite и применяет миграции; точка входа сервера, `setup` и `reset-password`.
 func OpenDatabase(cfg *Config) (*sql.DB, error) {
-	conn, err := infrastructure.NewSQLiteConnection(cfg.Database.Path)
+	db, err := OpenDatabaseNoMigrate(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to SQLite: %w", err)
+		return nil, err
 	}
 
 	dbURL := fmt.Sprintf("sqlite://%s", cfg.Database.Path)
 	if err = infrastructure.NewMigrationManager(dbURL, migrationsDir).Up(); err != nil {
-		_ = conn.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
-	if err = verifySchema(conn.DB()); err != nil {
-		_ = conn.Close()
+	if err = verifySchema(db); err != nil {
+		_ = db.Close()
 		return nil, err
+	}
+
+	return db, nil
+}
+
+// OpenDatabaseNoMigrate открывает SQLite как есть — для `backup`: VACUUM INTO не зависит от схемы,
+// а копию нужно уметь снять и с устаревшей базы, и не мигрируя её под работающим контейнером.
+func OpenDatabaseNoMigrate(cfg *Config) (*sql.DB, error) {
+	conn, err := infrastructure.NewSQLiteConnection(cfg.Database.Path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to SQLite: %w", err)
 	}
 
 	return conn.DB(), nil

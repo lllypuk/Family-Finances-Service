@@ -27,7 +27,7 @@ func runBackup(ctx context.Context, args []string, _ io.Reader, stdout io.Writer
 		keep = cfg.Database.BackupKeep
 	}
 
-	db, err := internal.OpenDatabase(cfg)
+	db, err := internal.OpenDatabaseNoMigrate(cfg)
 	if err != nil {
 		return err
 	}
