@@ -75,7 +75,6 @@ func (c *SQLiteTestDB) CleanTables(t *testing.T) {
 	// List of tables to clean in order (respecting FK constraints)
 	tables := []string{
 		"sessions",
-		"invites",
 		"reports",
 		"budgets",
 		"transactions",

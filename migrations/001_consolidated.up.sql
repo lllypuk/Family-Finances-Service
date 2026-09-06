@@ -124,22 +124,6 @@ CREATE TABLE IF NOT EXISTS reports (
     CHECK (is_cached IN (0, 1))
 );
 
--- Инвайты уходят вместе с InviteService (план 04, задача 2)
-CREATE TABLE IF NOT EXISTS invites (
-    id TEXT PRIMARY KEY,
-    family_id TEXT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
-    created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    email TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('admin', 'member', 'child')),
-    token TEXT NOT NULL UNIQUE,
-    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'expired', 'revoked')),
-    expires_at DATETIME NOT NULL,
-    accepted_at DATETIME,
-    accepted_by TEXT REFERENCES users(id) ON DELETE SET NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
 -- Только хеш токена; срок продлевается активностью (см. internal/auth/session.go)
 CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
@@ -173,9 +157,6 @@ CREATE INDEX IF NOT EXISTS idx_budgets_family_period ON budgets(family_id, start
 
 CREATE INDEX IF NOT EXISTS idx_reports_family_type ON reports(family_id, type);
 CREATE INDEX IF NOT EXISTS idx_reports_generated_by ON reports(generated_by);
-
-CREATE INDEX IF NOT EXISTS idx_invites_token ON invites(token);
-CREATE INDEX IF NOT EXISTS idx_invites_family_id ON invites(family_id);
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 
@@ -211,12 +192,6 @@ CREATE TRIGGER IF NOT EXISTS update_budgets_updated_at
 AFTER UPDATE ON budgets
 BEGIN
     UPDATE budgets SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-END;
-
-CREATE TRIGGER IF NOT EXISTS update_invites_updated_at
-AFTER UPDATE ON invites
-BEGIN
-    UPDATE invites SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
 
 ANALYZE;

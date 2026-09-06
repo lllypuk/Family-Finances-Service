@@ -23,7 +23,6 @@ func NewRepositoriesSQLite(db *sql.DB) *handlers.Repositories {
 		Transaction: transaction.NewSQLiteRepository(db),
 		Budget:      budget.NewSQLiteRepository(db),
 		Report:      report.NewSQLiteRepository(db),
-		Invite:      user.NewInviteSQLiteRepository(db),
 		Session:     auth.NewSessionSQLiteRepository(db),
 	}
 }

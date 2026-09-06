@@ -120,9 +120,9 @@ JSON: `amount_minor` (int64), `date` (`"2026-09-04"`), `currency` и `timezone` 
   `internal/services/interfaces.go`, `internal/run.go`, `internal/application/handlers/repositories.go`,
   `migrations/001_consolidated.up.sql`, `001_consolidated.down.sql`
 
-- [ ] удалить файлы, поля `Invite` из `Repositories`/`Services`, таблицу `invites` из миграции
-- [ ] `grep -rn -i invite internal cmd tests` — пусто
-- [ ] `make fmt && make test && make lint` — зелёные
+- [x] удалить файлы, поля `Invite` из `Repositories`/`Services`, таблицу `invites` из миграции
+- [x] `grep -rn -i invite internal cmd tests` — пусто
+- [x] `make fmt && make test && make lint` — зелёные
 
 ### Task 3: Убрать роль `child`
 

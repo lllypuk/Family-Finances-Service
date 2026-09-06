@@ -32,14 +32,13 @@ Contains all database objects in order of dependencies:
    | `transactions` | `amount > 0`, `date` |
    | `budgets` | `amount`, `spent`, период `start_date`/`end_date` |
    | `reports` | `data` — JSON отчёта |
-   | `invites` | удаляется вместе с `InviteService` (план 04) |
    | `sessions` | bearer-токены: только `token_hash` |
 
 2. **Indexes**: только те, что закрывают реальные запросы (семья+дата, категория, автор)
-3. **Triggers**: `updated_at` для families, users, categories, transactions, budgets, invites
+3. **Triggers**: `updated_at` для families, users, categories, transactions, budgets
 4. **Analytics**: Statistics updates (ANALYZE)
 
-`budget_alerts` и `user_sessions` удалены; таблицу `schema_migrations` ведёт golang-migrate.
+`budget_alerts`, `invites` и `user_sessions` удалены; таблицу `schema_migrations` ведёт golang-migrate.
 
 ### `001_consolidated.down.sql`
 

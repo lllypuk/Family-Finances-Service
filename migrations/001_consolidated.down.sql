@@ -1,6 +1,5 @@
 -- Family Budget Service — откат консолидированной схемы: всё в обратном порядке.
 
-DROP TRIGGER IF EXISTS update_invites_updated_at;
 DROP TRIGGER IF EXISTS update_budgets_updated_at;
 DROP TRIGGER IF EXISTS update_transactions_updated_at;
 DROP TRIGGER IF EXISTS update_categories_updated_at;
@@ -8,9 +7,6 @@ DROP TRIGGER IF EXISTS update_users_updated_at;
 DROP TRIGGER IF EXISTS update_families_updated_at;
 
 DROP INDEX IF EXISTS idx_sessions_user_id;
-
-DROP INDEX IF EXISTS idx_invites_family_id;
-DROP INDEX IF EXISTS idx_invites_token;
 
 DROP INDEX IF EXISTS idx_reports_generated_by;
 DROP INDEX IF EXISTS idx_reports_family_type;
@@ -32,7 +28,6 @@ DROP INDEX IF EXISTS idx_users_email_active;
 DROP INDEX IF EXISTS idx_users_family_id;
 
 DROP TABLE IF EXISTS sessions;
-DROP TABLE IF EXISTS invites;
 DROP TABLE IF EXISTS reports;
 DROP TABLE IF EXISTS budgets;
 DROP TABLE IF EXISTS transactions;
