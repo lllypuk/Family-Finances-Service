@@ -7,6 +7,12 @@
 {$DOMAIN} {
 	encode zstd gzip
 
+	# JSON-API: тела больше мегабайта не бывает, а логин доступен без токена —
+	# без лимита неавторизованный клиент раскачивает память приложения.
+	request_body {
+		max_size 1MB
+	}
+
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		# API отдаёт только JSON — ресурсы не грузятся ниоткуда.

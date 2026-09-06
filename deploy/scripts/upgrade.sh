@@ -15,6 +15,7 @@ DATA_DIR="${DATA_DIR:-${INSTALL_DIR}/data}"
 # поэтому «версия» — это git-ref в этом каталоге, а не тег образа.
 SRC_DIR="${SRC_DIR:-${INSTALL_DIR}/src}"
 COMPOSE_FILE="${COMPOSE_FILE:-${INSTALL_DIR}/docker-compose.yml}"
+CADDYFILE="${CADDYFILE:-${INSTALL_DIR}/caddy/Caddyfile}"
 HEALTH_URL="${HEALTH_URL:-http://localhost:8080/health}"
 HEALTH_CHECK_TIMEOUT=60
 HEALTH_CHECK_INTERVAL=2
@@ -46,6 +47,8 @@ CURRENT_VERSION=""
 # git-ref (тег, ветка или коммит), из которого пересобирается образ.
 TARGET_VERSION="main"
 ROLLBACK_ON_FAILURE=true
+# Caddy перечитывает конфиг только по команде: bind-mount меняется молча.
+CADDYFILE_CHANGED=false
 
 # Parse command line arguments
 parse_args() {
@@ -263,6 +266,13 @@ create_upgrade_backup() {
         cp "${INSTALL_DIR}/.env" "${UPGRADE_BACKUP_DIR}/.env" || return 1
     fi
 
+    # Compose и Caddyfile обновляются вместе с образом (sync_deploy_files),
+    # значит откат обязан вернуть и их.
+    cp "${COMPOSE_FILE}" "${UPGRADE_BACKUP_DIR}/docker-compose.yml" || return 1
+    if [[ -f "${CADDYFILE}" ]]; then
+        cp "${CADDYFILE}" "${UPGRADE_BACKUP_DIR}/Caddyfile" || return 1
+    fi
+
     # Save current version info
     echo "${CURRENT_VERSION}" > "${UPGRADE_BACKUP_DIR}/version.txt" || return 1
     date > "${UPGRADE_BACKUP_DIR}/backup_time.txt" || return 1
@@ -297,6 +307,59 @@ restore_src_checkout() {
     fi
 }
 
+# Топология (compose, Caddyfile) живёт в ${INSTALL_DIR}, а не в образе: без этой
+# синхронизации новый релиз запускался бы на compose предыдущего — без новых
+# переменных, монтирований и с прежним digest'ом Caddy.
+sync_deploy_files() {
+    local compose_src="${SRC_DIR}/deploy/docker-compose.yml"
+    local caddy_src="${SRC_DIR}/deploy/caddy/Caddyfile"
+
+    if [[ ! -f "${compose_src}" || ! -f "${caddy_src}" ]]; then
+        log_error "Deployment files not found under ${SRC_DIR}/deploy"
+        return 1
+    fi
+
+    cp "${compose_src}" "${COMPOSE_FILE}" || return 1
+    mkdir -p "$(dirname "${CADDYFILE}")" || return 1
+    if ! cmp -s "${caddy_src}" "${CADDYFILE}"; then
+        CADDYFILE_CHANGED=true
+    fi
+    cp "${caddy_src}" "${CADDYFILE}" || return 1
+
+    log_info "Deployment files synced from ${SRC_DIR}/deploy"
+}
+
+restore_deploy_files() {
+    if [[ -f "${UPGRADE_BACKUP_DIR}/docker-compose.yml" ]]; then
+        cp "${UPGRADE_BACKUP_DIR}/docker-compose.yml" "${COMPOSE_FILE}" || true
+    fi
+    if [[ -f "${UPGRADE_BACKUP_DIR}/Caddyfile" ]]; then
+        if ! cmp -s "${UPGRADE_BACKUP_DIR}/Caddyfile" "${CADDYFILE}"; then
+            CADDYFILE_CHANGED=true
+        fi
+        cp "${UPGRADE_BACKUP_DIR}/Caddyfile" "${CADDYFILE}" || true
+    fi
+}
+
+# Перечитать конфиг Caddy, если он изменился: `up -d` пересоздаёт контейнер по
+# изменению сервиса в compose, а не содержимого примонтированного файла.
+reload_caddy() {
+    [[ "${CADDYFILE_CHANGED}" == "true" ]] || return 0
+
+    cd "${INSTALL_DIR}" || return 0
+
+    if docker compose -f "${COMPOSE_FILE}" exec -T caddy \
+        caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+        log_success "Caddy config reloaded"
+        return 0
+    fi
+
+    log_warning "Caddy config reload failed, restarting Caddy..."
+    docker compose -f "${COMPOSE_FILE}" restart caddy \
+        || log_error "Caddy restart failed; check ${CADDYFILE}"
+    return 0
+}
+
 # Обновить исходники и пересобрать образ.
 # `docker compose pull` тут неприменим: сервис build-only (D-02).
 build_new_version() {
@@ -318,6 +381,12 @@ build_new_version() {
         return 1
     fi
 
+    if ! sync_deploy_files; then
+        restore_deploy_files
+        restore_src_checkout "${previous_head}"
+        return 1
+    fi
+
     log_info "Building image from $(git -C "${SRC_DIR}" rev-parse --short HEAD)..."
 
     cd "${INSTALL_DIR}"
@@ -329,6 +398,7 @@ build_new_version() {
         log_error "Failed to build new version"
         # Дерево возвращаем к работающему образу: иначе следующий запуск сочтёт
         # несобранный коммит текущей версией.
+        restore_deploy_files
         restore_src_checkout "${previous_head}"
         return 1
     fi
@@ -459,6 +529,8 @@ rollback() {
         cp "${UPGRADE_BACKUP_DIR}/.env" "${INSTALL_DIR}/.env"
     fi
 
+    restore_deploy_files
+
     # Restore previous version: откатываем исходники на сохранённый коммит и
     # пересобираем образ — готового образа для отката в реестре нет (D-02).
     # Если бэкап не успел записать version.txt (падение до этого шага), берём
@@ -486,6 +558,7 @@ rollback() {
     sleep 10
 
     if verify_health; then
+        reload_caddy
         log_success "Rollback successful! Service is running on previous version: ${prev_version}"
         return 0
     else
@@ -610,6 +683,7 @@ upgrade() {
     # Verify health
     if verify_health; then
         trap - ERR
+        reload_caddy
         log_success "╔════════════════════════════════════════════════════════════════╗"
         log_success "║       Upgrade Successful!                                      ║"
         log_success "╚════════════════════════════════════════════════════════════════╝"

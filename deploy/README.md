@@ -112,10 +112,13 @@ sudo /opt/family-budget/src/deploy/scripts/upgrade.sh --version v0.1.0
 ```
 
 It records the current ref, takes a database copy with `docker compose run --rm --no-deps app backup`
-(a `run` container works whether `app` is up or down), then fetches the target ref, rebuilds, restarts
-and waits for `/health`. The copy is taken **before** the rebuild on purpose: the subcommand applies
+(a `run` container works whether `app` is up or down), then fetches the target ref, copies
+`deploy/docker-compose.yml` and `deploy/caddy/Caddyfile` from the new checkout over the installed
+copies (the image is rebuilt from `src/`, the topology lives next to it and would otherwise stay on
+the previous release), rebuilds, restarts and waits for `/health`. A changed Caddyfile is applied with
+`caddy reload` — a bind-mounted file changing does not recreate the container. The copy is taken **before** the rebuild on purpose: the subcommand applies
 migrations when it opens the database, so a copy taken with the new image would already carry the new
-schema and there would be nothing to roll back to. A failed health check rolls back the ref, the database and `.env` automatically;
+schema and there would be nothing to roll back to. A failed health check rolls back the ref, the database, `.env`, the compose file and the Caddyfile automatically;
 `--no-rollback` disables that, and `upgrade.sh rollback` replays the most recent
 `backups/upgrade_<ts>/` by hand.
 
