@@ -59,11 +59,6 @@ setup_ufw_firewall() {
     ufw allow 443/tcp comment 'HTTPS'
     log_info "Allowed HTTP (80/tcp) and HTTPS (443/tcp)"
     
-    # Block direct access to application port from outside
-    # (it will be accessed through reverse proxy only)
-    ufw deny 8080/tcp comment 'Block direct access to app'
-    log_info "Blocked direct access to port 8080"
-    
     # Enable UFW
     ufw --force enable
     
@@ -85,10 +80,6 @@ setup_firewalld() {
     firewall-cmd --permanent --add-service=http
     firewall-cmd --permanent --add-service=https
     log_info "Allowed HTTP and HTTPS"
-    
-    # Block direct access to application port
-    firewall-cmd --permanent --remove-port=8080/tcp 2>/dev/null || true
-    log_info "Blocked direct access to port 8080"
     
     # Reload firewall
     firewall-cmd --reload

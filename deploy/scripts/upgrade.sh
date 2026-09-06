@@ -15,7 +15,7 @@ DATA_DIR="${DATA_DIR:-${INSTALL_DIR}/data}"
 # поэтому «версия» — это git-ref в этом каталоге, а не тег образа.
 SRC_DIR="${SRC_DIR:-${INSTALL_DIR}/src}"
 COMPOSE_FILE="${COMPOSE_FILE:-${INSTALL_DIR}/docker-compose.yml}"
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8080/health}"
+HEALTH_URL="${HEALTH_URL:-http://localhost:8080/health}"
 HEALTH_CHECK_TIMEOUT=60
 HEALTH_CHECK_INTERVAL=2
 # UID/GID пользователя внутри образа (docker/Dockerfile: app = 1000:1000).
@@ -120,15 +120,6 @@ check_root() {
     fi
 }
 
-# git >= 2.35.2 отказывается работать с репозиторием, принадлежащим другому
-# пользователю ("dubious ownership"): install.sh отдаёт ${SRC_DIR} системному
-# пользователю приложения, а этот скрипт работает из-под root.
-ensure_git_safe_directory() {
-    if ! git config --global --get-all safe.directory 2>/dev/null | grep -qxF "${SRC_DIR}"; then
-        git config --global --add safe.directory "${SRC_DIR}"
-    fi
-}
-
 check_installation() {
     log_info "Checking installation..."
 
@@ -149,15 +140,14 @@ check_installation() {
         exit 1
     fi
 
-    ensure_git_safe_directory
-
     log_success "Installation directory found"
 }
 
 check_disk_space() {
     log_info "Checking disk space..."
 
-    local available=$(df -BM "${INSTALL_DIR}" | tail -1 | awk '{print $4}' | sed 's/M//')
+    local available
+    available=$(df -BM "${INSTALL_DIR}" | tail -1 | awk '{print $4}' | sed 's/M//')
     local required=500  # 500MB minimum
 
     if [[ ${available} -lt ${required} ]]; then
@@ -219,38 +209,35 @@ check_database_integrity() {
 # Backup Functions
 # ============================================
 
-# Снять копию базы на ХОСТЕ.
+# Take a database copy with the application's own `backup` subcommand
+# (VACUUM INTO, so a single self-contained file - no -wal/-shm to carry along).
 #
-# Раньше здесь был `docker exec … sqlite3 …`, но в рантайм-образе sqlite3 нет
-# (docker/Dockerfile ставит только ca-certificates/tzdata/wget), поэтому под
-# `set -euo pipefail` скрипт падал с кодом 127 на каждом реальном обновлении —
-# то есть бэкапа и материала для отката не было вовсе.
-#
-# Вызывается уже после stop_service, так что копия снимается с остановленной
-# базы. sqlite3 на хосте предпочтителен (`.backup` сворачивает WAL в один
-# файл); без него копируем файл вместе с -wal/-shm, иначе копия неполная.
-backup_database_file() {
-    local db_file=$1
-    local dest=$2
+# `docker compose run`, not `exec`: the service is already stopped at this point, and on a failed
+# upgrade the app container may be missing entirely. --no-deps keeps compose from
+# starting Caddy for a one-shot command.
+create_database_backup() {
+    local dest=$1
 
-    if command -v sqlite3 >/dev/null 2>&1; then
-        if sqlite3 "${db_file}" ".backup '${dest}'"; then
-            return 0
-        fi
-        log_warning "sqlite3 .backup failed, falling back to a plain file copy"
-    else
-        log_warning "sqlite3 is not installed on the host, copying database files as-is"
+    cd "${INSTALL_DIR}" || return 1
+
+    if ! docker compose -f "${COMPOSE_FILE}" run --rm --no-deps app backup; then
+        log_error "The backup subcommand failed"
+        return 1
     fi
 
-    cp "${db_file}" "${dest}"
-    if [[ -f "${db_file}-wal" ]]; then
-        cp "${db_file}-wal" "${dest}-wal"
-    fi
-    if [[ -f "${db_file}-shm" ]]; then
-        cp "${db_file}-shm" "${dest}-shm"
+    # The subcommand writes into BACKUP_DIR under its own timestamped name.
+    local latest
+    # shellcheck disable=SC2012 # имена файлов задаёт сам сервис: backup_<дата>_<время>.db
+    latest=$(ls -t "${BACKUP_DIR}"/backup_*.db 2>/dev/null | head -1)
+    if [[ -z "${latest}" ]]; then
+        log_error "No backup file appeared in ${BACKUP_DIR}"
+        return 1
     fi
 
-    return 0
+    # Copied into the upgrade directory: retention (BACKUP_KEEP) prunes ${BACKUP_DIR},
+    # and rollback must still find the file it was promised.
+    cp "${latest}" "${dest}" || return 1
+    log_info "Backup taken from ${latest}"
 }
 
 # Снять предобновленческий бэкап. Каждая операция проверяется явно и возвращает
@@ -266,7 +253,7 @@ create_upgrade_backup() {
     local db_file="${DATA_DIR}/budget.db"
     if [[ -f "${db_file}" ]]; then
         log_info "Backing up database..."
-        backup_database_file "${db_file}" "${UPGRADE_BACKUP_DIR}/budget.db" || return 1
+        create_database_backup "${UPGRADE_BACKUP_DIR}/budget.db" || return 1
         log_success "Database backed up"
     fi
 
@@ -275,19 +262,12 @@ create_upgrade_backup() {
         log_info "Backing up environment file..."
         cp "${INSTALL_DIR}/.env" "${UPGRADE_BACKUP_DIR}/.env" || return 1
     fi
-    if [[ -f "${INSTALL_DIR}/config/.env" ]]; then
-        mkdir -p "${UPGRADE_BACKUP_DIR}/config" || return 1
-        cp "${INSTALL_DIR}/config/.env" "${UPGRADE_BACKUP_DIR}/config/.env" || return 1
-    fi
 
     # Save current version info
     echo "${CURRENT_VERSION}" > "${UPGRADE_BACKUP_DIR}/version.txt" || return 1
     date > "${UPGRADE_BACKUP_DIR}/backup_time.txt" || return 1
 
-    # Save container info if running
-    if docker ps --format '{{.Names}}' | grep -q 'family-budget'; then
-        docker inspect $(docker ps -q --filter "name=family-budget" | head -1) > "${UPGRADE_BACKUP_DIR}/container_info.json" 2>/dev/null || true
-    fi
+    docker inspect family-budget-app > "${UPGRADE_BACKUP_DIR}/container_info.json" 2>/dev/null || true
 
     log_success "Pre-upgrade backup created: ${UPGRADE_BACKUP_DIR}"
 }
@@ -385,21 +365,24 @@ start_service() {
     sleep 10
 }
 
+# Порт 8080 наружу не публикуется (наружу смотрит только Caddy), поэтому
+# /health опрашивается изнутри контейнера — wget есть в рантайм-образе.
 verify_health() {
     log_info "Verifying service health..."
 
     local elapsed=0
     local max_wait=${HEALTH_CHECK_TIMEOUT}
 
-    while [[ ${elapsed} -lt ${max_wait} ]]; do
-        local http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "${HEALTH_URL}" 2>/dev/null || echo "000")
+    cd "${INSTALL_DIR}" || return 1
 
-        if [[ "${http_code}" == "200" ]]; then
+    while [[ ${elapsed} -lt ${max_wait} ]]; do
+        if docker compose -f "${COMPOSE_FILE}" exec -T app \
+            wget -q -O /dev/null "${HEALTH_URL}" 2>/dev/null; then
             log_success "Health check passed!"
             return 0
         fi
 
-        log_info "Health check attempt (${elapsed}s/${max_wait}s): HTTP ${http_code}"
+        log_info "Health check attempt (${elapsed}s/${max_wait}s)"
         sleep ${HEALTH_CHECK_INTERVAL}
         elapsed=$((elapsed + HEALTH_CHECK_INTERVAL))
     done
@@ -457,25 +440,14 @@ rollback() {
     # накатил бы их поверх восстановленного файла и вернул данные обратно.
     if [[ -f "${UPGRADE_BACKUP_DIR}/budget.db" ]]; then
         log_info "Restoring database from backup..."
+        # Осиротевшие -wal/-shm от неудачного запуска обязательно удалить: SQLite
+        # накатил бы их поверх восстановленного файла и вернул данные обратно.
         rm -f "${DATA_DIR}/budget.db-wal" "${DATA_DIR}/budget.db-shm"
         cp "${UPGRADE_BACKUP_DIR}/budget.db" "${DATA_DIR}/budget.db"
-        if [[ -f "${UPGRADE_BACKUP_DIR}/budget.db-wal" ]]; then
-            cp "${UPGRADE_BACKUP_DIR}/budget.db-wal" "${DATA_DIR}/budget.db-wal"
-        fi
-        if [[ -f "${UPGRADE_BACKUP_DIR}/budget.db-shm" ]]; then
-            cp "${UPGRADE_BACKUP_DIR}/budget.db-shm" "${DATA_DIR}/budget.db-shm"
-        fi
 
-        # Скрипт работает из-под root. `cp` поверх существующего budget.db
-        # сохраняет его владельца, но -wal/-shm были удалены строкой выше, и
-        # копии создаются заново от root:root. Контейнер запущен как uid 1000,
-        # SQLite в режиме WAL пишет в оба файла — без chown откатанный сервис
-        # просто не открывает базу. Этот путь как раз штатный на хостах без
-        # sqlite3 (см. backup_database_file).
-        chown "${CONTAINER_UID}:${CONTAINER_GID}" \
-            "${DATA_DIR}/budget.db" \
-            "${DATA_DIR}/budget.db-wal" \
-            "${DATA_DIR}/budget.db-shm" 2>/dev/null || true
+        # Скрипт работает из-под root, а контейнер запущен как uid 1000: без chown
+        # откатанный сервис не откроет восстановленную базу на запись.
+        chown "${CONTAINER_UID}:${CONTAINER_GID}" "${DATA_DIR}/budget.db" 2>/dev/null || true
 
         log_success "Database restored"
     fi
@@ -484,15 +456,13 @@ rollback() {
     if [[ -f "${UPGRADE_BACKUP_DIR}/.env" ]]; then
         cp "${UPGRADE_BACKUP_DIR}/.env" "${INSTALL_DIR}/.env"
     fi
-    if [[ -f "${UPGRADE_BACKUP_DIR}/config/.env" ]]; then
-        cp "${UPGRADE_BACKUP_DIR}/config/.env" "${INSTALL_DIR}/config/.env"
-    fi
 
     # Restore previous version: откатываем исходники на сохранённый коммит и
     # пересобираем образ — готового образа для отката в реестре нет (D-02).
     # Если бэкап не успел записать version.txt (падение до этого шага), берём
     # версию, определённую в начале прогона: она и есть уже развёрнутая.
-    local prev_version=$(cat "${UPGRADE_BACKUP_DIR}/version.txt" 2>/dev/null || echo "")
+    local prev_version
+    prev_version=$(cat "${UPGRADE_BACKUP_DIR}/version.txt" 2>/dev/null || echo "")
     if [[ -z "${prev_version}" ]]; then
         prev_version="${CURRENT_VERSION:-unknown}"
     fi
@@ -559,10 +529,10 @@ handle_upgrade_failure() {
 manual_rollback() {
     log_info "=== Manual Rollback ==="
 
-    ensure_git_safe_directory
-
     # Find most recent upgrade backup
-    local latest_backup=$(ls -td "${BACKUP_DIR}"/upgrade_* 2>/dev/null | head -1)
+    local latest_backup
+    # shellcheck disable=SC2012 # каталоги создаёт этот же скрипт: upgrade_<дата>_<время>
+    latest_backup=$(ls -td "${BACKUP_DIR}"/upgrade_* 2>/dev/null | head -1)
     
     if [[ -z "${latest_backup}" ]]; then
         log_error "No upgrade backups found in ${BACKUP_DIR}"
@@ -644,7 +614,7 @@ upgrade() {
         log_info "Backup location: ${UPGRADE_BACKUP_DIR}"
         log_info "Health check: PASSED"
         echo ""
-        log_info "Service is running at: ${HEALTH_URL}"
+        log_info "Service is running behind Caddy"
         echo ""
         exit 0
     else

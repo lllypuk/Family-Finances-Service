@@ -45,7 +45,8 @@ check_system_requirements() {
     # The floor stays at 512MB for the local Docker image build, not for the service.
     local min_ram_mb=512
     local recommended_ram_mb=1024
-    local total_ram=$(free -m | awk '/^Mem:/{print $2}')
+    local total_ram
+    total_ram=$(free -m | awk '/^Mem:/{print $2}')
     if [[ $total_ram -lt $min_ram_mb ]]; then
         log_error "Insufficient RAM: ${total_ram}MB (minimum ${min_ram_mb}MB required)"
         exit 1
@@ -59,7 +60,8 @@ check_system_requirements() {
     log_success "RAM check passed: ${total_ram}MB"
     
     # Check disk space (minimum 10GB)
-    local available_space=$(df -BG / | awk 'NR==2 {print $4}' | sed 's/G//')
+    local available_space
+    available_space=$(df -BG / | awk 'NR==2 {print $4}' | sed 's/G//')
     if [[ $available_space -lt 10 ]]; then
         log_error "Insufficient disk space: ${available_space}GB (minimum 10GB required)"
         exit 1
@@ -88,7 +90,7 @@ check_port() {
 check_ports() {
     log_info "Checking port availability..."
     
-    local ports=(80 443 8080)
+    local ports=(80 443)
     local ports_in_use=()
     
     for port in "${ports[@]}"; do
@@ -101,7 +103,7 @@ check_ports() {
         log_warning "The following ports are in use: ${ports_in_use[*]}"
         log_warning "This may interfere with the installation"
         if [[ "${NON_INTERACTIVE:-false}" != "true" ]]; then
-            read -p "Continue anyway? (y/N) " -n 1 -r
+            read -r -p "Continue anyway? (y/N) " -n 1
             echo
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                 exit 1
@@ -152,11 +154,6 @@ detect_os() {
     log_success "OS is supported"
 }
 
-# Generate secure random secret
-generate_secret() {
-    openssl rand -base64 32
-}
-
 # Ensure git is available (needed to fetch sources — the image is built locally)
 install_git() {
     if command -v git &>/dev/null; then
@@ -185,32 +182,12 @@ install_git() {
     log_success "git installed"
 }
 
-# Create user if doesn't exist
-create_user() {
-    local username=$1
-    if id "$username" &>/dev/null; then
-        log_info "User $username already exists"
-    else
-        useradd --system --no-create-home --shell /bin/false "$username"
-        log_success "Created system user: $username"
-    fi
-}
-
-# Set file ownership and permissions
-set_permissions() {
-    local path=$1
-    local owner=$2
-    local perms=$3
-    
-    chown -R "$owner:$owner" "$path"
-    chmod "$perms" "$path"
-}
-
 # Backup existing directory
 backup_directory() {
     local dir=$1
     if [[ -d "$dir" ]]; then
-        local backup_name="${dir}.backup.$(date +%Y%m%d_%H%M%S)"
+        local backup_name
+        backup_name="${dir}.backup.$(date +%Y%m%d_%H%M%S)"
         log_info "Backing up existing directory to: $backup_name"
         mv "$dir" "$backup_name"
         log_success "Backup created"
@@ -228,7 +205,7 @@ prompt_input() {
         return
     fi
     
-    read -p "$prompt [$default]: " input
+    read -r -p "$prompt [$default]: " input
     if [[ -z "$input" ]]; then
         eval "$var_name=\"$default\""
     else
@@ -244,7 +221,7 @@ confirm_action() {
         return 0
     fi
     
-    read -p "$message (y/N) " -n 1 -r
+    read -r -p "$message (y/N) " -n 1
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         return 0
