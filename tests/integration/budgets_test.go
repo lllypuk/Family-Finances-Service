@@ -16,6 +16,9 @@ import (
 
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
+	"family-budget-service/internal/services/dto"
 	"family-budget-service/internal/testhelpers"
 )
 
@@ -32,16 +35,16 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		err = testServer.Repos.Category.Create(context.Background(), testCategory)
 		require.NoError(t, err)
 
-		startDate := time.Now()
-		endDate := startDate.AddDate(0, 1, 0) // one month later
+		startDate := date.Today(time.UTC)
+		endDate := startDate.AddDays(30)
 
 		request := handlers.CreateBudgetRequest{
-			Name:       "Monthly Groceries Budget",
-			Amount:     800.00,
-			Period:     "monthly",
-			CategoryID: &testCategory.ID,
-			StartDate:  startDate,
-			EndDate:    endDate,
+			Name:        "Monthly Groceries Budget",
+			AmountMinor: 80_000,
+			Period:      "monthly",
+			CategoryID:  &testCategory.ID,
+			StartDate:   startDate,
+			EndDate:     endDate,
 		}
 
 		requestBodyBytes, err := json.Marshal(request)
@@ -61,11 +64,11 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, request.Name, response.Data.Name)
-		assert.InEpsilon(t, request.Amount, response.Data.Amount, 0.001)
+		assert.Equal(t, request.AmountMinor, response.Data.AmountMinor)
 		assert.Equal(t, request.Period, response.Data.Period)
 		assert.Equal(t, *request.CategoryID, *response.Data.CategoryID)
-		assert.Zero(t, response.Data.Spent)
-		assert.InEpsilon(t, request.Amount, response.Data.Remaining, 0.001)
+		assert.Zero(t, response.Data.SpentMinor)
+		assert.Equal(t, request.AmountMinor, response.Data.RemainingMinor)
 		assert.True(t, response.Data.IsActive)
 		assert.NotZero(t, response.Data.ID)
 		assert.NotZero(t, response.Data.CreatedAt)
@@ -86,35 +89,46 @@ func TestBudgetHandler_Integration(t *testing.T) {
 			field   string
 		}{
 			{
-				name: "negative_amount",
+				name: "negative_amount_minor",
 				request: handlers.CreateBudgetRequest{
-					Name:      "Test Budget",
-					Amount:    -100.0,
-					Period:    "monthly",
-					StartDate: time.Now(),
-					EndDate:   time.Now().AddDate(0, 1, 0),
+					Name:        "Test Budget",
+					AmountMinor: -10_000,
+					Period:      "monthly",
+					StartDate:   date.Today(time.UTC),
+					EndDate:     date.Today(time.UTC).AddDays(30),
 				},
-				field: "amount",
+				field: "amount_minor",
+			},
+			{
+				name: "zero_amount_minor",
+				request: handlers.CreateBudgetRequest{
+					Name:        "Test Budget",
+					AmountMinor: 0,
+					Period:      "monthly",
+					StartDate:   date.Today(time.UTC),
+					EndDate:     date.Today(time.UTC).AddDays(30),
+				},
+				field: "amount_minor",
 			},
 			{
 				name: "invalid_period",
 				request: handlers.CreateBudgetRequest{
-					Name:      "Test Budget",
-					Amount:    100.0,
-					Period:    "invalid_period",
-					StartDate: time.Now(),
-					EndDate:   time.Now().AddDate(0, 1, 0),
+					Name:        "Test Budget",
+					AmountMinor: 10_000,
+					Period:      "invalid_period",
+					StartDate:   date.Today(time.UTC),
+					EndDate:     date.Today(time.UTC).AddDays(30),
 				},
 				field: "period",
 			},
 			{
 				name: "empty_name",
 				request: handlers.CreateBudgetRequest{
-					Name:      "",
-					Amount:    100.0,
-					Period:    "monthly",
-					StartDate: time.Now(),
-					EndDate:   time.Now().AddDate(0, 1, 0),
+					Name:        "",
+					AmountMinor: 10_000,
+					Period:      "monthly",
+					StartDate:   date.Today(time.UTC),
+					EndDate:     date.Today(time.UTC).AddDays(30),
 				},
 				field: "name",
 			},
@@ -162,15 +176,15 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		// Create budget where start_date > end_date
 		// Note: This test validates that the budget can be created even with invalid date logic
 		// since date validation is not implemented at the handler level
-		startDate := time.Now()
-		endDate := startDate.AddDate(0, -1, 0) // one month earlier
+		startDate := date.Today(time.UTC)
+		endDate := startDate.AddDays(-30)
 
 		request := handlers.CreateBudgetRequest{
-			Name:      "Date Test Budget",
-			Amount:    100.0,
-			Period:    "monthly",
-			StartDate: startDate,
-			EndDate:   endDate,
+			Name:        "Date Test Budget",
+			AmountMinor: 10_000,
+			Period:      "monthly",
+			StartDate:   startDate,
+			EndDate:     endDate,
 		}
 
 		requestBodyBytes, err := json.Marshal(request)
@@ -228,7 +242,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 
 		assert.Equal(t, testBudget.ID, response.Data.ID)
 		assert.Equal(t, testBudget.Name, response.Data.Name)
-		assert.InEpsilon(t, testBudget.AmountMinor.Float(), response.Data.Amount, 0.001)
+		assert.Equal(t, testBudget.AmountMinor, response.Data.AmountMinor)
 		assert.Equal(t, string(testBudget.Period), response.Data.Period)
 		assert.Equal(t, testBudget.CategoryID, response.Data.CategoryID)
 		assert.Equal(t, testBudget.IsActive, response.Data.IsActive)
@@ -368,10 +382,10 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		newName := "Updated Budget Name"
-		newAmount := 1500.00
+		newAmount := money.Minor(150_000)
 		updateRequest := handlers.UpdateBudgetRequest{
-			Name:   &newName,
-			Amount: &newAmount,
+			Name:        &newName,
+			AmountMinor: &newAmount,
 		}
 
 		requestBodyBytes, err := json.Marshal(updateRequest)
@@ -399,7 +413,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 
 		assert.Equal(t, testBudget.ID, response.Data.ID)
 		assert.Equal(t, newName, response.Data.Name)
-		assert.InEpsilon(t, newAmount, response.Data.Amount, 0.001)
+		assert.Equal(t, newAmount, response.Data.AmountMinor)
 		assert.Equal(t, testBudget.CategoryID, response.Data.CategoryID)  // unchanged
 		assert.NotEqual(t, testBudget.UpdatedAt, response.Data.UpdatedAt) // should be updated
 	})
@@ -450,9 +464,9 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, testBudget.ID, response.Data.ID)
-		assert.Equal(t, newName, response.Data.Name)                                     // updated
-		assert.InEpsilon(t, testBudget.AmountMinor.Float(), response.Data.Amount, 0.001) // unchanged
-		assert.Equal(t, testBudget.CategoryID, response.Data.CategoryID)                 // unchanged
+		assert.Equal(t, newName, response.Data.Name)                       // updated
+		assert.Equal(t, testBudget.AmountMinor, response.Data.AmountMinor) // unchanged
+		assert.Equal(t, testBudget.CategoryID, response.Data.CategoryID)   // unchanged
 	})
 
 	t.Run("UpdateBudget_ToggleActive", func(t *testing.T) {
@@ -502,9 +516,9 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, testBudget.ID, response.Data.ID)
-		assert.Equal(t, newIsActive, response.Data.IsActive)                             // updated
-		assert.Equal(t, testBudget.Name, response.Data.Name)                             // unchanged
-		assert.InEpsilon(t, testBudget.AmountMinor.Float(), response.Data.Amount, 0.001) // unchanged
+		assert.Equal(t, newIsActive, response.Data.IsActive)               // updated
+		assert.Equal(t, testBudget.Name, response.Data.Name)               // unchanged
+		assert.Equal(t, testBudget.AmountMinor, response.Data.AmountMinor) // unchanged
 	})
 
 	t.Run("DeleteBudget_Success", func(t *testing.T) {
@@ -550,4 +564,101 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		// Budget should be marked as inactive after soft delete
 		assert.False(t, response.Data.IsActive)
 	})
+}
+
+// TestBudgetAPI_CreateWithClientID_Idempotent — повтор POST с тем же id отдаёт
+// существующий бюджет, а не создаёт второй (A-07).
+func TestBudgetAPI_CreateWithClientID_Idempotent(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+	ctx := context.Background()
+
+	testCategory := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(ctx, testCategory))
+
+	clientID := uuid.New()
+	today := date.Today(time.UTC)
+	body := mustJSON(t, map[string]any{
+		"id":           clientID,
+		"name":         "Повторяемый бюджет",
+		"amount_minor": 100_000,
+		"period":       "monthly",
+		"category_id":  testCategory.ID,
+		"start_date":   today.String(),
+		"end_date":     today.AddDays(30).String(),
+	})
+
+	post := func(t *testing.T) *httptest.ResponseRecorder {
+		t.Helper()
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/budgets", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		session.Apply(req)
+		rec := httptest.NewRecorder()
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		return rec
+	}
+
+	first := post(t)
+	require.Equal(t, http.StatusCreated, first.Code, "тело: %s", first.Body.String())
+
+	second := post(t)
+	require.Equal(t, http.StatusOK, second.Code, "тело: %s", second.Body.String())
+
+	var repeated handlers.APIResponse[handlers.BudgetResponse]
+	require.NoError(t, json.Unmarshal(second.Body.Bytes(), &repeated))
+	assert.Equal(t, clientID, repeated.Data.ID)
+	assert.Equal(t, money.Minor(100_000), repeated.Data.AmountMinor)
+
+	stored, err := testServer.Repos.Budget.GetAll(ctx)
+	require.NoError(t, err)
+	assert.Len(t, stored, 1, "повтор POST не должен создавать второй бюджет")
+}
+
+// TestCategoryAPI_CreateWithClientID_Idempotent — то же для категорий.
+func TestCategoryAPI_CreateWithClientID_Idempotent(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+
+	clientID := uuid.New()
+	body := mustJSON(t, map[string]any{
+		"id":    clientID,
+		"name":  "Повторяемая категория",
+		"type":  "expense",
+		"color": "#FF00FF",
+		"icon":  "repeat",
+	})
+
+	post := func(t *testing.T) *httptest.ResponseRecorder {
+		t.Helper()
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/categories", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		session.Apply(req)
+		rec := httptest.NewRecorder()
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		return rec
+	}
+
+	first := post(t)
+	require.Equal(t, http.StatusCreated, first.Code, "тело: %s", first.Body.String())
+
+	second := post(t)
+	require.Equal(t, http.StatusOK, second.Code, "тело: %s", second.Body.String())
+
+	var repeated handlers.APIResponse[dto.CategoryAPIResponse]
+	require.NoError(t, json.Unmarshal(second.Body.Bytes(), &repeated))
+	assert.Equal(t, clientID, repeated.Data.ID)
+
+	stored, err := testServer.Repos.Category.GetAll(context.Background())
+	require.NoError(t, err)
+	matching := 0
+	for _, c := range stored {
+		if c.Name == "Повторяемая категория" {
+			matching++
+		}
+	}
+	assert.Equal(t, 1, matching, "повтор POST не должен создавать вторую категорию")
 }

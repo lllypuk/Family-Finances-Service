@@ -137,8 +137,8 @@ func TestBudgetHandler_GetBudgetByID_UsesCategoryDateRangeSpent(t *testing.T) {
 
 	var response handlers.APIResponse[handlers.BudgetResponse]
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-	assert.InDelta(t, 275.25, response.Data.Spent, 0.001)
-	assert.InDelta(t, 724.75, response.Data.Remaining, 0.001)
+	assert.Equal(t, money.Minor(27_525), response.Data.SpentMinor)
+	assert.Equal(t, money.Minor(72_475), response.Data.RemainingMinor)
 
 	mockTxRepo.AssertNotCalled(t, "GetTotalByCategory", mock.Anything, mock.Anything, mock.Anything)
 	mockTxRepo.AssertNotCalled(t, "GetTotalByDateRange", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
@@ -187,8 +187,8 @@ func TestBudgetHandler_GetBudgetByID_FamilyBudgetUsesDateRangeSpent(t *testing.T
 
 	var response handlers.APIResponse[handlers.BudgetResponse]
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-	assert.InDelta(t, 800.0, response.Data.Spent, 0.001)
-	assert.InDelta(t, 1200.0, response.Data.Remaining, 0.001)
+	assert.Equal(t, money.Minor(80_000), response.Data.SpentMinor)
+	assert.Equal(t, money.Minor(120_000), response.Data.RemainingMinor)
 
 	mockTxRepo.AssertNotCalled(t, "GetTotalByCategory", mock.Anything, mock.Anything, mock.Anything)
 	mockTxRepo.AssertNotCalled(

@@ -4,14 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/auth"
-	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
@@ -54,12 +52,16 @@ func (h *ReportHandler) CreateReport(c echo.Context) error {
 
 	var req CreateReportRequest
 	if err := c.Bind(&req); err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
-			bodyDetail(ErrCodeInvalidRequest, err.Error()))
+		return respondBindError(c, err)
 	}
 
 	if err := h.validator.Struct(req); err != nil {
 		return respondValidationErrors(c, err)
+	}
+
+	if req.EndDate.Before(req.StartDate) {
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+			ErrorDetail{Field: fieldEndDate, Message: "must not be before start_date", Code: ErrCodeValidationError})
 	}
 
 	if h.reportService == nil {
@@ -72,8 +74,8 @@ func (h *ReportHandler) CreateReport(c echo.Context) error {
 		Type:      report.Type(req.Type),
 		Period:    report.Period(req.Period),
 		UserID:    principal.UserID,
-		StartDate: date.FromTime(req.StartDate),
-		EndDate:   date.FromTime(req.EndDate),
+		StartDate: req.StartDate,
+		EndDate:   req.EndDate,
 	})
 	if err != nil {
 		if errors.Is(err, services.ErrUnsupportedReportType) {
@@ -234,8 +236,8 @@ func newReportResponse(r *report.Report) ReportResponse {
 		Type:        string(r.Type),
 		Period:      string(r.Period),
 		UserID:      r.UserID,
-		StartDate:   r.StartDate.In(time.UTC),
-		EndDate:     r.EndDate.In(time.UTC),
+		StartDate:   r.StartDate,
+		EndDate:     r.EndDate,
 		Data:        r.Data,
 		GeneratedAt: r.GeneratedAt,
 	}

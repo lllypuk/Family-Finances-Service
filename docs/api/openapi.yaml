@@ -363,10 +363,6 @@ paths:
           in: query
           required: false
           schema: { $ref: '#/components/schemas/CategoryType' }
-        - name: is_active
-          in: query
-          required: false
-          schema: { type: boolean }
       responses:
         '200':
           description: Список категорий
@@ -595,12 +591,10 @@ paths:
       parameters:
         - { $ref: '#/components/parameters/Limit' }
         - { $ref: '#/components/parameters/Offset' }
-        - name: is_active
+        - name: active_only
           in: query
+          description: '`true` — только бюджеты, активные на сегодня'
           schema: { type: boolean }
-        - name: category_id
-          in: query
-          schema: { type: string, format: uuid }
       responses:
         '200':
           description: Список бюджетов
@@ -683,12 +677,13 @@ paths:
       parameters:
         - { $ref: '#/components/parameters/Limit' }
         - { $ref: '#/components/parameters/Offset' }
-        - name: type
+        - name: user_id
           in: query
-          schema: { $ref: '#/components/schemas/ReportType' }
+          description: Только отчёты этого автора
+          schema: { type: string, format: uuid }
       responses:
         '200':
-          description: Список отчётов без тела `data` каждого отчёта
+          description: Список отчётов
           content:
             application/json:
               schema:
@@ -697,7 +692,7 @@ paths:
                 properties:
                   data:
                     type: array
-                    items: { $ref: '#/components/schemas/ReportSummary' }
+                    items: { $ref: '#/components/schemas/Report' }
                   meta: { $ref: '#/components/schemas/ListMeta' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -752,7 +747,7 @@ paths:
       summary: Выгрузить отчёт в CSV
       description: |
         admin и member. Разделитель — запятая, кодировка UTF-8 с BOM (Excel),
-        суммы — в основных единицах с двумя знаками.
+        суммы — целые в минимальных единицах, рядом колонка `Currency`.
       responses:
         '200':
           description: CSV-файл
@@ -1319,7 +1314,6 @@ components:
         name: { type: string, minLength: 2, maxLength: 50 }
         color: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
         icon: { type: string }
-        is_active: { type: boolean }
 
     Transaction:
       type: object
@@ -1385,7 +1379,8 @@ components:
 
     Budget:
       type: object
-      required: [id, name, amount_minor, spent_minor, remaining_minor, period, start_date, end_date, is_active, created_at, updated_at]
+      required: [id, name, amount_minor, spent_minor, remaining_minor, utilization, period, start_date,
+                 end_date, is_active, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
@@ -1397,7 +1392,7 @@ components:
         utilization:
           type: number
           format: double
-          description: Доля израсходованного, 0…N (проценты остаются float — A-05)
+          description: Израсходованная доля лимита в процентах (проценты остаются float — A-05)
         period: { $ref: '#/components/schemas/BudgetPeriod' }
         category_id:
           oneOf:
@@ -1487,15 +1482,15 @@ components:
         end_date: { $ref: '#/components/schemas/CalendarDate' }
     CategoryBreakdownItem:
       type: object
-      required: [category_id, category_name, amount_minor, share, count]
+      required: [category_id, category_name, amount_minor, percentage, count]
       properties:
         category_id: { type: string, format: uuid }
         category_name: { type: string }
         amount_minor: { $ref: '#/components/schemas/Money' }
-        share:
+        percentage:
           type: number
           format: double
-          description: Доля категории в сумме периода, 0…1
+          description: Доля категории в сумме периода в процентах
         count: { type: integer }
     DailyBreakdownItem:
       type: object
@@ -1507,16 +1502,16 @@ components:
         balance_minor: { $ref: '#/components/schemas/Money' }
     TopExpenseItem:
       type: object
-      required: [id, amount_minor, description, category_name, date]
+      required: [id, amount_minor, description, category, date]
       properties:
         id: { type: string, format: uuid }
         amount_minor: { $ref: '#/components/schemas/Money' }
         description: { type: string }
-        category_name: { type: string }
+        category: { type: string }
         date: { $ref: '#/components/schemas/CalendarDate' }
     BudgetComparisonItem:
       type: object
-      required: [budget_id, budget_name, planned_minor, actual_minor, difference_minor]
+      required: [budget_id, budget_name, planned_minor, actual_minor, difference_minor, percentage]
       properties:
         budget_id: { type: string, format: uuid }
         budget_name: { type: string }
@@ -1525,7 +1520,10 @@ components:
         difference_minor:
           allOf: [{ $ref: '#/components/schemas/Money' }]
           description: '`planned_minor - actual_minor`'
-        utilization: { type: number, format: double }
+        percentage:
+          type: number
+          format: double
+          description: Израсходованная доля лимита в процентах
 
     PeriodTotals:
       type: object

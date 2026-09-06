@@ -172,11 +172,11 @@ func TestAPIRoles_MemberHasAccessToFinanceRoutes(t *testing.T) {
 	// member: user_id из тела запроса игнорируется (S-01).
 	t.Run("member create transaction", func(t *testing.T) {
 		body := mustJSON(t, map[string]any{
-			"amount":      12.5,
-			"type":        "expense",
-			"description": "member write",
-			"category_id": fixtures.categoryID,
-			"date":        "2026-01-01T00:00:00Z",
+			"amount_minor": 1_250,
+			"type":         "expense",
+			"description":  "member write",
+			"category_id":  fixtures.categoryID,
+			"date":         "2026-01-01",
 		})
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", bytes.NewBuffer(body))

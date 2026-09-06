@@ -91,4 +91,6 @@ const (
 	fieldRole        = "role"
 	fieldNewPassword = "new_password"
 	fieldCurrency    = "currency"
+	fieldDate        = "date"
+	fieldEndDate     = "end_date"
 )

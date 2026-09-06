@@ -186,12 +186,12 @@ JSON: `amount_minor` (int64), `date` (`"2026-09-04"`), `currency` и `timezone` 
   `tests/integration/transactions_test.go`, `budgets_test.go`, `families_test.go`,
   `tests/integration/openapi_coverage_test.go`, `docs/api/openapi.yaml`
 
-- [ ] запросы/ответы: `amount_minor` (`gt=0`), `date`/`start_date`/`end_date` как `YYYY-MM-DD`, фильтры `amount_from_minor`/`amount_to_minor`; `Family{currency, timezone}`
-- [ ] `id` (uuid4, optional) в `Create*Request` транзакций, бюджетов, категорий: сервис `GetByID` → есть → `200`, нет → `201`
-- [ ] `openapi.yaml` привести к коду; в тест покрытия добавить обратную проверку — каждая операция спецификации зарегистрирована как роут
-- [ ] тесты обработчиков: `amount_minor: 0` → 422, `date: "2026-13-01"` → 422, повтор `POST` с тем же `id` → 200 и одна запись в БД
-- [ ] интеграционные тесты: полный цикл создания/фильтрации/отчёта на копейках
-- [ ] `make fmt && make test && make lint` — зелёные
+- [x] запросы/ответы: `amount_minor` (`gt=0`), `date`/`start_date`/`end_date` как `YYYY-MM-DD`, фильтры `amount_from_minor`/`amount_to_minor`; `Family{currency, timezone}`
+- [x] `id` (uuid4, optional) в `Create*Request` транзакций, бюджетов, категорий: сервис `GetByID` → есть → `200`, нет → `201`
+- [x] `openapi.yaml` привести к коду; в тест покрытия добавить обратную проверку — каждая операция спецификации зарегистрирована как роут
+- [x] тесты обработчиков: `amount_minor: 0` → 422, `date: "2026-13-01"` → 422, повтор `POST` с тем же `id` → 200 и одна запись в БД
+- [x] интеграционные тесты: полный цикл создания/фильтрации/отчёта на копейках
+- [x] `make fmt && make test && make lint` — зелёные
 
 ### Task 8: Verify acceptance criteria
 

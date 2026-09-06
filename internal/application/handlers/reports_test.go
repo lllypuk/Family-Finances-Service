@@ -115,8 +115,8 @@ func createValidReportRequest() handlers.CreateReportRequest {
 		Name:      "Monthly Expenses Report",
 		Type:      "expenses",
 		Period:    "monthly",
-		StartDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-		EndDate:   time.Date(2025, 1, 31, 0, 0, 0, 0, time.UTC),
+		StartDate: date.New(2025, time.January, 1),
+		EndDate:   date.New(2025, time.January, 31),
 	}
 }
 
@@ -779,18 +779,18 @@ func TestReportHandler_ReportPeriods_Validation(t *testing.T) {
 func TestReportHandler_DateRange_Validation(t *testing.T) {
 	tests := []struct {
 		name      string
-		startDate time.Time
-		endDate   time.Time
+		startDate date.Date
+		endDate   date.Date
 	}{
 		{
 			name:      "Valid date range",
-			startDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-			endDate:   time.Date(2025, 1, 31, 23, 59, 59, 0, time.UTC),
+			startDate: date.New(2025, time.January, 1),
+			endDate:   date.New(2025, time.January, 31),
 		},
 		{
 			name:      "Same start and end date",
-			startDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-			endDate:   time.Date(2025, 1, 1, 23, 59, 59, 0, time.UTC),
+			startDate: date.New(2025, time.January, 1),
+			endDate:   date.New(2025, time.January, 1),
 		},
 	}
 

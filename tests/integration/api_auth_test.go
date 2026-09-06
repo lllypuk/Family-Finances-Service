@@ -17,6 +17,7 @@ import (
 
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/category"
+	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/testhelpers"
@@ -50,7 +51,7 @@ import (
 // AuditBypassScenario вернул созданную запись целиком, то есть анонимный клиент
 // не просто прошёл, а записал транзакцию от имени чужого пользователя:
 //
-//	{"data":{"id":"c68a0cb6-…","amount":13.37,"type":"expense",
+//	{"data":{"id":"c68a0cb6-…","amount_minor":1337,"type":"expense",
 //	 "description":"anonymous injection","user_id":"184701d2-…"}, …}
 //
 // Единственный подтест, который проходил и в красной фазе, —
@@ -129,12 +130,12 @@ func TestAPIAuth_AnonymousRequestsRejected(t *testing.T) {
 	// выдуманный bearer: создать транзакцию от имени произвольного пользователя.
 	t.Run("AuditBypassScenario", func(t *testing.T) {
 		body := mustJSON(t, map[string]any{
-			"amount":      13.37,
-			"type":        "expense",
-			"description": "anonymous injection",
-			"category_id": fixtures.categoryID,
-			"user_id":     fixtures.userID,
-			"date":        time.Now(),
+			"amount_minor": 1_337,
+			"type":         "expense",
+			"description":  "anonymous injection",
+			"category_id":  fixtures.categoryID,
+			"user_id":      fixtures.userID,
+			"date":         date.Today(time.UTC),
 		})
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", bytes.NewBuffer(body))
@@ -208,12 +209,12 @@ func TestAPIAuth_AuthenticatedRequestsAllowed(t *testing.T) {
 
 	t.Run("WriteWithSession", func(t *testing.T) {
 		body := mustJSON(t, map[string]any{
-			"amount":      21.0,
-			"type":        "expense",
-			"description": "authenticated write",
-			"category_id": fixtures.categoryID,
-			"user_id":     fixtures.userID,
-			"date":        time.Now(),
+			"amount_minor": 2_100,
+			"type":         "expense",
+			"description":  "authenticated write",
+			"category_id":  fixtures.categoryID,
+			"user_id":      fixtures.userID,
+			"date":         date.Today(time.UTC),
 		})
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", bytes.NewBuffer(body))
@@ -249,12 +250,12 @@ func TestAPIAuth_BodyUserIDIgnored(t *testing.T) {
 	fixtures := createAPIFixtures(t, testServer)
 
 	body := mustJSON(t, map[string]any{
-		"amount":      99.0,
-		"type":        "expense",
-		"description": "impersonation attempt",
-		"category_id": fixtures.freeCategoryID,
-		"user_id":     fixtures.userID,
-		"date":        time.Now(),
+		"amount_minor": 9_900,
+		"type":         "expense",
+		"description":  "impersonation attempt",
+		"category_id":  fixtures.freeCategoryID,
+		"user_id":      fixtures.userID,
+		"date":         date.Today(time.UTC),
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", bytes.NewBuffer(body))

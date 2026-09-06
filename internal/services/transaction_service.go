@@ -158,7 +158,7 @@ func (s *TransactionServiceImpl) CreateTransaction(
 
 	// Create transaction
 	newTransaction := &transaction.Transaction{
-		ID:          uuid.New(),
+		ID:          dto.EntityID(req.ID),
 		AmountMinor: req.AmountMinor,
 		Type:        req.Type,
 		Description: req.Description,

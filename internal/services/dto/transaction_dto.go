@@ -18,6 +18,8 @@ var (
 
 // CreateTransactionDTO represents the data required to create a new transaction
 type CreateTransactionDTO struct {
+	// ID — необязательный клиентский идентификатор; пустой означает «сгенерировать».
+	ID          *uuid.UUID       `validate:"omitempty"`
 	AmountMinor money.Minor      `validate:"required,gt=0"`
 	Type        transaction.Type `validate:"required,oneof=income expense"`
 	Description string           `validate:"required,min=2,max=200"`

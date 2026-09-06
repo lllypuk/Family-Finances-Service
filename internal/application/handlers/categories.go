@@ -30,15 +30,22 @@ func NewCategoryHandler(repositories *Repositories, categoryService services.Cat
 func (h *CategoryHandler) CreateCategory(c echo.Context) error {
 	var req CreateCategoryRequest
 	if bindErr := c.Bind(&req); bindErr != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
-			bodyDetail(ErrCodeInvalidRequest, bindErr.Error()))
+		return respondBindError(c, bindErr)
 	}
 
 	if validationErr := h.validator.Struct(req); validationErr != nil {
 		return respondValidationErrors(c, validationErr)
 	}
 
+	// Клиентский id уже созданной записи — повтор POST после разрыва связи (A-07).
+	if req.ID != nil {
+		if existing, getErr := h.categoryService.GetCategoryByID(c.Request().Context(), *req.ID); getErr == nil {
+			return respondAPI(c, http.StatusOK, dto.ToCategoryAPIResponse(existing))
+		}
+	}
+
 	createDTO := dto.CreateCategoryDTO{
+		ID:       req.ID,
 		Name:     req.Name,
 		Type:     category.Type(req.Type),
 		Color:    req.Color,
@@ -103,8 +110,7 @@ func (h *CategoryHandler) UpdateCategory(c echo.Context) error {
 
 	var req UpdateCategoryRequest
 	if bindErr := c.Bind(&req); bindErr != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
-			bodyDetail(ErrCodeInvalidRequest, bindErr.Error()))
+		return respondBindError(c, bindErr)
 	}
 
 	if validationErr := h.validator.Struct(req); validationErr != nil {

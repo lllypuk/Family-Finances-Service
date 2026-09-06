@@ -21,6 +21,8 @@ var (
 
 // CreateBudgetDTO represents the data required to create a new budget
 type CreateBudgetDTO struct {
+	// ID — необязательный клиентский идентификатор; пустой означает «сгенерировать».
+	ID          *uuid.UUID    `validate:"omitempty"`
 	Name        string        `validate:"required,min=2,max=100"`
 	AmountMinor money.Minor   `validate:"required,gt=0"`
 	Period      budget.Period `validate:"required,oneof=weekly monthly yearly custom"`

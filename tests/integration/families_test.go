@@ -101,6 +101,7 @@ func TestFamilyAPI_Integration(t *testing.T) {
 		var response handlers.APIResponse[handlers.FamilyResponse]
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 		assert.Equal(t, testServer.AuthFamily.ID, response.Data.ID)
+		assert.Equal(t, testServer.AuthFamily.Timezone, response.Data.Timezone)
 	})
 
 	t.Run("UpdateFamily_MemberForbidden", func(t *testing.T) {
@@ -140,6 +141,29 @@ func TestFamilyAPI_Integration(t *testing.T) {
 	t.Run("UpdateFamily_BlankName", func(t *testing.T) {
 		rec := do(t, http.MethodPut, `{"name":"  "}`, adminAuth)
 		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
+	})
+
+	t.Run("UpdateFamily_Timezone", func(t *testing.T) {
+		rec := do(t, http.MethodPut, `{"timezone":"Asia/Novosibirsk"}`, adminAuth)
+		require.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
+
+		var response handlers.APIResponse[handlers.FamilyResponse]
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		assert.Equal(t, "Asia/Novosibirsk", response.Data.Timezone)
+
+		stored, err := testServer.Repos.Family.Get(context.Background())
+		require.NoError(t, err)
+		assert.Equal(t, "Asia/Novosibirsk", stored.Timezone)
+	})
+
+	t.Run("UpdateFamily_InvalidTimezone", func(t *testing.T) {
+		rec := do(t, http.MethodPut, `{"timezone":"Mars/Olympus"}`, adminAuth)
+		require.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
+
+		var response handlers.ErrorResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		require.Len(t, response.Error.Details, 1)
+		assert.Equal(t, "timezone", response.Error.Details[0].Field)
 	})
 
 	// Подтест идёт последним: он заводит транзакцию, после которой валюта заперта навсегда.

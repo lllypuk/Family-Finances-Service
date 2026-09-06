@@ -43,28 +43,33 @@ func NewBudgetHandler(
 func (h *BudgetHandler) CreateBudget(c echo.Context) error {
 	var req CreateBudgetRequest
 	if err := c.Bind(&req); err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
-			bodyDetail(ErrCodeInvalidRequest, err.Error()))
+		return respondBindError(c, err)
 	}
 
 	if err := h.validator.Struct(req); err != nil {
 		return respondValidationErrors(c, err)
 	}
 
+	// Клиентский id уже созданной записи — повтор POST после разрыва связи (A-07).
+	if req.ID != nil {
+		if existing, found := h.findBudget(c, *req.ID); found {
+			return respondAPI(c, http.StatusOK, h.buildBudgetResponse(existing))
+		}
+	}
+
 	if h.budgetService != nil {
 		return h.createBudgetViaService(c, req)
 	}
 
-	// Создаем новый бюджет
 	newBudget := &budget.Budget{
-		ID:          uuid.New(),
+		ID:          dto.EntityID(req.ID),
 		Name:        req.Name,
-		AmountMinor: money.FromFloat(req.Amount),
-		SpentMinor:  0, // Начальная потраченная сумма
+		AmountMinor: req.AmountMinor,
+		SpentMinor:  0,
 		Period:      budget.Period(req.Period),
 		CategoryID:  req.CategoryID,
-		StartDate:   date.FromTime(req.StartDate),
-		EndDate:     date.FromTime(req.EndDate),
+		StartDate:   req.StartDate,
+		EndDate:     req.EndDate,
 		IsActive:    true,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
@@ -74,22 +79,21 @@ func (h *BudgetHandler) CreateBudget(c echo.Context) error {
 		return respondError(c, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create budget")
 	}
 
-	response := BudgetResponse{
-		ID:         newBudget.ID,
-		Name:       newBudget.Name,
-		Amount:     newBudget.AmountMinor.Float(),
-		Spent:      newBudget.SpentMinor.Float(),
-		Remaining:  newBudget.GetRemainingAmount().Float(),
-		Period:     string(newBudget.Period),
-		CategoryID: newBudget.CategoryID,
-		StartDate:  newBudget.StartDate.In(time.UTC),
-		EndDate:    newBudget.EndDate.In(time.UTC),
-		IsActive:   newBudget.IsActive,
-		CreatedAt:  newBudget.CreatedAt,
-		UpdatedAt:  newBudget.UpdatedAt,
+	return respondAPI(c, http.StatusCreated, h.buildBudgetResponse(newBudget))
+}
+
+// findBudget ищет бюджет по клиентскому id; ошибка означает «не найден».
+func (h *BudgetHandler) findBudget(c echo.Context, id uuid.UUID) (*budget.Budget, bool) {
+	ctx := c.Request().Context()
+	if h.budgetService != nil {
+		b, err := h.budgetService.GetBudgetByID(ctx, id)
+
+		return b, err == nil
 	}
 
-	return respondAPI(c, http.StatusCreated, response)
+	b, err := h.repositories.Budget.GetByID(ctx, id)
+
+	return b, err == nil
 }
 
 func (h *BudgetHandler) GetBudgets(c echo.Context) error {
@@ -165,22 +169,10 @@ func (h *BudgetHandler) GetBudgetByID(c echo.Context) error {
 		}
 	}
 
-	response := BudgetResponse{
-		ID:         foundBudget.ID,
-		Name:       foundBudget.Name,
-		Amount:     foundBudget.AmountMinor.Float(),
-		Spent:      spent.Float(),
-		Remaining:  (foundBudget.AmountMinor - spent).Float(),
-		Period:     string(foundBudget.Period),
-		CategoryID: foundBudget.CategoryID,
-		StartDate:  foundBudget.StartDate.In(time.UTC),
-		EndDate:    foundBudget.EndDate.In(time.UTC),
-		IsActive:   foundBudget.IsActive,
-		CreatedAt:  foundBudget.CreatedAt,
-		UpdatedAt:  foundBudget.UpdatedAt,
-	}
+	// Пересчитанный расход подставляется в бюджет, чтобы ответ считался одной формулой.
+	foundBudget.SpentMinor = spent
 
-	return respondAPI(c, http.StatusOK, response)
+	return respondAPI(c, http.StatusOK, h.buildBudgetResponse(foundBudget))
 }
 
 func (h *BudgetHandler) UpdateBudget(c echo.Context) error {
@@ -209,14 +201,14 @@ func (h *BudgetHandler) updateBudgetFields(budget *budget.Budget, req *UpdateBud
 	if req.Name != nil {
 		budget.Name = *req.Name
 	}
-	if req.Amount != nil {
-		budget.AmountMinor = money.FromFloat(*req.Amount)
+	if req.AmountMinor != nil {
+		budget.AmountMinor = *req.AmountMinor
 	}
 	if req.StartDate != nil {
-		budget.StartDate = date.FromTime(*req.StartDate)
+		budget.StartDate = *req.StartDate
 	}
 	if req.EndDate != nil {
-		budget.EndDate = date.FromTime(*req.EndDate)
+		budget.EndDate = *req.EndDate
 	}
 	if req.IsActive != nil {
 		budget.IsActive = *req.IsActive
@@ -226,18 +218,19 @@ func (h *BudgetHandler) updateBudgetFields(budget *budget.Budget, req *UpdateBud
 
 func (h *BudgetHandler) buildBudgetResponse(b *budget.Budget) BudgetResponse {
 	return BudgetResponse{
-		ID:         b.ID,
-		Name:       b.Name,
-		Amount:     b.AmountMinor.Float(),
-		Spent:      b.SpentMinor.Float(),
-		Remaining:  b.GetRemainingAmount().Float(),
-		Period:     string(b.Period),
-		CategoryID: b.CategoryID,
-		StartDate:  b.StartDate.In(time.UTC),
-		EndDate:    b.EndDate.In(time.UTC),
-		IsActive:   b.IsActive,
-		CreatedAt:  b.CreatedAt,
-		UpdatedAt:  b.UpdatedAt,
+		ID:             b.ID,
+		Name:           b.Name,
+		AmountMinor:    b.AmountMinor,
+		SpentMinor:     b.SpentMinor,
+		RemainingMinor: b.GetRemainingAmount(),
+		Utilization:    b.GetSpentPercentage(),
+		Period:         string(b.Period),
+		CategoryID:     b.CategoryID,
+		StartDate:      b.StartDate,
+		EndDate:        b.EndDate,
+		IsActive:       b.IsActive,
+		CreatedAt:      b.CreatedAt,
+		UpdatedAt:      b.UpdatedAt,
 	}
 }
 
@@ -256,12 +249,13 @@ func (h *BudgetHandler) DeleteBudget(c echo.Context) error {
 
 func (h *BudgetHandler) createBudgetViaService(c echo.Context, req CreateBudgetRequest) error {
 	createdBudget, err := h.budgetService.CreateBudget(c.Request().Context(), dto.CreateBudgetDTO{
+		ID:          req.ID,
 		Name:        req.Name,
-		AmountMinor: money.FromFloat(req.Amount),
+		AmountMinor: req.AmountMinor,
 		Period:      budget.Period(req.Period),
 		CategoryID:  req.CategoryID,
-		StartDate:   date.FromTime(req.StartDate),
-		EndDate:     date.FromTime(req.EndDate),
+		StartDate:   req.StartDate,
+		EndDate:     req.EndDate,
 	})
 	if err != nil {
 		return h.handleBudgetServiceError(c, err, "create")
@@ -328,24 +322,18 @@ func (h *BudgetHandler) updateBudgetViaService(c echo.Context) error {
 
 	var req UpdateBudgetRequest
 	if bindErr := c.Bind(&req); bindErr != nil {
-		return HandleBindError(c)
+		return respondBindError(c, bindErr)
 	}
 	if validationErr := h.validator.Struct(req); validationErr != nil {
 		return respondValidationErrors(c, validationErr)
 	}
 
-	serviceReq := dto.UpdateBudgetDTO{Name: req.Name, IsActive: req.IsActive}
-	if req.Amount != nil {
-		amount := money.FromFloat(*req.Amount)
-		serviceReq.AmountMinor = &amount
-	}
-	if req.StartDate != nil {
-		start := date.FromTime(*req.StartDate)
-		serviceReq.StartDate = &start
-	}
-	if req.EndDate != nil {
-		end := date.FromTime(*req.EndDate)
-		serviceReq.EndDate = &end
+	serviceReq := dto.UpdateBudgetDTO{
+		Name:        req.Name,
+		IsActive:    req.IsActive,
+		AmountMinor: req.AmountMinor,
+		StartDate:   req.StartDate,
+		EndDate:     req.EndDate,
 	}
 
 	updatedBudget, err := h.budgetService.UpdateBudget(c.Request().Context(), id, serviceReq)

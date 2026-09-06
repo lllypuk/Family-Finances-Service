@@ -104,7 +104,7 @@ func (s *categoryService) CreateCategory(ctx context.Context, req dto.CreateCate
 
 	// Create new category
 	newCategory := &category.Category{
-		ID:        uuid.New(),
+		ID:        dto.EntityID(req.ID),
 		Name:      req.Name,
 		Type:      req.Type,
 		Color:     req.Color,

@@ -4,6 +4,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 )
 
 // APIResponse represents a generic API response structure for HTTP responses
@@ -116,12 +119,14 @@ type ChangePasswordRequest struct {
 type UpdateFamilyRequest struct {
 	Name     *string `json:"name,omitempty"     validate:"omitempty,min=2,max=100"`
 	Currency *string `json:"currency,omitempty" validate:"omitempty,len=3"`
+	Timezone *string `json:"timezone,omitempty" validate:"omitempty,timezone"`
 }
 
 type FamilyResponse struct {
 	ID        uuid.UUID `json:"id"`
 	Name      string    `json:"name"`
 	Currency  string    `json:"currency"`
+	Timezone  string    `json:"timezone"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -135,6 +140,7 @@ type BackupResponse struct {
 
 // CreateCategoryRequest represents the request payload for creating a new category
 type CreateCategoryRequest struct {
+	ID       *uuid.UUID `json:"id,omitempty"`
 	Name     string     `json:"name"                validate:"required,min=2,max=50"`
 	Type     string     `json:"type"                validate:"required,oneof=income expense"`
 	Color    string     `json:"color"               validate:"required,hexcolor"`
@@ -165,34 +171,35 @@ type CategoryResponse struct {
 // (CreateTransaction читает её через auth.FromContext),
 // иначе клиент писал бы от чужого имени — S-01.
 type CreateTransactionRequest struct {
-	Amount      float64   `json:"amount"         validate:"required,gt=0"`
-	Type        string    `json:"type"           validate:"required,oneof=income expense"`
-	Description string    `json:"description"    validate:"required,min=2,max=200"`
-	CategoryID  uuid.UUID `json:"category_id"    validate:"required"`
-	Date        time.Time `json:"date"           validate:"required"`
-	Tags        []string  `json:"tags,omitempty"`
+	ID          *uuid.UUID  `json:"id,omitempty"`
+	AmountMinor money.Minor `json:"amount_minor"   validate:"required,gt=0"`
+	Type        string      `json:"type"           validate:"required,oneof=income expense"`
+	Description string      `json:"description"    validate:"required,min=2,max=200"`
+	CategoryID  uuid.UUID   `json:"category_id"    validate:"required"`
+	Date        date.Date   `json:"date"           validate:"required"`
+	Tags        []string    `json:"tags,omitempty"`
 }
 
 type UpdateTransactionRequest struct {
-	Amount      *float64   `json:"amount,omitempty"      validate:"omitempty,gt=0"`
-	Type        *string    `json:"type,omitempty"        validate:"omitempty,oneof=income expense"`
-	Description *string    `json:"description,omitempty" validate:"omitempty,min=2,max=200"`
-	CategoryID  *uuid.UUID `json:"category_id,omitempty"`
-	Date        *time.Time `json:"date,omitempty"`
-	Tags        []string   `json:"tags,omitempty"`
+	AmountMinor *money.Minor `json:"amount_minor,omitempty" validate:"omitempty,gt=0"`
+	Type        *string      `json:"type,omitempty"         validate:"omitempty,oneof=income expense"`
+	Description *string      `json:"description,omitempty"  validate:"omitempty,min=2,max=200"`
+	CategoryID  *uuid.UUID   `json:"category_id,omitempty"`
+	Date        *date.Date   `json:"date,omitempty"`
+	Tags        []string     `json:"tags,omitempty"`
 }
 
 type TransactionResponse struct {
-	ID          uuid.UUID `json:"id"`
-	Amount      float64   `json:"amount"`
-	Type        string    `json:"type"`
-	Description string    `json:"description"`
-	CategoryID  uuid.UUID `json:"category_id"`
-	UserID      uuid.UUID `json:"user_id"`
-	Date        time.Time `json:"date"`
-	Tags        []string  `json:"tags"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID          uuid.UUID   `json:"id"`
+	AmountMinor money.Minor `json:"amount_minor"`
+	Type        string      `json:"type"`
+	Description string      `json:"description"`
+	CategoryID  uuid.UUID   `json:"category_id"`
+	UserID      uuid.UUID   `json:"user_id"`
+	Date        date.Date   `json:"date"`
+	Tags        []string    `json:"tags"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
 }
 
 // BulkDeleteRequest — тело POST /transactions/bulk-delete; неизвестные id игнорируются.
@@ -205,49 +212,53 @@ type BulkDeleteResponse struct {
 }
 
 type TransactionFilterParams struct {
-	UserID      *uuid.UUID `query:"user_id"`
-	CategoryID  *uuid.UUID `query:"category_id"`
-	Type        *string    `query:"type"`
-	DateFrom    *time.Time `query:"date_from"`
-	DateTo      *time.Time `query:"date_to"`
-	AmountFrom  *float64   `query:"amount_from"`
-	AmountTo    *float64   `query:"amount_to"`
-	Description *string    `query:"description"`
-	Limit       int        `query:"limit"       validate:"min=1,max=1000"`
-	Offset      int        `query:"offset"      validate:"min=0"`
+	UserID          *uuid.UUID   `query:"user_id"`
+	CategoryID      *uuid.UUID   `query:"category_id"`
+	Type            *string      `query:"type"`
+	DateFrom        *date.Date   `query:"date_from"`
+	DateTo          *date.Date   `query:"date_to"`
+	AmountFromMinor *money.Minor `query:"amount_from_minor"`
+	AmountToMinor   *money.Minor `query:"amount_to_minor"`
+	Description     *string      `query:"description"`
+	Limit           int          `query:"limit"             validate:"min=1,max=1000"`
+	Offset          int          `query:"offset"            validate:"min=0"`
 }
 
 // CreateBudgetRequest represents the request payload for creating a new budget
 type CreateBudgetRequest struct {
-	Name       string     `json:"name"                  validate:"required,min=2,max=100"`
-	Amount     float64    `json:"amount"                validate:"required,gt=0"`
-	Period     string     `json:"period"                validate:"required,oneof=weekly monthly yearly custom"`
-	CategoryID *uuid.UUID `json:"category_id,omitempty"`
-	StartDate  time.Time  `json:"start_date"            validate:"required"`
-	EndDate    time.Time  `json:"end_date"              validate:"required"`
+	ID          *uuid.UUID  `json:"id,omitempty"`
+	Name        string      `json:"name"                  validate:"required,min=2,max=100"`
+	AmountMinor money.Minor `json:"amount_minor"          validate:"required,gt=0"`
+	Period      string      `json:"period"                validate:"required,oneof=weekly monthly yearly custom"`
+	CategoryID  *uuid.UUID  `json:"category_id,omitempty"`
+	StartDate   date.Date   `json:"start_date"            validate:"required"`
+	EndDate     date.Date   `json:"end_date"              validate:"required"`
 }
 
 type UpdateBudgetRequest struct {
-	Name      *string    `json:"name,omitempty"       validate:"omitempty,min=2,max=100"`
-	Amount    *float64   `json:"amount,omitempty"     validate:"omitempty,gt=0"`
-	StartDate *time.Time `json:"start_date,omitempty"`
-	EndDate   *time.Time `json:"end_date,omitempty"`
-	IsActive  *bool      `json:"is_active,omitempty"`
+	Name        *string      `json:"name,omitempty"         validate:"omitempty,min=2,max=100"`
+	AmountMinor *money.Minor `json:"amount_minor,omitempty" validate:"omitempty,gt=0"`
+	StartDate   *date.Date   `json:"start_date,omitempty"`
+	EndDate     *date.Date   `json:"end_date,omitempty"`
+	IsActive    *bool        `json:"is_active,omitempty"`
 }
 
+// BudgetResponse — RemainingMinor уходит в минус при перерасходе; Utilization
+// остаётся долей в процентах (A-05).
 type BudgetResponse struct {
-	ID         uuid.UUID  `json:"id"`
-	Name       string     `json:"name"`
-	Amount     float64    `json:"amount"`
-	Spent      float64    `json:"spent"`
-	Remaining  float64    `json:"remaining"`
-	Period     string     `json:"period"`
-	CategoryID *uuid.UUID `json:"category_id,omitempty"`
-	StartDate  time.Time  `json:"start_date"`
-	EndDate    time.Time  `json:"end_date"`
-	IsActive   bool       `json:"is_active"`
-	CreatedAt  time.Time  `json:"created_at"`
-	UpdatedAt  time.Time  `json:"updated_at"`
+	ID             uuid.UUID   `json:"id"`
+	Name           string      `json:"name"`
+	AmountMinor    money.Minor `json:"amount_minor"`
+	SpentMinor     money.Minor `json:"spent_minor"`
+	RemainingMinor money.Minor `json:"remaining_minor"`
+	Utilization    float64     `json:"utilization"`
+	Period         string      `json:"period"`
+	CategoryID     *uuid.UUID  `json:"category_id,omitempty"`
+	StartDate      date.Date   `json:"start_date"`
+	EndDate        date.Date   `json:"end_date"`
+	IsActive       bool        `json:"is_active"`
+	CreatedAt      time.Time   `json:"created_at"`
+	UpdatedAt      time.Time   `json:"updated_at"`
 }
 
 // CreateReportRequest represents the request payload for creating a new report.
@@ -257,8 +268,8 @@ type CreateReportRequest struct {
 	Name      string    `json:"name"       validate:"required,min=2,max=100"`
 	Type      string    `json:"type"       validate:"required,oneof=expenses income budget cash_flow category_breakdown"`
 	Period    string    `json:"period"     validate:"required,oneof=daily weekly monthly yearly custom"`
-	StartDate time.Time `json:"start_date" validate:"required"`
-	EndDate   time.Time `json:"end_date"   validate:"required,gtefield=StartDate"`
+	StartDate date.Date `json:"start_date" validate:"required"`
+	EndDate   date.Date `json:"end_date"   validate:"required"`
 }
 
 type ReportResponse struct {
@@ -267,8 +278,8 @@ type ReportResponse struct {
 	Type        string    `json:"type"`
 	Period      string    `json:"period"`
 	UserID      uuid.UUID `json:"user_id"`
-	StartDate   time.Time `json:"start_date"`
-	EndDate     time.Time `json:"end_date"`
+	StartDate   date.Date `json:"start_date"`
+	EndDate     date.Date `json:"end_date"`
 	Data        any       `json:"data"`
 	GeneratedAt time.Time `json:"generated_at"`
 }

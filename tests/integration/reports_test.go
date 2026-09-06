@@ -39,8 +39,8 @@ func TestReportHandler_Integration(t *testing.T) {
 		err = testServer.Repos.User.Create(context.Background(), user)
 		require.NoError(t, err)
 
-		startDate := time.Now().AddDate(0, -1, 0) // one month ago
-		endDate := time.Now()
+		startDate := date.Today(time.UTC).AddDays(-30)
+		endDate := date.Today(time.UTC)
 
 		request := handlers.CreateReportRequest{
 			Name:      "Monthly Expense Report",
@@ -97,8 +97,8 @@ func TestReportHandler_Integration(t *testing.T) {
 					Name:      "",
 					Type:      "expenses",
 					Period:    "monthly",
-					StartDate: time.Now().AddDate(0, -1, 0),
-					EndDate:   time.Now(),
+					StartDate: date.Today(time.UTC).AddDays(-30),
+					EndDate:   date.Today(time.UTC),
 				},
 				field: "name",
 			},
@@ -108,8 +108,8 @@ func TestReportHandler_Integration(t *testing.T) {
 					Name:      "Test Report",
 					Type:      "invalid_type",
 					Period:    "monthly",
-					StartDate: time.Now().AddDate(0, -1, 0),
-					EndDate:   time.Now(),
+					StartDate: date.Today(time.UTC).AddDays(-30),
+					EndDate:   date.Today(time.UTC),
 				},
 				field: "type",
 			},
@@ -119,8 +119,8 @@ func TestReportHandler_Integration(t *testing.T) {
 					Name:      "Test Report",
 					Type:      "expenses",
 					Period:    "invalid_period",
-					StartDate: time.Now().AddDate(0, -1, 0),
-					EndDate:   time.Now(),
+					StartDate: date.Today(time.UTC).AddDays(-30),
+					EndDate:   date.Today(time.UTC),
 				},
 				field: "period",
 			},
@@ -373,8 +373,8 @@ func TestReportHandler_Integration(t *testing.T) {
 					Name:      fmt.Sprintf("Test %s Report", reportType),
 					Type:      reportType,
 					Period:    "monthly",
-					StartDate: time.Now().AddDate(0, -1, 0),
-					EndDate:   time.Now(),
+					StartDate: date.Today(time.UTC).AddDays(-30),
+					EndDate:   date.Today(time.UTC),
 				}
 
 				requestBodyBytes, err := json.Marshal(request)
@@ -413,24 +413,21 @@ func TestReportHandler_Integration(t *testing.T) {
 
 		for _, period := range periods {
 			t.Run(fmt.Sprintf("period_%s", period), func(t *testing.T) {
-				var startDate, endDate time.Time
+				today := date.Today(time.UTC)
+
+				var startDate, endDate date.Date
 
 				switch period {
 				case "daily":
-					startDate = time.Now().Truncate(24 * time.Hour)
-					endDate = startDate.Add(24 * time.Hour)
+					startDate, endDate = today, today
 				case "weekly":
-					startDate = time.Now().AddDate(0, 0, -7)
-					endDate = time.Now()
+					startDate, endDate = today.AddDays(-7), today
 				case "monthly":
-					startDate = time.Now().AddDate(0, -1, 0)
-					endDate = time.Now()
+					startDate, endDate = today.AddDays(-30), today
 				case "yearly":
-					startDate = time.Now().AddDate(-1, 0, 0)
-					endDate = time.Now()
+					startDate, endDate = today.AddDays(-365), today
 				case "custom":
-					startDate = time.Now().AddDate(0, -2, 0)
-					endDate = time.Now().AddDate(0, -1, 0)
+					startDate, endDate = today.AddDays(-60), today.AddDays(-30)
 				}
 
 				request := handlers.CreateReportRequest{
@@ -482,8 +479,8 @@ func TestReportAPI_GenerateAndExport(t *testing.T) {
 		Name:      "Export Report",
 		Type:      "expenses",
 		Period:    "monthly",
-		StartDate: time.Now().AddDate(0, 0, -7),
-		EndDate:   time.Now(),
+		StartDate: date.Today(time.UTC).AddDays(-7),
+		EndDate:   date.Today(time.UTC),
 	}
 	body, err := json.Marshal(request)
 	require.NoError(t, err)
@@ -527,8 +524,8 @@ func TestReportAPI_CreateReport_CustomPeriodKeepsDates(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	session := testServer.Auth(t)
 
-	start := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
-	end := time.Date(2026, time.January, 31, 0, 0, 0, 0, time.UTC)
+	start := date.New(2026, time.January, 1)
+	end := date.New(2026, time.January, 31)
 
 	request := handlers.CreateReportRequest{
 		Name:      "Custom Breakdown",
@@ -549,8 +546,8 @@ func TestReportAPI_CreateReport_CustomPeriodKeepsDates(t *testing.T) {
 
 	var created handlers.APIResponse[handlers.ReportResponse]
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &created))
-	assert.True(t, created.Data.StartDate.Equal(start), "start: %s", created.Data.StartDate)
-	assert.True(t, created.Data.EndDate.Equal(end), "end: %s", created.Data.EndDate)
+	assert.Equal(t, start, created.Data.StartDate)
+	assert.Equal(t, end, created.Data.EndDate)
 }
 
 // TestStatsAPI_Summary — сводка за период совпадает с созданными операциями.
@@ -611,8 +608,8 @@ func TestReportAPI_CreateReport_RejectsInvertedDateRange(t *testing.T) {
 		"name":       "Inverted",
 		"type":       "expenses",
 		"period":     "monthly",
-		"start_date": "2026-03-31T00:00:00Z",
-		"end_date":   "2026-03-01T00:00:00Z",
+		"start_date": "2026-03-31",
+		"end_date":   "2026-03-01",
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/reports", bytes.NewBuffer(body))

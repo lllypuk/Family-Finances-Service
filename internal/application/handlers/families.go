@@ -40,8 +40,7 @@ func (h *FamilyHandler) GetFamily(c echo.Context) error {
 func (h *FamilyHandler) UpdateFamily(c echo.Context) error {
 	var req UpdateFamilyRequest
 	if bindErr := c.Bind(&req); bindErr != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
-			bodyDetail(ErrCodeInvalidRequest, bindErr.Error()))
+		return respondBindError(c, bindErr)
 	}
 
 	// Репозиторий сохраняет уже подрезанное имя, поэтому длину проверяем по нему же.
@@ -59,7 +58,7 @@ func (h *FamilyHandler) UpdateFamily(c echo.Context) error {
 				ErrorDetail{Field: fieldCurrency, Message: currencyErr.Error(), Code: ErrCodeValidationError})
 		}
 	}
-	if req.Name == nil && req.Currency == nil {
+	if req.Name == nil && req.Currency == nil && req.Timezone == nil {
 		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, "at least one field must be provided"))
 	}
@@ -67,6 +66,7 @@ func (h *FamilyHandler) UpdateFamily(c echo.Context) error {
 	updatedFamily, err := h.familyService.UpdateFamily(c.Request().Context(), dto.UpdateFamilyDTO{
 		Name:     req.Name,
 		Currency: req.Currency,
+		Timezone: req.Timezone,
 	})
 	if err != nil {
 		return h.handleServiceError(c, err)
@@ -94,6 +94,7 @@ func toFamilyResponse(f *user.Family) FamilyResponse {
 		ID:        f.ID,
 		Name:      f.Name,
 		Currency:  f.Currency,
+		Timezone:  f.Timezone,
 		CreatedAt: f.CreatedAt,
 		UpdatedAt: f.UpdatedAt,
 	}

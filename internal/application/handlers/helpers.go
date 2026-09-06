@@ -13,6 +13,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/auth"
+	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/services"
 )
 
@@ -85,7 +86,13 @@ func bodyDetail(code, message string) ErrorDetail {
 }
 
 // respondBindError — 400 на тело, которое не разобралось; текст ошибки Bind — в details.
+// Непонятная дата — ошибка поля, а не сломанный JSON, поэтому 422.
 func respondBindError(c echo.Context, err error) error {
+	if errors.Is(err, date.ErrInvalidDate) {
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+			ErrorDetail{Field: fieldDate, Message: "must be a date in YYYY-MM-DD format", Code: ErrCodeValidationError})
+	}
+
 	return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
 		bodyDetail(ErrCodeInvalidRequest, err.Error()))
 }
@@ -432,7 +439,7 @@ func (h *UpdateEntityHelper[TRequest, TEntity, TResponse]) Execute(c echo.Contex
 	// Bind request
 	var req TRequest
 	if bindErr := h.BindRequest(c, &req); bindErr != nil {
-		return HandleBindError(c)
+		return respondBindError(c, bindErr)
 	}
 
 	// Validate request

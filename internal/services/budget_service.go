@@ -111,7 +111,7 @@ func (s *BudgetServiceImpl) CreateBudget(ctx context.Context, req dto.CreateBudg
 
 	// Create new budget
 	newBudget := &budget.Budget{
-		ID:          uuid.New(),
+		ID:          dto.EntityID(req.ID),
 		Name:        req.Name,
 		AmountMinor: req.AmountMinor,
 		SpentMinor:  0, // Always starts with 0
