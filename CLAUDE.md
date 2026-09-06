@@ -36,7 +36,7 @@ inside `docker/docker-compose.yml`. `make compose-config` validates both compose
 (so the digest lives in one place).
 
 SQLite: `make sqlite-shell`, `make sqlite-stats`, `make sqlite-backup` (runs `go run ./cmd/server backup`),
-`make sqlite-restore BACKUP_FILE=./backups/<file>.db` (dev-only `cp`; in production restore is manual over ssh).
+`make sqlite-restore BACKUP_FILE=./backups/backup_<ts>.db` (dev-only `cp`; in production restore is manual over ssh).
 
 **Mandatory before handing off any code change: `make fmt`, `make test`, `make lint` — `make lint` must report
 0 issues.** The linter config is strict (see "Linter constraints" below); do not add `//nolint` without a specific
@@ -287,8 +287,9 @@ Go **1.26.7** (also pinned as `GO_VERSION` in `.github/workflows/ci.yml`), Echo 
 go-playground/validator v10, testify, `go.yaml.in/yaml/v3` (test-only: parses `docs/api/openapi.yaml` in the
 coverage test).
 
-CI (`.github/workflows/ci.yml`) runs golangci-lint, `govulncheck`, `make test-coverage`, `make build`, and a Docker
-build/run smoke test. Additional workflows: `docker.yml`, `security.yml` (CodeQL, Semgrep, TruffleHog, OSV),
+CI (`.github/workflows/ci.yml`) runs golangci-lint, `govulncheck`, `make test-coverage`, `make build`, a Docker
+build/run smoke test, `shellcheck -e SC1091` over `deploy/scripts/**` (SC1091 is off: the libs are sourced through
+a computed path) and `make compose-config` + `make caddy-validate`. Additional workflows: `docker.yml`, `security.yml` (CodeQL, Semgrep, TruffleHog, OSV),
 `scorecard.yml` (OSSF Scorecard), `release.yml`.
 
 `scorecard.yml` is deliberately a **separate file**: with `publish_results: true` the OSSF API rejects results from
@@ -298,7 +299,10 @@ do not add steps beyond the action's approved list (`actions/checkout`, `actions
 `github/codeql-action/upload-sarif`, `ossf/scorecard-action`, `step-security/harden-runner`).
 
 **Every `uses:` is pinned to a commit SHA** with the version as a trailing comment
-(`uses: actions/checkout@d23441a… # v6.1.0`), and both `FROM` lines in `docker/Dockerfile` are pinned by digest.
+(`uses: actions/checkout@d23441a… # v6.1.0`); both `FROM` lines in `docker/Dockerfile` and the `caddy` image in
+`deploy/docker-compose.yml` are pinned by digest (that one is watched by the `docker-compose` Dependabot ecosystem
+for `/deploy` — the `docker` ecosystem sees Dockerfiles only, and `make caddy-validate` reads the digest back out
+of the compose file).
 There are no exceptions. Do not reintroduce a tag or branch ref (`@v4`, `@main`, `@master`) — Dependabot updates
 the SHA and its comment together. `go install` in CI likewise pins exact tool versions, never `@latest`.
 

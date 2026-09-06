@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -273,15 +274,25 @@ func TestCleanupOldBackups(t *testing.T) {
 	service := NewBackupService(db, dbPath, "", keep, slog.Default())
 	ctx := context.Background()
 
+	created := make([]string, 0, keep+2)
 	for range keep + 2 {
-		_, err := service.CreateBackup(ctx)
+		info, err := service.CreateBackup(ctx)
 		require.NoError(t, err)
+		created = append(created, info.Filename)
 		time.Sleep(10 * time.Millisecond) // Ensure different timestamps
 	}
 
 	backups, err := service.ListBackups(ctx)
 	require.NoError(t, err)
-	assert.Len(t, backups, keep)
+
+	// ListBackups отдаёт от свежих к старым: проверка по количеству прошла бы
+	// и при удалении свежих файлов вместо старых.
+	names := make([]string, 0, len(backups))
+	for _, b := range backups {
+		names = append(names, b.Filename)
+	}
+	slices.Reverse(names)
+	assert.Equal(t, created[len(created)-keep:], names)
 }
 
 func TestGetBackupFilePath_InvalidFilename(t *testing.T) {

@@ -6,9 +6,9 @@ API for the Android client. One instance = one family.
 ## 🎯 Project Status: IN DEVELOPMENT 🚧
 
 > **Direction (September 2026):** API-only backend for an Android app. Decisions and the five implementation
-> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–04 are done: the
-> web interface, cookie sessions and CSRF are gone, money is integer minor units and dates are calendar dates;
-> the sections below describe the code as it is today.
+> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–05 are done: the
+> web interface, cookie sessions and CSRF are gone, money is integer minor units, dates are calendar dates and
+> the deployment is one compose with Caddy; the sections below describe the code as it is today.
 
 - ✅ REST API for family, users, categories, transactions, budgets, reports, stats, backups
 - ✅ Bearer-token authentication with server-side sessions and a login rate limiter
@@ -78,7 +78,8 @@ The author of a record is taken from the token, so `user_id` in a request body i
 ### Not available yet
 
 - Users are never deleted, only deactivated (`PATCH /users/:id {"is_active": false}`)
-- Backup **restore** is deliberately not exposed over the API — use `make sqlite-restore`
+- Backup **restore** is deliberately not exposed over the API and has no subcommand — in production it is
+  manual over ssh ([deploy/README.md](deploy/README.md)); `make sqlite-restore` is a dev-only `cp`
 - More than one currency: a family has exactly one, and it can no longer be changed once a transaction exists
 
 ## 🏗️ Architecture and Technology Stack
@@ -154,8 +155,8 @@ make docker-logs      # View logs
 make compose-config   # Validate all docker-compose files (docker/ + deploy/)
 
 # SQLite database
-make sqlite-backup    # Create backup
-make sqlite-restore   # Restore from backup
+make sqlite-backup    # Create backup in ./backups (go run ./cmd/server backup)
+make sqlite-restore   # Restore from backup (dev only)
 make sqlite-shell     # Open SQLite shell
 make sqlite-stats     # DB statistics
 make db-reset         # Delete ./data/budget.db* (required after editing the migration, see migrations/README.md)
@@ -168,7 +169,7 @@ make help             # Show all commands
 ## 🏛️ Project Structure
 
 ```
-├── cmd/server/              # Entry point: server, `-health-check`, `setup`, `reset-password`
+├── cmd/server/              # Entry point: server, `-health-check`, `setup`, `reset-password`, `backup`
 ├── internal/
 │   ├── domain/              # Business entities (User, Family, Transaction, Budget, Report, …)
 │   ├── auth/                # Bearer tokens, sessions, RequireBearer/RequireRole, login rate limiter
@@ -201,7 +202,8 @@ All configuration is environment variables; there are no secrets.
 | `SERVER_IDLE_TIMEOUT`  | `60s`                                  | HTTP server idle timeout                                                    |
 | `TRUSTED_PROXIES`      | empty                                  | Comma-separated CIDRs whose `X-Forwarded-For` is trusted for the client IP (login rate limiter). Empty — the client IP is unknown and only the per-email limit applies; behind a reverse proxy set it to the proxy network (e.g. `172.20.0.0/16`) to enable the per-IP limit |
 | `DATABASE_PATH`        | `./data/budget.db`                     | SQLite database file path                                                   |
-| `BACKUP_DIR`           | empty → `<dir(DATABASE_PATH)>/backups` | Where `POST /api/v1/backups` writes. Docker compose sets `/backups` so `VACUUM INTO` copies do not land inside the database volume |
+| `BACKUP_DIR`           | empty → `<dir(DATABASE_PATH)>/backups` | Where `POST /api/v1/backups` and the `backup` subcommand write. Docker compose sets `/backups` so `VACUUM INTO` copies do not land inside the database volume |
+| `BACKUP_KEEP`          | `30`                                   | How many newest backup files to keep; shared by `POST /api/v1/backups` and the `backup` subcommand (`--keep N` overrides it). A non-numeric or non-positive value is ignored |
 | `ENVIRONMENT`          | `development`                          | App environment (`development`, `production`, `test`)                       |
 | `LOG_LEVEL`            | `info`                                 | Logging level                                                               |
 | `LOG_FORMAT`           | `json`                                 | Log format                                                                  |
@@ -272,8 +274,9 @@ The family and the first admin are created afterwards over ssh (`docker compose 
 cron job running the `backup` subcommand.
 
 Supported: Ubuntu 22.04/24.04, Debian 11/12, Rocky/AlmaLinux 9. Scripts in `deploy/scripts/`:
-`install.sh` (`--domain`, `--email`, `--dry-run`, `--reinstall`), `upgrade.sh` (`--version <ref>`,
-`rollback`), `uninstall.sh --keep-data`, `health-check.sh`. Details:
+`install.sh` (`--domain`, `--email`, `--non-interactive`, `--dry-run`, `--reinstall`), `upgrade.sh`
+(`--version <ref>`, `rollback`), `uninstall.sh --keep-data`, `health-check.sh` (`HEALTH_URL`, default
+`https://$DOMAIN/health`). Details:
 [deploy/README.md](deploy/README.md) and
 [docs/specs/004-deployment-readiness.md](docs/specs/004-deployment-readiness.md).
 

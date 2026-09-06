@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log/slog"
 
 	"family-budget-service/internal"
 	"family-budget-service/internal/observability"
@@ -15,7 +14,8 @@ import (
 const cmdBackup = "backup"
 
 // runBackup — подкоманда `backup`: VACUUM INTO в BACKUP_DIR и удаление лишних файлов.
-// Запускается по cron хоста через `docker compose exec`, поэтому пишет и в stdout, и в лог.
+// Запускается по cron хоста через `docker compose exec`, поэтому итог печатается в stdout
+// (логгер собирается ради самого сервиса: он пишет туда же, в os.Stdout).
 func runBackup(ctx context.Context, args []string, _ io.Reader, stdout io.Writer) error {
 	keep, err := parseBackupArgs(args)
 	if err != nil {
@@ -43,12 +43,6 @@ func runBackup(ctx context.Context, args []string, _ io.Reader, stdout io.Writer
 	if err != nil {
 		return err
 	}
-
-	logger.InfoContext(ctx, "backup created",
-		slog.String("file", info.Filename),
-		slog.Int64("size", info.Size),
-		slog.Int("keep", keep),
-	)
 
 	_, err = fmt.Fprintf(stdout, "backup %s created (%d bytes)\n", info.Filename, info.Size)
 	return err

@@ -4,7 +4,7 @@
 
 set -euo pipefail
 # -E: ловушка ERR наследуется функциями и подоболочками, иначе она не сработает
-# внутри start_service/create_upgrade_backup, ради которых и заведена.
+# внутри start_service/verify_health, ради которых и заведена.
 set -E
 
 # Configuration
@@ -212,9 +212,9 @@ check_database_integrity() {
 # Take a database copy with the application's own `backup` subcommand
 # (VACUUM INTO, so a single self-contained file - no -wal/-shm to carry along).
 #
-# `docker compose run`, not `exec`: the service is already stopped at this point, and on a failed
-# upgrade the app container may be missing entirely. --no-deps keeps compose from
-# starting Caddy for a one-shot command.
+# `docker compose run`, not `exec`: after a failed upgrade the app container may be
+# missing entirely, while `run` works whether the service is up or down. --no-deps
+# keeps compose from starting Caddy for a one-shot command.
 create_database_backup() {
     local dest=$1
 
@@ -241,8 +241,8 @@ create_database_backup() {
 }
 
 # Снять предобновленческий бэкап. Каждая операция проверяется явно и возвращает
-# 1: сервис на этот момент уже остановлен, а `set -e` внутри функции, вызванной
-# в условии (`if ! create_upgrade_backup`), не работает — без явных проверок
+# 1: `set -e` внутри функции, вызванной в условии (`if ! create_upgrade_backup`),
+# не работает — без явных проверок
 # частично снятый бэкап считался бы удачным, и откат восстанавливал бы обрывок.
 create_upgrade_backup() {
     log_info "Creating pre-upgrade backup..."
@@ -355,10 +355,14 @@ start_service() {
 
     cd "${INSTALL_DIR}" || return 1
 
+    # Весь проект, а не `up -d app`: аварийная ветка stop_service гасит стек
+    # целиком (`down`), а Caddy зависит от app, не наоборот — с `up -d app` он
+    # так и остался бы лежать, и наружу никто бы не отвечал.
+    #
     # Явная проверка обязательна: `up -d` падает на занятом порте, на нехватке
     # места и на неверном .env, а вызывающая сторона обрабатывает только
     # ненулевой код возврата (внутри `if !` механизм `set -e` отключён).
-    docker compose -f "${COMPOSE_FILE}" up -d app || return 1
+    docker compose -f "${COMPOSE_FILE}" up -d || return 1
 
     # Wait for startup
     log_info "Waiting for service to start..."
@@ -440,8 +444,6 @@ rollback() {
     # накатил бы их поверх восстановленного файла и вернул данные обратно.
     if [[ -f "${UPGRADE_BACKUP_DIR}/budget.db" ]]; then
         log_info "Restoring database from backup..."
-        # Осиротевшие -wal/-shm от неудачного запуска обязательно удалить: SQLite
-        # накатил бы их поверх восстановленного файла и вернул данные обратно.
         rm -f "${DATA_DIR}/budget.db-wal" "${DATA_DIR}/budget.db-shm"
         cp "${UPGRADE_BACKUP_DIR}/budget.db" "${DATA_DIR}/budget.db"
 
@@ -472,13 +474,14 @@ rollback() {
         log_error "Previous commit is unknown; restarting with the image that is already built"
         log_error "(that image is the FAILED upgrade — verify the service manually)"
     elif restore_source_checkout "${prev_version}"; then
-        docker compose -f "${COMPOSE_FILE}" build app || log_error "Rebuild of previous version failed"
+        VERSION="$(git -C "${SRC_DIR}" describe --tags --always --dirty 2>/dev/null || echo dev)" \
+            docker compose -f "${COMPOSE_FILE}" build app || log_error "Rebuild of previous version failed"
     else
         log_error "Could not restore sources at ${prev_version}; the image is NOT rebuilt"
         log_error "and still contains the failed upgrade. Restore manually from ${UPGRADE_BACKUP_DIR}"
     fi
 
-    docker compose -f "${COMPOSE_FILE}" up -d app
+    docker compose -f "${COMPOSE_FILE}" up -d
 
     sleep 10
 
@@ -495,9 +498,9 @@ rollback() {
 # Единая точка обработки провала обновления после остановки сервиса.
 #
 # Раньше её не было: в rollback уходил только провал verify_health, а падение
-# create_upgrade_backup или `docker compose up -d` (диск, порт, битый .env)
-# просто завершало скрипт по `set -e` — сервис оставался погашенным, откат не
-# выполнялся, и оператор не получал даже инструкций по восстановлению.
+# `docker compose up -d` (диск, порт, битый .env) просто завершало скрипт по
+# `set -e` — сервис оставался погашенным, откат не выполнялся, и оператор не
+# получал даже инструкций по восстановлению.
 handle_upgrade_failure() {
     local reason=$1
 
@@ -575,10 +578,17 @@ upgrade() {
 
     check_database_integrity
 
-    # Fetch sources and rebuild the image.
-    # Делается ДО бэкапа намеренно: неудачная сборка ничего не меняет на диске,
-    # а бэкап снимается с уже остановленного сервиса (см. ниже) — так копия
-    # базы заведомо консистентна.
+    # Бэкап снимается ДО сборки: подкоманда `backup` открывает БД через
+    # OpenDatabase, а тот накатывает миграции. Снятый новым образом
+    # «предобновленческий» бэкап уже содержал бы новую схему, и откатывать было
+    # бы не на что. VACUUM INTO даёт консистентный снимок и на живом сервисе.
+    if ! create_upgrade_backup; then
+        log_error "Failed to create the pre-upgrade backup"
+        log_error "Nothing has been changed; the service keeps running the current version"
+        exit 1
+    fi
+
+    # Fetch sources and rebuild the image: неудачная сборка ничего не меняет на диске.
     if ! build_new_version; then
         log_error "Failed to build new version"
         exit 1
@@ -591,11 +601,6 @@ upgrade() {
     # handle_upgrade_failure, иначе `set -e` завершит скрипт с погашенным
     # сервисом и без единой попытки отката (ROLLBACK_ON_FAILURE игнорируется).
     trap 'handle_upgrade_failure "unexpected error at line ${LINENO}"' ERR
-
-    # Create backup (сервис уже остановлен — база никем не пишется)
-    if ! create_upgrade_backup; then
-        handle_upgrade_failure "failed to create the pre-upgrade backup"
-    fi
 
     # Start with new version
     if ! start_service; then

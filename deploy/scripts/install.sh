@@ -200,6 +200,22 @@ copy_deploy_files() {
     log_success "Deployment files copied"
 }
 
+# Дописать ключ, если его в файле нет; существующее значение не трогаем.
+ensure_env_key() {
+    local file=$1 key=$2 value=$3
+
+    if grep -q "^${key}=" "${file}"; then
+        return 0
+    fi
+    if [[ "${DRY_RUN}" == "true" ]]; then
+        log_info "[dry-run] would append ${key}=${value} to ${file}"
+        return 0
+    fi
+
+    log_info "Adding the missing ${key} to ${file}"
+    echo "${key}=${value}" >> "${file}"
+}
+
 # Write .env from .env.example, substituting the domain and the ACME e-mail.
 # A repeated run keeps the existing file: it is the operator's, not ours.
 create_env_file() {
@@ -207,6 +223,15 @@ create_env_file() {
 
     if [[ -f "${env_file}" && "${REINSTALL}" != "true" ]]; then
         log_info "Keeping existing ${env_file}"
+        # Файл может быть старше этого скрипта: без BUILD_CONTEXT сборка ушла бы
+        # в ${INSTALL_DIR}/.. (дефолт compose), без BACKUP_DIR бэкапы легли бы
+        # внутрь тома с базой, а не в ./backups.
+        ensure_env_key "${env_file}" BUILD_CONTEXT ./src
+        ensure_env_key "${env_file}" DATABASE_PATH /data/budget.db
+        ensure_env_key "${env_file}" BACKUP_DIR /backups
+        ensure_env_key "${env_file}" BACKUP_KEEP 30
+        ensure_env_key "${env_file}" DOMAIN "${DOMAIN}"
+        ensure_env_key "${env_file}" ACME_EMAIL "${ACME_EMAIL}"
         return 0
     fi
 
@@ -246,9 +271,20 @@ remove_legacy_network() {
         return 0
     fi
 
+    if ! docker network inspect "${LEGACY_NETWORK}" &>/dev/null; then
+        return 0
+    fi
+
     if docker network rm "${LEGACY_NETWORK}" 2>/dev/null; then
         log_info "Removed the network of the previous installation: ${LEGACY_NETWORK}"
+        return 0
     fi
+
+    # Сеть не удаляется, пока к ней подключены контейнеры, — `up` ниже упадёт
+    # на "Pool overlaps", поэтому показываем оператору, что именно её держит.
+    log_warning "Could not remove the legacy network ${LEGACY_NETWORK}; containers still attached:"
+    docker network inspect -f '{{range .Containers}}  {{.Name}}{{println}}{{end}}' "${LEGACY_NETWORK}" || true
+    log_warning "Stop and remove them (docker rm -f <name>), then re-run the installer"
 }
 
 deploy_application() {

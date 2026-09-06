@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,11 +25,28 @@ func backupEnv(t *testing.T) string {
 	return backupDir
 }
 
-func countBackups(t *testing.T, dir string) int {
+// backupNames — имена файлов в каталоге бэкапов, отсортированные по возрастанию
+// (os.ReadDir сортирует по имени, а имя — это временная метка).
+func backupNames(t *testing.T, dir string) []string {
 	t.Helper()
 	entries, err := os.ReadDir(dir)
 	require.NoError(t, err)
-	return len(entries)
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	return names
+}
+
+// runBackupOnce возвращает имя созданного файла, вытащенное из строки вида
+// `backup <file> created (<n> bytes)`.
+func runBackupOnce(t *testing.T, args []string) string {
+	t.Helper()
+	var out bytes.Buffer
+	require.NoError(t, runBackup(context.Background(), args, nil, &out))
+	fields := strings.Fields(out.String())
+	require.Len(t, fields, 5, "unexpected output: %q", out.String())
+	return fields[1]
 }
 
 func TestRunBackup_Success(t *testing.T) {
@@ -38,19 +56,21 @@ func TestRunBackup_Success(t *testing.T) {
 	require.NoError(t, runBackup(context.Background(), nil, nil, &out))
 
 	assert.Contains(t, out.String(), "created")
-	assert.Equal(t, 1, countBackups(t, backupDir))
+	assert.Len(t, backupNames(t, backupDir), 1)
 }
 
 func TestRunBackup_KeepRetainsNewest(t *testing.T) {
 	backupDir := backupEnv(t)
 
 	const keep = 2
-	var out bytes.Buffer
+	created := make([]string, 0, keep+2)
 	for range keep + 2 {
-		require.NoError(t, runBackup(context.Background(), []string{"--keep", "2"}, nil, &out))
+		created = append(created, runBackupOnce(t, []string{"--keep", "2"}))
 	}
 
-	assert.Equal(t, keep, countBackups(t, backupDir))
+	// Именно последние keep: проверка по количеству прошла бы и при обратной
+	// сортировке в cleanupOldBackups, то есть при удалении свежих файлов.
+	assert.Equal(t, created[len(created)-keep:], backupNames(t, backupDir))
 }
 
 func TestRunBackup_DatabaseOpenError(t *testing.T) {
@@ -61,6 +81,19 @@ func TestRunBackup_DatabaseOpenError(t *testing.T) {
 	var out bytes.Buffer
 	require.Error(t, runBackup(context.Background(), nil, nil, &out))
 	assert.Empty(t, out.String())
+}
+
+// Без --keep ретеншен берётся из BACKUP_KEEP.
+func TestRunBackup_KeepFromEnv(t *testing.T) {
+	backupDir := backupEnv(t)
+	t.Setenv("BACKUP_KEEP", "1")
+
+	created := make([]string, 0, 2)
+	for range 2 {
+		created = append(created, runBackupOnce(t, nil))
+	}
+
+	assert.Equal(t, created[1:], backupNames(t, backupDir))
 }
 
 func TestParseBackupArgs_InvalidFlag(t *testing.T) {

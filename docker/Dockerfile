@@ -34,8 +34,8 @@ FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec4
 RUN apk add --no-cache ca-certificates tzdata wget
 
 # Непривилегированный пользователь с фиксированным UID/GID 1000.
-# Раньше здесь был `nobody` (65534), а deploy/docker-compose.prod.yml запускал
-# контейнер от `1000:1000` — на bind-mount `./data` SQLite не мог открыть БД (D-03).
+# Раньше здесь был `nobody` (65534), а прод-compose запускал контейнер
+# от `1000:1000` — на bind-mount `./data` SQLite не мог открыть БД (D-03).
 # Теперь UID один и тот же в образе и в compose; install.sh делает
 # `chown 1000:1000` на data/backups/logs.
 RUN addgroup -g 1000 -S app && \
@@ -51,7 +51,7 @@ COPY --from=builder /app/family-budget-service /app/family-budget-service
 COPY --from=builder /app/migrations /app/migrations
 
 # Создание директорий для данных SQLite, бэкапов и логов
-# (deploy/docker-compose.*.yml монтируют /backups и /logs с хоста)
+# (deploy/docker-compose.yml монтирует /data и /backups с хоста)
 RUN mkdir -p /data /backups /logs && \
     chown -R app:app /data /backups /logs /app
 

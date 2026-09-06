@@ -4,8 +4,11 @@
 
 set -euo pipefail
 
-# Configuration from environment or defaults
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8080/health}"
+# Configuration from environment or defaults.
+# Порт 8080 наружу не публикуется (снаружи слушает только Caddy), поэтому
+# по умолчанию опрашиваем домен; для DOMAIN=localhost нужен HEALTH_URL с http.
+DOMAIN="${DOMAIN:-localhost}"
+HEALTH_URL="${HEALTH_URL:-https://${DOMAIN}/health}"
 TIMEOUT="${HEALTH_TIMEOUT:-5}"
 RETRIES="${HEALTH_RETRIES:-3}"
 RETRY_DELAY="${HEALTH_RETRY_DELAY:-2}"

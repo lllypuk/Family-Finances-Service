@@ -192,8 +192,10 @@ main() {
 
     check_root
     confirm_uninstall
-    backup_data
+    # Сначала стоп, потом копия: приложение сливает WAL только при штатном
+    # завершении, а backup_data копирует один budget.db без -wal/-shm.
     stop_services
+    backup_data
     remove_images
     remove_installation_directory
     remove_firewall_rules

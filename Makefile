@@ -2,6 +2,7 @@
 APP_NAME=family-budget-service
 BUILD_DIR=./build
 DATA_DIR=./data
+BACKUP_DIR=./backups
 DOCKER_COMPOSE_FILE=docker/docker-compose.yml
 # compose v2 берёт `.env` и относительные пути из project directory, которая по
 # умолчанию равна каталогу первого `-f` (то есть `docker/`). `--project-directory .`
@@ -155,7 +156,7 @@ compose-config:
 .PHONY: caddy-validate
 caddy-validate:
 	@echo "Validating $(CADDYFILE)..."
-	@img=$$(awk '/^[[:space:]]*image:/ {print $$2; exit}' $(DEPLOY_COMPOSE_FILE)); \
+	@img=$$(awk '/^[[:space:]]*image:[[:space:]]*caddy/ {print $$2; exit}' $(DEPLOY_COMPOSE_FILE)); \
 		docker run --rm -e DOMAIN=localhost -e ACME_EMAIL=admin@localhost \
 			-v "$$PWD/$(CADDYFILE):/etc/caddy/Caddyfile:ro" \
 			"$$img" caddy validate --config /etc/caddy/Caddyfile
@@ -164,12 +165,12 @@ caddy-validate:
 .PHONY: sqlite-backup
 sqlite-backup:
 	@echo "Creating SQLite backup..."
-	@go run ./cmd/server backup
+	@BACKUP_DIR=$(BACKUP_DIR) go run ./cmd/server backup
 
 .PHONY: sqlite-restore
 sqlite-restore:
 	@echo "Restoring SQLite from backup..."
-	@echo "Usage: make sqlite-restore BACKUP_FILE=./backups/budget_YYYYMMDD_HHMMSS.db"
+	@echo "Usage: make sqlite-restore BACKUP_FILE=$(BACKUP_DIR)/backup_YYYYMMDD_HHMMSSmmm.db"
 	@if [ -z "$(BACKUP_FILE)" ]; then \
 		echo "Error: BACKUP_FILE is required"; \
 		exit 1; \

@@ -39,20 +39,30 @@ install_ufw() {
     log_success "UFW installed"
 }
 
-# Configure UFW firewall
+# Configure UFW firewall.
+# Правила не сбрасываются: `ufw --force reset` снёс бы разрешения, выданные
+# оператором для всего остального на этом хосте, а нужные нам allow идемпотентны.
 setup_ufw_firewall() {
     log_info "Configuring UFW firewall..."
-    
-    # Reset UFW to default
-    ufw --force reset
-    
+
     # Set default policies
     ufw default deny incoming
     ufw default allow outgoing
-    
-    # Allow SSH (prevent lockout)
-    ufw allow 22/tcp comment 'SSH'
-    log_info "Allowed SSH (22/tcp)"
+
+    # Порт sshd читаем из конфига: на нестандартном порту жёстко зашитый 22
+    # запер бы оператора снаружи, а консоли у домашнего мини-сервера может не быть.
+    local ssh_ports=()
+    mapfile -t ssh_ports < <(sed -nE 's/^[[:space:]]*Port[[:space:]]+([0-9]+).*/\1/p' \
+        /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null | sort -u)
+    if [[ ${#ssh_ports[@]} -eq 0 ]]; then
+        ssh_ports=(22)
+    fi
+
+    local port
+    for port in "${ssh_ports[@]}"; do
+        ufw allow "${port}/tcp" comment 'SSH'
+        log_info "Allowed SSH (${port}/tcp)"
+    done
     
     # Allow HTTP and HTTPS
     ufw allow 80/tcp comment 'HTTP'

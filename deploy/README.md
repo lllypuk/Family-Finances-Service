@@ -12,7 +12,7 @@ and proxies everything to `app:8080`; the service itself is never exposed on the
 | `scripts/install.sh` | first install: Docker, firewall, `.env`, build, `up` |
 | `scripts/upgrade.sh` | git ref → backup → rebuild → health, automatic rollback |
 | `scripts/uninstall.sh` | removal, `--keep-data` keeps the database and backups |
-| `scripts/health-check.sh` | `GET /health` with retries, for monitoring |
+| `scripts/health-check.sh` | `GET /health` with retries, for monitoring (`HEALTH_URL`, default `https://$DOMAIN/health`: port 8080 is not published) |
 
 There are **no secrets**: authentication is bearer tokens stored in the database.
 
@@ -112,8 +112,10 @@ sudo /opt/family-budget/src/deploy/scripts/upgrade.sh --version v0.1.0
 ```
 
 It records the current ref, takes a database copy with `docker compose run --rm --no-deps app backup`
-(a `run` container works even when `app` is down), fetches the target ref, rebuilds, restarts and
-waits for `/health`. A failed health check rolls back the ref, the database and `.env` automatically;
+(a `run` container works whether `app` is up or down), then fetches the target ref, rebuilds, restarts
+and waits for `/health`. The copy is taken **before** the rebuild on purpose: the subcommand applies
+migrations when it opens the database, so a copy taken with the new image would already carry the new
+schema and there would be nothing to roll back to. A failed health check rolls back the ref, the database and `.env` automatically;
 `--no-rollback` disables that, and `upgrade.sh rollback` replays the most recent
 `backups/upgrade_<ts>/` by hand.
 

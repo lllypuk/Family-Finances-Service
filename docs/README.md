@@ -37,7 +37,7 @@
 ### ✅ API и аутентификация
 - **`/api/v1`** — единственный интерфейс, контракт в `api/openapi.yaml`
 - **Bearer-токены** с серверными сессиями, отзыв по одной и всех разом
-- **CLI `setup` / `reset-password`** — bootstrap семьи и сброс пароля без HTTP
+- **CLI `setup` / `reset-password` / `backup`** — bootstrap семьи, сброс пароля и бэкап без HTTP
 - **Лимитер логина** в приложении, `TRUSTED_PROXIES` для реального IP
 
 ### ✅ Security
