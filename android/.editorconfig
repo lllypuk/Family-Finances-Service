@@ -1,0 +1,34 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{kt,kts}]
+indent_style = space
+indent_size = 4
+max_line_length = 120
+
+# ktlint_official переносит почти каждое многострочное выражение и разбивает
+# сигнатуры функций — на Compose-коде это даёт больше шума, чем пользы.
+ktlint_code_style = intellij_idea
+
+# Composable-функции пишутся с большой буквы по соглашению Compose.
+ktlint_function_naming_ignore_when_annotated_with = Composable
+
+# Сигнатуру с двумя и более параметрами держим многострочной. Иначе ktlint схлопывает
+# её в одну строку, пока влезает в 120 символов, и форматирование скачет туда-обратно
+# при добавлении очередного параметра — на Compose это происходит постоянно.
+ktlint_function_signature_rule_force_multiline_when_parameter_count_greater_or_equal_than = 2
+ktlint_class_signature_rule_force_multiline_when_parameter_count_greater_or_equal_than = 2
+ij_kotlin_allow_trailing_comma = true
+ij_kotlin_allow_trailing_comma_on_call_site = true
+
+[*.{xml,yml,yaml,toml}]
+indent_style = space
+indent_size = 2
+
+[Makefile]
+indent_style = tab
