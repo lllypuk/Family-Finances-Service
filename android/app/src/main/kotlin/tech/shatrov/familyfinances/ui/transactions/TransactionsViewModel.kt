@@ -70,6 +70,7 @@ class TransactionsViewModel(
     private var filters = TransactionFilters()
     private var loaded = emptyList<Transaction>()
     private var total = 0
+    private var exhausted = false
     private var categories = emptyList<Category>()
     private var authors = emptyMap<UUID, String>()
     private var job: Job? = null
@@ -115,7 +116,12 @@ class TransactionsViewModel(
                 }
                 val page = api.client.unwrap { requestPage(fromStart) }
                 // distinctBy: сосед мог вставить запись между страницами и сдвинуть окно.
-                loaded = if (fromStart) page.`data` else (loaded + page.`data`).distinctBy { it.id }
+                val merged = if (fromStart) page.`data` else (loaded + page.`data`).distinctBy { it.id }
+                // Страница, не добавившая ни строки, — конец списка, даже если total больше:
+                // выброшенный дубликат навсегда оставил бы loaded.size меньше total, а подвал
+                // перезапускается только по изменению числа строк — экран завис бы на спиннере.
+                exhausted = !fromStart && merged.size == loaded.size
+                loaded = merged
                 total = page.meta.pagination.total
                 mutable.value = ready()
             } catch (failure: ApiFailure) {
@@ -156,7 +162,7 @@ class TransactionsViewModel(
             currency = session.currency,
             filters = filters,
             categories = categories,
-            hasMore = loaded.size < total,
+            hasMore = !exhausted && loaded.size < total,
         )
     }
 

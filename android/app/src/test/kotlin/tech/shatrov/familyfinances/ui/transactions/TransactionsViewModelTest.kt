@@ -136,6 +136,21 @@ class TransactionsViewModelTest {
         assertEquals("2", lastRequestUrl(4).queryParameter("offset"))
     }
 
+    // Сосед вставил запись перед окном: страница приходит той же, и total её уже считает.
+    @Test
+    fun pageWithoutNewRowsStopsPaging() = runTest {
+        enqueueFirstPage()
+        createModel()
+        settle()
+
+        server.enqueueJson(200, TRANSACTIONS_PAGE_1)
+        model.loadMore()
+        val state = settleMore()
+
+        assertEquals(2, state.groups[0].rows.size)
+        assertFalse(state.hasMore)
+    }
+
     @Test
     fun emptyAnswerIsNotAFailure() = runTest {
         enqueueFirstPage(TRANSACTIONS_EMPTY)

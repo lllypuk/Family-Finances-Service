@@ -7,8 +7,10 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -21,6 +23,7 @@ import tech.shatrov.familyfinances.core.api.Category
 import tech.shatrov.familyfinances.core.api.CategoryType
 import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.theme.AppTheme
+import tech.shatrov.familyfinances.ui.UiError
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -36,6 +39,7 @@ class TransactionEditScreenTest {
     private fun show(
         state: TransactionEditUiState,
         onTypeChange: (TransactionType) -> Unit = {},
+        onRetry: () -> Unit = {},
     ) {
         composeRule.setContent {
             AppTheme {
@@ -48,6 +52,7 @@ class TransactionEditScreenTest {
                     onDescriptionChange = {},
                     onSubmit = {},
                     onDelete = {},
+                    onRetry = onRetry,
                     onBack = {},
                 )
             }
@@ -85,6 +90,26 @@ class TransactionEditScreenTest {
         assertEquals(TransactionType.income, type)
     }
 
+    @Test
+    fun failedLoadOffersRetry() {
+        var retried = false
+        show(
+            TransactionEditUiState(loading = false, error = UiError.Network),
+            onRetry = { retried = true },
+        )
+
+        composeRule.onNodeWithText(res.getString(R.string.retry)).performScrollTo().performClick()
+
+        assertTrue(retried)
+    }
+
+    @Test
+    fun failedSaveDoesNotOfferRetry() {
+        show(form().copy(error = UiError.Network))
+
+        composeRule.onNodeWithText(res.getString(R.string.retry)).assertDoesNotExist()
+    }
+
     private fun form(
         amount: String = "1500",
         fieldErrors: Map<String, String> = emptyMap(),
@@ -95,6 +120,7 @@ class TransactionEditScreenTest {
         description = "Кофе",
         categories = listOf(groceries),
         loading = false,
+        loaded = true,
         fieldErrors = fieldErrors,
     )
 

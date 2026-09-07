@@ -51,6 +51,7 @@ data class TransactionEditUiState(
     val categories: List<Category> = emptyList(),
     val editing: Boolean = false,
     val loading: Boolean = true,
+    val loaded: Boolean = false,
     val submitting: Boolean = false,
     val error: UiError? = null,
     val fieldErrors: Map<String, String> = emptyMap(),
@@ -199,10 +200,11 @@ private fun TransactionEditUiState.filled(
     categories: List<Category>,
     existing: Transaction?,
 ): TransactionEditUiState = if (existing == null) {
-    copy(loading = false, categories = categories)
+    copy(loading = false, loaded = true, categories = categories)
 } else {
     copy(
         loading = false,
+        loaded = true,
         categories = categories,
         amount = formatAmountInput(existing.amountMinor),
         type = existing.type,

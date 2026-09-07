@@ -60,6 +60,7 @@ fun TransactionEditScreen(
     onDescriptionChange: (String) -> Unit,
     onSubmit: () -> Unit,
     onDelete: () -> Unit,
+    onRetry: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -144,6 +145,13 @@ fun TransactionEditScreen(
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium,
             )
+            // Повтор только для незагрузившейся формы: на отказе сохранения он перечитал бы
+            // справочник поверх введённого.
+            if (!state.loaded) {
+                Button(onClick = onRetry, modifier = Modifier.heightIn(min = Dimens.TOUCH_MIN)) {
+                    Text(stringResource(R.string.retry))
+                }
+            }
         }
 
         Button(
@@ -163,7 +171,7 @@ fun TransactionEditScreen(
         if (state.editing) {
             TextButton(
                 onClick = { deleteConfirmShown = true },
-                enabled = !state.submitting,
+                enabled = !state.submitting && state.loaded,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = Dimens.TOUCH_MIN),

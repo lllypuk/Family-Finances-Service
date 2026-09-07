@@ -81,6 +81,9 @@ fun AppRoot(graph: AppGraph) {
     // перечитываются по возврату, а не при каждом заходе.
     var listStale by rememberSaveable { mutableStateOf(false) }
     var homeStale by rememberSaveable { mutableStateOf(false) }
+    // Модели экранов лежат в store активити и переживают выход. Ключа по пользователю мало:
+    // повторный вход тем же человеком показал бы данные прошлой сессии и не перечитал бы их.
+    var epoch by rememberSaveable { mutableIntStateOf(0) }
     val session by graph.session.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     // Модель формы живёт в своём store: ключ у неё свой на каждый заход, а store активити
@@ -129,6 +132,7 @@ fun AppRoot(graph: AppGraph) {
         }
 
         AppScreen.Login -> {
+            LaunchedEffect(Unit) { epoch++ }
             val model: LoginViewModel = viewModel { LoginViewModel(graph.api) }
             val state by model.state.collectAsStateWithLifecycle()
             // Токен уже записан хранилищем: дальше бутстрап, а не сразу главная. Флаг снимается
@@ -151,7 +155,7 @@ fun AppRoot(graph: AppGraph) {
         // Модели ключуются по вошедшему: они переживают выход, и после входа другим
         // пользователем прежняя роль показала бы ему чужие действия.
         AppScreen.Home -> WithSession(session) { active ->
-            val model: HomeViewModel = viewModel(key = "home-${active.user.id}") {
+            val model: HomeViewModel = viewModel(key = "home-${active.user.id}-$epoch") {
                 HomeViewModel(graph.api, active.currency)
             }
             val home by model.state.collectAsStateWithLifecycle()
@@ -176,7 +180,7 @@ fun AppRoot(graph: AppGraph) {
         }
 
         AppScreen.Transactions -> WithSession(session) { active ->
-            val model: TransactionsViewModel = viewModel(key = "transactions-${active.user.id}") {
+            val model: TransactionsViewModel = viewModel(key = "transactions-${active.user.id}-$epoch") {
                 TransactionsViewModel(graph.api, active)
             }
             val transactions by model.state.collectAsStateWithLifecycle()
@@ -199,16 +203,18 @@ fun AppRoot(graph: AppGraph) {
         }
 
         AppScreen.Categories -> WithSession(session) { active ->
-            val model: CategoriesViewModel = viewModel(key = "categories-${active.user.id}") {
+            val model: CategoriesViewModel = viewModel(key = "categories-${active.user.id}-$epoch") {
                 CategoriesViewModel(graph.api, active.isAdmin)
             }
             val categories by model.state.collectAsStateWithLifecycle()
             val editor by model.editor.collectAsStateWithLifecycle()
             val form = editor
-            // Список подписывает строки именами категорий и фильтрует по ним, поэтому уход
-            // с этого экрана всегда помечает его устаревшим — правку модель наружу не отдаёт.
+            // Список подписывает строки именами категорий и фильтрует по ним, а главная —
+            // расходы в сводке, поэтому уход с этого экрана помечает устаревшими оба:
+            // правку модель наружу не отдаёт.
             val leave = {
                 listStale = true
+                homeStale = true
                 screen = AppScreen.Home
             }
             BackHandler { if (form == null) leave() else model.onDismiss() }
@@ -260,6 +266,7 @@ fun AppRoot(graph: AppGraph) {
                 onDescriptionChange = model::onDescriptionChange,
                 onSubmit = model::onSubmit,
                 onDelete = model::onDelete,
+                onRetry = model::load,
                 onBack = { screen = AppScreen.Transactions },
             )
         }
