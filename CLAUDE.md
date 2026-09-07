@@ -303,8 +303,11 @@ over `deploy/**` (SC1091 is off: the libs are sourced through a computed path), 
 `govulncheck`, `make build`, `docker compose config` for all three layouts and `caddy validate`. `gosec` is
 part of golangci-lint here, not a separate job: run standalone it ignores the `//nolint:gosec` suppressions and
 the `.golangci.yml` exclusions, and fails on lines the linter deliberately passes.
-On a merge request it also builds the image and curls `/health` inside it; on `main` and on a `v*` tag it
+On a merge request it also builds the image and curls `/health` inside it; on `main` and on a `vX.Y.Z` tag it
 pushes the image to `registry.gitlab.shatrov.tech` and deploys to the mini-server (see "Deployment" below).
+The tag pattern in `.release-tags` is exact on purpose: the Android client shares this repository (decision A-13
+in `docs/specs/005-api-only-redesign.md`) and releases under its own tag namespace, which must not build or deploy
+the server — and a tag with a slash could not name a Docker image anyway.
 
 The runner is a single instance-wide docker executor on home-server: `privileged = true`, `/certs/client`
 (dind) and `/home/sasha/ci-cache:/ci-cache` (Go caches, hence `GOCACHE`/`GOMODCACHE` pointing there instead of
