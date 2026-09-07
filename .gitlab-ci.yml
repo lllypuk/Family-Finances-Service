@@ -58,10 +58,16 @@ workflow:
     FFS_VERSION_TAG: main-$CI_COMMIT_SHORT_SHA
     FFS_MOVING_TAG: main
   rules:
-    - if: $CI_COMMIT_TAG
+    # Только теги вида vX.Y.Z. Правило `if: $CI_COMMIT_TAG` без шаблона выкатывало
+    # прод с любого тега, а имя тега идёт в имя образа после двоеточия — слэш в
+    # нём Docker относит к пути, а не к тегу. В одном репозитории с приложением
+    # это обязательное условие: тег его сборки (`app-v1.0.0`) сервера не касается.
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
       variables:
         FFS_VERSION_TAG: $CI_COMMIT_TAG
         FFS_MOVING_TAG: latest
+    - if: $CI_COMMIT_TAG
+      when: never
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 # Здесь же работает gosec: он включён в .golangci.yml со своими исключениями и
