@@ -35,7 +35,7 @@
 - доступ к данным чужой семьи или чужого пользователя;
 - SQL-инъекции, обход аутентификации по bearer-токену или лимитера логина;
 - утечка или подделка токенов сессий;
-- уязвимости в цепочке сборки (Dockerfile, GitHub Actions workflows).
+- уязвимости в цепочке сборки (Dockerfile, `.gitlab-ci.yml`).
 
 ## Что не входит
 
@@ -46,10 +46,13 @@
 
 ## Практики безопасности в репозитории
 
-- Все GitHub Actions пришпилены по коммит-SHA, базовые Docker-образы — по дайджесту;
-  обновления приходят через Dependabot.
-- На каждый push и pull request выполняются CodeQL, Semgrep, govulncheck,
-  OSV Scanner и TruffleHog (`.github/workflows/security.yml`), еженедельно —
-  OSSF Scorecard (`.github/workflows/scorecard.yml`).
-- Токен `GITHUB_TOKEN` по умолчанию ограничен `contents: read`; write-скоупы
-  выдаются точечно отдельным джобам.
+- Базовые Docker-образы пришпилены по дайджесту, версии инструментов в CI — точные.
+  После переезда с GitHub обновления приходят руками: Dependabot остался там.
+- На каждый merge request и на `main` выполняются `govulncheck` и golangci-lint,
+  в который входит `gosec` со своими исключениями (`.gitlab-ci.yml`); оба валят
+  пайплайн находкой. CodeQL, Semgrep, TruffleHog,
+  OSV Scanner и OSSF Scorecard были джобами GitHub; шаблоны SAST и Secret
+  Detection в GitLab CE есть, но их отчёты без Ultimate никуда не попадают и
+  сборку не останавливают.
+- Реестр образов закрытый; выкат ходит на сервер по ssh отдельным ключом,
+  токен реестра передаётся процессу на stdin, а не аргументом.

@@ -14,13 +14,12 @@ API for the Android client. One instance = one family.
 - ✅ Bearer-token authentication with server-side sessions and a login rate limiter
 - ✅ Family bootstrap and password reset from the CLI (`setup`, `reset-password`)
 - ✅ Lightweight SQLite database, migrations applied at startup
-- ✅ CI/CD pipelines with GitHub Actions
+- ✅ CI/CD in GitLab: checks on every merge request, image and deploy from `main`
 - ✅ Single Docker container, built from source (`docker/Dockerfile`)
 - ✅ Money as integer minor units (`amount_minor`), calendar `YYYY-MM-DD` dates, idempotent `POST`
 - ✅ Self-hosted deployment: one compose (`deploy/`) with Caddy, Let's Encrypt and daily CLI backups
-- 🚧 Multi-platform builds (linux/amd64, linux/arm64) — the workflow exists, but no release has been tagged yet,
-  so nothing is published to GHCR. Both compose files build locally instead of pulling; see
-  [docs/specs/004-deployment-readiness.md](docs/specs/004-deployment-readiness.md#d-02)
+- ✅ Image published to `registry.gitlab.shatrov.tech` on every push to `main` and on every `v*` tag;
+  the server pulls it, `docker/docker-compose.yml` still builds locally for development
 
 ## API
 
@@ -184,9 +183,9 @@ make help             # Show all commands
 ├── migrations/              # 001_consolidated.{up,down}.sql — the whole schema
 ├── tests/integration/       # HTTP tests over the full stack, OpenAPI coverage test
 ├── docs/                    # Product brief, tech stack, audits (specs/), plans, API contract
-├── deploy/                  # Self-hosted deployment: compose + Caddy + install/upgrade scripts
+├── deploy/                  # Self-hosted deployment: compose + Caddy + install/release scripts
 ├── docker/                  # Dockerfile + docker-compose.yml
-└── .github/workflows/       # CI/CD pipelines (ci, docker, security, scorecard, release)
+└── .gitlab-ci.yml           # CI/CD: checks, image, deploy to the mini-server
 ```
 
 ## Configuration
@@ -232,7 +231,7 @@ docker compose --project-directory . -f docker/docker-compose.yml down         #
   limiter, JSON error handler — over an in-memory SQLite database
 - `docs/api/openapi.yaml` is checked both ways by `make test`: a route with no operation, and an operation
   with no route, both fail
-- golangci-lint with 50+ linters, 0 issues required; CodeQL, Semgrep, TruffleHog, OSV Scanner in CI; Dependabot
+- golangci-lint with 50+ linters (gosec among them), 0 issues required; `govulncheck` in CI
 
 ```bash
 make test              # All tests
@@ -251,34 +250,35 @@ make lint              # Code quality checks
 
 ## 🏠 Self-Hosted Deployment
 
-One topology: the application and Caddy in a single compose, Let's Encrypt certificates, no secrets
-to generate. Point an A record at the server, forward 80/443, then:
+The server pulls a prebuilt image; nothing is compiled there. Two layouts share one file set and are
+chosen by `COMPOSE_FILE` in `.env`: compose starts its own Caddy with Let's Encrypt, or the app joins
+the external docker network `edge` behind a Caddy that already owns 80/443 (this is how the
+mini-server runs it).
+
+Point an A record at the server, log in to the registry, then:
 
 ```bash
-git clone https://github.com/lllypuk/Family-Finances-Service.git
-cd Family-Finances-Service
-sudo ./deploy/scripts/install.sh --domain budget.example.com --email admin@example.com
+git clone ssh://git@gitlab.shatrov.tech:2222/shatrov.tech/family-finances-service.git
+cd family-finances-service
+sudo ./deploy/scripts/install.sh --domain ffs.shatrov.tech --email admin@example.com
 ```
 
 The installer cannot be piped into `bash` (`curl … | sudo bash`): it sources `lib/common.sh`,
 `lib/docker.sh` and `lib/firewall.sh` from its own directory, which does not exist when the script
 is read from stdin. Always clone first.
 
-**The deployment builds from source, it does not pull an image.** `install.sh` clones the repository
-into `/opt/family-budget/src` (`REPO_GIT_URL` / `REPO_REF` env vars, default: upstream URL and `main`)
-and builds the Docker image on the server, so the machine needs `git` and outbound network access; the
-512MB RAM floor is sized for that build, not for the running service (128–256MB).
+After the first install, updates are the pipeline's job: every green build on `main` copies `deploy/`
+to the host and runs `release.sh`, which snapshots the database, swaps the image and restarts.
+Rollback is a previous image tag in `.env`, no rebuild.
 
-The family and the first admin are created afterwards over ssh (`docker compose exec app
+The family and the first admin are created over ssh (`docker compose exec app
 /app/family-budget-service setup …`), the second user through `POST /api/v1/users`; backups are a host
 cron job running the `backup` subcommand.
 
 Supported: Ubuntu 22.04/24.04, Debian 11/12, Rocky/AlmaLinux 9. Scripts in `deploy/scripts/`:
-`install.sh` (`--domain`, `--email`, `--non-interactive`, `--dry-run`, `--reinstall`), `upgrade.sh`
-(`--version <ref>`, `rollback`), `uninstall.sh --keep-data`, `health-check.sh` (`HEALTH_URL`, default
-`https://$DOMAIN/health`). Details:
-[deploy/README.md](deploy/README.md) and
-[docs/specs/004-deployment-readiness.md](docs/specs/004-deployment-readiness.md).
+`install.sh` (`--domain`, `--email`, `--image`, `--non-interactive`, `--dry-run`, `--reinstall`),
+`uninstall.sh --keep-data`, `health-check.sh` (`HEALTH_URL`, default `https://$DOMAIN/health`).
+Details: [deploy/README.md](deploy/README.md).
 
 ## 📚 Documentation
 

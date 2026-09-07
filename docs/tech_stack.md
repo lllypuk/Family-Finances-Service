@@ -33,11 +33,10 @@
 - **Контейнеризация**: Docker & Docker Compose — `docker/docker-compose.yml` для разработки,
   `deploy/docker-compose.yml` (`app` + Caddy, сеть `172.20.0.0/16`, `TRUSTED_PROXIES`) для сервера
 - **Reverse proxy / TLS**: Caddy, автоматический Let's Encrypt, конфиг `deploy/caddy/Caddyfile`
-- **Multi-platform**: linux/amd64, linux/arm64
-- **CI/CD**: GitHub Actions (ci, docker, security, release)
-- **Registry**: GHCR, публикация по тегу `v*` (`.github/workflows/docker.yml`). Тега пока нет,
-  поэтому и `docker/`, и `deploy/` собирают образ из `docker/Dockerfile` на месте
-- **Security Scanning**: CodeQL, Semgrep, TruffleHog, OSV Scanner
+- **CI/CD**: GitLab CI (`.gitlab-ci.yml`), раннер — docker executor на home-server
+- **Registry**: `registry.gitlab.shatrov.tech`, тег `main-<sha>` на каждый пуш в `main` и `vX.Y.Z`
+  на тег; сервер образ тянет, `docker/` для разработки собирает локально
+- **Security Scanning**: govulncheck, gosec в составе golangci-lint
 
 ### Документация API
 - **Спецификация**: OpenAPI 3.1 — `docs/api/openapi.yaml`, роут без описания валит `make test`
@@ -222,7 +221,8 @@ github.com/stretchr/testify       # Testing utilities
 - [x] Переход на API-only для Android: планы 01–05 выполнены (bearer, удаление веб-слоя, деньги в
   минимальных единицах, календарные даты, один compose с Caddy); решения в
   [specs/005-api-only-redesign.md](specs/005-api-only-redesign.md)
-- [ ] Первый релиз `v0.1.0` и переход `deploy/` на образ из GHCR вместо сборки на сервере
+- [x] Переезд на GitLab: CI/CD с выкатом на mini-server, `deploy/` тянет образ из реестра
+- [ ] Первый релиз `v0.1.0`
 - [ ] Улучшение аналитики и отчетов
 
 ### Среднесрочные планы

@@ -1,9 +1,9 @@
-# Единственный прод-compose: приложение + Caddy на домашнем мини-сервере.
-# Готового образа в GHCR для этой установки нет — образ собирается на месте.
-# `BUILD_CONTEXT` — путь к корню репозитория относительно project directory
-# (каталога этого файла). По умолчанию `..`, то есть запуск из клона репозитория;
-# install.sh кладёт compose в /opt/family-budget, клон — в /opt/family-budget/src
-# и выставляет BUILD_CONTEXT=./src.
+# Прод-compose: приложение + Caddy. Образ приезжает из реестра GitLab, на
+# сервере ничего не собирается — адрес образа лежит в .env (FFS_IMAGE), и
+# ровно эту строку переписывает release.sh на каждом выкате.
+#
+# На машине, где 80 и 443 уже заняты чужим TLS-терминатором, поверх кладётся
+# docker-compose.proxied.yml — см. COMPOSE_FILE в .env.example.
 #
 # Каталоги bind-mount'ов нужно создать ДО первого `up` и отдать 1000:1000
 # (docker/Dockerfile: `USER 1000:1000`); недостающие Docker создаёт от root,
@@ -12,11 +12,7 @@
 
 services:
   app:
-    build:
-      context: ${BUILD_CONTEXT:-..}
-      dockerfile: docker/Dockerfile
-      args:
-        VERSION: ${VERSION:-dev}
+    image: ${FFS_IMAGE:?нужен образ приложения, см. .env.example}
     container_name: family-budget-app
     restart: unless-stopped
     env_file:

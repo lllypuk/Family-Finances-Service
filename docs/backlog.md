@@ -29,10 +29,10 @@ S-03 (лимитер логина в `internal/auth/ratelimit.go`), `CSRF_SECRET
   на API-only ([005](specs/005-api-only-redesign.md)): все пять планов закрыты, код и `openapi.yaml`
   совпадают, деплой — один compose с Caddy.
 
-## Инфраструктура Dependabot
+## Обновление зависимостей после переезда на GitLab
 
-- В `.github/dependabot.yml` указаны метки `dependencies`, `go`, `github-actions`, `docker`.
-  На GitHub часть из них (`go`, `github-actions`, `docker`) не существуют, из-за чего каждый
-  dependabot-PR стартует с warning "labels could not be found".
-  Решение: создать эти метки в репозитории или убрать из конфига dependabot и оставить
-  только `dependencies`.
+- **Автообновлений больше нет.** Dependabot остался на GitHub вместе с `.github/`, а GitLab CE
+  своего аналога не даёт. Руками обновляются: модули Go (`go get -u`), дайджесты `FROM` в
+  `docker/Dockerfile`, дайджест образа Caddy в `deploy/docker-compose.yml` и версии инструментов
+  в `.gitlab-ci.yml` (`GOLANGCI_LINT_VERSION`, `GOVULNCHECK_VERSION`).
+  `govulncheck` в пайплайне поймает уязвимую версию Go-зависимости, но не устаревший базовый образ.

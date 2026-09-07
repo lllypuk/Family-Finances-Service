@@ -1,46 +1,75 @@
 # Deployment
 
-One topology: the application and Caddy in a single compose on a home mini-server, one family per
-instance ([spec 005](../docs/specs/005-api-only-redesign.md)). Caddy terminates TLS with Let's Encrypt
-and proxies everything to `app:8080`; the service itself is never exposed on the host.
+One family per instance ([spec 005](../docs/specs/005-api-only-redesign.md)). The image is built by
+GitLab CI and pulled from `registry.gitlab.shatrov.tech`; nothing is compiled on the server.
 
 | File | Purpose |
 |---|---|
-| `docker-compose.yml` | `app` (built from source) + `caddy`, network `172.20.0.0/16` |
+| `docker-compose.yml` | `app` (image from the registry) + `caddy`, network `172.20.0.0/16` |
+| `docker-compose.proxied.yml` | overlay for a host where 80/443 already belong to another Caddy |
 | `caddy/Caddyfile` | TLS, security headers, JSON access log, `log_skip @health` |
-| `.env.example` | template for `.env` — `DOMAIN`, `ACME_EMAIL`, paths, `BACKUP_KEEP` |
-| `scripts/install.sh` | first install: Docker, firewall, `.env`, build, `up` |
-| `scripts/upgrade.sh` | git ref → backup → rebuild → health, automatic rollback |
+| `.env.example` | template for `.env` — `FFS_IMAGE`, layout, `DOMAIN`, paths, `BACKUP_KEEP` |
+| `release.sh` | host-side update: registry login, DB snapshot, image swap, `up --wait` |
+| `scripts/install.sh` | first install: Docker, firewall, `.env`, pull, `up` |
 | `scripts/uninstall.sh` | removal, `--keep-data` keeps the database and backups |
-| `scripts/health-check.sh` | `GET /health` with retries, for monitoring (`HEALTH_URL`, default `https://$DOMAIN/health` with `DOMAIN` read from `$INSTALL_DIR/.env`: port 8080 is not published) |
+| `scripts/health-check.sh` | `GET /health` with retries, for monitoring |
 
 There are **no secrets**: authentication is bearer tokens stored in the database.
 
+## Two layouts
+
+`.env` decides, through `COMPOSE_FILE`, which one the machine runs — the file set is the same.
+
+**Own TLS** (default): compose starts Caddy, which obtains a Let's Encrypt certificate for `DOMAIN`
+and proxies to `app:8080`. The host must own ports 80 and 443.
+
+**Behind a shared terminator** (`COMPOSE_FILE=docker-compose.yml:docker-compose.proxied.yml`): the
+bundled Caddy moves into the `own-tls` profile and never starts, and `app` joins the external docker
+network `edge`, where the other Caddy reaches it as `ffs:8080`. This is how **mini-server** runs it —
+80 and 443 there belong to the shatrov.tech landing. Two consequences:
+
+- `TRUSTED_PROXIES` is overridden with `FFS_EDGE_SUBNET`, the subnet of `edge`. `X-Forwarded-For`
+  arrives from a container outside `internal`, and without this the login limiter would treat both
+  users as one client.
+- The headers in `caddy/Caddyfile` are not read at all. HSTS and CSP have to travel with the site
+  block in the shared Caddy:
+
+  ```caddyfile
+  ffs.{$DOMAIN} {
+    encode zstd gzip
+    reverse_proxy ffs:8080
+    header {
+      -Server
+      Strict-Transport-Security "max-age=31536000; includeSubDomains"
+      Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
+      X-Content-Type-Options "nosniff"
+      Referrer-Policy "no-referrer"
+    }
+  }
+  ```
+
 ## Requirements
 
-Ubuntu 22.04/24.04, Debian 11/12 or Rocky/AlmaLinux 9; `git` and outbound network access.
-512MB RAM is sized for the image build on the server — the running service needs 128–256MB.
-
-**The image is built from source, not pulled.** Nothing is published to GHCR for this installation
-until the first `v*` tag ([`docker.yml`](../.github/workflows/docker.yml)); `install.sh` clones the
-repository into `/opt/family-budget/src` (`REPO_GIT_URL` / `REPO_REF`, default upstream `main`) and
-builds there. `VERSION` comes from `git describe` in that checkout and ends up in `GET /health`.
+Ubuntu 22.04/24.04, Debian 11/12 or Rocky/AlmaLinux 9; outbound network access. 256MB RAM is enough —
+the server only runs the image. The registry is private, so the host needs `docker login
+registry.gitlab.shatrov.tech` once, with a personal or deploy token that can read packages.
 
 ## Install
 
-1. Point an A record for your domain at the external IP and forward 80 and 443 to the mini-server.
-   Caddy needs both reachable from the internet to obtain a certificate.
+1. Point an A record for your domain at the external IP. For the own-TLS layout forward 80 and 443 to
+   the host: Caddy needs both reachable from the internet to obtain a certificate.
 2. Clone and run the installer as root:
 
    ```bash
-   git clone https://github.com/lllypuk/Family-Finances-Service.git
-   cd Family-Finances-Service
+   git clone ssh://git@gitlab.shatrov.tech:2222/shatrov.tech/family-finances-service.git
+   cd family-finances-service
    sudo ./deploy/scripts/install.sh --domain ffs.shatrov.tech --email you@example.com
    ```
 
+   The compose files and the Caddyfile are taken from the checkout you run it in; nothing is cloned.
    `curl … | sudo bash` does not work: the script sources `lib/*.sh` from its own directory.
-   `--dry-run` prints every mutating command instead of running it; `--reinstall` moves an existing
-   `/opt/family-budget` to `/opt/family-budget.backup.<ts>` — without it a repeated run keeps
+   `--image` overrides the image, `--dry-run` prints every mutating command instead of running it,
+   `--reinstall` moves an existing `/opt/family-budget` aside — without it a repeated run keeps
    `data/`, `backups/` and `.env`.
 
 3. Create the family and the first admin over ssh (there is no HTTP bootstrap):
@@ -68,23 +97,48 @@ builds there. `VERSION` comes from `git describe` in that checkout and ends up i
 ## Layout on the server
 
 ```
-/opt/family-budget/
-├── docker-compose.yml     # copied from deploy/
-├── caddy/Caddyfile        # copied from deploy/
-├── .env                   # rendered from .env.example, chmod 600
-├── src/                   # git checkout, the build context (BUILD_CONTEXT=./src)
-├── data/budget.db         # SQLite, mounted at /data
-├── backups/               # backup_<date>_<time>.db, mounted at /backups
-└── logs/caddy/access.log  # JSON, rolled at 100MB × 5
+/opt/family-budget/          # mini-server: /home/sasha/ffs
+├── docker-compose.yml       # from deploy/, replaced by every deploy
+├── docker-compose.proxied.yml
+├── caddy/Caddyfile
+├── release.sh
+├── .env                     # stays on the server; CI rewrites one line, FFS_IMAGE
+├── data/budget.db           # SQLite, mounted at /data
+├── backups/                 # backup_<date>_<time>.db, mounted at /backups
+└── logs/caddy/access.log    # own-TLS layout only, JSON, rolled at 100MB × 5
 ```
 
 `data/`, `backups/` and `logs/` belong to `1000:1000` — the UID the image runs as. Docker creates a
 missing bind-mount directory as root, and SQLite then cannot open the database.
 
-`TRUSTED_PROXIES=172.20.0.0/16` is set in `environment:` in the compose file and nowhere else
-(`environment` overrides `env_file`, so a copy in `.env` would be dead). It has to match
-`ipam.config.subnet`: with a mismatch the login limiter sees every request as coming from the Caddy
-container and both users share one per-IP bucket.
+`TRUSTED_PROXIES` is set in `environment:`, not in `.env` (`environment` overrides `env_file`, so a
+copy there would be dead). In the own-TLS layout it is the compose network and must match
+`ipam.config.subnet`; in the proxied layout the overlay replaces it with `FFS_EDGE_SUBNET`.
+
+## Deploy
+
+Every green pipeline on `main` deploys: CI builds `…/family-finances-service:main-<sha>`, copies this
+directory to the host and runs `release.sh`, which logs into the registry, snapshots the database,
+rewrites `FFS_IMAGE` in `.env`, pulls and restarts with `--wait`. A tag `vX.Y.Z` does the same with
+the tag as the image version. The pipeline fails if the service does not reach `healthy`, and the
+`smoke` job then checks `/health` over the public domain.
+
+The snapshot is taken **before** the image is swapped, with the container that is still running: the
+new release migrates the database at startup, and a copy taken afterwards is not what a rollback
+needs.
+
+Rollback is a previous image, no rebuild involved:
+
+```bash
+cd /home/sasha/ffs
+grep FFS_IMAGE .env                      # what is running now
+sed -i 's|^FFS_IMAGE=.*|FFS_IMAGE=registry.gitlab.shatrov.tech/shatrov.tech/family-finances-service:main-1a2b3c4d|' .env
+docker compose up -d --wait
+```
+
+If the newer release migrated the database, restore the snapshot it took first — see below. Image
+tags older than the registry cleanup policy are gone; re-running the old pipeline's `release-image`
+job builds that commit again.
 
 ## Backups
 
@@ -105,46 +159,31 @@ docker compose up -d
 
 Check a backup before trusting it: `sqlite3 backups/<file>.db 'PRAGMA integrity_check'`.
 
-## Upgrade and rollback
-
-```bash
-sudo /opt/family-budget/src/deploy/scripts/upgrade.sh --version v0.1.0
-```
-
-It records the current ref, takes a database copy with `docker compose run --rm --no-deps app backup`
-(a `run` container works whether `app` is up or down), then fetches the target ref, copies
-`deploy/docker-compose.yml` and `deploy/caddy/Caddyfile` from the new checkout over the installed
-copies (the image is rebuilt from `src/`, the topology lives next to it and would otherwise stay on
-the previous release), rebuilds, restarts and waits for `/health`. A changed Caddyfile is applied with
-`caddy reload` — a bind-mounted file changing does not recreate the container. The copy is taken **before** the rebuild on purpose: after it, `compose run` would
-start the *new* image, and a database the new release has already migrated is not what a rollback
-needs. A failed health check rolls back the ref, the database, `.env`, the compose file and the Caddyfile automatically;
-`--no-rollback` disables that, and `upgrade.sh rollback` replays the most recent
-`backups/upgrade_<ts>/` by hand. If the rollback cannot rebuild the previous image or restore the
-deploy files, it leaves the service **stopped**: the failed upgrade's image over the restored
-database would migrate it and undo the rollback.
-
 ## Operations
 
 ```bash
 cd /opt/family-budget
 docker compose ps
 docker compose logs -f app            # application, JSON slog
-tail -f logs/caddy/access.log         # requests, /health excluded
+tail -f logs/caddy/access.log         # own-TLS layout; otherwise the shared Caddy has them
 docker compose restart app
 curl -s https://ffs.shatrov.tech/health
 ```
 
 Removal: `sudo ./uninstall.sh --keep-data` stops and deletes the containers, images and networks but
-leaves `/opt/family-budget` and the Caddy volumes; without the flag everything goes.
+leaves the installation directory and the Caddy volumes; without the flag everything goes.
 
 ## Troubleshooting
 
+- **`pull access denied` / `unauthorized`** — the registry is private. `docker login
+  registry.gitlab.shatrov.tech` on the host; in CI the job token does it.
 - **`up` fails with "Pool overlaps with other one"** — a network from an older installation sits on
   `172.20.0.0/16`. `install.sh` removes `family-budget_family-budget-net` before starting; for any
   other leftover, `docker network ls` then `docker network rm <name>`.
-- **No certificate** — 80 and 443 must reach the server from the internet, and the A record must
-  already resolve. `docker compose logs caddy` shows the ACME error.
+- **`network edge not found`** — the proxied layout expects it to exist:
+  `docker network create edge`.
+- **No certificate** (own-TLS layout) — 80 and 443 must reach the server from the internet, and the A
+  record must already resolve. `docker compose logs caddy` shows the ACME error.
 - **`app` unhealthy, "unable to open database file"** — ownership of `data/`:
   `sudo chown -R 1000:1000 data backups logs`.
 - **A `500` with no detail in the response** — the message is only in the log
