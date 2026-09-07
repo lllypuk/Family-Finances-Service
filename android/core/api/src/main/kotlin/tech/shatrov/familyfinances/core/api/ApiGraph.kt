@@ -2,6 +2,7 @@ package tech.shatrov.familyfinances.core.api
 
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.receiveAsFlow
 import tech.shatrov.familyfinances.core.api.auth.TokenVault
 import tech.shatrov.familyfinances.core.api.net.ApiClient
@@ -19,8 +20,12 @@ class ApiGraph(
     // на экране, который его требует.
     private val sessionExpiredEvents = Channel<Unit>(Channel.CONFLATED)
 
-    /** Сервер ответил `401` на запрос с токеном: хранилище уже очищено, дальше — экран входа. */
-    val sessionExpired: Flow<Unit> = sessionExpiredEvents.receiveAsFlow()
+    /**
+     * Сервер ответил `401` на запрос с токеном: хранилище уже очищено, дальше — экран входа.
+     * Хранилище перечитывается на выдаче, а не на отправке: событие ждёт подписчика, и вход,
+     * прошедший за это время, не должен быть уведён на экран входа ответом прошлой сессии.
+     */
+    val sessionExpired: Flow<Unit> = sessionExpiredEvents.receiveAsFlow().filter { tokens.read() == null }
 
     val client: ApiClient = ApiClient(baseUrl, tokens) { sessionExpiredEvents.trySend(Unit) }
 

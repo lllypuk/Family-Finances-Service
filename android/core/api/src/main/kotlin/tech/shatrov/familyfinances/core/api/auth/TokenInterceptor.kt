@@ -28,10 +28,17 @@ internal class TokenInterceptor(
         }
 
         val response = chain.proceed(request)
-        if (token != null && response.code == HTTP_UNAUTHORIZED) {
-            tokens.clear()
+        if (response.code == HTTP_UNAUTHORIZED && sessionGone(token)) {
             onSessionExpired()
         }
         return response
     }
+
+    /**
+     * Кончилась ли та сессия, с которой ушёл запрос. Ответ прошлой сессии приходит уже после
+     * нового входа и не должен уводить на экран входа: с токеном это проверяет [TokenVault.clearIf],
+     * без токена (Keystore не дал его прочитать) — пустое хранилище на момент ответа.
+     */
+    private fun sessionGone(token: String?): Boolean =
+        if (token == null) tokens.read() == null else tokens.clearIf(token)
 }

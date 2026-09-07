@@ -29,6 +29,12 @@ internal class FakeTokenVault(
     override fun clear() {
         stored = null
     }
+
+    override fun clearIf(token: String): Boolean {
+        if (stored?.token != token) return false
+        stored = null
+        return true
+    }
 }
 
 internal fun liveToken(token: String = "t-1"): SessionToken = SessionToken(token, OffsetDateTime.now().plusDays(30))

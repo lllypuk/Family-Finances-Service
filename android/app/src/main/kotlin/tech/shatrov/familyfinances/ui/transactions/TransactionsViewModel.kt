@@ -31,6 +31,12 @@ data class TransactionRow(
     val isMine: Boolean,
 )
 
+/** Границы периода, по которым посчитан загруженный список: обе даты берутся из одного `today()`. */
+private data class DateWindow(
+    val from: LocalDate?,
+    val to: LocalDate?,
+)
+
 data class DayGroup(
     val date: LocalDate,
     val rows: List<TransactionRow>,
@@ -61,7 +67,9 @@ sealed interface TransactionsUiState {
 class TransactionsViewModel(
     private val api: ApiGraph,
     private val session: Session,
-    private val today: LocalDate = LocalDate.now(),
+    // Дата берётся на каждый запрос, а не один раз: модель живёт всю сессию приложения, и
+    // после полуночи «этот месяц» иначе остался бы прошлым.
+    private val today: () -> LocalDate = { LocalDate.now(session.zone) },
 ) : ViewModel() {
     private val mutable = MutableStateFlow<TransactionsUiState>(TransactionsUiState.Loading)
 
@@ -69,6 +77,8 @@ class TransactionsViewModel(
 
     private var filters = TransactionFilters()
     private var loaded = emptyList<Transaction>()
+    private var loadedWindow: DateWindow? = null
+    private var pendingWindow: DateWindow? = null
     private var total = 0
     private var exhausted = false
     private var categories = emptyList<Category>()
@@ -91,6 +101,19 @@ class TransactionsViewModel(
         load(fromStart = true, reloadReferences = false)
     }
 
+    /**
+     * Заход на экран и возврат из фона. Дата пересчитывается только в запросе, а кончившиеся
+     * страницы запросов больше не делают: без этой проверки «этот месяц» остался бы прошлым.
+     * Идущий запрос сверяется по своему окну, а не по загруженному: полночь под ним иначе
+     * осталась бы незамеченной, и его ответ встал бы на экран как «этот месяц».
+     */
+    fun revalidate() {
+        val current = (if (job?.isActive == true) pendingWindow else loadedWindow) ?: return
+        if (window(today()) == current) return
+        mutable.value = TransactionsUiState.Loading
+        load(fromStart = true)
+    }
+
     /** Догрузка следующей страницы; вызовы во время запроса и после отказа игнорируются. */
     fun loadMore() {
         val ready = mutable.value as? TransactionsUiState.Ready ?: return
@@ -107,37 +130,50 @@ class TransactionsViewModel(
         reloadReferences: Boolean = false,
     ) {
         job?.cancel()
+        val bounds = window(today())
+        pendingWindow = bounds
         job = viewModelScope.launch {
+            // Полночь между страницами сдвигает границы «этого месяца», а offset посчитан
+            // по прошлому окну: такую догрузку начинаем с нуля, иначе страницы двух
+            // периодов слипаются, а начало нового теряется. Окно считается до запроса: по
+            // отказу список прошлого месяца нельзя оставить на экране как «этот».
+            val start = fromStart || bounds != loadedWindow
             try {
                 // Категория, заведённая на соседнем экране, иначе не попала бы ни в строку,
                 // ни в фильтр до перезапуска процесса: модель живёт всю сессию.
                 if (reloadReferences || categories.isEmpty()) {
                     loadReferences()
                 }
-                val page = api.client.unwrap { requestPage(fromStart) }
+                val page = api.client.unwrap { requestPage(bounds, offset = if (start) 0 else loaded.size) }
                 // distinctBy: сосед мог вставить запись между страницами и сдвинуть окно.
-                val merged = if (fromStart) page.`data` else (loaded + page.`data`).distinctBy { it.id }
+                val merged = if (start) page.`data` else (loaded + page.`data`).distinctBy { it.id }
                 // Страница, не добавившая ни строки, — конец списка, даже если total больше:
                 // выброшенный дубликат навсегда оставил бы loaded.size меньше total, а подвал
                 // перезапускается только по изменению числа строк — экран завис бы на спиннере.
-                exhausted = !fromStart && merged.size == loaded.size
+                exhausted = !start && merged.size == loaded.size
                 loaded = merged
+                loadedWindow = bounds
                 total = page.meta.pagination.total
                 mutable.value = ready()
             } catch (failure: ApiFailure) {
-                mutable.value = failed(fromStart, failure.toUiError())
+                mutable.value = failed(start, failure.toUiError())
             }
         }
     }
 
-    private suspend fun requestPage(fromStart: Boolean) = api.transactions.listTransactions(
+    private suspend fun requestPage(
+        bounds: DateWindow,
+        offset: Int,
+    ) = api.transactions.listTransactions(
         limit = PAGE_SIZE,
-        offset = if (fromStart) 0 else loaded.size,
+        offset = offset,
         categoryId = filters.categoryId,
         type = filters.type,
-        dateFrom = filters.dateFrom(today),
-        dateTo = filters.dateTo(today),
+        dateFrom = bounds.from,
+        dateTo = bounds.to,
     )
+
+    private fun window(day: LocalDate) = DateWindow(filters.dateFrom(day), filters.dateTo(day))
 
     // `/users` открыт только админу, поэтому у member список авторов остаётся пустым:
     // своя запись всё равно подписана «Вы», а чужая в семье из двух человек однозначна.

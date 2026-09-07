@@ -78,7 +78,9 @@ fun TransactionEditScreen(
             horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
+            // Отправка не отменяется: её корутина умрёт вместе с моделью формы, а запись
+            // сервер уже мог принять.
+            TextButton(onClick = onBack, enabled = !state.submitting) { Text(stringResource(R.string.back)) }
             Text(
                 text = stringResource(
                     if (state.editing) R.string.transaction_edit_title else R.string.transaction_new_title,

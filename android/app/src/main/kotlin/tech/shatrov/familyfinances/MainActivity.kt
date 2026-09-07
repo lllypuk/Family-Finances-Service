@@ -33,6 +33,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
@@ -53,6 +54,7 @@ import tech.shatrov.familyfinances.ui.transactions.TransactionEditScreen
 import tech.shatrov.familyfinances.ui.transactions.TransactionEditViewModel
 import tech.shatrov.familyfinances.ui.transactions.TransactionsScreen
 import tech.shatrov.familyfinances.ui.transactions.TransactionsViewModel
+import java.time.LocalDate
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -156,14 +158,19 @@ fun AppRoot(graph: AppGraph) {
         // пользователем прежняя роль показала бы ему чужие действия.
         AppScreen.Home -> WithSession(session) { active ->
             val model: HomeViewModel = viewModel(key = "home-${active.user.id}-$epoch") {
-                HomeViewModel(graph.api, active.currency)
+                HomeViewModel(graph.api, active.currency, active.zone)
             }
             val home by model.state.collectAsStateWithLifecycle()
-            LaunchedEffect(homeStale) {
+            // На возврате из фона, а не только при заходе: модель живёт всю сессию, а сводка
+            // посчитана по «сегодня» и границам месяца, которые под свёрнутым экраном сменились.
+            LifecycleResumeEffect(homeStale) {
                 if (homeStale) {
                     model.refresh()
                     homeStale = false
+                } else {
+                    model.revalidate()
                 }
+                onPauseOrDispose {}
             }
             HomeScreen(
                 state = home,
@@ -184,11 +191,16 @@ fun AppRoot(graph: AppGraph) {
                 TransactionsViewModel(graph.api, active)
             }
             val transactions by model.state.collectAsStateWithLifecycle()
-            LaunchedEffect(listStale) {
+            // На возврате из фона, а не только при заходе: модель живёт всю сессию, и месяц
+            // под фильтром «этот» мог смениться, пока экран лежал свёрнутым.
+            LifecycleResumeEffect(listStale) {
                 if (listStale) {
                     model.refresh()
                     listStale = false
+                } else {
+                    model.revalidate()
                 }
+                onPauseOrDispose {}
             }
             BackHandler { screen = AppScreen.Home }
             TransactionsScreen(
@@ -241,12 +253,17 @@ fun AppRoot(graph: AppGraph) {
             }
         }
 
-        is AppScreen.TransactionEdit -> WithSession(session) {
+        is AppScreen.TransactionEdit -> WithSession(session) { active ->
             // Ключ по черновику: без него следующий заход на форму достался бы модели прошлого,
             // уже сохранённого, и экран сразу закрылся бы.
             val model: TransactionEditViewModel =
                 viewModel(viewModelStoreOwner = forms, key = "edit-${current.draft}") {
-                    TransactionEditViewModel(graph.api, current.id, current.draft)
+                    TransactionEditViewModel(
+                        graph.api,
+                        current.id,
+                        current.draft,
+                        LocalDate.now(active.zone),
+                    )
                 }
             val edit by model.state.collectAsStateWithLifecycle()
             LaunchedEffect(edit.done) {
@@ -256,7 +273,10 @@ fun AppRoot(graph: AppGraph) {
                     screen = AppScreen.Transactions
                 }
             }
-            BackHandler { screen = AppScreen.Transactions }
+            // Уход с формы во время отправки убил бы её корутину: запись сервер уже мог
+            // принять, а список о ней не узнал бы — и повтор создал бы вторую с новым черновиком.
+            val leave = { if (!edit.submitting) screen = AppScreen.Transactions }
+            BackHandler { leave() }
             TransactionEditScreen(
                 state = edit,
                 onAmountChange = model::onAmountChange,
@@ -267,7 +287,7 @@ fun AppRoot(graph: AppGraph) {
                 onSubmit = model::onSubmit,
                 onDelete = model::onDelete,
                 onRetry = model::load,
-                onBack = { screen = AppScreen.Transactions },
+                onBack = leave,
             )
         }
     }

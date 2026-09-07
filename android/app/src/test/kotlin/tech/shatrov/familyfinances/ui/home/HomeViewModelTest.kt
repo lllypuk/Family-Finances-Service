@@ -7,7 +7,10 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import mockwebserver3.Dispatcher
+import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
+import mockwebserver3.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -26,6 +29,13 @@ import tech.shatrov.familyfinances.core.api.ApiGraph
 import tech.shatrov.familyfinances.enqueueJson
 import tech.shatrov.familyfinances.liveToken
 import tech.shatrov.familyfinances.ui.UiError
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+
+/** Задержка ответа, ушедшего до полуночи: перезапущенный запрос должен успеть раньше него. */
+private const val STALE_SUMMARY_DELAY_MS = 300L
 
 /** Главная: один запрос сводки, валюта из сессии и состояния «пусто» и «повторить». */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -51,8 +61,16 @@ class HomeViewModelTest {
     /** Ответ приходит с сетевого потока, поэтому итог ждём по состоянию, а не по планировщику. */
     private suspend fun settle(): HomeUiState = model.state.first { it != HomeUiState.Loading }
 
+    /** Дата модели: тест переставляет её, чтобы проверить переход через полночь. */
+    private var today = LocalDate.parse("2026-09-07")
+
     private fun createModel() {
-        model = HomeViewModel(ApiGraph(server.url("/").toString(), FakeTokenVault(liveToken())), "RUB")
+        model = HomeViewModel(
+            ApiGraph(server.url("/").toString(), FakeTokenVault(liveToken())),
+            "RUB",
+            ZoneId.of("Europe/Moscow"),
+            { today },
+        )
     }
 
     @Test
@@ -118,6 +136,68 @@ class HomeViewModelTest {
 
         assertTrue(settle() is HomeUiState.Ready)
     }
+
+    // Сводка посчитана по «сегодня» семьи: без сверки на возврате главная показывала бы
+    // прошлый месяц до перезапуска процесса.
+    @Test
+    fun revalidateAfterMidnightReloadsSummary() = runTest {
+        server.enqueueJson(200, STATS_OK)
+        createModel()
+        settle()
+
+        today = LocalDate.parse("2026-10-01")
+        server.enqueueJson(200, STATS_EMPTY)
+        model.revalidate()
+
+        assertTrue((settle() as HomeUiState.Ready).isEmpty)
+        assertEquals(2, server.requestCount)
+    }
+
+    // Тот же день лишнего запроса не делает: сводка уже за него.
+    @Test
+    fun revalidateWithinSameDayKeepsSummary() = runTest {
+        server.enqueueJson(200, STATS_OK)
+        createModel()
+        settle()
+
+        model.revalidate()
+
+        assertTrue(model.state.value is HomeUiState.Ready)
+        assertEquals(1, server.requestCount)
+    }
+
+    // Возврат из фона под идущим запросом: он ушёл до полуночи, и без сверки с его датой
+    // сводка за прошлые сутки встала бы на экран, а второго колбэка жизненного цикла не будет.
+    @Test
+    fun revalidateRestartsRequestStartedBeforeMidnight() = runTest {
+        val served = AtomicInteger()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = if (served.getAndIncrement() == 0) {
+                jsonResponse(STATS_OK, STALE_SUMMARY_DELAY_MS)
+            } else {
+                jsonResponse(STATS_EMPTY)
+            }
+        }
+        createModel()
+        // Ответ сервер держит, но сам запрос уже ушёл: иначе сверять на возврате нечего.
+        server.takeRequest()
+
+        today = LocalDate.parse("2026-10-01")
+        model.revalidate()
+
+        assertTrue((settle() as HomeUiState.Ready).isEmpty)
+        assertEquals(2, server.requestCount)
+    }
+
+    private fun jsonResponse(
+        body: String,
+        delayMs: Long = 0,
+    ): MockResponse = MockResponse.Builder()
+        .code(200)
+        .body(body)
+        .setHeader("Content-Type", "application/json")
+        .bodyDelay(delayMs, TimeUnit.MILLISECONDS)
+        .build()
 
     @Test
     fun unreadableBodyIsMalformed() = runTest {

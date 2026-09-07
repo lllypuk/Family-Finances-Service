@@ -65,11 +65,14 @@ class TransactionsViewModelTest {
         Dispatchers.resetMain()
     }
 
+    /** Дата модели: тест переставляет её, чтобы проверить переход через полночь. */
+    private var today = LocalDate.parse("2026-09-15")
+
     private fun createModel(role: Role = Role.admin) {
         model = TransactionsViewModel(
             ApiGraph(server.url("/").toString(), FakeTokenVault(liveToken())),
             testSession(role),
-            LocalDate.parse("2026-09-15"),
+            { today },
         )
     }
 
@@ -184,6 +187,125 @@ class TransactionsViewModelTest {
         createModel()
 
         assertEquals(TransactionsUiState.Failure(UiError.Server("всё сломалось")), settle())
+    }
+
+    // Полночь между страницами: границы «этого месяца» уехали на новый месяц, а offset
+    // прошлого окна пропустил бы его начало и склеил два периода в один список.
+    @Test
+    fun monthRolloverRestartsPagingFromZero() = runTest {
+        today = LocalDate.parse("2026-09-30")
+        enqueueFirstPage()
+        createModel()
+        settle()
+        server.enqueueJson(200, TRANSACTIONS_PAGE_1)
+        model.onFiltersChange(TransactionFilters(period = TransactionPeriod.THIS_MONTH))
+        settle()
+
+        today = LocalDate.parse("2026-10-01")
+        server.enqueueJson(200, TRANSACTIONS_PAGE_2)
+        model.loadMore()
+        val state = settleMore()
+
+        val url = lastRequestUrl(5)
+        assertEquals("0", url.queryParameter("offset"))
+        assertEquals("2026-10-01", url.queryParameter("date_from"))
+        assertEquals("2026-10-31", url.queryParameter("date_to"))
+        // Страница нового месяца заменяет список, а не дописывается к сентябрьскому.
+        assertEquals(1, state.groups.size)
+        assertEquals(LocalDate.parse("2026-09-06"), state.groups[0].date)
+    }
+
+    // Страницы кончились, и loadMore выходит до расчёта даты: без проверки на заходе экран
+    // показывал бы сентябрь под «этим месяцем» до перезапуска процесса.
+    @Test
+    fun monthRolloverIsCaughtWhenPagingIsExhausted() = runTest {
+        today = LocalDate.parse("2026-09-30")
+        enqueueFirstPage()
+        createModel()
+        settle()
+        server.enqueueJson(200, TRANSACTIONS_EMPTY)
+        model.onFiltersChange(TransactionFilters(period = TransactionPeriod.THIS_MONTH))
+        assertFalse((settle() as TransactionsUiState.Ready).hasMore)
+
+        today = LocalDate.parse("2026-10-01")
+        server.enqueueJson(200, TRANSACTIONS_PAGE_1)
+        model.revalidate()
+        settle()
+
+        val url = lastRequestUrl(5)
+        assertEquals("0", url.queryParameter("offset"))
+        assertEquals("2026-10-01", url.queryParameter("date_from"))
+        assertEquals("2026-10-31", url.queryParameter("date_to"))
+    }
+
+    // Возврат из фона под идущим запросом: его окно посчитано до полуночи, и без сверки
+    // с ним ответ встал бы на экран сентябрём под видом «этого месяца».
+    @Test
+    fun revalidateRestartsRequestStartedBeforeMidnight() = runTest {
+        // Ответы раздаются по запросу: октябрьский приходит, пока сервер держит сентябрьский.
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.url.encodedPath.endsWith("/categories") -> jsonResponse(CATEGORIES_OK)
+
+                request.url.encodedPath.endsWith("/users") -> jsonResponse(USERS_OK)
+
+                request.url.queryParameter("date_from") == "2026-10-01" -> jsonResponse(TRANSACTIONS_EMPTY)
+
+                request.url.queryParameter("offset") == "2" ->
+                    jsonResponse(TRANSACTIONS_PAGE_1, delayMs = STALE_PAGE_DELAY_MS)
+
+                else -> jsonResponse(TRANSACTIONS_PAGE_1)
+            }
+        }
+        today = LocalDate.parse("2026-09-30")
+        createModel()
+        settle()
+        model.onFiltersChange(TransactionFilters(period = TransactionPeriod.THIS_MONTH))
+        settle()
+
+        model.loadMore()
+        today = LocalDate.parse("2026-10-01")
+        model.revalidate()
+
+        assertTrue((settle() as TransactionsUiState.Ready).isEmpty)
+    }
+
+    // Тот же заход в пределах месяца лишнего запроса не делает: список уже за это окно.
+    @Test
+    fun revalidateWithinSameMonthKeepsList() = runTest {
+        enqueueFirstPage()
+        createModel()
+        settle()
+        server.enqueueJson(200, TRANSACTIONS_EMPTY)
+        model.onFiltersChange(TransactionFilters(period = TransactionPeriod.THIS_MONTH))
+        settle()
+
+        model.revalidate()
+
+        assertTrue(model.state.value is TransactionsUiState.Ready)
+        assertEquals(4, server.requestCount)
+    }
+
+    // Отказ запроса нового месяца: сентябрьский список нельзя оставить на экране как «этот
+    // месяц», поэтому такая догрузка падает целым экраном, а не подвалом.
+    @Test
+    fun monthRolloverFailureReplacesScreen() = runTest {
+        today = LocalDate.parse("2026-09-30")
+        enqueueFirstPage()
+        createModel()
+        settle()
+        server.enqueueJson(200, TRANSACTIONS_PAGE_1)
+        model.onFiltersChange(TransactionFilters(period = TransactionPeriod.THIS_MONTH))
+        settle()
+
+        today = LocalDate.parse("2026-10-01")
+        server.enqueueJson(500, """{"error":{"code":"INTERNAL","message":"всё сломалось"}}""")
+        model.loadMore()
+
+        assertEquals(
+            TransactionsUiState.Failure(UiError.Server("всё сломалось")),
+            model.state.first { it is TransactionsUiState.Failure },
+        )
     }
 
     @Test

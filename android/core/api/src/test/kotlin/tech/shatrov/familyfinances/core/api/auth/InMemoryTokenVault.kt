@@ -11,4 +11,10 @@ class InMemoryTokenVault(private var stored: SessionToken? = null) : TokenVault 
     override fun clear() {
         stored = null
     }
+
+    override fun clearIf(token: String): Boolean {
+        if (stored?.token != token) return false
+        stored = null
+        return true
+    }
 }
