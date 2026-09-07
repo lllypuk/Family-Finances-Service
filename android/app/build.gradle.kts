@@ -94,6 +94,7 @@ tasks.matching { it.name == "assembleRelease" }.configureEach {
 }
 
 dependencies {
+    implementation(project(":core:api"))
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)
@@ -116,4 +117,5 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(platform(libs.compose.bom))
     testImplementation(libs.compose.ui.test.junit4)
+    testImplementation(libs.okhttp.mockwebserver)
 }

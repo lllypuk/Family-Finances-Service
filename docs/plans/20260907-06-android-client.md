@@ -267,18 +267,18 @@
   `ui/login/LoginScreenTest.kt`, `SessionTest.kt`
 - Modify: `android/app/src/main/kotlin/.../MainActivity.kt`, `android/app/build.gradle.kts`
 
-- [ ] тема и метрики копией из `field-engine/core/ui`, без офлайн-компонентов
-- [ ] `AppScreen` sealed + `rememberSaveable`-навигация; старт — вход или главная по наличию токена
+- [x] тема и метрики копией из `field-engine/core/ui`, без офлайн-компонентов
+- [x] `AppScreen` sealed + `rememberSaveable`-навигация; старт — вход или главная по наличию токена
       и непросроченному `expires_at`
-- [ ] бутстрап сессии: `GET /me` и `GET /family` после логина и при старте с токеном, роль и валюта
+- [x] бутстрап сессии: `GET /me` и `GET /family` после логина и при старте с токеном, роль и валюта
       складываются в `AppGraph`; отказ бутстрапа возвращает на вход
-- [ ] `LoginViewModel`: разные тексты для `INVALID_CREDENTIALS`, `RATE_LIMITED` с ожиданием и
+- [x] `LoginViewModel`: разные тексты для `INVALID_CREDENTIALS`, `RATE_LIMITED` с ожиданием и
       `SETUP_REQUIRED`
-- [ ] выход из аккаунта: `POST /auth/logout`, очистка хранилища, возврат на экран входа
-- [ ] тесты ViewModel и бутстрапа: успех, неверный пароль, лимит, сервис не настроен, протухший
+- [x] выход из аккаунта: `POST /auth/logout`, очистка хранилища, возврат на экран входа
+- [x] тесты ViewModel и бутстрапа: успех, неверный пароль, лимит, сервис не настроен, протухший
       токен на старте
-- [ ] Compose-тест экрана входа: поля, отключённая кнопка, показ ошибки
-- [ ] `make -C android check` — зелёный
+- [x] Compose-тест экрана входа: поля, отключённая кнопка, показ ошибки
+- [x] `make -C android check` — зелёный
 
 ### Task 7: Главная
 

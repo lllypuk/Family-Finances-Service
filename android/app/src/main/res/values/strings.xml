@@ -1,4 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Семейный бюджет</string>
+
+    <string name="login_title">Вход</string>
+    <string name="login_email">Почта</string>
+    <string name="login_password">Пароль</string>
+    <string name="login_submit">Войти</string>
+    <string name="login_error_credentials">Неверная почта или пароль</string>
+    <string name="login_error_rate_limited">Слишком много попыток, попробуйте позже</string>
+    <string name="login_error_rate_limited_wait">Слишком много попыток, повторите через %1$d с</string>
+    <string name="login_error_setup_required">Сервис ещё не настроен</string>
+    <string name="login_error_network">Нет связи с сервером</string>
+    <string name="login_error_malformed">Сервер ответил непонятным — попробуйте позже</string>
+
+    <string name="home_greeting">Здравствуйте, %1$s</string>
+    <string name="home_currency">Валюта семьи: %1$s</string>
+    <string name="sign_out">Выйти</string>
+    <string name="loading">Загрузка…</string>
 </resources>
