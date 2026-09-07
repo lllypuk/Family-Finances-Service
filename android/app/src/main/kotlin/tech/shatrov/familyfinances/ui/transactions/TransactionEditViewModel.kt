@@ -25,6 +25,9 @@ import java.util.UUID
 /** Справочник категорий берётся одной страницей: их у семьи считанные единицы. */
 private const val CATEGORY_LIMIT = 200
 
+/** Нижние границы контракта: `amount_minor > 0`, `description` от двух символов. */
+private const val MIN_DESCRIPTION = 2
+
 /** Имена полей формы — те же, что в `error.details[].field`: словарь перевода не нужен. */
 object TransactionField {
     const val AMOUNT = "amount_minor"
@@ -62,7 +65,11 @@ data class TransactionEditUiState(
         get() = categories.filter { it.type == type.asCategoryType() }
 
     val canSubmit: Boolean
-        get() = parseAmountMinor(amount) != null && categoryId != null && !loading && !submitting
+        get() = (parseAmountMinor(amount) ?: 0L) > 0L &&
+            description.trim().length >= MIN_DESCRIPTION &&
+            categoryId != null &&
+            !loading &&
+            !submitting
 }
 
 /**

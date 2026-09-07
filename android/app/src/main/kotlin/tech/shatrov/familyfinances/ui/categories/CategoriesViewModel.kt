@@ -34,6 +34,9 @@ val CategoryPalette = listOf(
 
 private const val DEFAULT_ICON = "tag"
 
+/** Нижняя граница контракта для `name`. */
+private const val MIN_NAME = 2
+
 /** Имена полей формы — те же, что в `error.details[].field`. */
 object CategoryField {
     const val NAME = "name"
@@ -90,7 +93,7 @@ data class CategoryEditUiState(
 ) {
     val editing: Boolean get() = id != null
 
-    val canSubmit: Boolean get() = name.isNotBlank() && icon.isNotBlank() && !submitting
+    val canSubmit: Boolean get() = name.trim().length >= MIN_NAME && icon.isNotBlank() && !submitting
 }
 
 /**

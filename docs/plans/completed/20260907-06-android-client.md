@@ -365,7 +365,7 @@
 - [x] повторная установка APK поверх предыдущего проходит без удаления приложения (тот же ключ)
       (ручная проверка на устройстве — пропущено, не автоматизируется)
 - [x] выключенная сеть даёт понятное сообщение, а не пустой экран — логика покрыта юнит-тестами
-      (`HomeViewModelTest`, `LoginViewModelTest`, `SessionTest.networkFailureReturnsToLogin`);
+      (`HomeViewModelTest`, `LoginViewModelTest`, `SessionTest.networkFailureKeepsStoredToken`);
       проверка на устройстве пропущена
 - [x] удаление сессии через `DELETE /auth/sessions/{id}` уводит клиента на экран входа — 401
       чистит хранилище и возвращает на вход (`SessionTest.unauthorizedBootstrapReturnsToLogin`,
