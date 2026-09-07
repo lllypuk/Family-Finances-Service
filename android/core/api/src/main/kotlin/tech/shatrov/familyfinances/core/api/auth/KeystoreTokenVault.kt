@@ -3,6 +3,7 @@ package tech.shatrov.familyfinances.core.api.auth
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import java.io.IOException
 import java.security.GeneralSecurityException
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -27,11 +28,21 @@ class KeystoreTokenVault(context: Context) : TokenVault {
 
     override fun read(): SessionToken? {
         val stored = prefs.getString(PREF_TOKEN, null) ?: return null
-        val token = CipherText.unpack(stored)?.let { decrypt(it) }?.let { decodePayload(it) }
+        val token = decode(stored)
         if (token == null) {
             reissueKey()
         }
         return token
+    }
+
+    // Читают отсюда первый кадр приложения и поток OkHttp, где ловить некому: отказ Keystore
+    // (ProviderException, `load(null)`) значит «токена нет», а не краш.
+    private fun decode(stored: String): SessionToken? = try {
+        CipherText.unpack(stored)?.let { decrypt(it) }?.let { decodePayload(it) }
+    } catch (_: IOException) {
+        null
+    } catch (_: RuntimeException) {
+        null
     }
 
     override fun write(token: SessionToken) {
@@ -91,6 +102,10 @@ class KeystoreTokenVault(context: Context) : TokenVault {
             KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }.deleteEntry(KEY_ALIAS)
         } catch (_: GeneralSecurityException) {
             // Ключа уже нет — следующий secretKey() создаст новый.
+        } catch (_: IOException) {
+            // Keystore не открылся: перевыпуск попробует следующий запуск.
+        } catch (_: RuntimeException) {
+            // ProviderException и родня.
         }
     }
 }

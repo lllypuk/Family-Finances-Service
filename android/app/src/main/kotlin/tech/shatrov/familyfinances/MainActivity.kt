@@ -12,23 +12,31 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
+import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import tech.shatrov.familyfinances.theme.AppTheme
 import tech.shatrov.familyfinances.theme.Dimens
+import tech.shatrov.familyfinances.ui.UiError
 import tech.shatrov.familyfinances.ui.categories.CategoriesScreen
 import tech.shatrov.familyfinances.ui.categories.CategoriesViewModel
 import tech.shatrov.familyfinances.ui.categories.CategoryEditScreen
@@ -36,6 +44,8 @@ import tech.shatrov.familyfinances.ui.home.HomeScreen
 import tech.shatrov.familyfinances.ui.home.HomeViewModel
 import tech.shatrov.familyfinances.ui.login.LoginScreen
 import tech.shatrov.familyfinances.ui.login.LoginViewModel
+import tech.shatrov.familyfinances.ui.message
+import tech.shatrov.familyfinances.ui.toUiError
 import tech.shatrov.familyfinances.ui.transactions.TransactionEditScreen
 import tech.shatrov.familyfinances.ui.transactions.TransactionEditViewModel
 import tech.shatrov.familyfinances.ui.transactions.TransactionsScreen
@@ -85,10 +95,29 @@ fun AppRoot(graph: AppGraph) {
 
     when (val current = screen) {
         AppScreen.Loading -> {
-            LaunchedEffect(Unit) {
-                screen = if (graph.bootstrap()) AppScreen.Home else AppScreen.Login
+            var failure by remember { mutableStateOf<UiError?>(null) }
+            var attempt by remember { mutableIntStateOf(0) }
+            // На вход уводит только кончившийся токен. Обрыв связи оставляет сохранённую
+            // сессию на месте: иначе старт без сети даёт пустую форму входа без объяснений.
+            LaunchedEffect(attempt) {
+                failure = null
+                val error = graph.bootstrap()
+                when {
+                    error == null -> screen = AppScreen.Home
+                    error is ApiFailure.Api && error.isUnauthorized -> screen = AppScreen.Login
+                    else -> failure = error.toUiError()
+                }
             }
-            Centered { Text(stringResource(R.string.loading)) }
+            BootstrapScreen(
+                error = failure,
+                onRetry = { attempt++ },
+                onSignOut = {
+                    scope.launch {
+                        graph.signOut()
+                        screen = AppScreen.Login
+                    }
+                },
+            )
         }
 
         AppScreen.Login -> {
@@ -168,11 +197,17 @@ fun AppRoot(graph: AppGraph) {
             val categories by model.state.collectAsStateWithLifecycle()
             val editor by model.editor.collectAsStateWithLifecycle()
             val form = editor
-            BackHandler { if (form == null) screen = AppScreen.Home else model.onDismiss() }
+            // Список подписывает строки именами категорий и фильтрует по ним, поэтому уход
+            // с этого экрана всегда помечает его устаревшим — правку модель наружу не отдаёт.
+            val leave = {
+                listStale = true
+                screen = AppScreen.Home
+            }
+            BackHandler { if (form == null) leave() else model.onDismiss() }
             if (form == null) {
                 CategoriesScreen(
                     state = categories,
-                    onBack = { screen = AppScreen.Home },
+                    onBack = leave,
                     onRetry = model::refresh,
                     onAdd = model::onAdd,
                     onOpen = model::onOpen,
@@ -219,6 +254,27 @@ fun AppRoot(graph: AppGraph) {
                 onBack = { screen = AppScreen.Transactions },
             )
         }
+    }
+}
+
+/** Старт с сохранённым токеном: загрузка, а при отказе — причина, повтор и выход. */
+@Composable
+private fun BootstrapScreen(
+    error: UiError?,
+    onRetry: () -> Unit,
+    onSignOut: () -> Unit,
+) {
+    if (error == null) {
+        Centered { Text(stringResource(R.string.loading)) }
+        return
+    }
+    Centered {
+        Text(
+            text = error.message(LocalContext.current.resources),
+            color = MaterialTheme.colorScheme.error,
+        )
+        Button(onClick = onRetry) { Text(stringResource(R.string.retry)) }
+        TextButton(onClick = onSignOut) { Text(stringResource(R.string.sign_out)) }
     }
 }
 

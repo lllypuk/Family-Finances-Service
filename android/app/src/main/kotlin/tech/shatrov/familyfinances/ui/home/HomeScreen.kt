@@ -60,6 +60,7 @@ fun HomeScreen(
             Text(
                 text = stringResource(R.string.home_title),
                 style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.weight(1f),
             )
             Row {
                 TextButton(onClick = onOpenTransactions) {

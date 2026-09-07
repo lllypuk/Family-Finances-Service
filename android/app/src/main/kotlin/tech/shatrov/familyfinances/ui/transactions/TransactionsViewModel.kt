@@ -78,14 +78,16 @@ class TransactionsViewModel(
         refresh()
     }
 
+    /** Возврат на экран и повтор после отказа: справочники перечитываются вместе со списком. */
     fun refresh() {
         mutable.value = TransactionsUiState.Loading
-        load(fromStart = true)
+        load(fromStart = true, reloadReferences = true)
     }
 
     fun onFiltersChange(next: TransactionFilters) {
         filters = next
-        refresh()
+        mutable.value = TransactionsUiState.Loading
+        load(fromStart = true, reloadReferences = false)
     }
 
     /** Догрузка следующей страницы; вызовы во время запроса и после отказа игнорируются. */
@@ -99,11 +101,16 @@ class TransactionsViewModel(
     // Загрузка в один поток: смена фильтра во время догрузки иначе дописала бы к новому
     // списку страницу прошлого запроса, и в нём оказались бы две строки с одним id — на таком
     // ключе LazyColumn падает.
-    private fun load(fromStart: Boolean) {
+    private fun load(
+        fromStart: Boolean,
+        reloadReferences: Boolean = false,
+    ) {
         job?.cancel()
         job = viewModelScope.launch {
             try {
-                if (categories.isEmpty()) {
+                // Категория, заведённая на соседнем экране, иначе не попала бы ни в строку,
+                // ни в фильтр до перезапуска процесса: модель живёт всю сессию.
+                if (reloadReferences || categories.isEmpty()) {
                     loadReferences()
                 }
                 val page = api.client.unwrap { requestPage(fromStart) }

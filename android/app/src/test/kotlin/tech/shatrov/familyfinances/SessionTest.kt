@@ -6,12 +6,14 @@ import mockwebserver3.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import tech.shatrov.familyfinances.core.api.ApiGraph
 import tech.shatrov.familyfinances.core.api.auth.SessionToken
+import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import java.time.OffsetDateTime
 
 /** Бутстрап сессии: роль и валюта для остальных экранов и решение «вход или главная». */
@@ -38,7 +40,7 @@ class SessionTest {
         server.enqueueJson(200, ME_OK)
         server.enqueueJson(200, FAMILY_OK)
 
-        assertTrue(graph.bootstrap())
+        assertNull(graph.bootstrap())
 
         val session = requireNotNull(graph.session.value)
         assertEquals("RUB", session.currency)
@@ -52,7 +54,7 @@ class SessionTest {
         server.enqueueJson(200, MEMBER_OK)
         server.enqueueJson(200, FAMILY_OK)
 
-        assertTrue(graph.bootstrap())
+        assertNull(graph.bootstrap())
 
         assertFalse(requireNotNull(graph.session.value).isAdmin)
     }
@@ -62,19 +64,22 @@ class SessionTest {
     fun unauthorizedBootstrapReturnsToLogin() = runTest {
         server.enqueueJson(401, """{"error":{"code":"UNAUTHORIZED","message":"токен истёк"}}""")
 
-        assertFalse(graph.bootstrap())
+        val failure = graph.bootstrap()
 
+        assertTrue(failure is ApiFailure.Api && failure.isUnauthorized)
         assertNull(graph.session.value)
         assertNull(vault.read())
     }
 
+    // Связи нет — сессия не кончилась: токен остаётся, экран показывает причину и повтор.
     @Test
-    fun networkFailureReturnsToLogin() = runTest {
+    fun networkFailureKeepsStoredToken() = runTest {
         server.close()
 
-        assertFalse(graph.bootstrap())
+        assertTrue(graph.bootstrap() is ApiFailure.Network)
 
         assertNull(graph.session.value)
+        assertNotNull(vault.read())
     }
 
     // Просроченный токен на старте: запроса не будет, сразу экран входа.

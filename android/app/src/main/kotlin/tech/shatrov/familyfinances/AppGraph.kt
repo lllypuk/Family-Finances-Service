@@ -25,19 +25,21 @@ class AppGraph(val api: ApiGraph) {
 
     /**
      * Бутстрап сессии: `GET /me` и `GET /family` после логина и при старте с сохранённым токеном.
-     * `true` — сессия готова, `false` — на экран входа: без роли и валюты рисовать нечего.
+     * `null` — сессия готова; отказ отдаётся вызывающему целиком: обрыв связи не то же самое,
+     * что кончившийся токен, и уводить с ним на пустой экран входа нельзя.
      */
-    suspend fun bootstrap(): Boolean {
+    suspend fun bootstrap(): ApiFailure? {
         val loaded = try {
             Session(
                 user = api.client.unwrap { api.me.getCurrentUser() }.`data`,
                 family = api.client.unwrap { api.family.getFamily() }.`data`,
             )
         } catch (failure: ApiFailure) {
-            null
+            mutableSession.value = null
+            return failure
         }
         mutableSession.value = loaded
-        return loaded != null
+        return null
     }
 
     /** Выход: хранилище чистится в любом случае — отказ сервера не повод оставить токен на телефоне. */

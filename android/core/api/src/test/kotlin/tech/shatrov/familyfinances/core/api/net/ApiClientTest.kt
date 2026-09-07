@@ -73,6 +73,17 @@ class ApiClientTest {
         failure
     }
 
+    // Кривая дата — отказ транспорта: DateTimeParseException не наследует ApiFailure и ушла бы
+    // мимо всех catch в необработанное исключение viewModelScope.
+    @Test
+    fun unparsableDateIsMalformed() = runTest {
+        enqueue(200, TRANSACTIONS_OK.replace("\"2026-09-07\"", "\"07.09.2026\""))
+
+        val failure = expectFailure { graph.client.unwrap { graph.transactions.listTransactions() }.`data` }
+
+        assertTrue(failure is ApiFailure.Malformed)
+    }
+
     @Test
     fun unwrapsEnvelopeOnSuccess() = runTest {
         enqueue(200, LOGIN_OK)
