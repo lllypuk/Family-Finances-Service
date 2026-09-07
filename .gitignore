@@ -11,3 +11,14 @@ cookies.txt
 .cache/
 .gocache/
 .scratch
+
+# Android-клиент: результаты сборки, машинный путь к SDK и ключ подписи.
+# Keystore в дереве репозитория не лежит никогда — он есть на ноутбуке и в переменных CI.
+android/.gradle/
+android/build/
+android/**/build/
+android/local.properties
+*.apk
+*.jks
+*.keystore
+.ralphex/

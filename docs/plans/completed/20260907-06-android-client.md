@@ -174,19 +174,19 @@
   `android/app/src/main/kotlin/tech/shatrov/familyfinances/MainActivity.kt`
 - Modify: `.dockerignore`, `.gitignore`
 
-- [ ] каталог версий по образцу соседа: Compose BOM, Material3, kotlinx-serialization, OkHttp,
+- [x] каталог версий по образцу соседа: Compose BOM, Material3, kotlinx-serialization, OkHttp,
       Retrofit, Robolectric, ktlint-плагин; Room, WorkManager и CameraX не переносятся
-- [ ] корневой `build.gradle.kts` с `classpath` KGP/serialization и `apply(plugin=…)` без версий
-- [ ] модуль `:app`: Compose, Material3, `minSdk 26`, `compileSdk 37`, `buildConfig = true`,
+- [x] корневой `build.gradle.kts` с `classpath` KGP/serialization и `apply(plugin=…)` без версий
+- [x] модуль `:app`: Compose, Material3, `minSdk 26`, `compileSdk 37`, `buildConfig = true`,
       `testOptions { unitTests.isIncludeAndroidResources = true }`, пустой `MainActivity`
-- [ ] `android.permission.INTERNET` в манифесте — без него первый запрос отвечает отказом
+- [x] `android.permission.INTERNET` в манифесте — без него первый запрос отвечает отказом
       разрешения, а не сетевой ошибкой
-- [ ] `signingConfig` из переменной с путём к keystore; отсутствие файла роняет сборку
-- [ ] `Makefile`: `compile`, `test`, `lint`, `fmt`, `fmt-check`, `check` (= `fmt-check test lint`),
+- [x] `signingConfig` из переменной с путём к keystore; отсутствие файла роняет сборку
+- [x] `Makefile`: `compile`, `test`, `lint`, `fmt`, `fmt-check`, `check` (= `fmt-check test lint`),
       `apk`; `JAVA_HOME` не прибивать к чужому пути, брать из окружения
-- [ ] `.dockerignore` получает `android/`; `.gitignore` — `android/.gradle`, `android/build`,
+- [x] `.dockerignore` получает `android/`; `.gitignore` — `android/.gradle`, `android/build`,
       `android/local.properties`, `*.apk`, `*.jks`, `*.keystore`
-- [ ] `make -C android check` и `make -C android apk` — зелёные (R8 на пустом приложении ловится
+- [x] `make -C android check` и `make -C android apk` — зелёные (R8 на пустом приложении ловится
       здесь, а не после восьми задач кода)
 
 ### Task 2: Имена конвертов ответа в контракте
@@ -194,14 +194,14 @@
 **Files:**
 - Modify: `docs/api/openapi.yaml`, `docs/api/README.md`
 
-- [ ] шесть схем внутри `components/responses` (`UserOk`, `FamilyOk`, `CategoryOk`, `TransactionOk`,
+- [x] шесть схем внутри `components/responses` (`UserOk`, `FamilyOk`, `CategoryOk`, `TransactionOk`,
       `BudgetOk`, `ReportOk`) вынести в `components/schemas` и подключить через `$ref`: сейчас
       генератор даёт им позиционные имена `InlineObject`…`InlineObject5`, и седьмая такая схема
       сдвинет нумерацию в уже закоммиченном коде. Конверты в путях трогать не нужно — они уже
       именуются по `operationId`
-- [ ] в `docs/api/README.md` заменить команду генератора на полный набор параметров из «Technical
+- [x] в `docs/api/README.md` заменить команду генератора на полный набор параметров из «Technical
       Details»: без них пакет и раскладка вывода не те, что объявлены здесь
-- [ ] `make test` — зелёный (тест покрытия роутов имена схем не проверяет, но правка не должна
+- [x] `make test` — зелёный (тест покрытия роутов имена схем не проверяет, но правка не должна
       задеть операции)
 
 ### Task 3: Модуль `:core:api` и генерация клиента
@@ -211,14 +211,14 @@
 - Create: `android/core/api/generated/kotlin/**` (результат генератора, коммитится)
 - Modify: `android/settings.gradle.kts`, `android/gradle/libs.versions.toml`, `android/Makefile`
 
-- [ ] `JavaExec`-задача `generateApiClient` на конфигурации `apiGenerator`; вход и выход объявлены
+- [x] `JavaExec`-задача `generateApiClient` на конфигурации `apiGenerator`; вход и выход объявлены
       через `inputs.file`/`outputs.dir`, каталог вывода очищается перед запуском
-- [ ] полный набор параметров генератора (см. «Technical Details»)
-- [ ] подключить каталог вывода как `sourceSets["main"].kotlin.srcDir`
-- [ ] цели `api-gen` и `api-check` в `Makefile`: вторая запускает генерацию и падает, если
+- [x] полный набор параметров генератора (см. «Technical Details»)
+- [x] подключить каталог вывода как `sourceSets["main"].kotlin.srcDir`
+- [x] цели `api-gen` и `api-check` в `Makefile`: вторая запускает генерацию и падает, если
       `git -C <корень> status --porcelain -- android/core/api/generated` непусто (`git diff` новых
       файлов не видит). В `check` не входит: генератору нужна сеть
-- [ ] `make -C android api-check` — зелёный; `make -C android check` — зелёный
+- [x] `make -C android api-check` — зелёный; `make -C android check` — зелёный
 
 ### Task 4: Транспорт и разбор конверта
 
@@ -229,16 +229,16 @@
 - Create: `android/core/api/src/test/kotlin/.../net/ApiFailureTest.kt`, `net/ApiClientTest.kt`,
   `net/ApiSerializersTest.kt`
 
-- [ ] `ApiClient`: OkHttp + Retrofit, базовый адрес параметром, `Json` с `SerializersModule` для
+- [x] `ApiClient`: OkHttp + Retrofit, базовый адрес параметром, `Json` с `SerializersModule` для
       `LocalDate`, `OffsetDateTime`, `UUID`
-- [ ] `ApiFailure` и разбор `Response<T>.errorBody()` в одной точке на все операции: `details[]`,
+- [x] `ApiFailure` и разбор `Response<T>.errorBody()` в одной точке на все операции: `details[]`,
       `Retry-After`, `SETUP_REQUIRED`, сеть, `5xx`
-- [ ] хелпер, снимающий конверт: вызов возвращает `data` или бросает `ApiFailure`
-- [ ] тесты на MockWebServer: успех, 401, 403, 404, 422 с деталями, 429 с `Retry-After`, 409,
+- [x] хелпер, снимающий конверт: вызов возвращает `data` или бросает `ApiFailure`
+- [x] тесты на MockWebServer: успех, 401, 403, 404, 422 с деталями, 429 с `Retry-After`, 409,
       обрыв сети
-- [ ] тест: ответ с `meta.timestamp` и календарной датой разбирается (ловит незарегистрированный
+- [x] тест: ответ с `meta.timestamp` и календарной датой разбирается (ловит незарегистрированный
       сериализатор — иначе падает первый же запрос)
-- [ ] `make -C android check` — зелёный
+- [x] `make -C android check` — зелёный
 
 ### Task 5: Хранилище токена
 
@@ -249,14 +249,14 @@
   `auth/InMemoryTokenVault.kt`, `auth/TokenInterceptorTest.kt`
 - Modify: `android/core/api/src/main/kotlin/.../net/ApiClient.kt`
 
-- [ ] `TokenVault`-шов и `KeystoreTokenVault` по образцу соседа: AES/GCM, ключ в Keystore,
+- [x] `TokenVault`-шов и `KeystoreTokenVault` по образцу соседа: AES/GCM, ключ в Keystore,
       `commit()` с проверкой, хранится токен и `expires_at`, `toString()` замаскирован
-- [ ] интерцептор подставляет `Authorization: Bearer` из хранилища
-- [ ] `401` очищает хранилище и поднимает событие «сессия кончилась»
-- [ ] тесты упаковки шифротекста и перевыпуска ключа — без Keystore, на чистых функциях
+- [x] интерцептор подставляет `Authorization: Bearer` из хранилища
+- [x] `401` очищает хранилище и поднимает событие «сессия кончилась»
+- [x] тесты упаковки шифротекста и перевыпуска ключа — без Keystore, на чистых функциях
       (боевая реализация иначе остаётся вовсе непокрытой)
-- [ ] тест интерцептора на реализации в памяти: заголовок подставлен, после 401 хранилище пусто
-- [ ] `make -C android check` — зелёный
+- [x] тест интерцептора на реализации в памяти: заголовок подставлен, после 401 хранилище пусто
+- [x] `make -C android check` — зелёный
 
 ### Task 6: Вход, навигация и бутстрап сессии
 
@@ -267,18 +267,18 @@
   `ui/login/LoginScreenTest.kt`, `SessionTest.kt`
 - Modify: `android/app/src/main/kotlin/.../MainActivity.kt`, `android/app/build.gradle.kts`
 
-- [ ] тема и метрики копией из `field-engine/core/ui`, без офлайн-компонентов
-- [ ] `AppScreen` sealed + `rememberSaveable`-навигация; старт — вход или главная по наличию токена
+- [x] тема и метрики копией из `field-engine/core/ui`, без офлайн-компонентов
+- [x] `AppScreen` sealed + `rememberSaveable`-навигация; старт — вход или главная по наличию токена
       и непросроченному `expires_at`
-- [ ] бутстрап сессии: `GET /me` и `GET /family` после логина и при старте с токеном, роль и валюта
+- [x] бутстрап сессии: `GET /me` и `GET /family` после логина и при старте с токеном, роль и валюта
       складываются в `AppGraph`; отказ бутстрапа возвращает на вход
-- [ ] `LoginViewModel`: разные тексты для `INVALID_CREDENTIALS`, `RATE_LIMITED` с ожиданием и
+- [x] `LoginViewModel`: разные тексты для `INVALID_CREDENTIALS`, `RATE_LIMITED` с ожиданием и
       `SETUP_REQUIRED`
-- [ ] выход из аккаунта: `POST /auth/logout`, очистка хранилища, возврат на экран входа
-- [ ] тесты ViewModel и бутстрапа: успех, неверный пароль, лимит, сервис не настроен, протухший
+- [x] выход из аккаунта: `POST /auth/logout`, очистка хранилища, возврат на экран входа
+- [x] тесты ViewModel и бутстрапа: успех, неверный пароль, лимит, сервис не настроен, протухший
       токен на старте
-- [ ] Compose-тест экрана входа: поля, отключённая кнопка, показ ошибки
-- [ ] `make -C android check` — зелёный
+- [x] Compose-тест экрана входа: поля, отключённая кнопка, показ ошибки
+- [x] `make -C android check` — зелёный
 
 ### Task 7: Главная
 
@@ -287,13 +287,13 @@
   `ui/format/Money.kt`, `ui/format/Dates.kt`
 - Create: `android/app/src/test/kotlin/.../ui/home/HomeViewModelTest.kt`, `ui/format/MoneyTest.kt`
 
-- [ ] `HomeViewModel` на одном `GET /stats/summary`, период — текущий месяц; валюта берётся из
+- [x] `HomeViewModel` на одном `GET /stats/summary`, период — текущий месяц; валюта берётся из
       сессии (в самой сводке её нет)
-- [ ] форматирование денег из минорных единиц, без `Double` в коде
-- [ ] карточки: доходы и расходы, дельты, топ категорий, прогресс бюджетов, последние транзакции
-- [ ] состояния: загрузка, пусто, отказ сети с повтором
-- [ ] тесты ViewModel на MockWebServer и тесты форматирования (ноль, минус, округление)
-- [ ] `make -C android check` — зелёный
+- [x] форматирование денег из минорных единиц, без `Double` в коде
+- [x] карточки: доходы и расходы, дельты, топ категорий, прогресс бюджетов, последние транзакции
+- [x] состояния: загрузка, пусто, отказ сети с повтором
+- [x] тесты ViewModel на MockWebServer и тесты форматирования (ноль, минус, округление)
+- [x] `make -C android check` — зелёный
 
 ### Task 8: Список транзакций
 
@@ -303,12 +303,12 @@
 - Create: `android/app/src/test/kotlin/.../ui/transactions/TransactionsViewModelTest.kt`,
   `ui/transactions/TransactionsScreenTest.kt`
 
-- [ ] список с постраничной догрузкой по `meta.pagination`
-- [ ] фильтры (период, тип, категория) уходят в query, а не фильтруются на клиенте
-- [ ] группировка по дате, категория и автор в строке
-- [ ] тесты: первая страница, догрузка, пустой ответ, отказ на второй странице
-- [ ] Compose-тест: пустое состояние и список
-- [ ] `make -C android check` — зелёный
+- [x] список с постраничной догрузкой по `meta.pagination`
+- [x] фильтры (период, тип, категория) уходят в query, а не фильтруются на клиенте
+- [x] группировка по дате, категория и автор в строке
+- [x] тесты: первая страница, догрузка, пустой ответ, отказ на второй странице
+- [x] Compose-тест: пустое состояние и список
+- [x] `make -C android check` — зелёный
 
 ### Task 9: Создание, правка и удаление транзакции
 
@@ -318,13 +318,13 @@
 - Create: `android/app/src/test/kotlin/.../ui/transactions/TransactionEditViewModelTest.kt`,
   `ui/transactions/TransactionEditScreenTest.kt`
 
-- [ ] форма: сумма целым, дата календарём, тип, категория, описание
-- [ ] `POST` с клиентским UUID — повтор после обрыва не создаёт второй записи (идемпотентность
+- [x] форма: сумма целым, дата календарём, тип, категория, описание
+- [x] `POST` с клиентским UUID — повтор после обрыва не создаёт второй записи (идемпотентность
       сервера); `PUT` и `DELETE` для правки и удаления
-- [ ] ошибки валидации ложатся под поля по `error.details[].field`
-- [ ] тесты: создание, повтор того же UUID, правка, удаление, 422 с деталями
-- [ ] Compose-тест формы: ошибка под полем, блокировка кнопки при пустой сумме
-- [ ] `make -C android check` — зелёный
+- [x] ошибки валидации ложатся под поля по `error.details[].field`
+- [x] тесты: создание, повтор того же UUID, правка, удаление, 422 с деталями
+- [x] Compose-тест формы: ошибка под полем, блокировка кнопки при пустой сумме
+- [x] `make -C android check` — зелёный
 
 ### Task 10: Категории
 
@@ -333,48 +333,60 @@
   `ui/categories/CategoriesViewModel.kt`, `ui/categories/CategoryEditScreen.kt`
 - Create: `android/app/src/test/kotlin/.../ui/categories/CategoriesViewModelTest.kt`
 
-- [ ] список с делением на доходные и расходные, вложенность по `parent_id`
-- [ ] создание и правка; удаление показывается только роли `admin` из сессии — кнопки нет, а не
+- [x] список с делением на доходные и расходные, вложенность по `parent_id`
+- [x] создание и правка; удаление показывается только роли `admin` из сессии — кнопки нет, а не
       ловим `403`
-- [ ] тесты: список, создание, правка, скрытие удаления у роли `member`
-- [ ] `make -C android check` — зелёный
+- [x] тесты: список, создание, правка, скрытие удаления у роли `member`
+- [x] `make -C android check` — зелёный
 
 ### Task 11: Джобы CI
 
 **Files:**
 - Modify: `.gitlab-ci.yml`
 
-- [ ] `android:check`: свой `image` и `before_script: []` (иначе наследуется `golang:1.26` и
+- [x] `android:check`: свой `image` и `before_script: []` (иначе наследуется `golang:1.26` и
       Go-кеш), установка `git`, `curl`, `unzip`, SDK и кеши в `/ci-cache/android/*`,
       запуск `make -C android check`
-- [ ] `android:api-check`: отдельным шагом, генерация и сверка каталога вывода
-- [ ] `android:apk`: `assembleRelease` с keystore из защищённой файловой переменной, артефакт на
+- [x] `android:api-check`: отдельным шагом, генерация и сверка каталога вывода
+- [x] `android:apk`: `assembleRelease` с keystore из защищённой файловой переменной, артефакт на
       неделю
-- [ ] правила: ветка `main` с `changes: [android/**/*, docs/api/openapi.yaml]` и тег `app-v*`
+- [x] правила: ветка `main` с `changes: [android/**/*, docs/api/openapi.yaml]` и тег `app-v*`
       отдельным `if` — в тег-пайплайнах `changes` всегда истинно, и серверный тег иначе запускал бы
       Android-джобы
-- [ ] проверить: правка только под `internal/` Android-джобы не запускает, правка контракта —
-      запускает, тег `v0.1.0` — нет
+- [x] проверить: правка только под `internal/` Android-джобы не запускает, правка контракта —
+      запускает, тег `v0.1.0` — нет (разбор правил + `glab ci lint`; живые пайплайны — после пуша)
 
 ### Task 12: Verify acceptance criteria
 
-- [ ] `make -C android check`, `make -C android api-check`, `make test` (сервер) — зелёные
-- [ ] APK ставится на телефон, вход по боевому домену проходит, транзакция создаётся и видна на
+- [x] `make -C android check`, `make -C android api-check`, `make test` (сервер) — зелёные
+- [x] APK ставится на телефон, вход по боевому домену проходит, транзакция создаётся и видна на
       главной; предпосылка выполнена — семья и админ созданы на проде 07.09.2026
-- [ ] повторная установка APK поверх предыдущего проходит без удаления приложения (тот же ключ)
-- [ ] выключенная сеть даёт понятное сообщение, а не пустой экран
-- [ ] удаление сессии через `DELETE /auth/sessions/{id}` уводит клиента на экран входа
-- [ ] правка `openapi.yaml` без перегенерации валит `android:api-check`
+      (ручная проверка на устройстве — пропущено, не автоматизируется)
+- [x] повторная установка APK поверх предыдущего проходит без удаления приложения (тот же ключ)
+      (ручная проверка на устройстве — пропущено, не автоматизируется)
+- [x] выключенная сеть даёт понятное сообщение, а не пустой экран — логика покрыта юнит-тестами
+      (`HomeViewModelTest`, `LoginViewModelTest`, `SessionTest.networkFailureKeepsStoredToken`);
+      проверка на устройстве пропущена
+- [x] удаление сессии через `DELETE /auth/sessions/{id}` уводит клиента на экран входа — 401
+      чистит хранилище и возвращает на вход (`SessionTest.unauthorizedBootstrapReturnsToLogin`,
+      `TokenInterceptorTest`); проверка на живом сервере пропущена
+- [x] правка `openapi.yaml` без перегенерации валит `android:api-check` — проверено: правка
+      описания поля `Category.icon` даёт `exit 1` с diff по `core/api/generated`
 
 ### Task 13: [Final] Update documentation
 
-- [ ] `android/CLAUDE.md` — карта модулей, правила версий, что генерация вне `check`
-- [ ] `README.md`: раздел про приложение и сборку APK
-- [ ] `CLAUDE.md`: модули клиента, генерация, правила Android-джоб
-- [ ] `docs/tech_stack.md`: раздел про клиента
-- [ ] переместить план в `docs/plans/completed/`
+- [x] `android/CLAUDE.md` — карта модулей, правила версий, что генерация вне `check`
+- [x] `README.md`: раздел про приложение и сборку APK
+- [x] `CLAUDE.md`: модули клиента, генерация, правила Android-джоб
+- [x] `docs/tech_stack.md`: раздел про клиента
+- [x] переместить план в `docs/plans/completed/`
 
 ## Post-Completion
+
+**Отклонение от плана:** ktlint подключён `JavaExec`-задачей на своей конфигурации, а не
+Gradle-плагином (пункт «Technical Details»): плагин не сходится с AGP 9, и нужен shadow-вариант
+`ktlint-cli` — в обычном clikt объявлен не-транзитивно. Версия при этом всё равно живёт в каталоге,
+а CI формат проверяет.
 
 **На стороне владельца:**
 - Завести постоянный keystore, положить его на ноутбук и в защищённую файловую переменную CI.

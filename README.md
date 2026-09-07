@@ -5,10 +5,11 @@ API for the Android client. One instance = one family.
 
 ## 🎯 Project Status: IN DEVELOPMENT 🚧
 
-> **Direction (September 2026):** API-only backend for an Android app. Decisions and the five implementation
-> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–05 are done: the
-> web interface, cookie sessions and CSRF are gone, money is integer minor units, dates are calendar dates and
-> the deployment is one compose with Caddy; the sections below describe the code as it is today.
+> **Direction (September 2026):** API-only backend for an Android app. Decisions and the six implementation
+> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–06 are done: the
+> web interface, cookie sessions and CSRF are gone, money is integer minor units, dates are calendar dates,
+> the deployment is one compose with Caddy and the Android client lives in `android/`; the sections below
+> describe the code as it is today.
 
 - ✅ REST API for family, users, categories, transactions, budgets, reports, stats, backups
 - ✅ Bearer-token authentication with server-side sessions and a login rate limiter
@@ -185,6 +186,7 @@ make help             # Show all commands
 ├── docs/                    # Product brief, tech stack, audits (specs/), plans, API contract
 ├── deploy/                  # Self-hosted deployment: compose + Caddy + install/release scripts
 ├── docker/                  # Dockerfile + docker-compose.yml
+├── android/                 # Android client: :app (Compose) + :core:api (generated client, transport)
 └── .gitlab-ci.yml           # CI/CD: checks, image, deploy to the mini-server
 ```
 
@@ -280,6 +282,29 @@ Supported: Ubuntu 22.04/24.04, Debian 11/12, Rocky/AlmaLinux 9. Scripts in `depl
 `uninstall.sh --keep-data`, `health-check.sh` (`HEALTH_URL`, default `https://$DOMAIN/health`).
 Details: [deploy/README.md](deploy/README.md).
 
+## 📱 Android client
+
+`android/` — the online Kotlin/Compose client to `/api/v1` (login, home, transactions, categories).
+Models and typed interfaces are generated from `docs/api/openapi.yaml` into `android/core/api/generated`
+and committed; generation needs the network, so it stays out of `check` and its freshness is a separate
+target and CI step.
+
+Locally this needs JDK 21+ and an Android SDK with `android-37.0` and build-tools 37; the CI job
+installs the same set.
+
+```bash
+make -C android check        # format, Robolectric unit tests, Android Lint — offline
+make -C android api-check    # regenerate the client and fail if the contract moved without it
+make -C android apk          # signed release APK -> android/app/build/outputs/apk/release/
+```
+
+The APK is installed from a laptop; there is no store. Signing needs one permanent keystore
+(`FFS_KEYSTORE_PATH` / `FFS_KEYSTORE_PASSWORD`, defaults under `~/.android`) — the same one CI uses,
+because another certificate means uninstalling the app together with its data. A tag `app-vX.Y.Z` builds
+the APK in CI and keeps it as a job artifact for a week; server tags `vX.Y.Z` do not run the Android jobs.
+Bump `appVersionCode`/`appVersionName` in `android/gradle/libs.versions.toml` before tagging. Details:
+[android/CLAUDE.md](android/CLAUDE.md).
+
 ## 📚 Documentation
 
 - **[CLAUDE.md](CLAUDE.md)** — development and architecture guidance
@@ -288,6 +313,7 @@ Details: [deploy/README.md](deploy/README.md).
 - **[docs/api/openapi.yaml](docs/api/openapi.yaml)** — the API contract; request/response structs live in
   `internal/application/handlers/types.go`, the error envelope in `handlers/errors.go`
 - **[deploy/README.md](deploy/README.md)** — self-hosted deployment guide (see the note above)
+- **[android/CLAUDE.md](android/CLAUDE.md)** — Android client: modules, version rules, code generation
 
 ## License
 

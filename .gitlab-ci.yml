@@ -7,6 +7,10 @@ stages:
   - build
   - release
   - deploy
+  # Клиент собирается отдельно от сервера: его стадия последняя, а джобы в ней с `needs: []`,
+  # то есть стартуют сразу и никого не ждут. В общих стадиях упавший `android:check` или
+  # недоступный Maven Central останавливали бы выкат сервера, которого они не касаются.
+  - android
 
 variables:
   # Кеш Go лежит в каталоге, который раннер монтирует в /ci-cache, а не гоняется
@@ -177,6 +181,112 @@ image:smoke:
       echo "$body" | grep -q '"version":"test"'
   after_script:
     - docker rm -f ffs-test || true
+
+# Android-клиент лежит в этом же репозитории (A-13), поэтому его джобы отсекаются `changes:`:
+# серверная правка не должна тянуть Android SDK и Gradle. В тег-пайплайне `changes:` истинно
+# всегда, и без явного `when: never` серверный тег vX.Y.Z собирал бы ещё и приложение.
+.android-rules:
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^app-v\d+\.\d+\.\d+$/
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes: &android-changes
+        - android/**/*
+        - docs/api/openapi.yaml
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes: *android-changes
+
+# Образ — голый JDK: готового с платформой 37 нет, а раскладка чужих образов — лишняя
+# переменная. Своё before_script здесь обязательно: иначе доедет блок из `default:` с
+# `go version`, которого в этом образе нет. SDK и кеши лежат в /ci-cache, как остальные кеши
+# репозитория; механизм `cache:` не используется.
+.android:
+  extends: .android-rules
+  image: eclipse-temurin:21-jdk
+  variables:
+    ANDROID_HOME: /ci-cache/android/sdk
+    GRADLE_USER_HOME: /ci-cache/android/gradle
+    # Локальный maven-репозиторий Robolectric: android-all jar весит ~100 МБ, и по умолчанию
+    # он качался бы в ~/.m2 контейнера, то есть каждой джобой заново. Путь читает
+    # android/build.gradle.kts и отдаёт тестовой JVM как -Dmaven.repo.local.
+    ROBOLECTRIC_M2_REPO: /ci-cache/android/m2
+    GRADLE_OPTS: -Dorg.gradle.daemon=false
+    CMDLINE_TOOLS_URL: https://dl.google.com/android/repository/commandlinetools-linux-15859902_latest.zip
+    # Список меняется — каталог SDK на раннере чистится руками: sdkmanager пакеты докладывает,
+    # но выпавшее отсюда так и останется лежать.
+    ANDROID_PACKAGES: platform-tools platforms;android-37.0 build-tools;37.0.0
+  before_script:
+    - apt-get update -qq
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends make git curl unzip > /dev/null
+    # Рабочую копию раскладывает helper-образ раннера, uid у него свой: без safe.directory git
+    # откажется читать «чужой» репозиторий, и api-check упадёт не по делу.
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    - mkdir -p "$ANDROID_HOME" "$GRADLE_USER_HOME" "$ROBOLECTRIC_M2_REPO"
+    - |
+      if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+        mkdir -p "$ANDROID_HOME/cmdline-tools"
+        curl -sSL -o /tmp/cmdline-tools.zip "$CMDLINE_TOOLS_URL"
+        unzip -q /tmp/cmdline-tools.zip -d /tmp/cmdline-tools
+        rm -rf "$ANDROID_HOME/cmdline-tools/latest"
+        mv /tmp/cmdline-tools/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
+      fi
+    - export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+    # Не `yes | sdkmanager`: sdkmanager закрывает пайп первым, yes умирает по SIGPIPE, и при
+    # pipefail (раннер запускает скрипт именно так) джоба падает с кодом 141. printf —
+    # builtin, его вывод влезает в буфер пайпа целиком.
+    - printf 'y\n%.0s' $(seq 100) | sdkmanager --sdk_root="$ANDROID_HOME" --licenses > /dev/null
+    - sdkmanager --sdk_root="$ANDROID_HOME" --install $ANDROID_PACKAGES > /dev/null
+
+# Цель офлайновая: формат, unit-тесты (Robolectric), Android Lint. Инструментальных тестов в
+# CI нет — раннеру для эмулятора нужен /dev/kvm.
+android:check:
+  extends: .android
+  stage: android
+  needs: []
+  script:
+    - make -C android check
+  artifacts:
+    when: always
+    expire_in: 1 week
+    reports:
+      junit:
+        - android/**/build/test-results/testDebugUnitTest/TEST-*.xml
+    paths:
+      - android/**/build/reports/lint-results-*.html
+
+# Отдельная джоба, а не шаг `check`: генерация тянет генератор и артефакты из сети. Правка
+# openapi.yaml без перегенерации клиента в том же коммите роняет её.
+android:api-check:
+  extends: .android
+  stage: android
+  needs: []
+  script:
+    - make -C android api-check
+
+# Подпись тем же ключом, что и на ноутбуке: другой сертификат даёт
+# INSTALL_FAILED_UPDATE_INCOMPATIBLE и требует сносить приложение с телефона вместе с данными.
+# Keystore приезжает защищённой файловой переменной FFS_KEYSTORE (её значение — путь к файлу),
+# пароль — FFS_KEYSTORE_PASSWORD; без них джоба падает, а не подписывает чем попало.
+# На MR не собирается: подписанный APK нужен для установки, а не для проверки.
+android:apk:
+  extends: .android
+  stage: android
+  needs: []
+  variables:
+    FFS_KEYSTORE_PATH: $FFS_KEYSTORE
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^app-v\d+\.\d+\.\d+$/
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes: *android-changes
+  script:
+    - make -C android apk
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - android/app/build/outputs/apk/release/*.apk
 
 release-image:
   stage: release

@@ -232,6 +232,8 @@ MR в двух репозиториях плюс бамп пина.
 | 03 | [bearer-auth-web-removal](../plans/completed/20260904-03-bearer-auth-web-removal.md) | `internal/auth`, `/auth/*`, `/me`, CLI setup, лимитер, удаление `internal/web`, чистка конфига |
 | 04 | [schema-and-money](../plans/completed/20260904-04-schema-and-money.md) | переписанная `001_consolidated`, `amount_minor`, календарные даты, часовой пояс, удаление инвайтов и `child` |
 | 05 | [deploy-ffs](../plans/completed/20260904-05-deploy-ffs.md) | compose + Caddy для `ffs.shatrov.tech`, CLI `backup`, чистка `deploy/` |
+| 06 | [android-client](../plans/completed/20260907-06-android-client.md) | модули `:app` и `:core:api`, генерация клиента из контракта, Android-джобы в пайплайне |
 
-План 05 закрыт: все пять планов выполнены — остаются действия владельца на сервере
-(DNS, `install.sh`, `setup`, cron бэкапа, тег `v0.1.0`).
+План 06 закрыт: все шесть планов выполнены — остаются действия владельца на сервере
+(DNS, `install.sh`, `setup`, cron бэкапа, тег `v0.1.0`). Следующим планом — бюджеты, отчёты,
+пользователи, сессии и бэкапы в приложении.

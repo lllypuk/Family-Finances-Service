@@ -1012,62 +1012,32 @@ components:
       description: Пользователь
       content:
         application/json:
-          schema:
-            type: object
-            required: [data, meta]
-            properties:
-              data: { $ref: '#/components/schemas/User' }
-              meta: { $ref: '#/components/schemas/Meta' }
+          schema: { $ref: '#/components/schemas/UserOk' }
     FamilyOk:
       description: Семья
       content:
         application/json:
-          schema:
-            type: object
-            required: [data, meta]
-            properties:
-              data: { $ref: '#/components/schemas/Family' }
-              meta: { $ref: '#/components/schemas/Meta' }
+          schema: { $ref: '#/components/schemas/FamilyOk' }
     CategoryOk:
       description: Категория
       content:
         application/json:
-          schema:
-            type: object
-            required: [data, meta]
-            properties:
-              data: { $ref: '#/components/schemas/Category' }
-              meta: { $ref: '#/components/schemas/Meta' }
+          schema: { $ref: '#/components/schemas/CategoryOk' }
     TransactionOk:
       description: Транзакция
       content:
         application/json:
-          schema:
-            type: object
-            required: [data, meta]
-            properties:
-              data: { $ref: '#/components/schemas/Transaction' }
-              meta: { $ref: '#/components/schemas/Meta' }
+          schema: { $ref: '#/components/schemas/TransactionOk' }
     BudgetOk:
       description: Бюджет
       content:
         application/json:
-          schema:
-            type: object
-            required: [data, meta]
-            properties:
-              data: { $ref: '#/components/schemas/Budget' }
-              meta: { $ref: '#/components/schemas/Meta' }
+          schema: { $ref: '#/components/schemas/BudgetOk' }
     ReportOk:
       description: Отчёт
       content:
         application/json:
-          schema:
-            type: object
-            required: [data, meta]
-            properties:
-              data: { $ref: '#/components/schemas/Report' }
-              meta: { $ref: '#/components/schemas/Meta' }
+          schema: { $ref: '#/components/schemas/ReportOk' }
 
   schemas:
     Money:
@@ -1151,6 +1121,43 @@ components:
         code:
           type: string
           examples: ['required']
+
+    UserOk:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/User' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    FamilyOk:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/Family' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    CategoryOk:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/Category' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    TransactionOk:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/Transaction' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    BudgetOk:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/Budget' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    ReportOk:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/Report' }
+        meta: { $ref: '#/components/schemas/Meta' }
 
     Health:
       type: object

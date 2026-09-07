@@ -27,7 +27,18 @@
 - **Testing**: testify v1.10.0 + in-memory SQLite
 
 ### Клиент
-- Android-приложение, генерируется из `docs/api/openapi.yaml`; HTML сервис не отдаёт
+Android-приложение в `android/` этого же репозитория; HTML сервис не отдаёт.
+
+- **Язык и UI**: Kotlin 2.3, Compose + Material3 (BOM 2026.08), AGP 9.3, `minSdk` 26, `compileSdk` 37
+- **Модули**: `:core:api` (сгенерированный клиент, транспорт, хранилище токена) и `:app` (экраны,
+  ViewModel'и, ручная навигация `AppScreen`, composition root `AppGraph`); DI ручной, без Hilt и Koin
+- **Сеть**: OkHttp 5 + Retrofit 3, kotlinx-serialization; модели и интерфейсы генерируются
+  openapi-generator 7.24 из `docs/api/openapi.yaml`, вывод коммитится в `android/core/api/generated`
+- **Токен**: один непрозрачный bearer, AES/GCM в Android Keystore; `401` ведёт на экран входа
+- **Тесты**: Robolectric 4.16 в `src/test` + MockWebServer; инструментальных в CI нет
+- **Версии**: только `android/gradle/libs.versions.toml`; ktlint и генератор — своими конфигурациями
+- **Сборка**: `make -C android check` (офлайновая), `api-check` (свежесть генерации),
+  `apk` (подпись постоянным keystore, стора нет — APK ставится с ноутбука)
 
 ### Инфраструктура
 - **Контейнеризация**: Docker & Docker Compose — `docker/docker-compose.yml` для разработки,
@@ -60,6 +71,7 @@ Family-Finances-Service/
 ├── migrations/            # 001_consolidated.{up,down}.sql
 ├── docs/                 # Документация проекта (specs, plans, guides, patterns, api)
 ├── docker/               # Dockerfile, docker-compose.yml для разработки
+├── android/              # Android-клиент: :app (Compose) + :core:api (генерируемый клиент)
 ├── deploy/               # прод: compose (app + Caddy), Caddyfile, install/upgrade/uninstall
 └── Makefile              # Автоматизация задач
 ```

@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Семейный бюджет</string>
+
+    <string name="login_title">Вход</string>
+    <string name="login_email">Почта</string>
+    <string name="login_password">Пароль</string>
+    <string name="login_submit">Войти</string>
+    <string name="login_error_credentials">Неверная почта или пароль</string>
+    <string name="login_error_rate_limited">Слишком много попыток, попробуйте позже</string>
+    <string name="login_error_rate_limited_wait">Слишком много попыток, повторите через %1$d с</string>
+    <string name="login_error_setup_required">Сервис ещё не настроен</string>
+    <string name="login_error_storage">Не удалось сохранить вход на телефоне — попробуйте ещё раз</string>
+
+    <string name="home_title">Главная</string>
+    <string name="home_income">Доходы</string>
+    <string name="home_expenses">Расходы</string>
+    <string name="home_net">Итого</string>
+    <string name="home_transactions">Операций за период: %1$d</string>
+    <string name="home_top_categories">Расходы по категориям</string>
+    <string name="home_budgets">Бюджеты</string>
+    <string name="home_recent">Последние операции</string>
+    <string name="home_budget_progress">%1$s из %2$s</string>
+    <string name="home_empty">Операций пока нет</string>
+    <string name="home_open_transactions">Операции</string>
+    <string name="home_open_categories">Категории</string>
+
+    <string name="transactions_title">Операции</string>
+    <string name="transactions_empty">Операций не найдено</string>
+    <string name="transactions_author_me">Вы</string>
+    <string name="filter_all">Всё время</string>
+    <string name="filter_this_month">Этот месяц</string>
+    <string name="filter_prev_month">Прошлый месяц</string>
+    <string name="filter_any_type">Все</string>
+    <string name="filter_income">Доходы</string>
+    <string name="filter_expense">Расходы</string>
+    <string name="filter_all_categories">Все категории</string>
+    <string name="transactions_add">Добавить</string>
+
+    <string name="transaction_new_title">Новая операция</string>
+    <string name="transaction_edit_title">Операция</string>
+    <string name="transaction_amount">Сумма</string>
+    <string name="transaction_category">Категория</string>
+    <string name="transaction_description">Описание</string>
+    <string name="transaction_save">Сохранить</string>
+    <string name="transaction_delete">Удалить</string>
+    <string name="transaction_delete_confirm">Удалить операцию?</string>
+    <string name="transaction_date_pick">Выбрать</string>
+    <string name="type_income">Доход</string>
+    <string name="type_expense">Расход</string>
+    <string name="cancel">Отмена</string>
+
+    <string name="categories_title">Категории</string>
+    <string name="categories_add">Добавить</string>
+    <string name="categories_empty">Категорий пока нет</string>
+    <string name="categories_income">Доходные</string>
+    <string name="categories_expense">Расходные</string>
+    <string name="category_new_title">Новая категория</string>
+    <string name="category_edit_title">Категория</string>
+    <string name="category_name">Название</string>
+    <string name="category_color">Цвет</string>
+    <string name="category_icon">Значок</string>
+    <string name="category_parent">Родительская категория</string>
+    <string name="category_no_parent">Без родителя</string>
+    <string name="category_save">Сохранить</string>
+    <string name="category_delete">Удалить</string>
+    <string name="category_delete_confirm">Удалить категорию?</string>
+
+    <string name="retry">Повторить</string>
+    <string name="back">Назад</string>
+    <string name="error_network">Нет связи с сервером</string>
+    <string name="error_malformed">Сервер ответил непонятным — попробуйте позже</string>
+    <string name="sign_out">Выйти</string>
+    <string name="loading">Загрузка…</string>
+</resources>
