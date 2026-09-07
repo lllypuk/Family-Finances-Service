@@ -35,6 +35,20 @@
     <string name="filter_income">Доходы</string>
     <string name="filter_expense">Расходы</string>
     <string name="filter_all_categories">Все категории</string>
+    <string name="transactions_add">Добавить</string>
+
+    <string name="transaction_new_title">Новая операция</string>
+    <string name="transaction_edit_title">Операция</string>
+    <string name="transaction_amount">Сумма</string>
+    <string name="transaction_category">Категория</string>
+    <string name="transaction_description">Описание</string>
+    <string name="transaction_save">Сохранить</string>
+    <string name="transaction_delete">Удалить</string>
+    <string name="transaction_delete_confirm">Удалить операцию?</string>
+    <string name="transaction_date_pick">Выбрать</string>
+    <string name="type_income">Доход</string>
+    <string name="type_expense">Расход</string>
+    <string name="cancel">Отмена</string>
 
     <string name="retry">Повторить</string>
     <string name="back">Назад</string>

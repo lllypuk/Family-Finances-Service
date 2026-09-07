@@ -28,6 +28,8 @@ import tech.shatrov.familyfinances.ui.home.HomeScreen
 import tech.shatrov.familyfinances.ui.home.HomeViewModel
 import tech.shatrov.familyfinances.ui.login.LoginScreen
 import tech.shatrov.familyfinances.ui.login.LoginViewModel
+import tech.shatrov.familyfinances.ui.transactions.TransactionEditScreen
+import tech.shatrov.familyfinances.ui.transactions.TransactionEditViewModel
 import tech.shatrov.familyfinances.ui.transactions.TransactionsScreen
 import tech.shatrov.familyfinances.ui.transactions.TransactionsViewModel
 
@@ -50,13 +52,16 @@ fun AppRoot(graph: AppGraph) {
     var screen by rememberSaveable(stateSaver = AppScreenSaver) {
         mutableStateOf(if (graph.hasLiveToken()) AppScreen.Loading else AppScreen.Login)
     }
+    // Список пережил правку формы вместе с моделью, поэтому перечитывается по возврату,
+    // а не при каждом заходе с главной.
+    var listStale by rememberSaveable { mutableStateOf(false) }
     val session by graph.session.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
     // Смерть процесса возвращает сохранённый экран, но не сессию: без роли и валюты главной
     // нечего показывать, поэтому бутстрап прогоняется заново.
     LaunchedEffect(screen, session) {
-        if (session == null && screen in setOf(AppScreen.Home, AppScreen.Transactions)) {
+        if (session == null && screen != AppScreen.Loading && screen != AppScreen.Login) {
             screen = AppScreen.Loading
         }
     }
@@ -65,7 +70,7 @@ fun AppRoot(graph: AppGraph) {
         graph.api.sessionExpired.collect { screen = AppScreen.Login }
     }
 
-    when (screen) {
+    when (val current = screen) {
         AppScreen.Loading -> {
             LaunchedEffect(Unit) {
                 screen = if (graph.bootstrap()) AppScreen.Home else AppScreen.Login
@@ -88,8 +93,8 @@ fun AppRoot(graph: AppGraph) {
             )
         }
 
-        AppScreen.Home -> WithSession(session) { current ->
-            val model: HomeViewModel = viewModel { HomeViewModel(graph.api, current.currency) }
+        AppScreen.Home -> WithSession(session) { active ->
+            val model: HomeViewModel = viewModel { HomeViewModel(graph.api, active.currency) }
             val home by model.state.collectAsStateWithLifecycle()
             HomeScreen(
                 state = home,
@@ -104,15 +109,49 @@ fun AppRoot(graph: AppGraph) {
             )
         }
 
-        AppScreen.Transactions -> WithSession(session) { current ->
-            val model: TransactionsViewModel = viewModel { TransactionsViewModel(graph.api, current) }
+        AppScreen.Transactions -> WithSession(session) { active ->
+            val model: TransactionsViewModel = viewModel { TransactionsViewModel(graph.api, active) }
             val transactions by model.state.collectAsStateWithLifecycle()
+            LaunchedEffect(listStale) {
+                if (listStale) {
+                    model.refresh()
+                    listStale = false
+                }
+            }
             TransactionsScreen(
                 state = transactions,
                 onBack = { screen = AppScreen.Home },
                 onRetry = model::refresh,
                 onFiltersChange = model::onFiltersChange,
                 onLoadMore = model::loadMore,
+                onCreate = { screen = AppScreen.TransactionEdit(null) },
+                onOpen = { screen = AppScreen.TransactionEdit(it) },
+            )
+        }
+
+        is AppScreen.TransactionEdit -> WithSession(session) {
+            // Ключ по черновику: без него следующий заход на форму достался бы модели прошлого,
+            // уже сохранённого, и экран сразу закрылся бы.
+            val model: TransactionEditViewModel = viewModel(key = "edit-${current.draft}") {
+                TransactionEditViewModel(graph.api, current.id, current.draft)
+            }
+            val edit by model.state.collectAsStateWithLifecycle()
+            LaunchedEffect(edit.done) {
+                if (edit.done) {
+                    listStale = true
+                    screen = AppScreen.Transactions
+                }
+            }
+            TransactionEditScreen(
+                state = edit,
+                onAmountChange = model::onAmountChange,
+                onTypeChange = model::onTypeChange,
+                onCategoryChange = model::onCategoryChange,
+                onDateChange = model::onDateChange,
+                onDescriptionChange = model::onDescriptionChange,
+                onSubmit = model::onSubmit,
+                onDelete = model::onDelete,
+                onBack = { screen = AppScreen.Transactions },
             )
         }
     }

@@ -56,3 +56,27 @@ private fun groupDigits(units: Long): String {
     }
     return grouped.toString()
 }
+
+/** Целых единиц в сумме больше этого столько цифр не бывает: длиннее — переполнение `Long`. */
+private const val MAX_UNIT_DIGITS = 15
+
+/**
+ * Сумма из поля ввода в минорные единицы; `null` — введено не число.
+ * Разбор целочисленный: `Double` не появляется даже промежуточно, иначе крупные суммы теряют копейки.
+ */
+fun parseAmountMinor(text: String): Long? {
+    val cleaned = text.filterNot { it.isWhitespace() || it == NBSP }
+    val separator = cleaned.indexOfFirst { it == ',' || it == '.' }
+    val units = if (separator < 0) cleaned else cleaned.substring(0, separator)
+    val fraction = if (separator < 0) "" else cleaned.substring(separator + 1)
+    if (units.isEmpty() || units.length > MAX_UNIT_DIGITS || !units.all { it.isDigit() }) return null
+    if (fraction.length > FRACTION_DIGITS || !fraction.all { it.isDigit() }) return null
+    return units.toLong() * MINOR_IN_UNIT + fraction.padEnd(FRACTION_DIGITS, '0').toLong()
+}
+
+/** Обратно в поле ввода: разряды не группируются, иначе правка строки ломает разбор. */
+fun formatAmountInput(minor: Long): String {
+    val units = minor / MINOR_IN_UNIT
+    val fraction = minor % MINOR_IN_UNIT
+    return if (fraction == 0L) units.toString() else "$units,${fraction.toString().padStart(FRACTION_DIGITS, '0')}"
+}

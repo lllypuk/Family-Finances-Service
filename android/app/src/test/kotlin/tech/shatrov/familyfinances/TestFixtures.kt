@@ -178,3 +178,21 @@ internal const val TRANSACTIONS_EMPTY = """
 "meta":{"request_id":"r-10","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0",
 "pagination":{"limit":50,"offset":0,"total":0}}}
 """
+
+internal const val COFFEE_ID = "88888888-8888-8888-8888-888888888881"
+
+internal const val TRANSACTION_OK = """
+{"data":{"id":"$COFFEE_ID","amount_minor":150000,"type":"expense","description":"Кофе",
+"category_id":"$GROCERIES_ID","user_id":"$ADMIN_ID","date":"2026-09-07","tags":[],
+"created_at":"2026-09-07T09:00:00Z","updated_at":"2026-09-07T09:00:00Z"},
+"meta":{"request_id":"r-11","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0"}}
+"""
+
+/** 422 с деталями: поле названо так же, как в теле запроса. */
+internal const val VALIDATION_ERROR = """
+{"error":{"code":"VALIDATION_ERROR","message":"Проверьте поля",
+"details":[{"field":"amount_minor","message":"должно быть больше нуля","code":"gt"}]},
+"meta":{"request_id":"r-12","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0"}}
+"""
+
+internal const val INTERNAL_ERROR = """{"error":{"code":"INTERNAL","message":"всё сломалось"}}"""

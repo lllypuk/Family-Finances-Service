@@ -34,6 +34,7 @@ class TransactionsScreenTest {
     private fun show(
         state: TransactionsUiState,
         onFiltersChange: (TransactionFilters) -> Unit = {},
+        onOpen: (UUID) -> Unit = {},
     ) {
         composeRule.setContent {
             AppTheme {
@@ -43,6 +44,8 @@ class TransactionsScreenTest {
                     onRetry = {},
                     onFiltersChange = onFiltersChange,
                     onLoadMore = {},
+                    onCreate = {},
+                    onOpen = onOpen,
                 )
             }
         }
@@ -82,6 +85,16 @@ class TransactionsScreenTest {
         composeRule.onNodeWithText(res.getString(R.string.filter_expense)).performClick()
 
         assertEquals(TransactionType.expense, filters?.type)
+    }
+
+    @Test
+    fun tappingRowOpensTransaction() {
+        var opened: UUID? = null
+        show(ready(listOf(row())), onOpen = { opened = it })
+
+        composeRule.onNodeWithText("Кофе").performClick()
+
+        assertEquals(UUID.fromString("88888888-8888-8888-8888-888888888881"), opened)
     }
 
     private fun ready(rows: List<TransactionRow>) = TransactionsUiState.Ready(

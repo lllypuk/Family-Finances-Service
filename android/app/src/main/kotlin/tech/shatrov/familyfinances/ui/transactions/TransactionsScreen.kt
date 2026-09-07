@@ -1,5 +1,6 @@
 package tech.shatrov.familyfinances.ui.transactions
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,12 +10,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,6 +31,7 @@ import tech.shatrov.familyfinances.theme.LocalAppColors
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.format.formatMoney
 import tech.shatrov.familyfinances.ui.message
+import java.util.UUID
 
 @Composable
 fun TransactionsScreen(
@@ -41,6 +40,8 @@ fun TransactionsScreen(
     onRetry: () -> Unit,
     onFiltersChange: (TransactionFilters) -> Unit,
     onLoadMore: () -> Unit,
+    onCreate: () -> Unit,
+    onOpen: (UUID) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -55,7 +56,9 @@ fun TransactionsScreen(
             Text(
                 text = stringResource(R.string.transactions_title),
                 style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.weight(1f),
             )
+            TextButton(onClick = onCreate) { Text(stringResource(R.string.transactions_add)) }
         }
 
         when (state) {
@@ -74,7 +77,7 @@ fun TransactionsScreen(
                 if (state.isEmpty) {
                     Centered { Text(stringResource(R.string.transactions_empty)) }
                 } else {
-                    Days(state, onLoadMore)
+                    Days(state, onLoadMore, onOpen)
                 }
             }
         }
@@ -88,7 +91,7 @@ private fun Filters(
 ) {
     val filters = state.filters
     Column(verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_1)) {
-        ChipRow {
+        ChipRow(Modifier.padding(horizontal = Dimens.SPACE_4)) {
             item {
                 Chip(stringResource(R.string.filter_all), filters.period == TransactionPeriod.ALL) {
                     onChange(filters.copy(period = TransactionPeriod.ALL))
@@ -111,7 +114,7 @@ private fun Filters(
                 }
             }
         }
-        ChipRow {
+        ChipRow(Modifier.padding(horizontal = Dimens.SPACE_4)) {
             item {
                 Chip(stringResource(R.string.filter_any_type), filters.type == null) {
                     onChange(filters.copy(type = null))
@@ -128,7 +131,7 @@ private fun Filters(
                 }
             }
         }
-        ChipRow {
+        ChipRow(Modifier.padding(horizontal = Dimens.SPACE_4)) {
             item {
                 Chip(stringResource(R.string.filter_all_categories), filters.categoryId == null) {
                     onChange(filters.copy(categoryId = null))
@@ -147,6 +150,7 @@ private fun Filters(
 private fun Days(
     state: TransactionsUiState.Ready,
     onLoadMore: () -> Unit,
+    onOpen: (UUID) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier
@@ -164,7 +168,7 @@ private fun Days(
                 )
             }
             items(group.rows, key = { it.transaction.id }) { row ->
-                TransactionItem(row, state.currency)
+                TransactionItem(row, state.currency, onOpen)
             }
         }
 
@@ -202,12 +206,16 @@ private fun Days(
 private fun TransactionItem(
     row: TransactionRow,
     currency: String,
+    onOpen: (UUID) -> Unit,
 ) {
     val colors = LocalAppColors.current
     val income = row.transaction.type == TransactionType.income
     val author = if (row.isMine) stringResource(R.string.transactions_author_me) else row.authorName
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onOpen(row.transaction.id) }
+            .heightIn(min = Dimens.TOUCH_MIN),
         horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -238,26 +246,6 @@ private fun TransactionItem(
             color = if (income) colors.income else colors.expense,
         )
     }
-}
-
-@Composable
-private fun ChipRow(content: LazyListScope.() -> Unit) {
-    LazyRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = Dimens.SPACE_4),
-        horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
-        content = content,
-    )
-}
-
-@Composable
-private fun Chip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    FilterChip(selected = selected, onClick = onClick, label = { Text(label) })
 }
 
 @Composable

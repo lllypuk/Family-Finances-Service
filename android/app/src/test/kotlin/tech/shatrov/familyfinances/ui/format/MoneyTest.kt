@@ -1,6 +1,7 @@
 package tech.shatrov.familyfinances.ui.format
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 private const val NBSP = "\u00A0"
@@ -58,5 +59,32 @@ class MoneyTest {
         assertEquals("+25%", formatPercent(0.25, signed = true))
         assertEquals("-15%", formatPercent(-0.15, signed = true))
         assertEquals("25%", formatPercent(0.25))
+    }
+
+    @Test
+    fun amountIsParsedIntoMinorUnits() {
+        assertEquals(150000L, parseAmountMinor("1500"))
+        assertEquals(150050L, parseAmountMinor("1500,50"))
+        assertEquals(150050L, parseAmountMinor("1500.50"))
+        assertEquals(150500L, parseAmountMinor("1505,"))
+        assertEquals(150500L, parseAmountMinor("1 505"))
+    }
+
+    @Test
+    fun garbageAmountIsNotANumber() {
+        assertNull(parseAmountMinor(""))
+        assertNull(parseAmountMinor(","))
+        assertNull(parseAmountMinor("-100"))
+        assertNull(parseAmountMinor("1500,505"))
+        assertNull(parseAmountMinor("сто"))
+        assertNull(parseAmountMinor("9999999999999999"))
+    }
+
+    // Обратно в поле ввода: разряды не группируются, иначе правка строки ломает разбор.
+    @Test
+    fun amountGoesBackIntoTheField() {
+        assertEquals("1500", formatAmountInput(150000))
+        assertEquals("1500,05", formatAmountInput(150005))
+        assertEquals("0", formatAmountInput(0))
     }
 }
