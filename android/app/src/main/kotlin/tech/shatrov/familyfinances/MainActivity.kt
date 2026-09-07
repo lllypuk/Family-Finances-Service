@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,6 +24,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import tech.shatrov.familyfinances.theme.AppTheme
 import tech.shatrov.familyfinances.theme.Dimens
+import tech.shatrov.familyfinances.ui.home.HomeScreen
+import tech.shatrov.familyfinances.ui.home.HomeViewModel
 import tech.shatrov.familyfinances.ui.login.LoginScreen
 import tech.shatrov.familyfinances.ui.login.LoginViewModel
 
@@ -85,25 +86,29 @@ fun AppRoot(graph: AppGraph) {
             )
         }
 
-        AppScreen.Home -> Centered {
+        AppScreen.Home -> {
             val current = session
-            if (current != null) {
-                Text(stringResource(R.string.home_greeting, current.user.firstName))
-                Text(stringResource(R.string.home_currency, current.currency))
-            }
-            Button(onClick = {
-                scope.launch {
-                    graph.signOut()
-                    screen = AppScreen.Login
-                }
-            }) {
-                Text(stringResource(R.string.sign_out))
+            // Сессия гаснет на выходе раньше, чем сменится экран: главной без валюты рисовать нечего.
+            if (current == null) {
+                Centered { Text(stringResource(R.string.loading)) }
+            } else {
+                val model: HomeViewModel = viewModel { HomeViewModel(graph.api, current.currency) }
+                val home by model.state.collectAsStateWithLifecycle()
+                HomeScreen(
+                    state = home,
+                    onRetry = model::refresh,
+                    onSignOut = {
+                        scope.launch {
+                            graph.signOut()
+                            screen = AppScreen.Login
+                        }
+                    },
+                )
             }
         }
     }
 }
 
-// Заглушка главной до задачи 7: экран есть, чтобы навигации было куда вести.
 @Composable
 private fun Centered(content: @Composable () -> Unit) {
     Column(

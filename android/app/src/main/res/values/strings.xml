@@ -13,8 +13,19 @@
     <string name="login_error_network">Нет связи с сервером</string>
     <string name="login_error_malformed">Сервер ответил непонятным — попробуйте позже</string>
 
-    <string name="home_greeting">Здравствуйте, %1$s</string>
-    <string name="home_currency">Валюта семьи: %1$s</string>
+    <string name="home_title">Главная</string>
+    <string name="home_income">Доходы</string>
+    <string name="home_expenses">Расходы</string>
+    <string name="home_net">Итого</string>
+    <string name="home_transactions">Операций за период: %1$d</string>
+    <string name="home_top_categories">Расходы по категориям</string>
+    <string name="home_budgets">Бюджеты</string>
+    <string name="home_recent">Последние операции</string>
+    <string name="home_budget_progress">%1$s из %2$s</string>
+    <string name="home_empty">Операций пока нет</string>
+    <string name="home_retry">Повторить</string>
+    <string name="home_error_network">Нет связи с сервером</string>
+    <string name="home_error_malformed">Сервер ответил непонятным — попробуйте позже</string>
     <string name="sign_out">Выйти</string>
     <string name="loading">Загрузка…</string>
 </resources>

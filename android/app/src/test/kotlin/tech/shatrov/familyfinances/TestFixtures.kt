@@ -52,6 +52,39 @@ internal const val LOGIN_OK = """
 "meta":{"request_id":"r-3","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0"}}
 """
 
+internal const val STATS_OK = """
+{"data":{"from":"2026-09-01","to":"2026-09-07",
+"current":{"from":"2026-09-01","to":"2026-09-07","income_minor":15000000,"expenses_minor":4231050,
+"net_minor":10768950,"transaction_count":12},
+"previous":{"from":"2026-08-01","to":"2026-08-07","income_minor":12000000,"expenses_minor":5000000,
+"net_minor":7000000,"transaction_count":9},
+"has_previous_data":true,"income_delta":0.25,"expenses_delta":-0.15,
+"expense_categories":[{"category_id":"44444444-4444-4444-4444-444444444444","name":"Продукты",
+"amount_minor":3000050,"transaction_count":7,"share":0.709}],
+"income_categories":[{"category_id":"55555555-5555-5555-5555-555555555555","name":"Зарплата",
+"amount_minor":15000000,"transaction_count":1,"share":1.0}],
+"budgets":[{"id":"66666666-6666-6666-6666-666666666666","name":"Еда","amount_minor":5000000,
+"spent_minor":3000050,"remaining_minor":1999950,"utilization":0.6,"period":"monthly",
+"start_date":"2026-09-01","end_date":"2026-09-30","days_remaining":23,"is_active":true,
+"is_over_budget":false,"is_near_limit":false,"category_name":"Продукты"}],
+"recent":[{"id":"77777777-7777-7777-7777-777777777777","type":"expense","amount_minor":150000,
+"description":"Кофе","date":"2026-09-07","created_at":"2026-09-07T09:00:00Z","category_name":"Кафе"}],
+"transactions_total":42},
+"meta":{"request_id":"r-4","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0"}}
+"""
+
+/** Семья только что создана: сервер шлёт нули и пустые списки, а не отказ. */
+internal const val STATS_EMPTY = """
+{"data":{"from":"2026-09-01","to":"2026-09-07",
+"current":{"from":"2026-09-01","to":"2026-09-07","income_minor":0,"expenses_minor":0,
+"net_minor":0,"transaction_count":0},
+"previous":{"from":"2026-08-01","to":"2026-08-07","income_minor":0,"expenses_minor":0,
+"net_minor":0,"transaction_count":0},
+"has_previous_data":false,"income_delta":0,"expenses_delta":0,
+"expense_categories":[],"income_categories":[],"budgets":[],"recent":[],"transactions_total":0},
+"meta":{"request_id":"r-5","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0"}}
+"""
+
 internal fun MockWebServer.enqueueJson(
     code: Int,
     body: String,
