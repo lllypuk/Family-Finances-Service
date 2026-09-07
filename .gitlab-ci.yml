@@ -204,6 +204,10 @@ image:smoke:
 .android:
   extends: .android-rules
   image: eclipse-temurin:21-jdk
+  # Все три джобы делят один GRADLE_USER_HOME, а Gradle держит на нём файловые блокировки с
+  # таймаутом в минуту: параллельно (в том числе с пайплайном соседней ветки) они падают на
+  # `Timeout waiting to lock journal cache`. Группа сериализует их по всему проекту.
+  resource_group: android
   variables:
     ANDROID_HOME: /ci-cache/android/sdk
     GRADLE_USER_HOME: /ci-cache/android/gradle
@@ -267,8 +271,10 @@ android:api-check:
 # Подпись тем же ключом, что и на ноутбуке: другой сертификат даёт
 # INSTALL_FAILED_UPDATE_INCOMPATIBLE и требует сносить приложение с телефона вместе с данными.
 # Keystore приезжает защищённой файловой переменной FFS_KEYSTORE (её значение — путь к файлу),
-# пароль — FFS_KEYSTORE_PASSWORD; без них джоба падает, а не подписывает чем попало.
-# На MR не собирается: подписанный APK нужен для установки, а не для проверки.
+# пароль — FFS_KEYSTORE_PASSWORD; без них джоба падает, а не подписывает чем попало. Обе
+# переменные защищённые, поэтому тег `app-v*` должен быть в protected tags — иначе они не
+# доедут. Собирается только по этому тегу: подписанный APK нужен для установки на телефон,
+# а не для проверки каждого пуша.
 android:apk:
   extends: .android
   stage: android
@@ -277,10 +283,6 @@ android:apk:
     FFS_KEYSTORE_PATH: $FFS_KEYSTORE
   rules:
     - if: $CI_COMMIT_TAG =~ /^app-v\d+\.\d+\.\d+$/
-    - if: $CI_COMMIT_TAG
-      when: never
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      changes: *android-changes
   script:
     - make -C android apk
   artifacts:
