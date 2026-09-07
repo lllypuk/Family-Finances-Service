@@ -141,7 +141,11 @@ docker-logs:
 # deploy/docker-compose.yml запускается на месте, из `deploy/` — project directory
 # там своя, поэтому `--project-directory .` ему не нужен (в отличие от docker/*.yml).
 DEPLOY_COMPOSE_FILE=deploy/docker-compose.yml
+DEPLOY_PROXIED_FILE=deploy/docker-compose.proxied.yml
 CADDYFILE=deploy/caddy/Caddyfile
+# Обе переменные обязательны (`${VAR:?}`) и живут в .env на сервере, а его в
+# репозитории нет — для проверки синтаксиса подставляются заглушки.
+COMPOSE_VALIDATE_ENV=FFS_IMAGE=validate FFS_EDGE_SUBNET=172.22.0.0/16
 
 .PHONY: compose-config
 compose-config:
@@ -149,7 +153,9 @@ compose-config:
 	@echo "  $(DOCKER_COMPOSE_FILE)"
 	@$(DOCKER_COMPOSE) config -q
 	@echo "  $(DEPLOY_COMPOSE_FILE)"
-	@docker compose -f $(DEPLOY_COMPOSE_FILE) config -q
+	@$(COMPOSE_VALIDATE_ENV) docker compose -f $(DEPLOY_COMPOSE_FILE) config -q
+	@echo "  $(DEPLOY_COMPOSE_FILE) + $(DEPLOY_PROXIED_FILE)"
+	@$(COMPOSE_VALIDATE_ENV) docker compose -f $(DEPLOY_COMPOSE_FILE) -f $(DEPLOY_PROXIED_FILE) config -q
 	@echo "All compose files are valid"
 
 # Образ берётся из compose, чтобы дайджест жил в одном месте.

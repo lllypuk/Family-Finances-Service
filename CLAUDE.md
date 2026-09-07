@@ -30,8 +30,9 @@ go test ./internal/application/handlers -run 'TestAuthHandler_.*' -v
 Docker: `make docker-up` / `docker-up-d` / `docker-down` / `docker-logs` — all use `docker/docker-compose.yml`
 (builds `docker/Dockerfile`; no secrets are required). Compose is invoked as `docker compose --project-directory .`
 (the `DOCKER_COMPOSE` variable in the Makefile) so that `.env` is read from the repo root — hence `build.context: .`
-inside `docker/docker-compose.yml`. `make compose-config` validates both compose files (`docker/` and
-`deploy/docker-compose.yml`) and runs in CI; neither needs any variable set, there are no secrets.
+inside `docker/docker-compose.yml`. `make compose-config` validates all three layouts (`docker/`, `deploy/docker-compose.yml` and that file
+with `deploy/docker-compose.proxied.yml` on top) and runs in CI; `COMPOSE_VALIDATE_ENV` supplies the two
+variables the deploy files demand via `${VAR:?}` (`FFS_IMAGE`, `FFS_EDGE_SUBNET`) — there are no secrets.
 `make caddy-validate` checks `deploy/caddy/Caddyfile` with the Caddy image taken out of the deploy compose
 (so the digest lives in one place).
 
@@ -276,37 +277,43 @@ from it, and code and spec now match. **A registered route with no operation in 
 `TestOpenAPISpec_OperationsHaveIDAndErrorResponse` requiring an `operationId` and a 4xx `$ref: Error` on every
 operation). The reverse also fails it (`TestOpenAPISpec_DescribesOnlyRegisteredRoutes`): spec and routes match
 exactly, with no exceptions. See `docs/api/README.md`.
-Self-hosted deployment is `deploy/`: one compose (`app` + Caddy), `caddy/Caddyfile`, `.env.example` and the
-`install`/`upgrade`/`uninstall`/`health-check` scripts — see `deploy/README.md`. Backups in production are the
-`backup` subcommand from a host cron job; restore is manual over ssh.
+**Deployment** is `deploy/`: `docker-compose.yml` (`app` pulled from `registry.gitlab.shatrov.tech` + Caddy),
+`docker-compose.proxied.yml` (the overlay for mini-server, where 80/443 belong to the shatrov.tech Caddy: the
+bundled Caddy goes into the `own-tls` profile and `app` joins the external network `edge` as `ffs`),
+`caddy/Caddyfile`, `.env.example`, `release.sh` and the `install`/`uninstall`/`health-check` scripts — see
+`deploy/README.md`. The `.env` on the server holds the machine's layout and `FFS_IMAGE`; a deploy rewrites that
+one line, so it never travels from the repository. Backups in production are the `backup` subcommand from a host
+cron job; restore is manual over ssh. There is no `upgrade.sh` any more — the pipeline is the upgrade path.
 
 When runtime/dev commands disagree between documents, `Makefile` + this file win.
 
 ## Stack versions (keep in sync with go.mod)
 
-Go **1.26.7** (also pinned as `GO_VERSION` in `.github/workflows/ci.yml`), Echo **v4.15.4**,
+Go **1.26.7** (CI runs the `golang:1.26` image), Echo **v4.15.4**,
 `modernc.org/sqlite` (pure Go, no CGO), golang-migrate v4, `golang.org/x/crypto` (bcrypt),
 go-playground/validator v10, testify, `go.yaml.in/yaml/v3` (test-only: parses `docs/api/openapi.yaml` in the
 coverage test).
 
-CI (`.github/workflows/ci.yml`) runs golangci-lint, `govulncheck`, `make test-coverage`, `make build`, a Docker
-build/run smoke test, `shellcheck -e SC1091` over `deploy/scripts/**` (SC1091 is off: the libs are sourced through
-a computed path) and `make compose-config` + `make caddy-validate`. Additional workflows: `docker.yml`, `security.yml` (CodeQL, Semgrep, TruffleHog, OSV),
-`scorecard.yml` (OSSF Scorecard), `release.yml`.
+**CI is GitLab (`.gitlab-ci.yml`), the repository lives on `gitlab.shatrov.tech`**; GitHub is a read-only
+mirror with no workflows, pushed by the `mirror:github` job over a GitHub deploy key (the native GitLab push
+mirror hands out its public key only in the UI, which no script can pick up). The push is deliberately not
+forced: a divergence means somebody wrote to the mirror by hand, and that should turn a job red rather than
+disappear. The pipeline runs golangci-lint (`fmt --diff` + `run`), `shellcheck -e SC1091`
+over `deploy/**` (SC1091 is off: the libs are sourced through a computed path), `make test-coverage`,
+`govulncheck`, `make build`, `docker compose config` for all three layouts and `caddy validate`. `gosec` is
+part of golangci-lint here, not a separate job: run standalone it ignores the `//nolint:gosec` suppressions and
+the `.golangci.yml` exclusions, and fails on lines the linter deliberately passes.
+On a merge request it also builds the image and curls `/health` inside it; on `main` and on a `v*` tag it
+pushes the image to `registry.gitlab.shatrov.tech` and deploys to the mini-server (see "Deployment" below).
 
-`scorecard.yml` is deliberately a **separate file**: with `publish_results: true` the OSSF API rejects results from
-any workflow that declares a top-level `env` or `defaults` (`security.yml` declares `env.GO_VERSION`), and only the
-job running `ossf/scorecard-action` may hold `id-token: write`. Keep that file free of global `env`/`defaults`, and
-do not add steps beyond the action's approved list (`actions/checkout`, `actions/upload-artifact`,
-`github/codeql-action/upload-sarif`, `ossf/scorecard-action`, `step-security/harden-runner`).
+The runner is a single instance-wide docker executor on home-server: `privileged = true`, `/certs/client`
+(dind) and `/home/sasha/ci-cache:/ci-cache` (Go caches, hence `GOCACHE`/`GOMODCACHE` pointing there instead of
+the `cache:` mechanism). Jobs carry no tags.
 
-**Every `uses:` is pinned to a commit SHA** with the version as a trailing comment
-(`uses: actions/checkout@d23441a… # v6.1.0`); both `FROM` lines in `docker/Dockerfile` and the `caddy` image in
-`deploy/docker-compose.yml` are pinned by digest (that one is watched by the `docker-compose` Dependabot ecosystem
-for `/deploy` — the `docker` ecosystem sees Dockerfiles only, and `make caddy-validate` reads the digest back out
-of the compose file).
-There are no exceptions. Do not reintroduce a tag or branch ref (`@v4`, `@main`, `@master`) — Dependabot updates
-the SHA and its comment together. `go install` in CI likewise pins exact tool versions, never `@latest`.
+**Tool versions in CI are pinned exactly** (`GOLANGCI_LINT_VERSION`, `GOVULNCHECK_VERSION`),
+never `@latest`; both `FROM` lines in `docker/Dockerfile` and the `caddy` image in `deploy/docker-compose.yml`
+are pinned by digest, and `make caddy-validate` reads that digest back out of the compose file. Dependabot went
+away with GitHub, so these digests are now bumped by hand — nothing watches them.
 
 **Token permissions:** every workflow declares a top-level `permissions: contents: read`, and write scopes are
 granted per job (`packages: write` to push images, `security-events: write` to upload SARIF, `contents: write` only

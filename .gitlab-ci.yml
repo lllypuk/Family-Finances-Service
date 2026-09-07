@@ -1,0 +1,275 @@
+# CI: проверки на каждый MR, на main — образ в реестр и выкат на mini-server.
+# Раннер один, docker executor, джобы без тегов.
+
+stages:
+  - lint
+  - test
+  - build
+  - release
+  - deploy
+
+variables:
+  # Кеш Go лежит в каталоге, который раннер монтирует в /ci-cache, а не гоняется
+  # механизмом cache:. Каталог переживает джобы, кеши Go рассчитаны на
+  # параллельное использование. Монтирование задано в config.toml раннера.
+  GOCACHE: /ci-cache/go/build
+  GOMODCACHE: /ci-cache/go/mod
+  GOLANGCI_LINT_CACHE: /ci-cache/golangci
+  CI_TOOLS: /ci-cache/tools
+  GOLANGCI_LINT_VERSION: v2.12.2
+  GOVULNCHECK_VERSION: v1.7.0
+  # Каталог развёртывания на целевом хосте. Рядом с ним лежит .env, который CI
+  # не знает и не переписывает целиком: release.sh правит в нём одну строку.
+  FFS_TARGET_PATH: /home/sasha/ffs
+
+default:
+  image: golang:1.26
+  interruptible: true
+  before_script:
+    - mkdir -p "$GOCACHE" "$GOMODCACHE" "$GOLANGCI_LINT_CACHE" "$CI_TOOLS"
+    - go version
+
+# Пайплайн ветки бывает только у main: остальные ветки проверяются MR-пайплайном,
+# и пуш в ветку без MR раннера не занимает. Тег идёт первым правилом: без него
+# пайплайна на теге не будет вовсе — $CI_COMMIT_BRANCH на теге пуст.
+workflow:
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Демон Docker приезжает сервисом: сокет хоста раннер джобам не отдаёт.
+# Раннеру для этого нужны privileged = true и том /certs/client — без
+# сертификатов, которые dind туда кладёт, клиент не подключится.
+.dind:
+  services:
+    - name: docker:29-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: /certs
+    DOCKER_CERT_PATH: /certs/client
+    DOCKER_TLS_VERIFY: "1"
+
+# Теги образа. Версия попадает в бинарь через -ldflags (ARG VERSION в
+# docker/Dockerfile) и потом отвечает в /health, поэтому она же адресует образ.
+.release-tags:
+  variables:
+    FFS_VERSION_TAG: main-$CI_COMMIT_SHORT_SHA
+    FFS_MOVING_TAG: main
+  rules:
+    - if: $CI_COMMIT_TAG
+      variables:
+        FFS_VERSION_TAG: $CI_COMMIT_TAG
+        FFS_MOVING_TAG: latest
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Здесь же работает gosec: он включён в .golangci.yml со своими исключениями и
+# понимает подавления //nolint:gosec. Отдельным бинарём его гонять нельзя — тот
+# читает только #nosec и падает на тех же местах, что линтер сознательно пропускает.
+lint:
+  stage: lint
+  script:
+    - |
+      LINT=$CI_TOOLS/golangci-lint-$GOLANGCI_LINT_VERSION
+      if [ ! -x "$LINT" ]; then
+        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh \
+          | sh -s -- -b "$CI_TOOLS" "$GOLANGCI_LINT_VERSION"
+        mv "$CI_TOOLS/golangci-lint" "$LINT"
+      fi
+      "$LINT" --version
+    - |
+      LINT=$CI_TOOLS/golangci-lint-$GOLANGCI_LINT_VERSION
+      "$LINT" fmt --diff
+      "$LINT" run --timeout 5m
+
+# Скрипты развёртывания уезжают на сервер целиком и запускаются там bash'ем,
+# поэтому проверяются здесь, а не глазами при ревью.
+# SC1091 — source файла, которого в репозитории нет (конфиг хоста).
+lint:shell:
+  stage: lint
+  image:
+    name: koalaman/shellcheck-alpine:stable
+    entrypoint: [""]
+  before_script: []
+  script:
+    - shellcheck -e SC1091 deploy/scripts/*.sh deploy/scripts/lib/*.sh deploy/release.sh
+
+test:
+  stage: test
+  script:
+    - go mod download
+    - go mod verify
+    - make test-coverage
+  coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
+
+vulncheck:
+  stage: test
+  script:
+    - |
+      GV=$CI_TOOLS/govulncheck-$GOVULNCHECK_VERSION
+      if [ ! -x "$GV" ]; then
+        GOBIN=$CI_TOOLS go install "golang.org/x/vuln/cmd/govulncheck@$GOVULNCHECK_VERSION"
+        mv "$CI_TOOLS/govulncheck" "$GV"
+      fi
+    - $CI_TOOLS/govulncheck-$GOVULNCHECK_VERSION ./...
+
+build:
+  stage: build
+  script:
+    - make build
+    - ls -la build/
+  artifacts:
+    paths:
+      - build/
+    expire_in: 1 week
+
+# `docker compose config` разбирает файлы локально, демон ему не нужен.
+# .env в репозитории нет (в нём адрес образа и он же правится на сервере),
+# поэтому для проверки подставляется пример.
+validate:compose:
+  stage: build
+  image: docker:29-cli
+  before_script: []
+  script:
+    - cp deploy/.env.example deploy/.env
+    - docker compose -f deploy/docker-compose.yml config -q
+    - docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.proxied.yml config -q
+    - docker compose --project-directory . -f docker/docker-compose.yml config -q
+
+# Плавающий тег, а не дайджест из compose: проверяется синтаксис Caddyfile, и
+# свежий минорный Caddy, который его не примет, лучше узнать здесь.
+validate:caddyfile:
+  stage: build
+  image: caddy:2.11-alpine
+  before_script: []
+  variables:
+    DOMAIN: ffs.shatrov.tech
+    ACME_EMAIL: ci@shatrov.tech
+  script:
+    - caddy validate --config deploy/caddy/Caddyfile
+
+# Образ на MR собирается и запускается, но никуда не пушится: сломанный
+# Dockerfile иначе обнаружился бы уже после мержа, на выкате.
+image:smoke:
+  stage: build
+  extends: .dind
+  image: docker:29-cli
+  before_script: []
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - docker build --pull --provenance=false -f docker/Dockerfile --build-arg VERSION=test -t ffs:test .
+    - docker run -d --name ffs-test -p 8080:8080 -e ENVIRONMENT=production ffs:test
+    - |
+      for _ in $(seq 1 20); do
+        body=$(wget -qO- http://docker:8080/health) && break
+        sleep 1
+      done
+      docker logs ffs-test
+      echo "$body"
+      echo "$body" | grep -q '"version":"test"'
+  after_script:
+    - docker rm -f ffs-test || true
+
+release-image:
+  stage: release
+  extends:
+    - .dind
+    - .release-tags
+  image: docker:29-cli
+  before_script:
+    - printf '%s' "$CI_REGISTRY_PASSWORD" | docker login --username "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    # --provenance=false: иначе BuildKit кладёт рядом attestation-манифест, то
+    # есть выпускает manifest list, и реестр отвечает «blob unknown to registry»
+    # на индекс, ссылающийся на ещё не доехавшего ребёнка. Образ
+    # одноплатформенный, список манифестов ему не нужен.
+    - |
+      docker build --pull --provenance=false -f docker/Dockerfile \
+        --build-arg VERSION="$FFS_VERSION_TAG" \
+        -t "$CI_REGISTRY_IMAGE:$FFS_VERSION_TAG" \
+        -t "$CI_REGISTRY_IMAGE:$FFS_MOVING_TAG" .
+    - docker push "$CI_REGISTRY_IMAGE:$FFS_VERSION_TAG"
+    - docker push "$CI_REGISTRY_IMAGE:$FFS_MOVING_TAG"
+  after_script:
+    - docker logout "$CI_REGISTRY"
+
+deploy:
+  stage: deploy
+  extends: .release-tags
+  image: alpine:3.24.1
+  needs:
+    - release-image
+  environment:
+    name: production
+    url: https://ffs.shatrov.tech
+  variables:
+    DEPLOY_SSH_PORT: "22"
+  before_script:
+    - apk add --no-cache openssh-client
+    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    # Переменные типа File приезжают путём к файлу. Перевод строки дописывается
+    # здесь: GitLab срезает у значения хвостовые пробелы, а ключ без него
+    # openssh не разбирает вовсе — и жалуется на формат, а не на хвост.
+    - (cat "$DEPLOY_SSH_KEY"; echo) > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+    - (cat "$DEPLOY_KNOWN_HOSTS"; echo) > ~/.ssh/known_hosts && chmod 600 ~/.ssh/known_hosts
+    - printf 'IdentityFile ~/.ssh/id_deploy\nIdentitiesOnly yes\nBatchMode yes\n' > ~/.ssh/config
+  script:
+    - run_ssh="ssh -p $DEPLOY_SSH_PORT $DEPLOY_USER@$DEPLOY_HOST"
+    # Конфигурация окружения едет из репозитория целиком: иначе правка compose
+    # или Caddyfile доезжает до сервера руками, то есть однажды не доезжает.
+    # .env остаётся на сервере: там раскладка машины и адрес образа.
+    - $run_ssh mkdir -p "$FFS_TARGET_PATH"
+    - tar -czf - -C deploy --exclude='.env' . | $run_ssh tar -xzf - -C "$FFS_TARGET_PATH"
+    # Токен реестра уходит на stdin, а не аргументом: аргументы удалённого
+    # процесса видны в `ps` на сервере всё время деплоя.
+    - |
+      printf '%s\n' "$CI_JOB_TOKEN" | $run_ssh bash "$FFS_TARGET_PATH/release.sh" \
+        "$FFS_TARGET_PATH" "$CI_REGISTRY" "$CI_REGISTRY_USER" "$CI_REGISTRY_IMAGE:$FFS_VERSION_TAG"
+
+# Дым после выката: сервис отвечает снаружи, по домену и через общий Caddy, а не
+# только «контейнер поднялся». До `cmd/server setup` /health отвечает 200 с
+# setup_complete: false — это тоже успех.
+smoke:
+  stage: deploy
+  extends: .release-tags
+  image: alpine:3.24.1
+  needs:
+    - deploy
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - curl -fsS --max-time 20 https://ffs.shatrov.tech/health
+
+# Зеркало на GitHub. Нативное push-зеркало GitLab не годится: свой публичный
+# ключ оно отдаёт только в UI, и завести его скриптом нечем. Здесь тот же
+# результат обычным push'ем по deploy-ключу GitHub (права на запись, один
+# репозиторий), и видно это прямо в пайплайне.
+#
+# GIT_DEPTH: 0 — мелкий клон по умолчанию отдать целиком нельзя.
+# Push без --force намеренно: расхождение означает, что в зеркало кто-то писал
+# руками, и об этом надо узнать красной джобой, а не потерей коммитов.
+mirror:github:
+  stage: deploy
+  image: alpine:3.24.1
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    GIT_DEPTH: "0"
+  before_script:
+    - apk add --no-cache git openssh-client
+    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    - (cat "$GITHUB_MIRROR_KEY"; echo) > ~/.ssh/id_mirror && chmod 600 ~/.ssh/id_mirror
+    - (cat "$GITHUB_KNOWN_HOSTS"; echo) > ~/.ssh/known_hosts && chmod 600 ~/.ssh/known_hosts
+    - printf 'IdentityFile ~/.ssh/id_mirror\nIdentitiesOnly yes\nBatchMode yes\n' > ~/.ssh/config
+  script:
+    - git remote remove github 2>/dev/null || true
+    - git remote add github git@github.com:lllypuk/Family-Finances-Service.git
+    - |
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        git push github "refs/tags/$CI_COMMIT_TAG"
+      else
+        git push github "HEAD:refs/heads/$CI_DEFAULT_BRANCH"
+      fi

@@ -55,13 +55,12 @@
 - **Health checks** (/health эндпоинт)
 
 ### ✅ CI/CD & DevOps
-- **GitHub Actions** workflows (ci.yml, docker.yml, security.yml, release.yml, scorecard.yml)
-- **Один прод-compose** ([deploy/](../deploy/README.md)): `app` + Caddy с автоматическим TLS,
-  скрипты `install`/`upgrade`/`uninstall`/`health-check`, бэкап подкомандой `backup` из cron
-- **Multi-platform Docker builds** (linux/amd64, linux/arm64)
-- **Security scanning** (CodeQL, Semgrep, TruffleHog)
-- **Dependency management** (Dependabot)
-- **Automated releases** с semantic versioning
+- **GitLab CI** (`.gitlab-ci.yml`): проверки на MR, образ в реестр и выкат на mini-server с `main`
+- **Один прод-compose** ([deploy/](../deploy/README.md)): `app` + Caddy с автоматическим TLS либо
+  оверлей за общим терминатором, `release.sh` для выката, бэкап подкомандой `backup` из cron
+- **Registry**: `registry.gitlab.shatrov.tech`, тег `main-<sha>` и `vX.Y.Z`
+- **Security scanning**: govulncheck, gosec в составе golangci-lint
+- **GitHub** — зеркало только для чтения
 
 ## 📁 Структура документации
 

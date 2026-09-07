@@ -4,9 +4,9 @@
 set -euo pipefail
 
 INSTALL_DIR="${INSTALL_DIR:-/opt/family-budget}"
-SRC_DIR="${INSTALL_DIR}/src"
-REPO_GIT_URL="${REPO_GIT_URL:-https://github.com/lllypuk/Family-Finances-Service.git}"
-REPO_REF="${REPO_REF:-main}"
+# Образ приезжает из реестра GitLab: на сервере ничего не собирается.
+# Реестр закрытый, поэтому до первого запуска нужен `docker login`.
+DEFAULT_IMAGE="registry.gitlab.shatrov.tech/shatrov.tech/family-finances-service:main"
 LOG_FILE="${LOG_FILE:-/var/log/family-budget-install.log}"
 DEFAULT_DOMAIN="ffs.shatrov.tech"
 
@@ -29,14 +29,16 @@ source "${SCRIPT_DIR}/lib/firewall.sh"
 
 DOMAIN=""
 ACME_EMAIL=""
+IMAGE=""
 NON_INTERACTIVE=false
 DRY_RUN=false
 # --reinstall: explicit consent to wipe an existing installation (the whole tree,
 # database included, is moved to ${INSTALL_DIR}.backup.<ts>). Without it a repeated
 # run keeps data/, backups/ and .env.
 REINSTALL=false
-# Directory holding the deploy/ files (compose, Caddyfile, .env.example); set by fetch_sources.
-DEPLOY_DIR=""
+# Каталог с файлами развёртывания: этот скрипт лежит в deploy/scripts/ того же
+# клона, из которого его и запускают.
+DEPLOY_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Повторный запуск переписывает Caddyfile у уже работающей установки; set by copy_deploy_files.
 CADDYFILE_CHANGED=false
 # Копия работающего Caddyfile на время замены (см. copy_deploy_files/reload_caddy).
@@ -54,6 +56,10 @@ run() {
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
+            --image)
+                IMAGE="$2"
+                shift 2
+                ;;
             --non-interactive)
                 NON_INTERACTIVE=true
                 shift
@@ -97,6 +103,7 @@ Usage: sudo ./install.sh [OPTIONS]
 OPTIONS:
     --domain DOMAIN     Domain served by Caddy (default: ${DEFAULT_DOMAIN})
     --email EMAIL       Contact e-mail for Let's Encrypt (default: admin@DOMAIN)
+    --image REF         Application image to pull (default: ${DEFAULT_IMAGE})
     --non-interactive   Run without prompts
     --dry-run           Print every mutating command instead of running it
     --reinstall         DESTRUCTIVE. Move the existing ${INSTALL_DIR} aside
@@ -109,14 +116,15 @@ EXAMPLES:
 
 ENVIRONMENT:
     INSTALL_DIR         Installation directory (default: /opt/family-budget)
-    REPO_GIT_URL        Repository to build from (default: upstream GitHub URL)
-    REPO_REF            Branch or tag to check out (default: main)
 
 REQUIREMENTS:
     - Ubuntu 22.04/24.04, Debian 11/12, or Rocky Linux 9
-    - 1GB RAM recommended (the image is built locally; below 512MB \`go build\`
-      is OOM-killed), 10GB disk, root privileges, ports 80/443 free
+    - 512MB RAM, 5GB disk, root privileges, ports 80/443 free
+    - \`docker login\` for the image registry: it is private, and the pull below
+      fails without it
     - DNS A record pointing at this host: Caddy issues the certificate on first start
+    - Run this script from a checkout: the compose files and the Caddyfile are
+      taken from ../ relative to it, nothing is cloned
 EOF
 }
 
@@ -127,6 +135,7 @@ prompt_configuration() {
     if [[ -f "${env_file}" && "${REINSTALL}" != "true" ]]; then
         DOMAIN="${DOMAIN:-$(env_value "${env_file}" DOMAIN)}"
         ACME_EMAIL="${ACME_EMAIL:-$(env_value "${env_file}" ACME_EMAIL)}"
+        IMAGE="${IMAGE:-$(env_value "${env_file}" FFS_IMAGE)}"
     fi
 
     if [[ "${NON_INTERACTIVE}" != "true" ]]; then
@@ -138,9 +147,11 @@ prompt_configuration() {
 
     DOMAIN="${DOMAIN:-${DEFAULT_DOMAIN}}"
     ACME_EMAIL="${ACME_EMAIL:-admin@${DOMAIN}}"
+    IMAGE="${IMAGE:-${DEFAULT_IMAGE}}"
 
     log_info "Domain: ${DOMAIN}"
     log_info "ACME e-mail: ${ACME_EMAIL}"
+    log_info "Image: ${IMAGE}"
     log_info "Install directory: ${INSTALL_DIR}"
 
     if ! confirm_action "Proceed with installation?"; then
@@ -170,29 +181,17 @@ create_directories() {
 
 # There is no published image: the image is built on this host, so the sources
 # have to sit next to the compose file (compose sets BUILD_CONTEXT=./src).
-fetch_sources() {
-    log_info "Fetching sources into ${SRC_DIR}..."
-
-    run install_git
-
-    if [[ "${DRY_RUN}" == "true" ]]; then
-        log_info "[dry-run] git clone --depth 1 --branch ${REPO_REF} ${REPO_GIT_URL} ${SRC_DIR}"
-        # Nothing was cloned, so take the deploy files from the checkout this script lives in.
-        DEPLOY_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-        log_info "[dry-run] using deploy files from ${DEPLOY_DIR}"
-        return 0
+check_deploy_dir() {
+    local missing=0
+    local f
+    for f in docker-compose.yml docker-compose.proxied.yml caddy/Caddyfile .env.example release.sh; do
+        [[ -f "${DEPLOY_DIR}/${f}" ]] || { log_error "Missing ${DEPLOY_DIR}/${f}"; missing=1; }
+    done
+    if [[ ${missing} -ne 0 ]]; then
+        log_error "Run this script from a complete checkout: deploy/scripts/install.sh"
+        exit 1
     fi
-
-    if [[ -d "${SRC_DIR}/.git" ]]; then
-        git -C "${SRC_DIR}" fetch --depth 1 origin "${REPO_REF}"
-        git -C "${SRC_DIR}" checkout --force --detach FETCH_HEAD
-    else
-        rm -rf "${SRC_DIR}"
-        git clone --depth 1 --branch "${REPO_REF}" "${REPO_GIT_URL}" "${SRC_DIR}"
-    fi
-
-    DEPLOY_DIR="${SRC_DIR}/deploy"
-    log_success "Sources ready at ${SRC_DIR} ($(git -C "${SRC_DIR}" rev-parse --short HEAD))"
+    log_info "Deployment files: ${DEPLOY_DIR}"
 }
 
 copy_deploy_files() {
@@ -216,6 +215,10 @@ copy_deploy_files() {
     fi
 
     run cp "${compose_src}" "${INSTALL_DIR}/docker-compose.yml"
+    # Оверлей и release.sh кладутся всегда: ими пользуется выкат из CI, а
+    # раскладку машины выбирает COMPOSE_FILE в .env, а не набор файлов.
+    run cp "${DEPLOY_DIR}/docker-compose.proxied.yml" "${INSTALL_DIR}/docker-compose.proxied.yml"
+    run cp "${DEPLOY_DIR}/release.sh" "${INSTALL_DIR}/release.sh"
     run cp "${caddyfile_src}" "${INSTALL_DIR}/caddy/Caddyfile"
     log_success "Deployment files copied"
 }
@@ -317,10 +320,11 @@ create_env_file() {
 
     if [[ -f "${env_file}" && "${REINSTALL}" != "true" ]]; then
         log_info "Keeping existing ${env_file}"
-        # Файл может быть старше этого скрипта: без BUILD_CONTEXT сборка ушла бы
-        # в ${INSTALL_DIR}/.. (дефолт compose), без BACKUP_DIR бэкапы легли бы
-        # внутрь тома с базой, а не в ./backups.
-        ensure_env_key "${env_file}" BUILD_CONTEXT ./src
+        # Файл может быть старше этого скрипта: без FFS_IMAGE compose не
+        # запустится вовсе, без BACKUP_DIR бэкапы легли бы внутрь тома с базой.
+        # FFS_IMAGE только добавляется: на работающей установке его значение
+        # принадлежит последнему выкату, а не установщику.
+        ensure_env_key "${env_file}" FFS_IMAGE "${IMAGE}"
         ensure_env_key "${env_file}" DATABASE_PATH /data/budget.db
         ensure_env_key "${env_file}" BACKUP_DIR /backups
         ensure_env_key "${env_file}" BACKUP_KEEP 30
@@ -332,13 +336,13 @@ create_env_file() {
     log_info "Creating ${env_file}..."
 
     if [[ "${DRY_RUN}" == "true" ]]; then
-        log_info "[dry-run] would render ${DEPLOY_DIR}/.env.example with DOMAIN=${DOMAIN}, ACME_EMAIL=${ACME_EMAIL}"
+        log_info "[dry-run] would render ${DEPLOY_DIR}/.env.example with DOMAIN=${DOMAIN}, ACME_EMAIL=${ACME_EMAIL}, FFS_IMAGE=${IMAGE}"
         return 0
     fi
 
     sed -e "s|^DOMAIN=.*|DOMAIN=${DOMAIN}|" \
         -e "s|^ACME_EMAIL=.*|ACME_EMAIL=${ACME_EMAIL}|" \
-        -e "s|^#BUILD_CONTEXT=|BUILD_CONTEXT=|" \
+        -e "s|^FFS_IMAGE=.*|FFS_IMAGE=${IMAGE}|" \
         "${DEPLOY_DIR}/.env.example" > "${env_file}"
 
     chmod 600 "${env_file}"
@@ -382,16 +386,21 @@ remove_legacy_network() {
 }
 
 deploy_application() {
-    log_info "Building the image (this takes a few minutes)..."
+    log_info "Pulling ${IMAGE}..."
 
     run cd "${INSTALL_DIR}"
-    run env VERSION="$(git -C "${SRC_DIR}" describe --tags --always --dirty 2>/dev/null || echo dev)" \
-        docker compose build app
+    # Реестр закрытый: без `docker login` pull отвечает про доступ, и сообщение
+    # стоит объяснить здесь, а не оставить голым выводом docker.
+    if ! run docker compose pull; then
+        log_error "Pull failed. The registry is private — log in first:"
+        log_error "  docker login ${IMAGE%%/*}"
+        exit 1
+    fi
 
     remove_legacy_network
 
     log_info "Starting services..."
-    run docker compose up -d
+    run docker compose up -d --wait
 
     reload_caddy
 
@@ -491,7 +500,7 @@ main() {
     run install_docker
     run setup_firewall
     create_directories
-    fetch_sources
+    check_deploy_dir
     copy_deploy_files
     create_env_file
     set_file_permissions
