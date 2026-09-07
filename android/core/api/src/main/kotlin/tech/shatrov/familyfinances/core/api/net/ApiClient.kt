@@ -7,6 +7,8 @@ import okhttp3.OkHttpClient
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import tech.shatrov.familyfinances.core.api.auth.TokenInterceptor
+import tech.shatrov.familyfinances.core.api.auth.TokenVault
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlin.reflect.KClass
@@ -18,7 +20,11 @@ private const val READ_TIMEOUT_SECONDS = 30L
  * Транспорт: Retrofit поверх OkHttp и снятие конверта ответа.
  * Базовый адрес — корень хоста со слэшем на конце: пути в сгенерированных интерфейсах полные.
  */
-class ApiClient(baseUrl: String) {
+class ApiClient(
+    baseUrl: String,
+    tokens: TokenVault,
+    onSessionExpired: () -> Unit,
+) {
     val json: Json = Json {
         // Сервер обновляется сам с каждого мержа, телефоны — руками: новое поле в ответе
         // не должно ронять установленный APK.
@@ -28,6 +34,7 @@ class ApiClient(baseUrl: String) {
     }
 
     private val http: OkHttpClient = OkHttpClient.Builder()
+        .addInterceptor(TokenInterceptor(tokens, onSessionExpired))
         .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .build()

@@ -52,7 +52,8 @@ dependencies {
     api(libs.kotlinx.serialization.json)
     implementation(libs.retrofit.converter.kotlinx)
     implementation(libs.okhttp)
-    implementation(libs.kotlinx.coroutines.android)
+    // SharedFlow «сессия кончилась» видна из :app, поэтому не implementation.
+    api(libs.kotlinx.coroutines.android)
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)

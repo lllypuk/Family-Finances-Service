@@ -10,6 +10,7 @@ import org.junit.Before
 import org.junit.Test
 import tech.shatrov.familyfinances.core.api.ApiGraph
 import tech.shatrov.familyfinances.core.api.LoginRequest
+import tech.shatrov.familyfinances.core.api.auth.InMemoryTokenVault
 import java.time.LocalDate
 import java.time.OffsetDateTime
 
@@ -38,7 +39,7 @@ class ApiClientTest {
     fun start() {
         server = MockWebServer()
         server.start()
-        graph = ApiGraph(server.url("/").toString())
+        graph = ApiGraph(server.url("/").toString(), InMemoryTokenVault())
     }
 
     @After
