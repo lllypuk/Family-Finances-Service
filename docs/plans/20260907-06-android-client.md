@@ -174,19 +174,19 @@
   `android/app/src/main/kotlin/tech/shatrov/familyfinances/MainActivity.kt`
 - Modify: `.dockerignore`, `.gitignore`
 
-- [ ] каталог версий по образцу соседа: Compose BOM, Material3, kotlinx-serialization, OkHttp,
+- [x] каталог версий по образцу соседа: Compose BOM, Material3, kotlinx-serialization, OkHttp,
       Retrofit, Robolectric, ktlint-плагин; Room, WorkManager и CameraX не переносятся
-- [ ] корневой `build.gradle.kts` с `classpath` KGP/serialization и `apply(plugin=…)` без версий
-- [ ] модуль `:app`: Compose, Material3, `minSdk 26`, `compileSdk 37`, `buildConfig = true`,
+- [x] корневой `build.gradle.kts` с `classpath` KGP/serialization и `apply(plugin=…)` без версий
+- [x] модуль `:app`: Compose, Material3, `minSdk 26`, `compileSdk 37`, `buildConfig = true`,
       `testOptions { unitTests.isIncludeAndroidResources = true }`, пустой `MainActivity`
-- [ ] `android.permission.INTERNET` в манифесте — без него первый запрос отвечает отказом
+- [x] `android.permission.INTERNET` в манифесте — без него первый запрос отвечает отказом
       разрешения, а не сетевой ошибкой
-- [ ] `signingConfig` из переменной с путём к keystore; отсутствие файла роняет сборку
-- [ ] `Makefile`: `compile`, `test`, `lint`, `fmt`, `fmt-check`, `check` (= `fmt-check test lint`),
+- [x] `signingConfig` из переменной с путём к keystore; отсутствие файла роняет сборку
+- [x] `Makefile`: `compile`, `test`, `lint`, `fmt`, `fmt-check`, `check` (= `fmt-check test lint`),
       `apk`; `JAVA_HOME` не прибивать к чужому пути, брать из окружения
-- [ ] `.dockerignore` получает `android/`; `.gitignore` — `android/.gradle`, `android/build`,
+- [x] `.dockerignore` получает `android/`; `.gitignore` — `android/.gradle`, `android/build`,
       `android/local.properties`, `*.apk`, `*.jks`, `*.keystore`
-- [ ] `make -C android check` и `make -C android apk` — зелёные (R8 на пустом приложении ловится
+- [x] `make -C android check` и `make -C android apk` — зелёные (R8 на пустом приложении ловится
       здесь, а не после восьми задач кода)
 
 ### Task 2: Имена конвертов ответа в контракте

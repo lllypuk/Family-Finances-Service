@@ -1,3 +1,5 @@
+import org.gradle.api.attributes.Bundling
+
 // AGP 9 приносит собственный Kotlin, но более старой версии. Нужный KGP кладётся на classpath
 // сборки здесь, а в модулях подключается `apply(plugin = "…")` без версии: версионированные
 // alias'ы kotlin-плагинов в модулях конфликтуют с classpath-KGP.
@@ -16,7 +18,14 @@ plugins {
 
 // ktlint запускается своей конфигурацией, а не сторонним плагином: версия живёт в каталоге,
 // в CI он приезжает вместе с проектом, и совместимость с AGP 9 ни от кого не зависит.
-val ktlint: Configuration by configurations.creating
+// ktlint-cli публикует обычный и shadow-вариант; без явного `Bundling` Gradle не выбирает
+// между ними и падает на резолве. Нужен shadow: в обычном варианте clikt объявлен
+// не-транзитивно, и запуск падает на ClassNotFoundException.
+val ktlint = configurations.create("ktlint") {
+    attributes {
+        attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling::class.java, Bundling.SHADOWED))
+    }
+}
 
 dependencies {
     ktlint(libs.ktlint.cli)

@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.io.File
 
 // Плагина `org.jetbrains.kotlin.android` здесь нет намеренно: AGP 9 несёт Kotlin встроенным и
 // на попытку подключить его отдельно отвечает отказом.
@@ -81,9 +82,11 @@ android {
 
 // Подпись проверяется только когда собирается релиз: иначе отсутствие ключа ломало бы `check`.
 tasks.matching { it.name == "assembleRelease" }.configureEach {
+    // Путь снимается в локальную переменную до `doFirst`: действие задачи попадает в кеш
+    // конфигурации, а ссылку на скрипт сборки туда не сериализовать.
+    val path = keystorePath
     doFirst {
-        val path = keystorePath
-        require(!path.isNullOrBlank() && file(path).exists()) {
+        require(!path.isNullOrBlank() && File(path).exists()) {
             "Нет keystore для подписи. Задайте FFS_KEYSTORE_PATH и FFS_KEYSTORE_PASSWORD " +
                 "(на ноутбуке — через make, в CI — защищённые переменные)."
         }
