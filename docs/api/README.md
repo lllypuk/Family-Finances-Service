@@ -37,8 +37,20 @@ npx --yes @redocly/cli@latest lint docs/api/openapi.yaml
 ```bash
 npx --yes @openapitools/openapi-generator-cli generate \
   -i docs/api/openapi.yaml -g kotlin -o build/android-client \
-  --additional-properties=library=jvm-retrofit2,serializationLibrary=kotlinx_serialization,dateLibrary=java8
+  --additional-properties=library=jvm-retrofit2,serializationLibrary=kotlinx_serialization \
+  --additional-properties=dateLibrary=java8,useCoroutines=true,useResponseAsReturnType=true \
+  --additional-properties=packageName=tech.shatrov.familyfinances.core.api \
+  --additional-properties=apiPackage=tech.shatrov.familyfinances.core.api \
+  --additional-properties=modelPackage=tech.shatrov.familyfinances.core.api \
+  --additional-properties=sourceFolder=kotlin \
+  --global-property=apis,models,apiDocs=false,modelDocs=false,apiTests=false,modelTests=false
 ```
+
+Набор параметров не сокращается: без `useCoroutines` интерфейсы отдают `Call<T>`, без
+`useResponseAsReturnType` тело ошибки недоступно, без `sourceFolder` вывод уезжает в
+`generated/src/main/kotlin`, а без `--global-property` рядом с кодом появляются чужие
+`build.gradle`, `README.md` и `docs/`. Те же значения держит задача `generateApiClient`
+в `android/core/api/build.gradle.kts`.
 
 Генератор — деталь Android-проекта, а не этого репозитория: здесь нет ни node-зависимостей,
 ни шага сборки клиента. Проверить после генерации: `Money` → `Long`, `CalendarDate` → `LocalDate`.

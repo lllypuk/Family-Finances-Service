@@ -194,14 +194,14 @@
 **Files:**
 - Modify: `docs/api/openapi.yaml`, `docs/api/README.md`
 
-- [ ] шесть схем внутри `components/responses` (`UserOk`, `FamilyOk`, `CategoryOk`, `TransactionOk`,
+- [x] шесть схем внутри `components/responses` (`UserOk`, `FamilyOk`, `CategoryOk`, `TransactionOk`,
       `BudgetOk`, `ReportOk`) вынести в `components/schemas` и подключить через `$ref`: сейчас
       генератор даёт им позиционные имена `InlineObject`…`InlineObject5`, и седьмая такая схема
       сдвинет нумерацию в уже закоммиченном коде. Конверты в путях трогать не нужно — они уже
       именуются по `operationId`
-- [ ] в `docs/api/README.md` заменить команду генератора на полный набор параметров из «Technical
+- [x] в `docs/api/README.md` заменить команду генератора на полный набор параметров из «Technical
       Details»: без них пакет и раскладка вывода не те, что объявлены здесь
-- [ ] `make test` — зелёный (тест покрытия роутов имена схем не проверяет, но правка не должна
+- [x] `make test` — зелёный (тест покрытия роутов имена схем не проверяет, но правка не должна
       задеть операции)
 
 ### Task 3: Модуль `:core:api` и генерация клиента
