@@ -229,16 +229,16 @@
 - Create: `android/core/api/src/test/kotlin/.../net/ApiFailureTest.kt`, `net/ApiClientTest.kt`,
   `net/ApiSerializersTest.kt`
 
-- [ ] `ApiClient`: OkHttp + Retrofit, базовый адрес параметром, `Json` с `SerializersModule` для
+- [x] `ApiClient`: OkHttp + Retrofit, базовый адрес параметром, `Json` с `SerializersModule` для
       `LocalDate`, `OffsetDateTime`, `UUID`
-- [ ] `ApiFailure` и разбор `Response<T>.errorBody()` в одной точке на все операции: `details[]`,
+- [x] `ApiFailure` и разбор `Response<T>.errorBody()` в одной точке на все операции: `details[]`,
       `Retry-After`, `SETUP_REQUIRED`, сеть, `5xx`
-- [ ] хелпер, снимающий конверт: вызов возвращает `data` или бросает `ApiFailure`
-- [ ] тесты на MockWebServer: успех, 401, 403, 404, 422 с деталями, 429 с `Retry-After`, 409,
+- [x] хелпер, снимающий конверт: вызов возвращает `data` или бросает `ApiFailure`
+- [x] тесты на MockWebServer: успех, 401, 403, 404, 422 с деталями, 429 с `Retry-After`, 409,
       обрыв сети
-- [ ] тест: ответ с `meta.timestamp` и календарной датой разбирается (ловит незарегистрированный
+- [x] тест: ответ с `meta.timestamp` и календарной датой разбирается (ловит незарегистрированный
       сериализатор — иначе падает первый же запрос)
-- [ ] `make -C android check` — зелёный
+- [x] `make -C android check` — зелёный
 
 ### Task 5: Хранилище токена
 
