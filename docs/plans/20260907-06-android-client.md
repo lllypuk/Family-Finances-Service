@@ -344,17 +344,17 @@
 **Files:**
 - Modify: `.gitlab-ci.yml`
 
-- [ ] `android:check`: свой `image` и `before_script: []` (иначе наследуется `golang:1.26` и
+- [x] `android:check`: свой `image` и `before_script: []` (иначе наследуется `golang:1.26` и
       Go-кеш), установка `git`, `curl`, `unzip`, SDK и кеши в `/ci-cache/android/*`,
       запуск `make -C android check`
-- [ ] `android:api-check`: отдельным шагом, генерация и сверка каталога вывода
-- [ ] `android:apk`: `assembleRelease` с keystore из защищённой файловой переменной, артефакт на
+- [x] `android:api-check`: отдельным шагом, генерация и сверка каталога вывода
+- [x] `android:apk`: `assembleRelease` с keystore из защищённой файловой переменной, артефакт на
       неделю
-- [ ] правила: ветка `main` с `changes: [android/**/*, docs/api/openapi.yaml]` и тег `app-v*`
+- [x] правила: ветка `main` с `changes: [android/**/*, docs/api/openapi.yaml]` и тег `app-v*`
       отдельным `if` — в тег-пайплайнах `changes` всегда истинно, и серверный тег иначе запускал бы
       Android-джобы
-- [ ] проверить: правка только под `internal/` Android-джобы не запускает, правка контракта —
-      запускает, тег `v0.1.0` — нет
+- [x] проверить: правка только под `internal/` Android-джобы не запускает, правка контракта —
+      запускает, тег `v0.1.0` — нет (разбор правил + `glab ci lint`; живые пайплайны — после пуша)
 
 ### Task 12: Verify acceptance criteria
 

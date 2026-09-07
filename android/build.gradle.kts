@@ -52,3 +52,14 @@ tasks.register<JavaExec>("ktlintFormat") {
     jvmArgs("--add-opens=java.base/java.lang=ALL-UNNAMED")
     args(listOf("-F") + ktlintSources)
 }
+
+// Robolectric тянет android-all jar (~100 МБ) в локальный maven-репозиторий, по умолчанию в
+// ~/.m2 — то есть мимо кеша CI, каждой джобой заново. Путь приходит переменной окружения и
+// уезжает в тестовую JVM: свойства демона Gradle тесты не наследуют.
+val robolectricM2 = providers.environmentVariable("ROBOLECTRIC_M2_REPO")
+
+subprojects {
+    tasks.withType<Test>().configureEach {
+        robolectricM2.orNull?.let { systemProperty("maven.repo.local", it) }
+    }
+}
