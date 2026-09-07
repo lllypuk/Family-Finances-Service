@@ -375,11 +375,11 @@
 
 ### Task 13: [Final] Update documentation
 
-- [ ] `android/CLAUDE.md` — карта модулей, правила версий, что генерация вне `check`
-- [ ] `README.md`: раздел про приложение и сборку APK
-- [ ] `CLAUDE.md`: модули клиента, генерация, правила Android-джоб
-- [ ] `docs/tech_stack.md`: раздел про клиента
-- [ ] переместить план в `docs/plans/completed/`
+- [x] `android/CLAUDE.md` — карта модулей, правила версий, что генерация вне `check`
+- [x] `README.md`: раздел про приложение и сборку APK
+- [x] `CLAUDE.md`: модули клиента, генерация, правила Android-джоб
+- [x] `docs/tech_stack.md`: раздел про клиента
+- [x] переместить план в `docs/plans/completed/`
 
 ## Post-Completion
 

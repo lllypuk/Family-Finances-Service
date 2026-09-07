@@ -185,6 +185,7 @@ make help             # Show all commands
 ├── docs/                    # Product brief, tech stack, audits (specs/), plans, API contract
 ├── deploy/                  # Self-hosted deployment: compose + Caddy + install/release scripts
 ├── docker/                  # Dockerfile + docker-compose.yml
+├── android/                 # Android client: :app (Compose) + :core:api (generated client, transport)
 └── .gitlab-ci.yml           # CI/CD: checks, image, deploy to the mini-server
 ```
 
@@ -280,6 +281,25 @@ Supported: Ubuntu 22.04/24.04, Debian 11/12, Rocky/AlmaLinux 9. Scripts in `depl
 `uninstall.sh --keep-data`, `health-check.sh` (`HEALTH_URL`, default `https://$DOMAIN/health`).
 Details: [deploy/README.md](deploy/README.md).
 
+## 📱 Android client
+
+`android/` — the online Kotlin/Compose client to `/api/v1` (login, home, transactions, categories).
+Models and typed interfaces are generated from `docs/api/openapi.yaml` into `android/core/api/generated`
+and committed; generation needs the network, so it stays out of `check` and its freshness is a separate
+target and CI step.
+
+```bash
+make -C android check        # format, Robolectric unit tests, Android Lint — offline
+make -C android api-check    # regenerate the client and fail if the contract moved without it
+make -C android apk          # signed release APK -> android/app/build/outputs/apk/release/
+```
+
+The APK is installed from a laptop; there is no store. Signing needs one permanent keystore
+(`FFS_KEYSTORE_PATH` / `FFS_KEYSTORE_PASSWORD`, defaults under `~/.android`) — the same one CI uses,
+because another certificate means uninstalling the app together with its data. A tag `app-v*` builds
+the APK in CI; server tags `vX.Y.Z` do not run the Android jobs. Details:
+[android/CLAUDE.md](android/CLAUDE.md).
+
 ## 📚 Documentation
 
 - **[CLAUDE.md](CLAUDE.md)** — development and architecture guidance
@@ -288,6 +308,7 @@ Details: [deploy/README.md](deploy/README.md).
 - **[docs/api/openapi.yaml](docs/api/openapi.yaml)** — the API contract; request/response structs live in
   `internal/application/handlers/types.go`, the error envelope in `handlers/errors.go`
 - **[deploy/README.md](deploy/README.md)** — self-hosted deployment guide (see the note above)
+- **[android/CLAUDE.md](android/CLAUDE.md)** — Android client: modules, version rules, code generation
 
 ## License
 

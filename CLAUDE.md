@@ -287,6 +287,32 @@ cron job; restore is manual over ssh. There is no `upgrade.sh` any more — the 
 
 When runtime/dev commands disagree between documents, `Makefile` + this file win.
 
+## Android client (`android/`)
+
+The Kotlin/Compose client to `/api/v1` lives in this repository (decision A-13). Two Gradle modules:
+`:core:api` — the generated models and Retrofit interfaces plus transport, token vault and `ApiGraph`,
+the only module that knows about the network; `:app` — Compose screens, ViewModels, hand-rolled
+`AppScreen` navigation and `AppGraph`. Package and namespace: `tech.shatrov.familyfinances`.
+See `android/CLAUDE.md` and `android/core/api/CLAUDE.md`; commands are `make -C android <target>`.
+
+`android/core/api/generated` is openapi-generator output from `docs/api/openapi.yaml`, **committed and
+never edited by hand**. Generation pulls the generator from the network, so it is in neither `compile`
+nor `check` (both must work offline): run `make -C android api-gen` after changing the contract and
+commit the result, or `make -C android api-check` fails. The six envelopes in `components/responses`
+are named by the `*Ok` schemas in `components/schemas` — inline ones would generate positional
+`InlineObject…` names that a seventh such schema would shift.
+
+Versions live only in `android/gradle/libs.versions.toml`, `compileSdk`/`minSdk`/`jvmTarget` included.
+
+CI (`.gitlab-ci.yml`): `android:check`, `android:api-check`, `android:apk`. Every Android job must
+override `image` **and** `before_script: []` — the `default:` block would otherwise hand it
+`golang:1.26` and the Go cache paths. Rules come from `.android-rules`: the branch `main` and merge
+requests with `changes: [android/**/*, docs/api/openapi.yaml]`, plus the tag `app-v*`; a server tag
+`vX.Y.Z` is excluded explicitly, because `changes:` is always true in a tag pipeline. Android SDK and
+the Gradle/Robolectric caches sit in `/ci-cache/android/*`, like every other cache here — the `cache:`
+mechanism is unused. `android:apk` signs with the same keystore as the laptop
+(`FFS_KEYSTORE`/`FFS_KEYSTORE_PASSWORD`) and is not built on merge requests.
+
 ## Stack versions (keep in sync with go.mod)
 
 Go **1.26.7** (CI runs the `golang:1.26` image), Echo **v4.15.4**,
