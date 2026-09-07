@@ -112,8 +112,9 @@ registry.gitlab.shatrov.tech` once, with a personal or deploy token that can rea
 missing bind-mount directory as root, and SQLite then cannot open the database.
 
 `TRUSTED_PROXIES` is set in `environment:`, not in `.env` (`environment` overrides `env_file`, so a
-copy there would be dead). In the own-TLS layout it is the compose network and must match
-`ipam.config.subnet`; in the proxied layout the overlay replaces it with `FFS_EDGE_SUBNET`.
+copy under that name would be dead). In the own-TLS layout it is `FFS_INTERNAL_SUBNET`, the same
+value the network is created with; in the proxied layout the overlay replaces it with
+`FFS_EDGE_SUBNET`, the subnet of `edge`.
 
 ## Deploy
 
@@ -177,9 +178,11 @@ leaves the installation directory and the Caddy volumes; without the flag everyt
 
 - **`pull access denied` / `unauthorized`** — the registry is private. `docker login
   registry.gitlab.shatrov.tech` on the host; in CI the job token does it.
-- **`up` fails with "Pool overlaps with other one"** — a network from an older installation sits on
-  `172.20.0.0/16`. `install.sh` removes `family-budget_family-budget-net` before starting; for any
-  other leftover, `docker network ls` then `docker network rm <name>`.
+- **`up` fails with "Pool overlaps with other one"** — the internal subnet is taken on this host.
+  `docker network ls` and `docker network inspect` show by whom; put a free range into
+  `FFS_INTERNAL_SUBNET` in `.env` (it feeds both the network and `TRUSTED_PROXIES`). A leftover
+  network from an older installation is removed by `install.sh`, or by hand with
+  `docker network rm <name>`.
 - **`network edge not found`** — the proxied layout expects it to exist:
   `docker network create edge`.
 - **No certificate** (own-TLS layout) — 80 and 443 must reach the server from the internet, and the A
