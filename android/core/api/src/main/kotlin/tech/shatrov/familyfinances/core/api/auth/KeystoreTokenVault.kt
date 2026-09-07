@@ -52,6 +52,10 @@ class KeystoreTokenVault(context: Context) : TokenVault {
             encrypt(token.encodePayload()).pack()
         } catch (e: GeneralSecurityException) {
             throw TokenVaultException("токен не зашифрован", e)
+        } catch (e: IOException) {
+            // `load(null)` объявляет IOException, а Kotlin проверяемые исключения не требует:
+            // без этой ветки отказ Keystore ронял бы приложение сразу после удачного входа.
+            throw TokenVaultException("токен не зашифрован", e)
         } catch (e: RuntimeException) {
             // ProviderException и родня: на части устройств Keystore отказывает именно так,
             // и без этого ветка выхода из try роняла бы приложение после удачного входа.
@@ -66,7 +70,7 @@ class KeystoreTokenVault(context: Context) : TokenVault {
 
     @Synchronized
     override fun clear() {
-        prefs.edit().remove(PREF_TOKEN).commit()
+        remove()
     }
 
     // Сравнение и очистка под тем же монитором, что и write(): иначе между ними успевает лечь
@@ -74,9 +78,12 @@ class KeystoreTokenVault(context: Context) : TokenVault {
     @Synchronized
     override fun clearIf(token: String): Boolean {
         if (read()?.token != token) return false
-        clear()
-        return true
+        return remove()
     }
+
+    // Не легло на диск — токен на месте, и звать onSessionExpired нельзя: ApiGraph отфильтрует
+    // событие по всё ещё читаемому токену, а запросы продолжат носить мёртвый.
+    private fun remove(): Boolean = prefs.edit().remove(PREF_TOKEN).commit()
 
     private fun encrypt(plain: ByteArray): CipherText {
         val cipher = Cipher.getInstance(TRANSFORMATION)
