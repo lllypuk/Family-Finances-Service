@@ -304,7 +304,9 @@ are named by the `*Ok` schemas in `components/schemas` — inline ones would gen
 
 Versions live only in `android/gradle/libs.versions.toml`, `compileSdk`/`minSdk`/`jvmTarget` included.
 
-CI (`.gitlab-ci.yml`): `android:check`, `android:api-check`, `android:apk`. All three `extends: .android`,
+CI (`.gitlab-ci.yml`): `android:check`, `android:api-check`, `android:apk` — all three in the trailing
+`android` stage with `needs: []`, so they start at once and nothing waits for them: a red client check or an
+unreachable Maven Central must not hold back the server deploy. All three `extends: .android`,
 which overrides `image` **and** replaces the `default:` `before_script` (it would otherwise hand the job
 `golang:1.26`, `go version` and the Go cache paths) with the JDK/SDK setup. Rules come from `.android-rules`: the branch `main` and merge
 requests with `changes: [android/**/*, docs/api/openapi.yaml]`, plus the tag `app-vX.Y.Z`; a server tag

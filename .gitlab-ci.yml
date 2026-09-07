@@ -7,6 +7,10 @@ stages:
   - build
   - release
   - deploy
+  # Клиент собирается отдельно от сервера: его стадия последняя, а джобы в ней с `needs: []`,
+  # то есть стартуют сразу и никого не ждут. В общих стадиях упавший `android:check` или
+  # недоступный Maven Central останавливали бы выкат сервера, которого они не касаются.
+  - android
 
 variables:
   # Кеш Go лежит в каталоге, который раннер монтирует в /ci-cache, а не гоняется
@@ -238,7 +242,8 @@ image:smoke:
 # CI нет — раннеру для эмулятора нужен /dev/kvm.
 android:check:
   extends: .android
-  stage: test
+  stage: android
+  needs: []
   script:
     - make -C android check
   artifacts:
@@ -254,7 +259,8 @@ android:check:
 # openapi.yaml без перегенерации клиента в том же коммите роняет её.
 android:api-check:
   extends: .android
-  stage: test
+  stage: android
+  needs: []
   script:
     - make -C android api-check
 
@@ -265,7 +271,8 @@ android:api-check:
 # На MR не собирается: подписанный APK нужен для установки, а не для проверки.
 android:apk:
   extends: .android
-  stage: build
+  stage: android
+  needs: []
   variables:
     FFS_KEYSTORE_PATH: $FFS_KEYSTORE
   rules:

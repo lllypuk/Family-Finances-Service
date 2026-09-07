@@ -30,6 +30,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
@@ -80,6 +83,11 @@ fun AppRoot(graph: AppGraph) {
     var homeStale by rememberSaveable { mutableStateOf(false) }
     val session by graph.session.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
+    // Модель формы живёт в своём store: ключ у неё свой на каждый заход, а store активити
+    // отдаёт брошенные модели только вместе с активити.
+    val forms: FormModels = viewModel { FormModels() }
+    val onForm = screen is AppScreen.TransactionEdit
+    LaunchedEffect(onForm) { if (!onForm) forms.viewModelStore.clear() }
 
     // Смерть процесса возвращает сохранённый экран, но не сессию: без роли и валюты главной
     // нечего показывать, поэтому бутстрап прогоняется заново.
@@ -230,9 +238,10 @@ fun AppRoot(graph: AppGraph) {
         is AppScreen.TransactionEdit -> WithSession(session) {
             // Ключ по черновику: без него следующий заход на форму достался бы модели прошлого,
             // уже сохранённого, и экран сразу закрылся бы.
-            val model: TransactionEditViewModel = viewModel(key = "edit-${current.draft}") {
-                TransactionEditViewModel(graph.api, current.id, current.draft)
-            }
+            val model: TransactionEditViewModel =
+                viewModel(viewModelStoreOwner = forms, key = "edit-${current.draft}") {
+                    TransactionEditViewModel(graph.api, current.id, current.draft)
+                }
             val edit by model.state.collectAsStateWithLifecycle()
             LaunchedEffect(edit.done) {
                 if (edit.done) {
@@ -254,6 +263,17 @@ fun AppRoot(graph: AppGraph) {
                 onBack = { screen = AppScreen.Transactions },
             )
         }
+    }
+}
+
+/** Хозяин моделей формы: переживает поворот вместе с активити, но чистится при уходе с формы. */
+private class FormModels :
+    ViewModel(),
+    ViewModelStoreOwner {
+    override val viewModelStore = ViewModelStore()
+
+    override fun onCleared() {
+        viewModelStore.clear()
     }
 }
 
