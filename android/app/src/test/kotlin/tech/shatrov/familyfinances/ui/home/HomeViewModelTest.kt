@@ -25,6 +25,7 @@ import tech.shatrov.familyfinances.STATS_OK
 import tech.shatrov.familyfinances.core.api.ApiGraph
 import tech.shatrov.familyfinances.enqueueJson
 import tech.shatrov.familyfinances.liveToken
+import tech.shatrov.familyfinances.ui.UiError
 
 /** Главная: один запрос сводки, валюта из сессии и состояния «пусто» и «повторить». */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -94,7 +95,7 @@ class HomeViewModelTest {
         server.close()
 
         createModel()
-        assertEquals(HomeUiState.Failure(HomeError.Network), settle())
+        assertEquals(HomeUiState.Failure(UiError.Network), settle())
 
         server = MockWebServer()
         server.start()
@@ -110,7 +111,7 @@ class HomeViewModelTest {
         server.enqueueJson(500, """{"error":{"code":"INTERNAL","message":"всё сломалось"}}""")
 
         createModel()
-        assertEquals(HomeUiState.Failure(HomeError.Server("всё сломалось")), settle())
+        assertEquals(HomeUiState.Failure(UiError.Server("всё сломалось")), settle())
 
         server.enqueueJson(200, STATS_OK)
         model.refresh()
@@ -124,6 +125,6 @@ class HomeViewModelTest {
 
         createModel()
 
-        assertEquals(HomeUiState.Failure(HomeError.Malformed), settle())
+        assertEquals(HomeUiState.Failure(UiError.Malformed), settle())
     }
 }

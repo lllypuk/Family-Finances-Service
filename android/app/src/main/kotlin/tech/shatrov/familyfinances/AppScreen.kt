@@ -13,11 +13,14 @@ sealed interface AppScreen {
     data object Login : AppScreen
 
     data object Home : AppScreen
+
+    data object Transactions : AppScreen
 }
 
 private const val KEY_LOADING = "loading"
 private const val KEY_LOGIN = "login"
 private const val KEY_HOME = "home"
+private const val KEY_TRANSACTIONS = "transactions"
 
 /** Экран переживает поворот; всё остальное восстанавливается из хранилища токена. */
 val AppScreenSaver: Saver<AppScreen, String> = Saver(
@@ -26,12 +29,14 @@ val AppScreenSaver: Saver<AppScreen, String> = Saver(
             AppScreen.Loading -> KEY_LOADING
             AppScreen.Login -> KEY_LOGIN
             AppScreen.Home -> KEY_HOME
+            AppScreen.Transactions -> KEY_TRANSACTIONS
         }
     },
     restore = { key ->
         when (key) {
             KEY_LOGIN -> AppScreen.Login
             KEY_HOME -> AppScreen.Home
+            KEY_TRANSACTIONS -> AppScreen.Transactions
             else -> AppScreen.Loading
         }
     },

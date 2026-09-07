@@ -28,6 +28,8 @@ import tech.shatrov.familyfinances.ui.home.HomeScreen
 import tech.shatrov.familyfinances.ui.home.HomeViewModel
 import tech.shatrov.familyfinances.ui.login.LoginScreen
 import tech.shatrov.familyfinances.ui.login.LoginViewModel
+import tech.shatrov.familyfinances.ui.transactions.TransactionsScreen
+import tech.shatrov.familyfinances.ui.transactions.TransactionsViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -54,7 +56,7 @@ fun AppRoot(graph: AppGraph) {
     // Смерть процесса возвращает сохранённый экран, но не сессию: без роли и валюты главной
     // нечего показывать, поэтому бутстрап прогоняется заново.
     LaunchedEffect(screen, session) {
-        if (screen == AppScreen.Home && session == null) {
+        if (session == null && screen in setOf(AppScreen.Home, AppScreen.Transactions)) {
             screen = AppScreen.Loading
         }
     }
@@ -86,26 +88,46 @@ fun AppRoot(graph: AppGraph) {
             )
         }
 
-        AppScreen.Home -> {
-            val current = session
-            // Сессия гаснет на выходе раньше, чем сменится экран: главной без валюты рисовать нечего.
-            if (current == null) {
-                Centered { Text(stringResource(R.string.loading)) }
-            } else {
-                val model: HomeViewModel = viewModel { HomeViewModel(graph.api, current.currency) }
-                val home by model.state.collectAsStateWithLifecycle()
-                HomeScreen(
-                    state = home,
-                    onRetry = model::refresh,
-                    onSignOut = {
-                        scope.launch {
-                            graph.signOut()
-                            screen = AppScreen.Login
-                        }
-                    },
-                )
-            }
+        AppScreen.Home -> WithSession(session) { current ->
+            val model: HomeViewModel = viewModel { HomeViewModel(graph.api, current.currency) }
+            val home by model.state.collectAsStateWithLifecycle()
+            HomeScreen(
+                state = home,
+                onRetry = model::refresh,
+                onOpenTransactions = { screen = AppScreen.Transactions },
+                onSignOut = {
+                    scope.launch {
+                        graph.signOut()
+                        screen = AppScreen.Login
+                    }
+                },
+            )
         }
+
+        AppScreen.Transactions -> WithSession(session) { current ->
+            val model: TransactionsViewModel = viewModel { TransactionsViewModel(graph.api, current) }
+            val transactions by model.state.collectAsStateWithLifecycle()
+            TransactionsScreen(
+                state = transactions,
+                onBack = { screen = AppScreen.Home },
+                onRetry = model::refresh,
+                onFiltersChange = model::onFiltersChange,
+                onLoadMore = model::loadMore,
+            )
+        }
+    }
+}
+
+/** Сессия гаснет на выходе раньше, чем сменится экран: без валюты и роли рисовать нечего. */
+@Composable
+private fun WithSession(
+    session: Session?,
+    content: @Composable (Session) -> Unit,
+) {
+    if (session == null) {
+        Centered { Text(stringResource(R.string.loading)) }
+    } else {
+        content(session)
     }
 }
 

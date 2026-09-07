@@ -23,9 +23,23 @@
     <string name="home_recent">Последние операции</string>
     <string name="home_budget_progress">%1$s из %2$s</string>
     <string name="home_empty">Операций пока нет</string>
-    <string name="home_retry">Повторить</string>
-    <string name="home_error_network">Нет связи с сервером</string>
-    <string name="home_error_malformed">Сервер ответил непонятным — попробуйте позже</string>
+        <string name="home_open_transactions">Операции</string>
+
+    <string name="transactions_title">Операции</string>
+    <string name="transactions_empty">Операций не найдено</string>
+    <string name="transactions_author_me">Вы</string>
+    <string name="filter_all">Всё время</string>
+    <string name="filter_this_month">Этот месяц</string>
+    <string name="filter_prev_month">Прошлый месяц</string>
+    <string name="filter_any_type">Все</string>
+    <string name="filter_income">Доходы</string>
+    <string name="filter_expense">Расходы</string>
+    <string name="filter_all_categories">Все категории</string>
+
+    <string name="retry">Повторить</string>
+    <string name="back">Назад</string>
+    <string name="error_network">Нет связи с сервером</string>
+    <string name="error_malformed">Сервер ответил непонятным — попробуйте позже</string>
     <string name="sign_out">Выйти</string>
     <string name="loading">Загрузка…</string>
 </resources>

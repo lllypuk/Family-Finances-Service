@@ -28,5 +28,6 @@ class ApiGraph(
     val family: FamilyApi = client.create(FamilyApi::class)
     val categories: CategoriesApi = client.create(CategoriesApi::class)
     val transactions: TransactionsApi = client.create(TransactionsApi::class)
+    val users: UsersApi = client.create(UsersApi::class)
     val stats: StatsApi = client.create(StatsApi::class)
 }

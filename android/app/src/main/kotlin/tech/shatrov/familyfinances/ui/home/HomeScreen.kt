@@ -35,6 +35,7 @@ import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.format.formatMoney
 import tech.shatrov.familyfinances.ui.format.formatPercent
 import tech.shatrov.familyfinances.ui.format.formatPeriod
+import tech.shatrov.familyfinances.ui.message
 
 /** Сколько категорий помещается в карточку: остальное живёт на экране транзакций. */
 private const val TOP_CATEGORIES = 5
@@ -43,6 +44,7 @@ private const val TOP_CATEGORIES = 5
 fun HomeScreen(
     state: HomeUiState,
     onRetry: () -> Unit,
+    onOpenTransactions: () -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -58,7 +60,12 @@ fun HomeScreen(
                 text = stringResource(R.string.home_title),
                 style = MaterialTheme.typography.headlineSmall,
             )
-            TextButton(onClick = onSignOut) { Text(stringResource(R.string.sign_out)) }
+            Row {
+                TextButton(onClick = onOpenTransactions) {
+                    Text(stringResource(R.string.home_open_transactions))
+                }
+                TextButton(onClick = onSignOut) { Text(stringResource(R.string.sign_out)) }
+            }
         }
 
         when (state) {
@@ -73,7 +80,7 @@ fun HomeScreen(
                     onClick = onRetry,
                     modifier = Modifier.heightIn(min = Dimens.TOUCH_MIN),
                 ) {
-                    Text(stringResource(R.string.home_retry))
+                    Text(stringResource(R.string.retry))
                 }
             }
 
