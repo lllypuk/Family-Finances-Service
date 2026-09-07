@@ -211,14 +211,14 @@
 - Create: `android/core/api/generated/kotlin/**` (результат генератора, коммитится)
 - Modify: `android/settings.gradle.kts`, `android/gradle/libs.versions.toml`, `android/Makefile`
 
-- [ ] `JavaExec`-задача `generateApiClient` на конфигурации `apiGenerator`; вход и выход объявлены
+- [x] `JavaExec`-задача `generateApiClient` на конфигурации `apiGenerator`; вход и выход объявлены
       через `inputs.file`/`outputs.dir`, каталог вывода очищается перед запуском
-- [ ] полный набор параметров генератора (см. «Technical Details»)
-- [ ] подключить каталог вывода как `sourceSets["main"].kotlin.srcDir`
-- [ ] цели `api-gen` и `api-check` в `Makefile`: вторая запускает генерацию и падает, если
+- [x] полный набор параметров генератора (см. «Technical Details»)
+- [x] подключить каталог вывода как `sourceSets["main"].kotlin.srcDir`
+- [x] цели `api-gen` и `api-check` в `Makefile`: вторая запускает генерацию и падает, если
       `git -C <корень> status --porcelain -- android/core/api/generated` непусто (`git diff` новых
       файлов не видит). В `check` не входит: генератору нужна сеть
-- [ ] `make -C android api-check` — зелёный; `make -C android check` — зелёный
+- [x] `make -C android api-check` — зелёный; `make -C android check` — зелёный
 
 ### Task 4: Транспорт и разбор конверта
 

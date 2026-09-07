@@ -44,6 +44,20 @@ apk: ## Собрать релизный APK (нужен keystore)
 	$(GRADLE) assembleRelease
 	@echo "APK: app/build/outputs/apk/release/"
 
+# Генерация вне `check`: она ходит в сеть за генератором и артефактами.
+.PHONY: api-gen
+api-gen: ## Перегенерировать клиент из docs/api/openapi.yaml (нужна сеть)
+	$(GRADLE) :core:api:generateApiClient
+
+# `git diff` новых файлов не видит, поэтому свежесть проверяется по `status --porcelain`.
+.PHONY: api-check
+api-check: api-gen ## Проверить, что сгенерированный клиент совпадает с контрактом
+	@if [ -n "$$(git -C .. status --porcelain -- android/core/api/generated)" ]; then \
+		echo "Сгенерированный клиент отстал от docs/api/openapi.yaml — запустите make api-gen и закоммитьте:"; \
+		git -C .. status --porcelain -- android/core/api/generated; \
+		exit 1; \
+	fi
+
 .PHONY: clean
 clean: ## Удалить результаты сборки
 	$(GRADLE) clean
