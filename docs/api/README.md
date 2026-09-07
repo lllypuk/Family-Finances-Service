@@ -43,14 +43,17 @@ npx --yes @openapitools/openapi-generator-cli generate \
   --additional-properties=apiPackage=tech.shatrov.familyfinances.core.api \
   --additional-properties=modelPackage=tech.shatrov.familyfinances.core.api \
   --additional-properties=sourceFolder=kotlin \
-  --global-property=apis,models,apiDocs=false,modelDocs=false,apiTests=false,modelTests=false
+  --global-property=apis,models,supportingFiles=CollectionFormats.kt,apiDocs=false,modelDocs=false,apiTests=false,modelTests=false
 ```
 
 Набор параметров не сокращается: без `useCoroutines` интерфейсы отдают `Call<T>`, без
 `useResponseAsReturnType` тело ошибки недоступно, без `sourceFolder` вывод уезжает в
 `generated/src/main/kotlin`, а без `--global-property` рядом с кодом появляются чужие
-`build.gradle`, `README.md` и `docs/`. Те же значения держит задача `generateApiClient`
-в `android/core/api/build.gradle.kts`.
+`build.gradle`, `README.md` и `docs/`, а без `supportingFiles=CollectionFormats.kt` не собирается
+сгенерированный код: этот файл импортируют все интерфейсы. Те же значения держит задача
+`generateApiClient` в `android/core/api/build.gradle.kts`.
 
-Генератор — деталь Android-проекта, а не этого репозитория: здесь нет ни node-зависимостей,
-ни шага сборки клиента. Проверить после генерации: `Money` → `Long`, `CalendarDate` → `LocalDate`.
+Боевая генерация идёт не этой командой, а задачей `:core:api:generateApiClient`
+(`make -C android api-gen`, без node); вывод коммитится в `android/core/api/generated`, свежесть
+держат `make -C android api-check` и джоба `android:api-check`. Команда выше — для разовой проверки
+контракта. Проверить после генерации: `Money` → `Long`, `CalendarDate` → `LocalDate`.

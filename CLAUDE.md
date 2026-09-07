@@ -267,9 +267,9 @@ reference): `docs/README.md` (navigation), `docs/product_brief.md`, `docs/tech_s
 status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the finished ones.
 
 **Current direction:** `docs/specs/005-api-only-redesign.md` — the service is an API-only backend for an
-Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–05 are done
-(`docs/plans/completed/`); what is left is the owner's work on the server (DNS, `install.sh`, `setup`, backup
-cron, the `v0.1.0` tag).
+Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–06 are done
+(`docs/plans/completed/`, 06 = the Android client); what is left is the owner's work on the server (DNS,
+`install.sh`, `setup`, backup cron, the `v0.1.0` tag).
 
 `docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates
 from it, and code and spec now match. **A registered route with no operation in the spec fails `make test`**
@@ -304,10 +304,10 @@ are named by the `*Ok` schemas in `components/schemas` — inline ones would gen
 
 Versions live only in `android/gradle/libs.versions.toml`, `compileSdk`/`minSdk`/`jvmTarget` included.
 
-CI (`.gitlab-ci.yml`): `android:check`, `android:api-check`, `android:apk`. Every Android job must
-override `image` **and** `before_script: []` — the `default:` block would otherwise hand it
-`golang:1.26` and the Go cache paths. Rules come from `.android-rules`: the branch `main` and merge
-requests with `changes: [android/**/*, docs/api/openapi.yaml]`, plus the tag `app-v*`; a server tag
+CI (`.gitlab-ci.yml`): `android:check`, `android:api-check`, `android:apk`. All three `extends: .android`,
+which overrides `image` **and** replaces the `default:` `before_script` (it would otherwise hand the job
+`golang:1.26`, `go version` and the Go cache paths) with the JDK/SDK setup. Rules come from `.android-rules`: the branch `main` and merge
+requests with `changes: [android/**/*, docs/api/openapi.yaml]`, plus the tag `app-vX.Y.Z`; a server tag
 `vX.Y.Z` is excluded explicitly, because `changes:` is always true in a tag pipeline. Android SDK and
 the Gradle/Robolectric caches sit in `/ci-cache/android/*`, like every other cache here — the `cache:`
 mechanism is unused. `android:apk` signs with the same keystore as the laptop
@@ -331,9 +331,9 @@ part of golangci-lint here, not a separate job: run standalone it ignores the `/
 the `.golangci.yml` exclusions, and fails on lines the linter deliberately passes.
 On a merge request it also builds the image and curls `/health` inside it; on `main` and on a `vX.Y.Z` tag it
 pushes the image to `registry.gitlab.shatrov.tech` and deploys to the mini-server (see "Deployment" below).
-The tag pattern in `.release-tags` is exact on purpose: the Android client shares this repository (decision A-13
-in `docs/specs/005-api-only-redesign.md`) and releases under its own tag namespace, which must not build or deploy
-the server — and a tag with a slash could not name a Docker image anyway.
+Both tag patterns (`.release-tags`, `.android-rules`) are exact on purpose: the Android client shares this
+repository (decision A-13 in `docs/specs/005-api-only-redesign.md`) and releases under its own tag namespace,
+which must not build or deploy the server — and a tag with a slash could not name a Docker image anyway.
 
 The runner is a single instance-wide docker executor on home-server: `privileged = true`, `/certs/client`
 (dind) and `/home/sasha/ci-cache:/ci-cache` (Go caches, hence `GOCACHE`/`GOMODCACHE` pointing there instead of

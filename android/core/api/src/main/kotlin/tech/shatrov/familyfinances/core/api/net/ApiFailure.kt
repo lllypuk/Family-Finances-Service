@@ -29,7 +29,6 @@ sealed class ApiFailure(
     ) : ApiFailure("HTTP $status $code: $serverMessage", null) {
         val isUnauthorized: Boolean get() = status == HTTP_UNAUTHORIZED
         val isSetupRequired: Boolean get() = code == ApiErrorCode.SETUP_REQUIRED
-        val isServerError: Boolean get() = status >= HTTP_SERVER_ERROR
     }
 
     /** Ответ пришёл, но конверта в нём нет: страница прокси, обрезанное тело, пустой `5xx`. */
@@ -43,7 +42,6 @@ sealed class ApiFailure(
 
     private companion object {
         const val HTTP_UNAUTHORIZED = 401
-        const val HTTP_SERVER_ERROR = 500
     }
 }
 

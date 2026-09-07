@@ -1,8 +1,8 @@
 package tech.shatrov.familyfinances.core.api
 
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.receiveAsFlow
 import tech.shatrov.familyfinances.core.api.auth.TokenVault
 import tech.shatrov.familyfinances.core.api.net.ApiClient
 
@@ -14,14 +14,15 @@ class ApiGraph(
     baseUrl: String,
     val tokens: TokenVault,
 ) {
-    // Буфер на одно событие: подписчика может не быть в момент отказа — экран как раз
-    // пересоздаётся, — а уводить на вход всё равно нужно.
-    private val sessionExpiredEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    // Канал, а не SharedFlow: подписчика может не быть в момент отказа — экран как раз
+    // пересоздаётся, — и событие без replay пропало бы, оставив пользователя без токена
+    // на экране, который его требует.
+    private val sessionExpiredEvents = Channel<Unit>(Channel.CONFLATED)
 
     /** Сервер ответил `401` на запрос с токеном: хранилище уже очищено, дальше — экран входа. */
-    val sessionExpired: SharedFlow<Unit> = sessionExpiredEvents.asSharedFlow()
+    val sessionExpired: Flow<Unit> = sessionExpiredEvents.receiveAsFlow()
 
-    val client: ApiClient = ApiClient(baseUrl, tokens) { sessionExpiredEvents.tryEmit(Unit) }
+    val client: ApiClient = ApiClient(baseUrl, tokens) { sessionExpiredEvents.trySend(Unit) }
 
     val auth: AuthApi = client.create(AuthApi::class)
     val me: MeApi = client.create(MeApi::class)

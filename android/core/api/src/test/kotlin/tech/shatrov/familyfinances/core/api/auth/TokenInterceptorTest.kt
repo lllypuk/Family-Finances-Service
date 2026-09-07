@@ -54,7 +54,7 @@ class TokenInterceptorTest {
         )
     }
 
-    private suspend fun callMe() = graph.client.unwrap({ graph.me.getCurrentUser() }, { it.`data` })
+    private suspend fun callMe() = graph.client.unwrap { graph.me.getCurrentUser() }.`data`
 
     @Test
     fun addsBearerHeaderFromVault() = runTest {
@@ -80,25 +80,24 @@ class TokenInterceptorTest {
         assertEquals(1, expired.size)
     }
 
-    // Логин уходит без заголовка, поэтому его 401 — неверный пароль, а не конец сессии:
-    // иначе неудачный вход выбрасывал бы соседа из уже живой сессии.
+    // Бутстрап мог отвалиться по сети и увести на вход с живым токеном в хранилище: опечатка
+    // в пароле не должна стирать его и выбрасывать соседа из работающей сессии.
     @Test
-    fun loginFailureIsNotSessionExpiry() = runTest {
+    fun loginFailureKeepsLiveTokenAndRaisesNoEvent() = runTest {
         val expired = mutableListOf<Unit>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             graph.sessionExpired.toList(expired)
         }
-        vault.clear()
         enqueue(401, INVALID_CREDENTIALS)
 
         val failure = runCatching {
-            graph.client.unwrap(
-                { graph.auth.login(LoginRequest(email = "admin@test.com", password = "Admin1234!")) },
-                { it.`data` },
-            )
+            graph.client
+                .unwrap { graph.auth.login(LoginRequest(email = "admin@test.com", password = "Admin1234!")) }
+                .`data`
         }.exceptionOrNull()
 
         assertTrue(failure is ApiFailure.Api)
+        assertEquals("t-1", vault.read()?.token)
         assertNull(server.takeRequest().headers["Authorization"])
         assertTrue(expired.isEmpty())
     }

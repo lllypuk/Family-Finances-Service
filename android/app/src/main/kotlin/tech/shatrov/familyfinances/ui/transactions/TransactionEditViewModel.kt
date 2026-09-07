@@ -88,12 +88,11 @@ class TransactionEditViewModel(
         mutable.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
             try {
-                val categories = api.client.unwrap(
-                    { api.categories.listCategories(limit = CATEGORY_LIMIT) },
-                    { it.`data` },
-                )
+                val categories = api.client
+                    .unwrap { api.categories.listCategories(limit = CATEGORY_LIMIT) }
+                    .`data`
                 val existing = transactionId?.let { id ->
-                    api.client.unwrap({ api.transactions.getTransaction(id) }, { it.`data` })
+                    api.client.unwrap { api.transactions.getTransaction(id) }.`data`
                 }
                 mutable.update { it.filled(categories, existing) }
             } catch (failure: ApiFailure) {
@@ -164,37 +163,31 @@ class TransactionEditViewModel(
     ) {
         val description = current.description.trim()
         if (transactionId == null) {
-            api.client.unwrap(
-                {
-                    api.transactions.createTransaction(
-                        CreateTransactionRequest(
-                            amountMinor = amountMinor,
-                            type = current.type,
-                            description = description,
-                            categoryId = categoryId,
-                            date = current.date,
-                            id = draftId,
-                        ),
-                    )
-                },
-                { it.`data` },
-            )
+            api.client.unwrap {
+                api.transactions.createTransaction(
+                    CreateTransactionRequest(
+                        amountMinor = amountMinor,
+                        type = current.type,
+                        description = description,
+                        categoryId = categoryId,
+                        date = current.date,
+                        id = draftId,
+                    ),
+                )
+            }
         } else {
-            api.client.unwrap(
-                {
-                    api.transactions.updateTransaction(
-                        transactionId,
-                        UpdateTransactionRequest(
-                            amountMinor = amountMinor,
-                            type = current.type,
-                            description = description,
-                            categoryId = categoryId,
-                            date = current.date,
-                        ),
-                    )
-                },
-                { it.`data` },
-            )
+            api.client.unwrap {
+                api.transactions.updateTransaction(
+                    transactionId,
+                    UpdateTransactionRequest(
+                        amountMinor = amountMinor,
+                        type = current.type,
+                        description = description,
+                        categoryId = categoryId,
+                        date = current.date,
+                    ),
+                )
+            }
         }
     }
 }

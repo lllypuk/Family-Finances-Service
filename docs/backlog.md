@@ -26,7 +26,7 @@ S-03 (лимитер логина в `internal/auth/ratelimit.go`), `CSRF_SECRET
 
 - **Тег `v0.1.0` не поставлен** — действие владельца репозитория. `docker.yml` и `release.yml`
   уже указывают `file: docker/Dockerfile`, блокера нет. Ставить тег имеет смысл после перехода
-  на API-only ([005](specs/005-api-only-redesign.md)): все пять планов закрыты, код и `openapi.yaml`
+  на API-only ([005](specs/005-api-only-redesign.md)): все шесть планов закрыты, код и `openapi.yaml`
   совпадают, деплой — один compose с Caddy.
 
 ## Обновление зависимостей после переезда на GitLab
@@ -34,5 +34,8 @@ S-03 (лимитер логина в `internal/auth/ratelimit.go`), `CSRF_SECRET
 - **Автообновлений больше нет.** Dependabot остался на GitHub вместе с `.github/`, а GitLab CE
   своего аналога не даёт. Руками обновляются: модули Go (`go get -u`), дайджесты `FROM` в
   `docker/Dockerfile`, дайджест образа Caddy в `deploy/docker-compose.yml` и версии инструментов
-  в `.gitlab-ci.yml` (`GOLANGCI_LINT_VERSION`, `GOVULNCHECK_VERSION`).
+  в `.gitlab-ci.yml` (`GOLANGCI_LINT_VERSION`, `GOVULNCHECK_VERSION`), а также версии клиента в
+  `android/gradle/libs.versions.toml` (AGP, Kotlin, Compose BOM, OkHttp/Retrofit, Robolectric,
+  openapi-generator, ktlint) и `CMDLINE_TOOLS_URL`/`ANDROID_PACKAGES` в `.gitlab-ci.yml` —
+  Gradle-зависимости не смотрит вообще ничто.
   `govulncheck` в пайплайне поймает уязвимую версию Go-зависимости, но не устаревший базовый образ.

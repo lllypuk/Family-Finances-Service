@@ -52,7 +52,7 @@ dependencies {
     api(libs.kotlinx.serialization.json)
     implementation(libs.retrofit.converter.kotlinx)
     implementation(libs.okhttp)
-    // SharedFlow «сессия кончилась» видна из :app, поэтому не implementation.
+    // Поток «сессия кончилась» виден из :app, поэтому не implementation.
     api(libs.kotlinx.coroutines.android)
 
     testImplementation(libs.junit)
@@ -74,7 +74,11 @@ tasks.register<JavaExec>("generateApiClient") {
     // Каталог вычищается перед запуском: генератор не удаляет файлы, и схема, выпавшая из
     // спеки, осталась бы закоммиченным мусором, который ещё и компилируется.
     val outDir = generatedDir.asFile
+    val generatorFiles = apiGenerator.incoming.files
     doFirst {
+        // Резолв генератора до очистки: офлайн он падает, и без этой строки задача успевала бы
+        // снести закоммиченный клиент до отказа, оставив дерево без него.
+        check(generatorFiles.files.isNotEmpty()) { "генератор не резолвится" }
         outDir.deleteRecursively()
     }
 

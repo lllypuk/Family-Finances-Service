@@ -7,6 +7,7 @@ import tech.shatrov.familyfinances.core.api.Role
 import tech.shatrov.familyfinances.core.api.User
 import tech.shatrov.familyfinances.core.api.auth.SessionToken
 import tech.shatrov.familyfinances.core.api.auth.TokenVault
+import tech.shatrov.familyfinances.core.api.auth.TokenVaultException
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -14,10 +15,14 @@ import java.util.UUID
 internal const val ROBOLECTRIC_SDK = 36
 
 /** Хранилище для тестов: Keystore в Robolectric не поднимается. */
-internal class FakeTokenVault(private var stored: SessionToken? = null) : TokenVault {
+internal class FakeTokenVault(
+    private var stored: SessionToken? = null,
+    private val failOnWrite: Boolean = false,
+) : TokenVault {
     override fun read(): SessionToken? = stored
 
     override fun write(token: SessionToken) {
+        if (failOnWrite) throw TokenVaultException("тестовый отказ хранилища", null)
         stored = token
     }
 

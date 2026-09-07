@@ -65,7 +65,6 @@ sealed interface CategoriesUiState {
     data class Ready(
         val income: List<CategoryNode>,
         val expense: List<CategoryNode>,
-        val canDelete: Boolean,
     ) : CategoriesUiState {
         val isEmpty: Boolean get() = income.isEmpty() && expense.isEmpty()
     }
@@ -120,10 +119,7 @@ class CategoriesViewModel(
         mutable.value = CategoriesUiState.Loading
         viewModelScope.launch {
             try {
-                loaded = api.client.unwrap(
-                    { api.categories.listCategories(limit = CATEGORY_LIMIT) },
-                    { it.`data` },
-                )
+                loaded = api.client.unwrap { api.categories.listCategories(limit = CATEGORY_LIMIT) }.`data`
                 mutable.value = ready()
             } catch (failure: ApiFailure) {
                 mutable.value = CategoriesUiState.Failure(failure.toUiError())
@@ -211,31 +207,25 @@ class CategoriesViewModel(
         val icon = current.icon.trim()
         val id = current.id
         if (id == null) {
-            api.client.unwrap(
-                {
-                    api.categories.createCategory(
-                        CreateCategoryRequest(
-                            name = name,
-                            type = current.type,
-                            color = current.color,
-                            icon = icon,
-                            id = current.draft,
-                            parentId = current.parentId,
-                        ),
-                    )
-                },
-                { it.`data` },
-            )
+            api.client.unwrap {
+                api.categories.createCategory(
+                    CreateCategoryRequest(
+                        name = name,
+                        type = current.type,
+                        color = current.color,
+                        icon = icon,
+                        id = current.draft,
+                        parentId = current.parentId,
+                    ),
+                )
+            }
         } else {
-            api.client.unwrap(
-                {
-                    api.categories.updateCategory(
-                        id,
-                        UpdateCategoryRequest(name = name, color = current.color, icon = icon),
-                    )
-                },
-                { it.`data` },
-            )
+            api.client.unwrap {
+                api.categories.updateCategory(
+                    id,
+                    UpdateCategoryRequest(name = name, color = current.color, icon = icon),
+                )
+            }
         }
     }
 
@@ -253,7 +243,6 @@ class CategoriesViewModel(
         return CategoriesUiState.Ready(
             income = nodes.filter { it.category.type == CategoryType.income },
             expense = nodes.filter { it.category.type == CategoryType.expense },
-            canDelete = isAdmin,
         )
     }
 }

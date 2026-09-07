@@ -7,7 +7,11 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withContext
+import mockwebserver3.Dispatcher
+import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
+import mockwebserver3.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -35,6 +39,10 @@ import tech.shatrov.familyfinances.testSession
 import tech.shatrov.familyfinances.ui.UiError
 import java.time.LocalDate
 import java.util.UUID
+import java.util.concurrent.TimeUnit
+
+/** Задержка ответа в тесте гонки: столько сервер держит страницу прошлого запроса. */
+private const val STALE_PAGE_DELAY_MS = 300L
 
 /** Список транзакций: страницы, фильтры в query и имена из справочников. */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -76,6 +84,16 @@ class TransactionsViewModelTest {
         server.enqueueJson(200, USERS_OK)
         server.enqueueJson(200, body)
     }
+
+    private fun jsonResponse(
+        body: String,
+        delayMs: Long = 0,
+    ): MockResponse = MockResponse.Builder()
+        .code(200)
+        .body(body)
+        .setHeader("Content-Type", "application/json")
+        .bodyDelay(delayMs, TimeUnit.MILLISECONDS)
+        .build()
 
     /** Пропускает справочники и предыдущие страницы: интересен всегда последний запрос. */
     private fun lastRequestUrl(count: Int) = (1..count).map { server.takeRequest() }.last().url
@@ -174,6 +192,40 @@ class TransactionsViewModelTest {
         assertEquals(GROCERIES_ID, url.queryParameter("category_id"))
         assertEquals("2026-09-01", url.queryParameter("date_from"))
         assertEquals("2026-09-30", url.queryParameter("date_to"))
+    }
+
+    // Смена фильтра во время догрузки: страница прошлого запроса не должна дописаться к новому
+    // списку — в нём оказались бы две строки с одним id, и LazyColumn упал бы на ключе.
+    @Test
+    fun filterChangeDropsPageOfPreviousQuery() = runTest {
+        // Ответы раздаются по запросу, а не очередью: порядок прихода здесь и есть предмет теста.
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.url.encodedPath.endsWith("/categories") -> jsonResponse(CATEGORIES_OK)
+
+                request.url.encodedPath.endsWith("/users") -> jsonResponse(USERS_OK)
+
+                request.url.queryParameter("type") == "income" -> jsonResponse(TRANSACTIONS_PAGE_2)
+
+                // Догрузка старого фильтра: сервер держит её, пока фильтр уже сменился.
+                request.url.queryParameter("offset") == "2" ->
+                    jsonResponse(TRANSACTIONS_PAGE_1, delayMs = STALE_PAGE_DELAY_MS)
+
+                else -> jsonResponse(TRANSACTIONS_PAGE_1)
+            }
+        }
+        createModel()
+        settle()
+
+        model.loadMore()
+        model.onFiltersChange(TransactionFilters(type = TransactionType.income))
+        settle()
+
+        // Ожидание реальное: задержку держит сервер, а не планировщик runTest.
+        withContext(Dispatchers.IO) { Thread.sleep(STALE_PAGE_DELAY_MS * 3) }
+
+        val rows = (model.state.value as TransactionsUiState.Ready).groups.flatMap { it.rows }
+        assertEquals(listOf("Зарплата"), rows.map { it.transaction.description })
     }
 
     // `/users` открыт только админу: у member список авторов остаётся пустым, а не роняет экран.

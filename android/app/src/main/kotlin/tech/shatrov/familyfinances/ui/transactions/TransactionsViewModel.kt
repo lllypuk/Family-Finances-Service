@@ -2,6 +2,7 @@ package tech.shatrov.familyfinances.ui.transactions
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -71,7 +72,7 @@ class TransactionsViewModel(
     private var total = 0
     private var categories = emptyList<Category>()
     private var authors = emptyMap<UUID, String>()
-    private var inFlight = false
+    private var job: Job? = null
 
     init {
         refresh()
@@ -90,33 +91,28 @@ class TransactionsViewModel(
     /** Догрузка следующей страницы; вызовы во время запроса и после отказа игнорируются. */
     fun loadMore() {
         val ready = mutable.value as? TransactionsUiState.Ready ?: return
-        if (!ready.hasMore || inFlight) return
+        if (!ready.hasMore || job?.isActive == true) return
         mutable.value = ready.copy(loadingMore = true, moreError = null)
         load(fromStart = false)
     }
 
-    /** Повтор после отказа на догрузке: состояние отказа снимается, иначе `loadMore` встанет. */
-    fun retryMore() {
-        val ready = mutable.value as? TransactionsUiState.Ready ?: return
-        mutable.value = ready.copy(moreError = null)
-        loadMore()
-    }
-
+    // Загрузка в один поток: смена фильтра во время догрузки иначе дописала бы к новому
+    // списку страницу прошлого запроса, и в нём оказались бы две строки с одним id — на таком
+    // ключе LazyColumn падает.
     private fun load(fromStart: Boolean) {
-        inFlight = true
-        viewModelScope.launch {
+        job?.cancel()
+        job = viewModelScope.launch {
             try {
                 if (categories.isEmpty()) {
                     loadReferences()
                 }
-                val page = api.client.unwrap({ requestPage(fromStart) }, { it })
-                loaded = if (fromStart) page.`data` else loaded + page.`data`
+                val page = api.client.unwrap { requestPage(fromStart) }
+                // distinctBy: сосед мог вставить запись между страницами и сдвинуть окно.
+                loaded = if (fromStart) page.`data` else (loaded + page.`data`).distinctBy { it.id }
                 total = page.meta.pagination.total
                 mutable.value = ready()
             } catch (failure: ApiFailure) {
                 mutable.value = failed(fromStart, failure.toUiError())
-            } finally {
-                inFlight = false
             }
         }
     }
@@ -133,10 +129,11 @@ class TransactionsViewModel(
     // `/users` открыт только админу, поэтому у member список авторов остаётся пустым:
     // своя запись всё равно подписана «Вы», а чужая в семье из двух человек однозначна.
     private suspend fun loadReferences() {
-        categories = api.client.unwrap({ api.categories.listCategories(limit = REFERENCE_LIMIT) }, { it.`data` })
+        categories = api.client.unwrap { api.categories.listCategories(limit = REFERENCE_LIMIT) }.`data`
         if (session.isAdmin) {
             authors = api.client
-                .unwrap({ api.users.listUsers(limit = REFERENCE_LIMIT) }, { it.`data` })
+                .unwrap { api.users.listUsers(limit = REFERENCE_LIMIT) }
+                .`data`
                 .associate { it.id to it.firstName }
         }
     }

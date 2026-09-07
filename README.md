@@ -5,10 +5,11 @@ API for the Android client. One instance = one family.
 
 ## 🎯 Project Status: IN DEVELOPMENT 🚧
 
-> **Direction (September 2026):** API-only backend for an Android app. Decisions and the five implementation
-> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–05 are done: the
-> web interface, cookie sessions and CSRF are gone, money is integer minor units, dates are calendar dates and
-> the deployment is one compose with Caddy; the sections below describe the code as it is today.
+> **Direction (September 2026):** API-only backend for an Android app. Decisions and the six implementation
+> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–06 are done: the
+> web interface, cookie sessions and CSRF are gone, money is integer minor units, dates are calendar dates,
+> the deployment is one compose with Caddy and the Android client lives in `android/`; the sections below
+> describe the code as it is today.
 
 - ✅ REST API for family, users, categories, transactions, budgets, reports, stats, backups
 - ✅ Bearer-token authentication with server-side sessions and a login rate limiter
@@ -288,6 +289,9 @@ Models and typed interfaces are generated from `docs/api/openapi.yaml` into `and
 and committed; generation needs the network, so it stays out of `check` and its freshness is a separate
 target and CI step.
 
+Locally this needs JDK 21+ and an Android SDK with `android-37.0` and build-tools 37; the CI job
+installs the same set.
+
 ```bash
 make -C android check        # format, Robolectric unit tests, Android Lint — offline
 make -C android api-check    # regenerate the client and fail if the contract moved without it
@@ -296,8 +300,9 @@ make -C android apk          # signed release APK -> android/app/build/outputs/a
 
 The APK is installed from a laptop; there is no store. Signing needs one permanent keystore
 (`FFS_KEYSTORE_PATH` / `FFS_KEYSTORE_PASSWORD`, defaults under `~/.android`) — the same one CI uses,
-because another certificate means uninstalling the app together with its data. A tag `app-v*` builds
-the APK in CI; server tags `vX.Y.Z` do not run the Android jobs. Details:
+because another certificate means uninstalling the app together with its data. A tag `app-vX.Y.Z` builds
+the APK in CI and keeps it as a job artifact for a week; server tags `vX.Y.Z` do not run the Android jobs.
+Bump `appVersionCode`/`appVersionName` in `android/gradle/libs.versions.toml` before tagging. Details:
 [android/CLAUDE.md](android/CLAUDE.md).
 
 ## 📚 Documentation

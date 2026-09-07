@@ -62,10 +62,9 @@ class ApiClientTest {
         server.enqueue(response.build())
     }
 
-    private suspend fun login() = graph.client.unwrap(
-        { graph.auth.login(LoginRequest(email = "admin@test.com", password = "Admin1234!")) },
-        { it.`data` },
-    )
+    private suspend fun login() = graph.client
+        .unwrap { graph.auth.login(LoginRequest(email = "admin@test.com", password = "Admin1234!")) }
+        .`data`
 
     private suspend fun expectFailure(block: suspend () -> Unit): ApiFailure = try {
         block()
@@ -92,7 +91,7 @@ class ApiClientTest {
     fun parsesCalendarDateAndMetaTimestamp() = runTest {
         enqueue(200, TRANSACTIONS_OK)
 
-        val data = graph.client.unwrap({ graph.transactions.listTransactions() }, { it.`data` })
+        val data = graph.client.unwrap { graph.transactions.listTransactions() }.`data`
 
         assertEquals(LocalDate.of(2026, 9, 7), data.single().date)
     }

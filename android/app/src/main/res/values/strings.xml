@@ -10,8 +10,7 @@
     <string name="login_error_rate_limited">Слишком много попыток, попробуйте позже</string>
     <string name="login_error_rate_limited_wait">Слишком много попыток, повторите через %1$d с</string>
     <string name="login_error_setup_required">Сервис ещё не настроен</string>
-    <string name="login_error_network">Нет связи с сервером</string>
-    <string name="login_error_malformed">Сервер ответил непонятным — попробуйте позже</string>
+    <string name="login_error_storage">Не удалось сохранить вход на телефоне — попробуйте ещё раз</string>
 
     <string name="home_title">Главная</string>
     <string name="home_income">Доходы</string>

@@ -30,6 +30,7 @@ import tech.shatrov.familyfinances.core.api.ApiGraph
 import tech.shatrov.familyfinances.core.api.CategoryType
 import tech.shatrov.familyfinances.enqueueJson
 import tech.shatrov.familyfinances.liveToken
+import tech.shatrov.familyfinances.ui.UiError
 import java.util.UUID
 
 /** Категории: список с вложенностью, создание, правка и удаление, скрытое от `member`. */
@@ -179,14 +180,54 @@ class CategoriesViewModelTest {
         createModel(isAdmin = false)
         val state = ready()
 
-        assertFalse(state.canDelete)
-
         model.onOpen(state.expense.single().category)
         assertFalse(model.editor.value?.canDelete == true)
 
         model.onDelete()
         assertNotNull(model.editor.value)
         assertEquals(1, server.requestCount)
+    }
+
+    // 422 ложится под поля формы: общего текста при этом нет, чинить нужно именно поле.
+    @Test
+    fun validationErrorLandsUnderField() = runTest {
+        server.enqueueJson(200, CATEGORIES_NESTED)
+        createModel()
+        ready()
+        model.onAdd()
+        model.onNameChange("Еда")
+
+        server.enqueueJson(
+            422,
+            """{"error":{"code":"VALIDATION_ERROR","message":"проверьте поля",
+            "details":[{"field":"name","message":"уже занято","code":"conflict"}]}}""",
+        )
+        model.onSubmit()
+        val form = requireNotNull(settled())
+
+        assertEquals("уже занято", form.fieldErrors[CategoryField.NAME])
+        assertNull(form.error)
+
+        // Правка поля гасит ошибку под ним: она была про прошлую попытку.
+        model.onNameChange("Еда и напитки")
+        assertTrue(requireNotNull(model.editor.value).fieldErrors.isEmpty())
+    }
+
+    // Отказ не под полем остаётся общим текстом, иначе он пропал бы вовсе.
+    @Test
+    fun serverFailureKeepsFormOpen() = runTest {
+        server.enqueueJson(200, CATEGORIES_NESTED)
+        createModel()
+        ready()
+        model.onAdd()
+        model.onNameChange("Еда")
+
+        server.enqueueJson(500, """{"error":{"code":"INTERNAL","message":"всё сломалось"}}""")
+        model.onSubmit()
+        val form = requireNotNull(settled())
+
+        assertEquals(UiError.Server("всё сломалось"), form.error)
+        assertTrue(form.fieldErrors.isEmpty())
     }
 
     /** Тело записанного запроса: у `RecordedRequest` оно необязательное. */

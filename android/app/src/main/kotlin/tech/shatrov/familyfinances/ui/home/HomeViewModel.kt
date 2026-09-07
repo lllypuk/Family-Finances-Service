@@ -45,7 +45,7 @@ class HomeViewModel(
             mutable.value = try {
                 // Границы периода не задаём: текущий месяц сервер считает в часовом поясе семьи
                 // (A-06), а телефон может стоять в другом.
-                val summary = api.client.unwrap({ api.stats.getStatsSummary() }, { it.`data` })
+                val summary = api.client.unwrap { api.stats.getStatsSummary() }.`data`
                 HomeUiState.Ready(summary, currency)
             } catch (failure: ApiFailure) {
                 HomeUiState.Failure(failure.toUiError())

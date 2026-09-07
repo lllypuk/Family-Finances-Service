@@ -14,10 +14,17 @@ class SessionToken(
     override fun toString(): String = "SessionToken(expiresAt=$expiresAt)"
 }
 
+/** Хранилище отказало: ключ Keystore недоступен или запись не легла на диск. */
+class TokenVaultException(
+    message: String,
+    cause: Throwable?,
+) : Exception(message, cause)
+
 /** Шов над хранилищем: боевая реализация держит токен в Keystore, тесты подставляют свою. */
 interface TokenVault {
     fun read(): SessionToken?
 
+    /** Бросает [TokenVaultException]: вход прошёл, а токен сохранить не удалось. */
     fun write(token: SessionToken)
 
     fun clear()

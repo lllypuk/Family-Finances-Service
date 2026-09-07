@@ -192,7 +192,7 @@ private fun Days(
             // Догрузка начинается, когда подвал доехал до экрана: отдельного «показать ещё»
             // не нужно, а повторный вызов гасит сама модель.
             item {
-                LaunchedEffect(state.groups.size) { onLoadMore() }
+                LaunchedEffect(state.groups.sumOf { it.rows.size }) { onLoadMore() }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,

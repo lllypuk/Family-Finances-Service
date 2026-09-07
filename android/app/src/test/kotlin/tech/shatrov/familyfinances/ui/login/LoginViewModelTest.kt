@@ -26,6 +26,7 @@ import tech.shatrov.familyfinances.LOGIN_OK
 import tech.shatrov.familyfinances.ROBOLECTRIC_SDK
 import tech.shatrov.familyfinances.core.api.ApiGraph
 import tech.shatrov.familyfinances.enqueueJson
+import tech.shatrov.familyfinances.ui.UiError
 
 /**
  * Вход: токен доезжает до хранилища, а отказы различаются по виду — их чинят по-разному.
@@ -127,7 +128,7 @@ class LoginViewModelTest {
         server.enqueueJson(500, """{"error":{"code":"INTERNAL","message":"всё сломалось"}}""")
         fillCredentials()
 
-        assertEquals(LoginError.Server("всё сломалось"), submitAndSettle().error)
+        assertEquals(LoginError.Generic(UiError.Server("всё сломалось")), submitAndSettle().error)
     }
 
     @Test
@@ -135,7 +136,33 @@ class LoginViewModelTest {
         server.close()
         fillCredentials()
 
-        assertEquals(LoginError.Network, submitAndSettle().error)
+        assertEquals(LoginError.Generic(UiError.Network), submitAndSettle().error)
+    }
+
+    // Модель переживает выход из аккаунта: не снятый флаг увёл бы следующий заход на вход
+    // в круг «вход → бутстрап без токена → вход».
+    @Test
+    fun navigationClearsSignedInFlag() = runTest {
+        server.enqueueJson(200, LOGIN_OK)
+        fillCredentials()
+        assertTrue(submitAndSettle().signedIn)
+
+        model.onNavigated()
+
+        assertFalse(model.state.value.signedIn)
+    }
+
+    // Keystore отказал уже после удачного логина: это сообщение на экране, а не падение.
+    @Test
+    fun vaultFailureIsReported() = runTest {
+        model = LoginViewModel(ApiGraph(server.url("/").toString(), FakeTokenVault(failOnWrite = true)))
+        server.enqueueJson(200, LOGIN_OK)
+        fillCredentials()
+
+        val state = submitAndSettle()
+
+        assertEquals(LoginError.Storage, state.error)
+        assertFalse(state.signedIn)
     }
 
     @Test
@@ -158,8 +185,9 @@ class LoginViewModelTest {
             LoginError.RateLimited(60),
             LoginError.RateLimited(null),
             LoginError.SetupRequired,
-            LoginError.Network,
-            LoginError.Malformed,
+            LoginError.Storage,
+            LoginError.Generic(UiError.Network),
+            LoginError.Generic(UiError.Malformed),
         ).map { it.message(res) }
 
         assertEquals(texts.size, texts.toSet().size)

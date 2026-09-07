@@ -2,11 +2,16 @@ package tech.shatrov.familyfinances
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,11 +44,15 @@ import tech.shatrov.familyfinances.ui.transactions.TransactionsViewModel
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val graph = AppGraph.create(applicationContext, BuildConfig.API_BASE_URL)
+        val graph = (application as FamilyFinancesApp).graph
         setContent {
             AppTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    AppRoot(graph)
+                    // С targetSdk 37 система рисует контент под своими панелями: без отступа
+                    // верхний ряд каждого экрана уезжает под статус-бар.
+                    Box(modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing)) {
+                        AppRoot(graph)
+                    }
                 }
             }
         }
@@ -55,9 +64,10 @@ fun AppRoot(graph: AppGraph) {
     var screen by rememberSaveable(stateSaver = AppScreenSaver) {
         mutableStateOf(if (graph.hasLiveToken()) AppScreen.Loading else AppScreen.Login)
     }
-    // Список пережил правку формы вместе с моделью, поэтому перечитывается по возврату,
-    // а не при каждом заходе с главной.
+    // Список и главная переживают правку формы вместе со своими моделями, поэтому
+    // перечитываются по возврату, а не при каждом заходе.
     var listStale by rememberSaveable { mutableStateOf(false) }
+    var homeStale by rememberSaveable { mutableStateOf(false) }
     val session by graph.session.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
@@ -84,9 +94,14 @@ fun AppRoot(graph: AppGraph) {
         AppScreen.Login -> {
             val model: LoginViewModel = viewModel { LoginViewModel(graph.api) }
             val state by model.state.collectAsStateWithLifecycle()
-            // Токен уже записан хранилищем: дальше бутстрап, а не сразу главная.
+            // Токен уже записан хранилищем: дальше бутстрап, а не сразу главная. Флаг снимается
+            // тут же — модель переживает выход, и невзведённый обратно флаг увёл бы следующий
+            // заход на вход в бесконечный круг «вход → бутстрап → вход».
             LaunchedEffect(state.signedIn) {
-                if (state.signedIn) screen = AppScreen.Loading
+                if (state.signedIn) {
+                    model.onNavigated()
+                    screen = AppScreen.Loading
+                }
             }
             LoginScreen(
                 state = state,
@@ -96,9 +111,19 @@ fun AppRoot(graph: AppGraph) {
             )
         }
 
+        // Модели ключуются по вошедшему: они переживают выход, и после входа другим
+        // пользователем прежняя роль показала бы ему чужие действия.
         AppScreen.Home -> WithSession(session) { active ->
-            val model: HomeViewModel = viewModel { HomeViewModel(graph.api, active.currency) }
+            val model: HomeViewModel = viewModel(key = "home-${active.user.id}") {
+                HomeViewModel(graph.api, active.currency)
+            }
             val home by model.state.collectAsStateWithLifecycle()
+            LaunchedEffect(homeStale) {
+                if (homeStale) {
+                    model.refresh()
+                    homeStale = false
+                }
+            }
             HomeScreen(
                 state = home,
                 onRetry = model::refresh,
@@ -114,7 +139,9 @@ fun AppRoot(graph: AppGraph) {
         }
 
         AppScreen.Transactions -> WithSession(session) { active ->
-            val model: TransactionsViewModel = viewModel { TransactionsViewModel(graph.api, active) }
+            val model: TransactionsViewModel = viewModel(key = "transactions-${active.user.id}") {
+                TransactionsViewModel(graph.api, active)
+            }
             val transactions by model.state.collectAsStateWithLifecycle()
             LaunchedEffect(listStale) {
                 if (listStale) {
@@ -122,6 +149,7 @@ fun AppRoot(graph: AppGraph) {
                     listStale = false
                 }
             }
+            BackHandler { screen = AppScreen.Home }
             TransactionsScreen(
                 state = transactions,
                 onBack = { screen = AppScreen.Home },
@@ -134,10 +162,13 @@ fun AppRoot(graph: AppGraph) {
         }
 
         AppScreen.Categories -> WithSession(session) { active ->
-            val model: CategoriesViewModel = viewModel { CategoriesViewModel(graph.api, active.isAdmin) }
+            val model: CategoriesViewModel = viewModel(key = "categories-${active.user.id}") {
+                CategoriesViewModel(graph.api, active.isAdmin)
+            }
             val categories by model.state.collectAsStateWithLifecycle()
             val editor by model.editor.collectAsStateWithLifecycle()
             val form = editor
+            BackHandler { if (form == null) screen = AppScreen.Home else model.onDismiss() }
             if (form == null) {
                 CategoriesScreen(
                     state = categories,
@@ -171,9 +202,11 @@ fun AppRoot(graph: AppGraph) {
             LaunchedEffect(edit.done) {
                 if (edit.done) {
                     listStale = true
+                    homeStale = true
                     screen = AppScreen.Transactions
                 }
             }
+            BackHandler { screen = AppScreen.Transactions }
             TransactionEditScreen(
                 state = edit,
                 onAmountChange = model::onAmountChange,

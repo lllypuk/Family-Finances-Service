@@ -35,10 +35,20 @@ class KeystoreTokenVault(context: Context) : TokenVault {
     }
 
     override fun write(token: SessionToken) {
-        val packed = encrypt(token.encodePayload()).pack()
+        val packed = try {
+            encrypt(token.encodePayload()).pack()
+        } catch (e: GeneralSecurityException) {
+            throw TokenVaultException("токен не зашифрован", e)
+        } catch (e: RuntimeException) {
+            // ProviderException и родня: на части устройств Keystore отказывает именно так,
+            // и без этого ветка выхода из try роняла бы приложение после удачного входа.
+            throw TokenVaultException("токен не зашифрован", e)
+        }
         // commit(), а не apply(): результат нужен здесь, иначе о потерянном токене узнает
         // только следующий запуск — уже экраном входа.
-        check(prefs.edit().putString(PREF_TOKEN, packed).commit()) { "токен не сохранён" }
+        if (!prefs.edit().putString(PREF_TOKEN, packed).commit()) {
+            throw TokenVaultException("токен не сохранён", null)
+        }
     }
 
     override fun clear() {

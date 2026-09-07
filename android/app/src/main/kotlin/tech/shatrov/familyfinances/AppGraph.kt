@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import tech.shatrov.familyfinances.core.api.ApiGraph
 import tech.shatrov.familyfinances.core.api.auth.KeystoreTokenVault
+import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import java.time.OffsetDateTime
 
 /**
@@ -18,18 +19,37 @@ class AppGraph(val api: ApiGraph) {
     /** Роль и валюта для экранов: заполняется бутстрапом, гаснет на выходе. */
     val session: StateFlow<Session?> = mutableSession.asStateFlow()
 
-    fun hasLiveToken(now: OffsetDateTime = OffsetDateTime.now()): Boolean = api.tokens.hasLiveToken(now)
+    /** Токен на месте и не просрочен — иначе стартуем с экрана входа, не тратя запрос. */
+    fun hasLiveToken(now: OffsetDateTime = OffsetDateTime.now()): Boolean =
+        api.tokens.read()?.expiresAt?.isAfter(now) == true
 
-    /** `true` — сессия готова, `false` — на экран входа. */
+    /**
+     * Бутстрап сессии: `GET /me` и `GET /family` после логина и при старте с сохранённым токеном.
+     * `true` — сессия готова, `false` — на экран входа: без роли и валюты рисовать нечего.
+     */
     suspend fun bootstrap(): Boolean {
-        val loaded = api.loadSession()
+        val loaded = try {
+            Session(
+                user = api.client.unwrap { api.me.getCurrentUser() }.`data`,
+                family = api.client.unwrap { api.family.getFamily() }.`data`,
+            )
+        } catch (failure: ApiFailure) {
+            null
+        }
         mutableSession.value = loaded
         return loaded != null
     }
 
+    /** Выход: хранилище чистится в любом случае — отказ сервера не повод оставить токен на телефоне. */
     suspend fun signOut() {
-        api.signOut()
-        mutableSession.value = null
+        try {
+            api.client.send { api.auth.logout() }
+        } catch (failure: ApiFailure) {
+            // Сессия кончается на этом телефоне независимо от того, услышал ли её конец сервер.
+        } finally {
+            api.tokens.clear()
+            mutableSession.value = null
+        }
     }
 
     companion object {

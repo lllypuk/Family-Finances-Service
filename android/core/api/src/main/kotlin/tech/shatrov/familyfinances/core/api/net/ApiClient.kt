@@ -47,14 +47,10 @@ class ApiClient(
 
     fun <T : Any> create(service: KClass<T>): T = retrofit.create(service.java)
 
-    /** Возвращает `data` конверта или бросает [ApiFailure]. */
-    suspend fun <E : Any, D> unwrap(
-        request: suspend () -> Response<E>,
-        data: (E) -> D,
-    ): D {
+    /** Возвращает конверт ответа или бросает [ApiFailure]. */
+    suspend fun <E : Any> unwrap(request: suspend () -> Response<E>): E {
         val response = execute(request)
-        val body = response.body() ?: throw ApiFailure.Malformed(response.code(), null)
-        return data(body)
+        return response.body() ?: throw ApiFailure.Malformed(response.code(), null)
     }
 
     /** Операции без тела (`204`): отказ приходит тем же конвертом. */
