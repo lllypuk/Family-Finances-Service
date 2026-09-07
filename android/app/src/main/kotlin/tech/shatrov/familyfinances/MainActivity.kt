@@ -24,6 +24,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import tech.shatrov.familyfinances.theme.AppTheme
 import tech.shatrov.familyfinances.theme.Dimens
+import tech.shatrov.familyfinances.ui.categories.CategoriesScreen
+import tech.shatrov.familyfinances.ui.categories.CategoriesViewModel
+import tech.shatrov.familyfinances.ui.categories.CategoryEditScreen
 import tech.shatrov.familyfinances.ui.home.HomeScreen
 import tech.shatrov.familyfinances.ui.home.HomeViewModel
 import tech.shatrov.familyfinances.ui.login.LoginScreen
@@ -100,6 +103,7 @@ fun AppRoot(graph: AppGraph) {
                 state = home,
                 onRetry = model::refresh,
                 onOpenTransactions = { screen = AppScreen.Transactions },
+                onOpenCategories = { screen = AppScreen.Categories },
                 onSignOut = {
                     scope.launch {
                         graph.signOut()
@@ -127,6 +131,34 @@ fun AppRoot(graph: AppGraph) {
                 onCreate = { screen = AppScreen.TransactionEdit(null) },
                 onOpen = { screen = AppScreen.TransactionEdit(it) },
             )
+        }
+
+        AppScreen.Categories -> WithSession(session) { active ->
+            val model: CategoriesViewModel = viewModel { CategoriesViewModel(graph.api, active.isAdmin) }
+            val categories by model.state.collectAsStateWithLifecycle()
+            val editor by model.editor.collectAsStateWithLifecycle()
+            val form = editor
+            if (form == null) {
+                CategoriesScreen(
+                    state = categories,
+                    onBack = { screen = AppScreen.Home },
+                    onRetry = model::refresh,
+                    onAdd = model::onAdd,
+                    onOpen = model::onOpen,
+                )
+            } else {
+                CategoryEditScreen(
+                    state = form,
+                    onNameChange = model::onNameChange,
+                    onTypeChange = model::onTypeChange,
+                    onColorChange = model::onColorChange,
+                    onIconChange = model::onIconChange,
+                    onParentChange = model::onParentChange,
+                    onSubmit = model::onSubmit,
+                    onDelete = model::onDelete,
+                    onBack = model::onDismiss,
+                )
+            }
         }
 
         is AppScreen.TransactionEdit -> WithSession(session) {

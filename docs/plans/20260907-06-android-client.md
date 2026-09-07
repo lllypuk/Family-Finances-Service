@@ -333,11 +333,11 @@
   `ui/categories/CategoriesViewModel.kt`, `ui/categories/CategoryEditScreen.kt`
 - Create: `android/app/src/test/kotlin/.../ui/categories/CategoriesViewModelTest.kt`
 
-- [ ] список с делением на доходные и расходные, вложенность по `parent_id`
-- [ ] создание и правка; удаление показывается только роли `admin` из сессии — кнопки нет, а не
+- [x] список с делением на доходные и расходные, вложенность по `parent_id`
+- [x] создание и правка; удаление показывается только роли `admin` из сессии — кнопки нет, а не
       ловим `403`
-- [ ] тесты: список, создание, правка, скрытие удаления у роли `member`
-- [ ] `make -C android check` — зелёный
+- [x] тесты: список, создание, правка, скрытие удаления у роли `member`
+- [x] `make -C android check` — зелёный
 
 ### Task 11: Джобы CI
 

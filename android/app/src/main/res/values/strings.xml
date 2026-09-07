@@ -23,7 +23,8 @@
     <string name="home_recent">Последние операции</string>
     <string name="home_budget_progress">%1$s из %2$s</string>
     <string name="home_empty">Операций пока нет</string>
-        <string name="home_open_transactions">Операции</string>
+    <string name="home_open_transactions">Операции</string>
+    <string name="home_open_categories">Категории</string>
 
     <string name="transactions_title">Операции</string>
     <string name="transactions_empty">Операций не найдено</string>
@@ -49,6 +50,22 @@
     <string name="type_income">Доход</string>
     <string name="type_expense">Расход</string>
     <string name="cancel">Отмена</string>
+
+    <string name="categories_title">Категории</string>
+    <string name="categories_add">Добавить</string>
+    <string name="categories_empty">Категорий пока нет</string>
+    <string name="categories_income">Доходные</string>
+    <string name="categories_expense">Расходные</string>
+    <string name="category_new_title">Новая категория</string>
+    <string name="category_edit_title">Категория</string>
+    <string name="category_name">Название</string>
+    <string name="category_color">Цвет</string>
+    <string name="category_icon">Значок</string>
+    <string name="category_parent">Родительская категория</string>
+    <string name="category_no_parent">Без родителя</string>
+    <string name="category_save">Сохранить</string>
+    <string name="category_delete">Удалить</string>
+    <string name="category_delete_confirm">Удалить категорию?</string>
 
     <string name="retry">Повторить</string>
     <string name="back">Назад</string>

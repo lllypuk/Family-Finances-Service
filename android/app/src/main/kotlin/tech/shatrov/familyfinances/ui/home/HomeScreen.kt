@@ -45,6 +45,7 @@ fun HomeScreen(
     state: HomeUiState,
     onRetry: () -> Unit,
     onOpenTransactions: () -> Unit,
+    onOpenCategories: () -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -63,6 +64,9 @@ fun HomeScreen(
             Row {
                 TextButton(onClick = onOpenTransactions) {
                     Text(stringResource(R.string.home_open_transactions))
+                }
+                TextButton(onClick = onOpenCategories) {
+                    Text(stringResource(R.string.home_open_categories))
                 }
                 TextButton(onClick = onSignOut) { Text(stringResource(R.string.sign_out)) }
             }

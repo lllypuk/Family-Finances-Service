@@ -1,4 +1,4 @@
-package tech.shatrov.familyfinances.ui.transactions
+package tech.shatrov.familyfinances.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxWidth

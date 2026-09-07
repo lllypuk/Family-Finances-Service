@@ -141,6 +141,28 @@ internal const val CATEGORIES_OK = """
 "pagination":{"limit":200,"offset":0,"total":2}}}
 """
 
+internal const val MILK_ID = "44444444-4444-4444-4444-444444444445"
+
+/** Подкатегория «Молочное» под «Продуктами»: вложенность видна на первом же списке. */
+internal const val CATEGORIES_NESTED = """
+{"data":[
+{"id":"$GROCERIES_ID","name":"Продукты","type":"expense","color":"#ff0000","icon":"cart",
+"is_active":true,"created_at":"2026-09-07T10:00:00Z","updated_at":"2026-09-07T10:00:00Z"},
+{"id":"$MILK_ID","name":"Молочное","type":"expense","color":"#ff0001","icon":"milk",
+"parent_id":"$GROCERIES_ID",
+"is_active":true,"created_at":"2026-09-07T10:00:00Z","updated_at":"2026-09-07T10:00:00Z"},
+{"id":"$SALARY_ID","name":"Зарплата","type":"income","color":"#00ff00","icon":"wallet",
+"is_active":true,"created_at":"2026-09-07T10:00:00Z","updated_at":"2026-09-07T10:00:00Z"}],
+"meta":{"request_id":"r-6","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0",
+"pagination":{"limit":200,"offset":0,"total":3}}}
+"""
+
+internal const val CATEGORY_OK = """
+{"data":{"id":"$GROCERIES_ID","name":"Продукты","type":"expense","color":"#ff0000","icon":"cart",
+"is_active":true,"created_at":"2026-09-07T10:00:00Z","updated_at":"2026-09-07T10:00:00Z"},
+"meta":{"request_id":"r-13","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0"}}
+"""
+
 internal const val USERS_OK = """
 {"data":[
 {"id":"$ADMIN_ID","email":"admin@test.com","first_name":"Админ","last_name":"Тест","role":"admin",
