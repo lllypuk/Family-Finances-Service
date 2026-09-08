@@ -312,8 +312,12 @@ which overrides `image` **and** replaces the `default:` `before_script` (it woul
 requests with `changes: [android/**/*, docs/api/openapi.yaml]`, plus the tag `app-vX.Y.Z`; a server tag
 `vX.Y.Z` is excluded explicitly, because `changes:` is always true in a tag pipeline. Android SDK and
 the Gradle/Robolectric caches sit in `/ci-cache/android/*`, like every other cache here — the `cache:`
-mechanism is unused. `android:apk` signs with the same keystore as the laptop
-(`FFS_KEYSTORE`/`FFS_KEYSTORE_PASSWORD`) and is not built on merge requests.
+mechanism is unused. All three share one `GRADLE_USER_HOME`, which Gradle locks: they carry
+`resource_group: android` so they never run at the same time — including against the pipeline of another
+branch, which is how they first failed. `android:apk` runs **only** on an `app-vX.Y.Z` tag and signs with
+the same keystore as the laptop: `FFS_KEYSTORE` is a protected *file* variable holding the **base64** of
+the JKS (a CI variable is text; the job decodes it) and `FFS_KEYSTORE_PASSWORD` is protected and masked —
+hence `app-v*` is a protected tag, or neither would reach the pipeline.
 
 ## Stack versions (keep in sync with go.mod)
 
