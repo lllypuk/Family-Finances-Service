@@ -270,20 +270,20 @@ android:api-check:
 
 # Подпись тем же ключом, что и на ноутбуке: другой сертификат даёт
 # INSTALL_FAILED_UPDATE_INCOMPATIBLE и требует сносить приложение с телефона вместе с данными.
-# Keystore приезжает защищённой файловой переменной FFS_KEYSTORE (её значение — путь к файлу),
-# пароль — FFS_KEYSTORE_PASSWORD; без них джоба падает, а не подписывает чем попало. Обе
-# переменные защищённые, поэтому тег `app-v*` должен быть в protected tags — иначе они не
-# доедут. Собирается только по этому тегу: подписанный APK нужен для установки на телефон,
-# а не для проверки каждого пуша.
+# Keystore приезжает защищённой файловой переменной FFS_KEYSTORE, пароль — FFS_KEYSTORE_PASSWORD;
+# без них джоба падает, а не подписывает чем попало. Обе переменные защищённые, поэтому тег
+# `app-v*` защищён тоже — иначе они до пайплайна не доедут. Собирается только по этому тегу:
+# подписанный APK нужен для установки на телефон, а не для проверки каждого пуша.
 android:apk:
   extends: .android
   stage: android
   needs: []
-  variables:
-    FFS_KEYSTORE_PATH: $FFS_KEYSTORE
   rules:
     - if: $CI_COMMIT_TAG =~ /^app-v\d+\.\d+\.\d+$/
   script:
+    # Значение переменной — base64: JKS двоичный, а CI хранит значения строками.
+    - base64 -d "$FFS_KEYSTORE" > /tmp/ffs-installer.jks
+    - export FFS_KEYSTORE_PATH=/tmp/ffs-installer.jks
     - make -C android apk
   artifacts:
     expire_in: 1 week
