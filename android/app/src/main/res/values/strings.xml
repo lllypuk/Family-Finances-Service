@@ -103,6 +103,20 @@
     <string name="settings_currency">Валюта: %1$s</string>
     <string name="settings_timezone">Часовой пояс: %1$s</string>
     <string name="settings_sign_out_confirm">Выйти из аккаунта?</string>
+    <string name="settings_save">Сохранить</string>
+    <string name="settings_email">Почта</string>
+    <string name="settings_first_name">Имя</string>
+    <string name="settings_last_name">Фамилия</string>
+    <string name="settings_error_email_taken">Эта почта уже занята другим пользователем</string>
+    <string name="settings_password_current">Текущий пароль</string>
+    <string name="settings_password_new">Новый пароль</string>
+    <string name="settings_password_repeat">Повторите новый пароль</string>
+    <string name="settings_password_hint">От 10 до 72 байт: русская буква считается за две</string>
+    <string name="settings_password_length">Пароль должен быть от 10 до 72 байт</string>
+    <string name="settings_password_mismatch">Пароли не совпадают</string>
+    <string name="settings_password_wrong_current">Неверный текущий пароль</string>
+    <string name="settings_password_changed">Пароль изменён, другие устройства разлогинены</string>
+    <string name="settings_password_unknown">Результат неизвестен: если ошибка повторится, войдите с новым паролем</string>
 
     <string name="retry">Повторить</string>
     <string name="back">Назад</string>

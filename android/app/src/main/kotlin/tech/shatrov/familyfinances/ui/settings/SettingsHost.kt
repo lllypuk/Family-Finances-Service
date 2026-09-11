@@ -12,6 +12,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import tech.shatrov.familyfinances.AppGraph
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.Session
@@ -62,11 +64,92 @@ fun SettingsHost(
             onSignedOut = onSignedOut,
         )
 
+        is SettingsPage.Profile -> ProfilePage(
+            graph = graph,
+            session = session,
+            models = models,
+            page = page,
+            onSubmitting = { submitting = it },
+            onSessionChanged = onSessionChanged,
+            onDone = leave,
+        )
+
+        is SettingsPage.Password -> PasswordPage(
+            graph = graph,
+            models = models,
+            page = page,
+            onSubmitting = { submitting = it },
+            onBack = leave,
+        )
+
         else -> Centered {
             Text(page.slug)
             TextButton(onClick = leave) { Text(stringResource(R.string.back)) }
         }
     }
+}
+
+/**
+ * Профиль: имя и почта. После `200` сессия обновляется здесь — модель о графе не знает, а
+ * `onSessionChanged` тот же, что у перечитки в корне.
+ */
+@Composable
+private fun ProfilePage(
+    graph: AppGraph,
+    session: Session,
+    models: ViewModelStoreOwner,
+    page: SettingsPage.Profile,
+    onSubmitting: (Boolean) -> Unit,
+    onSessionChanged: (Session, Session) -> Unit,
+    onDone: () -> Unit,
+) {
+    val model: ProfileViewModel = viewModel(viewModelStoreOwner = models, key = page.modelKey) {
+        ProfileViewModel(graph.api, session.user)
+    }
+    val state by model.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(state.submitting) { onSubmitting(state.submitting) }
+    LaunchedEffect(state.saved) {
+        val saved = state.saved ?: return@LaunchedEffect
+        graph.update(saved)
+        onSessionChanged(session, session.copy(user = saved))
+        onDone()
+    }
+
+    ProfileScreen(
+        state = state,
+        onEmailChange = model::onEmailChange,
+        onFirstNameChange = model::onFirstNameChange,
+        onLastNameChange = model::onLastNameChange,
+        onSubmit = model::onSubmit,
+        onBack = onDone,
+    )
+}
+
+/** Смена своего пароля: успех оставляет экран открытым — на нём и написано, что случилось. */
+@Composable
+private fun PasswordPage(
+    graph: AppGraph,
+    models: ViewModelStoreOwner,
+    page: SettingsPage.Password,
+    onSubmitting: (Boolean) -> Unit,
+    onBack: () -> Unit,
+) {
+    val model: PasswordViewModel = viewModel(viewModelStoreOwner = models, key = page.modelKey) {
+        PasswordViewModel(graph.api)
+    }
+    val state by model.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(state.submitting) { onSubmitting(state.submitting) }
+
+    PasswordScreen(
+        state = state,
+        onCurrentChange = model::onCurrentChange,
+        onNewChange = model::onNewChange,
+        onRepeatChange = model::onRepeatChange,
+        onSubmit = model::onSubmit,
+        onBack = onBack,
+    )
 }
 
 @Composable

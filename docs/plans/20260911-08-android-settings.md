@@ -233,16 +233,16 @@
 - Create: тесты `ProfileViewModelTest`, `ProfileScreenTest`, `PasswordViewModelTest`, `PasswordScreenTest`
 - Modify: `ui/settings/SettingsHost.kt` (заглушки `Profile`, `Password` → экраны), `strings.xml`
 
-- [ ] `ProfileViewModel`: поля из `Session.user`, `PUT /me` из diff (`UpdateUserRequest`), `409
+- [x] `ProfileViewModel`: поля из `Session.user`, `PUT /me` из diff (`UpdateUserRequest`), `409
       EMAIL_TAKEN` → перевод, `422` → под поля; после `200` — `update(user)`, `onSessionChanged`, `done`
-- [ ] `PasswordViewModel`: текущий, новый, повтор; `canSubmit` — байтовая длина 10…72 и совпадение;
+- [x] `PasswordViewModel`: текущий, новый, повтор; `canSubmit` — байтовая длина 10…72 и совпадение;
       `send { changePassword }`; `401 INVALID_CREDENTIALS` → ошибка под «Текущий пароль»;
       `Network`/`Malformed`/`5xx` → текст о неизвестном результате; успех — поля чистятся, текст
-- [ ] экраны по образцу `BudgetEditScreen`; подключение в хост
-- [ ] тесты: тело `PUT /me` из одного поля; `401` не поднимает `sessionExpired` (реальный
+- [x] экраны по образцу `BudgetEditScreen`; подключение в хост
+- [x] тесты: тело `PUT /me` из одного поля; `401` не поднимает `sessionExpired` (реальный
       `ApiGraph` над `MockWebServer`); `500` → неизвестный результат; «ёёёёё» (10 байт) проходит,
       9 байт — нет
-- [ ] `make -C android check` — зелёный
+- [x] `make -C android check` — зелёный
 
 ### Task 4: Сессии и формат времени
 
