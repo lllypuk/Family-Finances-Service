@@ -48,9 +48,14 @@ class ApiClient(
     fun <T : Any> create(service: KClass<T>): T = retrofit.create(service.java)
 
     /** Возвращает конверт ответа или бросает [ApiFailure]. */
-    suspend fun <E : Any> unwrap(request: suspend () -> Response<E>): E {
+    suspend fun <E : Any> unwrap(request: suspend () -> Response<E>): E = unwrapWithCode(request).second
+
+    /** Конверт вместе с кодом: идемпотентный `POST` отличает создание (`201`) от повтора (`200`). */
+    suspend fun <E : Any> unwrapWithCode(request: suspend () -> Response<E>): Pair<Int, E> {
         val response = execute(request)
-        return response.body() ?: throw ApiFailure.Malformed(response.code(), null)
+        val body = response.body() ?: throw ApiFailure.Malformed(response.code(), null)
+
+        return response.code() to body
     }
 
     /** Операции без тела (`204`): отказ приходит тем же конвертом. */

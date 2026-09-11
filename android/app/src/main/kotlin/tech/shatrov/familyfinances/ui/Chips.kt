@@ -27,7 +27,8 @@ internal fun ChipRow(
 internal fun Chip(
     label: String,
     selected: Boolean,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
-    FilterChip(selected = selected, onClick = onClick, label = { Text(label) })
+    FilterChip(selected = selected, onClick = onClick, enabled = enabled, label = { Text(label) })
 }

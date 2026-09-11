@@ -29,6 +29,9 @@ private const val CATEGORY_LIMIT = 200
 /** Нижняя граница контракта: `name` от двух символов. */
 private const val MIN_NAME = 2
 
+/** `201` — бюджет создан этим запросом; `200` — сервер отдал созданный прошлой попыткой. */
+private const val HTTP_CREATED = 201
+
 /** Имена полей формы — те же, что в `error.details[].field`: словарь перевода не нужен. */
 object BudgetField {
     const val NAME = "name"
@@ -184,8 +187,14 @@ class BudgetEditViewModel(
         mutable.update { it.copy(submitting = true, error = null, fieldErrors = emptyMap()) }
         viewModelScope.launch {
             try {
-                save(current, amountMinor)
-                mutable.update { it.copy(submitting = false, done = true) }
+                val unapplied = save(current, amountMinor)
+                mutable.update {
+                    if (unapplied == null) {
+                        it.copy(submitting = false, done = true)
+                    } else {
+                        it.copy(submitting = false, error = unapplied)
+                    }
+                }
             } catch (failure: ApiFailure) {
                 mutable.value = mutable.value.failed(failure)
             }
@@ -205,12 +214,13 @@ class BudgetEditViewModel(
         }
     }
 
+    /** Возвращает ошибку, когда сохранено не то, что на форме, — иначе `null`. */
     private suspend fun save(
         current: BudgetEditUiState,
         amountMinor: Long,
-    ) {
+    ): UiError? {
         if (budgetId == null) {
-            api.client.unwrap {
+            val (code, created) = api.client.unwrapWithCode {
                 api.budgets.createBudget(
                     CreateBudgetRequest(
                         name = current.name.trim(),
@@ -223,10 +233,30 @@ class BudgetEditViewModel(
                     ),
                 )
             }
-        } else {
-            val changes = current.changes ?: return
-            api.client.unwrap { api.budgets.updateBudget(budgetId, changes) }
+
+            return if (code == HTTP_CREATED) null else reconcile(current, created.`data`)
         }
+        val changes = current.changes ?: return null
+        api.client.unwrap { api.budgets.updateBudget(budgetId, changes) }
+
+        return null
+    }
+
+    /**
+     * `200` на `POST`: бюджет создала прошлая попытка, а тело повтора сервер не смотрел —
+     * правки, сделанные между попытками, дошлём `PUT`-ом, иначе форма закроется успехом
+     * поверх прежних значений. Период и категорию `PUT` не меняет: о них остаётся сказать.
+     */
+    private suspend fun reconcile(
+        current: BudgetEditUiState,
+        created: Budget,
+    ): UiError? {
+        current.copy(loaded = created).changes?.let { changes ->
+            api.client.unwrap { api.budgets.updateBudget(created.id, changes) }
+        }
+        val locked = created.period != current.period || created.categoryId != current.categoryId
+
+        return UiError.Resource(R.string.budget_error_recreated).takeIf { locked }
     }
 }
 

@@ -71,6 +71,10 @@ fun BudgetEditScreen(
     var pickingDate by remember { mutableStateOf<DateField?>(null) }
     var deleteConfirmShown by remember { mutableStateOf(false) }
 
+    // Отправка уносит снимок формы: правка во время неё в запрос не попадёт, а успех закроет
+    // экран поверх неё.
+    val editable = !state.submitting
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -85,6 +89,7 @@ fun BudgetEditScreen(
             onValueChange = onNameChange,
             label = { Text(stringResource(R.string.budget_name)) },
             singleLine = true,
+            enabled = editable,
             isError = state.fieldErrors.containsKey(BudgetField.NAME),
             supportingText = { FieldError(state.fieldErrors[BudgetField.NAME]) },
             modifier = Modifier.fillMaxWidth(),
@@ -95,6 +100,7 @@ fun BudgetEditScreen(
             onValueChange = onAmountChange,
             label = { Text(stringResource(R.string.budget_amount)) },
             singleLine = true,
+            enabled = editable,
             isError = state.fieldErrors.containsKey(BudgetField.AMOUNT),
             supportingText = { FieldError(state.fieldErrors[BudgetField.AMOUNT]) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -107,18 +113,20 @@ fun BudgetEditScreen(
         } else {
             ChipRow {
                 items(BudgetPeriod.entries) { period ->
-                    Chip(stringResource(periodLabel(period)), state.period == period) { onPeriodChange(period) }
+                    Chip(stringResource(periodLabel(period)), state.period == period, editable) {
+                        onPeriodChange(period)
+                    }
                 }
             }
         }
         FieldError(state.fieldErrors[BudgetField.PERIOD])
 
         Label(R.string.budget_category)
-        CategoryPicker(state, onCategoryChange)
+        CategoryPicker(state, editable, onCategoryChange)
         FieldError(state.fieldErrors[BudgetField.CATEGORY])
 
-        DateButton(R.string.budget_start, formatDay(state.start)) { pickingDate = DateField.START }
-        DateButton(R.string.budget_end, formatDay(state.end)) { pickingDate = DateField.END }
+        DateButton(R.string.budget_start, formatDay(state.start), editable) { pickingDate = DateField.START }
+        DateButton(R.string.budget_end, formatDay(state.end), editable) { pickingDate = DateField.END }
         FieldError(state.fieldErrors[BudgetField.START])
         FieldError(state.fieldErrors[BudgetField.END])
         if (state.periodInvalid) {
@@ -221,6 +229,7 @@ private fun Header(
 @Composable
 private fun CategoryPicker(
     state: BudgetEditUiState,
+    enabled: Boolean,
     onCategoryChange: (UUID?) -> Unit,
 ) {
     val known = state.categories.firstOrNull { it.id == state.categoryId }?.name
@@ -240,10 +249,12 @@ private fun CategoryPicker(
     }
     ChipRow {
         item {
-            Chip(stringResource(R.string.budgets_all_categories), state.categoryId == null) { onCategoryChange(null) }
+            Chip(stringResource(R.string.budgets_all_categories), state.categoryId == null, enabled) {
+                onCategoryChange(null)
+            }
         }
         items(state.categories) { category: Category ->
-            Chip(category.name, state.categoryId == category.id) { onCategoryChange(category.id) }
+            Chip(category.name, state.categoryId == category.id, enabled) { onCategoryChange(category.id) }
         }
     }
 }
@@ -252,10 +263,12 @@ private fun CategoryPicker(
 private fun DateButton(
     @StringRes label: Int,
     day: String,
+    enabled: Boolean,
     onClick: () -> Unit,
 ) {
     OutlinedButton(
         onClick = onClick,
+        enabled = enabled,
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = Dimens.TOUCH_MIN),

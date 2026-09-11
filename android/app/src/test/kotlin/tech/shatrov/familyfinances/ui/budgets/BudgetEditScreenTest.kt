@@ -158,6 +158,16 @@ class BudgetEditScreenTest {
         composeRule.onNodeWithText(res.getString(R.string.budget_period_monthly)).assertIsDisplayed()
     }
 
+    /** Запрос уже ушёл снимком формы: править её во время отправки нечего. */
+    @Test
+    fun submittingLocksTheFields() {
+        show(form().copy(submitting = true))
+
+        composeRule.onNodeWithText("Еда").performScrollTo().assertIsNotEnabled()
+        composeRule.onNodeWithText(res.getString(R.string.budget_period_weekly)).performScrollTo().assertIsNotEnabled()
+        composeRule.onNodeWithText(endLabel(END)).performScrollTo().assertIsNotEnabled()
+    }
+
     private fun endLabel(date: LocalDate) = "${res.getString(R.string.budget_end)}: ${formatDay(date)}"
 
     private fun show(

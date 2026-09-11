@@ -35,6 +35,27 @@ import tech.shatrov.familyfinances.ui.UiError
 import java.time.LocalDate
 import java.util.UUID
 
+/** Клиентский UUID черновика: с ним уходит `POST`, им же сервер отвечает на повтор. */
+private const val DRAFT = "99999999-9999-9999-9999-999999999999"
+
+/** Повтор `POST` после потерянного ответа: бюджет создан прошлой попыткой — `200`, а не `201`. */
+private const val CREATED_EARLIER = """
+{"data":{"id":"$DRAFT","name":"Еда","amount_minor":5000000,"spent_minor":0,
+"remaining_minor":5000000,"utilization":0.0,"period":"monthly","start_date":"2026-09-15",
+"end_date":"2026-10-14","is_active":true,
+"created_at":"2026-09-15T10:00:00Z","updated_at":"2026-09-15T10:00:00Z"},
+"meta":{"request_id":"r-21","timestamp":"2026-09-15T10:00:00Z","version":"v0.1.0"}}
+"""
+
+/** Тот же повтор, но у созданного бюджета своя категория: `PUT` её не меняет. */
+private const val CREATED_WITH_CATEGORY = """
+{"data":{"id":"$DRAFT","name":"Еда","amount_minor":5000000,"spent_minor":0,
+"remaining_minor":5000000,"utilization":0.0,"period":"monthly","start_date":"2026-09-15",
+"end_date":"2026-10-14","is_active":true,"category_id":"$GROCERIES_ID",
+"created_at":"2026-09-15T10:00:00Z","updated_at":"2026-09-15T10:00:00Z"},
+"meta":{"request_id":"r-22","timestamp":"2026-09-15T10:00:00Z","version":"v0.1.0"}}
+"""
+
 /** Перерасход: сумма меньше потраченного, и повтор её в `PUT` сервер отверг бы. */
 private const val OVERSPENT_BUDGET_OK = """
 {"data":{"id":"$FOOD_BUDGET_ID","name":"Еда","amount_minor":5000000,"spent_minor":7500000,
@@ -317,6 +338,54 @@ class BudgetEditViewModelTest {
         assertEquals(first, second)
     }
 
+    /** Ответ первой попытки потерян: повтор вернёт прежний бюджет, и правки надо дослать. */
+    @Test
+    fun retryAfterALostResponseSendsTheEditsWithAPut() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        createModel()
+        loaded()
+        model.onNameChange("Еда")
+        model.onAmountChange("50000")
+
+        server.enqueueJson(500, INTERNAL_ERROR)
+        model.onSubmit()
+        assertFalse(settled().done)
+
+        model.onAmountChange("60000")
+        server.enqueueJson(200, CREATED_EARLIER)
+        server.enqueueJson(200, CREATED_EARLIER)
+        model.onSubmit()
+        assertTrue(settled().done)
+
+        val request = lastRequest(4)
+        assertEquals("PUT", request.method)
+        assertEquals("/api/v1/budgets/$DRAFT", request.url.encodedPath)
+        assertEquals("""{"amount_minor":6000000}""", request.text())
+    }
+
+    /** Период и категорию `PUT` не меняет: расхождение с формой — сообщение, а не успех. */
+    @Test
+    fun categoryChangedBetweenAttemptsIsReported() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        createModel()
+        loaded()
+        model.onNameChange("Еда")
+        model.onAmountChange("50000")
+        model.onCategoryChange(UUID.fromString(GROCERIES_ID))
+
+        server.enqueueJson(500, INTERNAL_ERROR)
+        model.onSubmit()
+        assertFalse(settled().done)
+
+        model.onCategoryChange(null)
+        server.enqueueJson(200, CREATED_WITH_CATEGORY)
+        model.onSubmit()
+        val state = settled()
+
+        assertFalse(state.done)
+        assertEquals(UiError.Resource(R.string.budget_error_recreated), state.error)
+    }
+
     @Test
     fun failedDeleteKeepsTheForm() = runTest {
         editing()
@@ -347,6 +416,6 @@ class BudgetEditViewModelTest {
     private fun RecordedRequest.text(): String = body?.utf8().orEmpty()
 
     private companion object {
-        val DRAFT_ID: UUID = UUID.fromString("99999999-9999-9999-9999-999999999999")
+        val DRAFT_ID: UUID = UUID.fromString(DRAFT)
     }
 }
