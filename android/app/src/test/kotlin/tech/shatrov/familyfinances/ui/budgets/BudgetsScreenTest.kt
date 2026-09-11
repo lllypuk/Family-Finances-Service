@@ -34,6 +34,7 @@ class BudgetsScreenTest {
 
     private fun show(
         state: BudgetsUiState,
+        filter: BudgetFilter = BudgetFilter.TODAY,
         onFilterChange: (BudgetFilter) -> Unit = {},
         onOpen: (UUID) -> Unit = {},
     ) {
@@ -41,6 +42,7 @@ class BudgetsScreenTest {
             AppTheme {
                 BudgetsScreen(
                     state = state,
+                    filter = filter,
                     currency = "RUB",
                     onRetry = {},
                     onFilterChange = onFilterChange,
@@ -53,21 +55,21 @@ class BudgetsScreenTest {
 
     @Test
     fun emptyTodayPointsAtOtherFilter() {
-        show(BudgetsUiState.Ready(emptyList(), BudgetFilter.TODAY))
+        show(BudgetsUiState.Ready(emptyList()), BudgetFilter.TODAY)
 
         composeRule.onNodeWithText(res.getString(R.string.budgets_empty_today)).assertIsDisplayed()
     }
 
     @Test
     fun emptyAllJustSaysSo() {
-        show(BudgetsUiState.Ready(emptyList(), BudgetFilter.ALL))
+        show(BudgetsUiState.Ready(emptyList()), BudgetFilter.ALL)
 
         composeRule.onNodeWithText(res.getString(R.string.budgets_empty)).assertIsDisplayed()
     }
 
     @Test
     fun rowShowsNameCategoryPeriodAndAmounts() {
-        show(BudgetsUiState.Ready(listOf(row(categoryName = "Продукты")), BudgetFilter.TODAY))
+        show(BudgetsUiState.Ready(listOf(row(categoryName = "Продукты"))))
 
         val period = formatPeriod(LocalDate.parse("2026-09-01"), LocalDate.parse("2026-09-30"))
         composeRule.onNodeWithText("Еда").assertIsDisplayed()
@@ -82,7 +84,7 @@ class BudgetsScreenTest {
 
     @Test
     fun budgetWithoutCategorySaysAllCategories() {
-        show(BudgetsUiState.Ready(listOf(row(categoryName = null)), BudgetFilter.ALL))
+        show(BudgetsUiState.Ready(listOf(row(categoryName = null))), BudgetFilter.ALL)
 
         val period = formatPeriod(LocalDate.parse("2026-09-01"), LocalDate.parse("2026-09-30"))
         composeRule
@@ -93,7 +95,7 @@ class BudgetsScreenTest {
     @Test
     fun tappingFilterReachesCallback() {
         var filter: BudgetFilter? = null
-        show(BudgetsUiState.Ready(listOf(row()), BudgetFilter.TODAY), onFilterChange = { filter = it })
+        show(BudgetsUiState.Ready(listOf(row())), onFilterChange = { filter = it })
 
         composeRule.onNodeWithText(res.getString(R.string.budgets_filter_all)).performClick()
 
@@ -104,11 +106,20 @@ class BudgetsScreenTest {
     fun tappingRowOpensBudget() {
         var opened: UUID? = null
         val budget = row()
-        show(BudgetsUiState.Ready(listOf(budget), BudgetFilter.TODAY), onOpen = { opened = it })
+        show(BudgetsUiState.Ready(listOf(budget)), onOpen = { opened = it })
 
         composeRule.onNodeWithText("Еда").performClick()
 
         assertEquals(budget.budget.id, opened)
+    }
+
+    /** Категория удалена: справочник её не отдал, и выдавать бюджет за общий нельзя. */
+    @Test
+    fun budgetOfAnUnknownCategoryShowsADash() {
+        show(BudgetsUiState.Ready(listOf(row(categoryName = null, categoryId = UUID.randomUUID()))))
+
+        val period = formatPeriod(LocalDate.parse("2026-09-01"), LocalDate.parse("2026-09-30"))
+        composeRule.onNodeWithText("— · $period").assertIsDisplayed()
     }
 
     @Test
@@ -118,9 +129,28 @@ class BudgetsScreenTest {
         composeRule.onNodeWithText(res.getString(R.string.retry)).assertIsDisplayed()
     }
 
+    /** Упавший запрос «на сегодня» иначе не переключить: «Повторить» повторяет ровно его. */
+    @Test
+    fun filterStaysReachableOnFailure() {
+        var picked: BudgetFilter? = null
+        show(BudgetsUiState.Failure(UiError.Network), onFilterChange = { picked = it })
+
+        composeRule.onNodeWithText(res.getString(R.string.budgets_filter_all)).performClick()
+
+        assertEquals(BudgetFilter.ALL, picked)
+    }
+
+    @Test
+    fun filterStaysReachableWhileLoading() {
+        show(BudgetsUiState.Loading)
+
+        composeRule.onNodeWithText(res.getString(R.string.budgets_filter_today)).assertIsDisplayed()
+    }
+
     private fun row(
         categoryName: String? = "Продукты",
         utilization: Double = 60.0,
+        categoryId: UUID? = if (categoryName == null) null else UUID.randomUUID(),
     ): BudgetRow {
         val stamp = OffsetDateTime.parse("2026-09-07T10:00:00Z")
         return BudgetRow(
@@ -137,7 +167,7 @@ class BudgetsScreenTest {
                 isActive = true,
                 createdAt = stamp,
                 updatedAt = stamp,
-                categoryId = if (categoryName == null) null else UUID.randomUUID(),
+                categoryId = categoryId,
             ),
             categoryName = categoryName,
             level = levelOf(utilization),

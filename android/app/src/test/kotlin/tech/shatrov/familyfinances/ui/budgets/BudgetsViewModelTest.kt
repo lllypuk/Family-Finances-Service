@@ -10,7 +10,9 @@ import kotlinx.coroutines.test.setMain
 import mockwebserver3.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -23,6 +25,7 @@ import tech.shatrov.familyfinances.FakeTokenVault
 import tech.shatrov.familyfinances.GROCERIES_ID
 import tech.shatrov.familyfinances.INTERNAL_ERROR
 import tech.shatrov.familyfinances.ROBOLECTRIC_SDK
+import tech.shatrov.familyfinances.SALARY_ID
 import tech.shatrov.familyfinances.core.api.ApiGraph
 import tech.shatrov.familyfinances.enqueueJson
 import tech.shatrov.familyfinances.liveToken
@@ -38,6 +41,15 @@ private const val BUDGETS_NEAR = """
 "start_date":"2026-09-01","end_date":"2026-09-30","is_active":true,
 "created_at":"2026-09-07T10:00:00Z","updated_at":"2026-09-07T10:00:00Z"}],
 "meta":{"request_id":"r-17","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0",
+"pagination":{"limit":200,"offset":0,"total":1}}}
+"""
+
+/** Справочник без «Продуктов»: категория бюджета удалена и мягко скрыта из списка. */
+private const val CATEGORIES_WITHOUT_GROCERIES = """
+{"data":[
+{"id":"$SALARY_ID","name":"Зарплата","type":"income","color":"#00ff00","icon":"wallet",
+"is_active":true,"created_at":"2026-09-07T10:00:00Z","updated_at":"2026-09-07T10:00:00Z"}],
+"meta":{"request_id":"r-21","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0",
 "pagination":{"limit":200,"offset":0,"total":1}}}
 """
 
@@ -89,9 +101,9 @@ class BudgetsViewModelTest {
         enqueueList()
 
         createModel()
-        val state = settle() as BudgetsUiState.Ready
+        settle()
 
-        assertEquals(BudgetFilter.TODAY, state.filter)
+        assertEquals(BudgetFilter.TODAY, model.filter.value)
         assertEquals("true", requestUrl(1).queryParameter("active_only"))
     }
 
@@ -103,9 +115,9 @@ class BudgetsViewModelTest {
 
         enqueueList()
         model.onFilterChange(BudgetFilter.ALL)
-        val state = settle() as BudgetsUiState.Ready
+        settle()
 
-        assertEquals(BudgetFilter.ALL, state.filter)
+        assertEquals(BudgetFilter.ALL, model.filter.value)
         assertNull(requestUrl(3).queryParameter("active_only"))
     }
 
@@ -119,10 +131,25 @@ class BudgetsViewModelTest {
         assertEquals(listOf("Еда", "Всё"), rows.map { it.budget.name })
         assertEquals("Продукты", rows.first().categoryName)
         assertEquals(GROCERIES_ID, rows.first().budget.categoryId.toString())
+        assertFalse(rows.first().allCategories)
         // Бюджет на все категории: имени нет, и строка покажет «Все категории».
         assertNull(rows.last().categoryName)
+        assertTrue(rows.last().allCategories)
         assertEquals(BudgetLevel.OVER, rows.first().level)
         assertEquals(BudgetLevel.OK, rows.last().level)
+    }
+
+    /** Категория бюджета удалена: справочник её не отдаёт, но строка не «на все категории». */
+    @Test
+    fun budgetOfADeletedCategoryIsNotMarkedAsAllCategories() = runTest {
+        server.enqueueJson(200, BUDGETS_LIST)
+        server.enqueueJson(200, CATEGORIES_WITHOUT_GROCERIES)
+
+        createModel()
+        val rows = (settle() as BudgetsUiState.Ready).rows
+
+        assertNull(rows.first().categoryName)
+        assertFalse(rows.first().allCategories)
     }
 
     @Test
@@ -141,7 +168,7 @@ class BudgetsViewModelTest {
 
         createModel()
 
-        assertEquals(BudgetsUiState.Ready(emptyList(), BudgetFilter.TODAY), settle())
+        assertEquals(BudgetsUiState.Ready(emptyList()), settle())
     }
 
     // «Сегодня» считает сервер: после полуночи ответ уже про другой набор бюджетов.

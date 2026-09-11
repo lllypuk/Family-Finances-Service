@@ -24,6 +24,7 @@ import tech.shatrov.familyfinances.CATEGORIES_OK
 import tech.shatrov.familyfinances.FOOD_BUDGET_ID
 import tech.shatrov.familyfinances.FakeTokenVault
 import tech.shatrov.familyfinances.GROCERIES_ID
+import tech.shatrov.familyfinances.INTERNAL_ERROR
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.ROBOLECTRIC_SDK
 import tech.shatrov.familyfinances.core.api.ApiGraph
@@ -229,6 +230,104 @@ class BudgetEditViewModelTest {
 
         model.onNameChange("Продукты")
         assertTrue(model.state.value.fieldErrors.isEmpty())
+    }
+
+    /** Справочник не загрузился: «все категории» тут не выбор, а пустой список. */
+    @Test
+    fun failedLoadBlocksSavingUntilRetrySucceeds() = runTest {
+        server.enqueueJson(500, INTERNAL_ERROR)
+        createModel()
+        val failed = loaded()
+
+        assertFalse(failed.ready)
+        assertEquals(UiError.Server("всё сломалось"), failed.error)
+
+        model.onNameChange("Еда")
+        model.onAmountChange("50000")
+        assertFalse(model.state.value.canSubmit)
+
+        server.enqueueJson(200, CATEGORIES_OK)
+        model.load()
+        val retried = loaded()
+
+        assertTrue(retried.ready)
+        assertNull(retried.error)
+        assertTrue(retried.canSubmit)
+        // Повтор перечитывает справочник, а не введённое.
+        assertEquals("Еда", retried.name)
+    }
+
+    @Test
+    fun endNotAfterStartBlocksSaving() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        createModel()
+        loaded()
+        model.onNameChange("Еда")
+        model.onAmountChange("50000")
+        assertTrue(model.state.value.canSubmit)
+
+        model.onEndChange(LocalDate.parse("2026-09-15"))
+
+        assertTrue(model.state.value.periodInvalid)
+        assertFalse(model.state.value.canSubmit)
+    }
+
+    @Test
+    fun shortNameAndNonPositiveAmountBlockSaving() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        createModel()
+        loaded()
+
+        model.onNameChange("Е")
+        model.onAmountChange("50000")
+        assertFalse(model.state.value.canSubmit)
+
+        model.onNameChange("Еда")
+        model.onAmountChange("0")
+        assertFalse(model.state.value.canSubmit)
+
+        model.onAmountChange("не число")
+        assertFalse(model.state.value.canSubmit)
+
+        model.onAmountChange("1")
+        assertTrue(model.state.value.canSubmit)
+    }
+
+    /** Повтор после обрыва шлёт тот же клиентский UUID — второго бюджета не появится. */
+    @Test
+    fun retryRepeatsTheSameDraftId() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        createModel()
+        loaded()
+        model.onNameChange("Еда")
+        model.onAmountChange("50000")
+
+        server.enqueueJson(500, INTERNAL_ERROR)
+        model.onSubmit()
+        assertFalse(settled().done)
+
+        server.enqueueJson(201, BUDGET_OK)
+        model.onSubmit()
+        assertTrue(settled().done)
+
+        server.takeRequest()
+        val first = server.takeRequest().text()
+        val second = server.takeRequest().text()
+        assertTrue(first, first.contains("\"id\":\"$DRAFT_ID\""))
+        assertEquals(first, second)
+    }
+
+    @Test
+    fun failedDeleteKeepsTheForm() = runTest {
+        editing()
+
+        server.enqueueJson(500, INTERNAL_ERROR)
+        model.onDelete()
+        val state = settled()
+
+        assertFalse(state.done)
+        assertFalse(state.submitting)
+        assertEquals(UiError.Server("всё сломалось"), state.error)
     }
 
     @Test

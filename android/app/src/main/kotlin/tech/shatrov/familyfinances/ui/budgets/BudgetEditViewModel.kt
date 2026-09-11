@@ -86,10 +86,17 @@ data class BudgetEditUiState(
             return request.takeIf { it != UpdateBudgetRequest() }
         }
 
+    /** Конец не позже начала: кнопка гаснет, и без подписи форма выглядит сломанной. */
+    val periodInvalid: Boolean
+        get() = end <= start
+
+    // `ready` обязателен: без справочника «все категории» — не выбор пользователя, а пустой
+    // список, и созданный так бюджет категорию уже не получит — её нет в `UpdateBudgetRequest`.
     val canSubmit: Boolean
         get() = name.trim().length >= MIN_NAME &&
             (amountMinor ?: 0L) > 0L &&
-            end > start &&
+            !periodInvalid &&
+            ready &&
             !loading &&
             !submitting &&
             (!editing || changes != null)

@@ -40,6 +40,7 @@ import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
 import tech.shatrov.familyfinances.ui.DatePickerSheet
+import tech.shatrov.familyfinances.ui.FieldError
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.message
 import java.time.LocalDate
@@ -85,7 +86,7 @@ fun BudgetEditScreen(
             label = { Text(stringResource(R.string.budget_name)) },
             singleLine = true,
             isError = state.fieldErrors.containsKey(BudgetField.NAME),
-            supportingText = { FieldError(state, BudgetField.NAME) },
+            supportingText = { FieldError(state.fieldErrors[BudgetField.NAME]) },
             modifier = Modifier.fillMaxWidth(),
         )
 
@@ -95,7 +96,7 @@ fun BudgetEditScreen(
             label = { Text(stringResource(R.string.budget_amount)) },
             singleLine = true,
             isError = state.fieldErrors.containsKey(BudgetField.AMOUNT),
-            supportingText = { FieldError(state, BudgetField.AMOUNT) },
+            supportingText = { FieldError(state.fieldErrors[BudgetField.AMOUNT]) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth(),
         )
@@ -110,16 +111,19 @@ fun BudgetEditScreen(
                 }
             }
         }
-        FieldError(state, BudgetField.PERIOD)
+        FieldError(state.fieldErrors[BudgetField.PERIOD])
 
         Label(R.string.budget_category)
         CategoryPicker(state, onCategoryChange)
-        FieldError(state, BudgetField.CATEGORY)
+        FieldError(state.fieldErrors[BudgetField.CATEGORY])
 
         DateButton(R.string.budget_start, formatDay(state.start)) { pickingDate = DateField.START }
         DateButton(R.string.budget_end, formatDay(state.end)) { pickingDate = DateField.END }
-        FieldError(state, BudgetField.START)
-        FieldError(state, BudgetField.END)
+        FieldError(state.fieldErrors[BudgetField.START])
+        FieldError(state.fieldErrors[BudgetField.END])
+        if (state.periodInvalid) {
+            FieldError(stringResource(R.string.budget_error_period))
+        }
 
         FormError(state, onRetry)
 
@@ -283,13 +287,4 @@ private fun FormError(
 @Composable
 private fun Label(@StringRes text: Int) {
     Text(stringResource(text), style = MaterialTheme.typography.bodySmall)
-}
-
-@Composable
-private fun FieldError(
-    state: BudgetEditUiState,
-    field: String,
-) {
-    val text = state.fieldErrors[field] ?: return
-    Text(text = text, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
 }

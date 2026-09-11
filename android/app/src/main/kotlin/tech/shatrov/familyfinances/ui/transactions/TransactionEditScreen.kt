@@ -39,6 +39,7 @@ import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
 import tech.shatrov.familyfinances.ui.DatePickerSheet
+import tech.shatrov.familyfinances.ui.FieldError
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.message
 import java.time.LocalDate
@@ -95,7 +96,7 @@ fun TransactionEditScreen(
             label = { Text(stringResource(R.string.transaction_amount)) },
             singleLine = true,
             isError = state.fieldErrors.containsKey(TransactionField.AMOUNT),
-            supportingText = { FieldError(state, TransactionField.AMOUNT) },
+            supportingText = { FieldError(state.fieldErrors[TransactionField.AMOUNT]) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth(),
         )
@@ -112,7 +113,7 @@ fun TransactionEditScreen(
                 }
             }
         }
-        FieldError(state, TransactionField.TYPE)
+        FieldError(state.fieldErrors[TransactionField.TYPE])
 
         Text(stringResource(R.string.transaction_category), style = MaterialTheme.typography.bodySmall)
         ChipRow {
@@ -120,7 +121,7 @@ fun TransactionEditScreen(
                 Chip(category.name, state.categoryId == category.id) { onCategoryChange(category.id) }
             }
         }
-        FieldError(state, TransactionField.CATEGORY)
+        FieldError(state.fieldErrors[TransactionField.CATEGORY])
 
         OutlinedButton(
             onClick = { datePickerShown = true },
@@ -128,7 +129,7 @@ fun TransactionEditScreen(
         ) {
             Text(formatDay(state.date))
         }
-        FieldError(state, TransactionField.DATE)
+        FieldError(state.fieldErrors[TransactionField.DATE])
 
         OutlinedTextField(
             value = state.description,
@@ -136,7 +137,7 @@ fun TransactionEditScreen(
             label = { Text(stringResource(R.string.transaction_description)) },
             singleLine = true,
             isError = state.fieldErrors.containsKey(TransactionField.DESCRIPTION),
-            supportingText = { FieldError(state, TransactionField.DESCRIPTION) },
+            supportingText = { FieldError(state.fieldErrors[TransactionField.DESCRIPTION]) },
             modifier = Modifier.fillMaxWidth(),
         )
 
@@ -214,13 +215,4 @@ fun TransactionEditScreen(
             },
         )
     }
-}
-
-@Composable
-private fun FieldError(
-    state: TransactionEditUiState,
-    field: String,
-) {
-    val text = state.fieldErrors[field] ?: return
-    Text(text = text, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
 }

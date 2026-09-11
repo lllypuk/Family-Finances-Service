@@ -29,6 +29,7 @@ import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.theme.Dimens
 import tech.shatrov.familyfinances.theme.LocalAppColors
 import tech.shatrov.familyfinances.ui.AppIcons
+import tech.shatrov.familyfinances.ui.Centered
 import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
 import tech.shatrov.familyfinances.ui.format.formatMoney
@@ -43,6 +44,7 @@ private const val FULL_PERCENT = 100f
 @Composable
 fun BudgetsScreen(
     state: BudgetsUiState,
+    filter: BudgetFilter,
     currency: String,
     onRetry: () -> Unit,
     onFilterChange: (BudgetFilter) -> Unit,
@@ -68,6 +70,9 @@ fun BudgetsScreen(
             }
         }
 
+        // Чипы вне `when`: на отказе запроса «на сегодня» переключиться иначе некуда.
+        Filters(filter, onFilterChange)
+
         when (state) {
             BudgetsUiState.Loading -> Centered { CircularProgressIndicator() }
 
@@ -84,14 +89,12 @@ fun BudgetsScreen(
                 }
             }
 
-            is BudgetsUiState.Ready -> {
-                Filters(state.filter, onFilterChange)
+            is BudgetsUiState.Ready ->
                 if (state.isEmpty) {
-                    Centered { Text(stringResource(emptyText(state.filter))) }
+                    Centered { Text(stringResource(emptyText(filter))) }
                 } else {
                     Rows(state, currency, onOpen)
                 }
-            }
         }
     }
 }
@@ -121,6 +124,14 @@ private fun Filters(
             }
         }
     }
+}
+
+/** Категория, которой нет в справочнике (удалена), — прочерк, а не «Все категории». */
+@Composable
+private fun categoryLabel(row: BudgetRow): String = when {
+    row.categoryName != null -> row.categoryName
+    row.allCategories -> stringResource(R.string.budgets_all_categories)
+    else -> "—"
 }
 
 @Composable
@@ -179,8 +190,7 @@ private fun BudgetItem(
             )
         }
         Text(
-            text = "${row.categoryName ?: stringResource(R.string.budgets_all_categories)} · " +
-                formatPeriod(budget.startDate, budget.endDate),
+            text = "${categoryLabel(row)} · " + formatPeriod(budget.startDate, budget.endDate),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
@@ -195,18 +205,5 @@ private fun BudgetItem(
             },
             modifier = Modifier.fillMaxWidth(),
         )
-    }
-}
-
-@Composable
-private fun Centered(content: @Composable () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(Dimens.SPACE_4),
-        verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_3, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        content()
     }
 }

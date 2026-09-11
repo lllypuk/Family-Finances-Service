@@ -18,6 +18,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -30,6 +31,7 @@ import tech.shatrov.familyfinances.ROBOLECTRIC_SDK
 import tech.shatrov.familyfinances.core.api.Budget
 import tech.shatrov.familyfinances.core.api.BudgetPeriod
 import tech.shatrov.familyfinances.theme.AppTheme
+import tech.shatrov.familyfinances.ui.UiError
 import tech.shatrov.familyfinances.ui.format.formatDay
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -68,13 +70,41 @@ class BudgetEditScreenTest {
 
     private val res = ApplicationProvider.getApplicationContext<Context>().resources
 
+    /** Арифметику пресета проверяет `BudgetEditViewModelTest.periodChangeMovesTheEnd`. */
     @Test
-    fun weeklyPresetMovesTheEndDate() {
-        showLive(form())
+    fun periodChipReportsTheChoiceAndEndLabelFollowsState() {
+        var picked: BudgetPeriod? = null
+        showLive(form()) { picked = it }
 
         composeRule.onNodeWithText(res.getString(R.string.budget_period_weekly)).performClick()
 
+        assertEquals(BudgetPeriod.weekly, picked)
         composeRule.onNodeWithText(endLabel(START.plusDays(WEEK_TAIL))).performScrollTo().assertIsDisplayed()
+    }
+
+    /** Справочник не загрузился: «Повторить» есть, а сохранять нечем. */
+    @Test
+    fun failedLoadOffersRetryAndBlocksSaving() {
+        show(form().copy(ready = false, error = UiError.Network))
+
+        composeRule.onNodeWithText(res.getString(R.string.retry)).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(res.getString(R.string.budget_save)).performScrollTo().assertIsNotEnabled()
+    }
+
+    /** Отказ сохранения: повтор перечитал бы справочник поверх введённого. */
+    @Test
+    fun failedSaveDoesNotOfferRetry() {
+        show(form().copy(error = UiError.Network))
+
+        composeRule.onNodeWithText(res.getString(R.string.retry)).assertDoesNotExist()
+    }
+
+    @Test
+    fun endBeforeStartIsExplained() {
+        show(form().copy(end = START.minusDays(1)))
+
+        composeRule.onNodeWithText(res.getString(R.string.budget_error_period)).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(res.getString(R.string.budget_save)).performScrollTo().assertIsNotEnabled()
     }
 
     @Test
@@ -139,14 +169,18 @@ class BudgetEditScreenTest {
         }
     }
 
-    /** Пресет конца живёт в модели, поэтому экран для него запускается поверх живого состояния. */
-    private fun showLive(initial: BudgetEditUiState) {
+    /** Экран поверх живого состояния: подпись конца должна пойти за сменой периода. */
+    private fun showLive(
+        initial: BudgetEditUiState,
+        onPeriodChange: (BudgetPeriod) -> Unit,
+    ) {
         composeRule.setContent {
             var state by remember { mutableStateOf(initial) }
             AppTheme {
                 Screen(
                     state = state,
                     onPeriodChange = { period ->
+                        onPeriodChange(period)
                         state = state.copy(period = period, end = endOf(period, state.start) ?: state.end)
                     },
                     onDelete = {},

@@ -86,6 +86,7 @@
     <string name="budget_save">Сохранить</string>
     <string name="budget_delete">Удалить</string>
     <string name="budget_delete_confirm">Удалить бюджет?</string>
+    <string name="budget_error_period">Конец периода должен быть позже начала</string>
     <string name="budget_error_rejected">Не удалось сохранить: название занято, даты пересекаются с другим бюджетом или сумма меньше уже потраченного</string>
     <string name="budget_progress">%1$s из %2$s</string>
 

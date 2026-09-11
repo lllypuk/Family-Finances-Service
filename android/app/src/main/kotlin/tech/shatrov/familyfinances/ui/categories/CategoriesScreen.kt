@@ -33,6 +33,7 @@ import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.core.api.Category
 import tech.shatrov.familyfinances.theme.Dimens
 import tech.shatrov.familyfinances.ui.AppIcons
+import tech.shatrov.familyfinances.ui.Centered
 import tech.shatrov.familyfinances.ui.message
 
 /** Список категорий: доходные и расходные врозь, подкатегории — с отступом под родителем. */
@@ -153,18 +154,5 @@ private fun CategoryItem(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-    }
-}
-
-@Composable
-private fun Centered(content: @Composable () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(Dimens.SPACE_4),
-        verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_3, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        content()
     }
 }

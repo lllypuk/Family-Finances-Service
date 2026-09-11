@@ -29,22 +29,25 @@ enum class BudgetLevel { OK, NEAR, OVER }
 
 enum class BudgetFilter { TODAY, ALL }
 
-/** Строка списка: имя категории подставлено здесь, чтобы разметка не искала его по словарю. */
+/**
+ * Строка списка: имя категории подставлено здесь, чтобы разметка не искала его по словарю.
+ * `categoryName == null` при непустом `budget.categoryId` — категории нет в справочнике
+ * (удалена), и выдавать её за бюджет на все категории нельзя.
+ */
 data class BudgetRow(
     val budget: Budget,
     val categoryName: String?,
     val level: BudgetLevel,
-)
+) {
+    val allCategories: Boolean get() = budget.categoryId == null
+}
 
 sealed interface BudgetsUiState {
     data object Loading : BudgetsUiState
 
     data class Failure(val error: UiError) : BudgetsUiState
 
-    data class Ready(
-        val rows: List<BudgetRow>,
-        val filter: BudgetFilter,
-    ) : BudgetsUiState {
+    data class Ready(val rows: List<BudgetRow>) : BudgetsUiState {
         val isEmpty: Boolean get() = rows.isEmpty()
     }
 }
@@ -63,7 +66,12 @@ class BudgetsViewModel(
 
     val state: StateFlow<BudgetsUiState> = mutable.asStateFlow()
 
-    private var filter = BudgetFilter.TODAY
+    // Фильтр отдельно от состояния списка: чипы рисуются и на загрузке, и на отказе — иначе
+    // упавший запрос «на сегодня» не переключить, и «Повторить» повторяет ровно его.
+    private val mutableFilter = MutableStateFlow(BudgetFilter.TODAY)
+
+    val filter: StateFlow<BudgetFilter> = mutableFilter.asStateFlow()
+
     private var requestedOn: LocalDate? = null
     private var job: Job? = null
 
@@ -72,8 +80,8 @@ class BudgetsViewModel(
     }
 
     fun onFilterChange(next: BudgetFilter) {
-        if (next == filter) return
-        filter = next
+        if (next == mutableFilter.value) return
+        mutableFilter.value = next
         refresh()
     }
 
@@ -99,7 +107,7 @@ class BudgetsViewModel(
                     .unwrap {
                         api.budgets.listBudgets(
                             limit = BUDGET_LIMIT,
-                            activeOnly = if (filter == BudgetFilter.TODAY) true else null,
+                            activeOnly = if (mutableFilter.value == BudgetFilter.TODAY) true else null,
                         )
                     }
                     .`data`
@@ -107,7 +115,7 @@ class BudgetsViewModel(
                     .unwrap { api.categories.listCategories(limit = BUDGET_LIMIT) }
                     .`data`
                     .associate { it.id to it.name }
-                BudgetsUiState.Ready(budgets.map { row(it, names) }, filter)
+                BudgetsUiState.Ready(budgets.map { row(it, names) })
             } catch (failure: ApiFailure) {
                 BudgetsUiState.Failure(failure.toUiError())
             }

@@ -42,6 +42,7 @@ import tech.shatrov.familyfinances.theme.Dimens
 import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
+import tech.shatrov.familyfinances.ui.FieldError
 import tech.shatrov.familyfinances.ui.message
 import java.util.UUID
 
@@ -89,7 +90,7 @@ fun CategoryEditScreen(
             label = { Text(stringResource(R.string.category_name)) },
             singleLine = true,
             isError = state.fieldErrors.containsKey(CategoryField.NAME),
-            supportingText = { FieldError(state, CategoryField.NAME) },
+            supportingText = { FieldError(state.fieldErrors[CategoryField.NAME]) },
             modifier = Modifier.fillMaxWidth(),
         )
 
@@ -106,7 +107,7 @@ fun CategoryEditScreen(
                     }
                 }
             }
-            FieldError(state, CategoryField.TYPE)
+            FieldError(state.fieldErrors[CategoryField.TYPE])
 
             Text(stringResource(R.string.category_parent), style = MaterialTheme.typography.bodySmall)
             ChipRow {
@@ -119,12 +120,12 @@ fun CategoryEditScreen(
                     Chip(parent.name, state.parentId == parent.id) { onParentChange(parent.id) }
                 }
             }
-            FieldError(state, CategoryField.PARENT)
+            FieldError(state.fieldErrors[CategoryField.PARENT])
         }
 
         Text(stringResource(R.string.category_color), style = MaterialTheme.typography.bodySmall)
         Palette(state.color, onColorChange)
-        FieldError(state, CategoryField.COLOR)
+        FieldError(state.fieldErrors[CategoryField.COLOR])
 
         OutlinedTextField(
             value = state.icon,
@@ -132,7 +133,7 @@ fun CategoryEditScreen(
             label = { Text(stringResource(R.string.category_icon)) },
             singleLine = true,
             isError = state.fieldErrors.containsKey(CategoryField.ICON),
-            supportingText = { FieldError(state, CategoryField.ICON) },
+            supportingText = { FieldError(state.fieldErrors[CategoryField.ICON]) },
             modifier = Modifier.fillMaxWidth(),
         )
 
@@ -214,13 +215,4 @@ private fun Palette(
             ) {}
         }
     }
-}
-
-@Composable
-private fun FieldError(
-    state: CategoryEditUiState,
-    field: String,
-) {
-    val text = state.fieldErrors[field] ?: return
-    Text(text = text, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
 }

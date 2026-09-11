@@ -42,6 +42,7 @@ import tech.shatrov.familyfinances.theme.AppTheme
 import tech.shatrov.familyfinances.theme.Dimens
 import tech.shatrov.familyfinances.ui.AppNavBar
 import tech.shatrov.familyfinances.ui.AppTab
+import tech.shatrov.familyfinances.ui.Centered
 import tech.shatrov.familyfinances.ui.UiError
 import tech.shatrov.familyfinances.ui.budgets.BudgetEditScreen
 import tech.shatrov.familyfinances.ui.budgets.BudgetEditViewModel
@@ -268,6 +269,7 @@ fun AppRoot(graph: AppGraph) {
                 BudgetsViewModel(graph.api, active.zone)
             }
             val budgets by model.state.collectAsStateWithLifecycle()
+            val budgetFilter by model.filter.collectAsStateWithLifecycle()
             // «Сегодня» под фильтром считает сервер: ответ, полученный вчера, к возврату из
             // фона показывает чужой день.
             LifecycleResumeEffect(budgetsStale) {
@@ -283,6 +285,7 @@ fun AppRoot(graph: AppGraph) {
             WithNavBar(AppTab.BUDGETS, onSelect = { screen = it.screen }) {
                 BudgetsScreen(
                     state = budgets,
+                    filter = budgetFilter,
                     currency = active.currency,
                     onRetry = model::refresh,
                     onFilterChange = model::onFilterChange,
@@ -434,18 +437,5 @@ private fun WithSession(
         Centered { Text(stringResource(R.string.loading)) }
     } else {
         content(session)
-    }
-}
-
-@Composable
-private fun Centered(content: @Composable () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(Dimens.SPACE_4),
-        verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_3, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        content()
     }
 }

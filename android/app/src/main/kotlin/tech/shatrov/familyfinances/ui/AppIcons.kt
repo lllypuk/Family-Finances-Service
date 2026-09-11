@@ -16,32 +16,33 @@ private const val STROKE = 2f
  * стиле с домом и списком, а `material-icons-extended` тянет тысячи векторов ради шести.
  */
 object AppIcons {
-    val Home: ImageVector by lazy {
+    val Home: ImageVector =
         icon("home", "M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z")
-    }
-    val List: ImageVector by lazy {
+
+    val List: ImageVector =
         icon("list", "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01")
-    }
-    val Tag: ImageVector by lazy {
+
+    val Tag: ImageVector =
         icon(
             "tag",
             "M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z",
             "M7.5 6.5a1 1 0 1 0 0 2 1 1 0 1 0 0-2z",
         )
-    }
-    val Target: ImageVector by lazy {
+
+    val Target: ImageVector =
         icon(
             "target",
             "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z",
             "M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12z",
             "M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
         )
-    }
-    val Plus: ImageVector by lazy { icon("plus", "M12 5v14M5 12h14") }
-    val ArrowLeft: ImageVector by lazy { icon("arrow-left", "m12 19-7-7 7-7M19 12H5") }
-    val LogOut: ImageVector by lazy {
+
+    val Plus: ImageVector = icon("plus", "M12 5v14M5 12h14")
+
+    val ArrowLeft: ImageVector = icon("arrow-left", "m12 19-7-7 7-7M19 12H5")
+
+    val LogOut: ImageVector =
         icon("log-out", "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9")
-    }
 }
 
 /** Цвет контура чёрный только формально: `Icon` перекрашивает вектор целиком под `tint`. */
