@@ -1,7 +1,7 @@
 # План 07 — Бюджеты в Android-клиенте
 
-Продолжение [плана 06](completed/20260907-06-android-client.md): из «следующего плана» берутся
-только бюджеты. Отчёты, профиль, пользователи, сессии и бэкапы — в [бэклоге](../backlog.md).
+Продолжение [плана 06](20260907-06-android-client.md): из «следующего плана» берутся
+только бюджеты. Отчёты, профиль, пользователи, сессии и бэкапы — в [бэклоге](../../backlog.md).
 
 ## Overview
 
@@ -259,13 +259,13 @@
 
 ### Task 8: [Final] Update documentation
 
-- [ ] `android/CLAUDE.md`: «четыре корня» вместо трёх, `budgetsStale`, правило «PUT из diff» и
+- [x] `android/CLAUDE.md`: «четыре корня» вместо трёх, `budgetsStale`, правило «PUT из diff» и
       почему `is_active` не показывается
-- [ ] `android/gradle/libs.versions.toml`: `appVersionCode` 1 → 2, `appVersionName` 0.1.0 → 0.2.0 —
+- [x] `android/gradle/libs.versions.toml`: `appVersionCode` 1 → 2, `appVersionName` 0.1.0 → 0.2.0 —
       равный `versionCode` система ставит молча, и телефон остаётся на старой сборке
-- [ ] `docs/backlog.md`: серверные пункты из этого плана уже добавлены при его создании —
+- [x] `docs/backlog.md`: серверные пункты из этого плана уже добавлены при его создании —
       сверить, что ничего не закрылось по ходу
-- [ ] перенести план в `docs/plans/completed/`
+- [x] перенести план в `docs/plans/completed/`
 
 ## Post-Completion
 
