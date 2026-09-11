@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Фон иконки = canvas темы; legacy-растров нет, minSdk 26 рисует адаптивную везде. -->
+    <color name="ic_launcher_background">#071014</color>
+</resources>

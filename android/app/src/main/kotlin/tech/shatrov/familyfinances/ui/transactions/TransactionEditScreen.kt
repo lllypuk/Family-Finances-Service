@@ -17,6 +17,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -37,6 +39,7 @@ import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.core.api.Category
 import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.theme.Dimens
+import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
 import tech.shatrov.familyfinances.ui.format.formatDay
@@ -80,7 +83,9 @@ fun TransactionEditScreen(
         ) {
             // Отправка не отменяется: её корутина умрёт вместе с моделью формы, а запись
             // сервер уже мог принять.
-            TextButton(onClick = onBack, enabled = !state.submitting) { Text(stringResource(R.string.back)) }
+            IconButton(onClick = onBack, enabled = !state.submitting) {
+                Icon(AppIcons.ArrowLeft, contentDescription = stringResource(R.string.back))
+            }
             Text(
                 text = stringResource(
                     if (state.editing) R.string.transaction_edit_title else R.string.transaction_new_title,

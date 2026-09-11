@@ -22,8 +22,6 @@
     <string name="home_recent">Последние операции</string>
     <string name="home_budget_progress">%1$s из %2$s</string>
     <string name="home_empty">Операций пока нет</string>
-    <string name="home_open_transactions">Операции</string>
-    <string name="home_open_categories">Категории</string>
 
     <string name="transactions_title">Операции</string>
     <string name="transactions_empty">Операций не найдено</string>

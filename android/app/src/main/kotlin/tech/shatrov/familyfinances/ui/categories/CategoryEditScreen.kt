@@ -17,6 +17,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -37,6 +39,7 @@ import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.core.api.Category
 import tech.shatrov.familyfinances.core.api.CategoryType
 import tech.shatrov.familyfinances.theme.Dimens
+import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
 import tech.shatrov.familyfinances.ui.message
@@ -69,7 +72,9 @@ fun CategoryEditScreen(
             horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
+            IconButton(onClick = onBack) {
+                Icon(AppIcons.ArrowLeft, contentDescription = stringResource(R.string.back))
+            }
             Text(
                 text = stringResource(
                     if (state.editing) R.string.category_edit_title else R.string.category_new_title,

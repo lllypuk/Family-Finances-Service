@@ -13,9 +13,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -28,6 +29,7 @@ import tech.shatrov.familyfinances.core.api.Category
 import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.theme.Dimens
 import tech.shatrov.familyfinances.theme.LocalAppColors
+import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
 import tech.shatrov.familyfinances.ui.format.formatDay
@@ -38,7 +40,6 @@ import java.util.UUID
 @Composable
 fun TransactionsScreen(
     state: TransactionsUiState,
-    onBack: () -> Unit,
     onRetry: () -> Unit,
     onFiltersChange: (TransactionFilters) -> Unit,
     onLoadMore: () -> Unit,
@@ -50,17 +51,18 @@ fun TransactionsScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = Dimens.SPACE_4, vertical = Dimens.SPACE_2),
+                .padding(start = Dimens.SPACE_4, end = Dimens.SPACE_2, top = Dimens.SPACE_2, bottom = Dimens.SPACE_2),
             horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
             Text(
                 text = stringResource(R.string.transactions_title),
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onCreate) { Text(stringResource(R.string.transactions_add)) }
+            IconButton(onClick = onCreate) {
+                Icon(AppIcons.Plus, contentDescription = stringResource(R.string.transactions_add))
+            }
         }
 
         when (state) {
