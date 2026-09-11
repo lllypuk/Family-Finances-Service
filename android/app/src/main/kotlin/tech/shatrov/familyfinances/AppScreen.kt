@@ -69,40 +69,43 @@ val AppScreenSaver: Saver<AppScreen, String> = Saver(
             is AppScreen.Settings -> "$KEY_SETTINGS:${screen.page.saveKey()}"
         }
     },
+    // Ключ мог прийти из бандла прошлой версии: разбор чужого формата — не крэш, а загрузка.
     restore = { key ->
-        when {
-            key == KEY_LOGIN -> AppScreen.Login
-
-            key == KEY_HOME -> AppScreen.Home
-
-            key == KEY_TRANSACTIONS -> AppScreen.Transactions
-
-            key == KEY_CATEGORIES -> AppScreen.Categories
-
-            key == KEY_BUDGETS -> AppScreen.Budgets
-
-            key.startsWith("$KEY_TRANSACTION_EDIT:") -> {
-                val (target, draft) = key.removePrefix("$KEY_TRANSACTION_EDIT:").split(':')
-                AppScreen.TransactionEdit(
-                    id = target.takeIf { it.isNotEmpty() }?.let(UUID::fromString),
-                    draft = UUID.fromString(draft),
-                )
-            }
-
-            key.startsWith("$KEY_BUDGET_EDIT:") -> {
-                val (target, draft) = key.removePrefix("$KEY_BUDGET_EDIT:").split(':')
-                AppScreen.BudgetEdit(
-                    id = target.takeIf { it.isNotEmpty() }?.let(UUID::fromString),
-                    draft = UUID.fromString(draft),
-                )
-            }
-
-            key.startsWith("$KEY_SETTINGS:") -> {
-                val (page, target, visit) = key.removePrefix("$KEY_SETTINGS:").split(':')
-                restoreSettingsPage(page, target, visit)?.let(AppScreen::Settings) ?: AppScreen.Loading
-            }
-
-            else -> AppScreen.Loading
-        }
+        runCatching { restoreScreen(key) }.getOrNull() ?: AppScreen.Loading
     },
 )
+
+private fun restoreScreen(key: String): AppScreen? = when {
+    key == KEY_LOGIN -> AppScreen.Login
+
+    key == KEY_HOME -> AppScreen.Home
+
+    key == KEY_TRANSACTIONS -> AppScreen.Transactions
+
+    key == KEY_CATEGORIES -> AppScreen.Categories
+
+    key == KEY_BUDGETS -> AppScreen.Budgets
+
+    key.startsWith("$KEY_TRANSACTION_EDIT:") -> {
+        val (target, draft) = key.removePrefix("$KEY_TRANSACTION_EDIT:").split(':')
+        AppScreen.TransactionEdit(
+            id = target.takeIf { it.isNotEmpty() }?.let(UUID::fromString),
+            draft = UUID.fromString(draft),
+        )
+    }
+
+    key.startsWith("$KEY_BUDGET_EDIT:") -> {
+        val (target, draft) = key.removePrefix("$KEY_BUDGET_EDIT:").split(':')
+        AppScreen.BudgetEdit(
+            id = target.takeIf { it.isNotEmpty() }?.let(UUID::fromString),
+            draft = UUID.fromString(draft),
+        )
+    }
+
+    key.startsWith("$KEY_SETTINGS:") -> {
+        val (page, target, visit) = key.removePrefix("$KEY_SETTINGS:").split(':')
+        restoreSettingsPage(page, target, visit)?.let(AppScreen::Settings) ?: AppScreen.Loading
+    }
+
+    else -> null
+}

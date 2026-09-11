@@ -60,18 +60,7 @@ fun SettingsRootScreen(
             .padding(Dimens.SPACE_4),
         verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_3),
     ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(AppIcons.ArrowLeft, contentDescription = stringResource(R.string.back))
-            }
-            Text(
-                text = stringResource(R.string.settings_title),
-                style = MaterialTheme.typography.headlineSmall,
-            )
-        }
+        SettingsHeader(R.string.settings_title, enabled = true, onBack = onBack)
 
         if (refreshing) {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())

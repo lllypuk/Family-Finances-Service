@@ -22,6 +22,7 @@ import org.robolectric.annotation.Config
 import tech.shatrov.familyfinances.BACKUPS_OK
 import tech.shatrov.familyfinances.BACKUPS_TRUNCATED
 import tech.shatrov.familyfinances.BACKUP_CREATED
+import tech.shatrov.familyfinances.FORBIDDEN_ERROR
 import tech.shatrov.familyfinances.FakeTokenVault
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.ROBOLECTRIC_SDK
@@ -87,6 +88,17 @@ class BackupsViewModelTest {
         assertEquals("backup_20260911_100000123.db", newest.name)
         assertEquals("12,3${NBSP}МБ", newest.size)
         assertEquals("11 сентября 2026, 13:00", newest.created)
+    }
+
+    /** Роль сняли с другого телефона: текст свой, а страницу закроет хост. */
+    @Test
+    fun forbiddenClosesThePage() = runTest {
+        server.enqueueJson(403, FORBIDDEN_ERROR)
+        create()
+        val state = model.state.first { it is BackupsUiState.Failure } as BackupsUiState.Failure
+
+        assertTrue(state.forbidden)
+        assertEquals(UiError.Resource(R.string.settings_forbidden), state.error)
     }
 
     @Test

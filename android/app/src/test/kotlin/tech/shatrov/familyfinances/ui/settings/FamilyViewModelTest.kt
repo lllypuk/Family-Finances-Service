@@ -18,6 +18,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import tech.shatrov.familyfinances.FAMILY_OK
+import tech.shatrov.familyfinances.FORBIDDEN_ERROR
 import tech.shatrov.familyfinances.FakeTokenVault
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.ROBOLECTRIC_SDK
@@ -64,6 +65,18 @@ class FamilyViewModelTest {
     }
 
     private suspend fun settled(): FamilyUiState = model.state.first { !it.submitting }
+
+    /** Роль сняли между заходом и «Сохранить»: текст свой, а страницу закроет хост. */
+    @Test
+    fun forbiddenClosesThePage() = runTest {
+        model.onNameChange("Шатровы")
+        server.enqueueJson(403, FORBIDDEN_ERROR)
+        model.onSubmit()
+        val state = settled()
+
+        assertTrue(state.forbidden)
+        assertEquals(UiError.Resource(R.string.settings_forbidden), state.error)
+    }
 
     @Test
     fun unchangedFormHasNothingToSend() {

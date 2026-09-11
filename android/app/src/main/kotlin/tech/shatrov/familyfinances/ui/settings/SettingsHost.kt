@@ -24,6 +24,9 @@ import java.util.UUID
  * @param models store моделей подразделов; чистит его `AppRoot` на каждом переходе.
  * @param onSignedOut «Выйти» подтверждён: сам выход делает `AppRoot` — его scope переживает
  *   смену экрана, а этот умрёт вместе с хостом.
+ *
+ * `403` в подразделе значит, что роль сняли с другого телефона: страница закрывается в корень,
+ * а он перечитает сессию и уберёт из списка то, чего больше нет.
  */
 @Composable
 fun SettingsHost(
@@ -43,6 +46,7 @@ fun SettingsHost(
     // Заход в форму, которому есть что сказать про заданный пароль: модель страницы пароля к
     // этому моменту уже уничтожена вместе со store, а хост переход переживает.
     var passwordSetFor by remember { mutableStateOf<UUID?>(null) }
+    val toRoot = { onPageChange(SettingsPage.Root()) }
     val leave = {
         if (!submitting) {
             val parent = page.parent()
@@ -87,6 +91,7 @@ fun SettingsHost(
             models = models,
             page = page,
             onOpen = onPageChange,
+            onForbidden = toRoot,
             onBack = leave,
         )
 
@@ -108,6 +113,7 @@ fun SettingsHost(
             models = models,
             page = page,
             onSubmitting = { submitting = it },
+            onForbidden = toRoot,
             onDone = { target ->
                 passwordSetFor = target.visit
                 onPageChange(target)
@@ -121,6 +127,7 @@ fun SettingsHost(
             models = models,
             page = page,
             onSubmitting = { submitting = it },
+            onForbidden = toRoot,
             onSessionChanged = onSessionChanged,
             onDone = leave,
         )
@@ -140,6 +147,7 @@ fun SettingsHost(
             models = models,
             page = page,
             onSubmitting = { submitting = it },
+            onForbidden = toRoot,
             onBack = leave,
         )
     }
@@ -193,6 +201,7 @@ private fun FamilyPage(
     models: ViewModelStoreOwner,
     page: SettingsPage.Family,
     onSubmitting: (Boolean) -> Unit,
+    onForbidden: () -> Unit,
     onSessionChanged: (Session, Session) -> Unit,
     onDone: () -> Unit,
 ) {
@@ -202,6 +211,7 @@ private fun FamilyPage(
     val state by model.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(state.submitting) { onSubmitting(state.submitting) }
+    LaunchedEffect(state.forbidden) { if (state.forbidden) onForbidden() }
     LaunchedEffect(state.saved) {
         val saved = state.saved ?: return@LaunchedEffect
         graph.update(saved)
@@ -278,6 +288,7 @@ private fun BackupsPage(
     models: ViewModelStoreOwner,
     page: SettingsPage.Backups,
     onSubmitting: (Boolean) -> Unit,
+    onForbidden: () -> Unit,
     onBack: () -> Unit,
 ) {
     val model: BackupsViewModel = viewModel(viewModelStoreOwner = models, key = page.modelKey) {
@@ -285,7 +296,10 @@ private fun BackupsPage(
     }
     val state by model.state.collectAsStateWithLifecycle()
 
+    val forbidden = (state as? BackupsUiState.Failure)?.forbidden == true
+
     LaunchedEffect(state.busy) { onSubmitting(state.busy) }
+    LaunchedEffect(forbidden) { if (forbidden) onForbidden() }
 
     BackupsScreen(
         state = state,
@@ -304,12 +318,17 @@ private fun UsersPage(
     models: ViewModelStoreOwner,
     page: SettingsPage.Users,
     onOpen: (SettingsPage) -> Unit,
+    onForbidden: () -> Unit,
     onBack: () -> Unit,
 ) {
     val model: UsersViewModel = viewModel(viewModelStoreOwner = models, key = page.modelKey) {
         UsersViewModel(graph.api, session.user.id)
     }
     val state by model.state.collectAsStateWithLifecycle()
+
+    val forbidden = (state as? UsersUiState.Failure)?.forbidden == true
+
+    LaunchedEffect(forbidden) { if (forbidden) onForbidden() }
 
     UsersScreen(
         state = state,
@@ -388,6 +407,7 @@ private fun UserPasswordPage(
     models: ViewModelStoreOwner,
     page: SettingsPage.UserPassword,
     onSubmitting: (Boolean) -> Unit,
+    onForbidden: () -> Unit,
     onDone: (SettingsPage.UserEdit) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -397,6 +417,7 @@ private fun UserPasswordPage(
     val state by model.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(state.submitting) { onSubmitting(state.submitting) }
+    LaunchedEffect(state.forbidden) { if (state.forbidden) onForbidden() }
     LaunchedEffect(state.done) {
         if (state.done) onDone(SettingsPage.UserEdit(page.id))
     }

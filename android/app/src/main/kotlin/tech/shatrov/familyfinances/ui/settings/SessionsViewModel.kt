@@ -18,8 +18,6 @@ import tech.shatrov.familyfinances.core.api.Session as ApiSession
 /** Сессии берутся одной страницей: их у пользователя единицы. */
 private const val SESSION_LIMIT = 200
 
-private const val HTTP_NOT_FOUND = 404
-
 /** Строка списка: даты уже в зоне семьи, «Без имени» подставляет экран. */
 data class SessionRow(
     val id: UUID,
@@ -88,7 +86,7 @@ class SessionsViewModel(
                 refresh()
             } catch (failure: ApiFailure) {
                 // Сессии уже нет — отзывать нечего, устарел список.
-                if ((failure as? ApiFailure.Api)?.status == HTTP_NOT_FOUND) {
+                if ((failure as? ApiFailure.Api)?.isNotFound == true) {
                     refresh()
                 } else {
                     mutable.value = current.copy(revoking = null, error = failure.toUiError())

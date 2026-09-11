@@ -95,11 +95,11 @@ fun AppRoot(graph: AppGraph) {
     val scope = rememberCoroutineScope()
     // Модель формы живёт в своём store: ключ у неё свой на каждый заход, а store активити
     // отдаёт брошенные модели только вместе с активити.
-    val forms: FormModels = viewModel { FormModels() }
+    val forms: ScopedModels = viewModel(key = "forms") { ScopedModels() }
     val onForm = screen is AppScreen.TransactionEdit || screen is AppScreen.BudgetEdit
     LaunchedEffect(onForm) { if (!onForm) forms.viewModelStore.clear() }
     // Свой store: модели подразделов настроек чистятся на каждом переходе, а модели форм — нет.
-    val settings: SettingsModels = viewModel { SettingsModels() }
+    val settings: ScopedModels = viewModel(key = "settings") { ScopedModels() }
     val inSettings = screen is AppScreen.Settings
     LaunchedEffect(inSettings) { if (!inSettings) settings.viewModelStore.clear() }
 
@@ -417,19 +417,12 @@ fun AppRoot(graph: AppGraph) {
     }
 }
 
-/** Хозяин моделей формы: переживает поворот вместе с активити, но чистится при уходе с формы. */
-private class FormModels :
-    ViewModel(),
-    ViewModelStoreOwner {
-    override val viewModelStore = ViewModelStore()
-
-    override fun onCleared() {
-        viewModelStore.clear()
-    }
-}
-
-/** Хозяин моделей подразделов настроек: свой store, чтобы чистить его отдельно от форм. */
-private class SettingsModels :
+/**
+ * Хозяин моделей области: переживает поворот вместе с активити, но чистится при уходе из неё.
+ * Областей две — формы и подразделы настроек, — и каждая чистится отдельно, поэтому это два
+ * экземпляра с разными ключами, а не один общий store.
+ */
+private class ScopedModels :
     ViewModel(),
     ViewModelStoreOwner {
     override val viewModelStore = ViewModelStore()

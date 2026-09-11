@@ -11,7 +11,6 @@ import tech.shatrov.familyfinances.core.api.Role
 import tech.shatrov.familyfinances.core.api.User
 import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import tech.shatrov.familyfinances.ui.UiError
-import tech.shatrov.familyfinances.ui.toUiError
 import java.util.UUID
 
 /** Пользователи берутся одной страницей: их в семье двое. */
@@ -30,7 +29,11 @@ data class UserRow(
 sealed interface UsersUiState {
     data object Loading : UsersUiState
 
-    data class Failure(val error: UiError) : UsersUiState
+    /** [forbidden] — роль сняли: страницу закрывает хост, повторять запрос незачем. */
+    data class Failure(
+        val error: UiError,
+        val forbidden: Boolean = false,
+    ) : UsersUiState
 
     data class Ready(
         val rows: List<UserRow>,
@@ -64,7 +67,7 @@ class UsersViewModel(
                     total = page.meta.pagination.total,
                 )
             } catch (failure: ApiFailure) {
-                mutable.value = UsersUiState.Failure(failure.toUiError())
+                mutable.value = UsersUiState.Failure(failure.toSettingsError(), failure.forbidden)
             }
         }
     }

@@ -34,7 +34,8 @@ Android-приложение в `android/` этого же репозитори�
   ViewModel'и, ручная навигация `AppScreen`, composition root `AppGraph`); DI ручной, без Hilt и Koin
 - **Сеть**: OkHttp 5 + Retrofit 3, kotlinx-serialization; модели и интерфейсы генерируются
   openapi-generator 7.24 из `docs/api/openapi.yaml`, вывод коммитится в `android/core/api/generated`
-- **Токен**: один непрозрачный bearer, AES/GCM в Android Keystore; `401` ведёт на экран входа
+- **Токен**: один непрозрачный bearer, AES/GCM в Android Keystore; `401` ведёт на экран входа, кроме
+  `INVALID_CREDENTIALS` на `PUT /me/password` — это неверный текущий пароль, а не конец сессии
 - **Тесты**: Robolectric 4.16 в `src/test` + MockWebServer; инструментальных в CI нет
 - **Версии**: только `android/gradle/libs.versions.toml`; ktlint и генератор — своими конфигурациями
 - **Сборка**: `make -C android check` (офлайновая), `api-check` (свежесть генерации),

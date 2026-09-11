@@ -24,6 +24,12 @@ fun formatBytes(bytes: Long): String {
         divisor *= STEP
     }
 
-    val tenths = (bytes * TENTHS + divisor / 2) / divisor
+    var tenths = (bytes * TENTHS + divisor / 2) / divisor
+    // Единица выбрана до округления: 1048575 Б это ещё «КБ», но округляется уже в «1,0 МБ».
+    val next = units.getOrNull(units.indexOf(unit) + 1)
+    if (tenths >= STEP * TENTHS && next != null) {
+        unit = next
+        tenths = (bytes * TENTHS + divisor * STEP / 2) / (divisor * STEP)
+    }
     return "${tenths / TENTHS},${tenths % TENTHS}$NBSP$unit"
 }

@@ -15,7 +15,6 @@ import tech.shatrov.familyfinances.core.api.UpdateUserRequest
 import tech.shatrov.familyfinances.core.api.User
 import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import tech.shatrov.familyfinances.ui.UiError
-import tech.shatrov.familyfinances.ui.toUiError
 import java.util.UUID
 
 /** Имена полей формы — те же, что в `error.details[].field`: словарь перевода не нужен. */
@@ -123,7 +122,13 @@ class UserEditViewModel(
                 val user = api.client.unwrap { api.users.getUser(target) }.`data`
                 mutable.update { it.withUser(user, notify = false).copy(loading = false) }
             } catch (failure: ApiFailure) {
-                mutable.update { it.copy(loading = false, loadError = failure.toUiError(settingsConflicts)) }
+                mutable.update {
+                    it.copy(
+                        loading = false,
+                        loadError = failure.toSettingsError(),
+                        exit = if (failure.forbidden) UserEditExit.Root else it.exit,
+                    )
+                }
             }
         }
     }
@@ -200,8 +205,10 @@ class UserEditViewModel(
         viewModelScope.launch {
             try {
                 val saved = api.client.unwrap { api.users.updateUser(target, changes) }.`data`
-                mutable.update { it.withUser(saved, notify = true).copy(submitting = false) }
+                mutable.update { it.withUser(saved, notify = true) }
+                // Перечитка идёт ещё под `submitting`: разблокированная форма потеряла бы ввод.
                 reload(target)
+                mutable.update { it.copy(submitting = false) }
             } catch (failure: ApiFailure) {
                 mutable.value = mutable.value.failed(failure)
             }
@@ -217,17 +224,15 @@ class UserEditViewModel(
         viewModelScope.launch {
             try {
                 val saved = api.client.unwrap { api.users.patchUser(target, request) }.`data`
-                mutable.update {
-                    it.withUser(saved, notify = true).copy(
-                        submitting = false,
-                        exit = if (leaving) UserEditExit.Root else null,
-                    )
-                }
+                mutable.update { it.withUser(saved, notify = true) }
                 if (!leaving) reload(target)
+                mutable.update {
+                    it.copy(submitting = false, exit = if (leaving) UserEditExit.Root else null)
+                }
             } catch (failure: ApiFailure) {
-                mutable.value = mutable.value.failed(failure)
                 // Отказ мог прийти вторым шагом запроса: роль уже записана, активность нет.
                 reload(target)
+                mutable.value = mutable.value.failed(failure)
             }
         }
     }
@@ -273,11 +278,13 @@ private fun UserEditUiState.failed(failure: ApiFailure): UserEditUiState {
     return copy(
         submitting = false,
         fieldErrors = underFields,
+        // Роль сняли на другом телефоне: список этому токену уже не отвечает.
+        exit = if (failure.forbidden) UserEditExit.Root else exit,
         // Деталь не про поле формы (`field: "body"`) осталась бы без текста — показываем её общим.
         error = if (underFields.size == details.size && underFields.isNotEmpty()) {
             null
         } else {
-            failure.toUiError(settingsConflicts)
+            failure.toSettingsError()
         },
     )
 }

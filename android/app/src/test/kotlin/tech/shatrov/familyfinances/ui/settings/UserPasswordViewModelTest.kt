@@ -17,6 +17,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import tech.shatrov.familyfinances.FORBIDDEN_ERROR
 import tech.shatrov.familyfinances.FakeTokenVault
 import tech.shatrov.familyfinances.INTERNAL_ERROR
 import tech.shatrov.familyfinances.MEMBER_ID
@@ -59,6 +60,18 @@ class UserPasswordViewModelTest {
     }
 
     private suspend fun settled(): UserPasswordUiState = model.state.first { !it.submitting }
+
+    /** Роль сняли, пока страница была открыта: страницу закроет хост, а текст свой. */
+    @Test
+    fun forbiddenClosesThePage() = runTest {
+        fill("Password12")
+        server.enqueueJson(403, FORBIDDEN_ERROR)
+        model.onSubmit()
+        val state = settled()
+
+        assertTrue(state.forbidden)
+        assertEquals(UiError.Resource(R.string.settings_forbidden), state.error)
+    }
 
     @Test
     fun mismatchAndShortPasswordBlockSending() {

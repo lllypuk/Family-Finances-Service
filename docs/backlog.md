@@ -26,7 +26,7 @@ S-03 (лимитер логина в `internal/auth/ratelimit.go`), `CSRF_SECRET
 
 - **Тег `v0.1.0` не поставлен** — действие владельца репозитория. `docker.yml` и `release.yml`
   уже указывают `file: docker/Dockerfile`, блокера нет. Ставить тег имеет смысл после перехода
-  на API-only ([005](specs/005-api-only-redesign.md)): все шесть планов закрыты, код и `openapi.yaml`
+  на API-only ([005](specs/005-api-only-redesign.md)): все восемь планов закрыты, код и `openapi.yaml`
   совпадают, деплой — один compose с Caddy.
 
 ## Обновление зависимостей после переезда на GitLab

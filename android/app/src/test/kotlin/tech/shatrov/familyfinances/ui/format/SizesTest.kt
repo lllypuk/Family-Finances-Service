@@ -26,6 +26,14 @@ class SizesTest {
         assertEquals("12,3${NBSP}МБ", formatBytes(12_876_906))
     }
 
+    /** Единица выбирается до округления: 1048575 Б это ещё «КБ», но печатается уже мегабайтом. */
+    @Test
+    fun roundingUpCarriesTheUnit() {
+        assertEquals("1023,9${NBSP}КБ", formatBytes(1_048_524))
+        assertEquals("1,0${NBSP}МБ", formatBytes(1_048_525))
+        assertEquals("1,0${NBSP}МБ", formatBytes(1_048_575))
+    }
+
     @Test
     fun gigabyteIsReachedToo() {
         assertEquals("2,0${NBSP}ГБ", formatBytes(2 * 1024L * 1024 * 1024))

@@ -18,13 +18,17 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import tech.shatrov.familyfinances.ADMIN_ID
+import tech.shatrov.familyfinances.FORBIDDEN_ERROR
 import tech.shatrov.familyfinances.FakeTokenVault
+import tech.shatrov.familyfinances.INTERNAL_ERROR
+import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.ROBOLECTRIC_SDK
 import tech.shatrov.familyfinances.USERS_OK
 import tech.shatrov.familyfinances.USERS_TRUNCATED
 import tech.shatrov.familyfinances.core.api.ApiGraph
 import tech.shatrov.familyfinances.enqueueJson
 import tech.shatrov.familyfinances.liveToken
+import tech.shatrov.familyfinances.ui.UiError
 import java.util.UUID
 
 /** Список пользователей: одна страница, своя запись помечена, усечение видно по `total`. */
@@ -58,6 +62,9 @@ class UsersViewModelTest {
     private suspend fun ready(): UsersUiState.Ready =
         model.state.first { it is UsersUiState.Ready } as UsersUiState.Ready
 
+    private suspend fun failure(): UsersUiState.Failure =
+        model.state.first { it is UsersUiState.Failure } as UsersUiState.Failure
+
     @Test
     fun listIsAskedAsOnePageAndMarksSelf() = runTest {
         server.enqueueJson(200, USERS_OK)
@@ -78,6 +85,30 @@ class UsersViewModelTest {
         assertEquals("admin@test.com", self.email)
         assertFalse(state.rows[1].self)
         assertFalse(state.rows[1].admin)
+    }
+
+    @Test
+    fun failedListIsRetriedFromScratch() = runTest {
+        server.enqueueJson(500, INTERNAL_ERROR)
+        create()
+        assertFalse(failure().forbidden)
+
+        server.enqueueJson(200, USERS_OK)
+        model.refresh()
+
+        assertEquals(2, ready().rows.size)
+        assertEquals(2, server.requestCount)
+    }
+
+    /** Роль сняли с другого телефона: серверный текст свой, а страницу закроет хост. */
+    @Test
+    fun forbiddenClosesThePage() = runTest {
+        server.enqueueJson(403, FORBIDDEN_ERROR)
+        create()
+        val state = failure()
+
+        assertTrue(state.forbidden)
+        assertEquals(UiError.Resource(R.string.settings_forbidden), state.error)
     }
 
     @Test

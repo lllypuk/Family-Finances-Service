@@ -12,7 +12,6 @@ import tech.shatrov.familyfinances.core.api.Family
 import tech.shatrov.familyfinances.core.api.UpdateFamilyRequest
 import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import tech.shatrov.familyfinances.ui.UiError
-import tech.shatrov.familyfinances.ui.toUiError
 
 /** Имена полей формы — те же, что в `error.details[].field`. */
 object FamilyField {
@@ -33,6 +32,8 @@ data class FamilyUiState(
     val fieldErrors: Map<String, String> = emptyMap(),
     /** Ответ `PUT /family`: сессию обновляет хост, модель о графе не знает. */
     val saved: Family? = null,
+    /** Роль сняли: страницу закрывает хост, повторять правку незачем. */
+    val forbidden: Boolean = false,
 ) {
     /** Тело `PUT` из одних изменённых полей: пустого сервер не принимает (`minProperties: 1`). */
     val changes: UpdateFamilyRequest?
@@ -103,11 +104,12 @@ private fun FamilyUiState.failed(failure: ApiFailure): FamilyUiState {
     return copy(
         submitting = false,
         fieldErrors = underFields,
+        forbidden = failure.forbidden,
         // Деталь не про поле формы (`field: "body"`) осталась бы без текста — показываем её общим.
         error = if (underFields.size == details.size && underFields.isNotEmpty()) {
             null
         } else {
-            failure.toUiError(settingsConflicts)
+            failure.toSettingsError()
         },
     )
 }

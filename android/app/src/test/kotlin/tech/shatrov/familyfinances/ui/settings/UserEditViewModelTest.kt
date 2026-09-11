@@ -20,6 +20,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import tech.shatrov.familyfinances.ADMIN_ID
+import tech.shatrov.familyfinances.FORBIDDEN_ERROR
 import tech.shatrov.familyfinances.FakeTokenVault
 import tech.shatrov.familyfinances.MEMBER_ID
 import tech.shatrov.familyfinances.MEMBER_OK
@@ -124,7 +125,6 @@ class UserEditViewModelTest {
         // Отказ описывает не применённый шаг, а запись на сервере уже другая.
         server.enqueueJson(200, USER_INACTIVE_OK)
         model.onToggleActive()
-        // Перечитка идёт уже после того, как отказ погасил `submitting`.
         val state = model.state.first { !it.submitting && !it.active }
 
         assertEquals("""{"is_active":false}""", server.takeRequest().body?.utf8().orEmpty())
@@ -159,6 +159,43 @@ class UserEditViewModelTest {
 
         assertTrue(state.self)
         assertFalse(state.ownActions)
+    }
+
+    /** Форма разблокируется только после перечитки: иначе она затёрла бы уже начатый ввод. */
+    @Test
+    fun saveSendsOnlyTheChangedFieldAndRereads() = runTest {
+        server.enqueueJson(200, MEMBER_OK)
+        create(MEMBER_ID)
+        settled()
+        server.takeRequest()
+
+        model.onFirstNameChange(" Участник ")
+        assertTrue(model.state.value.canSubmit)
+
+        val renamed = MEMBER_OK.replace(""""first_name":"Член"""", """"first_name":"Участник"""")
+        server.enqueueJson(200, renamed)
+        server.enqueueJson(200, renamed)
+        model.onSubmit()
+        val state = settled()
+
+        val put = server.takeRequest()
+        assertEquals("PUT", put.method)
+        assertEquals("/api/v1/users/$MEMBER_ID", put.url.encodedPath)
+        assertEquals("""{"first_name":"Участник"}""", put.body?.utf8().orEmpty())
+        assertEquals("GET", server.takeRequest().method)
+        assertEquals("Участник", state.firstName)
+        assertNull(state.changes)
+    }
+
+    /** Роль сняли с другого телефона: `/users` этому токену уже не отвечает — уходим в корень. */
+    @Test
+    fun forbiddenLeavesForTheRoot() = runTest {
+        server.enqueueJson(403, FORBIDDEN_ERROR)
+        create(MEMBER_ID)
+        val state = model.state.first { !it.loading }
+
+        assertEquals(UserEditExit.Root, state.exit)
+        assertEquals(UiError.Resource(R.string.settings_forbidden), state.loadError)
     }
 
     @Test

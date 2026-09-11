@@ -12,10 +12,7 @@ import tech.shatrov.familyfinances.core.api.ApiGraph
 import tech.shatrov.familyfinances.core.api.SetPasswordRequest
 import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import tech.shatrov.familyfinances.ui.UiError
-import tech.shatrov.familyfinances.ui.toUiError
 import java.util.UUID
-
-private const val HTTP_SERVER_ERROR = 500
 
 data class UserPasswordUiState(
     val next: String = "",
@@ -25,6 +22,8 @@ data class UserPasswordUiState(
     val fieldErrors: Map<String, String> = emptyMap(),
     /** Сервер ответил `204`: страница закрывается, сообщение показывает форма пользователя. */
     val done: Boolean = false,
+    /** Роль сняли: страницу закрывает хост, повторять правку незачем. */
+    val forbidden: Boolean = false,
 ) {
     val newLength: Int
         get() = next.toByteArray(Charsets.UTF_8).size
@@ -81,14 +80,14 @@ private fun UserPasswordUiState.failed(failure: ApiFailure): UserPasswordUiState
     val rejected = failure as? ApiFailure.Api
     val details = rejected?.details.orEmpty()
     val underFields = details.filter { it.`field` == PasswordField.NEW }.associate { it.`field` to it.message }
-    val unknownResult = rejected == null || rejected.status >= HTTP_SERVER_ERROR
     return copy(
         submitting = false,
         fieldErrors = underFields,
+        forbidden = failure.forbidden,
         error = when {
-            unknownResult -> UiError.Resource(R.string.settings_user_password_unknown)
+            failure.resultUnknown -> UiError.Resource(R.string.settings_user_password_unknown)
             underFields.size == details.size && underFields.isNotEmpty() -> null
-            else -> failure.toUiError()
+            else -> failure.toSettingsError()
         },
     )
 }

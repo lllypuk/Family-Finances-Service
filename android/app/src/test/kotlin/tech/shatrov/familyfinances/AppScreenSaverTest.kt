@@ -71,4 +71,12 @@ class AppScreenSaverTest {
     fun unknownKeyFallsBackToLoading() {
         assertEquals(AppScreen.Loading, AppScreenSaver.restore("что-то не то"))
     }
+
+    /** Бандл прошлой версии несёт ключ другого формата: разбор его не роняет приложение. */
+    @Test
+    fun malformedKeyFallsBackToLoading() {
+        for (key in listOf("settings:root", "settings:root::не-uuid", "transaction-edit:", "budget-edit:x:y")) {
+            assertEquals(AppScreen.Loading, AppScreenSaver.restore(key))
+        }
+    }
 }

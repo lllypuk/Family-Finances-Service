@@ -13,14 +13,10 @@ import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import tech.shatrov.familyfinances.ui.UiError
 import tech.shatrov.familyfinances.ui.format.formatBytes
 import tech.shatrov.familyfinances.ui.format.formatDateTime
-import tech.shatrov.familyfinances.ui.toUiError
 import java.time.ZoneId
 
 /** Бэкапов на диске десятки (`BACKUP_KEEP` 30): одной страницы хватает. */
 private const val BACKUP_LIMIT = 200
-
-private const val HTTP_NOT_FOUND = 404
-private const val HTTP_SERVER_ERROR = 500
 
 /** Строка списка: размер и дата уже отформатированы, имя — ключ для удаления. */
 data class BackupRow(
@@ -32,7 +28,11 @@ data class BackupRow(
 sealed interface BackupsUiState {
     data object Loading : BackupsUiState
 
-    data class Failure(val error: UiError) : BackupsUiState
+    /** [forbidden] — роль сняли: страницу закрывает хост, повторять запрос незачем. */
+    data class Failure(
+        val error: UiError,
+        val forbidden: Boolean = false,
+    ) : BackupsUiState
 
     data class Ready(
         val rows: List<BackupRow>,
@@ -79,10 +79,12 @@ class BackupsViewModel(
                 // Retention мог удалить старые файлы, поэтому список перечитывается целиком.
                 reload(keep = null)
             } catch (failure: ApiFailure) {
-                if (failure.resultUnknown) {
+                if (failure.forbidden) {
+                    mutable.value = BackupsUiState.Failure(failure.toSettingsError(), forbidden = true)
+                } else if (failure.resultUnknown) {
                     reload(keep = UiError.Resource(R.string.settings_backup_unknown))
                 } else {
-                    mutable.value = current.copy(creating = false, error = failure.toUiError())
+                    mutable.value = current.copy(creating = false, error = failure.toSettingsError())
                 }
             }
         }
@@ -98,10 +100,12 @@ class BackupsViewModel(
                 reload(keep = null)
             } catch (failure: ApiFailure) {
                 // Файла уже нет — удалять нечего, устарел список.
-                if ((failure as? ApiFailure.Api)?.status == HTTP_NOT_FOUND) {
+                if ((failure as? ApiFailure.Api)?.isNotFound == true) {
                     reload(keep = null)
+                } else if (failure.forbidden) {
+                    mutable.value = BackupsUiState.Failure(failure.toSettingsError(), forbidden = true)
                 } else {
-                    mutable.value = current.copy(deleting = null, error = failure.toUiError())
+                    mutable.value = current.copy(deleting = null, error = failure.toSettingsError())
                 }
             }
         }
@@ -118,7 +122,10 @@ class BackupsViewModel(
                     error = keep,
                 )
             } catch (failure: ApiFailure) {
-                mutable.value = BackupsUiState.Failure(keep ?: failure.toUiError())
+                mutable.value = BackupsUiState.Failure(
+                    error = keep ?: failure.toSettingsError(),
+                    forbidden = keep == null && failure.forbidden,
+                )
             }
         }
     }
@@ -129,10 +136,3 @@ class BackupsViewModel(
         created = formatDateTime(createdAt, zone),
     )
 }
-
-/**
- * Создание бэкапа не идемпотентно и не имеет клиентского ключа: после обрыва, неразобранного
- * ответа или `5xx` файл мог появиться, поэтому повтор — только руками.
- */
-private val ApiFailure.resultUnknown: Boolean
-    get() = this !is ApiFailure.Api || status >= HTTP_SERVER_ERROR

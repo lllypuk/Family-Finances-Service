@@ -271,6 +271,12 @@ internal const val VALIDATION_ERROR = """
 "meta":{"request_id":"r-12","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0"}}
 """
 
+/** Роль сняли с другого телефона: админ-роут отвечает так любому подразделу настроек. */
+internal const val FORBIDDEN_ERROR = """
+{"error":{"code":"FORBIDDEN","message":"admin role required"},
+"meta":{"request_id":"r-60","timestamp":"2026-09-11T10:00:00Z","version":"v0.1.0"}}
+"""
+
 internal const val INTERNAL_ERROR = """{"error":{"code":"INTERNAL","message":"всё сломалось"}}"""
 
 internal const val FOOD_BUDGET_ID = "99999999-9999-9999-9999-999999999991"

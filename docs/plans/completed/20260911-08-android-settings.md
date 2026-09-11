@@ -337,7 +337,7 @@
 
 ### Task 10: [Final] Update documentation
 
-- [x] `android/CLAUDE.md`: вход в настройки, вложенный хост и `SettingsModels` (очистка на смене
+- [x] `android/CLAUDE.md`: вход в настройки, вложенный хост и store настроек (очистка на смене
       страницы, блокировка ухода при `submitting`), `refreshSession` и поколения, исключение для
       `401 INVALID_CREDENTIALS`, `device_name`, алиас `ApiSession`
 - [x] `android/gradle/libs.versions.toml`: `appVersionCode` 2 → 3, `appVersionName` 0.2.0 → 0.3.0
@@ -349,6 +349,9 @@
 - [x] перенести план в `docs/plans/completed/`
 
 ## Post-Completion
+
+**Открыто:** две приёмочные проверки Task 9 помечены `[x] (skipped)` — они делаются руками на
+устройствах и остаются невыполненными до установки `app-v0.3.0` на оба телефона.
 
 **Ручная проверка:** оба телефона после `app-v0.3.0`; у второго пользователя первая сессия
 создана до `device_name` и останется «Без имени» до перелогина.

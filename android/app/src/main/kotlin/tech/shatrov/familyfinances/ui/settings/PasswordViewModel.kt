@@ -20,7 +20,6 @@ const val PASSWORD_MIN_BYTES = 10
 const val PASSWORD_MAX_BYTES = 72
 
 private const val HTTP_UNAUTHORIZED = 401
-private const val HTTP_SERVER_ERROR = 500
 
 /** Имена полей `error.details[].field` для `PUT /me/password`. */
 object PasswordField {
@@ -124,12 +123,11 @@ private fun PasswordUiState.failed(failure: ApiFailure): PasswordUiState {
     }
     val details = rejected?.details.orEmpty()
     val underFields = details.filter { it.`field` in passwordFields }.associate { it.`field` to it.message }
-    val unknownResult = rejected == null || rejected.status >= HTTP_SERVER_ERROR
     return copy(
         submitting = false,
         fieldErrors = underFields,
         error = when {
-            unknownResult -> UiError.Resource(R.string.settings_password_unknown)
+            failure.resultUnknown -> UiError.Resource(R.string.settings_password_unknown)
             underFields.size == details.size && underFields.isNotEmpty() -> null
             else -> failure.toUiError()
         },
