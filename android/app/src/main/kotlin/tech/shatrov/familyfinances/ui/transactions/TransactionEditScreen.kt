@@ -14,15 +14,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,13 +35,14 @@ import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.core.api.Category
 import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.theme.Dimens
+import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
+import tech.shatrov.familyfinances.ui.DatePickerSheet
+import tech.shatrov.familyfinances.ui.FieldError
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.message
-import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneOffset
 import java.util.UUID
 
 /**
@@ -80,7 +79,9 @@ fun TransactionEditScreen(
         ) {
             // Отправка не отменяется: её корутина умрёт вместе с моделью формы, а запись
             // сервер уже мог принять.
-            TextButton(onClick = onBack, enabled = !state.submitting) { Text(stringResource(R.string.back)) }
+            IconButton(onClick = onBack, enabled = !state.submitting) {
+                Icon(AppIcons.ArrowLeft, contentDescription = stringResource(R.string.back))
+            }
             Text(
                 text = stringResource(
                     if (state.editing) R.string.transaction_edit_title else R.string.transaction_new_title,
@@ -95,7 +96,7 @@ fun TransactionEditScreen(
             label = { Text(stringResource(R.string.transaction_amount)) },
             singleLine = true,
             isError = state.fieldErrors.containsKey(TransactionField.AMOUNT),
-            supportingText = { FieldError(state, TransactionField.AMOUNT) },
+            supportingText = { FieldError(state.fieldErrors[TransactionField.AMOUNT]) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth(),
         )
@@ -112,7 +113,7 @@ fun TransactionEditScreen(
                 }
             }
         }
-        FieldError(state, TransactionField.TYPE)
+        FieldError(state.fieldErrors[TransactionField.TYPE])
 
         Text(stringResource(R.string.transaction_category), style = MaterialTheme.typography.bodySmall)
         ChipRow {
@@ -120,7 +121,7 @@ fun TransactionEditScreen(
                 Chip(category.name, state.categoryId == category.id) { onCategoryChange(category.id) }
             }
         }
-        FieldError(state, TransactionField.CATEGORY)
+        FieldError(state.fieldErrors[TransactionField.CATEGORY])
 
         OutlinedButton(
             onClick = { datePickerShown = true },
@@ -128,7 +129,7 @@ fun TransactionEditScreen(
         ) {
             Text(formatDay(state.date))
         }
-        FieldError(state, TransactionField.DATE)
+        FieldError(state.fieldErrors[TransactionField.DATE])
 
         OutlinedTextField(
             value = state.description,
@@ -136,7 +137,7 @@ fun TransactionEditScreen(
             label = { Text(stringResource(R.string.transaction_description)) },
             singleLine = true,
             isError = state.fieldErrors.containsKey(TransactionField.DESCRIPTION),
-            supportingText = { FieldError(state, TransactionField.DESCRIPTION) },
+            supportingText = { FieldError(state.fieldErrors[TransactionField.DESCRIPTION]) },
             modifier = Modifier.fillMaxWidth(),
         )
 
@@ -214,46 +215,4 @@ fun TransactionEditScreen(
             },
         )
     }
-}
-
-/** Календарь считает в UTC-полуночах, поэтому дата переводится через `ZoneOffset.UTC`. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun DatePickerSheet(
-    date: LocalDate,
-    onPick: (LocalDate) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val picker = rememberDatePickerState(
-        initialSelectedDateMillis = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
-    )
-    DatePickerDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = {
-                val millis = picker.selectedDateMillis
-                if (millis == null) {
-                    onDismiss()
-                } else {
-                    onPick(Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate())
-                }
-            }) {
-                Text(stringResource(R.string.transaction_date_pick))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-        },
-    ) {
-        DatePicker(state = picker)
-    }
-}
-
-@Composable
-private fun FieldError(
-    state: TransactionEditUiState,
-    field: String,
-) {
-    val text = state.fieldErrors[field] ?: return
-    Text(text = text, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
 }

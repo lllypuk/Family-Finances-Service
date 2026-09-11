@@ -4,12 +4,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Button
@@ -26,7 +24,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -39,8 +36,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import tech.shatrov.familyfinances.theme.AppTheme
-import tech.shatrov.familyfinances.theme.Dimens
+import tech.shatrov.familyfinances.ui.AppNavBar
+import tech.shatrov.familyfinances.ui.AppTab
+import tech.shatrov.familyfinances.ui.Centered
 import tech.shatrov.familyfinances.ui.UiError
+import tech.shatrov.familyfinances.ui.budgets.BudgetEditScreen
+import tech.shatrov.familyfinances.ui.budgets.BudgetEditViewModel
+import tech.shatrov.familyfinances.ui.budgets.BudgetsScreen
+import tech.shatrov.familyfinances.ui.budgets.BudgetsViewModel
 import tech.shatrov.familyfinances.ui.categories.CategoriesScreen
 import tech.shatrov.familyfinances.ui.categories.CategoriesViewModel
 import tech.shatrov.familyfinances.ui.categories.CategoryEditScreen
@@ -83,6 +86,7 @@ fun AppRoot(graph: AppGraph) {
     // перечитываются по возврату, а не при каждом заходе.
     var listStale by rememberSaveable { mutableStateOf(false) }
     var homeStale by rememberSaveable { mutableStateOf(false) }
+    var budgetsStale by rememberSaveable { mutableStateOf(false) }
     // Модели экранов лежат в store активити и переживают выход. Ключа по пользователю мало:
     // повторный вход тем же человеком показал бы данные прошлой сессии и не перечитал бы их.
     var epoch by rememberSaveable { mutableIntStateOf(0) }
@@ -91,7 +95,7 @@ fun AppRoot(graph: AppGraph) {
     // Модель формы живёт в своём store: ключ у неё свой на каждый заход, а store активити
     // отдаёт брошенные модели только вместе с активити.
     val forms: FormModels = viewModel { FormModels() }
-    val onForm = screen is AppScreen.TransactionEdit
+    val onForm = screen is AppScreen.TransactionEdit || screen is AppScreen.BudgetEdit
     LaunchedEffect(onForm) { if (!onForm) forms.viewModelStore.clear() }
 
     // Смерть процесса возвращает сохранённый экран, но не сессию: без роли и валюты главной
@@ -172,18 +176,18 @@ fun AppRoot(graph: AppGraph) {
                 }
                 onPauseOrDispose {}
             }
-            HomeScreen(
-                state = home,
-                onRetry = model::refresh,
-                onOpenTransactions = { screen = AppScreen.Transactions },
-                onOpenCategories = { screen = AppScreen.Categories },
-                onSignOut = {
-                    scope.launch {
-                        graph.signOut()
-                        screen = AppScreen.Login
-                    }
-                },
-            )
+            WithNavBar(AppTab.HOME, onSelect = { screen = it.screen }) {
+                HomeScreen(
+                    state = home,
+                    onRetry = model::refresh,
+                    onSignOut = {
+                        scope.launch {
+                            graph.signOut()
+                            screen = AppScreen.Login
+                        }
+                    },
+                )
+            }
         }
 
         AppScreen.Transactions -> WithSession(session) { active ->
@@ -203,15 +207,16 @@ fun AppRoot(graph: AppGraph) {
                 onPauseOrDispose {}
             }
             BackHandler { screen = AppScreen.Home }
-            TransactionsScreen(
-                state = transactions,
-                onBack = { screen = AppScreen.Home },
-                onRetry = model::refresh,
-                onFiltersChange = model::onFiltersChange,
-                onLoadMore = model::loadMore,
-                onCreate = { screen = AppScreen.TransactionEdit(null) },
-                onOpen = { screen = AppScreen.TransactionEdit(it) },
-            )
+            WithNavBar(AppTab.TRANSACTIONS, onSelect = { screen = it.screen }) {
+                TransactionsScreen(
+                    state = transactions,
+                    onRetry = model::refresh,
+                    onFiltersChange = model::onFiltersChange,
+                    onLoadMore = model::loadMore,
+                    onCreate = { screen = AppScreen.TransactionEdit(null) },
+                    onOpen = { screen = AppScreen.TransactionEdit(it) },
+                )
+            }
         }
 
         AppScreen.Categories -> WithSession(session) { active ->
@@ -221,23 +226,25 @@ fun AppRoot(graph: AppGraph) {
             val categories by model.state.collectAsStateWithLifecycle()
             val editor by model.editor.collectAsStateWithLifecycle()
             val form = editor
-            // Список подписывает строки именами категорий и фильтрует по ним, а главная —
-            // расходы в сводке, поэтому уход с этого экрана помечает устаревшими оба:
-            // правку модель наружу не отдаёт.
-            val leave = {
+            // Список подписывает строки именами категорий и фильтрует по ним, главная —
+            // расходы в сводке, бюджеты — имя категории в строке, поэтому уход с этого экрана
+            // помечает устаревшими все три: правку модель наружу не отдаёт.
+            val leave = { next: AppScreen ->
                 listStale = true
                 homeStale = true
-                screen = AppScreen.Home
+                budgetsStale = true
+                screen = next
             }
-            BackHandler { if (form == null) leave() else model.onDismiss() }
+            BackHandler { if (form == null) leave(AppScreen.Home) else model.onDismiss() }
             if (form == null) {
-                CategoriesScreen(
-                    state = categories,
-                    onBack = leave,
-                    onRetry = model::refresh,
-                    onAdd = model::onAdd,
-                    onOpen = model::onOpen,
-                )
+                WithNavBar(AppTab.CATEGORIES, onSelect = { leave(it.screen) }) {
+                    CategoriesScreen(
+                        state = categories,
+                        onRetry = model::refresh,
+                        onAdd = model::onAdd,
+                        onOpen = model::onOpen,
+                    )
+                }
             } else {
                 CategoryEditScreen(
                     state = form,
@@ -251,6 +258,82 @@ fun AppRoot(graph: AppGraph) {
                     onBack = model::onDismiss,
                 )
             }
+        }
+
+        AppScreen.Budgets -> WithSession(session) { active ->
+            val model: BudgetsViewModel = viewModel(key = "budgets-${active.user.id}-$epoch") {
+                BudgetsViewModel(graph.api, active.zone)
+            }
+            val budgets by model.state.collectAsStateWithLifecycle()
+            val budgetFilter by model.filter.collectAsStateWithLifecycle()
+            // «Сегодня» под фильтром считает сервер: ответ, полученный вчера, к возврату из
+            // фона показывает чужой день.
+            LifecycleResumeEffect(budgetsStale) {
+                if (budgetsStale) {
+                    model.refresh()
+                    budgetsStale = false
+                } else {
+                    model.revalidate()
+                }
+                onPauseOrDispose {}
+            }
+            BackHandler { screen = AppScreen.Home }
+            WithNavBar(AppTab.BUDGETS, onSelect = { screen = it.screen }) {
+                BudgetsScreen(
+                    state = budgets,
+                    filter = budgetFilter,
+                    currency = active.currency,
+                    onRetry = model::refresh,
+                    onFilterChange = model::onFilterChange,
+                    onCreate = { screen = AppScreen.BudgetEdit(null) },
+                    onOpen = { screen = AppScreen.BudgetEdit(it) },
+                )
+            }
+        }
+
+        is AppScreen.BudgetEdit -> WithSession(session) { active ->
+            val model: BudgetEditViewModel =
+                viewModel(viewModelStoreOwner = forms, key = "budget-${current.draft}") {
+                    BudgetEditViewModel(
+                        graph.api,
+                        current.id,
+                        current.draft,
+                        LocalDate.now(active.zone),
+                    )
+                }
+            val edit by model.state.collectAsStateWithLifecycle()
+            LaunchedEffect(edit.done) {
+                if (edit.done) {
+                    budgetsStale = true
+                    homeStale = true
+                    screen = AppScreen.Budgets
+                }
+            }
+            // Как у формы операции: уход во время отправки убил бы корутину, а повтор с новым
+            // черновиком создал бы второй бюджет.
+            val leave = {
+                if (!edit.submitting) {
+                    if (edit.saved) {
+                        budgetsStale = true
+                        homeStale = true
+                    }
+                    screen = AppScreen.Budgets
+                }
+            }
+            BackHandler { leave() }
+            BudgetEditScreen(
+                state = edit,
+                onNameChange = model::onNameChange,
+                onAmountChange = model::onAmountChange,
+                onPeriodChange = model::onPeriodChange,
+                onCategoryChange = model::onCategoryChange,
+                onStartChange = model::onStartChange,
+                onEndChange = model::onEndChange,
+                onSubmit = model::onSubmit,
+                onDelete = model::onDelete,
+                onRetry = model::load,
+                onBack = leave,
+            )
         }
 
         is AppScreen.TransactionEdit -> WithSession(session) { active ->
@@ -270,6 +353,8 @@ fun AppRoot(graph: AppGraph) {
                 if (edit.done) {
                     listStale = true
                     homeStale = true
+                    // Операция меняет `spent` бюджета своей категории.
+                    budgetsStale = true
                     screen = AppScreen.Transactions
                 }
             }
@@ -325,6 +410,27 @@ private fun BootstrapScreen(
     }
 }
 
+/** Корневые экраны делят одну панель вкладок; сами экраны о ней не знают. */
+@Composable
+private fun WithNavBar(
+    selected: AppTab,
+    onSelect: (AppTab) -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.weight(1f)) { content() }
+        AppNavBar(selected = selected, onSelect = onSelect)
+    }
+}
+
+private val AppTab.screen: AppScreen
+    get() = when (this) {
+        AppTab.HOME -> AppScreen.Home
+        AppTab.TRANSACTIONS -> AppScreen.Transactions
+        AppTab.CATEGORIES -> AppScreen.Categories
+        AppTab.BUDGETS -> AppScreen.Budgets
+    }
+
 /** Сессия гаснет на выходе раньше, чем сменится экран: без валюты и роли рисовать нечего. */
 @Composable
 private fun WithSession(
@@ -335,18 +441,5 @@ private fun WithSession(
         Centered { Text(stringResource(R.string.loading)) }
     } else {
         content(session)
-    }
-}
-
-@Composable
-private fun Centered(content: @Composable () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(Dimens.SPACE_4),
-        verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_3, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        content()
     }
 }

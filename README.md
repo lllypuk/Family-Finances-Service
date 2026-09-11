@@ -5,8 +5,8 @@ API for the Android client. One instance = one family.
 
 ## 🎯 Project Status: IN DEVELOPMENT 🚧
 
-> **Direction (September 2026):** API-only backend for an Android app. Decisions and the six implementation
-> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–06 are done: the
+> **Direction (September 2026):** API-only backend for an Android app. Decisions and the seven implementation
+> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–07 are done: the
 > web interface, cookie sessions and CSRF are gone, money is integer minor units, dates are calendar dates,
 > the deployment is one compose with Caddy and the Android client lives in `android/`; the sections below
 > describe the code as it is today.
@@ -284,7 +284,8 @@ Details: [deploy/README.md](deploy/README.md).
 
 ## 📱 Android client
 
-`android/` — the online Kotlin/Compose client to `/api/v1` (login, home, transactions, categories).
+`android/` — the online Kotlin/Compose client to `/api/v1` (login, home, transactions, categories, budgets;
+the four roots are switched by a bottom tab bar).
 Models and typed interfaces are generated from `docs/api/openapi.yaml` into `android/core/api/generated`
 and committed; generation needs the network, so it stays out of `check` and its freshness is a separate
 target and CI step.

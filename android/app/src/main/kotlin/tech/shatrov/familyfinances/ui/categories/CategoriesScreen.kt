@@ -17,10 +17,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,13 +32,14 @@ import androidx.compose.ui.unit.Dp
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.core.api.Category
 import tech.shatrov.familyfinances.theme.Dimens
+import tech.shatrov.familyfinances.ui.AppIcons
+import tech.shatrov.familyfinances.ui.Centered
 import tech.shatrov.familyfinances.ui.message
 
 /** Список категорий: доходные и расходные врозь, подкатегории — с отступом под родителем. */
 @Composable
 fun CategoriesScreen(
     state: CategoriesUiState,
-    onBack: () -> Unit,
     onRetry: () -> Unit,
     onAdd: () -> Unit,
     onOpen: (Category) -> Unit,
@@ -47,17 +49,18 @@ fun CategoriesScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = Dimens.SPACE_4, vertical = Dimens.SPACE_2),
+                .padding(start = Dimens.SPACE_4, end = Dimens.SPACE_2, top = Dimens.SPACE_2, bottom = Dimens.SPACE_2),
             horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
             Text(
                 text = stringResource(R.string.categories_title),
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onAdd) { Text(stringResource(R.string.categories_add)) }
+            IconButton(onClick = onAdd) {
+                Icon(AppIcons.Plus, contentDescription = stringResource(R.string.categories_add))
+            }
         }
 
         when (state) {
@@ -151,18 +154,5 @@ private fun CategoryItem(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-    }
-}
-
-@Composable
-private fun Centered(content: @Composable () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(Dimens.SPACE_4),
-        verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_3, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        content()
     }
 }
