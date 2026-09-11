@@ -127,6 +127,24 @@
     <string name="settings_user_add">Добавить пользователя</string>
     <string name="settings_user_self">Это вы</string>
     <string name="settings_user_inactive">Неактивен</string>
+    <string name="settings_user_new">Новый пользователь</string>
+    <string name="settings_user_edit">Пользователь</string>
+    <string name="settings_user_role">Роль</string>
+    <string name="settings_user_current_role">Роль: %1$s</string>
+    <string name="settings_user_create">Создать</string>
+    <string name="settings_user_make_admin">Сделать администратором</string>
+    <string name="settings_user_make_member">Сделать участником</string>
+    <string name="settings_user_role_confirm">Изменить роль пользователя?</string>
+    <string name="settings_user_deactivate">Деактивировать</string>
+    <string name="settings_user_activate">Активировать</string>
+    <string name="settings_user_deactivate_confirm">Деактивировать пользователя? Все его сессии закроются</string>
+    <string name="settings_user_activate_confirm">Активировать пользователя?</string>
+    <string name="settings_user_set_password">Задать пароль</string>
+    <string name="settings_user_password">Пароль пользователя</string>
+    <string name="settings_user_password_saved">Пароль задан, пользователь разлогинен везде</string>
+    <string name="settings_user_password_unknown">Результат неизвестен: попросите пользователя войти с новым паролем</string>
+    <string name="settings_error_last_admin">В семье должен остаться хотя бы один активный администратор</string>
+    <string name="settings_error_deactivate_self">Себя деактивировать нельзя</string>
     <string name="settings_list_truncated">Показаны первые %1$d из %2$d</string>
 
     <string name="retry">Повторить</string>

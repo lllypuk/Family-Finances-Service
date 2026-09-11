@@ -20,6 +20,7 @@ import tech.shatrov.familyfinances.Session
 import tech.shatrov.familyfinances.ui.Centered
 import tech.shatrov.familyfinances.ui.UiError
 import tech.shatrov.familyfinances.ui.toUiError
+import java.util.UUID
 
 /**
  * Хост настроек: свой `when` по [SettingsPage] и своя «назад». `AppRoot` знает только
@@ -44,6 +45,9 @@ fun SettingsHost(
     // Пока страница отправляет мутацию, уходить нельзя: очистка store отменила бы корутину,
     // а сервер запись уже мог принять.
     var submitting by remember(page) { mutableStateOf(false) }
+    // Заход в форму, которому есть что сказать про заданный пароль: модель страницы пароля к
+    // этому моменту уже уничтожена вместе со store, а хост переход переживает.
+    var passwordSetFor by remember { mutableStateOf<UUID?>(null) }
     val leave = {
         if (!submitting) {
             val parent = page.parent()
@@ -88,6 +92,31 @@ fun SettingsHost(
             models = models,
             page = page,
             onOpen = onPageChange,
+            onBack = leave,
+        )
+
+        is SettingsPage.UserEdit -> UserEditPage(
+            graph = graph,
+            session = session,
+            models = models,
+            page = page,
+            passwordSet = passwordSetFor == page.visit,
+            onSubmitting = { submitting = it },
+            onOpen = onPageChange,
+            onSessionChanged = onSessionChanged,
+            onUsersChanged = onUsersChanged,
+            onBack = leave,
+        )
+
+        is SettingsPage.UserPassword -> UserPasswordPage(
+            graph = graph,
+            models = models,
+            page = page,
+            onSubmitting = { submitting = it },
+            onDone = { target ->
+                passwordSetFor = target.visit
+                onPageChange(target)
+            },
             onBack = leave,
         )
 
@@ -215,6 +244,96 @@ private fun UsersPage(
         onRetry = model::refresh,
         onAdd = { onOpen(SettingsPage.UserEdit(null)) },
         onOpen = { onOpen(SettingsPage.UserEdit(it)) },
+        onBack = onBack,
+    )
+}
+
+/**
+ * Форма пользователя. Ответ про свою запись идёт в сессию, про чужую — в флаг устаревания
+ * списка: имя автора операции берётся оттуда.
+ */
+@Composable
+private fun UserEditPage(
+    graph: AppGraph,
+    session: Session,
+    models: ViewModelStoreOwner,
+    page: SettingsPage.UserEdit,
+    passwordSet: Boolean,
+    onSubmitting: (Boolean) -> Unit,
+    onOpen: (SettingsPage) -> Unit,
+    onSessionChanged: (Session, Session) -> Unit,
+    onUsersChanged: () -> Unit,
+    onBack: () -> Unit,
+) {
+    val model: UserEditViewModel = viewModel(viewModelStoreOwner = models, key = page.modelKey) {
+        UserEditViewModel(graph.api, page.id, session.user.id)
+    }
+    val state by model.state.collectAsStateWithLifecycle()
+    val target = page.id
+
+    LaunchedEffect(state.submitting) { onSubmitting(state.submitting) }
+    LaunchedEffect(state.saved) {
+        val saved = state.saved ?: return@LaunchedEffect
+        if (saved.id == session.user.id) {
+            graph.update(saved)
+            onSessionChanged(session, session.copy(user = saved))
+        } else {
+            onUsersChanged()
+        }
+    }
+    LaunchedEffect(state.exit) {
+        when (state.exit) {
+            UserEditExit.List -> onBack()
+
+            // Себя понизили: `/users` этому токену больше не отвечает.
+            UserEditExit.Root -> onOpen(SettingsPage.Root())
+
+            null -> Unit
+        }
+    }
+
+    UserEditScreen(
+        state = state,
+        passwordSet = passwordSet,
+        onEmailChange = model::onEmailChange,
+        onFirstNameChange = model::onFirstNameChange,
+        onLastNameChange = model::onLastNameChange,
+        onPasswordChange = model::onPasswordChange,
+        onRoleChange = model::onRoleChange,
+        onSubmit = model::onSubmit,
+        onToggleRole = model::onToggleRole,
+        onToggleActive = model::onToggleActive,
+        onSetPassword = { if (target != null) onOpen(SettingsPage.UserPassword(target)) },
+        onRetry = model::load,
+        onBack = onBack,
+    )
+}
+
+/** Установка пароля пользователю: успех уводит обратно в форму, там же и сообщение. */
+@Composable
+private fun UserPasswordPage(
+    graph: AppGraph,
+    models: ViewModelStoreOwner,
+    page: SettingsPage.UserPassword,
+    onSubmitting: (Boolean) -> Unit,
+    onDone: (SettingsPage.UserEdit) -> Unit,
+    onBack: () -> Unit,
+) {
+    val model: UserPasswordViewModel = viewModel(viewModelStoreOwner = models, key = page.modelKey) {
+        UserPasswordViewModel(graph.api, page.id)
+    }
+    val state by model.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(state.submitting) { onSubmitting(state.submitting) }
+    LaunchedEffect(state.done) {
+        if (state.done) onDone(SettingsPage.UserEdit(page.id))
+    }
+
+    UserPasswordScreen(
+        state = state,
+        onNewChange = model::onNewChange,
+        onRepeatChange = model::onRepeatChange,
+        onSubmit = model::onSubmit,
         onBack = onBack,
     )
 }

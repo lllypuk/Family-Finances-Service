@@ -1,6 +1,5 @@
 package tech.shatrov.familyfinances.ui.settings
 
-import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -8,29 +7,23 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.theme.Dimens
-import tech.shatrov.familyfinances.ui.FieldError
 import tech.shatrov.familyfinances.ui.message
 
-/** Смена своего пароля: текущий, новый и повтор. Длина считается в байтах, как на сервере. */
+/** Пароль пользователя со стороны админа: текущий не спрашивается, только новый и повтор. */
 @Composable
-fun PasswordScreen(
-    state: PasswordUiState,
-    onCurrentChange: (String) -> Unit,
+fun UserPasswordScreen(
+    state: UserPasswordUiState,
     onNewChange: (String) -> Unit,
     onRepeatChange: (String) -> Unit,
     onSubmit: () -> Unit,
@@ -38,10 +31,6 @@ fun PasswordScreen(
     modifier: Modifier = Modifier,
 ) {
     val editable = !state.submitting
-    val currentError = when {
-        state.currentInvalid -> stringResource(R.string.settings_password_wrong_current)
-        else -> state.fieldErrors[PasswordField.CURRENT]
-    }
 
     Column(
         modifier = modifier
@@ -50,15 +39,7 @@ fun PasswordScreen(
             .padding(Dimens.SPACE_4),
         verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_3),
     ) {
-        SettingsHeader(R.string.settings_password, enabled = editable, onBack = onBack)
-
-        SecretField(
-            value = state.current,
-            onValueChange = onCurrentChange,
-            label = R.string.settings_password_current,
-            enabled = editable,
-            error = currentError,
-        )
+        SettingsHeader(R.string.settings_user_password, enabled = editable, onBack = onBack)
 
         SecretField(
             value = state.next,
@@ -91,13 +72,6 @@ fun PasswordScreen(
             )
         }
 
-        if (state.changed) {
-            Text(
-                text = stringResource(R.string.settings_password_changed),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-
         Button(
             onClick = onSubmit,
             enabled = state.canSubmit,
@@ -112,27 +86,4 @@ fun PasswordScreen(
             }
         }
     }
-}
-
-/** Поле пароля: одинаково у своей смены, у формы создания и у админской установки. */
-@Composable
-internal fun SecretField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    @StringRes label: Int,
-    enabled: Boolean,
-    error: String?,
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(stringResource(label)) },
-        singleLine = true,
-        enabled = enabled,
-        isError = error != null,
-        supportingText = { FieldError(error) },
-        visualTransformation = PasswordVisualTransformation(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-        modifier = Modifier.fillMaxWidth(),
-    )
 }

@@ -277,23 +277,26 @@
 - Create: `ui/settings/UserEditViewModel.kt`, `ui/settings/UserEditScreen.kt`
 - Create: `ui/settings/UserPasswordViewModel.kt`, `ui/settings/UserPasswordScreen.kt`
 - Create: `UserEditViewModelTest`, `UserEditScreenTest`, `UserPasswordViewModelTest`
-- Modify: `ui/settings/SettingsHost.kt`, `strings.xml`, `TestFixtures.kt` (`USER_OK`)
+- Modify: `ui/settings/SettingsHost.kt`, `strings.xml`, `PasswordScreen.kt` (`SecretField` стал
+  `internal` — то же поле у создания и у админской установки), `SettingsConflicts.kt`,
+  `TestFixtures.kt` (`USER_ADMIN_OK`, `USER_INACTIVE_OK` вместо `USER_OK`: `MEMBER_OK` уже
+  подходит под `GET /users/:id`)
 
-- [ ] `UserEditViewModel`: создание — `CreateUserRequest` (пароль в байтах 10…72); правка —
+- [x] `UserEditViewModel`: создание — `CreateUserRequest` (пароль в байтах 10…72); правка —
       `getUser(id)` при входе, `PUT` из diff; отдельные действия «Сделать админом/участником»
       (`PATCH {role}`), «Деактивировать/Активировать» (`PATCH {is_active}`) с подтверждением; после
       каждого `2xx` и после ошибки деактивации — перечитать `getUser(id)`; для себя скрыты
       деактивация и «Задать пароль»; своя запись после `200` — `update(user)`, `onSessionChanged`;
       понижение своей роли — `done` в `Root`; чужая запись — `onUsersChanged`
-- [ ] `409` → `EMAIL_TAKEN`, `LAST_ADMIN`, `CANNOT_DEACTIVATE_SELF` по-русски; `422` — под поля
-- [ ] `UserPasswordViewModel`: `send { setUserPassword }`, успех — назад в `UserEdit` с текстом
-      «Пароль задан, пользователь разлогинен везде»; `Network`/`5xx` — неизвестный результат про
-      целевого пользователя
-- [ ] `UserEditScreenTest`: у своей записи нет деактивации; ошибка под полем; подтверждение перед
+- [x] `409` → `EMAIL_TAKEN`, `LAST_ADMIN`, `CANNOT_DEACTIVATE_SELF` по-русски; `422` — под поля
+- [x] `UserPasswordViewModel`: `send { setUserPassword }`, успех — назад в `UserEdit` с текстом
+      «Пароль задан, пользователь разлогинен везде» (➕ текст держит хост: store страницы к моменту
+      перехода уже очищен); `Network`/`5xx` — неизвестный результат про целевого пользователя
+- [x] `UserEditScreenTest`: у своей записи нет деактивации; ошибка под полем; подтверждение перед
       `PATCH`
-- [ ] тесты моделей: `PATCH` с одним полем; `409 LAST_ADMIN` → `Resource`; понижение своей роли →
+- [x] тесты моделей: `PATCH` с одним полем; `409 LAST_ADMIN` → `Resource`; понижение своей роли →
       `onSessionChanged`; ошибка деактивации → повторный `GET`
-- [ ] `make -C android check` — зелёный
+- [x] `make -C android check` — зелёный
 
 ### Task 7: Семья
 

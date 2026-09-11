@@ -201,6 +201,11 @@ internal const val USERS_OK = """
 "pagination":{"limit":200,"offset":0,"total":2}}}
 """
 
+/** Ответы `PATCH` по участнику: роль поднята и запись выключена — обе ветки формы. */
+internal val USER_ADMIN_OK = MEMBER_OK.replace(""""role":"member"""", """"role":"admin"""")
+
+internal val USER_INACTIVE_OK = MEMBER_OK.replace(""""is_active":true""", """"is_active":false""")
+
 /** Тот же список, но сервер знает о трёх пользователях: страница одна, и это видно на экране. */
 internal val USERS_TRUNCATED = USERS_OK.replace(""""total":2""", """"total":3""")
 
