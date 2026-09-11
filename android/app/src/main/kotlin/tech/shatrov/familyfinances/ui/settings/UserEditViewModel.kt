@@ -207,7 +207,7 @@ class UserEditViewModel(
                 val saved = api.client.unwrap { api.users.updateUser(target, changes) }.`data`
                 mutable.update { it.withUser(saved, notify = true) }
                 // Перечитка идёт ещё под `submitting`: разблокированная форма потеряла бы ввод.
-                reload(target)
+                reload(target, keepDraft = false)
                 mutable.update { it.copy(submitting = false) }
             } catch (failure: ApiFailure) {
                 mutable.value = mutable.value.failed(failure)
@@ -224,14 +224,14 @@ class UserEditViewModel(
         viewModelScope.launch {
             try {
                 val saved = api.client.unwrap { api.users.patchUser(target, request) }.`data`
-                mutable.update { it.withUser(saved, notify = true) }
-                if (!leaving) reload(target)
+                mutable.update { it.withUser(saved, notify = true, keepDraft = true) }
+                if (!leaving) reload(target, keepDraft = true)
                 mutable.update {
                     it.copy(submitting = false, exit = if (leaving) UserEditExit.Root else null)
                 }
             } catch (failure: ApiFailure) {
                 // Отказ мог прийти вторым шагом запроса: роль уже записана, активность нет.
-                reload(target)
+                reload(target, keepDraft = true)
                 mutable.value = mutable.value.failed(failure)
             }
         }
@@ -242,10 +242,13 @@ class UserEditViewModel(
     }
 
     /** Перечитка после ответа: её собственный отказ поверх результата правки не показывается. */
-    private suspend fun reload(target: UUID) {
+    private suspend fun reload(
+        target: UUID,
+        keepDraft: Boolean,
+    ) {
         try {
             val fresh = api.client.unwrap { api.users.getUser(target) }.`data`
-            mutable.update { it.withUser(fresh, notify = true) }
+            mutable.update { it.withUser(fresh, notify = true, keepDraft = keepDraft) }
         } catch (failure: ApiFailure) {
             return
         }
@@ -258,19 +261,32 @@ private fun UserEditUiState.cleared(field: String): UserEditUiState =
 
 /**
  * Запись с сервера становится и формой, и базой для следующего diff. [notify] отделяет ответ на
- * правку от первой загрузки: сессию и список трогает только правка.
+ * правку от первой загрузки: сессию и список трогает только правка. [keepDraft] — для правок
+ * мимо полей формы (`PATCH` роли и активности): начатый ввод они стирать не должны.
  */
 private fun UserEditUiState.withUser(
     user: User,
     notify: Boolean,
+    keepDraft: Boolean = false,
 ): UserEditUiState = copy(
     loaded = user,
-    email = user.email,
-    firstName = user.firstName,
-    lastName = user.lastName,
+    email = draft(email, loaded?.email, user.email, keepDraft),
+    firstName = draft(firstName, loaded?.firstName, user.firstName, keepDraft),
+    lastName = draft(lastName, loaded?.lastName, user.lastName, keepDraft),
     role = user.role,
     saved = if (notify) user else saved,
 )
+
+/**
+ * Поле формы после чужой правки: несохранённый ввод остаётся, нетронутое берётся с сервера —
+ * иначе устаревшее значение ушло бы обратно следующим `PUT` из diff.
+ */
+private fun draft(
+    current: String,
+    base: String?,
+    fresh: String,
+    keepDraft: Boolean,
+): String = if (keepDraft && base != null && current != base) current else fresh
 
 private fun UserEditUiState.failed(failure: ApiFailure): UserEditUiState {
     val details = (failure as? ApiFailure.Api)?.details.orEmpty()

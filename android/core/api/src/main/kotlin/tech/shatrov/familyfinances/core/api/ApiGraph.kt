@@ -36,6 +36,8 @@ class ApiGraph(
     val transactions: TransactionsApi = client.create(TransactionsApi::class)
     val budgets: BudgetsApi = client.create(BudgetsApi::class)
     val users: UsersApi = client.create(UsersApi::class)
-    val backups: BackupsApi = client.create(BackupsApi::class)
+
+    // `POST /backups` неидемпотентен: повтор создал бы второй файл и второй прогон retention.
+    val backups: BackupsApi = client.createWithoutRetries(BackupsApi::class)
     val stats: StatsApi = client.create(StatsApi::class)
 }

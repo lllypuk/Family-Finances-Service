@@ -187,6 +187,25 @@ class UserEditViewModelTest {
         assertNull(state.changes)
     }
 
+    /** `PATCH` роли пишет не поля формы: начатый ввод он стирать не должен. */
+    @Test
+    fun roleChangeKeepsTheUnsavedInput() = runTest {
+        server.enqueueJson(200, MEMBER_OK)
+        create(MEMBER_ID)
+        settled()
+        server.takeRequest()
+
+        model.onFirstNameChange("Участник")
+        server.enqueueJson(200, USER_ADMIN_OK)
+        server.enqueueJson(200, USER_ADMIN_OK)
+        model.onToggleRole()
+        val state = settled()
+
+        assertEquals("Участник", state.firstName)
+        assertEquals(Role.admin, state.currentRole)
+        assertTrue(state.canSubmit)
+    }
+
     /** Роль сняли с другого телефона: `/users` этому токену уже не отвечает — уходим в корень. */
     @Test
     fun forbiddenLeavesForTheRoot() = runTest {
