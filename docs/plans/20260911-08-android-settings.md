@@ -263,12 +263,13 @@
 
 **Files:**
 - Create: `ui/settings/UsersViewModel.kt`, `ui/settings/UsersScreen.kt`, `UsersViewModelTest`
-- Modify: `ui/settings/SettingsHost.kt`, `strings.xml`
+- Modify: `ui/settings/SettingsHost.kt`, `strings.xml`, `TestFixtures.kt` (`USERS_TRUNCATED`)
+- ➕ Modify: `ui/settings/SettingsHeader.kt` — слот под кнопку справа от заголовка («плюс» списка)
 
-- [ ] `listUsers(limit = 200)`, строка: имя, почта, роль, «неактивен», «это вы»; усечение по `total`
-- [ ] переходы в `UserEdit(null)` и `UserEdit(id)` — пока на заглушку из Task 2
-- [ ] тесты: query, отметка себя, усечение
-- [ ] `make -C android check` — зелёный
+- [x] `listUsers(limit = 200)`, строка: имя, почта, роль, «неактивен», «это вы»; усечение по `total`
+- [x] переходы в `UserEdit(null)` и `UserEdit(id)` — пока на заглушку из Task 2
+- [x] тесты: query, отметка себя, усечение
+- [x] `make -C android check` — зелёный
 
 ### Task 6: Пользователи — форма, роль/активность, пароль
 

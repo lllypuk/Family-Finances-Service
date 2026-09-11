@@ -82,6 +82,15 @@ fun SettingsHost(
             onBack = leave,
         )
 
+        is SettingsPage.Users -> UsersPage(
+            graph = graph,
+            session = session,
+            models = models,
+            page = page,
+            onOpen = onPageChange,
+            onBack = leave,
+        )
+
         is SettingsPage.Sessions -> SessionsPage(
             graph = graph,
             session = session,
@@ -182,6 +191,30 @@ private fun SessionsPage(
         state = state,
         onRetry = model::refresh,
         onRevoke = model::onRevoke,
+        onBack = onBack,
+    )
+}
+
+/** Список пользователей: правки в нём нет, уходить можно всегда. */
+@Composable
+private fun UsersPage(
+    graph: AppGraph,
+    session: Session,
+    models: ViewModelStoreOwner,
+    page: SettingsPage.Users,
+    onOpen: (SettingsPage) -> Unit,
+    onBack: () -> Unit,
+) {
+    val model: UsersViewModel = viewModel(viewModelStoreOwner = models, key = page.modelKey) {
+        UsersViewModel(graph.api, session.user.id)
+    }
+    val state by model.state.collectAsStateWithLifecycle()
+
+    UsersScreen(
+        state = state,
+        onRetry = model::refresh,
+        onAdd = { onOpen(SettingsPage.UserEdit(null)) },
+        onOpen = { onOpen(SettingsPage.UserEdit(it)) },
         onBack = onBack,
     )
 }

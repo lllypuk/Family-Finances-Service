@@ -124,6 +124,9 @@
     <string name="settings_session_last_used_hint">Активность обновляется не чаще раза в час</string>
     <string name="settings_session_revoke">Отозвать</string>
     <string name="settings_session_revoke_confirm">Отозвать эту сессию?</string>
+    <string name="settings_user_add">Добавить пользователя</string>
+    <string name="settings_user_self">Это вы</string>
+    <string name="settings_user_inactive">Неактивен</string>
     <string name="settings_list_truncated">Показаны первые %1$d из %2$d</string>
 
     <string name="retry">Повторить</string>

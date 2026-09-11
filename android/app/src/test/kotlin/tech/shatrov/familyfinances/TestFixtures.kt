@@ -201,6 +201,9 @@ internal const val USERS_OK = """
 "pagination":{"limit":200,"offset":0,"total":2}}}
 """
 
+/** Тот же список, но сервер знает о трёх пользователях: страница одна, и это видно на экране. */
+internal val USERS_TRUNCATED = USERS_OK.replace(""""total":2""", """"total":3""")
+
 /** Две операции за 7 сентября и одна за 6-е: группировка по дате видна на первой же странице. */
 internal const val TRANSACTIONS_PAGE_1 = """
 {"data":[
