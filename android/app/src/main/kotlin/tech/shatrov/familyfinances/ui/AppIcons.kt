@@ -29,6 +29,14 @@ object AppIcons {
             "M7.5 6.5a1 1 0 1 0 0 2 1 1 0 1 0 0-2z",
         )
     }
+    val Target: ImageVector by lazy {
+        icon(
+            "target",
+            "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z",
+            "M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12z",
+            "M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
+        )
+    }
     val Plus: ImageVector by lazy { icon("plus", "M12 5v14M5 12h14") }
     val ArrowLeft: ImageVector by lazy { icon("arrow-left", "m12 19-7-7 7-7M19 12H5") }
     val LogOut: ImageVector by lazy {

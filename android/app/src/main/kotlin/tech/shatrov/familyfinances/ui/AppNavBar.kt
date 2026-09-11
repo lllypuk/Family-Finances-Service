@@ -14,7 +14,7 @@ import androidx.compose.ui.res.stringResource
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.theme.LocalAppColors
 
-/** Три корня приложения; формы вкладок не имеют и панель не показывают. */
+/** Четыре корня приложения; формы вкладок не имеют и панель не показывают. */
 enum class AppTab(
     @StringRes val label: Int,
     val icon: ImageVector,
@@ -22,6 +22,7 @@ enum class AppTab(
     HOME(R.string.home_title, AppIcons.Home),
     TRANSACTIONS(R.string.transactions_title, AppIcons.List),
     CATEGORIES(R.string.categories_title, AppIcons.Tag),
+    BUDGETS(R.string.budgets_title, AppIcons.Target),
 }
 
 /** Нижняя панель вкладок. Отступ под системную панель уже дан корнем, поэтому свой — нулевой. */

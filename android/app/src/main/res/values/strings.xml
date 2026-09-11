@@ -64,6 +64,31 @@
     <string name="category_delete">Удалить</string>
     <string name="category_delete_confirm">Удалить категорию?</string>
 
+    <string name="budgets_title">Бюджеты</string>
+    <string name="budgets_add">Добавить</string>
+    <string name="budgets_empty_today">На сегодня бюджетов нет — посмотрите «Все периоды»</string>
+    <string name="budgets_empty">Бюджетов пока нет</string>
+    <string name="budgets_filter_today">На сегодня</string>
+    <string name="budgets_filter_all">Все периоды</string>
+    <string name="budgets_all_categories">Все категории</string>
+    <string name="budget_new_title">Новый бюджет</string>
+    <string name="budget_edit_title">Бюджет</string>
+    <string name="budget_name">Название</string>
+    <string name="budget_amount">Лимит</string>
+    <string name="budget_period">Период</string>
+    <string name="budget_period_weekly">Неделя</string>
+    <string name="budget_period_monthly">Месяц</string>
+    <string name="budget_period_yearly">Год</string>
+    <string name="budget_period_custom">Произвольный</string>
+    <string name="budget_category">Категория</string>
+    <string name="budget_start">Начало</string>
+    <string name="budget_end">Конец</string>
+    <string name="budget_save">Сохранить</string>
+    <string name="budget_delete">Удалить</string>
+    <string name="budget_delete_confirm">Удалить бюджет?</string>
+    <string name="budget_error_rejected">Не удалось сохранить: название занято, даты пересекаются с другим бюджетом или сумма меньше уже потраченного</string>
+    <string name="budget_progress">%1$s из %2$s</string>
+
     <string name="retry">Повторить</string>
     <string name="back">Назад</string>
     <string name="error_network">Нет связи с сервером</string>

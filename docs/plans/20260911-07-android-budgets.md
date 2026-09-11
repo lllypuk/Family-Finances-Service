@@ -114,25 +114,28 @@
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/TestFixtures.kt`
 - Create: `android/app/src/test/kotlin/tech/shatrov/familyfinances/AppScreenSaverTest.kt`
 
-- [ ] `ApiGraph.budgets: BudgetsApi` через `client.create`, как соседние
-- [ ] `AppScreen.Budgets` и `AppScreen.BudgetEdit(id: UUID?, draft: UUID)`; ключи в `AppScreenSaver`
+- [x] `ApiGraph.budgets: BudgetsApi` через `client.create`, как соседние
+- [x] `AppScreen.Budgets` и `AppScreen.BudgetEdit(id: UUID?, draft: UUID)`; ключи в `AppScreenSaver`
       по образцу `TransactionEdit`
-- [ ] `AppTab.BUDGETS` четвёртой вкладкой с новой иконкой в `AppIcons` (тем же `icon(name, path)`);
+- [x] `AppTab.BUDGETS` четвёртой вкладкой с новой иконкой в `AppIcons` (тем же `icon(name, path)`);
       KDoc «Три корня приложения» в `AppNavBar.kt` → четыре
-- [ ] оба `when` в `MainActivity.kt` (`AppRoot` по экрану и `AppTab.screen`) — неисчерпываемый
+- [x] оба `when` в `MainActivity.kt` (`AppRoot` по экрану и `AppTab.screen`) — неисчерпываемый
       `when` в Kotlin 2.3 не компилируется: временные ветки `BUDGETS -> AppScreen.Budgets`,
       `Budgets`/`BudgetEdit` → заглушка `Centered { Text(...) }`, которую заменит Task 6
-- [ ] `UiError.Resource(@StringRes id)` и его ветка в `message(res)`
-- [ ] строки: `budgets_title`, `budgets_add`, `budgets_empty_today`, `budgets_empty`,
+- [x] `UiError.Resource(@StringRes id)` и его ветка в `message(res)`
+- [x] строки: `budgets_title`, `budgets_add`, `budgets_empty_today`, `budgets_empty`,
       `budgets_filter_today`, `budgets_filter_all`, `budgets_all_categories`,
       `budget_new_title`, `budget_edit_title`, `budget_name`, `budget_amount`, `budget_period`,
       `budget_period_weekly|monthly|yearly|custom`, `budget_category`, `budget_start`, `budget_end`,
       `budget_save`, `budget_delete`, `budget_delete_confirm`, `budget_error_rejected`,
       `budget_progress` («%1$s из %2$s», без общего с главной — тексты разойдутся)
-- [ ] фикстуры: `BUDGET_OK`, `BUDGETS_LIST` (два бюджета: с категорией и общий, один перерасходован)
-- [ ] `AppScreenSaverTest`: save → restore для `Budgets` и `BudgetEdit` (с `id` и без) даёт тот
+- [x] фикстуры: `BUDGET_OK`, `BUDGETS_LIST` (два бюджета: с категорией и общий, один перерасходован)
+- [x] `AppScreenSaverTest`: save → restore для `Budgets` и `BudgetEdit` (с `id` и без) даёт тот
       же экран; тестов на `AppScreenSaver` в репозитории до этого не было
-- [ ] `make -C android check` — зелёный
+- [x] `make -C android check` — зелёный
+
+➕ Панели вкладок (`ui/AppNavBar.kt`, `ui/AppIcons.kt`) на ветке не было: они жили в неслитой
+  `android-bottom-nav`, на которую опирался раздел «Context». Ветка влита в эту перед задачей.
 
 ### Task 2: BudgetsViewModel — список с фильтром
 

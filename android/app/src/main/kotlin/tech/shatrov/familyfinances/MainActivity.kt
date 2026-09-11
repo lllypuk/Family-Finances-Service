@@ -257,6 +257,11 @@ fun AppRoot(graph: AppGraph) {
             }
         }
 
+        // Заглушки до Task 6 плана 07: `when` по экранам исчерпывающий, без ветки не собирается.
+        AppScreen.Budgets -> Centered { Text(stringResource(R.string.budgets_title)) }
+
+        is AppScreen.BudgetEdit -> Centered { Text(stringResource(R.string.budget_new_title)) }
+
         is AppScreen.TransactionEdit -> WithSession(session) { active ->
             // Ключ по черновику: без него следующий заход на форму достался бы модели прошлого,
             // уже сохранённого, и экран сразу закрылся бы.
@@ -347,6 +352,7 @@ private val AppTab.screen: AppScreen
         AppTab.HOME -> AppScreen.Home
         AppTab.TRANSACTIONS -> AppScreen.Transactions
         AppTab.CATEGORIES -> AppScreen.Categories
+        AppTab.BUDGETS -> AppScreen.Budgets
     }
 
 /** Сессия гаснет на выходе раньше, чем сменится экран: без валюты и роли рисовать нечего. */

@@ -28,6 +28,14 @@ sealed interface AppScreen {
         val id: UUID?,
         val draft: UUID = UUID.randomUUID(),
     ) : AppScreen
+
+    data object Budgets : AppScreen
+
+    /** Форма бюджета; `id` и `draft` работают так же, как у [TransactionEdit]. */
+    data class BudgetEdit(
+        val id: UUID?,
+        val draft: UUID = UUID.randomUUID(),
+    ) : AppScreen
 }
 
 private const val KEY_LOADING = "loading"
@@ -36,6 +44,8 @@ private const val KEY_HOME = "home"
 private const val KEY_TRANSACTIONS = "transactions"
 private const val KEY_TRANSACTION_EDIT = "transaction-edit"
 private const val KEY_CATEGORIES = "categories"
+private const val KEY_BUDGETS = "budgets"
+private const val KEY_BUDGET_EDIT = "budget-edit"
 
 /** Экран переживает поворот; всё остальное восстанавливается из хранилища токена. */
 val AppScreenSaver: Saver<AppScreen, String> = Saver(
@@ -46,7 +56,9 @@ val AppScreenSaver: Saver<AppScreen, String> = Saver(
             AppScreen.Home -> KEY_HOME
             AppScreen.Transactions -> KEY_TRANSACTIONS
             AppScreen.Categories -> KEY_CATEGORIES
+            AppScreen.Budgets -> KEY_BUDGETS
             is AppScreen.TransactionEdit -> "$KEY_TRANSACTION_EDIT:${screen.id ?: ""}:${screen.draft}"
+            is AppScreen.BudgetEdit -> "$KEY_BUDGET_EDIT:${screen.id ?: ""}:${screen.draft}"
         }
     },
     restore = { key ->
@@ -59,9 +71,19 @@ val AppScreenSaver: Saver<AppScreen, String> = Saver(
 
             key == KEY_CATEGORIES -> AppScreen.Categories
 
+            key == KEY_BUDGETS -> AppScreen.Budgets
+
             key.startsWith("$KEY_TRANSACTION_EDIT:") -> {
                 val (target, draft) = key.removePrefix("$KEY_TRANSACTION_EDIT:").split(':')
                 AppScreen.TransactionEdit(
+                    id = target.takeIf { it.isNotEmpty() }?.let(UUID::fromString),
+                    draft = UUID.fromString(draft),
+                )
+            }
+
+            key.startsWith("$KEY_BUDGET_EDIT:") -> {
+                val (target, draft) = key.removePrefix("$KEY_BUDGET_EDIT:").split(':')
+                AppScreen.BudgetEdit(
                     id = target.takeIf { it.isNotEmpty() }?.let(UUID::fromString),
                     draft = UUID.fromString(draft),
                 )
