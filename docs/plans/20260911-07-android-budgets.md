@@ -183,27 +183,27 @@
 - Create: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/budgets/BudgetDatesTest.kt`
 - Create: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/budgets/BudgetEditViewModelTest.kt`
 
-- [ ] `endOf(period, start): LocalDate?` — `custom` даёт `null`; 30 сентября monthly → 29 октября,
+- [x] `endOf(period, start): LocalDate?` — `custom` даёт `null`; 30 сентября monthly → 29 октября,
       31 декабря yearly → 30 декабря следующего года (тест на оба)
-- [ ] `BudgetEditUiState`: `name`, `amount` (строка, `parseAmountMinor`), `period`, `categoryId`,
+- [x] `BudgetEditUiState`: `name`, `amount` (строка, `parseAmountMinor`), `period`, `categoryId`,
       `start`, `end`, `categories` (только `expense`), `loaded: Budget?`, `editing`, `loading`,
       `submitting`, `error`, `fieldErrors`, `done`; `canSubmit` = имя ≥ 2, сумма > 0,
       `end > start`, не отправляется, а при правке — ещё и есть diff
-- [ ] `load()`: категории, при правке — `getBudget(id)`; создание: `start = today`,
+- [x] `load()`: категории, при правке — `getBudget(id)`; создание: `start = today`,
       `period = monthly`, `end = endOf(monthly, today)`
-- [ ] `onPeriodChange`/`onStartChange` при создании подставляют `end` через `endOf`, если период
+- [x] `onPeriodChange`/`onStartChange` при создании подставляют `end` через `endOf`, если период
       не `custom`; при правке — только меняют своё поле; `onEndChange` не трогает период
-- [ ] `onSubmit`: `POST` c `id = draft`; `PUT` — `UpdateBudgetRequest` только из изменённых полей;
+- [x] `onSubmit`: `POST` c `id = draft`; `PUT` — `UpdateBudgetRequest` только из изменённых полей;
       после успеха `done = true`
-- [ ] `onDelete`: `deleteBudget(id)` → `done`
-- [ ] ошибки: `details` с полями формы (`name`, `amount_minor`, `start_date`, `end_date`,
+- [x] `onDelete`: `deleteBudget(id)` → `done`
+- [x] ошибки: `details` с полями формы (`name`, `amount_minor`, `start_date`, `end_date`,
       а на `POST` ещё `category_id`, `period`) — под поля; всё остальное с `field = "body"` —
       `UiError.Resource(R.string.budget_error_rejected)`; прочее — `toUiError()`
-- [ ] тесты: тело `POST` содержит `id` черновика и не содержит `category_id` при «все категории»;
+- [x] тесты: тело `POST` содержит `id` черновика и не содержит `category_id` при «все категории»;
       `PUT` после смены только имени — тело из одного поля; перерасходованный бюджет с
       неизменённой суммой сохраняет имя без 422; 422 с `field=body` → `Resource`; 422 с
       `field=name` → `fieldErrors["name"]`; удаление → `done`
-- [ ] `make -C android check` — зелёный
+- [x] `make -C android check` — зелёный
 
 ### Task 5: BudgetEditScreen — форма
 
