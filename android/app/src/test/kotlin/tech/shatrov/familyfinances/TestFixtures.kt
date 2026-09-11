@@ -174,6 +174,23 @@ internal const val CATEGORY_OK = """
 "meta":{"request_id":"r-13","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0"}}
 """
 
+internal const val SESSION_CURRENT_ID = "99999999-9999-9999-9999-999999999991"
+internal const val SESSION_OTHER_ID = "99999999-9999-9999-9999-999999999992"
+
+/** Текущая сессия с именем устройства и старая безымянная — обе ветки строки списка. */
+internal const val SESSIONS_OK = """
+{"data":[
+{"id":"$SESSION_CURRENT_ID","created_at":"2026-09-10T07:30:00Z","last_used_at":"2026-09-11T09:00:00Z",
+"expires_at":"2026-10-10T07:30:00Z","current":true,"device_name":"Pixel 8"},
+{"id":"$SESSION_OTHER_ID","created_at":"2026-08-01T12:00:00Z","last_used_at":"2026-09-01T12:00:00Z",
+"expires_at":"2026-10-01T12:00:00Z","current":false}],
+"meta":{"request_id":"r-40","timestamp":"2026-09-11T10:00:00Z","version":"v0.1.0",
+"pagination":{"limit":200,"offset":0,"total":2}}}
+"""
+
+/** Тот же список, но сервер знает о пяти сессиях: страница одна, и это видно на экране. */
+internal val SESSIONS_TRUNCATED = SESSIONS_OK.replace(""""total":2""", """"total":5""")
+
 internal const val USERS_OK = """
 {"data":[
 {"id":"$ADMIN_ID","email":"admin@test.com","first_name":"Админ","last_name":"Тест","role":"admin",

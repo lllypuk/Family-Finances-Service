@@ -82,6 +82,15 @@ fun SettingsHost(
             onBack = leave,
         )
 
+        is SettingsPage.Sessions -> SessionsPage(
+            graph = graph,
+            session = session,
+            models = models,
+            page = page,
+            onSubmitting = { submitting = it },
+            onBack = leave,
+        )
+
         else -> Centered {
             Text(page.slug)
             TextButton(onClick = leave) { Text(stringResource(R.string.back)) }
@@ -148,6 +157,31 @@ private fun PasswordPage(
         onNewChange = model::onNewChange,
         onRepeatChange = model::onRepeatChange,
         onSubmit = model::onSubmit,
+        onBack = onBack,
+    )
+}
+
+/** Сессии: список с отзывом чужих. Даты считаются в зоне семьи, поэтому модель её и получает. */
+@Composable
+private fun SessionsPage(
+    graph: AppGraph,
+    session: Session,
+    models: ViewModelStoreOwner,
+    page: SettingsPage.Sessions,
+    onSubmitting: (Boolean) -> Unit,
+    onBack: () -> Unit,
+) {
+    val model: SessionsViewModel = viewModel(viewModelStoreOwner = models, key = page.modelKey) {
+        SessionsViewModel(graph.api, session.zone)
+    }
+    val state by model.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(state.busy) { onSubmitting(state.busy) }
+
+    SessionsScreen(
+        state = state,
+        onRetry = model::refresh,
+        onRevoke = model::onRevoke,
         onBack = onBack,
     )
 }

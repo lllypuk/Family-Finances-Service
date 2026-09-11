@@ -117,6 +117,14 @@
     <string name="settings_password_wrong_current">Неверный текущий пароль</string>
     <string name="settings_password_changed">Пароль изменён, другие устройства разлогинены</string>
     <string name="settings_password_unknown">Результат неизвестен: если ошибка повторится, войдите с новым паролем</string>
+    <string name="settings_session_current">Текущая</string>
+    <string name="settings_session_unnamed">Без имени</string>
+    <string name="settings_session_created">Вход: %1$s</string>
+    <string name="settings_session_last_used">Активность: %1$s</string>
+    <string name="settings_session_last_used_hint">Активность обновляется не чаще раза в час</string>
+    <string name="settings_session_revoke">Отозвать</string>
+    <string name="settings_session_revoke_confirm">Отозвать эту сессию?</string>
+    <string name="settings_list_truncated">Показаны первые %1$d из %2$d</string>
 
     <string name="retry">Повторить</string>
     <string name="back">Назад</string>

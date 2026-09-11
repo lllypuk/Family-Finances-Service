@@ -251,13 +251,13 @@
 - Create: `ui/settings/SessionsViewModel.kt`, `ui/settings/SessionsScreen.kt`, `SessionsViewModelTest`
 - Modify: `ui/settings/SettingsHost.kt`, `strings.xml`, `TestFixtures.kt` (`SESSIONS_OK`)
 
-- [ ] `formatDateTime` в зоне семьи; `DatesTest` — одна и та же метка в двух зонах даёт разные строки
-- [ ] `SessionsViewModel(api, zone)`: `listSessions(limit = 200)`, текущая с пометкой; строка: имя
+- [x] `formatDateTime` в зоне семьи; `DatesTest` — одна и та же метка в двух зонах даёт разные строки
+- [x] `SessionsViewModel(api, zone)`: `listSessions(limit = 200)`, текущая с пометкой; строка: имя
       устройства или «Без имени», создана, последняя активность; «Показаны первые 200 из N» при
       усечении
-- [ ] «Отозвать» с подтверждением у всех, кроме текущей; `404` → перечитать без ошибки
-- [ ] тесты: query, `404` → refresh, у текущей нет действия, усечение по `total`
-- [ ] `make -C android check` — зелёный
+- [x] «Отозвать» с подтверждением у всех, кроме текущей; `404` → перечитать без ошибки
+- [x] тесты: query, `404` → refresh, у текущей нет действия, усечение по `total`
+- [x] `make -C android check` — зелёный
 
 ### Task 5: Пользователи — список
 
