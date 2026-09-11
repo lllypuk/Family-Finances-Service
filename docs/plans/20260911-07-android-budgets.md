@@ -143,21 +143,21 @@
 - Create: `android/app/src/main/kotlin/tech/shatrov/familyfinances/ui/budgets/BudgetsViewModel.kt`
 - Create: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/budgets/BudgetsViewModelTest.kt`
 
-- [ ] `BudgetsUiState`: `Loading`, `Failure(error)`, `Ready(rows, filter)`; `BudgetRow(budget,
+- [x] `BudgetsUiState`: `Loading`, `Failure(error)`, `Ready(rows, filter)`; `BudgetRow(budget,
       categoryName: String?, level: BudgetLevel)` — `level ∈ OK | NEAR | OVER` по сырому
       `utilization` (проценты): `OVER` при > 100, `NEAR` при ≥ `NEAR_LIMIT = 80.0` — дубль
       серверного `BudgetAlertNearLimit` (`dto/budget_dto.go:131`), у `Budget` флагов
       `is_over_budget`/`is_near_limit` нет, в отличие от `BudgetProgress` на главной
-- [ ] `refresh()`: `listBudgets(limit = 200, activeOnly = if (filter == TODAY) true else null)` и
+- [x] `refresh()`: `listBudgets(limit = 200, activeOnly = if (filter == TODAY) true else null)` и
       `listCategories(limit = 200)` для имён; ошибка любого из двух — `Failure`
-- [ ] `onFilterChange(filter)` перечитывает список; фильтр переживает поворот (в состоянии модели)
-- [ ] `revalidate()` по образцу `HomeViewModel.revalidate` (`ui/home/HomeViewModel.kt:58`):
+- [x] `onFilterChange(filter)` перечитывает список; фильтр переживает поворот (в состоянии модели)
+- [x] `revalidate()` по образцу `HomeViewModel.revalidate` (`ui/home/HomeViewModel.kt:58`):
       «сегодня» считает сервер, и ответ на `active_only=true`, полученный вчера, после возврата
       из фона устарел — модель запоминает день запроса в зоне семьи и перечитывает при смене
-- [ ] тесты: сегодня → `active_only=true` в query, все → без параметра; имя категории и «Все
+- [x] тесты: сегодня → `active_only=true` в query, все → без параметра; имя категории и «Все
       категории»; `level` для 150 % = `OVER`, для 85 % = `NEAR`; `revalidate` в тот же день не
       шлёт запрос; сеть → `Failure(Network)`
-- [ ] `make -C android check` — зелёный
+- [x] `make -C android check` — зелёный
 
 ### Task 3: BudgetsScreen — список
 
