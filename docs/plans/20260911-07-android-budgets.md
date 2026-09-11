@@ -165,15 +165,15 @@
 - Create: `android/app/src/main/kotlin/tech/shatrov/familyfinances/ui/budgets/BudgetsScreen.kt`
 - Create: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/budgets/BudgetsScreenTest.kt`
 
-- [ ] шапка с заголовком и `Plus`, чипы фильтра из `ui/Chips.kt`, `LazyColumn` строк:
+- [x] шапка с заголовком и `Plus`, чипы фильтра из `ui/Chips.kt`, `LazyColumn` строк:
       название, категория или «Все категории», `formatPeriod(start, end)`, «потрачено из лимита»,
       `LinearProgressIndicator` (`utilization / 100`, обрезано в 0…1) с цветами как у
       `HomeScreen.BudgetRow` по `level` (`OVER` — `expense`, `NEAR` — `warning`)
-- [ ] пустое состояние: на «сегодня» — текст с подсказкой про «Все периоды»; на «все» — просто
+- [x] пустое состояние: на «сегодня» — текст с подсказкой про «Все периоды»; на «все» — просто
       «Бюджетов пока нет»; `Failure` — текст и «Повторить»
-- [ ] Compose-тесты: пустой список, строка показывает имя/период/суммы, тап по чипу и по строке
+- [x] Compose-тесты: пустой список, строка показывает имя/период/суммы, тап по чипу и по строке
       доходят до колбэков
-- [ ] `make -C android check` — зелёный
+- [x] `make -C android check` — зелёный
 
 ### Task 4: Даты периода и BudgetEditViewModel
 
