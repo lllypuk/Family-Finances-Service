@@ -12,8 +12,8 @@ private const val VIEWPORT = 24f
 private const val STROKE = 2f
 
 /**
- * Иконки интерфейса контурами Lucide. В `material-icons-core` нет ни метки, ни выхода в одном
- * стиле с домом и списком, а `material-icons-extended` тянет тысячи векторов ради шести.
+ * Иконки интерфейса контурами Lucide. В `material-icons-core` нет ни метки, ни профиля в одном
+ * стиле с домом и списком, а `material-icons-extended` тянет тысячи векторов ради семи.
  */
 object AppIcons {
     val Home: ImageVector =

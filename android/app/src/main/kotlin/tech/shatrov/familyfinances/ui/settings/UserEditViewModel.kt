@@ -186,7 +186,7 @@ class UserEditViewModel(
         started()
         viewModelScope.launch {
             try {
-                val created = api.client.unwrap { api.users.createUser(request) }.`data`
+                val created = api.client.unwrap { api.userWrites.createUser(request) }.`data`
                 mutable.update {
                     it.withUser(created, notify = true).copy(submitting = false, exit = UserEditExit.List)
                 }

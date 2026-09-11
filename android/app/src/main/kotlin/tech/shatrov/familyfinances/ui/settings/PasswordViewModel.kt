@@ -95,7 +95,7 @@ class PasswordViewModel(private val api: ApiGraph) : ViewModel() {
         viewModelScope.launch {
             try {
                 api.client.send {
-                    api.me.changePassword(ChangePasswordRequest(current.current, current.next))
+                    api.meWrites.changePassword(ChangePasswordRequest(current.current, current.next))
                 }
                 mutable.value = PasswordUiState(changed = true)
             } catch (failure: ApiFailure) {

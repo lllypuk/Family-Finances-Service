@@ -20,7 +20,7 @@ fun formatBytes(bytes: Long): String {
     var unit = units.first()
     for (candidate in units) {
         unit = candidate
-        if (bytes / divisor < STEP) break
+        if (candidate == units.last() || bytes / divisor < STEP) break
         divisor *= STEP
     }
 

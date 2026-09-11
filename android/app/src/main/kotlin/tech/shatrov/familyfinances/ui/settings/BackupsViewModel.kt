@@ -122,9 +122,11 @@ class BackupsViewModel(
                     error = keep,
                 )
             } catch (failure: ApiFailure) {
+                val error = failure.toSettingsError()
                 mutable.value = BackupsUiState.Failure(
-                    error = keep ?: failure.toSettingsError(),
-                    forbidden = keep == null && failure.forbidden,
+                    // Снятая роль важнее сохранённого сообщения: по флагу хост закрывает страницу.
+                    error = if (failure.forbidden) error else keep ?: error,
+                    forbidden = failure.forbidden,
                 )
             }
         }

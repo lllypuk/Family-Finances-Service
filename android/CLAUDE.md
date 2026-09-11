@@ -35,7 +35,7 @@ make -C android api-check  # api-gen + git status по каталогу выво
 потребитель не предвидится, а лишний модуль в Gradle стоит времени сборки.
 
 Иконки — вручную перенесённые контуры Lucide в `ui/AppIcons.kt`: `material-icons-core` не покрывает
-нужный набор в одном стиле, а `material-icons-extended` тянет тысячи векторов ради восьми. Девятая
+нужный набор в одном стиле, а `material-icons-extended` тянет тысячи векторов ради семи. Восьмая
 иконка — ещё один `icon(name, path…)`, а не новая зависимость. Иконка приложения адаптивная
 (`mipmap-anydpi-v26/ic_launcher.xml` + `drawable/ic_launcher_foreground.xml`), legacy-растров нет:
 `minSdk 26` рисует адаптивную везде.
