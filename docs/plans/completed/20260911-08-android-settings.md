@@ -337,16 +337,16 @@
 
 ### Task 10: [Final] Update documentation
 
-- [ ] `android/CLAUDE.md`: вход в настройки, вложенный хост и `SettingsModels` (очистка на смене
+- [x] `android/CLAUDE.md`: вход в настройки, вложенный хост и `SettingsModels` (очистка на смене
       страницы, блокировка ухода при `submitting`), `refreshSession` и поколения, исключение для
       `401 INVALID_CREDENTIALS`, `device_name`, алиас `ApiSession`
-- [ ] `android/gradle/libs.versions.toml`: `appVersionCode` 2 → 3, `appVersionName` 0.2.0 → 0.3.0
-- [ ] `docs/backlog.md`: снять «Экран Профиль/Настройки», оставить отчёты и `bulkDelete`; добавить
+- [x] `android/gradle/libs.versions.toml`: `appVersionCode` 2 → 3, `appVersionName` 0.2.0 → 0.3.0
+- [x] `docs/backlog.md`: снять «Экран Профиль/Настройки», оставить отчёты и `bulkDelete`; добавить
       серверные находки из «Context»: `409` у `PUT /users/:id` не в спеке; пароль и деактивация
       записываются до отзыва сессий (нужна одна транзакция); `POST /backups` против
       `SERVER_WRITE_TIMEOUT` 15 с — измерить `VACUUM` на проде, при необходимости поднять таймаут
       роута или сделать операцию асинхронной; `PATCH` двух полей без отката
-- [ ] перенести план в `docs/plans/completed/`
+- [x] перенести план в `docs/plans/completed/`
 
 ## Post-Completion
 
