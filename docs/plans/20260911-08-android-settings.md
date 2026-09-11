@@ -175,16 +175,16 @@
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/login/LoginViewModelTest.kt`
 - Modify: `android/app/src/main/kotlin/tech/shatrov/familyfinances/ui/UiError.kt`
 
-- [ ] `TokenInterceptor`: `401` на `PUT /api/v1/me/password` с `error.code == INVALID_CREDENTIALS`
+- [x] `TokenInterceptor`: `401` на `PUT /api/v1/me/password` с `error.code == INVALID_CREDENTIALS`
       (копия тела `peekBody(PEEK_LIMIT)`, разбор `ErrorEnvelope`) — пропускается без `clearIf`;
       любой другой `401` — как сейчас
-- [ ] тесты интерцептора: три случая из Testing Strategy; `unauthorizedClearsVaultAndRaisesEvent`
+- [x] тесты интерцептора: три случая из Testing Strategy; `unauthorizedClearsVaultAndRaisesEvent`
       не сломан
-- [ ] `ApiGraph.backups: BackupsApi`
-- [ ] `LoginViewModel(api, deviceName: String? = Build.MODEL.take(64).ifBlank { null })`; тест на
+- [x] `ApiGraph.backups: BackupsApi`
+- [x] `LoginViewModel(api, deviceName: String? = Build.MODEL.take(64).ifBlank { null })`; тест на
       тело логина с `device_name` и без него при `null`
-- [ ] `UiError.kt`: перегрузка `toUiError(known)` со значением по умолчанию
-- [ ] `make -C android check` — зелёный
+- [x] `UiError.kt`: перегрузка `toUiError(known)` со значением по умолчанию
+- [x] `make -C android check` — зелёный
 
 ### Task 2: Каркас настроек — `AppScreen.Settings`, хост, корень, вход с главной
 

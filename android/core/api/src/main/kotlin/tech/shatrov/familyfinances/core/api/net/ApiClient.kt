@@ -34,7 +34,7 @@ class ApiClient(
     }
 
     private val http: OkHttpClient = OkHttpClient.Builder()
-        .addInterceptor(TokenInterceptor(tokens, onSessionExpired))
+        .addInterceptor(TokenInterceptor(tokens, json, onSessionExpired))
         .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .build()

@@ -17,8 +17,12 @@ sealed interface UiError {
     data class Resource(@StringRes val id: Int) : UiError
 }
 
-fun ApiFailure.toUiError(): UiError = when (this) {
-    is ApiFailure.Api -> UiError.Server(serverMessage)
+/**
+ * Перевод отказа в текст. [known] отображает `error.code` в строку ресурса для кодов, чей
+ * серверный текст на экране не годится (`409` семьи и пользователей); остальное идёт как есть.
+ */
+fun ApiFailure.toUiError(known: Map<String, Int> = emptyMap()): UiError = when (this) {
+    is ApiFailure.Api -> known[code]?.let { UiError.Resource(it) } ?: UiError.Server(serverMessage)
     is ApiFailure.Network -> UiError.Network
     is ApiFailure.Malformed -> UiError.Malformed
 }
