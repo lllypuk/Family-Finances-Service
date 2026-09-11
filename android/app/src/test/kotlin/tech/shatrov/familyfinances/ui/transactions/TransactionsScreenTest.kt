@@ -40,7 +40,6 @@ class TransactionsScreenTest {
             AppTheme {
                 TransactionsScreen(
                     state = state,
-                    onBack = {},
                     onRetry = {},
                     onFiltersChange = onFiltersChange,
                     onLoadMore = {},

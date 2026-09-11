@@ -13,10 +13,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +32,7 @@ import tech.shatrov.familyfinances.core.api.RecentTransactionItem
 import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.theme.Dimens
 import tech.shatrov.familyfinances.theme.LocalAppColors
+import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.format.formatMoney
 import tech.shatrov.familyfinances.ui.format.formatPercent
@@ -44,8 +46,6 @@ private const val TOP_CATEGORIES = 5
 fun HomeScreen(
     state: HomeUiState,
     onRetry: () -> Unit,
-    onOpenTransactions: () -> Unit,
-    onOpenCategories: () -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -53,7 +53,7 @@ fun HomeScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = Dimens.SPACE_4, vertical = Dimens.SPACE_2),
+                .padding(start = Dimens.SPACE_4, end = Dimens.SPACE_2, top = Dimens.SPACE_2, bottom = Dimens.SPACE_2),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -62,14 +62,8 @@ fun HomeScreen(
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.weight(1f),
             )
-            Row {
-                TextButton(onClick = onOpenTransactions) {
-                    Text(stringResource(R.string.home_open_transactions))
-                }
-                TextButton(onClick = onOpenCategories) {
-                    Text(stringResource(R.string.home_open_categories))
-                }
-                TextButton(onClick = onSignOut) { Text(stringResource(R.string.sign_out)) }
+            IconButton(onClick = onSignOut) {
+                Icon(AppIcons.LogOut, contentDescription = stringResource(R.string.sign_out))
             }
         }
 

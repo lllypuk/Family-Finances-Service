@@ -40,6 +40,8 @@ import kotlinx.coroutines.launch
 import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import tech.shatrov.familyfinances.theme.AppTheme
 import tech.shatrov.familyfinances.theme.Dimens
+import tech.shatrov.familyfinances.ui.AppNavBar
+import tech.shatrov.familyfinances.ui.AppTab
 import tech.shatrov.familyfinances.ui.UiError
 import tech.shatrov.familyfinances.ui.categories.CategoriesScreen
 import tech.shatrov.familyfinances.ui.categories.CategoriesViewModel
@@ -172,18 +174,18 @@ fun AppRoot(graph: AppGraph) {
                 }
                 onPauseOrDispose {}
             }
-            HomeScreen(
-                state = home,
-                onRetry = model::refresh,
-                onOpenTransactions = { screen = AppScreen.Transactions },
-                onOpenCategories = { screen = AppScreen.Categories },
-                onSignOut = {
-                    scope.launch {
-                        graph.signOut()
-                        screen = AppScreen.Login
-                    }
-                },
-            )
+            WithNavBar(AppTab.HOME, onSelect = { screen = it.screen }) {
+                HomeScreen(
+                    state = home,
+                    onRetry = model::refresh,
+                    onSignOut = {
+                        scope.launch {
+                            graph.signOut()
+                            screen = AppScreen.Login
+                        }
+                    },
+                )
+            }
         }
 
         AppScreen.Transactions -> WithSession(session) { active ->
@@ -203,15 +205,16 @@ fun AppRoot(graph: AppGraph) {
                 onPauseOrDispose {}
             }
             BackHandler { screen = AppScreen.Home }
-            TransactionsScreen(
-                state = transactions,
-                onBack = { screen = AppScreen.Home },
-                onRetry = model::refresh,
-                onFiltersChange = model::onFiltersChange,
-                onLoadMore = model::loadMore,
-                onCreate = { screen = AppScreen.TransactionEdit(null) },
-                onOpen = { screen = AppScreen.TransactionEdit(it) },
-            )
+            WithNavBar(AppTab.TRANSACTIONS, onSelect = { screen = it.screen }) {
+                TransactionsScreen(
+                    state = transactions,
+                    onRetry = model::refresh,
+                    onFiltersChange = model::onFiltersChange,
+                    onLoadMore = model::loadMore,
+                    onCreate = { screen = AppScreen.TransactionEdit(null) },
+                    onOpen = { screen = AppScreen.TransactionEdit(it) },
+                )
+            }
         }
 
         AppScreen.Categories -> WithSession(session) { active ->
@@ -224,20 +227,21 @@ fun AppRoot(graph: AppGraph) {
             // Список подписывает строки именами категорий и фильтрует по ним, а главная —
             // расходы в сводке, поэтому уход с этого экрана помечает устаревшими оба:
             // правку модель наружу не отдаёт.
-            val leave = {
+            val leave = { next: AppScreen ->
                 listStale = true
                 homeStale = true
-                screen = AppScreen.Home
+                screen = next
             }
-            BackHandler { if (form == null) leave() else model.onDismiss() }
+            BackHandler { if (form == null) leave(AppScreen.Home) else model.onDismiss() }
             if (form == null) {
-                CategoriesScreen(
-                    state = categories,
-                    onBack = leave,
-                    onRetry = model::refresh,
-                    onAdd = model::onAdd,
-                    onOpen = model::onOpen,
-                )
+                WithNavBar(AppTab.CATEGORIES, onSelect = { leave(it.screen) }) {
+                    CategoriesScreen(
+                        state = categories,
+                        onRetry = model::refresh,
+                        onAdd = model::onAdd,
+                        onOpen = model::onOpen,
+                    )
+                }
             } else {
                 CategoryEditScreen(
                     state = form,
@@ -324,6 +328,26 @@ private fun BootstrapScreen(
         TextButton(onClick = onSignOut) { Text(stringResource(R.string.sign_out)) }
     }
 }
+
+/** Корневые экраны делят одну панель вкладок; сами экраны о ней не знают. */
+@Composable
+private fun WithNavBar(
+    selected: AppTab,
+    onSelect: (AppTab) -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.weight(1f)) { content() }
+        AppNavBar(selected = selected, onSelect = onSelect)
+    }
+}
+
+private val AppTab.screen: AppScreen
+    get() = when (this) {
+        AppTab.HOME -> AppScreen.Home
+        AppTab.TRANSACTIONS -> AppScreen.Transactions
+        AppTab.CATEGORIES -> AppScreen.Categories
+    }
 
 /** Сессия гаснет на выходе раньше, чем сменится экран: без валюты и роли рисовать нечего. */
 @Composable
