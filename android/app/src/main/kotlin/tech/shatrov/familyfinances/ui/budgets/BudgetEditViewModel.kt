@@ -58,6 +58,8 @@ data class BudgetEditUiState(
     val categories: List<Category> = emptyList(),
     val loaded: Budget? = null,
     val editing: Boolean = false,
+    // Справочник прочитан: до этого ошибка формы — про загрузку, и «Повторить» имеет смысл.
+    val ready: Boolean = false,
     val loading: Boolean = true,
     val submitting: Boolean = false,
     val error: UiError? = null,
@@ -230,10 +232,11 @@ private fun BudgetEditUiState.filled(
     categories: List<Category>,
     existing: Budget?,
 ): BudgetEditUiState = if (existing == null) {
-    copy(loading = false, categories = categories)
+    copy(loading = false, ready = true, categories = categories)
 } else {
     copy(
         loading = false,
+        ready = true,
         categories = categories,
         loaded = existing,
         name = existing.name,
