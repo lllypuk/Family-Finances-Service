@@ -47,7 +47,7 @@ private const val TOP_CATEGORIES = 5
 fun HomeScreen(
     state: HomeUiState,
     onRetry: () -> Unit,
-    onSignOut: () -> Unit,
+    onSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -63,8 +63,8 @@ fun HomeScreen(
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.weight(1f),
             )
-            IconButton(onClick = onSignOut) {
-                Icon(AppIcons.LogOut, contentDescription = stringResource(R.string.sign_out))
+            IconButton(onClick = onSettings) {
+                Icon(AppIcons.User, contentDescription = stringResource(R.string.settings_title))
             }
         }
 

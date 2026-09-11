@@ -91,6 +91,19 @@
     <string name="budget_error_rejected">Не удалось сохранить: название занято, даты пересекаются с другим бюджетом или сумма меньше уже потраченного</string>
     <string name="budget_progress">%1$s из %2$s</string>
 
+    <string name="settings_title">Настройки</string>
+    <string name="settings_profile">Профиль</string>
+    <string name="settings_password">Пароль</string>
+    <string name="settings_sessions">Сессии</string>
+    <string name="settings_users">Пользователи</string>
+    <string name="settings_family">Семья</string>
+    <string name="settings_backups">Бэкапы</string>
+    <string name="settings_role_admin">Администратор</string>
+    <string name="settings_role_member">Участник</string>
+    <string name="settings_currency">Валюта: %1$s</string>
+    <string name="settings_timezone">Часовой пояс: %1$s</string>
+    <string name="settings_sign_out_confirm">Выйти из аккаунта?</string>
+
     <string name="retry">Повторить</string>
     <string name="back">Назад</string>
     <string name="error_network">Нет связи с сервером</string>

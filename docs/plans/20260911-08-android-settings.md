@@ -202,28 +202,28 @@
 - Modify: `android/app/src/main/kotlin/tech/shatrov/familyfinances/ui/AppIcons.kt`
 - Modify: `android/app/src/main/res/values/strings.xml`
 
-- [ ] `SettingsPage` (sealed, девять страниц, у каждой `visit`) и `AppScreen.Settings(page)`;
+- [x] `SettingsPage` (sealed, девять страниц, у каждой `visit`) и `AppScreen.Settings(page)`;
       `AppScreenSaver` с ключом фиксированной арности; `AppScreenSaverTest` — все страницы
-- [ ] `AppGraph`: счётчик поколений, `refreshSession()`, `update(user)`, `update(family)`;
+- [x] `AppGraph`: счётчик поколений, `refreshSession()`, `update(user)`, `update(family)`;
       `AppGraphTest` по Testing Strategy
-- [ ] `SettingsModels` (копия `FormModels`) создаётся в `AppRoot`, чистится при смене `page` и при
+- [x] `SettingsModels` (копия `FormModels`) создаётся в `AppRoot`, чистится при смене `page` и при
       `screen !is Settings`
-- [ ] `SettingsHost(graph, session, models, page, onPageChange, onLeave, onSessionChanged,
+- [x] `SettingsHost(graph, session, models, page, onPageChange, onLeave, onSessionChanged,
       onUsersChanged, onSignedOut)`: `when` по странице, `BackHandler` по правилам из «Решений»,
       уход заблокирован при `submitting` текущей страницы; на этой задаче реальная только `Root`,
       остальные восемь — заглушка `Centered { Text(page.name) }` без ссылок на будущие классы
-- [ ] `SettingsRootScreen`: карточка пользователя (имя, почта, роль), карточка семьи (название,
+- [x] `SettingsRootScreen`: карточка пользователя (имя, почта, роль), карточка семьи (название,
       валюта, таймзона), пункты «Профиль», «Пароль», «Сессии», для admin — «Пользователи», «Семья»,
       «Бэкапы»; внизу «Выйти» с подтверждением. При входе (`LaunchedEffect(visit)`) —
       `refreshSession()` с индикатором поверх карточек; отказ — текст и «Повторить», карточки с
       прежней `Session` остаются; успех — `onSessionChanged(before, after)`
-- [ ] главная: иконка профиля (`AppIcons.User`, контур Lucide) вместо `LogOut` →
+- [x] главная: иконка профиля (`AppIcons.User`, контур Lucide) вместо `LogOut` →
       `AppScreen.Settings(Root)`
-- [ ] `AppRoot`: ветка `Settings`; `onSessionChanged`: `zone`/`currency`/`role` → `epoch++` и все
+- [x] `AppRoot`: ветка `Settings`; `onSessionChanged`: `zone`/`currency`/`role` → `epoch++` и все
       три флага, имя/почта → `listStale`; `onUsersChanged` → `listStale`; `onSignedOut` → `Login`
-- [ ] `SettingsRootScreenTest`: у member нет admin-пунктов, у admin есть; «Выйти» → подтверждение →
+- [x] `SettingsRootScreenTest`: у member нет admin-пунктов, у admin есть; «Выйти» → подтверждение →
       колбэк; отказ перечитки оставляет карточки
-- [ ] `make -C android check` — зелёный
+- [x] `make -C android check` — зелёный
 
 ### Task 3: Профиль и смена пароля
 

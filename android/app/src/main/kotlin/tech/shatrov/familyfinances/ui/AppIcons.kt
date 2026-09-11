@@ -41,6 +41,13 @@ object AppIcons {
 
     val ArrowLeft: ImageVector = icon("arrow-left", "m12 19-7-7 7-7M19 12H5")
 
+    val User: ImageVector =
+        icon(
+            "user",
+            "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2",
+            "M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z",
+        )
+
     val LogOut: ImageVector =
         icon("log-out", "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9")
 }

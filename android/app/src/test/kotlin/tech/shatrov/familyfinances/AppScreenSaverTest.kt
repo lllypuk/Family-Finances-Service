@@ -3,6 +3,7 @@ package tech.shatrov.familyfinances
 import androidx.compose.runtime.saveable.SaverScope
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import tech.shatrov.familyfinances.ui.settings.SettingsPage
 import java.util.UUID
 
 /** Сохранение экрана: ключ — строка, поэтому расхождение `save`/`restore` ловится только тестом. */
@@ -41,6 +42,29 @@ class AppScreenSaverTest {
             draft = UUID.fromString(FOOD_BUDGET_ID),
         )
         assertEquals(screen, roundTrip(screen))
+    }
+
+    @Test
+    fun settingsPagesSurviveRoundTrip() {
+        val visit = UUID.fromString(FOOD_BUDGET_ID)
+        val target = UUID.fromString(COFFEE_ID)
+        val pages = listOf(
+            SettingsPage.Root(visit),
+            SettingsPage.Profile(visit),
+            SettingsPage.Password(visit),
+            SettingsPage.Sessions(visit),
+            SettingsPage.Users(visit),
+            SettingsPage.UserEdit(null, visit),
+            SettingsPage.UserEdit(target, visit),
+            SettingsPage.UserPassword(target, visit),
+            SettingsPage.Family(visit),
+            SettingsPage.Backups(visit),
+        )
+
+        for (page in pages) {
+            val screen = AppScreen.Settings(page)
+            assertEquals(screen, roundTrip(screen))
+        }
     }
 
     @Test
