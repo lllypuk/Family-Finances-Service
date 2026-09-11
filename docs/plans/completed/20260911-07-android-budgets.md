@@ -145,7 +145,7 @@
 
 - [x] `BudgetsUiState`: `Loading`, `Failure(error)`, `Ready(rows, filter)`; `BudgetRow(budget,
       categoryName: String?, level: BudgetLevel)` — `level ∈ OK | NEAR | OVER` по сырому
-      `utilization` (проценты): `OVER` при > 100, `NEAR` при ≥ `NEAR_LIMIT = 80.0` — дубль
+      `utilization` (проценты): `OVER` при ≥ 100 (как `is_over_budget` в сводке), `NEAR` при ≥ `NEAR_LIMIT = 80.0` — дубль
       серверного `BudgetAlertNearLimit` (`dto/budget_dto.go:131`), у `Budget` флагов
       `is_over_budget`/`is_near_limit` нет, в отличие от `BudgetProgress` на главной
 - [x] `refresh()`: `listBudgets(limit = 200, activeOnly = if (filter == TODAY) true else null)` и

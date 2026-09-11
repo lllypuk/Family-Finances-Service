@@ -16,10 +16,11 @@ class BudgetLevelTest {
         assertEquals(BudgetLevel.NEAR, levelOf(80.0))
     }
 
-    /** Потрачен ровно лимит — ещё не перерасход: сервер считает так же. */
+    /** Потрачен ровно лимит — перерасход: сводка красит ту же запись так же (`>= 100`). */
     @Test
-    fun exactlyFullIsNearLimitNotOver() {
-        assertEquals(BudgetLevel.NEAR, levelOf(100.0))
+    fun exactlyFullIsOver() {
+        assertEquals(BudgetLevel.OVER, levelOf(100.0))
+        assertEquals(BudgetLevel.NEAR, levelOf(99.9))
     }
 
     @Test

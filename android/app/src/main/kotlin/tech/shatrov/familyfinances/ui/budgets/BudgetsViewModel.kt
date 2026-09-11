@@ -22,6 +22,7 @@ private const val BUDGET_LIMIT = 200
 /** Порог «на исходе» — тот же, что у серверного `BudgetAlertNearLimit`, в процентах. */
 private const val NEAR_LIMIT = 80.0
 
+/** Перерасход — с включённой границей: сводка красит ту же запись по `utilization >= 100`. */
 private const val FULL = 100.0
 
 /** Строка списка по сырому `utilization`: у `Budget` флагов `is_*` нет, в отличие от сводки. */
@@ -133,7 +134,7 @@ class BudgetsViewModel(
 }
 
 internal fun levelOf(utilization: Double): BudgetLevel = when {
-    utilization > FULL -> BudgetLevel.OVER
+    utilization >= FULL -> BudgetLevel.OVER
     utilization >= NEAR_LIMIT -> BudgetLevel.NEAR
     else -> BudgetLevel.OK
 }

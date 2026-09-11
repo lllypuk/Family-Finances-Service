@@ -384,6 +384,22 @@ class BudgetEditViewModelTest {
 
         assertFalse(state.done)
         assertEquals(UiError.Resource(R.string.budget_error_recreated), state.error)
+        // Повторный `POST` вернул бы тот же отказ: форма правит созданную запись.
+        assertTrue(state.editing)
+        assertTrue(state.saved)
+        assertEquals(UUID.fromString(GROCERIES_ID), state.categoryId)
+        assertFalse(state.canSubmit)
+
+        // Правка того, что `PUT` принимает, уходит на созданный бюджет.
+        model.onNameChange("Продукты")
+        server.enqueueJson(200, CREATED_WITH_CATEGORY)
+        model.onSubmit()
+        assertTrue(settled().done)
+
+        val request = lastRequest(4)
+        assertEquals("PUT", request.method)
+        assertEquals("/api/v1/budgets/$DRAFT", request.url.encodedPath)
+        assertEquals("""{"name":"Продукты"}""", request.text())
     }
 
     @Test

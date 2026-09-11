@@ -4,12 +4,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Button
@@ -26,7 +24,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -39,7 +36,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import tech.shatrov.familyfinances.theme.AppTheme
-import tech.shatrov.familyfinances.theme.Dimens
 import tech.shatrov.familyfinances.ui.AppNavBar
 import tech.shatrov.familyfinances.ui.AppTab
 import tech.shatrov.familyfinances.ui.Centered
@@ -315,7 +311,15 @@ fun AppRoot(graph: AppGraph) {
             }
             // Как у формы операции: уход во время отправки убил бы корутину, а повтор с новым
             // черновиком создал бы второй бюджет.
-            val leave = { if (!edit.submitting) screen = AppScreen.Budgets }
+            val leave = {
+                if (!edit.submitting) {
+                    if (edit.saved) {
+                        budgetsStale = true
+                        homeStale = true
+                    }
+                    screen = AppScreen.Budgets
+                }
+            }
             BackHandler { leave() }
             BudgetEditScreen(
                 state = edit,

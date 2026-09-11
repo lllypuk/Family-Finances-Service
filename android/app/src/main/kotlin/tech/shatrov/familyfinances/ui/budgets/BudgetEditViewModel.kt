@@ -67,6 +67,8 @@ data class BudgetEditUiState(
     val submitting: Boolean = false,
     val error: UiError? = null,
     val fieldErrors: Map<String, String> = emptyMap(),
+    // Сервер запись принял, даже если форма осталась открытой: список и сводка устарели.
+    val saved: Boolean = false,
     val done: Boolean = false,
 ) {
     val amountMinor: Long?
@@ -116,6 +118,9 @@ class BudgetEditViewModel(
     private val draftId: UUID = UUID.randomUUID(),
     today: LocalDate = LocalDate.now(),
 ) : ViewModel() {
+    // Повтор `POST` мог принести id уже созданной записи: дальше форма правит именно её.
+    private var savedId: UUID? = budgetId
+
     private val mutable = MutableStateFlow(
         BudgetEditUiState(
             start = today,
@@ -202,7 +207,7 @@ class BudgetEditViewModel(
     }
 
     fun onDelete() {
-        val id = budgetId ?: return
+        val id = savedId ?: return
         mutable.update { it.copy(submitting = true, error = null) }
         viewModelScope.launch {
             try {
@@ -219,7 +224,8 @@ class BudgetEditViewModel(
         current: BudgetEditUiState,
         amountMinor: Long,
     ): UiError? {
-        if (budgetId == null) {
+        val id = savedId
+        if (id == null) {
             val (code, created) = api.client.unwrapWithCode {
                 api.budgets.createBudget(
                     CreateBudgetRequest(
@@ -237,7 +243,7 @@ class BudgetEditViewModel(
             return if (code == HTTP_CREATED) null else reconcile(current, created.`data`)
         }
         val changes = current.changes ?: return null
-        api.client.unwrap { api.budgets.updateBudget(budgetId, changes) }
+        api.client.unwrap { api.budgets.updateBudget(id, changes) }
 
         return null
     }
@@ -246,15 +252,20 @@ class BudgetEditViewModel(
      * `200` на `POST`: бюджет создала прошлая попытка, а тело повтора сервер не смотрел —
      * правки, сделанные между попытками, дошлём `PUT`-ом, иначе форма закроется успехом
      * поверх прежних значений. Период и категорию `PUT` не меняет: о них остаётся сказать.
+     * Форма при этом переходит в правку созданной записи — повторный `POST` вернул бы
+     * тот же отказ, и выйти из него было бы нечем.
      */
     private suspend fun reconcile(
         current: BudgetEditUiState,
         created: Budget,
     ): UiError? {
-        current.copy(loaded = created).changes?.let { changes ->
-            api.client.unwrap { api.budgets.updateBudget(created.id, changes) }
-        }
+        savedId = created.id
+        mutable.update { it.copy(loaded = created, editing = true, saved = true) }
+        val applied = current.copy(loaded = created).changes?.let { changes ->
+            api.client.unwrap { api.budgets.updateBudget(created.id, changes) }.`data`
+        } ?: created
         val locked = created.period != current.period || created.categoryId != current.categoryId
+        mutable.update { it.copy(loaded = applied, period = applied.period, categoryId = applied.categoryId) }
 
         return UiError.Resource(R.string.budget_error_recreated).takeIf { locked }
     }
