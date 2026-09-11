@@ -143,6 +143,12 @@
     <string name="settings_user_password">Пароль пользователя</string>
     <string name="settings_user_password_saved">Пароль задан, пользователь разлогинен везде</string>
     <string name="settings_user_password_unknown">Результат неизвестен: попросите пользователя войти с новым паролем</string>
+    <string name="settings_family_name">Название семьи</string>
+    <string name="settings_family_currency">Валюта</string>
+    <string name="settings_family_currency_hint">Код ISO 4217, например RUB</string>
+    <string name="settings_family_timezone">Часовой пояс</string>
+    <string name="settings_family_timezone_hint">Имя IANA, например Europe/Moscow</string>
+    <string name="settings_error_currency_locked">Валюту нельзя сменить: в семье уже есть операции</string>
     <string name="settings_error_last_admin">В семье должен остаться хотя бы один активный администратор</string>
     <string name="settings_error_deactivate_self">Себя деактивировать нельзя</string>
     <string name="settings_list_truncated">Показаны первые %1$d из %2$d</string>

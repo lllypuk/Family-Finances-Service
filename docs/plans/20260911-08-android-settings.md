@@ -304,11 +304,11 @@
 - Create: `ui/settings/FamilyViewModel.kt`, `ui/settings/FamilyScreen.kt`, `FamilyViewModelTest`, `FamilyScreenTest`
 - Modify: `ui/settings/SettingsHost.kt`, `strings.xml`
 
-- [ ] поля из `Session.family` (название, валюта, таймзона — текстовые); `PUT` из diff
+- [x] поля из `Session.family` (название, валюта, таймзона — текстовые); `PUT` из diff
       (`UpdateFamilyRequest`); `409 CURRENCY_LOCKED` → перевод; `422` под поля (в том числе
       неизвестная зона); после `200` — `update(family)`, `onSessionChanged`, `done`
-- [ ] тесты: тело из одного поля; `409` → `Resource`; `422 timezone` под полем; кнопка выключена без diff
-- [ ] `make -C android check` — зелёный
+- [x] тесты: тело из одного поля; `409` → `Resource`; `422 timezone` под полем; кнопка выключена без diff
+- [x] `make -C android check` — зелёный
 
 ### Task 8: Бэкапы и формат размера
 

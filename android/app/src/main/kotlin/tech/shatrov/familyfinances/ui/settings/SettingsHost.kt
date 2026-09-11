@@ -120,6 +120,16 @@ fun SettingsHost(
             onBack = leave,
         )
 
+        is SettingsPage.Family -> FamilyPage(
+            graph = graph,
+            session = session,
+            models = models,
+            page = page,
+            onSubmitting = { submitting = it },
+            onSessionChanged = onSessionChanged,
+            onDone = leave,
+        )
+
         is SettingsPage.Sessions -> SessionsPage(
             graph = graph,
             session = session,
@@ -168,6 +178,43 @@ private fun ProfilePage(
         onEmailChange = model::onEmailChange,
         onFirstNameChange = model::onFirstNameChange,
         onLastNameChange = model::onLastNameChange,
+        onSubmit = model::onSubmit,
+        onBack = onDone,
+    )
+}
+
+/**
+ * Семья: название, валюта и таймзона. Ответ `PUT` меняет зону и валюту всех экранов, поэтому
+ * идёт в сессию тем же `onSessionChanged`, что и перечитка в корне.
+ */
+@Composable
+private fun FamilyPage(
+    graph: AppGraph,
+    session: Session,
+    models: ViewModelStoreOwner,
+    page: SettingsPage.Family,
+    onSubmitting: (Boolean) -> Unit,
+    onSessionChanged: (Session, Session) -> Unit,
+    onDone: () -> Unit,
+) {
+    val model: FamilyViewModel = viewModel(viewModelStoreOwner = models, key = page.modelKey) {
+        FamilyViewModel(graph.api, session.family)
+    }
+    val state by model.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(state.submitting) { onSubmitting(state.submitting) }
+    LaunchedEffect(state.saved) {
+        val saved = state.saved ?: return@LaunchedEffect
+        graph.update(saved)
+        onSessionChanged(session, session.copy(family = saved))
+        onDone()
+    }
+
+    FamilyScreen(
+        state = state,
+        onNameChange = model::onNameChange,
+        onCurrencyChange = model::onCurrencyChange,
+        onTimezoneChange = model::onTimezoneChange,
         onSubmit = model::onSubmit,
         onBack = onDone,
     )
