@@ -1,8 +1,6 @@
 package tech.shatrov.familyfinances.ui.settings
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -10,14 +8,11 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import tech.shatrov.familyfinances.AppGraph
-import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.Session
-import tech.shatrov.familyfinances.ui.Centered
 import tech.shatrov.familyfinances.ui.UiError
 import tech.shatrov.familyfinances.ui.toUiError
 import java.util.UUID
@@ -139,10 +134,14 @@ fun SettingsHost(
             onBack = leave,
         )
 
-        else -> Centered {
-            Text(page.slug)
-            TextButton(onClick = leave) { Text(stringResource(R.string.back)) }
-        }
+        is SettingsPage.Backups -> BackupsPage(
+            graph = graph,
+            session = session,
+            models = models,
+            page = page,
+            onSubmitting = { submitting = it },
+            onBack = leave,
+        )
     }
 }
 
@@ -267,6 +266,32 @@ private fun SessionsPage(
         state = state,
         onRetry = model::refresh,
         onRevoke = model::onRevoke,
+        onBack = onBack,
+    )
+}
+
+/** Бэкапы: список, создание и удаление. Даты в зоне семьи, поэтому модель её и получает. */
+@Composable
+private fun BackupsPage(
+    graph: AppGraph,
+    session: Session,
+    models: ViewModelStoreOwner,
+    page: SettingsPage.Backups,
+    onSubmitting: (Boolean) -> Unit,
+    onBack: () -> Unit,
+) {
+    val model: BackupsViewModel = viewModel(viewModelStoreOwner = models, key = page.modelKey) {
+        BackupsViewModel(graph.api, session.zone)
+    }
+    val state by model.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(state.busy) { onSubmitting(state.busy) }
+
+    BackupsScreen(
+        state = state,
+        onRetry = model::refresh,
+        onCreate = model::onCreate,
+        onDelete = model::onDelete,
         onBack = onBack,
     )
 }

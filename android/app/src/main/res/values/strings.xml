@@ -151,6 +151,11 @@
     <string name="settings_error_currency_locked">Валюту нельзя сменить: в семье уже есть операции</string>
     <string name="settings_error_last_admin">В семье должен остаться хотя бы один активный администратор</string>
     <string name="settings_error_deactivate_self">Себя деактивировать нельзя</string>
+    <string name="settings_backup_create">Создать бэкап</string>
+    <string name="settings_backup_delete">Удалить</string>
+    <string name="settings_backup_delete_confirm">Удалить файл бэкапа?</string>
+    <string name="settings_backup_hint">Скачивания нет: восстановление делается на сервере по ssh</string>
+    <string name="settings_backup_unknown">Результат неизвестен: проверьте список, файл мог быть создан</string>
     <string name="settings_list_truncated">Показаны первые %1$d из %2$d</string>
 
     <string name="retry">Повторить</string>

@@ -191,6 +191,24 @@ internal const val SESSIONS_OK = """
 /** Тот же список, но сервер знает о пяти сессиях: страница одна, и это видно на экране. */
 internal val SESSIONS_TRUNCATED = SESSIONS_OK.replace(""""total":2""", """"total":5""")
 
+/** Два файла: свежий мегабайтный и старый килобайтный — обе ветки `formatBytes`. */
+internal const val BACKUPS_OK = """
+{"data":[
+{"name":"backup_20260911_100000123.db","size_bytes":12876906,"created_at":"2026-09-11T10:00:00Z"},
+{"name":"backup_20260910_100000123.db","size_bytes":2048,"created_at":"2026-09-10T07:30:00Z"}],
+"meta":{"request_id":"r-50","timestamp":"2026-09-11T10:00:00Z","version":"v0.1.0",
+"pagination":{"limit":200,"offset":0,"total":2}}}
+"""
+
+/** Тот же список, но сервер знает о сорока файлах: страница одна, и это видно на экране. */
+internal val BACKUPS_TRUNCATED = BACKUPS_OK.replace(""""total":2""", """"total":40""")
+
+internal const val BACKUP_CREATED = """
+{"data":{"name":"backup_20260911_120000000.db","size_bytes":12876906,
+"created_at":"2026-09-11T12:00:00Z"},
+"meta":{"request_id":"r-51","timestamp":"2026-09-11T12:00:00Z","version":"v0.1.0"}}
+"""
+
 internal const val USERS_OK = """
 {"data":[
 {"id":"$ADMIN_ID","email":"admin@test.com","first_name":"Админ","last_name":"Тест","role":"admin",

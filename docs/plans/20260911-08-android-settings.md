@@ -317,13 +317,13 @@
 - Create: `ui/settings/BackupsViewModel.kt`, `ui/settings/BackupsScreen.kt`, `BackupsViewModelTest`
 - Modify: `ui/settings/SettingsHost.kt`, `strings.xml`, `TestFixtures.kt` (`BACKUPS_OK`)
 
-- [ ] `formatBytes` («12,3 МБ»), тест на границы КБ/МБ
-- [ ] `BackupsViewModel(api, zone)`: `listBackups(limit = 200)` — имя, размер, дата в зоне семьи;
+- [x] `formatBytes` («12,3 МБ»), тест на границы КБ/МБ
+- [x] `BackupsViewModel(api, zone)`: `listBackups(limit = 200)` — имя, размер, дата в зоне семьи;
       «Создать» — `unwrap { createBackup() }`, индикатор, после `201` перечитать;
       `Network`/`Malformed`/`5xx` → «Результат неизвестен» и перечитать; усечение по `total`
-- [ ] «Удалить» с подтверждением (`send`); `404` → перечитать
-- [ ] тесты: успех → POST и GET; обрыв → текст и GET; удаление; усечение
-- [ ] `make -C android check` — зелёный
+- [x] «Удалить» с подтверждением (`send`); `404` → перечитать
+- [x] тесты: успех → POST и GET; обрыв → текст и GET; удаление; усечение
+- [x] `make -C android check` — зелёный
 
 ### Task 9: Verify acceptance criteria
 
