@@ -234,17 +234,17 @@
 **Files:**
 - Modify: `android/app/src/main/kotlin/tech/shatrov/familyfinances/MainActivity.kt`
 
-- [ ] `budgetsStale` рядом с `listStale`/`homeStale`; `onForm` учитывает `BudgetEdit`
-- [ ] `AppScreen.Budgets` вместо заглушки из Task 1: модель с ключом `budgets-${user.id}-$epoch`,
+- [x] `budgetsStale` рядом с `listStale`/`homeStale`; `onForm` учитывает `BudgetEdit`
+- [x] `AppScreen.Budgets` вместо заглушки из Task 1: модель с ключом `budgets-${user.id}-$epoch`,
       `LifecycleResumeEffect` по `budgetsStale` — `refresh`, иначе `revalidate`, как у главной и
       операций; `BackHandler` на главную; `WithNavBar(AppTab.BUDGETS)`; `onCreate`/`onOpen` →
       `BudgetEdit`
-- [ ] `AppScreen.BudgetEdit`: модель в `forms` с ключом `budget-${draft}`; `done` взводит
+- [x] `AppScreen.BudgetEdit`: модель в `forms` с ключом `budget-${draft}`; `done` взводит
       `budgetsStale` и `homeStale` и ведёт на `Budgets`; уход во время `submitting` запрещён
-- [ ] `TransactionEdit.done` и уход с категорий взводят `budgetsStale`
-- [ ] тестов на `AppRoot` нет и стенда для него тоже (`MainActivityTest` — один дымовой тест);
+- [x] `TransactionEdit.done` и уход с категорий взводят `budgetsStale`
+- [x] тестов на `AppRoot` нет и стенда для него тоже (`MainActivityTest` — один дымовой тест);
       навигация проверяется руками в Task 7, новый стенд ради одной вкладки не строится
-- [ ] `make -C android check` — зелёный
+- [x] `make -C android check` — зелёный
 
 ### Task 7: Verify acceptance criteria
 

@@ -43,6 +43,10 @@ import tech.shatrov.familyfinances.theme.Dimens
 import tech.shatrov.familyfinances.ui.AppNavBar
 import tech.shatrov.familyfinances.ui.AppTab
 import tech.shatrov.familyfinances.ui.UiError
+import tech.shatrov.familyfinances.ui.budgets.BudgetEditScreen
+import tech.shatrov.familyfinances.ui.budgets.BudgetEditViewModel
+import tech.shatrov.familyfinances.ui.budgets.BudgetsScreen
+import tech.shatrov.familyfinances.ui.budgets.BudgetsViewModel
 import tech.shatrov.familyfinances.ui.categories.CategoriesScreen
 import tech.shatrov.familyfinances.ui.categories.CategoriesViewModel
 import tech.shatrov.familyfinances.ui.categories.CategoryEditScreen
@@ -85,6 +89,7 @@ fun AppRoot(graph: AppGraph) {
     // перечитываются по возврату, а не при каждом заходе.
     var listStale by rememberSaveable { mutableStateOf(false) }
     var homeStale by rememberSaveable { mutableStateOf(false) }
+    var budgetsStale by rememberSaveable { mutableStateOf(false) }
     // Модели экранов лежат в store активити и переживают выход. Ключа по пользователю мало:
     // повторный вход тем же человеком показал бы данные прошлой сессии и не перечитал бы их.
     var epoch by rememberSaveable { mutableIntStateOf(0) }
@@ -93,7 +98,7 @@ fun AppRoot(graph: AppGraph) {
     // Модель формы живёт в своём store: ключ у неё свой на каждый заход, а store активити
     // отдаёт брошенные модели только вместе с активити.
     val forms: FormModels = viewModel { FormModels() }
-    val onForm = screen is AppScreen.TransactionEdit
+    val onForm = screen is AppScreen.TransactionEdit || screen is AppScreen.BudgetEdit
     LaunchedEffect(onForm) { if (!onForm) forms.viewModelStore.clear() }
 
     // Смерть процесса возвращает сохранённый экран, но не сессию: без роли и валюты главной
@@ -224,12 +229,13 @@ fun AppRoot(graph: AppGraph) {
             val categories by model.state.collectAsStateWithLifecycle()
             val editor by model.editor.collectAsStateWithLifecycle()
             val form = editor
-            // Список подписывает строки именами категорий и фильтрует по ним, а главная —
-            // расходы в сводке, поэтому уход с этого экрана помечает устаревшими оба:
-            // правку модель наружу не отдаёт.
+            // Список подписывает строки именами категорий и фильтрует по ним, главная —
+            // расходы в сводке, бюджеты — имя категории в строке, поэтому уход с этого экрана
+            // помечает устаревшими все три: правку модель наружу не отдаёт.
             val leave = { next: AppScreen ->
                 listStale = true
                 homeStale = true
+                budgetsStale = true
                 screen = next
             }
             BackHandler { if (form == null) leave(AppScreen.Home) else model.onDismiss() }
@@ -257,10 +263,71 @@ fun AppRoot(graph: AppGraph) {
             }
         }
 
-        // Заглушки до Task 6 плана 07: `when` по экранам исчерпывающий, без ветки не собирается.
-        AppScreen.Budgets -> Centered { Text(stringResource(R.string.budgets_title)) }
+        AppScreen.Budgets -> WithSession(session) { active ->
+            val model: BudgetsViewModel = viewModel(key = "budgets-${active.user.id}-$epoch") {
+                BudgetsViewModel(graph.api, active.zone)
+            }
+            val budgets by model.state.collectAsStateWithLifecycle()
+            // «Сегодня» под фильтром считает сервер: ответ, полученный вчера, к возврату из
+            // фона показывает чужой день.
+            LifecycleResumeEffect(budgetsStale) {
+                if (budgetsStale) {
+                    model.refresh()
+                    budgetsStale = false
+                } else {
+                    model.revalidate()
+                }
+                onPauseOrDispose {}
+            }
+            BackHandler { screen = AppScreen.Home }
+            WithNavBar(AppTab.BUDGETS, onSelect = { screen = it.screen }) {
+                BudgetsScreen(
+                    state = budgets,
+                    currency = active.currency,
+                    onRetry = model::refresh,
+                    onFilterChange = model::onFilterChange,
+                    onCreate = { screen = AppScreen.BudgetEdit(null) },
+                    onOpen = { screen = AppScreen.BudgetEdit(it) },
+                )
+            }
+        }
 
-        is AppScreen.BudgetEdit -> Centered { Text(stringResource(R.string.budget_new_title)) }
+        is AppScreen.BudgetEdit -> WithSession(session) { active ->
+            val model: BudgetEditViewModel =
+                viewModel(viewModelStoreOwner = forms, key = "budget-${current.draft}") {
+                    BudgetEditViewModel(
+                        graph.api,
+                        current.id,
+                        current.draft,
+                        LocalDate.now(active.zone),
+                    )
+                }
+            val edit by model.state.collectAsStateWithLifecycle()
+            LaunchedEffect(edit.done) {
+                if (edit.done) {
+                    budgetsStale = true
+                    homeStale = true
+                    screen = AppScreen.Budgets
+                }
+            }
+            // Как у формы операции: уход во время отправки убил бы корутину, а повтор с новым
+            // черновиком создал бы второй бюджет.
+            val leave = { if (!edit.submitting) screen = AppScreen.Budgets }
+            BackHandler { leave() }
+            BudgetEditScreen(
+                state = edit,
+                onNameChange = model::onNameChange,
+                onAmountChange = model::onAmountChange,
+                onPeriodChange = model::onPeriodChange,
+                onCategoryChange = model::onCategoryChange,
+                onStartChange = model::onStartChange,
+                onEndChange = model::onEndChange,
+                onSubmit = model::onSubmit,
+                onDelete = model::onDelete,
+                onRetry = model::load,
+                onBack = leave,
+            )
+        }
 
         is AppScreen.TransactionEdit -> WithSession(session) { active ->
             // Ключ по черновику: без него следующий заход на форму достался бы модели прошлого,
@@ -279,6 +346,8 @@ fun AppRoot(graph: AppGraph) {
                 if (edit.done) {
                     listStale = true
                     homeStale = true
+                    // Операция меняет `spent` бюджета своей категории.
+                    budgetsStale = true
                     screen = AppScreen.Transactions
                 }
             }
