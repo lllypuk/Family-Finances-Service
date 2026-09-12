@@ -183,16 +183,20 @@ has a catch-all, an unknown `/api/v1/...` path is `401` without a token and `404
 
 ## Database & migrations
 
-All schema lives in **two consolidated files**: `migrations/001_consolidated.up.sql` and `001_consolidated.down.sql`
-(tables: families, users, categories, transactions, budgets, reports, sessions).
-There is no per-change migration file; append new DDL to the end of the `.up.sql` and the matching `DROP` to the
-front of the `.down.sql`. See `migrations/README.md`, and `make migrate-create` for the reminder.
+The whole schema lives in `migrations/001_consolidated.{up,down}.sql`
+(tables: families, users, categories, transactions, budgets, reports, sessions) — that file is the readable
+picture of the database, and a fresh DB is built from it.
 
 **Editing `001` does not touch an existing database.** golang-migrate stores only the version number, so on a DB
 that already has version 1 `Up()` returns `ErrNoChange` and the new DDL is skipped silently; the test path starts
-from an empty in-memory DB and will not show this. Until the first release the schema changes by rewriting `001`,
-and local and server databases are recreated: `make db-reset` (deletes `./data/budget.db*`) then `make run-local`
-and `setup` again.
+from an empty in-memory DB and will not show this. Before `v0.1.0` that was fine — every database was recreated
+with `make db-reset`. **Since `v0.1.0` is deployed, a schema change is a numbered migration as well**: write the
+DDL into `001` (so a new install gets it) *and* a `NNN_*.{up,down}.sql` applying it to a live database, like
+`002_budgets_name_period_partial_unique` (which rebuilds `budgets` — SQLite cannot `DROP INDEX` the implicit
+`sqlite_autoindex_*` behind a table-level `UNIQUE`). `002` is therefore a no-op rebuild on a fresh DB, and its
+table definition must stay identical to the one in `001`. Cover it in
+`internal/infrastructure/migrations_test.go`: `Migrate(1)` puts the released schema back, so the upgrade path is
+testable. See `migrations/README.md`, and `make migrate-create` for the reminder.
 
 Two independent code paths apply migrations, and **both must keep working**:
 

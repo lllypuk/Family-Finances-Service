@@ -4,10 +4,13 @@ This directory contains database schema migrations for the Family Budget Service
 
 ## Migration Strategy
 
-This project uses a **consolidated migration approach** with two files:
+`001_consolidated.{up,down}.sql` holds the **complete schema**: a fresh database is built from that one file, and
+it stays the readable picture of the tables. Since `v0.1.0` is deployed, a schema change also needs a numbered
+migration next to it — an already-applied `001` is never re-run (see "Changing the schema" below).
 
-- `001_consolidated.up.sql` - Contains all schema creation statements
-- `001_consolidated.down.sql` - Contains all schema rollback statements
+- `001_consolidated.up.sql` - the full schema
+- `001_consolidated.down.sql` - the full rollback
+- `002_budgets_name_period_partial_unique.{up,down}.sql` - the budget name/period `UNIQUE` → partial index
 
 ### Why Consolidated Migrations?
 
@@ -48,71 +51,29 @@ Contains rollback statements in **reverse order**:
 2. Drop indexes
 3. Drop tables (in reverse dependency order)
 
-## Adding New Migrations
+## Changing the schema
 
-To add a new migration (e.g., adding a new table or column):
+Every schema change is written **twice**:
 
-### 1. Update `001_consolidated.up.sql`
+1. **`001_consolidated.up.sql`** — the DDL in its final form (plus the matching `DROP` at the front of the
+   `.down.sql`). This is what a new install gets.
+2. **`NNN_<name>.{up,down}.sql`** — the same change as a step from the previous version, because golang-migrate
+   records only the version number (`schema_migrations`): on a database already at version 1 `Up()` returns
+   `ErrNoChange` and edits to `001` are skipped silently. The test path
+   (`internal/testhelpers/sqlite.go`) always starts from an empty in-memory DB and will not reveal this.
 
-Add your changes at the **end** of the appropriate section:
+On a fresh database `NNN` re-applies what `001` already did, so write it to be harmless there — `002` rebuilds
+`budgets` into a table identical to the one `001` creates. Keep the two definitions in sync.
 
-```sql
--- ==============================================================================
--- Migration XXX: Your migration description
--- ==============================================================================
+Cover the step in `internal/infrastructure/migrations_test.go`: `manager.Migrate(N-1)` puts the released schema
+back on a temp file, so the upgrade a server will actually run is what the test exercises.
 
--- Add your CREATE statements here
-CREATE TABLE IF NOT EXISTS your_new_table (
-    id TEXT PRIMARY KEY,
-    -- ... columns ...
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
+### SQLite: removing a table constraint
 
--- Add indexes
-CREATE INDEX IF NOT EXISTS idx_your_table_field ON your_new_table(field);
-
--- Add triggers if needed
-CREATE TRIGGER IF NOT EXISTS update_your_table_updated_at
-AFTER UPDATE ON your_new_table
-BEGIN
-    UPDATE your_new_table SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-END;
-```
-
-### 2. Update `001_consolidated.down.sql`
-
-Add corresponding DROP statements at the **beginning** of the file (reverse order):
-
-```sql
--- ==============================================================================
--- Migration XXX Down: Rollback your migration
--- ==============================================================================
-
--- Drop in reverse order of creation
-DROP TRIGGER IF EXISTS update_your_table_updated_at;
-DROP INDEX IF EXISTS idx_your_table_field;
-DROP TABLE IF EXISTS your_new_table;
-
--- ... rest of existing down migrations ...
-```
-
-### 3. Recreate Existing Databases
-
-golang-migrate records only the applied version number (`schema_migrations`), so editing the already-applied
-`001` has **no effect** on an existing database: `Up()` returns `ErrNoChange` and the new DDL is silently
-skipped. The test path (`internal/testhelpers/sqlite.go`) always starts from an empty in-memory DB and will not
-reveal this. Until the first release the schema evolves by rewriting `001`, and every local and server database
-is recreated from scratch:
-
-```bash
-# Local: delete ./data/budget.db* and let the server migrate a fresh file
-make db-reset
-make run-local
-
-# Or test with Docker
-make docker-down
-make docker-up
-```
+`DROP INDEX` refuses the implicit `sqlite_autoindex_*` that backs a table-level `UNIQUE`, and SQLite has no
+`ALTER TABLE ... DROP CONSTRAINT`. The only way out is the rebuild in `002`: create the new table → `INSERT
+... SELECT` → `DROP TABLE` the old one → `ALTER TABLE ... RENAME`. Dropping the table takes its indexes and its
+`updated_at` trigger with it — recreate both.
 
 ## Migration Workflow
 
@@ -154,9 +115,9 @@ migrate -path ./migrations -database "sqlite://./data/budget.db" down
 
 ### ❌ DON'T
 
-- Add a second migration file — схема живёт в `001`, правится на месте
+- Забыть про `NNN` рядом с правкой `001` — на выкаченной базе `001` уже не переигрывается
 - Forget to update the DOWN migration
-- Forget `make db-reset` after editing `001` (уже применённая версия не переигрывается)
+- Forget `make db-reset` локально, если правка `001` не сопровождается `NNN`
 - Use database-specific features (keep it SQLite compatible)
 
 ## SQLite-Specific Considerations
@@ -232,6 +193,7 @@ SELECT * FROM schema_migrations;
 | | - User invitation system | |
 | 001 | Bearer auth (plan 03): `sessions` replaces `user_sessions`; `families.singleton` UNIQUE | 2026-09-05 |
 | 001 | Plan 04: файл переписан одним куском; `*_minor INTEGER` вместо `REAL`, даты — `TEXT`, `families.timezone`, роль только `admin`/`member`; `budget_alerts` и `invites` удалены | 2026-09-06 |
+| 002 | Plan 09: табличный `UNIQUE` бюджетов → частичный индекс `idx_budgets_name_period_active` (`WHERE is_active = 1`) пересборкой таблицы | 2026-09-12 |
 
 ## See Also
 

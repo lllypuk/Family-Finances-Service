@@ -2,6 +2,18 @@
 
 All notable changes to database migrations will be documented in this file.
 
+## [2026-09-12] - Plan 09: budget name uniqueness
+
+### Changed
+- `budgets`: табличный `UNIQUE (family_id, name, start_date, end_date)` → частичный
+  `idx_budgets_name_period_active ... WHERE is_active = 1`, чтобы мягко удалённая строка не занимала
+  имя и период
+
+### Added
+- `002_budgets_name_period_partial_unique.{up,down}.sql` — та же правка для уже выкаченной базы
+  (`v0.1.0`): `001` на ней не переигрывается, а табличный `UNIQUE` в SQLite снимается только
+  пересборкой таблицы. На свежей базе это пересборка в ту же схему.
+
 ## [2026-09-06] - Plan 04: money, dates, roles
 
 ### Changed
@@ -110,5 +122,7 @@ The following individual migration files were consolidated:
 When adding new database changes:
 1. Add SQL statements to end of `001_consolidated.up.sql`
 2. Add corresponding DROP statements to beginning of `001_consolidated.down.sql`
-3. Test with `make db-reset && make run-local`
-4. Document changes in this CHANGELOG
+3. Add `NNN_<name>.{up,down}.sql` applying the same change to a deployed database, and cover it in
+   `internal/infrastructure/migrations_test.go`
+4. Test with `make db-reset && make run-local`
+5. Document changes in this CHANGELOG
