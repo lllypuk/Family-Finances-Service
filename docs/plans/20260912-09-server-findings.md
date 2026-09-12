@@ -326,9 +326,10 @@
 бы поле, которое сервер шлёт, и продолжал бы уметь слать то, которое сервер игнорирует.
 
 ### Task 10: Verify acceptance criteria
-- [ ] все пункты Overview реализованы; `is_active` нигде не принимается от клиента
-- [ ] `grep -rn 'DeleteByUser\|RevokeAllSessions\|SessionRevoker' internal tests` пуст
-- [ ] `make fmt && make test && make lint` — 0 issues; `make -C android check`
+- [x] все пункты Overview реализованы; `is_active` нигде не принимается от клиента
+      (`UpdateBudgetDTO` и схема `UpdateBudgetRequest` без поля, в ответах оно осталось)
+- [x] `grep -rn 'DeleteByUser\|RevokeAllSessions\|SessionRevoker' internal tests` пуст
+- [x] `make fmt && make test && make lint` — 0 issues; `make -C android check` — BUILD SUCCESSFUL
 
 ### Task 11: [Final] Update documentation
 - [ ] `CLAUDE.md`: «User writes are column-scoped» — `UpdatePassword(keep)`, `Patch`, отзыв сессий в
