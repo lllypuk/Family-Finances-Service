@@ -717,3 +717,163 @@ func TestBudgetService_UpdateBudget_EndDateBeforeStoredStart(t *testing.T) {
 	require.ErrorIs(t, err, dto.ErrInvalidBudgetPeriod)
 	assert.Nil(t, result)
 }
+
+// Границы периода включительные: общий день — пересечение.
+func TestBudgetService_CreateBudget_PeriodOverlapSharedBoundaryDay(t *testing.T) {
+	service, budgetRepo, _ := setupBudgetService(t)
+	ctx := context.Background()
+
+	req := createTestBudgetDTO()
+
+	existingBudget := createTestBudgetForService()
+	existingBudget.CategoryID = req.CategoryID
+	existingBudget.StartDate = req.EndDate // общий день с концом нового периода
+	existingBudget.EndDate = req.EndDate.AddDays(10)
+
+	budgetRepo.On(
+		"GetByPeriod",
+		ctx,
+		mock.AnythingOfType("date.Date"),
+		mock.AnythingOfType("date.Date"),
+	).Return([]*budget.Budget{existingBudget}, nil)
+
+	result, err := service.CreateBudget(ctx, req)
+
+	require.ErrorIs(t, err, services.ErrBudgetOverlapExists)
+	assert.Nil(t, result)
+
+	budgetRepo.AssertExpectations(t)
+}
+
+func TestBudgetService_CreateBudget_PeriodsTouchWithoutSharedDay(t *testing.T) {
+	service, budgetRepo, txRepo := setupBudgetService(t)
+	ctx := context.Background()
+
+	req := createTestBudgetDTO()
+
+	existingBudget := createTestBudgetForService()
+	existingBudget.CategoryID = req.CategoryID
+	existingBudget.StartDate = req.EndDate.AddDays(1) // сосед начинается на следующий день
+	existingBudget.EndDate = req.EndDate.AddDays(10)
+
+	budgetRepo.On(
+		"GetByPeriod",
+		ctx,
+		mock.AnythingOfType("date.Date"),
+		mock.AnythingOfType("date.Date"),
+	).Return([]*budget.Budget{existingBudget}, nil)
+	budgetRepo.On("Create", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
+	budgetRepo.On("GetByID", ctx, mock.AnythingOfType("uuid.UUID")).Return(createTestBudgetForService(), nil)
+	txRepo.On(
+		"GetTotalByCategoryAndDateRange",
+		ctx,
+		mock.AnythingOfType("uuid.UUID"),
+		mock.AnythingOfType("date.Date"),
+		mock.AnythingOfType("date.Date"),
+		transaction.TypeExpense,
+	).Return(money.Minor(0), nil)
+	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil).Maybe()
+
+	result, err := service.CreateBudget(ctx, req)
+
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+
+	budgetRepo.AssertExpectations(t)
+}
+
+func TestBudgetService_CreateBudget_SharedDayOtherCategory(t *testing.T) {
+	service, budgetRepo, txRepo := setupBudgetService(t)
+	ctx := context.Background()
+
+	req := createTestBudgetDTO()
+
+	existingBudget := createTestBudgetForService()
+	otherCategory := uuid.New()
+	existingBudget.CategoryID = &otherCategory
+	existingBudget.StartDate = req.EndDate
+	existingBudget.EndDate = req.EndDate.AddDays(10)
+
+	budgetRepo.On(
+		"GetByPeriod",
+		ctx,
+		mock.AnythingOfType("date.Date"),
+		mock.AnythingOfType("date.Date"),
+	).Return([]*budget.Budget{existingBudget}, nil)
+	budgetRepo.On("Create", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil)
+	budgetRepo.On("GetByID", ctx, mock.AnythingOfType("uuid.UUID")).Return(createTestBudgetForService(), nil)
+	txRepo.On(
+		"GetTotalByCategoryAndDateRange",
+		ctx,
+		mock.AnythingOfType("uuid.UUID"),
+		mock.AnythingOfType("date.Date"),
+		mock.AnythingOfType("date.Date"),
+		transaction.TypeExpense,
+	).Return(money.Minor(0), nil)
+	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil).Maybe()
+
+	result, err := service.CreateBudget(ctx, req)
+
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+
+	budgetRepo.AssertExpectations(t)
+}
+
+// Пара с общим днём, созданная до включительной проверки: переименование проходит, сдвиг
+// конца упирается в соседа, сдвиг начала на день за него — проходит.
+func TestBudgetService_UpdateBudget_LegacySharedDayPair(t *testing.T) {
+	legacyPair := func(t *testing.T) (*services.BudgetServiceImpl, *budget.Budget) {
+		t.Helper()
+
+		service, budgetRepo, txRepo := setupBudgetService(t)
+
+		neighbour := createTestBudgetForService()
+		second := createTestBudgetForService()
+		second.Name = "Second"
+		second.CategoryID = neighbour.CategoryID
+		second.StartDate = neighbour.EndDate // общий день
+		second.EndDate = neighbour.EndDate.AddDays(20)
+
+		budgetRepo.On("GetByID", mock.Anything, second.ID).Return(second, nil)
+		budgetRepo.On("GetByPeriod", mock.Anything,
+			mock.AnythingOfType("date.Date"), mock.AnythingOfType("date.Date")).
+			Return([]*budget.Budget{neighbour, second}, nil).Maybe()
+		txRepo.On("GetTotalByCategoryAndDateRange", mock.Anything,
+			*second.CategoryID, mock.AnythingOfType("date.Date"), mock.AnythingOfType("date.Date"),
+			transaction.TypeExpense).Return(money.Minor(0), nil)
+		budgetRepo.On("Update", mock.Anything, mock.AnythingOfType("*budget.Budget")).Return(nil).Maybe()
+
+		return service, second
+	}
+
+	t.Run("rename passes", func(t *testing.T) {
+		service, second := legacyPair(t)
+		newName := "Renamed"
+
+		result, err := service.UpdateBudget(context.Background(), second.ID, dto.UpdateBudgetDTO{Name: &newName})
+
+		require.NoError(t, err)
+		assert.Equal(t, newName, result.Name)
+	})
+
+	t.Run("end date shift hits neighbour", func(t *testing.T) {
+		service, second := legacyPair(t)
+		newEnd := second.EndDate.AddDays(5)
+
+		result, err := service.UpdateBudget(context.Background(), second.ID, dto.UpdateBudgetDTO{EndDate: &newEnd})
+
+		require.ErrorIs(t, err, services.ErrBudgetOverlapExists)
+		assert.Nil(t, result)
+	})
+
+	t.Run("start date shift past neighbour passes", func(t *testing.T) {
+		service, second := legacyPair(t)
+		newStart := second.StartDate.AddDays(1)
+
+		result, err := service.UpdateBudget(context.Background(), second.ID, dto.UpdateBudgetDTO{StartDate: &newStart})
+
+		require.NoError(t, err)
+		assert.Equal(t, newStart, result.StartDate)
+	})
+}

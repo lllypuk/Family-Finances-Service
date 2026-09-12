@@ -585,8 +585,8 @@ func (s *BudgetServiceImpl) budgetPeriodsOverlap(
 		return false
 	}
 
-	// Check if periods overlap
-	return endDate.After(existing.StartDate) && startDate.Before(existing.EndDate)
+	// Границы включительные: общий день — уже пересечение.
+	return !endDate.Before(existing.StartDate) && !startDate.After(existing.EndDate)
 }
 
 func (s *BudgetServiceImpl) sameBudgetScope(existingCategoryID, newCategoryID *uuid.UUID) bool {
