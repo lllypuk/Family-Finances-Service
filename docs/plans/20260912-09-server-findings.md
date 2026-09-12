@@ -303,9 +303,9 @@
 - Modify: `internal/services/backup_service.go`
 - Modify: `internal/services/backup_service_test.go`
 
-- [ ] после `VACUUM INTO` — `slog` Info `backup created` с `duration_ms` и `size` (через логгер сервиса)
-- [ ] unit-тест: успешный бэкап пишет запись с обоими полями (логгер на `bytes.Buffer`)
-- [ ] `make fmt && make test && make lint` зелёные
+- [x] после `VACUUM INTO` — `slog` Info `backup created` с `duration_ms` и `size` (через логгер сервиса)
+- [x] unit-тест: успешный бэкап пишет запись с обоими полями (логгер на `bytes.Buffer`)
+- [x] `make fmt && make test && make lint` зелёные
 
 ### Task 9: Android — перегенерация и коды `409` бюджетов
 

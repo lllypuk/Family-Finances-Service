@@ -2,8 +2,10 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -462,4 +464,23 @@ func TestCreateBackup_SweepsStaleTempFiles(t *testing.T) {
 
 	assert.NoFileExists(t, stale)
 	assert.FileExists(t, fresh)
+}
+
+func TestCreateBackup_LogsDurationAndSize(t *testing.T) {
+	db, dbPath, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, logger)
+
+	backupInfo, err := service.CreateBackup(context.Background())
+	require.NoError(t, err)
+
+	var record map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &record))
+	assert.Equal(t, "backup created", record["msg"])
+	assert.Equal(t, backupInfo.Filename, record["filename"])
+	assert.Contains(t, record, "duration_ms")
+	assert.InDelta(t, float64(backupInfo.Size), record["size"], 0.0)
 }
