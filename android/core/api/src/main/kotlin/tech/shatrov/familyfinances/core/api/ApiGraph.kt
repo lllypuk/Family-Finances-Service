@@ -36,5 +36,15 @@ class ApiGraph(
     val transactions: TransactionsApi = client.create(TransactionsApi::class)
     val budgets: BudgetsApi = client.create(BudgetsApi::class)
     val users: UsersApi = client.create(UsersApi::class)
+
+    // `POST /backups` неидемпотентен: повтор создал бы второй файл и второй прогон retention.
+    val backups: BackupsApi = client.createWithoutRetries(BackupsApi::class)
     val stats: StatsApi = client.create(StatsApi::class)
+
+    // `PUT /me/password` и `POST /users` тоже неидемпотентны, но читающие вызовы тех же
+    // интерфейсов автоповтор терять не должны, поэтому отдельные экземпляры на две операции:
+    // повтор прошедшей записи вернул бы `401 INVALID_CREDENTIALS` / `409 EMAIL_TAKEN` и показал
+    // бы «неверный пароль» / «почта занята» вместо неизвестного исхода.
+    val meWrites: MeApi = client.createWithoutRetries(MeApi::class)
+    val userWrites: UsersApi = client.createWithoutRetries(UsersApi::class)
 }

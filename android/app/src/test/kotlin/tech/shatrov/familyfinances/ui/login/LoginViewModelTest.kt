@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import mockwebserver3.MockWebServer
+import mockwebserver3.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -46,7 +47,7 @@ class LoginViewModelTest {
         server = MockWebServer()
         server.start()
         vault = FakeTokenVault()
-        model = LoginViewModel(ApiGraph(server.url("/").toString(), vault))
+        model = LoginViewModel(ApiGraph(server.url("/").toString(), vault), deviceName = "Pixel 8")
     }
 
     @After
@@ -155,7 +156,10 @@ class LoginViewModelTest {
     // Keystore отказал уже после удачного логина: это сообщение на экране, а не падение.
     @Test
     fun vaultFailureIsReported() = runTest {
-        model = LoginViewModel(ApiGraph(server.url("/").toString(), FakeTokenVault(failOnWrite = true)))
+        model = LoginViewModel(
+            ApiGraph(server.url("/").toString(), FakeTokenVault(failOnWrite = true)),
+            deviceName = "Pixel 8",
+        )
         server.enqueueJson(200, LOGIN_OK)
         fillCredentials()
 
@@ -195,4 +199,29 @@ class LoginViewModelTest {
         assertTrue(LoginError.RateLimited(60).message(res).contains("60"))
         assertNotEquals(LoginError.RateLimited(60).message(res), LoginError.RateLimited(null).message(res))
     }
+
+    // Имя устройства — единственный способ различить сессии в списке.
+    @Test
+    fun deviceNameIsSent() = runTest {
+        server.enqueueJson(200, LOGIN_OK)
+        fillCredentials()
+
+        submitAndSettle()
+
+        assertTrue(server.takeRequest().text().contains(""""device_name":"Pixel 8""""))
+    }
+
+    // Модель телефона нечитаема — поле не уходит вовсе: пустая строка стала бы именем сессии.
+    @Test
+    fun blankDeviceNameIsOmitted() = runTest {
+        model = LoginViewModel(ApiGraph(server.url("/").toString(), vault), deviceName = null)
+        server.enqueueJson(200, LOGIN_OK)
+        fillCredentials()
+
+        submitAndSettle()
+
+        assertFalse(server.takeRequest().text().contains("device_name"))
+    }
+
+    private fun RecordedRequest.text(): String = body?.utf8().orEmpty()
 }

@@ -19,6 +19,12 @@ sealed class ApiFailure(
     message: String,
     cause: Throwable?,
 ) : Exception(message, cause) {
+    /**
+     * Исход записи неизвестен: ответа не было, он не разобран или сервер упал — неидемпотентную
+     * операцию после такого повторяют руками.
+     */
+    val resultUnknown: Boolean get() = this !is Api || status >= HTTP_SERVER_ERROR
+
     /** Сервер ответил конвертом ошибки. */
     class Api(
         val status: Int,
@@ -28,6 +34,12 @@ sealed class ApiFailure(
         val retryAfterSeconds: Int? = null,
     ) : ApiFailure("HTTP $status $code: $serverMessage", null) {
         val isUnauthorized: Boolean get() = status == HTTP_UNAUTHORIZED
+
+        /** Роль сняли: экран, который вёл сюда, показывать этому токену уже нельзя. */
+        val isForbidden: Boolean get() = status == HTTP_FORBIDDEN
+
+        val isNotFound: Boolean get() = status == HTTP_NOT_FOUND
+
         val isSetupRequired: Boolean get() = code == ApiErrorCode.SETUP_REQUIRED
     }
 
@@ -42,6 +54,9 @@ sealed class ApiFailure(
 
     private companion object {
         const val HTTP_UNAUTHORIZED = 401
+        const val HTTP_FORBIDDEN = 403
+        const val HTTP_NOT_FOUND = 404
+        const val HTTP_SERVER_ERROR = 500
     }
 }
 

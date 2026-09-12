@@ -267,9 +267,9 @@ reference): `docs/README.md` (navigation), `docs/product_brief.md`, `docs/tech_s
 status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the finished ones.
 
 **Current direction:** `docs/specs/005-api-only-redesign.md` — the service is an API-only backend for an
-Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–07 are done
-(`docs/plans/completed/`, 06 = the Android client, 07 = its budgets tab); what is left is the owner's work on the
-server (DNS,
+Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–08 are done
+(`docs/plans/completed/`, 06 = the Android client, 07 = its budgets tab, 08 = its settings screen); what is left
+is the owner's work on the server (DNS,
 `install.sh`, `setup`, backup cron, the `v0.1.0` tag).
 
 `docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates

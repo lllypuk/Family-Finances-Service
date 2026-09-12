@@ -52,6 +52,7 @@ import tech.shatrov.familyfinances.ui.home.HomeViewModel
 import tech.shatrov.familyfinances.ui.login.LoginScreen
 import tech.shatrov.familyfinances.ui.login.LoginViewModel
 import tech.shatrov.familyfinances.ui.message
+import tech.shatrov.familyfinances.ui.settings.SettingsHost
 import tech.shatrov.familyfinances.ui.toUiError
 import tech.shatrov.familyfinances.ui.transactions.TransactionEditScreen
 import tech.shatrov.familyfinances.ui.transactions.TransactionEditViewModel
@@ -94,9 +95,13 @@ fun AppRoot(graph: AppGraph) {
     val scope = rememberCoroutineScope()
     // Модель формы живёт в своём store: ключ у неё свой на каждый заход, а store активити
     // отдаёт брошенные модели только вместе с активити.
-    val forms: FormModels = viewModel { FormModels() }
+    val forms: ScopedModels = viewModel(key = "forms") { ScopedModels() }
     val onForm = screen is AppScreen.TransactionEdit || screen is AppScreen.BudgetEdit
     LaunchedEffect(onForm) { if (!onForm) forms.viewModelStore.clear() }
+    // Свой store: модели подразделов настроек чистятся на каждом переходе, а модели форм — нет.
+    val settings: ScopedModels = viewModel(key = "settings") { ScopedModels() }
+    val inSettings = screen is AppScreen.Settings
+    LaunchedEffect(inSettings) { if (!inSettings) settings.viewModelStore.clear() }
 
     // Смерть процесса возвращает сохранённый экран, но не сессию: без роли и валюты главной
     // нечего показывать, поэтому бутстрап прогоняется заново.
@@ -180,12 +185,7 @@ fun AppRoot(graph: AppGraph) {
                 HomeScreen(
                     state = home,
                     onRetry = model::refresh,
-                    onSignOut = {
-                        scope.launch {
-                            graph.signOut()
-                            screen = AppScreen.Login
-                        }
-                    },
+                    onSettings = { screen = AppScreen.Settings() },
                 )
             }
         }
@@ -291,6 +291,45 @@ fun AppRoot(graph: AppGraph) {
             }
         }
 
+        is AppScreen.Settings -> WithSession(session) { active ->
+            SettingsHost(
+                graph = graph,
+                session = active,
+                models = settings,
+                page = current.page,
+                onPageChange = { next ->
+                    // Store чистится на самом переходе: эффект после него убил бы модель,
+                    // которую новая страница успела создать в композиции.
+                    settings.viewModelStore.clear()
+                    screen = AppScreen.Settings(next)
+                },
+                onLeave = { screen = AppScreen.Home },
+                onSessionChanged = { before, after ->
+                    if (before.zone != after.zone ||
+                        before.currency != after.currency ||
+                        before.user.role != after.user.role
+                    ) {
+                        // Модели вкладок посчитаны в прежней зоне и валюте, а роль решает,
+                        // какие действия им показывать.
+                        epoch++
+                        listStale = true
+                        homeStale = true
+                        budgetsStale = true
+                    } else if (before.user != after.user) {
+                        // Список подписывает операции именем автора.
+                        listStale = true
+                    }
+                },
+                onUsersChanged = { listStale = true },
+                onSignedOut = {
+                    scope.launch {
+                        graph.signOut()
+                        screen = AppScreen.Login
+                    }
+                },
+            )
+        }
+
         is AppScreen.BudgetEdit -> WithSession(session) { active ->
             val model: BudgetEditViewModel =
                 viewModel(viewModelStoreOwner = forms, key = "budget-${current.draft}") {
@@ -378,8 +417,12 @@ fun AppRoot(graph: AppGraph) {
     }
 }
 
-/** Хозяин моделей формы: переживает поворот вместе с активити, но чистится при уходе с формы. */
-private class FormModels :
+/**
+ * Хозяин моделей области: переживает поворот вместе с активити, но чистится при уходе из неё.
+ * Областей две — формы и подразделы настроек, — и каждая чистится отдельно, поэтому это два
+ * экземпляра с разными ключами, а не один общий store.
+ */
+private class ScopedModels :
     ViewModel(),
     ViewModelStoreOwner {
     override val viewModelStore = ViewModelStore()

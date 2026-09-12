@@ -17,6 +17,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import tech.shatrov.familyfinances.core.api.ApiGraph
+import tech.shatrov.familyfinances.core.api.ChangePasswordRequest
 import tech.shatrov.familyfinances.core.api.LoginRequest
 import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import java.time.OffsetDateTime
@@ -58,6 +59,10 @@ class TokenInterceptorTest {
     }
 
     private suspend fun callMe() = graph.client.unwrap { graph.me.getCurrentUser() }.`data`
+
+    private suspend fun changePassword() = graph.client.send {
+        graph.me.changePassword(ChangePasswordRequest(currentPassword = "Admin1234!", newPassword = "Admin4321!"))
+    }
 
     @Test
     fun addsBearerHeaderFromVault() = runTest {
@@ -189,6 +194,54 @@ class TokenInterceptorTest {
 
         runCatching { callMe() }
 
+        assertEquals(1, expired.size)
+    }
+
+    // Неверный текущий пароль: сервер отвечает тем же `401`, но сессия жива — стирать токен
+    // и уводить на вход из-за опечатки нельзя.
+    @Test
+    fun wrongCurrentPasswordKeepsSession() = runTest {
+        val expired = mutableListOf<Unit>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            graph.sessionExpired.toList(expired)
+        }
+        enqueue(401, INVALID_CREDENTIALS)
+
+        val failure = runCatching { changePassword() }.exceptionOrNull()
+
+        assertTrue(failure is ApiFailure.Api)
+        assertEquals("t-1", vault.read()?.token)
+        assertEquals("Bearer t-1", server.takeRequest().headers["Authorization"])
+        assertTrue(expired.isEmpty())
+    }
+
+    // Тот же путь с истёкшим токеном: это конец сессии, как везде.
+    @Test
+    fun unauthorizedOnPasswordPathClearsVault() = runTest {
+        val expired = mutableListOf<Unit>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            graph.sessionExpired.toList(expired)
+        }
+        enqueue(401, UNAUTHORIZED)
+
+        runCatching { changePassword() }
+
+        assertNull(vault.read())
+        assertEquals(1, expired.size)
+    }
+
+    // Тело не разобралось (прокси отдал свою страницу): код неизвестен, значит сессия кончилась.
+    @Test
+    fun unreadableBodyOnPasswordPathClearsVault() = runTest {
+        val expired = mutableListOf<Unit>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            graph.sessionExpired.toList(expired)
+        }
+        server.enqueue(MockResponse.Builder().code(401).build())
+
+        runCatching { changePassword() }
+
+        assertNull(vault.read())
         assertEquals(1, expired.size)
     }
 }

@@ -174,6 +174,41 @@ internal const val CATEGORY_OK = """
 "meta":{"request_id":"r-13","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0"}}
 """
 
+internal const val SESSION_CURRENT_ID = "99999999-9999-9999-9999-999999999991"
+internal const val SESSION_OTHER_ID = "99999999-9999-9999-9999-999999999992"
+
+/** Текущая сессия с именем устройства и старая безымянная — обе ветки строки списка. */
+internal const val SESSIONS_OK = """
+{"data":[
+{"id":"$SESSION_CURRENT_ID","created_at":"2026-09-10T07:30:00Z","last_used_at":"2026-09-11T09:00:00Z",
+"expires_at":"2026-10-10T07:30:00Z","current":true,"device_name":"Pixel 8"},
+{"id":"$SESSION_OTHER_ID","created_at":"2026-08-01T12:00:00Z","last_used_at":"2026-09-01T12:00:00Z",
+"expires_at":"2026-10-01T12:00:00Z","current":false}],
+"meta":{"request_id":"r-40","timestamp":"2026-09-11T10:00:00Z","version":"v0.1.0",
+"pagination":{"limit":200,"offset":0,"total":2}}}
+"""
+
+/** Тот же список, но сервер знает о пяти сессиях: страница одна, и это видно на экране. */
+internal val SESSIONS_TRUNCATED = SESSIONS_OK.replace(""""total":2""", """"total":5""")
+
+/** Два файла: свежий мегабайтный и старый килобайтный — обе ветки `formatBytes`. */
+internal const val BACKUPS_OK = """
+{"data":[
+{"name":"backup_20260911_100000123.db","size_bytes":12876906,"created_at":"2026-09-11T10:00:00Z"},
+{"name":"backup_20260910_100000123.db","size_bytes":2048,"created_at":"2026-09-10T07:30:00Z"}],
+"meta":{"request_id":"r-50","timestamp":"2026-09-11T10:00:00Z","version":"v0.1.0",
+"pagination":{"limit":200,"offset":0,"total":2}}}
+"""
+
+/** Тот же список, но сервер знает о сорока файлах: страница одна, и это видно на экране. */
+internal val BACKUPS_TRUNCATED = BACKUPS_OK.replace(""""total":2""", """"total":40""")
+
+internal const val BACKUP_CREATED = """
+{"data":{"name":"backup_20260911_120000000.db","size_bytes":12876906,
+"created_at":"2026-09-11T12:00:00Z"},
+"meta":{"request_id":"r-51","timestamp":"2026-09-11T12:00:00Z","version":"v0.1.0"}}
+"""
+
 internal const val USERS_OK = """
 {"data":[
 {"id":"$ADMIN_ID","email":"admin@test.com","first_name":"Админ","last_name":"Тест","role":"admin",
@@ -183,6 +218,14 @@ internal const val USERS_OK = """
 "meta":{"request_id":"r-7","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0",
 "pagination":{"limit":200,"offset":0,"total":2}}}
 """
+
+/** Ответы `PATCH` по участнику: роль поднята и запись выключена — обе ветки формы. */
+internal val USER_ADMIN_OK = MEMBER_OK.replace(""""role":"member"""", """"role":"admin"""")
+
+internal val USER_INACTIVE_OK = MEMBER_OK.replace(""""is_active":true""", """"is_active":false""")
+
+/** Тот же список, но сервер знает о трёх пользователях: страница одна, и это видно на экране. */
+internal val USERS_TRUNCATED = USERS_OK.replace(""""total":2""", """"total":3""")
 
 /** Две операции за 7 сентября и одна за 6-е: группировка по дате видна на первой же странице. */
 internal const val TRANSACTIONS_PAGE_1 = """
@@ -226,6 +269,12 @@ internal const val VALIDATION_ERROR = """
 {"error":{"code":"VALIDATION_ERROR","message":"Проверьте поля",
 "details":[{"field":"amount_minor","message":"должно быть больше нуля","code":"gt"}]},
 "meta":{"request_id":"r-12","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0"}}
+"""
+
+/** Роль сняли с другого телефона: админ-роут отвечает так любому подразделу настроек. */
+internal const val FORBIDDEN_ERROR = """
+{"error":{"code":"FORBIDDEN","message":"admin role required"},
+"meta":{"request_id":"r-60","timestamp":"2026-09-11T10:00:00Z","version":"v0.1.0"}}
 """
 
 internal const val INTERNAL_ERROR = """{"error":{"code":"INTERNAL","message":"всё сломалось"}}"""

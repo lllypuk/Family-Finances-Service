@@ -1,6 +1,7 @@
 package tech.shatrov.familyfinances.ui.login
 
 import android.content.res.Resources
+import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -69,8 +70,14 @@ data class LoginUiState(
     val canSubmit: Boolean get() = email.isNotBlank() && password.isNotEmpty() && !submitting
 }
 
+private const val DEVICE_NAME_LIMIT = 64
+
 /** Единственный публичный маршрут: `POST /auth/login` и запись токена в хранилище. */
-class LoginViewModel(private val api: ApiGraph) : ViewModel() {
+class LoginViewModel(
+    private val api: ApiGraph,
+    // Имя устройства видно в списке сессий: без него две сессии одной семьи не различить.
+    private val deviceName: String? = Build.MODEL.take(DEVICE_NAME_LIMIT).ifBlank { null },
+) : ViewModel() {
     private val mutable = MutableStateFlow(LoginUiState())
 
     val state: StateFlow<LoginUiState> = mutable.asStateFlow()
@@ -95,7 +102,11 @@ class LoginViewModel(private val api: ApiGraph) : ViewModel() {
         mutable.update { it.copy(submitting = true, error = null) }
         viewModelScope.launch {
             try {
-                val request = LoginRequest(email = current.email.trim(), password = current.password)
+                val request = LoginRequest(
+                    email = current.email.trim(),
+                    password = current.password,
+                    deviceName = deviceName,
+                )
                 val login = api.client.unwrap { api.auth.login(request) }.`data`
                 // Keystore и commit() — диск: на главном потоке это заметный провал кадров.
                 withContext(Dispatchers.IO) {

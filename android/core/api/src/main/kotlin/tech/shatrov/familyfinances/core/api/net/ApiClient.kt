@@ -34,9 +34,14 @@ class ApiClient(
     }
 
     private val http: OkHttpClient = OkHttpClient.Builder()
-        .addInterceptor(TokenInterceptor(tokens, onSessionExpired))
+        .addInterceptor(TokenInterceptor(tokens, json, onSessionExpired))
         .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .build()
+
+    // Пул, диспетчер и перехватчики общие с [http]: отличается только автоповтор.
+    private val httpWithoutRetries: OkHttpClient = http.newBuilder()
+        .retryOnConnectionFailure(false)
         .build()
 
     private val retrofit: Retrofit = Retrofit.Builder()
@@ -45,7 +50,18 @@ class ApiClient(
         .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
         .build()
 
+    private val retrofitWithoutRetries: Retrofit = retrofit.newBuilder()
+        .client(httpWithoutRetries)
+        .build()
+
     fun <T : Any> create(service: KClass<T>): T = retrofit.create(service.java)
+
+    /**
+     * Интерфейс на клиенте без автоповторов OkHttp: оборванное после отправки соединение он
+     * повторяет тем же телом, и неидемпотентная операция выполнилась бы дважды молча — а исход
+     * такого отказа и так показывается как неизвестный ([ApiFailure.resultUnknown]).
+     */
+    fun <T : Any> createWithoutRetries(service: KClass<T>): T = retrofitWithoutRetries.create(service.java)
 
     /** Возвращает конверт ответа или бросает [ApiFailure]. */
     suspend fun <E : Any> unwrap(request: suspend () -> Response<E>): E = unwrapWithCode(request).second
