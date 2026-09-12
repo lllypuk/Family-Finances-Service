@@ -323,8 +323,7 @@ func TestBudgetService_UpdateBudget_Success(t *testing.T) {
 		mock.AnythingOfType("date.Date"),
 		transaction.TypeExpense,
 	).Return(money.Minor(25000), nil) // Different from budget.Spent (300.0) to trigger update
-	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).
-		Return(nil).Times(2) // Once for recalc, once for update
+	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil).Once()
 
 	// Execute
 	result, err := service.UpdateBudget(ctx, testBudget.ID, req)
@@ -361,8 +360,7 @@ func TestBudgetService_UpdateBudget_AmountLessThanSpent(t *testing.T) {
 		mock.AnythingOfType("date.Date"),
 		mock.AnythingOfType("date.Date"),
 		transaction.TypeExpense,
-	).Return(money.Minor(45000), nil) // Different from testBudget.Spent (500.0) to trigger update
-	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil) // For recalc
+	).Return(money.Minor(45000), nil)
 
 	// Execute
 	result, err := service.UpdateBudget(ctx, testBudget.ID, req)
@@ -876,4 +874,112 @@ func TestBudgetService_UpdateBudget_LegacySharedDayPair(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, newStart, result.StartDate)
 	})
+}
+
+// Сужение периода: по новым датам расход меньше, уменьшенная сумма проходит.
+func TestBudgetService_UpdateBudget_NarrowedPeriodFitsLowerAmount(t *testing.T) {
+	service, budgetRepo, txRepo := setupBudgetService(t)
+	ctx := context.Background()
+
+	testBudget := createTestBudgetForService()
+	testBudget.SpentMinor = 80_000
+
+	newEnd := testBudget.StartDate.AddDays(5)
+	newAmount := money.Minor(50_000)
+
+	budgetRepo.On("GetByID", ctx, testBudget.ID).Return(testBudget, nil)
+	budgetRepo.On("GetByPeriod", ctx, testBudget.StartDate, newEnd).
+		Return([]*budget.Budget{testBudget}, nil)
+	txRepo.On("GetTotalByCategoryAndDateRange", ctx, *testBudget.CategoryID,
+		testBudget.StartDate, newEnd, transaction.TypeExpense).Return(money.Minor(20_000), nil)
+	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil).Once()
+
+	result, err := service.UpdateBudget(ctx, testBudget.ID, dto.UpdateBudgetDTO{
+		EndDate:     &newEnd,
+		AmountMinor: &newAmount,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, newAmount, result.AmountMinor)
+	assert.Equal(t, money.Minor(20_000), result.SpentMinor)
+
+	budgetRepo.AssertExpectations(t)
+	txRepo.AssertExpectations(t)
+}
+
+// Расход считается по новым датам: по старым сумма бы прошла.
+func TestBudgetService_UpdateBudget_AmountBelowSpentOfNewPeriod(t *testing.T) {
+	service, budgetRepo, txRepo := setupBudgetService(t)
+	ctx := context.Background()
+
+	testBudget := createTestBudgetForService()
+	testBudget.SpentMinor = 10_000
+
+	newEnd := testBudget.EndDate.AddDays(30)
+	newAmount := money.Minor(40_000)
+
+	budgetRepo.On("GetByID", ctx, testBudget.ID).Return(testBudget, nil)
+	budgetRepo.On("GetByPeriod", ctx, testBudget.StartDate, newEnd).
+		Return([]*budget.Budget{testBudget}, nil)
+	txRepo.On("GetTotalByCategoryAndDateRange", ctx, *testBudget.CategoryID,
+		testBudget.StartDate, newEnd, transaction.TypeExpense).Return(money.Minor(90_000), nil)
+
+	result, err := service.UpdateBudget(ctx, testBudget.ID, dto.UpdateBudgetDTO{
+		EndDate:     &newEnd,
+		AmountMinor: &newAmount,
+	})
+
+	require.ErrorIs(t, err, services.ErrBudgetAlreadyExceeded)
+	assert.Nil(t, result)
+	budgetRepo.AssertNotCalled(t, "Update", ctx, mock.Anything)
+
+	budgetRepo.AssertExpectations(t)
+	txRepo.AssertExpectations(t)
+}
+
+// Без суммы в запросе расширение периода сохраняется, даже если расход перерос бюджет.
+func TestBudgetService_UpdateBudget_WidenedPeriodWithoutAmount(t *testing.T) {
+	service, budgetRepo, txRepo := setupBudgetService(t)
+	ctx := context.Background()
+
+	testBudget := createTestBudgetForService()
+	newEnd := testBudget.EndDate.AddDays(30)
+
+	budgetRepo.On("GetByID", ctx, testBudget.ID).Return(testBudget, nil)
+	budgetRepo.On("GetByPeriod", ctx, testBudget.StartDate, newEnd).
+		Return([]*budget.Budget{testBudget}, nil)
+	txRepo.On("GetTotalByCategoryAndDateRange", ctx, *testBudget.CategoryID,
+		testBudget.StartDate, newEnd, transaction.TypeExpense).Return(money.Minor(120_000), nil)
+	budgetRepo.On("Update", ctx, mock.AnythingOfType("*budget.Budget")).Return(nil).Once()
+
+	result, err := service.UpdateBudget(ctx, testBudget.ID, dto.UpdateBudgetDTO{EndDate: &newEnd})
+
+	require.NoError(t, err)
+	assert.Equal(t, newEnd, result.EndDate)
+	assert.Equal(t, money.Minor(120_000), result.SpentMinor)
+
+	budgetRepo.AssertExpectations(t)
+	txRepo.AssertExpectations(t)
+}
+
+func TestBudgetService_UpdateBudget_SpentCalculationFails(t *testing.T) {
+	service, budgetRepo, txRepo := setupBudgetService(t)
+	ctx := context.Background()
+
+	testBudget := createTestBudgetForService()
+	newName := "Renamed"
+
+	budgetRepo.On("GetByID", ctx, testBudget.ID).Return(testBudget, nil)
+	txRepo.On("GetTotalByCategoryAndDateRange", ctx, *testBudget.CategoryID,
+		testBudget.StartDate, testBudget.EndDate, transaction.TypeExpense).
+		Return(money.Minor(0), errors.New("db is down"))
+
+	result, err := service.UpdateBudget(ctx, testBudget.ID, dto.UpdateBudgetDTO{Name: &newName})
+
+	require.ErrorIs(t, err, services.ErrBudgetCalculationFailed)
+	assert.Nil(t, result)
+	budgetRepo.AssertNotCalled(t, "Update", ctx, mock.Anything)
+
+	budgetRepo.AssertExpectations(t)
+	txRepo.AssertExpectations(t)
 }

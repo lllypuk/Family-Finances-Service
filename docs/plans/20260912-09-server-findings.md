@@ -221,14 +221,16 @@
 - Modify: `internal/services/budget_service.go`
 - Modify: `internal/services/budget_service_test.go`
 
-- [ ] вынести расчёт расхода из `recalculateAndUpdateSpent` в чистую `spentFor(ctx, b)`; запись — отдельно
-- [ ] `UpdateBudget`: применить поля → проверить пересечение → `spentFor` по итоговому периоду (ошибка →
+- [x] вынести расчёт расхода из `recalculateAndUpdateSpent` в чистую `spentFor(ctx, b)`; запись — отдельно
+- [x] `UpdateBudget`: применить поля → проверить пересечение → `spentFor` по итоговому периоду (ошибка →
       `ErrBudgetCalculationFailed`, апдейт не идёт) → сверить сумму, только если она в запросе → записать
-- [ ] unit-тест: сужение периода + уменьшение суммы, по новому периоду расход укладывается → успех
-- [ ] unit-тест: сумма меньше расхода по новому периоду → `ErrBudgetAlreadyExceeded`
-- [ ] unit-тест: расширение периода без суммы → сохраняется, `SpentMinor` пересчитан
-- [ ] unit-тест: отказ репозитория транзакций → `ErrBudgetCalculationFailed`, `Update` не вызван
-- [ ] `make fmt && make test && make lint` зелёные
+      ➕ сверка суммы ушла из `applyBudgetUpdate`; предварительный `recalculateAndUpdateSpent` по старым
+      датам снят — `Update` в успешном пути теперь один
+- [x] unit-тест: сужение периода + уменьшение суммы, по новому периоду расход укладывается → успех
+- [x] unit-тест: сумма меньше расхода по новому периоду → `ErrBudgetAlreadyExceeded`
+- [x] unit-тест: расширение периода без суммы → сохраняется, `SpentMinor` пересчитан
+- [x] unit-тест: отказ репозитория транзакций → `ErrBudgetCalculationFailed`, `Update` не вызван
+- [x] `make fmt && make test && make lint` зелёные
 
 ### Task 5: Репозиторий пользователей и `auth` — сессии в одной транзакции
 
