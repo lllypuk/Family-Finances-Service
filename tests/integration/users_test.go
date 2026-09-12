@@ -208,6 +208,30 @@ func TestUserHandler_Integration(t *testing.T) {
 		assert.Equal(t, user.Email, response.Data.Email) // Email should remain unchanged
 	})
 
+	t.Run("UpdateUser_EmailTaken", func(t *testing.T) {
+		testServer.Auth(t)
+		other := testhelpers.CreateTestUser(testServer.AuthFamily.ID)
+		require.NoError(t, testServer.Repos.User.Create(context.Background(), other))
+		target := testhelpers.CreateTestUser(testServer.AuthFamily.ID)
+		require.NoError(t, testServer.Repos.User.Create(context.Background(), target))
+
+		requestBody, err := json.Marshal(handlers.UpdateUserRequest{Email: &other.Email})
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/users/"+target.ID.String(), bytes.NewBuffer(requestBody))
+		testServer.Auth(t).Apply(req)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		testServer.Server.Echo().ServeHTTP(rec, req)
+		require.Equal(t, http.StatusConflict, rec.Code, rec.Body.String())
+
+		var response handlers.ErrorResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		assert.Equal(t, "EMAIL_TAKEN", response.Error.Code)
+		assert.Empty(t, response.Error.Details)
+	})
+
 	t.Run("Deactivate_ViaPatch", func(t *testing.T) {
 		// Пользователь заводится в ТОЙ ЖЕ семье, что и владелец сессии:
 		// репозитории берут family_id как `SELECT id FROM families LIMIT 1`.

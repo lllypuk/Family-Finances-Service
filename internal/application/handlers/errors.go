@@ -38,6 +38,14 @@ const (
 	ErrCodeLastAdmin = "LAST_ADMIN"
 	// ErrCodeCurrencyLocked signals a currency change on a family that already has transactions.
 	ErrCodeCurrencyLocked = "CURRENCY_LOCKED"
+	// ErrCodeBudgetOverlap signals a budget whose period overlaps another budget of the same scope.
+	ErrCodeBudgetOverlap = "BUDGET_OVERLAP"
+	// ErrCodeBudgetNameExists signals a budget name already used for the same period.
+	ErrCodeBudgetNameExists = "BUDGET_NAME_EXISTS"
+	// ErrCodeBudgetBelowSpent signals a budget amount below what the period has already spent.
+	ErrCodeBudgetBelowSpent = "BUDGET_BELOW_SPENT"
+	// ErrCodeBudgetIDExists signals a client id already taken by a deleted budget.
+	ErrCodeBudgetIDExists = "BUDGET_ID_EXISTS"
 	// ErrCodeInvalidQueryParam маркирует деталь ошибки 422 по query-параметру.
 	ErrCodeInvalidQueryParam = "INVALID_QUERY_PARAM"
 	// ErrCodeGenerationFailed signals a failed report generation.
@@ -75,6 +83,10 @@ const (
 	ErrMessageEmailTaken         = "Email already exists"
 	ErrMessageLastAdmin          = "Cannot deactivate or demote the last administrator"
 	ErrMessageCurrencyLocked     = "Currency cannot be changed while transactions exist"
+	ErrMessageBudgetOverlap      = "Budget period overlaps with an existing budget"
+	ErrMessageBudgetNameExists   = "Budget with this name already exists for this period"
+	ErrMessageBudgetBelowSpent   = "Budget amount is less than already spent"
+	ErrMessageBudgetIDExists     = "Budget id is already taken by a deleted budget"
 	ErrMessageInvalidBackupName  = "Invalid backup filename"
 	ErrMessageBackupNotFound     = "Backup not found"
 	ErrMessageBackupFailed       = "Failed to create backup"

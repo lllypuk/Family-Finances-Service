@@ -41,7 +41,7 @@ import kotlinx.serialization.Contextual
  * @param period 
  * @param startDate Календарная дата без времени в часовом поясе семьи (A-06)
  * @param endDate Календарная дата без времени в часовом поясе семьи (A-06)
- * @param isActive 
+ * @param isActive Всегда `true` — удалённые бюджеты не возвращаются
  * @param createdAt Служебная метка времени, RFC3339 UTC
  * @param updatedAt Служебная метка времени, RFC3339 UTC
  * @param categoryId null — бюджет на все категории
@@ -83,6 +83,7 @@ data class Budget (
     @Contextual @SerialName(value = "end_date")
     val endDate: java.time.LocalDate,
 
+    /* Всегда `true` — удалённые бюджеты не возвращаются */
     @SerialName(value = "is_active")
     val isActive: kotlin.Boolean,
 

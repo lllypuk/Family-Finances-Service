@@ -97,9 +97,9 @@ func TestAPIAuth_AnonymousRequestsRejected(t *testing.T) {
 	routes := apiV1Routes(testServer.Server.Echo(), fixtures)
 	require.NotEmpty(t, routes, "в роутере не нашлось ни одного маршрута /api/v1")
 
-	// Отозванный токен: сессия выдана и тут же удалена, сам токен остался у клиента.
+	// Отозванный токен: сессия выдана и тут же удалена сменой пароля, сам токен остался у клиента.
 	member, memberAuth := testServer.AuthAs(t, user.RoleAdmin)
-	require.NoError(t, testServer.Services.Auth.RevokeAllSessions(context.Background(), member.ID))
+	require.NoError(t, testServer.Repos.User.UpdatePassword(context.Background(), member.ID, "x", uuid.Nil))
 	revokedBearer := "Bearer " + memberAuth.Token
 
 	t.Run("EveryAPIRouteWithoutHeader", func(t *testing.T) {

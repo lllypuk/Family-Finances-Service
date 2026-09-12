@@ -209,9 +209,6 @@ func (h *BudgetHandler) updateBudgetFields(budget *budget.Budget, req *UpdateBud
 	if req.EndDate != nil {
 		budget.EndDate = *req.EndDate
 	}
-	if req.IsActive != nil {
-		budget.IsActive = *req.IsActive
-	}
 	budget.UpdatedAt = time.Now()
 }
 
@@ -329,10 +326,13 @@ func (h *BudgetHandler) updateBudgetViaService(c echo.Context) error {
 	if validationErr := h.validator.Struct(req); validationErr != nil {
 		return respondValidationErrors(c, validationErr)
 	}
+	if req.Name == nil && req.AmountMinor == nil && req.StartDate == nil && req.EndDate == nil {
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+			bodyDetail(ErrCodeValidationError, ErrMessageNoFields))
+	}
 
 	serviceReq := dto.UpdateBudgetDTO{
 		Name:        req.Name,
-		IsActive:    req.IsActive,
 		AmountMinor: req.AmountMinor,
 		StartDate:   req.StartDate,
 		EndDate:     req.EndDate,
@@ -352,10 +352,15 @@ func (h *BudgetHandler) handleBudgetServiceError(c echo.Context, err error, oper
 		return nil
 	case errors.Is(err, services.ErrBudgetNotFoundService), errors.Is(err, services.ErrBudgetNotFound):
 		return HandleNotFoundError(c, "Budget")
-	case errors.Is(err, services.ErrBudgetOverlapExists),
-		errors.Is(err, services.ErrBudgetAlreadyExceeded),
-		errors.Is(err, services.ErrBudgetAmountTooLarge),
-		errors.Is(err, services.ErrBudgetNameExists),
+	case errors.Is(err, services.ErrBudgetOverlapExists):
+		return respondError(c, http.StatusConflict, ErrCodeBudgetOverlap, ErrMessageBudgetOverlap)
+	case errors.Is(err, services.ErrBudgetNameExists):
+		return respondError(c, http.StatusConflict, ErrCodeBudgetNameExists, ErrMessageBudgetNameExists)
+	case errors.Is(err, services.ErrBudgetIDExists):
+		return respondError(c, http.StatusConflict, ErrCodeBudgetIDExists, ErrMessageBudgetIDExists)
+	case errors.Is(err, services.ErrBudgetAlreadyExceeded):
+		return respondError(c, http.StatusConflict, ErrCodeBudgetBelowSpent, ErrMessageBudgetBelowSpent)
+	case errors.Is(err, services.ErrBudgetAmountTooLarge),
 		errors.Is(err, dto.ErrInvalidBudgetPeriod),
 		errors.Is(err, dto.ErrInvalidBudgetAmount),
 		errors.Is(err, dto.ErrInvalidDateRange),

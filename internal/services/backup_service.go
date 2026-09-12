@@ -197,6 +197,8 @@ func (s *backupService) CreateBackup(ctx context.Context) (*BackupInfo, error) {
 		lastErr    error
 	)
 
+	start := time.Now()
+
 	for range backupNameAttempts {
 		now = time.Now()
 		filename = backupFilename(now)
@@ -240,6 +242,12 @@ func (s *backupService) CreateBackup(ctx context.Context) (*BackupInfo, error) {
 		Size:      info.Size(),
 		CreatedAt: info.ModTime(),
 	}
+
+	s.logger.InfoContext(ctx, "backup created",
+		slog.String("filename", filename),
+		slog.Int64("duration_ms", time.Since(start).Milliseconds()),
+		slog.Int64("size", info.Size()),
+	)
 
 	// Clean up old backups if limit exceeded
 	if cleanupErr := s.cleanupOldBackups(ctx); cleanupErr != nil {

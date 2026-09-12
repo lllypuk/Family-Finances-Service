@@ -17,6 +17,10 @@ var ErrNotFound = errors.New("user not found")
 // ErrFamilyExists — семья уже создана; единственность держит UNIQUE families.singleton.
 var ErrFamilyExists = errors.New("family already exists")
 
+// ErrEmailExists — нарушение UNIQUE users.email. Проверку делает БД: чтение перед записью
+// пропускает параллельное переименование, а ответ 409 обещан контрактом.
+var ErrEmailExists = errors.New("user with this email already exists")
+
 // ErrLastAdmin — запись оставила бы семью без активного администратора.
 // Проверяется в транзакции репозитория: два параллельных PATCH иначе понижали бы друг друга.
 var ErrLastAdmin = errors.New("last active admin")

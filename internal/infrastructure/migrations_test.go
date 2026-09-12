@@ -113,3 +113,41 @@ func columnType(ctx context.Context, t *testing.T, db *sql.DB, table, column str
 
 	return ""
 }
+
+// 002 снимает табличный UNIQUE с уже существующей базы: правку 001 golang-migrate не переигрывает,
+// а sqlite_autoindex_* от табличного UNIQUE не удаляется через DROP INDEX.
+func TestMigrations_BudgetNameFreedAfterSoftDelete(t *testing.T) {
+	ctx := t.Context()
+	root := testhelpers.RepoRoot(t)
+	dbPath := filepath.Join(t.TempDir(), "budgets.db")
+	manager := infrastructure.NewMigrationManager("sqlite://"+dbPath, filepath.Join(root, "migrations"))
+
+	require.NoError(t, manager.Up())
+	// Откат на версию 1 воспроизводит схему, выкаченную с v0.1.0: табличный UNIQUE поверх всех строк.
+	require.NoError(t, manager.Migrate(1))
+
+	db, err := sql.Open("sqlite", dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, db.Close()) })
+
+	familyID, _, categoryID := seedForChecks(ctx, t, db)
+	_, err = db.ExecContext(ctx, insertBudget, "budget-deleted", 0, categoryID, familyID)
+	require.NoError(t, err)
+
+	_, err = db.ExecContext(ctx, insertBudget, "budget-before", 1, categoryID, familyID)
+	require.Error(t, err, "на версии 1 табличный UNIQUE считает мягко удалённую строку")
+
+	require.NoError(t, manager.Up())
+
+	assert.Equal(t, 1, objectCount(ctx, t, db, "name = 'idx_budgets_name_period_active'"))
+	var kept int
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM budgets").Scan(&kept))
+	assert.Equal(t, 1, kept, "пересборка таблицы сохраняет строки")
+
+	_, err = db.ExecContext(ctx, insertBudget, "budget-after", 1, categoryID, familyID)
+	assert.NoError(t, err, "после 002 имя и период удалённого бюджета свободны")
+}
+
+const insertBudget = `
+	INSERT INTO budgets (id, name, amount_minor, period, start_date, end_date, is_active, category_id, family_id)
+	VALUES (?, 'Еда', 100000, 'monthly', '2026-09-01', '2026-09-30', ?, ?, ?)`

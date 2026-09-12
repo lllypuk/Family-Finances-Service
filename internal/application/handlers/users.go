@@ -172,8 +172,8 @@ func (h *UserHandler) GetUsers(c echo.Context) error {
 	return respondList(c, response, page, len(users))
 }
 
-// PatchUser меняет роль и/или активность. Оба правила (последний админ, самодеактивация)
-// живут в сервисе и приходят сюда как sentinel-ошибки -> 409.
+// PatchUser меняет роль и/или активность одной записью: при отказе не применено ни одно поле.
+// Оба правила (последний админ, самодеактивация) приходят сюда как sentinel-ошибки -> 409.
 func (h *UserHandler) PatchUser(c echo.Context) error {
 	idParam := c.Param("id")
 	id, err := uuid.Parse(idParam)
@@ -201,15 +201,13 @@ func (h *UserHandler) PatchUser(c echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
+	var role *user.Role
 	if req.Role != nil {
-		if roleErr := h.userService.ChangeUserRole(ctx, id, user.Role(*req.Role)); roleErr != nil {
-			return respondUserServiceError(c, roleErr)
-		}
+		r := user.Role(*req.Role)
+		role = &r
 	}
-	if req.IsActive != nil {
-		if activeErr := h.userService.SetActive(ctx, id, *req.IsActive, principal.UserID); activeErr != nil {
-			return respondUserServiceError(c, activeErr)
-		}
+	if patchErr := h.userService.PatchUser(ctx, id, role, req.IsActive, principal.UserID); patchErr != nil {
+		return respondUserServiceError(c, patchErr)
 	}
 
 	updatedUser, err := h.userService.GetUserByID(ctx, id)

@@ -23,7 +23,8 @@ info:
     Коды ошибок: `INVALID_REQUEST` / `INVALID_ID` (400 — тело или id не разобрались),
     `UNAUTHORIZED` (401), `FORBIDDEN` (403), `NOT_FOUND` / `<ENTITY>_NOT_FOUND` (404),
     `VALIDATION_ERROR` (422 — тело или query-параметры не прошли проверку, поля в `error.details`),
-    `SETUP_REQUIRED` / `CURRENCY_LOCKED` / `LAST_ADMIN` / `CANNOT_DEACTIVATE_SELF` (409),
+    `SETUP_REQUIRED` / `CURRENCY_LOCKED` / `LAST_ADMIN` / `CANNOT_DEACTIVATE_SELF` /
+    `BUDGET_OVERLAP` / `BUDGET_NAME_EXISTS` / `BUDGET_BELOW_SPENT` (409),
     `RATE_LIMITED` (429, с `Retry-After`), `INTERNAL_ERROR` (500).
   license:
     name: MIT
@@ -305,7 +306,8 @@ paths:
       operationId: updateUser
       tags: [users]
       summary: Изменить имя и email пользователя
-      description: Только admin.
+      description: |
+        Только admin. Email, занятый другим пользователем, — `409 EMAIL_TAKEN`.
       requestBody:
         required: true
         content:
@@ -317,6 +319,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
     patch:
       operationId: patchUser
@@ -325,9 +328,8 @@ paths:
       description: |
         Только admin. Деактивация (`is_active: false`) отзывает все сессии пользователя (A-04).
         Понижение роли или деактивация последнего активного админа — `409 LAST_ADMIN`;
-        деактивация себя — `409 CANNOT_DEACTIVATE_SELF`. Оба поля в одном запросе
-        применяются по очереди: сначала роль, затем активность; если второй шаг отвечает
-        `409`, изменение роли уже сохранено — ответ описывает только не применённый шаг.
+        деактивация себя — `409 CANNOT_DEACTIVATE_SELF`. Оба поля применяются одной
+        записью: при `409` не изменено ни одно из них.
       requestBody:
         required: true
         content:
@@ -644,7 +646,10 @@ paths:
       tags: [budgets]
       summary: Создать бюджет
       description: admin и member. Повтор с тем же `id` возвращает `200` с существующим
-        бюджетом; остальное тело при этом игнорируется (A-07).
+        бюджетом; остальное тело при этом игнорируется (A-07). Бизнес-отказы отвечают `409` — `BUDGET_OVERLAP`
+        (период пересекается с бюджетом той же области; границы включительные — общий день
+        уже пересечение), `BUDGET_NAME_EXISTS` (имя занято на этот период) и `BUDGET_ID_EXISTS`
+        (`id` занят удалённым бюджетом — нужен новый `id`, переименование не поможет).
       requestBody:
         required: true
         content:
@@ -656,6 +661,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
 
   /api/v1/budgets/{id}:
@@ -666,6 +672,7 @@ paths:
       tags: [budgets]
       summary: Бюджет по id
       description: admin и member. `spent_minor` считается по транзакциям периода на момент запроса.
+        Удалённый бюджет — `404`.
       responses:
         '200': { $ref: '#/components/responses/BudgetOk' }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -676,7 +683,9 @@ paths:
       operationId: updateBudget
       tags: [budgets]
       summary: Изменить бюджет
-      description: admin и member.
+      description: admin и member. Бизнес-отказы отвечают `409` — `BUDGET_OVERLAP`,
+        `BUDGET_NAME_EXISTS` и `BUDGET_BELOW_SPENT` (новая сумма меньше уже потраченного
+        за период).
       requestBody:
         required: true
         content:
@@ -688,12 +697,15 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
     delete:
       operationId: deleteBudget
       tags: [budgets]
       summary: Удалить бюджет
-      description: admin и member. Транзакции периода не затрагиваются.
+      description: admin и member. Транзакции периода не затрагиваются. Бюджет помечается
+        неактивным и после этого не отдаётся ни списком, ни по id — повторные `GET`/`PUT`/`DELETE`
+        отвечают `404`, а его `id` остаётся занятым (`POST` с тем же `id` — `409 BUDGET_ID_EXISTS`).
       responses:
         '204': { description: Бюджет удалён }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -990,7 +1002,8 @@ components:
     Conflict:
       description: |
         Состояние не допускает операцию: `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`,
-        `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN`
+        `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN`, `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`,
+        `BUDGET_BELOW_SPENT`
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1456,7 +1469,9 @@ components:
           description: null — бюджет на все категории
         start_date: { $ref: '#/components/schemas/CalendarDate' }
         end_date: { $ref: '#/components/schemas/CalendarDate' }
-        is_active: { type: boolean }
+        is_active:
+          type: boolean
+          description: Всегда `true` — удалённые бюджеты не возвращаются
         created_at: { $ref: '#/components/schemas/Timestamp' }
         updated_at: { $ref: '#/components/schemas/Timestamp' }
     CreateBudgetRequest:
@@ -1486,7 +1501,6 @@ components:
           minimum: 1
         start_date: { $ref: '#/components/schemas/CalendarDate' }
         end_date: { $ref: '#/components/schemas/CalendarDate' }
-        is_active: { type: boolean }
 
     ReportSummary:
       type: object

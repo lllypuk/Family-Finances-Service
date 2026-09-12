@@ -2,8 +2,10 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -462,4 +464,33 @@ func TestCreateBackup_SweepsStaleTempFiles(t *testing.T) {
 
 	assert.NoFileExists(t, stale)
 	assert.FileExists(t, fresh)
+}
+
+func TestCreateBackup_LogsDurationAndSize(t *testing.T) {
+	db, dbPath, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, logger)
+
+	backupInfo, err := service.CreateBackup(context.Background())
+	require.NoError(t, err)
+
+	// Записей может быть несколько (предупреждения очистки), нужную ищем по msg.
+	var record map[string]any
+	for _, line := range bytes.Split(bytes.TrimSpace(buf.Bytes()), []byte("\n")) {
+		var parsed map[string]any
+		require.NoError(t, json.Unmarshal(line, &parsed), string(line))
+		if parsed["msg"] == "backup created" {
+			record = parsed
+		}
+	}
+	require.NotNil(t, record, "лога backup created нет: %s", buf.String())
+
+	assert.Equal(t, backupInfo.Filename, record["filename"])
+	assert.Contains(t, record, "duration_ms")
+	stat, statErr := os.Stat(filepath.Join(filepath.Dir(dbPath), "backups", backupInfo.Filename))
+	require.NoError(t, statErr)
+	assert.InDelta(t, float64(stat.Size()), record["size"], 0.0)
 }

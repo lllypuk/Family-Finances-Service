@@ -25,7 +25,7 @@ interface UsersApi {
      *  - 400: Тело или идентификатор не разобрались: `INVALID_REQUEST` (сломанный JSON или неверный тип поля), `INVALID_ID` (в пути не UUID). Ошибки валидации значений — это `422`. 
      *  - 401: Токена нет, он истёк или отозван (`UNAUTHORIZED`)
      *  - 403: Роль не даёт доступа к операции (`FORBIDDEN`)
-     *  - 409: Состояние не допускает операцию: `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`, `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN` 
+     *  - 409: Состояние не допускает операцию: `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`, `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN`, `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`, `BUDGET_BELOW_SPENT` 
      *  - 422: Тело или параметры не прошли валидацию (`VALIDATION_ERROR`); поля — в `error.details`
      *
      * @param createUserRequest 
@@ -71,14 +71,14 @@ interface UsersApi {
     /**
      * PATCH api/v1/users/{id}
      * Изменить роль или активность
-     * Только admin. Деактивация (&#x60;is_active: false&#x60;) отзывает все сессии пользователя (A-04). Понижение роли или деактивация последнего активного админа — &#x60;409 LAST_ADMIN&#x60;; деактивация себя — &#x60;409 CANNOT_DEACTIVATE_SELF&#x60;. Оба поля в одном запросе применяются по очереди: сначала роль, затем активность; если второй шаг отвечает &#x60;409&#x60;, изменение роли уже сохранено — ответ описывает только не применённый шаг. 
+     * Только admin. Деактивация (&#x60;is_active: false&#x60;) отзывает все сессии пользователя (A-04). Понижение роли или деактивация последнего активного админа — &#x60;409 LAST_ADMIN&#x60;; деактивация себя — &#x60;409 CANNOT_DEACTIVATE_SELF&#x60;. Оба поля применяются одной записью: при &#x60;409&#x60; не изменено ни одно из них. 
      * Responses:
      *  - 200: Пользователь
      *  - 400: Тело или идентификатор не разобрались: `INVALID_REQUEST` (сломанный JSON или неверный тип поля), `INVALID_ID` (в пути не UUID). Ошибки валидации значений — это `422`. 
      *  - 401: Токена нет, он истёк или отозван (`UNAUTHORIZED`)
      *  - 403: Роль не даёт доступа к операции (`FORBIDDEN`)
      *  - 404: Объект не найден: `NOT_FOUND` для неизвестного пути, `<ENTITY>_NOT_FOUND` (`USER_NOT_FOUND`, `SESSION_NOT_FOUND`, `CATEGORY_NOT_FOUND`, …) для отсутствующей записи 
-     *  - 409: Состояние не допускает операцию: `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`, `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN` 
+     *  - 409: Состояние не допускает операцию: `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`, `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN`, `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`, `BUDGET_BELOW_SPENT` 
      *  - 422: Тело или параметры не прошли валидацию (`VALIDATION_ERROR`); поля — в `error.details`
      *
      * @param id 
@@ -110,13 +110,14 @@ interface UsersApi {
     /**
      * PUT api/v1/users/{id}
      * Изменить имя и email пользователя
-     * Только admin.
+     * Только admin. Email, занятый другим пользователем, — &#x60;409 EMAIL_TAKEN&#x60;. 
      * Responses:
      *  - 200: Пользователь
      *  - 400: Тело или идентификатор не разобрались: `INVALID_REQUEST` (сломанный JSON или неверный тип поля), `INVALID_ID` (в пути не UUID). Ошибки валидации значений — это `422`. 
      *  - 401: Токена нет, он истёк или отозван (`UNAUTHORIZED`)
      *  - 403: Роль не даёт доступа к операции (`FORBIDDEN`)
      *  - 404: Объект не найден: `NOT_FOUND` для неизвестного пути, `<ENTITY>_NOT_FOUND` (`USER_NOT_FOUND`, `SESSION_NOT_FOUND`, `CATEGORY_NOT_FOUND`, …) для отсутствующей записи 
+     *  - 409: Состояние не допускает операцию: `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`, `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN`, `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`, `BUDGET_BELOW_SPENT` 
      *  - 422: Тело или параметры не прошли валидацию (`VALIDATION_ERROR`); поля — в `error.details`
      *
      * @param id 

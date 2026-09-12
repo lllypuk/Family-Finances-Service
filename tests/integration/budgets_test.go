@@ -461,10 +461,9 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		assert.Equal(t, testBudget.CategoryID, response.Data.CategoryID)   // unchanged
 	})
 
-	t.Run("UpdateBudget_ToggleActive", func(t *testing.T) {
+	t.Run("UpdateBudget_IgnoresIsActive", func(t *testing.T) {
 		testServer := testhelpers.SetupHTTPServer(t)
 
-		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
 		require.NoError(t, err)
@@ -478,19 +477,12 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		err = testServer.Repos.Budget.Create(context.Background(), testBudget)
 		require.NoError(t, err)
 
-		// Toggle active status
-		newIsActive := false
-		updateRequest := handlers.UpdateBudgetRequest{
-			IsActive: &newIsActive,
-		}
-
-		requestBodyBytes, err := json.Marshal(updateRequest)
-		require.NoError(t, err)
+		body := `{"name":"Renamed Budget","is_active":false}`
 
 		req := httptest.NewRequest(
 			http.MethodPut,
 			fmt.Sprintf("/api/v1/budgets/%s", testBudget.ID),
-			bytes.NewBuffer(requestBodyBytes),
+			bytes.NewBufferString(body),
 		)
 		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
@@ -498,19 +490,14 @@ func TestBudgetHandler_Integration(t *testing.T) {
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusOK {
-			t.Logf("Toggle active budget failed with status %d, response: %s", rec.Code, rec.Body.String())
-		}
-		assert.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
 		var response handlers.APIResponse[handlers.BudgetResponse]
 		err = json.Unmarshal(rec.Body.Bytes(), &response)
 		require.NoError(t, err)
 
-		assert.Equal(t, testBudget.ID, response.Data.ID)
-		assert.Equal(t, newIsActive, response.Data.IsActive)               // updated
-		assert.Equal(t, testBudget.Name, response.Data.Name)               // unchanged
-		assert.Equal(t, testBudget.AmountMinor, response.Data.AmountMinor) // unchanged
+		assert.Equal(t, "Renamed Budget", response.Data.Name)
+		assert.True(t, response.Data.IsActive)
 	})
 
 	t.Run("DeleteBudget_Success", func(t *testing.T) {
@@ -540,21 +527,25 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		}
 		assert.Equal(t, http.StatusNoContent, rec.Code)
 
-		// Verify budget is soft deleted (is_active = false) by getting it and checking status
-		getReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/budgets/%s", testBudget.ID), nil)
-		testServer.Auth(t).Apply(getReq)
-		getRec := httptest.NewRecorder()
+		// Удалённый бюджет невидим по id для всех трёх методов
+		path := fmt.Sprintf("/api/v1/budgets/%s", testBudget.ID)
+		for _, tc := range []struct {
+			method string
+			body   string
+		}{
+			{http.MethodGet, ""},
+			{http.MethodPut, `{"name":"Renamed Budget"}`},
+			{http.MethodDelete, ""},
+		} {
+			afterReq := httptest.NewRequest(tc.method, path, bytes.NewBufferString(tc.body))
+			testServer.Auth(t).Apply(afterReq)
+			afterReq.Header.Set("Content-Type", "application/json")
+			afterRec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(getRec, getReq)
+			testServer.Server.Echo().ServeHTTP(afterRec, afterReq)
 
-		assert.Equal(t, http.StatusOK, getRec.Code)
-
-		var response handlers.APIResponse[handlers.BudgetResponse]
-		err = json.Unmarshal(getRec.Body.Bytes(), &response)
-		require.NoError(t, err)
-
-		// Budget should be marked as inactive after soft delete
-		assert.False(t, response.Data.IsActive)
+			assert.Equal(t, http.StatusNotFound, afterRec.Code, "%s %s: %s", tc.method, path, afterRec.Body.String())
+		}
 	})
 }
 
@@ -783,8 +774,8 @@ func TestBudgetAPI_CreateAmountAboveMaximum(t *testing.T) {
 }
 
 // TestBudgetAPI_CreateDuplicateNameSamePeriod — UNIQUE (family_id, name, start_date, end_date)
-// достижим с календарными датами: второй бюджет с тем же именем и периодом отбивается 422,
-// а не 500 из репозитория. Категории разные, иначе сработает проверка пересечения периодов.
+// достижим с календарными датами: второй бюджет с тем же именем и периодом отбивается
+// 409 BUDGET_NAME_EXISTS, а не 500 из репозитория. Категории разные, иначе сработает проверка пересечения периодов.
 func TestBudgetAPI_CreateDuplicateNameSamePeriod(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	session := testServer.Auth(t)
@@ -819,10 +810,344 @@ func TestBudgetAPI_CreateDuplicateNameSamePeriod(t *testing.T) {
 	require.Equal(t, http.StatusCreated, post(first.ID).Code)
 
 	rec := post(second.ID)
-	require.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
+	require.Equal(t, http.StatusConflict, rec.Code, "тело: %s", rec.Body.String())
 
 	var response handlers.ErrorResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-	require.Len(t, response.Error.Details, 1)
-	assert.Contains(t, response.Error.Details[0].Message, "already exists for this period")
+	assert.Equal(t, handlers.ErrCodeBudgetNameExists, response.Error.Code)
+	assert.Empty(t, response.Error.Details)
+}
+
+// TestBudgetAPI_CreateOverlappingPeriod_Conflict — пересечение периодов одной категории
+// это бизнес-отказ (409), а не ошибка формы.
+func TestBudgetAPI_CreateOverlappingPeriod_Conflict(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+	ctx := context.Background()
+
+	testCategory := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(ctx, testCategory))
+
+	today := date.Today(testServer.AuthFamily.Location())
+	post := func(name string, start, end date.Date) *httptest.ResponseRecorder {
+		body := mustJSON(t, map[string]any{
+			"name":         name,
+			"amount_minor": 50_000,
+			"period":       "monthly",
+			"category_id":  testCategory.ID,
+			"start_date":   start.String(),
+			"end_date":     end.String(),
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/budgets", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		session.Apply(req)
+		rec := httptest.NewRecorder()
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		return rec
+	}
+
+	require.Equal(t, http.StatusCreated, post("Первый", today, today.AddDays(30)).Code)
+
+	rec := post("Второй", today.AddDays(10), today.AddDays(40))
+	require.Equal(t, http.StatusConflict, rec.Code, "тело: %s", rec.Body.String())
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, handlers.ErrCodeBudgetOverlap, response.Error.Code)
+	assert.Empty(t, response.Error.Details)
+}
+
+// TestBudgetAPI_UpdateAmountBelowSpent_Conflict — сумма ниже уже потраченного за период → 409.
+func TestBudgetAPI_UpdateAmountBelowSpent_Conflict(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+	ctx := context.Background()
+
+	testCategory := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(ctx, testCategory))
+
+	today := date.Today(testServer.AuthFamily.Location())
+	body := mustJSON(t, map[string]any{
+		"name":         "Бюджет с расходом",
+		"amount_minor": 100_000,
+		"period":       "monthly",
+		"category_id":  testCategory.ID,
+		"start_date":   today.String(),
+		"end_date":     today.AddDays(30).String(),
+	})
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/budgets", bytes.NewBuffer(body))
+	createReq.Header.Set("Content-Type", "application/json")
+	session.Apply(createReq)
+	createRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(createRec, createReq)
+	require.Equal(t, http.StatusCreated, createRec.Code, "тело: %s", createRec.Body.String())
+
+	var created handlers.APIResponse[handlers.BudgetResponse]
+	require.NoError(t, json.Unmarshal(createRec.Body.Bytes(), &created))
+
+	txBody := mustJSON(t, map[string]any{
+		"amount_minor": 40_000,
+		"type":         "expense",
+		"description":  "Трата в бюджете",
+		"category_id":  testCategory.ID,
+		"date":         today.String(),
+	})
+	txReq := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", bytes.NewBuffer(txBody))
+	txReq.Header.Set("Content-Type", "application/json")
+	session.Apply(txReq)
+	txRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(txRec, txReq)
+	require.Equal(t, http.StatusCreated, txRec.Code, "тело: %s", txRec.Body.String())
+
+	updBody := mustJSON(t, map[string]any{"amount_minor": 10_000})
+	updReq := httptest.NewRequest(
+		http.MethodPut,
+		"/api/v1/budgets/"+created.Data.ID.String(),
+		bytes.NewBuffer(updBody),
+	)
+	updReq.Header.Set("Content-Type", "application/json")
+	session.Apply(updReq)
+	updRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(updRec, updReq)
+
+	require.Equal(t, http.StatusConflict, updRec.Code, "тело: %s", updRec.Body.String())
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(updRec.Body.Bytes(), &response))
+	assert.Equal(t, handlers.ErrCodeBudgetBelowSpent, response.Error.Code)
+	assert.Empty(t, response.Error.Details)
+}
+
+// TestBudgetAPI_CreateWithDeletedID_Conflict — id мягко удалённого бюджета занят навсегда:
+// идемпотентность его не видит (GetByID фильтрует is_active), а PRIMARY KEY занят. Отказ
+// должен называть свою причину, а не «имя занято» — переименование тут не помогает.
+func TestBudgetAPI_CreateWithDeletedID_Conflict(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+	ctx := context.Background()
+
+	testCategory := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(ctx, testCategory))
+
+	clientID := uuid.New()
+	today := date.Today(testServer.AuthFamily.Location())
+	post := func(name string) *httptest.ResponseRecorder {
+		body := mustJSON(t, map[string]any{
+			"id":           clientID,
+			"name":         name,
+			"amount_minor": 100_000,
+			"period":       "monthly",
+			"category_id":  testCategory.ID,
+			"start_date":   today.String(),
+			"end_date":     today.AddDays(30).String(),
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/budgets", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		session.Apply(req)
+		rec := httptest.NewRecorder()
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		return rec
+	}
+
+	require.Equal(t, http.StatusCreated, post("Удаляемый бюджет").Code)
+
+	delReq := httptest.NewRequest(http.MethodDelete, "/api/v1/budgets/"+clientID.String(), nil)
+	session.Apply(delReq)
+	delRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(delRec, delReq)
+	require.Equal(t, http.StatusNoContent, delRec.Code, "тело: %s", delRec.Body.String())
+
+	// Другое имя и другие даты: остаётся один конфликт — по id.
+	rec := post("Другое имя")
+	require.Equal(t, http.StatusConflict, rec.Code, "тело: %s", rec.Body.String())
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, handlers.ErrCodeBudgetIDExists, response.Error.Code)
+}
+
+// TestBudgetAPI_RecreateDeletedNameAndPeriod — имя и период мягко удалённого бюджета
+// освобождаются вместе с ним: иначе клиент получал бы 409 на бюджет, которого не видит,
+// и «создать заново» после удаления было бы невозможно.
+func TestBudgetAPI_RecreateDeletedNameAndPeriod(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+	ctx := context.Background()
+
+	testCategory := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(ctx, testCategory))
+
+	today := date.Today(testServer.AuthFamily.Location())
+	post := func(id uuid.UUID) *httptest.ResponseRecorder {
+		body := mustJSON(t, map[string]any{
+			"id":           id,
+			"name":         "Повторяемый бюджет",
+			"amount_minor": 70_000,
+			"period":       "monthly",
+			"category_id":  testCategory.ID,
+			"start_date":   today.String(),
+			"end_date":     today.AddDays(30).String(),
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/budgets", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		session.Apply(req)
+		rec := httptest.NewRecorder()
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		return rec
+	}
+
+	firstID := uuid.New()
+	require.Equal(t, http.StatusCreated, post(firstID).Code)
+
+	delReq := httptest.NewRequest(http.MethodDelete, "/api/v1/budgets/"+firstID.String(), nil)
+	session.Apply(delReq)
+	delRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(delRec, delReq)
+	require.Equal(t, http.StatusNoContent, delRec.Code, "тело: %s", delRec.Body.String())
+
+	rec := post(uuid.New())
+	require.Equal(t, http.StatusCreated, rec.Code, "тело: %s", rec.Body.String())
+}
+
+// TestBudgetAPI_CreateSharedBoundaryDay_Conflict — включительные границы проверяются через
+// настоящий SQL: окно GetByPeriod обязано отдать соседа, у которого общий с новым только
+// один день. Юнит-тесты сервиса этот запрос мокают.
+func TestBudgetAPI_CreateSharedBoundaryDay_Conflict(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+	ctx := context.Background()
+
+	testCategory := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(ctx, testCategory))
+
+	today := date.Today(testServer.AuthFamily.Location())
+	post := func(name string, start, end date.Date) *httptest.ResponseRecorder {
+		body := mustJSON(t, map[string]any{
+			"name":         name,
+			"amount_minor": 50_000,
+			"period":       "monthly",
+			"category_id":  testCategory.ID,
+			"start_date":   start.String(),
+			"end_date":     end.String(),
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/budgets", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		session.Apply(req)
+		rec := httptest.NewRecorder()
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		return rec
+	}
+
+	require.Equal(t, http.StatusCreated, post("Первый", today, today.AddDays(29)).Code)
+
+	shared := post("Общий день", today.AddDays(29), today.AddDays(59))
+	require.Equal(t, http.StatusConflict, shared.Code, "общий день не считается пересечением: %s",
+		shared.Body.String())
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(shared.Body.Bytes(), &response))
+	assert.Equal(t, handlers.ErrCodeBudgetOverlap, response.Error.Code)
+
+	next := post("Следующий день", today.AddDays(30), today.AddDays(60))
+	assert.Equal(t, http.StatusCreated, next.Code, "период со следующего дня — не пересечение: %s",
+		next.Body.String())
+}
+
+// TestBudgetAPI_UpdateToTakenName_Conflict — UNIQUE (family_id, name, start_date, end_date)
+// нарушает и UPDATE: репозиторий обязан отдать тот же сентинел, что на INSERT, иначе
+// переименование в занятое имя вернёт 500.
+func TestBudgetAPI_UpdateToTakenName_Conflict(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+	ctx := context.Background()
+
+	first := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(ctx, first))
+	second := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	second.Name = "Вторая категория"
+	require.NoError(t, testServer.Repos.Category.Create(ctx, second))
+
+	today := date.Today(testServer.AuthFamily.Location())
+	create := func(name string, categoryID uuid.UUID) handlers.BudgetResponse {
+		body := mustJSON(t, map[string]any{
+			"name":         name,
+			"amount_minor": 50_000,
+			"period":       "monthly",
+			"category_id":  categoryID.String(),
+			"start_date":   today.String(),
+			"end_date":     today.AddDays(30).String(),
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/budgets", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		session.Apply(req)
+		rec := httptest.NewRecorder()
+		testServer.Server.Echo().ServeHTTP(rec, req)
+		require.Equal(t, http.StatusCreated, rec.Code, "тело: %s", rec.Body.String())
+
+		var created handlers.APIResponse[handlers.BudgetResponse]
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &created))
+
+		return created.Data
+	}
+
+	taken := create("Занятое имя", first.ID)
+	renamed := create("Переименуемый", second.ID)
+
+	putBody := mustJSON(t, map[string]any{"name": taken.Name})
+	putReq := httptest.NewRequest(http.MethodPut, "/api/v1/budgets/"+renamed.ID.String(),
+		bytes.NewBuffer(putBody))
+	putReq.Header.Set("Content-Type", "application/json")
+	session.Apply(putReq)
+	putRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(putRec, putReq)
+
+	require.Equal(t, http.StatusConflict, putRec.Code, "тело: %s", putRec.Body.String())
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(putRec.Body.Bytes(), &response))
+	assert.Equal(t, handlers.ErrCodeBudgetNameExists, response.Error.Code)
+}
+
+// TestBudgetAPI_UpdateEmptyBody — тело без единого поля: minProperties: 1 в контракте,
+// значит 422, а не молчаливая запись с новым updated_at.
+func TestBudgetAPI_UpdateEmptyBody(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+	ctx := context.Background()
+
+	testCategory := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(ctx, testCategory))
+
+	today := date.Today(testServer.AuthFamily.Location())
+	body := mustJSON(t, map[string]any{
+		"name":         "Бюджет без правок",
+		"amount_minor": 50_000,
+		"period":       "monthly",
+		"category_id":  testCategory.ID,
+		"start_date":   today.String(),
+		"end_date":     today.AddDays(30).String(),
+	})
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/budgets", bytes.NewBuffer(body))
+	createReq.Header.Set("Content-Type", "application/json")
+	session.Apply(createReq)
+	createRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(createRec, createReq)
+	require.Equal(t, http.StatusCreated, createRec.Code, "тело: %s", createRec.Body.String())
+
+	var created handlers.APIResponse[handlers.BudgetResponse]
+	require.NoError(t, json.Unmarshal(createRec.Body.Bytes(), &created))
+
+	putReq := httptest.NewRequest(http.MethodPut, "/api/v1/budgets/"+created.Data.ID.String(),
+		bytes.NewBufferString(`{}`))
+	putReq.Header.Set("Content-Type", "application/json")
+	session.Apply(putReq)
+	putRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(putRec, putReq)
+
+	require.Equal(t, http.StatusUnprocessableEntity, putRec.Code, "тело: %s", putRec.Body.String())
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(putRec.Body.Bytes(), &response))
+	assert.Equal(t, handlers.ErrCodeValidationError, response.Error.Code)
 }

@@ -206,15 +206,12 @@ sqlite-stats:
 # New migrations should be added directly to these files
 .PHONY: migrate-create
 migrate-create:
-	@echo "⚠️  This project uses consolidated migrations approach"
-	@echo "Instead of creating new migration files, add your changes to:"
-	@echo "  - migrations/001_consolidated.up.sql (for schema changes)"
-	@echo "  - migrations/001_consolidated.down.sql (for rollback)"
-	@echo ""
-	@echo "Steps to add a migration:"
-	@echo "  1. Add new tables/indexes/triggers to the UP file"
-	@echo "  2. Add corresponding DROP statements to the DOWN file (in reverse order)"
-	@echo "  3. Test with: make db-reset && make run-local (an already-migrated DB ignores edits to 001)"
+	@echo "⚠️  A schema change is written twice — see migrations/README.md"
+	@echo "  1. migrations/001_consolidated.up.sql — the DDL in final form (new installs)"
+	@echo "     + matching DROP at the front of 001_consolidated.down.sql"
+	@echo "  2. migrations/NNN_<name>.{up,down}.sql — the same change as a step (deployed DBs:"
+	@echo "     an already-applied 001 is never re-run), covered in internal/infrastructure/migrations_test.go"
+	@echo "  3. Test with: make db-reset && make run-local"
 
 # Безопасность и валидация
 .PHONY: security-check

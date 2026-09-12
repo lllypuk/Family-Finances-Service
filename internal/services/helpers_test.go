@@ -107,30 +107,19 @@ func (m *MockUserRepository) Update(ctx context.Context, user *user.User) error 
 	return args.Error(0)
 }
 
-func (m *MockUserRepository) UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error {
-	args := m.Called(ctx, id, passwordHash)
+func (m *MockUserRepository) UpdatePassword(
+	ctx context.Context, id uuid.UUID, passwordHash string, keepSessionID uuid.UUID,
+) error {
+	args := m.Called(ctx, id, passwordHash, keepSessionID)
 	return args.Error(0)
 }
 
-func (m *MockUserRepository) UpdateRole(ctx context.Context, id uuid.UUID, role user.Role) error {
-	args := m.Called(ctx, id, role)
+func (m *MockUserRepository) Patch(ctx context.Context, id uuid.UUID, role *user.Role, active *bool) error {
+	args := m.Called(ctx, id, role, active)
 	return args.Error(0)
 }
 
-func (m *MockUserRepository) SetActive(ctx context.Context, id uuid.UUID, active bool) error {
-	args := m.Called(ctx, id, active)
-	return args.Error(0)
-}
-
-// MockSessionRevoker — заглушка services.SessionRevoker.
-type MockSessionRevoker struct {
-	mock.Mock
-}
-
-func (m *MockSessionRevoker) RevokeAllSessions(ctx context.Context, userID uuid.UUID) error {
-	args := m.Called(ctx, userID)
-	return args.Error(0)
-}
+func ptr[T any](v T) *T { return &v }
 
 // MockBudgetRepository is a mock implementation of BudgetRepository
 type MockBudgetRepository struct {

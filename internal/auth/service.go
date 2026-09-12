@@ -28,7 +28,9 @@ const dummyHash = "$2a$12$wFOQnJ9KhOwd9WIJUrpp8ObKeCKCr/1xA9YA2i6HiWBSqN5G4T4/S"
 type UserLookup interface {
 	GetByEmail(ctx context.Context, email string) (*user.User, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*user.User, error)
-	UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error
+	// UpdatePassword пишет хеш и отзывает сессии, кроме keepSessionID (uuid.Nil — все),
+	// одной транзакцией — иначе смена пароля могла бы записаться без отзыва сессий.
+	UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string, keepSessionID uuid.UUID) error
 }
 
 // SetupChecker сообщает, создана ли семья.
@@ -146,14 +148,6 @@ func (s *Service) Logout(ctx context.Context, sessionID uuid.UUID) error {
 	return nil
 }
 
-// RevokeAllSessions удаляет все сессии пользователя (деактивация админом).
-func (s *Service) RevokeAllSessions(ctx context.Context, userID uuid.UUID) error {
-	if err := s.sessions.DeleteByUser(ctx, userID, uuid.Nil); err != nil {
-		return fmt.Errorf("failed to revoke sessions: %w", err)
-	}
-	return nil
-}
-
 // ListSessions — живые сессии пользователя, новые первыми; истёкшие лежат в БД до ближайшего логина.
 func (s *Service) ListSessions(ctx context.Context, userID uuid.UUID) ([]*Session, error) {
 	all, err := s.sessions.ListByUser(ctx, userID)
@@ -208,11 +202,8 @@ func (s *Service) setPassword(ctx context.Context, userID uuid.UUID, newPassword
 	if err != nil {
 		return err
 	}
-	if err = s.users.UpdatePassword(ctx, userID, hash); err != nil {
+	if err = s.users.UpdatePassword(ctx, userID, hash, keep); err != nil {
 		return fmt.Errorf("failed to update password: %w", err)
-	}
-	if err = s.sessions.DeleteByUser(ctx, userID, keep); err != nil {
-		return fmt.Errorf("failed to revoke sessions: %w", err)
 	}
 	return nil
 }

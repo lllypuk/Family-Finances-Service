@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,6 +19,8 @@ import (
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/money"
+	"family-budget-service/internal/services"
+	"family-budget-service/internal/services/dto"
 )
 
 type MockBudgetRepository struct {
@@ -202,4 +205,108 @@ func TestBudgetHandler_GetBudgetByID_FamilyBudgetUsesDateRangeSpent(t *testing.T
 	)
 	mockBudgetRepo.AssertExpectations(t)
 	mockTxRepo.AssertExpectations(t)
+}
+
+// stubBudgetService отдаёт заранее заданную ошибку из UpdateBudget; остальной интерфейс
+// не вызывается и остаётся в встроенном nil.
+type stubBudgetService struct {
+	services.BudgetService
+
+	err error
+}
+
+func (s stubBudgetService) UpdateBudget(
+	_ context.Context,
+	_ uuid.UUID,
+	_ dto.UpdateBudgetDTO,
+) (*budget.Budget, error) {
+	return nil, s.err
+}
+
+func TestBudgetHandler_UpdateBudget_BusinessConflicts(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		code string
+	}{
+		{name: "overlap", err: services.ErrBudgetOverlapExists, code: handlers.ErrCodeBudgetOverlap},
+		{name: "name_exists", err: services.ErrBudgetNameExists, code: handlers.ErrCodeBudgetNameExists},
+		{name: "below_spent", err: services.ErrBudgetAlreadyExceeded, code: handlers.ErrCodeBudgetBelowSpent},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := handlers.NewBudgetHandler(&handlers.Repositories{}, stubBudgetService{err: tt.err})
+
+			budgetID := uuid.New()
+			e := echo.New()
+			req := httptest.NewRequest(
+				http.MethodPut,
+				"/budgets/"+budgetID.String(),
+				strings.NewReader(`{"amount_minor":1000}`),
+			)
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+			c.SetParamNames("id")
+			c.SetParamValues(budgetID.String())
+
+			require.NoError(t, handler.UpdateBudget(c))
+			assert.Equal(t, http.StatusConflict, rec.Code, rec.Body.String())
+
+			var response handlers.ErrorResponse
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+			assert.Equal(t, tt.code, response.Error.Code)
+			assert.Empty(t, response.Error.Details)
+		})
+	}
+}
+
+// TestBudgetHandler_UpdateBudget_CalculationFailedIs500 — сорванный расчёт расхода это сбой
+// инфраструктуры: бизнес-кода у него нет, и 409 клиент трактовал бы как «поправь тело».
+func TestBudgetHandler_UpdateBudget_CalculationFailedIs500(t *testing.T) {
+	handler := handlers.NewBudgetHandler(
+		&handlers.Repositories{},
+		stubBudgetService{err: services.ErrBudgetCalculationFailed},
+	)
+
+	budgetID := uuid.New()
+	e := echo.New()
+	req := httptest.NewRequest(
+		http.MethodPut,
+		"/budgets/"+budgetID.String(),
+		strings.NewReader(`{"amount_minor":1000}`),
+	)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(budgetID.String())
+
+	require.NoError(t, handler.UpdateBudget(c))
+	assert.Equal(t, http.StatusInternalServerError, rec.Code, rec.Body.String())
+}
+
+// TestBudgetHandler_UpdateBudget_AmountTooLargeStays422 — отказ формы остаётся валидацией.
+func TestBudgetHandler_UpdateBudget_AmountTooLargeStays422(t *testing.T) {
+	handler := handlers.NewBudgetHandler(
+		&handlers.Repositories{},
+		stubBudgetService{err: services.ErrBudgetAmountTooLarge},
+	)
+
+	budgetID := uuid.New()
+	e := echo.New()
+	req := httptest.NewRequest(
+		http.MethodPut,
+		"/budgets/"+budgetID.String(),
+		strings.NewReader(`{"amount_minor":1000}`),
+	)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(budgetID.String())
+
+	require.NoError(t, handler.UpdateBudget(c))
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
 }

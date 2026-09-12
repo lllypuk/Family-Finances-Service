@@ -37,7 +37,6 @@ type UpdateBudgetDTO struct {
 	AmountMinor *money.Minor `validate:"omitempty,gt=0"`
 	StartDate   *date.Date   `validate:"omitempty"`
 	EndDate     *date.Date   `validate:"omitempty"`
-	IsActive    *bool        `validate:"omitempty"`
 }
 
 // BudgetFilterDTO represents filtering and pagination options for budgets

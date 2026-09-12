@@ -19,8 +19,9 @@ var (
 	ErrFamilyNotFound = errors.New("family not found")
 	// ErrUserNotFound — тот же sentinel, что и user.ErrNotFound: хендлеры и auth.Service
 	// проверяют его через errors.Is, не завися от пакета services.
-	ErrUserNotFound       = user.ErrNotFound
-	ErrEmailAlreadyExists = errors.New("email already exists")
+	ErrUserNotFound = user.ErrNotFound
+	// ErrEmailAlreadyExists — тот же sentinel, что возвращает репозиторий на UNIQUE users.email.
+	ErrEmailAlreadyExists = user.ErrEmailExists
 	ErrInvalidRole        = errors.New("invalid user role")
 	ErrUnauthorized       = errors.New("unauthorized access")
 	ErrValidationFailed   = errors.New("validation failed")
@@ -41,16 +42,13 @@ type UserRepository interface {
 	GetAll(ctx context.Context) ([]*user.User, error)
 	// Update пишет только профиль (email, имя, фамилия).
 	Update(ctx context.Context, user *user.User) error
-	UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error
-	// UpdateRole и SetActive — одиночные записи с атомарной проверкой последнего активного
-	// администратора: user.ErrLastAdmin, если запись оставила бы семью без него.
-	UpdateRole(ctx context.Context, id uuid.UUID, role user.Role) error
-	SetActive(ctx context.Context, id uuid.UUID, active bool) error
-}
-
-// SessionRevoker отзывает bearer-сессии пользователя; реализуется *auth.Service.
-type SessionRevoker interface {
-	RevokeAllSessions(ctx context.Context, userID uuid.UUID) error
+	// UpdatePassword пишет хеш и отзывает сессии, кроме keepSessionID (uuid.Nil — все),
+	// одной транзакцией.
+	UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string, keepSessionID uuid.UUID) error
+	// Patch пишет роль и/или активность одной записью с атомарной проверкой последнего
+	// активного администратора: user.ErrLastAdmin, если запись оставила бы семью без него.
+	// Деактивация отзывает сессии той же транзакцией.
+	Patch(ctx context.Context, id uuid.UUID, role *user.Role, active *bool) error
 }
 
 // FamilyRepository defines the data access operations for the single family
@@ -67,16 +65,14 @@ type FamilyRepository interface {
 type userService struct {
 	userRepo   UserRepository
 	familyRepo FamilyRepository
-	sessions   SessionRevoker
 	validator  *validator.Validate
 }
 
 // NewUserService creates a new UserService instance
-func NewUserService(userRepo UserRepository, familyRepo FamilyRepository, sessions SessionRevoker) UserService {
+func NewUserService(userRepo UserRepository, familyRepo FamilyRepository) UserService {
 	return &userService{
 		userRepo:   userRepo,
 		familyRepo: familyRepo,
-		sessions:   sessions,
 		validator:  newValidator(),
 	}
 }
@@ -204,42 +200,21 @@ func (s *userService) UpdateUser(ctx context.Context, id uuid.UUID, req dto.Upda
 	return existingUser, nil
 }
 
-// SetActive включает или выключает пользователя. Деактивация отзывает все его сессии;
-// себя и последнего активного администратора выключить нельзя.
-func (s *userService) SetActive(ctx context.Context, id uuid.UUID, active bool, actorID uuid.UUID) error {
-	if !active && id == actorID {
+// PatchUser меняет роль и/или активность одной записью репозитория. Себя деактивировать
+// нельзя; «последнего активного админа» проверяет репозиторий в той же транзакции,
+// поэтому при отказе не применяется ни одно поле.
+func (s *userService) PatchUser(
+	ctx context.Context, id uuid.UUID, role *user.Role, active *bool, actorID uuid.UUID,
+) error {
+	if active != nil && !*active && id == actorID {
 		return ErrCannotDeactivateSelf
 	}
-
-	existingUser, err := s.GetUserByID(ctx, id)
-	if err != nil {
-		return err
-	}
-	if existingUser.IsActive == active {
-		return nil
-	}
-
-	if err = s.userRepo.SetActive(ctx, id, active); err != nil {
-		return fmt.Errorf("failed to update user: %w", err)
-	}
-
-	if !active {
-		if err = s.sessions.RevokeAllSessions(ctx, id); err != nil {
-			return fmt.Errorf("failed to revoke sessions: %w", err)
-		}
-	}
-
-	return nil
-}
-
-// ChangeUserRole changes a user's role; понижение последнего активного администратора — ErrLastAdmin.
-func (s *userService) ChangeUserRole(ctx context.Context, userID uuid.UUID, role user.Role) error {
-	if !role.IsValid() {
+	if role != nil && !role.IsValid() {
 		return ErrInvalidRole
 	}
 
-	if err := s.userRepo.UpdateRole(ctx, userID, role); err != nil {
-		return fmt.Errorf("failed to update user role: %w", err)
+	if err := s.userRepo.Patch(ctx, id, role, active); err != nil {
+		return fmt.Errorf("failed to patch user: %w", err)
 	}
 
 	return nil

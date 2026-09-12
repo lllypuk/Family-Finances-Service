@@ -88,6 +88,10 @@
     <string name="budget_delete_confirm">Удалить бюджет?</string>
     <string name="budget_error_period">Конец периода должен быть позже начала</string>
     <string name="budget_error_recreated">Бюджет уже был создан прошлой попыткой: период и категорию у него изменить нельзя</string>
+    <string name="budget_error_overlap">Период пересекается с другим бюджетом той же области: даже один общий день</string>
+    <string name="budget_error_name_exists">Бюджет с таким названием на этот период уже есть</string>
+    <string name="budget_error_below_spent">Сумма меньше уже потраченного за период</string>
+    <string name="budget_error_id_taken">Черновик уже использован удалённым бюджетом: закройте форму и создайте бюджет заново</string>
     <string name="budget_error_rejected">Не удалось сохранить: название занято, даты пересекаются с другим бюджетом или сумма меньше уже потраченного</string>
     <string name="budget_progress">%1$s из %2$s</string>
 

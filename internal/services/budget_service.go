@@ -29,6 +29,9 @@ var (
 	// ErrBudgetNameExists — тот же сентинел, что возвращает репозиторий на UNIQUE:
 	// проверку делает БД, а не сервис.
 	ErrBudgetNameExists = budget.ErrNameExists
+	// ErrBudgetIDExists — id занят мягко удалённым бюджетом: переименование не поможет,
+	// клиенту нужен новый id.
+	ErrBudgetIDExists = budget.ErrIDExists
 )
 
 // validateBudgetAmountBounds — верхняя граница суммы бюджета; здесь она нужна, чтобы
@@ -230,11 +233,6 @@ func (s *BudgetServiceImpl) UpdateBudget(
 		return nil, ErrBudgetNotFoundService
 	}
 
-	// Recalculate current spent amount
-	if recalcErr := s.recalculateAndUpdateSpent(ctx, existingBudget); recalcErr != nil {
-		s.logRecalculationWarning(ctx, "update_budget", existingBudget.ID, recalcErr)
-	}
-
 	originalStartDate := existingBudget.StartDate
 	originalEndDate := existingBudget.EndDate
 
@@ -248,6 +246,17 @@ func (s *BudgetServiceImpl) UpdateBudget(
 			return nil, validateErr
 		}
 	}
+
+	// Расход считается по итоговому периоду: сузив даты, клиент может опустить и сумму.
+	spent, err := s.spentFor(ctx, existingBudget)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrBudgetCalculationFailed, err)
+	}
+	if req.AmountMinor != nil && *req.AmountMinor < spent {
+		return nil, fmt.Errorf("%w: new amount %d is less than spent %d",
+			ErrBudgetAlreadyExceeded, *req.AmountMinor, spent)
+	}
+	existingBudget.SpentMinor = spent
 
 	// Update budget
 	if updateErr := s.budgetRepo.Update(ctx, existingBudget); updateErr != nil {
@@ -264,10 +273,6 @@ func applyBudgetUpdate(b *budget.Budget, req dto.UpdateBudgetDTO) error {
 		b.Name = *req.Name
 	}
 	if req.AmountMinor != nil {
-		if *req.AmountMinor < b.SpentMinor {
-			return fmt.Errorf("%w: new amount %d is less than spent %d",
-				ErrBudgetAlreadyExceeded, *req.AmountMinor, b.SpentMinor)
-		}
 		if err := validateBudgetAmountBounds(*req.AmountMinor); err != nil {
 			return err
 		}
@@ -278,9 +283,6 @@ func applyBudgetUpdate(b *budget.Budget, req dto.UpdateBudgetDTO) error {
 	}
 	if req.EndDate != nil {
 		b.EndDate = *req.EndDate
-	}
-	if req.IsActive != nil {
-		b.IsActive = *req.IsActive
 	}
 	b.UpdatedAt = time.Now()
 
@@ -545,22 +547,30 @@ func (s *BudgetServiceImpl) budgetMatchesFilter(b *budget.Budget, filter dto.Bud
 	return true
 }
 
-func (s *BudgetServiceImpl) recalculateAndUpdateSpent(ctx context.Context, b *budget.Budget) error {
+// spentFor — расход по периоду бюджета; ничего не пишет.
+func (s *BudgetServiceImpl) spentFor(ctx context.Context, b *budget.Budget) (money.Minor, error) {
 	var spent money.Minor
 	var err error
 
 	if b.CategoryID != nil {
-		// Calculate spent for specific category within budget period
 		spent, err = s.transactionRepo.GetTotalByCategoryAndDateRange(
 			ctx, *b.CategoryID, b.StartDate, b.EndDate, transaction.TypeExpense)
 	} else {
-		// Calculate spent for entire family within budget period
 		spent, err = s.transactionRepo.GetTotalByDateRange(
 			ctx, b.StartDate, b.EndDate, transaction.TypeExpense)
 	}
 
 	if err != nil {
-		return fmt.Errorf("failed to recalculate spent amount: %w", err)
+		return 0, fmt.Errorf("failed to calculate spent amount: %w", err)
+	}
+
+	return spent, nil
+}
+
+func (s *BudgetServiceImpl) recalculateAndUpdateSpent(ctx context.Context, b *budget.Budget) error {
+	spent, err := s.spentFor(ctx, b)
+	if err != nil {
+		return err
 	}
 
 	if b.SpentMinor != spent {
@@ -588,8 +598,8 @@ func (s *BudgetServiceImpl) budgetPeriodsOverlap(
 		return false
 	}
 
-	// Check if periods overlap
-	return endDate.After(existing.StartDate) && startDate.Before(existing.EndDate)
+	// Границы включительные: общий день — уже пересечение.
+	return !endDate.Before(existing.StartDate) && !startDate.After(existing.EndDate)
 }
 
 func (s *BudgetServiceImpl) sameBudgetScope(existingCategoryID, newCategoryID *uuid.UUID) bool {

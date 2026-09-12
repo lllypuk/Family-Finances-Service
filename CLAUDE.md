@@ -100,8 +100,8 @@ on `TransactionRepository`). Add a new repo method to the service-layer interfac
 `internal/auth` sits beside that chain and imports neither `services` nor `application`: it declares the narrow
 interfaces it needs (`SessionRepository`, `UserLookup`, `SetupChecker`), and the SQLite repositories satisfy them.
 `services` imports `auth` only for the password helpers (`HashPassword`, `ValidatePassword`,
-`RegisterPasswordValidation`) and for `SessionRevoker`, which `*auth.Service` implements so that `UserService`
-can revoke sessions on deactivation without knowing about tokens.
+`RegisterPasswordValidation`); session revocation belongs to the user repository (see "User writes are
+column-scoped" below), so `UserService` never touches sessions.
 
 ### Single-family model
 
@@ -145,11 +145,16 @@ has a catch-all, an unknown `/api/v1/...` path is `401` without a token and `404
   `DELETE /api/v1/categories/:id`, `/api/v1/backups` and `PUT /api/v1/family`; `financeAccess` (admin or member)
   for categories/transactions/budgets/reports/stats; `GET /api/v1/family` and the `/auth/*`, `/me*` routes are
   open to any authenticated role. Wrong role → `403 FORBIDDEN`.
-- **User writes are column-scoped.** `UserRepository.Update` writes only `email`/`first_name`/`last_name`;
-  password, role and `is_active` go through `UpdatePassword`, `UpdateRole`, `SetActive`, so an overlapping
-  `PUT /me` cannot write a stale hash or `is_active` back. `UpdateRole`/`SetActive` run the "last active admin"
-  check and the write in one `BeginTx` (`_txlock=immediate` serialises them) and return `user.ErrLastAdmin`
-  (= `services.ErrLastAdmin`) — there is no read-then-check in the service any more.
+- **User writes are column-scoped, and session revocation rides along.** `UserRepository.Update` writes only
+  `email`/`first_name`/`last_name`; password, role and `is_active` go through
+  `UpdatePassword(ctx, id, hash, keepSessionID)` and `Patch(ctx, id, role, active)`, so an overlapping `PUT /me`
+  cannot write a stale hash or `is_active` back. Both drop the owner's sessions in the **same** `BeginTx` as the
+  write (`keepSessionID` survives, `uuid.Nil` keeps none), next to the "last active admin" check that returns
+  `user.ErrLastAdmin` (= `services.ErrLastAdmin`) — a failed revoke can no longer leave a new password committed
+  with the old sessions alive. That is why the user repository owns `DELETE FROM sessions`: `auth.Service` has no
+  `RevokeAllSessions` and `auth.SessionRepository` no `DeleteByUser`. `PATCH /users/:id` applies role and
+  `is_active` in that one `UPDATE`, so its `409` leaves nothing half-applied. Still open: a concurrent `Login` may
+  check the old password before the commit and create its session after it.
 - **Errors outside handlers** (`internal/application/error_handler.go`, `newAPIErrorHandler`): `RequireBearer` and
   `RequireRole` return `*echo.HTTPError` (they cannot import `handlers` — cycle), and the error handler renders
   the JSON envelope for every error, router 404 and panics included. A non-`*echo.HTTPError` becomes a bare
@@ -178,16 +183,20 @@ has a catch-all, an unknown `/api/v1/...` path is `401` without a token and `404
 
 ## Database & migrations
 
-All schema lives in **two consolidated files**: `migrations/001_consolidated.up.sql` and `001_consolidated.down.sql`
-(tables: families, users, categories, transactions, budgets, reports, sessions).
-There is no per-change migration file; append new DDL to the end of the `.up.sql` and the matching `DROP` to the
-front of the `.down.sql`. See `migrations/README.md`, and `make migrate-create` for the reminder.
+The whole schema lives in `migrations/001_consolidated.{up,down}.sql`
+(tables: families, users, categories, transactions, budgets, reports, sessions) — that file is the readable
+picture of the database, and a fresh DB is built from it.
 
 **Editing `001` does not touch an existing database.** golang-migrate stores only the version number, so on a DB
 that already has version 1 `Up()` returns `ErrNoChange` and the new DDL is skipped silently; the test path starts
-from an empty in-memory DB and will not show this. Until the first release the schema changes by rewriting `001`,
-and local and server databases are recreated: `make db-reset` (deletes `./data/budget.db*`) then `make run-local`
-and `setup` again.
+from an empty in-memory DB and will not show this. Before `v0.1.0` that was fine — every database was recreated
+with `make db-reset`. **Since `v0.1.0` is deployed, a schema change is a numbered migration as well**: write the
+DDL into `001` (so a new install gets it) *and* a `NNN_*.{up,down}.sql` applying it to a live database, like
+`002_budgets_name_period_partial_unique` (which rebuilds `budgets` — SQLite cannot `DROP INDEX` the implicit
+`sqlite_autoindex_*` behind a table-level `UNIQUE`). `002` is therefore a no-op rebuild on a fresh DB, and its
+table definition must stay identical to the one in `001`. Cover it in
+`internal/infrastructure/migrations_test.go`: `Migrate(1)` puts the released schema back, so the upgrade path is
+testable. See `migrations/README.md`, and `make migrate-create` for the reminder.
 
 Two independent code paths apply migrations, and **both must keep working**:
 
@@ -249,6 +258,17 @@ on it.
 - **`POST` of a transaction, budget or category is idempotent** when the body carries a client-generated
   `id` (any valid UUID): an existing record answers `200` with itself and the repeated body is ignored — the id is
   the only thing compared. The check is a plain read-then-insert; two simultaneous retries can still collide.
+- **Budget business refusals are `409` with their own codes** — `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`,
+  `BUDGET_BELOW_SPENT`, `BUDGET_ID_EXISTS`; only shape errors (`amount_minor` out of range, reversed dates) stay
+  `422`. Periods of one
+  scope overlap **inclusively** — a shared boundary day is a conflict, because spending is summed over
+  `date >= start AND date <= end`. `is_active` is a soft-delete marker and nothing else: it is not in
+  `UpdateBudgetRequest`, and `GetByID` filters on it, so a deleted budget is `404` for GET/PUT/DELETE alike.
+  A deleted row keeps its primary key, so a `POST` reusing that `id` cannot be idempotent: the repository tells the
+  two unique violations apart (`budgets.id` in the message → `budget.ErrIDExists`) and the client gets
+  `409 BUDGET_ID_EXISTS`, not a name conflict it could never fix by renaming. The name+period uniqueness, by
+  contrast, is the partial index `idx_budgets_name_period_active` (`WHERE is_active = 1`), so after a delete the
+  same name and period can be created again under a new `id`.
 - **Fractions come in two units.** Shares (`share`, `*_delta`, `stats.budgets[].utilization`) are 0…1; fields named
   `percentage` and `budgets[].utilization` on `/budgets` are percent 0…100. Both are documented per field in
   `docs/api/openapi.yaml`.
@@ -267,10 +287,10 @@ reference): `docs/README.md` (navigation), `docs/product_brief.md`, `docs/tech_s
 status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the finished ones.
 
 **Current direction:** `docs/specs/005-api-only-redesign.md` — the service is an API-only backend for an
-Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–08 are done
-(`docs/plans/completed/`, 06 = the Android client, 07 = its budgets tab, 08 = its settings screen); what is left
-is the owner's work on the server (DNS,
-`install.sh`, `setup`, backup cron, the `v0.1.0` tag).
+Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–09 are done
+(`docs/plans/completed/`, 06 = the Android client, 07 = its budgets tab, 08 = its settings screen,
+09 = the server findings of 07–08); `v0.1.0` is tagged, and the budget contract changed after it, so the next
+server release is `v0.2.0`.
 
 `docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates
 from it, and code and spec now match. **A registered route with no operation in the spec fails `make test`**

@@ -35,7 +35,6 @@ import kotlinx.serialization.Contextual
  * @param amountMinor Сумма в минимальных единицах валюты семьи (копейки для RUB, центы для EUR/USD). Поддерживаются только валюты с двумя знаками после запятой (A-05). 
  * @param startDate Календарная дата без времени в часовом поясе семьи (A-06)
  * @param endDate Календарная дата без времени в часовом поясе семьи (A-06)
- * @param isActive 
  */
 @Serializable
 
@@ -54,10 +53,7 @@ data class UpdateBudgetRequest (
 
     /* Календарная дата без времени в часовом поясе семьи (A-06) */
     @Contextual @SerialName(value = "end_date")
-    val endDate: java.time.LocalDate? = null,
-
-    @SerialName(value = "is_active")
-    val isActive: kotlin.Boolean? = null
+    val endDate: java.time.LocalDate? = null
 
 ) {
 

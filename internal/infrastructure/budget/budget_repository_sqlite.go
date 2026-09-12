@@ -153,6 +153,9 @@ func (r *SQLiteRepository) Create(ctx context.Context, b *budget.Budget) error {
 	if err != nil {
 		// Check for unique constraint violation
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			if strings.Contains(err.Error(), "budgets.id") {
+				return fmt.Errorf("%w: %s", budget.ErrIDExists, b.ID)
+			}
 			return fmt.Errorf("%w: %s", budget.ErrNameExists, b.Name)
 		}
 		return fmt.Errorf("failed to create budget: %w", err)
@@ -172,7 +175,7 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*budget.B
 		SELECT id, name, amount_minor, spent_minor, period, start_date, end_date,
 			   category_id, family_id, is_active, created_at, updated_at
 		FROM budgets
-		WHERE id = ?`
+		WHERE id = ? AND is_active = 1`
 
 	var b budget.Budget
 	var idStr, periodStr, familyIDStr string

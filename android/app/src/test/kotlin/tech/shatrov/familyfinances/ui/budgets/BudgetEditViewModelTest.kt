@@ -72,6 +72,12 @@ private const val REJECTED_ERROR = """
 "meta":{"request_id":"r-19","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0"}}
 """
 
+/** `409`: причину различает код, деталей в теле нет. */
+private fun conflict(code: String) = """
+{"error":{"code":"$code","message":"Budget period overlaps with an existing budget"},
+"meta":{"request_id":"r-21","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0"}}
+"""
+
 private const val NAME_ERROR = """
 {"error":{"code":"VALIDATION_ERROR","message":"Проверьте поля",
 "details":[{"field":"name","message":"слишком короткое","code":"min"}]},
@@ -231,6 +237,31 @@ class BudgetEditViewModelTest {
         assertFalse(state.done)
         assertEquals(UiError.Resource(R.string.budget_error_rejected), state.error)
         assertTrue(state.fieldErrors.isEmpty())
+    }
+
+    /** Каждый код `409` — свой текст, незнакомый падает на общий. */
+    @Test
+    fun conflictCodesGetTheirOwnTexts() = runTest {
+        val expected = listOf(
+            "BUDGET_OVERLAP" to R.string.budget_error_overlap,
+            "BUDGET_NAME_EXISTS" to R.string.budget_error_name_exists,
+            "BUDGET_BELOW_SPENT" to R.string.budget_error_below_spent,
+            "BUDGET_SOMETHING_NEW" to R.string.budget_error_rejected,
+        )
+        for ((code, text) in expected) {
+            server.enqueueJson(200, CATEGORIES_OK)
+            createModel()
+            loaded()
+            model.onNameChange("Еда")
+            model.onAmountChange("50000")
+
+            server.enqueueJson(409, conflict(code))
+            model.onSubmit()
+            val state = settled()
+
+            assertEquals(code, UiError.Resource(text), state.error)
+            assertTrue(state.fieldErrors.isEmpty())
+        }
     }
 
     @Test
