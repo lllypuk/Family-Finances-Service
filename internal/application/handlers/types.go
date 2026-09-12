@@ -242,7 +242,6 @@ type UpdateBudgetRequest struct {
 	AmountMinor *money.Minor `json:"amount_minor,omitempty" validate:"omitempty,gt=0"`
 	StartDate   *date.Date   `json:"start_date,omitempty"`
 	EndDate     *date.Date   `json:"end_date,omitempty"`
-	IsActive    *bool        `json:"is_active,omitempty"`
 }
 
 // BudgetResponse — RemainingMinor уходит в минус при перерасходе; Utilization

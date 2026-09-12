@@ -426,6 +426,11 @@ func TestBudgetRepositorySQLite_Delete(t *testing.T) {
 		budgets, err := repo.GetAll(ctx)
 		require.NoError(t, err)
 		assert.Empty(t, budgets)
+
+		// Удалённый бюджет не читается и по известному id
+		_, err = repo.GetByID(ctx, uuid.MustParse(budgetID))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not found")
 	})
 
 	t.Run("Error_NonExistentBudget", func(t *testing.T) {

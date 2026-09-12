@@ -174,14 +174,17 @@
 - Modify: `internal/services/budget_service_test.go`, `internal/infrastructure/budget/*_test.go`,
   `tests/integration/budgets_test.go`
 
-- [ ] удалить `IsActive` из `UpdateBudgetDTO`, `UpdateBudgetRequest` и `applyBudgetUpdate`
-- [ ] `GetByID`: `AND is_active = 1`
-- [ ] удалить `is_active` из `UpdateBudgetRequest` в спеке
-- [ ] обновить unit-тесты сервиса, которые передавали `IsActive`
-- [ ] тест репозитория: после `Delete` `GetByID` → `budget.ErrNotFound`
-- [ ] интеграционные тесты: `PUT` с `is_active: false` не выключает бюджет (поле игнорируется);
+- [x] удалить `IsActive` из `UpdateBudgetDTO`, `UpdateBudgetRequest` и `applyBudgetUpdate`
+- [x] `GetByID`: `AND is_active = 1`
+- [x] удалить `is_active` из `UpdateBudgetRequest` в спеке
+- [x] обновить unit-тесты сервиса, которые передавали `IsActive` (таких не оказалось — DTO с `IsActive`
+      в тестах не собирался)
+- [x] тест репозитория: после `Delete` `GetByID` → not found
+      ➕ отклонение: `budget.ErrNotFound` в домене нет, `GetByID` возвращает `fmt.Errorf(... not found)`;
+      тест проверяет текст, как остальные тесты этого файла. Сентинел — отдельная задача, не в этом плане.
+- [x] интеграционные тесты: `PUT` с `is_active: false` не выключает бюджет (поле игнорируется);
       после `DELETE` — `GET`/`PUT`/`DELETE` по id → `404`
-- [ ] `make fmt && make test && make lint` зелёные
+- [x] `make fmt && make test && make lint` зелёные
 
 ### Task 2: Коды `409` для бизнес-отказов бюджета
 

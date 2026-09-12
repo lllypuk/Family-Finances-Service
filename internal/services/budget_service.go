@@ -279,9 +279,6 @@ func applyBudgetUpdate(b *budget.Budget, req dto.UpdateBudgetDTO) error {
 	if req.EndDate != nil {
 		b.EndDate = *req.EndDate
 	}
-	if req.IsActive != nil {
-		b.IsActive = *req.IsActive
-	}
 	b.UpdatedAt = time.Now()
 
 	if !b.EndDate.After(b.StartDate) {

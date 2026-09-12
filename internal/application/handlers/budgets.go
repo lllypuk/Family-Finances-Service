@@ -209,9 +209,6 @@ func (h *BudgetHandler) updateBudgetFields(budget *budget.Budget, req *UpdateBud
 	if req.EndDate != nil {
 		budget.EndDate = *req.EndDate
 	}
-	if req.IsActive != nil {
-		budget.IsActive = *req.IsActive
-	}
 	budget.UpdatedAt = time.Now()
 }
 
@@ -332,7 +329,6 @@ func (h *BudgetHandler) updateBudgetViaService(c echo.Context) error {
 
 	serviceReq := dto.UpdateBudgetDTO{
 		Name:        req.Name,
-		IsActive:    req.IsActive,
 		AmountMinor: req.AmountMinor,
 		StartDate:   req.StartDate,
 		EndDate:     req.EndDate,

@@ -461,10 +461,9 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		assert.Equal(t, testBudget.CategoryID, response.Data.CategoryID)   // unchanged
 	})
 
-	t.Run("UpdateBudget_ToggleActive", func(t *testing.T) {
+	t.Run("UpdateBudget_IgnoresIsActive", func(t *testing.T) {
 		testServer := testhelpers.SetupHTTPServer(t)
 
-		// Setup test data
 		family := testhelpers.CreateTestFamily()
 		err := testServer.Repos.Family.Create(context.Background(), family)
 		require.NoError(t, err)
@@ -478,19 +477,12 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		err = testServer.Repos.Budget.Create(context.Background(), testBudget)
 		require.NoError(t, err)
 
-		// Toggle active status
-		newIsActive := false
-		updateRequest := handlers.UpdateBudgetRequest{
-			IsActive: &newIsActive,
-		}
-
-		requestBodyBytes, err := json.Marshal(updateRequest)
-		require.NoError(t, err)
+		body := `{"name":"Renamed Budget","is_active":false}`
 
 		req := httptest.NewRequest(
 			http.MethodPut,
 			fmt.Sprintf("/api/v1/budgets/%s", testBudget.ID),
-			bytes.NewBuffer(requestBodyBytes),
+			bytes.NewBufferString(body),
 		)
 		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
@@ -498,19 +490,14 @@ func TestBudgetHandler_Integration(t *testing.T) {
 
 		testServer.Server.Echo().ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusOK {
-			t.Logf("Toggle active budget failed with status %d, response: %s", rec.Code, rec.Body.String())
-		}
-		assert.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
 		var response handlers.APIResponse[handlers.BudgetResponse]
 		err = json.Unmarshal(rec.Body.Bytes(), &response)
 		require.NoError(t, err)
 
-		assert.Equal(t, testBudget.ID, response.Data.ID)
-		assert.Equal(t, newIsActive, response.Data.IsActive)               // updated
-		assert.Equal(t, testBudget.Name, response.Data.Name)               // unchanged
-		assert.Equal(t, testBudget.AmountMinor, response.Data.AmountMinor) // unchanged
+		assert.Equal(t, "Renamed Budget", response.Data.Name)
+		assert.True(t, response.Data.IsActive)
 	})
 
 	t.Run("DeleteBudget_Success", func(t *testing.T) {
@@ -540,21 +527,25 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		}
 		assert.Equal(t, http.StatusNoContent, rec.Code)
 
-		// Verify budget is soft deleted (is_active = false) by getting it and checking status
-		getReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/budgets/%s", testBudget.ID), nil)
-		testServer.Auth(t).Apply(getReq)
-		getRec := httptest.NewRecorder()
+		// Удалённый бюджет невидим по id для всех трёх методов
+		path := fmt.Sprintf("/api/v1/budgets/%s", testBudget.ID)
+		for _, tc := range []struct {
+			method string
+			body   string
+		}{
+			{http.MethodGet, ""},
+			{http.MethodPut, `{"name":"Renamed Budget"}`},
+			{http.MethodDelete, ""},
+		} {
+			afterReq := httptest.NewRequest(tc.method, path, bytes.NewBufferString(tc.body))
+			testServer.Auth(t).Apply(afterReq)
+			afterReq.Header.Set("Content-Type", "application/json")
+			afterRec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(getRec, getReq)
+			testServer.Server.Echo().ServeHTTP(afterRec, afterReq)
 
-		assert.Equal(t, http.StatusOK, getRec.Code)
-
-		var response handlers.APIResponse[handlers.BudgetResponse]
-		err = json.Unmarshal(getRec.Body.Bytes(), &response)
-		require.NoError(t, err)
-
-		// Budget should be marked as inactive after soft delete
-		assert.False(t, response.Data.IsActive)
+			assert.Equal(t, http.StatusNotFound, afterRec.Code, "%s %s: %s", tc.method, path, afterRec.Body.String())
+		}
 	})
 }
 
