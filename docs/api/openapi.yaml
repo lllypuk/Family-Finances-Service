@@ -306,7 +306,8 @@ paths:
       operationId: updateUser
       tags: [users]
       summary: Изменить имя и email пользователя
-      description: Только admin.
+      description: |
+        Только admin. Email, занятый другим пользователем, — `409 EMAIL_TAKEN`.
       requestBody:
         required: true
         content:
@@ -318,6 +319,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
     patch:
       operationId: patchUser

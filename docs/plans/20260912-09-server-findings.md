@@ -293,9 +293,9 @@
 - Modify: `docs/api/openapi.yaml`
 - Modify: `tests/integration/users_test.go`
 
-- [ ] `'409': { $ref: '#/components/responses/Conflict' }` у `updateUser`, `EMAIL_TAKEN` упомянут в описании
-- [ ] интеграционный тест: `PUT /users/:id` с чужим email → `409 EMAIL_TAKEN`
-- [ ] `make fmt && make test && make lint` зелёные (`TestOpenAPISpec_*` в том числе)
+- [x] `'409': { $ref: '#/components/responses/Conflict' }` у `updateUser`, `EMAIL_TAKEN` упомянут в описании
+- [x] интеграционный тест: `PUT /users/:id` с чужим email → `409 EMAIL_TAKEN`
+- [x] `make fmt && make test && make lint` зелёные (`TestOpenAPISpec_*` в том числе)
 
 ### Task 8: Лог длительности `VACUUM INTO`
 
