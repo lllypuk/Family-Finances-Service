@@ -23,7 +23,8 @@ info:
     Коды ошибок: `INVALID_REQUEST` / `INVALID_ID` (400 — тело или id не разобрались),
     `UNAUTHORIZED` (401), `FORBIDDEN` (403), `NOT_FOUND` / `<ENTITY>_NOT_FOUND` (404),
     `VALIDATION_ERROR` (422 — тело или query-параметры не прошли проверку, поля в `error.details`),
-    `SETUP_REQUIRED` / `CURRENCY_LOCKED` / `LAST_ADMIN` / `CANNOT_DEACTIVATE_SELF` (409),
+    `SETUP_REQUIRED` / `CURRENCY_LOCKED` / `LAST_ADMIN` / `CANNOT_DEACTIVATE_SELF` /
+    `BUDGET_OVERLAP` / `BUDGET_NAME_EXISTS` / `BUDGET_BELOW_SPENT` (409),
     `RATE_LIMITED` (429, с `Retry-After`), `INTERNAL_ERROR` (500).
   license:
     name: MIT
@@ -644,7 +645,9 @@ paths:
       tags: [budgets]
       summary: Создать бюджет
       description: admin и member. Повтор с тем же `id` возвращает `200` с существующим
-        бюджетом; остальное тело при этом игнорируется (A-07).
+        бюджетом; остальное тело при этом игнорируется (A-07). Бизнес-отказы отвечают `409` — `BUDGET_OVERLAP`
+        (период пересекается с бюджетом той же области) и `BUDGET_NAME_EXISTS`
+        (имя занято на этот период).
       requestBody:
         required: true
         content:
@@ -656,6 +659,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
 
   /api/v1/budgets/{id}:
@@ -676,7 +680,9 @@ paths:
       operationId: updateBudget
       tags: [budgets]
       summary: Изменить бюджет
-      description: admin и member.
+      description: admin и member. Бизнес-отказы отвечают `409` — `BUDGET_OVERLAP`,
+        `BUDGET_NAME_EXISTS` и `BUDGET_BELOW_SPENT` (новая сумма меньше уже потраченного
+        за период).
       requestBody:
         required: true
         content:
@@ -688,6 +694,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
     delete:
       operationId: deleteBudget
@@ -990,7 +997,8 @@ components:
     Conflict:
       description: |
         Состояние не допускает операцию: `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`,
-        `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN`
+        `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN`, `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`,
+        `BUDGET_BELOW_SPENT`
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }

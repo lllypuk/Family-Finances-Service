@@ -348,10 +348,13 @@ func (h *BudgetHandler) handleBudgetServiceError(c echo.Context, err error, oper
 		return nil
 	case errors.Is(err, services.ErrBudgetNotFoundService), errors.Is(err, services.ErrBudgetNotFound):
 		return HandleNotFoundError(c, "Budget")
-	case errors.Is(err, services.ErrBudgetOverlapExists),
-		errors.Is(err, services.ErrBudgetAlreadyExceeded),
-		errors.Is(err, services.ErrBudgetAmountTooLarge),
-		errors.Is(err, services.ErrBudgetNameExists),
+	case errors.Is(err, services.ErrBudgetOverlapExists):
+		return respondError(c, http.StatusConflict, ErrCodeBudgetOverlap, ErrMessageBudgetOverlap)
+	case errors.Is(err, services.ErrBudgetNameExists):
+		return respondError(c, http.StatusConflict, ErrCodeBudgetNameExists, ErrMessageBudgetNameExists)
+	case errors.Is(err, services.ErrBudgetAlreadyExceeded):
+		return respondError(c, http.StatusConflict, ErrCodeBudgetBelowSpent, ErrMessageBudgetBelowSpent)
+	case errors.Is(err, services.ErrBudgetAmountTooLarge),
 		errors.Is(err, dto.ErrInvalidBudgetPeriod),
 		errors.Is(err, dto.ErrInvalidBudgetAmount),
 		errors.Is(err, dto.ErrInvalidDateRange),

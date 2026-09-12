@@ -193,12 +193,13 @@
 - Modify: `docs/api/openapi.yaml`
 - Modify: `internal/application/handlers/budgets_test.go`, `tests/integration/budgets_test.go`
 
-- [ ] константы `ErrCodeBudgetOverlap`, `ErrCodeBudgetNameExists`, `ErrCodeBudgetBelowSpent` и сообщения
-- [ ] `handleBudgetServiceError`: три ветки `409`; `ErrBudgetAmountTooLarge` и `dto.*` остаются `422`
-- [ ] спека: `'409'` у `createBudget` и `updateBudget`, коды в описании `Conflict` и в шапке
-- [ ] handler-тесты на каждую из трёх ошибок (статус, код, отсутствие `details`)
-- [ ] интеграционные тесты: пересечение, занятое имя, сумма ниже расхода → `409` с кодом
-- [ ] `make fmt && make test && make lint` зелёные
+- [x] константы `ErrCodeBudgetOverlap`, `ErrCodeBudgetNameExists`, `ErrCodeBudgetBelowSpent` и сообщения
+- [x] `handleBudgetServiceError`: три ветки `409`; `ErrBudgetAmountTooLarge` и `dto.*` остаются `422`
+- [x] спека: `'409'` у `createBudget` и `updateBudget`, коды в описании `Conflict` и в шапке
+- [x] handler-тесты на каждую из трёх ошибок (статус, код, отсутствие `details`)
+- [x] интеграционные тесты: пересечение, занятое имя, сумма ниже расхода → `409` с кодом
+      ➕ `TestBudgetAPI_CreateDuplicateNameSamePeriod` переписан с `422` на `409 BUDGET_NAME_EXISTS`
+- [x] `make fmt && make test && make lint` зелёные
 
 ### Task 3: Включительная проверка пересечения периодов
 

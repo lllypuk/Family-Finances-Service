@@ -774,8 +774,8 @@ func TestBudgetAPI_CreateAmountAboveMaximum(t *testing.T) {
 }
 
 // TestBudgetAPI_CreateDuplicateNameSamePeriod — UNIQUE (family_id, name, start_date, end_date)
-// достижим с календарными датами: второй бюджет с тем же именем и периодом отбивается 422,
-// а не 500 из репозитория. Категории разные, иначе сработает проверка пересечения периодов.
+// достижим с календарными датами: второй бюджет с тем же именем и периодом отбивается
+// 409 BUDGET_NAME_EXISTS, а не 500 из репозитория. Категории разные, иначе сработает проверка пересечения периодов.
 func TestBudgetAPI_CreateDuplicateNameSamePeriod(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	session := testServer.Auth(t)
@@ -810,10 +810,111 @@ func TestBudgetAPI_CreateDuplicateNameSamePeriod(t *testing.T) {
 	require.Equal(t, http.StatusCreated, post(first.ID).Code)
 
 	rec := post(second.ID)
-	require.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
+	require.Equal(t, http.StatusConflict, rec.Code, "тело: %s", rec.Body.String())
 
 	var response handlers.ErrorResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-	require.Len(t, response.Error.Details, 1)
-	assert.Contains(t, response.Error.Details[0].Message, "already exists for this period")
+	assert.Equal(t, handlers.ErrCodeBudgetNameExists, response.Error.Code)
+	assert.Empty(t, response.Error.Details)
+}
+
+// TestBudgetAPI_CreateOverlappingPeriod_Conflict — пересечение периодов одной категории
+// это бизнес-отказ (409), а не ошибка формы.
+func TestBudgetAPI_CreateOverlappingPeriod_Conflict(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+	ctx := context.Background()
+
+	testCategory := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(ctx, testCategory))
+
+	today := date.Today(testServer.AuthFamily.Location())
+	post := func(name string, start, end date.Date) *httptest.ResponseRecorder {
+		body := mustJSON(t, map[string]any{
+			"name":         name,
+			"amount_minor": 50_000,
+			"period":       "monthly",
+			"category_id":  testCategory.ID,
+			"start_date":   start.String(),
+			"end_date":     end.String(),
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/budgets", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		session.Apply(req)
+		rec := httptest.NewRecorder()
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		return rec
+	}
+
+	require.Equal(t, http.StatusCreated, post("Первый", today, today.AddDays(30)).Code)
+
+	rec := post("Второй", today.AddDays(10), today.AddDays(40))
+	require.Equal(t, http.StatusConflict, rec.Code, "тело: %s", rec.Body.String())
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, handlers.ErrCodeBudgetOverlap, response.Error.Code)
+	assert.Empty(t, response.Error.Details)
+}
+
+// TestBudgetAPI_UpdateAmountBelowSpent_Conflict — сумма ниже уже потраченного за период → 409.
+func TestBudgetAPI_UpdateAmountBelowSpent_Conflict(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+	ctx := context.Background()
+
+	testCategory := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(ctx, testCategory))
+
+	today := date.Today(testServer.AuthFamily.Location())
+	body := mustJSON(t, map[string]any{
+		"name":         "Бюджет с расходом",
+		"amount_minor": 100_000,
+		"period":       "monthly",
+		"category_id":  testCategory.ID,
+		"start_date":   today.String(),
+		"end_date":     today.AddDays(30).String(),
+	})
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/budgets", bytes.NewBuffer(body))
+	createReq.Header.Set("Content-Type", "application/json")
+	session.Apply(createReq)
+	createRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(createRec, createReq)
+	require.Equal(t, http.StatusCreated, createRec.Code, "тело: %s", createRec.Body.String())
+
+	var created handlers.APIResponse[handlers.BudgetResponse]
+	require.NoError(t, json.Unmarshal(createRec.Body.Bytes(), &created))
+
+	txBody := mustJSON(t, map[string]any{
+		"amount_minor": 40_000,
+		"type":         "expense",
+		"description":  "Трата в бюджете",
+		"category_id":  testCategory.ID,
+		"date":         today.String(),
+	})
+	txReq := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", bytes.NewBuffer(txBody))
+	txReq.Header.Set("Content-Type", "application/json")
+	session.Apply(txReq)
+	txRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(txRec, txReq)
+	require.Equal(t, http.StatusCreated, txRec.Code, "тело: %s", txRec.Body.String())
+
+	updBody := mustJSON(t, map[string]any{"amount_minor": 10_000})
+	updReq := httptest.NewRequest(
+		http.MethodPut,
+		"/api/v1/budgets/"+created.Data.ID.String(),
+		bytes.NewBuffer(updBody),
+	)
+	updReq.Header.Set("Content-Type", "application/json")
+	session.Apply(updReq)
+	updRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(updRec, updReq)
+
+	require.Equal(t, http.StatusConflict, updRec.Code, "тело: %s", updRec.Body.String())
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(updRec.Body.Bytes(), &response))
+	assert.Equal(t, handlers.ErrCodeBudgetBelowSpent, response.Error.Code)
+	assert.Empty(t, response.Error.Details)
 }
