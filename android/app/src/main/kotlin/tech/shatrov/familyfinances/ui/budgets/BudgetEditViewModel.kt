@@ -32,6 +32,15 @@ private const val MIN_NAME = 2
 /** `201` — бюджет создан этим запросом; `200` — сервер отдал созданный прошлой попыткой. */
 private const val HTTP_CREATED = 201
 
+private const val HTTP_CONFLICT = 409
+
+/** Коды `409` бюджета: серверный текст английский, на форме нужен свой. */
+private val budgetConflicts: Map<String, Int> = mapOf(
+    "BUDGET_OVERLAP" to R.string.budget_error_overlap,
+    "BUDGET_NAME_EXISTS" to R.string.budget_error_name_exists,
+    "BUDGET_BELOW_SPENT" to R.string.budget_error_below_spent,
+)
+
 /** Имена полей формы — те же, что в `error.details[].field`: словарь перевода не нужен. */
 object BudgetField {
     const val NAME = "name"
@@ -310,7 +319,14 @@ private fun BudgetEditUiState.failed(failure: ApiFailure): BudgetEditUiState {
         error = when {
             details.size > underFields.size -> UiError.Resource(R.string.budget_error_rejected)
             details.isNotEmpty() -> null
-            else -> failure.toUiError()
+            else -> failure.toBudgetError()
         },
     )
+}
+
+/** Незнакомый `409` — тот же общий текст: он про состояние бюджета, а не про сеть или поле. */
+private fun ApiFailure.toBudgetError(): UiError = if (this is ApiFailure.Api && status == HTTP_CONFLICT) {
+    UiError.Resource(budgetConflicts[code] ?: R.string.budget_error_rejected)
+} else {
+    toUiError()
 }

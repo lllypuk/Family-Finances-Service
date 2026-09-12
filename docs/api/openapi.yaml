@@ -1465,6 +1465,7 @@ components:
           description: null — бюджет на все категории
         start_date: { $ref: '#/components/schemas/CalendarDate' }
         end_date: { $ref: '#/components/schemas/CalendarDate' }
+        is_active: { type: boolean }
         created_at: { $ref: '#/components/schemas/Timestamp' }
         updated_at: { $ref: '#/components/schemas/Timestamp' }
     CreateBudgetRequest:
@@ -1494,7 +1495,6 @@ components:
           minimum: 1
         start_date: { $ref: '#/components/schemas/CalendarDate' }
         end_date: { $ref: '#/components/schemas/CalendarDate' }
-        is_active: { type: boolean }
 
     ReportSummary:
       type: object

@@ -315,11 +315,15 @@
 - Modify: `android/app/src/main/res/values/strings.xml`
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/budgets/BudgetEditViewModelTest.kt`
 
-- [ ] `make -C android api-gen`, закоммитить; `make -C android api-check`
-- [ ] карта `BUDGET_OVERLAP` / `BUDGET_NAME_EXISTS` / `BUDGET_BELOW_SPENT` → свои строки; неизвестный
+- [x] `make -C android api-gen`, закоммитить; `make -C android api-check`
+- [x] карта `BUDGET_OVERLAP` / `BUDGET_NAME_EXISTS` / `BUDGET_BELOW_SPENT` → свои строки; неизвестный
       `409` → `budget_error_rejected`
-- [ ] тесты ViewModel: каждый код → своя строка; `422` под полями как раньше
-- [ ] `make -C android check` зелёный
+- [x] тесты ViewModel: каждый код → своя строка; `422` под полями как раньше
+- [x] `make -C android check` зелёный
+
+➕ Генерация вскрыла ошибку задачи 1 в спеке: `is_active` убрали из схемы ответа `Budget` (оставив поле
+в `required` и в ответе сервера) вместо `UpdateBudgetRequest`. Исправлено здесь — иначе клиент потерял
+бы поле, которое сервер шлёт, и продолжал бы уметь слать то, которое сервер игнорирует.
 
 ### Task 10: Verify acceptance criteria
 - [ ] все пункты Overview реализованы; `is_active` нигде не принимается от клиента

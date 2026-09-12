@@ -17,13 +17,14 @@ interface BudgetsApi {
     /**
      * POST api/v1/budgets
      * Создать бюджет
-     * admin и member. Повтор с тем же &#x60;id&#x60; возвращает &#x60;200&#x60; с существующим бюджетом; остальное тело при этом игнорируется (A-07).
+     * admin и member. Повтор с тем же &#x60;id&#x60; возвращает &#x60;200&#x60; с существующим бюджетом; остальное тело при этом игнорируется (A-07). Бизнес-отказы отвечают &#x60;409&#x60; — &#x60;BUDGET_OVERLAP&#x60; (период пересекается с бюджетом той же области; границы включительные — общий день уже пересечение) и &#x60;BUDGET_NAME_EXISTS&#x60; (имя занято на этот период).
      * Responses:
      *  - 201: Бюджет
      *  - 200: Бюджет
      *  - 400: Тело или идентификатор не разобрались: `INVALID_REQUEST` (сломанный JSON или неверный тип поля), `INVALID_ID` (в пути не UUID). Ошибки валидации значений — это `422`. 
      *  - 401: Токена нет, он истёк или отозван (`UNAUTHORIZED`)
      *  - 403: Роль не даёт доступа к операции (`FORBIDDEN`)
+     *  - 409: Состояние не допускает операцию: `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`, `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN`, `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`, `BUDGET_BELOW_SPENT` 
      *  - 422: Тело или параметры не прошли валидацию (`VALIDATION_ERROR`); поля — в `error.details`
      *
      * @param createBudgetRequest 
@@ -87,13 +88,14 @@ interface BudgetsApi {
     /**
      * PUT api/v1/budgets/{id}
      * Изменить бюджет
-     * admin и member.
+     * admin и member. Бизнес-отказы отвечают &#x60;409&#x60; — &#x60;BUDGET_OVERLAP&#x60;, &#x60;BUDGET_NAME_EXISTS&#x60; и &#x60;BUDGET_BELOW_SPENT&#x60; (новая сумма меньше уже потраченного за период).
      * Responses:
      *  - 200: Бюджет
      *  - 400: Тело или идентификатор не разобрались: `INVALID_REQUEST` (сломанный JSON или неверный тип поля), `INVALID_ID` (в пути не UUID). Ошибки валидации значений — это `422`. 
      *  - 401: Токена нет, он истёк или отозван (`UNAUTHORIZED`)
      *  - 403: Роль не даёт доступа к операции (`FORBIDDEN`)
      *  - 404: Объект не найден: `NOT_FOUND` для неизвестного пути, `<ENTITY>_NOT_FOUND` (`USER_NOT_FOUND`, `SESSION_NOT_FOUND`, `CATEGORY_NOT_FOUND`, …) для отсутствующей записи 
+     *  - 409: Состояние не допускает операцию: `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`, `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN`, `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`, `BUDGET_BELOW_SPENT` 
      *  - 422: Тело или параметры не прошли валидацию (`VALIDATION_ERROR`); поля — в `error.details`
      *
      * @param id 
