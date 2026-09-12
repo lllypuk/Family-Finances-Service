@@ -144,10 +144,13 @@ func (f *fakeSessions) DeleteExpired(_ context.Context, now time.Time) error {
 	return nil
 }
 
+// fakeUsers — UserLookup; UpdatePassword отзывает сессии сам, как транзакция репозитория.
 type fakeUsers struct {
-	users   map[uuid.UUID]*user.User
-	updates map[uuid.UUID]string
-	failErr error
+	users    map[uuid.UUID]*user.User
+	updates  map[uuid.UUID]string
+	revoked  []revokeCall
+	sessions *fakeSessions
+	failErr  error
 }
 
 func (f *fakeUsers) GetByEmail(_ context.Context, email string) (*user.User, error) {
@@ -173,7 +176,7 @@ func (f *fakeUsers) GetByID(_ context.Context, id uuid.UUID) (*user.User, error)
 	return u, nil
 }
 
-func (f *fakeUsers) UpdatePassword(_ context.Context, id uuid.UUID, hash string) error {
+func (f *fakeUsers) UpdatePassword(_ context.Context, id uuid.UUID, hash string, keepSessionID uuid.UUID) error {
 	if f.failErr != nil {
 		return f.failErr
 	}
@@ -182,6 +185,12 @@ func (f *fakeUsers) UpdatePassword(_ context.Context, id uuid.UUID, hash string)
 	}
 	f.updates[id] = hash
 	f.users[id].Password = hash
+	f.revoked = append(f.revoked, revokeCall{userID: id, except: keepSessionID})
+	for hash, s := range f.sessions.byHash {
+		if s.UserID == id && s.ID != keepSessionID {
+			delete(f.sessions.byHash, hash)
+		}
+	}
 	return nil
 }
 
@@ -213,7 +222,11 @@ func newFixture(t *testing.T, setupDone bool) *fixture {
 
 	sessions := newFakeSessions()
 	sessions.owners[u.ID] = u
-	users := &fakeUsers{users: map[uuid.UUID]*user.User{u.ID: u}, updates: map[uuid.UUID]string{}}
+	users := &fakeUsers{
+		users:    map[uuid.UUID]*user.User{u.ID: u},
+		updates:  map[uuid.UUID]string{},
+		sessions: sessions,
+	}
 
 	now := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
 	setup := &fakeSetup{exists: setupDone}
@@ -504,10 +517,6 @@ func TestService_StorageFailure_IsNotAuthError(t *testing.T) {
 			f.users.failErr = errDB
 			return f.svc.AdminSetPassword(ctx, f.user.ID, "new-password-1")
 		},
-		"AdminSetPassword: DeleteByUser": func(_ *testing.T, f *fixture) error {
-			f.sessions.fail["DeleteByUser"] = errDB
-			return f.svc.AdminSetPassword(ctx, f.user.ID, "new-password-1")
-		},
 	}
 	for name, run := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -544,7 +553,7 @@ func TestService_ChangePassword_WrongCurrent(t *testing.T) {
 
 	require.ErrorIs(t, err, auth.ErrInvalidCredentials)
 	assert.Empty(t, f.users.updates)
-	assert.Empty(t, f.sessions.revoked)
+	assert.Empty(t, f.users.revoked)
 	assert.Len(t, f.sessions.byHash, 2, "sessions survive a failed change")
 	_, err = f.svc.Authenticate(context.Background(), token)
 	require.NoError(t, err)
@@ -569,7 +578,8 @@ func TestService_ChangePassword_Success_KeepsCurrentSession(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.True(t, auth.ComparePassword(f.users.updates[f.user.ID], "new-password-1"))
-	assert.Equal(t, []revokeCall{{userID: f.user.ID, except: keepID}}, f.sessions.revoked)
+	assert.Equal(t, []revokeCall{{userID: f.user.ID, except: keepID}}, f.users.revoked)
+	assert.Empty(t, f.sessions.revoked, "сессии отзывает та же транзакция, что пишет хеш")
 
 	_, err = f.svc.Authenticate(context.Background(), keepToken)
 	require.NoError(t, err)
@@ -588,7 +598,7 @@ func TestService_AdminSetPassword_RevokesAll(t *testing.T) {
 
 	require.NoError(t, f.svc.AdminSetPassword(context.Background(), f.user.ID, "reset-password-1"))
 
-	assert.Equal(t, []revokeCall{{userID: f.user.ID, except: uuid.Nil}}, f.sessions.revoked)
+	assert.Equal(t, []revokeCall{{userID: f.user.ID, except: uuid.Nil}}, f.users.revoked)
 	_, err := f.svc.Authenticate(context.Background(), token)
 	require.ErrorIs(t, err, auth.ErrUnauthorized)
 

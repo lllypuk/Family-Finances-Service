@@ -41,7 +41,9 @@ type UserRepository interface {
 	GetAll(ctx context.Context) ([]*user.User, error)
 	// Update пишет только профиль (email, имя, фамилия).
 	Update(ctx context.Context, user *user.User) error
-	UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error
+	// UpdatePassword пишет хеш и отзывает сессии, кроме keepSessionID (uuid.Nil — все),
+	// одной транзакцией.
+	UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string, keepSessionID uuid.UUID) error
 	// UpdateRole и SetActive — одиночные записи с атомарной проверкой последнего активного
 	// администратора: user.ErrLastAdmin, если запись оставила бы семью без него.
 	UpdateRole(ctx context.Context, id uuid.UUID, role user.Role) error

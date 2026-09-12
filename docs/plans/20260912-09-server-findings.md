@@ -242,19 +242,19 @@
   `internal/auth/service_test.go`, `internal/auth/export_test.go`, `internal/services/helpers_test.go`
   (фейк репозитория)
 
-- [ ] `withTx` из `updateGuarded`; `Patch(ctx, id, role, active)` — один `UPDATE`, проверка последнего
+- [x] `withTx` из `updateGuarded`; `Patch(ctx, id, role, active)` — один `UPDATE`, проверка последнего
       админа до записи, при деактивации `DELETE FROM sessions` тем же `tx`
-- [ ] `UpdatePassword(ctx, id, hash, keepSessionID)` — хеш и удаление сессий кроме `keep` в одной транзакции
-- [ ] `UpdateRole`/`SetActive` — обёртки над `Patch` (снимаются в задаче 6)
-- [ ] `auth.UserLookup.UpdatePassword(ctx, id, hash, keepSessionID)`; `setPassword` без `sessions.DeleteByUser`
-- [ ] тесты репозитория: пароль + сессии кроме `keep`; `Patch` только роль; только активность; оба поля;
+- [x] `UpdatePassword(ctx, id, hash, keepSessionID)` — хеш и удаление сессий кроме `keep` в одной транзакции
+- [x] `UpdateRole`/`SetActive` — обёртки над `Patch` (снимаются в задаче 6)
+- [x] `auth.UserLookup.UpdatePassword(ctx, id, hash, keepSessionID)`; `setPassword` без `sessions.DeleteByUser`
+- [x] тесты репозитория: пароль + сессии кроме `keep`; `Patch` только роль; только активность; оба поля;
       обе комбинации на последнем админе → `ErrLastAdmin`, ничего не записано, сессии целы; деактивация
       удаляет сессии; повышение неактивного до admin проходит; `Patch` без полей → ошибка
-- [ ] тест атомарности: триггер `BEFORE DELETE ON sessions … RAISE(ABORT)` → `UpdatePassword` и
+- [x] тест атомарности: триггер `BEFORE DELETE ON sessions … RAISE(ABORT)` → `UpdatePassword` и
       деактивация возвращают ошибку, хеш/активность/сессии прежние
-- [ ] тесты `auth`: `ChangePassword` передаёт `keepSessionID`, `AdminSetPassword` — `uuid.Nil`;
+- [x] тесты `auth`: `ChangePassword` передаёт `keepSessionID`, `AdminSetPassword` — `uuid.Nil`;
       отказ репозитория → ошибка без побочных эффектов
-- [ ] `make fmt && make test && make lint` зелёные
+- [x] `make fmt && make test && make lint` зелёные
 
 ### Task 6: `UserService.PatchUser` и `PATCH /users/:id` одной записью
 
