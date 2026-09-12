@@ -11,6 +11,7 @@ DROP INDEX IF EXISTS idx_sessions_user_id;
 DROP INDEX IF EXISTS idx_reports_generated_by;
 DROP INDEX IF EXISTS idx_reports_family_type;
 
+DROP INDEX IF EXISTS idx_budgets_name_period_active;
 DROP INDEX IF EXISTS idx_budgets_family_period;
 DROP INDEX IF EXISTS idx_budgets_category_id;
 DROP INDEX IF EXISTS idx_budgets_family_active;

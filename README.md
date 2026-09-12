@@ -74,8 +74,8 @@ The author of a record is taken from the token, so `user_id` in a request body i
   `id` answers `200` with the existing record instead of creating a duplicate
 - Budgets: business refusals are `409` with their own codes — `BUDGET_OVERLAP` (periods of one scope may not share
   even a single day), `BUDGET_NAME_EXISTS`, `BUDGET_BELOW_SPENT` and `BUDGET_ID_EXISTS`. `DELETE` is final: a deleted
-  budget is `404` for GET/PUT/DELETE, its `id` stays taken, and `is_active` can no longer be sent in
-  `PUT /api/v1/budgets/:id`
+  budget is `404` for GET/PUT/DELETE, its `id` stays taken (its name and period do not), and `is_active` can no
+  longer be sent in `PUT /api/v1/budgets/:id`
 - Every list answers with `meta.pagination {limit, offset, total}` — `limit` defaults to 50, max 200
 - One error envelope everywhere: `{"error":{"code","message","details"},"meta":{...}}`;
   validation fails with `422 VALIDATION_ERROR` and per-field `details`

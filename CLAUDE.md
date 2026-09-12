@@ -262,7 +262,9 @@ on it.
   `UpdateBudgetRequest`, and `GetByID` filters on it, so a deleted budget is `404` for GET/PUT/DELETE alike.
   A deleted row keeps its primary key, so a `POST` reusing that `id` cannot be idempotent: the repository tells the
   two unique violations apart (`budgets.id` in the message → `budget.ErrIDExists`) and the client gets
-  `409 BUDGET_ID_EXISTS`, not a name conflict it could never fix by renaming.
+  `409 BUDGET_ID_EXISTS`, not a name conflict it could never fix by renaming. The name+period uniqueness, by
+  contrast, is the partial index `idx_budgets_name_period_active` (`WHERE is_active = 1`), so after a delete the
+  same name and period can be created again under a new `id`.
 - **Fractions come in two units.** Shares (`share`, `*_delta`, `stats.budgets[].utilization`) are 0…1; fields named
   `percentage` and `budgets[].utilization` on `/budgets` are percent 0…100. Both are documented per field in
   `docs/api/openapi.yaml`.

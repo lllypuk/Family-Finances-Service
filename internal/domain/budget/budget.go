@@ -10,8 +10,8 @@ import (
 	"family-budget-service/internal/domain/money"
 )
 
-// ErrNameExists — нарушение UNIQUE (family_id, name, start_date, end_date): бюджет
-// с таким именем на этот период уже есть.
+// ErrNameExists — нарушение idx_budgets_name_period_active: живой бюджет с таким именем
+// на этот период уже есть. Индекс частичный, мягко удалённые бюджеты имя не держат.
 var ErrNameExists = errors.New("budget with this name already exists for this period")
 
 // ErrIDExists — нарушение PRIMARY KEY budgets.id. Живой бюджет с этим id вернул бы 200

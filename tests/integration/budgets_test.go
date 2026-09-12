@@ -968,6 +968,50 @@ func TestBudgetAPI_CreateWithDeletedID_Conflict(t *testing.T) {
 	assert.Equal(t, handlers.ErrCodeBudgetIDExists, response.Error.Code)
 }
 
+// TestBudgetAPI_RecreateDeletedNameAndPeriod — имя и период мягко удалённого бюджета
+// освобождаются вместе с ним: иначе клиент получал бы 409 на бюджет, которого не видит,
+// и «создать заново» после удаления было бы невозможно.
+func TestBudgetAPI_RecreateDeletedNameAndPeriod(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+	ctx := context.Background()
+
+	testCategory := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(ctx, testCategory))
+
+	today := date.Today(testServer.AuthFamily.Location())
+	post := func(id uuid.UUID) *httptest.ResponseRecorder {
+		body := mustJSON(t, map[string]any{
+			"id":           id,
+			"name":         "Повторяемый бюджет",
+			"amount_minor": 70_000,
+			"period":       "monthly",
+			"category_id":  testCategory.ID,
+			"start_date":   today.String(),
+			"end_date":     today.AddDays(30).String(),
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/budgets", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		session.Apply(req)
+		rec := httptest.NewRecorder()
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		return rec
+	}
+
+	firstID := uuid.New()
+	require.Equal(t, http.StatusCreated, post(firstID).Code)
+
+	delReq := httptest.NewRequest(http.MethodDelete, "/api/v1/budgets/"+firstID.String(), nil)
+	session.Apply(delReq)
+	delRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(delRec, delReq)
+	require.Equal(t, http.StatusNoContent, delRec.Code, "тело: %s", delRec.Body.String())
+
+	rec := post(uuid.New())
+	require.Equal(t, http.StatusCreated, rec.Code, "тело: %s", rec.Body.String())
+}
+
 // TestBudgetAPI_CreateSharedBoundaryDay_Conflict — включительные границы проверяются через
 // настоящий SQL: окно GetByPeriod обязано отдать соседа, у которого общий с новым только
 // один день. Юнит-тесты сервиса этот запрос мокают.

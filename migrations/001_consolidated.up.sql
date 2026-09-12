@@ -108,8 +108,7 @@ CREATE TABLE IF NOT EXISTS budgets (
     -- Строго больше: бюджет на один день бессмыслен, и то же требует budget.ValidatePeriod.
     -- У отчётов ниже стоит >=, там однодневный период допустим.
     CHECK (end_date > start_date),
-    CHECK (is_active IN (0, 1)),
-    UNIQUE (family_id, name, start_date, end_date)
+    CHECK (is_active IN (0, 1))
 );
 
 CREATE TABLE IF NOT EXISTS reports (
@@ -164,6 +163,11 @@ CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_budgets_family_active ON budgets(family_id, is_active);
 CREATE INDEX IF NOT EXISTS idx_budgets_category_id ON budgets(category_id);
 CREATE INDEX IF NOT EXISTS idx_budgets_family_period ON budgets(family_id, start_date, end_date);
+-- Частичный UNIQUE вместо табличного: мягко удалённая строка остаётся в таблице, и общий
+-- UNIQUE запрещал бы создать бюджет с тем же именем и периодом заново — конфликт с бюджетом,
+-- которого клиент уже не видит (GetByID и все списки фильтруют is_active).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_budgets_name_period_active
+    ON budgets(family_id, name, start_date, end_date) WHERE is_active = 1;
 
 CREATE INDEX IF NOT EXISTS idx_reports_family_type ON reports(family_id, type);
 CREATE INDEX IF NOT EXISTS idx_reports_generated_by ON reports(generated_by);
