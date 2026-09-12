@@ -100,8 +100,8 @@ on `TransactionRepository`). Add a new repo method to the service-layer interfac
 `internal/auth` sits beside that chain and imports neither `services` nor `application`: it declares the narrow
 interfaces it needs (`SessionRepository`, `UserLookup`, `SetupChecker`), and the SQLite repositories satisfy them.
 `services` imports `auth` only for the password helpers (`HashPassword`, `ValidatePassword`,
-`RegisterPasswordValidation`) and for `SessionRevoker`, which `*auth.Service` implements so that `UserService`
-can revoke sessions on deactivation without knowing about tokens.
+`RegisterPasswordValidation`); session revocation belongs to the user repository (see "User writes are
+column-scoped" below), so `UserService` never touches sessions.
 
 ### Single-family model
 
@@ -255,10 +255,14 @@ on it.
   `id` (any valid UUID): an existing record answers `200` with itself and the repeated body is ignored — the id is
   the only thing compared. The check is a plain read-then-insert; two simultaneous retries can still collide.
 - **Budget business refusals are `409` with their own codes** — `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`,
-  `BUDGET_BELOW_SPENT`; only shape errors (`amount_minor` out of range, reversed dates) stay `422`. Periods of one
+  `BUDGET_BELOW_SPENT`, `BUDGET_ID_EXISTS`; only shape errors (`amount_minor` out of range, reversed dates) stay
+  `422`. Periods of one
   scope overlap **inclusively** — a shared boundary day is a conflict, because spending is summed over
   `date >= start AND date <= end`. `is_active` is a soft-delete marker and nothing else: it is not in
   `UpdateBudgetRequest`, and `GetByID` filters on it, so a deleted budget is `404` for GET/PUT/DELETE alike.
+  A deleted row keeps its primary key, so a `POST` reusing that `id` cannot be idempotent: the repository tells the
+  two unique violations apart (`budgets.id` in the message → `budget.ErrIDExists`) and the client gets
+  `409 BUDGET_ID_EXISTS`, not a name conflict it could never fix by renaming.
 - **Fractions come in two units.** Shares (`share`, `*_delta`, `stats.budgets[].utilization`) are 0…1; fields named
   `percentage` and `budgets[].utilization` on `/budgets` are percent 0…100. Both are documented per field in
   `docs/api/openapi.yaml`.
@@ -277,10 +281,10 @@ reference): `docs/README.md` (navigation), `docs/product_brief.md`, `docs/tech_s
 status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the finished ones.
 
 **Current direction:** `docs/specs/005-api-only-redesign.md` — the service is an API-only backend for an
-Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–08 are done
-(`docs/plans/completed/`, 06 = the Android client, 07 = its budgets tab, 08 = its settings screen); what is left
-is the owner's work on the server (DNS,
-`install.sh`, `setup`, backup cron, the `v0.1.0` tag).
+Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–09 are done
+(`docs/plans/completed/`, 06 = the Android client, 07 = its budgets tab, 08 = its settings screen,
+09 = the server findings of 07–08); `v0.1.0` is tagged, and the budget contract changed after it, so the next
+server release is `v0.2.0`.
 
 `docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates
 from it, and code and spec now match. **A registered route with no operation in the spec fails `make test`**

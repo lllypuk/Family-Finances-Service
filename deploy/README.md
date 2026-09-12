@@ -146,6 +146,9 @@ job builds that commit again.
 `family-budget-service backup` runs `VACUUM INTO` against the live database and keeps the newest
 `BACKUP_KEEP` (default 30) files in `/backups`. The same retention applies to `POST /api/v1/backups`.
 Off-site copies: `GET /api/v1/backups/{name}/download` from the phone, or `scp`.
+Each successful copy logs `backup created` with `duration_ms` and `size` — `docker compose logs app |
+grep 'backup created'` shows how long `VACUUM INTO` takes on this database (the API route runs inside
+`SERVER_WRITE_TIMEOUT`, 15 s).
 
 Restore is manual, over ssh — there is no restore endpoint or subcommand:
 

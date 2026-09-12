@@ -364,6 +364,13 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		}
 		assert.True(t, found, "GetAll скрыл неактивного пользователя")
 
+		// Патч только роли не воскрешает пользователя: незаданное поле приходит NULL,
+		// и COALESCE оставляет прежнее значение.
+		require.NoError(t, repo.Patch(ctx, testUser.ID, ptr(user.RoleMember), nil))
+		byID, err = repo.GetByID(ctx, testUser.ID)
+		require.NoError(t, err)
+		assert.False(t, byID.IsActive, "патч роли включил пользователя обратно")
+
 		require.NoError(t, repo.Patch(ctx, testUser.ID, nil, ptr(true)))
 		byID, err = repo.GetByID(ctx, testUser.ID)
 		require.NoError(t, err)
@@ -715,4 +722,38 @@ func TestUserRepositorySQLite_SessionsRevokedInSameTx(t *testing.T) {
 		assert.True(t, got.IsActive)
 		assert.Equal(t, []string{sess.String()}, sessionIDs(t, db, member.ID))
 	})
+}
+
+// Занятый email должен приходить сентинелом и с Update: без него параллельное
+// переименование отвечало бы 500 вместо обещанного контрактом 409 EMAIL_TAKEN.
+func TestUserRepositorySQLite_DuplicateEmailIsSentinel(t *testing.T) {
+	container := testutils.SetupSQLiteTestDB(t)
+	helper := testutils.NewTestDataHelper(container.DB)
+	ctx := context.Background()
+
+	db := container.GetTestDatabase(t)
+	repo := userrepo.NewSQLiteRepository(db)
+	_, err := helper.CreateTestFamily(ctx, "Test Family", "USD")
+	require.NoError(t, err)
+
+	taken := &user.User{
+		ID: uuid.New(), Email: "taken@example.com", Password: "hash",
+		FirstName: "A", LastName: "B", Role: user.RoleAdmin,
+	}
+	require.NoError(t, repo.Create(ctx, taken))
+
+	other := &user.User{
+		ID: uuid.New(), Email: "other@example.com", Password: "hash",
+		FirstName: "C", LastName: "D", Role: user.RoleMember,
+	}
+	require.NoError(t, repo.Create(ctx, other))
+
+	clash := &user.User{
+		ID: uuid.New(), Email: taken.Email, Password: "hash",
+		FirstName: "E", LastName: "F", Role: user.RoleMember,
+	}
+	require.ErrorIs(t, repo.Create(ctx, clash), user.ErrEmailExists)
+
+	other.Email = taken.Email
+	require.ErrorIs(t, repo.Update(ctx, other), user.ErrEmailExists)
 }

@@ -29,6 +29,9 @@ var (
 	// ErrBudgetNameExists — тот же сентинел, что возвращает репозиторий на UNIQUE:
 	// проверку делает БД, а не сервис.
 	ErrBudgetNameExists = budget.ErrNameExists
+	// ErrBudgetIDExists — id занят мягко удалённым бюджетом: переименование не поможет,
+	// клиенту нужен новый id.
+	ErrBudgetIDExists = budget.ErrIDExists
 )
 
 // validateBudgetAmountBounds — верхняя граница суммы бюджета; здесь она нужна, чтобы

@@ -14,6 +14,11 @@ import (
 // с таким именем на этот период уже есть.
 var ErrNameExists = errors.New("budget with this name already exists for this period")
 
+// ErrIDExists — нарушение PRIMARY KEY budgets.id. Живой бюджет с этим id вернул бы 200
+// по идемпотентности (A-07), поэтому сюда доходит только id мягко удалённого бюджета:
+// его строка занимает ключ, но клиенту не видна.
+var ErrIDExists = errors.New("budget with this id already exists")
+
 type Budget struct {
 	ID          uuid.UUID   `json:"id"`
 	Name        string      `json:"name"`

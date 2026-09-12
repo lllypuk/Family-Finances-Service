@@ -262,6 +262,31 @@ func TestBudgetHandler_UpdateBudget_BusinessConflicts(t *testing.T) {
 	}
 }
 
+// TestBudgetHandler_UpdateBudget_CalculationFailedIs500 — сорванный расчёт расхода это сбой
+// инфраструктуры: бизнес-кода у него нет, и 409 клиент трактовал бы как «поправь тело».
+func TestBudgetHandler_UpdateBudget_CalculationFailedIs500(t *testing.T) {
+	handler := handlers.NewBudgetHandler(
+		&handlers.Repositories{},
+		stubBudgetService{err: services.ErrBudgetCalculationFailed},
+	)
+
+	budgetID := uuid.New()
+	e := echo.New()
+	req := httptest.NewRequest(
+		http.MethodPut,
+		"/budgets/"+budgetID.String(),
+		strings.NewReader(`{"amount_minor":1000}`),
+	)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(budgetID.String())
+
+	require.NoError(t, handler.UpdateBudget(c))
+	assert.Equal(t, http.StatusInternalServerError, rec.Code, rec.Body.String())
+}
+
 // TestBudgetHandler_UpdateBudget_AmountTooLargeStays422 — отказ формы остаётся валидацией.
 func TestBudgetHandler_UpdateBudget_AmountTooLargeStays422(t *testing.T) {
 	handler := handlers.NewBudgetHandler(

@@ -326,6 +326,10 @@ func (h *BudgetHandler) updateBudgetViaService(c echo.Context) error {
 	if validationErr := h.validator.Struct(req); validationErr != nil {
 		return respondValidationErrors(c, validationErr)
 	}
+	if req.Name == nil && req.AmountMinor == nil && req.StartDate == nil && req.EndDate == nil {
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+			bodyDetail(ErrCodeValidationError, ErrMessageNoFields))
+	}
 
 	serviceReq := dto.UpdateBudgetDTO{
 		Name:        req.Name,
@@ -352,6 +356,8 @@ func (h *BudgetHandler) handleBudgetServiceError(c echo.Context, err error, oper
 		return respondError(c, http.StatusConflict, ErrCodeBudgetOverlap, ErrMessageBudgetOverlap)
 	case errors.Is(err, services.ErrBudgetNameExists):
 		return respondError(c, http.StatusConflict, ErrCodeBudgetNameExists, ErrMessageBudgetNameExists)
+	case errors.Is(err, services.ErrBudgetIDExists):
+		return respondError(c, http.StatusConflict, ErrCodeBudgetIDExists, ErrMessageBudgetIDExists)
 	case errors.Is(err, services.ErrBudgetAlreadyExceeded):
 		return respondError(c, http.StatusConflict, ErrCodeBudgetBelowSpent, ErrMessageBudgetBelowSpent)
 	case errors.Is(err, services.ErrBudgetAmountTooLarge),

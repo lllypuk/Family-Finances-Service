@@ -366,10 +366,8 @@ func TestBudgetService_UpdateBudget_AmountLessThanSpent(t *testing.T) {
 	result, err := service.UpdateBudget(ctx, testBudget.ID, req)
 
 	// Assert
-	require.Error(t, err)
+	require.ErrorIs(t, err, services.ErrBudgetAlreadyExceeded)
 	assert.Nil(t, result)
-	assert.Contains(t, err.Error(), "new amount")
-	assert.Contains(t, err.Error(), "is less than spent")
 
 	budgetRepo.AssertExpectations(t)
 	txRepo.AssertExpectations(t)
@@ -957,6 +955,29 @@ func TestBudgetService_UpdateBudget_WidenedPeriodWithoutAmount(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, newEnd, result.EndDate)
 	assert.Equal(t, money.Minor(120_000), result.SpentMinor)
+
+	budgetRepo.AssertExpectations(t)
+	txRepo.AssertExpectations(t)
+}
+
+// Бюджет без категории: расход берётся по всем тратам периода, а не по категории.
+func TestBudgetService_UpdateBudget_FamilyWideAmountBelowSpent(t *testing.T) {
+	service, budgetRepo, txRepo := setupBudgetService(t)
+	ctx := context.Background()
+
+	testBudget := createTestBudgetForService()
+	testBudget.CategoryID = nil
+	newAmount := money.Minor(40_000)
+
+	budgetRepo.On("GetByID", ctx, testBudget.ID).Return(testBudget, nil)
+	txRepo.On("GetTotalByDateRange", ctx, testBudget.StartDate, testBudget.EndDate,
+		transaction.TypeExpense).Return(money.Minor(45_000), nil)
+
+	result, err := service.UpdateBudget(ctx, testBudget.ID, dto.UpdateBudgetDTO{AmountMinor: &newAmount})
+
+	require.ErrorIs(t, err, services.ErrBudgetAlreadyExceeded)
+	assert.Nil(t, result)
+	budgetRepo.AssertNotCalled(t, "Update", ctx, mock.Anything)
 
 	budgetRepo.AssertExpectations(t)
 	txRepo.AssertExpectations(t)

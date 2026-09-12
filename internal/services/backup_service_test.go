@@ -477,10 +477,20 @@ func TestCreateBackup_LogsDurationAndSize(t *testing.T) {
 	backupInfo, err := service.CreateBackup(context.Background())
 	require.NoError(t, err)
 
+	// Записей может быть несколько (предупреждения очистки), нужную ищем по msg.
 	var record map[string]any
-	require.NoError(t, json.Unmarshal(buf.Bytes(), &record))
-	assert.Equal(t, "backup created", record["msg"])
+	for _, line := range bytes.Split(bytes.TrimSpace(buf.Bytes()), []byte("\n")) {
+		var parsed map[string]any
+		require.NoError(t, json.Unmarshal(line, &parsed), string(line))
+		if parsed["msg"] == "backup created" {
+			record = parsed
+		}
+	}
+	require.NotNil(t, record, "лога backup created нет: %s", buf.String())
+
 	assert.Equal(t, backupInfo.Filename, record["filename"])
 	assert.Contains(t, record, "duration_ms")
-	assert.InDelta(t, float64(backupInfo.Size), record["size"], 0.0)
+	stat, statErr := os.Stat(filepath.Join(filepath.Dir(dbPath), "backups", backupInfo.Filename))
+	require.NoError(t, statErr)
+	assert.InDelta(t, float64(stat.Size()), record["size"], 0.0)
 }

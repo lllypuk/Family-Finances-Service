@@ -153,6 +153,9 @@ func (r *SQLiteRepository) Create(ctx context.Context, b *budget.Budget) error {
 	if err != nil {
 		// Check for unique constraint violation
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			if strings.Contains(err.Error(), "budgets.id") {
+				return fmt.Errorf("%w: %s", budget.ErrIDExists, b.ID)
+			}
 			return fmt.Errorf("%w: %s", budget.ErrNameExists, b.Name)
 		}
 		return fmt.Errorf("failed to create budget: %w", err)

@@ -235,7 +235,7 @@ github.com/stretchr/testify       # Testing utilities
   минимальных единицах, календарные даты, один compose с Caddy); решения в
   [specs/005-api-only-redesign.md](specs/005-api-only-redesign.md)
 - [x] Переезд на GitLab: CI/CD с выкатом на mini-server, `deploy/` тянет образ из реестра
-- [ ] Первый релиз `v0.1.0`
+- [x] Первый релиз `v0.1.0` (12.09.2026)
 - [ ] Улучшение аналитики и отчетов
 
 ### Среднесрочные планы

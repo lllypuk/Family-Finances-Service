@@ -19,8 +19,9 @@ var (
 	ErrFamilyNotFound = errors.New("family not found")
 	// ErrUserNotFound — тот же sentinel, что и user.ErrNotFound: хендлеры и auth.Service
 	// проверяют его через errors.Is, не завися от пакета services.
-	ErrUserNotFound       = user.ErrNotFound
-	ErrEmailAlreadyExists = errors.New("email already exists")
+	ErrUserNotFound = user.ErrNotFound
+	// ErrEmailAlreadyExists — тот же sentinel, что возвращает репозиторий на UNIQUE users.email.
+	ErrEmailAlreadyExists = user.ErrEmailExists
 	ErrInvalidRole        = errors.New("invalid user role")
 	ErrUnauthorized       = errors.New("unauthorized access")
 	ErrValidationFailed   = errors.New("validation failed")

@@ -5,8 +5,8 @@ API for the Android client. One instance = one family.
 
 ## 🎯 Project Status: IN DEVELOPMENT 🚧
 
-> **Direction (September 2026):** API-only backend for an Android app. Decisions and the eight implementation
-> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–08 are done: the
+> **Direction (September 2026):** API-only backend for an Android app. Decisions and the implementation
+> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–09 are done: the
 > web interface, cookie sessions and CSRF are gone, money is integer minor units, dates are calendar dates,
 > the deployment is one compose with Caddy and the Android client lives in `android/` with its settings screen;
 > the sections below
@@ -72,6 +72,10 @@ The author of a record is taken from the token, so `user_id` in a request body i
 - Transaction, budget and report dates are calendar `YYYY-MM-DD`; period bounds use the family's `timezone`
 - `POST` of a transaction, budget or category accepts a client-generated `id` (any valid UUID): a retry with the same
   `id` answers `200` with the existing record instead of creating a duplicate
+- Budgets: business refusals are `409` with their own codes — `BUDGET_OVERLAP` (periods of one scope may not share
+  even a single day), `BUDGET_NAME_EXISTS`, `BUDGET_BELOW_SPENT` and `BUDGET_ID_EXISTS`. `DELETE` is final: a deleted
+  budget is `404` for GET/PUT/DELETE, its `id` stays taken, and `is_active` can no longer be sent in
+  `PUT /api/v1/budgets/:id`
 - Every list answers with `meta.pagination {limit, offset, total}` — `limit` defaults to 50, max 200
 - One error envelope everywhere: `{"error":{"code","message","details"},"meta":{...}}`;
   validation fails with `422 VALIDATION_ERROR` and per-field `details`

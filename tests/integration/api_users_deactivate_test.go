@@ -81,6 +81,12 @@ func TestAPIUsers_Deactivate_RevokesAccess(t *testing.T) {
 	rec = adminJSON(t, ts, admin, http.MethodPatch, path, `{"is_active":true}`)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.True(t, decodeUser(t, rec).IsActive)
+
+	// Деактивация удалила строки сессий той же транзакцией, поэтому активность не возвращает
+	// старый токен: иначе 401 выше доказывал бы только перечитывание is_active.
+	assert.Equal(t, http.StatusUnauthorized,
+		bearerRequest(ts, http.MethodGet, "/api/v1/transactions", token, nil).Code,
+		"токен пережил деактивацию и ожил вместе с пользователем")
 	loginBearer(t, ts, member.Email, bearerPassword, "Pixel 8")
 }
 

@@ -39,6 +39,7 @@ private val budgetConflicts: Map<String, Int> = mapOf(
     "BUDGET_OVERLAP" to R.string.budget_error_overlap,
     "BUDGET_NAME_EXISTS" to R.string.budget_error_name_exists,
     "BUDGET_BELOW_SPENT" to R.string.budget_error_below_spent,
+    "BUDGET_ID_EXISTS" to R.string.budget_error_id_taken,
 )
 
 /** Имена полей формы — те же, что в `error.details[].field`: словарь перевода не нужен. */

@@ -140,7 +140,7 @@ func (r *SQLiteRepository) Create(ctx context.Context, u *user.User) error {
 	if err != nil {
 		// Check for unique constraint violation (email already exists)
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			return fmt.Errorf("user with email %s already exists", u.Email)
+			return fmt.Errorf("%w: %s", user.ErrEmailExists, u.Email)
 		}
 		return fmt.Errorf("failed to create user: %w", err)
 	}
@@ -247,7 +247,7 @@ func (r *SQLiteRepository) Update(ctx context.Context, u *user.User) error {
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			return fmt.Errorf("user with email %s already exists", u.Email)
+			return fmt.Errorf("%w: %s", user.ErrEmailExists, u.Email)
 		}
 		return fmt.Errorf("failed to update user: %w", err)
 	}
@@ -263,8 +263,11 @@ func (r *SQLiteRepository) Update(ctx context.Context, u *user.User) error {
 	return nil
 }
 
-// patchFields — сколько колонок может тронуть Patch (роль и активность).
-const patchFields = 2
+// patchQuery — незаданное поле приходит как NULL и COALESCE оставляет прежнее значение:
+// одна статическая запись вместо собранной из кусков.
+const patchQuery = `UPDATE users
+	SET role = COALESCE(?, role), is_active = COALESCE(?, is_active), updated_at = CURRENT_TIMESTAMP
+	WHERE id = ?`
 
 // Patch пишет роль и/или активность одной записью; понижение или выключение последнего
 // активного администратора — user.ErrLastAdmin, ничего не записано. Деактивация отзывает
@@ -277,18 +280,13 @@ func (r *SQLiteRepository) Patch(ctx context.Context, id uuid.UUID, role *user.R
 		return fmt.Errorf("invalid id parameter: %w", err)
 	}
 
-	sets := make([]string, 0, patchFields)
-	args := make([]any, 0, patchFields+1)
+	var roleArg, activeArg any
 	if role != nil {
-		sets = append(sets, "role = ?")
-		args = append(args, string(*role))
+		roleArg = string(*role)
 	}
 	if active != nil {
-		sets = append(sets, "is_active = ?")
-		args = append(args, boolToInt(*active))
+		activeArg = boolToInt(*active)
 	}
-	args = append(args, id.String())
-	query := `UPDATE users SET ` + strings.Join(sets, ", ") + `, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
 
 	deactivates := active != nil && !*active
 	dropsAdmin := deactivates || (role != nil && *role != user.RoleAdmin)
@@ -303,7 +301,7 @@ func (r *SQLiteRepository) Patch(ctx context.Context, id uuid.UUID, role *user.R
 				return user.ErrLastAdmin
 			}
 		}
-		if err := execUpdateOne(ctx, tx, id, query, args...); err != nil {
+		if err := execUpdateOne(ctx, tx, id, patchQuery, roleArg, activeArg, id.String()); err != nil {
 			return err
 		}
 		if deactivates {
@@ -497,7 +495,7 @@ func (r *SQLiteRepository) CreateWithTransaction(ctx context.Context, tx *sql.Tx
 	if err != nil {
 		// Check for unique constraint violation (email already exists)
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			return fmt.Errorf("user with email %s already exists", u.Email)
+			return fmt.Errorf("%w: %s", user.ErrEmailExists, u.Email)
 		}
 		return fmt.Errorf("failed to create user: %w", err)
 	}
