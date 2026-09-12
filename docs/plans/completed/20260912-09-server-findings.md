@@ -332,12 +332,13 @@
 - [x] `make fmt && make test && make lint` — 0 issues; `make -C android check` — BUILD SUCCESSFUL
 
 ### Task 11: [Final] Update documentation
-- [ ] `CLAUDE.md`: «User writes are column-scoped» — `UpdatePassword(keep)`, `Patch`, отзыв сессий в
+- [x] `CLAUDE.md`: «User writes are column-scoped» — `UpdatePassword(keep)`, `Patch`, отзыв сессий в
       репозитории; коды `409` бюджетов; удалённый бюджет — `404` по id
-- [ ] `docs/backlog.md`: удалить оба раздела «Сервер: находки …»; вписать три строки: решение по
+- [x] `docs/backlog.md`: удалить оба раздела «Сервер: находки …»; вписать три строки: решение по
       `is_active` бюджета, `UNIQUE` бюджетов считает удалённые строки, гонка `Login` со сменой пароля
-- [ ] `docs/patterns/error_handling.md` — новые коды, если там есть список
-- [ ] перенести план в `docs/plans/completed/`
+- [x] `docs/patterns/error_handling.md` — списка реальных кодов там нет (устаревшая таксономия
+      `BUSINESS_*`/`RESOURCE_*`); три кода `409` дописаны в настоящий список — `docs/patterns/api_standards.md`
+- [x] перенести план в `docs/plans/completed/`
 
 ## Post-Completion
 

@@ -145,11 +145,16 @@ has a catch-all, an unknown `/api/v1/...` path is `401` without a token and `404
   `DELETE /api/v1/categories/:id`, `/api/v1/backups` and `PUT /api/v1/family`; `financeAccess` (admin or member)
   for categories/transactions/budgets/reports/stats; `GET /api/v1/family` and the `/auth/*`, `/me*` routes are
   open to any authenticated role. Wrong role → `403 FORBIDDEN`.
-- **User writes are column-scoped.** `UserRepository.Update` writes only `email`/`first_name`/`last_name`;
-  password, role and `is_active` go through `UpdatePassword`, `UpdateRole`, `SetActive`, so an overlapping
-  `PUT /me` cannot write a stale hash or `is_active` back. `UpdateRole`/`SetActive` run the "last active admin"
-  check and the write in one `BeginTx` (`_txlock=immediate` serialises them) and return `user.ErrLastAdmin`
-  (= `services.ErrLastAdmin`) — there is no read-then-check in the service any more.
+- **User writes are column-scoped, and session revocation rides along.** `UserRepository.Update` writes only
+  `email`/`first_name`/`last_name`; password, role and `is_active` go through
+  `UpdatePassword(ctx, id, hash, keepSessionID)` and `Patch(ctx, id, role, active)`, so an overlapping `PUT /me`
+  cannot write a stale hash or `is_active` back. Both drop the owner's sessions in the **same** `BeginTx` as the
+  write (`keepSessionID` survives, `uuid.Nil` keeps none), next to the "last active admin" check that returns
+  `user.ErrLastAdmin` (= `services.ErrLastAdmin`) — a failed revoke can no longer leave a new password committed
+  with the old sessions alive. That is why the user repository owns `DELETE FROM sessions`: `auth.Service` has no
+  `RevokeAllSessions` and `auth.SessionRepository` no `DeleteByUser`. `PATCH /users/:id` applies role and
+  `is_active` in that one `UPDATE`, so its `409` leaves nothing half-applied. Still open: a concurrent `Login` may
+  check the old password before the commit and create its session after it.
 - **Errors outside handlers** (`internal/application/error_handler.go`, `newAPIErrorHandler`): `RequireBearer` and
   `RequireRole` return `*echo.HTTPError` (they cannot import `handlers` — cycle), and the error handler renders
   the JSON envelope for every error, router 404 and panics included. A non-`*echo.HTTPError` becomes a bare
@@ -249,6 +254,11 @@ on it.
 - **`POST` of a transaction, budget or category is idempotent** when the body carries a client-generated
   `id` (any valid UUID): an existing record answers `200` with itself and the repeated body is ignored — the id is
   the only thing compared. The check is a plain read-then-insert; two simultaneous retries can still collide.
+- **Budget business refusals are `409` with their own codes** — `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`,
+  `BUDGET_BELOW_SPENT`; only shape errors (`amount_minor` out of range, reversed dates) stay `422`. Periods of one
+  scope overlap **inclusively** — a shared boundary day is a conflict, because spending is summed over
+  `date >= start AND date <= end`. `is_active` is a soft-delete marker and nothing else: it is not in
+  `UpdateBudgetRequest`, and `GetByID` filters on it, so a deleted budget is `404` for GET/PUT/DELETE alike.
 - **Fractions come in two units.** Shares (`share`, `*_delta`, `stats.budgets[].utilization`) are 0…1; fields named
   `percentage` and `budgets[].utilization` on `/budgets` are percent 0…100. Both are documented per field in
   `docs/api/openapi.yaml`.
