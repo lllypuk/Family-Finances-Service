@@ -149,22 +149,6 @@ func requireAffected(result sql.Result) error {
 	return nil
 }
 
-// DeleteByUser удаляет все сессии пользователя, кроме exceptID.
-func (r *SessionSQLiteRepository) DeleteByUser(ctx context.Context, userID, exceptID uuid.UUID) error {
-	if err := validation.ValidateUUID(userID); err != nil {
-		return fmt.Errorf("invalid user ID: %w", err)
-	}
-
-	_, err := r.db.ExecContext(ctx,
-		`DELETE FROM sessions WHERE user_id = ? AND id != ?`,
-		userID.String(), exceptID.String(),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to delete user sessions: %w", err)
-	}
-	return nil
-}
-
 // ListByUser возвращает сессии пользователя, новые первыми.
 func (r *SessionSQLiteRepository) ListByUser(ctx context.Context, userID uuid.UUID) ([]*auth.Session, error) {
 	if err := validation.ValidateUUID(userID); err != nil {

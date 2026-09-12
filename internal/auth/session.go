@@ -64,8 +64,6 @@ type SessionRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	// DeleteOwned удаляет сессию только её владельца; чужая или неизвестная → ErrSessionNotFound.
 	DeleteOwned(ctx context.Context, userID, id uuid.UUID) error
-	// DeleteByUser отзывает все сессии пользователя, кроме exceptID (uuid.Nil — все).
-	DeleteByUser(ctx context.Context, userID, exceptID uuid.UUID) error
 	ListByUser(ctx context.Context, userID uuid.UUID) ([]*Session, error)
 	DeleteExpired(ctx context.Context, now time.Time) error
 }

@@ -102,7 +102,7 @@ func TestAPIUsers_DeactivateSelfRejected(t *testing.T) {
 }
 
 // Последний активный администратор не деактивируется даже чужой сессией:
-// неактивные админы в счёт не идут. Проверка живёт в userService.SetActive.
+// неактивные админы в счёт не идут. Проверка живёт в транзакции репозитория.
 func TestAPIUsers_DeactivateLastAdminRejected(t *testing.T) {
 	ts := testhelpers.SetupHTTPServer(t)
 	firstSess := ts.Auth(t)
@@ -115,7 +115,7 @@ func TestAPIUsers_DeactivateLastAdminRejected(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, doAuthedGET(t, ts, firstSess, "/api/v1/transactions"),
 		"токен деактивированного администратора всё ещё открывает API")
 
-	err := ts.Services.User.SetActive(context.Background(), second.ID, false, uuid.New())
+	err := ts.Services.User.PatchUser(context.Background(), second.ID, nil, ptr(false), uuid.New())
 	require.ErrorIs(t, err, services.ErrLastAdmin)
 
 	stored, getErr := ts.Repos.User.GetByID(context.Background(), second.ID)
@@ -124,6 +124,24 @@ func TestAPIUsers_DeactivateLastAdminRejected(t *testing.T) {
 
 	rec = adminJSON(t, ts, secondSess, http.MethodPatch, "/api/v1/users/"+first.ID.String(), `{"is_active":true}`)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+}
+
+// Самодеактивация вместе со сменой роли: PATCH — одна запись, поэтому при 409 роль тоже не изменилась.
+func TestAPIUsers_PatchSelfRoleAndDeactivateRejected(t *testing.T) {
+	ts := testhelpers.SetupHTTPServer(t)
+	admin := ts.Auth(t)
+	self := ts.AuthUser
+
+	rec := adminJSON(t, ts, admin, http.MethodPatch, "/api/v1/users/"+self.ID.String(),
+		`{"role":"member","is_active":false}`)
+
+	assert.Equal(t, http.StatusConflict, rec.Code, rec.Body.String())
+	assert.Equal(t, "CANNOT_DEACTIVATE_SELF", errorCode(t, rec))
+
+	stored, err := ts.Repos.User.GetByID(context.Background(), self.ID)
+	require.NoError(t, err)
+	assert.Equal(t, user.RoleAdmin, stored.Role, "роль применилась вопреки отказу")
+	assert.True(t, stored.IsActive)
 }
 
 // Роль и активность в одном PATCH; пустое тело — 422.

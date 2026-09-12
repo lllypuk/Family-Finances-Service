@@ -103,13 +103,10 @@ func (m *MockUserService) UpdateUser(ctx context.Context, id uuid.UUID, req dto.
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
-func (m *MockUserService) SetActive(ctx context.Context, id uuid.UUID, active bool, actorID uuid.UUID) error {
-	args := m.Called(ctx, id, active, actorID)
-	return args.Error(0)
-}
-
-func (m *MockUserService) ChangeUserRole(ctx context.Context, id uuid.UUID, newRole user.Role) error {
-	args := m.Called(ctx, id, newRole)
+func (m *MockUserService) PatchUser(
+	ctx context.Context, id uuid.UUID, role *user.Role, active *bool, actorID uuid.UUID,
+) error {
+	args := m.Called(ctx, id, role, active, actorID)
 	return args.Error(0)
 }
 
@@ -609,7 +606,7 @@ func TestUserHandler_GetUsers_ServiceError(t *testing.T) {
 func TestUserHandler_PatchUser_ChangesRole(t *testing.T) {
 	service := &MockUserService{}
 	targetID := uuid.New()
-	service.On("ChangeUserRole", mock.Anything, targetID, user.RoleMember).Return(nil)
+	service.On("PatchUser", mock.Anything, targetID, ptr(user.RoleMember), (*bool)(nil), mock.Anything).Return(nil)
 	service.On("GetUserByID", mock.Anything, targetID).Return(&user.User{
 		ID:    targetID,
 		Email: "member@family.com",
@@ -631,7 +628,8 @@ func TestUserHandler_PatchUser_ChangesRole(t *testing.T) {
 func TestUserHandler_PatchUser_LastAdminRejected(t *testing.T) {
 	service := &MockUserService{}
 	targetID := uuid.New()
-	service.On("ChangeUserRole", mock.Anything, targetID, user.RoleMember).Return(services.ErrLastAdmin)
+	service.On("PatchUser", mock.Anything, targetID, ptr(user.RoleMember), (*bool)(nil), mock.Anything).
+		Return(services.ErrLastAdmin)
 
 	rec := patchUserRequest(t, service, targetID.String(), `{"role":"member"}`, uuid.New())
 
@@ -655,7 +653,8 @@ func TestUserHandler_PatchUser_InvalidRole(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 	assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
 
-	service.AssertNotCalled(t, "ChangeUserRole", mock.Anything, mock.Anything, mock.Anything)
+	service.AssertNotCalled(t, "PatchUser", mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+		mock.Anything)
 }
 
 func TestUserHandler_PatchUser_EmptyBody(t *testing.T) {
@@ -665,7 +664,8 @@ func TestUserHandler_PatchUser_EmptyBody(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
-	service.AssertNotCalled(t, "ChangeUserRole", mock.Anything, mock.Anything, mock.Anything)
+	service.AssertNotCalled(t, "PatchUser", mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+		mock.Anything)
 }
 
 func TestUserHandler_PatchUser_InvalidID(t *testing.T) {
@@ -679,13 +679,15 @@ func TestUserHandler_PatchUser_InvalidID(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 	assert.Equal(t, "INVALID_ID", response.Error.Code)
 
-	service.AssertNotCalled(t, "ChangeUserRole", mock.Anything, mock.Anything, mock.Anything)
+	service.AssertNotCalled(t, "PatchUser", mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+		mock.Anything)
 }
 
 func TestUserHandler_PatchUser_UserNotFound(t *testing.T) {
 	service := &MockUserService{}
 	targetID := uuid.New()
-	service.On("ChangeUserRole", mock.Anything, targetID, user.RoleAdmin).Return(services.ErrUserNotFound)
+	service.On("PatchUser", mock.Anything, targetID, ptr(user.RoleAdmin), (*bool)(nil), mock.Anything).
+		Return(services.ErrUserNotFound)
 
 	rec := patchUserRequest(t, service, targetID.String(), `{"role":"admin"}`, uuid.New())
 
@@ -702,7 +704,7 @@ func TestUserHandler_PatchUser_Deactivates(t *testing.T) {
 	service := &MockUserService{}
 	targetID := uuid.New()
 	actorID := uuid.New()
-	service.On("SetActive", mock.Anything, targetID, false, actorID).Return(nil)
+	service.On("PatchUser", mock.Anything, targetID, (*user.Role)(nil), ptr(false), actorID).Return(nil)
 	service.On("GetUserByID", mock.Anything, targetID).Return(&user.User{
 		ID: targetID, Email: "member@family.com", Role: user.RoleMember, IsActive: false,
 	}, nil)
@@ -715,16 +717,14 @@ func TestUserHandler_PatchUser_Deactivates(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 	assert.False(t, response.Data.IsActive)
 
-	service.AssertNotCalled(t, "ChangeUserRole", mock.Anything, mock.Anything, mock.Anything)
 	service.AssertExpectations(t)
 }
 
-// Роль и активность в одном запросе применяются по очереди, в этом порядке.
+// Роль и активность в одном запросе уходят в сервис одним вызовом.
 func TestUserHandler_PatchUser_RoleAndActive(t *testing.T) {
 	service := &MockUserService{}
 	targetID := uuid.New()
-	service.On("ChangeUserRole", mock.Anything, targetID, user.RoleMember).Return(nil)
-	service.On("SetActive", mock.Anything, targetID, true, mock.Anything).Return(nil)
+	service.On("PatchUser", mock.Anything, targetID, ptr(user.RoleMember), ptr(true), mock.Anything).Return(nil)
 	service.On("GetUserByID", mock.Anything, targetID).Return(&user.User{
 		ID: targetID, Email: "member@family.com", Role: user.RoleMember, IsActive: true,
 	}, nil)
@@ -739,7 +739,8 @@ func TestUserHandler_PatchUser_RoleAndActive(t *testing.T) {
 func TestUserHandler_PatchUser_SelfDeactivationRejected(t *testing.T) {
 	service := &MockUserService{}
 	selfID := uuid.New()
-	service.On("SetActive", mock.Anything, selfID, false, selfID).Return(services.ErrCannotDeactivateSelf)
+	service.On("PatchUser", mock.Anything, selfID, (*user.Role)(nil), ptr(false), selfID).
+		Return(services.ErrCannotDeactivateSelf)
 
 	rec := patchUserRequest(t, service, selfID.String(), `{"is_active":false}`, selfID)
 
@@ -754,7 +755,8 @@ func TestUserHandler_PatchUser_SelfDeactivationRejected(t *testing.T) {
 func TestUserHandler_PatchUser_DeactivateLastAdminRejected(t *testing.T) {
 	service := &MockUserService{}
 	targetID := uuid.New()
-	service.On("SetActive", mock.Anything, targetID, false, mock.Anything).Return(services.ErrLastAdmin)
+	service.On("PatchUser", mock.Anything, targetID, (*user.Role)(nil), ptr(false), mock.Anything).
+		Return(services.ErrLastAdmin)
 
 	rec := patchUserRequest(t, service, targetID.String(), `{"is_active":false}`, uuid.New())
 
@@ -772,7 +774,8 @@ func TestUserHandler_PatchUser_NoSession(t *testing.T) {
 	rec := patchUserRequest(t, service, uuid.New().String(), `{"is_active":false}`, uuid.Nil)
 
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
-	service.AssertNotCalled(t, "SetActive", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	service.AssertNotCalled(t, "PatchUser", mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+		mock.Anything)
 }
 
 func TestUserHandler_SetUserPassword(t *testing.T) {
@@ -831,3 +834,5 @@ func TestUserHandler_SetUserPassword(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	})
 }
+
+func ptr[T any](v T) *T { return &v }

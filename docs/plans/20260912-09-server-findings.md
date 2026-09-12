@@ -272,20 +272,20 @@
   `tests/integration/session_revalidation_test.go`, `tests/integration/api_auth_test.go`,
   `tests/integration/api_users_deactivate_test.go`, `tests/integration/users_test.go`
 
-- [ ] `PatchUser(ctx, id, role *user.Role, active *bool, actorID)`: `ErrCannotDeactivateSelf`,
+- [x] `PatchUser(ctx, id, role *user.Role, active *bool, actorID)`: `ErrCannotDeactivateSelf`,
       `ErrInvalidRole`, затем `userRepo.Patch`; `SetActive`/`ChangeUserRole` удалить из `UserService`
-- [ ] удалить `SessionRevoker`, `auth.Service.RevokeAllSessions`, `SessionRepository.DeleteByUser` и
+- [x] удалить `SessionRevoker`, `auth.Service.RevokeAllSessions`, `SessionRepository.DeleteByUser` и
       реализацию, обёртки `UpdateRole`/`SetActive`; `NewUserService(userRepo, familyRepo)`; `container.go`
-- [ ] хендлер `PatchUser`: один вызов `PatchUser`
-- [ ] спека `patchUser`: оба поля применяются одной записью, при `409` ничего не изменено
-- [ ] обновить моки и фейки (`users_test.go`, `http_server_test.go`, `helpers_test.go`,
+- [x] хендлер `PatchUser`: один вызов `PatchUser`
+- [x] спека `patchUser`: оба поля применяются одной записью, при `409` ничего не изменено
+- [x] обновить моки и фейки (`users_test.go`, `http_server_test.go`, `helpers_test.go`,
       `service_test.go`) и прямые вызовы в интеграции (`session_revalidation_test.go`, `api_auth_test.go`)
-- [ ] unit-тесты сервиса: самодеактивация раньше `LAST_ADMIN`, невалидная роль, проброс `ErrLastAdmin`
-- [ ] интеграция: единственный админ патчит себя `{role: member, is_active: false}` →
+- [x] unit-тесты сервиса: самодеактивация раньше `LAST_ADMIN`, невалидная роль, проброс `ErrLastAdmin`
+- [x] интеграция: единственный админ патчит себя `{role: member, is_active: false}` →
       `409 CANNOT_DEACTIVATE_SELF`, роль не изменилась; второго админа теми же полями → `200`, оба
       применены; деактивация → следующий запрос с её токеном `401`; `PUT /users/:id/password` →
       старые сессии `401`
-- [ ] `make fmt && make test && make lint` зелёные
+- [x] `make fmt && make test && make lint` зелёные
 
 ### Task 7: Спека — `409` у `updateUser`
 

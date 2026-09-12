@@ -148,14 +148,6 @@ func (s *Service) Logout(ctx context.Context, sessionID uuid.UUID) error {
 	return nil
 }
 
-// RevokeAllSessions удаляет все сессии пользователя (деактивация админом).
-func (s *Service) RevokeAllSessions(ctx context.Context, userID uuid.UUID) error {
-	if err := s.sessions.DeleteByUser(ctx, userID, uuid.Nil); err != nil {
-		return fmt.Errorf("failed to revoke sessions: %w", err)
-	}
-	return nil
-}
-
 // ListSessions — живые сессии пользователя, новые первыми; истёкшие лежат в БД до ближайшего логина.
 func (s *Service) ListSessions(ctx context.Context, userID uuid.UUID) ([]*Session, error) {
 	all, err := s.sessions.ListByUser(ctx, userID)

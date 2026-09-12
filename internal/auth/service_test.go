@@ -27,7 +27,6 @@ type fakeSessions struct {
 	owners  map[uuid.UUID]*user.User
 	touches int
 	deleted []uuid.UUID
-	revoked []revokeCall
 	expired []time.Time
 	fail    map[string]error
 }
@@ -103,19 +102,6 @@ func (f *fakeSessions) DeleteOwned(_ context.Context, userID, id uuid.UUID) erro
 		}
 	}
 	return auth.ErrSessionNotFound
-}
-
-func (f *fakeSessions) DeleteByUser(_ context.Context, userID, exceptID uuid.UUID) error {
-	if err := f.fail["DeleteByUser"]; err != nil {
-		return err
-	}
-	f.revoked = append(f.revoked, revokeCall{userID: userID, except: exceptID})
-	for hash, s := range f.byHash {
-		if s.UserID == userID && s.ID != exceptID {
-			delete(f.byHash, hash)
-		}
-	}
-	return nil
 }
 
 func (f *fakeSessions) ListByUser(_ context.Context, userID uuid.UUID) ([]*auth.Session, error) {
@@ -316,19 +302,6 @@ func TestService_Authenticate_InactiveUser(t *testing.T) {
 
 	require.ErrorIs(t, err, auth.ErrUnauthorized)
 	assert.Nil(t, p)
-}
-
-func TestService_RevokeAllSessions(t *testing.T) {
-	f := newFixture(t, true)
-	first := f.login(t)
-	second := f.login(t)
-
-	require.NoError(t, f.svc.RevokeAllSessions(context.Background(), f.user.ID))
-
-	_, err := f.svc.Authenticate(context.Background(), first)
-	require.ErrorIs(t, err, auth.ErrUnauthorized)
-	_, err = f.svc.Authenticate(context.Background(), second)
-	require.ErrorIs(t, err, auth.ErrUnauthorized)
 }
 
 func TestService_Login_SetupRequired(t *testing.T) {
@@ -579,7 +552,6 @@ func TestService_ChangePassword_Success_KeepsCurrentSession(t *testing.T) {
 
 	assert.True(t, auth.ComparePassword(f.users.updates[f.user.ID], "new-password-1"))
 	assert.Equal(t, []revokeCall{{userID: f.user.ID, except: keepID}}, f.users.revoked)
-	assert.Empty(t, f.sessions.revoked, "сессии отзывает та же транзакция, что пишет хеш")
 
 	_, err = f.svc.Authenticate(context.Background(), keepToken)
 	require.NoError(t, err)

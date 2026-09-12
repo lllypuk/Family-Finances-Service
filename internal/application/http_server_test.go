@@ -76,13 +76,10 @@ func (m *MockUserService) UpdateUser(ctx context.Context, id uuid.UUID, req dto.
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
-func (m *MockUserService) SetActive(ctx context.Context, id uuid.UUID, active bool, actorID uuid.UUID) error {
-	args := m.Called(ctx, id, active, actorID)
-	return args.Error(0)
-}
-
-func (m *MockUserService) ChangeUserRole(ctx context.Context, id uuid.UUID, newRole user.Role) error {
-	args := m.Called(ctx, id, newRole)
+func (m *MockUserService) PatchUser(
+	ctx context.Context, id uuid.UUID, role *user.Role, active *bool, actorID uuid.UUID,
+) error {
+	args := m.Called(ctx, id, role, active, actorID)
 	return args.Error(0)
 }
 

@@ -119,34 +119,6 @@ func TestSessionRepositorySQLite_Integration(t *testing.T) {
 		require.ErrorIs(t, repo.DeleteOwned(ctx, owner, s.ID), auth.ErrSessionNotFound)
 	})
 
-	t.Run("DeleteByUser_KeepsException", func(t *testing.T) {
-		repo := authrepo.NewSessionSQLiteRepository(container.GetTestDatabase(t))
-		userID := createUser(t, "many@example.com")
-		otherID := createUserInSameFamily(ctx, t, container, userID, "other@example.com")
-
-		keep := auth.NewSession(userID, "hash-keep", "phone", now)
-		require.NoError(t, repo.Create(ctx, keep))
-		require.NoError(t, repo.Create(ctx, auth.NewSession(userID, "hash-a", "tablet", now.Add(-time.Minute))))
-		require.NoError(t, repo.Create(ctx, auth.NewSession(userID, "hash-b", "laptop", now.Add(-2*time.Minute))))
-		require.NoError(t, repo.Create(ctx, auth.NewSession(otherID, "hash-foreign", "d", now)))
-
-		require.NoError(t, repo.DeleteByUser(ctx, userID, keep.ID))
-
-		left, err := repo.ListByUser(ctx, userID)
-		require.NoError(t, err)
-		require.Len(t, left, 1)
-		assert.Equal(t, keep.ID, left[0].ID)
-
-		otherLeft, err := repo.ListByUser(ctx, otherID)
-		require.NoError(t, err)
-		assert.Len(t, otherLeft, 1)
-
-		require.NoError(t, repo.DeleteByUser(ctx, userID, uuid.Nil))
-		left, err = repo.ListByUser(ctx, userID)
-		require.NoError(t, err)
-		assert.Empty(t, left)
-	})
-
 	t.Run("ListByUser_NewestFirst", func(t *testing.T) {
 		repo := authrepo.NewSessionSQLiteRepository(container.GetTestDatabase(t))
 		userID := createUser(t, "list@example.com")

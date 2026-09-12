@@ -29,7 +29,7 @@ func TestSessionRevalidation_DeactivatedUserLosesAccess(t *testing.T) {
 
 	require.NoError(
 		t,
-		testServer.Services.User.SetActive(context.Background(), member.ID, false, testServer.AuthUser.ID),
+		testServer.Services.User.PatchUser(context.Background(), member.ID, nil, ptr(false), testServer.AuthUser.ID),
 	)
 
 	assert.Equal(t, http.StatusUnauthorized, doAuthedGET(t, testServer, memberAuth, "/api/v1/transactions"),
@@ -46,7 +46,7 @@ func TestSessionRevalidation_RoleDowngradeTakesEffect(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, doAuthedGET(t, testServer, secondAuth, "/api/v1/users"))
 
-	require.NoError(t, testServer.Repos.User.UpdateRole(context.Background(), second.ID, user.RoleMember))
+	require.NoError(t, testServer.Repos.User.Patch(context.Background(), second.ID, ptr(user.RoleMember), nil))
 
 	assert.Equal(t, http.StatusForbidden, doAuthedGET(t, testServer, secondAuth, "/api/v1/users"),
 		"роль всё ещё читается из выданного токена, а не из БД")
@@ -62,7 +62,9 @@ func TestSessionRevalidation_RoleUpgradeTakesEffect(t *testing.T) {
 
 	require.Equal(t, http.StatusForbidden, doAuthedGET(t, testServer, memberAuth, "/api/v1/users"))
 
-	require.NoError(t, testServer.Repos.User.UpdateRole(context.Background(), member.ID, user.RoleAdmin))
+	require.NoError(t, testServer.Repos.User.Patch(context.Background(), member.ID, ptr(user.RoleAdmin), nil))
 
 	assert.Equal(t, http.StatusOK, doAuthedGET(t, testServer, memberAuth, "/api/v1/users"))
 }
+
+func ptr[T any](v T) *T { return &v }

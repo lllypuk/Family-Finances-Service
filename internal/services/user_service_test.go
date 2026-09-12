@@ -114,7 +114,7 @@ func TestUserService_CreateUser(t *testing.T) {
 			familyRepo := &MockFamilyRepository{}
 			tt.setup(userRepo, familyRepo)
 
-			service := services.NewUserService(userRepo, familyRepo, &MockSessionRevoker{})
+			service := services.NewUserService(userRepo, familyRepo)
 
 			result, err := service.CreateUser(context.Background(), tt.dto)
 
@@ -197,7 +197,7 @@ func TestUserService_GetUserByID(t *testing.T) {
 			familyRepo := &MockFamilyRepository{}
 			tt.setup(userRepo, familyRepo)
 
-			service := services.NewUserService(userRepo, familyRepo, &MockSessionRevoker{})
+			service := services.NewUserService(userRepo, familyRepo)
 			result, err := service.GetUserByID(context.Background(), tt.userID)
 
 			if tt.notErrorType != nil {
@@ -301,7 +301,7 @@ func TestUserService_UpdateUser(t *testing.T) {
 			familyRepo := &MockFamilyRepository{}
 			tt.setup(userRepo, familyRepo)
 
-			service := services.NewUserService(userRepo, familyRepo, &MockSessionRevoker{})
+			service := services.NewUserService(userRepo, familyRepo)
 			result, err := service.UpdateUser(context.Background(), tt.userID, tt.dto)
 
 			if tt.wantError {
@@ -321,11 +321,7 @@ func TestUserService_UpdateUser(t *testing.T) {
 	}
 }
 
-func TestUserService_SetActive(t *testing.T) {
-	// Фикстуры создаются на каждый кейс: SetActive меняет IsActive у переданного объекта.
-	newUser := func(id uuid.UUID, role user.Role, active bool) *user.User {
-		return &user.User{ID: id, Email: id.String() + "@example.com", Role: role, IsActive: active}
-	}
+func TestUserService_PatchUser(t *testing.T) {
 	actorID := uuid.New()
 	memberID := uuid.New()
 	lastAdminID := uuid.New()
@@ -333,203 +329,100 @@ func TestUserService_SetActive(t *testing.T) {
 	tests := []struct {
 		name      string
 		userID    uuid.UUID
-		active    bool
-		setup     func(*MockUserRepository, *MockSessionRevoker)
+		role      *user.Role
+		active    *bool
+		setup     func(*MockUserRepository)
 		wantError error
 	}{
 		{
-			// Правило «себя выключить нельзя» живёт в сервисе, а не в хендлерах.
+			// Самодеактивация отбивается раньше проверки «последний админ»: репозиторий не зовём,
+			// поэтому роль из того же запроса тоже не применяется.
 			name:      "Error - Cannot deactivate self",
 			userID:    actorID,
-			active:    false,
-			setup:     func(*MockUserRepository, *MockSessionRevoker) {},
+			role:      ptr(user.RoleMember),
+			active:    ptr(false),
+			setup:     func(*MockUserRepository) {},
 			wantError: services.ErrCannotDeactivateSelf,
 		},
 		{
-			name:   "Success - Deactivate member revokes sessions",
+			name:      "Error - Invalid role",
+			userID:    memberID,
+			role:      ptr(user.Role("invalid")),
+			setup:     func(*MockUserRepository) {},
+			wantError: services.ErrInvalidRole,
+		},
+		{
+			name:   "Success - Role only",
 			userID: memberID,
-			active: false,
-			setup: func(userRepo *MockUserRepository, sessions *MockSessionRevoker) {
-				userRepo.On("GetByID", mock.Anything, memberID).Return(newUser(memberID, user.RoleMember, true), nil)
-				userRepo.On("SetActive", mock.Anything, memberID, false).Return(nil)
-				sessions.On("RevokeAllSessions", mock.Anything, memberID).Return(nil)
+			role:   ptr(user.RoleAdmin),
+			setup: func(userRepo *MockUserRepository) {
+				userRepo.On("Patch", mock.Anything, memberID, ptr(user.RoleAdmin), (*bool)(nil)).Return(nil)
 			},
 		},
 		{
-			name:   "Success - Reactivate keeps sessions untouched",
+			name:   "Success - Activity only",
 			userID: memberID,
-			active: true,
-			setup: func(userRepo *MockUserRepository, _ *MockSessionRevoker) {
-				userRepo.On("GetByID", mock.Anything, memberID).Return(newUser(memberID, user.RoleMember, false), nil)
-				userRepo.On("SetActive", mock.Anything, memberID, true).Return(nil)
+			active: ptr(false),
+			setup: func(userRepo *MockUserRepository) {
+				userRepo.On("Patch", mock.Anything, memberID, (*user.Role)(nil), ptr(false)).Return(nil)
 			},
 		},
 		{
-			name:   "Success - Already in requested state is a no-op",
+			name:   "Success - Both fields in one write",
 			userID: memberID,
-			active: true,
-			setup: func(userRepo *MockUserRepository, _ *MockSessionRevoker) {
-				userRepo.On("GetByID", mock.Anything, memberID).Return(newUser(memberID, user.RoleMember, true), nil)
+			role:   ptr(user.RoleMember),
+			active: ptr(false),
+			setup: func(userRepo *MockUserRepository) {
+				userRepo.On("Patch", mock.Anything, memberID, ptr(user.RoleMember), ptr(false)).Return(nil)
 			},
 		},
 		{
-			name:   "Error - User not found",
-			userID: uuid.New(),
-			active: false,
-			setup: func(userRepo *MockUserRepository, _ *MockSessionRevoker) {
-				userRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, user.ErrNotFound)
+			name:   "Success - Self role change is allowed",
+			userID: actorID,
+			role:   ptr(user.RoleMember),
+			setup: func(userRepo *MockUserRepository) {
+				userRepo.On("Patch", mock.Anything, actorID, ptr(user.RoleMember), (*bool)(nil)).Return(nil)
 			},
-			wantError: services.ErrUserNotFound,
 		},
 		{
-			// Проверку «последний активный админ» делает репозиторий в транзакции; сервис
-			// пробрасывает sentinel и не отзывает сессии.
+			// Проверку «последний активный админ» делает репозиторий в транзакции.
 			name:   "Error - Last active admin",
 			userID: lastAdminID,
-			active: false,
-			setup: func(userRepo *MockUserRepository, _ *MockSessionRevoker) {
-				userRepo.On("GetByID", mock.Anything, lastAdminID).
-					Return(newUser(lastAdminID, user.RoleAdmin, true), nil)
-				userRepo.On("SetActive", mock.Anything, lastAdminID, false).Return(user.ErrLastAdmin)
+			role:   ptr(user.RoleMember),
+			active: ptr(false),
+			setup: func(userRepo *MockUserRepository) {
+				userRepo.On("Patch", mock.Anything, lastAdminID, ptr(user.RoleMember), ptr(false)).
+					Return(user.ErrLastAdmin)
 			},
 			wantError: services.ErrLastAdmin,
 		},
 		{
-			name:   "Success - Admin deactivated while another active admin remains",
-			userID: lastAdminID,
-			active: false,
-			setup: func(userRepo *MockUserRepository, sessions *MockSessionRevoker) {
-				userRepo.On("GetByID", mock.Anything, lastAdminID).
-					Return(newUser(lastAdminID, user.RoleAdmin, true), nil)
-				userRepo.On("SetActive", mock.Anything, lastAdminID, false).Return(nil)
-				sessions.On("RevokeAllSessions", mock.Anything, lastAdminID).Return(nil)
-			},
-		},
-		{
-			name:   "Error - Session revocation failure surfaces",
-			userID: memberID,
-			active: false,
-			setup: func(userRepo *MockUserRepository, sessions *MockSessionRevoker) {
-				userRepo.On("GetByID", mock.Anything, memberID).Return(newUser(memberID, user.RoleMember, true), nil)
-				userRepo.On("SetActive", mock.Anything, memberID, false).Return(nil)
-				sessions.On("RevokeAllSessions", mock.Anything, memberID).Return(errors.New("db down"))
-			},
-			wantError: errors.New("db down"),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			userRepo := &MockUserRepository{}
-			sessions := &MockSessionRevoker{}
-			tt.setup(userRepo, sessions)
-
-			service := services.NewUserService(userRepo, &MockFamilyRepository{}, sessions)
-			err := service.SetActive(context.Background(), tt.userID, tt.active, actorID)
-
-			switch {
-			case tt.wantError == nil:
-				require.NoError(t, err)
-			case errors.Is(tt.wantError, services.ErrCannotDeactivateSelf),
-				errors.Is(tt.wantError, services.ErrUserNotFound),
-				errors.Is(tt.wantError, services.ErrLastAdmin):
-				require.ErrorIs(t, err, tt.wantError)
-			default:
-				require.ErrorContains(t, err, tt.wantError.Error())
-			}
-
-			userRepo.AssertExpectations(t)
-			sessions.AssertExpectations(t)
-		})
-	}
-}
-
-func TestUserService_ChangeUserRole(t *testing.T) {
-	// Проверка «последний админ» и запись — одна транзакция репозитория (UpdateRole);
-	// сервис только валидирует роль и пробрасывает sentinel-ошибки.
-	existingUserID := uuid.New()
-	onlyAdminID := uuid.New()
-
-	tests := []struct {
-		name      string
-		userID    uuid.UUID
-		role      user.Role
-		setup     func(*MockUserRepository, *MockFamilyRepository)
-		wantError bool
-		errorType error
-	}{
-		{
-			name:   "Success - Change role to admin",
-			userID: existingUserID,
-			role:   user.RoleAdmin,
-			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
-				userRepo.On("UpdateRole", mock.Anything, existingUserID, user.RoleAdmin).Return(nil)
-			},
-			wantError: false,
-		},
-		{
-			name:   "Error - Invalid role",
-			userID: existingUserID,
-			role:   user.Role("invalid"),
-			setup: func(_ *MockUserRepository, _ *MockFamilyRepository) {
-			},
-			wantError: true,
-			errorType: services.ErrInvalidRole,
-		},
-		{
 			name:   "Error - User not found",
-			userID: uuid.New(),
-			role:   user.RoleAdmin,
-			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
-				userRepo.On("UpdateRole", mock.Anything, mock.Anything, user.RoleAdmin).
+			userID: memberID,
+			active: ptr(true),
+			setup: func(userRepo *MockUserRepository) {
+				userRepo.On("Patch", mock.Anything, memberID, (*user.Role)(nil), ptr(true)).
 					Return(fmt.Errorf("user with id x: %w", user.ErrNotFound))
 			},
-			wantError: true,
-			errorType: services.ErrUserNotFound,
-		},
-		{
-			// Понижение последнего админа оставляет семью без того, кто
-			// заводит пользователей — тот же запрет, что и на удаление.
-			name:   "Error - Demoting the last admin",
-			userID: onlyAdminID,
-			role:   user.RoleMember,
-			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
-				userRepo.On("UpdateRole", mock.Anything, onlyAdminID, user.RoleMember).Return(user.ErrLastAdmin)
-			},
-			wantError: true,
-			errorType: services.ErrLastAdmin,
-		},
-		{
-			name:   "Success - Demoting an admin while another admin remains",
-			userID: onlyAdminID,
-			role:   user.RoleMember,
-			setup: func(userRepo *MockUserRepository, _ *MockFamilyRepository) {
-				userRepo.On("UpdateRole", mock.Anything, onlyAdminID, user.RoleMember).Return(nil)
-			},
-			wantError: false,
+			wantError: services.ErrUserNotFound,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			userRepo := &MockUserRepository{}
-			familyRepo := &MockFamilyRepository{}
-			tt.setup(userRepo, familyRepo)
+			tt.setup(userRepo)
 
-			service := services.NewUserService(userRepo, familyRepo, &MockSessionRevoker{})
-			err := service.ChangeUserRole(context.Background(), tt.userID, tt.role)
+			service := services.NewUserService(userRepo, &MockFamilyRepository{})
+			err := service.PatchUser(context.Background(), tt.userID, tt.role, tt.active, actorID)
 
-			if tt.wantError {
-				require.Error(t, err)
-				if tt.errorType != nil {
-					require.ErrorIs(t, err, tt.errorType)
-				}
-			} else {
+			if tt.wantError == nil {
 				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, tt.wantError)
 			}
 
 			userRepo.AssertExpectations(t)
-			familyRepo.AssertExpectations(t)
 		})
 	}
 }
@@ -574,7 +467,7 @@ func TestUserService_ValidateUserAccess(t *testing.T) {
 			familyRepo := &MockFamilyRepository{}
 			tt.setup(userRepo, familyRepo)
 
-			service := services.NewUserService(userRepo, familyRepo, &MockSessionRevoker{})
+			service := services.NewUserService(userRepo, familyRepo)
 			err := service.ValidateUserAccess(context.Background(), tt.userID, tt.resourceOwnerID)
 
 			if tt.wantError {

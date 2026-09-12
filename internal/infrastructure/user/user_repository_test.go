@@ -304,8 +304,8 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		require.NoError(t, repo.Create(ctx, other))
 
 		require.NoError(t, repo.UpdatePassword(ctx, stale.ID, "new-hash", uuid.Nil))
-		require.NoError(t, repo.UpdateRole(ctx, stale.ID, user.RoleMember))
-		require.NoError(t, repo.SetActive(ctx, stale.ID, false))
+		require.NoError(t, repo.Patch(ctx, stale.ID, ptr(user.RoleMember), nil))
+		require.NoError(t, repo.Patch(ctx, stale.ID, nil, ptr(false)))
 
 		stale.FirstName = "New"
 		require.NoError(t, repo.Update(ctx, stale))
@@ -325,7 +325,7 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 	})
 
 	// Неактивный пользователь остаётся видимым: активность решает auth, а не репозиторий.
-	t.Run("SetActive_Deactivate_StillVisible", func(t *testing.T) {
+	t.Run("Patch_Deactivate_StillVisible", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
 		repo := userrepo.NewSQLiteRepository(db)
 
@@ -343,7 +343,7 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		require.NoError(t, repo.Create(ctx, testUser))
 		assert.True(t, testUser.IsActive, "Create всегда заводит активного пользователя")
 
-		require.NoError(t, repo.SetActive(ctx, testUser.ID, false))
+		require.NoError(t, repo.Patch(ctx, testUser.ID, nil, ptr(false)))
 
 		byID, err := repo.GetByID(ctx, testUser.ID)
 		require.NoError(t, err)
@@ -364,7 +364,7 @@ func TestUserRepositorySQLite_Integration(t *testing.T) {
 		}
 		assert.True(t, found, "GetAll скрыл неактивного пользователя")
 
-		require.NoError(t, repo.SetActive(ctx, testUser.ID, true))
+		require.NoError(t, repo.Patch(ctx, testUser.ID, nil, ptr(true)))
 		byID, err = repo.GetByID(ctx, testUser.ID)
 		require.NoError(t, err)
 		assert.True(t, byID.IsActive)

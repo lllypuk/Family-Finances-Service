@@ -23,11 +23,11 @@ type UserService interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (*user.User, error)
 	GetUsers(ctx context.Context) ([]*user.User, error)
 	UpdateUser(ctx context.Context, id uuid.UUID, req dto.UpdateUserDTO) (*user.User, error)
-	// SetActive — деактивация отзывает сессии; себя и последнего активного админа выключить нельзя.
-	SetActive(ctx context.Context, id uuid.UUID, active bool, actorID uuid.UUID) error
+	// PatchUser пишет роль и активность одной записью; деактивация отзывает сессии,
+	// себя и последнего активного админа выключить нельзя.
+	PatchUser(ctx context.Context, id uuid.UUID, role *user.Role, active *bool, actorID uuid.UUID) error
 
 	// Business Operations
-	ChangeUserRole(ctx context.Context, userID uuid.UUID, role user.Role) error
 	ValidateUserAccess(ctx context.Context, userID, resourceOwnerID uuid.UUID) error
 	GetUserByEmail(ctx context.Context, email string) (*user.User, error)
 }

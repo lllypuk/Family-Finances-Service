@@ -263,17 +263,6 @@ func (r *SQLiteRepository) Update(ctx context.Context, u *user.User) error {
 	return nil
 }
 
-// UpdateRole меняет роль; понижение последнего активного администратора — user.ErrLastAdmin.
-func (r *SQLiteRepository) UpdateRole(ctx context.Context, id uuid.UUID, role user.Role) error {
-	return r.Patch(ctx, id, &role, nil)
-}
-
-// SetActive включает или выключает пользователя; выключение последнего активного
-// администратора — user.ErrLastAdmin.
-func (r *SQLiteRepository) SetActive(ctx context.Context, id uuid.UUID, active bool) error {
-	return r.Patch(ctx, id, nil, &active)
-}
-
 // patchFields — сколько колонок может тронуть Patch (роль и активность).
 const patchFields = 2
 
