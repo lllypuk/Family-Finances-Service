@@ -45,7 +45,17 @@ func parseMigrateArgs(args []string) (uint, bool, error) {
 		return 0, false, fmt.Errorf("%s: %w", cmdMigrate, err)
 	}
 
-	set := fs.NFlag() > 0
+	if fs.NArg() > 0 {
+		return 0, false, fmt.Errorf("%s: unexpected argument %q, the target is set with --to N", cmdMigrate, fs.Arg(0))
+	}
+
+	var set bool
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "to" {
+			set = true
+		}
+	})
+
 	// golang-migrate не умеет Migrate(0) и отвечает на него "file does not exist"; полный
 	// снос схемы эта подкоманда не предлагает.
 	if set && *to == 0 {

@@ -54,6 +54,13 @@ func TestParseMigrateArgs_ToZero(t *testing.T) {
 	assert.Contains(t, err.Error(), "--to must be 1 or above")
 }
 
+func TestParseMigrateArgs_PositionalArgument(t *testing.T) {
+	_, _, err := parseMigrateArgs([]string{"2"})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unexpected argument")
+}
+
 func TestParseMigrateArgs_UnknownFlag(t *testing.T) {
 	_, _, err := parseMigrateArgs([]string{"--down"})
 
