@@ -7,10 +7,11 @@
 ## Команды
 
 ```bash
-make -C android check      # = fmt-check test lint; офлайновая, генерации в ней нет
+make -C android check      # = fmt-check test lint r8-check; офлайновая, генерации в ней нет
 make -C android compile    # assembleDebug
 make -C android test       # testDebugUnitTest (Robolectric)
 make -C android fmt        # ktlintFormat
+make -C android r8-check   # R8 без подписи + сверка mapping.txt с моделями :core:api
 make -C android apk        # assembleRelease, нужен keystore
 make -C android api-gen    # перегенерация клиента из docs/api/openapi.yaml (нужна сеть)
 make -C android api-check  # api-gen + git status по каталогу вывода
@@ -145,6 +146,12 @@ Compose-тестами покрыты экраны с вводом и экран
 (значение переменной — текст), джоба раскодирует её перед сборкой. Смена сертификата даёт
 `INSTALL_FAILED_UPDATE_INCOMPATIBLE` и требует сносить приложение вместе с данными; нет keystore —
 `assembleRelease` падает, а не подписывается чем попало. В дерево репозитория файл не кладётся.
+
+Тесты минифицированный код не видят: модель, на которую ссылается только generic-сигнатура
+Retrofit, R8 однажды удалил, и приложение падало на телефоне при зелёном CI. Поэтому
+`core/api/consumer-rules.pro` держит все `@Serializable`-модели, а `checkReleaseModelsKept`
+(`make r8-check`, часть `check` и `assembleRelease`) сверяет `mapping.txt` со сгенерированными
+моделями — R8 для этого подписи не требует.
 
 Стора не будет: APK ставится с ноутбука. Тег `app-vX.Y.Z` собирает APK в CI и кладёт его в
 артефакты на неделю; серверные теги `vX.Y.Z` Android-джоб не запускают.
