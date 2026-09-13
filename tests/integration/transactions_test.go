@@ -873,3 +873,36 @@ func TestTransactionAPI_CreateWithNilClientID(t *testing.T) {
 	require.Len(t, errResp.Error.Details, 1)
 	assert.Equal(t, "id", errResp.Error.Details[0].Field)
 }
+
+// TestTransactionAPI_UpdateEmptyBody — тело без единого поля: minProperties: 1 в контракте,
+// значит 422; `"tags": []` — это поле (очистка), и проходит.
+func TestTransactionAPI_UpdateEmptyBody(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+	ctx := context.Background()
+
+	testCategory := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(ctx, testCategory))
+	testTransaction := testhelpers.CreateTestTransaction(
+		testServer.AuthFamily.ID, testServer.AuthUser.ID, testCategory.ID, transaction.TypeExpense)
+	require.NoError(t, testServer.Repos.Transaction.Create(ctx, testTransaction))
+
+	put := func(body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/transactions/"+testTransaction.ID.String(),
+			bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		session.Apply(req)
+		rec := httptest.NewRecorder()
+		testServer.Server.Echo().ServeHTTP(rec, req)
+		return rec
+	}
+
+	emptyRec := put(`{}`)
+	require.Equal(t, http.StatusUnprocessableEntity, emptyRec.Code, "тело: %s", emptyRec.Body.String())
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(emptyRec.Body.Bytes(), &response))
+	assert.Equal(t, handlers.ErrCodeValidationError, response.Error.Code)
+
+	clearRec := put(`{"tags": []}`)
+	assert.Equal(t, http.StatusOK, clearRec.Code, "тело: %s", clearRec.Body.String())
+}

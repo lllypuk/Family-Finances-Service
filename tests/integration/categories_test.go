@@ -552,3 +552,25 @@ func getCategory(
 
 	return response.Data
 }
+
+// TestCategoryAPI_UpdateEmptyBody — тело без единого поля: minProperties: 1 в контракте,
+// значит 422, а не молчаливая запись с новым updated_at.
+func TestCategoryAPI_UpdateEmptyBody(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+
+	testCategory := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(context.Background(), testCategory))
+
+	putReq := httptest.NewRequest(http.MethodPut, "/api/v1/categories/"+testCategory.ID.String(),
+		bytes.NewBufferString(`{}`))
+	putReq.Header.Set("Content-Type", "application/json")
+	session.Apply(putReq)
+	putRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(putRec, putReq)
+
+	require.Equal(t, http.StatusUnprocessableEntity, putRec.Code, "тело: %s", putRec.Body.String())
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(putRec.Body.Bytes(), &response))
+	assert.Equal(t, handlers.ErrCodeValidationError, response.Error.Code)
+}
