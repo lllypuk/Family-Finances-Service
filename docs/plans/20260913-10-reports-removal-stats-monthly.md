@@ -206,15 +206,15 @@
 - Modify: `internal/services/stats_service.go`, `internal/services/stats_service_test.go`,
   `tests/integration/stats_test.go` (создан в Task 2)
 
-- [ ] `Summary`: `PeriodTotals` текущего и предыдущего периода и `CategoryShare` — из `TotalsByCategory`
+- [x] `Summary`: `PeriodTotals` текущего и предыдущего периода и `CategoryShare` — из `TotalsByCategory`
       (`categoryName` как сейчас); `transactionsBetween`, `periodTotals`, оба лимита — удалить; ошибка предыдущего
       периода → ошибка `Summary`. `CountTransactions` (`:93`) — фильтр `dto.NewTransactionFilterDTO()`, не нулевой
       (нулевой `Limit` не проходит валидацию, и каждая сводка станет ошибкой)
-- [ ] тесты сервиса: суммы сходятся с прежними случаями (`stats_service_test.go`); доля категорий; ошибка
+- [x] тесты сервиса: суммы сходятся с прежними случаями (`stats_service_test.go`); доля категорий; ошибка
       репозитория → ошибка `Summary`. Интеграционно (`tests/integration/stats_test.go`, in-memory SQLite): 20 001
       операция одной вставкой в транзакции → `current.transaction_count == 20001` и сумма сходится — мок полноту
       выборки не проверяет
-- [ ] `make fmt && make test && make lint`; коммит `fix: сводка считается в SQL, без потолка в 20 000 операций`
+- [x] `make fmt && make test && make lint`; коммит `fix: сводка считается в SQL, без потолка в 20 000 операций`
 
 ### Task 6: `GET /api/v1/stats/monthly`
 

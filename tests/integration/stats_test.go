@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -68,4 +69,65 @@ func TestStatsAPI_Summary_InvalidDate(t *testing.T) {
 	assert.Equal(t, handlers.ErrCodeValidationError, response.Error.Code)
 	require.Len(t, response.Error.Details, 1)
 	assert.Equal(t, "from", response.Error.Details[0].Field)
+}
+
+// statsBulkTransactions — число операций, на котором прежняя постраничная выборка обрывалась молча.
+const statsBulkTransactions = 20_001
+
+// TestStatsAPI_Summary_BeyondFormerPageCeiling — сводка считается в SQL, поэтому потолка в 20 000 операций нет.
+func TestStatsAPI_Summary_BeyondFormerPageCeiling(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+	ctx := context.Background()
+
+	expenseCat := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(ctx, expenseCat))
+
+	today := date.Today(testServer.AuthFamily.Location())
+	insertBulkExpenses(t, testServer, expenseCat.ID, today, statsBulkTransactions)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/summary", nil)
+	session.Apply(req)
+	rec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var response handlers.APIResponse[dto.StatsSummary]
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, statsBulkTransactions, response.Data.Current.TransactionCount)
+	assert.Equal(t, money.Minor(statsBulkTransactions*100), response.Data.Current.ExpensesMinor)
+	require.Len(t, response.Data.ExpenseCategories, 1)
+	assert.Equal(t, statsBulkTransactions, response.Data.ExpenseCategories[0].TransactionCount)
+}
+
+// insertBulkExpenses пишет операции напрямую в базу: через репозиторий по одной транзакции это минуты.
+func insertBulkExpenses(
+	t *testing.T,
+	testServer *testhelpers.TestServer,
+	categoryID uuid.UUID,
+	day date.Date,
+	count int,
+) {
+	t.Helper()
+
+	tx, err := testServer.Container.DB.Begin()
+	require.NoError(t, err)
+	defer func() { _ = tx.Rollback() }()
+
+	stmt, err := tx.Prepare(`INSERT INTO transactions
+		(id, amount_minor, description, date, type, category_id, user_id, family_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+	require.NoError(t, err)
+	defer func() { _ = stmt.Close() }()
+
+	for range count {
+		_, execErr := stmt.Exec(
+			uuid.New().String(), 100, "bulk", day.String(), string(transaction.TypeExpense),
+			categoryID.String(), testServer.AuthUser.ID.String(), testServer.AuthFamily.ID.String(),
+		)
+		require.NoError(t, execErr)
+	}
+
+	require.NoError(t, tx.Commit())
 }

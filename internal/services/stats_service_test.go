@@ -30,25 +30,27 @@ type statsMocks struct {
 	aggregates   *MockTransactionRepository
 }
 
-func newStatsService() (services.StatsService, *statsMocks) {
-	m := &statsMocks{
+// totals объявляет агрегат за период; без него сводка за этот период не соберётся.
+func (m *statsMocks) totals(from, to date.Date, rows ...transaction.CategoryTotal) {
+	m.aggregates.On("GetTotalsByCategoryAndDateRange", mock.Anything, from, to).Return(rows, nil)
+}
+
+func newStatsMocks() *statsMocks {
+	return &statsMocks{
 		transactions: new(MockTransactionService),
 		budgets:      new(MockBudgetService),
 		categories:   new(MockCategoryService),
 		families:     new(MockFamilyService),
 		aggregates:   new(MockTransactionRepository),
 	}
+}
+
+func newStatsService() (services.StatsService, *statsMocks) {
+	m := newStatsMocks()
 	m.families.On("GetFamily", mock.Anything).
 		Return(&user.Family{Currency: "RUB", Timezone: "Europe/Moscow"}, nil).Maybe()
 
 	return services.NewStatsService(m.transactions, m.budgets, m.categories, m.families, m.aggregates), m
-}
-
-// periodFilter матчит выборку транзакций за конкретный период.
-func periodFilter(from, to date.Date) any {
-	return mock.MatchedBy(func(f dto.TransactionFilterDTO) bool {
-		return f.DateFrom != nil && f.DateTo != nil && *f.DateFrom == from && *f.DateTo == to
-	})
 }
 
 // recentFilter матчит выборку последних транзакций (без дат).
@@ -63,6 +65,15 @@ func previousPeriod(from, to date.Date) (date.Date, date.Date) {
 	days := int(to.In(time.UTC).Sub(from.In(time.UTC)).Hours() / 24)
 
 	return previousTo.AddDays(-days), previousTo
+}
+
+func catTotal(
+	categoryID uuid.UUID,
+	txType transaction.Type,
+	amount money.Minor,
+	count int,
+) transaction.CategoryTotal {
+	return transaction.CategoryTotal{CategoryID: categoryID, Type: txType, AmountMinor: amount, Count: count}
 }
 
 func statsTransaction(amount money.Minor, txType transaction.Type, categoryID uuid.UUID) *transaction.Transaction {
@@ -93,19 +104,20 @@ func TestStatsService_Summary_Success(t *testing.T) {
 	prevFrom, prevTo := previousPeriod(from, to)
 
 	foodID, salaryID := uuid.New(), uuid.New()
-	current := []*transaction.Transaction{
-		statsTransaction(100000, transaction.TypeIncome, salaryID),
-		statsTransaction(40000, transaction.TypeExpense, foodID),
-		statsTransaction(10000, transaction.TypeExpense, foodID),
+	m.totals(from, to,
+		catTotal(salaryID, transaction.TypeIncome, 100_000, 1),
+		catTotal(foodID, transaction.TypeExpense, 50_000, 2),
+	)
+	m.totals(prevFrom, prevTo,
+		catTotal(salaryID, transaction.TypeIncome, 80_000, 1),
+		catTotal(foodID, transaction.TypeExpense, 25_000, 1),
+	)
+	recent := []*transaction.Transaction{
+		statsTransaction(100_000, transaction.TypeIncome, salaryID),
+		statsTransaction(40_000, transaction.TypeExpense, foodID),
+		statsTransaction(10_000, transaction.TypeExpense, foodID),
 	}
-	previous := []*transaction.Transaction{
-		statsTransaction(80000, transaction.TypeIncome, salaryID),
-		statsTransaction(25000, transaction.TypeExpense, foodID),
-	}
-
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).Return(current, nil)
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(prevFrom, prevTo)).Return(previous, nil)
-	m.transactions.On("GetAllTransactions", mock.Anything, recentFilter()).Return(current, nil)
+	m.transactions.On("GetAllTransactions", mock.Anything, recentFilter()).Return(recent, nil)
 	m.transactions.On("CountTransactions", mock.Anything, mock.Anything).Return(42, nil)
 	m.budgets.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil)
 	m.categories.On("GetCategoryByID", mock.Anything, foodID).Return(statsCategory(foodID, "Еда"), nil)
@@ -145,14 +157,11 @@ func TestStatsService_Summary_CategoriesSortedByAmount(t *testing.T) {
 	prevFrom, prevTo := previousPeriod(from, to)
 
 	smallID, bigID := uuid.New(), uuid.New()
-	current := []*transaction.Transaction{
-		statsTransaction(10000, transaction.TypeExpense, smallID),
-		statsTransaction(30000, transaction.TypeExpense, bigID),
-	}
-
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).Return(current, nil)
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(prevFrom, prevTo)).
-		Return([]*transaction.Transaction{}, nil)
+	m.totals(from, to,
+		catTotal(smallID, transaction.TypeExpense, 10_000, 1),
+		catTotal(bigID, transaction.TypeExpense, 30_000, 1),
+	)
+	m.totals(prevFrom, prevTo)
 	m.transactions.On("GetAllTransactions", mock.Anything, recentFilter()).
 		Return([]*transaction.Transaction{}, nil)
 	m.transactions.On("CountTransactions", mock.Anything, mock.Anything).Return(2, nil)
@@ -176,12 +185,10 @@ func TestStatsService_Summary_UnknownCategorySkipped(t *testing.T) {
 	prevFrom, prevTo := previousPeriod(from, to)
 
 	unknownID := uuid.New()
-	current := []*transaction.Transaction{statsTransaction(10000, transaction.TypeExpense, unknownID)}
-
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).Return(current, nil)
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(prevFrom, prevTo)).
-		Return([]*transaction.Transaction{}, nil)
-	m.transactions.On("GetAllTransactions", mock.Anything, recentFilter()).Return(current, nil)
+	m.totals(from, to, catTotal(unknownID, transaction.TypeExpense, 10_000, 1))
+	m.totals(prevFrom, prevTo)
+	m.transactions.On("GetAllTransactions", mock.Anything, recentFilter()).
+		Return([]*transaction.Transaction{statsTransaction(10_000, transaction.TypeExpense, unknownID)}, nil)
 	m.transactions.On("CountTransactions", mock.Anything, mock.Anything).Return(1, nil)
 	m.budgets.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil)
 	m.categories.On("GetCategoryByID", mock.Anything, unknownID).Return(nil, errors.New("not found"))
@@ -218,10 +225,8 @@ func TestStatsService_Summary_BudgetProgress(t *testing.T) {
 		},
 	}
 
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).
-		Return([]*transaction.Transaction{}, nil)
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(prevFrom, prevTo)).
-		Return([]*transaction.Transaction{}, nil)
+	m.totals(from, to)
+	m.totals(prevFrom, prevTo)
 	m.transactions.On("GetAllTransactions", mock.Anything, recentFilter()).
 		Return([]*transaction.Transaction{}, nil)
 	m.transactions.On("CountTransactions", mock.Anything, mock.Anything).Return(0, nil)
@@ -256,10 +261,8 @@ func TestStatsService_Summary_EmptyPeriod(t *testing.T) {
 	to := from.AddDays(30)
 	prevFrom, prevTo := previousPeriod(from, to)
 
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).
-		Return([]*transaction.Transaction{}, nil)
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(prevFrom, prevTo)).
-		Return([]*transaction.Transaction{}, nil)
+	m.totals(from, to)
+	m.totals(prevFrom, prevTo)
 	m.transactions.On("GetAllTransactions", mock.Anything, recentFilter()).
 		Return([]*transaction.Transaction{}, nil)
 	m.transactions.On("CountTransactions", mock.Anything, mock.Anything).Return(0, nil)
@@ -286,11 +289,8 @@ func TestStatsService_Summary_ZeroPreviousAmount(t *testing.T) {
 	prevFrom, prevTo := previousPeriod(from, to)
 
 	categoryID := uuid.New()
-	current := []*transaction.Transaction{statsTransaction(50000, transaction.TypeIncome, categoryID)}
-	previous := []*transaction.Transaction{statsTransaction(20000, transaction.TypeExpense, categoryID)}
-
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).Return(current, nil)
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(prevFrom, prevTo)).Return(previous, nil)
+	m.totals(from, to, catTotal(categoryID, transaction.TypeIncome, 50_000, 1))
+	m.totals(prevFrom, prevTo, catTotal(categoryID, transaction.TypeExpense, 20_000, 1))
 	m.transactions.On("GetAllTransactions", mock.Anything, recentFilter()).
 		Return([]*transaction.Transaction{}, nil)
 	m.transactions.On("CountTransactions", mock.Anything, mock.Anything).Return(2, nil)
@@ -316,12 +316,12 @@ func TestStatsService_Summary_InvalidPeriod(t *testing.T) {
 	assert.Nil(t, summary)
 }
 
-func TestStatsService_Summary_TransactionServiceError(t *testing.T) {
+func TestStatsService_Summary_AggregateError(t *testing.T) {
 	svc, m := newStatsService()
 	from := date.New(2026, time.March, 1)
 	to := from.AddDays(30)
 
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).
+	m.aggregates.On("GetTotalsByCategoryAndDateRange", mock.Anything, from, to).
 		Return(nil, errors.New("database error"))
 
 	summary, err := svc.Summary(t.Context(), &from, &to)
@@ -335,8 +335,7 @@ func TestStatsService_Summary_BudgetServiceError(t *testing.T) {
 	from := date.New(2026, time.March, 1)
 	to := from.AddDays(30)
 
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).
-		Return([]*transaction.Transaction{}, nil)
+	m.totals(from, to)
 	m.budgets.On("GetActiveBudgets", mock.Anything, mock.Anything).Return(nil, errors.New("budget service down"))
 
 	summary, err := svc.Summary(t.Context(), &from, &to)
@@ -345,30 +344,26 @@ func TestStatsService_Summary_BudgetServiceError(t *testing.T) {
 	assert.Nil(t, summary)
 }
 
-// Ошибка выборки предыдущего периода не роняет сводку — данных для сравнения просто нет.
-func TestStatsService_Summary_PreviousPeriodErrorIgnored(t *testing.T) {
+// Сбой выборки предыдущего периода — это сбой БД, а не «данных для сравнения нет».
+func TestStatsService_Summary_PreviousPeriodError(t *testing.T) {
 	svc, m := newStatsService()
 	from := date.New(2026, time.March, 1)
 	to := from.AddDays(30)
 	prevFrom, prevTo := previousPeriod(from, to)
 
 	categoryID := uuid.New()
-	current := []*transaction.Transaction{statsTransaction(50000, transaction.TypeIncome, categoryID)}
-
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).Return(current, nil)
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(prevFrom, prevTo)).
+	m.totals(from, to, catTotal(categoryID, transaction.TypeIncome, 50_000, 1))
+	m.aggregates.On("GetTotalsByCategoryAndDateRange", mock.Anything, prevFrom, prevTo).
 		Return(nil, errors.New("database error"))
 	m.transactions.On("GetAllTransactions", mock.Anything, recentFilter()).
 		Return([]*transaction.Transaction{}, nil)
 	m.transactions.On("CountTransactions", mock.Anything, mock.Anything).Return(1, nil)
 	m.budgets.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil)
-	m.categories.On("GetCategoryByID", mock.Anything, categoryID).Return(statsCategory(categoryID, "Еда"), nil)
 
 	summary, err := svc.Summary(t.Context(), &from, &to)
-	require.NoError(t, err)
 
-	assert.False(t, summary.HasPreviousData)
-	assert.Equal(t, money.Minor(50_000), summary.Current.IncomeMinor)
+	require.Error(t, err)
+	assert.Nil(t, summary)
 }
 
 func TestStatsService_Summary_CountError(t *testing.T) {
@@ -376,8 +371,7 @@ func TestStatsService_Summary_CountError(t *testing.T) {
 	from := date.New(2026, time.March, 1)
 	to := from.AddDays(30)
 
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).
-		Return([]*transaction.Transaction{}, nil)
+	m.totals(from, to)
 	m.transactions.On("GetAllTransactions", mock.Anything, recentFilter()).
 		Return([]*transaction.Transaction{}, nil)
 	m.transactions.On("CountTransactions", mock.Anything, mock.Anything).
@@ -390,46 +384,6 @@ func TestStatsService_Summary_CountError(t *testing.T) {
 	assert.Nil(t, summary)
 }
 
-// pageFilter матчит страницу выборки за период: страницы отличаются только offset.
-func pageFilter(from, to date.Date, offset int) any {
-	return mock.MatchedBy(func(f dto.TransactionFilterDTO) bool {
-		return f.DateFrom != nil && f.DateTo != nil &&
-			*f.DateFrom == from && *f.DateTo == to && f.Offset == offset
-	})
-}
-
-func TestStatsService_Summary_SumsBeyondFirstPage(t *testing.T) {
-	svc, m := newStatsService()
-	from := date.New(2026, time.March, 1)
-	to := date.New(2026, time.March, 31)
-	prevFrom, prevTo := previousPeriod(from, to)
-
-	foodID := uuid.New()
-	firstPage := make([]*transaction.Transaction, 0, 1000)
-	for range 1000 {
-		firstPage = append(firstPage, statsTransaction(1000, transaction.TypeExpense, foodID))
-	}
-	secondPage := []*transaction.Transaction{statsTransaction(2500, transaction.TypeExpense, foodID)}
-
-	m.transactions.On("GetAllTransactions", mock.Anything, pageFilter(from, to, 0)).Return(firstPage, nil)
-	m.transactions.On("GetAllTransactions", mock.Anything, pageFilter(from, to, 1000)).Return(secondPage, nil)
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(prevFrom, prevTo)).
-		Return([]*transaction.Transaction{}, nil)
-	m.transactions.On("GetAllTransactions", mock.Anything, recentFilter()).
-		Return([]*transaction.Transaction{}, nil)
-	m.transactions.On("CountTransactions", mock.Anything, mock.Anything).Return(1001, nil)
-	m.budgets.On("GetActiveBudgets", mock.Anything, mock.Anything).Return([]*budget.Budget{}, nil)
-	m.categories.On("GetCategoryByID", mock.Anything, foodID).Return(statsCategory(foodID, "Еда"), nil)
-
-	summary, err := svc.Summary(t.Context(), &from, &to)
-	require.NoError(t, err)
-
-	assert.Equal(t, 1001, summary.Current.TransactionCount)
-	assert.Equal(t, money.Minor(1_002_500), summary.Current.ExpensesMinor)
-	require.Len(t, summary.ExpenseCategories, 1)
-	assert.Equal(t, 1001, summary.ExpenseCategories[0].TransactionCount)
-}
-
 func TestStatsService_Summary_CategoryCountsSplitByType(t *testing.T) {
 	svc, m := newStatsService()
 	from := date.New(2026, time.March, 1)
@@ -437,15 +391,11 @@ func TestStatsService_Summary_CategoryCountsSplitByType(t *testing.T) {
 	prevFrom, prevTo := previousPeriod(from, to)
 
 	mixedID := uuid.New()
-	current := []*transaction.Transaction{
-		statsTransaction(10000, transaction.TypeExpense, mixedID),
-		statsTransaction(20000, transaction.TypeExpense, mixedID),
-		statsTransaction(5000, transaction.TypeIncome, mixedID),
-	}
-
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, to)).Return(current, nil)
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(prevFrom, prevTo)).
-		Return([]*transaction.Transaction{}, nil)
+	m.totals(from, to,
+		catTotal(mixedID, transaction.TypeExpense, 30_000, 2),
+		catTotal(mixedID, transaction.TypeIncome, 5_000, 1),
+	)
+	m.totals(prevFrom, prevTo)
 	m.transactions.On("GetAllTransactions", mock.Anything, recentFilter()).
 		Return([]*transaction.Transaction{}, nil)
 	m.transactions.On("CountTransactions", mock.Anything, mock.Anything).Return(3, nil)
@@ -472,10 +422,8 @@ func TestStatsService_Summary_DefaultPeriodUsesFamilyTimezone(t *testing.T) {
 	from, _ := today.MonthBounds()
 	prevFrom, prevTo := previousPeriod(from, today)
 
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(from, today)).
-		Return([]*transaction.Transaction{}, nil)
-	m.transactions.On("GetAllTransactions", mock.Anything, periodFilter(prevFrom, prevTo)).
-		Return([]*transaction.Transaction{}, nil)
+	m.totals(from, today)
+	m.totals(prevFrom, prevTo)
 	m.transactions.On("GetAllTransactions", mock.Anything, recentFilter()).
 		Return([]*transaction.Transaction{}, nil)
 	m.transactions.On("CountTransactions", mock.Anything, mock.Anything).Return(0, nil)
@@ -492,17 +440,12 @@ func TestStatsService_Summary_DefaultPeriodUsesFamilyTimezone(t *testing.T) {
 	assert.Empty(t, summary.ExpenseCategories)
 	assert.Empty(t, summary.IncomeCategories)
 	m.families.AssertCalled(t, "GetFamily", mock.Anything)
+	m.aggregates.AssertExpectations(t)
 	m.budgets.AssertExpectations(t)
 }
 
 func TestStatsService_Summary_FamilyError(t *testing.T) {
-	m := &statsMocks{
-		transactions: new(MockTransactionService),
-		budgets:      new(MockBudgetService),
-		categories:   new(MockCategoryService),
-		families:     new(MockFamilyService),
-		aggregates:   new(MockTransactionRepository),
-	}
+	m := newStatsMocks()
 	m.families.On("GetFamily", mock.Anything).Return(nil, errors.New("family repository down"))
 	svc := services.NewStatsService(m.transactions, m.budgets, m.categories, m.families, m.aggregates)
 
