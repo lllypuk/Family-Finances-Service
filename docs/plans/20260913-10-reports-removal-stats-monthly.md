@@ -3,7 +3,7 @@
 Отчёты в мобильном приложении — это экран поверх статистики, а не CSV-файл (решение владельца
 13.09.2026; строка «CSV-экспорт: оставить» в `docs/specs/005-api-only-redesign.md:190` отменена).
 Серверный релиз `v0.3.0`; клиент (период на главной, экран «Обзор», мультивыбор операций) — план 11.
-Ревью: codex, тред `reports-replacement`, 13.09.2026.
+Ревью: codex (тред `reports-replacement`, два раунда) и plan-review, 13.09.2026.
 
 ## Overview
 
@@ -17,7 +17,7 @@
   смотрит только на общий `has_previous_data` (`android/.../ui/home/HomeScreen.kt:144`).
 - Новый `GET /api/v1/stats/monthly?from&to` — ряд по месяцам для экрана «Обзор».
 - Сервис в `BudgetHandler`/`TransactionHandler` становится обязательным параметром, мёртвые ветки
-  `if h.xxxService != nil` (12 штук) уходят вместе с юнит-тестами на репозиторный путь.
+  `if h.xxxService != nil` (13 штук) уходят вместе с юнит-тестами на репозиторный путь.
 
 ## Context (from discovery)
 
@@ -35,29 +35,34 @@
   `services/{report_service,report_csv,helpers}_test.go`, `services/dto/report_dto_test.go`,
   `infrastructure/report/report_repository_test.go`, `validation/validation_test.go`,
   `tests/integration/{reports,transactions,api_pagination,api_roles,api_auth}_test.go`.
-- Схема: таблица и индексы `idx_reports_family_type`, `idx_reports_generated_by` —
-  `migrations/001_consolidated.up.sql:114–125`, `001_consolidated.down.sql:12–13,33`.
+- Схема: таблица `migrations/001_consolidated.up.sql:114–132`, индексы `idx_reports_family_type`,
+  `idx_reports_generated_by` — `:172–173`; `001_consolidated.down.sql:11–12,33`.
   `migrations_test.go:30` (список таблиц), `:47` (`reports.start_date`), `:125` (`Migrate(1)` после `Up()` —
   released-схема восстанавливается down-миграциями, а не повторным `001.up`). Прод на версии 2.
 - Спека: `docs/api/openapi.yaml:716–813` (три пути `reports`), схемы `ReportOk` (`:1049`, `:1168` — один из шести
   envelope-ов, см. `CLAUDE.md`, раздел Android), `ReportType/ReportPeriod` (`:1219–1230`),
   `ReportSummary/Report/ReportData` (`:1505–1596`); `getStatsSummary` `:814`, `StatsSummary` `:1648`,
-  `PeriodTotals` `:1597`. Клиент: `android/core/api/generated/.../apis/ReportsApi.kt` исчезнет при регенерации;
-  приложение `ReportsApi` не вызывает.
+  `PeriodTotals` `:1597`. Клиент: `android/core/api/generated/kotlin/.../core/api/ReportsApi.kt`, модели `Report*`,
+  `CreateReportRequest.kt`, `ListReports200Response.kt` исчезнут при регенерации; приложение их не вызывает.
+  Единственные HTTP-тесты `/stats/summary` живут в `tests/integration/reports_test.go:561,593`.
 - Статистика: `statsService` (`stats_service.go:34`) зависит от сервисов, не репозиториев; `Summary` (`:58`)
-  → `transactionsBetween` (`:121`, постранично до 20 000) → `periodTotals` (`:303`), `categoryShares` (`:232`)
+  → `transactionsBetween` (`:121`, обрыв на `:141`) → `periodTotals` (`:303`), `categoryShares` (`:232`)
   в памяти; `previousTotals` (`:148`) — ошибка выборки читается как «данных нет»; `previousPeriod` (`:324`) —
   соседний интервал той же длины (соответствует `openapi.yaml:1658`); `periodDeltas` (`:330`) при нулевой базе
-  возвращает 0. Бюджеты (`:82`) и `recent` (`:93`) считаются на `today`, а не на период — так и остаётся,
+  возвращает 0. Бюджеты (`:82`) и `recent` (`:87`) считаются на `today`, а не на период — так и остаётся,
   контракт это описывает. Хендлер: `handlers/stats.go:24`, `parseStatsPeriod` (`:45`) переиспользуется.
-- Репозиторий транзакций уже умеет `SUM` по периоду (`transaction_repository_sqlite.go:719`
-  `GetTotalByFamilyAndDateRange`), `GROUP BY` — только в бюджетах (`budget_repository_sqlite.go:305`).
+- Интерфейс `TransactionRepository` — `internal/services/transaction_service.go:48` (не `interfaces.go`), соседи
+  `GetTotalByCategory/ByDateRange/ByCategoryAndDateRange` (`:58–68`). Репозиторий уже умеет `SUM` по периоду
+  (`transaction_repository_sqlite.go:719`), `GROUP BY` — только в бюджетах (`budget_repository_sqlite.go:305`).
+  В `date.go` есть `AddDays` (`:77`) и `MonthBounds` (`:90`), арифметики по месяцам нет.
   `date` — TEXT `YYYY-MM-DD` без зоны (`001_consolidated.up.sql:73,85`), поэтому `substr(date, 1, 7)` даёт месяц
   без пересчёта пояса; пояс семьи нужен только для границ по умолчанию.
 - Мёртвые ветки: `handlers/transactions.go:74,100,262,491,528,619,643`, `handlers/budgets.go:56,84,101,129,178,234`;
   конструкторы с вариативным сервисом — `budgets.go:26`, `transactions.go:32`. Юнит-тесты на репозиторный путь:
   `budgets_test.go:88` (`setupBudgetHandler`), `transactions_test.go:130` (`setupTransactionHandler`);
-  сервисный путь уже тестируется через `stubBudgetService` (`budgets_test.go:239,268,292`).
+  сервисный путь уже тестируется через `stubBudgetService` (`budgets_test.go:239,268,292`). `MockTransactionRepository`
+  (`transactions_test.go`) встраивает `handlers.TransactionRepository` и нужен `setupBudgetHandler` (`budgets_test.go:88,90`);
+  его `GetTotalsByCategory` (`:117`) — мёртвый метод, единственное вхождение в дереве.
 
 ## Development Approach
 
@@ -112,7 +117,8 @@
       больше не читаются. Extra-метод `GetAll` в `handlers.TransactionRepository` (`repositories.go:28–36`) после
       сноса никто не зовёт — алиас становится обычным `= services.TransactionRepository`
 - [ ] `setupBudgetHandler`/`setupTransactionHandler` — на стаб/мок сервиса (+ мок `FamilyRepository` для
-      `active_only`); `MockTransactionRepository` в `transactions_test.go` — удалить, если больше никем не используется
+      `active_only`); `MockTransactionRepository` остаётся (его ждёт `setupBudgetHandler`), мёртвый
+      `GetTotalsByCategory` (`transactions_test.go:117`) — удалить, чтобы не путался с новым `TotalsByCategory`
 - [ ] тесты сервисного пути: успех, 404 (`isNotFoundError`), 409/422 через `handle*ServiceError` — по одному
       случаю на метод, без дублирования интеграционных
 - [ ] `make fmt && make test && make lint` — 0 issues; коммит `refactor: сервис обязателен в хендлерах бюджетов и транзакций`
@@ -131,14 +137,20 @@
   `internal/infrastructure/validation/validation.go` (+ `_test`),
   `internal/testhelpers/integration_server.go`, `internal/testhelpers/factories.go`,
   `tests/integration/{transactions,api_pagination,api_roles,api_auth}_test.go`
-- Modify: `docs/api/openapi.yaml`, `android/core/api/generated/**` (регенерация)
+- Create: `tests/integration/stats_test.go` (перенос `TestStatsAPI_Summary*` из `reports_test.go:561,593`)
+- Modify: `internal/application/handlers/errors.go:52–56`, `docs/api/openapi.yaml`, `android/core/api/generated/**`
 
 - [ ] снести роуты, хендлер, сервис, репозиторий, домен, DTO, `ReportRepository`/`Services.Report`, параметр
-      `NewServices`, `ErrReportNotFound` из `isNotFoundError`, валидаторы отчётов, фабрику `CreateTestReport`
-- [ ] в интеграционных тестах (`api_pagination`, `api_roles`, `api_auth`, `transactions`) заменить `/reports` на другой
-      ресурс, если проверялось общее поведение (пагинация, роль, 401), иначе удалить случай
+      `NewServices`, `ErrReportNotFound` из `isNotFoundError`, валидаторы отчётов, фабрику `CreateTestReport`,
+      коды `ErrCodeGenerationFailed`/`ErrCodeSaveFailed`/`ErrCodeExportFailed` (`errors.go:52–56`, живут только в
+      `reports.go:84,88,112`)
+- [ ] `TestStatsAPI_Summary`, `TestStatsAPI_Summary_InvalidDate` → `tests/integration/stats_test.go` до удаления
+      `reports_test.go`
+- [ ] интеграционные тесты: `api_pagination_test.go:115,276`, `api_auth_test.go:193,337`, `api_roles_test.go:154`,
+      `transactions_test.go:690` — механически на другой ресурс; `TestAPIPagination_Reports_TotalBeyondRepositoryLimit`
+      (`api_pagination_test.go:333`, потолок репозитория в 100 строк) — перенести на `/api/v1/transactions`
 - [ ] `openapi.yaml`: убрать три пути, `ReportOk` из `responses` и `schemas`, `ReportType/ReportPeriod/ReportSummary/
-      Report/ReportData`, тег `reports`, коды `REPORT_*` из шапки, если есть
+      Report/ReportData`, тег `reports`; коды `GENERATION_FAILED`/`SAVE_FAILED`/`EXPORT_FAILED` из шапки, если есть
 - [ ] `make -C android api-gen` — `ReportsApi.kt` и модели `Report*` исчезают; закоммитить; `make -C android api-check`,
       `make -C android check`
 - [ ] `make fmt && make test && make lint` — 0 issues (в т.ч. `TestOpenAPISpec_*`); коммит `refactor: снос /reports`
@@ -157,8 +169,9 @@
 - [ ] `CleanTables`: убрать `reports`; `migrations_test.go`: убрать из списка таблиц и проверку `reports.start_date`,
       добавить `assert` отсутствия таблицы после `Up()`
 - [ ] тест `TestMigrations_DropReports`: `Up()`, `Migrate(2)` → таблица есть, `Up()` → нет, `Down()` → таблиц нет
-- [ ] подкоманда `migrate --to N` (`OpenDatabaseNoMigrate` + `MigrationManager.Migrate(N)`, без аргумента —
-      печать текущей версии): старый образ не стартует на версии схемы, которой нет в его `./migrations`
+- [ ] подкоманда `migrate --to N` (`NewMigrationManager` берёт URL, `migrations.go:21` — `OpenDatabaseNoMigrate` не
+      нужен; `os.Stat(DATABASE_PATH)` до запуска, как `backup.go:33`, иначе опечатка в пути создаст пустую базу
+      версии N; без аргумента — печать текущей версии): старый образ не стартует на версии схемы, которой нет в его `./migrations`
       (golang-migrate: `no migration found for version 3`), так что откат образа начинается с `migrate --to 2`
       образом `v0.3.0`. Это касалось и `v0.1.0` ↔ версии 2, просто никто не откатывал. Тест в `bootstrap_test.go`;
       раздел «Откат» в `deploy/README.md`
@@ -169,11 +182,13 @@
 **Files:**
 - Modify: `internal/domain/transaction/transaction.go` (типы `CategoryTotal`, `MonthTotal`)
 - Modify: `internal/infrastructure/transaction/transaction_repository_sqlite.go` (+ `_test`)
-- Modify: `internal/services/interfaces.go` (`TransactionRepository`), `internal/services/container.go`,
-  `internal/services/stats_service.go:34–57` (конструктор), моки `TransactionRepository`
-  (`internal/services/helpers_test.go` и кто его встраивает), `internal/testhelpers/integration_server.go`
+- Modify: `internal/services/transaction_service.go:48` (`TransactionRepository`), `internal/services/container.go`,
+  `internal/services/stats_service.go:34–57` (конструктор), моки: `internal/services/helpers_test.go`,
+  `internal/application/handlers/transactions_test.go` (`MockTransactionRepository` встраивает
+  `handlers.TransactionRepository`, `repositories.go:31`), `internal/testhelpers/integration_server.go`
 
-- [ ] `TotalsByCategory(ctx, from, to) ([]transaction.CategoryTotal, error)`: `category_id, type, SUM(amount_minor),
+- [ ] имена в стиле соседей: `GetTotalsByCategoryAndDateRange`, `GetTotalsByMonth` (ниже — коротко).
+      `TotalsByCategory(ctx, from, to) ([]transaction.CategoryTotal, error)`: `category_id, type, SUM(amount_minor),
       COUNT(*)`, `GROUP BY category_id, type`, `family_id` из `getSingleFamilyID`
 - [ ] `TotalsByMonth(ctx, from, to) ([]transaction.MonthTotal, error)`: `substr(date, 1, 7) AS month, type, SUM, COUNT`,
       `GROUP BY month, type ORDER BY month`
@@ -188,7 +203,8 @@
 ### Task 5: `Summary` на агрегатах
 
 **Files:**
-- Modify: `internal/services/stats_service.go`, `internal/services/stats_service_test.go`
+- Modify: `internal/services/stats_service.go`, `internal/services/stats_service_test.go`,
+  `tests/integration/stats_test.go` (создан в Task 2)
 
 - [ ] `Summary`: `PeriodTotals` текущего и предыдущего периода и `CategoryShare` — из `TotalsByCategory`
       (`categoryName` как сейчас); `transactionsBetween`, `periodTotals`, оба лимита — удалить; ошибка предыдущего
@@ -203,11 +219,12 @@
 ### Task 6: `GET /api/v1/stats/monthly`
 
 **Files:**
+- Modify: `internal/domain/date/date.go` (+ `_test`): `MonthKey() string` (`YYYY-MM`), `AddMonths(n)` или
+  `MonthStart` со сдвигом — арифметики по месяцам сейчас нет
 - Modify: `internal/services/dto/stats_dto.go` (`StatsMonthly`, `MonthTotals`), `internal/services/interfaces.go`
   (`StatsService.Monthly`), `internal/services/stats_service.go` (+ `_test`)
 - Modify: `internal/application/handlers/stats.go` (+ `_test`), `internal/application/http_server.go`
-- Modify: `docs/api/openapi.yaml`, `android/core/api/generated/**`
-- Create: `tests/integration/stats_monthly_test.go`
+- Modify: `docs/api/openapi.yaml`, `android/core/api/generated/**`, `tests/integration/stats_test.go`
 
 - [ ] `StatsService.Monthly(ctx, from, to *date.Date) (*dto.StatsMonthly, error)`: границы по умолчанию — 12 месяцев
       по сегодняшний в поясе семьи; корзины на каждый месяц `[from, to]`, нули для пустых; суммы из `TotalsByMonth`
