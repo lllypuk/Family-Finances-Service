@@ -205,8 +205,7 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 			mockService := &MockCategoryService{}
 			tt.mockSetup(mockService, testFamilyID)
 
-			repos := &handlers.Repositories{}
-			handler := handlers.NewCategoryHandler(repos, mockService)
+			handler := handlers.NewCategoryHandler(mockService)
 
 			e := echo.New()
 			var req *http.Request
@@ -286,8 +285,7 @@ func TestCategoryHandler_GetCategories(t *testing.T) {
 			mockService := &MockCategoryService{}
 			tt.mockSetup(mockService)
 
-			repos := &handlers.Repositories{}
-			handler := handlers.NewCategoryHandler(repos, mockService)
+			handler := handlers.NewCategoryHandler(mockService)
 
 			e := echo.New()
 			req := httptest.NewRequest(http.MethodGet, "/categories", nil)
@@ -387,8 +385,7 @@ func TestCategoryHandler_GetCategoryByID(t *testing.T) {
 			mockService := &MockCategoryService{}
 			tt.mockSetup(mockService, testFamilyID)
 
-			repos := &handlers.Repositories{}
-			handler := handlers.NewCategoryHandler(repos, mockService)
+			handler := handlers.NewCategoryHandler(mockService)
 
 			e := echo.New()
 			req := httptest.NewRequest(http.MethodGet, "/categories/"+tt.categoryID, nil)
@@ -497,8 +494,7 @@ func TestCategoryHandler_UpdateCategory(t *testing.T) {
 			mockService := &MockCategoryService{}
 			tt.mockSetup(mockService, testFamilyID)
 
-			repos := &handlers.Repositories{}
-			handler := handlers.NewCategoryHandler(repos, mockService)
+			handler := handlers.NewCategoryHandler(mockService)
 
 			e := echo.New()
 			body, _ := json.Marshal(tt.requestBody)
@@ -589,8 +585,7 @@ func TestCategoryHandler_DeleteCategory(t *testing.T) {
 			mockService := &MockCategoryService{}
 			tt.mockSetup(mockService, testFamilyID)
 
-			repos := &handlers.Repositories{}
-			handler := handlers.NewCategoryHandler(repos, mockService)
+			handler := handlers.NewCategoryHandler(mockService)
 
 			e := echo.New()
 			familyID := testFamilyID.String()

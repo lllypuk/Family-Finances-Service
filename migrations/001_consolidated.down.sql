@@ -8,6 +8,8 @@ DROP TRIGGER IF EXISTS update_families_updated_at;
 
 DROP INDEX IF EXISTS idx_sessions_user_id;
 
+-- reports удалена миграцией 003, но полный откат проходит через 003.down, которая её
+-- восстанавливает, — убрать таблицу и её индексы обязан этот файл.
 DROP INDEX IF EXISTS idx_reports_generated_by;
 DROP INDEX IF EXISTS idx_reports_family_type;
 

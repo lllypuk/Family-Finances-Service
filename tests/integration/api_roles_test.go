@@ -151,7 +151,6 @@ func TestAPIRoles_MemberHasAccessToFinanceRoutes(t *testing.T) {
 		"/api/v1/categories",
 		"/api/v1/transactions",
 		"/api/v1/budgets",
-		"/api/v1/reports",
 		"/api/v1/stats/summary",
 	}
 

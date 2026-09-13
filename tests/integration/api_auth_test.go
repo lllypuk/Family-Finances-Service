@@ -76,7 +76,6 @@ type apiFixtures struct {
 	categoryID    uuid.UUID
 	transactionID uuid.UUID
 	budgetID      uuid.UUID
-	reportID      uuid.UUID
 
 	// freeCategoryID — категория без бюджета: BudgetService отвергает второй
 	// пересекающийся бюджет на ту же категорию, а нам нужен честный 201.
@@ -190,7 +189,6 @@ func TestAPIAuth_AuthenticatedRequestsAllowed(t *testing.T) {
 			{name: "categories", path: "/api/v1/categories"},
 			{name: "transactions", path: "/api/v1/transactions"},
 			{name: "budgets", path: "/api/v1/budgets"},
-			{name: "reports", path: "/api/v1/reports"},
 		}
 
 		for _, tc := range readCases {
@@ -334,7 +332,6 @@ func concreteAPIPath(pattern string, fixtures apiFixtures) string {
 		"categories":   fixtures.categoryID,
 		"transactions": fixtures.transactionID,
 		"budgets":      fixtures.budgetID,
-		"reports":      fixtures.reportID,
 	}
 
 	segments := strings.Split(pattern, "/")
@@ -377,9 +374,6 @@ func createAPIFixtures(t *testing.T, ts *testhelpers.TestServer) apiFixtures {
 	testBudget := testhelpers.CreateTestBudget(familyID, testCategory.ID)
 	require.NoError(t, ts.Repos.Budget.Create(ctx, testBudget))
 
-	testReport := testhelpers.CreateTestReport(familyID, testUser.ID)
-	require.NoError(t, ts.Repos.Report.Create(ctx, testReport))
-
 	freeCategory := testhelpers.CreateTestCategory(familyID, category.TypeExpense)
 	require.NoError(t, ts.Repos.Category.Create(ctx, freeCategory))
 
@@ -388,7 +382,6 @@ func createAPIFixtures(t *testing.T, ts *testhelpers.TestServer) apiFixtures {
 		categoryID:     testCategory.ID,
 		transactionID:  testTransaction.ID,
 		budgetID:       testBudget.ID,
-		reportID:       testReport.ID,
 		freeCategoryID: freeCategory.ID,
 	}
 }

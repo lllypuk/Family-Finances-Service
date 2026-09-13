@@ -10,7 +10,6 @@ import (
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/money"
-	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services/dto"
@@ -130,44 +129,8 @@ type BudgetService interface {
 // Пустые границы означают текущий месяц по часовому поясу семьи.
 type StatsService interface {
 	Summary(ctx context.Context, from, to *date.Date) (*dto.StatsSummary, error)
-}
-
-// ReportService defines business operations for report generation and analytics
-type ReportService interface {
-	// Report Generation
-	GenerateExpenseReport(ctx context.Context, req dto.ReportRequestDTO) (*dto.ExpenseReportDTO, error)
-	GenerateIncomeReport(ctx context.Context, req dto.ReportRequestDTO) (*dto.IncomeReportDTO, error)
-	GenerateBudgetComparisonReport(
-		ctx context.Context,
-		period report.Period,
-	) (*dto.BudgetComparisonDTO, error)
-	GenerateCashFlowReport(ctx context.Context, from, to date.Date) (*dto.CashFlowReportDTO, error)
-	GenerateCategoryBreakdownReport(
-		ctx context.Context,
-		period report.Period,
-	) (*dto.CategoryBreakdownDTO, error)
-
-	// GenerateReport dispatches by req.Type and returns an unsaved report with converted data
-	GenerateReport(ctx context.Context, req dto.ReportRequestDTO) (*report.Report, error)
-
-	// Report Management
-	SaveReport(ctx context.Context, reportEntity *report.Report) error
-	GetReportByID(ctx context.Context, id uuid.UUID) (*report.Report, error)
-	GetReports(ctx context.Context, typeFilter *report.Type) ([]*report.Report, error)
-	GetReportsByUserID(ctx context.Context, userID uuid.UUID) ([]*report.Report, error)
-	DeleteReport(ctx context.Context, id uuid.UUID) error
-
-	// Export Operations
-	ExportReport(ctx context.Context, reportID uuid.UUID, format string, options dto.ExportOptionsDTO) ([]byte, error)
-	ExportReportData(ctx context.Context, reportData any, format string, options dto.ExportOptionsDTO) ([]byte, error)
-
-	// Analytics & Insights
-	GenerateTrendAnalysis(
-		ctx context.Context,
-		categoryID *uuid.UUID,
-		period report.Period,
-	) (*dto.TrendAnalysisDTO, error)
-	GenerateFinancialInsights(ctx context.Context) ([]dto.RecommendationDTO, error)
+	// Monthly — ряд по месяцам периода; пустые границы означают двенадцать месяцев по сегодняшний.
+	Monthly(ctx context.Context, from, to *date.Date) (*dto.StatsMonthly, error)
 }
 
 // BackupService defines business operations for database backup management

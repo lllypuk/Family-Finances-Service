@@ -789,3 +789,87 @@ func (r *SQLiteRepository) GetTotalByCategoryAndDateRange(
 
 	return total, nil
 }
+
+// GetTotalsByCategoryAndDateRange — суммы и число операций по каждой паре (категория, тип) за период.
+func (r *SQLiteRepository) GetTotalsByCategoryAndDateRange(
+	ctx context.Context,
+	startDate, endDate date.Date,
+) ([]transaction.CategoryTotal, error) {
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	query := `
+		SELECT category_id, type, SUM(amount_minor), COUNT(*)
+		FROM transactions
+		WHERE family_id = ? AND date >= ? AND date <= ?
+		GROUP BY category_id, type`
+
+	rows, err := r.db.QueryContext(ctx, query, sqlitehelpers.UUIDToString(familyID), startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get totals by category: %w", err)
+	}
+	defer rows.Close()
+
+	var totals []transaction.CategoryTotal
+	for rows.Next() {
+		var (
+			categoryID string
+			total      transaction.CategoryTotal
+		)
+		if scanErr := rows.Scan(&categoryID, &total.Type, &total.AmountMinor, &total.Count); scanErr != nil {
+			return nil, fmt.Errorf("failed to scan category total: %w", scanErr)
+		}
+		total.CategoryID, err = uuid.Parse(categoryID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse category ID: %w", err)
+		}
+		totals = append(totals, total)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate category totals: %w", err)
+	}
+
+	return totals, nil
+}
+
+// GetTotalsByMonth — суммы и число операций по каждой паре (месяц `YYYY-MM`, тип) за период;
+// крайние месяцы покрывают только дни внутри интервала.
+func (r *SQLiteRepository) GetTotalsByMonth(
+	ctx context.Context,
+	startDate, endDate date.Date,
+) ([]transaction.MonthTotal, error) {
+	familyID, err := r.getSingleFamilyID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// date — TEXT `YYYY-MM-DD` без зоны, поэтому месяц берётся срезом, без пересчёта пояса.
+	query := `
+		SELECT substr(date, 1, 7) AS month, type, SUM(amount_minor), COUNT(*)
+		FROM transactions
+		WHERE family_id = ? AND date >= ? AND date <= ?
+		GROUP BY month, type
+		ORDER BY month`
+
+	rows, err := r.db.QueryContext(ctx, query, sqlitehelpers.UUIDToString(familyID), startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get totals by month: %w", err)
+	}
+	defer rows.Close()
+
+	var totals []transaction.MonthTotal
+	for rows.Next() {
+		var total transaction.MonthTotal
+		if scanErr := rows.Scan(&total.Month, &total.Type, &total.AmountMinor, &total.Count); scanErr != nil {
+			return nil, fmt.Errorf("failed to scan month total: %w", scanErr)
+		}
+		totals = append(totals, total)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate month totals: %w", err)
+	}
+
+	return totals, nil
+}

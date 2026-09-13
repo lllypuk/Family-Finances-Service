@@ -6,15 +6,15 @@ API for the Android client. One instance = one family.
 ## 🎯 Project Status: IN DEVELOPMENT 🚧
 
 > **Direction (September 2026):** API-only backend for an Android app. Decisions and the implementation
-> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–09 are done: the
+> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–10 are done: the
 > web interface, cookie sessions and CSRF are gone, money is integer minor units, dates are calendar dates,
-> the deployment is one compose with Caddy and the Android client lives in `android/` with its settings screen;
-> the sections below
+> the deployment is one compose with Caddy, the Android client lives in `android/` with its settings screen,
+> and stored reports are gone in favour of `GET /api/v1/stats/monthly`; the sections below
 > describe the code as it is today.
 
-- ✅ REST API for family, users, categories, transactions, budgets, reports, stats, backups
+- ✅ REST API for family, users, categories, transactions, budgets, stats, backups
 - ✅ Bearer-token authentication with server-side sessions and a login rate limiter
-- ✅ Family bootstrap and password reset from the CLI (`setup`, `reset-password`)
+- ✅ Family bootstrap, password reset and schema moves from the CLI (`setup`, `reset-password`, `migrate`)
 - ✅ Lightweight SQLite database, migrations applied at startup
 - ✅ CI/CD in GitLab: checks on every merge request, image and deploy from `main`
 - ✅ Single Docker container, built from source (`docker/Dockerfile`)
@@ -51,17 +51,19 @@ There are two roles, `admin` and `member`; both see all of the family's data. Th
 creates a user with `POST /api/v1/users`.
 
 - `/api/v1/users` and `/api/v1/backups`, `PUT /api/v1/family`, `DELETE /api/v1/categories/:id` — **admin only**
-- `/api/v1/{categories,transactions,budgets,reports,stats}` — **admin or member**
+- `/api/v1/{categories,transactions,budgets,stats}` — **admin or member**
 - `GET /api/v1/family`, `/api/v1/me*`, `/api/v1/auth/*` — any authenticated role
 
 The author of a record is taken from the token, so `user_id` in a request body is ignored.
 
 ### Ready (current behavior)
 
-- `POST /api/v1/reports` generates and stores a report (expense, income, budget, cash-flow,
-  category-breakdown); `GET /api/v1/reports/:id/export` returns CSV
 - `GET /api/v1/stats/summary?from=YYYY-MM-DD&to=YYYY-MM-DD` — dashboard summary (totals, deltas to the
   previous period, top categories, budget progress, recent transactions); defaults to the current month
+- `GET /api/v1/stats/monthly?from=YYYY-MM-DD&to=YYYY-MM-DD` — one bucket per calendar month in `[from, to]`
+  (income, expenses, net, count); months without transactions are zeros and the edge months cover only the
+  days inside the interval. Defaults to twelve months ending today in the family's timezone; a period wider
+  than 120 months is `422`
 - `GET`/`PUT /api/v1/me`, `PUT /api/v1/me/password`; `PATCH /api/v1/users/:id` (`role`, `is_active`),
   `PUT /api/v1/users/:id/password`
 - Backups over API: `POST`/`GET /api/v1/backups`, `GET /api/v1/backups/:name/download`,
@@ -69,7 +71,7 @@ The author of a record is taken from the token, so `user_id` in a request body i
 - `POST /api/v1/transactions/bulk-delete`
 - Money is `amount_minor` — an integer in the family's minor units (kopeks/cents); percentages and utilization
   stay fractional. `PUT /api/v1/family` returns `409 CURRENCY_LOCKED` if a transaction already exists
-- Transaction, budget and report dates are calendar `YYYY-MM-DD`; period bounds use the family's `timezone`
+- Transaction and budget dates are calendar `YYYY-MM-DD`; period bounds use the family's `timezone`
 - `POST` of a transaction, budget or category accepts a client-generated `id` (any valid UUID): a retry with the same
   `id` answers `200` with the existing record instead of creating a duplicate
 - Budgets: business refusals are `409` with their own codes — `BUDGET_OVERLAP` (periods of one scope may not share
@@ -174,9 +176,9 @@ make help             # Show all commands
 ## 🏛️ Project Structure
 
 ```
-├── cmd/server/              # Entry point: server, `-health-check`, `setup`, `reset-password`, `backup`
+├── cmd/server/              # Entry point: server, `-health-check`, `setup`, `reset-password`, `backup`, `migrate`
 ├── internal/
-│   ├── domain/              # Business entities (User, Family, Transaction, Budget, Report, …)
+│   ├── domain/              # Business entities (User, Family, Transaction, Budget, Category, …)
 │   ├── auth/                # Bearer tokens, sessions, RequireBearer/RequireRole, login rate limiter
 │   ├── application/         # Echo server, JSON error handler, /api/v1 handlers
 │   ├── services/            # Business logic
@@ -186,7 +188,7 @@ make help             # Show all commands
 │   ├── bootstrap.go         # OpenDatabase (DB + migrations), Setup, ResetPassword — shared by server and CLI
 │   ├── config.go            # Env-var configuration
 │   └── run.go               # Wiring
-├── migrations/              # 001_consolidated.{up,down}.sql — the whole schema
+├── migrations/              # 001_consolidated.{up,down}.sql + numbered NNN_* steps
 ├── tests/integration/       # HTTP tests over the full stack, OpenAPI coverage test
 ├── docs/                    # Product brief, tech stack, audits (specs/), plans, API contract
 ├── deploy/                  # Self-hosted deployment: compose + Caddy + install/release scripts
@@ -276,7 +278,10 @@ is read from stdin. Always clone first.
 
 After the first install, updates are the pipeline's job: every green build on `main` copies `deploy/`
 to the host and runs `release.sh`, which snapshots the database, swaps the image and restarts.
-Rollback is a previous image tag in `.env`, no rebuild.
+Rollback is a previous image tag in `.env`, no rebuild. If the release being rolled back migrated the
+schema, step it down first with the image that is still deployed (`docker compose run --rm --no-deps -T app
+migrate --to N`) — the older image refuses to start on a version it has no migration file for; see
+[deploy/README.md](deploy/README.md).
 
 The family and the first admin are created over ssh (`docker compose exec app
 /app/family-budget-service setup …`), the second user through `POST /api/v1/users`; backups are a host

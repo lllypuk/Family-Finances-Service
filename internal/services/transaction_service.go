@@ -71,6 +71,13 @@ type TransactionRepository interface {
 		startDate, endDate date.Date,
 		transactionType transaction.Type,
 	) (money.Minor, error)
+	// GetTotalsByCategoryAndDateRange агрегирует период одним запросом: строка на пару (категория, тип).
+	GetTotalsByCategoryAndDateRange(
+		ctx context.Context,
+		startDate, endDate date.Date,
+	) ([]transaction.CategoryTotal, error)
+	// GetTotalsByMonth — то же по месяцам `YYYY-MM`; крайние месяцы покрывают только дни внутри периода.
+	GetTotalsByMonth(ctx context.Context, startDate, endDate date.Date) ([]transaction.MonthTotal, error)
 	// Note: UpdateBulkCategory may need to be implemented in the repository
 	// For now, we'll use individual updates in a transaction
 }

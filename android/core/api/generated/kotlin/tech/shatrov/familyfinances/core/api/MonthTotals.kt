@@ -31,18 +31,19 @@ import kotlinx.serialization.Contextual
 /**
  * 
  *
- * @param date Календарная дата без времени в часовом поясе семьи (A-06)
+ * @param month Календарный месяц `YYYY-MM`
  * @param incomeMinor Сумма в минимальных единицах валюты семьи (копейки для RUB, центы для EUR/USD). Поддерживаются только валюты с двумя знаками после запятой (A-05). 
  * @param expensesMinor Сумма в минимальных единицах валюты семьи (копейки для RUB, центы для EUR/USD). Поддерживаются только валюты с двумя знаками после запятой (A-05). 
- * @param balanceMinor Сумма в минимальных единицах валюты семьи (копейки для RUB, центы для EUR/USD). Поддерживаются только валюты с двумя знаками после запятой (A-05). 
+ * @param netMinor `income_minor - expenses_minor`
+ * @param transactionCount 
  */
 @Serializable
 
-data class DailyBreakdownItem (
+data class MonthTotals (
 
-    /* Календарная дата без времени в часовом поясе семьи (A-06) */
-    @Contextual @SerialName(value = "date")
-    val date: java.time.LocalDate,
+    /* Календарный месяц `YYYY-MM` */
+    @SerialName(value = "month")
+    val month: kotlin.String,
 
     /* Сумма в минимальных единицах валюты семьи (копейки для RUB, центы для EUR/USD). Поддерживаются только валюты с двумя знаками после запятой (A-05).  */
     @SerialName(value = "income_minor")
@@ -52,9 +53,12 @@ data class DailyBreakdownItem (
     @SerialName(value = "expenses_minor")
     val expensesMinor: kotlin.Long,
 
-    /* Сумма в минимальных единицах валюты семьи (копейки для RUB, центы для EUR/USD). Поддерживаются только валюты с двумя знаками после запятой (A-05).  */
-    @SerialName(value = "balance_minor")
-    val balanceMinor: kotlin.Long
+    /* `income_minor - expenses_minor` */
+    @SerialName(value = "net_minor")
+    val netMinor: kotlin.Long,
+
+    @SerialName(value = "transaction_count")
+    val transactionCount: kotlin.Int
 
 ) {
 

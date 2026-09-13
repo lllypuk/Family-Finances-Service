@@ -65,8 +65,8 @@ DELETE /api/v1/transactions/{id}
 
 ## Формат запросов и ответов
 
-`Content-Type: application/json` в обе стороны; исключения — экспорт отчёта (`text/csv`) и
-скачивание бэкапа (`application/octet-stream`).
+`Content-Type: application/json` в обе стороны; исключение — скачивание бэкапа
+(`application/octet-stream`).
 
 ```json
 {
@@ -143,7 +143,7 @@ Authorization: Bearer <token>
 Роли — `admin` и `member` (A-04), обе видят все данные семьи:
 
 - **admin** — `/users`, `/backups`, `PUT /family`, `DELETE /categories/{id}`.
-- **admin или member** — категории, транзакции, бюджеты, отчёты, статистика.
+- **admin или member** — категории, транзакции, бюджеты, статистика.
 
 Роль читается из БД на каждом запросе, а не из токена: деактивация и понижение действуют сразу.
 Автор записи берётся из токена, а не из тела — `user_id` в `POST` игнорируется.

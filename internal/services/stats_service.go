@@ -18,24 +18,38 @@ import (
 // ErrInvalidStatsPeriod возвращается, когда конец периода раньше его начала.
 var ErrInvalidStatsPeriod = errors.New("stats period end is before start")
 
+// ErrStatsPeriodTooLong возвращается, когда период запрошен шире monthlyMaxMonths.
+var ErrStatsPeriodTooLong = errors.New("stats period is too long")
+
 const (
-	// statsTransactionLimit — размер страницы выборки транзакций за период.
-	statsTransactionLimit = 1000
-	// statsMaxTransactions — потолок суммируемых за период операций: страховка от
-	// бесконечного цикла, если источник данных не уважает offset.
-	statsMaxTransactions = 20000
-	statsRecentLimit     = 10
+	statsRecentLimit = 10
+	// monthlyDefaultMonths — длина ряда по умолчанию в GET /stats/monthly.
+	monthlyDefaultMonths = 12
+	// monthlyMaxMonths — потолок ряда: на каждый месяц периода заводится корзина, а границы
+	// приходят от клиента, так что 0001-01-01…9999-12-31 иначе выдаёт 120 000 корзин в JSON.
+	monthlyMaxMonths = 120
 
 	budgetNearLimitShare = 0.8
 	budgetOverLimitShare = 1.0
 )
 
-// statsService считает агрегаты поверх остальных сервисов, без прямого доступа к репозиториям.
+// statsAggregates — суммы за период одним запросом; статистика берёт их из репозитория напрямую,
+// потому что через сервис пришлось бы вычитывать все операции в память.
+type statsAggregates interface {
+	GetTotalsByCategoryAndDateRange(
+		ctx context.Context,
+		startDate, endDate date.Date,
+	) ([]transaction.CategoryTotal, error)
+	GetTotalsByMonth(ctx context.Context, startDate, endDate date.Date) ([]transaction.MonthTotal, error)
+}
+
+// statsService считает агрегаты поверх остальных сервисов; за суммами периода ходит в statsAggregates.
 type statsService struct {
 	transactions TransactionService
 	budgets      BudgetService
 	categories   CategoryService
 	families     FamilyService
+	aggregates   statsAggregates
 }
 
 // NewStatsService создаёт сервис статистики
@@ -44,12 +58,14 @@ func NewStatsService(
 	budgets BudgetService,
 	categories CategoryService,
 	families FamilyService,
+	aggregates statsAggregates,
 ) StatsService {
 	return &statsService{
 		transactions: transactions,
 		budgets:      budgets,
 		categories:   categories,
 		families:     families,
+		aggregates:   aggregates,
 	}
 }
 
@@ -74,7 +90,7 @@ func (s *statsService) Summary(ctx context.Context, from, to *date.Date) (*dto.S
 		return nil, ErrInvalidStatsPeriod
 	}
 
-	current, err := s.transactionsBetween(ctx, start, end)
+	totals, categoryTotals, err := s.totalsByCategory(ctx, start, end)
 	if err != nil {
 		return nil, err
 	}
@@ -89,16 +105,19 @@ func (s *statsService) Summary(ctx context.Context, from, to *date.Date) (*dto.S
 		return nil, err
 	}
 
-	// Limit обязателен для валидации фильтра, на подсчёт он не влияет.
-	total, err := s.transactions.CountTransactions(ctx, dto.TransactionFilterDTO{Limit: statsTransactionLimit})
+	// Фильтр по умолчанию, а не нулевой: нулевой Limit не проходит валидацию.
+	total, err := s.transactions.CountTransactions(ctx, dto.NewTransactionFilterDTO())
 	if err != nil {
 		return nil, fmt.Errorf("failed to count transactions: %w", err)
 	}
 
-	totals := periodTotals(start, end, current)
 	previousFrom, previousTo := previousPeriod(start, end)
-	previous, hasPrevious := s.previousTotals(ctx, previousFrom, previousTo)
-	expenseCategories, incomeCategories := s.categoryShares(ctx, current, totals)
+	previous, _, err := s.totalsByCategory(ctx, previousFrom, previousTo)
+	if err != nil {
+		return nil, err
+	}
+	hasPrevious := previous.TransactionCount > 0
+	expenseCategories, incomeCategories := s.categoryShares(ctx, categoryTotals, totals)
 
 	incomeDelta, expensesDelta := periodDeltas(totals, previous, hasPrevious)
 
@@ -118,40 +137,49 @@ func (s *statsService) Summary(ctx context.Context, from, to *date.Date) (*dto.S
 	}, nil
 }
 
-func (s *statsService) transactionsBetween(
-	ctx context.Context,
-	from, to date.Date,
-) ([]*transaction.Transaction, error) {
-	// Постранично: суммы периода должны сходиться, а не обрываться на первой странице.
-	var all []*transaction.Transaction
-	for offset := 0; ; offset += statsTransactionLimit {
-		filter := dto.TransactionFilterDTO{
-			DateFrom: &from,
-			DateTo:   &to,
-			Limit:    statsTransactionLimit,
-			Offset:   offset,
-		}
-
-		page, err := s.transactions.GetAllTransactions(ctx, filter)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get transactions for period: %w", err)
-		}
-
-		all = append(all, page...)
-		if len(page) < statsTransactionLimit || len(all) >= statsMaxTransactions {
-			return all, nil
-		}
+// Monthly собирает ряд по месяцам периода [from, to] включительно; nil-границы — двенадцать
+// календарных месяцев по сегодняшний в часовом поясе семьи.
+func (s *statsService) Monthly(ctx context.Context, from, to *date.Date) (*dto.StatsMonthly, error) {
+	family, err := s.families.GetFamily(ctx)
+	if err != nil {
+		return nil, err
 	}
+
+	today := date.Today(family.Location())
+	monthStart, _ := today.MonthBounds()
+	start, end := monthStart.AddMonths(-(monthlyDefaultMonths - 1)), today
+	if from != nil {
+		start = *from
+	}
+	if to != nil {
+		end = *to
+	}
+	if end.Before(start) {
+		return nil, ErrInvalidStatsPeriod
+	}
+	if monthsBetween(start, end) > monthlyMaxMonths {
+		return nil, ErrStatsPeriodTooLong
+	}
+
+	rows, err := s.aggregates.GetTotalsByMonth(ctx, start, end)
+	if err != nil {
+		return nil, fmt.Errorf("failed to aggregate transactions by month: %w", err)
+	}
+
+	return &dto.StatsMonthly{From: start, To: end, Months: monthBuckets(start, end, rows)}, nil
 }
 
-// previousTotals возвращает суммы за предыдущий период; ошибка выборки означает «данных нет».
-func (s *statsService) previousTotals(ctx context.Context, from, to date.Date) (dto.PeriodTotals, bool) {
-	transactions, err := s.transactionsBetween(ctx, from, to)
-	if err != nil || len(transactions) == 0 {
-		return dto.PeriodTotals{From: from, To: to}, false
+// totalsByCategory отдаёт итоги периода и строки агрегата, из которых они собраны.
+func (s *statsService) totalsByCategory(
+	ctx context.Context,
+	from, to date.Date,
+) (dto.PeriodTotals, []transaction.CategoryTotal, error) {
+	rows, err := s.aggregates.GetTotalsByCategoryAndDateRange(ctx, from, to)
+	if err != nil {
+		return dto.PeriodTotals{}, nil, fmt.Errorf("failed to aggregate transactions for period: %w", err)
 	}
 
-	return periodTotals(from, to, transactions), true
+	return periodTotals(from, to, rows), rows, nil
 }
 
 func (s *statsService) budgetProgress(ctx context.Context, today date.Date) ([]dto.BudgetProgress, error) {
@@ -228,56 +256,37 @@ func (s *statsService) recentTransactions(ctx context.Context) ([]dto.RecentTran
 	return recent, nil
 }
 
-// categoryShares группирует транзакции периода по категориям; категории без имени пропускаются.
+// categoryShares раскладывает строки агрегата по типу; категории без имени пропускаются.
 func (s *statsService) categoryShares(
 	ctx context.Context,
-	transactions []*transaction.Transaction,
+	rows []transaction.CategoryTotal,
 	totals dto.PeriodTotals,
 ) ([]dto.CategoryShare, []dto.CategoryShare) {
-	type bucket struct {
-		share         dto.CategoryShare
-		income        money.Minor
-		expenses      money.Minor
-		incomeCount   int
-		expensesCount int
-	}
-
 	// Пустые, а не nil: в контракте оба поля — обязательные массивы (openapi StatsSummary).
 	expenses := make([]dto.CategoryShare, 0)
 	income := make([]dto.CategoryShare, 0)
-	buckets := make(map[uuid.UUID]*bucket)
-	for _, tx := range transactions {
-		b, ok := buckets[tx.CategoryID]
-		if !ok {
-			category, err := s.categories.GetCategoryByID(ctx, tx.CategoryID)
-			if err != nil || category == nil {
-				continue
-			}
-			b = &bucket{share: dto.CategoryShare{
-				CategoryID: tx.CategoryID,
-				Name:       category.Name,
-				Color:      category.Color,
-				Icon:       category.Icon,
-			}}
-			buckets[tx.CategoryID] = b
+
+	for _, row := range rows {
+		if row.AmountMinor <= 0 {
+			continue
 		}
 
-		switch tx.Type {
+		category, err := s.categories.GetCategoryByID(ctx, row.CategoryID)
+		if err != nil || category == nil {
+			continue
+		}
+		share := dto.CategoryShare{
+			CategoryID: row.CategoryID,
+			Name:       category.Name,
+			Color:      category.Color,
+			Icon:       category.Icon,
+		}
+
+		switch row.Type {
 		case transaction.TypeIncome:
-			b.income += tx.AmountMinor
-			b.incomeCount++
+			income = append(income, withAmount(share, row.AmountMinor, row.Count, totals.IncomeMinor))
 		case transaction.TypeExpense:
-			b.expenses += tx.AmountMinor
-			b.expensesCount++
-		}
-	}
-
-	for _, b := range buckets {
-		if b.expenses > 0 {
-			expenses = append(expenses, withAmount(b.share, b.expenses, b.expensesCount, totals.ExpensesMinor))
-		}
-		if b.income > 0 {
-			income = append(income, withAmount(b.share, b.income, b.incomeCount, totals.IncomeMinor))
+			expenses = append(expenses, withAmount(share, row.AmountMinor, row.Count, totals.ExpensesMinor))
 		}
 	}
 
@@ -300,24 +309,60 @@ func (s *statsService) categoryName(ctx context.Context, categoryID *uuid.UUID) 
 	return category.Name
 }
 
-func periodTotals(from, to date.Date, transactions []*transaction.Transaction) dto.PeriodTotals {
-	totals := dto.PeriodTotals{
-		From:             from,
-		To:               to,
-		TransactionCount: len(transactions),
-	}
+func periodTotals(from, to date.Date, rows []transaction.CategoryTotal) dto.PeriodTotals {
+	totals := dto.PeriodTotals{From: from, To: to}
 
-	for _, tx := range transactions {
-		switch tx.Type {
+	for _, row := range rows {
+		totals.TransactionCount += row.Count
+		switch row.Type {
 		case transaction.TypeIncome:
-			totals.IncomeMinor += tx.AmountMinor
+			totals.IncomeMinor += row.AmountMinor
 		case transaction.TypeExpense:
-			totals.ExpensesMinor += tx.AmountMinor
+			totals.ExpensesMinor += row.AmountMinor
 		}
 	}
 	totals.NetMinor = totals.IncomeMinor - totals.ExpensesMinor
 
 	return totals
+}
+
+// monthsBetween — число календарных месяцев, которые задевает период [from, to].
+func monthsBetween(from, to date.Date) int {
+	return (to.Year-from.Year)*12 + int(to.Month) - int(from.Month) + 1
+}
+
+// monthBuckets раскладывает строки агрегата по корзинам месяцев [from, to]; месяц без операций — нули.
+// На месяц приходит 0–2 строки (по одной на тип) в непредсказуемом порядке, поэтому суммы накапливаются.
+func monthBuckets(from, to date.Date, rows []transaction.MonthTotal) []dto.MonthTotals {
+	// Пустой, а не nil: в контракте months — обязательный массив.
+	months := make([]dto.MonthTotals, 0, monthlyDefaultMonths)
+	index := make(map[string]int)
+
+	last := date.Date{Year: to.Year, Month: to.Month, Day: 1}
+	for m := (date.Date{Year: from.Year, Month: from.Month, Day: 1}); !m.After(last); m = m.AddMonths(1) {
+		index[m.MonthKey()] = len(months)
+		months = append(months, dto.MonthTotals{Month: m.MonthKey()})
+	}
+
+	for _, row := range rows {
+		i, ok := index[row.Month]
+		if !ok {
+			continue
+		}
+		months[i].TransactionCount += row.Count
+		switch row.Type {
+		case transaction.TypeIncome:
+			months[i].IncomeMinor += row.AmountMinor
+		case transaction.TypeExpense:
+			months[i].ExpensesMinor += row.AmountMinor
+		}
+	}
+
+	for i := range months {
+		months[i].NetMinor = months[i].IncomeMinor - months[i].ExpensesMinor
+	}
+
+	return months
 }
 
 // previousPeriod — период той же длины, вплотную перед [from, to].

@@ -20,12 +20,16 @@ Replace `add_user_preferences` with a descriptive name for your migration.
 
 ## What Happens
 
-`make migrate-create` creates nothing: the project keeps the whole schema in two consolidated files. The
-target prints the three steps to follow by hand:
+`make migrate-create` creates nothing: it prints the steps to follow by hand. Since `v0.1.0` is deployed,
+every schema change is written **twice** — into `001` for a new install, and as a numbered step for a live
+database (`migrations/README.md`):
 
 1. Append the new DDL to the end of `migrations/001_consolidated.up.sql`
 2. Add the matching `DROP` statements to the front of `migrations/001_consolidated.down.sql` (reverse order)
-3. Recreate the local database — an already-migrated DB ignores edits to `001`:
+3. Write the same change as `migrations/NNN_<name>.{up,down}.sql` — on a DB already at version 1 `Up()`
+   returns `ErrNoChange` and edits to `001` are skipped silently. Cover it in
+   `internal/infrastructure/migrations_test.go`
+4. Recreate the local database:
    ```bash
    make db-reset && make run-local
    ```

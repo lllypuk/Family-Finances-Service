@@ -27,13 +27,13 @@ func TestMigrations_UpAndDownOnEmptyDatabase(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, db.Close()) })
 
-	tables := []string{"families", "users", "categories", "transactions", "budgets", "reports", "sessions"}
+	tables := []string{"families", "users", "categories", "transactions", "budgets", "sessions"}
 	for _, table := range tables {
 		var count int
 		require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&count), table)
 	}
 
-	for _, dropped := range []string{"budget_alerts", "invites", "user_sessions"} {
+	for _, dropped := range []string{"budget_alerts", "invites", "user_sessions", "reports"} {
 		assert.Equal(t, 0, objectCount(ctx, t, db, "name = '"+dropped+"'"), dropped+" удалена")
 	}
 
@@ -44,7 +44,6 @@ func TestMigrations_UpAndDownOnEmptyDatabase(t *testing.T) {
 	assert.Equal(t, "TEXT", columnType(ctx, t, db, "transactions", "date"))
 	assert.Equal(t, "TEXT", columnType(ctx, t, db, "budgets", "start_date"))
 	assert.Equal(t, "TEXT", columnType(ctx, t, db, "budgets", "end_date"))
-	assert.Equal(t, "TEXT", columnType(ctx, t, db, "reports", "start_date"))
 	assert.Equal(t, "TEXT", columnType(ctx, t, db, "families", "timezone"))
 	assert.Empty(t, columnType(ctx, t, db, "transactions", "amount"), "старая колонка amount не должна остаться")
 
@@ -151,3 +150,31 @@ func TestMigrations_BudgetNameFreedAfterSoftDelete(t *testing.T) {
 const insertBudget = `
 	INSERT INTO budgets (id, name, amount_minor, period, start_date, end_date, is_active, category_id, family_id)
 	VALUES (?, 'Еда', 100000, 'monthly', '2026-09-01', '2026-09-30', ?, ?, ?)`
+
+// 003 снимает reports с базы, стоящей на версии 2: правку 001 golang-migrate ей не отдаст.
+func TestMigrations_DropReports(t *testing.T) {
+	ctx := t.Context()
+	root := testhelpers.RepoRoot(t)
+	dbPath := filepath.Join(t.TempDir(), "reports.db")
+	manager := infrastructure.NewMigrationManager("sqlite://"+dbPath, filepath.Join(root, "migrations"))
+
+	require.NoError(t, manager.Up())
+
+	db, err := sql.Open("sqlite", dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, db.Close()) })
+
+	// Версия 2 — схема, выкаченная до этого плана: 003.down возвращает таблицу с индексами.
+	require.NoError(t, manager.Migrate(2))
+	assert.Equal(t, 1, objectCount(ctx, t, db, "name = 'reports'"))
+	assert.Equal(t, 2, objectCount(ctx, t, db, "name LIKE 'idx_reports%'"))
+
+	require.NoError(t, manager.Up())
+	assert.Equal(t, 0, objectCount(ctx, t, db, "name = 'reports'"))
+	assert.Equal(t, 0, objectCount(ctx, t, db, "name LIKE 'idx_reports%'"))
+
+	// Полный откат идёт через 003.down, которая таблицу воссоздаёт, — убирает её 001.down.
+	require.NoError(t, manager.Down())
+	left := objectCount(ctx, t, db, "type = 'table' AND name NOT LIKE 'sqlite_%' AND name != 'schema_migrations'")
+	assert.Equal(t, 0, left, "down не оставляет таблиц")
+}

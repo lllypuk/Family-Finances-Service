@@ -23,8 +23,8 @@
 
 package tech.shatrov.familyfinances.core.api
 
-import tech.shatrov.familyfinances.core.api.ListMeta
-import tech.shatrov.familyfinances.core.api.Report
+import tech.shatrov.familyfinances.core.api.Meta
+import tech.shatrov.familyfinances.core.api.StatsMonthly
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
@@ -38,13 +38,13 @@ import kotlinx.serialization.Contextual
  */
 @Serializable
 
-data class ListReports200Response (
+data class GetStatsMonthly200Response (
 
     @SerialName(value = "data")
-    val `data`: kotlin.collections.List<Report>,
+    val `data`: StatsMonthly,
 
     @SerialName(value = "meta")
-    val meta: ListMeta
+    val meta: Meta
 
 ) {
 

@@ -30,14 +30,41 @@ func (h *StatsHandler) GetSummary(c echo.Context) error {
 
 	summary, err := h.statsService.Summary(c.Request().Context(), from, to)
 	if err != nil {
-		if errors.Is(err, services.ErrInvalidStatsPeriod) {
-			return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
-				ErrorDetail{Field: "from", Message: "must not be after to", Code: ErrCodeInvalidQueryParam})
-		}
-		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+		return respondStatsError(c, err)
 	}
 
 	return respondAPI(c, http.StatusOK, summary)
+}
+
+// GetMonthly отдаёт ряд по месяцам периода [from, to]; без параметров — двенадцать календарных
+// месяцев по сегодняшний в часовом поясе семьи, границы считает сервис.
+func (h *StatsHandler) GetMonthly(c echo.Context) error {
+	from, to, detail := parseStatsPeriod(c)
+	if detail != nil {
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError,
+			ErrMessageValidationFailed, *detail)
+	}
+
+	monthly, err := h.statsService.Monthly(c.Request().Context(), from, to)
+	if err != nil {
+		return respondStatsError(c, err)
+	}
+
+	return respondAPI(c, http.StatusOK, monthly)
+}
+
+// respondStatsError: перевёрнутый и слишком длинный период — ошибки поля from, остальное — 500.
+func respondStatsError(c echo.Context, err error) error {
+	switch {
+	case errors.Is(err, services.ErrInvalidStatsPeriod):
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+			ErrorDetail{Field: "from", Message: "must not be after to", Code: ErrCodeInvalidQueryParam})
+	case errors.Is(err, services.ErrStatsPeriodTooLong):
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+			ErrorDetail{Field: "from", Message: "period must not exceed 120 months", Code: ErrCodeInvalidQueryParam})
+	}
+
+	return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 }
 
 // parseStatsPeriod разбирает from/to как календарные даты; отсутствующая граница — nil,

@@ -143,3 +143,38 @@ func TestOpenDatabase_RejectsOutdatedSchema(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "outdated database schema")
 }
+
+// Откат релиза: старый образ не стартует на версии схемы, которой нет в его ./migrations,
+// поэтому её опускает новый образ — подкомандой `migrate --to N`.
+func TestMigrateTo_MovesSchemaDown(t *testing.T) {
+	t.Chdir(testhelpers.RepoRoot(t))
+	cfg := internal.LoadConfig()
+	cfg.Database.Path = filepath.Join(t.TempDir(), "migrate.db")
+
+	db, err := internal.OpenDatabase(cfg)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	version, dirty, err := internal.SchemaVersion(cfg)
+	require.NoError(t, err)
+	require.False(t, dirty)
+	require.Positive(t, version)
+
+	require.NoError(t, internal.MigrateTo(cfg, version-1))
+
+	lowered, _, err := internal.SchemaVersion(cfg)
+	require.NoError(t, err)
+	assert.Equal(t, version-1, lowered)
+}
+
+func TestMigrateTo_MissingDatabaseIsNotCreated(t *testing.T) {
+	t.Chdir(testhelpers.RepoRoot(t))
+	cfg := internal.LoadConfig()
+	cfg.Database.Path = filepath.Join(t.TempDir(), "absent.db")
+
+	require.Error(t, internal.MigrateTo(cfg, 2))
+	assert.NoFileExists(t, cfg.Database.Path)
+
+	_, _, err := internal.SchemaVersion(cfg)
+	require.Error(t, err)
+}

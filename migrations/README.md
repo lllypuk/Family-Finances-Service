@@ -11,6 +11,7 @@ migration next to it — an already-applied `001` is never re-run (see "Changing
 - `001_consolidated.up.sql` - the full schema
 - `001_consolidated.down.sql` - the full rollback
 - `002_budgets_name_period_partial_unique.{up,down}.sql` - the budget name/period `UNIQUE` → partial index
+- `003_drop_reports.{up,down}.sql` - the `reports` table dropped (plan 10)
 
 ### Why Consolidated Migrations?
 
@@ -34,7 +35,6 @@ Contains all database objects in order of dependencies:
    | `categories` | `income`/`expense`, самоссылка `parent_id`, `color`/`icon` для клиента |
    | `transactions` | `amount_minor INTEGER > 0`, `date TEXT 'YYYY-MM-DD'` (CHECK GLOB) |
    | `budgets` | `amount_minor`, `spent_minor`, период `start_date`/`end_date` — `TEXT`-даты |
-   | `reports` | период `start_date`/`end_date` — `TEXT`-даты, `data` — JSON отчёта с суммами `*_minor` |
    | `sessions` | bearer-токены: только `token_hash` |
 
 2. **Indexes**: только те, что закрывают реальные запросы (семья+дата, категория, автор)
@@ -90,16 +90,17 @@ if err = infrastructure.NewMigrationManager(dbURL, migrationsDir).Up(); err != n
 
 ### Manual Migration Commands
 
-While the project uses `golang-migrate` library, manual execution is typically not needed since migrations run on startup.
+The service ships the same thing as a subcommand — it reads `DATABASE_PATH` and refuses to run when that
+file does not exist (golang-migrate would otherwise create an empty database and stamp it):
 
-If needed for testing:
 ```bash
-# Run migrations
-migrate -path ./migrations -database "sqlite://./data/budget.db" up
-
-# Rollback migrations
-migrate -path ./migrations -database "sqlite://./data/budget.db" down
+go run ./cmd/server migrate           # текущая версия схемы
+go run ./cmd/server migrate --to 2    # подвинуть версию, в том числе вниз
 ```
+
+In the container it is `docker compose run --rm --no-deps -T app migrate --to 2`. Stepping down is what
+makes a release rollback possible: an old image does not start on a version it has no file for
+(`deploy/README.md`). `--to 0` is rejected — the lowest reachable target is 1.
 
 ## Best Practices
 
@@ -194,6 +195,7 @@ SELECT * FROM schema_migrations;
 | 001 | Bearer auth (plan 03): `sessions` replaces `user_sessions`; `families.singleton` UNIQUE | 2026-09-05 |
 | 001 | Plan 04: файл переписан одним куском; `*_minor INTEGER` вместо `REAL`, даты — `TEXT`, `families.timezone`, роль только `admin`/`member`; `budget_alerts` и `invites` удалены | 2026-09-06 |
 | 002 | Plan 09: табличный `UNIQUE` бюджетов → частичный индекс `idx_budgets_name_period_active` (`WHERE is_active = 1`) пересборкой таблицы | 2026-09-12 |
+| 003 | Plan 10: таблица `reports` и её индексы удалены вместе с `/api/v1/reports` | 2026-09-13 |
 
 ## See Also
 

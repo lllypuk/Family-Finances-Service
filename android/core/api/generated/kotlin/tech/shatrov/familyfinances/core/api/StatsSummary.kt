@@ -40,8 +40,8 @@ import kotlinx.serialization.Contextual
  * @param current 
  * @param previous Предыдущий период той же длины; заполнен нулями, если данных нет
  * @param hasPreviousData false — сравнивать с `previous` нельзя, дельты равны нулю
- * @param incomeDelta Изменение доходов к предыдущему периоду, доля (0.12 = +12%)
- * @param expensesDelta Изменение расходов к предыдущему периоду, доля (0.12 = +12%)
+ * @param incomeDelta Изменение доходов к предыдущему периоду, доля (0.12 = +12%). `0` и при нулевой базе метрики — рост «с нуля» долей не выражается; клиент сверяет `previous.income_minor`. 
+ * @param expensesDelta Изменение расходов к предыдущему периоду, доля (0.12 = +12%). `0` и при нулевой базе метрики — рост «с нуля» долей не выражается; клиент сверяет `previous.expenses_minor`. 
  * @param expenseCategories Разбивка расходов по категориям, по убыванию суммы
  * @param incomeCategories Разбивка доходов по категориям, по убыванию суммы
  * @param budgets Бюджеты, активные на момент запроса (не на границы периода), по убыванию утилизации
@@ -71,11 +71,11 @@ data class StatsSummary (
     @SerialName(value = "has_previous_data")
     val hasPreviousData: kotlin.Boolean,
 
-    /* Изменение доходов к предыдущему периоду, доля (0.12 = +12%) */
+    /* Изменение доходов к предыдущему периоду, доля (0.12 = +12%). `0` и при нулевой базе метрики — рост «с нуля» долей не выражается; клиент сверяет `previous.income_minor`.  */
     @SerialName(value = "income_delta")
     val incomeDelta: kotlin.Double,
 
-    /* Изменение расходов к предыдущему периоду, доля (0.12 = +12%) */
+    /* Изменение расходов к предыдущему периоду, доля (0.12 = +12%). `0` и при нулевой базе метрики — рост «с нуля» долей не выражается; клиент сверяет `previous.expenses_minor`.  */
     @SerialName(value = "expenses_delta")
     val expensesDelta: kotlin.Double,
 

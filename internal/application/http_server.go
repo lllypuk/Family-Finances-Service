@@ -27,7 +27,6 @@ const (
 
 type HTTPServer struct {
 	echo                 *echo.Echo
-	repositories         *handlers.Repositories
 	services             *services.Services
 	config               *Config
 	observabilityService *observability.Service
@@ -41,7 +40,6 @@ type HTTPServer struct {
 	categoryHandler    *handlers.CategoryHandler
 	transactionHandler *handlers.TransactionHandler
 	budgetHandler      *handlers.BudgetHandler
-	reportHandler      *handlers.ReportHandler
 	statsHandler       *handlers.StatsHandler
 	backupHandler      *handlers.BackupHandler
 }
@@ -127,7 +125,6 @@ func NewHTTPServerWithObservability(
 
 	server := &HTTPServer{
 		echo:                 e,
-		repositories:         repositories,
 		services:             services,
 		config:               config,
 		observabilityService: obsService,
@@ -138,10 +135,9 @@ func NewHTTPServerWithObservability(
 		meHandler:          handlers.NewMeHandler(services.User, services.Auth),
 		userHandler:        handlers.NewUserHandler(services.User, services.Auth),
 		familyHandler:      handlers.NewFamilyHandler(services.Family),
-		categoryHandler:    handlers.NewCategoryHandler(repositories, services.Category),
-		transactionHandler: handlers.NewTransactionHandler(repositories, services.Transaction),
+		categoryHandler:    handlers.NewCategoryHandler(services.Category),
+		transactionHandler: handlers.NewTransactionHandler(services.Transaction),
 		budgetHandler:      handlers.NewBudgetHandler(repositories, services.Budget),
-		reportHandler:      handlers.NewReportHandler(repositories, services.Report),
 		statsHandler:       handlers.NewStatsHandler(services.Stats),
 		backupHandler:      handlers.NewBackupHandler(services.Backup),
 	}
@@ -217,15 +213,9 @@ func (s *HTTPServer) setupResourceRoutes(api *echo.Group) {
 	budgets.PUT("/:id", s.budgetHandler.UpdateBudget)
 	budgets.DELETE("/:id", s.budgetHandler.DeleteBudget)
 
-	reports := api.Group("/reports", financeAccess)
-	reports.POST("", s.reportHandler.CreateReport)
-	reports.GET("", s.reportHandler.GetReports)
-	reports.GET("/:id", s.reportHandler.GetReportByID)
-	reports.GET("/:id/export", s.reportHandler.ExportReport)
-	reports.DELETE("/:id", s.reportHandler.DeleteReport)
-
 	stats := api.Group("/stats", financeAccess)
 	stats.GET("/summary", s.statsHandler.GetSummary)
+	stats.GET("/monthly", s.statsHandler.GetMonthly)
 
 	backups := api.Group("/backups", adminOnly)
 	backups.POST("", s.backupHandler.CreateBackup)

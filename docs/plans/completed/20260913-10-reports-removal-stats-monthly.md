@@ -107,21 +107,21 @@
 - Modify: `internal/application/handlers/budgets_test.go`, `internal/application/handlers/transactions_test.go`,
   `internal/application/http_server_test.go`
 
-- [ ] `NewBudgetHandler(repos, budgetService services.BudgetService)`, `NewTransactionHandler(repos, transactionService
+- [x] `NewBudgetHandler(repos, budgetService services.BudgetService)`, `NewTransactionHandler(repos, transactionService
       services.TransactionService)`; `nil` сервис — паника в конструкторе с понятным текстом
-- [ ] снести 12 ветвлений и репозиторные реализации; `*ViaService` влить в публичные методы; удалить осиротевшие
+- [x] снести 12 ветвлений и репозиторные реализации; `*ViaService` влить в публичные методы; удалить осиротевшие
       `UpdateEntityParams`/`UpdateEntityHelper`, `updateTransactionFields` и т.п. `DeleteEntityHelper` и
       `ParseIDParamWithError` остаются — их зовут сервисные пути (`transactions.go:550,620`, `budgets.go:235`)
-- [ ] `h.repositories.Family` остаётся: `getBudgetsViaService` берёт `familyToday` для `active_only=true`
+- [x] `h.repositories.Family` остаётся: `getBudgetsViaService` берёт `familyToday` для `active_only=true`
       (`budgets.go:272`, `helpers.go:88` — `nil` молча даёт UTC); остальные поля `Repositories` в этих хендлерах
       больше не читаются. Extra-метод `GetAll` в `handlers.TransactionRepository` (`repositories.go:28–36`) после
       сноса никто не зовёт — алиас становится обычным `= services.TransactionRepository`
-- [ ] `setupBudgetHandler`/`setupTransactionHandler` — на стаб/мок сервиса (+ мок `FamilyRepository` для
+- [x] `setupBudgetHandler`/`setupTransactionHandler` — на стаб/мок сервиса (+ мок `FamilyRepository` для
       `active_only`); `MockTransactionRepository` остаётся (его ждёт `setupBudgetHandler`), мёртвый
       `GetTotalsByCategory` (`transactions_test.go:117`) — удалить, чтобы не путался с новым `TotalsByCategory`
-- [ ] тесты сервисного пути: успех, 404 (`isNotFoundError`), 409/422 через `handle*ServiceError` — по одному
+- [x] тесты сервисного пути: успех, 404 (`isNotFoundError`), 409/422 через `handle*ServiceError` — по одному
       случаю на метод, без дублирования интеграционных
-- [ ] `make fmt && make test && make lint` — 0 issues; коммит `refactor: сервис обязателен в хендлерах бюджетов и транзакций`
+- [x] `make fmt && make test && make lint` — 0 issues; коммит `refactor: сервис обязателен в хендлерах бюджетов и транзакций`
 
 ### Task 2: Удалить `/reports` из кода и контракта
 
@@ -140,20 +140,20 @@
 - Create: `tests/integration/stats_test.go` (перенос `TestStatsAPI_Summary*` из `reports_test.go:561,593`)
 - Modify: `internal/application/handlers/errors.go:52–56`, `docs/api/openapi.yaml`, `android/core/api/generated/**`
 
-- [ ] снести роуты, хендлер, сервис, репозиторий, домен, DTO, `ReportRepository`/`Services.Report`, параметр
+- [x] снести роуты, хендлер, сервис, репозиторий, домен, DTO, `ReportRepository`/`Services.Report`, параметр
       `NewServices`, `ErrReportNotFound` из `isNotFoundError`, валидаторы отчётов, фабрику `CreateTestReport`,
       коды `ErrCodeGenerationFailed`/`ErrCodeSaveFailed`/`ErrCodeExportFailed` (`errors.go:52–56`, живут только в
       `reports.go:84,88,112`)
-- [ ] `TestStatsAPI_Summary`, `TestStatsAPI_Summary_InvalidDate` → `tests/integration/stats_test.go` до удаления
+- [x] `TestStatsAPI_Summary`, `TestStatsAPI_Summary_InvalidDate` → `tests/integration/stats_test.go` до удаления
       `reports_test.go`
-- [ ] интеграционные тесты: `api_pagination_test.go:115,276`, `api_auth_test.go:193,337`, `api_roles_test.go:154`,
+- [x] интеграционные тесты: `api_pagination_test.go:115,276`, `api_auth_test.go:193,337`, `api_roles_test.go:154`,
       `transactions_test.go:690` — механически на другой ресурс; `TestAPIPagination_Reports_TotalBeyondRepositoryLimit`
       (`api_pagination_test.go:333`, потолок репозитория в 100 строк) — перенести на `/api/v1/transactions`
-- [ ] `openapi.yaml`: убрать три пути, `ReportOk` из `responses` и `schemas`, `ReportType/ReportPeriod/ReportSummary/
+- [x] `openapi.yaml`: убрать три пути, `ReportOk` из `responses` и `schemas`, `ReportType/ReportPeriod/ReportSummary/
       Report/ReportData`, тег `reports`; коды `GENERATION_FAILED`/`SAVE_FAILED`/`EXPORT_FAILED` из шапки, если есть
-- [ ] `make -C android api-gen` — `ReportsApi.kt` и модели `Report*` исчезают; закоммитить; `make -C android api-check`,
+- [x] `make -C android api-gen` — `ReportsApi.kt` и модели `Report*` исчезают; закоммитить; `make -C android api-check`,
       `make -C android check`
-- [ ] `make fmt && make test && make lint` — 0 issues (в т.ч. `TestOpenAPISpec_*`); коммит `refactor: снос /reports`
+- [x] `make fmt && make test && make lint` — 0 issues (в т.ч. `TestOpenAPISpec_*`); коммит `refactor: снос /reports`
 
 ### Task 3: Миграция `003_drop_reports`
 
@@ -163,19 +163,19 @@
 - Modify: `internal/infrastructure/migrations_test.go`, `internal/testhelpers/sqlite.go`
 - Create: `cmd/server/migrate.go`; Modify: `cmd/server/main.go`, `internal/bootstrap.go` (+ `_test`), `deploy/README.md`
 
-- [ ] `001.up`: убрать таблицу и два индекса; `001.down`: оставить их `DROP … IF EXISTS` с комментарием про `003.down`
-- [ ] `003.up`: `DROP INDEX IF EXISTS idx_reports_generated_by; DROP INDEX IF EXISTS idx_reports_family_type;
+- [x] `001.up`: убрать таблицу и два индекса; `001.down`: оставить их `DROP … IF EXISTS` с комментарием про `003.down`
+- [x] `003.up`: `DROP INDEX IF EXISTS idx_reports_generated_by; DROP INDEX IF EXISTS idx_reports_family_type;
       DROP TABLE IF EXISTS reports;` `003.down`: `CREATE TABLE reports` + индексы дословно из `001` версии 2
-- [ ] `CleanTables`: убрать `reports`; `migrations_test.go`: убрать из списка таблиц и проверку `reports.start_date`,
+- [x] `CleanTables`: убрать `reports`; `migrations_test.go`: убрать из списка таблиц и проверку `reports.start_date`,
       добавить `assert` отсутствия таблицы после `Up()`
-- [ ] тест `TestMigrations_DropReports`: `Up()`, `Migrate(2)` → таблица есть, `Up()` → нет, `Down()` → таблиц нет
-- [ ] подкоманда `migrate --to N` (`NewMigrationManager` берёт URL, `migrations.go:21` — `OpenDatabaseNoMigrate` не
+- [x] тест `TestMigrations_DropReports`: `Up()`, `Migrate(2)` → таблица есть, `Up()` → нет, `Down()` → таблиц нет
+- [x] подкоманда `migrate --to N` (`NewMigrationManager` берёт URL, `migrations.go:21` — `OpenDatabaseNoMigrate` не
       нужен; `os.Stat(DATABASE_PATH)` до запуска, как `backup.go:33`, иначе опечатка в пути создаст пустую базу
       версии N; без аргумента — печать текущей версии): старый образ не стартует на версии схемы, которой нет в его `./migrations`
       (golang-migrate: `no migration found for version 3`), так что откат образа начинается с `migrate --to 2`
       образом `v0.3.0`. Это касалось и `v0.1.0` ↔ версии 2, просто никто не откатывал. Тест в `bootstrap_test.go`;
       раздел «Откат» в `deploy/README.md`
-- [ ] `make test` (оба пути: golang-migrate и `testhelpers`); коммит `feat: миграция 003 — таблица reports удалена`
+- [x] `make test` (оба пути: golang-migrate и `testhelpers`); коммит `feat: миграция 003 — таблица reports удалена`
 
 ### Task 4: Агрегаты в репозитории транзакций
 
@@ -187,18 +187,18 @@
   `internal/application/handlers/transactions_test.go` (`MockTransactionRepository` встраивает
   `handlers.TransactionRepository`, `repositories.go:31`), `internal/testhelpers/integration_server.go`
 
-- [ ] имена в стиле соседей: `GetTotalsByCategoryAndDateRange`, `GetTotalsByMonth` (ниже — коротко).
+- [x] имена в стиле соседей: `GetTotalsByCategoryAndDateRange`, `GetTotalsByMonth` (ниже — коротко).
       `TotalsByCategory(ctx, from, to) ([]transaction.CategoryTotal, error)`: `category_id, type, SUM(amount_minor),
       COUNT(*)`, `GROUP BY category_id, type`, `family_id` из `getSingleFamilyID`
-- [ ] `TotalsByMonth(ctx, from, to) ([]transaction.MonthTotal, error)`: `substr(date, 1, 7) AS month, type, SUM, COUNT`,
+- [x] `TotalsByMonth(ctx, from, to) ([]transaction.MonthTotal, error)`: `substr(date, 1, 7) AS month, type, SUM, COUNT`,
       `GROUP BY month, type ORDER BY month`
-- [ ] методы — в `services.TransactionRepository` (там живёт SQL), а `statsService` получает их через узкий
+- [x] методы — в `services.TransactionRepository` (там живёт SQL), а `statsService` получает их через узкий
       интерфейс `statsAggregates { TotalsByCategory; TotalsByMonth }` отдельным параметром `NewStatsService`;
       контейнер передаёт `transactionRepo`. `TransactionService` не растёт; комментарий «только сервисы» у
       `statsService` (`stats_service.go:33`) переписать. Моки репозитория — по два пустых метода
-- [ ] тесты репозитория: суммы по типу и категории, границы включительно, пустой период → пустой срез, месяц
+- [x] тесты репозитория: суммы по типу и категории, границы включительно, пустой период → пустой срез, месяц
       на стыке (`2026-08-31`/`2026-09-01` — разные корзины)
-- [ ] `make fmt && make test && make lint`; коммит `feat: агрегаты транзакций по категориям и месяцам`
+- [x] `make fmt && make test && make lint`; коммит `feat: агрегаты транзакций по категориям и месяцам`
 
 ### Task 5: `Summary` на агрегатах
 
@@ -206,15 +206,15 @@
 - Modify: `internal/services/stats_service.go`, `internal/services/stats_service_test.go`,
   `tests/integration/stats_test.go` (создан в Task 2)
 
-- [ ] `Summary`: `PeriodTotals` текущего и предыдущего периода и `CategoryShare` — из `TotalsByCategory`
+- [x] `Summary`: `PeriodTotals` текущего и предыдущего периода и `CategoryShare` — из `TotalsByCategory`
       (`categoryName` как сейчас); `transactionsBetween`, `periodTotals`, оба лимита — удалить; ошибка предыдущего
       периода → ошибка `Summary`. `CountTransactions` (`:93`) — фильтр `dto.NewTransactionFilterDTO()`, не нулевой
       (нулевой `Limit` не проходит валидацию, и каждая сводка станет ошибкой)
-- [ ] тесты сервиса: суммы сходятся с прежними случаями (`stats_service_test.go`); доля категорий; ошибка
+- [x] тесты сервиса: суммы сходятся с прежними случаями (`stats_service_test.go`); доля категорий; ошибка
       репозитория → ошибка `Summary`. Интеграционно (`tests/integration/stats_test.go`, in-memory SQLite): 20 001
       операция одной вставкой в транзакции → `current.transaction_count == 20001` и сумма сходится — мок полноту
       выборки не проверяет
-- [ ] `make fmt && make test && make lint`; коммит `fix: сводка считается в SQL, без потолка в 20 000 операций`
+- [x] `make fmt && make test && make lint`; коммит `fix: сводка считается в SQL, без потолка в 20 000 операций`
 
 ### Task 6: `GET /api/v1/stats/monthly`
 
@@ -226,42 +226,44 @@
 - Modify: `internal/application/handlers/stats.go` (+ `_test`), `internal/application/http_server.go`
 - Modify: `docs/api/openapi.yaml`, `android/core/api/generated/**`, `tests/integration/stats_test.go`
 
-- [ ] `StatsService.Monthly(ctx, from, to *date.Date) (*dto.StatsMonthly, error)`: границы по умолчанию — 12 месяцев
+- [x] `StatsService.Monthly(ctx, from, to *date.Date) (*dto.StatsMonthly, error)`: границы по умолчанию — 12 месяцев
       по сегодняшний в поясе семьи; корзины на каждый месяц `[from, to]`, нули для пустых; суммы из `TotalsByMonth`
-- [ ] `StatsHandler.GetMonthly` через `parseStatsPeriod`; `from > to` → `422` тем же `ErrorDetail`, что у `GetSummary`;
+- [x] `StatsHandler.GetMonthly` через `parseStatsPeriod`; `from > to` → `422` тем же `ErrorDetail`, что у `GetSummary`;
       роут `stats.GET("/monthly", …)` под `financeAccess`
-- [ ] сборка корзин — по ключу месяца из заранее построенной последовательности `[from, to]`; `TotalsByMonth`
+- [x] сборка корзин — по ключу месяца из заранее построенной последовательности `[from, to]`; `TotalsByMonth`
       отдаёт 0–2 строки на месяц (по `type`), порядок типов внутри месяца не гарантирован — раскладывать по `type`,
       `transaction_count` суммировать, пары строк не предполагать
-- [ ] спека: операция `getStatsMonthly` (tag `stats`, `operationId`, `4xx $ref: Error`), схемы `StatsMonthly`,
+- [x] спека: операция `getStatsMonthly` (tag `stats`, `operationId`, `4xx $ref: Error`), схемы `StatsMonthly`,
       `MonthTotals`; описать дефолт и правило крайних месяцев. Тут же — уточнение описаний `income_delta`/
       `expenses_delta` в `StatsSummary` («`0` и при нулевой базе метрики; клиент сверяет `previous.*_minor`»):
       описание попадает в Kotlin-комментарии, и `api-check` требует регенерации. `make -C android api-gen`,
       закоммитить, `make -C android api-check`, `make -C android check`
-- [ ] тесты сервиса: без границ и без операций → 12 нулевых корзин; явный интервал внутри одного месяца → одна
+- [x] тесты сервиса: без границ и без операций → 12 нулевых корзин; явный интервал внутри одного месяца → одна
       корзина; месяц только с доходами, только с расходами, с обоими; операции в двух месяцах. Интеграционные:
       `200` с токеном `member`, `401` без, `422` при `from > to`
-- [ ] `make fmt && make test && make lint`; коммит `feat: GET /stats/monthly — ряд по месяцам`
+- [x] `make fmt && make test && make lint`; коммит `feat: GET /stats/monthly — ряд по месяцам`
 
 ### Task 7: Verify acceptance criteria
-- [ ] `grep -rn -i 'report' internal tests cmd migrations docs/api/openapi.yaml` — только `003_*`, `001.down`
-      (намеренные `DROP`) и `migrations_test.go`
-- [ ] `make fmt && make test && make lint` — 0 issues; `make -C android api-check && make -C android check`
-- [ ] `make compose-config`; `go run ./cmd/server` с `make db-reset` (свежая база) и с базой версии 2
-      (`sqlite-restore` любого бэкапа до плана) — `/health` 200, `schema_migrations` = 3
+- [x] `grep -rn -i 'report' internal tests cmd migrations docs/api/openapi.yaml` — только `003_*`, `001.down`
+      (намеренные `DROP`) и `migrations_test.go`; сверх списка — `migrations/{README,CHANGELOG}.md` (описание самой
+      `003`), слово «reporting» в `transaction_service.go:211` и дословный лог красной фазы S-01 в
+      `api_auth_test.go:39,47` (исторический вывод, не ссылка на код)
+- [x] `make fmt && make test && make lint` — 0 issues; `make -C android api-check && make -C android check`
+- [x] `make compose-config`; сервер на свежей базе и на копии базы версии 2 (`migrate --to 2` перед стартом) —
+      `/health` 200, `schema_migrations` = 3, таблицы `reports` нет в обеих
 
 ### Task 8: [Final] Update documentation
-- [ ] `CLAUDE.md`: роуты (`reports` из перечня `financeAccess`, абзац про `POST /reports`/`export`), список таблиц
+- [x] `CLAUDE.md`: роуты (`reports` из перечня `financeAccess`, абзац про `POST /reports`/`export`), список таблиц
       в «Database & migrations», «шесть envelope-ов» → пять, `TestOpenAPISpec_*` не трогать; `StatsService.Monthly`
-- [ ] `docs/specs/005-api-only-redesign.md`: строка `:190` — решение «удалить, отчёты — экран поверх статистики»,
+- [x] `docs/specs/005-api-only-redesign.md`: строка `:190` — решение «удалить, отчёты — экран поверх статистики»,
       таблица планов (10), абзац `:241` — следующий релиз `v0.3.0`, дальше план 11 (клиент)
-- [ ] `docs/backlog.md`: снять пункт про мёртвые ветки хендлеров; вписать план 11 (клиент): экран «Обзор» с выбором
+- [x] `docs/backlog.md`: снять пункт про мёртвые ветки хендлеров; вписать план 11 (клиент): экран «Обзор» с выбором
       периода на `summary`+`monthly` (главная остаётся «этот месяц» — бюджеты и `recent` в `summary` считаются на
       сегодня, смешивать их с произвольным периодом нельзя), дельта скрывается при `previous.*_minor == 0`,
       мультивыбор операций + `bulk-delete`
-- [ ] `docs/patterns/api_standards.md`: коды `REPORT_*`, если были; `docs/api/README.md` — при упоминании отчётов;
+- [x] `docs/patterns/api_standards.md`: коды `REPORT_*`, если были; `docs/api/README.md` — при упоминании отчётов;
       `deploy/README.md` — при упоминании
-- [ ] перенести план в `docs/plans/completed/`
+- [x] перенести план в `docs/plans/completed/`
 
 ## Post-Completion
 

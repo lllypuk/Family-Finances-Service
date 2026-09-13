@@ -49,8 +49,6 @@ tags:
     description: Операции семьи
   - name: budgets
     description: Лимиты по периодам и категориям
-  - name: reports
-    description: Сохранённые отчёты и CSV-экспорт
   - name: stats
     description: Сводка для главного экрана клиента
   - name: backups
@@ -713,104 +711,6 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  /api/v1/reports:
-    get:
-      operationId: listReports
-      tags: [reports]
-      summary: Сохранённые отчёты
-      description: admin и member.
-      parameters:
-        - { $ref: '#/components/parameters/Limit' }
-        - { $ref: '#/components/parameters/Offset' }
-        - name: user_id
-          in: query
-          description: Только отчёты этого автора
-          schema: { type: string, format: uuid }
-      responses:
-        '200':
-          description: Список отчётов
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [data, meta]
-                properties:
-                  data:
-                    type: array
-                    items: { $ref: '#/components/schemas/Report' }
-                  meta: { $ref: '#/components/schemas/ListMeta' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '422': { $ref: '#/components/responses/ValidationFailed' }
-    post:
-      operationId: createReport
-      tags: [reports]
-      summary: Сгенерировать отчёт
-      description: |
-        admin и member. Владелец берётся из сессии — `user_id` в теле игнорируется.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/CreateReportRequest' }
-      responses:
-        '201': { $ref: '#/components/responses/ReportOk' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '422': { $ref: '#/components/responses/ValidationFailed' }
-
-  /api/v1/reports/{id}:
-    parameters:
-      - { $ref: '#/components/parameters/PathID' }
-    get:
-      operationId: getReport
-      tags: [reports]
-      summary: Отчёт с данными
-      description: admin и member.
-      responses:
-        '200': { $ref: '#/components/responses/ReportOk' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-    delete:
-      operationId: deleteReport
-      tags: [reports]
-      summary: Удалить отчёт
-      description: admin и member.
-      responses:
-        '204': { description: Отчёт удалён }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-
-  /api/v1/reports/{id}/export:
-    parameters:
-      - { $ref: '#/components/parameters/PathID' }
-    get:
-      operationId: exportReport
-      tags: [reports]
-      summary: Выгрузить отчёт в CSV
-      description: |
-        admin и member. Разделитель — запятая, кодировка UTF-8 с BOM (Excel),
-        суммы — целые в минимальных единицах, рядом колонка `Currency`.
-      responses:
-        '200':
-          description: CSV-файл
-          headers:
-            Content-Disposition:
-              schema: { type: string }
-              description: '`attachment; filename="report-<id>.csv"`'
-          content:
-            text/csv:
-              schema: { type: string }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-
   /api/v1/stats/summary:
     get:
       operationId: getStatsSummary
@@ -838,6 +738,41 @@ paths:
                 required: [data, meta]
                 properties:
                   data: { $ref: '#/components/schemas/StatsSummary' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /api/v1/stats/monthly:
+    get:
+      operationId: getStatsMonthly
+      tags: [stats]
+      summary: Ряд итогов по месяцам
+      description: |
+        admin и member. По корзине на каждый календарный месяц, попадающий в `[from, to]`;
+        месяц без операций — нули. Крайние месяцы не расширяются до полных: корзина покрывает
+        только дни внутри интервала. Без параметров — двенадцать календарных месяцев по
+        сегодняшний в часовом поясе семьи (`from` — первое число месяца одиннадцать месяцев назад).
+        Период шире 120 месяцев — `422`.
+      parameters:
+        - name: from
+          in: query
+          description: Начало периода включительно; по умолчанию первое число месяца одиннадцать месяцев назад
+          schema: { $ref: '#/components/schemas/CalendarDate' }
+        - name: to
+          in: query
+          description: Конец периода включительно; по умолчанию сегодня
+          schema: { $ref: '#/components/schemas/CalendarDate' }
+      responses:
+        '200':
+          description: Помесячный ряд
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { $ref: '#/components/schemas/StatsMonthly' }
                   meta: { $ref: '#/components/schemas/Meta' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1046,11 +981,6 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/BudgetOk' }
-    ReportOk:
-      description: Отчёт
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/ReportOk' }
 
   schemas:
     Money:
@@ -1165,13 +1095,6 @@ components:
       properties:
         data: { $ref: '#/components/schemas/Budget' }
         meta: { $ref: '#/components/schemas/Meta' }
-    ReportOk:
-      type: object
-      required: [data, meta]
-      properties:
-        data: { $ref: '#/components/schemas/Report' }
-        meta: { $ref: '#/components/schemas/Meta' }
-
     Health:
       type: object
       required: [status, version, setup_complete, timestamp]
@@ -1216,15 +1139,6 @@ components:
     BudgetPeriod:
       type: string
       enum: [weekly, monthly, yearly, custom]
-    ReportType:
-      type: string
-      enum: [expenses, income, budget, cash_flow, category_breakdown]
-      description: |
-        `category_breakdown` считается только по расходам: доли категорий берутся от суммы
-        расходов периода, доходные категории в отчёт не попадают.
-    ReportPeriod:
-      type: string
-      enum: [daily, weekly, monthly, yearly, custom]
 
     LoginRequest:
       type: object
@@ -1502,98 +1416,6 @@ components:
         start_date: { $ref: '#/components/schemas/CalendarDate' }
         end_date: { $ref: '#/components/schemas/CalendarDate' }
 
-    ReportSummary:
-      type: object
-      required: [id, name, type, period, user_id, start_date, end_date, generated_at]
-      properties:
-        id: { type: string, format: uuid }
-        name: { type: string }
-        type: { $ref: '#/components/schemas/ReportType' }
-        period: { $ref: '#/components/schemas/ReportPeriod' }
-        user_id: { type: string, format: uuid }
-        start_date: { $ref: '#/components/schemas/CalendarDate' }
-        end_date: { $ref: '#/components/schemas/CalendarDate' }
-        generated_at: { $ref: '#/components/schemas/Timestamp' }
-    Report:
-      allOf:
-        - { $ref: '#/components/schemas/ReportSummary' }
-        - type: object
-          required: [data]
-          properties:
-            data: { $ref: '#/components/schemas/ReportData' }
-    ReportData:
-      type: object
-      required: [total_income_minor, total_expenses_minor, net_income_minor]
-      properties:
-        total_income_minor: { $ref: '#/components/schemas/Money' }
-        total_expenses_minor: { $ref: '#/components/schemas/Money' }
-        net_income_minor: { $ref: '#/components/schemas/Money' }
-        category_breakdown:
-          type: array
-          items: { $ref: '#/components/schemas/CategoryBreakdownItem' }
-        daily_breakdown:
-          type: array
-          items: { $ref: '#/components/schemas/DailyBreakdownItem' }
-        top_expenses:
-          type: array
-          items: { $ref: '#/components/schemas/TopExpenseItem' }
-        budget_comparison:
-          type: array
-          items: { $ref: '#/components/schemas/BudgetComparisonItem' }
-    CreateReportRequest:
-      type: object
-      required: [name, type, period, start_date, end_date]
-      properties:
-        name: { type: string, minLength: 2, maxLength: 100 }
-        type: { $ref: '#/components/schemas/ReportType' }
-        period: { $ref: '#/components/schemas/ReportPeriod' }
-        start_date: { $ref: '#/components/schemas/CalendarDate' }
-        end_date: { $ref: '#/components/schemas/CalendarDate' }
-    CategoryBreakdownItem:
-      type: object
-      required: [category_id, category_name, amount_minor, percentage, count]
-      properties:
-        category_id: { type: string, format: uuid }
-        category_name: { type: string }
-        amount_minor: { $ref: '#/components/schemas/Money' }
-        percentage:
-          type: number
-          format: double
-          description: Доля категории в сумме расходов периода в процентах
-        count: { type: integer }
-    DailyBreakdownItem:
-      type: object
-      required: [date, income_minor, expenses_minor, balance_minor]
-      properties:
-        date: { $ref: '#/components/schemas/CalendarDate' }
-        income_minor: { $ref: '#/components/schemas/Money' }
-        expenses_minor: { $ref: '#/components/schemas/Money' }
-        balance_minor: { $ref: '#/components/schemas/Money' }
-    TopExpenseItem:
-      type: object
-      required: [id, amount_minor, description, category, date]
-      properties:
-        id: { type: string, format: uuid }
-        amount_minor: { $ref: '#/components/schemas/Money' }
-        description: { type: string }
-        category: { type: string }
-        date: { $ref: '#/components/schemas/CalendarDate' }
-    BudgetComparisonItem:
-      type: object
-      required: [budget_id, budget_name, planned_minor, actual_minor, difference_minor, percentage]
-      properties:
-        budget_id: { type: string, format: uuid }
-        budget_name: { type: string }
-        planned_minor: { $ref: '#/components/schemas/Money' }
-        actual_minor: { $ref: '#/components/schemas/Money' }
-        difference_minor:
-          allOf: [{ $ref: '#/components/schemas/Money' }]
-          description: '`planned_minor - actual_minor`'
-        percentage:
-          type: number
-          format: double
-          description: Израсходованная доля лимита в процентах
-
     PeriodTotals:
       type: object
       required: [from, to, income_minor, expenses_minor, net_minor, transaction_count]
@@ -1662,11 +1484,15 @@ components:
         income_delta:
           type: number
           format: double
-          description: Изменение доходов к предыдущему периоду, доля (0.12 = +12%)
+          description: |
+            Изменение доходов к предыдущему периоду, доля (0.12 = +12%). `0` и при нулевой базе
+            метрики — рост «с нуля» долей не выражается; клиент сверяет `previous.income_minor`.
         expenses_delta:
           type: number
           format: double
-          description: Изменение расходов к предыдущему периоду, доля (0.12 = +12%)
+          description: |
+            Изменение расходов к предыдущему периоду, доля (0.12 = +12%). `0` и при нулевой базе
+            метрики — рост «с нуля» долей не выражается; клиент сверяет `previous.expenses_minor`.
         expense_categories:
           type: array
           description: Разбивка расходов по категориям, по убыванию суммы
@@ -1686,6 +1512,30 @@ components:
         transactions_total:
           type: integer
           description: Общее число операций семьи за всё время, а не за период
+    StatsMonthly:
+      type: object
+      required: [from, to, months]
+      properties:
+        from: { $ref: '#/components/schemas/CalendarDate' }
+        to: { $ref: '#/components/schemas/CalendarDate' }
+        months:
+          type: array
+          description: По корзине на каждый месяц периода, по возрастанию месяца; пустые месяцы — нули
+          items: { $ref: '#/components/schemas/MonthTotals' }
+    MonthTotals:
+      type: object
+      required: [month, income_minor, expenses_minor, net_minor, transaction_count]
+      properties:
+        month:
+          type: string
+          description: Календарный месяц `YYYY-MM`
+          examples: ['2026-09']
+        income_minor: { $ref: '#/components/schemas/Money' }
+        expenses_minor: { $ref: '#/components/schemas/Money' }
+        net_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: '`income_minor - expenses_minor`'
+        transaction_count: { type: integer }
     RecentTransactionItem:
       type: object
       required: [id, type, amount_minor, description, date, created_at]

@@ -2,11 +2,9 @@ package handlers
 
 import (
 	"errors"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
@@ -21,28 +19,21 @@ import (
 )
 
 type TransactionHandler struct {
-	repositories       *Repositories
 	transactionService services.TransactionService
 	validator          *validator.Validate
-	logger             *slog.Logger
 }
 
 var errResponseAlreadyWritten = errors.New("response already written")
 
-func NewTransactionHandler(
-	repositories *Repositories,
-	transactionServices ...services.TransactionService,
-) *TransactionHandler {
-	var transactionService services.TransactionService
-	if len(transactionServices) > 0 {
-		transactionService = transactionServices[0]
+// NewTransactionHandler — сервис обязателен: бизнес-правила операции живут только в нём.
+func NewTransactionHandler(transactionService services.TransactionService) *TransactionHandler {
+	if transactionService == nil {
+		panic("handlers: NewTransactionHandler requires a non-nil services.TransactionService")
 	}
 
 	return &TransactionHandler{
-		repositories:       repositories,
 		transactionService: transactionService,
 		validator:          newAPIValidator(),
-		logger:             slog.Default(),
 	}
 }
 
@@ -71,48 +62,6 @@ func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
 		return err
 	}
 
-	if h.transactionService != nil {
-		return h.createTransactionViaService(c, req, userID)
-	}
-
-	newTransaction := h.buildTransaction(req, userID)
-
-	if err := h.repositories.Transaction.Create(c.Request().Context(), newTransaction); err != nil {
-		// Check if it's a foreign key constraint error
-		if h.isForeignKeyConstraintError(err) {
-			return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError,
-				ErrMessageInvalidCategoryRef, bodyDetail(ErrCodeValidationError, ErrMessageInvalidCategoryRef))
-		}
-
-		return respondError(c, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create transaction")
-	}
-
-	h.updateBudgetIfNeeded(c, newTransaction)
-
-	response := h.buildTransactionResponse(newTransaction)
-	return respondAPI(c, http.StatusCreated, response)
-}
-
-// findTransaction ищет запись по клиентскому id; ошибка репозитория здесь означает
-// «не найдено» — создание всё равно упрётся в неё повторно.
-func (h *TransactionHandler) findTransaction(c echo.Context, id uuid.UUID) (*transaction.Transaction, bool) {
-	ctx := c.Request().Context()
-	if h.transactionService != nil {
-		tx, err := h.transactionService.GetTransactionByID(ctx, id)
-
-		return tx, err == nil
-	}
-
-	tx, err := h.repositories.Transaction.GetByID(ctx, id)
-
-	return tx, err == nil
-}
-
-func (h *TransactionHandler) createTransactionViaService(
-	c echo.Context,
-	req CreateTransactionRequest,
-	userID uuid.UUID,
-) error {
 	createdTx, err := h.transactionService.CreateTransaction(c.Request().Context(), dto.CreateTransactionDTO{
 		ID:          req.ID,
 		AmountMinor: req.AmountMinor,
@@ -127,8 +76,15 @@ func (h *TransactionHandler) createTransactionViaService(
 		return h.handleCreateTransactionServiceError(c, err)
 	}
 
-	response := h.buildTransactionResponse(createdTx)
-	return respondAPI(c, http.StatusCreated, response)
+	return respondAPI(c, http.StatusCreated, h.buildTransactionResponse(createdTx))
+}
+
+// findTransaction ищет запись по клиентскому id; ошибка сервиса здесь означает
+// «не найдено» — создание всё равно упрётся в неё повторно.
+func (h *TransactionHandler) findTransaction(c echo.Context, id uuid.UUID) (*transaction.Transaction, bool) {
+	tx, err := h.transactionService.GetTransactionByID(c.Request().Context(), id)
+
+	return tx, err == nil
 }
 
 func (h *TransactionHandler) handleCreateTransactionServiceError(c echo.Context, err error) error {
@@ -139,7 +95,7 @@ func (h *TransactionHandler) handleCreateTransactionServiceError(c echo.Context,
 		strings.Contains(err.Error(), "user not found"),
 		errors.Is(err, services.ErrCategoryNotInFamily),
 		errors.Is(err, services.ErrUserNotInFamily):
-		message = "Invalid category, user, or family ID"
+		message = ErrMessageInvalidCategoryRef
 	case errors.Is(err, services.ErrInsufficientBudget):
 		message = "Transaction would exceed budget limit"
 	}
@@ -159,68 +115,6 @@ func (h *TransactionHandler) handleCreateTransactionServiceError(c echo.Context,
 			bodyDetail(ErrCodeValidationError, err.Error()))
 	default:
 		return respondError(c, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create transaction")
-	}
-}
-
-func (h *TransactionHandler) buildTransaction(
-	req CreateTransactionRequest,
-	userID uuid.UUID,
-) *transaction.Transaction {
-	return &transaction.Transaction{
-		ID:          dto.EntityID(req.ID),
-		AmountMinor: req.AmountMinor,
-		Type:        transaction.Type(req.Type),
-		Description: req.Description,
-		CategoryID:  req.CategoryID,
-		UserID:      userID,
-		Date:        req.Date,
-		Tags:        req.Tags,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
-}
-
-func (h *TransactionHandler) updateBudgetIfNeeded(c echo.Context, tx *transaction.Transaction) {
-	if tx.Type != transaction.TypeExpense {
-		return
-	}
-
-	// Check if Budget repository is available (might be nil in tests)
-	if h.repositories.Budget == nil {
-		return
-	}
-
-	budgets, err := h.repositories.Budget.GetActiveBudgets(c.Request().Context(), tx.Date)
-	if err != nil {
-		if h.logger != nil {
-			h.logger.WarnContext(
-				c.Request().Context(),
-				"failed to load active budgets after transaction create",
-				slog.String("transaction_id", tx.ID.String()),
-				slog.String("category_id", tx.CategoryID.String()),
-				slog.String("error", err.Error()),
-			)
-		}
-		return
-	}
-
-	for _, b := range budgets {
-		if b.CategoryID != nil && *b.CategoryID == tx.CategoryID {
-			b.SpentMinor += tx.AmountMinor
-			b.UpdatedAt = time.Now()
-			if updateErr := h.repositories.Budget.Update(c.Request().Context(), b); updateErr != nil {
-				if h.logger != nil {
-					h.logger.WarnContext(
-						c.Request().Context(),
-						"failed to update budget spent after transaction create",
-						slog.String("transaction_id", tx.ID.String()),
-						slog.String("budget_id", b.ID.String()),
-						slog.String("error", updateErr.Error()),
-					)
-				}
-			}
-			break
-		}
 	}
 }
 
@@ -259,31 +153,6 @@ func (h *TransactionHandler) GetTransactions(c echo.Context) error {
 		return err
 	}
 
-	if h.transactionService != nil {
-		return h.getTransactionsViaService(c, filters)
-	}
-
-	repoFilter := h.buildRepositoryFilter(filters)
-
-	transactions, err := h.repositories.Transaction.GetByFilter(c.Request().Context(), repoFilter)
-	if err != nil {
-		return respondError(c, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch transactions")
-	}
-
-	total, err := h.repositories.Transaction.CountByFilter(c.Request().Context(), repoFilter)
-	if err != nil {
-		return respondError(c, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch transactions")
-	}
-
-	return respondList(
-		c,
-		h.buildTransactionListResponse(transactions),
-		pageParams{Limit: filters.Limit, Offset: filters.Offset},
-		total,
-	)
-}
-
-func (h *TransactionHandler) getTransactionsViaService(c echo.Context, filters TransactionFilterParams) error {
 	serviceFilter := h.buildTransactionServiceFilter(filters)
 
 	transactions, err := h.transactionService.GetAllTransactions(c.Request().Context(), serviceFilter)
@@ -451,32 +320,6 @@ func (h *TransactionHandler) buildTransactionServiceFilter(filters TransactionFi
 	return filter
 }
 
-func (h *TransactionHandler) buildRepositoryFilter(filters TransactionFilterParams) transaction.Filter {
-	var typeFilter *transaction.Type
-	if filters.Type != nil {
-		t := transaction.Type(*filters.Type)
-		typeFilter = &t
-	}
-
-	return transaction.Filter{
-		UserID:          filters.UserID,
-		CategoryID:      filters.CategoryID,
-		Type:            typeFilter,
-		DateFrom:        filters.DateFrom,
-		DateTo:          filters.DateTo,
-		AmountFromMinor: filters.AmountFromMinor,
-		AmountToMinor:   filters.AmountToMinor,
-		Description: func() string {
-			if filters.Description != nil {
-				return *filters.Description
-			}
-			return ""
-		}(),
-		Limit:  filters.Limit,
-		Offset: filters.Offset,
-	}
-}
-
 func (h *TransactionHandler) buildTransactionListResponse(
 	transactions []*transaction.Transaction,
 ) []TransactionResponse {
@@ -488,25 +331,6 @@ func (h *TransactionHandler) buildTransactionListResponse(
 }
 
 func (h *TransactionHandler) GetTransactionByID(c echo.Context) error {
-	if h.transactionService != nil {
-		return h.getTransactionByIDViaService(c)
-	}
-
-	idParam := c.Param("id")
-	id, err := uuid.Parse(idParam)
-	if err != nil {
-		return HandleIDParseError(c, "transaction")
-	}
-
-	foundTransaction, err := h.repositories.Transaction.GetByID(c.Request().Context(), id)
-	if err != nil {
-		return HandleNotFoundError(c, "Transaction")
-	}
-
-	return respondAPI(c, http.StatusOK, h.buildTransactionResponse(foundTransaction))
-}
-
-func (h *TransactionHandler) getTransactionByIDViaService(c echo.Context) error {
 	id, err := ParseIDParamWithError(c, "transaction")
 	if err != nil {
 		var idParseErr *IDParseError
@@ -525,28 +349,6 @@ func (h *TransactionHandler) getTransactionByIDViaService(c echo.Context) error 
 }
 
 func (h *TransactionHandler) UpdateTransaction(c echo.Context) error {
-	if h.transactionService != nil {
-		return h.updateTransactionViaService(c)
-	}
-
-	helper := NewUpdateEntityHelper(
-		UpdateEntityParams[UpdateTransactionRequest, *transaction.Transaction, TransactionResponse]{
-			Validator: h.validator,
-			GetByID: func(c echo.Context, id uuid.UUID) (*transaction.Transaction, error) {
-				return h.repositories.Transaction.GetByID(c.Request().Context(), id)
-			},
-			Update: func(c echo.Context, entity *transaction.Transaction) error {
-				return h.repositories.Transaction.Update(c.Request().Context(), entity)
-			},
-			UpdateFields:  h.updateTransactionFields,
-			BuildResponse: h.buildTransactionResponse,
-			EntityType:    "transaction",
-		})
-
-	return helper.Execute(c)
-}
-
-func (h *TransactionHandler) updateTransactionViaService(c echo.Context) error {
 	id, err := ParseIDParamWithError(c, "transaction")
 	if err != nil {
 		var idParseErr *IDParseError
@@ -588,47 +390,9 @@ func (h *TransactionHandler) updateTransactionViaService(c echo.Context) error {
 	return respondAPI(c, http.StatusOK, h.buildTransactionResponse(updatedTx))
 }
 
-func (h *TransactionHandler) updateTransactionFields(tx *transaction.Transaction, req *UpdateTransactionRequest) {
-	if req.AmountMinor != nil {
-		tx.AmountMinor = *req.AmountMinor
-	}
-	if req.Type != nil {
-		tx.Type = transaction.Type(*req.Type)
-	}
-	if req.Description != nil {
-		tx.Description = *req.Description
-	}
-	if req.CategoryID != nil {
-		tx.CategoryID = *req.CategoryID
-	}
-	if req.Date != nil {
-		tx.Date = *req.Date
-	}
-	if req.Tags != nil {
-		tx.Tags = req.Tags
-	}
-	tx.UpdatedAt = time.Now()
-}
-
-// isForeignKeyConstraintError checks if the error is a foreign key constraint violation
-func (h *TransactionHandler) isForeignKeyConstraintError(err error) bool {
-	errStr := err.Error()
-	// Database foreign key constraint error messages contain these patterns
-	return strings.Contains(errStr, "foreign key constraint") ||
-		strings.Contains(errStr, "violates foreign key constraint") ||
-		strings.Contains(errStr, "FOREIGN KEY constraint failed")
-}
-
 func (h *TransactionHandler) DeleteTransaction(c echo.Context) error {
-	if h.transactionService != nil {
-		return DeleteEntityHelper(c, func(id uuid.UUID) error {
-			return h.transactionService.DeleteTransaction(c.Request().Context(), id)
-		}, "Transaction")
-	}
-
 	return DeleteEntityHelper(c, func(id uuid.UUID) error {
-		// In single-family model, repository handles family ID internally
-		return h.repositories.Transaction.Delete(c.Request().Context(), id)
+		return h.transactionService.DeleteTransaction(c.Request().Context(), id)
 	}, "Transaction")
 }
 
@@ -642,10 +406,6 @@ func (h *TransactionHandler) BulkDeleteTransactions(c echo.Context) error {
 
 	if err := h.validator.Struct(req); err != nil {
 		return respondValidationErrors(c, err)
-	}
-
-	if h.transactionService == nil {
-		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 
 	deleted, err := h.transactionService.BulkDelete(c.Request().Context(), req.IDs)

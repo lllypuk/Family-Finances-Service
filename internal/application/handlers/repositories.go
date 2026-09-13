@@ -1,10 +1,7 @@
 package handlers
 
 import (
-	"context"
-
 	"family-budget-service/internal/auth"
-	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/services"
 )
 
@@ -14,7 +11,6 @@ type Repositories struct {
 	Category    CategoryRepository
 	Transaction TransactionRepository
 	Budget      BudgetRepository
-	Report      ReportRepository
 	Session     auth.SessionRepository
 }
 
@@ -27,17 +23,8 @@ type FamilyRepository = services.FamilyRepository
 // CategoryRepository переиспользует сервисный контракт.
 type CategoryRepository = services.CategoryRepository
 
-// TransactionRepository расширяет сервисный контракт методом, который нужен только хендлерам.
-type TransactionRepository interface {
-	services.TransactionRepository
-	GetAll(
-		ctx context.Context,
-		limit, offset int,
-	) ([]*transaction.Transaction, error) // Single family - get all transactions
-}
+// TransactionRepository переиспользует сервисный контракт.
+type TransactionRepository = services.TransactionRepository
 
 // BudgetRepository переиспользует сервисный контракт.
 type BudgetRepository = services.BudgetRepository
-
-// ReportRepository переиспользует сервисный контракт.
-type ReportRepository = services.ReportRepository

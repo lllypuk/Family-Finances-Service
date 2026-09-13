@@ -141,6 +141,25 @@ If the newer release migrated the database, restore the snapshot it took first �
 tags older than the registry cleanup policy are gone; re-running the old pipeline's `release-image`
 job builds that commit again.
 
+### Rolling back across a migration
+
+The old image refuses to start on a schema version it has no file for (`no migration found for
+version 3`), so the schema is stepped down **before** `FFS_IMAGE` is swapped — with the image that
+is still deployed:
+
+```bash
+cd /home/sasha/ffs
+docker compose run --rm --no-deps -T app migrate             # current version
+docker compose stop app                                      # иначе рестарт вернёт 003 своим Up()
+docker compose run --rm --no-deps -T app migrate --to 2      # v0.3.0 → the schema v0.2.0 knows
+```
+
+The running container is stopped first on purpose: it migrated at startup and would not notice the
+step down, but any restart of it before `FFS_IMAGE` is swapped re-applies `003` silently.
+
+`003` only drops the unused `reports` table, so stepping back over it loses nothing. A down
+migration that would drop live data is not one to run — restore the snapshot instead.
+
 ## Backups
 
 `family-budget-service backup` runs `VACUUM INTO` against the live database and keeps the newest

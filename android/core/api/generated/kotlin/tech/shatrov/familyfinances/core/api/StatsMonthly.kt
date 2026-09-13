@@ -23,8 +23,7 @@
 
 package tech.shatrov.familyfinances.core.api
 
-import tech.shatrov.familyfinances.core.api.ReportPeriod
-import tech.shatrov.familyfinances.core.api.ReportType
+import tech.shatrov.familyfinances.core.api.MonthTotals
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
@@ -33,32 +32,25 @@ import kotlinx.serialization.Contextual
 /**
  * 
  *
- * @param name 
- * @param type 
- * @param period 
- * @param startDate Календарная дата без времени в часовом поясе семьи (A-06)
- * @param endDate Календарная дата без времени в часовом поясе семьи (A-06)
+ * @param from Календарная дата без времени в часовом поясе семьи (A-06)
+ * @param to Календарная дата без времени в часовом поясе семьи (A-06)
+ * @param months По корзине на каждый месяц периода, по возрастанию месяца; пустые месяцы — нули
  */
 @Serializable
 
-data class CreateReportRequest (
-
-    @SerialName(value = "name")
-    val name: kotlin.String,
-
-    @Contextual @SerialName(value = "type")
-    val type: ReportType,
-
-    @Contextual @SerialName(value = "period")
-    val period: ReportPeriod,
+data class StatsMonthly (
 
     /* Календарная дата без времени в часовом поясе семьи (A-06) */
-    @Contextual @SerialName(value = "start_date")
-    val startDate: java.time.LocalDate,
+    @Contextual @SerialName(value = "from")
+    val from: java.time.LocalDate,
 
     /* Календарная дата без времени в часовом поясе семьи (A-06) */
-    @Contextual @SerialName(value = "end_date")
-    val endDate: java.time.LocalDate
+    @Contextual @SerialName(value = "to")
+    val to: java.time.LocalDate,
+
+    /* По корзине на каждый месяц периода, по возрастанию месяца; пустые месяцы — нули */
+    @SerialName(value = "months")
+    val months: kotlin.collections.List<MonthTotals>
 
 ) {
 

@@ -33,6 +33,14 @@ func (m *MockStatsService) Summary(ctx context.Context, from, to *date.Date) (*d
 	return args.Get(0).(*dto.StatsSummary), args.Error(1)
 }
 
+func (m *MockStatsService) Monthly(ctx context.Context, from, to *date.Date) (*dto.StatsMonthly, error) {
+	args := m.Called(ctx, from, to)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dto.StatsMonthly), args.Error(1)
+}
+
 func statsRequest(target string) (echo.Context, *httptest.ResponseRecorder) {
 	e := echo.New()
 	httpReq := httptest.NewRequest(http.MethodGet, target, nil)
@@ -150,4 +158,116 @@ func TestStatsHandler_GetSummary_ServiceError(t *testing.T) {
 	var response handlers.ErrorResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 	assert.Equal(t, "INTERNAL_ERROR", response.Error.Code)
+}
+
+func TestStatsHandler_GetMonthly_Success(t *testing.T) {
+	mockService := &MockStatsService{}
+	handler := handlers.NewStatsHandler(mockService)
+
+	from := date.New(2026, time.August, 1)
+	to := date.New(2026, time.September, 13)
+	monthly := &dto.StatsMonthly{
+		From: from,
+		To:   to,
+		Months: []dto.MonthTotals{
+			{Month: "2026-08", IncomeMinor: 50_000, NetMinor: 50_000, TransactionCount: 1},
+			{Month: "2026-09", ExpensesMinor: 20_000, NetMinor: -20_000, TransactionCount: 2},
+		},
+	}
+	mockService.On("Monthly", mock.Anything, &from, &to).Return(monthly, nil)
+
+	c, rec := statsRequest("/stats/monthly?from=2026-08-01&to=2026-09-13")
+
+	require.NoError(t, handler.GetMonthly(c))
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var response handlers.APIResponse[dto.StatsMonthly]
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Data.Months, 2)
+	assert.Equal(t, "2026-09", response.Data.Months[1].Month)
+	assert.Equal(t, money.Minor(-20_000), response.Data.Months[1].NetMinor)
+
+	mockService.AssertExpectations(t)
+}
+
+// TestStatsHandler_GetMonthly_DefaultPeriod — без параметров границы считает сервис.
+func TestStatsHandler_GetMonthly_DefaultPeriod(t *testing.T) {
+	mockService := &MockStatsService{}
+	handler := handlers.NewStatsHandler(mockService)
+
+	mockService.On("Monthly", mock.Anything, (*date.Date)(nil), (*date.Date)(nil)).
+		Return(&dto.StatsMonthly{}, nil)
+
+	c, rec := statsRequest("/stats/monthly")
+
+	require.NoError(t, handler.GetMonthly(c))
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	mockService.AssertExpectations(t)
+}
+
+func TestStatsHandler_GetMonthly_InvalidDate(t *testing.T) {
+	mockService := &MockStatsService{}
+	handler := handlers.NewStatsHandler(mockService)
+
+	c, rec := statsRequest("/stats/monthly?to=2026-13-45")
+
+	require.NoError(t, handler.GetMonthly(c))
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Error.Details, 1)
+	assert.Equal(t, "to", response.Error.Details[0].Field)
+
+	mockService.AssertNotCalled(t, "Monthly", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestStatsHandler_GetMonthly_InvertedPeriod(t *testing.T) {
+	mockService := &MockStatsService{}
+	handler := handlers.NewStatsHandler(mockService)
+
+	mockService.On("Monthly", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil, services.ErrInvalidStatsPeriod)
+
+	c, rec := statsRequest("/stats/monthly?from=2026-09-30&to=2026-09-01")
+
+	require.NoError(t, handler.GetMonthly(c))
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Error.Details, 1)
+	assert.Equal(t, "from", response.Error.Details[0].Field)
+}
+
+func TestStatsHandler_GetMonthly_PeriodTooLong(t *testing.T) {
+	mockService := &MockStatsService{}
+	handler := handlers.NewStatsHandler(mockService)
+
+	mockService.On("Monthly", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil, services.ErrStatsPeriodTooLong)
+
+	c, rec := statsRequest("/stats/monthly?from=0001-01-01&to=9999-12-31")
+
+	require.NoError(t, handler.GetMonthly(c))
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Error.Details, 1)
+	assert.Equal(t, "from", response.Error.Details[0].Field)
+}
+
+func TestStatsHandler_GetMonthly_ServiceError(t *testing.T) {
+	mockService := &MockStatsService{}
+	handler := handlers.NewStatsHandler(mockService)
+
+	mockService.On("Monthly", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil, errors.New("repository failure"))
+
+	c, rec := statsRequest("/stats/monthly")
+
+	require.NoError(t, handler.GetMonthly(c))
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 }

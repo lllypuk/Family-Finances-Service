@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -15,7 +14,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/application/handlers"
@@ -24,116 +22,90 @@ import (
 	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
+	"family-budget-service/internal/services"
+	"family-budget-service/internal/services/dto"
 )
 
-// MockTransactionRepository is a mock implementation of transaction repository
-type MockTransactionRepository struct {
-	mock.Mock
+// stubTransactionService записывает пришедший запрос и отдаёт заготовленный ответ;
+// остальной интерфейс не вызывается и остаётся во встроенном nil.
+type stubTransactionService struct {
+	services.TransactionService
+
+	tx      *transaction.Transaction
+	txs     []*transaction.Transaction
+	total   int
+	err     error
+	created *dto.CreateTransactionDTO
+	updated *dto.UpdateTransactionDTO
+	filter  *dto.TransactionFilterDTO
+	deleted *uuid.UUID
 }
 
-func (m *MockTransactionRepository) Create(ctx context.Context, tx *transaction.Transaction) error {
-	args := m.Called(ctx, tx)
-	return args.Error(0)
-}
-
-func (m *MockTransactionRepository) GetByID(ctx context.Context, id uuid.UUID) (*transaction.Transaction, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+func (s *stubTransactionService) CreateTransaction(
+	_ context.Context,
+	req dto.CreateTransactionDTO,
+) (*transaction.Transaction, error) {
+	s.created = &req
+	if s.err != nil {
+		return nil, s.err
 	}
-	return args.Get(0).(*transaction.Transaction), args.Error(1)
+	if s.tx != nil {
+		return s.tx, nil
+	}
+
+	return &transaction.Transaction{
+		ID:          uuid.New(),
+		AmountMinor: req.AmountMinor,
+		Type:        req.Type,
+		Description: req.Description,
+		CategoryID:  req.CategoryID,
+		UserID:      req.UserID,
+		Date:        req.Date,
+		Tags:        req.Tags,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}, nil
 }
 
-func (m *MockTransactionRepository) GetByFilter(
-	ctx context.Context,
-	filter transaction.Filter,
+func (s *stubTransactionService) GetTransactionByID(
+	_ context.Context,
+	_ uuid.UUID,
+) (*transaction.Transaction, error) {
+	if s.tx == nil && s.err == nil {
+		return nil, services.ErrTransactionNotFound
+	}
+
+	return s.tx, s.err
+}
+
+func (s *stubTransactionService) GetAllTransactions(
+	_ context.Context,
+	filter dto.TransactionFilterDTO,
 ) ([]*transaction.Transaction, error) {
-	args := m.Called(ctx, filter)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*transaction.Transaction), args.Error(1)
+	s.filter = &filter
+	return s.txs, s.err
 }
 
-func (m *MockTransactionRepository) CountByFilter(
-	ctx context.Context,
-	filter transaction.Filter,
-) (int, error) {
-	args := m.Called(ctx, filter)
-	return args.Int(0), args.Error(1)
+func (s *stubTransactionService) CountTransactions(_ context.Context, _ dto.TransactionFilterDTO) (int, error) {
+	return s.total, s.err
 }
 
-func (m *MockTransactionRepository) Update(ctx context.Context, tx *transaction.Transaction) error {
-	args := m.Called(ctx, tx)
-	return args.Error(0)
+func (s *stubTransactionService) UpdateTransaction(
+	_ context.Context,
+	_ uuid.UUID,
+	req dto.UpdateTransactionDTO,
+) (*transaction.Transaction, error) {
+	s.updated = &req
+	return s.tx, s.err
 }
 
-func (m *MockTransactionRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
+func (s *stubTransactionService) DeleteTransaction(_ context.Context, id uuid.UUID) error {
+	s.deleted = &id
+	return s.err
 }
 
-func (m *MockTransactionRepository) DeleteBulk(ctx context.Context, ids []uuid.UUID) (int, error) {
-	args := m.Called(ctx, ids)
-	return args.Int(0), args.Error(1)
-}
-
-func (m *MockTransactionRepository) GetTotalByDateRange(
-	ctx context.Context,
-	startDate, endDate date.Date,
-	transactionType transaction.Type,
-) (money.Minor, error) {
-	args := m.Called(ctx, startDate, endDate, transactionType)
-	return args.Get(0).(money.Minor), args.Error(1)
-}
-
-func (m *MockTransactionRepository) GetTotalByCategory(
-	ctx context.Context,
-	categoryID uuid.UUID,
-	transactionType transaction.Type,
-) (money.Minor, error) {
-	args := m.Called(ctx, categoryID, transactionType)
-	return args.Get(0).(money.Minor), args.Error(1)
-}
-
-func (m *MockTransactionRepository) GetTotalByCategoryAndDateRange(
-	ctx context.Context,
-	categoryID uuid.UUID,
-	startDate, endDate date.Date,
-	transactionType transaction.Type,
-) (money.Minor, error) {
-	args := m.Called(ctx, categoryID, startDate, endDate, transactionType)
-	return args.Get(0).(money.Minor), args.Error(1)
-}
-
-func (m *MockTransactionRepository) GetAll(ctx context.Context, limit, offset int) ([]*transaction.Transaction, error) {
-	args := m.Called(ctx, limit, offset)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*transaction.Transaction), args.Error(1)
-}
-
-func (m *MockTransactionRepository) GetTotalsByCategory(
-	ctx context.Context,
-	familyID uuid.UUID,
-	period string,
-) (map[uuid.UUID]float64, error) {
-	args := m.Called(ctx, familyID, period)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(map[uuid.UUID]float64), args.Error(1)
-}
-
-// setupTransactionHandler creates a new transaction handler with mock repositories
-func setupTransactionHandler() (*handlers.TransactionHandler, *MockTransactionRepository) {
-	mockRepo := &MockTransactionRepository{}
-	repositories := &handlers.Repositories{
-		Transaction: mockRepo,
-	}
-	handler := handlers.NewTransactionHandler(repositories)
-	return handler, mockRepo
+func setupTransactionHandler(service *stubTransactionService) *handlers.TransactionHandler {
+	return handlers.NewTransactionHandler(service)
 }
 
 // createValidTransactionRequest creates a valid transaction request for testing
@@ -158,35 +130,57 @@ func withSessionUser(c echo.Context, userID uuid.UUID) {
 	})
 }
 
-func TestTransactionHandler_CreateTransaction_Success(t *testing.T) {
-	handler, mockRepo := setupTransactionHandler()
+func testTransaction(id uuid.UUID) *transaction.Transaction {
+	return &transaction.Transaction{
+		ID:          id,
+		AmountMinor: 15_000,
+		Type:        transaction.TypeExpense,
+		Description: "Test transaction",
+		CategoryID:  uuid.New(),
+		UserID:      uuid.New(),
+		Date:        date.Today(time.UTC),
+		Tags:        []string{"test"},
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+}
 
-	// Arrange
-	req := createValidTransactionRequest()
-	sessionUserID := uuid.New()
-	mockRepo.On("Create", mock.Anything, mock.AnythingOfType("*transaction.Transaction")).Return(nil)
-
-	// Prepare HTTP request
-	body, err := json.Marshal(req)
-	require.NoError(t, err)
+func postTransaction(
+	t *testing.T,
+	handler *handlers.TransactionHandler,
+	body []byte,
+	userID *uuid.UUID,
+) *httptest.ResponseRecorder {
+	t.Helper()
 
 	e := echo.New()
 	httpReq := httptest.NewRequest(http.MethodPost, "/transactions", bytes.NewBuffer(body))
 	httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(httpReq, rec)
-	withSessionUser(c, sessionUserID)
+	if userID != nil {
+		withSessionUser(c, *userID)
+	}
 
-	// Act
-	err = handler.CreateTransaction(c)
+	require.NoError(t, handler.CreateTransaction(c))
 
-	// Assert
+	return rec
+}
+
+func TestTransactionHandler_CreateTransaction_Success(t *testing.T) {
+	service := &stubTransactionService{}
+	handler := setupTransactionHandler(service)
+
+	req := createValidTransactionRequest()
+	sessionUserID := uuid.New()
+	body, err := json.Marshal(req)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusCreated, rec.Code)
+
+	rec := postTransaction(t, handler, body, &sessionUserID)
+	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
 
 	var response handlers.APIResponse[handlers.TransactionResponse]
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 
 	assert.Equal(t, req.AmountMinor, response.Data.AmountMinor)
 	assert.Equal(t, req.Type, response.Data.Type)
@@ -194,26 +188,17 @@ func TestTransactionHandler_CreateTransaction_Success(t *testing.T) {
 	assert.Equal(t, req.CategoryID, response.Data.CategoryID)
 	assert.Equal(t, sessionUserID, response.Data.UserID)
 	assert.Equal(t, req.Tags, response.Data.Tags)
-
-	mockRepo.AssertExpectations(t)
 }
 
 // TestTransactionHandler_CreateTransaction_IgnoresBodyUserID закрывает вторую
 // половину S-01: автор записи берётся из сессии, а не из тела запроса, поэтому
 // подмена user_id в JSON не даёт писать от чужого имени.
 func TestTransactionHandler_CreateTransaction_IgnoresBodyUserID(t *testing.T) {
-	handler, mockRepo := setupTransactionHandler()
+	service := &stubTransactionService{}
+	handler := setupTransactionHandler(service)
 
-	// Arrange
 	sessionUserID := uuid.New()
 	victimUserID := uuid.New()
-
-	var created *transaction.Transaction
-	mockRepo.On("Create", mock.Anything, mock.AnythingOfType("*transaction.Transaction")).
-		Run(func(args mock.Arguments) {
-			created, _ = args.Get(1).(*transaction.Transaction)
-		}).
-		Return(nil)
 
 	body, err := json.Marshal(map[string]any{
 		"amount_minor": 10_050,
@@ -225,61 +210,39 @@ func TestTransactionHandler_CreateTransaction_IgnoresBodyUserID(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	e := echo.New()
-	httpReq := httptest.NewRequest(http.MethodPost, "/transactions", bytes.NewBuffer(body))
-	httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(httpReq, rec)
-	withSessionUser(c, sessionUserID)
-
-	// Act
-	err = handler.CreateTransaction(c)
-
-	// Assert
-	require.NoError(t, err)
+	rec := postTransaction(t, handler, body, &sessionUserID)
 	require.Equal(t, http.StatusCreated, rec.Code, "тело ответа: %s", rec.Body.String())
 
-	require.NotNil(t, created)
-	assert.Equal(t, sessionUserID, created.UserID, "запись обязана быть создана от имени владельца сессии")
-	assert.NotEqual(t, victimUserID, created.UserID, "user_id из тела запроса обязан игнорироваться")
+	require.NotNil(t, service.created)
+	assert.Equal(t, sessionUserID, service.created.UserID, "запись обязана быть создана от имени владельца сессии")
+	assert.NotEqual(t, victimUserID, service.created.UserID, "user_id из тела запроса обязан игнорироваться")
 
 	var response handlers.APIResponse[handlers.TransactionResponse]
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 	assert.Equal(t, sessionUserID, response.Data.UserID)
-
-	mockRepo.AssertExpectations(t)
 }
 
 // TestTransactionHandler_CreateTransaction_NoSession — страховка на случай,
-// если хендлер когда-нибудь окажется вне группы с RequireAPIAuth: без сессии
+// если хендлер когда-нибудь окажется вне группы с RequireBearer: без сессии
 // автора взять неоткуда, поэтому запись создавать нельзя.
 func TestTransactionHandler_CreateTransaction_NoSession(t *testing.T) {
-	handler, mockRepo := setupTransactionHandler()
+	service := &stubTransactionService{}
+	handler := setupTransactionHandler(service)
 
 	body, err := json.Marshal(createValidTransactionRequest())
 	require.NoError(t, err)
 
-	e := echo.New()
-	httpReq := httptest.NewRequest(http.MethodPost, "/transactions", bytes.NewBuffer(body))
-	httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(httpReq, rec)
-
-	err = handler.CreateTransaction(c)
-
-	require.NoError(t, err)
+	rec := postTransaction(t, handler, body, nil)
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 
 	var response handlers.ErrorResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 	assert.Equal(t, "UNAUTHORIZED", response.Error.Code)
 
-	mockRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+	assert.Nil(t, service.created)
 }
 
 func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
-	handler, _ := setupTransactionHandler()
-
 	tests := []struct {
 		name           string
 		requestBody    any
@@ -361,9 +324,11 @@ func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			service := &stubTransactionService{}
+			handler := setupTransactionHandler(service)
+
 			var body []byte
 			var err error
-
 			if str, ok := tt.requestBody.(string); ok {
 				body = []byte(str)
 			} else {
@@ -371,18 +336,10 @@ func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			e := echo.New()
-			httpReq := httptest.NewRequest(http.MethodPost, "/transactions", bytes.NewBuffer(body))
-			httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-			rec := httptest.NewRecorder()
-			c := e.NewContext(httpReq, rec)
-			withSessionUser(c, uuid.New())
+			userID := uuid.New()
+			rec := postTransaction(t, handler, body, &userID)
 
-			// Act
-			err = handler.CreateTransaction(c)
-
-			// Assert: битый JSON — 400, непрошедшее валидацию тело — 422 с деталями по полям.
-			require.NoError(t, err)
+			// Битый JSON — 400, непрошедшее валидацию тело — 422 с деталями по полям.
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 
 			var response handlers.ErrorResponse
@@ -392,186 +349,168 @@ func TestTransactionHandler_CreateTransaction_InvalidRequest(t *testing.T) {
 				require.NotEmpty(t, response.Error.Details)
 				assert.Equal(t, tt.expectedField, response.Error.Details[0].Field)
 			}
+
+			assert.Nil(t, service.created, "до сервиса запрос доходить не должен")
 		})
 	}
 }
 
-func TestTransactionHandler_CreateTransaction_RepositoryError(t *testing.T) {
-	handler, mockRepo := setupTransactionHandler()
-
-	// Arrange
-	req := createValidTransactionRequest()
-	mockRepo.On("Create", mock.Anything, mock.AnythingOfType("*transaction.Transaction")).
-		Return(errors.New("database error"))
-
-	// Prepare HTTP request
-	body, err := json.Marshal(req)
-	require.NoError(t, err)
-
-	e := echo.New()
-	httpReq := httptest.NewRequest(http.MethodPost, "/transactions", bytes.NewBuffer(body))
-	httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(httpReq, rec)
-	withSessionUser(c, uuid.New())
-
-	// Act
-	err = handler.CreateTransaction(c)
-
-	// Assert
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusInternalServerError, rec.Code)
-
-	var response handlers.ErrorResponse
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
-	require.NoError(t, err)
-	assert.Equal(t, "CREATE_FAILED", response.Error.Code)
-}
-
-func TestTransactionHandler_GetTransactions_Success(t *testing.T) {
-	handler, mockRepo := setupTransactionHandler()
-
-	// Arrange
-	familyID := uuid.New()
-	expectedTransactions := []*transaction.Transaction{
+func TestTransactionHandler_CreateTransaction_ServiceError(t *testing.T) {
+	tests := []struct {
+		name           string
+		err            error
+		expectedStatus int
+		expectedCode   string
+	}{
 		{
-			ID:          uuid.New(),
-			AmountMinor: 10_000,
-			Type:        transaction.TypeExpense,
-			Description: "Test transaction 1",
-			CategoryID:  uuid.New(),
-			UserID:      uuid.New(),
-			Date:        date.Today(time.UTC),
-			Tags:        []string{"test"},
-			CreatedAt:   time.Now(),
-			UpdatedAt:   time.Now(),
+			name:           "database failure",
+			err:            errors.New("database error"),
+			expectedStatus: http.StatusInternalServerError,
+			expectedCode:   "CREATE_FAILED",
 		},
 		{
-			ID:          uuid.New(),
-			AmountMinor: 20_000,
-			Type:        transaction.TypeIncome,
-			Description: "Test transaction 2",
-			CategoryID:  uuid.New(),
-			UserID:      uuid.New(),
-			Date:        date.Today(time.UTC),
-			Tags:        []string{"test"},
-			CreatedAt:   time.Now(),
-			UpdatedAt:   time.Now(),
+			name:           "unknown category",
+			err:            services.ErrCategoryNotInFamily,
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedCode:   handlers.ErrCodeValidationError,
 		},
 	}
 
-	mockRepo.On("GetByFilter", mock.Anything, mock.AnythingOfType("transaction.Filter")).
-		Return(expectedTransactions, nil)
-	mockRepo.On("CountByFilter", mock.Anything, mock.AnythingOfType("transaction.Filter")).
-		Return(len(expectedTransactions), nil)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := setupTransactionHandler(&stubTransactionService{err: tt.err})
 
-	e := echo.New()
-	httpReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/transactions?family_id=%s", familyID), nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(httpReq, rec)
+			body, err := json.Marshal(createValidTransactionRequest())
+			require.NoError(t, err)
 
-	// Act
-	err := handler.GetTransactions(c)
+			userID := uuid.New()
+			rec := postTransaction(t, handler, body, &userID)
+			assert.Equal(t, tt.expectedStatus, rec.Code, rec.Body.String())
 
-	// Assert
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, rec.Code)
-
-	var response handlers.APIResponse[[]handlers.TransactionResponse]
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
-	require.NoError(t, err)
-
-	assert.Len(t, response.Data, 2)
-	assert.Equal(t, expectedTransactions[0].AmountMinor, response.Data[0].AmountMinor)
-	assert.Equal(t, expectedTransactions[1].AmountMinor, response.Data[1].AmountMinor)
-
-	mockRepo.AssertExpectations(t)
+			var response handlers.ErrorResponse
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+			assert.Equal(t, tt.expectedCode, response.Error.Code)
+		})
+	}
 }
 
-// TestTransactionHandler_GetTransactions_MissingFamilyID is deprecated in single-family model
-/*
-func TestTransactionHandler_GetTransactions_MissingFamilyID(t *testing.T) {
-	handler, _ := setupTransactionHandler()
+// TestTransactionHandler_CreateTransaction_ExistingClientID — запись с присланным id уже
+// есть: отвечаем 200 и не пишем второй раз (A-07).
+func TestTransactionHandler_CreateTransaction_ExistingClientID(t *testing.T) {
+	clientID := uuid.New()
+	existing := testTransaction(clientID)
+	existing.AmountMinor = 12_345
+	service := &stubTransactionService{tx: existing}
+	handler := setupTransactionHandler(service)
+
+	req := createValidTransactionRequest()
+	req.ID = &clientID
+	body, err := json.Marshal(req)
+	require.NoError(t, err)
+
+	userID := uuid.New()
+	rec := postTransaction(t, handler, body, &userID)
+	assert.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
+
+	var response handlers.APIResponse[handlers.TransactionResponse]
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, clientID, response.Data.ID)
+	assert.Equal(t, money.Minor(12_345), response.Data.AmountMinor)
+
+	assert.Nil(t, service.created, "повторный POST не создаёт вторую запись")
+}
+
+func TestTransactionHandler_GetTransactions_Success(t *testing.T) {
+	expectedTransactions := []*transaction.Transaction{testTransaction(uuid.New()), testTransaction(uuid.New())}
+	expectedTransactions[1].AmountMinor = 20_000
+	expectedTransactions[1].Type = transaction.TypeIncome
+
+	service := &stubTransactionService{txs: expectedTransactions, total: len(expectedTransactions)}
+	handler := setupTransactionHandler(service)
 
 	e := echo.New()
 	httpReq := httptest.NewRequest(http.MethodGet, "/transactions", nil)
 	rec := httptest.NewRecorder()
-	c := e.NewContext(httpReq, rec)
 
-	// Act
-	err := handler.GetTransactions(c)
+	require.NoError(t, handler.GetTransactions(e.NewContext(httpReq, rec)))
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
-	// Assert - the handler should return an error, but JSON response should be set
-	require.Error(t, err)
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	var response handlers.APIResponse[[]handlers.TransactionResponse]
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 
-	var response handlers.ErrorResponse
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
-	require.NoError(t, err)
-	assert.Equal(t, "MISSING_FAMILY_ID", response.Error.Code)
+	require.Len(t, response.Data, 2)
+	assert.Equal(t, expectedTransactions[0].AmountMinor, response.Data[0].AmountMinor)
+	assert.Equal(t, expectedTransactions[1].AmountMinor, response.Data[1].AmountMinor)
+	require.NotNil(t, response.Meta.Pagination)
+	assert.Equal(t, 2, response.Meta.Pagination.Total)
 }
-*/
 
-// TestTransactionHandler_GetTransactions_InvalidFamilyID is deprecated in single-family model
-/*
-func TestTransactionHandler_GetTransactions_InvalidFamilyID(t *testing.T) {
-	handler, _ := setupTransactionHandler()
+// TestTransactionHandler_GetTransactions_FilterErrorIs422 — отказ фильтра из сервиса остаётся
+// ошибкой параметров, а не 500: клиент различает их по коду.
+func TestTransactionHandler_GetTransactions_FilterErrorIs422(t *testing.T) {
+	handler := setupTransactionHandler(&stubTransactionService{err: dto.ErrInvalidDateRange})
 
 	e := echo.New()
-	httpReq := httptest.NewRequest(http.MethodGet, "/transactions?family_id=invalid", nil)
+	httpReq := httptest.NewRequest(http.MethodGet, "/transactions", nil)
 	rec := httptest.NewRecorder()
-	c := e.NewContext(httpReq, rec)
 
-	// Act
-	err := handler.GetTransactions(c)
-
-	// Assert - the handler should return an error, but JSON response should be set
-	require.Error(t, err)
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	require.NoError(t, handler.GetTransactions(e.NewContext(httpReq, rec)))
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
 
 	var response handlers.ErrorResponse
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
-	require.NoError(t, err)
-	assert.Equal(t, "INVALID_FAMILY_ID", response.Error.Code)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, handlers.ErrCodeValidationError, response.Error.Code)
 }
-*/
+
+func TestTransactionHandler_GetTransactions_ServiceError(t *testing.T) {
+	handler := setupTransactionHandler(&stubTransactionService{err: errors.New("database error")})
+
+	e := echo.New()
+	httpReq := httptest.NewRequest(http.MethodGet, "/transactions", nil)
+	rec := httptest.NewRecorder()
+
+	require.NoError(t, handler.GetTransactions(e.NewContext(httpReq, rec)))
+	assert.Equal(t, http.StatusInternalServerError, rec.Code, rec.Body.String())
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "FETCH_FAILED", response.Error.Code)
+}
 
 func TestTransactionHandler_GetTransactions_WithFilters(t *testing.T) {
-	handler, mockRepo := setupTransactionHandler()
+	service := &stubTransactionService{txs: []*transaction.Transaction{}}
+	handler := setupTransactionHandler(service)
 
-	// Arrange
-	familyID := uuid.New()
 	userID := uuid.New()
 	categoryID := uuid.New()
-	dateFrom := date.Today(time.UTC).AddDays(-30).String()
-	dateTo := date.Today(time.UTC).String()
+	dateFrom := date.Today(time.UTC).AddDays(-30)
+	dateTo := date.Today(time.UTC)
 
-	mockRepo.On("GetByFilter", mock.Anything, mock.AnythingOfType("transaction.Filter")).
-		Return([]*transaction.Transaction{}, nil)
-	mockRepo.On("CountByFilter", mock.Anything, mock.AnythingOfType("transaction.Filter")).
-		Return(0, nil)
-
-	e := echo.New()
 	query := url.Values{}
-	query.Set("family_id", familyID.String())
 	query.Set("user_id", userID.String())
 	query.Set("category_id", categoryID.String())
 	query.Set("type", "expense")
-	query.Set("date_from", dateFrom)
-	query.Set("date_to", dateTo)
+	query.Set("date_from", dateFrom.String())
+	query.Set("date_to", dateTo.String())
 	query.Set("limit", "25")
 	query.Set("offset", "10")
+
+	e := echo.New()
 	httpReq := httptest.NewRequest(http.MethodGet, "/transactions?"+query.Encode(), nil)
 	rec := httptest.NewRecorder()
-	c := e.NewContext(httpReq, rec)
 
-	// Act
-	err := handler.GetTransactions(c)
+	require.NoError(t, handler.GetTransactions(e.NewContext(httpReq, rec)))
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
-	// Assert
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, rec.Code)
-	mockRepo.AssertExpectations(t)
+	require.NotNil(t, service.filter)
+	assert.Equal(t, &userID, service.filter.UserID)
+	assert.Equal(t, &categoryID, service.filter.CategoryID)
+	require.NotNil(t, service.filter.Type)
+	assert.Equal(t, transaction.TypeExpense, *service.filter.Type)
+	assert.Equal(t, &dateFrom, service.filter.DateFrom)
+	assert.Equal(t, &dateTo, service.filter.DateTo)
+	assert.Equal(t, 25, service.filter.Limit)
+	assert.Equal(t, 10, service.filter.Offset)
 }
 
 func TestTransactionHandler_GetTransactions_InvalidQueryParams(t *testing.T) {
@@ -604,16 +543,14 @@ func TestTransactionHandler_GetTransactions_InvalidQueryParams(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler, mockRepo := setupTransactionHandler()
+			service := &stubTransactionService{}
+			handler := setupTransactionHandler(service)
 
 			e := echo.New()
 			httpReq := httptest.NewRequest(http.MethodGet, "http://example.com"+tt.query, nil)
 			rec := httptest.NewRecorder()
-			c := e.NewContext(httpReq, rec)
 
-			err := handler.GetTransactions(c)
-
-			require.NoError(t, err)
+			require.NoError(t, handler.GetTransactions(e.NewContext(httpReq, rec)))
 			assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
 			var response handlers.ErrorResponse
@@ -624,330 +561,210 @@ func TestTransactionHandler_GetTransactions_InvalidQueryParams(t *testing.T) {
 			assert.Equal(t, "INVALID_QUERY_PARAM", response.Error.Details[0].Code)
 			assert.Equal(t, tt.expectedParam, response.Error.Details[0].Field)
 
-			mockRepo.AssertNotCalled(t, "GetByFilter", mock.Anything, mock.Anything)
+			assert.Nil(t, service.filter, "до сервиса битый параметр доходить не должен")
 		})
 	}
 }
 
 func TestTransactionHandler_GetTransactionByID_Success(t *testing.T) {
-	handler, mockRepo := setupTransactionHandler()
-
-	// Arrange
 	transactionID := uuid.New()
-	expectedTransaction := &transaction.Transaction{
-		ID:          transactionID,
-		AmountMinor: 15_000,
-		Type:        transaction.TypeExpense,
-		Description: "Test transaction",
-		CategoryID:  uuid.New(),
-		UserID:      uuid.New(),
-		Date:        date.Today(time.UTC),
-		Tags:        []string{"test"},
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
+	expected := testTransaction(transactionID)
+	handler := setupTransactionHandler(&stubTransactionService{tx: expected})
 
-	mockRepo.On("GetByID", mock.Anything, transactionID).Return(expectedTransaction, nil)
-
-	e := echo.New()
-	httpReq := httptest.NewRequest(http.MethodGet, "/transactions/"+transactionID.String(), nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(httpReq, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(transactionID.String())
-
-	// Act
-	err := handler.GetTransactionByID(c)
-
-	// Assert
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, rec.Code)
+	rec := transactionByIDRequest(t, handler, transactionID.String())
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
 	var response handlers.APIResponse[handlers.TransactionResponse]
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 
-	assert.Equal(t, expectedTransaction.ID, response.Data.ID)
-	assert.Equal(t, expectedTransaction.AmountMinor, response.Data.AmountMinor)
-	assert.Equal(t, string(expectedTransaction.Type), response.Data.Type)
-
-	mockRepo.AssertExpectations(t)
+	assert.Equal(t, expected.ID, response.Data.ID)
+	assert.Equal(t, expected.AmountMinor, response.Data.AmountMinor)
+	assert.Equal(t, string(expected.Type), response.Data.Type)
 }
 
 func TestTransactionHandler_GetTransactionByID_InvalidID(t *testing.T) {
-	handler, _ := setupTransactionHandler()
+	handler := setupTransactionHandler(&stubTransactionService{})
 
-	e := echo.New()
-	httpReq := httptest.NewRequest(http.MethodGet, "/transactions/invalid", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(httpReq, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("invalid")
-
-	// Act
-	err := handler.GetTransactionByID(c)
-
-	// Assert
-	require.NoError(t, err)
+	rec := transactionByIDRequest(t, handler, "invalid")
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 
 	var response handlers.ErrorResponse
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 	assert.Equal(t, "INVALID_ID", response.Error.Code)
 }
 
 func TestTransactionHandler_GetTransactionByID_NotFound(t *testing.T) {
-	handler, mockRepo := setupTransactionHandler()
+	handler := setupTransactionHandler(&stubTransactionService{err: services.ErrTransactionNotFound})
 
-	// Arrange
-	transactionID := uuid.New()
-	mockRepo.On("GetByID", mock.Anything, transactionID).Return(nil, errors.New("not found"))
-
-	e := echo.New()
-	httpReq := httptest.NewRequest(http.MethodGet, "/transactions/"+transactionID.String(), nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(httpReq, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(transactionID.String())
-
-	// Act
-	err := handler.GetTransactionByID(c)
-
-	// Assert
-	require.NoError(t, err)
+	rec := transactionByIDRequest(t, handler, uuid.New().String())
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 
 	var response handlers.ErrorResponse
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 	assert.Equal(t, "TRANSACTION_NOT_FOUND", response.Error.Code)
-
-	mockRepo.AssertExpectations(t)
 }
 
 func TestTransactionHandler_UpdateTransaction_Success(t *testing.T) {
-	handler, mockRepo := setupTransactionHandler()
-
-	// Arrange
 	transactionID := uuid.New()
-	existingTransaction := &transaction.Transaction{
-		ID:          transactionID,
-		AmountMinor: 10_000,
-		Type:        transaction.TypeExpense,
-		Description: "Old description",
-		CategoryID:  uuid.New(),
-		UserID:      uuid.New(),
-		Date:        date.Today(time.UTC),
-		Tags:        []string{"old"},
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
+	updated := testTransaction(transactionID)
+	updated.AmountMinor = 20_000
+	updated.Description = "Updated description"
+	updated.Tags = []string{"updated", "test"}
 
-	updateReq := handlers.UpdateTransactionRequest{
-		AmountMinor: new(money.Minor(20_000)),
-		Description: new("Updated description"),
-		Tags:        []string{"updated", "test"},
-	}
+	service := &stubTransactionService{tx: updated}
+	handler := setupTransactionHandler(service)
 
-	mockRepo.On("GetByID", mock.Anything, transactionID).Return(existingTransaction, nil)
-	mockRepo.On("Update", mock.Anything, mock.MatchedBy(func(tx *transaction.Transaction) bool {
-		return tx.ID == transactionID &&
-			tx.AmountMinor == money.Minor(20_000) &&
-			tx.Description == "Updated description" &&
-			len(tx.Tags) == 2 &&
-			tx.Tags[0] == "updated" &&
-			tx.Tags[1] == "test"
-	})).Return(nil)
-
-	// Prepare HTTP request
-	body, err := json.Marshal(updateReq)
-	require.NoError(t, err)
-
-	e := echo.New()
-	httpReq := httptest.NewRequest(http.MethodPatch, "/transactions/"+transactionID.String(), bytes.NewBuffer(body))
-	httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(httpReq, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(transactionID.String())
-
-	// Act
-	err = handler.UpdateTransaction(c)
-
-	// Assert
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, rec.Code)
+	rec := updateTransactionRequest(t, handler, transactionID.String(),
+		`{"amount_minor":20000,"description":"Updated description","tags":["updated","test"]}`)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
 	var response handlers.APIResponse[handlers.TransactionResponse]
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 
 	assert.Equal(t, transactionID, response.Data.ID)
 	assert.Equal(t, money.Minor(20_000), response.Data.AmountMinor)
 	assert.Equal(t, "Updated description", response.Data.Description)
 
-	mockRepo.AssertExpectations(t)
+	require.NotNil(t, service.updated)
+	require.NotNil(t, service.updated.AmountMinor)
+	assert.Equal(t, money.Minor(20_000), *service.updated.AmountMinor)
+	assert.Equal(t, []string{"updated", "test"}, service.updated.Tags)
+}
+
+func TestTransactionHandler_UpdateTransaction_NotFound(t *testing.T) {
+	handler := setupTransactionHandler(&stubTransactionService{err: services.ErrTransactionNotFound})
+
+	rec := updateTransactionRequest(t, handler, uuid.New().String(), `{"amount_minor":20000}`)
+	assert.Equal(t, http.StatusNotFound, rec.Code, rec.Body.String())
+}
+
+func TestTransactionHandler_UpdateTransaction_InvalidAmountIs422(t *testing.T) {
+	handler := setupTransactionHandler(&stubTransactionService{err: services.ErrInvalidTransactionAmount})
+
+	rec := updateTransactionRequest(t, handler, uuid.New().String(), `{"amount_minor":20000}`)
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, handlers.ErrCodeValidationError, response.Error.Code)
 }
 
 func TestTransactionHandler_DeleteTransaction_Success(t *testing.T) {
-	handler, mockRepo := setupTransactionHandler()
-
-	// Arrange
 	transactionID := uuid.New()
-	mockRepo.On("Delete", mock.Anything, transactionID).Return(nil)
+	service := &stubTransactionService{}
+	handler := setupTransactionHandler(service)
 
-	e := echo.New()
-	httpReq := httptest.NewRequest(
-		http.MethodDelete,
-		"/transactions/"+transactionID.String(),
-		nil,
-	)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(httpReq, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(transactionID.String())
-
-	// Act
-	err := handler.DeleteTransaction(c)
-
-	// Assert
-	require.NoError(t, err)
+	rec := deleteTransactionRequest(t, handler, transactionID.String())
 	assert.Equal(t, http.StatusNoContent, rec.Code)
-
-	mockRepo.AssertExpectations(t)
+	require.NotNil(t, service.deleted)
+	assert.Equal(t, transactionID, *service.deleted)
 }
 
 func TestTransactionHandler_DeleteTransaction_InvalidID(t *testing.T) {
-	handler, _ := setupTransactionHandler()
+	handler := setupTransactionHandler(&stubTransactionService{})
 
-	e := echo.New()
-	httpReq := httptest.NewRequest(http.MethodDelete, "/transactions/invalid", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(httpReq, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("invalid")
-
-	// Act
-	err := handler.DeleteTransaction(c)
-
-	// Assert
-	require.NoError(t, err)
+	rec := deleteTransactionRequest(t, handler, "invalid")
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
-func TestTransactionHandler_DeleteTransaction_RepositoryError(t *testing.T) {
-	handler, mockRepo := setupTransactionHandler()
+func TestTransactionHandler_DeleteTransaction_NotFound(t *testing.T) {
+	handler := setupTransactionHandler(&stubTransactionService{err: services.ErrTransactionNotFound})
 
-	// Arrange
-	transactionID := uuid.New()
-	mockRepo.On("Delete", mock.Anything, transactionID).Return(errors.New("database error"))
+	rec := deleteTransactionRequest(t, handler, uuid.New().String())
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
 
-	e := echo.New()
-	httpReq := httptest.NewRequest(
-		http.MethodDelete,
-		"/transactions/"+transactionID.String(),
-		nil,
-	)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(httpReq, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(transactionID.String())
+func TestTransactionHandler_UpdateTransaction_ServiceError(t *testing.T) {
+	handler := setupTransactionHandler(&stubTransactionService{err: errors.New("database error")})
 
-	// Act
-	err := handler.DeleteTransaction(c)
+	rec := updateTransactionRequest(t, handler, uuid.New().String(), `{"amount_minor":20000}`)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code, rec.Body.String())
 
-	// Assert
-	require.NoError(t, err)
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "UPDATE_FAILED", response.Error.Code)
+}
+
+func TestTransactionHandler_DeleteTransaction_ServiceError(t *testing.T) {
+	handler := setupTransactionHandler(&stubTransactionService{err: errors.New("database error")})
+
+	rec := deleteTransactionRequest(t, handler, uuid.New().String())
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 
 	var response handlers.ErrorResponse
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 	assert.Equal(t, "DELETE_FAILED", response.Error.Code)
-
-	mockRepo.AssertExpectations(t)
 }
 
-// Benchmark tests for performance validation
-func BenchmarkTransactionHandler_CreateTransaction(b *testing.B) {
-	handler, mockRepo := setupTransactionHandler()
-
-	// Setup mock to return nil for all calls
-	mockRepo.On("Create", mock.Anything, mock.AnythingOfType("*transaction.Transaction")).Return(nil)
-
-	req := createValidTransactionRequest()
-	body, _ := json.Marshal(req)
-
-	for b.Loop() {
-		e := echo.New()
-		httpReq := httptest.NewRequest(http.MethodPost, "/transactions", bytes.NewBuffer(body))
-		httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(httpReq, rec)
-
-		handler.CreateTransaction(c)
-	}
+// TestNewTransactionHandler_NilServicePanics — хендлер без сервиса отвечать не может,
+// и обнаружиться это должно при сборке приложения, а не на первом запросе.
+func TestNewTransactionHandler_NilServicePanics(t *testing.T) {
+	assert.Panics(t, func() {
+		handlers.NewTransactionHandler(nil)
+	})
 }
 
-func BenchmarkTransactionHandler_GetTransactions(b *testing.B) {
-	handler, mockRepo := setupTransactionHandler()
-
-	// Setup mock to return empty slice for all calls
-	mockRepo.On("GetByFilter", mock.Anything, mock.AnythingOfType("transaction.Filter")).
-		Return([]*transaction.Transaction{}, nil)
-	mockRepo.On("CountByFilter", mock.Anything, mock.AnythingOfType("transaction.Filter")).
-		Return(0, nil)
-
-	familyID := uuid.New()
-
-	for b.Loop() {
-		e := echo.New()
-		httpReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/transactions?family_id=%s", familyID), nil)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(httpReq, rec)
-
-		handler.GetTransactions(c)
-	}
+// TestNewBudgetHandler_NilServicePanics — то же для бюджетов.
+func TestNewBudgetHandler_NilServicePanics(t *testing.T) {
+	assert.Panics(t, func() {
+		handlers.NewBudgetHandler(&handlers.Repositories{}, nil)
+	})
 }
 
-// TestTransactionHandler_CreateTransaction_ExistingClientID — запись с присланным id уже
-// есть: отвечаем 200 и не пишем второй раз (A-07).
-func TestTransactionHandler_CreateTransaction_ExistingClientID(t *testing.T) {
-	handler, mockRepo := setupTransactionHandler()
-
-	clientID := uuid.New()
-	existing := &transaction.Transaction{
-		ID:          clientID,
-		AmountMinor: 12_345,
-		Type:        transaction.TypeExpense,
-		Description: "Уже создана",
-		CategoryID:  uuid.New(),
-		UserID:      uuid.New(),
-		Date:        date.Today(time.UTC),
-	}
-	mockRepo.On("GetByID", mock.Anything, clientID).Return(existing, nil).Once()
-
-	req := createValidTransactionRequest()
-	req.ID = &clientID
-	body, err := json.Marshal(req)
-	require.NoError(t, err)
+func transactionByIDRequest(
+	t *testing.T,
+	handler *handlers.TransactionHandler,
+	id string,
+) *httptest.ResponseRecorder {
+	t.Helper()
 
 	e := echo.New()
-	httpReq := httptest.NewRequest(http.MethodPost, "/transactions", bytes.NewBuffer(body))
+	httpReq := httptest.NewRequest(http.MethodGet, "/transactions/"+id, nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httpReq, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(id)
+
+	require.NoError(t, handler.GetTransactionByID(c))
+
+	return rec
+}
+
+func updateTransactionRequest(
+	t *testing.T,
+	handler *handlers.TransactionHandler,
+	id, body string,
+) *httptest.ResponseRecorder {
+	t.Helper()
+
+	e := echo.New()
+	httpReq := httptest.NewRequest(http.MethodPut, "/transactions/"+id, bytes.NewBufferString(body))
 	httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(httpReq, rec)
-	withSessionUser(c, uuid.New())
+	c.SetParamNames("id")
+	c.SetParamValues(id)
 
-	require.NoError(t, handler.CreateTransaction(c))
-	assert.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
+	require.NoError(t, handler.UpdateTransaction(c))
 
-	var response handlers.APIResponse[handlers.TransactionResponse]
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-	assert.Equal(t, clientID, response.Data.ID)
-	assert.Equal(t, money.Minor(12_345), response.Data.AmountMinor)
+	return rec
+}
 
-	mockRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
-	mockRepo.AssertExpectations(t)
+func deleteTransactionRequest(
+	t *testing.T,
+	handler *handlers.TransactionHandler,
+	id string,
+) *httptest.ResponseRecorder {
+	t.Helper()
+
+	e := echo.New()
+	httpReq := httptest.NewRequest(http.MethodDelete, "/transactions/"+id, nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httpReq, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(id)
+
+	require.NoError(t, handler.DeleteTransaction(c))
+
+	return rec
 }
