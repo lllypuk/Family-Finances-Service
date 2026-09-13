@@ -563,6 +563,10 @@ func (h *TransactionHandler) updateTransactionViaService(c echo.Context) error {
 	if validationErr := h.validator.Struct(req); validationErr != nil {
 		return respondValidationErrors(c, validationErr)
 	}
+	if req.isEmpty() {
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+			bodyDetail(ErrCodeValidationError, ErrMessageNoFields))
+	}
 
 	serviceReq := dto.UpdateTransactionDTO{
 		Description: req.Description,

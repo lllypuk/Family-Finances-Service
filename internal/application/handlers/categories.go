@@ -121,6 +121,10 @@ func (h *CategoryHandler) UpdateCategory(c echo.Context) error {
 	if validationErr := h.validator.Struct(req); validationErr != nil {
 		return respondValidationErrors(c, validationErr)
 	}
+	if req.Name == nil && req.Color == nil && req.Icon == nil {
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+			bodyDetail(ErrCodeValidationError, ErrMessageNoFields))
+	}
 
 	updateDTO := dto.UpdateCategoryDTO{
 		Name:  req.Name,

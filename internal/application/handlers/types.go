@@ -189,6 +189,12 @@ type UpdateTransactionRequest struct {
 	Tags        []string     `json:"tags,omitempty"`
 }
 
+// isEmpty — ни одного поля; `"tags": []` считается полем (очистка тегов).
+func (r UpdateTransactionRequest) isEmpty() bool {
+	return r.AmountMinor == nil && r.Type == nil && r.Description == nil &&
+		r.CategoryID == nil && r.Date == nil && r.Tags == nil
+}
+
 type TransactionResponse struct {
 	ID          uuid.UUID   `json:"id"`
 	AmountMinor money.Minor `json:"amount_minor"`
