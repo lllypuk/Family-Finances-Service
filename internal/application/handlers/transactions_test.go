@@ -105,7 +105,7 @@ func (s *stubTransactionService) DeleteTransaction(_ context.Context, id uuid.UU
 }
 
 func setupTransactionHandler(service *stubTransactionService) *handlers.TransactionHandler {
-	return handlers.NewTransactionHandler(&handlers.Repositories{}, service)
+	return handlers.NewTransactionHandler(service)
 }
 
 // createValidTransactionRequest creates a valid transaction request for testing
@@ -445,6 +445,38 @@ func TestTransactionHandler_GetTransactions_Success(t *testing.T) {
 	assert.Equal(t, 2, response.Meta.Pagination.Total)
 }
 
+// TestTransactionHandler_GetTransactions_FilterErrorIs422 — отказ фильтра из сервиса остаётся
+// ошибкой параметров, а не 500: клиент различает их по коду.
+func TestTransactionHandler_GetTransactions_FilterErrorIs422(t *testing.T) {
+	handler := setupTransactionHandler(&stubTransactionService{err: dto.ErrInvalidDateRange})
+
+	e := echo.New()
+	httpReq := httptest.NewRequest(http.MethodGet, "/transactions", nil)
+	rec := httptest.NewRecorder()
+
+	require.NoError(t, handler.GetTransactions(e.NewContext(httpReq, rec)))
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, handlers.ErrCodeValidationError, response.Error.Code)
+}
+
+func TestTransactionHandler_GetTransactions_ServiceError(t *testing.T) {
+	handler := setupTransactionHandler(&stubTransactionService{err: errors.New("database error")})
+
+	e := echo.New()
+	httpReq := httptest.NewRequest(http.MethodGet, "/transactions", nil)
+	rec := httptest.NewRecorder()
+
+	require.NoError(t, handler.GetTransactions(e.NewContext(httpReq, rec)))
+	assert.Equal(t, http.StatusInternalServerError, rec.Code, rec.Body.String())
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "FETCH_FAILED", response.Error.Code)
+}
+
 func TestTransactionHandler_GetTransactions_WithFilters(t *testing.T) {
 	service := &stubTransactionService{txs: []*transaction.Transaction{}}
 	handler := setupTransactionHandler(service)
@@ -642,6 +674,17 @@ func TestTransactionHandler_DeleteTransaction_NotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
 
+func TestTransactionHandler_UpdateTransaction_ServiceError(t *testing.T) {
+	handler := setupTransactionHandler(&stubTransactionService{err: errors.New("database error")})
+
+	rec := updateTransactionRequest(t, handler, uuid.New().String(), `{"amount_minor":20000}`)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code, rec.Body.String())
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "UPDATE_FAILED", response.Error.Code)
+}
+
 func TestTransactionHandler_DeleteTransaction_ServiceError(t *testing.T) {
 	handler := setupTransactionHandler(&stubTransactionService{err: errors.New("database error")})
 
@@ -657,7 +700,7 @@ func TestTransactionHandler_DeleteTransaction_ServiceError(t *testing.T) {
 // и обнаружиться это должно при сборке приложения, а не на первом запросе.
 func TestNewTransactionHandler_NilServicePanics(t *testing.T) {
 	assert.Panics(t, func() {
-		handlers.NewTransactionHandler(&handlers.Repositories{}, nil)
+		handlers.NewTransactionHandler(nil)
 	})
 }
 

@@ -90,16 +90,17 @@ if err = infrastructure.NewMigrationManager(dbURL, migrationsDir).Up(); err != n
 
 ### Manual Migration Commands
 
-While the project uses `golang-migrate` library, manual execution is typically not needed since migrations run on startup.
+The service ships the same thing as a subcommand — it reads `DATABASE_PATH` and refuses to run when that
+file does not exist (golang-migrate would otherwise create an empty database and stamp it):
 
-If needed for testing:
 ```bash
-# Run migrations
-migrate -path ./migrations -database "sqlite://./data/budget.db" up
-
-# Rollback migrations
-migrate -path ./migrations -database "sqlite://./data/budget.db" down
+go run ./cmd/server migrate           # текущая версия схемы
+go run ./cmd/server migrate --to 2    # подвинуть версию, в том числе вниз
 ```
+
+In the container it is `docker compose run --rm --no-deps -T app migrate --to 2`. Stepping down is what
+makes a release rollback possible: an old image does not start on a version it has no file for
+(`deploy/README.md`). `--to 0` is rejected — the lowest reachable target is 1.
 
 ## Best Practices
 

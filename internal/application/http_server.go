@@ -27,7 +27,6 @@ const (
 
 type HTTPServer struct {
 	echo                 *echo.Echo
-	repositories         *handlers.Repositories
 	services             *services.Services
 	config               *Config
 	observabilityService *observability.Service
@@ -126,7 +125,6 @@ func NewHTTPServerWithObservability(
 
 	server := &HTTPServer{
 		echo:                 e,
-		repositories:         repositories,
 		services:             services,
 		config:               config,
 		observabilityService: obsService,
@@ -137,8 +135,8 @@ func NewHTTPServerWithObservability(
 		meHandler:          handlers.NewMeHandler(services.User, services.Auth),
 		userHandler:        handlers.NewUserHandler(services.User, services.Auth),
 		familyHandler:      handlers.NewFamilyHandler(services.Family),
-		categoryHandler:    handlers.NewCategoryHandler(repositories, services.Category),
-		transactionHandler: handlers.NewTransactionHandler(repositories, services.Transaction),
+		categoryHandler:    handlers.NewCategoryHandler(services.Category),
+		transactionHandler: handlers.NewTransactionHandler(services.Transaction),
 		budgetHandler:      handlers.NewBudgetHandler(repositories, services.Budget),
 		statsHandler:       handlers.NewStatsHandler(services.Stats),
 		backupHandler:      handlers.NewBackupHandler(services.Backup),

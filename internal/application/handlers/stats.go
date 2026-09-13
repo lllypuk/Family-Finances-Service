@@ -53,11 +53,15 @@ func (h *StatsHandler) GetMonthly(c echo.Context) error {
 	return respondAPI(c, http.StatusOK, monthly)
 }
 
-// respondStatsError: перевёрнутый период — ошибка поля from, остальное — 500.
+// respondStatsError: перевёрнутый и слишком длинный период — ошибки поля from, остальное — 500.
 func respondStatsError(c echo.Context, err error) error {
-	if errors.Is(err, services.ErrInvalidStatsPeriod) {
+	switch {
+	case errors.Is(err, services.ErrInvalidStatsPeriod):
 		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			ErrorDetail{Field: "from", Message: "must not be after to", Code: ErrCodeInvalidQueryParam})
+	case errors.Is(err, services.ErrStatsPeriodTooLong):
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+			ErrorDetail{Field: "from", Message: "period must not exceed 120 months", Code: ErrCodeInvalidQueryParam})
 	}
 
 	return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)

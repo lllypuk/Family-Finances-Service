@@ -39,18 +39,18 @@ func parseMigrateArgs(args []string) (uint, bool, error) {
 	fs := flag.NewFlagSet(cmdMigrate, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 
-	to := fs.Uint("to", 0, "target schema version (default: only print the current one)")
+	to := fs.Uint("to", 0, "target schema version, 1 or above (default: only print the current one)")
 
 	if err := fs.Parse(args); err != nil {
 		return 0, false, fmt.Errorf("%s: %w", cmdMigrate, err)
 	}
 
-	var set bool
-	fs.Visit(func(f *flag.Flag) {
-		if f.Name == "to" {
-			set = true
-		}
-	})
+	set := fs.NFlag() > 0
+	// golang-migrate не умеет Migrate(0) и отвечает на него "file does not exist"; полный
+	// снос схемы эта подкоманда не предлагает.
+	if set && *to == 0 {
+		return 0, false, fmt.Errorf("%s: --to must be 1 or above", cmdMigrate)
+	}
 
 	return *to, set, nil
 }

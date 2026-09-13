@@ -801,7 +801,7 @@ func (r *SQLiteRepository) GetTotalsByCategoryAndDateRange(
 	}
 
 	query := `
-		SELECT category_id, type, COALESCE(SUM(amount_minor), 0), COUNT(*)
+		SELECT category_id, type, SUM(amount_minor), COUNT(*)
 		FROM transactions
 		WHERE family_id = ? AND date >= ? AND date <= ?
 		GROUP BY category_id, type`
@@ -847,7 +847,7 @@ func (r *SQLiteRepository) GetTotalsByMonth(
 
 	// date — TEXT `YYYY-MM-DD` без зоны, поэтому месяц берётся срезом, без пересчёта пояса.
 	query := `
-		SELECT substr(date, 1, 7) AS month, type, COALESCE(SUM(amount_minor), 0), COUNT(*)
+		SELECT substr(date, 1, 7) AS month, type, SUM(amount_minor), COUNT(*)
 		FROM transactions
 		WHERE family_id = ? AND date >= ? AND date <= ?
 		GROUP BY month, type

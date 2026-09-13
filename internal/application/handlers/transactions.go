@@ -19,7 +19,6 @@ import (
 )
 
 type TransactionHandler struct {
-	repositories       *Repositories
 	transactionService services.TransactionService
 	validator          *validator.Validate
 }
@@ -27,16 +26,12 @@ type TransactionHandler struct {
 var errResponseAlreadyWritten = errors.New("response already written")
 
 // NewTransactionHandler — сервис обязателен: бизнес-правила операции живут только в нём.
-func NewTransactionHandler(
-	repositories *Repositories,
-	transactionService services.TransactionService,
-) *TransactionHandler {
+func NewTransactionHandler(transactionService services.TransactionService) *TransactionHandler {
 	if transactionService == nil {
 		panic("handlers: NewTransactionHandler requires a non-nil services.TransactionService")
 	}
 
 	return &TransactionHandler{
-		repositories:       repositories,
 		transactionService: transactionService,
 		validator:          newAPIValidator(),
 	}

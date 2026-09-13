@@ -74,12 +74,15 @@ Layered/Clean architecture, single Go module `family-budget-service`. Wiring hap
 2. `internal.OpenDatabase(cfg)` (`internal/bootstrap.go`) — `infrastructure.NewSQLiteConnection` + golang-migrate
    `Up()` from `./migrations`. `setup`/`reset-password` open the DB through the same function;
    `backup` uses `OpenDatabaseNoMigrate` — a copy must be possible from an outdated schema, and a cron
-   `compose run` must not migrate the live DB under the running container.
+   `compose run` must not migrate the live DB under the running container. `migrate` opens no DB at all: it
+   goes straight to `NewMigrationManager` and `os.Stat`s `DATABASE_PATH` first, because golang-migrate on a
+   wrong path would create an empty database and stamp it with a version.
 3. `infrastructure.NewRepositoriesSQLite(db)` → `*handlers.Repositories` (one struct holding every repo).
 4. `auth.NewService(repos.Session, repos.User, repos.Family)` — built here and handed to
    `services.NewServices(...)` → `*services.Services` (`Services.Auth`). `StatsService.Summary(ctx, from, to)` owns
    the dashboard arithmetic behind `GET /api/v1/stats/summary`, `StatsService.Monthly(ctx, from, to)` the month
-   series behind `GET /api/v1/stats/monthly`; the handler only formats.
+   series behind `GET /api/v1/stats/monthly` (capped at `monthlyMaxMonths` = 120 buckets, since the bounds
+   come from the client); the handler only formats.
 5. `application.NewHTTPServerWithObservability(...)` — builds the Echo instance and registers `/health` and
    `/api/v1`. Nothing else is served: no HTML, no static files, no CORS.
 
@@ -196,6 +199,11 @@ DDL into `001` (so a new install gets it) *and* a `NNN_*.{up,down}.sql` applying
 table definition must stay identical to the one in `001`. Cover it in
 `internal/infrastructure/migrations_test.go`: `Migrate(1)` puts the released schema back, so the upgrade path is
 testable. See `migrations/README.md`, and `make migrate-create` for the reminder.
+
+`go run ./cmd/server migrate` prints the schema version, `migrate --to N` moves it in either direction
+(`--to 0` is rejected: golang-migrate answers `Migrate(0)` with "file does not exist"). This is the rollback
+path — an image refuses to start on a version it has no file for, so the schema is stepped down with the
+*new* image, with the container stopped, before the old one is deployed (`deploy/README.md`).
 
 Two independent code paths apply migrations, and **both must keep working**:
 

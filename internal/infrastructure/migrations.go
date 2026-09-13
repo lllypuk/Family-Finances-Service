@@ -109,6 +109,10 @@ func (m *MigrationManager) Version() (uint, bool, error) {
 	defer migration.Close()
 
 	version, dirty, err := migration.Version()
+	// ErrNilVersion — не ошибка, а пустая база: ни одной миграции ещё не применяли.
+	if errors.Is(err, migrate.ErrNilVersion) {
+		return 0, dirty, nil
+	}
 	if err != nil {
 		return 0, false, fmt.Errorf("failed to get migration version: %w", err)
 	}

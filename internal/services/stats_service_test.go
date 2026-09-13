@@ -545,6 +545,44 @@ func TestStatsService_Monthly_InvalidPeriod(t *testing.T) {
 	assert.Nil(t, monthly)
 }
 
+// TestStatsService_Monthly_PeriodTooLong — потолок ряда: границы приходят от клиента,
+// и период в тысячи лет иначе развернулся бы в корзину на каждый его месяц.
+func TestStatsService_Monthly_PeriodTooLong(t *testing.T) {
+	svc, _ := newStatsService()
+	from := date.New(2026, time.January, 1)
+	to := from.AddMonths(120)
+
+	monthly, err := svc.Monthly(t.Context(), &from, &to)
+
+	require.ErrorIs(t, err, services.ErrStatsPeriodTooLong)
+	assert.Nil(t, monthly)
+}
+
+// TestStatsService_Monthly_MaxPeriod — ровно потолок ещё проходит.
+func TestStatsService_Monthly_MaxPeriod(t *testing.T) {
+	svc, m := newStatsService()
+	from := date.New(2026, time.January, 1)
+	to := from.AddMonths(119)
+	m.monthly(from, to)
+
+	monthly, err := svc.Monthly(t.Context(), &from, &to)
+
+	require.NoError(t, err)
+	assert.Len(t, monthly.Months, 120)
+}
+
+func TestStatsService_Monthly_FamilyError(t *testing.T) {
+	m := newStatsMocks()
+	m.families.On("GetFamily", mock.Anything).Return(nil, errors.New("family repository down"))
+	svc := services.NewStatsService(m.transactions, m.budgets, m.categories, m.families, m.aggregates)
+
+	monthly, err := svc.Monthly(t.Context(), nil, nil)
+
+	require.Error(t, err)
+	assert.Nil(t, monthly)
+	m.aggregates.AssertNotCalled(t, "GetTotalsByMonth", mock.Anything, mock.Anything, mock.Anything)
+}
+
 func TestStatsService_Monthly_AggregateError(t *testing.T) {
 	svc, m := newStatsService()
 	from := date.New(2026, time.September, 1)

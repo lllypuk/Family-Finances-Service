@@ -178,6 +178,26 @@ func TestStatsAPI_Monthly_Unauthorized(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
+// TestStatsAPI_Monthly_PeriodTooLong — период шире потолка отбивается 422, а не разворачивается
+// в корзину на каждый его месяц.
+func TestStatsAPI_Monthly_PeriodTooLong(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/monthly?from=0001-01-01&to=9999-12-31", nil)
+	session.Apply(req)
+	rec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, handlers.ErrCodeValidationError, response.Error.Code)
+	require.Len(t, response.Error.Details, 1)
+	assert.Equal(t, "from", response.Error.Details[0].Field)
+}
+
 // TestStatsAPI_Monthly_InvertedPeriod — конец раньше начала отбивается 422 полем from.
 func TestStatsAPI_Monthly_InvertedPeriod(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)

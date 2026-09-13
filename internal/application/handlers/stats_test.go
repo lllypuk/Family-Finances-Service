@@ -241,6 +241,24 @@ func TestStatsHandler_GetMonthly_InvertedPeriod(t *testing.T) {
 	assert.Equal(t, "from", response.Error.Details[0].Field)
 }
 
+func TestStatsHandler_GetMonthly_PeriodTooLong(t *testing.T) {
+	mockService := &MockStatsService{}
+	handler := handlers.NewStatsHandler(mockService)
+
+	mockService.On("Monthly", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil, services.ErrStatsPeriodTooLong)
+
+	c, rec := statsRequest("/stats/monthly?from=0001-01-01&to=9999-12-31")
+
+	require.NoError(t, handler.GetMonthly(c))
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Error.Details, 1)
+	assert.Equal(t, "from", response.Error.Details[0].Field)
+}
+
 func TestStatsHandler_GetMonthly_ServiceError(t *testing.T) {
 	mockService := &MockStatsService{}
 	handler := handlers.NewStatsHandler(mockService)

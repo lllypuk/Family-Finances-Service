@@ -15,14 +15,12 @@ import (
 )
 
 type CategoryHandler struct {
-	repositories    *Repositories
 	categoryService services.CategoryService
 	validator       *validator.Validate
 }
 
-func NewCategoryHandler(repositories *Repositories, categoryService services.CategoryService) *CategoryHandler {
+func NewCategoryHandler(categoryService services.CategoryService) *CategoryHandler {
 	return &CategoryHandler{
-		repositories:    repositories,
 		categoryService: categoryService,
 		validator:       newAPIValidator(),
 	}

@@ -18,10 +18,16 @@ import (
 // ErrInvalidStatsPeriod возвращается, когда конец периода раньше его начала.
 var ErrInvalidStatsPeriod = errors.New("stats period end is before start")
 
+// ErrStatsPeriodTooLong возвращается, когда период запрошен шире monthlyMaxMonths.
+var ErrStatsPeriodTooLong = errors.New("stats period is too long")
+
 const (
 	statsRecentLimit = 10
 	// monthlyDefaultMonths — длина ряда по умолчанию в GET /stats/monthly.
 	monthlyDefaultMonths = 12
+	// monthlyMaxMonths — потолок ряда: на каждый месяц периода заводится корзина, а границы
+	// приходят от клиента, так что 0001-01-01…9999-12-31 иначе выдаёт 120 000 корзин в JSON.
+	monthlyMaxMonths = 120
 
 	budgetNearLimitShare = 0.8
 	budgetOverLimitShare = 1.0
@@ -106,10 +112,11 @@ func (s *statsService) Summary(ctx context.Context, from, to *date.Date) (*dto.S
 	}
 
 	previousFrom, previousTo := previousPeriod(start, end)
-	previous, hasPrevious, err := s.previousTotals(ctx, previousFrom, previousTo)
+	previous, _, err := s.totalsByCategory(ctx, previousFrom, previousTo)
 	if err != nil {
 		return nil, err
 	}
+	hasPrevious := previous.TransactionCount > 0
 	expenseCategories, incomeCategories := s.categoryShares(ctx, categoryTotals, totals)
 
 	incomeDelta, expensesDelta := periodDeltas(totals, previous, hasPrevious)
@@ -150,6 +157,9 @@ func (s *statsService) Monthly(ctx context.Context, from, to *date.Date) (*dto.S
 	if end.Before(start) {
 		return nil, ErrInvalidStatsPeriod
 	}
+	if monthsBetween(start, end) > monthlyMaxMonths {
+		return nil, ErrStatsPeriodTooLong
+	}
 
 	rows, err := s.aggregates.GetTotalsByMonth(ctx, start, end)
 	if err != nil {
@@ -170,19 +180,6 @@ func (s *statsService) totalsByCategory(
 	}
 
 	return periodTotals(from, to, rows), rows, nil
-}
-
-// previousTotals возвращает суммы за предыдущий период; второе значение ложно, если операций там не было.
-func (s *statsService) previousTotals(
-	ctx context.Context,
-	from, to date.Date,
-) (dto.PeriodTotals, bool, error) {
-	totals, _, err := s.totalsByCategory(ctx, from, to)
-	if err != nil {
-		return dto.PeriodTotals{}, false, err
-	}
-
-	return totals, totals.TransactionCount > 0, nil
 }
 
 func (s *statsService) budgetProgress(ctx context.Context, today date.Date) ([]dto.BudgetProgress, error) {
@@ -327,6 +324,11 @@ func periodTotals(from, to date.Date, rows []transaction.CategoryTotal) dto.Peri
 	totals.NetMinor = totals.IncomeMinor - totals.ExpensesMinor
 
 	return totals
+}
+
+// monthsBetween — число календарных месяцев, которые задевает период [from, to].
+func monthsBetween(from, to date.Date) int {
+	return (to.Year-from.Year)*12 + int(to.Month) - int(from.Month) + 1
 }
 
 // monthBuckets раскладывает строки агрегата по корзинам месяцев [from, to]; месяц без операций — нули.

@@ -150,8 +150,12 @@ is still deployed:
 ```bash
 cd /home/sasha/ffs
 docker compose run --rm --no-deps -T app migrate             # current version
+docker compose stop app                                      # иначе рестарт вернёт 003 своим Up()
 docker compose run --rm --no-deps -T app migrate --to 2      # v0.3.0 → the schema v0.2.0 knows
 ```
+
+The running container is stopped first on purpose: it migrated at startup and would not notice the
+step down, but any restart of it before `FFS_IMAGE` is swapped re-applies `003` silently.
 
 `003` only drops the unused `reports` table, so stepping back over it loses nothing. A down
 migration that would drop live data is not one to run — restore the snapshot instead.
