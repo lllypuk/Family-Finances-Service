@@ -16,6 +16,7 @@ android {
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
+        consumerProguardFiles("consumer-rules.pro")
         minSdk = libs.versions.minSdk.get().toInt()
     }
 
