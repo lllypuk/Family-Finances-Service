@@ -187,18 +187,18 @@
   `internal/application/handlers/transactions_test.go` (`MockTransactionRepository` встраивает
   `handlers.TransactionRepository`, `repositories.go:31`), `internal/testhelpers/integration_server.go`
 
-- [ ] имена в стиле соседей: `GetTotalsByCategoryAndDateRange`, `GetTotalsByMonth` (ниже — коротко).
+- [x] имена в стиле соседей: `GetTotalsByCategoryAndDateRange`, `GetTotalsByMonth` (ниже — коротко).
       `TotalsByCategory(ctx, from, to) ([]transaction.CategoryTotal, error)`: `category_id, type, SUM(amount_minor),
       COUNT(*)`, `GROUP BY category_id, type`, `family_id` из `getSingleFamilyID`
-- [ ] `TotalsByMonth(ctx, from, to) ([]transaction.MonthTotal, error)`: `substr(date, 1, 7) AS month, type, SUM, COUNT`,
+- [x] `TotalsByMonth(ctx, from, to) ([]transaction.MonthTotal, error)`: `substr(date, 1, 7) AS month, type, SUM, COUNT`,
       `GROUP BY month, type ORDER BY month`
-- [ ] методы — в `services.TransactionRepository` (там живёт SQL), а `statsService` получает их через узкий
+- [x] методы — в `services.TransactionRepository` (там живёт SQL), а `statsService` получает их через узкий
       интерфейс `statsAggregates { TotalsByCategory; TotalsByMonth }` отдельным параметром `NewStatsService`;
       контейнер передаёт `transactionRepo`. `TransactionService` не растёт; комментарий «только сервисы» у
       `statsService` (`stats_service.go:33`) переписать. Моки репозитория — по два пустых метода
-- [ ] тесты репозитория: суммы по типу и категории, границы включительно, пустой период → пустой срез, месяц
+- [x] тесты репозитория: суммы по типу и категории, границы включительно, пустой период → пустой срез, месяц
       на стыке (`2026-08-31`/`2026-09-01` — разные корзины)
-- [ ] `make fmt && make test && make lint`; коммит `feat: агрегаты транзакций по категориям и месяцам`
+- [x] `make fmt && make test && make lint`; коммит `feat: агрегаты транзакций по категориям и месяцам`
 
 ### Task 5: `Summary` на агрегатах
 

@@ -84,3 +84,19 @@ func ValidateDate(on date.Date) error {
 
 	return nil
 }
+
+// CategoryTotal — сумма и число операций одной категории одного типа за период.
+type CategoryTotal struct {
+	CategoryID  uuid.UUID
+	Type        Type
+	AmountMinor money.Minor
+	Count       int
+}
+
+// MonthTotal — сумма и число операций одного типа за календарный месяц `YYYY-MM`.
+type MonthTotal struct {
+	Month       string
+	Type        Type
+	AmountMinor money.Minor
+	Count       int
+}

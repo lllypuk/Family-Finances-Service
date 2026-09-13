@@ -30,12 +30,23 @@ const (
 	budgetOverLimitShare = 1.0
 )
 
-// statsService считает агрегаты поверх остальных сервисов, без прямого доступа к репозиториям.
+// statsAggregates — суммы за период одним запросом; статистика берёт их из репозитория напрямую,
+// потому что через сервис пришлось бы вычитывать все операции в память.
+type statsAggregates interface {
+	GetTotalsByCategoryAndDateRange(
+		ctx context.Context,
+		startDate, endDate date.Date,
+	) ([]transaction.CategoryTotal, error)
+	GetTotalsByMonth(ctx context.Context, startDate, endDate date.Date) ([]transaction.MonthTotal, error)
+}
+
+// statsService считает агрегаты поверх остальных сервисов; за суммами периода ходит в statsAggregates.
 type statsService struct {
 	transactions TransactionService
 	budgets      BudgetService
 	categories   CategoryService
 	families     FamilyService
+	aggregates   statsAggregates
 }
 
 // NewStatsService создаёт сервис статистики
@@ -44,12 +55,14 @@ func NewStatsService(
 	budgets BudgetService,
 	categories CategoryService,
 	families FamilyService,
+	aggregates statsAggregates,
 ) StatsService {
 	return &statsService{
 		transactions: transactions,
 		budgets:      budgets,
 		categories:   categories,
 		families:     families,
+		aggregates:   aggregates,
 	}
 }
 

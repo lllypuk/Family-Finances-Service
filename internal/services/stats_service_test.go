@@ -27,6 +27,7 @@ type statsMocks struct {
 	budgets      *MockBudgetService
 	categories   *MockCategoryService
 	families     *MockFamilyService
+	aggregates   *MockTransactionRepository
 }
 
 func newStatsService() (services.StatsService, *statsMocks) {
@@ -35,11 +36,12 @@ func newStatsService() (services.StatsService, *statsMocks) {
 		budgets:      new(MockBudgetService),
 		categories:   new(MockCategoryService),
 		families:     new(MockFamilyService),
+		aggregates:   new(MockTransactionRepository),
 	}
 	m.families.On("GetFamily", mock.Anything).
 		Return(&user.Family{Currency: "RUB", Timezone: "Europe/Moscow"}, nil).Maybe()
 
-	return services.NewStatsService(m.transactions, m.budgets, m.categories, m.families), m
+	return services.NewStatsService(m.transactions, m.budgets, m.categories, m.families, m.aggregates), m
 }
 
 // periodFilter матчит выборку транзакций за конкретный период.
@@ -499,9 +501,10 @@ func TestStatsService_Summary_FamilyError(t *testing.T) {
 		budgets:      new(MockBudgetService),
 		categories:   new(MockCategoryService),
 		families:     new(MockFamilyService),
+		aggregates:   new(MockTransactionRepository),
 	}
 	m.families.On("GetFamily", mock.Anything).Return(nil, errors.New("family repository down"))
-	svc := services.NewStatsService(m.transactions, m.budgets, m.categories, m.families)
+	svc := services.NewStatsService(m.transactions, m.budgets, m.categories, m.families, m.aggregates)
 
 	summary, err := svc.Summary(t.Context(), nil, nil)
 

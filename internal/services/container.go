@@ -40,7 +40,7 @@ func NewServices(
 	transactionService := NewTransactionServiceWithLogger(transactionRepo, budgetRepo, categoryRepo, userRepo, logger)
 	budgetService := NewBudgetServiceWithLogger(fullBudgetRepo, transactionRepo, logger)
 
-	statsService := NewStatsService(transactionService, budgetService, categoryService, familyService)
+	statsService := NewStatsService(transactionService, budgetService, categoryService, familyService, transactionRepo)
 
 	return &Services{
 		User:        userService,

@@ -518,3 +518,120 @@ func TestTransactionRepositorySQLite_MinorUnitsAndDateBounds(t *testing.T) {
 		assert.Equal(t, days[1], results[0].Date)
 	})
 }
+
+func TestTransactionRepositorySQLite_Totals(t *testing.T) {
+	container := testutils.SetupSQLiteTestDB(t)
+	helper := testutils.NewTestDataHelper(container.DB)
+	ctx := context.Background()
+
+	db := container.GetTestDatabase(t)
+	repo := transactionrepo.NewSQLiteRepository(db)
+
+	familyID, err := helper.CreateTestFamily(ctx, "Totals Family", "RUB")
+	require.NoError(t, err)
+	userID, err := helper.CreateTestUser(ctx, "totals@example.com", "Totals", "User", "admin", familyID)
+	require.NoError(t, err)
+	foodID, err := helper.CreateTestCategory(ctx, "Food", "expense", familyID, nil)
+	require.NoError(t, err)
+	salaryID, err := helper.CreateTestCategory(ctx, "Salary", "income", familyID, nil)
+	require.NoError(t, err)
+
+	entries := []struct {
+		category string
+		txType   transaction.Type
+		amount   money.Minor
+		day      date.Date
+	}{
+		{foodID, transaction.TypeExpense, 1_000, date.New(2026, time.August, 31)},
+		{foodID, transaction.TypeExpense, 500, date.New(2026, time.August, 31)},
+		{salaryID, transaction.TypeIncome, 7_000, date.New(2026, time.September, 1)},
+		{foodID, transaction.TypeExpense, 250, date.New(2026, time.September, 2)},
+		{foodID, transaction.TypeExpense, 999, date.New(2026, time.October, 1)},
+	}
+	for i, e := range entries {
+		tx := &transaction.Transaction{
+			ID:          uuid.New(),
+			AmountMinor: e.amount,
+			Type:        e.txType,
+			Description: "Totals " + e.day.String(),
+			CategoryID:  uuid.MustParse(e.category),
+			UserID:      uuid.MustParse(userID),
+			Date:        e.day,
+		}
+		require.NoError(t, repo.Create(ctx, tx), "transaction %d", i)
+	}
+
+	type totalKey struct {
+		category string
+		txType   transaction.Type
+	}
+	byCategory := func(t *testing.T, from, to date.Date) map[totalKey]transaction.CategoryTotal {
+		t.Helper()
+		totals, totalsErr := repo.GetTotalsByCategoryAndDateRange(ctx, from, to)
+		require.NoError(t, totalsErr)
+		out := make(map[totalKey]transaction.CategoryTotal, len(totals))
+		for _, total := range totals {
+			out[totalKey{total.CategoryID.String(), total.Type}] = total
+		}
+		return out
+	}
+
+	t.Run("CategoryTotalsBySumAndType", func(t *testing.T) {
+		totals := byCategory(t, date.New(2026, time.August, 31), date.New(2026, time.September, 2))
+		require.Len(t, totals, 2)
+		food := totals[totalKey{foodID, transaction.TypeExpense}]
+		assert.Equal(t, money.Minor(1_750), food.AmountMinor)
+		assert.Equal(t, 3, food.Count)
+		salary := totals[totalKey{salaryID, transaction.TypeIncome}]
+		assert.Equal(t, money.Minor(7_000), salary.AmountMinor)
+		assert.Equal(t, 1, salary.Count)
+	})
+
+	t.Run("CategoryTotalsBoundsAreInclusive", func(t *testing.T) {
+		totals := byCategory(t, date.New(2026, time.September, 1), date.New(2026, time.September, 2))
+		require.Len(t, totals, 2)
+		assert.Equal(t, money.Minor(250), totals[totalKey{foodID, transaction.TypeExpense}].AmountMinor)
+		assert.Equal(t, money.Minor(7_000), totals[totalKey{salaryID, transaction.TypeIncome}].AmountMinor)
+	})
+
+	t.Run("CategoryTotalsEmptyPeriod", func(t *testing.T) {
+		totals, totalsErr := repo.GetTotalsByCategoryAndDateRange(
+			ctx, date.New(2026, time.July, 1), date.New(2026, time.July, 31),
+		)
+		require.NoError(t, totalsErr)
+		assert.Empty(t, totals)
+	})
+
+	t.Run("MonthTotalsSplitOnMonthBoundary", func(t *testing.T) {
+		totals, totalsErr := repo.GetTotalsByMonth(
+			ctx, date.New(2026, time.August, 31), date.New(2026, time.October, 1),
+		)
+		require.NoError(t, totalsErr)
+		require.Len(t, totals, 4)
+		assert.Equal(t, "2026-08", totals[0].Month)
+		assert.Equal(t, transaction.TypeExpense, totals[0].Type)
+		assert.Equal(t, money.Minor(1_500), totals[0].AmountMinor)
+		assert.Equal(t, 2, totals[0].Count)
+
+		var septemberExpense, septemberIncome money.Minor
+		for _, total := range totals[1:3] {
+			assert.Equal(t, "2026-09", total.Month)
+			if total.Type == transaction.TypeExpense {
+				septemberExpense = total.AmountMinor
+			} else {
+				septemberIncome = total.AmountMinor
+			}
+		}
+		assert.Equal(t, money.Minor(250), septemberExpense)
+		assert.Equal(t, money.Minor(7_000), septemberIncome)
+
+		assert.Equal(t, "2026-10", totals[3].Month)
+		assert.Equal(t, money.Minor(999), totals[3].AmountMinor)
+	})
+
+	t.Run("MonthTotalsEmptyPeriod", func(t *testing.T) {
+		totals, totalsErr := repo.GetTotalsByMonth(ctx, date.New(2026, time.July, 1), date.New(2026, time.July, 31))
+		require.NoError(t, totalsErr)
+		assert.Empty(t, totals)
+	})
+}

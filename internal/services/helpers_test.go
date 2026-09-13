@@ -334,6 +334,28 @@ func (m *MockTransactionRepository) GetTotalByDateRange(
 	return args.Get(0).(money.Minor), args.Error(1)
 }
 
+func (m *MockTransactionRepository) GetTotalsByCategoryAndDateRange(
+	ctx context.Context,
+	startDate, endDate date.Date,
+) ([]transaction.CategoryTotal, error) {
+	args := m.Called(ctx, startDate, endDate)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]transaction.CategoryTotal), args.Error(1)
+}
+
+func (m *MockTransactionRepository) GetTotalsByMonth(
+	ctx context.Context,
+	startDate, endDate date.Date,
+) ([]transaction.MonthTotal, error) {
+	args := m.Called(ctx, startDate, endDate)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]transaction.MonthTotal), args.Error(1)
+}
+
 // Common Mock Services
 
 // MockTransactionService is a mock implementation of TransactionService
