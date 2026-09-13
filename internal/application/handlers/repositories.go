@@ -11,7 +11,6 @@ type Repositories struct {
 	Category    CategoryRepository
 	Transaction TransactionRepository
 	Budget      BudgetRepository
-	Report      ReportRepository
 	Session     auth.SessionRepository
 }
 
@@ -29,6 +28,3 @@ type TransactionRepository = services.TransactionRepository
 
 // BudgetRepository переиспользует сервисный контракт.
 type BudgetRepository = services.BudgetRepository
-
-// ReportRepository переиспользует сервисный контракт.
-type ReportRepository = services.ReportRepository

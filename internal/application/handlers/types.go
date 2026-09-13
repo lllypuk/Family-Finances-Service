@@ -267,26 +267,3 @@ type BudgetResponse struct {
 	CreatedAt      time.Time   `json:"created_at"`
 	UpdatedAt      time.Time   `json:"updated_at"`
 }
-
-// CreateReportRequest represents the request payload for creating a new report.
-// Как и в CreateTransactionRequest, user_id из тела запроса убран: владелец
-// отчёта определяется сессией, а не клиентом.
-type CreateReportRequest struct {
-	Name      string    `json:"name"       validate:"required,min=2,max=100"`
-	Type      string    `json:"type"       validate:"required,oneof=expenses income budget cash_flow category_breakdown"`
-	Period    string    `json:"period"     validate:"required,oneof=daily weekly monthly yearly custom"`
-	StartDate date.Date `json:"start_date" validate:"required"`
-	EndDate   date.Date `json:"end_date"   validate:"required"`
-}
-
-type ReportResponse struct {
-	ID          uuid.UUID `json:"id"`
-	Name        string    `json:"name"`
-	Type        string    `json:"type"`
-	Period      string    `json:"period"`
-	UserID      uuid.UUID `json:"user_id"`
-	StartDate   date.Date `json:"start_date"`
-	EndDate     date.Date `json:"end_date"`
-	Data        any       `json:"data"`
-	GeneratedAt time.Time `json:"generated_at"`
-}

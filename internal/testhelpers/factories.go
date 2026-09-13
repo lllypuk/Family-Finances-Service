@@ -8,7 +8,6 @@ import (
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/money"
-	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
 
@@ -20,9 +19,7 @@ const (
 	TestTransactionAmountMinor = money.Minor(10_050)
 	// TestBudgetAmountMinor test budget amount in minor units (1000.00)
 	TestBudgetAmountMinor = money.Minor(100_000)
-	// TestReportExpensesMinor represents the test report expenses amount in minor units (500.00)
-	TestReportExpensesMinor = money.Minor(50_000)
-	// testPeriodDays — длина периода тестовых бюджета и отчёта в днях
+	// testPeriodDays — длина периода тестового бюджета в днях
 	testPeriodDays = 30
 )
 
@@ -100,20 +97,5 @@ func CreateTestBudget(_ uuid.UUID, categoryID uuid.UUID) *budget.Budget {
 		IsActive:    true,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
-	}
-}
-
-// CreateTestReport creates a test report
-func CreateTestReport(_ uuid.UUID, userID uuid.UUID) *report.Report {
-	return &report.Report{
-		ID:          uuid.New(),
-		UserID:      userID,
-		Name:        "Test Report",
-		Type:        report.TypeExpenses,
-		Period:      report.PeriodMonthly,
-		StartDate:   date.Today(time.UTC).AddDays(-testPeriodDays),
-		EndDate:     date.Today(time.UTC),
-		Data:        report.Data{TotalExpensesMinor: TestReportExpensesMinor},
-		GeneratedAt: time.Now(),
 	}
 }

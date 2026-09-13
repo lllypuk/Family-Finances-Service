@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -16,8 +15,6 @@ import (
 
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/category"
-	"family-budget-service/internal/domain/date"
-	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/testhelpers"
 )
@@ -112,7 +109,6 @@ func TestAPIPagination_AllListsCarryPagination(t *testing.T) {
 		"/api/v1/transactions",
 		"/api/v1/categories",
 		"/api/v1/budgets",
-		"/api/v1/reports",
 		"/api/v1/users",
 		"/api/v1/backups",
 	} {
@@ -273,7 +269,7 @@ func TestAPIPagination_ListsRejectOutOfRangeParams(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	testServer.Auth(t)
 
-	paths := []string{"/api/v1/categories", "/api/v1/users", "/api/v1/reports", "/api/v1/backups"}
+	paths := []string{"/api/v1/categories", "/api/v1/users", "/api/v1/backups"}
 	queries := []string{"?limit=0", "?limit=500", "?offset=-1"}
 
 	for _, path := range paths {
@@ -326,33 +322,20 @@ func TestAPIBulkDelete_Transactions_RejectsBadBodies(t *testing.T) {
 	}
 }
 
-// reportsBeyondRepoLimit — на сотне репозиторий отчётов раньше обрезал выборку,
+// txBeyondRepoLimit — выборка репозитория раньше обрывалась на сотне,
 // поэтому total занижался, а страницы после сотой были пустыми.
-const reportsBeyondRepoLimit = 101
+const txBeyondRepoLimit = 101
 
-func TestAPIPagination_Reports_TotalBeyondRepositoryLimit(t *testing.T) {
+func TestAPIPagination_Transactions_TotalBeyondRepositoryLimit(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
-	testServer.Auth(t)
+	seedTransactions(t, testServer, txBeyondRepoLimit)
 
-	start := date.Today(time.UTC).AddDays(-1)
-	for i := range reportsBeyondRepoLimit {
-		rep := report.NewReport(
-			fmt.Sprintf("Report %d", i),
-			report.TypeExpenses,
-			report.PeriodMonthly,
-			testServer.AuthUser.ID,
-			start,
-			start.AddDays(1),
-		)
-		require.NoError(t, testServer.Repos.Report.Create(t.Context(), rep))
-	}
-
-	code, response := getJSON[handlers.APIResponse[[]handlers.ReportResponse]](
-		t, testServer, "/api/v1/reports?limit=1&offset=100",
+	code, response := getJSON[handlers.APIResponse[[]handlers.TransactionResponse]](
+		t, testServer, "/api/v1/transactions?limit=1&offset=100",
 	)
 
 	require.Equal(t, http.StatusOK, code)
 	require.NotNil(t, response.Meta.Pagination)
-	assert.Equal(t, reportsBeyondRepoLimit, response.Meta.Pagination.Total)
+	assert.Equal(t, txBeyondRepoLimit, response.Meta.Pagination.Total)
 	assert.Len(t, response.Data, 1)
 }

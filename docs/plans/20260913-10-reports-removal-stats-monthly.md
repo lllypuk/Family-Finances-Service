@@ -140,20 +140,20 @@
 - Create: `tests/integration/stats_test.go` (перенос `TestStatsAPI_Summary*` из `reports_test.go:561,593`)
 - Modify: `internal/application/handlers/errors.go:52–56`, `docs/api/openapi.yaml`, `android/core/api/generated/**`
 
-- [ ] снести роуты, хендлер, сервис, репозиторий, домен, DTO, `ReportRepository`/`Services.Report`, параметр
+- [x] снести роуты, хендлер, сервис, репозиторий, домен, DTO, `ReportRepository`/`Services.Report`, параметр
       `NewServices`, `ErrReportNotFound` из `isNotFoundError`, валидаторы отчётов, фабрику `CreateTestReport`,
       коды `ErrCodeGenerationFailed`/`ErrCodeSaveFailed`/`ErrCodeExportFailed` (`errors.go:52–56`, живут только в
       `reports.go:84,88,112`)
-- [ ] `TestStatsAPI_Summary`, `TestStatsAPI_Summary_InvalidDate` → `tests/integration/stats_test.go` до удаления
+- [x] `TestStatsAPI_Summary`, `TestStatsAPI_Summary_InvalidDate` → `tests/integration/stats_test.go` до удаления
       `reports_test.go`
-- [ ] интеграционные тесты: `api_pagination_test.go:115,276`, `api_auth_test.go:193,337`, `api_roles_test.go:154`,
+- [x] интеграционные тесты: `api_pagination_test.go:115,276`, `api_auth_test.go:193,337`, `api_roles_test.go:154`,
       `transactions_test.go:690` — механически на другой ресурс; `TestAPIPagination_Reports_TotalBeyondRepositoryLimit`
       (`api_pagination_test.go:333`, потолок репозитория в 100 строк) — перенести на `/api/v1/transactions`
-- [ ] `openapi.yaml`: убрать три пути, `ReportOk` из `responses` и `schemas`, `ReportType/ReportPeriod/ReportSummary/
+- [x] `openapi.yaml`: убрать три пути, `ReportOk` из `responses` и `schemas`, `ReportType/ReportPeriod/ReportSummary/
       Report/ReportData`, тег `reports`; коды `GENERATION_FAILED`/`SAVE_FAILED`/`EXPORT_FAILED` из шапки, если есть
-- [ ] `make -C android api-gen` — `ReportsApi.kt` и модели `Report*` исчезают; закоммитить; `make -C android api-check`,
+- [x] `make -C android api-gen` — `ReportsApi.kt` и модели `Report*` исчезают; закоммитить; `make -C android api-check`,
       `make -C android check`
-- [ ] `make fmt && make test && make lint` — 0 issues (в т.ч. `TestOpenAPISpec_*`); коммит `refactor: снос /reports`
+- [x] `make fmt && make test && make lint` — 0 issues (в т.ч. `TestOpenAPISpec_*`); коммит `refactor: снос /reports`
 
 ### Task 3: Миграция `003_drop_reports`
 

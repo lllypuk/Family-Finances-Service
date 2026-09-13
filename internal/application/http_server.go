@@ -41,7 +41,6 @@ type HTTPServer struct {
 	categoryHandler    *handlers.CategoryHandler
 	transactionHandler *handlers.TransactionHandler
 	budgetHandler      *handlers.BudgetHandler
-	reportHandler      *handlers.ReportHandler
 	statsHandler       *handlers.StatsHandler
 	backupHandler      *handlers.BackupHandler
 }
@@ -141,7 +140,6 @@ func NewHTTPServerWithObservability(
 		categoryHandler:    handlers.NewCategoryHandler(repositories, services.Category),
 		transactionHandler: handlers.NewTransactionHandler(repositories, services.Transaction),
 		budgetHandler:      handlers.NewBudgetHandler(repositories, services.Budget),
-		reportHandler:      handlers.NewReportHandler(repositories, services.Report),
 		statsHandler:       handlers.NewStatsHandler(services.Stats),
 		backupHandler:      handlers.NewBackupHandler(services.Backup),
 	}
@@ -216,13 +214,6 @@ func (s *HTTPServer) setupResourceRoutes(api *echo.Group) {
 	budgets.GET("/:id", s.budgetHandler.GetBudgetByID)
 	budgets.PUT("/:id", s.budgetHandler.UpdateBudget)
 	budgets.DELETE("/:id", s.budgetHandler.DeleteBudget)
-
-	reports := api.Group("/reports", financeAccess)
-	reports.POST("", s.reportHandler.CreateReport)
-	reports.GET("", s.reportHandler.GetReports)
-	reports.GET("/:id", s.reportHandler.GetReportByID)
-	reports.GET("/:id/export", s.reportHandler.ExportReport)
-	reports.DELETE("/:id", s.reportHandler.DeleteReport)
 
 	stats := api.Group("/stats", financeAccess)
 	stats.GET("/summary", s.statsHandler.GetSummary)

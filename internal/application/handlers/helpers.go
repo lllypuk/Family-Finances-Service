@@ -335,7 +335,6 @@ func respondPasswordPolicyError(c echo.Context) error {
 func isNotFoundError(err error) bool {
 	return errors.Is(err, services.ErrTransactionNotFound) ||
 		errors.Is(err, services.ErrBudgetNotFoundService) ||
-		errors.Is(err, services.ErrReportNotFound) ||
 		errors.Is(err, services.ErrCategoryNotFound)
 }
 

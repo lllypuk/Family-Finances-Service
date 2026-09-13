@@ -20,7 +20,6 @@ import (
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/money"
-	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/observability"
@@ -388,118 +387,6 @@ func (m *MockBudgetService) RecalculateBudgetSpent(ctx context.Context, budgetID
 	return nil
 }
 
-// MockReportService is a mock for report service
-type MockReportService struct {
-	mock.Mock
-}
-
-//nolint:revive // test mock
-func (m *MockReportService) GenerateExpenseReport(
-	ctx context.Context,
-	req dto.ReportRequestDTO,
-) (*dto.ExpenseReportDTO, error) {
-	return nil, nil //nolint:nilnil // test mock
-}
-
-//nolint:revive // test mock
-func (m *MockReportService) GenerateIncomeReport(
-	ctx context.Context,
-	req dto.ReportRequestDTO,
-) (*dto.IncomeReportDTO, error) {
-	return nil, nil //nolint:nilnil // test mock
-}
-
-//nolint:revive // test mock
-func (m *MockReportService) GenerateBudgetComparisonReport(
-	ctx context.Context,
-	period report.Period,
-) (*dto.BudgetComparisonDTO, error) {
-	return nil, nil //nolint:nilnil // test mock
-}
-
-//nolint:revive // test mock
-func (m *MockReportService) GenerateCashFlowReport(
-	ctx context.Context,
-	from, to date.Date,
-) (*dto.CashFlowReportDTO, error) {
-	return nil, nil //nolint:nilnil // test mock
-}
-
-//nolint:revive // test mock
-func (m *MockReportService) GenerateCategoryBreakdownReport(
-	ctx context.Context,
-	period report.Period,
-) (*dto.CategoryBreakdownDTO, error) {
-	return nil, nil //nolint:nilnil // test mock
-}
-
-//nolint:revive // test mock
-func (m *MockReportService) GenerateReport(
-	ctx context.Context,
-	req dto.ReportRequestDTO,
-) (*report.Report, error) {
-	return nil, nil //nolint:nilnil // test mock
-}
-
-//nolint:revive // test mock
-func (m *MockReportService) SaveReport(ctx context.Context, reportEntity *report.Report) error {
-	return nil
-}
-
-//nolint:revive // test mock
-func (m *MockReportService) GetReportByID(ctx context.Context, id uuid.UUID) (*report.Report, error) {
-	return nil, nil //nolint:nilnil // test mock
-}
-
-//nolint:revive // test mock
-func (m *MockReportService) GetReports(ctx context.Context, typeFilter *report.Type) ([]*report.Report, error) {
-	return nil, nil
-}
-
-//nolint:revive // test mock
-func (m *MockReportService) GetReportsByUserID(ctx context.Context, userID uuid.UUID) ([]*report.Report, error) {
-	return nil, nil
-}
-
-//nolint:revive // test mock
-func (m *MockReportService) DeleteReport(ctx context.Context, id uuid.UUID) error {
-	return nil
-}
-
-//nolint:revive // test mock
-func (m *MockReportService) ExportReport(
-	ctx context.Context,
-	reportID uuid.UUID,
-	format string,
-	options dto.ExportOptionsDTO,
-) ([]byte, error) {
-	return nil, nil
-}
-
-//nolint:revive // test mock
-func (m *MockReportService) ExportReportData(
-	ctx context.Context,
-	reportData any,
-	format string,
-	options dto.ExportOptionsDTO,
-) ([]byte, error) {
-	return nil, nil
-}
-
-//nolint:revive // test mock
-func (m *MockReportService) GenerateFinancialInsights(ctx context.Context) ([]dto.RecommendationDTO, error) {
-	return nil, nil
-}
-
-//nolint:revive // test mock
-func (m *MockReportService) GenerateTrendAnalysis(
-	ctx context.Context,
-	categoryID *uuid.UUID,
-	period report.Period,
-) (*dto.TrendAnalysisDTO, error) {
-	return nil, nil //nolint:nilnil // test mock
-}
-
 // newMockFamilyService — семья «создана»: /health спрашивает IsSetupComplete на каждом запросе.
 func newMockFamilyService() *MockFamilyService {
 	family := &MockFamilyService{}
@@ -515,7 +402,6 @@ func NewMockServices() *services.Services {
 		Category:    &MockCategoryService{},
 		Transaction: &MockTransactionService{},
 		Budget:      &MockBudgetService{},
-		Report:      &MockReportService{},
 	}
 }
 
@@ -629,8 +515,6 @@ func TestHTTPServer_RoutesSetup(t *testing.T) {
 	assert.True(t, routePaths["GET /api/v1/transactions"])
 	assert.True(t, routePaths["POST /api/v1/budgets"])
 	assert.True(t, routePaths["GET /api/v1/budgets"])
-	assert.True(t, routePaths["POST /api/v1/reports"])
-	assert.True(t, routePaths["GET /api/v1/reports"])
 
 	// Кроме /health ничего вне /api/v1 нет: веб-слой удалён (план 03, задача 8).
 	for _, route := range routes {
@@ -745,7 +629,6 @@ func TestHTTPServer_IntegrationWithRealEndpoints(t *testing.T) {
 		Category:    mockCategoryService,
 		Transaction: &MockTransactionService{},
 		Budget:      &MockBudgetService{},
-		Report:      &MockReportService{},
 	}
 	server := application.NewHTTPServer(&repos.Repositories, mockServices, config)
 

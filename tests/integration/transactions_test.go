@@ -19,8 +19,8 @@ import (
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/money"
-	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
+	"family-budget-service/internal/services/dto"
 	"family-budget-service/internal/testhelpers"
 )
 
@@ -606,7 +606,7 @@ func TestTransactionHandler_Integration_Filters(t *testing.T) {
 }
 
 // TestTransactionAPI_MinorUnitsLifecycle — полный цикл на копейках: три операции по 33
-// копейки складываются в 99, а не в 0.99 с потерей, и переживают фильтр и отчёт.
+// копейки складываются в 99, а не в 0.99 с потерей, и переживают фильтр и сводку.
 func TestTransactionAPI_MinorUnitsLifecycle(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	session := testServer.Auth(t)
@@ -680,28 +680,20 @@ func TestTransactionAPI_MinorUnitsLifecycle(t *testing.T) {
 	// tags — обязательный массив контракта, а не null.
 	assert.NotNil(t, all.Data[0].Tags)
 
-	reportBody := mustJSON(t, map[string]any{
-		"name":       "Копейки",
-		"type":       "expenses",
-		"period":     "custom",
-		"start_date": today.String(),
-		"end_date":   today.String(),
-	})
-	reportReq := httptest.NewRequest(http.MethodPost, "/api/v1/reports", bytes.NewBuffer(reportBody))
-	reportReq.Header.Set("Content-Type", "application/json")
-	session.Apply(reportReq)
-	reportRec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(reportRec, reportReq)
-	require.Equal(t, http.StatusCreated, reportRec.Code, "тело: %s", reportRec.Body.String())
+	summaryReq := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/stats/summary?from="+today.String()+"&to="+today.String(),
+		nil,
+	)
+	session.Apply(summaryReq)
+	summaryRec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(summaryRec, summaryReq)
+	require.Equal(t, http.StatusOK, summaryRec.Code, "тело: %s", summaryRec.Body.String())
 
-	var created struct {
-		Data struct {
-			Data report.Data `json:"data"`
-		} `json:"data"`
-	}
-	require.NoError(t, json.Unmarshal(reportRec.Body.Bytes(), &created))
-	// 33*3 + 5000: копейки не теряются и не округляются по дороге в отчёт.
-	assert.Equal(t, money.Minor(5_099), created.Data.Data.TotalExpensesMinor)
+	var summary handlers.APIResponse[dto.StatsSummary]
+	require.NoError(t, json.Unmarshal(summaryRec.Body.Bytes(), &summary))
+	// 33*3 + 5000: копейки не теряются и не округляются по дороге в сводку.
+	assert.Equal(t, money.Minor(5_099), summary.Data.Current.ExpensesMinor)
 }
 
 // TestTransactionAPI_CreateWithClientID_Idempotent — повтор POST с тем же id

@@ -43,7 +43,7 @@ func TestTransactionService_CreateTransaction_Success(t *testing.T) {
 	testUser := createTestUser(uuid.Nil)
 	testUser.ID = userID
 
-	testCategory := createTestCategory(categoryID, "Test Category", category.TypeExpense)
+	testCategory := createTestCategory(categoryID, category.TypeExpense)
 
 	testBudget := createTestBudget(uuid.New(), 50000, categoryID)
 
@@ -122,7 +122,7 @@ func TestTransactionService_CreateTransaction_ExceedsBudget(t *testing.T) {
 	testUser := createTestUser(uuid.Nil)
 	testUser.ID = userID
 
-	testCategory := createTestCategory(categoryID, "Test Category", category.TypeExpense)
+	testCategory := createTestCategory(categoryID, category.TypeExpense)
 
 	testBudget := createTestBudget(uuid.New(), 50000, categoryID)
 	testBudget.SpentMinor = 10000 // Already spent 100 out of 500 budget
@@ -165,7 +165,7 @@ func TestTransactionService_CreateTransaction_IncomeNoLimitCheck(t *testing.T) {
 	testUser := createTestUser(uuid.Nil)
 	testUser.ID = userID
 
-	testCategory := createTestCategory(categoryID, "Test Category", category.TypeIncome)
+	testCategory := createTestCategory(categoryID, category.TypeIncome)
 
 	// Setup expectations - no budget check for income
 	userRepo.On("GetByID", ctx, userID).Return(testUser, nil)
@@ -191,7 +191,7 @@ func TestTransactionService_GetTransactionByID_Success(t *testing.T) {
 	service, txRepo, _, _, _ := setupTransactionService()
 	ctx := context.Background()
 
-	testTx := createTestTransaction(uuid.New(), 10050, transaction.TypeExpense, date.Today(time.UTC))
+	testTx := createTestTransaction(uuid.New(), 10050, date.Today(time.UTC))
 
 	// Setup expectations
 	txRepo.On("GetByID", ctx, testTx.ID).Return(testTx, nil)
@@ -233,8 +233,8 @@ func TestTransactionService_GetAllTransactions_Success(t *testing.T) {
 	filter := dto.NewTransactionFilterDTO()
 
 	testTxs := []*transaction.Transaction{
-		createTestTransaction(uuid.New(), 10000, transaction.TypeExpense, date.Today(time.UTC)),
-		createTestTransaction(uuid.New(), 20000, transaction.TypeExpense, date.Today(time.UTC)),
+		createTestTransaction(uuid.New(), 10000, date.Today(time.UTC)),
+		createTestTransaction(uuid.New(), 20000, date.Today(time.UTC)),
 	}
 
 	// Setup expectations
@@ -278,7 +278,7 @@ func TestTransactionService_UpdateTransaction_Success(t *testing.T) {
 	categoryID := uuid.New()
 	newCategoryID := uuid.New()
 
-	testTx := createTestTransaction(uuid.New(), 10050, transaction.TypeExpense, date.Today(time.UTC))
+	testTx := createTestTransaction(uuid.New(), 10050, date.Today(time.UTC))
 	testTx.CategoryID = categoryID
 
 	newAmount := money.Minor(15_075)
@@ -325,7 +325,7 @@ func TestTransactionService_DeleteTransaction_Success(t *testing.T) {
 	ctx := context.Background()
 
 	categoryID := uuid.New()
-	existingTx := createTestTransaction(uuid.New(), 10050, transaction.TypeExpense, date.Today(time.UTC))
+	existingTx := createTestTransaction(uuid.New(), 10050, date.Today(time.UTC))
 	existingTx.CategoryID = categoryID
 	testBudget := createTestBudget(uuid.New(), 50000, categoryID)
 
@@ -350,7 +350,7 @@ func TestTransactionService_BulkDelete_SkipsUnknownIDs(t *testing.T) {
 	ctx := context.Background()
 
 	categoryID := uuid.New()
-	existingTx := createTestTransaction(uuid.New(), 10050, transaction.TypeExpense, date.Today(time.UTC))
+	existingTx := createTestTransaction(uuid.New(), 10050, date.Today(time.UTC))
 	existingTx.CategoryID = categoryID
 	missingID := uuid.New()
 	testBudget := createTestBudget(uuid.New(), 50000, categoryID)
@@ -406,15 +406,15 @@ func TestTransactionService_BulkCategorizeTransactions_Success(t *testing.T) {
 	oldCategoryID := uuid.New()
 	newCategoryID := uuid.New()
 
-	tx1 := createTestTransaction(uuid.New(), 10050, transaction.TypeExpense, date.Today(time.UTC))
+	tx1 := createTestTransaction(uuid.New(), 10050, date.Today(time.UTC))
 	tx1.CategoryID = oldCategoryID
 
-	tx2 := createTestTransaction(uuid.New(), 20000, transaction.TypeExpense, date.Today(time.UTC))
+	tx2 := createTestTransaction(uuid.New(), 20000, date.Today(time.UTC))
 	tx2.CategoryID = oldCategoryID
 
 	transactionIDs := []uuid.UUID{tx1.ID, tx2.ID}
 
-	testCategory := createTestCategory(newCategoryID, "Test Category", category.TypeExpense)
+	testCategory := createTestCategory(newCategoryID, category.TypeExpense)
 
 	oldBudget := createTestBudget(uuid.New(), 50000, oldCategoryID)
 	newBudget := createTestBudget(uuid.New(), 30000, newCategoryID)
@@ -463,7 +463,7 @@ func TestTransactionService_GetTransactionsByDateRange_Success(t *testing.T) {
 	to := date.Today(time.UTC)
 
 	testTxs := []*transaction.Transaction{
-		createTestTransaction(uuid.New(), 10000, transaction.TypeExpense, date.Today(time.UTC)),
+		createTestTransaction(uuid.New(), 10000, date.Today(time.UTC)),
 	}
 
 	// Setup expectations
@@ -580,7 +580,7 @@ func TestTransactionService_BulkDelete_DeduplicatesIDs(t *testing.T) {
 	ctx := context.Background()
 
 	categoryID := uuid.New()
-	existingTx := createTestTransaction(uuid.New(), 10050, transaction.TypeExpense, date.Today(time.UTC))
+	existingTx := createTestTransaction(uuid.New(), 10050, date.Today(time.UTC))
 	existingTx.CategoryID = categoryID
 	testBudget := createTestBudget(uuid.New(), 50000, categoryID)
 

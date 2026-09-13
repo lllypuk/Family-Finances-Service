@@ -11,7 +11,6 @@ import (
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/money"
-	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
 )
 
@@ -21,7 +20,6 @@ const (
 	maxBudgetNameLength   = 255
 	maxDescriptionLength  = 1000
 	maxCategoryNameLength = 255
-	maxReportNameLength   = 255
 	currencyCodeLength    = 3
 	MaxQueryLimit         = 1000 // Exported for use in repositories
 )
@@ -148,38 +146,6 @@ func ValidateCategoryName(name string) error {
 	}
 	if len(name) > maxCategoryNameLength {
 		return errors.New("category name too long")
-	}
-	return nil
-}
-
-// ValidateReportType validates report type
-func ValidateReportType(reportType report.Type) error {
-	switch reportType {
-	case report.TypeExpenses, report.TypeIncome, report.TypeBudget, report.TypeCashFlow, report.TypeCategoryBreak:
-		return nil
-	default:
-		return errors.New("invalid report type")
-	}
-}
-
-// ValidateReportPeriod validates report period
-func ValidateReportPeriod(period report.Period) error {
-	switch period {
-	case report.PeriodDaily, report.PeriodWeekly, report.PeriodMonthly, report.PeriodYearly, report.PeriodCustom:
-		return nil
-	default:
-		return errors.New("invalid report period")
-	}
-}
-
-// ValidateReportName validates report name
-func ValidateReportName(name string) error {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return errors.New("report name cannot be empty")
-	}
-	if len(name) > maxReportNameLength {
-		return errors.New("report name too long")
 	}
 	return nil
 }

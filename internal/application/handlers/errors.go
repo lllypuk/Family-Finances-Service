@@ -48,12 +48,6 @@ const (
 	ErrCodeBudgetIDExists = "BUDGET_ID_EXISTS"
 	// ErrCodeInvalidQueryParam маркирует деталь ошибки 422 по query-параметру.
 	ErrCodeInvalidQueryParam = "INVALID_QUERY_PARAM"
-	// ErrCodeGenerationFailed signals a failed report generation.
-	ErrCodeGenerationFailed = "GENERATION_FAILED"
-	// ErrCodeSaveFailed signals that a generated entity could not be persisted.
-	ErrCodeSaveFailed = "SAVE_FAILED"
-	// ErrCodeExportFailed signals a failed report export.
-	ErrCodeExportFailed = "EXPORT_FAILED"
 	// ErrCodeInvalidBackupName signals a backup filename outside the `backup_*.db` pattern.
 	ErrCodeInvalidBackupName = "INVALID_BACKUP_NAME"
 	// ErrCodeBackupNotFound signals that the requested backup file does not exist.

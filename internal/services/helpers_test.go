@@ -11,7 +11,6 @@ import (
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/money"
-	"family-budget-service/internal/domain/report"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services"
@@ -333,46 +332,6 @@ func (m *MockTransactionRepository) GetTotalByDateRange(
 ) (money.Minor, error) {
 	args := m.Called(ctx, startDate, endDate, txType)
 	return args.Get(0).(money.Minor), args.Error(1)
-}
-
-// MockReportRepository is a mock implementation of ReportRepository
-type MockReportRepository struct {
-	mock.Mock
-}
-
-func (m *MockReportRepository) Create(ctx context.Context, report *report.Report) error {
-	args := m.Called(ctx, report)
-	return args.Error(0)
-}
-
-func (m *MockReportRepository) GetByID(ctx context.Context, id uuid.UUID) (*report.Report, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*report.Report), args.Error(1)
-}
-
-// Updated: GetAll replaces GetByFamilyID
-func (m *MockReportRepository) GetAll(ctx context.Context) ([]*report.Report, error) {
-	args := m.Called(ctx)
-	return args.Get(0).([]*report.Report), args.Error(1)
-}
-
-func (m *MockReportRepository) GetByUserID(ctx context.Context, userID uuid.UUID) ([]*report.Report, error) {
-	args := m.Called(ctx, userID)
-	return args.Get(0).([]*report.Report), args.Error(1)
-}
-
-func (m *MockReportRepository) Update(ctx context.Context, report *report.Report) error {
-	args := m.Called(ctx, report)
-	return args.Error(0)
-}
-
-// Updated: Delete no longer requires familyID
-func (m *MockReportRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
 }
 
 // Common Mock Services
@@ -697,14 +656,9 @@ func (m *MockCategoryService) CheckCategoryUsage(ctx context.Context, categoryID
 // Common Test Helper Functions
 
 // createTestTransaction creates a test transaction with all required parameters
-func createTestTransaction(
-	id uuid.UUID,
-	amountMinor money.Minor,
-	transactionType transaction.Type,
-	on date.Date,
-) *transaction.Transaction {
+func createTestTransaction(id uuid.UUID, amountMinor money.Minor, on date.Date) *transaction.Transaction {
 	categoryID := uuid.New()
-	return createTestTransactionWithCategory(id, categoryID, amountMinor, transactionType, on)
+	return createTestTransactionWithCategory(id, categoryID, amountMinor, transaction.TypeExpense, on)
 }
 
 // createTestTransactionWithCategory creates a test transaction with specific category
@@ -729,10 +683,10 @@ func createTestTransactionWithCategory(
 }
 
 // createTestCategory creates a test category with all required parameters
-func createTestCategory(id uuid.UUID, name string, categoryType category.Type) *category.Category {
+func createTestCategory(id uuid.UUID, categoryType category.Type) *category.Category {
 	return &category.Category{
 		ID:        id,
-		Name:      name,
+		Name:      "Test Category",
 		Type:      categoryType,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
@@ -763,40 +717,6 @@ func createTestUser(_ uuid.UUID) *user.User {
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
-}
-
-// setupReportService creates a properly configured report service for testing
-func setupReportService() (
-	services.ReportService,
-	*MockReportRepository,
-	*MockUserRepository,
-	*MockTransactionService,
-	*MockBudgetRepository,
-	*MockCategoryService,
-) {
-	mockReportRepo := &MockReportRepository{}
-	mockTransactionRepo := &MockTransactionRepository{}
-	mockBudgetRepo := &MockBudgetRepository{}
-	mockCategoryRepo := &MockCategoryRepository{}
-	mockUserRepo := &MockUserRepository{}
-	mockFamilyRepo := &MockFamilyRepository{}
-	mockFamilyRepo.On("Get", mock.Anything).
-		Return(&user.Family{Currency: "RUB", Timezone: "Europe/Moscow"}, nil).Maybe()
-	mockTransactionService := &MockTransactionService{}
-	mockCategoryService := &MockCategoryService{}
-
-	service := services.NewReportService(
-		mockReportRepo,
-		mockTransactionRepo,
-		mockBudgetRepo,
-		mockCategoryRepo,
-		mockUserRepo,
-		mockFamilyRepo,
-		mockTransactionService,
-		mockCategoryService,
-	)
-
-	return service, mockReportRepo, mockUserRepo, mockTransactionService, mockBudgetRepo, mockCategoryService
 }
 
 // setupTransactionService creates a properly configured transaction service for testing
