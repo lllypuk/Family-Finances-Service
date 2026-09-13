@@ -253,17 +253,17 @@
       `/health` 200, `schema_migrations` = 3, таблицы `reports` нет в обеих
 
 ### Task 8: [Final] Update documentation
-- [ ] `CLAUDE.md`: роуты (`reports` из перечня `financeAccess`, абзац про `POST /reports`/`export`), список таблиц
+- [x] `CLAUDE.md`: роуты (`reports` из перечня `financeAccess`, абзац про `POST /reports`/`export`), список таблиц
       в «Database & migrations», «шесть envelope-ов» → пять, `TestOpenAPISpec_*` не трогать; `StatsService.Monthly`
-- [ ] `docs/specs/005-api-only-redesign.md`: строка `:190` — решение «удалить, отчёты — экран поверх статистики»,
+- [x] `docs/specs/005-api-only-redesign.md`: строка `:190` — решение «удалить, отчёты — экран поверх статистики»,
       таблица планов (10), абзац `:241` — следующий релиз `v0.3.0`, дальше план 11 (клиент)
-- [ ] `docs/backlog.md`: снять пункт про мёртвые ветки хендлеров; вписать план 11 (клиент): экран «Обзор» с выбором
+- [x] `docs/backlog.md`: снять пункт про мёртвые ветки хендлеров; вписать план 11 (клиент): экран «Обзор» с выбором
       периода на `summary`+`monthly` (главная остаётся «этот месяц» — бюджеты и `recent` в `summary` считаются на
       сегодня, смешивать их с произвольным периодом нельзя), дельта скрывается при `previous.*_minor == 0`,
       мультивыбор операций + `bulk-delete`
-- [ ] `docs/patterns/api_standards.md`: коды `REPORT_*`, если были; `docs/api/README.md` — при упоминании отчётов;
+- [x] `docs/patterns/api_standards.md`: коды `REPORT_*`, если были; `docs/api/README.md` — при упоминании отчётов;
       `deploy/README.md` — при упоминании
-- [ ] перенести план в `docs/plans/completed/`
+- [x] перенести план в `docs/plans/completed/`
 
 ## Post-Completion
 

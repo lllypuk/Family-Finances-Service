@@ -78,7 +78,8 @@ Layered/Clean architecture, single Go module `family-budget-service`. Wiring hap
 3. `infrastructure.NewRepositoriesSQLite(db)` → `*handlers.Repositories` (one struct holding every repo).
 4. `auth.NewService(repos.Session, repos.User, repos.Family)` — built here and handed to
    `services.NewServices(...)` → `*services.Services` (`Services.Auth`). `StatsService.Summary(ctx, from, to)` owns
-   the dashboard arithmetic behind `GET /api/v1/stats/summary`; the handler only formats.
+   the dashboard arithmetic behind `GET /api/v1/stats/summary`, `StatsService.Monthly(ctx, from, to)` the month
+   series behind `GET /api/v1/stats/monthly`; the handler only formats.
 5. `application.NewHTTPServerWithObservability(...)` — builds the Echo instance and registers `/health` and
    `/api/v1`. Nothing else is served: no HTML, no static files, no CORS.
 
@@ -143,7 +144,7 @@ has a catch-all, an unknown `/api/v1/...` path is `401` without a token and `404
   `testhelpers.WithTrustedProxies(t, "192.0.2.0/24")` (httptest's `RemoteAddr`).
 - **Role gates** are built from `auth.RequireRole(roles...)`: `adminOnly` for `/api/v1/users`,
   `DELETE /api/v1/categories/:id`, `/api/v1/backups` and `PUT /api/v1/family`; `financeAccess` (admin or member)
-  for categories/transactions/budgets/reports/stats; `GET /api/v1/family` and the `/auth/*`, `/me*` routes are
+  for categories/transactions/budgets/stats; `GET /api/v1/family` and the `/auth/*`, `/me*` routes are
   open to any authenticated role. Wrong role → `403 FORBIDDEN`.
 - **User writes are column-scoped, and session revocation rides along.** `UserRepository.Update` writes only
   `email`/`first_name`/`last_name`; password, role and `is_active` go through
@@ -161,9 +162,7 @@ has a catch-all, an unknown `/api/v1/...` path is `401` without a token and `404
   `500` — the text goes to the log only, so read the server log when debugging one.
 - Handlers take the author from `auth.FromContext(c)` → `*auth.Principal{SessionID, UserID, Email, Role}`
   (see `TransactionHandler.CreateTransaction`); `UserID` is **not** a field of
-  `CreateTransactionRequest`/`CreateReportRequest`, so sending it in the body does nothing.
-  `POST /api/v1/reports` generates the report through `ReportService.GenerateReport` and stores it (`201`);
-  `GET /api/v1/reports/:id/export` returns CSV from `ReportService.ExportReport`.
+  `CreateTransactionRequest`, so sending it in the body does nothing.
 - **One error envelope, one pagination shape** (`internal/application/handlers/helpers.go`): answer with
   `respondAPI`/`respondError(c, status, code, message, details...)`, never a hand-built `ResponseMeta`; validation
   failures are `422 VALIDATION_ERROR` with `error.details[{field, message, code}]`, while broken JSON and an
@@ -184,7 +183,7 @@ has a catch-all, an unknown `/api/v1/...` path is `401` without a token and `404
 ## Database & migrations
 
 The whole schema lives in `migrations/001_consolidated.{up,down}.sql`
-(tables: families, users, categories, transactions, budgets, reports, sessions) — that file is the readable
+(tables: families, users, categories, transactions, budgets, sessions) — that file is the readable
 picture of the database, and a fresh DB is built from it.
 
 **Editing `001` does not touch an existing database.** golang-migrate stores only the version number, so on a DB
@@ -287,10 +286,11 @@ reference): `docs/README.md` (navigation), `docs/product_brief.md`, `docs/tech_s
 status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the finished ones.
 
 **Current direction:** `docs/specs/005-api-only-redesign.md` — the service is an API-only backend for an
-Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–09 are done
+Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–10 are done
 (`docs/plans/completed/`, 06 = the Android client, 07 = its budgets tab, 08 = its settings screen,
-09 = the server findings of 07–08); `v0.1.0` is tagged, and the budget contract changed after it, so the next
-server release is `v0.2.0`.
+09 = the server findings of 07–08, 10 = `/reports` removed and `GET /stats/monthly` added); `v0.2.0` is tagged,
+and plan 10 changed the contract after it, so the next server release is `v0.3.0`. Plan 11 is the client side of
+10: an "Обзор" screen over `summary` + `monthly`, and multi-select over transactions.
 
 `docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates
 from it, and code and spec now match. **A registered route with no operation in the spec fails `make test`**
@@ -319,9 +319,9 @@ See `android/CLAUDE.md` and `android/core/api/CLAUDE.md`; commands are `make -C 
 `android/core/api/generated` is openapi-generator output from `docs/api/openapi.yaml`, **committed and
 never edited by hand**. Generation pulls the generator from the network, so it is in neither `compile`
 nor `check` (both must work offline): run `make -C android api-gen` after changing the contract and
-commit the result, or `make -C android api-check` fails. The six envelopes in `components/responses`
+commit the result, or `make -C android api-check` fails. The five envelopes in `components/responses`
 are named by the `*Ok` schemas in `components/schemas` — inline ones would generate positional
-`InlineObject…` names that a seventh such schema would shift.
+`InlineObject…` names that a sixth such schema would shift.
 
 Versions live only in `android/gradle/libs.versions.toml`, `compileSdk`/`minSdk`/`jvmTarget` included.
 
