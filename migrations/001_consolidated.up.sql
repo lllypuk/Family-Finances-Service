@@ -106,29 +106,8 @@ CREATE TABLE IF NOT EXISTS budgets (
     CHECK (start_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
     CHECK (end_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
     -- Строго больше: бюджет на один день бессмыслен, и то же требует budget.ValidatePeriod.
-    -- У отчётов ниже стоит >=, там однодневный период допустим.
     CHECK (end_date > start_date),
     CHECK (is_active IN (0, 1))
-);
-
-CREATE TABLE IF NOT EXISTS reports (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    type TEXT NOT NULL,
-    period TEXT NOT NULL,
-    start_date TEXT NOT NULL,
-    end_date TEXT NOT NULL,
-    data TEXT NOT NULL,
-    family_id TEXT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
-    generated_by TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
-    CHECK (type IN ('expenses', 'income', 'budget', 'cash_flow', 'category_breakdown')),
-    CHECK (period IN ('daily', 'weekly', 'monthly', 'yearly', 'custom')),
-    CHECK (LENGTH(TRIM(name)) > 0),
-    CHECK (start_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
-    CHECK (end_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
-    CHECK (end_date >= start_date)
 );
 
 -- Только хеш токена; срок продлевается активностью (см. internal/auth/session.go)
@@ -168,9 +147,6 @@ CREATE INDEX IF NOT EXISTS idx_budgets_family_period ON budgets(family_id, start
 -- которого клиент уже не видит (GetByID и все списки фильтруют is_active).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_budgets_name_period_active
     ON budgets(family_id, name, start_date, end_date) WHERE is_active = 1;
-
-CREATE INDEX IF NOT EXISTS idx_reports_family_type ON reports(family_id, type);
-CREATE INDEX IF NOT EXISTS idx_reports_generated_by ON reports(generated_by);
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 

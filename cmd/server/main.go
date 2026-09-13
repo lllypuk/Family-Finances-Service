@@ -46,6 +46,9 @@ func main() {
 		case cmdBackup:
 			runCommand(cmdBackup, runBackup)
 			return
+		case cmdMigrate:
+			runCommand(cmdMigrate, runMigrate)
+			return
 		default:
 			// Без этой ветки опечатка в cron или запуск `backup` на старом образе,
 			// где подкоманды ещё нет, молча поднимают HTTP-сервер: команда висит
@@ -67,8 +70,8 @@ func main() {
 
 func usage(unknown string) {
 	fmt.Fprintf(os.Stderr, "unknown command %q\n", unknown)
-	fmt.Fprintf(os.Stderr, "usage: server [%s|%s|%s|%s]\n",
-		cmdSetup, cmdResetPassword, cmdBackup, healthCheckFlag)
+	fmt.Fprintf(os.Stderr, "usage: server [%s|%s|%s|%s|%s]\n",
+		cmdSetup, cmdResetPassword, cmdBackup, cmdMigrate, healthCheckFlag)
 	os.Exit(exitUsage)
 }
 

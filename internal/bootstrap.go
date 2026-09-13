@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 
 	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/user"
@@ -23,8 +24,7 @@ func OpenDatabase(cfg *Config) (*sql.DB, error) {
 		return nil, err
 	}
 
-	dbURL := fmt.Sprintf("sqlite://%s", cfg.Database.Path)
-	if err = infrastructure.NewMigrationManager(dbURL, migrationsDir).Up(); err != nil {
+	if err = infrastructure.NewMigrationManager(databaseURL(cfg), migrationsDir).Up(); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
@@ -35,6 +35,38 @@ func OpenDatabase(cfg *Config) (*sql.DB, error) {
 	}
 
 	return db, nil
+}
+
+// SchemaVersion возвращает версию схемы и признак оборванной миграции.
+func SchemaVersion(cfg *Config) (uint, bool, error) {
+	if err := requireDatabaseFile(cfg); err != nil {
+		return 0, false, err
+	}
+
+	return infrastructure.NewMigrationManager(databaseURL(cfg), migrationsDir).Version()
+}
+
+// MigrateTo двигает схему к version, в том числе вниз: образ не стартует на версии, которой нет
+// в его ./migrations, поэтому откат релиза начинается с MigrateTo образом новой версии.
+func MigrateTo(cfg *Config, version uint) error {
+	if err := requireDatabaseFile(cfg); err != nil {
+		return err
+	}
+
+	return infrastructure.NewMigrationManager(databaseURL(cfg), migrationsDir).Migrate(version)
+}
+
+// requireDatabaseFile: по неверному пути golang-migrate создал бы пустую базу и разметил её version.
+func requireDatabaseFile(cfg *Config) error {
+	if _, err := os.Stat(cfg.Database.Path); err != nil {
+		return fmt.Errorf("database %s: %w", cfg.Database.Path, err)
+	}
+
+	return nil
+}
+
+func databaseURL(cfg *Config) string {
+	return fmt.Sprintf("sqlite://%s", cfg.Database.Path)
 }
 
 // OpenDatabaseNoMigrate открывает SQLite как есть — для `backup`: VACUUM INTO не зависит от схемы,

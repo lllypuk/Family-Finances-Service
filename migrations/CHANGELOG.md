@@ -2,6 +2,15 @@
 
 All notable changes to database migrations will be documented in this file.
 
+## [2026-09-13] - Plan 10: reports dropped
+
+### Removed
+- Таблица `reports` с индексами `idx_reports_family_type` / `idx_reports_generated_by` — из `001`
+  и, для выкаченной базы версии 2, миграцией `003_drop_reports.{up,down}.sql`. На свежей базе `003`
+  — no-op. `003.down` восстанавливает только схему: данных в таблице на проде не было.
+- `001.down` продолжает удалять `reports`: полный откат проходит через `003.down`, которая её
+  создаёт заново.
+
 ## [2026-09-12] - Plan 09: budget name uniqueness
 
 ### Changed

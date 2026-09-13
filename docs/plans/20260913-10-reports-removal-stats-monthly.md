@@ -163,19 +163,19 @@
 - Modify: `internal/infrastructure/migrations_test.go`, `internal/testhelpers/sqlite.go`
 - Create: `cmd/server/migrate.go`; Modify: `cmd/server/main.go`, `internal/bootstrap.go` (+ `_test`), `deploy/README.md`
 
-- [ ] `001.up`: убрать таблицу и два индекса; `001.down`: оставить их `DROP … IF EXISTS` с комментарием про `003.down`
-- [ ] `003.up`: `DROP INDEX IF EXISTS idx_reports_generated_by; DROP INDEX IF EXISTS idx_reports_family_type;
+- [x] `001.up`: убрать таблицу и два индекса; `001.down`: оставить их `DROP … IF EXISTS` с комментарием про `003.down`
+- [x] `003.up`: `DROP INDEX IF EXISTS idx_reports_generated_by; DROP INDEX IF EXISTS idx_reports_family_type;
       DROP TABLE IF EXISTS reports;` `003.down`: `CREATE TABLE reports` + индексы дословно из `001` версии 2
-- [ ] `CleanTables`: убрать `reports`; `migrations_test.go`: убрать из списка таблиц и проверку `reports.start_date`,
+- [x] `CleanTables`: убрать `reports`; `migrations_test.go`: убрать из списка таблиц и проверку `reports.start_date`,
       добавить `assert` отсутствия таблицы после `Up()`
-- [ ] тест `TestMigrations_DropReports`: `Up()`, `Migrate(2)` → таблица есть, `Up()` → нет, `Down()` → таблиц нет
-- [ ] подкоманда `migrate --to N` (`NewMigrationManager` берёт URL, `migrations.go:21` — `OpenDatabaseNoMigrate` не
+- [x] тест `TestMigrations_DropReports`: `Up()`, `Migrate(2)` → таблица есть, `Up()` → нет, `Down()` → таблиц нет
+- [x] подкоманда `migrate --to N` (`NewMigrationManager` берёт URL, `migrations.go:21` — `OpenDatabaseNoMigrate` не
       нужен; `os.Stat(DATABASE_PATH)` до запуска, как `backup.go:33`, иначе опечатка в пути создаст пустую базу
       версии N; без аргумента — печать текущей версии): старый образ не стартует на версии схемы, которой нет в его `./migrations`
       (golang-migrate: `no migration found for version 3`), так что откат образа начинается с `migrate --to 2`
       образом `v0.3.0`. Это касалось и `v0.1.0` ↔ версии 2, просто никто не откатывал. Тест в `bootstrap_test.go`;
       раздел «Откат» в `deploy/README.md`
-- [ ] `make test` (оба пути: golang-migrate и `testhelpers`); коммит `feat: миграция 003 — таблица reports удалена`
+- [x] `make test` (оба пути: golang-migrate и `testhelpers`); коммит `feat: миграция 003 — таблица reports удалена`
 
 ### Task 4: Агрегаты в репозитории транзакций
 
