@@ -1,3 +1,4 @@
+import com.android.build.api.artifact.SingleArtifact
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.io.File
 
@@ -119,3 +120,35 @@ dependencies {
     testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.okhttp.mockwebserver)
 }
+
+// Тесты минифицированного кода не видят: модель, на которую ссылается только generic-сигнатура
+// Retrofit, R8 удалял, и это всплывало уже на телефоне (см. `core/api/consumer-rules.pro`).
+// Поэтому сохранность моделей сверяется по mapping R8 и стоит на пути `assembleRelease`.
+// Файл берётся из артефакта варианта: `outputs/mapping/` заполняет отдельная задача копирования,
+// и после одного лишь `minifyReleaseWithR8` там лежит прошлый результат.
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        val mapping = variant.artifacts.get(SingleArtifact.OBFUSCATION_MAPPING_FILE)
+        val generated = rootProject.layout.projectDirectory
+            .dir("core/api/generated/kotlin/tech/shatrov/familyfinances/core/api")
+        tasks.register("checkReleaseModelsKept") {
+            description = "Проверить, что R8 оставил все @Serializable-модели :core:api"
+            inputs.file(mapping)
+            inputs.dir(generated)
+            doLast {
+                val kept = mapping.get().asFile.useLines { lines ->
+                    lines.filter { it.endsWith(":") && !it.startsWith(" ") }
+                        .map { it.substringBefore(" -> ") }
+                        .toSet()
+                }
+                val missing = generated.asFile.listFiles { file -> file.extension == "kt" }.orEmpty()
+                    .filter { file -> file.useLines { lines -> lines.any { it == "@Serializable" } } }
+                    .map { "tech.shatrov.familyfinances.core.api.${it.nameWithoutExtension}" }
+                    .filterNot(kept::contains)
+                    .sorted()
+                check(missing.isEmpty()) { "R8 удалил модели :core:api: ${missing.joinToString()}" }
+            }
+        }
+    }
+}
+tasks.matching { it.name == "assembleRelease" }.configureEach { dependsOn("checkReleaseModelsKept") }

@@ -37,7 +37,11 @@ fmt-check: ## Проверить формат по ktlint
 # Генерации здесь намеренно нет: она тянет артефакты из сети, а `check` обязан работать
 # офлайн. Свежесть сгенерированного клиента проверяет отдельная цель `api-check`.
 .PHONY: check
-check: fmt-check test lint ## Формат, тесты, линт
+check: fmt-check test lint r8-check ## Формат, тесты, линт, сохранность моделей после R8
+
+.PHONY: r8-check
+r8-check: ## Прогнать R8 и сверить mapping.txt с моделями :core:api (keystore не нужен)
+	$(GRADLE) :app:checkReleaseModelsKept
 
 .PHONY: apk
 apk: ## Собрать релизный APK (нужен keystore)
