@@ -20,6 +20,8 @@ var ErrInvalidStatsPeriod = errors.New("stats period end is before start")
 
 const (
 	statsRecentLimit = 10
+	// monthlyDefaultMonths — длина ряда по умолчанию в GET /stats/monthly.
+	monthlyDefaultMonths = 12
 
 	budgetNearLimitShare = 0.8
 	budgetOverLimitShare = 1.0
@@ -126,6 +128,35 @@ func (s *statsService) Summary(ctx context.Context, from, to *date.Date) (*dto.S
 		Recent:            recent,
 		TransactionsTotal: total,
 	}, nil
+}
+
+// Monthly собирает ряд по месяцам периода [from, to] включительно; nil-границы — двенадцать
+// календарных месяцев по сегодняшний в часовом поясе семьи.
+func (s *statsService) Monthly(ctx context.Context, from, to *date.Date) (*dto.StatsMonthly, error) {
+	family, err := s.families.GetFamily(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	today := date.Today(family.Location())
+	monthStart, _ := today.MonthBounds()
+	start, end := monthStart.AddMonths(-(monthlyDefaultMonths - 1)), today
+	if from != nil {
+		start = *from
+	}
+	if to != nil {
+		end = *to
+	}
+	if end.Before(start) {
+		return nil, ErrInvalidStatsPeriod
+	}
+
+	rows, err := s.aggregates.GetTotalsByMonth(ctx, start, end)
+	if err != nil {
+		return nil, fmt.Errorf("failed to aggregate transactions by month: %w", err)
+	}
+
+	return &dto.StatsMonthly{From: start, To: end, Months: monthBuckets(start, end, rows)}, nil
 }
 
 // totalsByCategory отдаёт итоги периода и строки агрегата, из которых они собраны.
@@ -296,6 +327,40 @@ func periodTotals(from, to date.Date, rows []transaction.CategoryTotal) dto.Peri
 	totals.NetMinor = totals.IncomeMinor - totals.ExpensesMinor
 
 	return totals
+}
+
+// monthBuckets раскладывает строки агрегата по корзинам месяцев [from, to]; месяц без операций — нули.
+// На месяц приходит 0–2 строки (по одной на тип) в непредсказуемом порядке, поэтому суммы накапливаются.
+func monthBuckets(from, to date.Date, rows []transaction.MonthTotal) []dto.MonthTotals {
+	// Пустой, а не nil: в контракте months — обязательный массив.
+	months := make([]dto.MonthTotals, 0, monthlyDefaultMonths)
+	index := make(map[string]int)
+
+	last := date.Date{Year: to.Year, Month: to.Month, Day: 1}
+	for m := (date.Date{Year: from.Year, Month: from.Month, Day: 1}); !m.After(last); m = m.AddMonths(1) {
+		index[m.MonthKey()] = len(months)
+		months = append(months, dto.MonthTotals{Month: m.MonthKey()})
+	}
+
+	for _, row := range rows {
+		i, ok := index[row.Month]
+		if !ok {
+			continue
+		}
+		months[i].TransactionCount += row.Count
+		switch row.Type {
+		case transaction.TypeIncome:
+			months[i].IncomeMinor += row.AmountMinor
+		case transaction.TypeExpense:
+			months[i].ExpensesMinor += row.AmountMinor
+		}
+	}
+
+	for i := range months {
+		months[i].NetMinor = months[i].IncomeMinor - months[i].ExpensesMinor
+	}
+
+	return months
 }
 
 // previousPeriod — период той же длины, вплотную перед [from, to].

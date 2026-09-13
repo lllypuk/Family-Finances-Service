@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -16,6 +17,7 @@ import (
 	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
+	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services/dto"
 	"family-budget-service/internal/testhelpers"
 )
@@ -130,4 +132,67 @@ func insertBulkExpenses(
 	}
 
 	require.NoError(t, tx.Commit())
+}
+
+// TestStatsAPI_Monthly — ряд по месяцам покрывает период, операции попадают в свой месяц.
+func TestStatsAPI_Monthly(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	member, session := testServer.AuthAs(t, user.RoleMember)
+	ctx := context.Background()
+
+	expenseCat := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(ctx, expenseCat))
+
+	expense := testhelpers.CreateTestTransaction(
+		testServer.AuthFamily.ID, member.ID, expenseCat.ID, transaction.TypeExpense,
+	)
+	expense.AmountMinor = 20_000
+	expense.Date = date.New(2026, time.September, 10)
+	require.NoError(t, testServer.Repos.Transaction.Create(ctx, expense))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/monthly?from=2026-08-15&to=2026-09-13", nil)
+	session.Apply(req)
+	rec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var response handlers.APIResponse[dto.StatsMonthly]
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Data.Months, 2)
+	assert.Equal(t, "2026-08", response.Data.Months[0].Month)
+	assert.Equal(t, 0, response.Data.Months[0].TransactionCount)
+	assert.Equal(t, "2026-09", response.Data.Months[1].Month)
+	assert.Equal(t, money.Minor(20_000), response.Data.Months[1].ExpensesMinor)
+	assert.Equal(t, money.Minor(-20_000), response.Data.Months[1].NetMinor)
+}
+
+// TestStatsAPI_Monthly_Unauthorized — без токена ряд недоступен.
+func TestStatsAPI_Monthly_Unauthorized(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/monthly", nil)
+	rec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+// TestStatsAPI_Monthly_InvertedPeriod — конец раньше начала отбивается 422 полем from.
+func TestStatsAPI_Monthly_InvertedPeriod(t *testing.T) {
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/monthly?from=2026-09-30&to=2026-09-01", nil)
+	session.Apply(req)
+	rec := httptest.NewRecorder()
+	testServer.Server.Echo().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, handlers.ErrCodeValidationError, response.Error.Code)
+	require.Len(t, response.Error.Details, 1)
+	assert.Equal(t, "from", response.Error.Details[0].Field)
 }

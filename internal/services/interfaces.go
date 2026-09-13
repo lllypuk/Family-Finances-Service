@@ -129,6 +129,8 @@ type BudgetService interface {
 // Пустые границы означают текущий месяц по часовому поясу семьи.
 type StatsService interface {
 	Summary(ctx context.Context, from, to *date.Date) (*dto.StatsSummary, error)
+	// Monthly — ряд по месяцам периода; пустые границы означают двенадцать месяцев по сегодняшний.
+	Monthly(ctx context.Context, from, to *date.Date) (*dto.StatsMonthly, error)
 }
 
 // BackupService defines business operations for database backup management

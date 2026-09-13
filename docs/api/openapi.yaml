@@ -743,6 +743,40 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
 
+  /api/v1/stats/monthly:
+    get:
+      operationId: getStatsMonthly
+      tags: [stats]
+      summary: Ряд итогов по месяцам
+      description: |
+        admin и member. По корзине на каждый календарный месяц, попадающий в `[from, to]`;
+        месяц без операций — нули. Крайние месяцы не расширяются до полных: корзина покрывает
+        только дни внутри интервала. Без параметров — двенадцать календарных месяцев по
+        сегодняшний в часовом поясе семьи (`from` — первое число месяца одиннадцать месяцев назад).
+      parameters:
+        - name: from
+          in: query
+          description: Начало периода включительно; по умолчанию первое число месяца одиннадцать месяцев назад
+          schema: { $ref: '#/components/schemas/CalendarDate' }
+        - name: to
+          in: query
+          description: Конец периода включительно; по умолчанию сегодня
+          schema: { $ref: '#/components/schemas/CalendarDate' }
+      responses:
+        '200':
+          description: Помесячный ряд
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { $ref: '#/components/schemas/StatsMonthly' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
   /api/v1/backups:
     get:
       operationId: listBackups
@@ -1449,11 +1483,15 @@ components:
         income_delta:
           type: number
           format: double
-          description: Изменение доходов к предыдущему периоду, доля (0.12 = +12%)
+          description: |
+            Изменение доходов к предыдущему периоду, доля (0.12 = +12%). `0` и при нулевой базе
+            метрики — рост «с нуля» долей не выражается; клиент сверяет `previous.income_minor`.
         expenses_delta:
           type: number
           format: double
-          description: Изменение расходов к предыдущему периоду, доля (0.12 = +12%)
+          description: |
+            Изменение расходов к предыдущему периоду, доля (0.12 = +12%). `0` и при нулевой базе
+            метрики — рост «с нуля» долей не выражается; клиент сверяет `previous.expenses_minor`.
         expense_categories:
           type: array
           description: Разбивка расходов по категориям, по убыванию суммы
@@ -1473,6 +1511,30 @@ components:
         transactions_total:
           type: integer
           description: Общее число операций семьи за всё время, а не за период
+    StatsMonthly:
+      type: object
+      required: [from, to, months]
+      properties:
+        from: { $ref: '#/components/schemas/CalendarDate' }
+        to: { $ref: '#/components/schemas/CalendarDate' }
+        months:
+          type: array
+          description: По корзине на каждый месяц периода, по возрастанию месяца; пустые месяцы — нули
+          items: { $ref: '#/components/schemas/MonthTotals' }
+    MonthTotals:
+      type: object
+      required: [month, income_minor, expenses_minor, net_minor, transaction_count]
+      properties:
+        month:
+          type: string
+          description: Календарный месяц `YYYY-MM`
+          examples: ['2026-09']
+        income_minor: { $ref: '#/components/schemas/Money' }
+        expenses_minor: { $ref: '#/components/schemas/Money' }
+        net_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: '`income_minor - expenses_minor`'
+        transaction_count: { type: integer }
     RecentTransactionItem:
       type: object
       required: [id, type, amount_minor, description, date, created_at]

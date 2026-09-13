@@ -226,22 +226,22 @@
 - Modify: `internal/application/handlers/stats.go` (+ `_test`), `internal/application/http_server.go`
 - Modify: `docs/api/openapi.yaml`, `android/core/api/generated/**`, `tests/integration/stats_test.go`
 
-- [ ] `StatsService.Monthly(ctx, from, to *date.Date) (*dto.StatsMonthly, error)`: границы по умолчанию — 12 месяцев
+- [x] `StatsService.Monthly(ctx, from, to *date.Date) (*dto.StatsMonthly, error)`: границы по умолчанию — 12 месяцев
       по сегодняшний в поясе семьи; корзины на каждый месяц `[from, to]`, нули для пустых; суммы из `TotalsByMonth`
-- [ ] `StatsHandler.GetMonthly` через `parseStatsPeriod`; `from > to` → `422` тем же `ErrorDetail`, что у `GetSummary`;
+- [x] `StatsHandler.GetMonthly` через `parseStatsPeriod`; `from > to` → `422` тем же `ErrorDetail`, что у `GetSummary`;
       роут `stats.GET("/monthly", …)` под `financeAccess`
-- [ ] сборка корзин — по ключу месяца из заранее построенной последовательности `[from, to]`; `TotalsByMonth`
+- [x] сборка корзин — по ключу месяца из заранее построенной последовательности `[from, to]`; `TotalsByMonth`
       отдаёт 0–2 строки на месяц (по `type`), порядок типов внутри месяца не гарантирован — раскладывать по `type`,
       `transaction_count` суммировать, пары строк не предполагать
-- [ ] спека: операция `getStatsMonthly` (tag `stats`, `operationId`, `4xx $ref: Error`), схемы `StatsMonthly`,
+- [x] спека: операция `getStatsMonthly` (tag `stats`, `operationId`, `4xx $ref: Error`), схемы `StatsMonthly`,
       `MonthTotals`; описать дефолт и правило крайних месяцев. Тут же — уточнение описаний `income_delta`/
       `expenses_delta` в `StatsSummary` («`0` и при нулевой базе метрики; клиент сверяет `previous.*_minor`»):
       описание попадает в Kotlin-комментарии, и `api-check` требует регенерации. `make -C android api-gen`,
       закоммитить, `make -C android api-check`, `make -C android check`
-- [ ] тесты сервиса: без границ и без операций → 12 нулевых корзин; явный интервал внутри одного месяца → одна
+- [x] тесты сервиса: без границ и без операций → 12 нулевых корзин; явный интервал внутри одного месяца → одна
       корзина; месяц только с доходами, только с расходами, с обоими; операции в двух месяцах. Интеграционные:
       `200` с токеном `member`, `401` без, `422` при `from > to`
-- [ ] `make fmt && make test && make lint`; коммит `feat: GET /stats/monthly — ряд по месяцам`
+- [x] `make fmt && make test && make lint`; коммит `feat: GET /stats/monthly — ряд по месяцам`
 
 ### Task 7: Verify acceptance criteria
 - [ ] `grep -rn -i 'report' internal tests cmd migrations docs/api/openapi.yaml` — только `003_*`, `001.down`

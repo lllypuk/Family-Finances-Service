@@ -35,6 +35,15 @@ func (m *statsMocks) totals(from, to date.Date, rows ...transaction.CategoryTota
 	m.aggregates.On("GetTotalsByCategoryAndDateRange", mock.Anything, from, to).Return(rows, nil)
 }
 
+// monthly объявляет помесячный агрегат за период.
+func (m *statsMocks) monthly(from, to date.Date, rows ...transaction.MonthTotal) {
+	m.aggregates.On("GetTotalsByMonth", mock.Anything, from, to).Return(rows, nil)
+}
+
+func monthTotal(month string, txType transaction.Type, amount money.Minor, count int) transaction.MonthTotal {
+	return transaction.MonthTotal{Month: month, Type: txType, AmountMinor: amount, Count: count}
+}
+
 func newStatsMocks() *statsMocks {
 	return &statsMocks{
 		transactions: new(MockTransactionService),
@@ -453,4 +462,98 @@ func TestStatsService_Summary_FamilyError(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Nil(t, summary)
+}
+
+// TestStatsService_Monthly_DefaultPeriod — без границ ряд покрывает двенадцать месяцев
+// по сегодняшний в зоне семьи, месяцы без операций — нули.
+func TestStatsService_Monthly_DefaultPeriod(t *testing.T) {
+	svc, m := newStatsService()
+	m.aggregates.On("GetTotalsByMonth", mock.Anything, mock.Anything, mock.Anything).
+		Return([]transaction.MonthTotal{}, nil)
+
+	monthly, err := svc.Monthly(t.Context(), nil, nil)
+	require.NoError(t, err)
+
+	moscow, locErr := time.LoadLocation("Europe/Moscow")
+	require.NoError(t, locErr)
+	today := date.Today(moscow)
+	monthStart, _ := today.MonthBounds()
+
+	require.Len(t, monthly.Months, 12)
+	assert.Equal(t, monthStart.AddMonths(-11), monthly.From)
+	assert.Equal(t, today, monthly.To)
+	assert.Equal(t, monthStart.AddMonths(-11).MonthKey(), monthly.Months[0].Month)
+	assert.Equal(t, today.MonthKey(), monthly.Months[11].Month)
+	assert.Equal(t, money.Minor(0), monthly.Months[0].IncomeMinor)
+	assert.Equal(t, 0, monthly.Months[0].TransactionCount)
+}
+
+// TestStatsService_Monthly_SingleMonth — интервал внутри одного месяца даёт одну корзину
+// с обоими типами операций.
+func TestStatsService_Monthly_SingleMonth(t *testing.T) {
+	svc, m := newStatsService()
+	from := date.New(2026, time.September, 5)
+	to := date.New(2026, time.September, 13)
+
+	m.monthly(from, to,
+		monthTotal("2026-09", transaction.TypeExpense, 20_000, 3),
+		monthTotal("2026-09", transaction.TypeIncome, 50_000, 1),
+	)
+
+	monthly, err := svc.Monthly(t.Context(), &from, &to)
+	require.NoError(t, err)
+
+	require.Len(t, monthly.Months, 1)
+	assert.Equal(t, "2026-09", monthly.Months[0].Month)
+	assert.Equal(t, money.Minor(50_000), monthly.Months[0].IncomeMinor)
+	assert.Equal(t, money.Minor(20_000), monthly.Months[0].ExpensesMinor)
+	assert.Equal(t, money.Minor(30_000), monthly.Months[0].NetMinor)
+	assert.Equal(t, 4, monthly.Months[0].TransactionCount)
+}
+
+// TestStatsService_Monthly_SeveralMonths — корзина на каждый месяц периода, включая пустой в середине.
+func TestStatsService_Monthly_SeveralMonths(t *testing.T) {
+	svc, m := newStatsService()
+	from := date.New(2026, time.July, 20)
+	to := date.New(2026, time.September, 10)
+
+	m.monthly(from, to,
+		monthTotal("2026-07", transaction.TypeIncome, 70_000, 2),
+		monthTotal("2026-09", transaction.TypeExpense, 15_000, 1),
+	)
+
+	monthly, err := svc.Monthly(t.Context(), &from, &to)
+	require.NoError(t, err)
+
+	require.Len(t, monthly.Months, 3)
+	assert.Equal(t, []string{"2026-07", "2026-08", "2026-09"},
+		[]string{monthly.Months[0].Month, monthly.Months[1].Month, monthly.Months[2].Month})
+	assert.Equal(t, money.Minor(70_000), monthly.Months[0].NetMinor)
+	assert.Equal(t, money.Minor(0), monthly.Months[1].NetMinor)
+	assert.Equal(t, 0, monthly.Months[1].TransactionCount)
+	assert.Equal(t, money.Minor(-15_000), monthly.Months[2].NetMinor)
+}
+
+func TestStatsService_Monthly_InvalidPeriod(t *testing.T) {
+	svc, _ := newStatsService()
+	from := date.New(2026, time.September, 30)
+	to := from.AddDays(-1)
+
+	monthly, err := svc.Monthly(t.Context(), &from, &to)
+
+	require.ErrorIs(t, err, services.ErrInvalidStatsPeriod)
+	assert.Nil(t, monthly)
+}
+
+func TestStatsService_Monthly_AggregateError(t *testing.T) {
+	svc, m := newStatsService()
+	from := date.New(2026, time.September, 1)
+	to := date.New(2026, time.September, 30)
+
+	m.aggregates.On("GetTotalsByMonth", mock.Anything, from, to).Return(nil, errors.New("database error"))
+
+	monthly, err := svc.Monthly(t.Context(), &from, &to)
+
+	require.Error(t, err)
+	assert.Nil(t, monthly)
 }

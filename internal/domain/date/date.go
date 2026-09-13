@@ -13,6 +13,9 @@ import (
 // Layout — единственный формат даты на проводе и в БД.
 const Layout = "2006-01-02"
 
+// monthLayout — месяц без дня: ключ помесячных агрегатов.
+const monthLayout = "2006-01"
+
 // ErrInvalidDate возвращается при разборе строки, не являющейся календарной датой.
 var ErrInvalidDate = errors.New("invalid date")
 
@@ -84,6 +87,17 @@ func (d Date) Before(other Date) bool {
 
 func (d Date) After(other Date) bool {
 	return d.compare(other) > 0
+}
+
+// MonthKey — месяц даты строкой "YYYY-MM"; тот же ключ, что даёт SQL-агрегат по месяцам.
+func (d Date) MonthKey() string {
+	return d.In(time.UTC).Format(monthLayout)
+}
+
+// AddMonths сдвигает дату на n месяцев. День нормализуется как в time.AddDate
+// (31 января + 1 месяц = 3 марта), поэтому шагать месяцами следует по первым числам.
+func (d Date) AddMonths(n int) Date {
+	return FromTime(d.In(time.UTC).AddDate(0, n, 0))
 }
 
 // MonthBounds возвращает первый и последний день месяца, в который попадает дата.

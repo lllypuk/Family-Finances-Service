@@ -38,6 +38,22 @@ type PeriodTotals struct {
 	TransactionCount int         `json:"transaction_count"`
 }
 
+// StatsMonthly — помесячный ряд за период [From, To] для GET /stats/monthly.
+type StatsMonthly struct {
+	From   date.Date     `json:"from"`
+	To     date.Date     `json:"to"`
+	Months []MonthTotals `json:"months"`
+}
+
+// MonthTotals — итоги календарного месяца "YYYY-MM"; крайние месяцы покрывают только дни внутри периода.
+type MonthTotals struct {
+	Month            string      `json:"month"`
+	IncomeMinor      money.Minor `json:"income_minor"`
+	ExpensesMinor    money.Minor `json:"expenses_minor"`
+	NetMinor         money.Minor `json:"net_minor"`
+	TransactionCount int         `json:"transaction_count"`
+}
+
 // CategoryShare — сумма по категории и её доля в сумме периода.
 type CategoryShare struct {
 	CategoryID       uuid.UUID   `json:"category_id"`

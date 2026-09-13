@@ -8,9 +8,27 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 import tech.shatrov.familyfinances.core.api.Error
+import tech.shatrov.familyfinances.core.api.GetStatsMonthly200Response
 import tech.shatrov.familyfinances.core.api.GetStatsSummary200Response
 
 interface StatsApi {
+    /**
+     * GET api/v1/stats/monthly
+     * Ряд итогов по месяцам
+     * admin и member. По корзине на каждый календарный месяц, попадающий в &#x60;[from, to]&#x60;; месяц без операций — нули. Крайние месяцы не расширяются до полных: корзина покрывает только дни внутри интервала. Без параметров — двенадцать календарных месяцев по сегодняшний в часовом поясе семьи (&#x60;from&#x60; — первое число месяца одиннадцать месяцев назад). 
+     * Responses:
+     *  - 200: Помесячный ряд
+     *  - 401: Токена нет, он истёк или отозван (`UNAUTHORIZED`)
+     *  - 403: Роль не даёт доступа к операции (`FORBIDDEN`)
+     *  - 422: Тело или параметры не прошли валидацию (`VALIDATION_ERROR`); поля — в `error.details`
+     *
+     * @param from Начало периода включительно; по умолчанию первое число месяца одиннадцать месяцев назад (optional)
+     * @param to Конец периода включительно; по умолчанию сегодня (optional)
+     * @return [GetStatsMonthly200Response]
+     */
+    @GET("api/v1/stats/monthly")
+    suspend fun getStatsMonthly(@Query("from") from: java.time.LocalDate? = null, @Query("to") to: java.time.LocalDate? = null): Response<GetStatsMonthly200Response>
+
     /**
      * GET api/v1/stats/summary
      * Сводка за период

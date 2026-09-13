@@ -251,3 +251,18 @@ func TestDate_Value_Zero(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "2026-09-04", value)
 }
+
+// TestDate_MonthKey — ключ месяца совпадает с тем, что отдаёт SQL-агрегат (substr(date, 1, 7)).
+func TestDate_MonthKey(t *testing.T) {
+	assert.Equal(t, "2026-09", date.New(2026, time.September, 13).MonthKey())
+	assert.Equal(t, "2026-01", date.New(2026, time.January, 1).MonthKey())
+}
+
+func TestDate_AddMonths(t *testing.T) {
+	first := date.New(2026, time.September, 1)
+
+	assert.Equal(t, date.New(2025, time.October, 1), first.AddMonths(-11))
+	assert.Equal(t, date.New(2026, time.December, 1), first.AddMonths(3))
+	// Нормализация как в time.AddDate: 31 января + 1 месяц — это 3 марта.
+	assert.Equal(t, date.New(2026, time.March, 3), date.New(2026, time.January, 31).AddMonths(1))
+}
