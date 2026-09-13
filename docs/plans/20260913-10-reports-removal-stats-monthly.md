@@ -107,21 +107,21 @@
 - Modify: `internal/application/handlers/budgets_test.go`, `internal/application/handlers/transactions_test.go`,
   `internal/application/http_server_test.go`
 
-- [ ] `NewBudgetHandler(repos, budgetService services.BudgetService)`, `NewTransactionHandler(repos, transactionService
+- [x] `NewBudgetHandler(repos, budgetService services.BudgetService)`, `NewTransactionHandler(repos, transactionService
       services.TransactionService)`; `nil` сервис — паника в конструкторе с понятным текстом
-- [ ] снести 12 ветвлений и репозиторные реализации; `*ViaService` влить в публичные методы; удалить осиротевшие
+- [x] снести 12 ветвлений и репозиторные реализации; `*ViaService` влить в публичные методы; удалить осиротевшие
       `UpdateEntityParams`/`UpdateEntityHelper`, `updateTransactionFields` и т.п. `DeleteEntityHelper` и
       `ParseIDParamWithError` остаются — их зовут сервисные пути (`transactions.go:550,620`, `budgets.go:235`)
-- [ ] `h.repositories.Family` остаётся: `getBudgetsViaService` берёт `familyToday` для `active_only=true`
+- [x] `h.repositories.Family` остаётся: `getBudgetsViaService` берёт `familyToday` для `active_only=true`
       (`budgets.go:272`, `helpers.go:88` — `nil` молча даёт UTC); остальные поля `Repositories` в этих хендлерах
       больше не читаются. Extra-метод `GetAll` в `handlers.TransactionRepository` (`repositories.go:28–36`) после
       сноса никто не зовёт — алиас становится обычным `= services.TransactionRepository`
-- [ ] `setupBudgetHandler`/`setupTransactionHandler` — на стаб/мок сервиса (+ мок `FamilyRepository` для
+- [x] `setupBudgetHandler`/`setupTransactionHandler` — на стаб/мок сервиса (+ мок `FamilyRepository` для
       `active_only`); `MockTransactionRepository` остаётся (его ждёт `setupBudgetHandler`), мёртвый
       `GetTotalsByCategory` (`transactions_test.go:117`) — удалить, чтобы не путался с новым `TotalsByCategory`
-- [ ] тесты сервисного пути: успех, 404 (`isNotFoundError`), 409/422 через `handle*ServiceError` — по одному
+- [x] тесты сервисного пути: успех, 404 (`isNotFoundError`), 409/422 через `handle*ServiceError` — по одному
       случаю на метод, без дублирования интеграционных
-- [ ] `make fmt && make test && make lint` — 0 issues; коммит `refactor: сервис обязателен в хендлерах бюджетов и транзакций`
+- [x] `make fmt && make test && make lint` — 0 issues; коммит `refactor: сервис обязателен в хендлерах бюджетов и транзакций`
 
 ### Task 2: Удалить `/reports` из кода и контракта
 

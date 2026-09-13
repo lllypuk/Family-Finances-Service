@@ -390,21 +390,6 @@ func HandleNotFoundError(c echo.Context, entityType string) error {
 	)
 }
 
-// HandleUpdateError returns standardized update error response
-func HandleUpdateError(c echo.Context, entityType string) error {
-	return respondError(
-		c,
-		http.StatusInternalServerError,
-		"UPDATE_FAILED",
-		"Failed to update "+strings.ToLower(entityType),
-	)
-}
-
-// ReturnSuccessResponse returns standardized success response with data
-func ReturnSuccessResponse[T any](c echo.Context, data T) error {
-	return respondAPI(c, http.StatusOK, data)
-}
-
 // ParseIDParamWithError extracts and validates UUID from request parameter with custom error message
 func ParseIDParamWithError(c echo.Context, entityType string) (uuid.UUID, error) {
 	idParam := c.Param("id")
@@ -433,89 +418,4 @@ func HandleIDParseError(c echo.Context, entityType string) error {
 		ErrCodeInvalidID,
 		"Invalid "+strings.ToLower(entityType)+" ID format",
 	)
-}
-
-// UpdateEntityHelper provides common update functionality for all handlers
-type UpdateEntityHelper[TRequest any, TEntity any, TResponse any] struct {
-	ParseID       func(echo.Context, string) (uuid.UUID, error)
-	BindRequest   func(echo.Context, *TRequest) error
-	Validate      func(*TRequest) error
-	GetExisting   func(echo.Context, uuid.UUID) (TEntity, error)
-	UpdateFields  func(TEntity, *TRequest)
-	SaveEntity    func(echo.Context, TEntity) error
-	BuildResponse func(TEntity) TResponse
-	EntityType    string
-}
-
-// UpdateEntityParams contains the parameters needed to create an UpdateEntityHelper
-type UpdateEntityParams[TRequest any, TEntity any, TResponse any] struct {
-	Validator     *validator.Validate
-	GetByID       func(echo.Context, uuid.UUID) (TEntity, error)
-	Update        func(echo.Context, TEntity) error
-	UpdateFields  func(TEntity, *TRequest)
-	BuildResponse func(TEntity) TResponse
-	EntityType    string
-}
-
-// NewUpdateEntityHelper creates a configured UpdateEntityHelper with standard implementations
-func NewUpdateEntityHelper[TRequest any, TEntity any, TResponse any](
-	params UpdateEntityParams[TRequest, TEntity, TResponse],
-) *UpdateEntityHelper[TRequest, TEntity, TResponse] {
-	return &UpdateEntityHelper[TRequest, TEntity, TResponse]{
-		ParseID: ParseIDParamWithError,
-		BindRequest: func(c echo.Context, req *TRequest) error {
-			return c.Bind(req)
-		},
-		Validate: func(req *TRequest) error {
-			return params.Validator.Struct(req)
-		},
-		GetExisting:   params.GetByID,
-		UpdateFields:  params.UpdateFields,
-		SaveEntity:    params.Update,
-		BuildResponse: params.BuildResponse,
-		EntityType:    params.EntityType,
-	}
-}
-
-// Execute runs the complete update flow
-func (h *UpdateEntityHelper[TRequest, TEntity, TResponse]) Execute(c echo.Context) error {
-	// Parse and validate ID
-	id, err := h.ParseID(c, h.EntityType)
-	if err != nil {
-		// Check if it's an ID parse error and handle it
-		var idParseErr *IDParseError
-		if errors.As(err, &idParseErr) {
-			return HandleIDParseError(c, h.EntityType)
-		}
-		return err
-	}
-
-	// Bind request
-	var req TRequest
-	if bindErr := h.BindRequest(c, &req); bindErr != nil {
-		return respondBindError(c, bindErr)
-	}
-
-	// Validate request
-	if validationErr := h.Validate(&req); validationErr != nil {
-		return respondValidationErrors(c, validationErr)
-	}
-
-	// Get existing entity
-	existing, err := h.GetExisting(c, id)
-	if err != nil {
-		return HandleNotFoundError(c, h.EntityType)
-	}
-
-	// Update fields
-	h.UpdateFields(existing, &req)
-
-	// Save entity
-	if saveErr := h.SaveEntity(c, existing); saveErr != nil {
-		return HandleUpdateError(c, h.EntityType)
-	}
-
-	// Build and return response
-	response := h.BuildResponse(existing)
-	return ReturnSuccessResponse(c, response)
 }
