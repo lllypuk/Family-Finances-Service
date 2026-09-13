@@ -244,11 +244,13 @@
 - [x] `make fmt && make test && make lint`; коммит `feat: GET /stats/monthly — ряд по месяцам`
 
 ### Task 7: Verify acceptance criteria
-- [ ] `grep -rn -i 'report' internal tests cmd migrations docs/api/openapi.yaml` — только `003_*`, `001.down`
-      (намеренные `DROP`) и `migrations_test.go`
-- [ ] `make fmt && make test && make lint` — 0 issues; `make -C android api-check && make -C android check`
-- [ ] `make compose-config`; `go run ./cmd/server` с `make db-reset` (свежая база) и с базой версии 2
-      (`sqlite-restore` любого бэкапа до плана) — `/health` 200, `schema_migrations` = 3
+- [x] `grep -rn -i 'report' internal tests cmd migrations docs/api/openapi.yaml` — только `003_*`, `001.down`
+      (намеренные `DROP`) и `migrations_test.go`; сверх списка — `migrations/{README,CHANGELOG}.md` (описание самой
+      `003`), слово «reporting» в `transaction_service.go:211` и дословный лог красной фазы S-01 в
+      `api_auth_test.go:39,47` (исторический вывод, не ссылка на код)
+- [x] `make fmt && make test && make lint` — 0 issues; `make -C android api-check && make -C android check`
+- [x] `make compose-config`; сервер на свежей базе и на копии базы версии 2 (`migrate --to 2` перед стартом) —
+      `/health` 200, `schema_migrations` = 3, таблицы `reports` нет в обеих
 
 ### Task 8: [Final] Update documentation
 - [ ] `CLAUDE.md`: роуты (`reports` из перечня `financeAccess`, абзац про `POST /reports`/`export`), список таблиц
