@@ -17,8 +17,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -32,7 +30,6 @@ import androidx.compose.ui.unit.Dp
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.core.api.Category
 import tech.shatrov.familyfinances.theme.Dimens
-import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Centered
 import tech.shatrov.familyfinances.ui.message
 
@@ -46,22 +43,13 @@ fun CategoriesScreen(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
-        Row(
+        Text(
+            text = stringResource(R.string.categories_title),
+            style = MaterialTheme.typography.headlineSmall,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = Dimens.SPACE_4, end = Dimens.SPACE_2, top = Dimens.SPACE_2, bottom = Dimens.SPACE_2),
-            horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = stringResource(R.string.categories_title),
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(onClick = onAdd) {
-                Icon(AppIcons.Plus, contentDescription = stringResource(R.string.categories_add))
-            }
-        }
+                .padding(horizontal = Dimens.SPACE_4, vertical = Dimens.SPACE_2),
+        )
 
         when (state) {
             CategoriesUiState.Loading -> Centered { CircularProgressIndicator() }
@@ -106,8 +94,7 @@ private fun Groups(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = Dimens.SPACE_4),
-        verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_1),
-        contentPadding = PaddingValues(vertical = Dimens.SPACE_3),
+        contentPadding = PaddingValues(top = Dimens.SPACE_1, bottom = Dimens.FAB_CLEARANCE),
     ) {
         section(R.string.categories_expense, state.expense, onOpen)
         section(R.string.categories_income, state.income, onOpen)
@@ -124,7 +111,7 @@ private fun LazyListScope.section(
         Text(
             text = stringResource(title),
             style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = Dimens.SPACE_2),
+            modifier = Modifier.padding(top = Dimens.SPACE_4, bottom = Dimens.SPACE_1),
         )
     }
     for (node in nodes) {
@@ -145,7 +132,7 @@ private fun CategoryItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onOpen(category) }
-            .heightIn(min = Dimens.TOUCH_MIN)
+            .heightIn(min = Dimens.ROW_COMPACT)
             .padding(start = indent),
         horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
         verticalAlignment = Alignment.CenterVertically,

@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -219,14 +220,7 @@ fun AppRoot(graph: AppGraph) {
             WithNavBar(
                 AppTab.TRANSACTIONS,
                 onSelect = { screen = it.screen },
-                fab = {
-                    FloatingActionButton(onClick = { screen = AppScreen.TransactionEdit(null) }) {
-                        Icon(
-                            AppIcons.Plus,
-                            contentDescription = stringResource(R.string.transactions_add),
-                        )
-                    }
-                },
+                fab = { AddFab({ screen = AppScreen.TransactionEdit(null) }, R.string.transactions_add) },
             ) {
                 TransactionsScreen(
                     state = transactions,
@@ -259,7 +253,11 @@ fun AppRoot(graph: AppGraph) {
             }
             BackHandler { if (form == null) leave(AppScreen.Home) else model.onDismiss() }
             if (form == null) {
-                WithNavBar(AppTab.CATEGORIES, onSelect = { leave(it.screen) }) {
+                WithNavBar(
+                    AppTab.CATEGORIES,
+                    onSelect = { leave(it.screen) },
+                    fab = { AddFab(model::onAdd, R.string.categories_add) },
+                ) {
                     CategoriesScreen(
                         state = categories,
                         onRetry = model::refresh,
@@ -300,7 +298,11 @@ fun AppRoot(graph: AppGraph) {
                 onPauseOrDispose {}
             }
             BackHandler { screen = AppScreen.Home }
-            WithNavBar(AppTab.BUDGETS, onSelect = { screen = it.screen }) {
+            WithNavBar(
+                AppTab.BUDGETS,
+                onSelect = { screen = it.screen },
+                fab = { AddFab({ screen = AppScreen.BudgetEdit(null) }, R.string.budgets_add) },
+            ) {
                 BudgetsScreen(
                     state = budgets,
                     filter = budgetFilter,
@@ -492,6 +494,17 @@ private fun WithNavBar(
             Box(modifier = Modifier.align(Alignment.BottomEnd).padding(Dimens.SPACE_4)) { fab() }
         }
         AppNavBar(selected = selected, onSelect = onSelect)
+    }
+}
+
+/** Кнопка «добавить» вкладки: одна на операции, категории и бюджеты, чтобы ход был одинаковым. */
+@Composable
+private fun AddFab(
+    onClick: () -> Unit,
+    @StringRes label: Int,
+) {
+    FloatingActionButton(onClick = onClick) {
+        Icon(AppIcons.Plus, contentDescription = stringResource(label))
     }
 }
 

@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -33,11 +33,14 @@ import tech.shatrov.familyfinances.theme.Dimens
 import tech.shatrov.familyfinances.theme.LocalAppColors
 import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Centered
+import tech.shatrov.familyfinances.ui.RowPlace
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.format.formatMoney
 import tech.shatrov.familyfinances.ui.format.formatMonth
 import tech.shatrov.familyfinances.ui.format.formatPercent
+import tech.shatrov.familyfinances.ui.groupedRow
 import tech.shatrov.familyfinances.ui.message
+import tech.shatrov.familyfinances.ui.rowPlace
 
 /** Сколько категорий помещается в карточку: остальное живёт на экране транзакций. */
 private const val TOP_CATEGORIES = 5
@@ -118,32 +121,38 @@ fun HomeScreen(
 @Composable
 private fun Summary(state: HomeUiState.Ready) {
     val summary = state.summary
+    val topCategories = summary.expenseCategories.take(TOP_CATEGORIES)
+    // Строки секции сливаются в одну панель, поэтому зазор между элементами нулевой: воздух
+    // между секциями даёт заголовок.
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = Dimens.SPACE_4),
-        verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_3),
         contentPadding = PaddingValues(vertical = Dimens.SPACE_3),
     ) {
         item {
             Totals(state)
         }
 
-        if (summary.expenseCategories.isNotEmpty()) {
+        if (topCategories.isNotEmpty()) {
             item { SectionTitle(stringResource(R.string.home_top_categories)) }
-            items(summary.expenseCategories.take(TOP_CATEGORIES)) { category ->
-                CategoryRow(category, state.currency)
+            itemsIndexed(topCategories) { index, category ->
+                CategoryRow(category, state.currency, rowPlace(index, topCategories.size))
             }
         }
 
         if (summary.budgets.isNotEmpty()) {
             item { SectionTitle(stringResource(R.string.home_budgets)) }
-            items(summary.budgets) { budget -> BudgetRow(budget, state.currency) }
+            itemsIndexed(summary.budgets) { index, budget ->
+                BudgetRow(budget, state.currency, rowPlace(index, summary.budgets.size))
+            }
         }
 
         if (summary.recent.isNotEmpty()) {
             item { SectionTitle(stringResource(R.string.home_recent)) }
-            items(summary.recent) { transaction -> RecentRow(transaction, state.currency) }
+            itemsIndexed(summary.recent) { index, transaction ->
+                RecentRow(transaction, state.currency, rowPlace(index, summary.recent.size))
+            }
         }
     }
 }
@@ -223,7 +232,7 @@ private fun SectionTitle(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(top = Dimens.SPACE_2),
+        modifier = Modifier.padding(top = Dimens.SPACE_6, bottom = Dimens.SPACE_2),
     )
 }
 
@@ -231,9 +240,12 @@ private fun SectionTitle(text: String) {
 private fun CategoryRow(
     category: CategoryShare,
     currency: String,
+    place: RowPlace,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .groupedRow(place, LocalAppColors.current),
         horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -260,9 +272,15 @@ private fun CategoryRow(
 private fun BudgetRow(
     budget: BudgetProgress,
     currency: String,
+    place: RowPlace,
 ) {
     val colors = LocalAppColors.current
-    Column(verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_1)) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .groupedRow(place, colors),
+        verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_1),
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -299,11 +317,14 @@ private fun BudgetRow(
 private fun RecentRow(
     transaction: RecentTransactionItem,
     currency: String,
+    place: RowPlace,
 ) {
     val colors = LocalAppColors.current
     val income = transaction.type == TransactionType.income
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .groupedRow(place, colors),
         horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
