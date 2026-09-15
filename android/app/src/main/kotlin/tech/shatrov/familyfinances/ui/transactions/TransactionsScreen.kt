@@ -266,7 +266,7 @@ private fun TransactionItem(
                 )
             }
         }
-        // Знак ставится текстом, а не только цветом: доход и акцент — один цвет темы.
+        // Знак ставится текстом, а не только цветом: ради цветовосприятия.
         Text(
             text = formatMoney(
                 if (income) row.transaction.amountMinor else -row.transaction.amountMinor,

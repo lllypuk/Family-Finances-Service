@@ -318,7 +318,7 @@ private fun RecentRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        // Знак ставится текстом, а не только цветом: доход и акцент — один цвет темы.
+        // Знак ставится текстом, а не только цветом: ради цветовосприятия.
         Text(
             text = formatMoney(
                 if (income) transaction.amountMinor else -transaction.amountMinor,

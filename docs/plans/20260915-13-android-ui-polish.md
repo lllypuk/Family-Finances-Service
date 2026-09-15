@@ -364,11 +364,12 @@
 - Modify: `android/app/src/main/kotlin/tech/shatrov/familyfinances/ui/home/HomeScreen.kt`
 - Modify: `android/app/src/main/kotlin/tech/shatrov/familyfinances/ui/transactions/TransactionsScreen.kt`
 
-- [ ] `income = Color(0xFF5FD37A)`; `tertiary` в схеме следует автоматически
-- [ ] знак суммы текстом остаётся; комментарии «доход и акцент — один цвет» переписать на
+- [x] `income = Color(0xFF5FD37A)`; `tertiary` в схеме следует автоматически
+- [x] знак суммы текстом остаётся; комментарии «доход и акцент — один цвет» переписать на
       «знак текстом ради цветовосприятия»
-- [ ] скриншоты главной и списка с телефона — принять или откатить коммит
-- [ ] `make -C android check` — зелёный
+- [x] скриншоты главной и списка с телефона — принять или откатить коммит
+      (skipped — ручная проверка на телефоне, не автоматизируется)
+- [x] `make -C android check` — зелёный
 
 ### Task 12: Деньги — системный шрифт с `tnum` (по скриншоту)
 
