@@ -7,10 +7,11 @@
 **Проект представляет собой self-hosted решение** — один Docker-образ (~50MB) со встроенной SQLite базой данных: JSON API для Android-приложения, bearer-аутентификация, CLI для первичной настройки.
 
 > **Направление с сентября 2026:** API-only бэкенд для Android-приложения. Решения и порядок работ —
-> [specs/005-api-only-redesign.md](specs/005-api-only-redesign.md); планы 01–10, 12 и 13 выполнены (веб-интерфейс
+> [specs/005-api-only-redesign.md](specs/005-api-only-redesign.md); планы 01–10 и 12–14 выполнены (веб-интерфейс
 > удалён, деньги в минимальных единицах, календарные даты, деплой одним compose с Caddy, Android-клиент в
 > `android/` вместе с экраном настроек, отчёты удалены в пользу `GET /stats/monthly`, бюджеты умеют повторяться
-> серией, интерфейс клиента приведён к Material 3 — `app-v0.6.0`).
+> серией, интерфейс клиента приведён к Material 3 — `app-v0.6.0`, метрики Prometheus вынесены на служебный
+> слушатель — сервер `v0.5.0`).
 > Разделы ниже описывают текущее состояние кода.
 
 ## 🚀 Быстрый старт
@@ -63,6 +64,7 @@
 ### ✅ Observability
 - **Structured logging** (slog)
 - **Health checks** (/health эндпоинт)
+- **Метрики Prometheus** (`ffs_*` на `METRICS_ADDR`, `GET /metrics` вне Echo; пусто — выключено)
 
 ### ✅ CI/CD & DevOps
 - **GitLab CI** (`.gitlab-ci.yml`): проверки на MR, образ в реестр и выкат на mini-server с `main`

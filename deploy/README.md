@@ -184,6 +184,30 @@ docker compose up -d
 
 Check a backup before trusting it: `sqlite3 backups/<file>.db 'PRAGMA integrity_check'`.
 
+## Monitoring
+
+`METRICS_ADDR=0.0.0.0:9091` is set in `docker-compose.yml`, not in `.env`: the port belongs to the
+topology. It is never published to the host — the scraper reaches it over the Docker network, which the
+`prometheus.io/scrape` / `prometheus.io/port` labels on `app` announce. An empty `METRICS_ADDR` (the
+default, and the local/dev layout) starts no listener at all.
+
+`/metrics` is a plain `net/http` listener with no authentication, and it is not part of `/api/v1` — on the
+API port `GET /metrics` stays a `404`. "Not published" means not reachable from the host or the internet, not
+unreachable: the listener binds every interface of the container, so any container sharing a network with `app`
+can read it. In the proxied layout that includes `edge`, which is shared with the landing-page stack — the
+scrape exposes the version, user/session/transaction counts and the DB size to anything already on that
+network. From the host:
+
+```bash
+docker exec family-budget-app wget -qO- http://127.0.0.1:9091/metrics | head
+```
+
+Besides HTTP, login and API-backup counters, the scrape reads the current state out of the database
+(`ffs_db_size_bytes`, `ffs_sessions_active`, `ffs_users`, `ffs_transactions`, `ffs_setup_complete`) and
+the backup directory. The cron backup runs in a separate `compose run` container and writes no counters —
+it is visible only through `ffs_backup_latest_file_timestamp_seconds`, the mtime of the newest file, which
+is what the "copy older than 26 h" alert is built on.
+
 ## Operations
 
 ```bash

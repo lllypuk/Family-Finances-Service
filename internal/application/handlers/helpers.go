@@ -252,8 +252,6 @@ func ErrorCodeForStatus(status int) string {
 		return ErrCodeForbidden
 	case http.StatusNotFound:
 		return ErrCodeNotFound
-	case http.StatusMethodNotAllowed:
-		return ErrCodeMethodNotAllowed
 	case http.StatusUnprocessableEntity:
 		return ErrCodeValidationError
 	case http.StatusTooManyRequests:

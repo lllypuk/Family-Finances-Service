@@ -3,6 +3,7 @@ package application_test
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -22,6 +23,7 @@ import (
 	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
+	"family-budget-service/internal/metrics"
 	"family-budget-service/internal/observability"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
@@ -668,7 +670,9 @@ func TestHTTPServer_UnknownPath_Returns404JSON(t *testing.T) {
 		code   string
 	}{
 		{"unknown path", http.MethodGet, "/login", http.StatusNotFound, handlers.ErrCodeNotFound},
-		{"wrong method", http.MethodPost, "/health", http.StatusMethodNotAllowed, handlers.ErrCodeMethodNotAllowed},
+		// Корневой catch-all (метка route у метрик) перехватывает и чужой метод: 404 вместо 405,
+		// как это уже было внутри /api/v1 из-за catch-all группы.
+		{"wrong method", http.MethodPost, "/health", http.StatusNotFound, handlers.ErrCodeNotFound},
 		{"no token", http.MethodGet, "/api/v1/me", http.StatusUnauthorized, handlers.ErrCodeUnauthorized},
 	}
 
@@ -689,4 +693,75 @@ func TestHTTPServer_UnknownPath_Returns404JSON(t *testing.T) {
 			assert.NotEmpty(t, body.Meta.Version)
 		})
 	}
+}
+
+// panickingServices — семья, чья проверка setup падает: /health публичен, так что это
+// самый короткий путь к панике в обработчике.
+func panickingServices() *services.Services {
+	family := &MockFamilyService{}
+	family.On("IsSetupComplete", mock.Anything).Run(func(mock.Arguments) {
+		panic("boom")
+	}).Return(false, nil).Maybe()
+
+	mockServices := NewMockServices()
+	mockServices.Family = family
+	return mockServices
+}
+
+func metricsText(t *testing.T, m *metrics.Metrics) string {
+	t.Helper()
+
+	rec := httptest.NewRecorder()
+	m.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	return rec.Body.String()
+}
+
+func TestHTTPServer_Metrics_CountsRequestsByRouteTemplate(t *testing.T) {
+	m := metrics.New("test", slog.New(slog.DiscardHandler))
+	repos := NewMockRepositories()
+	config := &application.Config{Port: "8080", Host: "localhost", Metrics: m}
+	server := application.NewHTTPServer(&repos.Repositories, NewMockServices(), config)
+
+	for _, path := range []string{"/health", "/healthz"} {
+		rec := httptest.NewRecorder()
+		server.Echo().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+	}
+
+	body := metricsText(t, m)
+	assert.Contains(t, body, `ffs_http_requests_total{method="GET",route="/health",status="200"} 1`)
+	assert.Contains(t, body, `ffs_http_requests_total{method="GET",route="/*",status="404"} 1`)
+	assert.Contains(t, body, "ffs_http_requests_in_flight 0")
+}
+
+func TestHTTPServer_Metrics_PanicIsCountedAndAnswered(t *testing.T) {
+	m := metrics.New("test", slog.New(slog.DiscardHandler))
+	repos := NewMockRepositories()
+	config := &application.Config{Port: "8080", Host: "localhost", Metrics: m}
+	server := application.NewHTTPServer(&repos.Repositories, panickingServices(), config)
+
+	rec := httptest.NewRecorder()
+	server.Echo().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
+
+	require.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"error"`)
+	assert.Contains(t, rec.Body.String(), "INTERNAL_ERROR")
+
+	body := metricsText(t, m)
+	assert.Contains(t, body, "ffs_http_panics_total 1")
+	assert.Contains(t, body, "ffs_http_requests_in_flight 0")
+	assert.Contains(t, body, `ffs_http_requests_total{method="GET",route="/health",status="500"} 1`)
+}
+
+// Без Metrics в конфиге сервер работает как раньше — middleware просто нет.
+func TestHTTPServer_WithoutMetrics_PanicStillAnswered(t *testing.T) {
+	repos := NewMockRepositories()
+	config := &application.Config{Port: "8080", Host: "localhost"}
+	server := application.NewHTTPServer(&repos.Repositories, panickingServices(), config)
+
+	rec := httptest.NewRecorder()
+	server.Echo().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 }

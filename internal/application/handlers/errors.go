@@ -22,8 +22,6 @@ const (
 	ErrCodeForbidden = "FORBIDDEN"
 	// ErrCodeNotFound signals an unknown route or a missing resource (404 outside a handler).
 	ErrCodeNotFound = "NOT_FOUND"
-	// ErrCodeMethodNotAllowed signals a method not registered on the route.
-	ErrCodeMethodNotAllowed = "METHOD_NOT_ALLOWED"
 	// ErrCodeBadRequest signals a request rejected before reaching a handler.
 	ErrCodeBadRequest = "BAD_REQUEST"
 	// ErrCodeInternal signals a server-side failure; details stay in the log only.

@@ -9,13 +9,17 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 
 	"family-budget-service/internal/application"
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/auth"
 	"family-budget-service/internal/infrastructure"
+	"family-budget-service/internal/metrics"
 	"family-budget-service/internal/observability"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/version"
@@ -33,7 +37,27 @@ type Application struct {
 	httpServer           *application.HTTPServer
 	db                   *sql.DB
 	observabilityService *observability.Service
+	listeners            []listener
 }
+
+// listener — слушатель, которым распоряжаются serveAll и shutdown.
+type listener interface {
+	Start() error
+	Shutdown(ctx context.Context) error
+}
+
+// metricsListener приводит служебный *http.Server к listener: он поднимается сам, без echo.
+type metricsListener struct {
+	*http.Server
+}
+
+func (l metricsListener) Start() error { return l.ListenAndServe() }
+
+// backupTimesFunc — замыкание над BackupService под metrics.BackupLister:
+// пакет metrics не знает про services.BackupInfo.
+type backupTimesFunc func(ctx context.Context) ([]time.Time, error)
+
+func (f backupTimesFunc) ListBackupTimes(ctx context.Context) ([]time.Time, error) { return f(ctx) }
 
 func NewApplication() (*Application, error) {
 	// Загрузка конфигурации
@@ -75,6 +99,13 @@ func NewApplication() (*Application, error) {
 	// Получаем logger из observability service
 	logger := app.observabilityService.Logger
 
+	// Реестр метрик — до сервисов: наблюдатели едут в них параметром.
+	// Пустой METRICS_ADDR выключает метрики целиком, а не только слушателя.
+	var registry *metrics.Metrics
+	if config.Server.MetricsAddr != "" {
+		registry = metrics.New(version.String(), logger)
+	}
+
 	// Инициализация BackupService
 	backupService := services.NewBackupService(
 		db,
@@ -82,6 +113,7 @@ func NewApplication() (*Application, error) {
 		config.GetBackupDir(),
 		config.Database.BackupKeep,
 		logger,
+		backupObserver(registry),
 	)
 
 	authService := auth.NewService(app.repositories.Session, app.repositories.User, app.repositories.Family)
@@ -117,6 +149,7 @@ func NewApplication() (*Application, error) {
 		WriteTimeout:   config.Server.WriteTimeout,
 		IdleTimeout:    config.Server.IdleTimeout,
 		TrustedProxies: trustedProxies,
+		Metrics:        registry,
 	}
 	app.httpServer = application.NewHTTPServerWithObservability(
 		app.repositories,
@@ -124,56 +157,138 @@ func NewApplication() (*Application, error) {
 		serverConfig,
 		app.observabilityService,
 	)
+	app.listeners = []listener{app.httpServer}
+
+	if registry != nil {
+		app.registerCollectors(registry, backupService)
+		app.listeners = append(app.listeners, metricsListener{
+			Server: metrics.NewServer(config.Server.MetricsAddr, registry.Handler()),
+		})
+	}
 
 	return app, nil
 }
 
-func (a *Application) Run() error {
-	// Создание контекста для graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+// registerCollectors подключает коллекторы, которые читают состояние на скрейпе.
+// Ошибка регистрации — только в лог: метрика важнее старта сервиса.
+func (a *Application) registerCollectors(registry *metrics.Metrics, backupService services.BackupService) {
+	logger := a.observabilityService.Logger
 
-	// Канал для получения сигналов ОС
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	// Запуск HTTP сервера в горутине
-	go func() {
-		a.observabilityService.Logger.InfoContext(ctx, "Starting HTTP server",
-			slog.String("host", a.config.Server.Host),
-			slog.String("port", a.config.Server.Port))
-		if err := a.httpServer.Start(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			a.observabilityService.Logger.ErrorContext(ctx, "HTTP server error", slog.String("error", err.Error()))
-			cancel()
-		}
-	}()
-
-	// Ожидание сигнала завершения
-	select {
-	case sig := <-sigChan:
-		a.observabilityService.Logger.InfoContext(ctx, "Received shutdown signal", slog.String("signal", sig.String()))
-	case <-ctx.Done():
-		a.observabilityService.Logger.InfoContext(ctx, "Context cancelled")
+	collectors := []prometheus.Collector{
+		metrics.NewBackupDirCollector(backupTimesFunc(func(ctx context.Context) ([]time.Time, error) {
+			backups, err := backupService.ListBackups(ctx)
+			if err != nil {
+				return nil, err
+			}
+			times := make([]time.Time, 0, len(backups))
+			for _, backup := range backups {
+				times = append(times, backup.CreatedAt)
+			}
+			return times, nil
+		})),
+		metrics.NewStateCollector(infrastructure.NewMetricsReader(a.db), a.config.Database.Path),
+		metrics.NewDBCollector(a.db),
 	}
 
-	return a.shutdown()
+	for _, collector := range collectors {
+		if err := registry.Register(collector); err != nil {
+			logger.ErrorContext(context.Background(), "collector not registered",
+				slog.String("error", err.Error()))
+		}
+	}
 }
 
-func (a *Application) shutdown() error {
+// backupObserver отдаёт наблюдателя реестра или заглушку, если метрики выключены.
+func backupObserver(m *metrics.Metrics) services.BackupObserver {
+	if m == nil {
+		return services.NopBackupObserver{}
+	}
+	return m.Backup()
+}
+
+func (a *Application) Run() error {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	a.observabilityService.Logger.InfoContext(ctx, "Starting HTTP server",
+		slog.String("host", a.config.Server.Host),
+		slog.String("port", a.config.Server.Port),
+		slog.String("metrics_addr", a.config.Server.MetricsAddr))
+
+	stopErrs, serveErr := serveAll(ctx, a.listeners...)
+	if serveErr != nil {
+		a.observabilityService.Logger.ErrorContext(ctx, "listener error", slog.String("error", serveErr.Error()))
+	}
+	for _, err := range stopErrs {
+		if err != nil {
+			a.observabilityService.Logger.ErrorContext(ctx, "listener shutdown error",
+				slog.String("error", err.Error()))
+		}
+	}
+
+	a.shutdown()
+	return serveErr
+}
+
+// serveAll поднимает все слушатели и ждёт отмены контекста или первой ошибки старта;
+// в обоих случаях гасит остальные, дожидается их горутин и возвращает ошибки остановки
+// вместе с этой ошибкой. Гасим ровно один раз: повтор в shutdown() растянул бы
+// graceful-окно вдвое, если первый Shutdown упёрся в таймаут.
+func serveAll(ctx context.Context, listeners ...listener) ([]error, error) {
+	errCh := make(chan error, len(listeners))
+
+	var wg sync.WaitGroup
+	for _, l := range listeners {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := l.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				errCh <- err
+			}
+		}()
+	}
+
+	var startErr error
+	select {
+	case startErr = <-errCh:
+	case <-ctx.Done():
+	}
+
+	stopCtx, cancel := context.WithTimeout(context.Background(), GracefulShutdownTimeout)
+	defer cancel()
+	stopErrs := shutdownAll(stopCtx, listeners)
+	wg.Wait()
+
+	return stopErrs, startErr
+}
+
+// shutdownAll гасит слушатели параллельно: последовательно один зависший съел бы
+// весь таймаут, отведённый на всех.
+func shutdownAll(ctx context.Context, listeners []listener) []error {
+	errs := make([]error, len(listeners))
+
+	var wg sync.WaitGroup
+	for i, l := range listeners {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs[i] = l.Shutdown(ctx)
+		}()
+	}
+	wg.Wait()
+
+	return errs
+}
+
+// shutdown закрывает базу и observability. Вызывается только после serveAll:
+// коллекторы /metrics ходят в базу на скрейпе, и db.Close() до остановки
+// слушателя — гонка.
+func (a *Application) shutdown() {
 	a.observabilityService.Logger.InfoContext(context.Background(), "Shutting down application...")
 
-	// Контекст с таймаутом для graceful shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), GracefulShutdownTimeout)
 	defer cancel()
 
-	// Остановка HTTP сервера
-	if err := a.httpServer.Shutdown(ctx); err != nil {
-		a.observabilityService.Logger.ErrorContext(ctx, "HTTP server shutdown error", slog.String("error", err.Error()))
-	} else {
-		a.observabilityService.Logger.InfoContext(ctx, "HTTP server stopped")
-	}
-
-	// Закрытие подключения к SQLite
 	if a.db != nil {
 		if closeErr := a.db.Close(); closeErr != nil {
 			a.observabilityService.Logger.ErrorContext(
@@ -186,14 +301,9 @@ func (a *Application) shutdown() error {
 		}
 	}
 
-	// Логируем завершение работы приложения перед остановкой observability сервиса
 	a.observabilityService.Logger.InfoContext(ctx, "Application shutdown complete")
 
-	// Остановка observability сервиса (последний шаг)
 	if err := a.observabilityService.Shutdown(ctx); err != nil {
-		// На этом этапе logger уже может быть недоступен, используем простой log
-		// Альтернативно можно игнорировать эту ошибку, так как приложение завершается
 		_ = err // Игнорируем ошибку при shutdown observability сервиса
 	}
-	return nil
 }

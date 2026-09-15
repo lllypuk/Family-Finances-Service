@@ -23,7 +23,9 @@ import (
 	categoryrepo "family-budget-service/internal/infrastructure/category"
 	transactionrepo "family-budget-service/internal/infrastructure/transaction"
 	userrepo "family-budget-service/internal/infrastructure/user"
+	"family-budget-service/internal/metrics"
 	"family-budget-service/internal/services"
+	"family-budget-service/internal/version"
 )
 
 // testDeviceName — device_name сессий, выданных LoginAs.
@@ -35,6 +37,8 @@ type TestServer struct {
 	Services  *services.Services
 	Server    *application.HTTPServer
 	Container *SQLiteTestDB
+	// Metrics — тот же реестр, что считает запросы сервера.
+	Metrics *metrics.Metrics
 
 	// AuthFamily/AuthUser заполняются при первом вызове Auth
 	AuthFamily *user.Family
@@ -76,9 +80,18 @@ func SetupHTTPServer(t *testing.T, opts ...ServerOption) *TestServer {
 
 	authService := auth.NewService(repos.Session, repos.User, repos.Family)
 
+	registry := metrics.New(version.String(), slog.Default())
+
 	// Create BackupService for testing with in-memory database.
 	// Каталог бэкапов — временный: иначе сервис пишет ./backups в каталог пакета.
-	backupService := services.NewBackupService(db, ":memory:", t.TempDir(), services.DefaultBackupKeep, slog.Default())
+	backupService := services.NewBackupService(
+		db,
+		":memory:",
+		t.TempDir(),
+		services.DefaultBackupKeep,
+		slog.Default(),
+		registry.Backup(),
+	)
 
 	// Create services for testing - use simplified version to avoid circular dependencies
 	servicesContainer := services.NewServices(
@@ -94,8 +107,9 @@ func SetupHTTPServer(t *testing.T, opts ...ServerOption) *TestServer {
 	)
 
 	config := &application.Config{
-		Port: "8080",
-		Host: "localhost",
+		Port:    "8080",
+		Host:    "localhost",
+		Metrics: registry,
 	}
 	for _, opt := range opts {
 		opt(config)
@@ -109,6 +123,7 @@ func SetupHTTPServer(t *testing.T, opts ...ServerOption) *TestServer {
 		Services:  servicesContainer,
 		Server:    httpServer,
 		Container: container,
+		Metrics:   registry,
 	}
 
 	// Явного освобождения ресурсов не требуется: БД in-memory закрывается своим

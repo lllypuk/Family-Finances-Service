@@ -55,7 +55,7 @@ func TestCreateBackup_Success(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default(), NopBackupObserver{})
 	ctx := context.Background()
 
 	// Create backup
@@ -78,7 +78,7 @@ func TestListBackups_Empty(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default(), NopBackupObserver{})
 	ctx := context.Background()
 
 	// List backups when none exist
@@ -93,7 +93,7 @@ func TestListBackups_Multiple(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default(), NopBackupObserver{})
 	ctx := context.Background()
 
 	// Create multiple backups
@@ -121,7 +121,7 @@ func TestDeleteBackup_Success(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default(), NopBackupObserver{})
 	ctx := context.Background()
 
 	// Create backup
@@ -142,7 +142,7 @@ func TestDeleteBackup_NotFound(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default(), NopBackupObserver{})
 	ctx := context.Background()
 
 	// Try to delete non-existent backup
@@ -157,7 +157,7 @@ func TestDeleteBackup_InvalidFilename(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default(), NopBackupObserver{})
 	ctx := context.Background()
 
 	testCases := []struct {
@@ -183,7 +183,7 @@ func TestGetBackup_Success(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default(), NopBackupObserver{})
 	ctx := context.Background()
 
 	// Create backup
@@ -203,7 +203,7 @@ func TestGetBackup_NotFound(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default(), NopBackupObserver{})
 	ctx := context.Background()
 
 	// Try to get non-existent backup
@@ -273,7 +273,7 @@ func TestCleanupOldBackups(t *testing.T) {
 	defer cleanup()
 
 	const keep = 3
-	service := NewBackupService(db, dbPath, "", keep, slog.Default())
+	service := NewBackupService(db, dbPath, "", keep, slog.Default(), NopBackupObserver{})
 	ctx := context.Background()
 
 	created := make([]string, 0, keep+2)
@@ -301,7 +301,7 @@ func TestGetBackupFilePath_InvalidFilename(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default(), NopBackupObserver{})
 
 	// Try with invalid filename
 	path := service.GetBackupFilePath("../../../etc/passwd")
@@ -314,7 +314,7 @@ func TestSafePath_PathTraversalProtection(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default()).(*backupService)
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default(), NopBackupObserver{}).(*backupService)
 
 	tests := []struct {
 		name        string
@@ -377,7 +377,7 @@ func TestNewBackupService_ExplicitBackupDir(t *testing.T) {
 	defer cleanup()
 
 	backupDir := filepath.Join(t.TempDir(), "external")
-	service := NewBackupService(db, dbPath, backupDir, DefaultBackupKeep, slog.Default())
+	service := NewBackupService(db, dbPath, backupDir, DefaultBackupKeep, slog.Default(), NopBackupObserver{})
 
 	info, err := service.CreateBackup(context.Background())
 	require.NoError(t, err)
@@ -393,7 +393,7 @@ func TestVacuumInto_ErrorClassification(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service, ok := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default()).(*backupService)
+	service, ok := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default(), NopBackupObserver{}).(*backupService)
 	require.True(t, ok)
 	require.NoError(t, service.ensureBackupDir())
 	ctx := context.Background()
@@ -429,7 +429,7 @@ func TestCreateBackup_FailureIsNotRetried(t *testing.T) {
 	db, dbPath, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default())
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default(), NopBackupObserver{})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -458,7 +458,7 @@ func TestCreateBackup_SweepsStaleTempFiles(t *testing.T) {
 	old := time.Now().Add(-staleTempAge - time.Minute)
 	require.NoError(t, os.Chtimes(stale, old, old))
 
-	service := NewBackupService(db, dbPath, "", 0, slog.Default())
+	service := NewBackupService(db, dbPath, "", 0, slog.Default(), NopBackupObserver{})
 	_, err := service.CreateBackup(context.Background())
 	require.NoError(t, err)
 
@@ -472,7 +472,7 @@ func TestCreateBackup_LogsDurationAndSize(t *testing.T) {
 
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, logger)
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, logger, NopBackupObserver{})
 
 	backupInfo, err := service.CreateBackup(context.Background())
 	require.NoError(t, err)
@@ -493,4 +493,62 @@ func TestCreateBackup_LogsDurationAndSize(t *testing.T) {
 	stat, statErr := os.Stat(filepath.Join(filepath.Dir(dbPath), "backups", backupInfo.Filename))
 	require.NoError(t, statErr)
 	assert.InDelta(t, float64(stat.Size()), record["size"], 0.0)
+}
+
+// recordingBackupObserver — наблюдатель метрик бэкапа, записывающий вызовы.
+type recordingBackupObserver struct {
+	outcomes  []string
+	durations []time.Duration
+}
+
+func (o *recordingBackupObserver) ObserveBackup(outcome string, d time.Duration) {
+	o.outcomes = append(o.outcomes, outcome)
+	o.durations = append(o.durations, d)
+}
+
+func TestCreateBackup_ObservesSuccess(t *testing.T) {
+	db, dbPath, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	observer := &recordingBackupObserver{}
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default(), observer)
+
+	_, err := service.CreateBackup(context.Background())
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{backupOutcomeOK}, observer.outcomes)
+	assert.Positive(t, observer.durations[0])
+}
+
+func TestCreateBackup_ObservesFailure(t *testing.T) {
+	db, dbPath, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	observer := &recordingBackupObserver{}
+	service := NewBackupService(db, dbPath, "", DefaultBackupKeep, slog.Default(), observer)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := service.CreateBackup(ctx)
+	require.Error(t, err)
+
+	assert.Equal(t, []string{backupOutcomeError}, observer.outcomes)
+}
+
+// Каталог бэкапов, который нельзя создать (на пути файл), — тоже исход error.
+func TestCreateBackup_ObservesBackupDirFailure(t *testing.T) {
+	db, dbPath, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	blocked := filepath.Join(t.TempDir(), "backups")
+	require.NoError(t, os.WriteFile(blocked, []byte("not a directory"), 0o600))
+
+	observer := &recordingBackupObserver{}
+	service := NewBackupService(db, dbPath, blocked, DefaultBackupKeep, slog.Default(), observer)
+
+	_, err := service.CreateBackup(context.Background())
+	require.Error(t, err)
+
+	assert.Equal(t, []string{backupOutcomeError}, observer.outcomes)
 }

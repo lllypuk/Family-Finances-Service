@@ -29,7 +29,8 @@ Layered/Clean architecture, single Go module `family-budget-service`. Wiring hap
 `internal/run.go` (`NewApplication`) — in this order:
 
 1. `LoadConfig()` + `Validate()` (`internal/config.go`) — all config is env vars, no config files:
-   `SERVER_*`, `DATABASE_PATH`, `BACKUP_DIR`, `BACKUP_KEEP`, `LOG_*`, `ENVIRONMENT`, `TRUSTED_PROXIES`.
+   `SERVER_*`, `DATABASE_PATH`, `BACKUP_DIR`, `BACKUP_KEEP`, `LOG_*`, `ENVIRONMENT`, `TRUSTED_PROXIES`,
+   `METRICS_ADDR`.
    There are no secrets. `BACKUP_DIR` empty means `<dir(DATABASE_PATH)>/backups` (`Config.GetBackupDir()`,
    compose mounts `/backups`); `BACKUP_KEEP` (default 30) is the retention shared by `POST /api/v1/backups`
    and the `backup` subcommand.
@@ -46,7 +47,16 @@ Layered/Clean architecture, single Go module `family-budget-service`. Wiring hap
    series behind `GET /api/v1/stats/monthly` (capped at `monthlyMaxMonths` = 120 buckets, since the bounds
    come from the client); the handler only formats.
 5. `application.NewHTTPServerWithObservability(...)` — builds the Echo instance and registers `/health` and
-   `/api/v1`. Nothing else is served: no HTML, no static files, no CORS.
+   `/api/v1`. Nothing else is served: no HTML, no static files, no CORS. The metrics registry reaches it as
+   `application.Config.Metrics`.
+6. `metrics.NewServer(cfg.Server.MetricsAddr, registry.Handler())` — a second `net/http` listener with the one
+   route `GET /metrics`, built only when `METRICS_ADDR` is set (see "Metrics on a second listener").
+
+Both servers are now created in `NewApplication`, not inside their own `Start`, and `Run` hands them to
+`serveAll(ctx, listeners...)`: it returns the first start error (a busy port used to be swallowed) together with
+the shutdown errors, and on that error or on a signal stops every listener and waits for all of them. Listeners
+are stopped there and only there — a second pass in `shutdown()` would spend the graceful window twice — so
+`shutdown()` only closes the DB, which the scrape collectors read.
 
 The version reported by `/health` comes from `internal/version` (`version.String()` → `observability.NewHealthService`).
 `Version` is the one package-level var allowed by `.golangci.yml` (file-scoped `gochecknoglobals` exclusion); it
@@ -86,6 +96,10 @@ Two public routes: `GET /health` and `POST /api/v1/auth/login`. Everything else 
 `s.echo.Group("/api/v1", auth.RequireBearer(s.services.Auth))` (`internal/application/http_server.go`): the
 login route is registered on the bare Echo instance so the group middleware never sees it, and because the group
 has a catch-all, an unknown `/api/v1/...` path is `401` without a token and `404` JSON with one.
+`s.echo.RouteNotFound("/*", echo.NotFoundHandler)` on the root exists for the metrics `route` label: without it
+an unmatched path outside the group reports the nearest node's template (`/healthz` would count as `/health`).
+The spec coverage test skips `echo.RouteNotFound` routes, and `/metrics` is not on Echo at all — on the API port
+it is a plain `404`, with a token and without one.
 
 - **Tokens** (`internal/auth`): 32 random bytes, base64url on the wire, `hex(sha256)` in the `sessions` table.
   `IdleTTL` 30 days sliding, `AbsoluteTTL` 180 days from creation; `last_used_at` is written at most once per
@@ -141,6 +155,24 @@ has a catch-all, an unknown `/api/v1/...` path is `401` without a token and `404
   len(all))`. The `field` in `error.details` is the json name (`start_date`), because every handler validator comes
   from `newAPIValidator()` — plain `validator.New()` would report Go field names.
 
+### Metrics on a second listener
+
+`internal/metrics` holds a private `prometheus.Registry` (no package-level instruments — `gochecknoglobals`) and
+travels as a parameter; with `METRICS_ADDR` empty `run.go` builds no registry and opens no extra socket
+(`testhelpers.SetupHTTPServer` always builds one — see "Testing" — but never a socket). It is a leaf package: consumers declare the one-method observer interfaces
+(`services.BackupObserver`, `handlers.LoginObserver`, each with a `Nop*` for the cron process, for
+`NewHTTPServer` and for tests), and the scrape collectors take narrow readers (`metrics.BackupLister`,
+`metrics.StateReader` — the latter satisfied by `infrastructure.NewMetricsReader(db)`, a separate type, so no
+repository interface or its mocks grow). `Handler()` runs `promhttp` with `ContinueOnError`: one failing
+collector costs its own metric, not the whole scrape, and every `Collect` gets its own `ScrapeTimeout` (5s)
+context because the HTTP timeout does not reach SQL.
+
+`ffs_backups_total` and `ffs_backup_duration_seconds` are written inside `CreateBackup`, i.e. only for API
+calls — the cron `compose run` is a different process with no registry, and is visible only through
+`ffs_backup_latest_file_timestamp_seconds` (the newest file's `ModTime`, not "last successful run", so deleting
+it moves the gauge back). Metric names and labels are a contract with the observability repository: the accepted
+list is in `docs/plans/completed/20260915-14-prometheus-metrics.md`, the deployment side in `deploy/README.md`.
+
 **Working directory matters:** `./migrations` is resolved relative to the process CWD (`migrationsDir` in
 `internal/bootstrap.go`), so both the server and the CLI subcommands must be started from the repo root.
 
@@ -192,6 +224,8 @@ on it.
     `testhelpers.LoginAs(t, ts, u)`, which writes a `sessions` row for `u` directly because factory users carry a
     placeholder password hash. All return an `*AuthSession{Token}`; call `sess.Apply(req)` to set
     `Authorization: Bearer`. `ts.AuthUser` / `ts.AuthFamily` hold what `Auth` created.
+  - `SetupHTTPServer` always builds a registry: `ts.Metrics` is the same instance the server middleware and the
+    backup service write to, scraped in tests through `ts.Metrics.Handler()` without opening a socket.
   - `testhelpers.RepoRoot(t)` walks up to `go.mod`; use it for anything cwd-relative (`openapi.yaml`, migrations
     in `bootstrap_test.go` via `t.Chdir`) — `go test` runs with cwd = the package directory.
 - `testhelpers/factories.go` — `CreateTestFamily`, `CreateTestUser`, etc.
@@ -260,13 +294,14 @@ reference): `docs/README.md` (navigation), `docs/product_brief.md`, `docs/tech_s
 status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the finished ones.
 
 **Current direction:** `docs/specs/005-api-only-redesign.md` — the service is an API-only backend for an
-Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–10, 12 and 13 are
+Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–10 and 12–14 are
 done (`docs/plans/completed/`, 06 = the Android client, 07 = its budgets tab, 08 = its settings screen,
 09 = the server findings of 07–08, 10 = `/reports` removed and `GET /stats/monthly` added, 12 = recurring
 budgets, both sides, 13 = the client's UI audit: segments instead of chips, a FAB on "Операции", empty states
-with an action, password visibility — client only, the contract did not move). Releases: server `v0.3.0`
-(plan 10) and `v0.4.0` (plan 12), client `app-v0.6.0` — it needs
-a server of `v0.4.0` or newer (`recurring` is required in the generated model). Plan 11 is the client side of
+with an action, password visibility — client only, the contract did not move; 14 = the `/metrics` listener).
+Releases: server `v0.3.0` (plan 10), `v0.4.0` (plan 12) and `v0.5.0` (plan 14 — `/metrics`, the contract did
+not move), client `app-v0.6.0` — it needs a server of `v0.4.0` or newer (`recurring` is required in the
+generated model). Plan 11 is the client side of
 10: an "Обзор" screen over `summary` + `monthly`, and multi-select over transactions.
 
 `docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates

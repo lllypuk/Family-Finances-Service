@@ -73,3 +73,18 @@ func TestLoggingMiddleware_StatusAndLevel(t *testing.T) {
 		})
 	}
 }
+
+func TestResponseStatus_Branches(t *testing.T) {
+	e := echo.New()
+	newContext := func(written int) echo.Context {
+		c := e.NewContext(httptest.NewRequest(http.MethodGet, "/health", nil), httptest.NewRecorder())
+		c.Response().Status = written
+		return c
+	}
+
+	assert.Equal(t, http.StatusUnauthorized,
+		observability.ResponseStatus(newContext(http.StatusOK), echo.NewHTTPError(http.StatusUnauthorized)))
+	assert.Equal(t, http.StatusInternalServerError,
+		observability.ResponseStatus(newContext(http.StatusOK), errors.New("boom")))
+	assert.Equal(t, http.StatusNoContent, observability.ResponseStatus(newContext(http.StatusNoContent), nil))
+}

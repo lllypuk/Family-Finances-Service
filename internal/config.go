@@ -19,6 +19,9 @@ const (
 	defaultServerReadTimeout  = 15 * time.Second
 	defaultServerWriteTimeout = 15 * time.Second
 	defaultServerIdleTimeout  = 60 * time.Second
+
+	// maxPort — верхняя граница TCP-порта в METRICS_ADDR.
+	maxPort = 65535
 )
 
 type Config struct {
@@ -37,6 +40,9 @@ type ServerConfig struct {
 	// TrustedProxies — TRUSTED_PROXIES как есть: CIDR через запятую, чьи X-Forwarded-For принимаются.
 	// Пусто — доверять только RemoteAddr; разбирает TrustedProxyRanges.
 	TrustedProxies string
+	// MetricsAddr — host:port служебного слушателя /metrics. Пусто — метрики выключены
+	// целиком: ни порта, ни реестра.
+	MetricsAddr string
 }
 
 type DatabaseConfig struct {
@@ -80,6 +86,7 @@ func LoadConfig() *Config {
 			WriteTimeout:   getDurationEnv("SERVER_WRITE_TIMEOUT", defaultServerWriteTimeout),
 			IdleTimeout:    getDurationEnv("SERVER_IDLE_TIMEOUT", defaultServerIdleTimeout),
 			TrustedProxies: getEnv("TRUSTED_PROXIES", ""),
+			MetricsAddr:    getEnv("METRICS_ADDR", ""),
 		},
 		Database: DatabaseConfig{
 			Path:       getEnv("DATABASE_PATH", "./data/budget.db"),
@@ -113,6 +120,19 @@ func LoadConfig() *Config {
 func (c *Config) Validate() error {
 	if c.Database.Path == "" {
 		return errors.New("database path is required")
+	}
+
+	if c.Server.MetricsAddr != "" {
+		// SplitHostPort только режет строку: "0.0.0.0:abc" и порт 99999 проходят её,
+		// а падает уже Start — и serveAll снимает вместе со служебным слушателем основной.
+		_, port, err := net.SplitHostPort(c.Server.MetricsAddr)
+		if err != nil {
+			return fmt.Errorf("METRICS_ADDR: %w", err)
+		}
+		number, convErr := strconv.Atoi(port)
+		if convErr != nil || number < 0 || number > maxPort {
+			return fmt.Errorf("METRICS_ADDR: invalid port %q", port)
+		}
 	}
 
 	_, err := c.TrustedProxyRanges()

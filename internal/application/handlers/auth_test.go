@@ -22,6 +22,7 @@ import (
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/user"
+	"family-budget-service/internal/metrics"
 )
 
 const (
@@ -132,7 +133,12 @@ func (f *fakeAuthService) AdminSetPassword(_ context.Context, userID uuid.UUID, 
 }
 
 func newAuthHandler(svc *fakeAuthService) *handlers.AuthHandler {
-	return handlers.NewAuthHandler(svc, auth.NewRateLimiter(nil), slog.New(slog.DiscardHandler))
+	return handlers.NewAuthHandler(
+		svc,
+		auth.NewRateLimiter(nil),
+		slog.New(slog.DiscardHandler),
+		handlers.NopLoginObserver{},
+	)
 }
 
 // principalContext — контекст запроса с principal, как его кладёт auth.RequireBearer.
@@ -483,4 +489,75 @@ func TestAuthHandler_Login_EmptyBody(t *testing.T) {
 	require.NoError(t, newAuthHandler(svc).Login(e.NewContext(req, rec)))
 
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+}
+
+// outcomeHandler — хендлер с настоящим счётчиком реестра вместо заглушки.
+func outcomeHandler(svc *fakeAuthService, m *metrics.Metrics) *handlers.AuthHandler {
+	return handlers.NewAuthHandler(svc, auth.NewRateLimiter(nil), slog.New(slog.DiscardHandler), m.Login())
+}
+
+func scrapeMetrics(t *testing.T, m *metrics.Metrics) string {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	m.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	require.Equal(t, http.StatusOK, rec.Code)
+	return rec.Body.String()
+}
+
+func TestAuthHandler_Login_CountsOutcomes(t *testing.T) {
+	tests := []struct {
+		name    string
+		body    string
+		setup   func(*fakeAuthService)
+		outcome string
+	}{
+		{name: "success", body: loginBody(fakeLoginEmail, fakeLoginPassword), outcome: "ok"},
+		{name: "wrong password", body: loginBody(fakeLoginEmail, "wrong-password"), outcome: "invalid_credentials"},
+		{
+			name:    "setup required",
+			body:    loginBody(fakeLoginEmail, fakeLoginPassword),
+			setup:   func(f *fakeAuthService) { f.loginErr = auth.ErrSetupRequired },
+			outcome: "setup_required",
+		},
+		{
+			name:    "storage failure",
+			body:    loginBody(fakeLoginEmail, fakeLoginPassword),
+			setup:   func(f *fakeAuthService) { f.loginErr = errors.New("database is locked") },
+			outcome: "error",
+		},
+		{name: "broken json", body: `{"email":`, outcome: "invalid_request"},
+		{name: "empty body", body: `{}`, outcome: "invalid_request"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := newFakeAuthService()
+			if tt.setup != nil {
+				tt.setup(svc)
+			}
+			m := metrics.New("test", slog.New(slog.DiscardHandler))
+			c, _ := principalContext(http.MethodPost, "/api/v1/auth/login", tt.body, nil)
+
+			require.NoError(t, outcomeHandler(svc, m).Login(c))
+
+			assert.Contains(t, scrapeMetrics(t, m),
+				`ffs_login_attempts_total{outcome="`+tt.outcome+`"} 1`)
+		})
+	}
+}
+
+func TestAuthHandler_Login_CountsRateLimited(t *testing.T) {
+	m := metrics.New("test", slog.New(slog.DiscardHandler))
+	handler := outcomeHandler(newFakeAuthService(), m)
+
+	for range auth.IPLimit + 1 {
+		c, _ := principalContext(http.MethodPost, "/api/v1/auth/login",
+			loginBody(fakeLoginEmail, "wrong-password"), nil)
+		require.NoError(t, handler.Login(c))
+	}
+
+	body := scrapeMetrics(t, m)
+	assert.Contains(t, body, `ffs_login_attempts_total{outcome="rate_limited"} 1`)
+	assert.Contains(t, body,
+		`ffs_login_attempts_total{outcome="invalid_credentials"} `+strconv.Itoa(auth.IPLimit))
 }

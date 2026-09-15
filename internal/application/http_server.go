@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -15,6 +14,7 @@ import (
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/user"
+	"family-budget-service/internal/metrics"
 	"family-budget-service/internal/observability"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/version"
@@ -27,6 +27,7 @@ const (
 
 type HTTPServer struct {
 	echo                 *echo.Echo
+	server               *http.Server
 	services             *services.Services
 	config               *Config
 	observabilityService *observability.Service
@@ -55,6 +56,9 @@ type Config struct {
 	// LoginLimiter — лимитер POST /auth/login; nil — auth.NewRateLimiter, причём без TrustedProxies
 	// корзина per-IP отключена: за прокси все клиенты — один адрес, лимит закрывал бы вход всей семье.
 	LoginLimiter *auth.RateLimiter
+	// Metrics — реестр Prometheus; nil — HTTP-метрики не пишутся (NewHTTPServer без Config.Metrics,
+	// юнит-тесты хендлеров). Интеграционный стенд реестр задаёт.
+	Metrics *metrics.Metrics
 }
 
 // NewHTTPServer создает HTTP сервер без observability (для обратной совместимости)
@@ -93,8 +97,13 @@ func NewHTTPServerWithObservability(
 	e.IPExtractor = auth.IPExtractor(config.TrustedProxies)
 	e.HTTPErrorHandler = newAPIErrorHandler(logger)
 
-	// Базовые middleware
-	e.Use(middleware.Recover())
+	// Базовые middleware. Метрики — первыми, чтобы считать и запросы, отвергнутые дальше по цепочке.
+	if config.Metrics != nil {
+		e.Use(metrics.EchoMiddleware(config.Metrics.HTTP()))
+	}
+	e.Use(middleware.RecoverWithConfig(middleware.RecoverConfig{
+		LogErrorFunc: panicLogger(config.Metrics, logger),
+	}))
 	e.Use(middleware.RequestID())
 
 	// Timeout для всех запросов
@@ -131,7 +140,7 @@ func NewHTTPServerWithObservability(
 		healthService:        healthService,
 
 		// Инициализация API handlers
-		authHandler:        handlers.NewAuthHandler(services.Auth, limiter, logger),
+		authHandler:        handlers.NewAuthHandler(services.Auth, limiter, logger, loginObserver(config.Metrics)),
 		meHandler:          handlers.NewMeHandler(services.User, services.Auth),
 		userHandler:        handlers.NewUserHandler(services.User, services.Auth),
 		familyHandler:      handlers.NewFamilyHandler(services.Family),
@@ -143,7 +152,37 @@ func NewHTTPServerWithObservability(
 	}
 
 	server.setupRoutes()
+	// e.Server — то, что гасит echo.Shutdown; configureServer его не заполняет,
+	// поэтому связать экземпляр надо здесь.
+	server.server = server.buildNetHTTPServer(net.JoinHostPort(config.Host, config.Port))
+	e.Server = server.server
 	return server
+}
+
+// loginObserver отдаёт счётчик входов реестра или заглушку, если метрики выключены.
+func loginObserver(m *metrics.Metrics) handlers.LoginObserver {
+	if m == nil {
+		return handlers.NopLoginObserver{}
+	}
+	return m.Login()
+}
+
+// panicLogger считает панику и пишет стек в slog; штатный вывод Recover при заданном
+// callback выключается. Возврат nil подавил бы 500 — ошибку нужно вернуть как есть.
+func panicLogger(m *metrics.Metrics, logger *slog.Logger) middleware.LogErrorFunc {
+	return func(c echo.Context, err error, stack []byte) error {
+		if m != nil {
+			m.HTTP().ObservePanic()
+		}
+		logger.ErrorContext(c.Request().Context(), "HTTP handler panicked",
+			slog.String("method", c.Request().Method),
+			slog.String("path", c.Request().URL.Path),
+			slog.String("error", err.Error()),
+			slog.String("stack", string(stack)),
+		)
+
+		return err
+	}
 }
 
 // Echo returns the echo instance for testing purposes
@@ -153,6 +192,10 @@ func (s *HTTPServer) Echo() *echo.Echo {
 
 func (s *HTTPServer) setupRoutes() {
 	s.echo.GET("/health", s.healthService.HealthHandler())
+
+	// Явный корневой catch-all: иначе у несматченного пути c.Path() пуст либо достаётся
+	// соседнему шаблону, и метка route у метрик врёт (/healthz → /health).
+	s.echo.RouteNotFound("/*", echo.NotFoundHandler)
 
 	// Единственный публичный маршрут API. Зарегистрирован мимо группы, поэтому
 	// RequireBearer его не касается.
@@ -224,11 +267,10 @@ func (s *HTTPServer) setupResourceRoutes(api *echo.Group) {
 	backups.DELETE("/:name", s.backupHandler.DeleteBackup)
 }
 
-func (s *HTTPServer) Start(_ context.Context) error {
-	address := fmt.Sprintf("%s:%s", s.config.Host, s.config.Port)
-	server := s.buildNetHTTPServer(address)
-	s.echo.Server = server
-	return s.echo.StartServer(server)
+// Start слушает до остановки; сам *http.Server собран в конструкторе, чтобы
+// Shutdown был возможен и до того, как горутина Start успела стартовать.
+func (s *HTTPServer) Start() error {
+	return s.echo.StartServer(s.server)
 }
 
 func (s *HTTPServer) Shutdown(ctx context.Context) error {

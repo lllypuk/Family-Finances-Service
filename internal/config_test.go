@@ -122,3 +122,35 @@ func TestLoadConfig_TrustedProxies(t *testing.T) {
 
 	assert.Equal(t, "172.18.0.0/16", internal.LoadConfig().Server.TrustedProxies)
 }
+
+// METRICS_ADDR слушает служебный порт; «9091» без хоста открыло бы его наружу
+// не там, где ждёт Alloy, поэтому host:port проверяется на старте.
+func TestConfig_Validate_MetricsAddr(t *testing.T) {
+	cfg := productionConfig()
+
+	cfg.Server.MetricsAddr = ""
+	require.NoError(t, cfg.Validate(), "пусто — метрики выключены")
+
+	cfg.Server.MetricsAddr = "0.0.0.0:9091"
+	require.NoError(t, cfg.Validate())
+
+	cfg.Server.MetricsAddr = "9091"
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "METRICS_ADDR")
+
+	// SplitHostPort принимает и то, и другое; отказ на старте слушателя снял бы
+	// вместе со служебным портом основной, поэтому порт проверяется здесь.
+	for _, addr := range []string{"0.0.0.0:abc", "0.0.0.0:99999", "0.0.0.0:-1"} {
+		cfg.Server.MetricsAddr = addr
+		portErr := cfg.Validate()
+		require.Error(t, portErr, addr)
+		assert.Contains(t, portErr.Error(), "METRICS_ADDR", addr)
+	}
+}
+
+func TestLoadConfig_MetricsAddr(t *testing.T) {
+	t.Setenv("METRICS_ADDR", "127.0.0.1:9091")
+
+	assert.Equal(t, "127.0.0.1:9091", internal.LoadConfig().Server.MetricsAddr)
+}
