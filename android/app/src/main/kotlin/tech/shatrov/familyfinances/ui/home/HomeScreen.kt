@@ -168,6 +168,8 @@ private fun Totals(state: HomeUiState.Ready) {
             text = formatMoney(summary.current.netMinor, state.currency, signed = true),
             style = MaterialTheme.typography.displayLarge,
             maxLines = 1,
+            // Крупная сумма на узком экране не влезает: без многоточия обрезок читался бы как число.
+            overflow = TextOverflow.Ellipsis,
             color = if (summary.current.netMinor < 0) colors.expense else colors.income,
         )
         TotalRow(

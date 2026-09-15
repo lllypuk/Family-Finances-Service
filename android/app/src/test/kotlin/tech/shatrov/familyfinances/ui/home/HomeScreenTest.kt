@@ -21,6 +21,7 @@ import tech.shatrov.familyfinances.statsSummary
 import tech.shatrov.familyfinances.theme.AppTheme
 import tech.shatrov.familyfinances.ui.UiError
 import tech.shatrov.familyfinances.ui.format.formatDay
+import tech.shatrov.familyfinances.ui.format.formatMoney
 import tech.shatrov.familyfinances.ui.format.formatMonth
 import tech.shatrov.familyfinances.ui.format.formatPercent
 import java.time.LocalDate
@@ -75,19 +76,26 @@ class HomeScreenTest {
     }
 
     @Test
-    fun totalsShowNetAndDeltas() {
-        show(ready(statsSummary(incomeDelta = 0.25, expensesDelta = -0.15)))
+    fun totalsShowSignedNetWithIncomeAndExpensesAndDeltas() {
+        val summary = statsSummary(incomeDelta = 0.25, expensesDelta = -0.15)
+        show(ready(summary))
 
         composeRule.onNodeWithText(res.getString(R.string.home_net)).assertIsDisplayed()
+        composeRule
+            .onNodeWithText(formatMoney(summary.current.netMinor, "RUB", signed = true))
+            .assertIsDisplayed()
+        composeRule.onNodeWithText(formatMoney(summary.current.incomeMinor, "RUB")).assertIsDisplayed()
+        composeRule.onNodeWithText(formatMoney(summary.current.expensesMinor, "RUB")).assertIsDisplayed()
         composeRule.onNodeWithText(formatPercent(0.25, signed = true)).assertIsDisplayed()
     }
 
     @Test
     fun deltasAreHiddenWithoutPreviousData() {
-        show(ready(statsSummary(hasPreviousData = false, incomeDelta = 0.0, expensesDelta = 0.0)))
+        show(ready(statsSummary(hasPreviousData = false, incomeDelta = 0.25, expensesDelta = -0.15)))
 
         composeRule.onNodeWithText(res.getString(R.string.home_net)).assertIsDisplayed()
-        composeRule.onAllNodesWithText(formatPercent(0.0, signed = true)).assertCountEquals(0)
+        composeRule.onAllNodesWithText(formatPercent(0.25, signed = true)).assertCountEquals(0)
+        composeRule.onAllNodesWithText(formatPercent(-0.15, signed = true)).assertCountEquals(0)
     }
 
     @Test

@@ -1,6 +1,5 @@
 package tech.shatrov.familyfinances.ui.budgets
 
-import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -108,7 +107,7 @@ private fun Empty(
 ) {
     val today = filter == BudgetFilter.TODAY
     Centered {
-        Text(stringResource(emptyText(filter)))
+        Text(stringResource(if (today) R.string.budgets_empty_today else R.string.budgets_empty))
         Button(
             onClick = { if (today) onFilterChange(BudgetFilter.ALL) else onCreate() },
             modifier = Modifier.heightIn(min = Dimens.TOUCH_MIN),
@@ -116,12 +115,6 @@ private fun Empty(
             Text(stringResource(if (today) R.string.budgets_show_all else R.string.budgets_add_first))
         }
     }
-}
-
-@StringRes
-private fun emptyText(filter: BudgetFilter): Int = when (filter) {
-    BudgetFilter.TODAY -> R.string.budgets_empty_today
-    BudgetFilter.ALL -> R.string.budgets_empty
 }
 
 @Composable

@@ -1,8 +1,10 @@
 package tech.shatrov.familyfinances.ui.transactions
 
 import android.content.Context
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
@@ -142,6 +144,14 @@ class TransactionsScreenTest {
     }
 
     @Test
+    fun filtersStayWhileLoading() {
+        show(TransactionsUiState.Loading)
+
+        composeRule.onNodeWithText(res.getString(R.string.filter_this_month)).assertIsDisplayed()
+        composeRule.onNodeWithText(res.getString(R.string.filter_all_categories)).assertIsDisplayed()
+    }
+
+    @Test
     fun categoryChipShowsSelectedName() {
         show(
             ready(listOf(row(categoryName = null))),
@@ -150,6 +160,18 @@ class TransactionsScreenTest {
         )
 
         composeRule.onNodeWithText("Продукты").assertIsDisplayed()
+    }
+
+    @Test
+    fun categoryChipShowsDashWhenSelectedCategoryIsGone() {
+        show(
+            ready(emptyList()),
+            filters = TransactionFilters(categoryId = CATEGORY_ID),
+            categories = emptyList(),
+        )
+
+        composeRule.onNodeWithText("—").assertIsDisplayed()
+        composeRule.onAllNodesWithText(res.getString(R.string.filter_all_categories)).assertCountEquals(0)
     }
 
     // Тело листа отдельно от `ModalBottomSheet`: тот в Robolectric ненадёжен.

@@ -6,12 +6,13 @@ API for the Android client. One instance = one family.
 ## 🎯 Project Status: IN DEVELOPMENT 🚧
 
 > **Direction (September 2026):** API-only backend for an Android app. Decisions and the implementation
-> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–10 and 12 are done: the
+> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–10, 12 and 13 are done: the
 > web interface, cookie sessions and CSRF are gone, money is integer minor units, dates are calendar dates,
 > the deployment is one compose with Caddy, the Android client lives in `android/` with its settings screen,
-> stored reports are gone in favour of `GET /api/v1/stats/monthly`, and budgets can repeat as a series;
+> stored reports are gone in favour of `GET /api/v1/stats/monthly`, budgets can repeat as a series, and the
+> client's UI audit is closed (plan 13, client only — the contract did not move);
 > the sections below describe the code as it is today. Releases: server `v0.3.0` (plan 10) and `v0.4.0`
-> (plan 12), client `app-v0.5.0` — it needs a server of `v0.4.0` or newer (`recurring` is required in the
+> (plan 12), client `app-v0.6.0` — it needs a server of `v0.4.0` or newer (`recurring` is required in the
 > generated model). Left: plan 11, the client's "Обзор" screen over `summary` + `monthly` and multi-select
 > over transactions ([docs/backlog.md](docs/backlog.md)).
 

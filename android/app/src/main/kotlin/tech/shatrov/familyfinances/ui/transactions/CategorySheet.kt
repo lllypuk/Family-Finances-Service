@@ -11,10 +11,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import kotlinx.coroutines.launch
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.core.api.Category
 import tech.shatrov.familyfinances.theme.Dimens
@@ -30,8 +33,13 @@ internal fun CategorySheet(
     onSelect: (UUID?) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        CategorySheetContent(categories, selected, onSelect)
+    val sheetState = rememberModalBottomSheetState()
+    val scope = rememberCoroutineScope()
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        CategorySheetContent(categories, selected) { picked ->
+            // Снятие с композиции убрало бы лист одним кадром: сначала анимация, потом выбор.
+            scope.launch { sheetState.hide() }.invokeOnCompletion { if (!sheetState.isVisible) onSelect(picked) }
+        }
     }
 }
 

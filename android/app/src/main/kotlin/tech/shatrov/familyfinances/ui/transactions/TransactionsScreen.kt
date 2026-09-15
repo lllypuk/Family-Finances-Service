@@ -54,19 +54,13 @@ fun TransactionsScreen(
 ) {
     var sheet by rememberSaveable { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxSize()) {
-        Row(
+        Text(
+            text = stringResource(R.string.transactions_title),
+            style = MaterialTheme.typography.headlineSmall,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = Dimens.SPACE_4, end = Dimens.SPACE_2, top = Dimens.SPACE_2, bottom = Dimens.SPACE_2),
-            horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = stringResource(R.string.transactions_title),
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.weight(1f),
-            )
-        }
+                .padding(horizontal = Dimens.SPACE_4, vertical = Dimens.SPACE_2),
+        )
 
         // Фильтры вне `when`: на отказе запроса переключиться иначе некуда, а «Повторить»
         // повторяет ровно его.
@@ -112,7 +106,12 @@ private fun Filters(
     onChange: (TransactionFilters) -> Unit,
     onPickCategory: () -> Unit,
 ) {
-    val selectedName = categories.firstOrNull { it.id == filters.categoryId }?.name
+    // Категория, которой нет в справочнике (удалена), — прочерк: «Все категории» на включённом
+    // фильтре сказали бы, что фильтра нет, а список при этом остаётся пустым.
+    val categoryLabel = when {
+        filters.categoryId == null -> stringResource(R.string.filter_all_categories)
+        else -> categories.firstOrNull { it.id == filters.categoryId }?.name ?: "—"
+    }
     Column(verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_1)) {
         SegmentedChoice(
             options = listOf(
@@ -147,11 +146,7 @@ private fun Filters(
                 }
             }
             item {
-                Chip(
-                    selectedName ?: stringResource(R.string.filter_all_categories),
-                    filters.categoryId != null,
-                    onClick = onPickCategory,
-                )
+                Chip(categoryLabel, filters.categoryId != null, onClick = onPickCategory)
             }
         }
     }

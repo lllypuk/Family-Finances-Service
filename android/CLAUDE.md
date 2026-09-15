@@ -36,7 +36,7 @@ make -C android api-check  # api-gen + git status по каталогу выво
 потребитель не предвидится, а лишний модуль в Gradle стоит времени сборки.
 
 Иконки — вручную перенесённые контуры Lucide в `ui/AppIcons.kt`: `material-icons-core` не покрывает
-нужный набор в одном стиле, а `material-icons-extended` тянет тысячи векторов ради семи. Восьмая
+нужный набор в одном стиле, а `material-icons-extended` тянет тысячи векторов ради десятка. Следующая
 иконка — ещё один `icon(name, path…)`, а не новая зависимость. Иконка приложения адаптивная
 (`mipmap-anydpi-v26/ic_launcher.xml` + `drawable/ic_launcher_foreground.xml`), legacy-растров нет:
 `minSdk 26` рисует адаптивную везде.
@@ -96,6 +96,12 @@ Koin, и граф лежит в `FamilyFinancesApp`, а не в активити
 `BuildConfig` у каждого модуля свой, из `:core:api` его не прочитать.
 
 ## Общие элементы экранов
+
+Роль, не заданная в `appColorScheme` (`theme/Theme.kt`), берётся из baseline-палитры M3 — фиолетовой:
+`secondaryContainer`/`onSecondaryContainer` заданы поэтому, их читают `FilterChip`, `SegmentedButton` и
+дорожка `LinearProgressIndicator`. Контраст `elevated` к `canvas` ~1,2:1, поэтому выбранность держит
+обводка `action` (`ui/Chips.kt`, `ui/Segments.kt`), а не заливка. Новый M3-компонент сначала проверяют
+на его ролях.
 
 Взаимоисключающий выбор из 2–3 вариантов — `SegmentedChoice` (`ui/Segments.kt`): тип операции, фильтр
 бюджетов, фильтр типа операций. Чипы (`ChipRow`, `ui/Chips.kt`) остаются там, где вариантов больше
