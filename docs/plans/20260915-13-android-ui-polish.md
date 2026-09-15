@@ -228,18 +228,18 @@
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/transactions/TransactionsScreenTest.kt`
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/transactions/TransactionsViewModelTest.kt`
 
-- [ ] `TransactionsViewModel`: `filters: StateFlow<TransactionFilters>` и `categories:
+- [x] `TransactionsViewModel`: `filters: StateFlow<TransactionFilters>` и `categories:
       StateFlow<List<Category>>` отдельно от `state`; `Ready` их больше не несёт
-- [ ] `TransactionsScreen(state, filters, categories, ...)`; `AppRoot` собирает оба потока
-- [ ] `Filters` вне `when`: ряд 1 — `SegmentedChoice` типа; ряд 2 — `ChipRow` трёх периодов + чип
+- [x] `TransactionsScreen(state, filters, categories, ...)`; `AppRoot` собирает оба потока
+- [x] `Filters` вне `when`: ряд 1 — `SegmentedChoice` типа; ряд 2 — `ChipRow` трёх периодов + чип
       категории «Все категории»/имя выбранной
-- [ ] `CategorySheet.kt`: `@OptIn(ExperimentalMaterial3Api)` `ModalBottomSheet` вокруг
+- [x] `CategorySheet.kt`: `@OptIn(ExperimentalMaterial3Api)` `ModalBottomSheet` вокруг
       `CategorySheetContent(categories, selected, onSelect)` — `LazyColumn` с «Все категории» и
       списком; выбор → `onFiltersChange(copy(categoryId))` и закрытие; `shown` —
       `rememberSaveable` на уровне экрана
-- [ ] тесты: `CategorySheetContent` — выбор доходит до колбэка; фильтры видны на `Failure`;
+- [x] тесты: `CategorySheetContent` — выбор доходит до колбэка; фильтры видны на `Failure`;
       `TransactionsViewModelTest` — смена фильтра публикуется и уходит в query
-- [ ] `make -C android check` — зелёный
+- [x] `make -C android check` — зелёный
 
 ### Task 5: FAB на «Операциях»
 

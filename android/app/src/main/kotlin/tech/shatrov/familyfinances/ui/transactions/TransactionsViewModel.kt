@@ -50,8 +50,6 @@ sealed interface TransactionsUiState {
     data class Ready(
         val groups: List<DayGroup>,
         val currency: String,
-        val filters: TransactionFilters,
-        val categories: List<Category>,
         val hasMore: Boolean,
         val loadingMore: Boolean = false,
         val moreError: UiError? = null,
@@ -75,13 +73,21 @@ class TransactionsViewModel(
 
     val state: StateFlow<TransactionsUiState> = mutable.asStateFlow()
 
-    private var filters = TransactionFilters()
+    // Фильтры и справочник категорий — отдельно от состояния списка: ряды фильтров рисуются и
+    // на загрузке, и на отказе, а в sealed-состояние с `data object Loading` их не втащить.
+    private val mutableFilters = MutableStateFlow(TransactionFilters())
+
+    val filters: StateFlow<TransactionFilters> = mutableFilters.asStateFlow()
+
+    private val mutableCategories = MutableStateFlow(emptyList<Category>())
+
+    val categories: StateFlow<List<Category>> = mutableCategories.asStateFlow()
+
     private var loaded = emptyList<Transaction>()
     private var loadedWindow: DateWindow? = null
     private var pendingWindow: DateWindow? = null
     private var total = 0
     private var exhausted = false
-    private var categories = emptyList<Category>()
     private var authors = emptyMap<UUID, String>()
     private var job: Job? = null
 
@@ -96,7 +102,7 @@ class TransactionsViewModel(
     }
 
     fun onFiltersChange(next: TransactionFilters) {
-        filters = next
+        mutableFilters.value = next
         mutable.value = TransactionsUiState.Loading
         load(fromStart = true, reloadReferences = false)
     }
@@ -141,7 +147,7 @@ class TransactionsViewModel(
             try {
                 // Категория, заведённая на соседнем экране, иначе не попала бы ни в строку,
                 // ни в фильтр до перезапуска процесса: модель живёт всю сессию.
-                if (reloadReferences || categories.isEmpty()) {
+                if (reloadReferences || mutableCategories.value.isEmpty()) {
                     loadReferences()
                 }
                 val page = api.client.unwrap { requestPage(bounds, offset = if (start) 0 else loaded.size) }
@@ -167,18 +173,22 @@ class TransactionsViewModel(
     ) = api.transactions.listTransactions(
         limit = PAGE_SIZE,
         offset = offset,
-        categoryId = filters.categoryId,
-        type = filters.type,
+        categoryId = mutableFilters.value.categoryId,
+        type = mutableFilters.value.type,
         dateFrom = bounds.from,
         dateTo = bounds.to,
     )
 
-    private fun window(day: LocalDate) = DateWindow(filters.dateFrom(day), filters.dateTo(day))
+    private fun window(day: LocalDate): DateWindow {
+        val current = mutableFilters.value
+        return DateWindow(current.dateFrom(day), current.dateTo(day))
+    }
 
     // `/users` открыт только админу, поэтому у member список авторов остаётся пустым:
     // своя запись всё равно подписана «Вы», а чужая в семье из двух человек однозначна.
     private suspend fun loadReferences() {
-        categories = api.client.unwrap { api.categories.listCategories(limit = REFERENCE_LIMIT) }.`data`
+        mutableCategories.value =
+            api.client.unwrap { api.categories.listCategories(limit = REFERENCE_LIMIT) }.`data`
         if (session.isAdmin) {
             authors = api.client
                 .unwrap { api.users.listUsers(limit = REFERENCE_LIMIT) }
@@ -188,7 +198,7 @@ class TransactionsViewModel(
     }
 
     private fun ready(): TransactionsUiState.Ready {
-        val names = categories.associate { it.id to it.name }
+        val names = mutableCategories.value.associate { it.id to it.name }
         return TransactionsUiState.Ready(
             groups = loaded
                 .groupBy { it.date }
@@ -196,8 +206,6 @@ class TransactionsViewModel(
                     DayGroup(date, transactions.map { row(it, names) })
                 },
             currency = session.currency,
-            filters = filters,
-            categories = categories,
             hasMore = !exhausted && loaded.size < total,
         )
     }

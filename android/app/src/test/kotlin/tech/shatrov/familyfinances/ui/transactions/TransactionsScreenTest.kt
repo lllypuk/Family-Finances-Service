@@ -7,21 +7,28 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import tech.shatrov.familyfinances.GROCERIES_ID
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.ROBOLECTRIC_SDK
+import tech.shatrov.familyfinances.core.api.Category
+import tech.shatrov.familyfinances.core.api.CategoryType
 import tech.shatrov.familyfinances.core.api.Transaction
 import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.theme.AppTheme
+import tech.shatrov.familyfinances.ui.UiError
 import tech.shatrov.familyfinances.ui.format.formatDay
-import tech.shatrov.familyfinances.ui.format.formatMoney
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.util.UUID
+
+private val CATEGORY_ID: UUID = UUID.fromString(GROCERIES_ID)
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [ROBOLECTRIC_SDK])
@@ -33,6 +40,8 @@ class TransactionsScreenTest {
 
     private fun show(
         state: TransactionsUiState,
+        filters: TransactionFilters = TransactionFilters(),
+        categories: List<Category> = emptyList(),
         onFiltersChange: (TransactionFilters) -> Unit = {},
         onOpen: (UUID) -> Unit = {},
     ) {
@@ -40,6 +49,8 @@ class TransactionsScreenTest {
             AppTheme {
                 TransactionsScreen(
                     state = state,
+                    filters = filters,
+                    categories = categories,
                     onRetry = {},
                     onFiltersChange = onFiltersChange,
                     onLoadMore = {},
@@ -96,11 +107,74 @@ class TransactionsScreenTest {
         assertEquals(UUID.fromString("88888888-8888-8888-8888-888888888881"), opened)
     }
 
+    // Фильтры вне `when`: упавший запрос иначе не переключить — «Повторить» повторяет ровно его.
+    @Test
+    fun filtersStayOnFailure() {
+        show(TransactionsUiState.Failure(UiError.Server("всё сломалось")))
+
+        composeRule.onNodeWithText(res.getString(R.string.filter_this_month)).assertIsDisplayed()
+        composeRule.onNodeWithText(res.getString(R.string.filter_all_categories)).assertIsDisplayed()
+    }
+
+    @Test
+    fun categoryChipShowsSelectedName() {
+        show(
+            ready(listOf(row(categoryName = null))),
+            filters = TransactionFilters(categoryId = CATEGORY_ID),
+            categories = listOf(category()),
+        )
+
+        composeRule.onNodeWithText("Продукты").assertIsDisplayed()
+    }
+
+    // Тело листа отдельно от `ModalBottomSheet`: тот в Robolectric ненадёжен.
+    @Test
+    fun categorySheetSelectionReachesCallback() {
+        var picked: UUID? = null
+        var called = false
+        composeRule.setContent {
+            AppTheme {
+                CategorySheetContent(listOf(category()), selected = null) {
+                    picked = it
+                    called = true
+                }
+            }
+        }
+
+        composeRule.onNodeWithText("Продукты").performClick()
+
+        assertTrue(called)
+        assertEquals(CATEGORY_ID, picked)
+    }
+
+    @Test
+    fun categorySheetResetReachesCallback() {
+        var picked: UUID? = CATEGORY_ID
+        composeRule.setContent {
+            AppTheme {
+                CategorySheetContent(listOf(category()), selected = CATEGORY_ID) { picked = it }
+            }
+        }
+
+        composeRule.onNodeWithText(res.getString(R.string.filter_all_categories)).performClick()
+
+        assertNull(picked)
+    }
+
+    private fun category() = Category(
+        id = CATEGORY_ID,
+        name = "Продукты",
+        type = CategoryType.expense,
+        color = "#ff0000",
+        icon = "cart",
+        isActive = true,
+        createdAt = OffsetDateTime.parse("2026-09-07T09:00:00Z"),
+        updatedAt = OffsetDateTime.parse("2026-09-07T09:00:00Z"),
+    )
+
     private fun ready(rows: List<TransactionRow>) = TransactionsUiState.Ready(
         groups = if (rows.isEmpty()) emptyList() else listOf(DayGroup(LocalDate.parse("2026-09-07"), rows)),
         currency = "RUB",
-        filters = TransactionFilters(),
-        categories = emptyList(),
         hasMore = false,
     )
 

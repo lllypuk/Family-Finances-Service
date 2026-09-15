@@ -195,6 +195,8 @@ fun AppRoot(graph: AppGraph) {
                 TransactionsViewModel(graph.api, active)
             }
             val transactions by model.state.collectAsStateWithLifecycle()
+            val filters by model.filters.collectAsStateWithLifecycle()
+            val categories by model.categories.collectAsStateWithLifecycle()
             // На возврате из фона, а не только при заходе: модель живёт всю сессию, и месяц
             // под фильтром «этот» мог смениться, пока экран лежал свёрнутым.
             LifecycleResumeEffect(listStale) {
@@ -210,6 +212,8 @@ fun AppRoot(graph: AppGraph) {
             WithNavBar(AppTab.TRANSACTIONS, onSelect = { screen = it.screen }) {
                 TransactionsScreen(
                     state = transactions,
+                    filters = filters,
+                    categories = categories,
                     onRetry = model::refresh,
                     onFiltersChange = model::onFiltersChange,
                     onLoadMore = model::loadMore,

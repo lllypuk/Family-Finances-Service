@@ -308,22 +308,24 @@ class TransactionsViewModelTest {
         )
     }
 
+    // Фильтры и категории — в своих потоках: ряды рисуются и на загрузке, и на отказе.
     @Test
-    fun filtersGoToQuery() = runTest {
+    fun filtersGoToQueryAndToOwnFlow() = runTest {
         enqueueFirstPage()
         createModel()
         settle()
 
         server.enqueueJson(200, TRANSACTIONS_PAGE_1)
-        model.onFiltersChange(
-            TransactionFilters(
-                period = TransactionPeriod.THIS_MONTH,
-                type = TransactionType.expense,
-                categoryId = UUID.fromString(GROCERIES_ID),
-            ),
+        val next = TransactionFilters(
+            period = TransactionPeriod.THIS_MONTH,
+            type = TransactionType.expense,
+            categoryId = UUID.fromString(GROCERIES_ID),
         )
+        model.onFiltersChange(next)
+        assertEquals(next, model.filters.value)
         settle()
 
+        assertEquals(listOf("Продукты", "Зарплата"), model.categories.value.map { it.name })
         val url = lastRequestUrl(4)
         assertEquals("expense", url.queryParameter("type"))
         assertEquals(GROCERIES_ID, url.queryParameter("category_id"))

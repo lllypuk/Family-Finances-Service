@@ -19,6 +19,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -42,6 +46,8 @@ import java.util.UUID
 @Composable
 fun TransactionsScreen(
     state: TransactionsUiState,
+    filters: TransactionFilters,
+    categories: List<Category>,
     onRetry: () -> Unit,
     onFiltersChange: (TransactionFilters) -> Unit,
     onLoadMore: () -> Unit,
@@ -49,6 +55,7 @@ fun TransactionsScreen(
     onOpen: (UUID) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var sheet by rememberSaveable { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -67,6 +74,10 @@ fun TransactionsScreen(
             }
         }
 
+        // Фильтры вне `when`: на отказе запроса переключиться иначе некуда, а «Повторить»
+        // повторяет ровно его.
+        Filters(filters, categories, onFiltersChange) { sheet = true }
+
         when (state) {
             TransactionsUiState.Loading -> Centered { CircularProgressIndicator() }
 
@@ -78,25 +89,47 @@ fun TransactionsScreen(
                 RetryButton(onRetry)
             }
 
-            is TransactionsUiState.Ready -> {
-                Filters(state, onFiltersChange)
+            is TransactionsUiState.Ready ->
                 if (state.isEmpty) {
                     Centered { Text(stringResource(R.string.transactions_empty)) }
                 } else {
                     Days(state, onLoadMore, onOpen)
                 }
-            }
         }
+    }
+
+    if (sheet) {
+        CategorySheet(
+            categories = categories,
+            selected = filters.categoryId,
+            onSelect = {
+                onFiltersChange(filters.copy(categoryId = it))
+                sheet = false
+            },
+            onDismiss = { sheet = false },
+        )
     }
 }
 
 @Composable
 private fun Filters(
-    state: TransactionsUiState.Ready,
+    filters: TransactionFilters,
+    categories: List<Category>,
     onChange: (TransactionFilters) -> Unit,
+    onPickCategory: () -> Unit,
 ) {
-    val filters = state.filters
+    val selectedName = categories.firstOrNull { it.id == filters.categoryId }?.name
     Column(verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_1)) {
+        SegmentedChoice(
+            options = listOf(
+                null to stringResource(R.string.filter_any_type),
+                TransactionType.income to stringResource(R.string.filter_income),
+                TransactionType.expense to stringResource(R.string.filter_expense),
+            ),
+            selected = filters.type,
+            onSelect = { onChange(filters.copy(type = it)) },
+            modifier = Modifier.padding(horizontal = Dimens.SPACE_4),
+        )
         ChipRow(Modifier.padding(horizontal = Dimens.SPACE_4)) {
             item {
                 Chip(stringResource(R.string.filter_all), filters.period == TransactionPeriod.ALL) {
@@ -119,27 +152,12 @@ private fun Filters(
                     onChange(filters.copy(period = TransactionPeriod.PREV_MONTH))
                 }
             }
-        }
-        SegmentedChoice(
-            options = listOf(
-                null to stringResource(R.string.filter_any_type),
-                TransactionType.income to stringResource(R.string.filter_income),
-                TransactionType.expense to stringResource(R.string.filter_expense),
-            ),
-            selected = filters.type,
-            onSelect = { onChange(filters.copy(type = it)) },
-            modifier = Modifier.padding(horizontal = Dimens.SPACE_4),
-        )
-        ChipRow(Modifier.padding(horizontal = Dimens.SPACE_4)) {
             item {
-                Chip(stringResource(R.string.filter_all_categories), filters.categoryId == null) {
-                    onChange(filters.copy(categoryId = null))
-                }
-            }
-            items(state.categories) { category: Category ->
-                Chip(category.name, filters.categoryId == category.id) {
-                    onChange(filters.copy(categoryId = category.id))
-                }
+                Chip(
+                    selectedName ?: stringResource(R.string.filter_all_categories),
+                    filters.categoryId != null,
+                    onClick = onPickCategory,
+                )
             }
         }
     }

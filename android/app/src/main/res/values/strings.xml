@@ -35,6 +35,7 @@
     <string name="filter_income">Доходы</string>
     <string name="filter_expense">Расходы</string>
     <string name="filter_all_categories">Все категории</string>
+    <string name="filter_category">Категория</string>
     <string name="transactions_add">Добавить</string>
 
     <string name="transaction_new_title">Новая операция</string>
