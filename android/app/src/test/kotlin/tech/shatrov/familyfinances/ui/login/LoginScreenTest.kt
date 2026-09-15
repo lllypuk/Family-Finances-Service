@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -78,6 +79,19 @@ class LoginScreenTest {
         composeRule.onNodeWithText(res.getString(R.string.login_submit)).assertIsEnabled().performClick()
 
         assertEquals(1, submits)
+    }
+
+    @Test
+    fun toggleRevealsPassword() {
+        show(LoginUiState(email = "admin@test.com", password = "Admin1234!"))
+
+        // Совпадение по тексту видит и сырое значение поля, поэтому смотрим на маску.
+        val masked = "\u2022".repeat("Admin1234!".length)
+        composeRule.onNodeWithText(masked).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(res.getString(R.string.password_show)).performClick()
+
+        composeRule.onNodeWithText(masked).assertDoesNotExist()
+        composeRule.onNodeWithContentDescription(res.getString(R.string.password_hide)).assertIsDisplayed()
     }
 
     @Test

@@ -193,14 +193,14 @@
 - Modify: `android/app/src/main/res/values/strings.xml`
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/login/LoginScreenTest.kt`
 
-- [ ] `AppIcons.Eye`, `AppIcons.EyeOff` — контуры Lucide
-- [ ] `SecretField` переезжает в `ui/SecretField.kt`: `remember { visible }`, trailing `IconButton`
+- [x] `AppIcons.Eye`, `AppIcons.EyeOff` — контуры Lucide
+- [x] `SecretField` переезжает в `ui/SecretField.kt`: `remember { visible }`, trailing `IconButton`
       с `contentDescription` `password_show`/`password_hide`; новые параметры
       `imeAction = ImeAction.Default`, `keyboardActions = KeyboardActions.Default`; шесть вызовов в
       настройках — только импорт
-- [ ] логин: своё поле пароля → `SecretField(..., imeAction = Done, keyboardActions = onDone)`
-- [ ] `LoginScreenTest`: после нажатия «Показать пароль» текст пароля виден
-- [ ] `make -C android check` — зелёный
+- [x] логин: своё поле пароля → `SecretField(..., imeAction = Done, keyboardActions = onDone)`
+- [x] `LoginScreenTest`: после нажатия «Показать пароль» текст пароля виден
+- [x] `make -C android check` — зелёный
 
 ### Task 3: `SegmentedChoice` — тип операции, фильтр бюджетов, фильтр типа
 

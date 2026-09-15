@@ -6,6 +6,8 @@
     <string name="login_email">Почта</string>
     <string name="login_password">Пароль</string>
     <string name="login_submit">Войти</string>
+    <string name="password_show">Показать пароль</string>
+    <string name="password_hide">Скрыть пароль</string>
     <string name="login_error_credentials">Неверная почта или пароль</string>
     <string name="login_error_rate_limited">Слишком много попыток, попробуйте позже</string>
     <string name="login_error_rate_limited_wait">Слишком много попыток, повторите через %1$d с</string>
