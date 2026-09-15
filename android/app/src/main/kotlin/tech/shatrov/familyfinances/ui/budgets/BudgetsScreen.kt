@@ -15,7 +15,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -52,22 +51,13 @@ fun BudgetsScreen(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
-        Row(
+        Text(
+            text = stringResource(R.string.budgets_title),
+            style = MaterialTheme.typography.headlineSmall,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = Dimens.SPACE_4, end = Dimens.SPACE_2, top = Dimens.SPACE_2, bottom = Dimens.SPACE_2),
-            horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = stringResource(R.string.budgets_title),
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(onClick = onCreate) {
-                Icon(AppIcons.Plus, contentDescription = stringResource(R.string.budgets_add))
-            }
-        }
+                .padding(horizontal = Dimens.SPACE_4, vertical = Dimens.SPACE_2),
+        )
 
         // Чипы вне `when`: на отказе запроса «на сегодня» переключиться иначе некуда.
         Filters(filter, onFilterChange)
@@ -152,7 +142,7 @@ private fun Rows(
             .fillMaxSize()
             .padding(horizontal = Dimens.SPACE_4),
         verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_3),
-        contentPadding = PaddingValues(vertical = Dimens.SPACE_3),
+        contentPadding = PaddingValues(top = Dimens.SPACE_3, bottom = Dimens.FAB_CLEARANCE),
     ) {
         items(state.rows, key = { it.budget.id }) { row ->
             BudgetItem(row, currency, onOpen)

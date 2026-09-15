@@ -1,6 +1,5 @@
 package tech.shatrov.familyfinances.ui.transactions
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,7 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -34,10 +33,13 @@ import tech.shatrov.familyfinances.theme.LocalAppColors
 import tech.shatrov.familyfinances.ui.Centered
 import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
+import tech.shatrov.familyfinances.ui.RowPlace
 import tech.shatrov.familyfinances.ui.SegmentedChoice
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.format.formatMoney
+import tech.shatrov.familyfinances.ui.groupedRow
 import tech.shatrov.familyfinances.ui.message
+import tech.shatrov.familyfinances.ui.rowPlace
 import java.util.UUID
 
 @Composable
@@ -178,23 +180,24 @@ private fun Days(
     onLoadMore: () -> Unit,
     onOpen: (UUID) -> Unit,
 ) {
+    // Строки одного дня сливаются в панель, поэтому зазор между элементами нулевой: воздух
+    // между днями даёт заголовок.
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = Dimens.SPACE_4),
-        verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
-        contentPadding = PaddingValues(top = Dimens.SPACE_3, bottom = Dimens.FAB_CLEARANCE),
+        contentPadding = PaddingValues(bottom = Dimens.FAB_CLEARANCE),
     ) {
         for (group in state.groups) {
             item(key = group.date) {
                 Text(
                     text = formatDay(group.date),
                     style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(top = Dimens.SPACE_2),
+                    modifier = Modifier.padding(top = Dimens.SPACE_4, bottom = Dimens.SPACE_2),
                 )
             }
-            items(group.rows, key = { it.transaction.id }) { row ->
-                TransactionItem(row, state.currency, onOpen)
+            itemsIndexed(group.rows, key = { _, row -> row.transaction.id }) { index, row ->
+                TransactionItem(row, state.currency, rowPlace(index, group.rows.size), onOpen)
             }
         }
 
@@ -203,7 +206,9 @@ private fun Days(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = Dimens.SPACE_4),
                 ) {
                     Text(
                         text = state.moreError.message(LocalContext.current.resources),
@@ -218,7 +223,9 @@ private fun Days(
             item {
                 LaunchedEffect(state.groups.sumOf { it.rows.size }) { onLoadMore() }
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = Dimens.SPACE_4),
                     horizontalArrangement = Arrangement.Center,
                 ) {
                     CircularProgressIndicator()
@@ -232,6 +239,7 @@ private fun Days(
 private fun TransactionItem(
     row: TransactionRow,
     currency: String,
+    place: RowPlace,
     onOpen: (UUID) -> Unit,
 ) {
     val colors = LocalAppColors.current
@@ -240,8 +248,8 @@ private fun TransactionItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onOpen(row.transaction.id) }
-            .heightIn(min = Dimens.TOUCH_MIN),
+            .heightIn(min = Dimens.TOUCH_MIN)
+            .groupedRow(place, colors) { onOpen(row.transaction.id) },
         horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
