@@ -40,6 +40,8 @@ import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
 import tech.shatrov.familyfinances.ui.DatePickerSheet
 import tech.shatrov.familyfinances.ui.FieldError
+import tech.shatrov.familyfinances.ui.SegmentedChoice
+import tech.shatrov.familyfinances.ui.currencySuffix
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.message
 import java.time.LocalDate
@@ -94,6 +96,8 @@ fun TransactionEditScreen(
             value = state.amount,
             onValueChange = onAmountChange,
             label = { Text(stringResource(R.string.transaction_amount)) },
+            suffix = currencySuffix(state.currency),
+            textStyle = MaterialTheme.typography.displayMedium,
             singleLine = true,
             isError = state.fieldErrors.containsKey(TransactionField.AMOUNT),
             supportingText = { FieldError(state.fieldErrors[TransactionField.AMOUNT]) },
@@ -101,18 +105,14 @@ fun TransactionEditScreen(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        ChipRow {
-            item {
-                Chip(stringResource(R.string.type_expense), state.type == TransactionType.expense) {
-                    onTypeChange(TransactionType.expense)
-                }
-            }
-            item {
-                Chip(stringResource(R.string.type_income), state.type == TransactionType.income) {
-                    onTypeChange(TransactionType.income)
-                }
-            }
-        }
+        SegmentedChoice(
+            options = listOf(
+                TransactionType.expense to stringResource(R.string.type_expense),
+                TransactionType.income to stringResource(R.string.type_income),
+            ),
+            selected = state.type,
+            onSelect = onTypeChange,
+        )
         FieldError(state.fieldErrors[TransactionField.TYPE])
 
         Text(stringResource(R.string.transaction_category), style = MaterialTheme.typography.bodySmall)
@@ -127,7 +127,12 @@ fun TransactionEditScreen(
             onClick = { datePickerShown = true },
             modifier = Modifier.heightIn(min = Dimens.TOUCH_MIN),
         ) {
-            Text(formatDay(state.date))
+            Icon(
+                imageVector = AppIcons.Calendar,
+                contentDescription = null,
+                modifier = Modifier.padding(end = Dimens.SPACE_2),
+            )
+            Text(stringResource(R.string.transaction_date, formatDay(state.date)))
         }
         FieldError(state.fieldErrors[TransactionField.DATE])
 

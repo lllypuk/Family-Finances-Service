@@ -11,6 +11,7 @@ private val locale: Locale = Locale.forLanguageTag("ru")
 private val dayMonth = DateTimeFormatter.ofPattern("d MMMM", locale)
 private val dayMonthYear = DateTimeFormatter.ofPattern("d MMMM yyyy", locale)
 private val dayMonthYearTime = DateTimeFormatter.ofPattern("d MMMM yyyy, HH:mm", locale)
+private val monthYear = DateTimeFormatter.ofPattern("LLLL yyyy", locale)
 
 /** Дата операции: год показывается только чужой — в списке за текущий месяц он лишний шум. */
 fun formatDay(
@@ -23,6 +24,9 @@ fun formatPeriod(
     to: LocalDate,
     today: LocalDate = LocalDate.now(),
 ): String = "${formatDay(from, today)} — ${formatDay(to, today)}"
+
+/** Заголовок главной: `LLLL` — именительный «сентябрь», `MMMM` дал бы родительный «сентября». */
+fun formatMonth(date: LocalDate): String = date.format(monthYear).replaceFirstChar { it.titlecase(locale) }
 
 /** Служебная метка в зоне семьи (A-06): телефон в поездке иначе показал бы чужое время. */
 fun formatDateTime(

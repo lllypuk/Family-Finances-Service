@@ -260,10 +260,12 @@ reference): `docs/README.md` (navigation), `docs/product_brief.md`, `docs/tech_s
 status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the finished ones.
 
 **Current direction:** `docs/specs/005-api-only-redesign.md` — the service is an API-only backend for an
-Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–10 are done
-(`docs/plans/completed/`, 06 = the Android client, 07 = its budgets tab, 08 = its settings screen,
+Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–10, 12 and 13 are
+done (`docs/plans/completed/`, 06 = the Android client, 07 = its budgets tab, 08 = its settings screen,
 09 = the server findings of 07–08, 10 = `/reports` removed and `GET /stats/monthly` added, 12 = recurring
-budgets, both sides). Releases: server `v0.3.0` (plan 10) and `v0.4.0` (plan 12), client `app-v0.5.0` — it needs
+budgets, both sides, 13 = the client's UI audit: segments instead of chips, a FAB on "Операции", empty states
+with an action, password visibility — client only, the contract did not move). Releases: server `v0.3.0`
+(plan 10) and `v0.4.0` (plan 12), client `app-v0.6.0` — it needs
 a server of `v0.4.0` or newer (`recurring` is required in the generated model). Plan 11 is the client side of
 10: an "Обзор" screen over `summary` + `monthly`, and multi-select over transactions.
 

@@ -35,6 +35,7 @@ import tech.shatrov.familyfinances.ui.Centered
 import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
 import tech.shatrov.familyfinances.ui.FieldError
+import tech.shatrov.familyfinances.ui.SecretField
 import tech.shatrov.familyfinances.ui.message
 
 /** Действие, которое сервер применит сразу: у обоих спрашивается подтверждение. */

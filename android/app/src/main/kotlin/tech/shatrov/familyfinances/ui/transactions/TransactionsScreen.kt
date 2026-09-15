@@ -13,12 +13,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -29,10 +31,10 @@ import tech.shatrov.familyfinances.core.api.Category
 import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.theme.Dimens
 import tech.shatrov.familyfinances.theme.LocalAppColors
-import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Centered
 import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
+import tech.shatrov.familyfinances.ui.SegmentedChoice
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.format.formatMoney
 import tech.shatrov.familyfinances.ui.message
@@ -41,6 +43,8 @@ import java.util.UUID
 @Composable
 fun TransactionsScreen(
     state: TransactionsUiState,
+    filters: TransactionFilters,
+    categories: List<Category>,
     onRetry: () -> Unit,
     onFiltersChange: (TransactionFilters) -> Unit,
     onLoadMore: () -> Unit,
@@ -48,23 +52,19 @@ fun TransactionsScreen(
     onOpen: (UUID) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var sheet by rememberSaveable { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxSize()) {
-        Row(
+        Text(
+            text = stringResource(R.string.transactions_title),
+            style = MaterialTheme.typography.headlineSmall,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = Dimens.SPACE_4, end = Dimens.SPACE_2, top = Dimens.SPACE_2, bottom = Dimens.SPACE_2),
-            horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = stringResource(R.string.transactions_title),
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(onClick = onCreate) {
-                Icon(AppIcons.Plus, contentDescription = stringResource(R.string.transactions_add))
-            }
-        }
+                .padding(horizontal = Dimens.SPACE_4, vertical = Dimens.SPACE_2),
+        )
+
+        // Фильтры вне `when`: на отказе запроса переключиться иначе некуда, а «Повторить»
+        // повторяет ровно его.
+        Filters(filters, categories, onFiltersChange) { sheet = true }
 
         when (state) {
             TransactionsUiState.Loading -> Centered { CircularProgressIndicator() }
@@ -77,25 +77,52 @@ fun TransactionsScreen(
                 RetryButton(onRetry)
             }
 
-            is TransactionsUiState.Ready -> {
-                Filters(state, onFiltersChange)
+            is TransactionsUiState.Ready ->
                 if (state.isEmpty) {
-                    Centered { Text(stringResource(R.string.transactions_empty)) }
+                    Empty(filters, onCreate, onFiltersChange)
                 } else {
                     Days(state, onLoadMore, onOpen)
                 }
-            }
         }
+    }
+
+    if (sheet) {
+        CategorySheet(
+            categories = categories,
+            selected = filters.categoryId,
+            onSelect = {
+                onFiltersChange(filters.copy(categoryId = it))
+                sheet = false
+            },
+            onDismiss = { sheet = false },
+        )
     }
 }
 
 @Composable
 private fun Filters(
-    state: TransactionsUiState.Ready,
+    filters: TransactionFilters,
+    categories: List<Category>,
     onChange: (TransactionFilters) -> Unit,
+    onPickCategory: () -> Unit,
 ) {
-    val filters = state.filters
+    // Категория, которой нет в справочнике (удалена), — прочерк: «Все категории» на включённом
+    // фильтре сказали бы, что фильтра нет, а список при этом остаётся пустым.
+    val categoryLabel = when {
+        filters.categoryId == null -> stringResource(R.string.filter_all_categories)
+        else -> categories.firstOrNull { it.id == filters.categoryId }?.name ?: "—"
+    }
     Column(verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_1)) {
+        SegmentedChoice(
+            options = listOf(
+                null to stringResource(R.string.filter_any_type),
+                TransactionType.income to stringResource(R.string.filter_income),
+                TransactionType.expense to stringResource(R.string.filter_expense),
+            ),
+            selected = filters.type,
+            onSelect = { onChange(filters.copy(type = it)) },
+            modifier = Modifier.padding(horizontal = Dimens.SPACE_4),
+        )
         ChipRow(Modifier.padding(horizontal = Dimens.SPACE_4)) {
             item {
                 Chip(stringResource(R.string.filter_all), filters.period == TransactionPeriod.ALL) {
@@ -118,35 +145,29 @@ private fun Filters(
                     onChange(filters.copy(period = TransactionPeriod.PREV_MONTH))
                 }
             }
-        }
-        ChipRow(Modifier.padding(horizontal = Dimens.SPACE_4)) {
             item {
-                Chip(stringResource(R.string.filter_any_type), filters.type == null) {
-                    onChange(filters.copy(type = null))
-                }
-            }
-            item {
-                Chip(stringResource(R.string.filter_income), filters.type == TransactionType.income) {
-                    onChange(filters.copy(type = TransactionType.income))
-                }
-            }
-            item {
-                Chip(stringResource(R.string.filter_expense), filters.type == TransactionType.expense) {
-                    onChange(filters.copy(type = TransactionType.expense))
-                }
+                Chip(categoryLabel, filters.categoryId != null, onClick = onPickCategory)
             }
         }
-        ChipRow(Modifier.padding(horizontal = Dimens.SPACE_4)) {
-            item {
-                Chip(stringResource(R.string.filter_all_categories), filters.categoryId == null) {
-                    onChange(filters.copy(categoryId = null))
-                }
-            }
-            items(state.categories) { category: Category ->
-                Chip(category.name, filters.categoryId == category.id) {
-                    onChange(filters.copy(categoryId = category.id))
-                }
-            }
+    }
+}
+
+/** Пустой список: без фильтров звать создавать, с фильтрами — сбрасывать их. */
+@Composable
+private fun Empty(
+    filters: TransactionFilters,
+    onCreate: () -> Unit,
+    onFiltersChange: (TransactionFilters) -> Unit,
+) {
+    val unfiltered = filters == TransactionFilters()
+    Centered {
+        Text(stringResource(R.string.transactions_empty))
+        Button(
+            onClick = { if (unfiltered) onCreate() else onFiltersChange(TransactionFilters()) },
+            modifier = Modifier.heightIn(min = Dimens.TOUCH_MIN),
+        ) {
+            val label = if (unfiltered) R.string.transactions_add_first else R.string.transactions_reset_filters
+            Text(stringResource(label))
         }
     }
 }
@@ -162,7 +183,7 @@ private fun Days(
             .fillMaxSize()
             .padding(horizontal = Dimens.SPACE_4),
         verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
-        contentPadding = PaddingValues(vertical = Dimens.SPACE_3),
+        contentPadding = PaddingValues(top = Dimens.SPACE_3, bottom = Dimens.FAB_CLEARANCE),
     ) {
         for (group in state.groups) {
             item(key = group.date) {
@@ -240,7 +261,7 @@ private fun TransactionItem(
                 )
             }
         }
-        // Знак ставится текстом, а не только цветом: доход и акцент — один цвет темы.
+        // Знак ставится текстом, а не только цветом: ради цветовосприятия.
         Text(
             text = formatMoney(
                 if (income) row.transaction.amountMinor else -row.transaction.amountMinor,

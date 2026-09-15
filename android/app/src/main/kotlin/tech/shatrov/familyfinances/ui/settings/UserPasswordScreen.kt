@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.theme.Dimens
+import tech.shatrov.familyfinances.ui.SecretField
 import tech.shatrov.familyfinances.ui.message
 
 /** Пароль пользователя со стороны админа: текущий не спрашивается, только новый и повтор. */

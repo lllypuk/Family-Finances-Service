@@ -42,6 +42,7 @@ import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
 import tech.shatrov.familyfinances.ui.DatePickerSheet
 import tech.shatrov.familyfinances.ui.FieldError
+import tech.shatrov.familyfinances.ui.currencySuffix
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.message
 import java.time.LocalDate
@@ -101,6 +102,8 @@ fun BudgetEditScreen(
             value = state.amount,
             onValueChange = onAmountChange,
             label = { Text(stringResource(R.string.budget_amount)) },
+            suffix = currencySuffix(state.currency),
+            textStyle = MaterialTheme.typography.displayMedium,
             singleLine = true,
             enabled = editable,
             isError = state.fieldErrors.containsKey(BudgetField.AMOUNT),
@@ -236,7 +239,7 @@ private fun RecurringSwitch(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = stringResource(R.string.budget_recurring),
+            text = stringResource(R.string.budget_recurring_toggle),
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f),
         )
@@ -320,6 +323,11 @@ private fun DateButton(
             .fillMaxWidth()
             .heightIn(min = Dimens.TOUCH_MIN),
     ) {
+        Icon(
+            imageVector = AppIcons.Calendar,
+            contentDescription = null,
+            modifier = Modifier.padding(end = Dimens.SPACE_2),
+        )
         Text("${stringResource(label)}: $day")
     }
 }

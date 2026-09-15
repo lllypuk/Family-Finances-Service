@@ -1,6 +1,5 @@
 package tech.shatrov.familyfinances.ui.budgets
 
-import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -31,8 +30,7 @@ import tech.shatrov.familyfinances.theme.Dimens
 import tech.shatrov.familyfinances.theme.LocalAppColors
 import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Centered
-import tech.shatrov.familyfinances.ui.Chip
-import tech.shatrov.familyfinances.ui.ChipRow
+import tech.shatrov.familyfinances.ui.SegmentedChoice
 import tech.shatrov.familyfinances.ui.format.formatMoney
 import tech.shatrov.familyfinances.ui.format.formatPeriod
 import tech.shatrov.familyfinances.ui.message
@@ -92,7 +90,7 @@ fun BudgetsScreen(
 
             is BudgetsUiState.Ready ->
                 if (state.isEmpty) {
-                    Centered { Text(stringResource(emptyText(filter))) }
+                    Empty(filter, onFilterChange, onCreate)
                 } else {
                     Rows(state, currency, onOpen)
                 }
@@ -100,12 +98,23 @@ fun BudgetsScreen(
     }
 }
 
-@StringRes
-private fun emptyText(filter: BudgetFilter): Int = when (filter) {
-    // Будущий бюджет после создания не виден «на сегодня» — иначе он выглядит потерянным.
-    BudgetFilter.TODAY -> R.string.budgets_empty_today
-
-    BudgetFilter.ALL -> R.string.budgets_empty
+/** Пустой «на сегодня» зовёт расширить период: будущий бюджет здесь не виден. */
+@Composable
+private fun Empty(
+    filter: BudgetFilter,
+    onFilterChange: (BudgetFilter) -> Unit,
+    onCreate: () -> Unit,
+) {
+    val today = filter == BudgetFilter.TODAY
+    Centered {
+        Text(stringResource(if (today) R.string.budgets_empty_today else R.string.budgets_empty))
+        Button(
+            onClick = { if (today) onFilterChange(BudgetFilter.ALL) else onCreate() },
+            modifier = Modifier.heightIn(min = Dimens.TOUCH_MIN),
+        ) {
+            Text(stringResource(if (today) R.string.budgets_show_all else R.string.budgets_add_first))
+        }
+    }
 }
 
 @Composable
@@ -113,18 +122,15 @@ private fun Filters(
     filter: BudgetFilter,
     onChange: (BudgetFilter) -> Unit,
 ) {
-    ChipRow(Modifier.padding(horizontal = Dimens.SPACE_4)) {
-        item {
-            Chip(stringResource(R.string.budgets_filter_today), filter == BudgetFilter.TODAY) {
-                onChange(BudgetFilter.TODAY)
-            }
-        }
-        item {
-            Chip(stringResource(R.string.budgets_filter_all), filter == BudgetFilter.ALL) {
-                onChange(BudgetFilter.ALL)
-            }
-        }
-    }
+    SegmentedChoice(
+        options = listOf(
+            BudgetFilter.TODAY to stringResource(R.string.budgets_filter_today),
+            BudgetFilter.ALL to stringResource(R.string.budgets_filter_all),
+        ),
+        selected = filter,
+        onSelect = onChange,
+        modifier = Modifier.padding(horizontal = Dimens.SPACE_4),
+    )
 }
 
 /** Категория, которой нет в справочнике (удалена), — прочерк, а не «Все категории». */
@@ -185,7 +191,7 @@ private fun BudgetItem(
             if (budget.recurring) {
                 Icon(
                     imageVector = AppIcons.Repeat,
-                    contentDescription = stringResource(R.string.budget_recurring),
+                    contentDescription = stringResource(R.string.budget_recurring_badge),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(Dimens.ICON_SIZE),
                 )

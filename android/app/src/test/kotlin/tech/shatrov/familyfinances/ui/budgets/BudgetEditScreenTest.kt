@@ -180,6 +180,24 @@ class BudgetEditScreenTest {
 
     private fun endLabel(date: LocalDate) = "${res.getString(R.string.budget_end)}: ${formatDay(date)}"
 
+    @Test
+    fun amountFieldShowsCurrencySymbol() {
+        show(form())
+
+        composeRule.onNodeWithText("₽").assertIsDisplayed()
+    }
+
+    /** В форме — действие «Повторять», значок строки списка сюда не попадает. */
+    @Test
+    fun formLabelsTheRecurringSwitchAsAnAction() {
+        show(form())
+
+        composeRule.onNodeWithText(res.getString(R.string.budget_recurring_toggle))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText(res.getString(R.string.budget_recurring_badge)).assertDoesNotExist()
+    }
+
     private fun show(
         state: BudgetEditUiState,
         onDelete: () -> Unit = {},
@@ -212,6 +230,7 @@ class BudgetEditScreenTest {
     private fun form(fieldErrors: Map<String, String> = emptyMap()) = BudgetEditUiState(
         name = "Еда",
         amount = "50000",
+        currency = "RUB",
         period = BudgetPeriod.monthly,
         start = START,
         end = END,

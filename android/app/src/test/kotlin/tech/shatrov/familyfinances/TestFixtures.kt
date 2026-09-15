@@ -2,12 +2,18 @@ package tech.shatrov.familyfinances
 
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
+import tech.shatrov.familyfinances.core.api.BudgetProgress
+import tech.shatrov.familyfinances.core.api.CategoryShare
 import tech.shatrov.familyfinances.core.api.Family
+import tech.shatrov.familyfinances.core.api.PeriodTotals
+import tech.shatrov.familyfinances.core.api.RecentTransactionItem
 import tech.shatrov.familyfinances.core.api.Role
+import tech.shatrov.familyfinances.core.api.StatsSummary
 import tech.shatrov.familyfinances.core.api.User
 import tech.shatrov.familyfinances.core.api.auth.SessionToken
 import tech.shatrov.familyfinances.core.api.auth.TokenVault
 import tech.shatrov.familyfinances.core.api.auth.TokenVaultException
+import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -310,3 +316,47 @@ internal const val BUDGETS_EMPTY = """
 "meta":{"request_id":"r-16","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0",
 "pagination":{"limit":200,"offset":0,"total":0}}}
 """
+
+/** Сводка для Compose-тестов главной: `STATS_OK` — тот же ответ, но в виде JSON для MockWebServer. */
+@Suppress("LongParameterList")
+internal fun statsSummary(
+    from: LocalDate = LocalDate.parse("2026-09-01"),
+    to: LocalDate = LocalDate.parse("2026-09-15"),
+    incomeMinor: Long = 15_000_00,
+    expensesMinor: Long = 4_231_05,
+    transactionCount: Int = 12,
+    hasPreviousData: Boolean = true,
+    incomeDelta: Double = 0.25,
+    expensesDelta: Double = -0.15,
+    expenseCategories: List<CategoryShare> = emptyList(),
+    budgets: List<BudgetProgress> = emptyList(),
+    recent: List<RecentTransactionItem> = emptyList(),
+    transactionsTotal: Int = 42,
+): StatsSummary = StatsSummary(
+    from = from,
+    to = to,
+    current = PeriodTotals(
+        from = from,
+        to = to,
+        incomeMinor = incomeMinor,
+        expensesMinor = expensesMinor,
+        netMinor = incomeMinor - expensesMinor,
+        transactionCount = transactionCount,
+    ),
+    previous = PeriodTotals(
+        from = from.minusMonths(1),
+        to = to.minusMonths(1),
+        incomeMinor = 0,
+        expensesMinor = 0,
+        netMinor = 0,
+        transactionCount = 0,
+    ),
+    hasPreviousData = hasPreviousData,
+    incomeDelta = incomeDelta,
+    expensesDelta = expensesDelta,
+    expenseCategories = expenseCategories,
+    incomeCategories = emptyList(),
+    budgets = budgets,
+    recent = recent,
+    transactionsTotal = transactionsTotal,
+)

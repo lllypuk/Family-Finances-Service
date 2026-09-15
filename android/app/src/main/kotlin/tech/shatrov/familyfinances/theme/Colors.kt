@@ -32,12 +32,12 @@ val DarkColors = AppColors(
     textSecondary = Color(0xFF9CABAF),
     textInverse = Color(0xFF06110F),
     action = Color(0xFF20D1B0),
-    income = Color(0xFF20D1B0),
+    income = Color(0xFF5FD37A),
     warning = Color(0xFFF2A833),
     expense = Color(0xFFF25A52),
     disabled = Color(0xFF59666A),
 )
 
-// Доход и акцент — один цвет, поэтому знак суммы обязан читаться ещё и текстом: одним цветом
-// «+» от «−» не отличается при нарушенном цветовосприятии.
+// Знак суммы ставится текстом, а не только цветом: при нарушенном цветовосприятии зелёный
+// «доход» от красного «расхода» не отличается.
 val LocalAppColors = staticCompositionLocalOf { DarkColors }

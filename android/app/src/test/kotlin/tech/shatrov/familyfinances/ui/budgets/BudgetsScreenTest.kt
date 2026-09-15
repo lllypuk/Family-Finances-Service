@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -37,6 +38,7 @@ class BudgetsScreenTest {
         state: BudgetsUiState,
         filter: BudgetFilter = BudgetFilter.TODAY,
         onFilterChange: (BudgetFilter) -> Unit = {},
+        onCreate: () -> Unit = {},
         onOpen: (UUID) -> Unit = {},
     ) {
         composeRule.setContent {
@@ -47,7 +49,7 @@ class BudgetsScreenTest {
                     currency = "RUB",
                     onRetry = {},
                     onFilterChange = onFilterChange,
-                    onCreate = {},
+                    onCreate = onCreate,
                     onOpen = onOpen,
                 )
             }
@@ -59,6 +61,26 @@ class BudgetsScreenTest {
         show(BudgetsUiState.Ready(emptyList()), BudgetFilter.TODAY)
 
         composeRule.onNodeWithText(res.getString(R.string.budgets_empty_today)).assertIsDisplayed()
+    }
+
+    @Test
+    fun emptyTodayButtonSwitchesToAllPeriods() {
+        var filter: BudgetFilter? = null
+        show(BudgetsUiState.Ready(emptyList()), BudgetFilter.TODAY, onFilterChange = { filter = it })
+
+        composeRule.onNodeWithText(res.getString(R.string.budgets_show_all)).performClick()
+
+        assertEquals(BudgetFilter.ALL, filter)
+    }
+
+    @Test
+    fun emptyAllOffersToAddBudget() {
+        var created = false
+        show(BudgetsUiState.Ready(emptyList()), BudgetFilter.ALL, onCreate = { created = true })
+
+        composeRule.onNodeWithText(res.getString(R.string.budgets_add_first)).performClick()
+
+        assertTrue(created)
     }
 
     @Test
@@ -153,14 +175,14 @@ class BudgetsScreenTest {
     fun recurringRowIsMarked() {
         show(BudgetsUiState.Ready(listOf(row(recurring = true))))
 
-        composeRule.onNodeWithContentDescription(res.getString(R.string.budget_recurring)).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(res.getString(R.string.budget_recurring_badge)).assertIsDisplayed()
     }
 
     @Test
     fun plainRowHasNoRepeatMark() {
         show(BudgetsUiState.Ready(listOf(row())))
 
-        composeRule.onNodeWithContentDescription(res.getString(R.string.budget_recurring)).assertDoesNotExist()
+        composeRule.onNodeWithContentDescription(res.getString(R.string.budget_recurring_badge)).assertDoesNotExist()
     }
 
     private fun row(

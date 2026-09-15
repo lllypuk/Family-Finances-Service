@@ -70,6 +70,7 @@ private val formFields = setOf(
 data class BudgetEditUiState(
     val name: String = "",
     val amount: String = "",
+    val currency: String = "",
     val period: BudgetPeriod = BudgetPeriod.monthly,
     val categoryId: UUID? = null,
     val start: LocalDate = LocalDate.now(),
@@ -151,12 +152,14 @@ class BudgetEditViewModel(
     private val budgetId: UUID? = null,
     private val draftId: UUID = UUID.randomUUID(),
     today: LocalDate = LocalDate.now(),
+    currency: String = "",
 ) : ViewModel() {
     // Повтор `POST` мог принести id уже созданной записи: дальше форма правит именно её.
     private var savedId: UUID? = budgetId
 
     private val mutable = MutableStateFlow(
         BudgetEditUiState(
+            currency = currency,
             start = today,
             end = endOf(BudgetPeriod.monthly, today) ?: today,
             editing = budgetId != null,

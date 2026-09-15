@@ -10,26 +10,26 @@ import androidx.compose.ui.unit.sp
 const val TABULAR_FIGURES = "tnum"
 
 /**
- * Шрифты системные: вендорить файлы ради двух семейств незачем — приложение читают с руки, а не
- * с приборной панели. Деньги набираются моноширинным с `tnum`, интерфейс — обычным.
+ * Шрифты системные: вендорить файлы незачем — приложение читают с руки, а не с приборной панели.
+ * Деньги набираются тем же семейством, что и интерфейс, ровную колонку держит `tnum`.
  */
 val AppTypography = Typography(
     displayLarge = TextStyle(
-        fontFamily = FontFamily.Monospace,
+        fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Medium,
         fontSize = 40.sp,
         lineHeight = 46.sp,
         fontFeatureSettings = TABULAR_FIGURES,
     ),
     displayMedium = TextStyle(
-        fontFamily = FontFamily.Monospace,
+        fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Medium,
         fontSize = 24.sp,
         lineHeight = 30.sp,
         fontFeatureSettings = TABULAR_FIGURES,
     ),
     displaySmall = TextStyle(
-        fontFamily = FontFamily.Monospace,
+        fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 22.sp,

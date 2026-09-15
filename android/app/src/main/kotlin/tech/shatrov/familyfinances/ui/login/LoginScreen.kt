@@ -20,9 +20,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.theme.Dimens
+import tech.shatrov.familyfinances.ui.SecretField
 
 /**
  * Экран входа. Состояние приходит снаружи: ViewModel собирается корнем, а тест экрана
@@ -60,19 +60,14 @@ fun LoginScreen(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        OutlinedTextField(
+        SecretField(
             value = state.password,
             onValueChange = onPasswordChange,
-            label = { Text(stringResource(R.string.login_password)) },
-            singleLine = true,
+            label = R.string.login_password,
             enabled = !state.submitting,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Done,
-            ),
+            error = null,
+            imeAction = ImeAction.Done,
             keyboardActions = KeyboardActions(onDone = { onSubmit() }),
-            modifier = Modifier.fillMaxWidth(),
         )
 
         val error = state.error
