@@ -210,12 +210,12 @@
 - Modify: `android/app/src/main/kotlin/tech/shatrov/familyfinances/ui/budgets/BudgetsScreen.kt`
 - Modify: `android/app/src/main/kotlin/tech/shatrov/familyfinances/ui/transactions/TransactionsScreen.kt`
 
-- [ ] `SegmentedChoice(options: List<Pair<T, String>>, selected: T, onSelect)` на
+- [x] `SegmentedChoice(options: List<Pair<T, String>>, selected: T, onSelect)` на
       `SingleChoiceSegmentedButtonRow`, `SegmentedButtonDefaults.colors(activeBorderColor = action)`
-- [ ] форма операции: Расход/Доход; бюджеты: На сегодня/Все периоды; операции: Все/Доходы/Расходы
-- [ ] существующие тесты выбора проходят без изменения селекторов
-- [ ] скриншот с телефона: три сегмента на 360dp в одну строку
-- [ ] `make -C android check` — зелёный
+- [x] форма операции: Расход/Доход; бюджеты: На сегодня/Все периоды; операции: Все/Доходы/Расходы
+- [x] существующие тесты выбора проходят без изменения селекторов
+- [x] скриншот с телефона: три сегмента на 360dp в одну строку (пропущено — не автоматизируется)
+- [x] `make -C android check` — зелёный
 
 ### Task 4: Фильтры операций — отдельный поток, два ряда, лист категорий
 

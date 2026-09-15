@@ -33,6 +33,7 @@ import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Centered
 import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
+import tech.shatrov.familyfinances.ui.SegmentedChoice
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.format.formatMoney
 import tech.shatrov.familyfinances.ui.message
@@ -119,23 +120,16 @@ private fun Filters(
                 }
             }
         }
-        ChipRow(Modifier.padding(horizontal = Dimens.SPACE_4)) {
-            item {
-                Chip(stringResource(R.string.filter_any_type), filters.type == null) {
-                    onChange(filters.copy(type = null))
-                }
-            }
-            item {
-                Chip(stringResource(R.string.filter_income), filters.type == TransactionType.income) {
-                    onChange(filters.copy(type = TransactionType.income))
-                }
-            }
-            item {
-                Chip(stringResource(R.string.filter_expense), filters.type == TransactionType.expense) {
-                    onChange(filters.copy(type = TransactionType.expense))
-                }
-            }
-        }
+        SegmentedChoice(
+            options = listOf(
+                null to stringResource(R.string.filter_any_type),
+                TransactionType.income to stringResource(R.string.filter_income),
+                TransactionType.expense to stringResource(R.string.filter_expense),
+            ),
+            selected = filters.type,
+            onSelect = { onChange(filters.copy(type = it)) },
+            modifier = Modifier.padding(horizontal = Dimens.SPACE_4),
+        )
         ChipRow(Modifier.padding(horizontal = Dimens.SPACE_4)) {
             item {
                 Chip(stringResource(R.string.filter_all_categories), filters.categoryId == null) {

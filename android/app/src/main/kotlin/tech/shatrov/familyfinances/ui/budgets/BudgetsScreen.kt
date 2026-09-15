@@ -31,8 +31,7 @@ import tech.shatrov.familyfinances.theme.Dimens
 import tech.shatrov.familyfinances.theme.LocalAppColors
 import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Centered
-import tech.shatrov.familyfinances.ui.Chip
-import tech.shatrov.familyfinances.ui.ChipRow
+import tech.shatrov.familyfinances.ui.SegmentedChoice
 import tech.shatrov.familyfinances.ui.format.formatMoney
 import tech.shatrov.familyfinances.ui.format.formatPeriod
 import tech.shatrov.familyfinances.ui.message
@@ -113,18 +112,15 @@ private fun Filters(
     filter: BudgetFilter,
     onChange: (BudgetFilter) -> Unit,
 ) {
-    ChipRow(Modifier.padding(horizontal = Dimens.SPACE_4)) {
-        item {
-            Chip(stringResource(R.string.budgets_filter_today), filter == BudgetFilter.TODAY) {
-                onChange(BudgetFilter.TODAY)
-            }
-        }
-        item {
-            Chip(stringResource(R.string.budgets_filter_all), filter == BudgetFilter.ALL) {
-                onChange(BudgetFilter.ALL)
-            }
-        }
-    }
+    SegmentedChoice(
+        options = listOf(
+            BudgetFilter.TODAY to stringResource(R.string.budgets_filter_today),
+            BudgetFilter.ALL to stringResource(R.string.budgets_filter_all),
+        ),
+        selected = filter,
+        onSelect = onChange,
+        modifier = Modifier.padding(horizontal = Dimens.SPACE_4),
+    )
 }
 
 /** Категория, которой нет в справочнике (удалена), — прочерк, а не «Все категории». */

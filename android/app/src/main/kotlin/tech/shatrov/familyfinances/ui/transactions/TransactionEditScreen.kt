@@ -40,6 +40,7 @@ import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
 import tech.shatrov.familyfinances.ui.DatePickerSheet
 import tech.shatrov.familyfinances.ui.FieldError
+import tech.shatrov.familyfinances.ui.SegmentedChoice
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.message
 import java.time.LocalDate
@@ -101,18 +102,14 @@ fun TransactionEditScreen(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        ChipRow {
-            item {
-                Chip(stringResource(R.string.type_expense), state.type == TransactionType.expense) {
-                    onTypeChange(TransactionType.expense)
-                }
-            }
-            item {
-                Chip(stringResource(R.string.type_income), state.type == TransactionType.income) {
-                    onTypeChange(TransactionType.income)
-                }
-            }
-        }
+        SegmentedChoice(
+            options = listOf(
+                TransactionType.expense to stringResource(R.string.type_expense),
+                TransactionType.income to stringResource(R.string.type_income),
+            ),
+            selected = state.type,
+            onSelect = onTypeChange,
+        )
         FieldError(state.fieldErrors[TransactionField.TYPE])
 
         Text(stringResource(R.string.transaction_category), style = MaterialTheme.typography.bodySmall)
