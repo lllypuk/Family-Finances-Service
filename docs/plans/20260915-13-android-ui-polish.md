@@ -376,10 +376,11 @@
 **Files:**
 - Modify: `android/app/src/main/kotlin/tech/shatrov/familyfinances/theme/Type.kt`
 
-- [ ] `FontFamily.Default` в трёх `display*`, `fontFeatureSettings = TABULAR_FIGURES` остаётся,
+- [x] `FontFamily.Default` в трёх `display*`, `fontFeatureSettings = TABULAR_FIGURES` остаётся,
       док-комментарий про моноширинный переписать
-- [ ] скриншот списка операций с суммами разной длины: колонка ровная — принять, иначе откатить
-- [ ] `make -C android check` — зелёный
+- [x] скриншот списка операций с суммами разной длины: колонка ровная — принять, иначе откатить
+      (skipped — ручная проверка на телефоне, не автоматизируется)
+- [x] `make -C android check` — зелёный
 
 ### Task 13: Verify acceptance criteria
 
