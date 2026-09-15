@@ -10,8 +10,10 @@ API for the Android client. One instance = one family.
 > web interface, cookie sessions and CSRF are gone, money is integer minor units, dates are calendar dates,
 > the deployment is one compose with Caddy, the Android client lives in `android/` with its settings screen,
 > stored reports are gone in favour of `GET /api/v1/stats/monthly`, and budgets can repeat as a series;
-> the sections below describe the code as it is today. Plans 10 and 12 changed the contract after `v0.2.0`,
-> so the next server release is `v0.3.0` and the client follows as `app-v0.5.0`.
+> the sections below describe the code as it is today. Releases: server `v0.3.0` (plan 10) and `v0.4.0`
+> (plan 12), client `app-v0.5.0` — it needs a server of `v0.4.0` or newer (`recurring` is required in the
+> generated model). Left: plan 11, the client's "Обзор" screen over `summary` + `monthly` and multi-select
+> over transactions ([docs/backlog.md](docs/backlog.md)).
 
 - ✅ REST API for family, users, categories, transactions, budgets, stats, backups
 - ✅ Bearer-token authentication with server-side sessions and a login rate limiter
@@ -190,6 +192,7 @@ make help             # Show all commands
 │   ├── services/            # Business logic
 │   ├── infrastructure/      # SQLite repositories, migrations, connection
 │   ├── observability/       # Logging and /health
+│   ├── version/             # Version reported by /health, set at link time by -ldflags
 │   ├── testhelpers/         # In-memory DB, full test server, bearer helpers, factories
 │   ├── bootstrap.go         # OpenDatabase (DB + migrations), Setup, ResetPassword — shared by server and CLI
 │   ├── config.go            # Env-var configuration
@@ -311,7 +314,7 @@ Locally this needs JDK 21+ and an Android SDK with `android-37.0` and build-tool
 installs the same set.
 
 ```bash
-make -C android check        # format, Robolectric unit tests, Android Lint — offline
+make -C android check        # format, Robolectric unit tests, Android Lint, R8 model check — offline
 make -C android api-check    # regenerate the client and fail if the contract moved without it
 make -C android apk          # signed release APK -> android/app/build/outputs/apk/release/
 ```
@@ -320,14 +323,15 @@ The APK is installed from a laptop; there is no store. Signing needs one permane
 (`FFS_KEYSTORE_PATH` / `FFS_KEYSTORE_PASSWORD`, defaults under `~/.android`) — the same one CI uses,
 because another certificate means uninstalling the app together with its data. A tag `app-vX.Y.Z` builds
 the APK in CI and keeps it as a job artifact for a week; server tags `vX.Y.Z` do not run the Android jobs.
-Bump `appVersionCode`/`appVersionName` in `android/gradle/libs.versions.toml` before tagging. Details:
-[android/CLAUDE.md](android/CLAUDE.md).
+Bump `appVersionCode`/`appVersionName` in `android/gradle/libs.versions.toml` before tagging. The two release
+independently: a contract change must be additive, or the APK goes out first; a new required response field is the
+reverse — the APK goes out after the server (`app-v0.5.0` after `v0.4.0`). Details: [android/CLAUDE.md](android/CLAUDE.md).
 
 ## 📚 Documentation
 
 - **[CLAUDE.md](CLAUDE.md)** — development and architecture guidance
 - **[docs/](docs/README.md)** — product brief, tech stack, testing strategy, audits (`docs/specs/`), plans
-  (`docs/plans/`)
+  (`docs/plans/`), task workflows (`docs/workflows/`)
 - **[docs/api/openapi.yaml](docs/api/openapi.yaml)** — the API contract; request/response structs live in
   `internal/application/handlers/types.go`, the error envelope in `handlers/errors.go`
 - **[deploy/README.md](deploy/README.md)** — self-hosted deployment guide (see the note above)
