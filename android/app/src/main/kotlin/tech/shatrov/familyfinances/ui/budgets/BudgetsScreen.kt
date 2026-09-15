@@ -198,7 +198,7 @@ private fun BudgetItem(
             if (budget.recurring) {
                 Icon(
                     imageVector = AppIcons.Repeat,
-                    contentDescription = stringResource(R.string.budget_recurring),
+                    contentDescription = stringResource(R.string.budget_recurring_badge),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(Dimens.ICON_SIZE),
                 )

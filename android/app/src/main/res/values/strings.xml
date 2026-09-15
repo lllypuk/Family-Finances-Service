@@ -97,7 +97,8 @@
     <string name="budget_save">Сохранить</string>
     <string name="budget_delete">Удалить</string>
     <string name="budget_delete_confirm">Удалить бюджет?</string>
-    <string name="budget_recurring">Повторять</string>
+    <string name="budget_recurring_toggle">Повторять</string>
+    <string name="budget_recurring_badge">Повторяющийся</string>
     <string name="budget_recurring_hint">Даты — календарный период: следующий сервер заведёт сам</string>
     <string name="budget_delete_recurring">Повторение остановится</string>
     <string name="budget_error_period">Конец периода должен быть позже начала</string>
@@ -113,10 +114,10 @@
     <string name="settings_title">Настройки</string>
     <string name="settings_profile">Профиль</string>
     <string name="settings_password">Пароль</string>
-    <string name="settings_sessions">Сессии</string>
+    <string name="settings_sessions">Устройства</string>
     <string name="settings_users">Пользователи</string>
     <string name="settings_family">Семья</string>
-    <string name="settings_backups">Бэкапы</string>
+    <string name="settings_backups">Резервные копии</string>
     <string name="settings_role_admin">Администратор</string>
     <string name="settings_role_member">Участник</string>
     <string name="settings_currency">Валюта: %1$s</string>
@@ -136,13 +137,13 @@
     <string name="settings_password_wrong_current">Неверный текущий пароль</string>
     <string name="settings_password_changed">Пароль изменён, другие устройства разлогинены</string>
     <string name="settings_password_unknown">Результат неизвестен: если ошибка повторится, войдите с новым паролем</string>
-    <string name="settings_session_current">Текущая</string>
+    <string name="settings_session_current">Это устройство</string>
     <string name="settings_session_unnamed">Без имени</string>
     <string name="settings_session_created">Вход: %1$s</string>
     <string name="settings_session_last_used">Активность: %1$s</string>
     <string name="settings_session_last_used_hint">Активность обновляется не чаще раза в час</string>
     <string name="settings_session_revoke">Отозвать</string>
-    <string name="settings_session_revoke_confirm">Отозвать эту сессию?</string>
+    <string name="settings_session_revoke_confirm">Выйти на этом устройстве?</string>
     <string name="settings_user_add">Добавить пользователя</string>
     <string name="settings_user_self">Это вы</string>
     <string name="settings_user_inactive">Неактивен</string>
@@ -156,7 +157,7 @@
     <string name="settings_user_role_confirm">Изменить роль пользователя?</string>
     <string name="settings_user_deactivate">Деактивировать</string>
     <string name="settings_user_activate">Активировать</string>
-    <string name="settings_user_deactivate_confirm">Деактивировать пользователя? Все его сессии закроются</string>
+    <string name="settings_user_deactivate_confirm">Деактивировать пользователя? Он выйдет на всех устройствах</string>
     <string name="settings_user_activate_confirm">Активировать пользователя?</string>
     <string name="settings_user_set_password">Задать пароль</string>
     <string name="settings_user_password">Пароль пользователя</string>
@@ -170,11 +171,11 @@
     <string name="settings_error_currency_locked">Валюту нельзя сменить: в семье уже есть операции</string>
     <string name="settings_error_last_admin">В семье должен остаться хотя бы один активный администратор</string>
     <string name="settings_error_deactivate_self">Себя деактивировать нельзя</string>
-    <string name="settings_backup_create">Создать бэкап</string>
+    <string name="settings_backup_create">Создать копию</string>
     <string name="settings_backup_delete">Удалить</string>
-    <string name="settings_backup_delete_confirm">Удалить файл бэкапа?</string>
-    <string name="settings_backup_hint">Скачивания нет: восстановление делается на сервере по ssh</string>
-    <string name="settings_backup_unknown">Результат неизвестен: проверьте список, файл мог быть создан</string>
+    <string name="settings_backup_delete_confirm">Удалить файл копии?</string>
+    <string name="settings_backup_hint">Скачать копию нельзя: восстановление делается на сервере по ssh</string>
+    <string name="settings_backup_unknown">Результат неизвестен: проверьте список, копия могла быть создана</string>
     <string name="settings_forbidden">Прав на этот раздел больше нет: роль изменилась</string>
     <string name="settings_list_truncated">Показаны первые %1$d из %2$d</string>
 

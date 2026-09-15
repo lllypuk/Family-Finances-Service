@@ -239,7 +239,7 @@ private fun RecurringSwitch(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = stringResource(R.string.budget_recurring),
+            text = stringResource(R.string.budget_recurring_toggle),
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f),
         )

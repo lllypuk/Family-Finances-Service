@@ -175,14 +175,14 @@ class BudgetsScreenTest {
     fun recurringRowIsMarked() {
         show(BudgetsUiState.Ready(listOf(row(recurring = true))))
 
-        composeRule.onNodeWithContentDescription(res.getString(R.string.budget_recurring)).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(res.getString(R.string.budget_recurring_badge)).assertIsDisplayed()
     }
 
     @Test
     fun plainRowHasNoRepeatMark() {
         show(BudgetsUiState.Ready(listOf(row())))
 
-        composeRule.onNodeWithContentDescription(res.getString(R.string.budget_recurring)).assertDoesNotExist()
+        composeRule.onNodeWithContentDescription(res.getString(R.string.budget_recurring_badge)).assertDoesNotExist()
     }
 
     private fun row(

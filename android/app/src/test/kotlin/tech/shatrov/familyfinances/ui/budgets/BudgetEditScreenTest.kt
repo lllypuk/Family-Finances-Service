@@ -187,6 +187,17 @@ class BudgetEditScreenTest {
         composeRule.onNodeWithText("₽").assertIsDisplayed()
     }
 
+    /** В форме — действие «Повторять», значок строки списка сюда не попадает. */
+    @Test
+    fun formLabelsTheRecurringSwitchAsAnAction() {
+        show(form())
+
+        composeRule.onNodeWithText(res.getString(R.string.budget_recurring_toggle))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText(res.getString(R.string.budget_recurring_badge)).assertDoesNotExist()
+    }
+
     private fun show(
         state: BudgetEditUiState,
         onDelete: () -> Unit = {},

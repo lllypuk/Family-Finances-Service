@@ -350,12 +350,12 @@
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/budgets/BudgetsScreenTest.kt`
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/budgets/BudgetEditScreenTest.kt`
 
-- [ ] «Устройства»: `settings_sessions`, `settings_session_current`,
+- [x] «Устройства»: `settings_sessions`, `settings_session_current`,
       `settings_session_revoke_confirm`, `settings_user_deactivate_confirm` — по «Решениям»
-- [ ] «Резервные копии»: `settings_backups`, `settings_backup_create/delete_confirm/hint/unknown`
-- [ ] `budget_recurring` → `budget_recurring_toggle` (форма) и `budget_recurring_badge` (значок строки)
-- [ ] тесты на новые ресурсы
-- [ ] `make -C android check` — зелёный
+- [x] «Резервные копии»: `settings_backups`, `settings_backup_create/delete_confirm/hint/unknown`
+- [x] `budget_recurring` → `budget_recurring_toggle` (форма) и `budget_recurring_badge` (значок строки)
+- [x] тесты на новые ресурсы
+- [x] `make -C android check` — зелёный
 
 ### Task 11: Развести цвет дохода и акцента (по скриншоту)
 
