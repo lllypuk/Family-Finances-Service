@@ -42,7 +42,7 @@ private const val DRAFT = "99999999-9999-9999-9999-999999999999"
 private const val CREATED_EARLIER = """
 {"data":{"id":"$DRAFT","name":"Еда","amount_minor":5000000,"spent_minor":0,
 "remaining_minor":5000000,"utilization":0.0,"period":"monthly","start_date":"2026-09-15",
-"end_date":"2026-10-14","is_active":true,
+"end_date":"2026-10-14","is_active":true,"recurring":false,
 "created_at":"2026-09-15T10:00:00Z","updated_at":"2026-09-15T10:00:00Z"},
 "meta":{"request_id":"r-21","timestamp":"2026-09-15T10:00:00Z","version":"v0.1.0"}}
 """
@@ -51,7 +51,7 @@ private const val CREATED_EARLIER = """
 private const val CREATED_WITH_CATEGORY = """
 {"data":{"id":"$DRAFT","name":"Еда","amount_minor":5000000,"spent_minor":0,
 "remaining_minor":5000000,"utilization":0.0,"period":"monthly","start_date":"2026-09-15",
-"end_date":"2026-10-14","is_active":true,"category_id":"$GROCERIES_ID",
+"end_date":"2026-10-14","is_active":true,"recurring":false,"category_id":"$GROCERIES_ID",
 "created_at":"2026-09-15T10:00:00Z","updated_at":"2026-09-15T10:00:00Z"},
 "meta":{"request_id":"r-22","timestamp":"2026-09-15T10:00:00Z","version":"v0.1.0"}}
 """
@@ -60,7 +60,7 @@ private const val CREATED_WITH_CATEGORY = """
 private const val OVERSPENT_BUDGET_OK = """
 {"data":{"id":"$FOOD_BUDGET_ID","name":"Еда","amount_minor":5000000,"spent_minor":7500000,
 "remaining_minor":-2500000,"utilization":150.0,"period":"monthly","start_date":"2026-09-01",
-"end_date":"2026-09-30","is_active":true,"category_id":"$GROCERIES_ID",
+"end_date":"2026-09-30","is_active":true,"recurring":false,"category_id":"$GROCERIES_ID",
 "created_at":"2026-09-07T10:00:00Z","updated_at":"2026-09-07T10:00:00Z"},
 "meta":{"request_id":"r-18","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0"}}
 """
@@ -70,6 +70,26 @@ private const val REJECTED_ERROR = """
 {"error":{"code":"VALIDATION_ERROR","message":"Проверьте поля",
 "details":[{"field":"body","message":"budget period overlaps","code":"conflict"}]},
 "meta":{"request_id":"r-19","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0"}}
+"""
+
+/** Хвост серии: `recurring` стоит только у него, `series_id` — у каждого её инстанса. */
+private const val RECURRING_BUDGET_OK = """
+{"data":{"id":"$FOOD_BUDGET_ID","name":"Еда","amount_minor":5000000,"spent_minor":3000000,
+"remaining_minor":2000000,"utilization":60.0,"period":"monthly","start_date":"2026-09-01",
+"end_date":"2026-09-30","is_active":true,"recurring":true,"category_id":"$GROCERIES_ID",
+"series_id":"$FOOD_BUDGET_ID",
+"created_at":"2026-09-07T10:00:00Z","updated_at":"2026-09-07T10:00:00Z"},
+"meta":{"request_id":"r-23","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0"}}
+"""
+
+/** Та же запись после того, как чужое чтение продвинуло серию: хвост теперь октябрьский. */
+private const val ADVANCED_BUDGET_OK = """
+{"data":{"id":"$FOOD_BUDGET_ID","name":"Еда","amount_minor":5000000,"spent_minor":3000000,
+"remaining_minor":2000000,"utilization":60.0,"period":"monthly","start_date":"2026-09-01",
+"end_date":"2026-09-30","is_active":true,"recurring":false,"category_id":"$GROCERIES_ID",
+"series_id":"$FOOD_BUDGET_ID",
+"created_at":"2026-09-07T10:00:00Z","updated_at":"2026-09-07T10:00:00Z"},
+"meta":{"request_id":"r-24","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0"}}
 """
 
 /** `409`: причину различает код, деталей в теле нет. */
@@ -456,6 +476,111 @@ class BudgetEditViewModelTest {
 
         val request = lastRequest(3)
         assertEquals("DELETE", request.method)
+        assertEquals("/api/v1/budgets/$FOOD_BUDGET_ID", request.url.encodedPath)
+    }
+
+    /** Повторяющемуся бюджету границы подставляет форма: невыровненные сервер отвергает. */
+    @Test
+    fun recurringAlignsTheDatesAndLocksThem() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        createModel()
+        loaded()
+
+        model.onRecurringChange(true)
+        val monthly = model.state.value
+
+        assertEquals(LocalDate.parse("2026-09-01"), monthly.start)
+        assertEquals(LocalDate.parse("2026-09-30"), monthly.end)
+        assertTrue(monthly.startLocked)
+        assertTrue(monthly.endLocked)
+
+        // Неделя выравнивания не имеет: начало остаётся за пользователем, конец идёт за ним.
+        model.onPeriodChange(BudgetPeriod.weekly)
+        model.onStartChange(LocalDate.parse("2026-09-17"))
+        val weekly = model.state.value
+
+        assertEquals(LocalDate.parse("2026-09-17"), weekly.start)
+        assertEquals(LocalDate.parse("2026-09-23"), weekly.end)
+        assertFalse(weekly.startLocked)
+        assertTrue(weekly.endLocked)
+    }
+
+    /** `custom` — период без длины: тумблер скрыт, а поднятый флаг снимается. */
+    @Test
+    fun customPeriodDropsTheFlag() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        createModel()
+        loaded()
+        model.onRecurringChange(true)
+
+        model.onPeriodChange(BudgetPeriod.custom)
+        val state = model.state.value
+
+        assertFalse(state.canRecur)
+        assertFalse(state.recurring)
+        assertFalse(state.startLocked)
+    }
+
+    @Test
+    fun createSendsTheFlag() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        createModel()
+        loaded()
+        model.onNameChange("Еда")
+        model.onAmountChange("50000")
+        model.onRecurringChange(true)
+
+        server.enqueueJson(201, RECURRING_BUDGET_OK)
+        model.onSubmit()
+        assertTrue(settled().done)
+
+        val body = lastRequest(2).text()
+        assertTrue(body, body.contains("\"recurring\":true"))
+        assertTrue(body, body.contains("\"start_date\":\"2026-09-01\""))
+    }
+
+    /** Флаг уходит в `PUT` только изменённым: иначе правка имени трогала бы серию. */
+    @Test
+    fun recurringIsSentOnlyWhenChanged() = runTest {
+        val state = editing(RECURRING_BUDGET_OK)
+
+        assertTrue(state.recurring)
+        // Член серии: даты у него неизменяемы, сервер отвечает `422`.
+        assertTrue(state.inSeries)
+        assertTrue(state.startLocked)
+
+        model.onNameChange("Продукты")
+        server.enqueueJson(200, RECURRING_BUDGET_OK)
+        model.onSubmit()
+        assertTrue(settled().done)
+        assertEquals("""{"name":"Продукты"}""", lastRequest(3).text())
+
+        editing(RECURRING_BUDGET_OK)
+        model.onRecurringChange(false)
+        server.enqueueJson(200, ADVANCED_BUDGET_OK)
+        model.onSubmit()
+        assertTrue(settled().done)
+        assertEquals("""{"recurring":false}""", lastRequest(3).text())
+    }
+
+    /** Серию продвинуло чужое чтение: форма перечитывает свою копию, список помечен устаревшим. */
+    @Test
+    fun notTailConflictReloadsTheForm() = runTest {
+        editing(RECURRING_BUDGET_OK)
+        model.onRecurringChange(false)
+
+        server.enqueueJson(409, conflict("BUDGET_NOT_TAIL"))
+        server.enqueueJson(200, ADVANCED_BUDGET_OK)
+        model.onSubmit()
+        val state = model.state.first { !it.submitting && it.loaded?.recurring == false }
+
+        assertFalse(state.done)
+        assertEquals(UiError.Resource(R.string.budget_error_not_tail), state.error)
+        assertTrue(state.saved)
+        assertFalse(state.recurring)
+
+        val request = lastRequest(4)
+        assertEquals("GET", request.method)
         assertEquals("/api/v1/budgets/$FOOD_BUDGET_ID", request.url.encodedPath)
     }
 

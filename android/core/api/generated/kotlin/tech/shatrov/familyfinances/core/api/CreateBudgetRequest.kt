@@ -39,6 +39,7 @@ import kotlinx.serialization.Contextual
  * @param endDate Календарная дата без времени в часовом поясе семьи (A-06)
  * @param id Необязательный клиентский UUID для идемпотентного повтора; тело повтора игнорируется (A-07)
  * @param categoryId 
+ * @param recurring Завести серию: даты обязаны совпадать с календарным периодом (`monthly` — с 1-го по последнее число месяца, `yearly` — с 1 января по 31 декабря, `weekly` — ровно 7 дней), иначе `422` с полем `start_date`; `custom` — `422` с полем `recurring`. 
  */
 @Serializable
 
@@ -67,7 +68,11 @@ data class CreateBudgetRequest (
     val id: java.util.UUID? = null,
 
     @Contextual @SerialName(value = "category_id")
-    val categoryId: java.util.UUID? = null
+    val categoryId: java.util.UUID? = null,
+
+    /* Завести серию: даты обязаны совпадать с календарным периодом (`monthly` — с 1-го по последнее число месяца, `yearly` — с 1 января по 31 декабря, `weekly` — ровно 7 дней), иначе `422` с полем `start_date`; `custom` — `422` с полем `recurring`.  */
+    @SerialName(value = "recurring")
+    val recurring: kotlin.Boolean? = false
 
 ) {
 

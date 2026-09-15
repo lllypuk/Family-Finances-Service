@@ -144,21 +144,23 @@ job builds that commit again.
 ### Rolling back across a migration
 
 The old image refuses to start on a schema version it has no file for (`no migration found for
-version 3`), so the schema is stepped down **before** `FFS_IMAGE` is swapped — with the image that
+version 4`), so the schema is stepped down **before** `FFS_IMAGE` is swapped — with the image that
 is still deployed:
 
 ```bash
 cd /home/sasha/ffs
 docker compose run --rm --no-deps -T app migrate             # current version
-docker compose stop app                                      # иначе рестарт вернёт 003 своим Up()
-docker compose run --rm --no-deps -T app migrate --to 2      # v0.3.0 → the schema v0.2.0 knows
+docker compose stop app                                      # иначе рестарт вернёт 004 своим Up()
+docker compose run --rm --no-deps -T app migrate --to 2      # v0.3.0 (версия 4) → схема v0.2.0
 ```
 
 The running container is stopped first on purpose: it migrated at startup and would not notice the
-step down, but any restart of it before `FFS_IMAGE` is swapped re-applies `003` silently.
+step down, but any restart of it before `FFS_IMAGE` is swapped re-applies `004` silently.
 
-`003` only drops the unused `reports` table, so stepping back over it loses nothing. A down
-migration that would drop live data is not one to run — restore the snapshot instead.
+`003` only drops the unused `reports` table, so stepping back over it loses nothing. `004` is the
+opposite case: it drops `budgets.recurring` and `budgets.series_id`, so every recurring budget
+becomes an ordinary one and the link between the instances of a series is gone for good. If series
+already exist, the rollback is a snapshot restore, not `migrate --to 2`.
 
 ## Backups
 

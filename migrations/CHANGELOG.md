@@ -2,6 +2,16 @@
 
 All notable changes to database migrations will be documented in this file.
 
+## [2026-09-14] - Plan 12: recurring budgets
+
+### Added
+- `budgets.recurring INTEGER NOT NULL DEFAULT 0 CHECK (recurring IN (0, 1))` — хвост серии, который
+  сервер продлевает при чтении, и `budgets.series_id TEXT` (без FK: первый инстанс мягко удаляется).
+- `004_budgets_recurring.{up,down}.sql` — те же две колонки для базы версии 3. На свежей базе `004`
+  не дублирует `001`: `002` пересобирает `budgets` по схеме `v0.2.0`, то есть без этих колонок, и `004`
+  возвращает их после пересборки. `002` на новые колонки не трогаем — она обязана воспроизводить
+  выкаченную схему.
+
 ## [2026-09-13] - Plan 10: reports dropped
 
 ### Removed

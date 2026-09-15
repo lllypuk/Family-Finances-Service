@@ -21,17 +21,22 @@ var (
 	ErrBudgetNotFoundService   = errors.New("budget not found")
 	ErrBudgetAmountInvalid     = errors.New("budget amount must be greater than 0")
 	ErrBudgetPeriodInvalid     = errors.New("budget end date must be after start date")
-	ErrBudgetOverlapExists     = errors.New("budget period overlaps with existing budget")
 	ErrBudgetAlreadyExceeded   = errors.New("cannot update budget: amount is less than already spent")
 	ErrBudgetCalculationFailed = errors.New("failed to calculate budget metrics")
 	ErrInsufficientBudgetFunds = errors.New("insufficient budget funds")
 	ErrBudgetAmountTooLarge    = errors.New("budget amount exceeds the maximum")
+	// ErrBudgetOverlapExists — тот же сентинел, что возвращает репозиторий: занятость
+	// периода проверяется в транзакции, а не в памяти сервиса.
+	ErrBudgetOverlapExists = budget.ErrOverlap
 	// ErrBudgetNameExists — тот же сентинел, что возвращает репозиторий на UNIQUE:
 	// проверку делает БД, а не сервис.
 	ErrBudgetNameExists = budget.ErrNameExists
 	// ErrBudgetIDExists — id занят мягко удалённым бюджетом: переименование не поможет,
 	// клиенту нужен новый id.
 	ErrBudgetIDExists = budget.ErrIDExists
+	// ErrBudgetNotTail — операция требует хвоста серии, а хвост уже другой: форма
+	// клиента устарела, список нужно перечитать.
+	ErrBudgetNotTail = budget.ErrNotTail
 )
 
 // validateBudgetAmountBounds — верхняя граница суммы бюджета; здесь она нужна, чтобы
@@ -51,10 +56,12 @@ type BudgetRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*budget.Budget, error)
 	GetAll(ctx context.Context) ([]*budget.Budget, error)
 	GetActiveBudgets(ctx context.Context, on date.Date) ([]*budget.Budget, error)
-	Update(ctx context.Context, budget *budget.Budget) error
+	Update(ctx context.Context, budget *budget.Budget, expect budget.UpdateExpect) error
+	UpdateSpent(ctx context.Context, id uuid.UUID, spent money.Minor) error
+	ListRecurring(ctx context.Context) ([]*budget.Budget, error)
+	Advance(ctx context.Context, tailID uuid.UUID, today date.Date) (int, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetByCategory(ctx context.Context, categoryID *uuid.UUID) ([]*budget.Budget, error)
-	GetByPeriod(ctx context.Context, startDate, endDate date.Date) ([]*budget.Budget, error)
 }
 
 type TransactionRepositoryForBudgets interface {
@@ -125,14 +132,16 @@ func (s *BudgetServiceImpl) CreateBudget(ctx context.Context, req dto.CreateBudg
 		return nil, err
 	}
 
-	// Check for overlapping budgets in the same category
-	if err := s.ValidateBudgetPeriod(ctx, req.CategoryID, req.StartDate, req.EndDate); err != nil {
-		return nil, err
+	if req.Recurring {
+		if err := budget.ValidateRecurring(req.Period, req.StartDate, req.EndDate); err != nil {
+			return nil, err
+		}
 	}
 
-	// Create new budget
+	// Занятость периода проверяет транзакция репозитория, а не сервис.
+	id := dto.EntityID(req.ID)
 	newBudget := &budget.Budget{
-		ID:          dto.EntityID(req.ID),
+		ID:          id,
 		Name:        req.Name,
 		AmountMinor: req.AmountMinor,
 		SpentMinor:  0, // Always starts with 0
@@ -141,8 +150,12 @@ func (s *BudgetServiceImpl) CreateBudget(ctx context.Context, req dto.CreateBudg
 		StartDate:   req.StartDate,
 		EndDate:     req.EndDate,
 		IsActive:    true,
+		Recurring:   req.Recurring,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
+	}
+	if req.Recurring {
+		newBudget.SeriesID = &id
 	}
 
 	if err := s.budgetRepo.Create(ctx, newBudget); err != nil {
@@ -199,6 +212,10 @@ func (s *BudgetServiceImpl) GetBudgetsPage(
 		return nil, 0, err
 	}
 
+	if filter.Today != nil {
+		s.advanceRecurring(ctx, *filter.Today)
+	}
+
 	// Get budgets based on filter criteria
 	budgets, err := s.getBudgetsWithFilter(ctx, filter)
 	if err != nil {
@@ -235,16 +252,19 @@ func (s *BudgetServiceImpl) UpdateBudget(
 
 	originalStartDate := existingBudget.StartDate
 	originalEndDate := existingBudget.EndDate
+	wasRecurring := existingBudget.Recurring
 
 	if err = applyBudgetUpdate(existingBudget, req); err != nil {
 		return nil, err
 	}
 
-	// If dates changed, validate period overlap
-	if existingBudget.StartDate != originalStartDate || existingBudget.EndDate != originalEndDate {
-		if validateErr := s.validateBudgetPeriodForUpdate(ctx, existingBudget); validateErr != nil {
-			return nil, validateErr
-		}
+	datesChanged := existingBudget.StartDate != originalStartDate || existingBudget.EndDate != originalEndDate
+	if datesChanged && existingBudget.SeriesID != nil {
+		return nil, budget.ErrSeriesDatesFixed
+	}
+
+	if err = applyRecurringUpdate(existingBudget, req.Recurring, wasRecurring); err != nil {
+		return nil, err
 	}
 
 	// Расход считается по итоговому периоду: сузив даты, клиент может опустить и сумму.
@@ -259,7 +279,13 @@ func (s *BudgetServiceImpl) UpdateBudget(
 	existingBudget.SpentMinor = spent
 
 	// Update budget
-	if updateErr := s.budgetRepo.Update(ctx, existingBudget); updateErr != nil {
+	expect := budget.UpdateExpect{
+		Recurring:  wasRecurring,
+		StopSeries: req.Recurring != nil && !*req.Recurring,
+	}
+	// Update пересчитывает spent_minor в своей транзакции: после сдвига дат сохранённая сумма
+	// осталась от старых границ, а лимит транзакции читает её из БД без пересчёта.
+	if updateErr := s.budgetRepo.Update(ctx, existingBudget, expect); updateErr != nil {
 		return nil, fmt.Errorf("failed to update budget: %w", updateErr)
 	}
 
@@ -293,6 +319,65 @@ func applyBudgetUpdate(b *budget.Budget, req dto.UpdateBudgetDTO) error {
 	return nil
 }
 
+// applyRecurringUpdate применяет поле recurring: отсутствие не трогает флаг, true заводит
+// серию (или продолжает существующую), false её останавливает. Отказ «не-хвосту» при живом
+// хвосте проверяет репозиторий внутри транзакции записи — ему это говорит UpdateExpect.
+func applyRecurringUpdate(
+	b *budget.Budget,
+	want *bool,
+	wasRecurring bool,
+) error {
+	if want == nil {
+		return nil
+	}
+
+	if *want {
+		if err := budget.ValidateRecurring(b.Period, b.StartDate, b.EndDate); err != nil {
+			return err
+		}
+		b.Recurring = true
+		if b.SeriesID == nil {
+			seriesID := b.ID
+			b.SeriesID = &seriesID
+		}
+
+		return nil
+	}
+
+	b.Recurring = false
+	// Серия из одного инстанса при остановке распускается: иначе series_id навсегда
+	// запрёт даты бюджета, у которого нет ни одного соседа по серии.
+	if wasRecurring && b.SeriesID != nil && *b.SeriesID == b.ID {
+		b.SeriesID = nil
+	}
+
+	return nil
+}
+
+// advanceRecurring достраивает серии до today перед чтением списка: фоновых задач нет,
+// материализация ленивая. ErrNotTail означает, что серию уже достроило параллельное
+// чтение; прочие отказы не должны ронять чтение — серия останется на старом хвосте.
+func (s *BudgetServiceImpl) advanceRecurring(ctx context.Context, today date.Date) {
+	tails, err := s.budgetRepo.ListRecurring(ctx)
+	if err != nil {
+		s.logger.WarnContext(ctx, "failed to list recurring budgets",
+			slog.String("error", err.Error()))
+		return
+	}
+
+	for _, tail := range tails {
+		if _, advErr := s.budgetRepo.Advance(ctx, tail.ID, today); advErr != nil {
+			if errors.Is(advErr, budget.ErrNotTail) {
+				continue
+			}
+			s.logger.WarnContext(ctx, "failed to advance recurring budget",
+				slog.String("budget_id", tail.ID.String()),
+				slog.String("error", advErr.Error()),
+			)
+		}
+	}
+}
+
 // DeleteBudget deletes a budget
 func (s *BudgetServiceImpl) DeleteBudget(ctx context.Context, id uuid.UUID) error {
 	// Verify budget exists
@@ -314,6 +399,8 @@ func (s *BudgetServiceImpl) GetActiveBudgets(
 	ctx context.Context,
 	on date.Date,
 ) ([]*budget.Budget, error) {
+	s.advanceRecurring(ctx, on)
+
 	// Отбор по датам и is_active делает сам запрос; здесь остаётся только пересчёт spent.
 	activeBudgets, err := s.budgetRepo.GetActiveBudgets(ctx, on)
 	if err != nil {
@@ -336,10 +423,7 @@ func (s *BudgetServiceImpl) UpdateBudgetSpent(ctx context.Context, budgetID uuid
 		return ErrBudgetNotFoundService
 	}
 
-	budget.SpentMinor += amount
-	budget.UpdatedAt = time.Now()
-
-	return s.budgetRepo.Update(ctx, budget)
+	return s.budgetRepo.UpdateSpent(ctx, budgetID, budget.SpentMinor+amount)
 }
 
 // CheckBudgetLimits checks if a transaction would exceed budget limits
@@ -427,26 +511,6 @@ func (s *BudgetServiceImpl) GetBudgetsByCategory(
 	}
 
 	return budgets, nil
-}
-
-// ValidateBudgetPeriod validates that budget period doesn't overlap with existing budgets
-func (s *BudgetServiceImpl) ValidateBudgetPeriod(
-	ctx context.Context,
-	categoryID *uuid.UUID,
-	startDate, endDate date.Date,
-) error {
-	existingBudgets, err := s.budgetRepo.GetByPeriod(ctx, startDate, endDate)
-	if err != nil {
-		return fmt.Errorf("failed to validate budget period: %w", err)
-	}
-
-	for _, existing := range existingBudgets {
-		if s.budgetPeriodsOverlap(existing, categoryID, startDate, endDate) {
-			return fmt.Errorf("%w: overlaps with budget '%s'", ErrBudgetOverlapExists, existing.Name)
-		}
-	}
-
-	return nil
 }
 
 // RecalculateBudgetSpent recalculates and updates the spent amount for a budget
@@ -576,7 +640,7 @@ func (s *BudgetServiceImpl) recalculateAndUpdateSpent(ctx context.Context, b *bu
 	if b.SpentMinor != spent {
 		b.SpentMinor = spent
 		b.UpdatedAt = time.Now()
-		return s.budgetRepo.Update(ctx, b)
+		return s.budgetRepo.UpdateSpent(ctx, b.ID, spent)
 	}
 
 	return nil
@@ -586,55 +650,6 @@ func (s *BudgetServiceImpl) isBudgetActiveOnDate(b *budget.Budget, on date.Date)
 	return b.IsActive &&
 		!on.Before(b.StartDate) &&
 		!on.After(b.EndDate)
-}
-
-func (s *BudgetServiceImpl) budgetPeriodsOverlap(
-	existing *budget.Budget,
-	categoryID *uuid.UUID,
-	startDate, endDate date.Date,
-) bool {
-	// Only check overlap if it's the same category (or both are family-wide)
-	if !s.sameBudgetScope(existing.CategoryID, categoryID) {
-		return false
-	}
-
-	// Границы включительные: общий день — уже пересечение.
-	return !endDate.Before(existing.StartDate) && !startDate.After(existing.EndDate)
-}
-
-func (s *BudgetServiceImpl) sameBudgetScope(existingCategoryID, newCategoryID *uuid.UUID) bool {
-	// Both are family-wide budgets
-	if existingCategoryID == nil && newCategoryID == nil {
-		return true
-	}
-
-	// One is family-wide, one is category-specific
-	if existingCategoryID == nil || newCategoryID == nil {
-		return false
-	}
-
-	// Both are category-specific - check if same category
-	return *existingCategoryID == *newCategoryID
-}
-
-func (s *BudgetServiceImpl) validateBudgetPeriodForUpdate(ctx context.Context, budget *budget.Budget) error {
-	existingBudgets, err := s.budgetRepo.GetByPeriod(ctx, budget.StartDate, budget.EndDate)
-	if err != nil {
-		return fmt.Errorf("failed to validate budget period: %w", err)
-	}
-
-	for _, existing := range existingBudgets {
-		// Skip checking against itself
-		if existing.ID == budget.ID {
-			continue
-		}
-
-		if s.budgetPeriodsOverlap(existing, budget.CategoryID, budget.StartDate, budget.EndDate) {
-			return fmt.Errorf("%w: overlaps with budget '%s'", ErrBudgetOverlapExists, existing.Name)
-		}
-	}
-
-	return nil
 }
 
 func (s *BudgetServiceImpl) calculateBudgetStatus(b *budget.Budget) *dto.BudgetStatusDTO {

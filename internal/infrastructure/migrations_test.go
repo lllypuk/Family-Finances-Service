@@ -178,3 +178,44 @@ func TestMigrations_DropReports(t *testing.T) {
 	left := objectCount(ctx, t, db, "type = 'table' AND name NOT LIKE 'sqlite_%' AND name != 'schema_migrations'")
 	assert.Equal(t, 0, left, "down не оставляет таблиц")
 }
+
+// 004 добавляет колонки серии базе на версии 3; на свежей 002 пересобирает budgets по схеме v0.2.0,
+// то есть снимает то, что создала 001, — колонки возвращает та же 004.
+func TestMigrations_BudgetsRecurring(t *testing.T) {
+	ctx := t.Context()
+	root := testhelpers.RepoRoot(t)
+	dbPath := filepath.Join(t.TempDir(), "recurring.db")
+	manager := infrastructure.NewMigrationManager("sqlite://"+dbPath, filepath.Join(root, "migrations"))
+
+	require.NoError(t, manager.Up())
+
+	db, err := sql.Open("sqlite", dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, db.Close()) })
+
+	assert.Equal(t, "INTEGER", columnType(ctx, t, db, "budgets", "recurring"))
+	assert.Equal(t, "TEXT", columnType(ctx, t, db, "budgets", "series_id"))
+
+	// Версия 3 — схема, выкаченная до этого плана.
+	require.NoError(t, manager.Migrate(3))
+	assert.Empty(t, columnType(ctx, t, db, "budgets", "recurring"))
+	assert.Empty(t, columnType(ctx, t, db, "budgets", "series_id"))
+
+	require.NoError(t, manager.Up())
+	assert.Equal(t, "INTEGER", columnType(ctx, t, db, "budgets", "recurring"))
+	assert.Equal(t, "TEXT", columnType(ctx, t, db, "budgets", "series_id"))
+
+	familyID, _, categoryID := seedForChecks(ctx, t, db)
+	_, err = db.ExecContext(ctx, insertBudget, "budget-recurring", 1, categoryID, familyID)
+	require.NoError(t, err)
+
+	var recurring int
+	var seriesID sql.NullString
+	require.NoError(t, db.QueryRowContext(ctx,
+		"SELECT recurring, series_id FROM budgets WHERE id = 'budget-recurring'").Scan(&recurring, &seriesID))
+	assert.Equal(t, 0, recurring, "старая строка получает значение по умолчанию")
+	assert.False(t, seriesID.Valid)
+
+	_, err = db.ExecContext(ctx, "UPDATE budgets SET recurring = 2 WHERE id = 'budget-recurring'")
+	require.Error(t, err, "recurring вне 0/1 обязан отбиваться CHECK-ом")
+}

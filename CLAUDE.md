@@ -196,7 +196,10 @@ with `make db-reset`. **Since `v0.1.0` is deployed, a schema change is a numbere
 DDL into `001` (so a new install gets it) *and* a `NNN_*.{up,down}.sql` applying it to a live database, like
 `002_budgets_name_period_partial_unique` (which rebuilds `budgets` — SQLite cannot `DROP INDEX` the implicit
 `sqlite_autoindex_*` behind a table-level `UNIQUE`). `002` is therefore a no-op rebuild on a fresh DB, and its
-table definition must stay identical to the one in `001`. Cover it in
+table definition must stay frozen on the `v0.2.0` schema: a column added later lives in `001` *and* in its own
+`NNN` (`004` — `budgets.recurring`, `budgets.series_id`), so on a fresh DB `002` drops what `001` created and
+`004` puts it back. Never add a column to the `budgets` block inside `002` — it must keep reproducing the
+released schema, or the upgrade path it tests is not the one the server runs. Cover it in
 `internal/infrastructure/migrations_test.go`: `Migrate(1)` puts the released schema back, so the upgrade path is
 testable. See `migrations/README.md`, and `make migrate-create` for the reminder.
 
@@ -266,16 +269,32 @@ on it.
   `id` (any valid UUID): an existing record answers `200` with itself and the repeated body is ignored — the id is
   the only thing compared. The check is a plain read-then-insert; two simultaneous retries can still collide.
 - **Budget business refusals are `409` with their own codes** — `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`,
-  `BUDGET_BELOW_SPENT`, `BUDGET_ID_EXISTS`; only shape errors (`amount_minor` out of range, reversed dates) stay
-  `422`. Periods of one
+  `BUDGET_BELOW_SPENT`, `BUDGET_ID_EXISTS`, `BUDGET_NOT_TAIL`; only shape errors (`amount_minor` out of range,
+  reversed dates) stay `422`. Periods of one
   scope overlap **inclusively** — a shared boundary day is a conflict, because spending is summed over
-  `date >= start AND date <= end`. `is_active` is a soft-delete marker and nothing else: it is not in
+  `date >= start AND date <= end`. The occupancy predicate matches on scope *or* on name, and the two answer with
+  different codes (`takenBy.conflict`): a busy scope is `BUDGET_OVERLAP` and moves with the dates, a name taken in
+  another scope is `BUDGET_NAME_EXISTS` and only renaming clears it. `is_active` is a soft-delete marker and nothing else: it is not in
   `UpdateBudgetRequest`, and `GetByID` filters on it, so a deleted budget is `404` for GET/PUT/DELETE alike.
   A deleted row keeps its primary key, so a `POST` reusing that `id` cannot be idempotent: the repository tells the
   two unique violations apart (`budgets.id` in the message → `budget.ErrIDExists`) and the client gets
   `409 BUDGET_ID_EXISTS`, not a name conflict it could never fix by renaming. The name+period uniqueness, by
   contrast, is the partial index `idx_budgets_name_period_active` (`WHERE is_active = 1`), so after a delete the
   same name and period can be created again under a new `id`.
+- **A recurring budget is the tail of a series.** `recurring: true` marks the tail; `series_id` (the first
+  instance's id) ties the instances together. There is no background job: the next calendar period is
+  materialised lazily on reads (`GET /budgets`, `GET /stats/summary` → `BudgetServiceImpl.advanceRecurring` →
+  `Advance`, at most `maxAdvancePeriods` = 120 steps per call), the flag moves to the new instance and the past
+  ones stay as history with the same `series_id`. Dates of a recurring budget must match the calendar period
+  (`budget.ValidateRecurring`; `custom` cannot recur) and a series member's dates are immutable — both are `422`.
+  A `PUT` on an instance that is no longer the tail is `409 BUDGET_NOT_TAIL`: the client re-reads and edits the
+  new tail. Stopping a series that never advanced clears `series_id` as well — otherwise a one-instance "series"
+  would keep its dates frozen forever. A period already taken by a manual budget of the same scope or name is **stepped over**, not a stop
+  of the series — one manual edit must not kill it silently. Occupancy is one predicate inside the repository
+  transaction (`taken`, `budget_repository_sqlite.go`), never a read in the service, so a manual `POST` and a
+  materialisation cannot both land on one month; `Update` never writes the `spent_minor` it is handed —
+  it recomputes it from the transactions inside its own transaction (`syncSpent`), so a shifted period and the
+  expense sum commit together and a concurrent expense cannot be overwritten by a stale total.
 - **Fractions come in two units.** Shares (`share`, `*_delta`, `stats.budgets[].utilization`) are 0…1; fields named
   `percentage` and `budgets[].utilization` on `/budgets` are percent 0…100. Both are documented per field in
   `docs/api/openapi.yaml`.
@@ -297,7 +316,9 @@ status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the fi
 Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–10 are done
 (`docs/plans/completed/`, 06 = the Android client, 07 = its budgets tab, 08 = its settings screen,
 09 = the server findings of 07–08, 10 = `/reports` removed and `GET /stats/monthly` added); `v0.2.0` is tagged,
-and plan 10 changed the contract after it, so the next server release is `v0.3.0`. Plan 11 is the client side of
+and plans 10 and 12 changed the contract after it, so the next server release is `v0.3.0`. Plan 12 (recurring
+budgets, both sides) is done; the client half ships as `app-v0.5.0` **after** the server `v0.3.0` — a 0.5.0 client
+cannot read a 0.2.x server (`recurring` is required in the generated model). Plan 11 is the client side of
 10: an "Обзор" screen over `summary` + `monthly`, and multi-select over transactions.
 
 `docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates

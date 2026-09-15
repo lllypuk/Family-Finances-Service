@@ -157,8 +157,13 @@ func (m *MockBudgetRepository) GetActiveBudgets(ctx context.Context, on date.Dat
 	return args.Get(0).([]*budget.Budget), args.Error(1)
 }
 
-func (m *MockBudgetRepository) Update(ctx context.Context, budget *budget.Budget) error {
-	args := m.Called(ctx, budget)
+func (m *MockBudgetRepository) Update(ctx context.Context, budget *budget.Budget, expect budget.UpdateExpect) error {
+	args := m.Called(ctx, budget, expect)
+	return args.Error(0)
+}
+
+func (m *MockBudgetRepository) UpdateSpent(ctx context.Context, id uuid.UUID, spent money.Minor) error {
+	args := m.Called(ctx, id, spent)
 	return args.Error(0)
 }
 
@@ -172,17 +177,6 @@ func (m *MockBudgetRepository) GetByCategory(
 	categoryID *uuid.UUID,
 ) ([]*budget.Budget, error) {
 	args := m.Called(ctx, categoryID)
-	if args.Error(1) != nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*budget.Budget), args.Error(1)
-}
-
-func (m *MockBudgetRepository) GetByPeriod(
-	ctx context.Context,
-	startDate, endDate date.Date,
-) ([]*budget.Budget, error) {
-	args := m.Called(ctx, startDate, endDate)
 	if args.Error(1) != nil {
 		return nil, args.Error(1)
 	}
@@ -565,16 +559,6 @@ func (m *MockBudgetService) GetBudgetsByCategory(
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*budget.Budget), args.Error(1)
-}
-
-// Updated: ValidateBudgetPeriod signature (no familyID)
-func (m *MockBudgetService) ValidateBudgetPeriod(
-	ctx context.Context,
-	categoryID *uuid.UUID,
-	startDate, endDate date.Date,
-) error {
-	args := m.Called(ctx, categoryID, startDate, endDate)
-	return args.Error(0)
 }
 
 func (m *MockBudgetService) RecalculateBudgetSpent(ctx context.Context, budgetID uuid.UUID) error {

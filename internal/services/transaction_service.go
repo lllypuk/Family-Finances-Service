@@ -91,7 +91,7 @@ type TransactionRepositoryAtomicCreateWithBudget interface {
 // BudgetRepositoryForTransactions defines the budget operations needed for transaction service
 type BudgetRepositoryForTransactions interface {
 	GetActiveBudgets(ctx context.Context, on date.Date) ([]*budget.Budget, error)
-	Update(ctx context.Context, budget *budget.Budget) error
+	UpdateSpent(ctx context.Context, id uuid.UUID, spent money.Minor) error
 	// Note: GetByCategoryAndFamily may need to be added to budget repository
 	// For now, we'll iterate through active budgets to find the right one
 }
@@ -727,10 +727,7 @@ func (s *TransactionServiceImpl) updateBudgetSpent(
 		return nil //nolint:nilerr // No budget found is acceptable, not an error condition
 	}
 
-	budget.SpentMinor += amount
-	budget.UpdatedAt = time.Now()
-
-	return s.budgetRepo.Update(ctx, budget)
+	return s.budgetRepo.UpdateSpent(ctx, budget.ID, budget.SpentMinor+amount)
 }
 
 func (s *TransactionServiceImpl) findBudgetByCategory(

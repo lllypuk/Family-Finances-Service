@@ -3,6 +3,7 @@ package tech.shatrov.familyfinances.ui.budgets
 import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
@@ -147,10 +148,26 @@ class BudgetsScreenTest {
         composeRule.onNodeWithText(res.getString(R.string.budgets_filter_today)).assertIsDisplayed()
     }
 
+    /** Значок повтора — у хвоста серии: по нему видно, что бюджет продолжится сам. */
+    @Test
+    fun recurringRowIsMarked() {
+        show(BudgetsUiState.Ready(listOf(row(recurring = true))))
+
+        composeRule.onNodeWithContentDescription(res.getString(R.string.budget_recurring)).assertIsDisplayed()
+    }
+
+    @Test
+    fun plainRowHasNoRepeatMark() {
+        show(BudgetsUiState.Ready(listOf(row())))
+
+        composeRule.onNodeWithContentDescription(res.getString(R.string.budget_recurring)).assertDoesNotExist()
+    }
+
     private fun row(
         categoryName: String? = "Продукты",
         utilization: Double = 60.0,
         categoryId: UUID? = if (categoryName == null) null else UUID.randomUUID(),
+        recurring: Boolean = false,
     ): BudgetRow {
         val stamp = OffsetDateTime.parse("2026-09-07T10:00:00Z")
         return BudgetRow(
@@ -165,6 +182,7 @@ class BudgetsScreenTest {
                 startDate = LocalDate.parse("2026-09-01"),
                 endDate = LocalDate.parse("2026-09-30"),
                 isActive = true,
+                recurring = recurring,
                 createdAt = stamp,
                 updatedAt = stamp,
                 categoryId = categoryId,

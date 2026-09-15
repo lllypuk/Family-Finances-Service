@@ -19,3 +19,16 @@ fun endOf(
     BudgetPeriod.yearly -> start.plusYears(1).minusDays(1)
     BudgetPeriod.custom -> null
 }
+
+/**
+ * Начало календарного периода: повторяющийся бюджет сервер принимает только выровненным,
+ * иначе `422` с полем `start_date`. `weekly` выравнивать не по чему — серия шагает по +7 дней.
+ */
+fun alignedStart(
+    period: BudgetPeriod,
+    date: LocalDate,
+): LocalDate = when (period) {
+    BudgetPeriod.monthly -> date.withDayOfMonth(1)
+    BudgetPeriod.yearly -> date.withDayOfYear(1)
+    BudgetPeriod.weekly, BudgetPeriod.custom -> date
+}

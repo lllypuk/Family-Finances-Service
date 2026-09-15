@@ -18,6 +18,7 @@ import (
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/money"
+	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/services/dto"
 	"family-budget-service/internal/testhelpers"
 )
@@ -283,6 +284,8 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		budget1.Name = "Budget 1"
 		budget2 := testhelpers.CreateTestBudget(family.ID, testCategory.ID)
 		budget2.Name = "Budget 2"
+		budget2.StartDate = budget1.EndDate.AddDays(1)
+		budget2.EndDate = budget2.StartDate.AddDays(30)
 
 		err = testServer.Repos.Budget.Create(context.Background(), budget1)
 		require.NoError(t, err)
@@ -330,6 +333,8 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		inactiveBudget := testhelpers.CreateTestBudget(family.ID, testCategory.ID)
 		inactiveBudget.Name = "Inactive Budget"
 		inactiveBudget.IsActive = false
+		inactiveBudget.StartDate = activeBudget.EndDate.AddDays(1)
+		inactiveBudget.EndDate = inactiveBudget.StartDate.AddDays(30)
 
 		err = testServer.Repos.Budget.Create(context.Background(), activeBudget)
 		require.NoError(t, err)
@@ -773,9 +778,9 @@ func TestBudgetAPI_CreateAmountAboveMaximum(t *testing.T) {
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
 }
 
-// TestBudgetAPI_CreateDuplicateNameSamePeriod — UNIQUE (family_id, name, start_date, end_date)
-// достижим с календарными датами: второй бюджет с тем же именем и периодом отбивается
-// 409 BUDGET_NAME_EXISTS, а не 500 из репозитория. Категории разные, иначе сработает проверка пересечения периодов.
+// TestBudgetAPI_CreateDuplicateNameSamePeriod — имя занято на этот период, пусть и в другой
+// категории: индекс имени не знает о категориях, поэтому занятость проверяется второй веткой
+// предиката. Код отличается от пересечения области: здесь поможет только переименование.
 func TestBudgetAPI_CreateDuplicateNameSamePeriod(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	session := testServer.Auth(t)
@@ -1013,7 +1018,7 @@ func TestBudgetAPI_RecreateDeletedNameAndPeriod(t *testing.T) {
 }
 
 // TestBudgetAPI_CreateSharedBoundaryDay_Conflict — включительные границы проверяются через
-// настоящий SQL: окно GetByPeriod обязано отдать соседа, у которого общий с новым только
+// настоящий SQL: предикат занятости обязан отдать соседа, у которого общий с новым только
 // один день. Юнит-тесты сервиса этот запрос мокают.
 func TestBudgetAPI_CreateSharedBoundaryDay_Conflict(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
@@ -1056,9 +1061,8 @@ func TestBudgetAPI_CreateSharedBoundaryDay_Conflict(t *testing.T) {
 		next.Body.String())
 }
 
-// TestBudgetAPI_UpdateToTakenName_Conflict — UNIQUE (family_id, name, start_date, end_date)
-// нарушает и UPDATE: репозиторий обязан отдать тот же сентинел, что на INSERT, иначе
-// переименование в занятое имя вернёт 500.
+// TestBudgetAPI_UpdateToTakenName_Conflict — переименование в занятое имя проверяется тем же
+// предикатом, что и INSERT: репозиторий обязан отдать тот же сентинел, иначе UPDATE вернёт 500.
 func TestBudgetAPI_UpdateToTakenName_Conflict(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	session := testServer.Auth(t)
@@ -1150,4 +1154,319 @@ func TestBudgetAPI_UpdateEmptyBody(t *testing.T) {
 	var response handlers.ErrorResponse
 	require.NoError(t, json.Unmarshal(putRec.Body.Bytes(), &response))
 	assert.Equal(t, handlers.ErrCodeValidationError, response.Error.Code)
+}
+
+// recurringAPI — сервер, сессия и категория для сценариев серии: проверяется только контракт,
+// материализация идёт на чтении списка, как в бою.
+type recurringAPI struct {
+	t        *testing.T
+	server   *testhelpers.TestServer
+	session  *testhelpers.AuthSession
+	category *category.Category
+	today    date.Date
+}
+
+func newRecurringAPI(t *testing.T) *recurringAPI {
+	t.Helper()
+
+	testServer := testhelpers.SetupHTTPServer(t)
+	session := testServer.Auth(t)
+	testCategory := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
+	require.NoError(t, testServer.Repos.Category.Create(context.Background(), testCategory))
+
+	return &recurringAPI{
+		t:        t,
+		server:   testServer,
+		session:  session,
+		category: testCategory,
+		today:    date.Today(testServer.AuthFamily.Location()),
+	}
+}
+
+func (a *recurringAPI) do(method, path string, body map[string]any) *httptest.ResponseRecorder {
+	a.t.Helper()
+
+	var req *http.Request
+	if body == nil {
+		req = httptest.NewRequest(method, path, nil)
+	} else {
+		req = httptest.NewRequest(method, path, bytes.NewBuffer(mustJSON(a.t, body)))
+		req.Header.Set("Content-Type", "application/json")
+	}
+	a.session.Apply(req)
+	rec := httptest.NewRecorder()
+	a.server.Server.Echo().ServeHTTP(rec, req)
+
+	return rec
+}
+
+// monthOf — границы месяца today+offset. Шаг делается от первого числа: AddMonths не
+// зажимает день, и 31-го числа сдвиг назад уехал бы на месяц вперёд.
+func (a *recurringAPI) monthOf(offsetMonths int) (date.Date, date.Date) {
+	first, _ := a.today.MonthBounds()
+
+	return first.AddMonths(offsetMonths).MonthBounds()
+}
+
+// createRecurring заводит хвост серии на месяц today+offset: даты выровнены по календарю.
+func (a *recurringAPI) createRecurring(name string, offsetMonths int) handlers.BudgetResponse {
+	a.t.Helper()
+
+	start, end := a.monthOf(offsetMonths)
+	rec := a.do(http.MethodPost, "/api/v1/budgets", map[string]any{
+		"name":         name,
+		"amount_minor": 50_000,
+		"period":       "monthly",
+		"category_id":  a.category.ID,
+		"start_date":   start.String(),
+		"end_date":     end.String(),
+		"recurring":    true,
+	})
+	require.Equal(a.t, http.StatusCreated, rec.Code, "тело: %s", rec.Body.String())
+
+	var response handlers.APIResponse[handlers.BudgetResponse]
+	require.NoError(a.t, json.Unmarshal(rec.Body.Bytes(), &response))
+
+	return response.Data
+}
+
+func (a *recurringAPI) list(query string) []handlers.BudgetResponse {
+	a.t.Helper()
+
+	rec := a.do(http.MethodGet, "/api/v1/budgets"+query, nil)
+	require.Equal(a.t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
+
+	var response handlers.APIResponse[[]handlers.BudgetResponse]
+	require.NoError(a.t, json.Unmarshal(rec.Body.Bytes(), &response))
+
+	return response.Data
+}
+
+func (a *recurringAPI) put(id uuid.UUID, body map[string]any) *httptest.ResponseRecorder {
+	a.t.Helper()
+
+	return a.do(http.MethodPut, "/api/v1/budgets/"+id.String(), body)
+}
+
+func (a *recurringAPI) spend(amount money.Minor, on date.Date) {
+	a.t.Helper()
+
+	tx := testhelpers.CreateTestTransaction(
+		a.server.AuthFamily.ID, a.server.AuthUser.ID, a.category.ID, transaction.TypeExpense,
+	)
+	tx.AmountMinor = amount
+	tx.Date = on
+	require.NoError(a.t, a.server.Repos.Transaction.Create(context.Background(), tx))
+}
+
+// TestBudgetAPI_RecurringSeries_MaterializesOnRead — серия, заведённая три месяца назад,
+// достраивается на чтении: хвост — текущий месяц со своим расходом, прошлые инстансы остаются
+// историей с тем же series_id.
+func TestBudgetAPI_RecurringSeries_MaterializesOnRead(t *testing.T) {
+	api := newRecurringAPI(t)
+
+	const seriesMonthsBack = -3
+	created := api.createRecurring("Продукты", seriesMonthsBack)
+	require.True(t, created.Recurring)
+	require.NotNil(t, created.SeriesID)
+	require.Equal(t, created.ID, *created.SeriesID)
+
+	api.spend(12_000, api.today)
+
+	active := api.list("?active_only=true")
+	require.Len(t, active, 1)
+	currentStart, _ := api.today.MonthBounds()
+	assert.Equal(t, currentStart, active[0].StartDate)
+	assert.True(t, active[0].Recurring)
+	require.NotNil(t, active[0].SeriesID)
+	assert.Equal(t, created.ID, *active[0].SeriesID)
+	assert.Equal(t, money.Minor(12_000), active[0].SpentMinor)
+	assert.Equal(t, created.AmountMinor, active[0].AmountMinor)
+
+	all := api.list("")
+	require.Len(t, all, -seriesMonthsBack+1)
+	for _, b := range all {
+		require.NotNil(t, b.SeriesID)
+		assert.Equal(t, created.ID, *b.SeriesID)
+		assert.Equal(t, b.ID == active[0].ID, b.Recurring, "флаг только у хвоста")
+	}
+
+	statsRec := api.do(http.MethodGet, "/api/v1/stats/summary", nil)
+	require.Equal(t, http.StatusOK, statsRec.Code, "тело: %s", statsRec.Body.String())
+
+	var stats handlers.APIResponse[dto.StatsSummary]
+	require.NoError(t, json.Unmarshal(statsRec.Body.Bytes(), &stats))
+	require.Len(t, stats.Data.Budgets, 1)
+	assert.Equal(t, active[0].ID, stats.Data.Budgets[0].ID)
+	assert.Equal(t, money.Minor(12_000), stats.Data.Budgets[0].SpentMinor)
+}
+
+// TestBudgetAPI_RecurringSeries_StopAndResume — снятый флаг останавливает серию, возвращённый
+// достраивает пропущенные месяцы.
+func TestBudgetAPI_RecurringSeries_StopAndResume(t *testing.T) {
+	api := newRecurringAPI(t)
+
+	const seriesMonthsBack = -3
+	created := api.createRecurring("Продукты", seriesMonthsBack)
+
+	stopRec := api.put(created.ID, map[string]any{"recurring": false})
+	require.Equal(t, http.StatusOK, stopRec.Code, "тело: %s", stopRec.Body.String())
+
+	var stopped handlers.APIResponse[handlers.BudgetResponse]
+	require.NoError(t, json.Unmarshal(stopRec.Body.Bytes(), &stopped))
+	assert.False(t, stopped.Data.Recurring)
+
+	assert.Len(t, api.list(""), 1, "остановленная серия не растёт")
+
+	resumeRec := api.put(created.ID, map[string]any{"recurring": true})
+	require.Equal(t, http.StatusOK, resumeRec.Code, "тело: %s", resumeRec.Body.String())
+
+	assert.Len(t, api.list(""), -seriesMonthsBack+1)
+}
+
+// TestBudgetAPI_RecurringSeries_StopUnlocksDates — серия из одного инстанса при остановке
+// распускается: иначе series_id навсегда запретил бы правку дат обычного бюджета.
+func TestBudgetAPI_RecurringSeries_StopUnlocksDates(t *testing.T) {
+	api := newRecurringAPI(t)
+
+	created := api.createRecurring("Продукты", 0)
+
+	stopRec := api.put(created.ID, map[string]any{"recurring": false})
+	require.Equal(t, http.StatusOK, stopRec.Code, "тело: %s", stopRec.Body.String())
+
+	var stopped handlers.APIResponse[handlers.BudgetResponse]
+	require.NoError(t, json.Unmarshal(stopRec.Body.Bytes(), &stopped))
+	assert.False(t, stopped.Data.Recurring)
+	assert.Nil(t, stopped.Data.SeriesID)
+
+	start, end := api.monthOf(-6)
+	moveRec := api.put(created.ID, map[string]any{"start_date": start.String(), "end_date": end.String()})
+	require.Equal(t, http.StatusOK, moveRec.Code, "тело: %s", moveRec.Body.String())
+
+	var moved handlers.APIResponse[handlers.BudgetResponse]
+	require.NoError(t, json.Unmarshal(moveRec.Body.Bytes(), &moved))
+	assert.Equal(t, start, moved.Data.StartDate)
+}
+
+// TestBudgetAPI_RecurringSeries_StaleTailConflict — форма прошлого инстанса устарела: серия
+// продвинулась, и снимать флаг клиенту нужно с нового хвоста.
+func TestBudgetAPI_RecurringSeries_StaleTailConflict(t *testing.T) {
+	api := newRecurringAPI(t)
+
+	const seriesMonthsBack = -3
+	created := api.createRecurring("Продукты", seriesMonthsBack)
+	require.Len(t, api.list(""), -seriesMonthsBack+1)
+
+	rec := api.put(created.ID, map[string]any{"recurring": false})
+	require.Equal(t, http.StatusConflict, rec.Code, "тело: %s", rec.Body.String())
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, handlers.ErrCodeBudgetNotTail, response.Error.Code)
+
+	tail := api.list("?active_only=true")
+	require.Len(t, tail, 1)
+	retry := api.put(tail[0].ID, map[string]any{"recurring": false})
+	require.Equal(t, http.StatusOK, retry.Code, "тело: %s", retry.Body.String())
+
+	var stopped handlers.APIResponse[handlers.BudgetResponse]
+	require.NoError(t, json.Unmarshal(retry.Body.Bytes(), &stopped))
+	assert.False(t, stopped.Data.Recurring)
+}
+
+// TestBudgetAPI_RecurringSeries_SkipsManualMonth — ручной бюджет, заведённый на месяц серии
+// заранее, занимает период: серия перешагивает его и материализует следующий со своим лимитом.
+func TestBudgetAPI_RecurringSeries_SkipsManualMonth(t *testing.T) {
+	api := newRecurringAPI(t)
+
+	const seriesMonthsBack = -2
+	created := api.createRecurring("Продукты", seriesMonthsBack)
+
+	manualStart, manualEnd := api.monthOf(-1)
+	const manualAmount = money.Minor(10_000)
+	manualRec := api.do(http.MethodPost, "/api/v1/budgets", map[string]any{
+		"name":         "Ручной",
+		"amount_minor": int64(manualAmount),
+		"period":       "monthly",
+		"category_id":  api.category.ID,
+		"start_date":   manualStart.String(),
+		"end_date":     manualEnd.String(),
+	})
+	require.Equal(t, http.StatusCreated, manualRec.Code, "тело: %s", manualRec.Body.String())
+
+	active := api.list("?active_only=true")
+	require.Len(t, active, 1)
+	currentStart, _ := api.today.MonthBounds()
+	assert.Equal(t, currentStart, active[0].StartDate)
+	assert.Equal(t, created.AmountMinor, active[0].AmountMinor, "лимит серии, а не ручного бюджета")
+	assert.True(t, active[0].Recurring)
+	require.NotNil(t, active[0].SeriesID)
+	assert.Equal(t, created.ID, *active[0].SeriesID)
+
+	all := api.list("")
+	require.Len(t, all, 3, "хвост, ручной месяц и новый инстанс")
+	for _, b := range all {
+		if b.Name == "Ручной" {
+			assert.Nil(t, b.SeriesID)
+			assert.Equal(t, manualAmount, b.AmountMinor)
+		}
+	}
+}
+
+// TestBudgetAPI_RecurringSeries_MemberDatesFixed — перенос прошлого инстанса за хвост сломал бы
+// поиск хвоста по MAX(start_date), поэтому даты члена серии неизменны.
+func TestBudgetAPI_RecurringSeries_MemberDatesFixed(t *testing.T) {
+	api := newRecurringAPI(t)
+
+	created := api.createRecurring("Продукты", -1)
+	require.Len(t, api.list(""), 2)
+
+	start, end := api.monthOf(-6)
+	rec := api.put(created.ID, map[string]any{"start_date": start.String(), "end_date": end.String()})
+	require.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, handlers.ErrCodeValidationError, response.Error.Code)
+	require.Len(t, response.Error.Details, 1)
+	assert.Equal(t, "start_date", response.Error.Details[0].Field)
+}
+
+// TestBudgetAPI_CreateRecurring_Rejected — период без длины повторять нечем, невыровненные даты
+// разъехались бы с календарным шагом серии.
+func TestBudgetAPI_CreateRecurring_Rejected(t *testing.T) {
+	api := newRecurringAPI(t)
+
+	start, end := api.today.MonthBounds()
+	tests := []struct {
+		name   string
+		period string
+		start  date.Date
+		end    date.Date
+		field  string
+	}{
+		{name: "custom", period: "custom", start: start, end: end, field: "recurring"},
+		{name: "not_aligned", period: "monthly", start: start.AddDays(1), end: end, field: "start_date"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := api.do(http.MethodPost, "/api/v1/budgets", map[string]any{
+				"name":         "Продукты " + tt.name,
+				"amount_minor": 50_000,
+				"period":       tt.period,
+				"category_id":  api.category.ID,
+				"start_date":   tt.start.String(),
+				"end_date":     tt.end.String(),
+				"recurring":    true,
+			})
+			require.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
+
+			var response handlers.ErrorResponse
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+			assert.Equal(t, handlers.ErrCodeValidationError, response.Error.Code)
+			require.Len(t, response.Error.Details, 1)
+			assert.Equal(t, tt.field, response.Error.Details[0].Field)
+		})
+	}
 }

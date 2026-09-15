@@ -368,6 +368,7 @@ fun AppRoot(graph: AppGraph) {
                 onCategoryChange = model::onCategoryChange,
                 onStartChange = model::onStartChange,
                 onEndChange = model::onEndChange,
+                onRecurringChange = model::onRecurringChange,
                 onSubmit = model::onSubmit,
                 onDelete = model::onDelete,
                 onRetry = model::load,

@@ -6,11 +6,12 @@ API for the Android client. One instance = one family.
 ## 🎯 Project Status: IN DEVELOPMENT 🚧
 
 > **Direction (September 2026):** API-only backend for an Android app. Decisions and the implementation
-> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–10 are done: the
+> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–10 and 12 are done: the
 > web interface, cookie sessions and CSRF are gone, money is integer minor units, dates are calendar dates,
 > the deployment is one compose with Caddy, the Android client lives in `android/` with its settings screen,
-> and stored reports are gone in favour of `GET /api/v1/stats/monthly`; the sections below
-> describe the code as it is today.
+> stored reports are gone in favour of `GET /api/v1/stats/monthly`, and budgets can repeat as a series;
+> the sections below describe the code as it is today. Plans 10 and 12 changed the contract after `v0.2.0`,
+> so the next server release is `v0.3.0` and the client follows as `app-v0.5.0`.
 
 - ✅ REST API for family, users, categories, transactions, budgets, stats, backups
 - ✅ Bearer-token authentication with server-side sessions and a login rate limiter
@@ -75,9 +76,14 @@ The author of a record is taken from the token, so `user_id` in a request body i
 - `POST` of a transaction, budget or category accepts a client-generated `id` (any valid UUID): a retry with the same
   `id` answers `200` with the existing record instead of creating a duplicate
 - Budgets: business refusals are `409` with their own codes — `BUDGET_OVERLAP` (periods of one scope may not share
-  even a single day), `BUDGET_NAME_EXISTS`, `BUDGET_BELOW_SPENT` and `BUDGET_ID_EXISTS`. `DELETE` is final: a deleted
-  budget is `404` for GET/PUT/DELETE, its `id` stays taken (its name and period do not), and `is_active` can no
-  longer be sent in `PUT /api/v1/budgets/:id`
+  even a single day), `BUDGET_NAME_EXISTS`, `BUDGET_BELOW_SPENT`, `BUDGET_ID_EXISTS` and `BUDGET_NOT_TAIL`. `DELETE`
+  is final: a deleted budget is `404` for GET/PUT/DELETE, its `id` stays taken (its name and period do not), and
+  `is_active` can no longer be sent in `PUT /api/v1/budgets/:id`
+- A budget with `recurring: true` is the tail of a series, tied together by `series_id`. There is no background job:
+  the next calendar period is materialised on reads (`GET /api/v1/budgets`, `GET /api/v1/stats/summary`) and the flag
+  moves to the new instance, past ones stay as history. Dates must match the calendar period and `custom` cannot
+  recur (`422`); editing an instance that is no longer the tail is `409 BUDGET_NOT_TAIL` — re-read the list. A period
+  already taken by a manual budget is stepped over, not a stop of the series
 - Every list answers with `meta.pagination {limit, offset, total}` — `limit` defaults to 50, max 200
 - One error envelope everywhere: `{"error":{"code","message","details"},"meta":{...}}`;
   validation fails with `422 VALIDATION_ERROR` and per-field `details`

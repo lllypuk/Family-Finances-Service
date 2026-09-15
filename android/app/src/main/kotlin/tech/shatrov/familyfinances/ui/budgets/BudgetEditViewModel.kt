@@ -34,12 +34,16 @@ private const val HTTP_CREATED = 201
 
 private const val HTTP_CONFLICT = 409
 
+/** Серия ушла вперёд: форма держит прошлый инстанс, хвост теперь другая запись. */
+private const val NOT_TAIL = "BUDGET_NOT_TAIL"
+
 /** Коды `409` бюджета: серверный текст английский, на форме нужен свой. */
 private val budgetConflicts: Map<String, Int> = mapOf(
     "BUDGET_OVERLAP" to R.string.budget_error_overlap,
     "BUDGET_NAME_EXISTS" to R.string.budget_error_name_exists,
     "BUDGET_BELOW_SPENT" to R.string.budget_error_below_spent,
     "BUDGET_ID_EXISTS" to R.string.budget_error_id_taken,
+    NOT_TAIL to R.string.budget_error_not_tail,
 )
 
 /** Имена полей формы — те же, что в `error.details[].field`: словарь перевода не нужен. */
@@ -50,6 +54,7 @@ object BudgetField {
     const val CATEGORY = "category_id"
     const val START = "start_date"
     const val END = "end_date"
+    const val RECURRING = "recurring"
 }
 
 private val formFields = setOf(
@@ -59,6 +64,7 @@ private val formFields = setOf(
     BudgetField.CATEGORY,
     BudgetField.START,
     BudgetField.END,
+    BudgetField.RECURRING,
 )
 
 data class BudgetEditUiState(
@@ -68,6 +74,7 @@ data class BudgetEditUiState(
     val categoryId: UUID? = null,
     val start: LocalDate = LocalDate.now(),
     val end: LocalDate = LocalDate.now(),
+    val recurring: Boolean = false,
     val categories: List<Category> = emptyList(),
     val loaded: Budget? = null,
     val editing: Boolean = false,
@@ -97,9 +104,26 @@ data class BudgetEditUiState(
                 amountMinor = amountMinor?.takeIf { it != existing.amountMinor },
                 startDate = start.takeIf { it != existing.startDate },
                 endDate = end.takeIf { it != existing.endDate },
+                recurring = recurring.takeIf { it != existing.recurring },
             )
             return request.takeIf { it != UpdateBudgetRequest() }
         }
+
+    /** `custom` — период без длины: шагать серии нечем, сервер отвечает `422`. */
+    val canRecur: Boolean
+        get() = period != BudgetPeriod.custom
+
+    /** Член серии: его даты неизменяемы — перенос прошлого инстанса за хвост сломал бы серию. */
+    val inSeries: Boolean
+        get() = loaded?.seriesId != null
+
+    // Границы повторяющегося бюджета — календарные, и подставляет их форма; у `weekly`
+    // выравнивания нет, поэтому начало остаётся за пользователем.
+    val startLocked: Boolean
+        get() = inSeries || (recurring && period != BudgetPeriod.weekly)
+
+    val endLocked: Boolean
+        get() = inSeries || recurring
 
     /** Конец не позже начала: кнопка гаснет, и без подписи форма выглядит сломанной. */
     val periodInvalid: Boolean
@@ -173,16 +197,26 @@ class BudgetEditViewModel(
     fun onPeriodChange(period: BudgetPeriod) {
         mutable.update { current ->
             current
-                .copy(period = period, end = current.presetEnd(period, current.start))
+                .withPeriod(period, current.start, current.recurring && period != BudgetPeriod.custom)
                 .cleared(BudgetField.PERIOD)
+                .cleared(BudgetField.RECURRING)
         }
     }
 
     fun onStartChange(start: LocalDate) {
         mutable.update { current ->
             current
-                .copy(start = start, end = current.presetEnd(current.period, start))
+                .withPeriod(current.period, start, current.recurring)
                 .cleared(BudgetField.START)
+        }
+    }
+
+    /** Включение подставляет календарные границы: невыровненные сервер отвергает. */
+    fun onRecurringChange(recurring: Boolean) {
+        mutable.update { current ->
+            current
+                .withPeriod(current.period, current.start, recurring && current.canRecur)
+                .cleared(BudgetField.RECURRING)
         }
     }
 
@@ -212,6 +246,7 @@ class BudgetEditViewModel(
                 }
             } catch (failure: ApiFailure) {
                 mutable.value = mutable.value.failed(failure)
+                if (failure is ApiFailure.Api && failure.code == NOT_TAIL) reloadAfterAdvance()
             }
         }
     }
@@ -246,6 +281,7 @@ class BudgetEditViewModel(
                         endDate = current.end,
                         id = draftId,
                         categoryId = current.categoryId,
+                        recurring = current.recurring,
                     ),
                 )
             }
@@ -256,6 +292,23 @@ class BudgetEditViewModel(
         api.client.unwrap { api.budgets.updateBudget(id, changes) }
 
         return null
+    }
+
+    /**
+     * Серию продвинуло чужое чтение: и копия формы, и список отстали — перечитываем бюджет,
+     * а список помечаем устаревшим, потому что новый хвост видно только в нём.
+     */
+    private fun reloadAfterAdvance() {
+        val id = savedId ?: return
+        mutable.update { it.copy(saved = true) }
+        viewModelScope.launch {
+            try {
+                val actual = api.client.unwrap { api.budgets.getBudget(id) }.`data`
+                mutable.update { it.filled(it.categories, actual) }
+            } catch (failure: ApiFailure) {
+                mutable.update { it.copy(error = failure.toUiError()) }
+            }
+        }
     }
 
     /**
@@ -286,6 +339,22 @@ private fun BudgetEditUiState.presetEnd(
     start: LocalDate,
 ): LocalDate = if (editing) end else endOf(period, start) ?: end
 
+/**
+ * Границы под период: у повторяющегося — ровно календарный период, даже при правке, иначе
+ * `PUT` с флагом упрётся в `422`; у обычного — прежний пресет конца.
+ */
+private fun BudgetEditUiState.withPeriod(
+    period: BudgetPeriod,
+    start: LocalDate,
+    recurring: Boolean,
+): BudgetEditUiState {
+    if (!recurring) {
+        return copy(period = period, recurring = false, start = start, end = presetEnd(period, start))
+    }
+    val aligned = alignedStart(period, start)
+    return copy(period = period, recurring = true, start = aligned, end = endOf(period, aligned) ?: end)
+}
+
 private fun BudgetEditUiState.filled(
     categories: List<Category>,
     existing: Budget?,
@@ -303,6 +372,7 @@ private fun BudgetEditUiState.filled(
         categoryId = existing.categoryId,
         start = existing.startDate,
         end = existing.endDate,
+        recurring = existing.recurring,
     )
 }
 

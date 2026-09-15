@@ -55,6 +55,7 @@ func (h *BudgetHandler) CreateBudget(c echo.Context) error {
 		CategoryID:  req.CategoryID,
 		StartDate:   req.StartDate,
 		EndDate:     req.EndDate,
+		Recurring:   req.Recurring,
 	})
 	if err != nil {
 		return h.handleBudgetServiceError(c, err, "create")
@@ -91,6 +92,8 @@ func (h *BudgetHandler) GetBudgets(c echo.Context) error {
 		filter := dto.NewBudgetFilterDTO()
 		filter.Limit = page.Limit
 		filter.Offset = page.Offset
+		today := familyToday(c.Request().Context(), h.repositories.Family)
+		filter.Today = &today
 		budgets, total, err = h.budgetService.GetBudgetsPage(c.Request().Context(), filter)
 	}
 	if err != nil {
@@ -140,7 +143,8 @@ func (h *BudgetHandler) UpdateBudget(c echo.Context) error {
 	if validationErr := h.validator.Struct(req); validationErr != nil {
 		return respondValidationErrors(c, validationErr)
 	}
-	if req.Name == nil && req.AmountMinor == nil && req.StartDate == nil && req.EndDate == nil {
+	if req.Name == nil && req.AmountMinor == nil && req.StartDate == nil && req.EndDate == nil &&
+		req.Recurring == nil {
 		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, ErrMessageNoFields))
 	}
@@ -150,6 +154,7 @@ func (h *BudgetHandler) UpdateBudget(c echo.Context) error {
 		AmountMinor: req.AmountMinor,
 		StartDate:   req.StartDate,
 		EndDate:     req.EndDate,
+		Recurring:   req.Recurring,
 	}
 
 	updatedBudget, err := h.budgetService.UpdateBudget(c.Request().Context(), id, serviceReq)
@@ -179,9 +184,17 @@ func (h *BudgetHandler) buildBudgetResponse(b *budget.Budget) BudgetResponse {
 		StartDate:      b.StartDate,
 		EndDate:        b.EndDate,
 		IsActive:       b.IsActive,
+		Recurring:      b.Recurring,
+		SeriesID:       b.SeriesID,
 		CreatedAt:      b.CreatedAt,
 		UpdatedAt:      b.UpdatedAt,
 	}
+}
+
+// respondRecurringError — отказы вокруг серии приходят из домена и указывают на поле формы.
+func respondRecurringError(c echo.Context, field string, err error) error {
+	return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		ErrorDetail{Field: field, Message: err.Error(), Code: ErrCodeValidationError})
 }
 
 func (h *BudgetHandler) handleBudgetServiceError(c echo.Context, err error, operation string) error {
@@ -198,6 +211,12 @@ func (h *BudgetHandler) handleBudgetServiceError(c echo.Context, err error, oper
 		return respondError(c, http.StatusConflict, ErrCodeBudgetIDExists, ErrMessageBudgetIDExists)
 	case errors.Is(err, services.ErrBudgetAlreadyExceeded):
 		return respondError(c, http.StatusConflict, ErrCodeBudgetBelowSpent, ErrMessageBudgetBelowSpent)
+	case errors.Is(err, services.ErrBudgetNotTail):
+		return respondError(c, http.StatusConflict, ErrCodeBudgetNotTail, ErrMessageBudgetNotTail)
+	case errors.Is(err, budget.ErrRecurringCustom):
+		return respondRecurringError(c, fieldRecurring, err)
+	case errors.Is(err, budget.ErrRecurringNotAligned), errors.Is(err, budget.ErrSeriesDatesFixed):
+		return respondRecurringError(c, fieldStartDate, err)
 	case errors.Is(err, services.ErrBudgetAmountTooLarge),
 		errors.Is(err, dto.ErrInvalidBudgetPeriod),
 		errors.Is(err, dto.ErrInvalidBudgetAmount),

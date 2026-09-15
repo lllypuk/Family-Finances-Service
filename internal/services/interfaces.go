@@ -117,11 +117,6 @@ type BudgetService interface {
 	GetBudgetStatus(ctx context.Context, budgetID uuid.UUID) (*dto.BudgetStatusDTO, error)
 	CalculateBudgetUtilization(ctx context.Context, budgetID uuid.UUID) (*dto.BudgetUtilizationDTO, error)
 	GetBudgetsByCategory(ctx context.Context, categoryID uuid.UUID) ([]*budget.Budget, error) // Single family
-	ValidateBudgetPeriod(
-		ctx context.Context,
-		categoryID *uuid.UUID,
-		startDate, endDate date.Date,
-	) error
 	RecalculateBudgetSpent(ctx context.Context, budgetID uuid.UUID) error
 }
 

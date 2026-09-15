@@ -35,6 +35,7 @@ import kotlinx.serialization.Contextual
  * @param amountMinor Сумма в минимальных единицах валюты семьи (копейки для RUB, центы для EUR/USD). Поддерживаются только валюты с двумя знаками после запятой (A-05). 
  * @param startDate Календарная дата без времени в часовом поясе семьи (A-06)
  * @param endDate Календарная дата без времени в часовом поясе семьи (A-06)
+ * @param recurring Отсутствие поля не трогает серию. `true` разрешено бюджету вне серии и последнему живому инстансу серии без хвоста (иначе `409 BUDGET_NOT_TAIL`); даты должны быть выровнены по календарному периоду. `false` снимает флаг с хвоста; у не-хвоста при живом хвосте — `409 BUDGET_NOT_TAIL`. Даты члена серии менять нельзя — `422` с полем `start_date`. 
  */
 @Serializable
 
@@ -53,7 +54,11 @@ data class UpdateBudgetRequest (
 
     /* Календарная дата без времени в часовом поясе семьи (A-06) */
     @Contextual @SerialName(value = "end_date")
-    val endDate: java.time.LocalDate? = null
+    val endDate: java.time.LocalDate? = null,
+
+    /* Отсутствие поля не трогает серию. `true` разрешено бюджету вне серии и последнему живому инстансу серии без хвоста (иначе `409 BUDGET_NOT_TAIL`); даты должны быть выровнены по календарному периоду. `false` снимает флаг с хвоста; у не-хвоста при живом хвосте — `409 BUDGET_NOT_TAIL`. Даты члена серии менять нельзя — `422` с полем `start_date`.  */
+    @SerialName(value = "recurring")
+    val recurring: kotlin.Boolean? = null
 
 ) {
 

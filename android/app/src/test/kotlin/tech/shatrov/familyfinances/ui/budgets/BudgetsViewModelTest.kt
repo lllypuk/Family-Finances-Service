@@ -38,7 +38,7 @@ private const val BUDGETS_NEAR = """
 {"data":[
 {"id":"99999999-9999-9999-9999-999999999993","name":"Кафе","amount_minor":1000000,
 "spent_minor":850000,"remaining_minor":150000,"utilization":85.0,"period":"monthly",
-"start_date":"2026-09-01","end_date":"2026-09-30","is_active":true,
+"start_date":"2026-09-01","end_date":"2026-09-30","is_active":true,"recurring":false,
 "created_at":"2026-09-07T10:00:00Z","updated_at":"2026-09-07T10:00:00Z"}],
 "meta":{"request_id":"r-17","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0",
 "pagination":{"limit":200,"offset":0,"total":1}}}

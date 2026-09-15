@@ -285,7 +285,7 @@ internal const val ALL_BUDGET_ID = "99999999-9999-9999-9999-999999999992"
 internal const val BUDGET_OK = """
 {"data":{"id":"$FOOD_BUDGET_ID","name":"Еда","amount_minor":5000000,"spent_minor":3000000,
 "remaining_minor":2000000,"utilization":60.0,"period":"monthly","start_date":"2026-09-01",
-"end_date":"2026-09-30","is_active":true,"category_id":"$GROCERIES_ID",
+"end_date":"2026-09-30","is_active":true,"recurring":false,"category_id":"$GROCERIES_ID",
 "created_at":"2026-09-07T10:00:00Z","updated_at":"2026-09-07T10:00:00Z"},
 "meta":{"request_id":"r-14","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0"}}
 """
@@ -295,11 +295,11 @@ internal const val BUDGETS_LIST = """
 {"data":[
 {"id":"$FOOD_BUDGET_ID","name":"Еда","amount_minor":5000000,"spent_minor":7500000,
 "remaining_minor":-2500000,"utilization":150.0,"period":"monthly","start_date":"2026-09-01",
-"end_date":"2026-09-30","is_active":true,"category_id":"$GROCERIES_ID",
+"end_date":"2026-09-30","is_active":true,"recurring":false,"category_id":"$GROCERIES_ID",
 "created_at":"2026-09-07T10:00:00Z","updated_at":"2026-09-07T10:00:00Z"},
 {"id":"$ALL_BUDGET_ID","name":"Всё","amount_minor":10000000,"spent_minor":2000000,
 "remaining_minor":8000000,"utilization":20.0,"period":"yearly","start_date":"2026-01-01",
-"end_date":"2026-12-31","is_active":true,
+"end_date":"2026-12-31","is_active":true,"recurring":false,
 "created_at":"2026-09-07T10:00:00Z","updated_at":"2026-09-07T10:00:00Z"}],
 "meta":{"request_id":"r-15","timestamp":"2026-09-07T10:00:00Z","version":"v0.1.0",
 "pagination":{"limit":200,"offset":0,"total":2}}}

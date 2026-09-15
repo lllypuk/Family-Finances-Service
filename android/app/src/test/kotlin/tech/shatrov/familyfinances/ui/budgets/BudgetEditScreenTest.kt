@@ -55,6 +55,7 @@ private fun Screen(
         onCategoryChange = {},
         onStartChange = {},
         onEndChange = {},
+        onRecurringChange = {},
         onSubmit = {},
         onDelete = onDelete,
         onRetry = {},
@@ -143,6 +144,15 @@ class BudgetEditScreenTest {
         assertTrue(deleted)
     }
 
+    /** Удаление хвоста останавливает серию — подтверждение обязано это сказать. */
+    @Test
+    fun deletingARecurringBudgetWarnsAboutTheSeries() {
+        show(edit(recurring = true))
+
+        composeRule.onNodeWithText(res.getString(R.string.budget_delete)).performScrollTo().performClick()
+        composeRule.onNodeWithText(res.getString(R.string.budget_delete_recurring)).assertIsDisplayed()
+    }
+
     @Test
     fun creationHasNoDeleteButton() {
         show(form())
@@ -210,7 +220,7 @@ class BudgetEditScreenTest {
         fieldErrors = fieldErrors,
     )
 
-    private fun edit(): BudgetEditUiState {
+    private fun edit(recurring: Boolean = false): BudgetEditUiState {
         val stamp = OffsetDateTime.parse("2026-09-07T10:00:00Z")
         val budget = Budget(
             id = UUID.fromString("99999999-9999-9999-9999-999999999991"),
@@ -223,10 +233,11 @@ class BudgetEditScreenTest {
             startDate = START,
             endDate = END,
             isActive = true,
+            recurring = recurring,
             createdAt = stamp,
             updatedAt = stamp,
             categoryId = null,
         )
-        return form().copy(loaded = budget, editing = true)
+        return form().copy(loaded = budget, editing = true, recurring = recurring)
     }
 }
