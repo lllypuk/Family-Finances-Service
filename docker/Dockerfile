@@ -68,8 +68,8 @@ ENV DATABASE_PATH=/data/budget.db \
     LOG_LEVEL=info \
     ENVIRONMENT=production
 
-# Открытие порта
-EXPOSE 8080
+# Открытие портов: API и /metrics (METRICS_ADDR, по умолчанию выключен)
+EXPOSE 8080 9091
 
 # Healthcheck: GET /health (HEAD не зарегистрирован, поэтому не `--spider`).
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

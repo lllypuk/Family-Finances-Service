@@ -7,3 +7,5 @@ bundled Caddy goes into the `own-tls` profile and `app` joins the external netwo
 `deploy/README.md`. The `.env` on the server holds the machine's layout and `FFS_IMAGE`; a deploy rewrites that
 one line, so it never travels from the repository. Backups in production are the `backup` subcommand from a host
 cron job; restore is manual over ssh. There is no `upgrade.sh` any more — the pipeline is the upgrade path.
+Prometheus `/metrics` is on a second listener: `METRICS_ADDR` and the `prometheus.io/*` labels live in
+`docker-compose.yml` (topology, not `.env`), the port is not published, and the dev compose leaves it off.

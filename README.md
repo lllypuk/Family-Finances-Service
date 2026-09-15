@@ -6,13 +6,14 @@ API for the Android client. One instance = one family.
 ## 🎯 Project Status: IN DEVELOPMENT 🚧
 
 > **Direction (September 2026):** API-only backend for an Android app. Decisions and the implementation
-> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–10, 12 and 13 are done: the
+> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–10 and 12–14 are done: the
 > web interface, cookie sessions and CSRF are gone, money is integer minor units, dates are calendar dates,
 > the deployment is one compose with Caddy, the Android client lives in `android/` with its settings screen,
 > stored reports are gone in favour of `GET /api/v1/stats/monthly`, budgets can repeat as a series, and the
-> client's UI audit is closed (plan 13, client only — the contract did not move);
-> the sections below describe the code as it is today. Releases: server `v0.3.0` (plan 10) and `v0.4.0`
-> (plan 12), client `app-v0.6.0` — it needs a server of `v0.4.0` or newer (`recurring` is required in the
+> client's UI audit is closed (plan 13, client only — the contract did not move), and Prometheus metrics
+> moved onto a second listener (plan 14 — the contract did not move either);
+> the sections below describe the code as it is today. Releases: server `v0.3.0` (plan 10), `v0.4.0`
+> (plan 12) and `v0.5.0` (plan 14), client `app-v0.6.0` — it needs a server of `v0.4.0` or newer (`recurring` is required in the
 > generated model). Left: plan 11, the client's "Обзор" screen over `summary` + `monthly` and multi-select
 > over transactions ([docs/backlog.md](docs/backlog.md)).
 
@@ -23,6 +24,8 @@ API for the Android client. One instance = one family.
 - ✅ CI/CD in GitLab: checks on every merge request, image and deploy from `main`
 - ✅ Single Docker container, built from source (`docker/Dockerfile`)
 - ✅ Money as integer minor units (`amount_minor`), calendar `YYYY-MM-DD` dates, idempotent `POST`
+- ✅ Prometheus metrics (`ffs_*`) on a separate listener (`METRICS_ADDR`, off by default); `/metrics` is not
+  part of `/api/v1`
 - ✅ Self-hosted deployment: one compose (`deploy/`) with Caddy, Let's Encrypt and daily CLI backups
 - ✅ Image published to `registry.gitlab.shatrov.tech` on every push to `main` and on every `v*` tag;
   the server pulls it, `docker/docker-compose.yml` still builds locally for development
@@ -104,7 +107,8 @@ The author of a record is taken from the token, so `user_id` in a request body i
 - **SQLite** (modernc.org/sqlite) — pure Go, no CGO; migrations applied automatically at startup
 - **Clean Architecture**: `domain` → `services` → repository interfaces → `infrastructure`; `internal/auth`
   (tokens, sessions, middleware, rate limiter) beside them
-- **Structured logging** with slog, `/health` for orchestration, graceful shutdown
+- **Structured logging** with slog, `/health` for orchestration, optional `/metrics` on a second port,
+  graceful shutdown
 - **Single Docker container** (~50MB), in-memory SQLite for tests (no Docker needed)
 
 ## 🚀 Quick Start
@@ -193,6 +197,7 @@ make help             # Show all commands
 │   ├── services/            # Business logic
 │   ├── infrastructure/      # SQLite repositories, migrations, connection
 │   ├── observability/       # Logging and /health
+│   ├── metrics/             # Prometheus registry, Echo middleware, scrape collectors, /metrics listener
 │   ├── version/             # Version reported by /health, set at link time by -ldflags
 │   ├── testhelpers/         # In-memory DB, full test server, bearer helpers, factories
 │   ├── bootstrap.go         # OpenDatabase (DB + migrations), Setup, ResetPassword — shared by server and CLI
@@ -222,6 +227,7 @@ All configuration is environment variables; there are no secrets.
 | `DATABASE_PATH`        | `./data/budget.db`                     | SQLite database file path                                                   |
 | `BACKUP_DIR`           | empty → `<dir(DATABASE_PATH)>/backups` | Where `POST /api/v1/backups` and the `backup` subcommand write. Docker compose sets `/backups` so `VACUUM INTO` copies do not land inside the database volume |
 | `BACKUP_KEEP`          | `30`                                   | How many newest backup files to keep; shared by `POST /api/v1/backups` and the `backup` subcommand (`--keep N` overrides it). A non-numeric or non-positive value is ignored |
+| `METRICS_ADDR`         | empty                                  | `host:port` of the second listener serving `GET /metrics` (Prometheus). Empty — neither the listener nor the registry is built; production compose sets `0.0.0.0:9091` and does not publish the port. `/metrics` is never served on the API port |
 | `ENVIRONMENT`          | `development`                          | App environment (`development`, `production`, `test`)                       |
 | `LOG_LEVEL`            | `info`                                 | Logging level                                                               |
 | `LOG_FORMAT`           | `json`                                 | Log format                                                                  |

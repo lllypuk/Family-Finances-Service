@@ -66,6 +66,7 @@ Family-Finances-Service/
 │   ├── application/      # Echo, JSON error handler, хендлеры /api/v1
 │   ├── services/         # Бизнес-логика
 │   ├── infrastructure/   # Реализация репозиториев (SQLite), миграции
+│   ├── metrics/          # Реестр Prometheus, middleware, коллекторы скрейпа, слушатель /metrics
 │   ├── bootstrap.go      # OpenDatabase, Setup, ResetPassword — общие для сервера и CLI
 │   ├── config.go         # Конфигурация приложения
 │   └── run.go           # Bootstrap приложения
@@ -94,6 +95,8 @@ Family-Finances-Service/
 ### Observability
 - **Логирование**: slog (structured logging)
 - **Health checks**: /health эндпоинт
+- **Метрики**: Prometheus `ffs_*` на служебном слушателе `METRICS_ADDR` (`GET /metrics`, вне Echo);
+  пусто — реестр не собирается
 
 ## 🗄️ База данных
 
@@ -184,6 +187,8 @@ make test
 ### Мониторинг
 - **Healthcheck**: /health эндпоинт
 - **Logging**: Structured JSON logs (slog)
+- **Метрики**: `GET /metrics` на `METRICS_ADDR` (в прод-compose `0.0.0.0:9091`, порт не публикуется);
+  Alloy на хосте находит контейнер по меткам `prometheus.io/*`
 
 ## 📦 Зависимости
 
@@ -194,6 +199,7 @@ modernc.org/sqlite                 # SQLite driver (pure Go)
 github.com/google/uuid             # UUID generation
 golang.org/x/crypto                # bcrypt
 github.com/golang-migrate/migrate  # Migrations
+github.com/prometheus/client_golang # Реестр метрик и promhttp
 ```
 
 ### Dev зависимости
@@ -228,7 +234,9 @@ github.com/stretchr/testify       # Testing utilities
 ### Оптимизации
 - **SQLite**: Индексы, WAL mode, prepared statements
 - **Compression**: gzip middleware Echo
-- **Profiling/metrics**: нет — ни pprof, ни `/metrics`; только `/health` и JSON-лог
+- **Profiling**: pprof не включён
+- **Metrics**: `/metrics` на отдельном слушателе (`METRICS_ADDR`); коллекторы состояния читают БД
+  на скрейпе, `MaxOpenConns=1` не меняется
 
 ## 🔄 Планы развития
 

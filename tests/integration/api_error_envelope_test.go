@@ -32,15 +32,9 @@ func TestAPIErrorEnvelope_ErrorsOutsideHandlers(t *testing.T) {
 	}{
 		{"UnknownRoute", http.MethodGet, "/api/v1/does-not-exist", true, http.StatusNotFound, handlers.ErrCodeNotFound},
 		{"UnknownRouteOutsideAPI", http.MethodGet, "/login", false, http.StatusNotFound, handlers.ErrCodeNotFound},
-		// Внутри /api/v1 405 недостижим: catch-all группы перехватывает любой метод.
-		{
-			"MethodNotAllowed",
-			http.MethodPost,
-			"/health",
-			false,
-			http.StatusMethodNotAllowed,
-			handlers.ErrCodeMethodNotAllowed,
-		},
+		// 405 недостижим нигде: catch-all группы перехватывает любой метод внутри /api/v1,
+		// корневой RouteNotFound("/*") — снаружи.
+		{"WrongMethod", http.MethodPost, "/health", false, http.StatusNotFound, handlers.ErrCodeNotFound},
 		{
 			name: "WriteWithoutToken", method: http.MethodPost, target: "/api/v1/transactions", withAuth: false,
 			status: http.StatusUnauthorized, code: handlers.ErrCodeUnauthorized,

@@ -25,20 +25,48 @@ type AuthService interface {
 	AdminSetPassword(ctx context.Context, userID uuid.UUID, newPassword string) error
 }
 
+// LoginObserver считает попытки входа по исходу; интерфейс объявлен здесь,
+// чтобы handlers не зависел от пакета метрик.
+type LoginObserver interface {
+	ObserveLogin(outcome string)
+}
+
+// NopLoginObserver — заглушка для сборок без реестра метрик.
+type NopLoginObserver struct{}
+
+func (NopLoginObserver) ObserveLogin(string) {}
+
+// Исходы входа — значения метки outcome у ffs_login_attempts_total.
+const (
+	loginOutcomeOK                 = "ok"
+	loginOutcomeInvalidCredentials = "invalid_credentials" //nolint:gosec // G101 — значение метки, не секрет
+	loginOutcomeRateLimited        = "rate_limited"
+	loginOutcomeSetupRequired      = "setup_required"
+	loginOutcomeInvalidRequest     = "invalid_request"
+	loginOutcomeError              = "error"
+)
+
 // AuthHandler — выдача и отзыв bearer-токенов.
 type AuthHandler struct {
 	authService AuthService
 	limiter     *auth.RateLimiter
 	logger      *slog.Logger
 	validator   *validator.Validate
+	observer    LoginObserver
 }
 
-func NewAuthHandler(authService AuthService, limiter *auth.RateLimiter, logger *slog.Logger) *AuthHandler {
+func NewAuthHandler(
+	authService AuthService,
+	limiter *auth.RateLimiter,
+	logger *slog.Logger,
+	observer LoginObserver,
+) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
 		limiter:     limiter,
 		logger:      logger,
 		validator:   newAPIValidator(),
+		observer:    observer,
 	}
 }
 
@@ -47,9 +75,11 @@ func NewAuthHandler(authService AuthService, limiter *auth.RateLimiter, logger *
 func (h *AuthHandler) Login(c echo.Context) error {
 	var req LoginRequest
 	if err := c.Bind(&req); err != nil {
+		h.observer.ObserveLogin(loginOutcomeInvalidRequest)
 		return respondBindError(c, err)
 	}
 	if err := h.validator.Struct(&req); err != nil {
+		h.observer.ObserveLogin(loginOutcomeInvalidRequest)
 		return respondValidationErrors(c, err)
 	}
 
@@ -58,7 +88,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	ip := c.RealIP()
 
 	if retryAfter, ok := h.limiter.Allow(ip, email); !ok {
-		h.logLoginFailure(ctx, email, ip, "rate_limited")
+		h.logLoginFailure(ctx, email, ip, loginOutcomeRateLimited)
 		c.Response().Header().Set(echo.HeaderRetryAfter, strconv.Itoa(int(retryAfter.Seconds())))
 		return respondError(c, http.StatusTooManyRequests, ErrCodeRateLimited, ErrMessageRateLimited)
 	}
@@ -67,12 +97,13 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	if err != nil {
 		switch {
 		case errors.Is(err, auth.ErrSetupRequired):
-			h.logLoginFailure(ctx, email, ip, "setup_required")
+			h.logLoginFailure(ctx, email, ip, loginOutcomeSetupRequired)
 			return respondError(c, http.StatusConflict, ErrCodeSetupRequired, ErrMessageSetupRequired)
 		case errors.Is(err, auth.ErrInvalidCredentials):
-			h.logLoginFailure(ctx, email, ip, "invalid_credentials")
+			h.logLoginFailure(ctx, email, ip, loginOutcomeInvalidCredentials)
 			return respondError(c, http.StatusUnauthorized, ErrCodeInvalidCredentials, ErrMessageInvalidCredentials)
 		default:
+			h.observer.ObserveLogin(loginOutcomeError)
 			h.logger.ErrorContext(ctx, "login error",
 				slog.String("email", email), slog.String("ip", ip), slog.String("error", err.Error()))
 			return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
@@ -80,6 +111,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	}
 
 	h.limiter.Reset(email)
+	h.observer.ObserveLogin(loginOutcomeOK)
 
 	return respondAPI(c, http.StatusOK, LoginResponse{
 		Token:     result.Token,
@@ -88,7 +120,9 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	})
 }
 
+// logLoginFailure пишет лог и считает исход: reason — это и значение метки outcome.
 func (h *AuthHandler) logLoginFailure(ctx context.Context, email, ip, reason string) {
+	h.observer.ObserveLogin(reason)
 	h.logger.WarnContext(ctx, "login failed",
 		slog.String("email", email), slog.String("ip", ip), slog.String("reason", reason))
 }

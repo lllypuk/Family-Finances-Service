@@ -10,7 +10,7 @@ import (
 	"family-budget-service/internal/application/handlers"
 )
 
-// newAPIErrorHandler отдаёт любую ошибку вне хендлера (404 роутера, 405, отказ middleware,
+// newAPIErrorHandler отдаёт любую ошибку вне хендлера (404 роутера, отказ middleware,
 // паника) в общем JSON-envelope. Текст произвольной ошибки наружу не уходит: в нём
 // обёрнутые ошибки репозиториев и введённые пользователем значения — только в лог.
 func newAPIErrorHandler(logger *slog.Logger) echo.HTTPErrorHandler {

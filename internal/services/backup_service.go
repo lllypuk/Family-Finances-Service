@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -42,17 +43,41 @@ var (
 	errBackupNameTaken = errors.New("backup file name is already taken")
 )
 
+// BackupObserver считает копии, снятые через API; интерфейс объявлен здесь,
+// чтобы services не зависел от пакета метрик.
+type BackupObserver interface {
+	ObserveBackup(outcome string, d time.Duration)
+}
+
+// NopBackupObserver — заглушка для cron-процесса и тестов, где реестра нет.
+type NopBackupObserver struct{}
+
+func (NopBackupObserver) ObserveBackup(string, time.Duration) {}
+
+// Исходы снятия копии — значения метки outcome у ffs_backups_total.
+const (
+	backupOutcomeOK    = "ok"
+	backupOutcomeError = "error"
+)
+
 // backupService implements BackupService interface
 type backupService struct {
 	db        *sql.DB
 	backupDir string
 	keep      int
 	logger    *slog.Logger
+	observer  BackupObserver
 }
 
 // NewBackupService creates a new BackupService instance.
 // Пустой backupDir означает <dir(dbPath)>/backups, keep <= 0 — DefaultBackupKeep.
-func NewBackupService(db *sql.DB, dbPath, backupDir string, keep int, logger *slog.Logger) BackupService {
+func NewBackupService(
+	db *sql.DB,
+	dbPath, backupDir string,
+	keep int,
+	logger *slog.Logger,
+	observer BackupObserver,
+) BackupService {
 	if backupDir == "" {
 		backupDir = filepath.Join(filepath.Dir(dbPath), "backups")
 	}
@@ -64,6 +89,7 @@ func NewBackupService(db *sql.DB, dbPath, backupDir string, keep int, logger *sl
 		backupDir: backupDir,
 		keep:      keep,
 		logger:    logger,
+		observer:  observer,
 	}
 }
 
@@ -180,8 +206,23 @@ func (s *backupService) removeTemp(ctx context.Context, tmpPath string) {
 	}
 }
 
-// CreateBackup creates a new backup using SQLite VACUUM INTO
+// CreateBackup creates a new backup using SQLite VACUUM INTO.
+// Метрика снимается вокруг всей операции; провал уборки старых копий успех не отменяет.
 func (s *backupService) CreateBackup(ctx context.Context) (*BackupInfo, error) {
+	start := time.Now()
+
+	info, err := s.createBackup(ctx, start)
+
+	outcome := backupOutcomeOK
+	if err != nil {
+		outcome = backupOutcomeError
+	}
+	s.observer.ObserveBackup(outcome, time.Since(start))
+
+	return info, err
+}
+
+func (s *backupService) createBackup(ctx context.Context, start time.Time) (*BackupInfo, error) {
 	// Ensure backup directory exists
 	if err := s.ensureBackupDir(); err != nil {
 		return nil, fmt.Errorf("failed to create backup directory: %w", err)
@@ -196,8 +237,6 @@ func (s *backupService) CreateBackup(ctx context.Context) (*BackupInfo, error) {
 		backupPath string
 		lastErr    error
 	)
-
-	start := time.Now()
 
 	for range backupNameAttempts {
 		now = time.Now()
@@ -259,20 +298,23 @@ func (s *backupService) CreateBackup(ctx context.Context) (*BackupInfo, error) {
 	return backupInfo, nil
 }
 
-// ListBackups returns list of all backups sorted by date (newest first)
-func (s *backupService) ListBackups(_ context.Context) ([]*BackupInfo, error) {
-	// Ensure backup directory exists
-	if err := s.ensureBackupDir(); err != nil {
-		return nil, fmt.Errorf("failed to access backup directory: %w", err)
-	}
-
+// ListBackups returns list of all backups sorted by date (newest first).
+// Каталога может не быть — это пустой список, а не ошибка: чтение вызывается и со
+// скрейпа /metrics, и создавать там каталог оно не должно.
+func (s *backupService) ListBackups(ctx context.Context) ([]*BackupInfo, error) {
 	entries, err := os.ReadDir(s.backupDir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to read backup directory: %w", err)
 	}
 
 	var backups []*BackupInfo
 	for _, entry := range entries {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
 		if entry.IsDir() {
 			continue
 		}

@@ -30,15 +30,7 @@ func LoggingMiddleware(logger *slog.Logger) echo.MiddlewareFunc {
 			// Логируем результат
 			duration := time.Since(start)
 
-			// Ошибку из middleware (401/403 от RequireBearer) HTTPErrorHandler пишет уже после
-			// нас, поэтому статус берём из самой ошибки, а не из ещё не записанного ответа.
-			status := c.Response().Status
-			var he *echo.HTTPError
-			if errors.As(err, &he) {
-				status = he.Code
-			} else if err != nil {
-				status = http.StatusInternalServerError
-			}
+			status := ResponseStatus(c, err)
 
 			logArgs := []any{
 				slog.String("request_id", requestID),
@@ -65,6 +57,21 @@ func LoggingMiddleware(logger *slog.Logger) echo.MiddlewareFunc {
 
 			return err
 		}
+	}
+}
+
+// ResponseStatus — статус, который получит клиент. Ошибку из middleware (401/403 от
+// RequireBearer) HTTPErrorHandler пишет уже после наблюдателя, поэтому при ошибке статус
+// берётся из неё, а не из ещё не записанного ответа.
+func ResponseStatus(c echo.Context, err error) int {
+	var he *echo.HTTPError
+	switch {
+	case errors.As(err, &he):
+		return he.Code
+	case err != nil:
+		return http.StatusInternalServerError
+	default:
+		return c.Response().Status
 	}
 }
 

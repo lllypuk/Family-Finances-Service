@@ -45,7 +45,14 @@ func runBackup(ctx context.Context, args []string, _ io.Reader, stdout io.Writer
 		Format: cfg.Logging.Format,
 	})
 
-	service := services.NewBackupService(db, cfg.Database.Path, cfg.GetBackupDir(), keep, logger)
+	service := services.NewBackupService(
+		db,
+		cfg.Database.Path,
+		cfg.GetBackupDir(),
+		keep,
+		logger,
+		services.NopBackupObserver{},
+	)
 	info, err := service.CreateBackup(ctx)
 	if err != nil {
 		return err

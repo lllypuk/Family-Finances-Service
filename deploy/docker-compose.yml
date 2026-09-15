@@ -31,6 +31,14 @@ services:
       # мёртвым. Пустой TRUSTED_PROXIES выключает корзину per-IP в лимитере
       # логина, а за Caddy без него все клиенты выглядели бы одним адресом прокси.
       TRUSTED_PROXIES: ${FFS_INTERNAL_SUBNET:-172.20.0.0/16}
+      # Тоже топология: /metrics слушает отдельный порт, открытый только внутрь
+      # сети (наружу не публикуется), и скрейпер приходит по адресу контейнера.
+      # Пустое значение выключило бы слушателя, поэтому из .env не меняется.
+      METRICS_ADDR: 0.0.0.0:9091
+    labels:
+      # Docker-discovery скрейпера: сам порт из labels не открывается.
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9091"
     volumes:
       - ./data:/data
       - ./backups:/backups
