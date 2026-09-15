@@ -293,10 +293,10 @@
 - Modify: `android/app/src/main/res/values/strings.xml`
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/transactions/TransactionEditScreenTest.kt`
 
-- [ ] `AppIcons.Calendar` — контур Lucide
-- [ ] кнопка даты операции: `transaction_date` «Дата: %1$s» + иконка; `DateButton` бюджета — только иконка
-- [ ] `TransactionEditScreenTest`: подпись с датой видна, нажатие открывает пикер
-- [ ] `make -C android check` — зелёный
+- [x] `AppIcons.Calendar` — контур Lucide
+- [x] кнопка даты операции: `transaction_date` «Дата: %1$s» + иконка; `DateButton` бюджета — только иконка
+- [x] `TransactionEditScreenTest`: подпись с датой видна, нажатие открывает пикер
+- [x] `make -C android check` — зелёный
 
 ### Task 8: Главная — месяц и «Итого» как герой
 

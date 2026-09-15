@@ -24,6 +24,7 @@ import tech.shatrov.familyfinances.core.api.CategoryType
 import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.theme.AppTheme
 import tech.shatrov.familyfinances.ui.UiError
+import tech.shatrov.familyfinances.ui.format.formatDay
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -35,6 +36,8 @@ class TransactionEditScreenTest {
     val composeRule = createComposeRule()
 
     private val res = ApplicationProvider.getApplicationContext<Context>().resources
+
+    private val formDate = LocalDate.parse("2026-09-07")
 
     private fun show(
         state: TransactionEditUiState,
@@ -91,6 +94,26 @@ class TransactionEditScreenTest {
     }
 
     @Test
+    fun dateButtonShowsLabelledDate() {
+        show(form())
+
+        composeRule
+            .onNodeWithText(res.getString(R.string.transaction_date, formatDay(formDate)))
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun tappingDateOpensPicker() {
+        show(form())
+
+        composeRule
+            .onNodeWithText(res.getString(R.string.transaction_date, formatDay(formDate)))
+            .performClick()
+
+        composeRule.onNodeWithText(res.getString(R.string.transaction_date_pick)).assertIsDisplayed()
+    }
+
+    @Test
     fun failedLoadOffersRetry() {
         var retried = false
         show(
@@ -116,7 +139,7 @@ class TransactionEditScreenTest {
     ) = TransactionEditUiState(
         amount = amount,
         categoryId = UUID.fromString(GROCERIES_ID),
-        date = LocalDate.parse("2026-09-07"),
+        date = formDate,
         description = "Кофе",
         categories = listOf(groceries),
         loading = false,

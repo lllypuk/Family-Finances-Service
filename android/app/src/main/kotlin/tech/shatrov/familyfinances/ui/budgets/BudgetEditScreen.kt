@@ -320,6 +320,11 @@ private fun DateButton(
             .fillMaxWidth()
             .heightIn(min = Dimens.TOUCH_MIN),
     ) {
+        Icon(
+            imageVector = AppIcons.Calendar,
+            contentDescription = null,
+            modifier = Modifier.padding(end = Dimens.SPACE_2),
+        )
         Text("${stringResource(label)}: $day")
     }
 }

@@ -124,7 +124,12 @@ fun TransactionEditScreen(
             onClick = { datePickerShown = true },
             modifier = Modifier.heightIn(min = Dimens.TOUCH_MIN),
         ) {
-            Text(formatDay(state.date))
+            Icon(
+                imageVector = AppIcons.Calendar,
+                contentDescription = null,
+                modifier = Modifier.padding(end = Dimens.SPACE_2),
+            )
+            Text(stringResource(R.string.transaction_date, formatDay(state.date)))
         }
         FieldError(state.fieldErrors[TransactionField.DATE])
 
