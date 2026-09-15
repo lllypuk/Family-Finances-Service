@@ -394,12 +394,12 @@
 
 ### Task 14: [Final] Update documentation
 
-- [ ] `android/CLAUDE.md`: `SegmentedChoice` vs `Chip` (когда что), `SecretField` в `ui/`, FAB в
+- [x] `android/CLAUDE.md`: `SegmentedChoice` vs `Chip` (когда что), `SecretField` в `ui/`, FAB в
       `WithNavBar` и `FAB_CLEARANCE`, фильтры операций отдельным потоком, разделённые ресурсы
       повтора; абзац `:140` — главная и категории теперь с Compose-тестами (у них есть кнопка)
-- [ ] `android/gradle/libs.versions.toml`: `appVersionCode` +1, `appVersionName` → 0.6.0
-- [ ] `docs/backlog.md`: отложенное — светлая тема, `FlowRow` для категорий, колонки вместо « · »
-- [ ] перенести план в `docs/plans/completed/`
+- [x] `android/gradle/libs.versions.toml`: `appVersionCode` +1, `appVersionName` → 0.6.0
+- [x] `docs/backlog.md`: отложенное — светлая тема, `FlowRow` для категорий, колонки вместо « · »
+- [x] перенести план в `docs/plans/completed/`
 
 ## Post-Completion
 
