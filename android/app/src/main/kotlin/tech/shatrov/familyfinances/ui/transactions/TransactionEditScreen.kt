@@ -41,6 +41,7 @@ import tech.shatrov.familyfinances.ui.ChipRow
 import tech.shatrov.familyfinances.ui.DatePickerSheet
 import tech.shatrov.familyfinances.ui.FieldError
 import tech.shatrov.familyfinances.ui.SegmentedChoice
+import tech.shatrov.familyfinances.ui.currencySuffix
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.message
 import java.time.LocalDate
@@ -95,6 +96,8 @@ fun TransactionEditScreen(
             value = state.amount,
             onValueChange = onAmountChange,
             label = { Text(stringResource(R.string.transaction_amount)) },
+            suffix = currencySuffix(state.currency),
+            textStyle = MaterialTheme.typography.displayMedium,
             singleLine = true,
             isError = state.fieldErrors.containsKey(TransactionField.AMOUNT),
             supportingText = { FieldError(state.fieldErrors[TransactionField.AMOUNT]) },

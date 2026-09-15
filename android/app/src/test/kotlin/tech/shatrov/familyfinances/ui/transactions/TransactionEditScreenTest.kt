@@ -8,6 +8,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -42,13 +43,14 @@ class TransactionEditScreenTest {
     private fun show(
         state: TransactionEditUiState,
         onTypeChange: (TransactionType) -> Unit = {},
+        onAmountChange: (String) -> Unit = {},
         onRetry: () -> Unit = {},
     ) {
         composeRule.setContent {
             AppTheme {
                 TransactionEditScreen(
                     state = state,
-                    onAmountChange = {},
+                    onAmountChange = onAmountChange,
                     onTypeChange = onTypeChange,
                     onCategoryChange = {},
                     onDateChange = {},
@@ -114,6 +116,30 @@ class TransactionEditScreenTest {
     }
 
     @Test
+    fun amountFieldShowsCurrencySymbol() {
+        show(form())
+
+        composeRule.onNodeWithText("₽").assertIsDisplayed()
+    }
+
+    @Test
+    fun amountWithoutCurrencyHasNoSuffix() {
+        show(form().copy(currency = ""))
+
+        composeRule.onNodeWithText("₽").assertDoesNotExist()
+    }
+
+    @Test
+    fun typingAmountReachesCallback() {
+        var typed: String? = null
+        show(form(amount = ""), onAmountChange = { typed = it })
+
+        composeRule.onNodeWithText(res.getString(R.string.transaction_amount)).performTextInput("5")
+
+        assertEquals("5", typed)
+    }
+
+    @Test
     fun failedLoadOffersRetry() {
         var retried = false
         show(
@@ -138,6 +164,7 @@ class TransactionEditScreenTest {
         fieldErrors: Map<String, String> = emptyMap(),
     ) = TransactionEditUiState(
         amount = amount,
+        currency = "RUB",
         categoryId = UUID.fromString(GROCERIES_ID),
         date = formDate,
         description = "Кофе",

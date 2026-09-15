@@ -42,6 +42,7 @@ import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
 import tech.shatrov.familyfinances.ui.DatePickerSheet
 import tech.shatrov.familyfinances.ui.FieldError
+import tech.shatrov.familyfinances.ui.currencySuffix
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.message
 import java.time.LocalDate
@@ -101,6 +102,8 @@ fun BudgetEditScreen(
             value = state.amount,
             onValueChange = onAmountChange,
             label = { Text(stringResource(R.string.budget_amount)) },
+            suffix = currencySuffix(state.currency),
+            textStyle = MaterialTheme.typography.displayMedium,
             singleLine = true,
             enabled = editable,
             isError = state.fieldErrors.containsKey(BudgetField.AMOUNT),

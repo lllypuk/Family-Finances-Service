@@ -180,6 +180,13 @@ class BudgetEditScreenTest {
 
     private fun endLabel(date: LocalDate) = "${res.getString(R.string.budget_end)}: ${formatDay(date)}"
 
+    @Test
+    fun amountFieldShowsCurrencySymbol() {
+        show(form())
+
+        composeRule.onNodeWithText("₽").assertIsDisplayed()
+    }
+
     private fun show(
         state: BudgetEditUiState,
         onDelete: () -> Unit = {},
@@ -212,6 +219,7 @@ class BudgetEditScreenTest {
     private fun form(fieldErrors: Map<String, String> = emptyMap()) = BudgetEditUiState(
         name = "Еда",
         amount = "50000",
+        currency = "RUB",
         period = BudgetPeriod.monthly,
         start = START,
         end = END,

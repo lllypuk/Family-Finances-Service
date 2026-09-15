@@ -333,13 +333,13 @@
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/transactions/TransactionEditScreenTest.kt`
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/budgets/BudgetEditScreenTest.kt`
 
-- [ ] `symbolOf` → публичный `currencySymbol(code)`
-- [ ] `currency: String = ""` в конструкторах обеих моделей, в `UiState`; `AppRoot` передаёт из
+- [x] `symbolOf` → публичный `currencySymbol(code)`
+- [x] `currency: String = ""` в конструкторах обеих моделей, в `UiState`; `AppRoot` передаёт из
       `Session`; `TransactionEditViewModelTest:59` и `BudgetEditViewModelTest:129` не меняются
-- [ ] поля суммы/лимита: `textStyle = displayMedium`, `suffix = { Text(currencySymbol(currency)) }`
+- [x] поля суммы/лимита: `textStyle = displayMedium`, `suffix = { Text(currencySymbol(currency)) }`
       при непустой валюте
-- [ ] тесты: суффикс виден, ввод и ошибки прежние
-- [ ] `make -C android check` — зелёный
+- [x] тесты: суффикс виден, ввод и ошибки прежние
+- [x] `make -C android check` — зелёный
 
 ### Task 10: Текст — устройства, резервные копии, признак повторения
 

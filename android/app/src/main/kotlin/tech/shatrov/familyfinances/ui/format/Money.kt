@@ -29,7 +29,7 @@ fun formatMoney(
         else -> ""
     }
     val fraction = (absolute % MINOR_IN_UNIT).toString().padStart(FRACTION_DIGITS, '0')
-    return "$sign${groupDigits(absolute / MINOR_IN_UNIT)},$fraction$NBSP${symbolOf(currency)}"
+    return "$sign${groupDigits(absolute / MINOR_IN_UNIT)},$fraction$NBSP${currencySymbol(currency)}"
 }
 
 /** Доли (`share`, `*_delta`, `utilization`) приходят как 0…1 — в процентах их и показываем. */
@@ -43,7 +43,7 @@ fun formatPercent(
 }
 
 /** Незнакомый код показывается как есть: список валют сервер не ограничивает. */
-private fun symbolOf(currency: String): String = symbols[currency] ?: currency
+fun currencySymbol(currency: String): String = symbols[currency] ?: currency
 
 private fun groupDigits(units: Long): String {
     val digits = units.toString()

@@ -360,6 +360,7 @@ fun AppRoot(graph: AppGraph) {
                         current.id,
                         current.draft,
                         LocalDate.now(active.zone),
+                        active.currency,
                     )
                 }
             val edit by model.state.collectAsStateWithLifecycle()
@@ -408,6 +409,7 @@ fun AppRoot(graph: AppGraph) {
                         current.id,
                         current.draft,
                         LocalDate.now(active.zone),
+                        active.currency,
                     )
                 }
             val edit by model.state.collectAsStateWithLifecycle()

@@ -47,6 +47,7 @@ private val formFields = setOf(
 
 data class TransactionEditUiState(
     val amount: String = "",
+    val currency: String = "",
     val type: TransactionType = TransactionType.expense,
     val categoryId: UUID? = null,
     val date: LocalDate = LocalDate.now(),
@@ -81,9 +82,10 @@ class TransactionEditViewModel(
     private val transactionId: UUID? = null,
     private val draftId: UUID = UUID.randomUUID(),
     today: LocalDate = LocalDate.now(),
+    currency: String = "",
 ) : ViewModel() {
     private val mutable = MutableStateFlow(
-        TransactionEditUiState(date = today, editing = transactionId != null),
+        TransactionEditUiState(currency = currency, date = today, editing = transactionId != null),
     )
 
     val state: StateFlow<TransactionEditUiState> = mutable.asStateFlow()
