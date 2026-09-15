@@ -117,7 +117,8 @@ families       -- Профиль семьи (одна строка: singleton UN
 users          -- Пользователи семьи, роль admin|member
 categories     -- Категории доходов/расходов
 transactions   -- Операции: amount_minor INTEGER, date TEXT 'YYYY-MM-DD'
-budgets        -- Бюджеты: amount_minor/spent_minor, период start_date/end_date (TEXT-даты)
+budgets        -- Бюджеты: amount_minor/spent_minor, период start_date/end_date (TEXT-даты),
+               -- recurring/series_id — хвост серии и id её первого инстанса
 sessions       -- Bearer-сессии (хеш токена, устройство, сроки)
 ```
 

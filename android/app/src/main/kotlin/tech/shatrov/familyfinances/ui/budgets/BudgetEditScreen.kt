@@ -20,6 +20,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -62,6 +63,7 @@ fun BudgetEditScreen(
     onCategoryChange: (UUID?) -> Unit,
     onStartChange: (LocalDate) -> Unit,
     onEndChange: (LocalDate) -> Unit,
+    onRecurringChange: (Boolean) -> Unit,
     onSubmit: () -> Unit,
     onDelete: () -> Unit,
     onRetry: () -> Unit,
@@ -121,12 +123,21 @@ fun BudgetEditScreen(
         }
         FieldError(state.fieldErrors[BudgetField.PERIOD])
 
+        if (state.canRecur) {
+            RecurringSwitch(state, editable, onRecurringChange)
+        }
+        FieldError(state.fieldErrors[BudgetField.RECURRING])
+
         Label(R.string.budget_category)
         CategoryPicker(state, editable, onCategoryChange)
         FieldError(state.fieldErrors[BudgetField.CATEGORY])
 
-        DateButton(R.string.budget_start, formatDay(state.start), editable) { pickingDate = DateField.START }
-        DateButton(R.string.budget_end, formatDay(state.end), editable) { pickingDate = DateField.END }
+        DateButton(R.string.budget_start, formatDay(state.start), editable && !state.startLocked) {
+            pickingDate = DateField.START
+        }
+        DateButton(R.string.budget_end, formatDay(state.end), editable && !state.endLocked) {
+            pickingDate = DateField.END
+        }
         FieldError(state.fieldErrors[BudgetField.START])
         FieldError(state.fieldErrors[BudgetField.END])
         if (state.periodInvalid) {
@@ -179,6 +190,12 @@ fun BudgetEditScreen(
         AlertDialog(
             onDismissRequest = { deleteConfirmShown = false },
             title = { Text(stringResource(R.string.budget_delete_confirm)) },
+            // Хвост серии: удаление прерывает не только этот месяц.
+            text = if (state.loaded?.recurring == true) {
+                { Text(stringResource(R.string.budget_delete_recurring)) }
+            } else {
+                null
+            },
             confirmButton = {
                 TextButton(onClick = {
                     deleteConfirmShown = false
@@ -202,6 +219,36 @@ private fun periodLabel(period: BudgetPeriod): Int = when (period) {
     BudgetPeriod.monthly -> R.string.budget_period_monthly
     BudgetPeriod.yearly -> R.string.budget_period_yearly
     BudgetPeriod.custom -> R.string.budget_period_custom
+}
+
+/** Тумблер серии: при `custom` его нет — там нечему повторяться. */
+@Composable
+private fun RecurringSwitch(
+    state: BudgetEditUiState,
+    enabled: Boolean,
+    onRecurringChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = Dimens.TOUCH_MIN),
+        horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.budget_recurring),
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(checked = state.recurring, onCheckedChange = onRecurringChange, enabled = enabled)
+    }
+    if (state.recurring) {
+        Text(
+            text = stringResource(R.string.budget_recurring_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 @Composable

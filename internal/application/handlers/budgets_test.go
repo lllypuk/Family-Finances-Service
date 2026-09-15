@@ -35,6 +35,7 @@ type stubBudgetService struct {
 	created  *dto.CreateBudgetDTO
 	updated  *dto.UpdateBudgetDTO
 	activeOn *date.Date
+	filter   *dto.BudgetFilterDTO
 	deleted  *uuid.UUID
 }
 
@@ -49,8 +50,9 @@ func (s *stubBudgetService) GetBudgetByID(_ context.Context, _ uuid.UUID) (*budg
 
 func (s *stubBudgetService) GetBudgetsPage(
 	_ context.Context,
-	_ dto.BudgetFilterDTO,
+	filter dto.BudgetFilterDTO,
 ) ([]*budget.Budget, int, error) {
+	s.filter = &filter
 	return s.budgets, s.total, s.err
 }
 
@@ -161,6 +163,52 @@ func TestBudgetHandler_GetBudgets_ActiveOnlyUsesFamilyTimezone(t *testing.T) {
 	assert.Equal(t, date.Today(tokyo), *service.activeOn)
 }
 
+// TestBudgetHandler_GetBudgets_FullListPassesFamilyToday — материализация серий идёт и на
+// полном списке, а не только при active_only; today — в поясе семьи.
+func TestBudgetHandler_GetBudgets_FullListPassesFamilyToday(t *testing.T) {
+	service := &stubBudgetService{budgets: []*budget.Budget{testBudget(uuid.New())}, total: 1}
+	handler := setupBudgetHandler(service)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/budgets", nil)
+	rec := httptest.NewRecorder()
+
+	require.NoError(t, handler.GetBudgets(e.NewContext(req, rec)))
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	tokyo, err := time.LoadLocation("Asia/Tokyo")
+	require.NoError(t, err)
+	require.NotNil(t, service.filter)
+	require.NotNil(t, service.filter.Today)
+	assert.Equal(t, date.Today(tokyo), *service.filter.Today)
+}
+
+// TestBudgetHandler_BudgetResponse_CarriesSeries — хвост серии узнаётся клиентом по recurring,
+// а принадлежность к серии — по series_id.
+func TestBudgetHandler_BudgetResponse_CarriesSeries(t *testing.T) {
+	tail := testBudget(uuid.New())
+	tail.Recurring = true
+	tail.SeriesID = &tail.ID
+	handler := setupBudgetHandler(&stubBudgetService{budget: tail})
+
+	budgetID := tail.ID
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/budgets/"+budgetID.String(), nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(budgetID.String())
+
+	require.NoError(t, handler.GetBudgetByID(c))
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var response handlers.APIResponse[handlers.BudgetResponse]
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.True(t, response.Data.Recurring)
+	require.NotNil(t, response.Data.SeriesID)
+	assert.Equal(t, tail.ID, *response.Data.SeriesID)
+}
+
 func TestBudgetHandler_GetBudgetByID_NotFound(t *testing.T) {
 	handler := setupBudgetHandler(&stubBudgetService{err: services.ErrBudgetNotFoundService})
 
@@ -189,6 +237,7 @@ func TestBudgetHandler_UpdateBudget_BusinessConflicts(t *testing.T) {
 		{name: "overlap", err: services.ErrBudgetOverlapExists, code: handlers.ErrCodeBudgetOverlap},
 		{name: "name_exists", err: services.ErrBudgetNameExists, code: handlers.ErrCodeBudgetNameExists},
 		{name: "below_spent", err: services.ErrBudgetAlreadyExceeded, code: handlers.ErrCodeBudgetBelowSpent},
+		{name: "not_tail", err: services.ErrBudgetNotTail, code: handlers.ErrCodeBudgetNotTail},
 	}
 
 	for _, tt := range tests {
@@ -238,6 +287,69 @@ func TestBudgetHandler_UpdateBudget_AmountTooLargeStays422(t *testing.T) {
 
 	rec := updateBudgetRequest(t, handler, `{"amount_minor":1000}`)
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
+}
+
+// TestBudgetHandler_UpdateBudget_RecurringValidationFields — отказы серии это ошибки формы:
+// клиенту нужно знать, какое поле чинить.
+func TestBudgetHandler_UpdateBudget_RecurringValidationFields(t *testing.T) {
+	tests := []struct {
+		name  string
+		err   error
+		field string
+	}{
+		{name: "custom", err: budget.ErrRecurringCustom, field: "recurring"},
+		{name: "not_aligned", err: budget.ErrRecurringNotAligned, field: "start_date"},
+		{name: "series_dates_fixed", err: budget.ErrSeriesDatesFixed, field: "start_date"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := setupBudgetHandler(&stubBudgetService{err: tt.err})
+
+			rec := updateBudgetRequest(t, handler, `{"recurring":true}`)
+			require.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
+
+			var response handlers.ErrorResponse
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+			assert.Equal(t, handlers.ErrCodeValidationError, response.Error.Code)
+			require.Len(t, response.Error.Details, 1)
+			assert.Equal(t, tt.field, response.Error.Details[0].Field)
+		})
+	}
+}
+
+// TestBudgetHandler_UpdateBudget_OnlyRecurring — тело из одного recurring валидно: остановка
+// серии не меняет больше ничего.
+func TestBudgetHandler_UpdateBudget_OnlyRecurring(t *testing.T) {
+	service := &stubBudgetService{budget: testBudget(uuid.New())}
+	handler := setupBudgetHandler(service)
+
+	rec := updateBudgetRequest(t, handler, `{"recurring":false}`)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	require.NotNil(t, service.updated)
+	require.NotNil(t, service.updated.Recurring)
+	assert.False(t, *service.updated.Recurring)
+}
+
+// TestBudgetHandler_CreateBudget_PassesRecurring — флаг из тела доходит до сервиса.
+func TestBudgetHandler_CreateBudget_PassesRecurring(t *testing.T) {
+	service := &stubBudgetService{budget: testBudget(uuid.New())}
+	handler := setupBudgetHandler(service)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/budgets", strings.NewReader(
+		`{"name":"Food","amount_minor":100000,"period":"monthly",`+
+			`"start_date":"2026-01-01","end_date":"2026-01-31","recurring":true}`,
+	))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+
+	require.NoError(t, handler.CreateBudget(e.NewContext(req, rec)))
+	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+
+	require.NotNil(t, service.created)
+	assert.True(t, service.created.Recurring)
 }
 
 func TestBudgetHandler_DeleteBudget_Success(t *testing.T) {

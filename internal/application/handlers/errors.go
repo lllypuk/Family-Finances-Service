@@ -46,6 +46,8 @@ const (
 	ErrCodeBudgetBelowSpent = "BUDGET_BELOW_SPENT"
 	// ErrCodeBudgetIDExists signals a client id already taken by a deleted budget.
 	ErrCodeBudgetIDExists = "BUDGET_ID_EXISTS"
+	// ErrCodeBudgetNotTail signals an operation on a stale tail: the series has already advanced.
+	ErrCodeBudgetNotTail = "BUDGET_NOT_TAIL"
 	// ErrCodeInvalidQueryParam маркирует деталь ошибки 422 по query-параметру.
 	ErrCodeInvalidQueryParam = "INVALID_QUERY_PARAM"
 	// ErrCodeInvalidBackupName signals a backup filename outside the `backup_*.db` pattern.
@@ -81,6 +83,7 @@ const (
 	ErrMessageBudgetNameExists   = "Budget with this name already exists for this period"
 	ErrMessageBudgetBelowSpent   = "Budget amount is less than already spent"
 	ErrMessageBudgetIDExists     = "Budget id is already taken by a deleted budget"
+	ErrMessageBudgetNotTail      = "Budget has already advanced to the next period"
 	ErrMessageInvalidBackupName  = "Invalid backup filename"
 	ErrMessageBackupNotFound     = "Backup not found"
 	ErrMessageBackupFailed       = "Failed to create backup"
@@ -99,5 +102,7 @@ const (
 	fieldNewPassword = "new_password"
 	fieldCurrency    = "currency"
 	fieldDate        = "date"
+	fieldStartDate   = "start_date"
 	fieldEndDate     = "end_date"
+	fieldRecurring   = "recurring"
 )

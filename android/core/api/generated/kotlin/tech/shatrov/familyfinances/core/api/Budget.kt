@@ -42,9 +42,11 @@ import kotlinx.serialization.Contextual
  * @param startDate Календарная дата без времени в часовом поясе семьи (A-06)
  * @param endDate Календарная дата без времени в часовом поясе семьи (A-06)
  * @param isActive Всегда `true` — удалённые бюджеты не возвращаются
+ * @param recurring `true` только у последнего инстанса серии («хвоста»): когда его период кончается, сервер сам создаёт следующий и переносит флаг на него. Прошлые инстансы серии остаются с `recurring: false` и тем же `series_id`. 
  * @param createdAt Служебная метка времени, RFC3339 UTC
  * @param updatedAt Служебная метка времени, RFC3339 UTC
  * @param categoryId null — бюджет на все категории
+ * @param seriesId id первого инстанса серии; у обычного бюджета поле отсутствует. Не адресуется никакой операцией
  */
 @Serializable
 
@@ -87,6 +89,10 @@ data class Budget (
     @SerialName(value = "is_active")
     val isActive: kotlin.Boolean,
 
+    /* `true` только у последнего инстанса серии («хвоста»): когда его период кончается, сервер сам создаёт следующий и переносит флаг на него. Прошлые инстансы серии остаются с `recurring: false` и тем же `series_id`.  */
+    @SerialName(value = "recurring")
+    val recurring: kotlin.Boolean,
+
     /* Служебная метка времени, RFC3339 UTC */
     @Contextual @SerialName(value = "created_at")
     val createdAt: java.time.OffsetDateTime,
@@ -97,7 +103,11 @@ data class Budget (
 
     /* null — бюджет на все категории */
     @Contextual @SerialName(value = "category_id")
-    val categoryId: java.util.UUID? = null
+    val categoryId: java.util.UUID? = null,
+
+    /* id первого инстанса серии; у обычного бюджета поле отсутствует. Не адресуется никакой операцией */
+    @Contextual @SerialName(value = "series_id")
+    val seriesId: java.util.UUID? = null
 
 ) {
 

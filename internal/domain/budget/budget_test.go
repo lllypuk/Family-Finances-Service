@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/date"
@@ -247,4 +248,215 @@ func newBudget(
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
+}
+
+func TestValidateRecurring(t *testing.T) {
+	tests := []struct {
+		name    string
+		period  budget.Period
+		start   date.Date
+		end     date.Date
+		wantErr error
+	}{
+		{
+			name:   "Monthly aligned",
+			period: budget.PeriodMonthly,
+			start:  date.New(2026, time.September, 1),
+			end:    date.New(2026, time.September, 30),
+		},
+		{
+			name:   "Monthly february leap year",
+			period: budget.PeriodMonthly,
+			start:  date.New(2024, time.February, 1),
+			end:    date.New(2024, time.February, 29),
+		},
+		{
+			name:    "Monthly not first day",
+			period:  budget.PeriodMonthly,
+			start:   date.New(2026, time.September, 2),
+			end:     date.New(2026, time.September, 30),
+			wantErr: budget.ErrRecurringNotAligned,
+		},
+		{
+			name:    "Monthly not last day",
+			period:  budget.PeriodMonthly,
+			start:   date.New(2026, time.September, 1),
+			end:     date.New(2026, time.September, 29),
+			wantErr: budget.ErrRecurringNotAligned,
+		},
+		{
+			name:    "Monthly spans two months",
+			period:  budget.PeriodMonthly,
+			start:   date.New(2026, time.September, 1),
+			end:     date.New(2026, time.October, 31),
+			wantErr: budget.ErrRecurringNotAligned,
+		},
+		{
+			name:   "Yearly aligned",
+			period: budget.PeriodYearly,
+			start:  date.New(2026, time.January, 1),
+			end:    date.New(2026, time.December, 31),
+		},
+		{
+			name:    "Yearly ends next year",
+			period:  budget.PeriodYearly,
+			start:   date.New(2026, time.January, 1),
+			end:     date.New(2027, time.December, 31),
+			wantErr: budget.ErrRecurringNotAligned,
+		},
+		{
+			name:    "Yearly starts in february",
+			period:  budget.PeriodYearly,
+			start:   date.New(2026, time.February, 1),
+			end:     date.New(2026, time.December, 31),
+			wantErr: budget.ErrRecurringNotAligned,
+		},
+		{
+			name:   "Weekly seven days",
+			period: budget.PeriodWeekly,
+			start:  date.New(2026, time.September, 14),
+			end:    date.New(2026, time.September, 20),
+		},
+		{
+			name:   "Weekly across month boundary",
+			period: budget.PeriodWeekly,
+			start:  date.New(2026, time.September, 28),
+			end:    date.New(2026, time.October, 4),
+		},
+		{
+			name:    "Weekly six days",
+			period:  budget.PeriodWeekly,
+			start:   date.New(2026, time.September, 14),
+			end:     date.New(2026, time.September, 19),
+			wantErr: budget.ErrRecurringNotAligned,
+		},
+		{
+			name:    "Custom rejected",
+			period:  budget.PeriodCustom,
+			start:   date.New(2026, time.September, 1),
+			end:     date.New(2026, time.September, 30),
+			wantErr: budget.ErrRecurringCustom,
+		},
+		{
+			name:    "Unknown period rejected",
+			period:  budget.Period("quarterly"),
+			start:   date.New(2026, time.September, 1),
+			end:     date.New(2026, time.September, 30),
+			wantErr: budget.ErrRecurringNotAligned,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := budget.ValidateRecurring(tt.period, tt.start, tt.end)
+			if tt.wantErr == nil {
+				assert.NoError(t, err)
+
+				return
+			}
+
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestBudget_Next(t *testing.T) {
+	tests := []struct {
+		name      string
+		period    budget.Period
+		start     date.Date
+		end       date.Date
+		wantStart date.Date
+		wantEnd   date.Date
+	}{
+		{
+			name:      "Monthly december rolls over the year",
+			period:    budget.PeriodMonthly,
+			start:     date.New(2026, time.December, 1),
+			end:       date.New(2026, time.December, 31),
+			wantStart: date.New(2027, time.January, 1),
+			wantEnd:   date.New(2027, time.January, 31),
+		},
+		{
+			name:      "Monthly january to leap february",
+			period:    budget.PeriodMonthly,
+			start:     date.New(2024, time.January, 1),
+			end:       date.New(2024, time.January, 31),
+			wantStart: date.New(2024, time.February, 1),
+			wantEnd:   date.New(2024, time.February, 29),
+		},
+		{
+			name:      "Monthly january to short february",
+			period:    budget.PeriodMonthly,
+			start:     date.New(2026, time.January, 1),
+			end:       date.New(2026, time.January, 31),
+			wantStart: date.New(2026, time.February, 1),
+			wantEnd:   date.New(2026, time.February, 28),
+		},
+		{
+			name:      "Weekly shifts by seven days",
+			period:    budget.PeriodWeekly,
+			start:     date.New(2026, time.September, 28),
+			end:       date.New(2026, time.October, 4),
+			wantStart: date.New(2026, time.October, 5),
+			wantEnd:   date.New(2026, time.October, 11),
+		},
+		{
+			name:      "Yearly",
+			period:    budget.PeriodYearly,
+			start:     date.New(2026, time.January, 1),
+			end:       date.New(2026, time.December, 31),
+			wantStart: date.New(2027, time.January, 1),
+			wantEnd:   date.New(2027, time.December, 31),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			seriesID := uuid.New()
+			current := &budget.Budget{
+				ID:          uuid.New(),
+				Name:        "Продукты",
+				AmountMinor: 100_000,
+				SpentMinor:  40_000,
+				Period:      tt.period,
+				StartDate:   tt.start,
+				EndDate:     tt.end,
+				IsActive:    true,
+				Recurring:   true,
+				SeriesID:    &seriesID,
+			}
+
+			next := current.Next()
+			require.NotNil(t, next)
+			assert.Equal(t, tt.wantStart, next.StartDate)
+			assert.Equal(t, tt.wantEnd, next.EndDate)
+			require.NoError(t, budget.ValidateRecurring(tt.period, next.StartDate, next.EndDate))
+			assert.NotEqual(t, current.ID, next.ID)
+			assert.Equal(t, current.Name, next.Name)
+			assert.Equal(t, current.AmountMinor, next.AmountMinor)
+			assert.Equal(t, money.Minor(0), next.SpentMinor)
+			assert.True(t, next.Recurring)
+			assert.True(t, next.IsActive)
+			assert.Equal(t, &seriesID, next.SeriesID)
+			assert.Equal(t, tt.start, current.StartDate)
+		})
+	}
+}
+
+func TestBudget_Next_CustomPeriod(t *testing.T) {
+	current := &budget.Budget{
+		Period:    budget.PeriodCustom,
+		StartDate: date.New(2026, time.September, 1),
+		EndDate:   date.New(2026, time.September, 10),
+	}
+
+	assert.Nil(t, current.Next())
+}
+
+func TestOverlapError_Is(t *testing.T) {
+	err := error(&budget.OverlapError{Name: "Продукты"})
+
+	require.ErrorIs(t, err, budget.ErrOverlap)
+	assert.Contains(t, err.Error(), "Продукты")
 }

@@ -12,6 +12,7 @@ migration next to it — an already-applied `001` is never re-run (see "Changing
 - `001_consolidated.down.sql` - the full rollback
 - `002_budgets_name_period_partial_unique.{up,down}.sql` - the budget name/period `UNIQUE` → partial index
 - `003_drop_reports.{up,down}.sql` - the `reports` table dropped (plan 10)
+- `004_budgets_recurring.{up,down}.sql` - `budgets.recurring` / `budgets.series_id` (plan 12)
 
 ### Why Consolidated Migrations?
 
@@ -64,6 +65,12 @@ Every schema change is written **twice**:
 
 On a fresh database `NNN` re-applies what `001` already did, so write it to be harmless there — `002` rebuilds
 `budgets` into a table identical to the one `001` creates. Keep the two definitions in sync.
+
+**Exception to "`002` = `001`": columns added after `v0.2.0`.** `002` is frozen on the `v0.2.0` schema, so a
+column added later lives in `001` (for a new install) and in its own `NNN` — and on a fresh database `002`
+drops what `001` created, because its `INSERT ... SELECT` lists the columns of that older table. `004` then puts
+`recurring` / `series_id` back. Do not add new columns to the `budgets` definition inside `002`: it must keep
+reproducing the released schema, or the upgrade path it tests stops being the one the server runs.
 
 Cover the step in `internal/infrastructure/migrations_test.go`: `manager.Migrate(N-1)` puts the released schema
 back on a temp file, so the upgrade a server will actually run is what the test exercises.
@@ -196,6 +203,7 @@ SELECT * FROM schema_migrations;
 | 001 | Plan 04: файл переписан одним куском; `*_minor INTEGER` вместо `REAL`, даты — `TEXT`, `families.timezone`, роль только `admin`/`member`; `budget_alerts` и `invites` удалены | 2026-09-06 |
 | 002 | Plan 09: табличный `UNIQUE` бюджетов → частичный индекс `idx_budgets_name_period_active` (`WHERE is_active = 1`) пересборкой таблицы | 2026-09-12 |
 | 003 | Plan 10: таблица `reports` и её индексы удалены вместе с `/api/v1/reports` | 2026-09-13 |
+| 004 | Plan 12: `budgets.recurring` и `budgets.series_id` — периодические бюджеты | 2026-09-14 |
 
 ## See Also
 

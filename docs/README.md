@@ -7,9 +7,9 @@
 **Проект представляет собой self-hosted решение** — один Docker-образ (~50MB) со встроенной SQLite базой данных: JSON API для Android-приложения, bearer-аутентификация, CLI для первичной настройки.
 
 > **Направление с сентября 2026:** API-only бэкенд для Android-приложения. Решения и порядок работ —
-> [specs/005-api-only-redesign.md](specs/005-api-only-redesign.md); планы 01–10 выполнены (веб-интерфейс удалён,
+> [specs/005-api-only-redesign.md](specs/005-api-only-redesign.md); планы 01–10 и 12 выполнены (веб-интерфейс удалён,
 > деньги в минимальных единицах, календарные даты, деплой одним compose с Caddy, Android-клиент в `android/`
-> вместе с экраном настроек, отчёты удалены в пользу `GET /stats/monthly`).
+> вместе с экраном настроек, отчёты удалены в пользу `GET /stats/monthly`, бюджеты умеют повторяться серией).
 > Разделы ниже описывают текущее состояние кода.
 
 ## 🚀 Быстрый старт
@@ -91,7 +91,7 @@
 - **[001-project-assessment.md](specs/001-project-assessment.md)** - Общая оценка проекта
 - **[002-security-audit.md](specs/002-security-audit.md)** - Аудит безопасности (S-01…S-05, со статусами)
 - **[004-deployment-readiness.md](specs/004-deployment-readiness.md)** - Готовность к развёртыванию (D-01…D-04)
-- **[005-api-only-redesign.md](specs/005-api-only-redesign.md)** - Переход на API-only для Android (решения A-01…A-12)
+- **[005-api-only-redesign.md](specs/005-api-only-redesign.md)** - Переход на API-only для Android (решения A-01…A-14)
 
 ### 🔌 api/ - Контракт API
 - **[api/openapi.yaml](api/openapi.yaml)** - целевой контракт `/api/v1` (OpenAPI 3.1), источник для Kotlin-клиента

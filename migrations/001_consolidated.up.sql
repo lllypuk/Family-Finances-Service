@@ -96,6 +96,10 @@ CREATE TABLE IF NOT EXISTS budgets (
     category_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
     family_id TEXT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
     is_active INTEGER DEFAULT 1,
+    -- Хвост серии: при чтении бюджетов сервер достраивает следующий период (план 12).
+    recurring INTEGER NOT NULL DEFAULT 0 CHECK (recurring IN (0, 1)),
+    -- Без FK: первый инстанс серии мягко удаляется, но строка остаётся; ссылаться не на что ломаться.
+    series_id TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 

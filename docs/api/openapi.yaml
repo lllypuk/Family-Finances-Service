@@ -24,7 +24,8 @@ info:
     `UNAUTHORIZED` (401), `FORBIDDEN` (403), `NOT_FOUND` / `<ENTITY>_NOT_FOUND` (404),
     `VALIDATION_ERROR` (422 — тело или query-параметры не прошли проверку, поля в `error.details`),
     `SETUP_REQUIRED` / `CURRENCY_LOCKED` / `LAST_ADMIN` / `CANNOT_DEACTIVATE_SELF` /
-    `BUDGET_OVERLAP` / `BUDGET_NAME_EXISTS` / `BUDGET_BELOW_SPENT` (409),
+    `EMAIL_TAKEN` / `BUDGET_OVERLAP` / `BUDGET_NAME_EXISTS` / `BUDGET_BELOW_SPENT` /
+    `BUDGET_ID_EXISTS` / `BUDGET_NOT_TAIL` (409),
     `RATE_LIMITED` (429, с `Retry-After`), `INTERNAL_ERROR` (500).
   license:
     name: MIT
@@ -615,7 +616,9 @@ paths:
       operationId: listBudgets
       tags: [budgets]
       summary: Бюджеты семьи
-      description: admin и member.
+      description: admin и member. Серии повторяющихся бюджетов достраиваются лениво, на чтении —
+        до запроса сервер создаёт пропущенные инстансы по «сегодня» в таймзоне семьи, поэтому
+        `active_only=true` отдаёт текущий период серии, а полный список — её прошлые инстансы.
       parameters:
         - { $ref: '#/components/parameters/Limit' }
         - { $ref: '#/components/parameters/Offset' }
@@ -648,6 +651,7 @@ paths:
         (период пересекается с бюджетом той же области; границы включительные — общий день
         уже пересечение), `BUDGET_NAME_EXISTS` (имя занято на этот период) и `BUDGET_ID_EXISTS`
         (`id` занят удалённым бюджетом — нужен новый `id`, переименование не поможет).
+        Флаг `recurring` заводит серию — даты обязаны совпадать с календарным периодом.
       requestBody:
         required: true
         content:
@@ -682,8 +686,9 @@ paths:
       tags: [budgets]
       summary: Изменить бюджет
       description: admin и member. Бизнес-отказы отвечают `409` — `BUDGET_OVERLAP`,
-        `BUDGET_NAME_EXISTS` и `BUDGET_BELOW_SPENT` (новая сумма меньше уже потраченного
-        за период).
+        `BUDGET_NAME_EXISTS`, `BUDGET_BELOW_SPENT` (новая сумма меньше уже потраченного
+        за период) и `BUDGET_NOT_TAIL` (серия продвинулась — форма клиента устарела, список
+        нужно перечитать).
       requestBody:
         required: true
         content:
@@ -718,7 +723,9 @@ paths:
       summary: Сводка за период
       description: |
         admin и member. Заменяет дашборд веб-интерфейса. Без параметров — текущий месяц
-        в часовом поясе семьи (A-06).
+        в часовом поясе семьи (A-06). Серии повторяющихся бюджетов достраиваются и на этом
+        чтении: `budgets[]` может содержать инстанс, созданный самим запросом, — список
+        бюджетов после сводки стоит считать устаревшим.
       parameters:
         - name: from
           in: query
@@ -938,7 +945,7 @@ components:
       description: |
         Состояние не допускает операцию: `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`,
         `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN`, `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`,
-        `BUDGET_BELOW_SPENT`
+        `BUDGET_BELOW_SPENT`, `BUDGET_ID_EXISTS`, `BUDGET_NOT_TAIL`
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1362,7 +1369,7 @@ components:
     Budget:
       type: object
       required: [id, name, amount_minor, spent_minor, remaining_minor, utilization, period, start_date,
-                 end_date, is_active, created_at, updated_at]
+                 end_date, is_active, recurring, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
@@ -1386,6 +1393,17 @@ components:
         is_active:
           type: boolean
           description: Всегда `true` — удалённые бюджеты не возвращаются
+        recurring:
+          type: boolean
+          description: |
+            `true` только у последнего инстанса серии («хвоста»): когда его период кончается,
+            сервер сам создаёт следующий и переносит флаг на него. Прошлые инстансы серии
+            остаются с `recurring: false` и тем же `series_id`.
+        series_id:
+          oneOf:
+            - { type: string, format: uuid }
+            - { type: 'null' }
+          description: id первого инстанса серии; у обычного бюджета поле отсутствует. Не адресуется никакой операцией
         created_at: { $ref: '#/components/schemas/Timestamp' }
         updated_at: { $ref: '#/components/schemas/Timestamp' }
     CreateBudgetRequest:
@@ -1404,6 +1422,13 @@ components:
         category_id: { type: string, format: uuid }
         start_date: { $ref: '#/components/schemas/CalendarDate' }
         end_date: { $ref: '#/components/schemas/CalendarDate' }
+        recurring:
+          type: boolean
+          default: false
+          description: |
+            Завести серию: даты обязаны совпадать с календарным периодом (`monthly` — с 1-го по
+            последнее число месяца, `yearly` — с 1 января по 31 декабря, `weekly` — ровно 7 дней),
+            иначе `422` с полем `start_date`; `custom` — `422` с полем `recurring`.
     UpdateBudgetRequest:
       type: object
       minProperties: 1
@@ -1415,6 +1440,13 @@ components:
           minimum: 1
         start_date: { $ref: '#/components/schemas/CalendarDate' }
         end_date: { $ref: '#/components/schemas/CalendarDate' }
+        recurring:
+          type: boolean
+          description: |
+            Отсутствие поля не трогает серию. `true` разрешено бюджету вне серии и последнему живому
+            инстансу серии без хвоста (иначе `409 BUDGET_NOT_TAIL`); даты должны быть выровнены по
+            календарному периоду. `false` снимает флаг с хвоста; у не-хвоста при живом хвосте —
+            `409 BUDGET_NOT_TAIL`. Даты члена серии менять нельзя — `422` с полем `start_date`.
 
     PeriodTotals:
       type: object

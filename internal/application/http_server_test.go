@@ -336,15 +336,6 @@ func (m *MockBudgetService) GetBudgetsByCategory(ctx context.Context, categoryID
 }
 
 //nolint:revive // test mock
-func (m *MockBudgetService) ValidateBudgetPeriod(
-	ctx context.Context,
-	categoryID *uuid.UUID,
-	startDate, endDate date.Date,
-) error {
-	return nil
-}
-
-//nolint:revive // test mock
 func (m *MockBudgetService) CheckBudgetLimits(
 	ctx context.Context,
 	categoryID uuid.UUID,

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -180,6 +181,15 @@ private fun BudgetItem(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
+            // Значок только у хвоста серии: прошлые её инстансы — обычные строки истории.
+            if (budget.recurring) {
+                Icon(
+                    imageVector = AppIcons.Repeat,
+                    contentDescription = stringResource(R.string.budget_recurring),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(Dimens.ICON_SIZE),
+                )
+            }
             Text(
                 text = stringResource(
                     R.string.budget_progress,

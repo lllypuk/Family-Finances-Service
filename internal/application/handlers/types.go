@@ -241,6 +241,8 @@ type CreateBudgetRequest struct {
 	CategoryID  *uuid.UUID  `json:"category_id,omitempty"`
 	StartDate   date.Date   `json:"start_date"            validate:"required"`
 	EndDate     date.Date   `json:"end_date"              validate:"required"`
+	// Recurring — бюджет становится хвостом серии; даты обязаны совпасть с календарным периодом.
+	Recurring bool `json:"recurring,omitempty"`
 }
 
 type UpdateBudgetRequest struct {
@@ -248,6 +250,8 @@ type UpdateBudgetRequest struct {
 	AmountMinor *money.Minor `json:"amount_minor,omitempty" validate:"omitempty,gt=0"`
 	StartDate   *date.Date   `json:"start_date,omitempty"`
 	EndDate     *date.Date   `json:"end_date,omitempty"`
+	// Recurring — отсутствие поля не трогает флаг серии.
+	Recurring *bool `json:"recurring,omitempty"`
 }
 
 // BudgetResponse — RemainingMinor уходит в минус при перерасходе; Utilization
@@ -264,6 +268,8 @@ type BudgetResponse struct {
 	StartDate      date.Date   `json:"start_date"`
 	EndDate        date.Date   `json:"end_date"`
 	IsActive       bool        `json:"is_active"`
+	Recurring      bool        `json:"recurring"`
+	SeriesID       *uuid.UUID  `json:"series_id,omitempty"`
 	CreatedAt      time.Time   `json:"created_at"`
 	UpdatedAt      time.Time   `json:"updated_at"`
 }

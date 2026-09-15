@@ -29,6 +29,9 @@ type CreateBudgetDTO struct {
 	CategoryID  *uuid.UUID    `validate:"omitempty"`
 	StartDate   date.Date     `validate:"required"`
 	EndDate     date.Date     `validate:"required"`
+	// Recurring — бюджет становится хвостом новой серии: даты обязаны совпадать
+	// с календарным периодом (budget.ValidateRecurring).
+	Recurring bool `validate:"omitempty"`
 }
 
 // UpdateBudgetDTO represents the data that can be updated for an existing budget
@@ -37,6 +40,8 @@ type UpdateBudgetDTO struct {
 	AmountMinor *money.Minor `validate:"omitempty,gt=0"`
 	StartDate   *date.Date   `validate:"omitempty"`
 	EndDate     *date.Date   `validate:"omitempty"`
+	// Recurring — nil означает «не трогать флаг»; см. правила хвоста в BudgetService.
+	Recurring *bool `validate:"omitempty"`
 }
 
 // BudgetFilterDTO represents filtering and pagination options for budgets
@@ -45,6 +50,10 @@ type BudgetFilterDTO struct {
 	CategoryID *uuid.UUID     `validate:"omitempty"`
 	Period     *budget.Period `validate:"omitempty,oneof=weekly monthly yearly custom"`
 	IsActive   *bool          `validate:"omitempty"`
+
+	// Today — сегодняшняя дата по таймзоне семьи: до неё достраиваются серии
+	// повторяющихся бюджетов. nil — материализации не будет.
+	Today *date.Date `validate:"omitempty"`
 
 	// Date filters
 	ActiveOn *date.Date `validate:"omitempty"` // Budgets active on specific date

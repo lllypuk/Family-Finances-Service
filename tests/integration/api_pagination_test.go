@@ -149,9 +149,12 @@ func TestAPIPagination_Budgets_TotalIgnoresLimit(t *testing.T) {
 	testCategory := testhelpers.CreateTestCategory(testServer.AuthFamily.ID, category.TypeExpense)
 	require.NoError(t, testServer.Repos.Category.Create(context.Background(), testCategory))
 
-	for range 3 {
+	for i := range 3 {
 		testBudget := testhelpers.CreateTestBudget(testServer.AuthFamily.ID, testCategory.ID)
 		testBudget.Name = uuid.NewString()
+		// Периоды разводятся: занятый период одной области репозиторий отбивает.
+		testBudget.StartDate = testBudget.StartDate.AddDays(i * 40)
+		testBudget.EndDate = testBudget.StartDate.AddDays(30)
 		require.NoError(t, testServer.Repos.Budget.Create(context.Background(), testBudget))
 	}
 
