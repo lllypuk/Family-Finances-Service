@@ -15,6 +15,7 @@
     <string name="login_error_storage">Не удалось сохранить вход на телефоне — попробуйте ещё раз</string>
 
     <string name="home_title">Главная</string>
+    <string name="home_through">по %1$s</string>
     <string name="home_income">Доходы</string>
     <string name="home_expenses">Расходы</string>
     <string name="home_net">Итого</string>

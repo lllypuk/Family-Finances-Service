@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -36,8 +35,8 @@ import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Centered
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.format.formatMoney
+import tech.shatrov.familyfinances.ui.format.formatMonth
 import tech.shatrov.familyfinances.ui.format.formatPercent
-import tech.shatrov.familyfinances.ui.format.formatPeriod
 import tech.shatrov.familyfinances.ui.message
 
 /** Сколько категорий помещается в карточку: остальное живёт на экране транзакций. */
@@ -59,11 +58,24 @@ fun HomeScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = stringResource(R.string.home_title),
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.weight(1f),
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                val ready = state as? HomeUiState.Ready
+                Text(
+                    text = if (ready == null) {
+                        stringResource(R.string.home_title)
+                    } else {
+                        formatMonth(ready.summary.from)
+                    },
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+                if (ready != null) {
+                    Text(
+                        text = stringResource(R.string.home_through, formatDay(ready.summary.to)),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             IconButton(onClick = onSettings) {
                 Icon(AppIcons.User, contentDescription = stringResource(R.string.settings_title))
             }
@@ -114,15 +126,7 @@ private fun Summary(state: HomeUiState.Ready) {
         contentPadding = PaddingValues(vertical = Dimens.SPACE_3),
     ) {
         item {
-            Text(
-                text = formatPeriod(summary.from, summary.to),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        item {
-            TotalsCard(state)
+            Totals(state)
         }
 
         if (summary.expenseCategories.isNotEmpty()) {
@@ -145,41 +149,44 @@ private fun Summary(state: HomeUiState.Ready) {
 }
 
 @Composable
-private fun TotalsCard(state: HomeUiState.Ready) {
+private fun Totals(state: HomeUiState.Ready) {
     val colors = LocalAppColors.current
     val summary = state.summary
     // Дельты показываются только когда есть с чем сравнивать: иначе сервер шлёт нули, и «0 %»
     // читалось бы как «ничего не изменилось».
     val delta = { value: Double -> if (summary.hasPreviousData) formatPercent(value, signed = true) else null }
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(Dimens.SPACE_4),
-            verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
-        ) {
-            TotalRow(
-                label = stringResource(R.string.home_income),
-                amount = formatMoney(summary.current.incomeMinor, state.currency),
-                delta = delta(summary.incomeDelta),
-                color = colors.income,
-            )
-            TotalRow(
-                label = stringResource(R.string.home_expenses),
-                amount = formatMoney(summary.current.expensesMinor, state.currency),
-                delta = delta(summary.expensesDelta),
-                color = colors.expense,
-            )
-            TotalRow(
-                label = stringResource(R.string.home_net),
-                amount = formatMoney(summary.current.netMinor, state.currency, signed = true),
-                delta = null,
-                color = if (summary.current.netMinor < 0) colors.expense else colors.income,
-            )
-            Text(
-                text = stringResource(R.string.home_transactions, summary.current.transactionCount),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
+    ) {
+        Text(
+            text = stringResource(R.string.home_net),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = formatMoney(summary.current.netMinor, state.currency, signed = true),
+            style = MaterialTheme.typography.displayLarge,
+            maxLines = 1,
+            color = if (summary.current.netMinor < 0) colors.expense else colors.income,
+        )
+        TotalRow(
+            label = stringResource(R.string.home_income),
+            amount = formatMoney(summary.current.incomeMinor, state.currency),
+            delta = delta(summary.incomeDelta),
+            color = colors.income,
+        )
+        TotalRow(
+            label = stringResource(R.string.home_expenses),
+            amount = formatMoney(summary.current.expensesMinor, state.currency),
+            delta = delta(summary.expensesDelta),
+            color = colors.expense,
+        )
+        Text(
+            text = stringResource(R.string.home_transactions, summary.current.transactionCount),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

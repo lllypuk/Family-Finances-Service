@@ -308,17 +308,18 @@
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/TestFixtures.kt`
 - Create: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/home/HomeScreenTest.kt`
 
-- [ ] `formatMonth(date)` — `DateTimeFormatter.ofPattern("LLLL yyyy", locale)`, первая буква
+- [x] `formatMonth(date)` — `DateTimeFormatter.ofPattern("LLLL yyyy", locale)`, первая буква
       заглавная; `DatesTest`
-- [ ] шапка: на `Ready` — `formatMonth(summary.from)` и под ним `home_through` «по %1$s» из
+- [x] шапка: на `Ready` — `formatMonth(summary.from)` и под ним `home_through` «по %1$s» из
       `summary.to`; на `Loading`/`Failure` — `home_title`; иконка профиля на месте
-- [ ] `Summary`: первый элемент `formatPeriod` убран; `TotalsCard` → `Totals`: «Итого»
+- [x] `Summary`: первый элемент `formatPeriod` убран; `TotalsCard` → `Totals`: «Итого»
       `displayLarge` `maxLines = 1`, знак и цвет прежние; доходы и расходы `displaySmall` с
       дельтами; счётчик операций; `Card` убрана
-- [ ] `TestFixtures`: билдер `statsSummary(...)` → `StatsSummary`
-- [ ] `HomeScreenTest` по Testing Strategy
-- [ ] скриншот с телефона: сумма 9 цифр на 360dp в одну строку, иначе `displayMedium`
-- [ ] `make -C android check` — зелёный
+- [x] `TestFixtures`: билдер `statsSummary(...)` → `StatsSummary`
+- [x] `HomeScreenTest` по Testing Strategy
+- [x] скриншот с телефона: сумма 9 цифр на 360dp в одну строку, иначе `displayMedium`
+      (skipped — ручная проверка на телефоне, не автоматизируется; остаётся `displayLarge`)
+- [x] `make -C android check` — зелёный
 
 ### Task 9: Сумма — крупный стиль и валюта
 
