@@ -13,8 +13,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,7 +31,6 @@ import tech.shatrov.familyfinances.core.api.Category
 import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.theme.Dimens
 import tech.shatrov.familyfinances.theme.LocalAppColors
-import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Centered
 import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
@@ -69,9 +66,6 @@ fun TransactionsScreen(
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.weight(1f),
             )
-            IconButton(onClick = onCreate) {
-                Icon(AppIcons.Plus, contentDescription = stringResource(R.string.transactions_add))
-            }
         }
 
         // Фильтры вне `when`: на отказе запроса переключиться иначе некуда, а «Повторить»
@@ -174,7 +168,7 @@ private fun Days(
             .fillMaxSize()
             .padding(horizontal = Dimens.SPACE_4),
         verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
-        contentPadding = PaddingValues(vertical = Dimens.SPACE_3),
+        contentPadding = PaddingValues(top = Dimens.SPACE_3, bottom = Dimens.FAB_CLEARANCE),
     ) {
         for (group in state.groups) {
             item(key = group.date) {

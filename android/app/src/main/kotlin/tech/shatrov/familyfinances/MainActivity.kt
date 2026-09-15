@@ -8,9 +8,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Button
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -24,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -36,6 +40,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import tech.shatrov.familyfinances.theme.AppTheme
+import tech.shatrov.familyfinances.theme.Dimens
+import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.AppNavBar
 import tech.shatrov.familyfinances.ui.AppTab
 import tech.shatrov.familyfinances.ui.Centered
@@ -209,7 +215,18 @@ fun AppRoot(graph: AppGraph) {
                 onPauseOrDispose {}
             }
             BackHandler { screen = AppScreen.Home }
-            WithNavBar(AppTab.TRANSACTIONS, onSelect = { screen = it.screen }) {
+            WithNavBar(
+                AppTab.TRANSACTIONS,
+                onSelect = { screen = it.screen },
+                fab = {
+                    FloatingActionButton(onClick = { screen = AppScreen.TransactionEdit(null) }) {
+                        Icon(
+                            AppIcons.Plus,
+                            contentDescription = stringResource(R.string.transactions_add),
+                        )
+                    }
+                },
+            ) {
                 TransactionsScreen(
                     state = transactions,
                     filters = filters,
@@ -463,10 +480,14 @@ private fun BootstrapScreen(
 private fun WithNavBar(
     selected: AppTab,
     onSelect: (AppTab) -> Unit,
+    fab: @Composable () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.weight(1f)) { content() }
+        Box(modifier = Modifier.weight(1f)) {
+            content()
+            Box(modifier = Modifier.align(Alignment.BottomEnd).padding(Dimens.SPACE_4)) { fab() }
+        }
         AppNavBar(selected = selected, onSelect = onSelect)
     }
 }

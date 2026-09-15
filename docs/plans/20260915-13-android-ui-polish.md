@@ -249,15 +249,15 @@
 - Modify: `android/app/src/main/kotlin/tech/shatrov/familyfinances/ui/transactions/TransactionsScreen.kt`
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/transactions/TransactionsScreenTest.kt`
 
-- [ ] `Dimens.FAB_CLEARANCE = 88.dp`
-- [ ] `WithNavBar(fab: @Composable () -> Unit = {})`: контент + `fab` в `BottomEnd` с отступом
+- [x] `Dimens.FAB_CLEARANCE = 88.dp`
+- [x] `WithNavBar(fab: @Composable () -> Unit = {})`: контент + `fab` в `BottomEnd` с отступом
       `SPACE_4`; `AppRoot` передаёт `FloatingActionButton(Plus, contentDescription =
       transactions_add)` только для `TRANSACTIONS`, `onClick` — прежний `onCreate`
-- [ ] `TransactionsScreen`: `IconButton(Plus)` из шапки убран, `onCreate` остаётся;
+- [x] `TransactionsScreen`: `IconButton(Plus)` из шапки убран, `onCreate` остаётся;
       `contentPadding` снизу `FAB_CLEARANCE`
-- [ ] `TransactionsScreenTest`: селекторы на `transactions_add` в шапке убраны
-- [ ] скриншот с телефона: последняя строка и `Retry` подвала не под FAB
-- [ ] `make -C android check` — зелёный
+- [x] `TransactionsScreenTest`: селекторов на `transactions_add` в шапке не было — правка не нужна
+- [x] скриншот с телефона: последняя строка и `Retry` подвала не под FAB (пропущено — не автоматизируется)
+- [x] `make -C android check` — зелёный
 
 ### Task 6: Пустые состояния с действием
 
