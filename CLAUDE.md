@@ -4,28 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-```bash
-make run-local        # run on localhost:8080, SQLite at ./data/budget.db, LOG_LEVEL=debug
-make build            # -> ./build/family-budget-service (CGO_ENABLED=0)
-make test             # go test -v ./...
-make test-unit        # ./internal/...
-make test-integration # ./tests/...
-make test-coverage    # coverage.out + coverage.html
-make fmt              # go fmt ./...
-make lint             # golangci-lint run --fix
-make pre-commit       # fmt + test + lint
-make security-check   # gosec + govulncheck
-make deps             # go mod download && go mod tidy
-make db-reset         # rm ./data/budget.db* — required after any schema change (see "Database & migrations")
-```
-
-Run a single test / package:
-
-```bash
-go test ./internal/auth -run TestService_Login_Success -v
-go test ./tests/integration -run TestAuth_BearerFullCycle -v
-go test ./internal/application/handlers -run 'TestAuthHandler_.*' -v
-```
+Targets and their flags are in the `Makefile`; `make db-reset` (`rm ./data/budget.db*`) is required after any schema
+change (see "Database & migrations").
 
 Docker: `make docker-up` / `docker-up-d` / `docker-down` / `docker-logs` — all use `docker/docker-compose.yml`
 (builds `docker/Dockerfile`; no secrets are required). Compose is invoked as `docker compose --project-directory .`
@@ -40,26 +20,8 @@ SQLite: `make sqlite-shell`, `make sqlite-stats`, `make sqlite-backup` (runs `go
 `make sqlite-restore BACKUP_FILE=./backups/backup_<ts>.db` (dev-only `cp`; in production restore is manual over ssh).
 
 **Mandatory before handing off any code change: `make fmt`, `make test`, `make lint` — `make lint` must report
-0 issues.** The linter config is strict (see "Linter constraints" below); do not add `//nolint` without a specific
+0 issues.** The linter config is strict (`.golangci.yml`); do not add `//nolint` without a specific
 linter name and an explanation (`nolintlint` enforces both).
-
-### Local testing notes
-
-- Curl the local server with `--noproxy '*'`: `curl -s --noproxy '*' 127.0.0.1:8080/health`
-- The family is created from the CLI, not over HTTP. From the repo root, with the same `DATABASE_PATH` the server
-  uses (`./data/budget.db` is the default for both):
-
-  ```bash
-  printf 'Admin1234!\n' | go run ./cmd/server setup --family 'Test Family' --currency RUB \
-      --timezone Europe/Moscow --email admin@test.com --first-name Admin --last-name Test --password-stdin
-  curl -s --noproxy '*' -X POST 127.0.0.1:8080/api/v1/auth/login \
-      -H 'Content-Type: application/json' -d '{"email":"admin@test.com","password":"Admin1234!"}'
-  curl -s --noproxy '*' 127.0.0.1:8080/api/v1/me -H "Authorization: Bearer $TOKEN"
-  ```
-
-  `go run ./cmd/server reset-password --email … --password-stdin` sets a new password and revokes every session.
-- Project skills in `.claude/skills/`: `/pre-commit`, `/db-backup`, `/db-shell`, `/docker-up`, `/migrate-create`,
-  `/memory-update`
 
 ## Architecture
 
@@ -91,9 +53,8 @@ The version reported by `/health` comes from `internal/version` (`version.String
 defaults to `dev` and is overwritten at link time by `-ldflags "-X family-budget-service/internal/version.Version=…"`
 — `VERSION` in the `Makefile` (`git describe --tags --always --dirty`) and `ARG VERSION` in `docker/Dockerfile`.
 Every build path that matters passes it: the Makefile `export`s `VERSION` so compose forwards it as a build-arg
-(`args: VERSION: ${VERSION:-dev}` in both compose files), `deploy/scripts/{install,upgrade}.sh` set it from
-`git describe` in `./src`, and `docker.yml`/`release.yml` pass `--build-arg`/`-ldflags`. A `-X` flag naming a
-symbol that does not exist is silently dropped by the linker, so keep the full package path in sync.
+(`args: VERSION: ${VERSION:-dev}` in both compose files) and `.gitlab-ci.yml` passes `--build-arg VERSION`. A `-X` flag
+naming a symbol that does not exist is silently dropped by the linker, so keep the full package path in sync.
 `go build ./...` without `-ldflags` reports `dev`, which is correct, not a bug.
 
 Dependency direction: `application/handlers` → `services` → repository interfaces → `infrastructure`.
@@ -241,20 +202,6 @@ on it.
   (`internal/observability/`, `internal/services/dto/`, `tests/`).
 - Use testify `require` for fatal preconditions, `assert` for the rest (`testifylint` enforces correct usage).
 
-## Linter constraints worth knowing up front
-
-`.golangci.yml` is the "maratori golden config" with project tweaks. The rules that most often force a rewrite:
-
-- `golines` max line length **120**; `goimports` local prefix `family-budget-service` (local imports last group).
-- `funlen` 100 lines / 50 statements, `gocognit` 20, `cyclop` 30 per function and **10.0 package average**.
-- `gochecknoglobals` / `gochecknoinits` — no package-level vars or `init()`; `mnd` — no magic numbers (declare consts).
-- `sloglint`: no global loggers, and use the `...Context` slog methods when a context is in scope. Pass `*slog.Logger`
-  down explicitly (as `NewServices` does).
-- `depguard`: `log` is banned outside `main.go` (use `log/slog`), `math/rand` banned (use `math/rand/v2`).
-- `nonamedreturns`, `nakedret` (max 0 lines), `errorlint` (wrap with `%w`), `errcheck` incl. type assertions,
-  `govet` shadow-strict, `exhaustive` on switches **and** maps.
-- `funcorder`: constructors go immediately after the type they construct (the struct-method ordering check is off).
-
 ## Conventions
 
 - **Money is `money.Minor`** (`internal/domain/money`) — `int64` in minor units, `amount_minor`/`spent_minor`
@@ -315,10 +262,9 @@ status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the fi
 **Current direction:** `docs/specs/005-api-only-redesign.md` — the service is an API-only backend for an
 Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–10 are done
 (`docs/plans/completed/`, 06 = the Android client, 07 = its budgets tab, 08 = its settings screen,
-09 = the server findings of 07–08, 10 = `/reports` removed and `GET /stats/monthly` added); `v0.2.0` is tagged,
-and plans 10 and 12 changed the contract after it, so the next server release is `v0.3.0`. Plan 12 (recurring
-budgets, both sides) is done; the client half ships as `app-v0.5.0` **after** the server `v0.3.0` — a 0.5.0 client
-cannot read a 0.2.x server (`recurring` is required in the generated model). Plan 11 is the client side of
+09 = the server findings of 07–08, 10 = `/reports` removed and `GET /stats/monthly` added, 12 = recurring
+budgets, both sides). Releases: server `v0.3.0` (plan 10) and `v0.4.0` (plan 12), client `app-v0.5.0` — it needs
+a server of `v0.4.0` or newer (`recurring` is required in the generated model). Plan 11 is the client side of
 10: an "Обзор" screen over `summary` + `monthly`, and multi-select over transactions.
 
 `docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates
@@ -327,80 +273,16 @@ from it, and code and spec now match. **A registered route with no operation in 
 `TestOpenAPISpec_OperationsHaveIDAndErrorResponse` requiring an `operationId` and a 4xx `$ref: Error` on every
 operation). The reverse also fails it (`TestOpenAPISpec_DescribesOnlyRegisteredRoutes`): spec and routes match
 exactly, with no exceptions. See `docs/api/README.md`.
-**Deployment** is `deploy/`: `docker-compose.yml` (`app` pulled from `registry.gitlab.shatrov.tech` + Caddy),
-`docker-compose.proxied.yml` (the overlay for mini-server, where 80/443 belong to the shatrov.tech Caddy: the
-bundled Caddy goes into the `own-tls` profile and `app` joins the external network `edge` as `ffs`),
-`caddy/Caddyfile`, `.env.example`, `release.sh` and the `install`/`uninstall`/`health-check` scripts — see
-`deploy/README.md`. The `.env` on the server holds the machine's layout and `FFS_IMAGE`; a deploy rewrites that
-one line, so it never travels from the repository. Backups in production are the `backup` subcommand from a host
-cron job; restore is manual over ssh. There is no `upgrade.sh` any more — the pipeline is the upgrade path.
+**Deployment** is `deploy/` — see `deploy/CLAUDE.md` and `deploy/README.md`.
 
 When runtime/dev commands disagree between documents, `Makefile` + this file win.
 
 ## Android client (`android/`)
 
-The Kotlin/Compose client to `/api/v1` lives in this repository (decision A-13). Two Gradle modules:
-`:core:api` — the generated models and Retrofit interfaces plus transport, token vault and `ApiGraph`,
-the only module that knows about the network; `:app` — Compose screens, ViewModels, hand-rolled
-`AppScreen` navigation and `AppGraph`. Package and namespace: `tech.shatrov.familyfinances`.
-See `android/CLAUDE.md` and `android/core/api/CLAUDE.md`; commands are `make -C android <target>`.
+The Kotlin/Compose client to `/api/v1` lives in this repository (decision A-13). See `android/CLAUDE.md` and
+`android/core/api/CLAUDE.md`; commands are `make -C android <target>`; CI details are in `android/CLAUDE.md`.
 
-`android/core/api/generated` is openapi-generator output from `docs/api/openapi.yaml`, **committed and
-never edited by hand**. Generation pulls the generator from the network, so it is in neither `compile`
-nor `check` (both must work offline): run `make -C android api-gen` after changing the contract and
-commit the result, or `make -C android api-check` fails. The five envelopes in `components/responses`
-are named by the `*Ok` schemas in `components/schemas` — inline ones would generate positional
-`InlineObject…` names that a sixth such schema would shift.
+## CI
 
-Versions live only in `android/gradle/libs.versions.toml`, `compileSdk`/`minSdk`/`jvmTarget` included.
-
-CI (`.gitlab-ci.yml`): `android:check`, `android:api-check`, `android:apk` — all three in the trailing
-`android` stage with `needs: []`, so they start at once and nothing waits for them: a red client check or an
-unreachable Maven Central must not hold back the server deploy. All three `extends: .android`,
-which overrides `image` **and** replaces the `default:` `before_script` (it would otherwise hand the job
-`golang:1.26`, `go version` and the Go cache paths) with the JDK/SDK setup. Rules come from `.android-rules`: the branch `main` and merge
-requests with `changes: [android/**/*, docs/api/openapi.yaml]`, plus the tag `app-vX.Y.Z`; a server tag
-`vX.Y.Z` is excluded explicitly, because `changes:` is always true in a tag pipeline. Android SDK and
-the Gradle/Robolectric caches sit in `/ci-cache/android/*`, like every other cache here — the `cache:`
-mechanism is unused. All three share one `GRADLE_USER_HOME`, which Gradle locks: they carry
-`resource_group: android` so they never run at the same time — including against the pipeline of another
-branch, which is how they first failed. `android:apk` runs **only** on an `app-vX.Y.Z` tag and signs with
-the same keystore as the laptop: `FFS_KEYSTORE` is a protected *file* variable holding the **base64** of
-the JKS (a CI variable is text; the job decodes it) and `FFS_KEYSTORE_PASSWORD` is protected and masked —
-hence `app-v*` is a protected tag, or neither would reach the pipeline.
-
-## Stack versions (keep in sync with go.mod)
-
-Go **1.26.7** (CI runs the `golang:1.26` image), Echo **v4.15.4**,
-`modernc.org/sqlite` (pure Go, no CGO), golang-migrate v4, `golang.org/x/crypto` (bcrypt),
-go-playground/validator v10, testify, `go.yaml.in/yaml/v3` (test-only: parses `docs/api/openapi.yaml` in the
-coverage test).
-
-**CI is GitLab (`.gitlab-ci.yml`), the repository lives on `gitlab.shatrov.tech`**; GitHub is a read-only
-mirror with no workflows, pushed by the `mirror:github` job over a GitHub deploy key (the native GitLab push
-mirror hands out its public key only in the UI, which no script can pick up). The push is deliberately not
-forced: a divergence means somebody wrote to the mirror by hand, and that should turn a job red rather than
-disappear. The pipeline runs golangci-lint (`fmt --diff` + `run`), `shellcheck -e SC1091`
-over `deploy/**` (SC1091 is off: the libs are sourced through a computed path), `make test-coverage`,
-`govulncheck`, `make build`, `docker compose config` for all three layouts and `caddy validate`. `gosec` is
-part of golangci-lint here, not a separate job: run standalone it ignores the `//nolint:gosec` suppressions and
-the `.golangci.yml` exclusions, and fails on lines the linter deliberately passes.
-On a merge request it also builds the image and curls `/health` inside it; on `main` and on a `vX.Y.Z` tag it
-pushes the image to `registry.gitlab.shatrov.tech` and deploys to the mini-server (see "Deployment" below).
-Both tag patterns (`.release-tags`, `.android-rules`) are exact on purpose: the Android client shares this
-repository (decision A-13 in `docs/specs/005-api-only-redesign.md`) and releases under its own tag namespace,
-which must not build or deploy the server — and a tag with a slash could not name a Docker image anyway.
-
-The runner is a single instance-wide docker executor on home-server: `privileged = true`, `/certs/client`
-(dind) and `/home/sasha/ci-cache:/ci-cache` (Go caches, hence `GOCACHE`/`GOMODCACHE` pointing there instead of
-the `cache:` mechanism). Jobs carry no tags.
-
-**Tool versions in CI are pinned exactly** (`GOLANGCI_LINT_VERSION`, `GOVULNCHECK_VERSION`),
-never `@latest`; both `FROM` lines in `docker/Dockerfile` and the `caddy` image in `deploy/docker-compose.yml`
-are pinned by digest, and `make caddy-validate` reads that digest back out of the compose file. Dependabot went
-away with GitHub, so these digests are now bumped by hand — nothing watches them.
-
-**Token permissions:** every workflow declares a top-level `permissions: contents: read`, and write scopes are
-granted per job (`packages: write` to push images, `security-events: write` to upload SARIF, `contents: write` only
-for the release job). Job-level `permissions` *replaces* the top-level block rather than merging with it, so a job
-that needs `security-events: write` must also restate `contents: read` or its `actions/checkout` loses the token.
+GitLab (`.gitlab-ci.yml`), the repository lives on `gitlab.shatrov.tech`; GitHub is a read-only mirror.
+Pipeline layout, runner, mirror and version pins: the `gitlab-ci` skill.

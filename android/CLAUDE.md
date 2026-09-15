@@ -167,3 +167,22 @@ Retrofit, R8 однажды удалил, и приложение падало �
 Обратный случай — новое обязательное поле ответа: сгенерированная модель без значения по умолчанию
 не разберёт ответ старого сервера, поэтому такой APK ставят **после** выката сервера (план 12:
 `v0.3.0`, затем `app-v0.5.0`). Откат сервера после этого ломает клиент.
+
+## CI
+
+Versions live only in `android/gradle/libs.versions.toml`, `compileSdk`/`minSdk`/`jvmTarget` included.
+
+CI (`.gitlab-ci.yml`): `android:check`, `android:api-check`, `android:apk` — all three in the trailing
+`android` stage with `needs: []`, so they start at once and nothing waits for them: a red client check or an
+unreachable Maven Central must not hold back the server deploy. All three `extends: .android`,
+which overrides `image` **and** replaces the `default:` `before_script` (it would otherwise hand the job
+`golang:1.26`, `go version` and the Go cache paths) with the JDK/SDK setup. Rules come from `.android-rules`: the branch `main` and merge
+requests with `changes: [android/**/*, docs/api/openapi.yaml]`, plus the tag `app-vX.Y.Z`; a server tag
+`vX.Y.Z` is excluded explicitly, because `changes:` is always true in a tag pipeline. Android SDK and
+the Gradle/Robolectric caches sit in `/ci-cache/android/*`, like every other cache here — the `cache:`
+mechanism is unused. All three share one `GRADLE_USER_HOME`, which Gradle locks: they carry
+`resource_group: android` so they never run at the same time — including against the pipeline of another
+branch, which is how they first failed. `android:apk` runs **only** on an `app-vX.Y.Z` tag and signs with
+the same keystore as the laptop: `FFS_KEYSTORE` is a protected *file* variable holding the **base64** of
+the JKS (a CI variable is text; the job decodes it) and `FFS_KEYSTORE_PASSWORD` is protected and masked —
+hence `app-v*` is a protected tag, or neither would reach the pipeline.
