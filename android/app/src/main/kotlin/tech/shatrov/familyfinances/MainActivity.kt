@@ -191,6 +191,7 @@ fun AppRoot(graph: AppGraph) {
                 HomeScreen(
                     state = home,
                     onRetry = model::refresh,
+                    onAddTransaction = { screen = AppScreen.TransactionEdit(null) },
                     onSettings = { screen = AppScreen.Settings() },
                 )
             }

@@ -24,6 +24,7 @@
     <string name="home_recent">Последние операции</string>
     <string name="home_budget_progress">%1$s из %2$s</string>
     <string name="home_empty">Операций пока нет</string>
+    <string name="home_add_transaction">Добавить операцию</string>
 
     <string name="transactions_title">Операции</string>
     <string name="transactions_empty">Операций не найдено</string>
@@ -37,6 +38,8 @@
     <string name="filter_all_categories">Все категории</string>
     <string name="filter_category">Категория</string>
     <string name="transactions_add">Добавить</string>
+    <string name="transactions_add_first">Добавить операцию</string>
+    <string name="transactions_reset_filters">Сбросить фильтры</string>
 
     <string name="transaction_new_title">Новая операция</string>
     <string name="transaction_edit_title">Операция</string>
@@ -54,6 +57,7 @@
     <string name="categories_title">Категории</string>
     <string name="categories_add">Добавить</string>
     <string name="categories_empty">Категорий пока нет</string>
+    <string name="categories_add_first">Добавить категорию</string>
     <string name="categories_income">Доходные</string>
     <string name="categories_expense">Расходные</string>
     <string name="category_new_title">Новая категория</string>
@@ -69,8 +73,10 @@
 
     <string name="budgets_title">Бюджеты</string>
     <string name="budgets_add">Добавить</string>
-    <string name="budgets_empty_today">На сегодня бюджетов нет — посмотрите «Все периоды»</string>
+    <string name="budgets_empty_today">На сегодня бюджетов нет</string>
     <string name="budgets_empty">Бюджетов пока нет</string>
+    <string name="budgets_show_all">Показать все периоды</string>
+    <string name="budgets_add_first">Добавить бюджет</string>
     <string name="budgets_filter_today">На сегодня</string>
     <string name="budgets_filter_all">Все периоды</string>
     <string name="budgets_all_categories">Все категории</string>

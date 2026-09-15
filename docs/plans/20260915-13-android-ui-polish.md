@@ -272,17 +272,17 @@
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/budgets/BudgetsScreenTest.kt`
 - Create: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/categories/CategoriesScreenTest.kt`
 
-- [ ] `HomeScreen(onAddTransaction)`: пустое → текст + «Добавить операцию»; `AppRoot` →
+- [x] `HomeScreen(onAddTransaction)`: пустое → текст + «Добавить операцию»; `AppRoot` →
       `AppScreen.TransactionEdit(null)`
-- [ ] `TransactionsScreen`: пустое при `filters == TransactionFilters()` → «Добавить операцию»
+- [x] `TransactionsScreen`: пустое при `filters == TransactionFilters()` → «Добавить операцию»
       (`onCreate`), иначе «Сбросить фильтры» → `onFiltersChange(TransactionFilters())`
-- [ ] `CategoriesScreen`: пустое → «Добавить категорию» → `onAdd`
-- [ ] `BudgetsScreen`: `TODAY` → «Показать все периоды» → `onFilterChange(ALL)`; `ALL` → «Добавить бюджет»
-- [ ] строки: `home_add_transaction`, `transactions_add_first`, `transactions_reset_filters`,
+- [x] `CategoriesScreen`: пустое → «Добавить категорию» → `onAdd`
+- [x] `BudgetsScreen`: `TODAY` → «Показать все периоды» → `onFilterChange(ALL)`; `ALL` → «Добавить бюджет»
+- [x] строки: `home_add_transaction`, `transactions_add_first`, `transactions_reset_filters`,
       `categories_add_first`, `budgets_show_all`, `budgets_add_first`; `budgets_empty_today` без
       «посмотрите …»
-- [ ] тесты по Testing Strategy
-- [ ] `make -C android check` — зелёный
+- [x] тесты по Testing Strategy
+- [x] `make -C android check` — зелёный
 
 ### Task 7: Дата операции с подписью и иконкой
 

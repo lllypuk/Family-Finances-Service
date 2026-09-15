@@ -81,7 +81,15 @@ fun CategoriesScreen(
 
             is CategoriesUiState.Ready ->
                 if (state.isEmpty) {
-                    Centered { Text(stringResource(R.string.categories_empty)) }
+                    Centered {
+                        Text(stringResource(R.string.categories_empty))
+                        Button(
+                            onClick = onAdd,
+                            modifier = Modifier.heightIn(min = Dimens.TOUCH_MIN),
+                        ) {
+                            Text(stringResource(R.string.categories_add_first))
+                        }
+                    }
                 } else {
                     Groups(state, onOpen)
                 }

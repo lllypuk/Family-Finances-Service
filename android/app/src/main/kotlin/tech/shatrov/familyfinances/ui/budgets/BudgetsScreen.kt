@@ -91,7 +91,7 @@ fun BudgetsScreen(
 
             is BudgetsUiState.Ready ->
                 if (state.isEmpty) {
-                    Centered { Text(stringResource(emptyText(filter))) }
+                    Empty(filter, onFilterChange, onCreate)
                 } else {
                     Rows(state, currency, onOpen)
                 }
@@ -99,11 +99,28 @@ fun BudgetsScreen(
     }
 }
 
+/** Пустой «на сегодня» зовёт расширить период: будущий бюджет здесь не виден. */
+@Composable
+private fun Empty(
+    filter: BudgetFilter,
+    onFilterChange: (BudgetFilter) -> Unit,
+    onCreate: () -> Unit,
+) {
+    val today = filter == BudgetFilter.TODAY
+    Centered {
+        Text(stringResource(emptyText(filter)))
+        Button(
+            onClick = { if (today) onFilterChange(BudgetFilter.ALL) else onCreate() },
+            modifier = Modifier.heightIn(min = Dimens.TOUCH_MIN),
+        ) {
+            Text(stringResource(if (today) R.string.budgets_show_all else R.string.budgets_add_first))
+        }
+    }
+}
+
 @StringRes
 private fun emptyText(filter: BudgetFilter): Int = when (filter) {
-    // Будущий бюджет после создания не виден «на сегодня» — иначе он выглядит потерянным.
     BudgetFilter.TODAY -> R.string.budgets_empty_today
-
     BudgetFilter.ALL -> R.string.budgets_empty
 }
 

@@ -85,7 +85,7 @@ fun TransactionsScreen(
 
             is TransactionsUiState.Ready ->
                 if (state.isEmpty) {
-                    Centered { Text(stringResource(R.string.transactions_empty)) }
+                    Empty(filters, onCreate, onFiltersChange)
                 } else {
                     Days(state, onLoadMore, onOpen)
                 }
@@ -153,6 +153,26 @@ private fun Filters(
                     onClick = onPickCategory,
                 )
             }
+        }
+    }
+}
+
+/** Пустой список: без фильтров звать создавать, с фильтрами — сбрасывать их. */
+@Composable
+private fun Empty(
+    filters: TransactionFilters,
+    onCreate: () -> Unit,
+    onFiltersChange: (TransactionFilters) -> Unit,
+) {
+    val unfiltered = filters == TransactionFilters()
+    Centered {
+        Text(stringResource(R.string.transactions_empty))
+        Button(
+            onClick = { if (unfiltered) onCreate() else onFiltersChange(TransactionFilters()) },
+            modifier = Modifier.heightIn(min = Dimens.TOUCH_MIN),
+        ) {
+            val label = if (unfiltered) R.string.transactions_add_first else R.string.transactions_reset_filters
+            Text(stringResource(label))
         }
     }
 }

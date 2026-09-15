@@ -47,6 +47,7 @@ private const val TOP_CATEGORIES = 5
 fun HomeScreen(
     state: HomeUiState,
     onRetry: () -> Unit,
+    onAddTransaction: () -> Unit,
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -86,7 +87,15 @@ fun HomeScreen(
 
             is HomeUiState.Ready ->
                 if (state.isEmpty) {
-                    Centered { Text(stringResource(R.string.home_empty)) }
+                    Centered {
+                        Text(stringResource(R.string.home_empty))
+                        Button(
+                            onClick = onAddTransaction,
+                            modifier = Modifier.heightIn(min = Dimens.TOUCH_MIN),
+                        ) {
+                            Text(stringResource(R.string.home_add_transaction))
+                        }
+                    }
                 } else {
                     Summary(state)
                 }

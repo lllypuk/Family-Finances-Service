@@ -43,6 +43,7 @@ class TransactionsScreenTest {
         filters: TransactionFilters = TransactionFilters(),
         categories: List<Category> = emptyList(),
         onFiltersChange: (TransactionFilters) -> Unit = {},
+        onCreate: () -> Unit = {},
         onOpen: (UUID) -> Unit = {},
     ) {
         composeRule.setContent {
@@ -54,7 +55,7 @@ class TransactionsScreenTest {
                     onRetry = {},
                     onFiltersChange = onFiltersChange,
                     onLoadMore = {},
-                    onCreate = {},
+                    onCreate = onCreate,
                     onOpen = onOpen,
                 )
             }
@@ -66,6 +67,30 @@ class TransactionsScreenTest {
         show(ready(emptyList()))
 
         composeRule.onNodeWithText(res.getString(R.string.transactions_empty)).assertIsDisplayed()
+    }
+
+    @Test
+    fun emptyListWithoutFiltersOffersToAddTransaction() {
+        var created = false
+        show(ready(emptyList()), onCreate = { created = true })
+
+        composeRule.onNodeWithText(res.getString(R.string.transactions_add_first)).performClick()
+
+        assertTrue(created)
+    }
+
+    @Test
+    fun emptyListWithFiltersOffersToResetThem() {
+        var filters: TransactionFilters? = null
+        show(
+            ready(emptyList()),
+            filters = TransactionFilters(type = TransactionType.income),
+            onFiltersChange = { filters = it },
+        )
+
+        composeRule.onNodeWithText(res.getString(R.string.transactions_reset_filters)).performClick()
+
+        assertEquals(TransactionFilters(), filters)
     }
 
     @Test
