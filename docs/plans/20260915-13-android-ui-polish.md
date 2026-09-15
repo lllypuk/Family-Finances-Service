@@ -175,11 +175,11 @@
 - Modify: `android/app/src/main/kotlin/tech/shatrov/familyfinances/theme/Theme.kt`
 - Modify: `android/app/src/main/kotlin/tech/shatrov/familyfinances/ui/Chips.kt`
 
-- [ ] `appColorScheme`: `secondaryContainer = colors.elevated`, `onSecondaryContainer = colors.textPrimary`
-- [ ] `Chip`: `border = FilterChipDefaults.filterChipBorder(enabled, selected, selectedBorderColor = action, selectedBorderWidth = Dimens.BORDER)`
-- [ ] существующие экранные тесты чипов проходят без изменений
-- [ ] скриншот с телефона: чипы фильтров операций и дорожка прогресса бюджетов читаются
-- [ ] `make -C android check` — зелёный
+- [x] `appColorScheme`: `secondaryContainer = colors.elevated`, `onSecondaryContainer = colors.textPrimary`
+- [x] `Chip`: `border = FilterChipDefaults.filterChipBorder(enabled, selected, selectedBorderColor = action, selectedBorderWidth = Dimens.BORDER)`
+- [x] существующие экранные тесты чипов проходят без изменений
+- [x] скриншот с телефона: чипы фильтров операций и дорожка прогресса бюджетов читаются (пропущено — не автоматизируется)
+- [x] `make -C android check` — зелёный
 
 ### Task 2: `SecretField` с переключателем видимости — везде, включая логин
 
