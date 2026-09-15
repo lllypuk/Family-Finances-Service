@@ -89,6 +89,7 @@ class TransactionsViewModel(
     private var total = 0
     private var exhausted = false
     private var authors = emptyMap<UUID, String>()
+    private var referencesLoaded = false
     private var job: Job? = null
 
     init {
@@ -147,7 +148,7 @@ class TransactionsViewModel(
             try {
                 // Категория, заведённая на соседнем экране, иначе не попала бы ни в строку,
                 // ни в фильтр до перезапуска процесса: модель живёт всю сессию.
-                if (reloadReferences || mutableCategories.value.isEmpty()) {
+                if (reloadReferences || !referencesLoaded) {
                     loadReferences()
                 }
                 val page = api.client.unwrap { requestPage(bounds, offset = if (start) 0 else loaded.size) }
@@ -187,6 +188,9 @@ class TransactionsViewModel(
     // `/users` открыт только админу, поэтому у member список авторов остаётся пустым:
     // своя запись всё равно подписана «Вы», а чужая в семье из двух человек однозначна.
     private suspend fun loadReferences() {
+        // Флаг снимается до запросов и ставится после обоих: смена фильтра между ними отменяет
+        // корутину, а по непустым категориям загрузка авторов иначе считалась бы сделанной.
+        referencesLoaded = false
         mutableCategories.value =
             api.client.unwrap { api.categories.listCategories(limit = REFERENCE_LIMIT) }.`data`
         if (session.isAdmin) {
@@ -195,6 +199,7 @@ class TransactionsViewModel(
                 .`data`
                 .associate { it.id to it.firstName }
         }
+        referencesLoaded = true
     }
 
     private fun ready(): TransactionsUiState.Ready {
