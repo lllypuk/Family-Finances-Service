@@ -30,7 +30,7 @@ Layered/Clean architecture, single Go module `family-budget-service`. Wiring hap
 
 1. `LoadConfig()` + `Validate()` (`internal/config.go`) — all config is env vars, no config files:
    `SERVER_*`, `DATABASE_PATH`, `BACKUP_DIR`, `BACKUP_KEEP`, `LOG_*`, `ENVIRONMENT`, `TRUSTED_PROXIES`,
-   `METRICS_ADDR`.
+   `METRICS_ADDR`, `LLM_*` (see "Screenshot recognition").
    There are no secrets. `BACKUP_DIR` empty means `<dir(DATABASE_PATH)>/backups` (`Config.GetBackupDir()`,
    compose mounts `/backups`); `BACKUP_KEEP` (default 30) is the retention shared by `POST /api/v1/backups`
    and the `backup` subcommand.
@@ -154,6 +154,46 @@ it is a plain `404`, with a token and without one.
   repository returns whole are windowed with `pageSlice(items, page)` and answered by `respondList(c, items, page,
   len(all))`. The `field` in `error.details` is the json name (`start_date`), because every handler validator comes
   from `newAPIValidator()` — plain `validator.New()` would report Go field names.
+
+### Screenshot recognition: `POST /api/v1/transactions/recognize`
+
+Candidates only: the model's answer is returned for review, the client saves the rows with ordinary
+`POST /transactions` carrying its own `id`; no image is stored. The call is **not** idempotent — a repeat is a
+paid call, so neither side retries it on its own.
+
+- **Layers.** `internal/recognize` is pure (input/output types, `CheckImage` by signature, prompt, `Parse`,
+  `Normalize`) and knows nothing of `llm`. `internal/infrastructure/llmengine` is the only importer of
+  `github.com/lllypuk/llm`: it builds the request and maps failure classes onto `recognize.UnavailableError`.
+  `services.RecognizeService` adds the family's categories, today in `family.Timezone`, the currency and
+  `similar` (up to three transactions of the same amount and type within ±1 day — a badge, never a dedupe).
+  Moving to `llm.Router` touches only `llmengine` and `recognizer()` in `run.go`.
+- **Config.** `LLM_OLLAMA_HOST` empty (the default) builds no engine, and `ErrDisabled` becomes `503`;
+  `LLM_MODEL` and `LLM_TIMEOUT` are validated only when the host is set, `LLM_TIMEOUT` ≤ 60 s because the
+  deadline chain below is computed from it. The ollama.com key lives in the daemon — still no secrets.
+- **Codes.** `503 RECOGNITION_UNAVAILABLE` for off, unreachable, `needs_configuration` or timed out
+  (`Retry-After` in whole seconds, only when > 0); `502 RECOGNITION_FAILED` when the model answered and
+  `Parse` refused it; `413 PAYLOAD_TOO_LARGE` over `BodyLimit("11M")` (the limiter error is dug out of the
+  multipart reader with `errors.As`); `422` with `field: images[i]` for a non-image, an oversized or sixth part
+  or a foreign field name; `408 REQUEST_TIMEOUT` when the upload outlives its deadline; `400` for a body that is
+  not multipart. A `RetryNever` failure from `llm` is none of these and stays a `500`.
+- **No second retry loop.** Transport retries live inside `llm.Client` (`Attempts = 2`, `MaxRetryAfter = 10s`,
+  `Budget()` = 130 s). An answer that does not parse is `ErrBadAnswer` at once — `llm` accepts any text as a
+  success, and asking again would double the bill for the same garbage.
+- **Deadlines in two phases** (`handlers/recognize.go`). The route is skipped by the `ContextTimeout`
+  middleware (`recognizeRoute` in `http_server.go`). Before the body is read, `http.NewResponseController` sets
+  the write deadline to `now + uploadTimeout + Budget() + 15s` and the read deadline to `now + uploadTimeout`
+  (`http.ErrNotSupported` from a recorder is tolerated); the upload runs under
+  `context.WithTimeout(uploadTimeout)`, the engine under a fresh `Budget() + 5s`. Worst case 205 s, which the
+  client's read timeout (210 s) and any proxy in front must outlast. The read deadline is not reset after the
+  upload: `net/http` clears it when it starts its background read. `uploadTimeout` is
+  `application.Config.RecognizeUploadTimeout` (0 → `handlers.RecognizeUploadTimeout`);
+  `tests/integration/recognize_deadlines_test.go` checks the phases on a real socket.
+- **Subcommand.** `go run ./cmd/server recognize a.png b.jpg` runs one real call with the categories from
+  `DATABASE_PATH` (`OpenDatabaseNoMigrate`), prints the `Result` JSON to stdout and the engine's report to
+  stderr; without `LLM_OLLAMA_HOST` it exits with 2. This is the only way to try real screenshots — CI has no
+  model.
+- **Metrics:** `ffs_recognitions_total{outcome}` and `ffs_recognition_duration_seconds`, written by the service
+  through `services.RecognizeObserver`; `llm.Observer` is not wired yet.
 
 ### Metrics on a second listener
 

@@ -342,12 +342,13 @@ android/app/.../ui/AppIcons.kt            ScanLine (одна иконка; ли�
 - Modify: `deploy/docker-compose.yml`, `deploy/docker-compose.proxied.yml`, `deploy/.env.example`, `deploy/README.md`, `deploy/caddy/Caddyfile`, `docker/docker-compose.yml`
 - Modify: `CLAUDE.md`, `docs/api/README.md`
 
-- [ ] `LLM_OLLAMA_HOST`, `LLM_MODEL`, `LLM_TIMEOUT` в `environment:` обеих раскладок, пустые по умолчанию; `make compose-config`
-- [ ] Caddyfile dev-раскладки: `@recognize path /api/v1/transactions/recognize` → `request_body max_size 11MB`, остальным 1 МБ с исключением этого пути; `make caddy-validate`
-- [ ] `deploy/README.md`: плечо, адрес демона на хосте, отсутствие секретов, что значит `503`, **обязательная правка vhost в репозитории лендинга** для прода
-- [ ] `CLAUDE.md`: раздел «Распознавание скриншотов» — слои, коды, две фазы дедлайнов, «второго цикла повторов нет», подкоманда
-- [ ] `docs/api/README.md`: multipart и `encoding` как правило для файловых операций
-- [ ] `make fmt && make test && make lint`; `make compose-config`; `make caddy-validate` — зелёные до задачи 7
+- [x] `LLM_OLLAMA_HOST`, `LLM_MODEL`, `LLM_TIMEOUT` в `environment:` обеих раскладок, пустые по умолчанию; `make compose-config`
+- [x] Caddyfile dev-раскладки: `@recognize path /api/v1/transactions/recognize` → `request_body max_size 11MB`, остальным 1 МБ с исключением этого пути; `make caddy-validate`
+- [x] `deploy/README.md`: плечо, адрес демона на хосте, отсутствие секретов, что значит `503`, **обязательная правка vhost в репозитории лендинга** для прода
+- [x] `CLAUDE.md`: раздел «Распознавание скриншотов» — слои, коды, две фазы дедлайнов, «второго цикла повторов нет», подкоманда
+- [x] `docs/api/README.md`: multipart и `encoding` как правило для файловых операций
+- [x] `make fmt && make test && make lint`; `make compose-config`; `make caddy-validate` — зелёные до задачи 7
+- ➕ `LLM_*` в `deploy/docker-compose.yml` интерполируются из того же `.env` (`getEnv` считает пустое незаданным — умолчания конфига живы); оверлей `proxied` их наследует, правки не нужно; Caddy — `11MiB` (= `11534336`, ровно `BodyLimit("11M")` Echo, проверено `caddy adapt`), образец vhost в `deploy/README.md` несёт оба правила; `RetryNever` из `llm` остаётся `500` — записано в `CLAUDE.md`; `deploy/CLAUDE.md` дополнен
 
 ### Task 7: Долгий транспорт клиента и `ApiGraph.recognize`
 
