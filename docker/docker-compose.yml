@@ -45,6 +45,12 @@ services:
       # (`docker network inspect`), иначе за прокси корзина IP была бы общей на всех.
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
 
+      # Распознавание скриншотов: пустой хост — выключено (503). localhost здесь — сам контейнер,
+      # демона Ollama на хосте ищут по адресу хоста. Пустые модель и срок — умолчания конфига.
+      LLM_OLLAMA_HOST: ${LLM_OLLAMA_HOST:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_TIMEOUT: ${LLM_TIMEOUT:-}
+
     volumes:
       # Persistent volume for SQLite database
       - budget_data:/data

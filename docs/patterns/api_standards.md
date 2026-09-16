@@ -58,15 +58,19 @@ DELETE /api/v1/transactions/{id}
 | 401 | `UNAUTHORIZED` / `INVALID_CREDENTIALS` |
 | 403 | `FORBIDDEN` — роль не подходит |
 | 404 | `NOT_FOUND` (неизвестный путь) / `<ENTITY>_NOT_FOUND` (нет записи) |
+| 408 | `REQUEST_TIMEOUT` — тело распознавания не успело загрузиться |
 | 409 | `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`, `EMAIL_TAKEN`, `CANNOT_DEACTIVATE_SELF`, `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`, `BUDGET_BELOW_SPENT`, `BUDGET_ID_EXISTS`, `BUDGET_NOT_TAIL` |
+| 413 | `PAYLOAD_TOO_LARGE` — тело больше лимита маршрута |
 | 422 | `VALIDATION_ERROR` — поля в `error.details` |
 | 429 | `RATE_LIMITED` + `Retry-After` |
 | 500 | `INTERNAL_ERROR` |
+| 502 | `RECOGNITION_FAILED` — ответ модели не разобрался |
+| 503 | `RECOGNITION_UNAVAILABLE` + `Retry-After`, когда известен |
 
 ## Формат запросов и ответов
 
-`Content-Type: application/json` в обе стороны; исключение — скачивание бэкапа
-(`application/octet-stream`).
+`Content-Type: application/json` в обе стороны; исключения — скачивание бэкапа
+(`application/octet-stream`) и запрос `POST /transactions/recognize` (`multipart/form-data`).
 
 ```json
 {

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Наружу — только снимки камеры: готовые JPEG импорта никому, кроме нас, не нужны. -->
+<paths>
+    <cache-path name="camera" path="import/camera/" />
+</paths>

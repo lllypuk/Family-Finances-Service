@@ -8,7 +8,7 @@ GitLab CI and pulled from `registry.gitlab.shatrov.tech`; nothing is compiled on
 | `docker-compose.yml` | `app` (image from the registry) + `caddy`, network `172.20.0.0/16` |
 | `docker-compose.proxied.yml` | overlay for a host where 80/443 already belong to another Caddy |
 | `caddy/Caddyfile` | TLS, security headers, JSON access log, `log_skip @health` |
-| `.env.example` | template for `.env` — `FFS_IMAGE`, layout, `DOMAIN`, paths, `BACKUP_KEEP` |
+| `.env.example` | template for `.env` — `FFS_IMAGE`, layout, `DOMAIN`, paths, `BACKUP_KEEP`, `LLM_*` |
 | `release.sh` | host-side update: registry login, DB snapshot, image swap, `up --wait` |
 | `scripts/install.sh` | first install: Docker, firewall, `.env`, pull, `up` |
 | `scripts/uninstall.sh` | removal, `--keep-data` keeps the database and backups |
@@ -37,6 +37,14 @@ network `edge`, where the other Caddy reaches it as `ffs:8080`. This is how **mi
   ```caddyfile
   ffs.{$DOMAIN} {
     encode zstd gzip
+    @recognize path /api/v1/transactions/recognize
+    request_body @recognize {
+      max_size 11MiB
+    }
+    @json not path /api/v1/transactions/recognize
+    request_body @json {
+      max_size 1MB
+    }
     reverse_proxy ffs:8080
     header {
       -Server
@@ -207,6 +215,57 @@ Besides HTTP, login and API-backup counters, the scrape reads the current state 
 the backup directory. The cron backup runs in a separate `compose run` container and writes no counters —
 it is visible only through `ffs_backup_latest_file_timestamp_seconds`, the mtime of the newest file, which
 is what the "copy older than 26 h" alert is built on.
+
+Screenshot recognition adds `ffs_recognitions_total{outcome=ok|empty|failed|unavailable}` and
+`ffs_recognition_duration_seconds`, written per `POST /api/v1/transactions/recognize` (the `recognize`
+subcommand writes none). `failed` is a `502` or a `500`, `unavailable` a `503`, recognition switched off
+included.
+
+## Screenshot recognition
+
+`POST /api/v1/transactions/recognize` sends screenshots to a model through an Ollama daemon and
+returns candidate transactions; nothing is written until the client posts them. The daemon is
+configured in `.env` (see `.env.example`):
+
+- `LLM_OLLAMA_HOST` — empty by default, which switches recognition off: the route answers
+  `503 RECOGNITION_UNAVAILABLE` and the rest of the API is unaffected. On **mini-server** the daemon
+  runs on the host itself, `LLM_OLLAMA_HOST=http://192.168.1.10:11434` — `localhost` inside the
+  container is the container. The daemon has to listen on that address, and the host firewall has
+  to let the compose subnet reach port 11434.
+- `LLM_MODEL` (default `gemma4:31b-cloud`) and `LLM_TIMEOUT` (per attempt, default and maximum `60s`).
+
+There are still **no secrets**: the ollama.com key for cloud models belongs to the daemon
+(`ollama signin` on the host), the service sends no credentials.
+
+A `503` means the model could not be asked: host not set, daemon unreachable, the daemon not signed
+in or the model missing (`needs_configuration`), or the call timed out after its two attempts.
+`Retry-After` is set only when the provider named a delay. A `502 RECOGNITION_FAILED` means the model
+answered and the answer did not parse — that call was paid for, and the server does not retry it.
+Every call logs one `llm recognize call` line with `outcome`, `class`, `attempts`, `latency` and the
+token counts; neither images nor the answer text are logged.
+
+A request can run for up to 205 s (60 s upload, 130 s for the model with both attempts, 15 s to
+write the answer); the route sets its own deadlines past `SERVER_WRITE_TIMEOUT`. Whatever proxies it
+must not cut the request earlier — Caddy's `reverse_proxy` has no response timeout by default.
+
+**Before enabling it in production, change the vhost in the landing repository**
+(`shatrov.tech/landing`, `deploy/Caddyfile.prod`, then its `deploy:prod` job): the body limits from
+the block above. The app accepts up to five images of 2 MiB each (Echo `BodyLimit("11M")`, 11 000 000 bytes; Caddy's
+`11MiB` is slightly looser, so the JSON `413` comes from the app); a 1 MB
+limit on the whole site turns every upload into Caddy's `413`, and no limit at all lets an
+unauthenticated client push an unbounded body at `/api/v1/auth/login`. The own-TLS layout already
+carries both rules in `caddy/Caddyfile`.
+
+To try real screenshots on the host without the app (it reads the categories from the database and
+never migrates it):
+
+```bash
+cd /home/sasha/ffs
+docker compose run --rm --no-deps -T -v "$PWD/shots:/shots:ro" app recognize /shots/a.png /shots/b.jpg
+```
+
+The result goes to stdout as JSON, the call report to stderr; without `LLM_OLLAMA_HOST` the command
+exits with code 2.
 
 ## Operations
 

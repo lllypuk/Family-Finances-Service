@@ -48,6 +48,8 @@ func statusMessage(code int) string {
 		return handlers.ErrMessageUnauthorized
 	case http.StatusForbidden:
 		return handlers.ErrMessageForbidden
+	case http.StatusRequestEntityTooLarge:
+		return handlers.ErrMessagePayloadTooLarge
 	default:
 		return http.StatusText(code)
 	}

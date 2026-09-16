@@ -1,5 +1,8 @@
 package tech.shatrov.familyfinances
 
+import android.app.Application
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -32,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.core.content.IntentCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
@@ -59,6 +63,9 @@ import tech.shatrov.familyfinances.ui.home.HomeViewModel
 import tech.shatrov.familyfinances.ui.login.LoginScreen
 import tech.shatrov.familyfinances.ui.login.LoginViewModel
 import tech.shatrov.familyfinances.ui.message
+import tech.shatrov.familyfinances.ui.recognize.RecognizeScreen
+import tech.shatrov.familyfinances.ui.recognize.RecognizeViewModel
+import tech.shatrov.familyfinances.ui.recognize.rememberImportLaunchers
 import tech.shatrov.familyfinances.ui.settings.SettingsHost
 import tech.shatrov.familyfinances.ui.toUiError
 import tech.shatrov.familyfinances.ui.transactions.TransactionEditScreen
@@ -68,9 +75,13 @@ import tech.shatrov.familyfinances.ui.transactions.TransactionsViewModel
 import java.time.LocalDate
 
 class MainActivity : ComponentActivity() {
+    private val graph: AppGraph
+        get() = (application as FamilyFinancesApp).graph
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val graph = (application as FamilyFinancesApp).graph
+        // Пересозданная активити получает тот же intent: картинки уже предложены до поворота.
+        if (savedInstanceState == null) offerShared(intent)
         setContent {
             AppTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -83,6 +94,32 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        offerShared(intent)
+    }
+
+    // Запуск из «недавних» повторяет исходный intent целиком, а права на его URI уже истекли.
+    private fun offerShared(intent: Intent) {
+        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return
+        val uris = sharedImages(intent)
+        if (uris.isNotEmpty()) graph.imports.offer(uris)
+        intent.removeExtra(Intent.EXTRA_STREAM)
+        intent.clipData = null
+    }
+}
+
+/** `SEND` и `SEND_MULTIPLE` кладут URI и в `EXTRA_STREAM`, и в `ClipData` — отправители делают по-разному. */
+internal fun sharedImages(intent: Intent): List<Uri> {
+    if (intent.action != Intent.ACTION_SEND && intent.action != Intent.ACTION_SEND_MULTIPLE) return emptyList()
+    val stream = if (intent.action == Intent.ACTION_SEND) {
+        listOfNotNull(IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java))
+    } else {
+        IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
+    }
+    val clip = intent.clipData?.let { data -> (0 until data.itemCount).mapNotNull { data.getItemAt(it).uri } }.orEmpty()
+    return (stream + clip).distinct()
 }
 
 @Composable
@@ -103,7 +140,7 @@ fun AppRoot(graph: AppGraph) {
     // Модель формы живёт в своём store: ключ у неё свой на каждый заход, а store активити
     // отдаёт брошенные модели только вместе с активити.
     val forms: ScopedModels = viewModel(key = "forms") { ScopedModels() }
-    val onForm = screen is AppScreen.TransactionEdit || screen is AppScreen.BudgetEdit
+    val onForm = screen is AppScreen.TransactionEdit || screen is AppScreen.BudgetEdit || screen is AppScreen.Recognize
     LaunchedEffect(onForm) { if (!onForm) forms.viewModelStore.clear() }
     // Свой store: модели подразделов настроек чистятся на каждом переходе, а модели форм — нет.
     val settings: ScopedModels = viewModel(key = "settings") { ScopedModels() }
@@ -122,6 +159,33 @@ fun AppRoot(graph: AppGraph) {
         graph.api.sessionExpired.collect { screen = AppScreen.Login }
     }
 
+    val pending by graph.imports.pending.collectAsStateWithLifecycle()
+    val importLaunchers = rememberImportLaunchers { graph.imports.offer(it) }
+    // Формы и настройки импорт ждёт: уход с них бросил бы введённое или убил бы отправку.
+    // Занятый экран распознавания `pending` не публикует — это политика `ImportStore`.
+    LaunchedEffect(pending, session, screen) {
+        val id = pending ?: return@LaunchedEffect
+        if (session == null) return@LaunchedEffect
+        when (val current = screen) {
+            AppScreen.Home, AppScreen.Transactions, AppScreen.Budgets -> screen = AppScreen.Recognize(id)
+
+            AppScreen.Categories -> {
+                listStale = true
+                homeStale = true
+                budgetsStale = true
+                screen = AppScreen.Recognize(id)
+            }
+
+            // Прежний импорт в просмотре или отказе вытесняется: его модель и файлы уходят сразу.
+            is AppScreen.Recognize -> if (current.importId != id) {
+                forms.viewModelStore.clear()
+                screen = AppScreen.Recognize(id)
+            }
+
+            else -> Unit
+        }
+    }
+
     when (val current = screen) {
         AppScreen.Loading -> {
             var failure by remember { mutableStateOf<UiError?>(null) }
@@ -132,7 +196,7 @@ fun AppRoot(graph: AppGraph) {
                 failure = null
                 val error = graph.bootstrap()
                 when {
-                    error == null -> screen = AppScreen.Home
+                    error == null -> screen = graph.imports.pending.value?.let(AppScreen::Recognize) ?: AppScreen.Home
                     error is ApiFailure.Api && error.isUnauthorized -> screen = AppScreen.Login
                     else -> failure = error.toUiError()
                 }
@@ -231,6 +295,7 @@ fun AppRoot(graph: AppGraph) {
                     onLoadMore = model::loadMore,
                     onCreate = { screen = AppScreen.TransactionEdit(null) },
                     onOpen = { screen = AppScreen.TransactionEdit(it) },
+                    importLaunchers = importLaunchers,
                 )
             }
         }
@@ -397,6 +462,45 @@ fun AppRoot(graph: AppGraph) {
                 onSubmit = model::onSubmit,
                 onDelete = model::onDelete,
                 onRetry = model::load,
+                onBack = leave,
+            )
+        }
+
+        is AppScreen.Recognize -> WithSession(session) { active ->
+            val context = LocalContext.current
+            val model: RecognizeViewModel =
+                viewModel(viewModelStoreOwner = forms, key = "recognize-${current.importId}") {
+                    RecognizeViewModel(
+                        context.applicationContext as Application,
+                        graph.api,
+                        graph.imports,
+                        current.importId,
+                        active.currency,
+                    )
+                }
+            val recognize by model.state.collectAsStateWithLifecycle()
+            val waiting by graph.imports.waiting.collectAsStateWithLifecycle()
+            LaunchedEffect(recognize.savedCount) {
+                if (recognize.savedCount > 0) {
+                    listStale = true
+                    homeStale = true
+                    budgetsStale = true
+                }
+            }
+            val leave = { if (!recognize.saving) screen = AppScreen.Transactions }
+            BackHandler { leave() }
+            RecognizeScreen(
+                state = recognize,
+                currency = active.currency,
+                waiting = waiting,
+                today = LocalDate.now(active.zone),
+                onIncludedChange = model::onIncludedChange,
+                onDateChange = model::onDateChange,
+                onCategoryChange = model::onCategoryChange,
+                onDescriptionChange = model::onDescriptionChange,
+                onSave = model::save,
+                onRetry = model::retry,
+                onRetryRow = model::retryRow,
                 onBack = leave,
             )
         }

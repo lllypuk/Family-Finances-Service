@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -49,6 +50,9 @@ func main() {
 		case cmdMigrate:
 			runCommand(cmdMigrate, runMigrate)
 			return
+		case cmdRecognize:
+			runCommand(cmdRecognize, recognizeCommand(os.Stderr))
+			return
 		default:
 			// Без этой ветки опечатка в cron или запуск `backup` на старом образе,
 			// где подкоманды ещё нет, молча поднимают HTTP-сервер: команда висит
@@ -70,8 +74,8 @@ func main() {
 
 func usage(unknown string) {
 	fmt.Fprintf(os.Stderr, "unknown command %q\n", unknown)
-	fmt.Fprintf(os.Stderr, "usage: server [%s|%s|%s|%s|%s]\n",
-		cmdSetup, cmdResetPassword, cmdBackup, cmdMigrate, healthCheckFlag)
+	fmt.Fprintf(os.Stderr, "usage: server [%s|%s|%s|%s|%s|%s]\n",
+		cmdSetup, cmdResetPassword, cmdBackup, cmdMigrate, cmdRecognize, healthCheckFlag)
 	os.Exit(exitUsage)
 }
 
@@ -79,8 +83,16 @@ type command func(ctx context.Context, args []string, stdin io.Reader, stdout io
 
 func runCommand(name string, cmd command) {
 	if err := cmd(context.Background(), os.Args[2:], os.Stdin, os.Stdout); err != nil {
-		log.Fatalf("%s failed: %v", name, err)
+		log.Printf("%s failed: %v", name, err)
+		os.Exit(exitCode(err))
 	}
+}
+
+func exitCode(err error) int {
+	if errors.Is(err, errRecognizeDisabled) {
+		return exitUsage
+	}
+	return 1
 }
 
 func healthCheck() {

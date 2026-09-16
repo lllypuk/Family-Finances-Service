@@ -9,3 +9,6 @@ one line, so it never travels from the repository. Backups in production are the
 cron job; restore is manual over ssh. There is no `upgrade.sh` any more — the pipeline is the upgrade path.
 Prometheus `/metrics` is on a second listener: `METRICS_ADDR` and the `prometheus.io/*` labels live in
 `docker-compose.yml` (topology, not `.env`), the port is not published, and the dev compose leaves it off.
+Screenshot recognition: `LLM_*` are passed through `environment:` from `.env` (empty = off, `503`); on mini the
+Ollama daemon is the host's address, not `localhost`. The upload route needs its own body limit in the Caddy in
+front — `caddy/Caddyfile` has it, the production vhost lives in the landing repository (`deploy/README.md`).

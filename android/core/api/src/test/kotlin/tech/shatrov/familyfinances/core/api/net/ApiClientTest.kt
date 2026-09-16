@@ -3,6 +3,7 @@ package tech.shatrov.familyfinances.core.api.net
 import kotlinx.coroutines.test.runTest
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
+import mockwebserver3.SocketEffect
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -10,9 +11,12 @@ import org.junit.Before
 import org.junit.Test
 import tech.shatrov.familyfinances.core.api.ApiGraph
 import tech.shatrov.familyfinances.core.api.LoginRequest
+import tech.shatrov.familyfinances.core.api.TransactionsApi
 import tech.shatrov.familyfinances.core.api.auth.InMemoryTokenVault
+import java.net.SocketTimeoutException
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.util.concurrent.TimeUnit
 
 private const val LOGIN_OK = """
 {"data":{"token":"t-1","expires_at":"2027-03-06T10:00:00Z",
@@ -192,5 +196,56 @@ class ApiClientTest {
         val failure = expectFailure { login() }
 
         assertTrue(failure is ApiFailure.Network)
+    }
+
+    // Ответ через 3 с: обычный клиент с укороченным чтением отваливается, долгий дожидается.
+    @Test
+    fun longCallOutlivesRegularReadTimeout() = runTest {
+        val client = ApiClient(server.url("/").toString(), InMemoryTokenVault(), {}, readTimeoutSeconds = 1)
+        repeat(2) {
+            server.enqueue(
+                MockResponse.Builder()
+                    .body(TRANSACTIONS_OK)
+                    .setHeader("Content-Type", "application/json")
+                    .headersDelay(3, TimeUnit.SECONDS)
+                    .build(),
+            )
+        }
+
+        val failure =
+            expectFailure { client.unwrap { client.create(TransactionsApi::class).listTransactions() }.`data` }
+        val data = client.unwrap { client.createLongCall(TransactionsApi::class).listTransactions() }.`data`
+
+        assertTrue(failure is ApiFailure.Network)
+        assertTrue(failure.cause is SocketTimeoutException)
+        assertEquals(1, data.size)
+    }
+
+    // `408` без `Retry-After` OkHttp повторяет сам, если `retryOnConnectionFailure` не снят.
+    @Test
+    fun longCallDoesNotRepeatRequestTimeout() = runTest {
+        enqueue(408, """{"error":{"code":"REQUEST_TIMEOUT","message":"upload timed out"}}""")
+        enqueue(200, TRANSACTIONS_OK)
+
+        val failure = expectFailure {
+            graph.client.unwrap { graph.client.createLongCall(TransactionsApi::class).listTransactions() }.`data`
+        } as ApiFailure.Api
+
+        assertEquals(408, failure.status)
+        assertEquals(1, server.requestCount)
+    }
+
+    // Второй ответ в очереди поймал бы автоповтор оборванного после отправки запроса.
+    @Test
+    fun longCallDoesNotRepeatAfterDisconnect() = runTest {
+        server.enqueue(MockResponse.Builder().onResponseStart(SocketEffect.ShutdownConnection).build())
+        enqueue(200, TRANSACTIONS_OK)
+
+        val failure = expectFailure {
+            graph.client.unwrap { graph.client.createLongCall(TransactionsApi::class).listTransactions() }.`data`
+        }
+
+        assertTrue(failure is ApiFailure.Network)
+        assertEquals(1, server.requestCount)
     }
 }

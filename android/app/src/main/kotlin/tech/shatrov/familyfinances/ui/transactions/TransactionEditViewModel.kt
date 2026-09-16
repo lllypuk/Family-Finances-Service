@@ -202,7 +202,7 @@ class TransactionEditViewModel(
     }
 }
 
-private fun TransactionType.asCategoryType(): CategoryType =
+internal fun TransactionType.asCategoryType(): CategoryType =
     if (this == TransactionType.income) CategoryType.income else CategoryType.expense
 
 private fun TransactionEditUiState.filled(

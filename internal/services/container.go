@@ -15,6 +15,7 @@ type Services struct {
 	Budget      BudgetService
 	Stats       StatsService
 	Backup      BackupService
+	Recognize   RecognizeService
 	// Auth — bearer-сессии; собирается снаружи, как и Backup: ему нужны репозитории, а не сервисы.
 	Auth *auth.Service
 }
@@ -29,6 +30,8 @@ func NewServices(
 	fullBudgetRepo BudgetRepository,
 	backupService BackupService,
 	authService *auth.Service,
+	recognizer Recognizer,
+	recognizeObserver RecognizeObserver,
 	logger *slog.Logger,
 ) *Services {
 	usageChecker := NewCategoryUsageChecker(transactionRepo)
@@ -50,6 +53,7 @@ func NewServices(
 		Budget:      budgetService,
 		Stats:       statsService,
 		Backup:      backupService,
+		Recognize:   NewRecognizeService(recognizer, familyRepo, categoryRepo, transactionRepo, recognizeObserver),
 		Auth:        authService,
 	}
 }

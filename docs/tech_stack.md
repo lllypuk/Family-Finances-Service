@@ -59,13 +59,14 @@ Android-приложение в `android/` этого же репозитори�
 ```
 Family-Finances-Service/
 ├── cmd/                    # Точки входа приложения
-│   └── server/            # HTTP сервер + подкоманды `setup`, `reset-password`
+│   └── server/            # HTTP сервер + подкоманды `setup`, `reset-password`, `backup`, `migrate`, `recognize`
 ├── internal/              # Приватный код приложения
 │   ├── domain/           # Domain entities и бизнес-логика
 │   ├── auth/             # Bearer-токены, сессии, middleware, лимитер логина
 │   ├── application/      # Echo, JSON error handler, хендлеры /api/v1
 │   ├── services/         # Бизнес-логика
-│   ├── infrastructure/   # Реализация репозиториев (SQLite), миграции
+│   ├── infrastructure/   # Реализация репозиториев (SQLite), миграции; llmengine/ — вызов Ollama
+│   ├── recognize/        # Распознавание скриншотов: промпт, разбор и нормализация ответа модели
 │   ├── metrics/          # Реестр Prometheus, middleware, коллекторы скрейпа, слушатель /metrics
 │   ├── bootstrap.go      # OpenDatabase, Setup, ResetPassword — общие для сервера и CLI
 │   ├── config.go         # Конфигурация приложения
@@ -146,7 +147,7 @@ sessions       -- Bearer-сессии (хеш токена, устройство
 - **Ресурсно-ориентированный**: /families/{id}/transactions
 - **HTTP методы**: GET, POST, PUT, DELETE
 - **Статус-коды**: Стандартные HTTP коды
-- **Content-Type**: application/json
+- **Content-Type**: application/json; `multipart/form-data` — только `POST /transactions/recognize`
 
 ### Аутентификация и авторизация
 - **Схема**: `Authorization: Bearer <token>`; токен непрозрачный, в БД — SHA-256; 30 дней без
@@ -200,6 +201,7 @@ github.com/google/uuid             # UUID generation
 golang.org/x/crypto                # bcrypt
 github.com/golang-migrate/migrate  # Migrations
 github.com/prometheus/client_golang # Реестр метрик и promhttp
+github.com/lllypuk/llm              # Клиент Ollama для распознавания скриншотов
 ```
 
 ### Dev зависимости

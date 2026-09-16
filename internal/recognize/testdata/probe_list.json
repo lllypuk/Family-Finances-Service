@@ -1,0 +1,14 @@
+{
+  "items": [
+    {"source": 1, "amount": "349.90", "currency": "₽", "type": "expense", "date": "2000-09-14",
+     "date_text": "14 сентября", "year_present": false, "description": "Пятёрочка",
+     "category": "Еда / Продукты", "confidence": 0.9},
+    {"source": 1, "amount": "1 250,00", "currency": "руб.", "type": "expense", "date": "2000-09-14",
+     "date_text": "14 сентября", "year_present": false, "description": "Кафе Ромашка", "category": "Еда / Кафе"},
+    {"source": 1, "amount": "85000", "currency": "RUB", "type": "income", "date": "2000-09-13",
+     "date_text": "13 сентября", "year_present": false, "description": "Зарплата", "category": "Зарплата"},
+    {"source": 1, "amount": 300, "currency": null, "type": "expense", "date": null,
+     "date_text": "вчера", "year_present": false, "description": "Метро", "category": "Транспорт"}
+  ],
+  "incomplete": false
+}

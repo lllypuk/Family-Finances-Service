@@ -23,6 +23,9 @@ import (
 const (
 	// HTTPRequestTimeout timeout for HTTP requests
 	HTTPRequestTimeout = 30 * time.Second
+
+	// recognizeRoute живёт на своих дедлайнах (handlers.RecognizeHandler), общий таймаут его не касается.
+	recognizeRoute = "/api/v1/transactions/recognize"
 )
 
 type HTTPServer struct {
@@ -43,6 +46,7 @@ type HTTPServer struct {
 	budgetHandler      *handlers.BudgetHandler
 	statsHandler       *handlers.StatsHandler
 	backupHandler      *handlers.BackupHandler
+	recognizeHandler   *handlers.RecognizeHandler
 }
 
 type Config struct {
@@ -59,6 +63,8 @@ type Config struct {
 	// Metrics — реестр Prometheus; nil — HTTP-метрики не пишутся (NewHTTPServer без Config.Metrics,
 	// юнит-тесты хендлеров). Интеграционный стенд реестр задаёт.
 	Metrics *metrics.Metrics
+	// RecognizeUploadTimeout — срок приёма тела распознавания; 0 — handlers.RecognizeUploadTimeout.
+	RecognizeUploadTimeout time.Duration
 }
 
 // NewHTTPServer создает HTTP сервер без observability (для обратной совместимости)
@@ -108,6 +114,7 @@ func NewHTTPServerWithObservability(
 
 	// Timeout для всех запросов
 	e.Use(middleware.ContextTimeoutWithConfig(middleware.ContextTimeoutConfig{
+		Skipper: func(c echo.Context) bool { return c.Path() == recognizeRoute },
 		Timeout: HTTPRequestTimeout,
 	}))
 
@@ -132,6 +139,11 @@ func NewHTTPServerWithObservability(
 		}))
 	}
 
+	uploadTimeout := config.RecognizeUploadTimeout
+	if uploadTimeout == 0 {
+		uploadTimeout = handlers.RecognizeUploadTimeout
+	}
+
 	server := &HTTPServer{
 		echo:                 e,
 		services:             services,
@@ -149,6 +161,7 @@ func NewHTTPServerWithObservability(
 		budgetHandler:      handlers.NewBudgetHandler(repositories, services.Budget),
 		statsHandler:       handlers.NewStatsHandler(services.Stats),
 		backupHandler:      handlers.NewBackupHandler(services.Backup),
+		recognizeHandler:   handlers.NewRecognizeHandler(services.Recognize, uploadTimeout),
 	}
 
 	server.setupRoutes()
@@ -245,6 +258,7 @@ func (s *HTTPServer) setupResourceRoutes(api *echo.Group) {
 	transactions.POST("", s.transactionHandler.CreateTransaction)
 	transactions.GET("", s.transactionHandler.GetTransactions)
 	transactions.POST("/bulk-delete", s.transactionHandler.BulkDeleteTransactions)
+	transactions.POST("/recognize", s.recognizeHandler.Recognize, middleware.BodyLimit(handlers.RecognizeBodyLimit))
 	transactions.GET("/:id", s.transactionHandler.GetTransactionByID)
 	transactions.PUT("/:id", s.transactionHandler.UpdateTransaction)
 	transactions.DELETE("/:id", s.transactionHandler.DeleteTransaction)

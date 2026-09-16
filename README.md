@@ -11,7 +11,9 @@ API for the Android client. One instance = one family.
 > the deployment is one compose with Caddy, the Android client lives in `android/` with its settings screen,
 > stored reports are gone in favour of `GET /api/v1/stats/monthly`, budgets can repeat as a series, and the
 > client's UI audit is closed (plan 13, client only — the contract did not move), and Prometheus metrics
-> moved onto a second listener (plan 14 — the contract did not move either);
+> moved onto a second listener (plan 14 — the contract did not move either), and bank screenshots can be
+recognized into candidate transactions (plan 15, `POST /api/v1/transactions/recognize`; client `0.7.0`, not
+tagged yet, needs a server that has it);
 > the sections below describe the code as it is today. Releases: server `v0.3.0` (plan 10), `v0.4.0`
 > (plan 12) and `v0.5.0` (plan 14), client `app-v0.6.0` — it needs a server of `v0.4.0` or newer (`recurring` is required in the
 > generated model). Left: plan 11, the client's "Обзор" screen over `summary` + `monthly` and multi-select
@@ -20,6 +22,8 @@ API for the Android client. One instance = one family.
 - ✅ REST API for family, users, categories, transactions, budgets, stats, backups
 - ✅ Bearer-token authentication with server-side sessions and a login rate limiter
 - ✅ Family bootstrap, password reset and schema moves from the CLI (`setup`, `reset-password`, `migrate`)
+- ✅ Screenshot recognition over an Ollama daemon (`LLM_OLLAMA_HOST`, off by default): candidates for review,
+  nothing is stored
 - ✅ Lightweight SQLite database, migrations applied at startup
 - ✅ CI/CD in GitLab: checks on every merge request, image and deploy from `main`
 - ✅ Single Docker container, built from source (`docker/Dockerfile`)
@@ -76,6 +80,11 @@ The author of a record is taken from the token, so `user_id` in a request body i
 - Backups over API: `POST`/`GET /api/v1/backups`, `GET /api/v1/backups/:name/download`,
   `DELETE /api/v1/backups/:name`
 - `POST /api/v1/transactions/bulk-delete`
+- `POST /api/v1/transactions/recognize` — multipart `images` (1–5 PNG/JPEG, ≤ 2 MiB each), answers candidate
+  transactions for review and saves nothing; the client saves the chosen ones with ordinary `POST /transactions`.
+  A paid, non-idempotent call — neither side retries it on its own; it may run up to ~205 s. `503
+  RECOGNITION_UNAVAILABLE` when switched off or the model is unreachable (`Retry-After` when known), `502
+  RECOGNITION_FAILED` for an answer that does not parse, `413`, `408` for a too slow upload, `422` with `field: images[i]`
 - Money is `amount_minor` — an integer in the family's minor units (kopeks/cents); percentages and utilization
   stay fractional. `PUT /api/v1/family` returns `409 CURRENCY_LOCKED` if a transaction already exists
 - Transaction and budget dates are calendar `YYYY-MM-DD`; period bounds use the family's `timezone`
@@ -189,13 +198,14 @@ make help             # Show all commands
 ## 🏛️ Project Structure
 
 ```
-├── cmd/server/              # Entry point: server, `-health-check`, `setup`, `reset-password`, `backup`, `migrate`
+├── cmd/server/              # Entry point: server, `-health-check`, `setup`, `reset-password`, `backup`, `migrate`, `recognize`
 ├── internal/
 │   ├── domain/              # Business entities (User, Family, Transaction, Budget, Category, …)
 │   ├── auth/                # Bearer tokens, sessions, RequireBearer/RequireRole, login rate limiter
 │   ├── application/         # Echo server, JSON error handler, /api/v1 handlers
 │   ├── services/            # Business logic
-│   ├── infrastructure/      # SQLite repositories, migrations, connection
+│   ├── infrastructure/      # SQLite repositories, migrations, connection; llmengine/ — the Ollama call
+│   ├── recognize/           # Screenshot recognition: prompt, parsing and normalizing the model's answer
 │   ├── observability/       # Logging and /health
 │   ├── metrics/             # Prometheus registry, Echo middleware, scrape collectors, /metrics listener
 │   ├── version/             # Version reported by /health, set at link time by -ldflags
@@ -228,6 +238,9 @@ All configuration is environment variables; there are no secrets.
 | `BACKUP_DIR`           | empty → `<dir(DATABASE_PATH)>/backups` | Where `POST /api/v1/backups` and the `backup` subcommand write. Docker compose sets `/backups` so `VACUUM INTO` copies do not land inside the database volume |
 | `BACKUP_KEEP`          | `30`                                   | How many newest backup files to keep; shared by `POST /api/v1/backups` and the `backup` subcommand (`--keep N` overrides it). A non-numeric or non-positive value is ignored |
 | `METRICS_ADDR`         | empty                                  | `host:port` of the second listener serving `GET /metrics` (Prometheus). Empty — neither the listener nor the registry is built; production compose sets `0.0.0.0:9091` and does not publish the port. `/metrics` is never served on the API port |
+| `LLM_OLLAMA_HOST`      | empty                                  | Ollama daemon URL for screenshot recognition. Empty — recognition is off and `POST /api/v1/transactions/recognize` answers `503`. Inside Docker `localhost` is the container itself |
+| `LLM_MODEL`            | `gemma4:31b-cloud`                     | Model name; checked only when `LLM_OLLAMA_HOST` is set                      |
+| `LLM_TIMEOUT`          | `60s`                                  | Timeout of one model attempt, at most `60s`; checked only when `LLM_OLLAMA_HOST` is set |
 | `ENVIRONMENT`          | `development`                          | App environment (`development`, `production`, `test`)                       |
 | `LOG_LEVEL`            | `info`                                 | Logging level                                                               |
 | `LOG_FORMAT`           | `json`                                 | Log format                                                                  |

@@ -19,6 +19,7 @@ import (
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/auth"
 	"family-budget-service/internal/infrastructure"
+	"family-budget-service/internal/infrastructure/llmengine"
 	"family-budget-service/internal/metrics"
 	"family-budget-service/internal/observability"
 	"family-budget-service/internal/services"
@@ -128,6 +129,8 @@ func NewApplication() (*Application, error) {
 		app.repositories.Budget, // BudgetRepository
 		backupService,
 		authService,
+		recognizer(config.LLM, logger),
+		recognizeObserver(registry),
 		logger,
 	)
 
@@ -204,6 +207,23 @@ func backupObserver(m *metrics.Metrics) services.BackupObserver {
 		return services.NopBackupObserver{}
 	}
 	return m.Backup()
+}
+
+// recognizer собирает движок над Ollama или nil — распознавание выключено.
+// Возврат интерфейсом: *llmengine.Engine(nil) внутри интерфейса сервис не отличил бы от движка.
+func recognizer(cfg LLMConfig, logger *slog.Logger) services.Recognizer {
+	if cfg.OllamaHost == "" {
+		return nil
+	}
+	return llmengine.New(cfg.OllamaHost, cfg.Model, cfg.Timeout, nil, logger)
+}
+
+// recognizeObserver отдаёт наблюдателя реестра или заглушку, если метрики выключены.
+func recognizeObserver(m *metrics.Metrics) services.RecognizeObserver {
+	if m == nil {
+		return services.NopRecognizeObserver{}
+	}
+	return m.Recognize()
 }
 
 func (a *Application) Run() error {

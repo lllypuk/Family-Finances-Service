@@ -21,12 +21,14 @@ info:
     - Ошибка всегда одной формы: `{"error": {...}, "meta": {...}}` (A-08).
 
     Коды ошибок: `INVALID_REQUEST` / `INVALID_ID` (400 — тело или id не разобрались),
+    `REQUEST_TIMEOUT` (408 — тело не успело загрузиться), `PAYLOAD_TOO_LARGE` (413),
     `UNAUTHORIZED` (401), `FORBIDDEN` (403), `NOT_FOUND` / `<ENTITY>_NOT_FOUND` (404),
     `VALIDATION_ERROR` (422 — тело или query-параметры не прошли проверку, поля в `error.details`),
     `SETUP_REQUIRED` / `CURRENCY_LOCKED` / `LAST_ADMIN` / `CANNOT_DEACTIVATE_SELF` /
     `EMAIL_TAKEN` / `BUDGET_OVERLAP` / `BUDGET_NAME_EXISTS` / `BUDGET_BELOW_SPENT` /
     `BUDGET_ID_EXISTS` / `BUDGET_NOT_TAIL` (409),
-    `RATE_LIMITED` (429, с `Retry-After`), `INTERNAL_ERROR` (500).
+    `RATE_LIMITED` (429, с `Retry-After`), `INTERNAL_ERROR` (500),
+    `RECOGNITION_FAILED` (502), `RECOGNITION_UNAVAILABLE` (503, `Retry-After`, когда известен).
   license:
     name: MIT
     identifier: MIT
@@ -567,6 +569,78 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /api/v1/transactions/recognize:
+    post:
+      operationId: recognizeTransactions
+      tags: [transactions]
+      summary: Распознать операции на скриншотах
+      description: |
+        admin и member. Картинки уходят модели, ответ — **кандидаты** операций: ничего не
+        создаётся, запись идёт обычным `POST /api/v1/transactions` с клиентским `id`.
+        Картинки на сервере не хранятся. Вызов платный и не идемпотентный: клиент не повторяет
+        его сам, в том числе на `503`. Вызов синхронный и долгий — до ~205 с (загрузка до 60 с,
+        модель до 130 с), таймауты клиента рассчитываются на это. Пустой `items` — успех.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [images]
+              properties:
+                images:
+                  type: array
+                  minItems: 1
+                  maxItems: 5
+                  description: PNG или JPEG, до 2 МиБ и 16 Мп каждая; тип определяется по содержимому
+                  items: { type: string, format: binary }
+            encoding:
+              images:
+                style: form
+                explode: true
+      responses:
+        '200':
+          description: Кандидаты операций
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecognizeOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '408':
+          description: Тело не пришло за срок загрузки (`REQUEST_TIMEOUT`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '413':
+          description: Тело больше 11 000 000 байт (`PAYLOAD_TOO_LARGE`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          description: |
+            `VALIDATION_ERROR`: не картинка, больше 2 МиБ или 16 Мп, шестая часть — `field: images[i]`;
+            ни одной картинки — `field: images`; часть с другим именем — `field` равен её имени
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '502':
+          description: Модель ответила, но ответ не разобрался (`RECOGNITION_FAILED`); повторного вызова не было
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503':
+          description: |
+            `RECOGNITION_UNAVAILABLE`: распознавание на сервере не настроено, либо модель не ответила
+            (сеть, лимиты, просрочка)
+          headers:
+            Retry-After:
+              schema: { type: integer }
+              description: Секунды до повтора; только если модель их назвала
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /api/v1/transactions/{id}:
     parameters:
@@ -1579,6 +1653,70 @@ components:
         category_name: { type: string }
         date: { $ref: '#/components/schemas/CalendarDate' }
         created_at: { $ref: '#/components/schemas/Timestamp' }
+
+    RecognizeOk:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/RecognizeResult' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    RecognizeResult:
+      type: object
+      required: [items, incomplete, model]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/RecognizedTransaction' }
+        incomplete:
+          type: boolean
+          description: Список мог быть неполным — модель так сказала, строки отброшены или усечены до 50
+        model: { type: string, description: 'Модель, ответившая на вызов' }
+    RecognizedTransaction:
+      type: object
+      required: [source, amount_minor, currency, type, date, date_assumed, description, category_id, similar]
+      properties:
+        source:
+          oneOf:
+            - { type: integer, minimum: 0, maximum: 4 }
+            - { type: 'null' }
+          description: Индекс картинки в `images` (с нуля); null — модель не указала
+        amount_minor: { $ref: '#/components/schemas/Money' }
+        currency:
+          oneOf:
+            - { type: string, pattern: '^[A-Z]{3}$' }
+            - { type: 'null' }
+          description: ISO-код валюты с картинки; null — не распознана, считается валютой семьи
+        type: { $ref: '#/components/schemas/TransactionType' }
+        date:
+          oneOf:
+            - { $ref: '#/components/schemas/CalendarDate' }
+            - { type: 'null' }
+          description: null — даты на картинке нет, она относительная («вчера») или в будущем
+        date_assumed:
+          type: boolean
+          description: Года на картинке не было, сервер подставил его сам — дату нужно подтвердить
+        description:
+          type: string
+          maxLength: 200
+          description: Может быть короче двух символов — тогда `POST /transactions` его не примет
+        category_id:
+          oneOf:
+            - { type: string, format: uuid }
+            - { type: 'null' }
+          description: Активная категория семьи того же типа; null — однозначного совпадения нет
+        similar:
+          type: array
+          maxItems: 3
+          description: Существующие операции с той же суммой и типом в пределах дня от `date`; не дубли
+          items: { $ref: '#/components/schemas/SimilarTransaction' }
+    SimilarTransaction:
+      type: object
+      required: [id, date, description]
+      properties:
+        id: { type: string, format: uuid }
+        date: { $ref: '#/components/schemas/CalendarDate' }
+        description: { type: string }
 
     Backup:
       type: object
