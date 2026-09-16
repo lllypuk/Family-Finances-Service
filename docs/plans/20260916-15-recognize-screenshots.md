@@ -367,11 +367,11 @@ android/app/.../ui/AppIcons.kt            ScanLine (одна иконка; ли�
 - Create: `android/app/.../ui/recognize/ImportFiles.kt`, тест
 - Modify: `android/app/src/main/AndroidManifest.xml`, `res/xml/file_paths.xml` (create), `FamilyFinancesApp.kt`
 
-- [ ] `ImportFiles.prepare(context, importId, uris)`: чтение через `ContentResolver`, ориентация по `android.media.ExifInterface` (без новой зависимости, `minSdk 26`), `inSampleSize`, длинная сторона ≤ 2048, JPEG q85 с понижением качества, пока файл > 2 МиБ (ниже q60 — отказ строки), ≤ 5 файлов, отказ на не-картинке
-- [ ] `ImportFiles.sweep(context)` на старте приложения; удаление каталога импорта по завершении
-- [ ] `FileProvider` для камеры: `authorities="${applicationId}.files"`, `cache-path import/`
-- [ ] тесты Robolectric: PNG 1080×2400 → JPEG ≤ 2048 и ≤ 2 МиБ, EXIF-поворот, шестой URI отбрасывается, мусорный URI → ошибка строки, sweep чистит
-- [ ] `make -C android check` — зелёный до задачи 9
+- [x] `ImportFiles.prepare(context, importId, uris)`: чтение через `ContentResolver`, ориентация по `android.media.ExifInterface` (без новой зависимости, `minSdk 26`), `inSampleSize`, длинная сторона ≤ 2048, JPEG q85 с понижением качества, пока файл > 2 МиБ (ниже q60 — отказ строки), ≤ 5 файлов, отказ на не-картинке
+- [x] `ImportFiles.sweep(context)` на старте приложения; удаление каталога импорта по завершении
+- [x] `FileProvider` для камеры: `authorities="${applicationId}.files"`, `cache-path import/camera/` ➕ наружу только снимки камеры; `sweep` чистит `camera/` по возрасту (сутки) — снимок должен пережить смерть процесса, пока открыта камера
+- [x] тесты Robolectric: PNG 1080×2400 → JPEG ≤ 2048 и ≤ 2 МиБ, EXIF-поворот, шестой URI отбрасывается, мусорный URI → ошибка строки, sweep чистит
+- [x] `make -C android check` — зелёный до задачи 9
 
 ### Task 9: `ImportStore` и `RecognizeViewModel`
 
