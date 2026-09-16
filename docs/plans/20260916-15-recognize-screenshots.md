@@ -216,11 +216,11 @@ internal/recognize/
                       Date *date.Date, DateAssumed bool, Description string, CategoryID *uuid.UUID, Similar []Similar{ID, Date, Description}}
                  Result{Items, Incomplete bool, Model}
                  const MaxImages = 5, MaxItems = 50, MaxImageBytes = 2 << 20, MaxPixels = 16e6
-                 ErrUnavailable{RetryAfter time.Duration}, ErrBadAnswer, ErrDisabled
+                 ErrUnavailable + UnavailableError{RetryAfter, Err}, ErrBadAnswer, ErrDisabled, ErrNotImage, ErrImageTooLarge
   image.go       CheckImage(data []byte) (mime string, err error)   // MIME по сигнатуре, image.DecodeConfig png/jpeg — размеры, не целостность
   prompt.go      System(input) string; UserText(i int) string        // форма JSON, правила, список категорий «expense: Еда / Кафе»
-  parse.go       Parse(text string) (raw, error)                     // ограда, UseNumber, EOF после объекта, items — массив
-  normalize.go   Normalize(raw, input) (Result, error)               // суммы, валюта, даты и год, категории, source, усечение
+  parse.go       Parse(text string) (Answer, error)                    // ограда, UseNumber, EOF после объекта, items — массив
+  normalize.go   Normalize(Answer, Input) Result            // суммы, валюта, даты и год, категории, source, усечение
 
 internal/infrastructure/llmengine/
   ollama.go      New(host, model string, timeout time.Duration, obs llm.Observer) *Engine
@@ -264,14 +264,15 @@ android/app/.../ui/AppIcons.kt            ScanLine (одна иконка; ли�
 - Create: `internal/recognize/{recognize,image,prompt,parse,normalize}.go` и `_test.go`
 - Create: `internal/recognize/testdata/*.json` (ответы модели из проб, обезличенные)
 
-- [ ] типы `Input`/`Result`/`Item` (`Source *int`, `Currency *string`, `DateAssumed`, `Similar`, `Incomplete`), константы лимитов, ошибки
-- [ ] `CheckImage`: MIME по сигнатуре (PNG/JPEG, иначе отказ), `image.DecodeConfig`, `MaxPixels`, `MaxImageBytes`; целостность не обещается
-- [ ] `System(input)`: форма JSON с `date_text`/`year_present`, правила (десятичная строка, `null` для «сегодня/вчера» и без даты, исключения балансов/итогов/переводов между своими счетами), список категорий с путями; `UserText(i)`
-- [ ] `Parse`: ограда, `UseNumber`, лишние поля терпятся, EOF после объекта, `items` — массив
-- [ ] `Normalize`: сумма без `float64`, диапазон, валюта → ISO или `nil`, дата и правило года с `DateAssumed`, `null` для будущей даты, единственное совпадение категории по `(type, path)`, `source` → `nil`, усечение до `MaxItems` с `Incomplete`
-- [ ] тесты на фикстурах: скриншот из проб (четыре строки), ограда, `year_present=false` в декабре/январе (обе стороны опорной даты), запятая в сумме, `₽`/`руб.` → `RUB` и незнакомая валюта → `nil`, неоднозначная категория → `null`, `items: {}` и мусор после JSON → `ErrBadAnswer`, 60 строк
-- [ ] тесты `CheckImage` (PNG, JPEG, GIF, 20 Мп, обрезанный заголовок)
-- [ ] `make test`/`make lint` — зелёные до задачи 2
+- [x] типы `Input`/`Result`/`Item` (`Source *int`, `Currency *string`, `DateAssumed`, `Similar`, `Incomplete`), константы лимитов, ошибки
+- [x] `CheckImage`: MIME по сигнатуре (PNG/JPEG, иначе отказ), `image.DecodeConfig`, `MaxPixels`, `MaxImageBytes`; целостность не обещается
+- [x] `System(input)`: форма JSON с `date_text`/`year_present`, правила (десятичная строка, `null` для «сегодня/вчера» и без даты, исключения балансов/итогов/переводов между своими счетами), список категорий с путями; `UserText(i)`
+- [x] `Parse`: ограда, `UseNumber`, лишние поля терпятся, EOF после объекта, `items` — массив
+- [x] `Normalize`: сумма без `float64`, диапазон, валюта → ISO или `nil`, дата и правило года с `DateAssumed`, `null` для будущей даты, единственное совпадение категории по `(type, path)`, `source` → `nil`, усечение до `MaxItems` с `Incomplete`
+- [x] тесты на фикстурах: скриншот из проб (четыре строки), ограда, `year_present=false` в декабре/январе (обе стороны опорной даты), запятая в сумме, `₽`/`руб.` → `RUB` и незнакомая валюта → `nil`, неоднозначная категория → `null`, `items: {}` и мусор после JSON → `ErrBadAnswer`, 60 строк
+- [x] тесты `CheckImage` (PNG, JPEG, GIF, 20 Мп, обрезанный заголовок)
+- [x] `make test`/`make lint` — зелёные до задачи 2
+- ➕ `ErrUnavailable` — сентинел, срок повтора несёт `UnavailableError{RetryAfter, Err}` (`errname`); `Parse` → `Answer`, `Normalize` ошибок не возвращает; в промпте картинки нумеруются с 1 (`source` переводится в индекс), год без года на картинке — `2000` (високосный, 29 февраля разбирается); строка с негодной суммой или типом отбрасывается и ставит `incomplete`
 
 ### Task 2: Плечо `llmengine`, `RecognizeService`, сборка сервисов и стенда
 
