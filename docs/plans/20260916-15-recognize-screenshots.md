@@ -330,10 +330,11 @@ android/app/.../ui/AppIcons.kt            ScanLine (одна иконка; ли�
 - Create: `cmd/server/recognize.go` (по образцу `cmd/server/backup.go`: `internal.OpenDatabaseNoMigrate`)
 - Modify: `cmd/server/main.go`
 
-- [ ] `go run ./cmd/server recognize a.png b.jpg`: конфиг из env, категории из БД (`OpenDatabaseNoMigrate`), печать `Result` JSON и отчёта вызова в stderr
-- [ ] без `LLM_OLLAMA_HOST` — понятный отказ, код выхода 2
-- [ ] тест отказа без хоста
-- [ ] `make test`/`make lint` — зелёные до задачи 6
+- [x] `go run ./cmd/server recognize a.png b.jpg`: конфиг из env, категории из БД (`OpenDatabaseNoMigrate`), печать `Result` JSON и отчёта вызова в stderr
+- [x] без `LLM_OLLAMA_HOST` — понятный отказ, код выхода 2
+- [x] тест отказа без хоста
+- [x] `make test`/`make lint` — зелёные до задачи 6
+- ➕ отчёт вызова — текстовый `slog` движка в stderr; файлы проверяются `CheckImage` до открытия БД; код выхода выбирает `exitCode(err)` в `main.go` (`errRecognizeDisabled` → 2), тест — на неё, без перезапуска бинаря (`reassign` запрещает подменять `os.Args`)
 
 ### Task 6: Деплой и документация сервера
 
