@@ -4,8 +4,12 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.receiveAsFlow
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
 import tech.shatrov.familyfinances.core.api.auth.TokenVault
 import tech.shatrov.familyfinances.core.api.net.ApiClient
+import java.io.File
 
 /**
  * Composition root модуля: один клиент и типизированные интерфейсы поверх него.
@@ -47,4 +51,16 @@ class ApiGraph(
     // бы «неверный пароль» / «почта занята» вместо неизвестного исхода.
     val meWrites: MeApi = client.createWithoutRetries(MeApi::class)
     val userWrites: UsersApi = client.createWithoutRetries(UsersApi::class)
+
+    // Отдельный экземпляр: распознавание — платный вызов, который клиент сам не повторяет.
+    private val recognizer: TransactionsApi = client.createLongCall(TransactionsApi::class)
+
+    /** Отправляет подготовленные JPEG на распознавание; бросает [tech.shatrov.familyfinances.core.api.net.ApiFailure]. */
+    suspend fun recognize(files: List<File>): RecognizeOk = client.unwrap {
+        recognizer.recognizeTransactions(
+            files.map { MultipartBody.Part.createFormData("images", it.name, it.asRequestBody(JPEG)) },
+        )
+    }
 }
+
+private val JPEG = "image/jpeg".toMediaType()

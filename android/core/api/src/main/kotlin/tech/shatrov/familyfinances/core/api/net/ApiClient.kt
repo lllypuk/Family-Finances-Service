@@ -15,16 +15,27 @@ import kotlin.reflect.KClass
 
 private const val CONNECT_TIMEOUT_SECONDS = 10L
 private const val READ_TIMEOUT_SECONDS = 30L
+private const val LONG_WRITE_TIMEOUT_SECONDS = 60L
+
+// Худший случай распознавания на сервере — 205 с; клиент обязан его пережить.
+private const val LONG_READ_TIMEOUT_SECONDS = 210L
 
 /**
  * Транспорт: Retrofit поверх OkHttp и снятие конверта ответа.
  * Базовый адрес — корень хоста со слэшем на конце: пути в сгенерированных интерфейсах полные.
  */
-class ApiClient(
+class ApiClient internal constructor(
     baseUrl: String,
     tokens: TokenVault,
     onSessionExpired: () -> Unit,
+    readTimeoutSeconds: Long,
 ) {
+    constructor(
+        baseUrl: String,
+        tokens: TokenVault,
+        onSessionExpired: () -> Unit,
+    ) : this(baseUrl, tokens, onSessionExpired, READ_TIMEOUT_SECONDS)
+
     val json: Json = Json {
         // Сервер обновляется сам с каждого мержа, телефоны — руками: новое поле в ответе
         // не должно ронять установленный APK.
@@ -36,11 +47,18 @@ class ApiClient(
     private val http: OkHttpClient = OkHttpClient.Builder()
         .addInterceptor(TokenInterceptor(tokens, json, onSessionExpired))
         .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .readTimeout(readTimeoutSeconds, TimeUnit.SECONDS)
         .build()
 
     // Пул, диспетчер и перехватчики общие с [http]: отличается только автоповтор.
     private val httpWithoutRetries: OkHttpClient = http.newBuilder()
+        .retryOnConnectionFailure(false)
+        .build()
+
+    private val httpLongCall: OkHttpClient = http.newBuilder()
+        .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .writeTimeout(LONG_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .readTimeout(LONG_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .retryOnConnectionFailure(false)
         .build()
 
@@ -54,6 +72,10 @@ class ApiClient(
         .client(httpWithoutRetries)
         .build()
 
+    private val retrofitLongCall: Retrofit = retrofit.newBuilder()
+        .client(httpLongCall)
+        .build()
+
     fun <T : Any> create(service: KClass<T>): T = retrofit.create(service.java)
 
     /**
@@ -62,6 +84,9 @@ class ApiClient(
      * такого отказа и так показывается как неизвестный ([ApiFailure.resultUnknown]).
      */
     fun <T : Any> createWithoutRetries(service: KClass<T>): T = retrofitWithoutRetries.create(service.java)
+
+    /** Интерфейс для платного вызова модели: долгие сроки и тоже без автоповторов. */
+    fun <T : Any> createLongCall(service: KClass<T>): T = retrofitLongCall.create(service.java)
 
     /** Возвращает конверт ответа или бросает [ApiFailure]. */
     suspend fun <E : Any> unwrap(request: suspend () -> Response<E>): E = unwrapWithCode(request).second

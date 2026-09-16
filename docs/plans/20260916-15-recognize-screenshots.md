@@ -355,11 +355,11 @@ android/app/.../ui/AppIcons.kt            ScanLine (одна иконка; ли�
 **Files:**
 - Modify: `android/core/api/.../ApiGraph.kt`, `net/ApiClient.kt`, `ApiClientTest.kt`, `ApiGraphTest.kt`
 
-- [ ] `ApiClient.createLongCall`: `http.newBuilder()` (connect 10 с, write 60 с, read 210 с, `retryOnConnectionFailure(false)`) и `retrofit.newBuilder()` — интерсепторы, истечение сессии и сериализаторы общие; обычный клиент со старыми сроками
-- [ ] `ApiGraph.recognize(files: List<File>): RecognizeOk` собирает части `images` (`filename`, `image/jpeg`) внутри `:core:api`; `MultipartBody.Part` в `:app` не выходит (`okhttp` остаётся `implementation`)
-- [ ] тест: `MockWebServer` с задержкой 3 с и обычным клиентом с укороченным read → `ApiFailure.Network` с причиной `SocketTimeoutException`; долгий клиент отвечает; `503` — ровно один запрос по счётчику; обрыв — ровно один
-- [ ] тест `ApiGraph.recognize` с двумя файлами: части `images`, `filename`, MIME, байты — по `RecordedRequest`
-- [ ] `make -C android check` — зелёный до задачи 8
+- [x] `ApiClient.createLongCall`: `http.newBuilder()` (connect 10 с, write 60 с, read 210 с, `retryOnConnectionFailure(false)`) и `retrofit.newBuilder()` — интерсепторы, истечение сессии и сериализаторы общие; обычный клиент со старыми сроками
+- [x] `ApiGraph.recognize(files: List<File>): RecognizeOk` собирает части `images` (`filename`, `image/jpeg`) внутри `:core:api`; `MultipartBody.Part` в `:app` не выходит (`okhttp` остаётся `implementation`)
+- [x] тест: `MockWebServer` с задержкой 3 с и обычным клиентом с укороченным read → `ApiFailure.Network` с причиной `SocketTimeoutException`; долгий клиент отвечает; `503` — ровно один запрос по счётчику; обрыв — ровно один
+- [x] тест `ApiGraph.recognize` с двумя файлами: части `images`, `filename`, MIME, байты — по `RecordedRequest`
+- [x] `make -C android check` — зелёный до задачи 8
 
 ### Task 8: Импорт картинок на клиенте
 
