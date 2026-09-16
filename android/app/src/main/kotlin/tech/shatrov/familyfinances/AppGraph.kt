@@ -26,6 +26,9 @@ class AppGraph(val api: ApiGraph) {
     /** Роль и валюта для экранов: заполняется бутстрапом, гаснет на выходе. */
     val session: StateFlow<Session?> = mutableSession.asStateFlow()
 
+    /** Картинки, пришедшие в приложение: переживают поворот вместе с графом, но не смерть процесса. */
+    val imports: ImportStore = ImportStore()
+
     /** Токен на месте и не просрочен — иначе стартуем с экрана входа, не тратя запрос. */
     fun hasLiveToken(now: OffsetDateTime = OffsetDateTime.now()): Boolean =
         api.tokens.read()?.expiresAt?.isAfter(now) == true

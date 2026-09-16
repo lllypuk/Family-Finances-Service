@@ -380,14 +380,15 @@ android/app/.../ui/AppIcons.kt            ScanLine (одна иконка; ли�
 - Create: `android/app/.../ui/recognize/RecognizeViewModel.kt`, `RecognizeViewModelTest.kt`
 - Modify: `android/app/.../AppGraph.kt`
 
-- [ ] `ImportStore`: `offer(uris): UUID`, `claim(id)` — ровно одному, `pending: StateFlow<UUID?>`, `hold`/`release` для второго share во время `Preparing/Recognizing/Saving`
-- [ ] состояния модели: `Preparing → Recognizing → Review(rows) | Failure(error, retryable)`; строка: `draft`, поля, `included`, `similarTo`, `dateAssumed`, `currencyMismatch`, `status`
-- [ ] `claim` и один запрос в `init`; при рекомпозиции и повороте повторов нет; «Повторить» — только по нажатию
-- [ ] правки строки; смена суммы/типа/даты сбрасывает `similar` и `dateAssumed` (после явного выбора даты); `date == null`, `dateAssumed`, `currencyMismatch`, `categoryId == null` или описание короче 2 — сохранить нельзя
-- [ ] `save()`: выбранные строки по очереди `POST` с `draft` через `unwrapWithCode`; `201` → `saved`; `200` → `saved` с полями из ответа (запись уже была); `422` → ошибка поля; иной отказ → `failed` с «Повторить» тем же `draft`; `saved` заперты; `savedCount` в состоянии
-- [ ] `onCleared` чистит файлы импорта
-- [ ] тесты: `ImportStore` (двойной `claim`, `hold`), модель с `MockWebServer` (успех, `503` — один запрос, обрыв после отправки → повтор тем же `draft` → `200` принимает поля сервера, `422`, частичный отказ пачки, повтор не шлёт `saved`)
-- [ ] `make -C android check` — зелёный до задачи 10
+- [x] `ImportStore`: `offer(uris): UUID`, `claim(id)` — ровно одному, `pending: StateFlow<UUID?>`, `hold`/`release` для второго share во время `Preparing/Recognizing/Saving`
+- [x] состояния модели: `Preparing → Recognizing → Review(rows) | Failure(error, retryable)`; строка: `draft`, поля, `included`, `similarTo`, `dateAssumed`, `currencyMismatch`, `status`
+- [x] `claim` и один запрос в `init`; при рекомпозиции и повороте повторов нет; «Повторить» — только по нажатию
+- [x] правки строки; смена суммы/типа/даты сбрасывает `similar` и `dateAssumed` (после явного выбора даты); `date == null`, `dateAssumed`, `currencyMismatch`, `categoryId == null` или описание короче 2 — сохранить нельзя
+- [x] `save()`: выбранные строки по очереди `POST` с `draft` через `unwrapWithCode`; `201` → `saved`; `200` → `saved` с полями из ответа (запись уже была); `422` → ошибка поля; иной отказ → `failed` с «Повторить» тем же `draft`; `saved` заперты; `savedCount` в состоянии
+- [x] `onCleared` чистит файлы импорта
+- [x] тесты: `ImportStore` (двойной `claim`, `hold`), модель с `MockWebServer` (успех, `503` — один запрос, обрыв после отправки → повтор тем же `draft` → `200` принимает поля сервера, `422`, частичный отказ пачки, повтор не шлёт `saved`)
+- [x] `make -C android check` — зелёный до задачи 10
+- ➕ справочник категорий грузится до платного вызова и не перечитывается «Повторить»; `ImportStore.waiting` — флаг «ждёт после сохранения» для экрана; `retryRow(draft)` — повтор одной строки; `422` оставляет строку `Pending` с ошибками полей; `asCategoryType` стал `internal`
 
 ### Task 10: Экран, точки входа, share-intent
 

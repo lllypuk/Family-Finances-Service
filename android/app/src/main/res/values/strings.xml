@@ -185,4 +185,7 @@
     <string name="error_malformed">Сервер ответил непонятным — попробуйте позже</string>
     <string name="sign_out">Выйти</string>
     <string name="loading">Загрузка…</string>
+
+    <string name="recognize_import_lost">Картинки потерялись — поделитесь ими ещё раз</string>
+    <string name="recognize_no_images">Ни одну картинку не удалось прочитать</string>
 </resources>
