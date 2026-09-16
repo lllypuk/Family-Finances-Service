@@ -59,7 +59,7 @@ func imagePart(data []byte) testhelpers.FilePart {
 	return testhelpers.FilePart{Field: "images", Name: "shot.png", Data: data}
 }
 
-func assertValidationField(t *testing.T, rec *httptest.ResponseRecorder, field string) {
+func assertValidationField(t *testing.T, rec *httptest.ResponseRecorder, field, message string) {
 	t.Helper()
 
 	require.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
@@ -67,6 +67,7 @@ func assertValidationField(t *testing.T, rec *httptest.ResponseRecorder, field s
 	assert.Equal(t, handlers.ErrCodeValidationError, body.Error.Code)
 	require.Len(t, body.Error.Details, 1)
 	assert.Equal(t, field, body.Error.Details[0].Field)
+	assert.Contains(t, body.Error.Details[0].Message, message)
 }
 
 func TestRecognizeHandler_Recognize_Success(t *testing.T) {
@@ -109,26 +110,30 @@ func TestRecognizeHandler_Recognize_PartRefusals(t *testing.T) {
 	}
 
 	tests := []struct {
-		name  string
-		parts []testhelpers.FilePart
-		field string
+		name    string
+		parts   []testhelpers.FilePart
+		field   string
+		message string
 	}{
-		{name: "no parts", parts: nil, field: "images"},
+		{name: "no parts", parts: nil, field: "images", message: "is required"},
 		{
-			name:  "not an image",
-			parts: []testhelpers.FilePart{imagePart(png), imagePart([]byte("GIF89a"))},
-			field: "images[1]",
+			name:    "not an image",
+			parts:   []testhelpers.FilePart{imagePart(png), imagePart([]byte("GIF89a"))},
+			field:   "images[1]",
+			message: "PNG or JPEG",
 		},
 		{
-			name:  "too large",
-			parts: []testhelpers.FilePart{imagePart(make([]byte, recognize.MaxImageBytes+1))},
-			field: "images[0]",
+			name:    "too large",
+			parts:   []testhelpers.FilePart{imagePart(make([]byte, recognize.MaxImageBytes+1))},
+			field:   "images[0]",
+			message: "larger than",
 		},
-		{name: "sixth part", parts: six, field: "images[5]"},
+		{name: "sixth part", parts: six, field: "images[5]", message: "at most 5"},
 		{
-			name:  "foreign field",
-			parts: []testhelpers.FilePart{{Field: "note", Name: "a.png", Data: png}},
-			field: "note",
+			name:    "foreign field",
+			parts:   []testhelpers.FilePart{{Field: "note", Name: "a.png", Data: png}},
+			field:   "note",
+			message: "unexpected part",
 		},
 	}
 
@@ -137,7 +142,7 @@ func TestRecognizeHandler_Recognize_PartRefusals(t *testing.T) {
 			svc := &fakeRecognizeService{}
 			rec, err := recognizeRequest(t, svc, handlers.RecognizeUploadTimeout, tt.parts...)
 			require.NoError(t, err)
-			assertValidationField(t, rec, tt.field)
+			assertValidationField(t, rec, tt.field, tt.message)
 			assert.Zero(t, svc.calls)
 		})
 	}
@@ -150,6 +155,28 @@ func TestRecognizeHandler_Recognize_NotMultipart(t *testing.T) {
 	require.NoError(t, handlers.NewRecognizeHandler(&fakeRecognizeService{}, time.Minute).Recognize(c))
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Equal(t, handlers.ErrCodeInvalidRequest, decodeError(t, rec).Error.Code)
+}
+
+// recognizeTruncatedTail обрезает тело внутри данных картинки: обрыв в заголовках части
+// multipart.Reader отдаёт как io.EOF, и ответом был бы 422 «нет картинок».
+const recognizeTruncatedTail = 80
+
+func TestRecognizeHandler_Recognize_TruncatedBody(t *testing.T) {
+	body, contentType := testhelpers.MultipartBody(t, imagePart(testhelpers.PNGImage(t, 5, 5)))
+	principal := &auth.Principal{SessionID: uuid.New(), UserID: uuid.New(), Role: user.RoleMember}
+	c, rec := principalContext(
+		http.MethodPost,
+		recognizePath,
+		string(body[:len(body)-recognizeTruncatedTail]),
+		principal,
+	)
+	c.Request().Header.Set(echo.HeaderContentType, contentType)
+	svc := &fakeRecognizeService{}
+
+	require.NoError(t, handlers.NewRecognizeHandler(svc, time.Minute).Recognize(c))
+	require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+	assert.Equal(t, handlers.ErrCodeInvalidRequest, decodeError(t, rec).Error.Code)
+	assert.Zero(t, svc.calls)
 }
 
 func TestRecognizeHandler_Recognize_UploadTimeout(t *testing.T) {

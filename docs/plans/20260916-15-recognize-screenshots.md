@@ -348,7 +348,7 @@ android/app/.../ui/AppIcons.kt            ScanLine (одна иконка; ли�
 - [x] `CLAUDE.md`: раздел «Распознавание скриншотов» — слои, коды, две фазы дедлайнов, «второго цикла повторов нет», подкоманда
 - [x] `docs/api/README.md`: multipart и `encoding` как правило для файловых операций
 - [x] `make fmt && make test && make lint`; `make compose-config`; `make caddy-validate` — зелёные до задачи 7
-- ➕ `LLM_*` в `deploy/docker-compose.yml` интерполируются из того же `.env` (`getEnv` считает пустое незаданным — умолчания конфига живы); оверлей `proxied` их наследует, правки не нужно; Caddy — `11MiB` (= `11534336`, ровно `BodyLimit("11M")` Echo, проверено `caddy adapt`), образец vhost в `deploy/README.md` несёт оба правила; `RetryNever` из `llm` остаётся `500` — записано в `CLAUDE.md`; `deploy/CLAUDE.md` дополнен
+- ➕ `LLM_*` в `deploy/docker-compose.yml` интерполируются из того же `.env` (`getEnv` считает пустое незаданным — умолчания конфига живы); оверлей `proxied` их наследует, правки не нужно; Caddy — `11MiB` (= `11534336`, чуть свободнее `BodyLimit("11M")` Echo = `11000000`: `413` в JSON отвечает приложение), образец vhost в `deploy/README.md` несёт оба правила; `RetryNever` из `llm` остаётся `500` — записано в `CLAUDE.md`; `deploy/CLAUDE.md` дополнен
 
 ### Task 7: Долгий транспорт клиента и `ApiGraph.recognize`
 

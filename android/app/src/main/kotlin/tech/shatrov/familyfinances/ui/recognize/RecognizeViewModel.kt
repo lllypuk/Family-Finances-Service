@@ -21,13 +21,13 @@ import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import tech.shatrov.familyfinances.ui.UiError
 import tech.shatrov.familyfinances.ui.toUiError
 import tech.shatrov.familyfinances.ui.transactions.TransactionField
-import tech.shatrov.familyfinances.ui.transactions.asCategoryType
 import java.time.LocalDate
 import java.util.UUID
 
 private const val CATEGORY_LIMIT = 200
 private const val MIN_DESCRIPTION = 2
 private const val HTTP_CREATED = 201
+private const val HTTP_REQUEST_TIMEOUT = 408
 private const val HTTP_UNPROCESSABLE = 422
 private const val HTTP_SERVER_ERROR = 500
 
@@ -35,6 +35,7 @@ private const val HTTP_SERVER_ERROR = 500
 private val recognizeFailures = mapOf(
     "RECOGNITION_UNAVAILABLE" to R.string.recognize_error_unavailable,
     "RECOGNITION_FAILED" to R.string.recognize_error_failed,
+    "REQUEST_TIMEOUT" to R.string.recognize_error_upload_timeout,
 )
 
 private val rowFields = setOf(
@@ -110,11 +111,6 @@ data class RecognizeUiState(
     val incomplete: Boolean = false,
     val savedCount: Int = 0,
 ) {
-    val busy: Boolean
-        get() = phase is RecognizePhase.Preparing ||
-            phase is RecognizePhase.Recognizing ||
-            saving
-
     val saving: Boolean
         get() = (phase as? RecognizePhase.Review)?.saving == true
 
@@ -167,19 +163,6 @@ class RecognizeViewModel(
         included: Boolean,
     ) = edit(draft, null) { it.copy(included = included) }
 
-    fun onAmountChange(
-        draft: UUID,
-        amountMinor: Long,
-    ) = edit(draft, TransactionField.AMOUNT) { it.copy(amountMinor = amountMinor, similarTo = emptyList()) }
-
-    fun onTypeChange(
-        draft: UUID,
-        type: TransactionType,
-    ) = edit(draft, TransactionField.TYPE) { row ->
-        val keep = mutable.value.categories.any { it.id == row.categoryId && it.type == type.asCategoryType() }
-        row.copy(type = type, categoryId = row.categoryId.takeIf { keep }, similarTo = emptyList())
-    }
-
     /** Явный выбор даты, даже той же самой, подтверждает подставленный год. */
     fun onDateChange(
         draft: UUID,
@@ -207,6 +190,7 @@ class RecognizeViewModel(
 
     // Справочник — до платного вызова: его отказ не должен стоить распознавания.
     private suspend fun recognize() {
+        var keepHold = false
         try {
             val readyAt = mutable.value.images.indices.filter { mutable.value.images[it] is ImportImage.Ready }
             if (readyAt.isEmpty()) {
@@ -220,6 +204,8 @@ class RecognizeViewModel(
             mutable.update { it.copy(phase = RecognizePhase.Recognizing) }
             val files = readyAt.map { (mutable.value.images[it] as ImportImage.Ready).file }
             val result = api.recognize(files).`data`
+            // Ждущий share не вытесняет оплаченный ответ: импорт держится до сохранения или ухода.
+            keepHold = result.items.isNotEmpty() && imports.waiting.value
             mutable.update { state ->
                 state.copy(
                     phase = RecognizePhase.Review(result.items.map { it.toRow(readyAt, currency) }),
@@ -229,11 +215,12 @@ class RecognizeViewModel(
         } catch (failure: ApiFailure) {
             fail(
                 failure.toUiError(recognizeFailures),
-                retryable =
-                failure !is ApiFailure.Api || failure.status >= HTTP_SERVER_ERROR,
+                retryable = failure !is ApiFailure.Api ||
+                    failure.status == HTTP_REQUEST_TIMEOUT ||
+                    failure.status >= HTTP_SERVER_ERROR,
             )
         } finally {
-            imports.release(importId)
+            if (!keepHold) imports.release(importId)
         }
     }
 

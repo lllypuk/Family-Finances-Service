@@ -116,6 +116,19 @@ class ImportFilesTest {
         assertTrue(result.images[2] is ImportImage.Ready)
     }
 
+    // Файл на месте каталога: запись падает так же, как после `discard` посреди пережатия.
+    @Test
+    fun unwritableTargetFailsRowWithoutThrowing() = runTest {
+        val importId = UUID.randomUUID()
+        File(context.cacheDir, "import").mkdirs()
+        File(context.cacheDir, "import/$importId").writeText("x")
+        val png = Uri.fromFile(image("a.png", 40, 40, Bitmap.CompressFormat.PNG))
+
+        val result = ImportFiles.prepare(context, importId, listOf(png))
+
+        assertEquals(ImportImage.Failed(png, ImportFailure.UNREADABLE), result.images.single())
+    }
+
     @Test
     fun sweepKeepsOnlyFreshCameraShots() = runTest {
         val importId = UUID.randomUUID()

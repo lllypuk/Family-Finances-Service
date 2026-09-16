@@ -80,28 +80,35 @@ fun ImportSourceSheet(
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        ImportSourceSheetContent { launch ->
+        fun hideThen(launch: () -> Unit) {
             scope.launch { sheetState.hide() }.invokeOnCompletion {
                 if (!sheetState.isVisible) {
                     onDismiss()
-                    launch(launchers)
+                    launch()
                 }
             }
         }
+        ImportSourceSheetContent(
+            onGallery = { hideThen(launchers.gallery) },
+            onCamera = { hideThen(launchers.camera) },
+        )
     }
 }
 
 // Как у листа категорий: `ModalBottomSheet` в Robolectric ненадёжен, проверяется тело.
 @Composable
-internal fun ImportSourceSheetContent(onChoose: ((ImportLaunchers) -> Unit) -> Unit) {
+internal fun ImportSourceSheetContent(
+    onGallery: () -> Unit,
+    onCamera: () -> Unit,
+) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = stringResource(R.string.recognize_scan),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(horizontal = Dimens.SPACE_4, vertical = Dimens.SPACE_2),
         )
-        SourceRow(stringResource(R.string.recognize_from_gallery)) { onChoose { it.gallery() } }
-        SourceRow(stringResource(R.string.recognize_take_photo)) { onChoose { it.camera() } }
+        SourceRow(stringResource(R.string.recognize_from_gallery), onGallery)
+        SourceRow(stringResource(R.string.recognize_take_photo), onCamera)
     }
 }
 

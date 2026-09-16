@@ -180,3 +180,52 @@ func TestRecognizeService_Recognize_EngineErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestRecognizeService_Recognize_RepositoryErrors(t *testing.T) {
+	boom := errors.New("boom")
+	day := date.New(2026, time.September, 14)
+	dated := recognize.Result{Items: []recognize.Item{{AmountMinor: 100, Type: transaction.TypeExpense, Date: &day}}}
+
+	tests := []struct {
+		name         string
+		breakRepo    func(f *recognizeFixture)
+		engineCalled bool
+	}{
+		{
+			name: "family",
+			breakRepo: func(f *recognizeFixture) {
+				f.families.ExpectedCalls = nil
+				f.families.On("Get", mock.Anything).Return(nil, boom)
+			},
+		},
+		{
+			name: "categories",
+			breakRepo: func(f *recognizeFixture) {
+				f.categories.ExpectedCalls = nil
+				f.categories.On("GetAll", mock.Anything).Return(nil, boom)
+			},
+		},
+		{
+			name: "similar",
+			breakRepo: func(f *recognizeFixture) {
+				f.transactions.On("GetByFilter", mock.Anything, mock.Anything).Return(nil, boom)
+			},
+			engineCalled: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newRecognizeFixture()
+			tt.breakRepo(f)
+			engine := &fakeRecognizer{result: dated}
+
+			result, err := f.service(engine).Recognize(t.Context(), testImages())
+
+			require.ErrorIs(t, err, boom)
+			assert.Empty(t, result.Items)
+			assert.Equal(t, tt.engineCalled, engine.input.Images != nil)
+			assert.Equal(t, []recognitionRecord{{outcome: "failed"}}, f.observer.records)
+		})
+	}
+}

@@ -42,7 +42,6 @@ import tech.shatrov.familyfinances.SALARY_ID
 import tech.shatrov.familyfinances.TRANSACTION_OK
 import tech.shatrov.familyfinances.VALIDATION_ERROR
 import tech.shatrov.familyfinances.core.api.ApiGraph
-import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.enqueueJson
 import tech.shatrov.familyfinances.liveToken
 import tech.shatrov.familyfinances.ui.UiError
@@ -67,6 +66,14 @@ private const val RECOGNIZE_OK = """
 """
 
 private const val UNAVAILABLE = """{"error":{"code":"RECOGNITION_UNAVAILABLE","message":"недоступно"}}"""
+
+private const val UPLOAD_TIMEOUT = """{"error":{"code":"REQUEST_TIMEOUT","message":"upload timed out"}}"""
+
+private const val ROW_INVALID = """
+{"error":{"code":"VALIDATION_ERROR","message":"Проверьте поля","details":[
+{"field":"amount_minor","message":"должно быть больше нуля","code":"gt"},
+{"field":"description","message":"слишком коротко","code":"min"}]}}
+"""
 
 private const val RECOGNIZE_PATH = "/api/v1/transactions/recognize"
 private const val TRANSACTIONS_PATH = "/api/v1/transactions"
@@ -159,7 +166,8 @@ class RecognizeViewModelTest {
         assertTrue(store.waiting.value)
 
         val state = reviewed()
-        assertEquals(next, store.pending.value)
+        assertNull(store.pending.value)
+        assertTrue(store.waiting.value)
         assertTrue(state.incomplete)
         assertTrue(state.images[1] is ImportImage.Failed)
         val rows = rows()
@@ -174,6 +182,44 @@ class RecognizeViewModelTest {
         val sent = requests()
         assertEquals(listOf("/api/v1/categories", RECOGNIZE_PATH), sent.map { it.url.encodedPath })
         assertEquals(2, Regex("name=\"images\"").findAll(sent[1].text()).count())
+
+        server.enqueueJson(201, TRANSACTION_OK)
+        model.save()
+        reviewed()
+        assertEquals(next, store.pending.value)
+    }
+
+    @Test
+    fun reviewWithoutWaitingShareIsReplaceable() = runTest {
+        recognized()
+
+        val next = store.offer(listOf(shot("c.png")))
+
+        assertEquals(next, store.pending.value)
+    }
+
+    @Test
+    fun slowUploadIsRetryable() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(408, UPLOAD_TIMEOUT)
+        createModel()
+
+        val failed = reviewed().phase as RecognizePhase.Failure
+        assertTrue(failed.retryable)
+        assertEquals(UiError.Resource(R.string.recognize_error_upload_timeout), failed.error)
+    }
+
+    @Test
+    fun rejectedRequestIsNotRetried() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(422, VALIDATION_ERROR)
+        createModel()
+
+        val failed = reviewed().phase as RecognizePhase.Failure
+        assertFalse(failed.retryable)
+
+        model.retry()
+        assertEquals(2, server.requestCount)
     }
 
     @Test
@@ -230,14 +276,11 @@ class RecognizeViewModelTest {
         // Валюту строки не поправить: `POST` её не принимает.
         assertFalse(rows()[2].savable)
 
-        model.onAmountChange(shawarma, 35000)
+        model.onDateChange(shawarma, LocalDate.parse("2026-09-13"))
         assertTrue(rows()[0].similarTo.isEmpty())
-        model.onTypeChange(shawarma, TransactionType.income)
-        assertNull(rows()[0].categoryId)
-        assertFalse(rows()[0].savable)
 
         model.onIncludedChange(salary, false)
-        assertEquals(0, model.state.value.toSave)
+        assertEquals(1, model.state.value.toSave)
     }
 
     @Test
@@ -279,17 +322,23 @@ class RecognizeViewModelTest {
     @Test
     fun validationErrorLandsUnderRowField() = runTest {
         val draft = recognized()[0].draft
-        server.enqueueJson(422, VALIDATION_ERROR)
+        server.enqueueJson(422, ROW_INVALID)
 
         model.save()
         reviewed()
 
         val row = rows()[0]
         assertEquals(RowStatus.Pending, row.status)
-        assertEquals(mapOf(TransactionField.AMOUNT to "должно быть больше нуля"), row.fieldErrors)
+        assertEquals(
+            mapOf(
+                TransactionField.AMOUNT to "должно быть больше нуля",
+                TransactionField.DESCRIPTION to "слишком коротко",
+            ),
+            row.fieldErrors,
+        )
 
-        model.onAmountChange(draft, 30100)
-        assertTrue(rows()[0].fieldErrors.isEmpty())
+        model.onDescriptionChange(draft, "Шавуха большая")
+        assertEquals(setOf(TransactionField.AMOUNT), rows()[0].fieldErrors.keys)
     }
 
     @Test

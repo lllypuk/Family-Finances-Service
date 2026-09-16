@@ -18,10 +18,11 @@ import (
 	"family-budget-service/internal/testhelpers"
 )
 
-// Сроки сокращены в десятки раз: SERVER_READ/WRITE_TIMEOUT 15 с → 1 с, загрузка 60 с → 1 с.
+// Сроки сокращены в пятьдесят раз с тем же соотношением: SERVER_READ/WRITE_TIMEOUT 15 с → 300 мс,
+// загрузка 60 с → 1,2 с. Загрузка длиннее таймаута сервера — иначе продление дедлайна чтения не видно.
 const (
-	deadlineServerTimeout = time.Second
-	deadlineUploadTimeout = time.Second
+	deadlineServerTimeout = 300 * time.Millisecond
+	deadlineUploadTimeout = 1200 * time.Millisecond
 	deadlineEngineBudget  = 3 * time.Second
 )
 
@@ -99,6 +100,30 @@ func TestRecognizeDeadlines_LateEngineAnswerArrives(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode, string(payload))
 	assert.Contains(t, string(payload), `"model":"slow"`)
+}
+
+func TestRecognizeDeadlines_UploadOutlivesServerReadTimeout(t *testing.T) {
+	ts, srv := startDeadlineServer(t, newSlowRecognizer(0))
+
+	body, contentType := onePNG(t)
+	paused, writer := io.Pipe()
+	go func() {
+		_, _ = writer.Write(body[:len(body)/2])
+		time.Sleep(2 * deadlineServerTimeout)
+		_, _ = writer.Write(body[len(body)/2:])
+		_ = writer.Close()
+	}()
+
+	req := recognizeRequest(t.Context(), t, srv, ts.Auth(t), paused, contentType)
+	req.ContentLength = int64(len(body))
+
+	resp, err := srv.Client().Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	payload, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, string(payload))
 }
 
 func TestRecognizeDeadlines_SlowUploadRefused(t *testing.T) {

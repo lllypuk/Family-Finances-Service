@@ -2,14 +2,20 @@ package tech.shatrov.familyfinances
 
 import android.app.Application
 import android.net.Uri
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
+import mockwebserver3.Dispatcher
+import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
+import mockwebserver3.RecordedRequest
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Rule
@@ -23,7 +29,7 @@ import java.io.File
 
 private const val WAIT_MS = 5_000L
 
-/** Маршрут импорта в корне: share до входа открывается экраном распознавания после бутстрапа. */
+/** Маршрут импорта в корне: share до входа открывается после бутстрапа, открытую форму не прерывает. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [ROBOLECTRIC_SDK])
 class AppRootImportTest {
@@ -64,4 +70,37 @@ class AppRootImportTest {
         composeRule.onNodeWithText(res.getString(R.string.recognize_title)).assertExists()
         assertNull(graph.imports.pending.value)
     }
+
+    @Test
+    fun shareDuringTransactionFormWaits() {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when (request.url.encodedPath) {
+                "/api/v1/me" -> json(ME_OK)
+                "/api/v1/family" -> json(FAMILY_OK)
+                "/api/v1/stats/summary" -> json(STATS_EMPTY)
+                "/api/v1/categories" -> json(CATEGORIES_OK)
+                else -> MockResponse.Builder().code(404).build()
+            }
+        }
+        val graph = AppGraph(ApiGraph(server.url("/").toString(), FakeTokenVault(liveToken())))
+        composeRule.setContent { AppTheme { AppRoot(graph) } }
+
+        val add = res.getString(R.string.home_add_transaction)
+        composeRule.waitUntil(WAIT_MS) { composeRule.onAllNodesWithText(add).fetchSemanticsNodes().isNotEmpty() }
+        composeRule.onNodeWithText(add).performClick()
+        val title = res.getString(R.string.transaction_new_title)
+        composeRule.onNodeWithText(title).assertIsDisplayed()
+
+        val id = graph.imports.offer(listOf(Uri.fromFile(File(app.filesDir, "missing.png"))))
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(title).assertIsDisplayed()
+        composeRule.onAllNodesWithText(res.getString(R.string.recognize_title)).assertCountEquals(0)
+        assertEquals(id, graph.imports.pending.value)
+    }
+
+    private fun json(body: String) = MockResponse.Builder()
+        .body(body)
+        .setHeader("Content-Type", "application/json")
+        .build()
 }

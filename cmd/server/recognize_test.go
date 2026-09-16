@@ -30,6 +30,35 @@ func TestRunRecognize_WithoutHost(t *testing.T) {
 	assert.NoFileExists(t, path)
 }
 
+func TestRunRecognize_MissingDatabaseNotCreated(t *testing.T) {
+	t.Chdir(testhelpers.RepoRoot(t))
+	dir := t.TempDir()
+	image := filepath.Join(dir, "shot.png")
+	require.NoError(t, os.WriteFile(image, testhelpers.PNGImage(t, 8, 8), 0o600))
+	path := filepath.Join(dir, "missing.db")
+	t.Setenv("DATABASE_PATH", path)
+	t.Setenv("LLM_OLLAMA_HOST", "http://127.0.0.1:1")
+
+	var stdout, stderr bytes.Buffer
+	err := recognizeCommand(&stderr)(context.Background(), []string{image}, nil, &stdout)
+
+	require.ErrorIs(t, err, os.ErrNotExist)
+	assert.Empty(t, stdout.String())
+	assert.NoFileExists(t, path)
+}
+
+func TestRunRecognize_InvalidHost(t *testing.T) {
+	t.Chdir(testhelpers.RepoRoot(t))
+	t.Setenv("DATABASE_PATH", filepath.Join(t.TempDir(), "untouched.db"))
+	t.Setenv("LLM_OLLAMA_HOST", "ftp://127.0.0.1:1")
+
+	var stdout, stderr bytes.Buffer
+	err := recognizeCommand(&stderr)(context.Background(), []string{"a.png"}, nil, &stdout)
+
+	require.ErrorContains(t, err, "LLM_OLLAMA_HOST")
+	assert.NotErrorIs(t, err, errRecognizeDisabled)
+}
+
 func TestExitCode_RecognizeDisabledIsUsage(t *testing.T) {
 	assert.Equal(t, exitUsage, exitCode(fmt.Errorf("%s: %w", cmdRecognize, errRecognizeDisabled)))
 	assert.Equal(t, 1, exitCode(errors.New("boom")))

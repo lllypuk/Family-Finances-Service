@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"family-budget-service/internal/application"
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/transaction"
@@ -37,6 +38,19 @@ func (s *stubRecognizer) Recognize(_ context.Context, _ recognize.Input) (recogn
 }
 
 func (s *stubRecognizer) Budget() time.Duration { return time.Second }
+
+// deadlineProbe запоминает срок контекста, с которым вызван движок.
+type deadlineProbe struct {
+	budget   time.Duration
+	deadline time.Time
+}
+
+func (p *deadlineProbe) Recognize(ctx context.Context, _ recognize.Input) (recognize.Result, error) {
+	p.deadline, _ = ctx.Deadline()
+	return recognize.Result{Items: []recognize.Item{}}, nil
+}
+
+func (p *deadlineProbe) Budget() time.Duration { return p.budget }
 
 func postRecognize(
 	t *testing.T,
@@ -227,4 +241,17 @@ func TestRecognizeAPI_Metrics(t *testing.T) {
 		assert.Contains(t, metrics, `ffs_recognitions_total{outcome="`+outcome+`"} 1`)
 	}
 	assert.Contains(t, metrics, "ffs_recognition_duration_seconds_count 4")
+}
+
+func TestRecognizeAPI_EngineOutlivesRequestTimeout(t *testing.T) {
+	engine := &deadlineProbe{budget: 2 * application.HTTPRequestTimeout}
+	ts := testhelpers.SetupHTTPServer(t, testhelpers.WithRecognizer(engine))
+
+	started := time.Now()
+	body, contentType := onePNG(t)
+	rec := postRecognize(t, ts, ts.Auth(t), bytes.NewReader(body), contentType)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.True(t, engine.deadline.After(started.Add(application.HTTPRequestTimeout+10*time.Second)),
+		"общий таймаут запроса обрезал срок движка: %s", engine.deadline.Sub(started))
 }

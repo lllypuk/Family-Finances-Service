@@ -21,12 +21,14 @@ info:
     - Ошибка всегда одной формы: `{"error": {...}, "meta": {...}}` (A-08).
 
     Коды ошибок: `INVALID_REQUEST` / `INVALID_ID` (400 — тело или id не разобрались),
+    `REQUEST_TIMEOUT` (408 — тело не успело загрузиться), `PAYLOAD_TOO_LARGE` (413),
     `UNAUTHORIZED` (401), `FORBIDDEN` (403), `NOT_FOUND` / `<ENTITY>_NOT_FOUND` (404),
     `VALIDATION_ERROR` (422 — тело или query-параметры не прошли проверку, поля в `error.details`),
     `SETUP_REQUIRED` / `CURRENCY_LOCKED` / `LAST_ADMIN` / `CANNOT_DEACTIVATE_SELF` /
     `EMAIL_TAKEN` / `BUDGET_OVERLAP` / `BUDGET_NAME_EXISTS` / `BUDGET_BELOW_SPENT` /
     `BUDGET_ID_EXISTS` / `BUDGET_NOT_TAIL` (409),
-    `RATE_LIMITED` (429, с `Retry-After`), `INTERNAL_ERROR` (500).
+    `RATE_LIMITED` (429, с `Retry-After`), `INTERNAL_ERROR` (500),
+    `RECOGNITION_FAILED` (502), `RECOGNITION_UNAVAILABLE` (503, `Retry-After`, когда известен).
   license:
     name: MIT
     identifier: MIT

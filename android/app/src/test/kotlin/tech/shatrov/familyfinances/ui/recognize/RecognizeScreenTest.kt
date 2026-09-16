@@ -9,8 +9,10 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -47,6 +49,9 @@ class RecognizeScreenTest {
 
     private fun show(
         state: RecognizeUiState,
+        waiting: Boolean = false,
+        onIncludedChange: (UUID, Boolean) -> Unit = { _, _ -> },
+        onDescriptionChange: (UUID, String) -> Unit = { _, _ -> },
         onSave: () -> Unit = {},
         onRetryRow: (UUID) -> Unit = {},
     ) {
@@ -55,12 +60,12 @@ class RecognizeScreenTest {
                 RecognizeScreen(
                     state = state,
                     currency = "RUB",
-                    waiting = false,
+                    waiting = waiting,
                     today = TODAY,
-                    onIncludedChange = { _, _ -> },
+                    onIncludedChange = onIncludedChange,
                     onDateChange = { _, _ -> },
                     onCategoryChange = { _, _ -> },
-                    onDescriptionChange = { _, _ -> },
+                    onDescriptionChange = onDescriptionChange,
                     onSave = onSave,
                     onRetry = {},
                     onRetryRow = onRetryRow,
@@ -151,6 +156,44 @@ class RecognizeScreenTest {
         composeRule.onNodeWithText(res.getString(R.string.error_network)).assertIsDisplayed()
         composeRule.onNodeWithText(res.getString(R.string.retry)).performClick()
         assertEquals(failed.draft, retried)
+    }
+
+    @Test
+    fun uncheckingRowReachesCallback() {
+        val shawarma = row("Шавуха")
+        var change: Pair<UUID, Boolean>? = null
+        show(review(shawarma), onIncludedChange = { draft, included -> change = draft to included })
+
+        composeRule.onNodeWithContentDescription(res.getString(R.string.recognize_include)).performClick()
+
+        assertEquals(shawarma.draft to false, change)
+    }
+
+    @Test
+    fun typedDescriptionReachesItsRow() {
+        val shawarma = row("Шавуха")
+        var edited: UUID? = null
+        show(review(row("Кофе"), shawarma), onDescriptionChange = { draft, _ -> edited = draft })
+
+        composeRule.onNodeWithText("Шавуха").performTextInput("!")
+
+        assertEquals(shawarma.draft, edited)
+    }
+
+    @Test
+    fun savedRowIsLocked() {
+        show(review(row("Кофе", status = RowStatus.Saved)))
+
+        composeRule.onNodeWithContentDescription(res.getString(R.string.recognize_include)).assertIsNotEnabled()
+        composeRule.onNodeWithText("Кофе").assertIsNotEnabled()
+        composeRule.onNodeWithText("Продукты").assertIsNotEnabled()
+    }
+
+    @Test
+    fun waitingShareIsAnnounced() {
+        show(review(row("Шавуха")), waiting = true)
+
+        composeRule.onNodeWithText(res.getString(R.string.recognize_waiting)).assertIsDisplayed()
     }
 
     @Test

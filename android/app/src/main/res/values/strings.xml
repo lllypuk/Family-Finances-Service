@@ -196,6 +196,7 @@
     <string name="recognize_empty">Операций на картинке не нашлось</string>
     <string name="recognize_error_unavailable">Распознавание на сервере не настроено или модель сейчас не отвечает</string>
     <string name="recognize_error_failed">Модель ответила непонятным — попробуйте ещё раз</string>
+    <string name="recognize_error_upload_timeout">Картинки не успели загрузиться — повторите на связи получше</string>
     <string name="recognize_incomplete">Список мог быть неполным: проверьте картинку</string>
     <string name="recognize_dropped">Взяты первые пять картинок, остальные: %1$d</string>
     <string name="recognize_waiting">Новые картинки откроются после сохранения</string>

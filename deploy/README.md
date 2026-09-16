@@ -250,7 +250,8 @@ must not cut the request earlier — Caddy's `reverse_proxy` has no response tim
 
 **Before enabling it in production, change the vhost in the landing repository**
 (`shatrov.tech/landing`, `deploy/Caddyfile.prod`, then its `deploy:prod` job): the body limits from
-the block above. The app accepts up to five images of 2 MiB each (Echo `BodyLimit("11M")`); a 1 MB
+the block above. The app accepts up to five images of 2 MiB each (Echo `BodyLimit("11M")`, 11 000 000 bytes; Caddy's
+`11MiB` is slightly looser, so the JSON `413` comes from the app); a 1 MB
 limit on the whole site turns every upload into Caddy's `413`, and no limit at all lets an
 unauthenticated client push an unbounded body at `/api/v1/auth/login`. The own-TLS layout already
 carries both rules in `caddy/Caddyfile`.

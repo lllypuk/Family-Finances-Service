@@ -212,6 +212,7 @@ calls — the cron `compose run` is a different process with no registry, and is
 `ffs_backup_latest_file_timestamp_seconds` (the newest file's `ModTime`, not "last successful run", so deleting
 it moves the gauge back). Metric names and labels are a contract with the observability repository: the accepted
 list is in `docs/plans/completed/20260915-14-prometheus-metrics.md`, the deployment side in `deploy/README.md`.
+`ffs_recognition*` are not in that list yet — agreeing them is open in plan 15's Post-Completion.
 
 **Working directory matters:** `./migrations` is resolved relative to the process CWD (`migrationsDir` in
 `internal/bootstrap.go`), so both the server and the CLI subcommands must be started from the repo root.
@@ -266,6 +267,9 @@ on it.
     `Authorization: Bearer`. `ts.AuthUser` / `ts.AuthFamily` hold what `Auth` created.
   - `SetupHTTPServer` always builds a registry: `ts.Metrics` is the same instance the server middleware and the
     backup service write to, scraped in tests through `ts.Metrics.Handler()` without opening a socket.
+  - Recognition is off on the stand unless `testhelpers.WithRecognizer(r)` is passed;
+    `WithRecognizeUploadTimeout(d)` shortens the upload phase, `testhelpers/multipart.go` builds multipart bodies
+    and PNG/JPEG images.
   - `testhelpers.RepoRoot(t)` walks up to `go.mod`; use it for anything cwd-relative (`openapi.yaml`, migrations
     in `bootstrap_test.go` via `t.Chdir`) — `go test` runs with cwd = the package directory.
 - `testhelpers/factories.go` — `CreateTestFamily`, `CreateTestUser`, etc.

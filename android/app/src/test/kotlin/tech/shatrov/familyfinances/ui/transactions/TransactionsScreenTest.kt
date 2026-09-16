@@ -216,9 +216,8 @@ class TransactionsScreenTest {
     fun importSheetStartsChosenSource() {
         var gallery = 0
         var camera = 0
-        val launchers = ImportLaunchers(gallery = { gallery++ }, camera = { camera++ })
         composeRule.setContent {
-            AppTheme { ImportSourceSheetContent { launch -> launch(launchers) } }
+            AppTheme { ImportSourceSheetContent(onGallery = { gallery++ }, onCamera = { camera++ }) }
         }
 
         composeRule.onNodeWithText(res.getString(R.string.recognize_from_gallery)).performClick()

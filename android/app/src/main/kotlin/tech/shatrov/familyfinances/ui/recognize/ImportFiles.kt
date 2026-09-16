@@ -9,6 +9,7 @@ import android.media.ExifInterface
 import android.net.Uri
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -57,6 +58,7 @@ object ImportFiles {
     ): PreparedImport = withContext(Dispatchers.IO) {
         val dir = importDir(context, importId).apply { mkdirs() }
         val images = uris.take(MAX_IMAGES).mapIndexed { i, uri ->
+            ensureActive()
             convert(context.contentResolver, uri, File(dir, "$i.jpg"))
         }
         PreparedImport(images, dropped = (uris.size - MAX_IMAGES).coerceAtLeast(0))
@@ -121,13 +123,24 @@ object ImportFiles {
             bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
             if (out.size() <= MAX_BYTES) {
                 bitmap.recycle()
-                target.writeBytes(out.toByteArray())
-                return ImportImage.Ready(uri, target)
+                return write(uri, target, out)
             }
             quality -= QUALITY_STEP
         }
         bitmap.recycle()
         return ImportImage.Failed(uri, ImportFailure.TOO_LARGE)
+    }
+
+    // Каталог импорта удаляет `discard` модели, ушедшей с экрана посреди пережатия.
+    private fun write(
+        uri: Uri,
+        target: File,
+        out: ByteArrayOutputStream,
+    ): ImportImage = try {
+        target.writeBytes(out.toByteArray())
+        ImportImage.Ready(uri, target)
+    } catch (_: IOException) {
+        ImportImage.Failed(uri, ImportFailure.UNREADABLE)
     }
 
     private fun decode(

@@ -221,20 +221,17 @@ class ApiClientTest {
         assertEquals(1, data.size)
     }
 
+    // `408` без `Retry-After` OkHttp повторяет сам, если `retryOnConnectionFailure` не снят.
     @Test
-    fun longCallDoesNotRepeatUnavailable() = runTest {
-        enqueue(
-            503,
-            """{"error":{"code":"RECOGNITION_UNAVAILABLE","message":"распознавание недоступно"}}""",
-            retryAfter = "30",
-        )
+    fun longCallDoesNotRepeatRequestTimeout() = runTest {
+        enqueue(408, """{"error":{"code":"REQUEST_TIMEOUT","message":"upload timed out"}}""")
         enqueue(200, TRANSACTIONS_OK)
 
         val failure = expectFailure {
             graph.client.unwrap { graph.client.createLongCall(TransactionsApi::class).listTransactions() }.`data`
         } as ApiFailure.Api
 
-        assertEquals(503, failure.status)
+        assertEquals(408, failure.status)
         assertEquals(1, server.requestCount)
     }
 

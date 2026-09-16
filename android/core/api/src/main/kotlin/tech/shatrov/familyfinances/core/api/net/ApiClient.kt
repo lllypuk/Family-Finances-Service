@@ -55,11 +55,9 @@ class ApiClient internal constructor(
         .retryOnConnectionFailure(false)
         .build()
 
-    private val httpLongCall: OkHttpClient = http.newBuilder()
-        .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+    private val httpLongCall: OkHttpClient = httpWithoutRetries.newBuilder()
         .writeTimeout(LONG_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .readTimeout(LONG_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .retryOnConnectionFailure(false)
         .build()
 
     private val retrofit: Retrofit = Retrofit.Builder()
