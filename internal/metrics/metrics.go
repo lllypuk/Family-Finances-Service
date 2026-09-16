@@ -22,11 +22,12 @@ const namespace = "ffs"
 
 // Metrics — реестр и наблюдатели поверх него.
 type Metrics struct {
-	registry *prometheus.Registry
-	logger   *slog.Logger
-	http     *HTTPObserver
-	login    *LoginObserver
-	backup   *BackupObserver
+	registry  *prometheus.Registry
+	logger    *slog.Logger
+	http      *HTTPObserver
+	login     *LoginObserver
+	backup    *BackupObserver
+	recognize *RecognizeObserver
 }
 
 // New создаёт реестр со стандартными Go/process-коллекторами и метриками сервиса.
@@ -47,11 +48,12 @@ func New(version string, logger *slog.Logger) *Metrics {
 	buildInfo.WithLabelValues(version, runtime.Version()).Set(1)
 
 	return &Metrics{
-		registry: registry,
-		logger:   logger,
-		http:     newHTTPObserver(factory),
-		login:    newLoginObserver(factory),
-		backup:   newBackupObserver(factory),
+		registry:  registry,
+		logger:    logger,
+		http:      newHTTPObserver(factory),
+		login:     newLoginObserver(factory),
+		backup:    newBackupObserver(factory),
+		recognize: newRecognizeObserver(factory),
 	}
 }
 
@@ -93,6 +95,11 @@ func (m *Metrics) Login() *LoginObserver {
 // Backup возвращает наблюдателя резервных копий.
 func (m *Metrics) Backup() *BackupObserver {
 	return m.backup
+}
+
+// Recognize возвращает наблюдателя распознавания скриншотов.
+func (m *Metrics) Recognize() *RecognizeObserver {
+	return m.recognize
 }
 
 // promLogger — адаптер slog под promhttp.Logger (пакет log запрещён depguard).

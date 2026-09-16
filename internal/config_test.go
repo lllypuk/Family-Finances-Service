@@ -2,6 +2,7 @@ package internal_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -153,4 +154,69 @@ func TestLoadConfig_MetricsAddr(t *testing.T) {
 	t.Setenv("METRICS_ADDR", "127.0.0.1:9091")
 
 	assert.Equal(t, "127.0.0.1:9091", internal.LoadConfig().Server.MetricsAddr)
+}
+
+func TestConfig_Validate_LLM(t *testing.T) {
+	cfg := productionConfig()
+	require.NoError(t, cfg.Validate(), "пустой хост — плечо выключено, срок и модель не проверяются")
+
+	cfg.LLM = internal.LLMConfig{
+		OllamaHost: "http://192.168.1.10:11434",
+		Model:      "gemma4:31b-cloud",
+		Timeout:    time.Minute,
+	}
+	require.NoError(t, cfg.Validate())
+
+	tests := []struct {
+		name   string
+		mutate func(*internal.LLMConfig)
+		want   string
+	}{
+		{
+			name:   "host without scheme",
+			mutate: func(c *internal.LLMConfig) { c.OllamaHost = "192.168.1.10:11434" },
+			want:   "LLM_OLLAMA_HOST",
+		},
+		{
+			name:   "unsupported scheme",
+			mutate: func(c *internal.LLMConfig) { c.OllamaHost = "ftp://mini:11434" },
+			want:   "LLM_OLLAMA_HOST",
+		},
+		{name: "empty model", mutate: func(c *internal.LLMConfig) { c.Model = "" }, want: "LLM_MODEL"},
+		{name: "zero timeout", mutate: func(c *internal.LLMConfig) { c.Timeout = 0 }, want: "LLM_TIMEOUT"},
+		{
+			name:   "timeout above a minute",
+			mutate: func(c *internal.LLMConfig) { c.Timeout = 61 * time.Second },
+			want:   "LLM_TIMEOUT",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			broken := *cfg
+			tt.mutate(&broken.LLM)
+
+			err := broken.Validate()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.want)
+		})
+	}
+}
+
+func TestLoadConfig_LLM(t *testing.T) {
+	cfg := internal.LoadConfig()
+	assert.Empty(t, cfg.LLM.OllamaHost)
+	assert.Equal(t, "gemma4:31b-cloud", cfg.LLM.Model)
+	assert.Equal(t, time.Minute, cfg.LLM.Timeout)
+
+	t.Setenv("LLM_OLLAMA_HOST", "http://192.168.1.10:11434")
+	t.Setenv("LLM_MODEL", "qwen3-vl:235b-cloud")
+	t.Setenv("LLM_TIMEOUT", "45s")
+
+	cfg = internal.LoadConfig()
+	assert.Equal(t, internal.LLMConfig{
+		OllamaHost: "http://192.168.1.10:11434",
+		Model:      "qwen3-vl:235b-cloud",
+		Timeout:    45 * time.Second,
+	}, cfg.LLM)
 }

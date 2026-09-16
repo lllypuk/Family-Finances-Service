@@ -63,6 +63,8 @@ type Config struct {
 	// Metrics — реестр Prometheus; nil — HTTP-метрики не пишутся (NewHTTPServer без Config.Metrics,
 	// юнит-тесты хендлеров). Интеграционный стенд реестр задаёт.
 	Metrics *metrics.Metrics
+	// RecognizeUploadTimeout — срок приёма тела распознавания; 0 — handlers.RecognizeUploadTimeout.
+	RecognizeUploadTimeout time.Duration
 }
 
 // NewHTTPServer создает HTTP сервер без observability (для обратной совместимости)
@@ -137,6 +139,11 @@ func NewHTTPServerWithObservability(
 		}))
 	}
 
+	uploadTimeout := config.RecognizeUploadTimeout
+	if uploadTimeout == 0 {
+		uploadTimeout = handlers.RecognizeUploadTimeout
+	}
+
 	server := &HTTPServer{
 		echo:                 e,
 		services:             services,
@@ -154,7 +161,7 @@ func NewHTTPServerWithObservability(
 		budgetHandler:      handlers.NewBudgetHandler(repositories, services.Budget),
 		statsHandler:       handlers.NewStatsHandler(services.Stats),
 		backupHandler:      handlers.NewBackupHandler(services.Backup),
-		recognizeHandler:   handlers.NewRecognizeHandler(services.Recognize, handlers.RecognizeUploadTimeout),
+		recognizeHandler:   handlers.NewRecognizeHandler(services.Recognize, uploadTimeout),
 	}
 
 	server.setupRoutes()

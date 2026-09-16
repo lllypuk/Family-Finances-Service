@@ -170,6 +170,18 @@ func TestMetrics_Backup_CountsOutcomeAndDuration(t *testing.T) {
 	assert.InDelta(t, 2.0, gatheredValue(t, m, "ffs_backup_duration_seconds", nil), 0.0001)
 }
 
+func TestMetrics_Recognize_CountsOutcomeAndDuration(t *testing.T) {
+	m := testMetrics(t)
+
+	m.Recognize().ObserveRecognition("ok", 3*time.Second, 4)
+	m.Recognize().ObserveRecognition("unavailable", time.Second, 0)
+
+	assert.InDelta(t, 1.0, gatheredValue(t, m, "ffs_recognitions_total", map[string]string{"outcome": "ok"}), 0)
+	assert.InDelta(t, 1.0,
+		gatheredValue(t, m, "ffs_recognitions_total", map[string]string{"outcome": "unavailable"}), 0)
+	assert.InDelta(t, 4.0, gatheredValue(t, m, "ffs_recognition_duration_seconds", nil), 0.0001)
+}
+
 // db_name="budget" — контракт с observability, поэтому имя проверяется, а не только наличие go_sql_*.
 func TestMetrics_NewDBCollector_LabelsPoolAsBudget(t *testing.T) {
 	db := testhelpers.SetupSQLiteTestDB(t).DB

@@ -8,8 +8,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-// subsystemHTTP — подсистема метрик Echo-middleware.
-const subsystemHTTP = "http"
+const (
+	// subsystemHTTP — подсистема метрик Echo-middleware.
+	subsystemHTTP = "http"
+	labelOutcome  = "outcome"
+)
 
 // HTTPObserver — инструменты Echo-middleware.
 type HTTPObserver struct {
@@ -82,7 +85,7 @@ func newLoginObserver(factory promauto.Factory) *LoginObserver {
 			Subsystem: "login",
 			Name:      "attempts_total",
 			Help:      "Попытки входа по исходу.",
-		}, []string{"outcome"}),
+		}, []string{labelOutcome}),
 	}
 }
 
@@ -103,7 +106,7 @@ func newBackupObserver(factory promauto.Factory) *BackupObserver {
 			Namespace: namespace,
 			Name:      "backups_total",
 			Help:      "Резервные копии, снятые через API, по исходу.",
-		}, []string{"outcome"}),
+		}, []string{labelOutcome}),
 		duration: factory.NewHistogram(prometheus.HistogramOpts{
 			Namespace: namespace,
 			Name:      "backup_duration_seconds",
@@ -115,6 +118,34 @@ func newBackupObserver(factory promauto.Factory) *BackupObserver {
 
 // ObserveBackup пишет исход и длительность снятия копии.
 func (o *BackupObserver) ObserveBackup(outcome string, d time.Duration) {
+	o.total.WithLabelValues(outcome).Inc()
+	o.duration.Observe(d.Seconds())
+}
+
+// RecognizeObserver считает вызовы распознавания скриншотов.
+type RecognizeObserver struct {
+	total    *prometheus.CounterVec
+	duration prometheus.Histogram
+}
+
+func newRecognizeObserver(factory promauto.Factory) *RecognizeObserver {
+	return &RecognizeObserver{
+		total: factory.NewCounterVec(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "recognitions_total",
+			Help:      "Вызовы распознавания скриншотов по исходу.",
+		}, []string{labelOutcome}),
+		duration: factory.NewHistogram(prometheus.HistogramOpts{
+			Namespace: namespace,
+			Name:      "recognition_duration_seconds",
+			Help:      "Длительность распознавания скриншотов, включая повторы вызова модели.",
+			Buckets:   []float64{0.5, 1, 2.5, 5, 10, 20, 30, 60, 90, 130},
+		}),
+	}
+}
+
+// ObserveRecognition пишет исход и длительность вызова; число строк в метрики не идёт.
+func (o *RecognizeObserver) ObserveRecognition(outcome string, d time.Duration, _ int) {
 	o.total.WithLabelValues(outcome).Inc()
 	o.duration.Observe(d.Seconds())
 }

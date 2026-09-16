@@ -201,3 +201,30 @@ func TestRecognizeAPI_Access(t *testing.T) {
 	rec = postRecognize(t, ts, nil, bytes.NewReader(body), contentType)
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
+
+func TestRecognizeAPI_Metrics(t *testing.T) {
+	engine := &stubRecognizer{result: recognize.Result{Items: []recognize.Item{{
+		AmountMinor: 30000, Type: transaction.TypeExpense, Description: "Шавуха",
+	}}}}
+	ts := testhelpers.SetupHTTPServer(t, testhelpers.WithRecognizer(engine))
+	sess := ts.Auth(t)
+
+	body, contentType := onePNG(t)
+	require.Equal(t, http.StatusOK, postRecognize(t, ts, sess, bytes.NewReader(body), contentType).Code)
+
+	engine.result = recognize.Result{}
+	require.Equal(t, http.StatusOK, postRecognize(t, ts, sess, bytes.NewReader(body), contentType).Code)
+
+	engine.err = recognize.ErrBadAnswer
+	require.Equal(t, http.StatusBadGateway, postRecognize(t, ts, sess, bytes.NewReader(body), contentType).Code)
+
+	engine.err = &recognize.UnavailableError{RetryAfter: time.Second}
+	require.Equal(t, http.StatusServiceUnavailable,
+		postRecognize(t, ts, sess, bytes.NewReader(body), contentType).Code)
+
+	metrics := scrape(t, ts)
+	for _, outcome := range []string{"ok", "empty", "failed", "unavailable"} {
+		assert.Contains(t, metrics, `ffs_recognitions_total{outcome="`+outcome+`"} 1`)
+	}
+	assert.Contains(t, metrics, "ffs_recognition_duration_seconds_count 4")
+}

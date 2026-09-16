@@ -317,11 +317,12 @@ android/app/.../ui/AppIcons.kt            ScanLine (одна иконка; ли�
 - Modify: `internal/config.go`, `config_test.go`; `internal/run.go`; `internal/metrics/*.go` и тесты
 - Create: `tests/integration/recognize_deadlines_test.go`
 
-- [ ] `LLM_OLLAMA_HOST` (URL, пусто — выключено), `LLM_MODEL`, `LLM_TIMEOUT` (`0 < t ≤ 60s`); `Validate`
-- [ ] `run.go`: движок только при заданном хосте; `RecognizeObserver` → `ffs_recognitions_total{outcome}`, `ffs_recognition_duration_seconds`; без реестра — `Nop` (`llm.Observer` в этом выпуске не подключается)
-- [ ] метрики в интеграционных тестах через `ts.Metrics.Handler()`
-- [ ] тест дедлайнов: `httptest.NewUnstartedServer` с Echo проекта, `Config.WriteTimeout`/`ReadTimeout` в 1–2 с до `Start`, сокращённые `UploadTimeout` (поле handler'а) и бюджет (подменный движок) через параметры стенда; проверить: поздний ответ движка доходит; медленная загрузка дольше `UploadTimeout` → отказ; отмена контекста доходит до движка
-- [ ] `make fmt && make test && make lint` — зелёные до задачи 5
+- [x] `LLM_OLLAMA_HOST` (URL, пусто — выключено), `LLM_MODEL`, `LLM_TIMEOUT` (`0 < t ≤ 60s`); `Validate`
+- [x] `run.go`: движок только при заданном хосте; `RecognizeObserver` → `ffs_recognitions_total{outcome}`, `ffs_recognition_duration_seconds`; без реестра — `Nop` (`llm.Observer` в этом выпуске не подключается)
+- [x] метрики в интеграционных тестах через `ts.Metrics.Handler()`
+- [x] тест дедлайнов: `httptest.NewUnstartedServer` с Echo проекта, `Config.WriteTimeout`/`ReadTimeout` в 1–2 с до `Start`, сокращённые `UploadTimeout` (поле handler'а) и бюджет (подменный движок) через параметры стенда; проверить: поздний ответ движка доходит; медленная загрузка дольше `UploadTimeout` → отказ; отмена контекста доходит до движка
+- [x] `make fmt && make test && make lint` — зелёные до задачи 5
+- ➕ `LLM_*` проверяются только при заданном хосте (выключенному плечу срок и модель не нужны); срок загрузки — `application.Config.RecognizeUploadTimeout` (0 — константа handler'а), в стенде `WithRecognizeUploadTimeout`; стенд пишет исходы в реестр (`registry.Recognize()`), а не в `Nop`; сброс дедлайна чтения после загрузки не нужен — `net/http` снимает его сам, начиная фоновое чтение; имена `ffs_recognitions_total`/`ffs_recognition_duration_seconds` внести в список метрик в `deploy/README.md` (задача 6)
 
 ### Task 5: Подкоманда `recognize` для реальных скриншотов
 

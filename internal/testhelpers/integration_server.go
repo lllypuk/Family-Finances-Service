@@ -69,6 +69,11 @@ func WithRecognizer(r services.Recognizer) ServerOption {
 	return func(p *serverParams) { p.recognizer = r }
 }
 
+// WithRecognizeUploadTimeout сокращает срок приёма тела распознавания — для тестов сетевых дедлайнов.
+func WithRecognizeUploadTimeout(d time.Duration) ServerOption {
+	return func(p *serverParams) { p.config.RecognizeUploadTimeout = d }
+}
+
 // SetupHTTPServer creates a test HTTP server with real database connections
 func SetupHTTPServer(t *testing.T, opts ...ServerOption) *TestServer {
 	// Setup SQLite in-memory database
@@ -124,7 +129,7 @@ func SetupHTTPServer(t *testing.T, opts ...ServerOption) *TestServer {
 		backupService,     // backupService
 		authService,       // authService
 		params.recognizer,
-		services.NopRecognizeObserver{},
+		registry.Recognize(),
 		slog.Default(), // logger
 	)
 

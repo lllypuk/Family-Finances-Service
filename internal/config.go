@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -22,12 +23,18 @@ const (
 
 	// maxPort — верхняя граница TCP-порта в METRICS_ADDR.
 	maxPort = 65535
+
+	defaultLLMModel   = "gemma4:31b-cloud"
+	defaultLLMTimeout = 60 * time.Second
+	// maxLLMTimeout закрепляет верх цепочки дедлайнов: Budget() движка и срок чтения клиента считаются от него.
+	maxLLMTimeout = 60 * time.Second
 )
 
 type Config struct {
 	Server      ServerConfig
 	Database    DatabaseConfig
 	Logging     LoggingConfig
+	LLM         LLMConfig
 	Environment string
 }
 
@@ -54,6 +61,15 @@ type DatabaseConfig struct {
 	BackupDir string
 	// BackupKeep — BACKUP_KEEP: сколько последних файлов бэкапа хранить.
 	BackupKeep int
+}
+
+// LLMConfig — плечо распознавания скриншотов; ключ облачных моделей живёт у демона Ollama, не здесь.
+type LLMConfig struct {
+	// OllamaHost — LLM_OLLAMA_HOST; пусто — распознавание выключено (503).
+	OllamaHost string
+	Model      string
+	// Timeout — срок одной попытки вызова модели.
+	Timeout time.Duration
 }
 
 type LoggingConfig struct {
@@ -98,6 +114,11 @@ func LoadConfig() *Config {
 			Format:     getEnv("LOG_FORMAT", "json"),
 			OutputPath: getEnv("LOG_OUTPUT_PATH", "stdout"),
 		},
+		LLM: LLMConfig{
+			OllamaHost: getEnv("LLM_OLLAMA_HOST", ""),
+			Model:      getEnv("LLM_MODEL", defaultLLMModel),
+			Timeout:    getDurationEnv("LLM_TIMEOUT", defaultLLMTimeout),
+		},
 		Environment: getEnv("ENVIRONMENT", "development"),
 	}
 
@@ -135,8 +156,34 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	if err := c.LLM.validate(); err != nil {
+		return err
+	}
+
 	_, err := c.TrustedProxyRanges()
 	return err
+}
+
+// validate проверяет плечо только при заданном хосте: выключенному модель и срок не нужны.
+func (c LLMConfig) validate() error {
+	if c.OllamaHost == "" {
+		return nil
+	}
+
+	host, err := url.Parse(c.OllamaHost)
+	if err != nil || (host.Scheme != "http" && host.Scheme != "https") || host.Host == "" {
+		return fmt.Errorf("LLM_OLLAMA_HOST: want http(s)://host:port, got %q", c.OllamaHost)
+	}
+
+	if c.Model == "" {
+		return errors.New("LLM_MODEL is required when LLM_OLLAMA_HOST is set")
+	}
+
+	if c.Timeout <= 0 || c.Timeout > maxLLMTimeout {
+		return fmt.Errorf("LLM_TIMEOUT: want 0 < t <= %s, got %s", maxLLMTimeout, c.Timeout)
+	}
+
+	return nil
 }
 
 // TrustedProxyRanges — разобранный TRUSTED_PROXIES для echo.IPExtractor.
