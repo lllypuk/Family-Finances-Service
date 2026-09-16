@@ -300,15 +300,16 @@ android/app/.../ui/AppIcons.kt            ScanLine (одна иконка; ли�
 - Modify: `docs/api/openapi.yaml` (в этой же задаче — иначе тест покрытия красный); `make -C android api-gen`
 - Create: `tests/integration/recognize_test.go`
 
-- [ ] `transactions.POST("/recognize", h.Recognize, middleware.BodyLimit("11M"))`; `Skipper` у `ContextTimeout` для этого пути
-- [ ] дедлайны через `http.NewResponseController`: write `now+UploadTimeout+Budget()+15s` и read `now+UploadTimeout` до тела; `http.ErrNotSupported` терпится, иная ошибка → `500` с логом; `UploadTimeout` — поле handler'а (60 с)
-- [ ] две фазы контекста: загрузка под `UploadTimeout`, движок под `Budget()+5s`
-- [ ] потоковый `MultipartReader`: только части `images`, ≤ 5, каждая читается до `MaxImageBytes+1`, `CheckImage`; отказ — `422` с `field: images[i]`; ошибка лимитера через `errors.As` → `413`
-- [ ] коды: `ErrDisabled`/`ErrUnavailable` → `503 RECOGNITION_UNAVAILABLE` (+ `Retry-After` ceil, только > 0); `ErrBadAnswer` → `502 RECOGNITION_FAILED`; `413` → конверт `PAYLOAD_TOO_LARGE` в error handler
-- [ ] спека: `recognizeTransactions`, `requestBody` multipart с `encoding: images: {style: form, explode: true}`, схемы `RecognizeOk` (`incomplete`, `model`), `RecognizedTransaction` (`source`/`currency`/`date` nullable, `date_assumed`, `similar[{id, date, description}]`), ответы `413`, `422`, `502`, `503`; `npx @redocly/cli lint`; перегенерация клиента, сигнатура `List<MultipartBody.Part>` проверена
-- [ ] unit-тесты handler'а с `principalContext` (заголовок `Content-Type` перебивается на multipart после вызова): успех, каждая ветка отказа, шестая часть, чужое поле
-- [ ] интеграционные тесты: `200` с `similar`, `503` без движка, `503`+`Retry-After`, `502`, `413`, `422`, роль `member` ок, без токена `401`
-- [ ] `make fmt && make test && make lint`; `make -C android check` — зелёные до задачи 4
+- [x] `transactions.POST("/recognize", h.Recognize, middleware.BodyLimit("11M"))`; `Skipper` у `ContextTimeout` для этого пути
+- [x] дедлайны через `http.NewResponseController`: write `now+UploadTimeout+Budget()+15s` и read `now+UploadTimeout` до тела; `http.ErrNotSupported` терпится, иная ошибка → `500` с логом; `UploadTimeout` — поле handler'а (60 с)
+- [x] две фазы контекста: загрузка под `UploadTimeout`, движок под `Budget()+5s`
+- [x] потоковый `MultipartReader`: только части `images`, ≤ 5, каждая читается до `MaxImageBytes+1`, `CheckImage`; отказ — `422` с `field: images[i]`; ошибка лимитера через `errors.As` → `413`
+- [x] коды: `ErrDisabled`/`ErrUnavailable` → `503 RECOGNITION_UNAVAILABLE` (+ `Retry-After` ceil, только > 0); `ErrBadAnswer` → `502 RECOGNITION_FAILED`; `413` → конверт `PAYLOAD_TOO_LARGE` в error handler
+- [x] спека: `recognizeTransactions`, `requestBody` multipart с `encoding: images: {style: form, explode: true}`, схемы `RecognizeOk` (`incomplete`, `model`), `RecognizedTransaction` (`source`/`currency`/`date` nullable, `date_assumed`, `similar[{id, date, description}]`), ответы `413`, `422`, `502`, `503`; `npx @redocly/cli lint`; перегенерация клиента, сигнатура `List<MultipartBody.Part>` проверена
+- [x] unit-тесты handler'а с `principalContext` (заголовок `Content-Type` перебивается на multipart после вызова): успех, каждая ветка отказа, шестая часть, чужое поле
+- [x] интеграционные тесты: `200` с `similar`, `503` без движка, `503`+`Retry-After`, `502`, `413`, `422`, роль `member` ок, без токена `401`
+- [x] `make fmt && make test && make lint`; `make -C android check` — зелёные до задачи 4
+- ➕ истёкший срок загрузки — `408 REQUEST_TIMEOUT`, не-multipart и сломанное тело — `400`; часть с чужим именем — `422` с `field` по её имени, без частей — `field: images`; `NewRecognizeHandler(service, uploadTimeout)`, константы `RecognizeUploadTimeout`/`RecognizeBodyLimit` в `handlers`; сборщики multipart и картинок — `testhelpers/multipart.go`; `413` на потоке проверяется преамбулой больше лимита (пять частей по 2 МиБ лимит не превышают); схема ответа — `RecognizeOk{data: RecognizeResult}`, похожие — `SimilarTransaction`
 
 ### Task 4: Конфиг, движок в сборке, метрики, тест дедлайнов
 

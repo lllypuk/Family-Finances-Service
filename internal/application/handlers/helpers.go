@@ -241,7 +241,7 @@ func RespondAPIError(c echo.Context, status int, code, message string) error {
 }
 
 // ErrorCodeForStatus — error.code, соответствующий HTTP-статусу; неизвестный статус
-// (503 от таймаута, 413 и т. п.) получает код из http.StatusText, чтобы код и статус не расходились.
+// (503 от таймаута и т. п.) получает код из http.StatusText, чтобы код и статус не расходились.
 func ErrorCodeForStatus(status int) string {
 	switch status {
 	case http.StatusBadRequest:
@@ -254,6 +254,8 @@ func ErrorCodeForStatus(status int) string {
 		return ErrCodeNotFound
 	case http.StatusUnprocessableEntity:
 		return ErrCodeValidationError
+	case http.StatusRequestEntityTooLarge:
+		return ErrCodePayloadTooLarge
 	case http.StatusTooManyRequests:
 		return ErrCodeRateLimited
 	case http.StatusInternalServerError:

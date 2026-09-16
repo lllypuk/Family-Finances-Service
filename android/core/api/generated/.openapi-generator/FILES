@@ -47,9 +47,13 @@ kotlin/tech/shatrov/familyfinances/core/api/Pagination.kt
 kotlin/tech/shatrov/familyfinances/core/api/PatchUserRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/PeriodTotals.kt
 kotlin/tech/shatrov/familyfinances/core/api/RecentTransactionItem.kt
+kotlin/tech/shatrov/familyfinances/core/api/RecognizeOk.kt
+kotlin/tech/shatrov/familyfinances/core/api/RecognizeResult.kt
+kotlin/tech/shatrov/familyfinances/core/api/RecognizedTransaction.kt
 kotlin/tech/shatrov/familyfinances/core/api/Role.kt
 kotlin/tech/shatrov/familyfinances/core/api/Session.kt
 kotlin/tech/shatrov/familyfinances/core/api/SetPasswordRequest.kt
+kotlin/tech/shatrov/familyfinances/core/api/SimilarTransaction.kt
 kotlin/tech/shatrov/familyfinances/core/api/StatsApi.kt
 kotlin/tech/shatrov/familyfinances/core/api/StatsMonthly.kt
 kotlin/tech/shatrov/familyfinances/core/api/StatsSummary.kt
