@@ -410,8 +410,8 @@ android/app/.../ui/AppIcons.kt            ScanLine (одна иконка; ли�
 **Files:**
 - Modify: `android/CLAUDE.md`, `android/gradle/libs.versions.toml` (версия приложения)
 
-- [ ] `android/CLAUDE.md`: `ImportStore` и владение импортом, временные файлы и sweep, `draft` строк и повтор тем же `POST`, второй share, «клиент никогда не повторяет распознавание сам», потеря импорта при смерти процесса
-- [ ] `make -C android check` — зелёный
+- [x] `android/CLAUDE.md`: `ImportStore` и владение импортом, временные файлы и sweep, `draft` строк и повтор тем же `POST`, второй share, «клиент никогда не повторяет распознавание сам», потеря импорта при смерти процесса
+- [x] `make -C android check` — зелёный
 
 ### Task 12: Verify acceptance criteria
 - [ ] распознавание уведомления и списка даёт кандидатов с суммой, типом, датой и категорией; пустой результат — не ошибка
