@@ -217,6 +217,11 @@ class RecognizeViewModelTest {
 
         model.onDateChange(salary, LocalDate.parse("2026-09-01"))
         assertTrue(rows()[1].savable)
+        val salaryDescription = rows()[1].description
+        model.onDescriptionChange(salary, " З ")
+        assertFalse(rows()[1].savable)
+        model.onDescriptionChange(salary, salaryDescription)
+        assertTrue(rows()[1].savable)
 
         model.onDateChange(foreign, LocalDate.parse("2026-09-10"))
         model.onCategoryChange(foreign, UUID.fromString(GROCERIES_ID))
