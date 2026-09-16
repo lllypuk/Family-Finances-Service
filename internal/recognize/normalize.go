@@ -166,6 +166,10 @@ func normalizeCurrency(value *string) *string {
 	s = strings.TrimSpace(strings.TrimSuffix(s, "."))
 
 	code := currencyCode(s)
+	if code == "" && isISOCode(s) {
+		// Код вне таблицы — всё равно чужая валюта: null выдал бы её за валюту семьи.
+		code = strings.ToUpper(s)
+	}
 	if code == "" {
 		return nil
 	}
@@ -198,6 +202,10 @@ func currencyCode(s string) string {
 	default:
 		return ""
 	}
+}
+
+func isISOCode(s string) bool {
+	return len(s) == 3 && strings.IndexFunc(s, func(r rune) bool { return r < 'a' || r > 'z' }) < 0
 }
 
 // normalizeDate применяет правило года: без года — год опорной даты, а если так выходит будущее — предыдущий.

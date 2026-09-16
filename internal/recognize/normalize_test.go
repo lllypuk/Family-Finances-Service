@@ -218,7 +218,9 @@ func TestNormalize_Currency(t *testing.T) {
 		{currency: ptr("RUB"), expected: ptr("RUB")},
 		{currency: ptr("$"), expected: ptr("USD")},
 		{currency: ptr("€"), expected: ptr("EUR")},
+		{currency: ptr("chf"), expected: ptr("CHF")},
 		{currency: ptr("тугрик"), expected: nil},
+		{currency: ptr("usdt"), expected: nil},
 		{currency: ptr(""), expected: nil},
 		{currency: nil, expected: nil},
 	}

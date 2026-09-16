@@ -241,7 +241,9 @@ class RecognizeViewModel(
                 drafts.forEach { saveRow(it) }
             } finally {
                 setSaving(false)
-                imports.release(importId)
+                // Ждущий share не уносит строки с отказом, пока их не повторили или не ушли с экрана.
+                val failed = rows().any { it.included && it.status is RowStatus.Failed }
+                if (!(failed && imports.waiting.value)) imports.release(importId)
             }
         }
     }

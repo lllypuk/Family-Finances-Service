@@ -368,6 +368,37 @@ class RecognizeViewModelTest {
     }
 
     @Test
+    fun waitingShareKeepsFailedRowsUntilRetried() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueue(
+            MockResponse.Builder()
+                .body(RECOGNIZE_OK)
+                .setHeader("Content-Type", "application/json")
+                .headersDelay(500, TimeUnit.MILLISECONDS)
+                .build(),
+        )
+        createModel()
+        model.state.first { it.phase is RecognizePhase.Recognizing }
+        val next = store.offer(listOf(shot("c.png")))
+        reviewed()
+        val salary = rows()[1].draft
+        model.onDateChange(salary, LocalDate.parse("2026-09-01"))
+        server.enqueueJson(201, TRANSACTION_OK)
+        server.enqueueJson(500, INTERNAL_ERROR)
+
+        model.save()
+        reviewed()
+        assertTrue(rows()[1].status is RowStatus.Failed)
+        assertNull(store.pending.value)
+        assertTrue(store.waiting.value)
+
+        server.enqueueJson(201, TRANSACTION_OK)
+        model.retryRow(salary)
+        reviewed()
+        assertEquals(next, store.pending.value)
+    }
+
+    @Test
     fun clearingModelDiscardsFilesAndReleasesHold() = runTest {
         server.enqueueJson(200, CATEGORIES_OK)
         server.enqueueJson(200, RECOGNIZE_OK)
