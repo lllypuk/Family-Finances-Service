@@ -76,6 +76,9 @@ data class RecognizedRow(
     val locked: Boolean
         get() = status == RowStatus.Saving || status == RowStatus.Saved
 
+    val rejected: Boolean
+        get() = status is RowStatus.Failed || fieldErrors.isNotEmpty()
+
     val savable: Boolean
         get() = !locked &&
             amountMinor > 0 &&
@@ -241,9 +244,9 @@ class RecognizeViewModel(
                 drafts.forEach { saveRow(it) }
             } finally {
                 setSaving(false)
-                // Ждущий share не уносит строки с отказом, пока их не повторили или не ушли с экрана.
-                val failed = rows().any { it.included && it.status is RowStatus.Failed }
-                if (!(failed && imports.waiting.value)) imports.release(importId)
+                // Ждущий share не уносит строки с отказом (и `422` под полями), пока их не повторили или не ушли с экрана.
+                val rejected = rows().any { it.included && it.rejected }
+                if (!(rejected && imports.waiting.value)) imports.release(importId)
             }
         }
     }

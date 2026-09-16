@@ -399,6 +399,36 @@ class RecognizeViewModelTest {
     }
 
     @Test
+    fun waitingShareKeepsRowsRejectedUnderFields() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueue(
+            MockResponse.Builder()
+                .body(RECOGNIZE_OK)
+                .setHeader("Content-Type", "application/json")
+                .headersDelay(500, TimeUnit.MILLISECONDS)
+                .build(),
+        )
+        createModel()
+        model.state.first { it.phase is RecognizePhase.Recognizing }
+        val next = store.offer(listOf(shot("c.png")))
+        reviewed()
+        val shawarma = rows()[0].draft
+        server.enqueueJson(422, ROW_INVALID)
+
+        model.save()
+        reviewed()
+        assertEquals(RowStatus.Pending, rows()[0].status)
+        assertNull(store.pending.value)
+        assertTrue(store.waiting.value)
+
+        model.onDescriptionChange(shawarma, "Шавуха большая")
+        server.enqueueJson(201, TRANSACTION_OK)
+        model.save()
+        reviewed()
+        assertEquals(next, store.pending.value)
+    }
+
+    @Test
     fun clearingModelDiscardsFilesAndReleasesHold() = runTest {
         server.enqueueJson(200, CATEGORIES_OK)
         server.enqueueJson(200, RECOGNIZE_OK)
