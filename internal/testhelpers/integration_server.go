@@ -47,15 +47,26 @@ type TestServer struct {
 	authSession *AuthSession
 }
 
-// ServerOption настраивает application.Config тестового сервера.
-type ServerOption func(*application.Config)
+// serverParams — то, что опции меняют до сборки сервисов и сервера.
+type serverParams struct {
+	config     *application.Config
+	recognizer services.Recognizer
+}
+
+// ServerOption настраивает параметры тестового сервера; применяется до сборки сервисов.
+type ServerOption func(*serverParams)
 
 // WithTrustedProxies — CIDR, чьи X-Forwarded-For сервер принимает за адрес клиента.
 func WithTrustedProxies(t *testing.T, cidrs string) ServerOption {
 	t.Helper()
 	ranges, err := auth.ParseTrustedProxies(cidrs)
 	require.NoError(t, err)
-	return func(cfg *application.Config) { cfg.TrustedProxies = ranges }
+	return func(p *serverParams) { p.config.TrustedProxies = ranges }
+}
+
+// WithRecognizer подставляет движок распознавания; без опции плечо выключено.
+func WithRecognizer(r services.Recognizer) ServerOption {
+	return func(p *serverParams) { p.recognizer = r }
 }
 
 // SetupHTTPServer creates a test HTTP server with real database connections
@@ -93,6 +104,15 @@ func SetupHTTPServer(t *testing.T, opts ...ServerOption) *TestServer {
 		registry.Backup(),
 	)
 
+	params := &serverParams{config: &application.Config{
+		Port:    "8080",
+		Host:    "localhost",
+		Metrics: registry,
+	}}
+	for _, opt := range opts {
+		opt(params)
+	}
+
 	// Create services for testing - use simplified version to avoid circular dependencies
 	servicesContainer := services.NewServices(
 		repos.User,        // userRepo
@@ -103,20 +123,13 @@ func SetupHTTPServer(t *testing.T, opts ...ServerOption) *TestServer {
 		repos.Budget,      // fullBudgetRepo
 		backupService,     // backupService
 		authService,       // authService
-		slog.Default(),    // logger
+		params.recognizer,
+		services.NopRecognizeObserver{},
+		slog.Default(), // logger
 	)
 
-	config := &application.Config{
-		Port:    "8080",
-		Host:    "localhost",
-		Metrics: registry,
-	}
-	for _, opt := range opts {
-		opt(config)
-	}
-
 	// Create HTTP server without observability for testing
-	httpServer := application.NewHTTPServer(repos, servicesContainer, config)
+	httpServer := application.NewHTTPServer(repos, servicesContainer, params.config)
 
 	testServer := &TestServer{
 		Repos:     repos,

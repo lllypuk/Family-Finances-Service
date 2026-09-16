@@ -128,6 +128,8 @@ func NewApplication() (*Application, error) {
 		app.repositories.Budget, // BudgetRepository
 		backupService,
 		authService,
+		nil, // Recognizer
+		services.NopRecognizeObserver{},
 		logger,
 	)
 

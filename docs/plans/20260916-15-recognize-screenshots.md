@@ -223,12 +223,12 @@ internal/recognize/
   normalize.go   Normalize(Answer, Input) Result            // суммы, валюта, даты и год, категории, source, усечение
 
 internal/infrastructure/llmengine/
-  ollama.go      New(host, model string, timeout time.Duration, obs llm.Observer) *Engine
+  ollama.go      New(host, model string, timeout time.Duration, obs llm.Observer, logger *slog.Logger) *Engine
                  (*Engine) Recognize(ctx, recognize.Input) (recognize.Result, error); Budget()
 
 internal/services/recognize_service.go
   Recognizer interface; RecognizeService{Recognize(ctx, images) (recognize.Result, error); Budget()}
-  RecognizeObserver{Observe(outcome string, d time.Duration, items int)} + NopRecognizeObserver
+  RecognizeObserver{ObserveRecognition(outcome string, d time.Duration, items int)} + NopRecognizeObserver
 
 internal/application/handlers/recognize.go   RecognizeHandler{service, uploadTimeout}; дедлайны через http.NewResponseController
 internal/application/handlers/errors.go      ErrCode RECOGNITION_UNAVAILABLE, RECOGNITION_FAILED, PAYLOAD_TOO_LARGE
@@ -282,14 +282,15 @@ android/app/.../ui/AppIcons.kt            ScanLine (одна иконка; ли�
 - Modify: `internal/services/container.go`, `internal/run.go` (движок `nil`), `internal/testhelpers/integration_server.go` (`ServerOption` над параметрами стенда, применяется **до** сборки сервисов; `WithTrustedProxies` сохраняется; `WithRecognizer`)
 - Modify: `go.mod` (`github.com/lllypuk/llm v0.2.0`)
 
-- [ ] `go get github.com/lllypuk/llm@v0.2.0`; `Engine` собирает `llm.Request` (одно `user`-сообщение на картинку), `Attempts=2`, `MaxRetryAfter=10s`, `Temperature=0`, `Task=receipt.screenshot`
-- [ ] отказы: `needs_configuration`/`immediate`/`after_delay`/просрочка → `ErrUnavailable{RetryAfter}`; `ErrBadAnswer` — без повторного `Chat`
-- [ ] один `slog` на вызов по `Report`: outcome, попытки, usage, latency, число items; байты картинок и текст ответа в лог не попадают
-- [ ] `RecognizeService`: `nil`-движок → `ErrDisabled`; активные категории с путями; `Today(family.Location())`, валюта семьи; `similar` (id, дата, описание) через `GetByFilter` (сумма точно, тип, дата ±1, `Limit 3`) только у строк с датой
-- [ ] `RecognizeObserver` (+ `Nop`) — исход считается **после** нормализации
-- [ ] `NewServices` получает `Recognizer` и наблюдателя; оба вызова (`run.go:122`, стенд) обновлены в этой задаче, движок пока `nil`
-- [ ] тесты движка на `httptest` (ограда в ответе, 429 с `Retry-After`, 401, обрыв, отмена контекста); тесты сервиса с подменным движком (категории, `similar`, выключенное плечо)
-- [ ] `make test`/`make lint` — зелёные до задачи 3
+- [x] `go get github.com/lllypuk/llm@v0.2.0`; `Engine` собирает `llm.Request` (одно `user`-сообщение на картинку), `Attempts=2`, `MaxRetryAfter=10s`, `Temperature=0`, `Task=receipt.screenshot`
+- [x] отказы: `needs_configuration`/`immediate`/`after_delay`/просрочка → `ErrUnavailable{RetryAfter}`; `ErrBadAnswer` — без повторного `Chat`
+- [x] один `slog` на вызов по `Report`: outcome, попытки, usage, latency, число items; байты картинок и текст ответа в лог не попадают
+- [x] `RecognizeService`: `nil`-движок → `ErrDisabled`; активные категории с путями; `Today(family.Location())`, валюта семьи; `similar` (id, дата, описание) через `GetByFilter` (сумма точно, тип, дата ±1, `Limit 3`) только у строк с датой
+- [x] `RecognizeObserver` (+ `Nop`) — исход считается **после** нормализации
+- [x] `NewServices` получает `Recognizer` и наблюдателя; оба вызова (`run.go:122`, стенд) обновлены в этой задаче, движок пока `nil`
+- [x] тесты движка на `httptest` (ограда в ответе, 429 с `Retry-After`, 401, обрыв, отмена контекста); тесты сервиса с подменным движком (категории, `similar`, выключенное плечо)
+- [x] `make test`/`make lint` — зелёные до задачи 3
+- ➕ `New` принимает ещё `*slog.Logger`; метод наблюдателя — `ObserveRecognition` (как `ObserveBackup`); класс `never` (400, негодный запрос) — не `ErrUnavailable`, а обычная ошибка (→ `500`); выключенное плечо считается исходом `unavailable`; пауза повтора в тестах сокращается через `export_test.go`
 
 ### Task 3: Handler, маршрут, лимиты, дедлайны, спека
 
