@@ -422,8 +422,8 @@ android/app/.../ui/AppIcons.kt            ScanLine (одна иконка; ли�
 - ➕ короткое описание не было покрыто тестом — проверка добавлена в `blockedRowsUnlockOnlyByExplicitEdits`
 
 ### Task 13: [Final] Update documentation
-- [ ] `CLAUDE.md` (корень и `android/`) сверены с кодом
-- [ ] `docs/backlog.md`: переезд на `Router` после v0.4.0; `ffs_llm_attempts_total` из `llm.Observer`; WebP/HEIC; журнал `draft`-UUID для восстановления после смерти процесса — если понадобится
+- [x] `CLAUDE.md` (корень и `android/`) сверены с кодом
+- [x] `docs/backlog.md`: переезд на `Router` после v0.4.0; `ffs_llm_attempts_total` из `llm.Observer`; WebP/HEIC; журнал `draft`-UUID для восстановления после смерти процесса — если понадобится
 
 ## Post-Completion
 
