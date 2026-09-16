@@ -40,6 +40,9 @@ sealed interface AppScreen {
         val draft: UUID = UUID.randomUUID(),
     ) : AppScreen
 
+    /** Распознавание импорта [importId] из [ImportStore]; после смерти процесса импорта уже нет. */
+    data class Recognize(val importId: UUID) : AppScreen
+
     /** Настройки целиком: страницы внутри переключает свой хост, а не этот `when`. */
     data class Settings(val page: SettingsPage = SettingsPage.Root()) : AppScreen
 }
@@ -53,6 +56,7 @@ private const val KEY_CATEGORIES = "categories"
 private const val KEY_BUDGETS = "budgets"
 private const val KEY_BUDGET_EDIT = "budget-edit"
 private const val KEY_SETTINGS = "settings"
+private const val KEY_RECOGNIZE = "recognize"
 
 /** Экран переживает поворот; всё остальное восстанавливается из хранилища токена. */
 val AppScreenSaver: Saver<AppScreen, String> = Saver(
@@ -67,6 +71,7 @@ val AppScreenSaver: Saver<AppScreen, String> = Saver(
             is AppScreen.TransactionEdit -> "$KEY_TRANSACTION_EDIT:${screen.id ?: ""}:${screen.draft}"
             is AppScreen.BudgetEdit -> "$KEY_BUDGET_EDIT:${screen.id ?: ""}:${screen.draft}"
             is AppScreen.Settings -> "$KEY_SETTINGS:${screen.page.saveKey()}"
+            is AppScreen.Recognize -> "$KEY_RECOGNIZE:${screen.importId}"
         }
     },
     // Ключ мог прийти из бандла прошлой версии: разбор чужого формата — не крэш, а загрузка.
@@ -106,6 +111,8 @@ private fun restoreScreen(key: String): AppScreen? = when {
         val (page, target, visit) = key.removePrefix("$KEY_SETTINGS:").split(':')
         restoreSettingsPage(page, target, visit)?.let(AppScreen::Settings) ?: AppScreen.Loading
     }
+
+    key.startsWith("$KEY_RECOGNIZE:") -> AppScreen.Recognize(UUID.fromString(key.removePrefix("$KEY_RECOGNIZE:")))
 
     else -> null
 }

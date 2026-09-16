@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
@@ -26,6 +27,8 @@ import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.theme.AppTheme
 import tech.shatrov.familyfinances.ui.UiError
 import tech.shatrov.familyfinances.ui.format.formatDay
+import tech.shatrov.familyfinances.ui.recognize.ImportLaunchers
+import tech.shatrov.familyfinances.ui.recognize.ImportSourceSheetContent
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -59,6 +62,7 @@ class TransactionsScreenTest {
                     onLoadMore = {},
                     onCreate = onCreate,
                     onOpen = onOpen,
+                    importLaunchers = ImportLaunchers(gallery = {}, camera = {}),
                 )
             }
         }
@@ -206,6 +210,29 @@ class TransactionsScreenTest {
         composeRule.onNodeWithText(res.getString(R.string.filter_all_categories)).performClick()
 
         assertNull(picked)
+    }
+
+    @Test
+    fun importSheetStartsChosenSource() {
+        var gallery = 0
+        var camera = 0
+        val launchers = ImportLaunchers(gallery = { gallery++ }, camera = { camera++ })
+        composeRule.setContent {
+            AppTheme { ImportSourceSheetContent { launch -> launch(launchers) } }
+        }
+
+        composeRule.onNodeWithText(res.getString(R.string.recognize_from_gallery)).performClick()
+        composeRule.onNodeWithText(res.getString(R.string.recognize_take_photo)).performClick()
+
+        assertEquals(1, gallery)
+        assertEquals(1, camera)
+    }
+
+    @Test
+    fun scanIconIsInHeader() {
+        show(ready(emptyList()))
+
+        composeRule.onNodeWithContentDescription(res.getString(R.string.recognize_scan)).assertIsDisplayed()
     }
 
     private fun category() = Category(

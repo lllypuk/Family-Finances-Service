@@ -188,4 +188,28 @@
 
     <string name="recognize_import_lost">Картинки потерялись — поделитесь ими ещё раз</string>
     <string name="recognize_no_images">Ни одну картинку не удалось прочитать</string>
+    <string name="recognize_title">Распознавание</string>
+    <string name="recognize_scan">Распознать скриншот</string>
+    <string name="recognize_from_gallery">Из галереи</string>
+    <string name="recognize_take_photo">Снять</string>
+    <string name="recognize_progress">Распознаём…</string>
+    <string name="recognize_empty">Операций на картинке не нашлось</string>
+    <string name="recognize_error_unavailable">Распознавание на сервере не настроено или модель сейчас не отвечает</string>
+    <string name="recognize_error_failed">Модель ответила непонятным — попробуйте ещё раз</string>
+    <string name="recognize_incomplete">Список мог быть неполным: проверьте картинку</string>
+    <string name="recognize_dropped">Взяты первые пять картинок, остальные: %1$d</string>
+    <string name="recognize_waiting">Новые картинки откроются после сохранения</string>
+    <string name="recognize_image">Картинка %1$d</string>
+    <string name="recognize_image_unreadable">Картинка %1$d не прочитана</string>
+    <string name="recognize_image_empty">Операций не нашлось</string>
+    <string name="recognize_unattached">Не привязано к картинке</string>
+    <string name="recognize_include">Сохранять эту операцию</string>
+    <string name="recognize_pick_date">Выбрать дату</string>
+    <string name="recognize_date_assumed">%1$s — год подставлен, проверьте</string>
+    <string name="recognize_pick_category">Выбрать категорию</string>
+    <string name="recognize_similar">Похоже на «%1$s», %2$s</string>
+    <string name="recognize_currency_mismatch">Операция в %1$s: сохраняются только суммы в %2$s</string>
+    <string name="recognize_save">Сохранить %1$d</string>
+    <string name="recognize_saving">Сохраняем…</string>
+    <string name="recognize_saved">Сохранено</string>
 </resources>

@@ -31,6 +31,12 @@ private const val HTTP_CREATED = 201
 private const val HTTP_UNPROCESSABLE = 422
 private const val HTTP_SERVER_ERROR = 500
 
+// Серверные тексты отказов распознавания английские, а `503` не различает «выключено» и «не отвечает».
+private val recognizeFailures = mapOf(
+    "RECOGNITION_UNAVAILABLE" to R.string.recognize_error_unavailable,
+    "RECOGNITION_FAILED" to R.string.recognize_error_failed,
+)
+
 private val rowFields = setOf(
     TransactionField.AMOUNT,
     TransactionField.TYPE,
@@ -107,7 +113,10 @@ data class RecognizeUiState(
     val busy: Boolean
         get() = phase is RecognizePhase.Preparing ||
             phase is RecognizePhase.Recognizing ||
-            (phase as? RecognizePhase.Review)?.saving == true
+            saving
+
+    val saving: Boolean
+        get() = (phase as? RecognizePhase.Review)?.saving == true
 
     val toSave: Int
         get() = (phase as? RecognizePhase.Review)?.rows?.count { it.included && it.savable } ?: 0
@@ -218,7 +227,11 @@ class RecognizeViewModel(
                 )
             }
         } catch (failure: ApiFailure) {
-            fail(failure.toUiError(), retryable = failure !is ApiFailure.Api || failure.status >= HTTP_SERVER_ERROR)
+            fail(
+                failure.toUiError(recognizeFailures),
+                retryable =
+                failure !is ApiFailure.Api || failure.status >= HTTP_SERVER_ERROR,
+            )
         } finally {
             imports.release(importId)
         }

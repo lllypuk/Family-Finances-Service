@@ -12,6 +12,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,6 +32,7 @@ import tech.shatrov.familyfinances.core.api.Category
 import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.theme.Dimens
 import tech.shatrov.familyfinances.theme.LocalAppColors
+import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Centered
 import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
@@ -39,6 +42,8 @@ import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.format.formatMoney
 import tech.shatrov.familyfinances.ui.groupedRow
 import tech.shatrov.familyfinances.ui.message
+import tech.shatrov.familyfinances.ui.recognize.ImportLaunchers
+import tech.shatrov.familyfinances.ui.recognize.ImportSourceSheet
 import tech.shatrov.familyfinances.ui.rowPlace
 import java.util.UUID
 
@@ -52,17 +57,27 @@ fun TransactionsScreen(
     onLoadMore: () -> Unit,
     onCreate: () -> Unit,
     onOpen: (UUID) -> Unit,
+    importLaunchers: ImportLaunchers,
     modifier: Modifier = Modifier,
 ) {
     var sheet by rememberSaveable { mutableStateOf(false) }
+    var importSheet by rememberSaveable { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxSize()) {
-        Text(
-            text = stringResource(R.string.transactions_title),
-            style = MaterialTheme.typography.headlineSmall,
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = Dimens.SPACE_4, vertical = Dimens.SPACE_2),
-        )
+                .padding(start = Dimens.SPACE_4, end = Dimens.SPACE_2, top = Dimens.SPACE_2, bottom = Dimens.SPACE_2),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.transactions_title),
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = { importSheet = true }) {
+                Icon(AppIcons.ScanLine, contentDescription = stringResource(R.string.recognize_scan))
+            }
+        }
 
         // Фильтры вне `when`: на отказе запроса переключиться иначе некуда, а «Повторить»
         // повторяет ровно его.
@@ -98,6 +113,9 @@ fun TransactionsScreen(
             },
             onDismiss = { sheet = false },
         )
+    }
+    if (importSheet) {
+        ImportSourceSheet(importLaunchers, onDismiss = { importSheet = false })
     }
 }
 

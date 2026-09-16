@@ -396,13 +396,14 @@ android/app/.../ui/AppIcons.kt            ScanLine (одна иконка; ли�
 - Create: `android/app/.../ui/recognize/RecognizeScreen.kt`, `ImportSourceSheet.kt`, тесты
 - Modify: `AppScreen.kt`, `AppScreenSaver`, `MainActivity.kt`, `MainActivityTest.kt`, `ui/transactions/TransactionsScreen.kt`, `ui/AppIcons.kt`, `res/values/strings.xml`
 
-- [ ] `RecognizeScreen`: «Распознаём…», строки сгруппированы под превью своей картинки (`source`; без `source` — группа «не привязано»), заметка при `incomplete`; строка: чекбокс, сумма со знаком по типу, дата / «выбрать дату» / «год подставлен — проверьте», категория через `CategorySheet` («выбрать категорию» при `null`), описание; бейдж «похоже на «…», дата»; блокировка по валюте; «Сохранить N»; ошибки строк и «Повторить»; «Повторить» при `Failure`; `BackHandler` — уход заблокирован в `Saving`
-- [ ] `AppScreen.Recognize(importId)` + Saver; `MainActivity`: `offer` из `onCreate` при `savedInstanceState == null` и из `onNewIntent`, затем `removeExtra`; `launchMode="singleTop"`; `onForm` включает `Recognize`
-- [ ] `AppRoot`: маршрут по `imports.pending` при сессии; бутстрап → `Recognize`, если `pending` есть, иначе `Home`; второй share по политике `ImportStore`; `savedCount` → три флага
-- [ ] «Операции»: иконка `ScanLine` в шапке → `ImportSourceSheet`: `PickMultipleVisualMedia(5)` и `TakePicture` (URI снимка в `rememberSaveable`); результат → `imports.offer`
-- [ ] строки: заголовки, кнопки, бейджи, пояснение валюты, пустой результат («Операций на картинке не нашлось»), `503` («Распознавание на сервере не настроено»)
-- [ ] экранные тесты: группы по картинкам, «Сохранить N» считает выбранные, `date == null`, `dateAssumed` и `categoryId == null` блокируют, бейдж, заметка `incomplete`; `MainActivityTest`: `SEND` до логина → `Recognize` после бутстрапа; `onNewIntent` при открытом приложении; пересоздание не предлагает intent повторно
-- [ ] `make -C android check` — зелёный до задачи 11
+- [x] `RecognizeScreen`: «Распознаём…», строки сгруппированы под превью своей картинки (`source`; без `source` — группа «не привязано»), заметка при `incomplete`; строка: чекбокс, сумма со знаком по типу, дата / «выбрать дату» / «год подставлен — проверьте», категория через `CategorySheet` («выбрать категорию» при `null`), описание; бейдж «похоже на «…», дата»; блокировка по валюте; «Сохранить N»; ошибки строк и «Повторить»; «Повторить» при `Failure`; `BackHandler` — уход заблокирован в `Saving`
+- [x] `AppScreen.Recognize(importId)` + Saver; `MainActivity`: `offer` из `onCreate` при `savedInstanceState == null` и из `onNewIntent`, затем `removeExtra`; `launchMode="singleTop"`; `onForm` включает `Recognize`
+- [x] `AppRoot`: маршрут по `imports.pending` при сессии; бутстрап → `Recognize`, если `pending` есть, иначе `Home`; второй share по политике `ImportStore`; `savedCount` → три флага
+- [x] «Операции»: иконка `ScanLine` в шапке → `ImportSourceSheet`: `PickMultipleVisualMedia(5)` и `TakePicture` (URI снимка в `rememberSaveable`); результат → `imports.offer`
+- [x] строки: заголовки, кнопки, бейджи, пояснение валюты, пустой результат («Операций на картинке не нашлось»), `503` («Распознавание на сервере не настроено»)
+- [x] экранные тесты: группы по картинкам, «Сохранить N» считает выбранные, `date == null`, `dateAssumed` и `categoryId == null` блокируют, бейдж, заметка `incomplete`; `MainActivityTest`: `SEND` до логина → `Recognize` после бутстрапа; `onNewIntent` при открытом приложении; пересоздание не предлагает intent повторно
+- [x] `make -C android check` — зелёный до задачи 11
+- ➕ `503` одним текстом «не настроено или модель не отвечает» (сервер не различает причины), `502` — свой текст; сумма и тип на экране только показываются; маршрут по `pending` ждёт, пока открыты формы и настройки; лаунчеры галереи и камеры — в `AppRoot`, чтобы снимок пережил смерть процесса; запуск из «недавних» (`FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY`) не предлагается; тест «`SEND` до логина» — `AppRootImportTest`, intent'ы — `MainActivityTest`
 
 ### Task 11: Документация клиента
 

@@ -19,6 +19,9 @@ fun formatDay(
     today: LocalDate = LocalDate.now(),
 ): String = date.format(if (date.year == today.year) dayMonth else dayMonthYear)
 
+/** Дата с годом всегда: там, где проверить нужно именно год. */
+fun formatFullDay(date: LocalDate): String = date.format(dayMonthYear)
+
 fun formatPeriod(
     from: LocalDate,
     to: LocalDate,

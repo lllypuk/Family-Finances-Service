@@ -36,6 +36,7 @@ import tech.shatrov.familyfinances.FakeTokenVault
 import tech.shatrov.familyfinances.GROCERIES_ID
 import tech.shatrov.familyfinances.INTERNAL_ERROR
 import tech.shatrov.familyfinances.ImportStore
+import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.ROBOLECTRIC_SDK
 import tech.shatrov.familyfinances.SALARY_ID
 import tech.shatrov.familyfinances.TRANSACTION_OK
@@ -183,7 +184,7 @@ class RecognizeViewModelTest {
 
         val failed = reviewed().phase as RecognizePhase.Failure
         assertTrue(failed.retryable)
-        assertEquals(UiError.Server("недоступно"), failed.error)
+        assertEquals(UiError.Resource(R.string.recognize_error_unavailable), failed.error)
         assertEquals(2, server.requestCount)
 
         server.enqueueJson(200, RECOGNIZE_OK)

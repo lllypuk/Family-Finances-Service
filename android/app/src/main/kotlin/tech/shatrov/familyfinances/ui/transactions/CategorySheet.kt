@@ -32,11 +32,12 @@ internal fun CategorySheet(
     selected: UUID?,
     onSelect: (UUID?) -> Unit,
     onDismiss: () -> Unit,
+    allowAll: Boolean = true,
 ) {
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        CategorySheetContent(categories, selected) { picked ->
+        CategorySheetContent(categories, selected, allowAll) { picked ->
             // Снятие с композиции убрало бы лист одним кадром: сначала анимация, потом выбор.
             scope.launch { sheetState.hide() }.invokeOnCompletion { if (!sheetState.isVisible) onSelect(picked) }
         }
@@ -49,6 +50,7 @@ internal fun CategorySheet(
 internal fun CategorySheetContent(
     categories: List<Category>,
     selected: UUID?,
+    allowAll: Boolean = true,
     onSelect: (UUID?) -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxWidth()) {
@@ -59,8 +61,10 @@ internal fun CategorySheetContent(
                 modifier = Modifier.padding(horizontal = Dimens.SPACE_4, vertical = Dimens.SPACE_2),
             )
         }
-        item {
-            CategoryRow(stringResource(R.string.filter_all_categories), selected == null) { onSelect(null) }
+        if (allowAll) {
+            item {
+                CategoryRow(stringResource(R.string.filter_all_categories), selected == null) { onSelect(null) }
+            }
         }
         items(categories, key = { it.id }) { category ->
             CategoryRow(category.name, selected == category.id) { onSelect(category.id) }

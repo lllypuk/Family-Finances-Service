@@ -45,6 +45,12 @@ class AppScreenSaverTest {
     }
 
     @Test
+    fun recognizeKeepsImportId() {
+        val screen = AppScreen.Recognize(UUID.fromString(COFFEE_ID))
+        assertEquals(screen, roundTrip(screen))
+    }
+
+    @Test
     fun settingsPagesSurviveRoundTrip() {
         val visit = UUID.fromString(FOOD_BUDGET_ID)
         val target = UUID.fromString(COFFEE_ID)
