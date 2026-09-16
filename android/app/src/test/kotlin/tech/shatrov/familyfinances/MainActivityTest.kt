@@ -1,7 +1,9 @@
 package tech.shatrov.familyfinances
 
 import android.content.ClipData
+import android.content.ComponentName
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
@@ -55,6 +57,16 @@ class MainActivityTest {
             assertNotNull(first)
             assertNotEquals(first, imports.pending.value)
         }
+    }
+
+    // Share из чужого приложения запускается в задаче отправителя: при singleTop там появилась бы
+    // вторая активити, а не onNewIntent в открытой.
+    @Test
+    fun shareReusesTheAppTask() {
+        val app = ApplicationProvider.getApplicationContext<FamilyFinancesApp>()
+        val info = app.packageManager.getActivityInfo(ComponentName(app, MainActivity::class.java), 0)
+
+        assertEquals(ActivityInfo.LAUNCH_SINGLE_TASK, info.launchMode)
     }
 
     @Test

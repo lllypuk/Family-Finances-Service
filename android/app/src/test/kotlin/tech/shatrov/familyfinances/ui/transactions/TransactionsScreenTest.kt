@@ -199,6 +199,16 @@ class TransactionsScreenTest {
     }
 
     @Test
+    fun categorySheetShowsParentOfSubcategory() {
+        val child = category().copy(id = UUID.randomUUID(), name = "Прочее", parentId = CATEGORY_ID)
+        composeRule.setContent {
+            AppTheme { CategorySheetContent(listOf(category(), child), selected = null) {} }
+        }
+
+        composeRule.onNodeWithText("Продукты / Прочее").assertIsDisplayed()
+    }
+
+    @Test
     fun categorySheetResetReachesCallback() {
         var picked: UUID? = CATEGORY_ID
         composeRule.setContent {

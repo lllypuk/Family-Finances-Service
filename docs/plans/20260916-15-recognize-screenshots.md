@@ -184,7 +184,7 @@ UploadTimeout)` (`UploadTimeout` = 60 с), фаза загрузки под `con
 `PendingImport(id, uris)` и публикует `pending` в `StateFlow`; `claim(id): PendingImport?` отдаёт
 его ровно одному потребителю (атомарно, второй получает `null`). `MainActivity` зовёт `offer` из
 `onCreate` **только при `savedInstanceState == null`** и из `onNewIntent` всегда
-(`launchMode="singleTop"`, `SEND` и `SEND_MULTIPLE`, `EXTRA_STREAM` и `ClipData`), после чего
+(`launchMode="singleTask"` — share из чужого приложения иначе создал бы вторую активити в задаче отправителя; `SEND` и `SEND_MULTIPLE`, `EXTRA_STREAM` и `ClipData`), после чего
 `intent.removeExtra(EXTRA_STREAM)` — пересозданная активити тот же intent не предлагает.
 `AppRoot` только маршрутизирует: при сессии и `pending` — `screen = Recognize(id)`; бутстрап после
 успеха переходит в `Recognize(id)`, если `pending` есть, иначе в `Home`; `onForm` включает
@@ -251,7 +251,7 @@ android/app/.../ui/recognize/ImportFiles.kt          URI → JPEG (android.media
 android/app/.../ui/recognize/RecognizeViewModel.kt   claim, состояния, строки, save loop с повтором того же POST, savedCount
 android/app/.../ui/recognize/RecognizeScreen.kt      превью, прогресс, список строк, «Сохранить N», ошибки
 android/app/.../ui/recognize/ImportSourceSheet.kt    «Из галереи» / «Снять»
-android/app/src/main/AndroidManifest.xml  intent-filter SEND/SEND_MULTIPLE image/*, singleTop, FileProvider
+android/app/src/main/AndroidManifest.xml  intent-filter SEND/SEND_MULTIPLE image/*, singleTask, FileProvider
 android/app/src/main/res/xml/file_paths.xml
 android/app/.../ui/AppIcons.kt            ScanLine (одна иконка; лист — текстовые пункты)
 ```
@@ -397,7 +397,7 @@ android/app/.../ui/AppIcons.kt            ScanLine (одна иконка; ли�
 - Modify: `AppScreen.kt`, `AppScreenSaver`, `MainActivity.kt`, `MainActivityTest.kt`, `ui/transactions/TransactionsScreen.kt`, `ui/AppIcons.kt`, `res/values/strings.xml`
 
 - [x] `RecognizeScreen`: «Распознаём…», строки сгруппированы под превью своей картинки (`source`; без `source` — группа «не привязано»), заметка при `incomplete`; строка: чекбокс, сумма со знаком по типу, дата / «выбрать дату» / «год подставлен — проверьте», категория через `CategorySheet` («выбрать категорию» при `null`), описание; бейдж «похоже на «…», дата»; блокировка по валюте; «Сохранить N»; ошибки строк и «Повторить»; «Повторить» при `Failure`; `BackHandler` — уход заблокирован в `Saving`
-- [x] `AppScreen.Recognize(importId)` + Saver; `MainActivity`: `offer` из `onCreate` при `savedInstanceState == null` и из `onNewIntent`, затем `removeExtra`; `launchMode="singleTop"`; `onForm` включает `Recognize`
+- [x] `AppScreen.Recognize(importId)` + Saver; `MainActivity`: `offer` из `onCreate` при `savedInstanceState == null` и из `onNewIntent`, затем `removeExtra`; `launchMode="singleTask"`; `onForm` включает `Recognize`
 - [x] `AppRoot`: маршрут по `imports.pending` при сессии; бутстрап → `Recognize`, если `pending` есть, иначе `Home`; второй share по политике `ImportStore`; `savedCount` → три флага
 - [x] «Операции»: иконка `ScanLine` в шапке → `ImportSourceSheet`: `PickMultipleVisualMedia(5)` и `TakePicture` (URI снимка в `rememberSaveable`); результат → `imports.offer`
 - [x] строки: заголовки, кнопки, бейджи, пояснение валюты, пустой результат («Операций на картинке не нашлось»), `503` («Распознавание на сервере не настроено»)

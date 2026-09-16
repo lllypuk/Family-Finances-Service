@@ -88,6 +88,15 @@ class RecognizeScreenTest {
     }
 
     @Test
+    fun categoryShowsItsParent() {
+        val home = category(id = UUID.fromString(COFFEE_ID), name = "Дом")
+        val other = category(parentId = home.id, name = "Прочее")
+        show(review(row("Лампочки", categoryId = other.id)).copy(categories = listOf(home, other)))
+
+        composeRule.onNodeWithText("Дом / Прочее").assertIsDisplayed()
+    }
+
+    @Test
     fun saveCountsOnlyIncludedAndSavableRows() {
         var saved = false
         show(
@@ -258,9 +267,14 @@ class RecognizeScreenTest {
         status = status,
     )
 
-    private fun category() = Category(
-        id = UUID.fromString(GROCERIES_ID),
-        name = "Продукты",
+    private fun category(
+        id: UUID = UUID.fromString(GROCERIES_ID),
+        name: String = "Продукты",
+        parentId: UUID? = null,
+    ) = Category(
+        id = id,
+        name = name,
+        parentId = parentId,
         type = CategoryType.expense,
         color = "#ff0000",
         icon = "cart",

@@ -67,9 +67,15 @@ internal fun CategorySheetContent(
             }
         }
         items(categories, key = { it.id }) { category ->
-            CategoryRow(category.name, selected == category.id) { onSelect(category.id) }
+            CategoryRow(category.path(categories), selected == category.id) { onSelect(category.id) }
         }
     }
+}
+
+/** Имя с родителем: одно имя под разными родителями законно, и без пути их не отличить. */
+internal fun Category.path(categories: List<Category>): String {
+    val parent = parentId?.let { id -> categories.firstOrNull { it.id == id } } ?: return name
+    return "${parent.name} / $name"
 }
 
 @Composable

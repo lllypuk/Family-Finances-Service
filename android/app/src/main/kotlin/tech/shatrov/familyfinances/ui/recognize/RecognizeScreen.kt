@@ -61,6 +61,7 @@ import tech.shatrov.familyfinances.ui.rowPlace
 import tech.shatrov.familyfinances.ui.transactions.CategorySheet
 import tech.shatrov.familyfinances.ui.transactions.TransactionField
 import tech.shatrov.familyfinances.ui.transactions.asCategoryType
+import tech.shatrov.familyfinances.ui.transactions.path
 import java.io.File
 import java.time.LocalDate
 import java.util.UUID
@@ -355,7 +356,7 @@ private fun RowItem(
 
             val category = actions.categories.firstOrNull { it.id == row.categoryId }
             PickButton(
-                text = category?.name ?: stringResource(R.string.recognize_pick_category),
+                text = category?.path(actions.categories) ?: stringResource(R.string.recognize_pick_category),
                 attention = category == null,
                 enabled = editable,
             ) { actions.onPickCategory(row.draft) }

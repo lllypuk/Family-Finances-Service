@@ -130,7 +130,7 @@ private fun Filters(
     // фильтре сказали бы, что фильтра нет, а список при этом остаётся пустым.
     val categoryLabel = when {
         filters.categoryId == null -> stringResource(R.string.filter_all_categories)
-        else -> categories.firstOrNull { it.id == filters.categoryId }?.name ?: "—"
+        else -> categories.firstOrNull { it.id == filters.categoryId }?.path(categories) ?: "—"
     }
     Column(verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_1)) {
         SegmentedChoice(
