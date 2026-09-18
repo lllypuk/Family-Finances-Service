@@ -125,4 +125,7 @@ const (
 	fieldStartDate   = "start_date"
 	fieldEndDate     = "end_date"
 	fieldRecurring   = "recurring"
+	fieldAccountID   = "account_id"
+	fieldClearAcct   = "clear_account"
+	fieldUnassigned  = "unassigned"
 )

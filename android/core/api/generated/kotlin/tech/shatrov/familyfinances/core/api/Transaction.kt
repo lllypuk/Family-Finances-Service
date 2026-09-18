@@ -42,6 +42,7 @@ import kotlinx.serialization.Contextual
  * @param tags 
  * @param createdAt Служебная метка времени, RFC3339 UTC
  * @param updatedAt Служебная метка времени, RFC3339 UTC
+ * @param accountId Счёт операции; null — без счёта
  */
 @Serializable
 
@@ -80,7 +81,11 @@ data class Transaction (
 
     /* Служебная метка времени, RFC3339 UTC */
     @Contextual @SerialName(value = "updated_at")
-    val updatedAt: java.time.OffsetDateTime
+    val updatedAt: java.time.OffsetDateTime,
+
+    /* Счёт операции; null — без счёта */
+    @Contextual @SerialName(value = "account_id")
+    val accountId: java.util.UUID? = null
 
 ) {
 

@@ -251,17 +251,18 @@ API (`financeAccess`, кроме помеченного):
 - Modify: соответствующие `*_test.go`, `services/helpers_test.go:729` (фабрика сервиса, мок счетов), `tests/integration/transactions_test.go`, `internal/testhelpers/factories.go`, `testhelpers/integration_server.go` (:88, :122 — стенд собирается вручную)
 - Modify: `docs/api/openapi.yaml`; `make -C android api-gen`
 
-- [ ] `Transaction.AccountID *uuid.UUID`, `Filter.AccountID *uuid.UUID`, `Filter.Unassigned bool`
-- [ ] репозиторий: INSERT, UPDATE, `GetByID.Scan`, общий сканер, оба SELECT; `account_id = ?` и `account_id IS NULL` в `buildFilterConditions`
-- [ ] `CreateTransactionRequest.AccountID`, `UpdateTransactionRequest.AccountID` + `ClearAccount *bool` (оба в `isEmpty`), `TransactionFilterParams.AccountID` + `Unassigned`; оба преобразования фильтра
-- [ ] взаимоисключения: фильтр `account_id` + `unassigned` → `422`; тело `PUT` `account_id` + `clear_account: true` → `422` с `field: clear_account`
-- [ ] `CreateTransaction` (`transaction_service.go:153`): счёт существует и не архивный — рядом с `validateCategoryExists` (:710), иначе `422` с `field: account_id`
-- [ ] `UpdateTransaction`, после блока originals (`transaction_service.go:306-310`), перед `if req.AmountMinor != nil` (:312): `nil` — ничего; UUID равен сохранённому (сравнение значений, не указателей) — ничего; отличается — счёт существует и не архивный, иначе `422` с `field: account_id`; `clear_account` — `NULL`
-- [ ] ответ операции: `account_id` nullable; `Recent` в `stats` не меняется
-- [ ] спека: поле в `Transaction` и обоих запросах, `clear_account` в `UpdateTransactionRequest`, параметры `account_id` и `unassigned` у `listTransactions`
-- [ ] тесты: создание со счётом и без, оба фильтра (`total` = длине выборки), `PUT` без поля сохраняет счёт, `clear_account` отвязывает, `account_id` + `clear_account` → `422`, `account_id` + `unassigned` → `422`, архивный → `422`, неизвестный → `422`, правка описания при архивном счёте → `200`, `DELETE` счёта с операцией → `409`
-- [ ] тесты идемпотентности: повтор `POST` с тем же `id` после архивации счёта → `200`; повтор с другим `account_id` операцию не переназначает
-- [ ] `make fmt && make test && make lint`; `make -C android check`
+- [x] `Transaction.AccountID *uuid.UUID`, `Filter.AccountID *uuid.UUID`, `Filter.Unassigned bool`
+- [x] репозиторий: INSERT, UPDATE, `GetByID.Scan`, общий сканер, оба SELECT; `account_id = ?` и `account_id IS NULL` в `buildFilterConditions`
+- [x] `CreateTransactionRequest.AccountID`, `UpdateTransactionRequest.AccountID` + `ClearAccount *bool` (оба в `isEmpty`), `TransactionFilterParams.AccountID` + `Unassigned`; оба преобразования фильтра
+- [x] взаимоисключения: фильтр `account_id` + `unassigned` → `422`; тело `PUT` `account_id` + `clear_account: true` → `422` с `field: clear_account`
+- [x] `CreateTransaction` (`transaction_service.go:153`): счёт существует и не архивный — рядом с `validateCategoryExists` (:710), иначе `422` с `field: account_id`
+- [x] `UpdateTransaction`, после блока originals (`transaction_service.go:306-310`), перед `if req.AmountMinor != nil` (:312): `nil` — ничего; UUID равен сохранённому (сравнение значений, не указателей) — ничего; отличается — счёт существует и не архивный, иначе `422` с `field: account_id`; `clear_account` — `NULL`
+- [x] ответ операции: `account_id` nullable; `Recent` в `stats` не меняется
+- [x] спека: поле в `Transaction` и обоих запросах, `clear_account` в `UpdateTransactionRequest`, параметры `account_id` и `unassigned` у `listTransactions`
+- [x] тесты: создание со счётом и без, оба фильтра (`total` = длине выборки), `PUT` без поля сохраняет счёт, `clear_account` отвязывает, `account_id` + `clear_account` → `422`, `account_id` + `unassigned` → `422`, архивный → `422`, неизвестный → `422`, правка описания при архивном счёте → `200`, `DELETE` счёта с операцией → `409`
+- [x] тесты идемпотентности: повтор `POST` с тем же `id` после архивации счёта → `200`; повтор с другим `account_id` операцию не переназначает
+- ➕ интеграционные тесты — в `tests/integration/transaction_accounts_test.go`, а не в `transactions_test.go`; `factories.go` и `integration_server.go` правок не потребовали: `NewServices` уже получает `AccountRepository`
+- [x] `make fmt && make test && make lint`; `make -C android check`
 
 ### Task 5: Сверки и `GET /stats/reconciliation`
 

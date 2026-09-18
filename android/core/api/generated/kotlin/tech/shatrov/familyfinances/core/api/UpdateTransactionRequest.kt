@@ -36,6 +36,8 @@ import kotlinx.serialization.Contextual
  * @param type 
  * @param description 
  * @param categoryId 
+ * @param accountId Назначить счёт; без поля счёт не меняется. Проверяется (существует, не в архиве), только если отличается от сохранённого 
+ * @param clearAccount `true` — отвязать счёт; вместе с `account_id` — `422`
  * @param date Календарная дата без времени в часовом поясе семьи (A-06)
  * @param tags 
  */
@@ -55,6 +57,14 @@ data class UpdateTransactionRequest (
 
     @Contextual @SerialName(value = "category_id")
     val categoryId: java.util.UUID? = null,
+
+    /* Назначить счёт; без поля счёт не меняется. Проверяется (существует, не в архиве), только если отличается от сохранённого  */
+    @Contextual @SerialName(value = "account_id")
+    val accountId: java.util.UUID? = null,
+
+    /* `true` — отвязать счёт; вместе с `account_id` — `422` */
+    @SerialName(value = "clear_account")
+    val clearAccount: kotlin.Boolean? = null,
 
     /* Календарная дата без времени в часовом поясе семьи (A-06) */
     @Contextual @SerialName(value = "date")

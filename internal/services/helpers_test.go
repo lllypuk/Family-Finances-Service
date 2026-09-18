@@ -733,14 +733,29 @@ func setupTransactionService() (
 	*MockCategoryRepository,
 	*MockUserRepository,
 ) {
+	service, txRepo, budgetRepo, categoryRepo, userRepo, _ := setupTransactionServiceWithAccounts()
+
+	return service, txRepo, budgetRepo, categoryRepo, userRepo
+}
+
+// setupTransactionServiceWithAccounts — то же плюс мок счетов для тестов account_id.
+func setupTransactionServiceWithAccounts() (
+	services.TransactionService,
+	*MockTransactionRepository,
+	*MockBudgetRepository,
+	*MockCategoryRepository,
+	*MockUserRepository,
+	*mockAccountRepo,
+) {
 	txRepo := &MockTransactionRepository{}
 	budgetRepo := &MockBudgetRepository{}
 	categoryRepo := &MockCategoryRepository{}
 	userRepo := &MockUserRepository{}
+	accountRepo := &mockAccountRepo{}
 
-	service := services.NewTransactionService(txRepo, budgetRepo, categoryRepo, userRepo)
+	service := services.NewTransactionService(txRepo, budgetRepo, categoryRepo, userRepo, accountRepo)
 
-	return service, txRepo, budgetRepo, categoryRepo, userRepo
+	return service, txRepo, budgetRepo, categoryRepo, userRepo, accountRepo
 }
 
 // MockFamilyService is a mock implementation of FamilyService

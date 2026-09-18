@@ -10,6 +10,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 
+	"family-budget-service/internal/domain/account"
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/date"
@@ -32,6 +33,8 @@ var (
 	ErrBulkCategorizePartialFail = errors.New("some transactions failed to update during bulk categorization")
 	ErrTransactionAmountTooLarge = errors.New("transaction amount exceeds the maximum")
 	ErrTransactionDateOutOfRange = transaction.ErrDateOutOfRange
+	// ErrTransactionAccountInvalid — счёт операции не найден или в архиве.
+	ErrTransactionAccountInvalid = errors.New("account not found or archived")
 )
 
 // validateTransactionBounds — границы суммы и даты; здесь они нужны, чтобы клиент
@@ -107,12 +110,17 @@ type UserRepositoryForTransactions interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*user.User, error)
 }
 
+type AccountRepositoryForTransactions interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*account.Account, error)
+}
+
 // TransactionServiceImpl implements the TransactionService interface
 type TransactionServiceImpl struct {
 	transactionRepo TransactionRepository
 	budgetRepo      BudgetRepositoryForTransactions
 	categoryRepo    CategoryRepositoryForTransactions
 	userRepo        UserRepositoryForTransactions
+	accountRepo     AccountRepositoryForTransactions
 	validator       *validator.Validate
 	logger          *slog.Logger
 }
@@ -123,8 +131,9 @@ func NewTransactionService(
 	budgetRepo BudgetRepositoryForTransactions,
 	categoryRepo CategoryRepositoryForTransactions,
 	userRepo UserRepositoryForTransactions,
+	accountRepo AccountRepositoryForTransactions,
 ) *TransactionServiceImpl {
-	return NewTransactionServiceWithLogger(transactionRepo, budgetRepo, categoryRepo, userRepo, nil)
+	return NewTransactionServiceWithLogger(transactionRepo, budgetRepo, categoryRepo, userRepo, accountRepo, nil)
 }
 
 // NewTransactionServiceWithLogger creates a new TransactionService instance with injected logger.
@@ -133,6 +142,7 @@ func NewTransactionServiceWithLogger(
 	budgetRepo BudgetRepositoryForTransactions,
 	categoryRepo CategoryRepositoryForTransactions,
 	userRepo UserRepositoryForTransactions,
+	accountRepo AccountRepositoryForTransactions,
 	logger *slog.Logger,
 ) *TransactionServiceImpl {
 	if logger == nil {
@@ -144,6 +154,7 @@ func NewTransactionServiceWithLogger(
 		budgetRepo:      budgetRepo,
 		categoryRepo:    categoryRepo,
 		userRepo:        userRepo,
+		accountRepo:     accountRepo,
 		validator:       newValidator(),
 		logger:          logger,
 	}
@@ -172,6 +183,12 @@ func (s *TransactionServiceImpl) CreateTransaction(
 		return nil, err
 	}
 
+	if req.AccountID != nil {
+		if err := s.validateAccountUsable(ctx, *req.AccountID); err != nil {
+			return nil, err
+		}
+	}
+
 	// For expense transactions, check budget limits
 	if req.Type == transaction.TypeExpense {
 		if err := s.ValidateTransactionLimits(ctx, req.CategoryID, req.AmountMinor, req.Type, req.Date); err != nil {
@@ -186,6 +203,7 @@ func (s *TransactionServiceImpl) CreateTransaction(
 		Type:        req.Type,
 		Description: req.Description,
 		CategoryID:  req.CategoryID,
+		AccountID:   req.AccountID,
 		UserID:      req.UserID,
 		Date:        req.Date,
 		Tags:        req.Tags,
@@ -308,6 +326,10 @@ func (s *TransactionServiceImpl) UpdateTransaction(
 	originalType := existingTx.Type
 	originalCategoryID := existingTx.CategoryID
 	originalDate := existingTx.Date
+
+	if err = s.applyAccountChange(ctx, existingTx, req); err != nil {
+		return nil, err
+	}
 
 	// Update fields if provided
 	if req.AmountMinor != nil {
@@ -715,6 +737,45 @@ func (s *TransactionServiceImpl) validateCategoryExists(ctx context.Context, cat
 	return nil
 }
 
+// validateAccountUsable — к операции привязывается только существующий неархивный счёт.
+func (s *TransactionServiceImpl) validateAccountUsable(ctx context.Context, accountID uuid.UUID) error {
+	a, err := s.accountRepo.GetByID(ctx, accountID)
+	if errors.Is(err, account.ErrNotFound) {
+		return fmt.Errorf("%w: %s", ErrTransactionAccountInvalid, accountID)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to get account: %w", err)
+	}
+	if a.IsArchived {
+		return fmt.Errorf("%w: %s", ErrTransactionAccountInvalid, accountID)
+	}
+
+	return nil
+}
+
+// applyAccountChange проверяет счёт, только если он меняется: правка операции,
+// уже привязанной к архивному счёту, не должна упираться в этот счёт.
+func (s *TransactionServiceImpl) applyAccountChange(
+	ctx context.Context,
+	tx *transaction.Transaction,
+	req dto.UpdateTransactionDTO,
+) error {
+	switch {
+	case req.ClearAccount:
+		tx.AccountID = nil
+	case req.AccountID == nil:
+	case tx.AccountID != nil && *tx.AccountID == *req.AccountID:
+	default:
+		if err := s.validateAccountUsable(ctx, *req.AccountID); err != nil {
+			return err
+		}
+		id := *req.AccountID
+		tx.AccountID = &id
+	}
+
+	return nil
+}
+
 func (s *TransactionServiceImpl) updateBudgetSpent(
 	ctx context.Context,
 	categoryID uuid.UUID,
@@ -785,6 +846,8 @@ func (s *TransactionServiceImpl) convertDTOFilterToRepoFilter(filter dto.Transac
 	repoFilter := transaction.Filter{
 		UserID:     filter.UserID,
 		CategoryID: filter.CategoryID,
+		AccountID:  filter.AccountID,
+		Unassigned: filter.Unassigned,
 		Limit:      filter.Limit,
 		Offset:     filter.Offset,
 	}

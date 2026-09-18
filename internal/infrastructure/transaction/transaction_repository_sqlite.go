@@ -67,6 +67,7 @@ func (r *SQLiteRepository) getSingleFamilyIDWithTx(ctx context.Context, tx *sql.
 func scanTransactionRow(rows *sql.Rows) (*transaction.Transaction, error) {
 	var t transaction.Transaction
 	var idStr, typeStr, categoryIDStr, userIDStr, familyIDStr string // familyIDStr unused - single family model
+	var accountIDStr sql.NullString
 	var tagsJSON string
 
 	err := rows.Scan(
@@ -77,6 +78,7 @@ func scanTransactionRow(rows *sql.Rows) (*transaction.Transaction, error) {
 		&categoryIDStr,
 		&userIDStr,
 		&familyIDStr,
+		&accountIDStr,
 		&t.Date,
 		&tagsJSON,
 		&t.CreatedAt,
@@ -91,6 +93,9 @@ func scanTransactionRow(rows *sql.Rows) (*transaction.Transaction, error) {
 	t.CategoryID, _ = uuid.Parse(categoryIDStr)
 	t.UserID, _ = uuid.Parse(userIDStr)
 	t.Type = transaction.Type(typeStr)
+	if t.AccountID, err = accountIDFromNull(accountIDStr); err != nil {
+		return nil, err
+	}
 
 	// Parse tags from JSON
 	if jsonErr := json.Unmarshal([]byte(tagsJSON), &t.Tags); jsonErr != nil {
@@ -98,6 +103,19 @@ func scanTransactionRow(rows *sql.Rows) (*transaction.Transaction, error) {
 	}
 
 	return &t, nil
+}
+
+// accountIDFromNull — NULL в account_id означает операцию без счёта.
+func accountIDFromNull(ns sql.NullString) (*uuid.UUID, error) {
+	if !ns.Valid {
+		return nil, nil //nolint:nilnil // nil без ошибки — операция без счёта
+	}
+	id, err := uuid.Parse(ns.String)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse account ID: %w", err)
+	}
+
+	return &id, nil
 }
 
 // Create creates a new transaction in the database
@@ -172,8 +190,8 @@ func (r *SQLiteRepository) createWithFamilyID(
 	query := `
 		INSERT INTO transactions (
 			id, amount_minor, description, date, type, category_id, user_id, family_id,
-			tags, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			account_id, tags, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	_, err = execer.ExecContext(ctx, query,
 		sqlitehelpers.UUIDToString(t.ID),
@@ -184,6 +202,7 @@ func (r *SQLiteRepository) createWithFamilyID(
 		sqlitehelpers.UUIDToString(t.CategoryID),
 		sqlitehelpers.UUIDToString(t.UserID),
 		familyID.String(),
+		sqlitehelpers.UUIDPtrToString(t.AccountID),
 		string(tagsJSON),
 		t.CreatedAt,
 		t.UpdatedAt,
@@ -300,17 +319,18 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*transact
 
 	query := `
 		SELECT id, amount_minor, description, date, type, category_id, user_id, family_id,
-			   tags, created_at, updated_at
+			   account_id, tags, created_at, updated_at
 		FROM transactions
 		WHERE id = ?`
 
 	var t transaction.Transaction
 	var idStr, typeStr, categoryIDStr, userIDStr, familyIDStr string // familyIDStr unused - single family model
+	var accountIDStr sql.NullString
 	var tagsJSON string
 
 	err := r.db.QueryRowContext(ctx, query, sqlitehelpers.UUIDToString(id)).Scan(
 		&idStr, &t.AmountMinor, &t.Description, &t.Date, &typeStr,
-		&categoryIDStr, &userIDStr, &familyIDStr, &tagsJSON, &t.CreatedAt, &t.UpdatedAt,
+		&categoryIDStr, &userIDStr, &familyIDStr, &accountIDStr, &tagsJSON, &t.CreatedAt, &t.UpdatedAt,
 	)
 
 	if err != nil {
@@ -325,6 +345,9 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*transact
 	t.CategoryID, _ = uuid.Parse(categoryIDStr)
 	t.UserID, _ = uuid.Parse(userIDStr)
 	t.Type = transaction.Type(typeStr)
+	if t.AccountID, err = accountIDFromNull(accountIDStr); err != nil {
+		return nil, err
+	}
 
 	// Parse tags from JSON
 	if jsonErr := json.Unmarshal([]byte(tagsJSON), &t.Tags); jsonErr != nil {
@@ -371,6 +394,18 @@ func (r *SQLiteRepository) buildFilterConditions(
 		}
 		conditions = append(conditions, "category_id = ?")
 		args = append(args, sqlitehelpers.UUIDToString(*filter.CategoryID))
+	}
+
+	if filter.AccountID != nil {
+		if validationErr := validation.ValidateUUID(*filter.AccountID); validationErr != nil {
+			return nil, nil, fmt.Errorf("invalid account ID: %w", validationErr)
+		}
+		conditions = append(conditions, "account_id = ?")
+		args = append(args, sqlitehelpers.UUIDToString(*filter.AccountID))
+	}
+
+	if filter.Unassigned {
+		conditions = append(conditions, "account_id IS NULL")
 	}
 
 	if filter.Type != nil {
@@ -451,7 +486,7 @@ func (r *SQLiteRepository) GetByFilter(
 	//nolint:gosec // SQL concatenation is safe here - conditions are built from validated inputs
 	query := `
 		SELECT id, amount_minor, type, description, category_id, user_id, family_id,
-			   date, tags, created_at, updated_at
+			   account_id, date, tags, created_at, updated_at
 		FROM transactions
 		WHERE ` + strings.Join(conditions, " AND ") + `
 		ORDER BY date DESC, created_at DESC`
@@ -533,7 +568,7 @@ func (r *SQLiteRepository) Update(ctx context.Context, t *transaction.Transactio
 	query := `
 		UPDATE transactions
 		SET amount_minor = ?, description = ?, date = ?, type = ?, category_id = ?,
-			user_id = ?, tags = ?, updated_at = ?
+			user_id = ?, account_id = ?, tags = ?, updated_at = ?
 		WHERE id = ? AND family_id = ?`
 
 	result, err := r.db.ExecContext(ctx, query,
@@ -543,6 +578,7 @@ func (r *SQLiteRepository) Update(ctx context.Context, t *transaction.Transactio
 		string(t.Type),
 		sqlitehelpers.UUIDToString(t.CategoryID),
 		sqlitehelpers.UUIDToString(t.UserID),
+		sqlitehelpers.UUIDPtrToString(t.AccountID),
 		string(tagsJSON),
 		t.UpdatedAt,
 		sqlitehelpers.UUIDToString(t.ID),
@@ -659,7 +695,7 @@ func (r *SQLiteRepository) GetAll(
 
 	query := `
 		SELECT id, amount_minor, type, description, category_id, user_id, family_id,
-			   date, tags, created_at, updated_at
+			   account_id, date, tags, created_at, updated_at
 		FROM transactions
 		WHERE family_id = ? 		ORDER BY date DESC, created_at DESC
 		LIMIT ? OFFSET ?`

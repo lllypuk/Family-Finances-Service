@@ -191,11 +191,12 @@ type AccountResponse struct {
 // иначе клиент писал бы от чужого имени — S-01.
 type CreateTransactionRequest struct {
 	ID          *uuid.UUID  `json:"id,omitempty"`
-	AmountMinor money.Minor `json:"amount_minor"   validate:"required,gt=0"`
-	Type        string      `json:"type"           validate:"required,oneof=income expense"`
-	Description string      `json:"description"    validate:"required,min=2,max=200"`
-	CategoryID  uuid.UUID   `json:"category_id"    validate:"required"`
-	Date        date.Date   `json:"date"           validate:"required"`
+	AmountMinor money.Minor `json:"amount_minor"         validate:"required,gt=0"`
+	Type        string      `json:"type"                 validate:"required,oneof=income expense"`
+	Description string      `json:"description"          validate:"required,min=2,max=200"`
+	CategoryID  uuid.UUID   `json:"category_id"          validate:"required"`
+	AccountID   *uuid.UUID  `json:"account_id,omitempty"`
+	Date        date.Date   `json:"date"                 validate:"required"`
 	Tags        []string    `json:"tags,omitempty"`
 }
 
@@ -204,14 +205,17 @@ type UpdateTransactionRequest struct {
 	Type        *string      `json:"type,omitempty"         validate:"omitempty,oneof=income expense"`
 	Description *string      `json:"description,omitempty"  validate:"omitempty,min=2,max=200"`
 	CategoryID  *uuid.UUID   `json:"category_id,omitempty"`
-	Date        *date.Date   `json:"date,omitempty"`
-	Tags        []string     `json:"tags,omitempty"`
+	// AccountID: нет поля или null — счёт не трогается; отвязывает ClearAccount.
+	AccountID    *uuid.UUID `json:"account_id,omitempty"`
+	ClearAccount *bool      `json:"clear_account,omitempty"`
+	Date         *date.Date `json:"date,omitempty"`
+	Tags         []string   `json:"tags,omitempty"`
 }
 
 // isEmpty — ни одного поля; `"tags": []` считается полем (очистка тегов).
 func (r UpdateTransactionRequest) isEmpty() bool {
 	return r.AmountMinor == nil && r.Type == nil && r.Description == nil &&
-		r.CategoryID == nil && r.Date == nil && r.Tags == nil
+		r.CategoryID == nil && r.AccountID == nil && r.ClearAccount == nil && r.Date == nil && r.Tags == nil
 }
 
 type TransactionResponse struct {
@@ -220,6 +224,7 @@ type TransactionResponse struct {
 	Type        string      `json:"type"`
 	Description string      `json:"description"`
 	CategoryID  uuid.UUID   `json:"category_id"`
+	AccountID   *uuid.UUID  `json:"account_id"`
 	UserID      uuid.UUID   `json:"user_id"`
 	Date        date.Date   `json:"date"`
 	Tags        []string    `json:"tags"`
@@ -241,6 +246,8 @@ type BulkDeleteResponse struct {
 type TransactionFilterParams struct {
 	UserID          *uuid.UUID
 	CategoryID      *uuid.UUID
+	AccountID       *uuid.UUID
+	Unassigned      bool
 	Type            *string
 	DateFrom        *date.Date
 	DateTo          *date.Date

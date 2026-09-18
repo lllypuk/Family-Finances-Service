@@ -570,6 +570,14 @@ paths:
         - name: category_id
           in: query
           schema: { type: string, format: uuid }
+        - name: account_id
+          in: query
+          description: Только операции этого счёта; вместе с `unassigned=true` — `422`
+          schema: { type: string, format: uuid }
+        - name: unassigned
+          in: query
+          description: '`true` — только операции без счёта'
+          schema: { type: boolean }
         - name: type
           in: query
           schema: { $ref: '#/components/schemas/TransactionType' }
@@ -1518,6 +1526,11 @@ components:
         type: { $ref: '#/components/schemas/TransactionType' }
         description: { type: string }
         category_id: { type: string, format: uuid }
+        account_id:
+          oneOf:
+            - { type: string, format: uuid }
+            - { type: 'null' }
+          description: Счёт операции; null — без счёта
         user_id:
           type: string
           format: uuid
@@ -1542,6 +1555,10 @@ components:
         type: { $ref: '#/components/schemas/TransactionType' }
         description: { type: string, minLength: 2, maxLength: 200 }
         category_id: { type: string, format: uuid }
+        account_id:
+          type: string
+          format: uuid
+          description: Существующий неархивный счёт, иначе `422`
         date: { $ref: '#/components/schemas/CalendarDate' }
         tags:
           type: array
@@ -1557,6 +1574,15 @@ components:
         type: { $ref: '#/components/schemas/TransactionType' }
         description: { type: string, minLength: 2, maxLength: 200 }
         category_id: { type: string, format: uuid }
+        account_id:
+          type: string
+          format: uuid
+          description: |
+            Назначить счёт; без поля счёт не меняется. Проверяется (существует, не в архиве), только если
+            отличается от сохранённого
+        clear_account:
+          type: boolean
+          description: '`true` — отвязать счёт; вместе с `account_id` — `422`'
         date: { $ref: '#/components/schemas/CalendarDate' }
         tags:
           type: array

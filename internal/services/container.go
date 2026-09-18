@@ -42,7 +42,9 @@ func NewServices(
 	userService := NewUserService(userRepo, familyRepo)
 	categoryService := NewCategoryService(categoryRepo, familyRepo, usageChecker)
 	familyService := NewFamilyService(familyRepo, transactionRepo)
-	transactionService := NewTransactionServiceWithLogger(transactionRepo, budgetRepo, categoryRepo, userRepo, logger)
+	transactionService := NewTransactionServiceWithLogger(
+		transactionRepo, budgetRepo, categoryRepo, userRepo, accountRepo, logger,
+	)
 	budgetService := NewBudgetServiceWithLogger(fullBudgetRepo, transactionRepo, logger)
 
 	statsService := NewStatsService(transactionService, budgetService, categoryService, familyService, transactionRepo)

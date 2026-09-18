@@ -18,6 +18,7 @@ type Transaction struct {
 	Type        Type        `json:"type"`
 	Description string      `json:"description"`
 	CategoryID  uuid.UUID   `json:"category_id"`
+	AccountID   *uuid.UUID  `json:"account_id"`
 	UserID      uuid.UUID   `json:"user_id"` // Кто создал транзакцию
 	Date        date.Date   `json:"date"`    // Календарная дата операции
 	Tags        []string    `json:"tags"`    // Теги для поиска
@@ -33,8 +34,11 @@ const (
 )
 
 type Filter struct {
-	UserID          *uuid.UUID
-	CategoryID      *uuid.UUID
+	UserID     *uuid.UUID
+	CategoryID *uuid.UUID
+	AccountID  *uuid.UUID
+	// Unassigned — только операции без счёта; с AccountID несовместим.
+	Unassigned      bool
 	Type            *Type
 	DateFrom        *date.Date
 	DateTo          *date.Date
