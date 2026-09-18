@@ -25,7 +25,7 @@
 - Сборка: `services/container.go:23`, `infrastructure/repositories_sqlite.go:15`,
   `handlers/repositories.go:8`, `services/interfaces.go`.
 - Месяц: `internal/domain/date/date.go` — `MonthKey`, `MonthBounds`, `AddMonths` есть, разбора `YYYY-MM` нет.
-- Валюта: `services/family_service.go:103` — `hasTransactions` смотрит только на операции.
+- Валюта: `services/family_service.go:104` — `hasTransactions` (:126) смотрит только на операции.
 - Миграции: `001` — картина схемы, живая база получает `NNN`; тестовый путь
   (`internal/testhelpers/sqlite.go`) выполняет все `*.up.sql` подряд. golang-migrate открывает своё
   соединение без `_foreign_keys` (`internal/bootstrap.go`, `databaseURL`).
@@ -47,7 +47,8 @@
 - Unit: домен (`ParseMonth`, нормализация имени), сервисы на моках, handler'ы через `principalContext`.
 - Репозитории и миграции — in-memory SQLite (`testhelpers.SetupSQLiteTestDB`).
 - Интеграция — `testhelpers.SetupHTTPServer`: роли, коды, идемпотентность, покрытие спеки.
-- Клиент — Robolectric-тесты ViewModel'ей, как в `ui/recognize`. E2E в проекте нет.
+- Клиент — Robolectric-тесты ViewModel'ей и Compose-тесты там, где их требует `android/CLAUDE.md`: экраны с
+  вводом, необратимое по клику, пустое состояние с кнопкой. E2E в проекте нет.
 
 ## Progress Tracking
 
@@ -62,8 +63,8 @@
 сумму не уменьшает: сверяется цифра «траты за месяц», а не оборот.
 
 **Отвязка — отдельным флагом.** В `PUT /transactions/:id` отсутствие `account_id` (и `null` — для
-`*uuid.UUID` это одно и то же) = «не трогать», UUID = назначить, `clear_account: true` = отвязать; оба
-сразу — `422`. Различать «нет поля» и `null` пришлось бы и на сервере (обёртка с `Present`), и на клиенте
+`*uuid.UUID` это одно и то же) = «не трогать», UUID = назначить, `clear_account: true` = отвязать (`false` — ничего:
+`explicitNulls = false` его пришлёт); оба сразу — `422`. Различать «нет поля» и `null` пришлось бы и на сервере (обёртка с `Present`), и на клиенте
 (`explicitNulls = false`). Без отвязки нельзя: клиент подставляет последний счёт, и покупка за наличные,
 сохранённая не глядя, навсегда искажала бы сверку карты. Старый клиент, который полей не знает, счёт не
 стирает.
@@ -92,8 +93,8 @@ Go: `COLLATE NOCASE` в SQLite сворачивает только ASCII. Арх
 `internal/domain/names` (`names.Key`) — второй потребитель, позиции плана 17, уже известен; алгоритм после
 релиза не менять: это смысл записанных ключей.
 
-**`CURRENCY_LOCKED` — один вопрос к семейному репозиторию.** `FamilyRepository.HasMonetaryData(ctx, familyID)`:
-один `SELECT` с `EXISTS` по операциям и по сверкам (через `accounts.family_id`). `FamilyService` не
+**`CURRENCY_LOCKED` — один вопрос к семейному репозиторию.** `FamilyRepository.HasMonetaryData(ctx)` (семью
+репозиторий находит сам, как остальные его методы): один `SELECT` с `EXISTS` по операциям и по сверкам (через `accounts.family_id`). `FamilyService` не
 обрастает репозиторием на каждый денежный источник; план 17 допишет третий `EXISTS`. Проверка и смена
 валюты по-прежнему не атомарны — как и сейчас.
 
@@ -113,14 +114,14 @@ CREATE TABLE accounts (
     CHECK (LENGTH(TRIM(name)) > 0),
     UNIQUE (family_id, name_key)
 );
--- transactions: account_id TEXT REFERENCES accounts(id) ON DELETE RESTRICT
+-- transactions: account_id TEXT REFERENCES accounts(id) ON DELETE RESTRICT — после family_id, перед tags,
+-- одинаково в 001 и в блоке transactions внутри 005: table_info сравнивает и cid
 CREATE INDEX idx_transactions_account_date ON transactions(account_id, date);
 CREATE TABLE account_reconciliations (
     account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
     month TEXT NOT NULL,
     bank_expense_minor INTEGER NOT NULL,
     note TEXT NOT NULL DEFAULT '',
-    updated_by TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (account_id, month),
     CHECK (month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'),
@@ -128,19 +129,23 @@ CREATE TABLE account_reconciliations (
 );
 ```
 
+`accounts` получает триггер `update_accounts_updated_at` по образцу `001:179`; у сверок триггера нет —
+`updated_at = CURRENT_TIMESTAMP` пишет сам upsert (`DEFAULT` срабатывает только на `INSERT`). Кто правил
+сверку, не хранится: пользователей двое.
+
 API (`financeAccess`, кроме помеченного):
 
 | Маршрут | Заметки |
 |---|---|
 | `GET /accounts` | `?archived=true` добавляет архивные; `meta.pagination` |
 | `POST /accounts` | `{id?, name}`; идемпотентен по `id`; `409 ACCOUNT_NAME_EXISTS` |
-| `PUT /accounts/:id` | `{name?, is_archived?}` |
+| `PUT /accounts/:id` | `{name?, is_archived?}`; пустое тело — `422`, как `isEmpty` у операций |
 | `DELETE /accounts/:id` | `adminOnly`; `409 ACCOUNT_IN_USE` |
 | `POST /transactions` | `account_id?`; неизвестный или архивный — `422`; повтор по `id` отвечает сохранённой операцией раньше проверки счёта |
 | `PUT /transactions/:id` | `account_id?`, `clear_account?`; проверка счёта только когда UUID **отличается** от сохранённого — правка описания у операции с архивным счётом проходит |
 | `GET /transactions` | `?account_id=` или `?unassigned=true` (вместе — `422`) через общий `buildFilterConditions`, чтобы `total` совпадал |
-| `PUT /accounts/:id/reconciliations/:month` | `{bank_expense_minor, note?}`, полная замена: без `note` заметка очищается; `0 … money.MaxAmount`, поле — указатель, иначе `required` отвергнет законный `0`; `updated_by` из principal |
-| `DELETE /accounts/:id/reconciliations/:month` | `404`, если записи нет |
+| `PUT /accounts/:id/reconciliations/:month` | `{bank_expense_minor, note?}`, полная замена: без `note` заметка очищается; `0 … money.MaxAmount`, поле — указатель, иначе `required` отвергнет законный `0`; в спеке — `Money` (у него нет `minimum`), `>= 0` проверяет сервис; неизвестный счёт — `404` |
+| `DELETE /accounts/:id/reconciliations/:month` | `404`, если счёта или записи нет |
 | `GET /stats/reconciliation?month=` | по умолчанию текущий месяц в `family.Location()` |
 
 ```json
@@ -160,14 +165,15 @@ API (`financeAccess`, кроме помеченного):
 
 ### Экран «Сверка» (решение от 18.09.2026)
 
-Вход — карточка на «Главной» под `Totals` (`ui/home/HomeScreen.kt:160`), отдельной вкладки нет: действие
+Вход — карточка на «Главной» под `Totals` (`ui/home/HomeScreen.kt:134`, `item { Totals(state) }` внутри
+`Summary`), отдельной вкладки нет: действие
 ежемесячное. Макет текстовый, Figma догоняет после возврата лимита MCP. Компоненты — существующие:
 `groupedRow`, `SegmentedChoice` не нужен, суммы — стиль `money/*`.
 
 ```
-Главная                                  Сверка                      ‹ Сентябрь 2026 ›
+Главная                                  Сверка                        ‹ Август 2026 ›
 ┌──────────────────────────────────┐     ┌──────────────────────────────────────────┐
-│ Сверка · август          1 из 3 ›│     │ Тинькофф                          ✓ сошлось│
+│ Сверка · август          1 из 3 ›│     │ Альфа                             ✓ сошлось│
 └──────────────────────────────────┘     │ записано 43 100,00   в банке 43 100,00    │
                                          ├──────────────────────────────────────────┤
 Счетов нет:                              │ Сбер                 не записано 1 900,00 │
@@ -180,6 +186,8 @@ API (`financeAccess`, кроме помеченного):
                                          └──────────────────────────────────────────┘
 ```
 
+- Пока у семьи нет операций, «Главная» целиком заменена пустым состоянием (`HomeScreen.kt:104`) — карточки
+  там нет, счета заводятся из настроек.
 - Карточка показывает **прошлый** месяц до 10-го числа и текущий после — сверяют закончившийся месяц;
   «N из M» — счета с `diff = 0` из неархивных. Экран открывается на том же месяце.
 - Тап по строке счёта → операции (расходы, месяц, счёт). Тап по «в банке» → лист: сумма, заметка,
@@ -206,13 +214,13 @@ API (`financeAccess`, кроме помеченного):
 - Create: `migrations/005_accounts.{up,down}.sql`
 - Modify: `internal/infrastructure/migrations_test.go`
 
-- [ ] `001`: `accounts` перед `transactions`, колонка и индекс, `account_reconciliations`; в `001.down` новые `DROP … IF EXISTS` — `005.down` уже снёс эти объекты
-- [ ] `005.up`: `CREATE TABLE IF NOT EXISTS` для `accounts` **и** `account_reconciliations` (на свежей базе обе уже есть из `001`); пересборка `transactions` (`transactions_new` со всеми `CHECK` из `001:69` → `INSERT … SELECT` с явным списком колонок, включая `tags`, `created_at`, `updated_at`, и `account_id = NULL` → `DROP` → `RENAME`), четыре индекса `001:141-144`, новый индекс; триггер `update_transactions_updated_at` — последним, после копирования. Своего `BEGIN` в файле нет: golang-migrate уже открыл транзакцию
-- [ ] `005.down`: `DROP TABLE account_reconciliations`, `DROP INDEX idx_transactions_account_date`, `ALTER TABLE transactions DROP COLUMN account_id`, `DROP TABLE accounts`
-- [ ] `CleanTables`: `account_reconciliations` → `transactions` → `accounts`
-- [ ] тест: `Up()` → `Migrate(4)` (как `Up → Migrate(1)` в `migrations_test.go:124`; `Migrate(4)` на пустой базе выпущенную v4 не воспроизводит) → семья, категория, операции → `Up()` → строки и timestamps целы, триггер работает, `account_id IS NULL`, индексы на месте
+- [ ] `001`: `accounts` перед `transactions`, колонка и индекс, `account_reconciliations`, триггер `update_accounts_updated_at`; в `001.down` — `DROP TRIGGER/INDEX/TABLE IF EXISTS` поимённо (включая `idx_transactions_account_date`): `005.down` уже снёс эти объекты
+- [ ] `005.up`: `CREATE TABLE IF NOT EXISTS` для `accounts` **и** `account_reconciliations` (на свежей базе обе уже есть из `001`); пересборка `transactions` (`transactions_rebuilt`, как `budgets_rebuilt` в `002`, со всеми `CHECK` из `001:69` → `INSERT … SELECT` с явным списком колонок, включая `tags`, `created_at`, `updated_at`, и `account_id = NULL` → `DROP` → `RENAME`), четыре индекса `001:141-144`, новый индекс; триггер `update_transactions_updated_at` — последним, после копирования. Своего `BEGIN` в файле нет: golang-migrate уже открыл транзакцию
+- [ ] `005.down`: `DROP TABLE account_reconciliations`, `DROP TRIGGER update_accounts_updated_at`, `DROP INDEX idx_transactions_account_date`, `ALTER TABLE transactions DROP COLUMN account_id`, `DROP TABLE accounts`
+- [ ] `CleanTables`: `sessions, budgets, account_reconciliations, transactions, accounts, categories, users, families`; фабрики операций (`testhelpers/sqlite.go:193`, `:212`) пишут явный список колонок — их не трогать; список `tables` в `migrations_test.go:30` дополнить
+- [ ] тест: `Up()` → `Migrate(4)` (как `Up → Migrate(1)` в `migrations_test.go:124-126`; `Migrate(4)` на пустой базе выпущенную v4 не воспроизводит) → семья, категория, операции → `Up()` → строки и timestamps целы, триггер работает, `account_id IS NULL`, индексы на месте
 - [ ] тест: заполненные `account_id` и сверка → `Migrate(4)` → операции целы, колонки и таблиц нет → снова `Up()`
-- [ ] тест: схема свежей базы совпадает со схемой пути обновления — по `table_info`, `foreign_key_list`, `index_list`/`index_xinfo` трёх таблиц, не по тексту `sqlite_master` (DDL в `001` и `005` оформлен по-разному)
+- [ ] тест на двух базах: A — `Up()`; B — `Up() → Migrate(4) → Up()`; схемы совпадают по `table_info`, `foreign_key_list`, `index_list`/`index_xinfo` трёх таблиц, не по тексту `sqlite_master` (DDL в `001` и `005` оформлен по-разному)
 - [ ] `make fmt && make test && make lint`
 
 ### Task 3: Счета — домен, репозиторий, сервис, маршруты
@@ -230,9 +238,10 @@ API (`financeAccess`, кроме помеченного):
 - [ ] сервис: `Create`, `Update` пересчитывает `name_key`
 - [ ] handler: повтор по `id` — `respondClientID` до вызова сервиса (`categories.go:39`); `respondList` + `pageSlice`, `ignoreWritten(parsePagination)`; коды `ACCOUNT_NAME_EXISTS`, `ACCOUNT_IN_USE`
 - [ ] маршруты в группе `financeAccess`, `DELETE` — `adminOnly`
-- [ ] спека: `listAccounts`, `createAccount`, `updateAccount`, `deleteAccount`, схемы `Account`, `CreateAccountRequest`, `UpdateAccountRequest`; `npx @redocly/cli lint`
+- [ ] спека: новый тег `accounts`; `listAccounts`, `createAccount`, `updateAccount`, `deleteAccount`; схемы `Account`, `AccountOk` (+ `components/responses/AccountOk` — иначе генератор даст `InlineObject…`), `CreateAccountRequest`, `UpdateAccountRequest`; список — инлайновый объект с `ListMeta`, как у `listCategories`; коды `ACCOUNT_NAME_EXISTS`, `ACCOUNT_IN_USE` — в описание `components/responses/Conflict`; `npx @redocly/cli lint`
+- [ ] `dupl` включён и для handler'ов (порог 150 токенов): `accounts.go` и репозиторий не копировать с категорий целиком — общее выносить
 - [ ] unit-тесты: `names.Key` («Карта» = « карта »), репозиторий (уникальность, архив в списке), сервис, handler
-- [ ] интеграция: CRUD, повтор `POST` с тем же `id` → `200`, дубль имени → `409`, `member` не удаляет → `403`, без токена → `401`
+- [ ] интеграция: CRUD, архивный счёт скрыт без `?archived=true`, пустой `PUT` → `422`, повтор `POST` с тем же `id` → `200`, дубль имени → `409`, `member` не удаляет → `403`, без токена → `401`
 - [ ] `make fmt && make test && make lint`; `make -C android check`
 
 ### Task 4: `account_id` в операциях
@@ -244,11 +253,13 @@ API (`financeAccess`, кроме помеченного):
 
 - [ ] `Transaction.AccountID *uuid.UUID`, `Filter.AccountID *uuid.UUID`, `Filter.Unassigned bool`
 - [ ] репозиторий: INSERT, UPDATE, `GetByID.Scan`, общий сканер, оба SELECT; `account_id = ?` и `account_id IS NULL` в `buildFilterConditions`
-- [ ] `CreateTransactionRequest.AccountID`, `UpdateTransactionRequest.AccountID` + `ClearAccount *bool` (оба в `isEmpty`), `TransactionFilterParams.AccountID` + `Unassigned`; оба преобразования фильтра; взаимоисключения → `422`
-- [ ] сервис, между `transaction_service.go:301` и `:312`: `nil` — ничего; UUID равен сохранённому (сравнение значений, не указателей) — ничего; отличается — счёт существует и не архивный, иначе `422` с `field: account_id`; `clear_account` — `NULL`
+- [ ] `CreateTransactionRequest.AccountID`, `UpdateTransactionRequest.AccountID` + `ClearAccount *bool` (оба в `isEmpty`), `TransactionFilterParams.AccountID` + `Unassigned`; оба преобразования фильтра
+- [ ] взаимоисключения: фильтр `account_id` + `unassigned` → `422`; тело `PUT` `account_id` + `clear_account: true` → `422` с `field: clear_account`
+- [ ] `CreateTransaction` (`transaction_service.go:153`): счёт существует и не архивный — рядом с `validateCategoryExists` (:710), иначе `422` с `field: account_id`
+- [ ] `UpdateTransaction`, после блока originals (`transaction_service.go:306-310`), перед `if req.AmountMinor != nil` (:312): `nil` — ничего; UUID равен сохранённому (сравнение значений, не указателей) — ничего; отличается — счёт существует и не архивный, иначе `422` с `field: account_id`; `clear_account` — `NULL`
 - [ ] ответ операции: `account_id` nullable; `Recent` в `stats` не меняется
-- [ ] спека: поле в `Transaction`, обоих запросах, параметр `account_id` у `listTransactions`
-- [ ] тесты: создание со счётом и без, оба фильтра (`total` = длине выборки), `PUT` без поля сохраняет счёт, `clear_account` отвязывает, оба поля → `422`, архивный → `422`, неизвестный → `422`, правка описания при архивном счёте → `200`, `DELETE` счёта с операцией → `409`
+- [ ] спека: поле в `Transaction` и обоих запросах, `clear_account` в `UpdateTransactionRequest`, параметры `account_id` и `unassigned` у `listTransactions`
+- [ ] тесты: создание со счётом и без, оба фильтра (`total` = длине выборки), `PUT` без поля сохраняет счёт, `clear_account` отвязывает, `account_id` + `clear_account` → `422`, `account_id` + `unassigned` → `422`, архивный → `422`, неизвестный → `422`, правка описания при архивном счёте → `200`, `DELETE` счёта с операцией → `409`
 - [ ] тесты идемпотентности: повтор `POST` с тем же `id` после архивации счёта → `200`; повтор с другим `account_id` операцию не переназначает
 - [ ] `make fmt && make test && make lint`; `make -C android check`
 
@@ -259,16 +270,18 @@ API (`financeAccess`, кроме помеченного):
 - Create: `internal/infrastructure/reconciliation/reconciliation_repository_sqlite.go`, `_test.go`
 - Create: `internal/services/reconciliation_service.go`, `_test.go`
 - Create: `internal/application/handlers/reconciliations.go`, `_test.go`, `tests/integration/reconciliation_test.go`
-- Modify: `services/interfaces.go`, `container.go`, `repositories_sqlite.go`, `handlers/repositories.go`, `handlers/stats.go`, `services/dto/stats_dto.go`, `services/family_service.go`, `family_service_test.go:33`, `services/user_service.go:55` (интерфейс `FamilyRepository`), `infrastructure/user/family_repository_sqlite.go`, `services/helpers_test.go:49` (`MockFamilyRepository`), `handlers/errors.go:87` (текст `CURRENCY_LOCKED`), `http_server.go`, `testhelpers/integration_server.go`
+- Create: `internal/services/dto/reconciliation_dto.go`
+- Modify: `services/interfaces.go`, `container.go`, `repositories_sqlite.go`, `handlers/repositories.go`, `infrastructure/transaction/transaction_repository_sqlite.go`, `services/family_service.go`, `family_service_test.go:33`, `services/user_service.go:55` (интерфейс `FamilyRepository`), `infrastructure/user/family_repository_sqlite.go`, `services/helpers_test.go:23` (`MockFamilyRepository`), `handlers/errors.go:87` (текст `CURRENCY_LOCKED`), `http_server.go`, `testhelpers/integration_server.go`
 - Modify: `docs/api/openapi.yaml`; `make -C android api-gen`
 
-- [ ] репозиторий: `Upsert` (`ON CONFLICT(account_id, month) DO UPDATE`), `Delete`, `ListByMonth`, `Exists`; `RecordedByAccount(familyID, from, to)` — один `SELECT account_id, SUM(amount_minor) … WHERE family_id = ? AND type = 'expense' AND date >= ? AND date <= ? GROUP BY account_id` без `JOIN accounts` (внутренний JOIN потерял бы операции без счёта); `NULL`-группа сканируется nullable-типом и даёт `unassigned`, её отсутствие — 0; сверки семьи выбираются через `accounts.family_id`
+- [ ] репозиторий сверок: `Upsert` (`ON CONFLICT(account_id, month) DO UPDATE SET …, updated_at = CURRENT_TIMESTAMP`), `Delete`, `ListByMonth`
+- [ ] репозиторий операций, рядом с `GetTotalsByMonth` (:839), без `familyID`, как соседи: `RecordedByAccount(ctx, from, to)` — один `SELECT account_id, SUM(amount_minor) … WHERE family_id = ? AND type = 'expense' AND date >= ? AND date <= ? GROUP BY account_id` без `JOIN accounts` (внутренний JOIN потерял бы операции без счёта); `NULL`-группа сканируется nullable-типом и даёт `unassigned`, её отсутствие — 0; сверки семьи выбираются через `accounts.family_id`
 - [ ] сервис: `Put` (счёт существует, сумма `0 … MaxAmount`), `Delete`, `Summary(month)` — от `List(true)` всех счетов, затем суммы и сверки; архивный входит только с расходом или строкой сверки в месяце (нулевая сверка считается)
-- [ ] handler'ы: `PUT/DELETE /accounts/:id/reconciliations/:month`, `GET /stats/reconciliation`; месяц по умолчанию — из `family.Location()`
-- [ ] `FamilyRepository.HasMonetaryData` вместо `hasTransactions` в `family_service`; конструктор `NewFamilyService` при этом теряет `TransactionRepository`, если тот больше ни для чего не нужен (`bootstrap.go:110`, `container.go`)
-- [ ] спека: `putReconciliation`, `deleteReconciliation`, `getReconciliationStats`, схемы `ReconciliationRequest`, `ReconciliationStats`, `ReconciliationRow`
+- [ ] `ReconciliationHandler` (`handlers/reconciliations.go`) владеет всеми тремя маршрутами; `GET /stats/reconciliation` регистрируется в группе `stats`, считает `ReconciliationService.Summary` — `StatsHandler` и `stats_dto.go` не трогаются; месяц по умолчанию — из `family.Location()`
+- [ ] `FamilyRepository.HasMonetaryData(ctx)` вместо `hasTransactions` в `family_service`; конструктор `NewFamilyService` при этом теряет `TransactionRepository`, если тот больше ни для чего не нужен (`bootstrap.go:110`, `container.go`)
+- [ ] спека: `putReconciliation`, `deleteReconciliation` — тег `accounts`, `getReconciliationStats` — тег `stats`; схемы `ReconciliationRequest`, `Reconciliation` + `ReconciliationOk` (ответ `PUT`), `ReconciliationStats` + `ReconciliationStatsOk`, `ReconciliationRow`, соответствующие `components/responses`
 - [ ] тесты сервиса: только расходы, границы месяца (1-е и последнее число входят, соседние нет), `unassigned`, `diff` отрицательный, `null` без сверки, архивный счёт
-- [ ] интеграция: upsert дважды → одна запись, дописанная операция меняет `diff` без нового `PUT`, `DELETE` счёта со сверкой → `409`, `month=2026-13` → `422`, смена валюты при сверке без операций → `409 CURRENCY_LOCKED`
+- [ ] интеграция: без токена `401`, `member` — `200`; upsert дважды → одна запись и свежий `updated_at`; `PUT` без `note` очищает заметку; неизвестный счёт → `404`; дописанная операция меняет `diff` без нового `PUT`, `DELETE` счёта со сверкой → `409`, `month=2026-13` → `422`, смена валюты при сверке без операций → `409 CURRENCY_LOCKED`
 - [ ] `make fmt && make test && make lint`; `make -C android check`
 
 ### Task 6: Документация сервера
@@ -289,7 +302,8 @@ API (`financeAccess`, кроме помеченного):
 - [ ] методы счетов и сверок в `ApiGraph`
 - [ ] список: активные, сворачиваемая группа архивных, пустое состояние с действием
 - [ ] создание и переименование (клиентский `id`), архив/возврат, удаление для admin; `409` → текст через `SettingsConflicts.kt`
-- [ ] тесты ViewModel: загрузка, создание, `ACCOUNT_NAME_EXISTS`, `ACCOUNT_IN_USE`
+- [ ] `settings_error_currency_locked` (`strings.xml:171`): операции или сверки
+- [ ] тесты ViewModel: загрузка, создание, `ACCOUNT_NAME_EXISTS`, `ACCOUNT_IN_USE`; Compose-тесты: пустое состояние с кнопкой, подтверждение удаления счёта
 - [ ] `make -C android check`
 
 ### Task 8: Клиент — счёт в операции, фильтре и распознавании
@@ -302,21 +316,22 @@ API (`financeAccess`, кроме помеченного):
 - [ ] правка: уже привязанный архивный счёт показывается, но в листе выбора его нет; пункт «Без счёта» в листе шлёт `clear_account: true`
 - [ ] фильтр по счёту в списке операций
 - [ ] распознавание: один выбор счёта на пачку, уходит в каждый `POST /transactions`
-- [ ] тесты ViewModel: подстановка последнего счёта, сохранение без счёта, отвязка, фильтр, пачка со счётом
+- [ ] тесты ViewModel: подстановка последнего счёта, сохранение без счёта, отвязка, правка операции с архивным счётом (показан, в листе его нет), фильтр, пачка со счётом
 - [ ] `make -C android check`
 
 ### Task 9: Клиент — экран «Сверка»
 
 **Files:**
 - Create: `ui/reconciliation/ReconciliationScreen.kt`, `ReconciliationViewModel.kt` + тест
-- Modify: `AppScreen.kt`, `MainActivity.kt`, `ui/home/HomeScreen.kt`, `HomeViewModel.kt`, `ui/transactions/Filters.kt`, `TransactionsViewModel.kt`, `strings.xml`
+- Modify: `AppScreen.kt`, `MainActivity.kt`, `app/src/test/…/AppScreenSaverTest.kt`, `ui/home/HomeScreen.kt`, `HomeViewModel.kt`, `ui/transactions/Filters.kt`, `TransactionsViewModel.kt`, `strings.xml`
 
 - [ ] карточка на «Главной» по макету из Technical Details: месяц по правилу 10-го числа (`LocalDate.now(session.zone)`), «N из M», пустое состояние ведёт в «Счета»; ошибка загрузки карточки не роняет «Главную»
+- [ ] `MainActivity`: `BackHandler` со «Сверки» на «Главную» (:283 — образец), модель — `viewModel(key = "reconciliation-${user.id}-$epoch")` (:349); `AppScreen.Reconciliation` в `Saver` и в `AppScreenSaverTest`
 - [ ] переключатель месяца; строка на счёт: записано / в банке / разница; строка «Без счёта»
 - [ ] ввод цифры банка и заметки по тапу на «в банке», удаление сверки
-- [ ] тап по строке → операции с `type=expense`, границами выбранного месяца и `account_id` либо `unassigned=true`: `Filters.kt:8` знает только ALL/THIS_MONTH/PREV_MONTH по часам телефона — нужен период с явными датами, а `AppScreen.Transactions` (`AppScreen.kt:21`, сейчас `data object`) и его `Saver` — начальный фильтр
+- [ ] тап по строке → операции с `type=expense`, границами выбранного месяца и `account_id` либо `unassigned=true`: `Filters.kt:8` знает только ALL/THIS_MONTH/PREV_MONTH по часам телефона — нужен период с явными датами и поля `accountId` / `unassigned` в `TransactionFilters` (`Filters.kt:19-23`), а `AppScreen.Transactions` (`AppScreen.kt:21`, сейчас `data object`) и его `Saver` — начальный фильтр (сохраняются период, тип, счёт, `unassigned`)
 - [ ] состояния: нет счетов → действие «Завести счёт»; сошлось (`diff = 0`) отмечено
-- [ ] тесты ViewModel: загрузка, сохранение, смена месяца, ошибка сети; `HomeViewModel` — выбор месяца карточки 9-го и 10-го числа, «N из M», карточка при ошибке
+- [ ] тесты ViewModel: загрузка, сохранение, смена месяца, ошибка сети; `HomeViewModel` — выбор месяца карточки 9-го и 10-го числа, «N из M», карточка при ошибке; Compose-тесты: лист ввода суммы банка, удаление сверки, пустое состояние ведёт в «Счета»
 - [ ] `make -C android check`
 
 ### Task 10: Документация клиента
@@ -324,7 +339,8 @@ API (`financeAccess`, кроме помеченного):
 **Files:**
 - Modify: `android/CLAUDE.md`, `android/core/api/CLAUDE.md`
 
-- [ ] требование сервера `v0.6.0`; почему счёт не отвязывается (`explicitNulls = false`)
+- [ ] требование сервера `v0.6.0`; почему отвязка — флагом `clear_account` (`explicitNulls = false`)
+- [ ] `make -C android check`
 
 ### Task 11: Verify acceptance criteria
 
