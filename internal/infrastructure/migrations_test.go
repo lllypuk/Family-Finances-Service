@@ -30,7 +30,7 @@ func TestMigrations_UpAndDownOnEmptyDatabase(t *testing.T) {
 	t.Cleanup(func() { assert.NoError(t, db.Close()) })
 
 	tables := []string{"families", "users", "categories", "transactions", "budgets", "sessions",
-		"accounts", "account_reconciliations"}
+		"accounts", "account_reconciliations", "holdings", "holding_values"}
 	for _, table := range tables {
 		var count int
 		require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&count), table)
@@ -310,6 +310,63 @@ func TestMigrations_AccountsSchemaMatchesFreshInstall(t *testing.T) {
 	require.NoError(t, upgradedManager.Up())
 
 	for _, table := range []string{"transactions", "accounts", "account_reconciliations"} {
+		assert.Equal(t, schemaOf(ctx, t, fresh, table), schemaOf(ctx, t, upgraded, table), table)
+	}
+}
+
+// 006 на живой базе версии 5: позиции появляются, данные плана 16 не трогаются.
+func TestMigrations_HoldingsUpgradeKeepsAccounts(t *testing.T) {
+	ctx := t.Context()
+	manager, db := migratedDB(t)
+	require.NoError(t, manager.Migrate(5))
+	assert.Equal(t, 0, objectCount(ctx, t, db, "name IN ('holdings', 'holding_values')"))
+
+	familyID, userID, categoryID := seedForChecks(ctx, t, db)
+	_, err := db.ExecContext(ctx,
+		`INSERT INTO accounts (id, family_id, name, name_key) VALUES ('acc-1', ?, 'Карта', 'карта')`, familyID)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, insertTransaction, "tx-1", 100, "2026-09-04", categoryID, userID, familyID)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, "UPDATE transactions SET account_id = 'acc-1' WHERE id = 'tx-1'")
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO account_reconciliations (account_id, month, bank_expense_minor) VALUES ('acc-1', '2026-09', 100)`)
+	require.NoError(t, err)
+
+	require.NoError(t, manager.Up())
+
+	var accountID string
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT account_id FROM transactions WHERE id = 'tx-1'").
+		Scan(&accountID))
+	assert.Equal(t, "acc-1", accountID)
+	var bank int64
+	require.NoError(t, db.QueryRowContext(ctx,
+		"SELECT bank_expense_minor FROM account_reconciliations WHERE account_id = 'acc-1'").Scan(&bank))
+	assert.Equal(t, int64(100), bank)
+
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO holdings (id, family_id, name, name_key, side, kind, updated_at)
+		VALUES ('h-1', ?, 'Вклад', 'вклад', 'asset', 'deposit', '2026-09-01 10:00:00')`, familyID)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx,
+		`INSERT INTO holding_values (holding_id, date, value_minor) VALUES ('h-1', '2026-09-01', 0)`)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, "UPDATE holdings SET is_archived = 1 WHERE id = 'h-1'")
+	require.NoError(t, err)
+	var updatedAt string
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT updated_at FROM holdings WHERE id = 'h-1'").Scan(&updatedAt))
+	assert.NotContains(t, updatedAt, "2026-09-01", "триггер updated_at создан")
+}
+
+// Живая база (v5 → 006) и свежая (001 уже с позициями) обязаны прийти к одной схеме.
+func TestMigrations_HoldingsSchemaMatchesFreshInstall(t *testing.T) {
+	ctx := t.Context()
+	_, fresh := migratedDB(t)
+	upgradedManager, upgraded := migratedDB(t)
+	require.NoError(t, upgradedManager.Migrate(5))
+	require.NoError(t, upgradedManager.Up())
+
+	for _, table := range []string{"holdings", "holding_values"} {
 		assert.Equal(t, schemaOf(ctx, t, fresh, table), schemaOf(ctx, t, upgraded, table), table)
 	}
 }

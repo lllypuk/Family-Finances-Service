@@ -204,11 +204,11 @@ API (`financeAccess`, кроме помеченного):
 - Create: `migrations/006_holdings.{up,down}.sql`
 - Modify: `internal/infrastructure/migrations_test.go`
 
-- [ ] `001`: обе таблицы, индекс, триггер `update_holdings_updated_at`; в `001.down` — `DROP TRIGGER/INDEX/TABLE IF EXISTS`
-- [ ] `006.up`: `CREATE TABLE / INDEX / TRIGGER IF NOT EXISTS`; `006.down`: триггер, `holding_values`, затем `holdings`; список `tables` в `migrations_test.go:30` дополнить
-- [ ] `CleanTables`: `holding_values` → `holdings`, обе до `users` и `families`
-- [ ] тест: `Up → Migrate(5) → Up` — таблицы есть, данные плана 16 целы, триггер `holdings` срабатывает; на двух базах (A — `Up()`, B — `Up → Migrate(5) → Up`) схемы совпадают по `table_info` / `foreign_key_list` / `index_list`
-- [ ] `make fmt && make test && make lint`
+- [x] `001`: обе таблицы, индекс, триггер `update_holdings_updated_at`; в `001.down` — `DROP TRIGGER/INDEX/TABLE IF EXISTS`
+- [x] `006.up`: `CREATE TABLE / INDEX / TRIGGER IF NOT EXISTS`; `006.down`: триггер, `holding_values`, затем `holdings`; список `tables` в `migrations_test.go:30` дополнить
+- [x] `CleanTables`: `holding_values` → `holdings`, обе до `users` и `families`
+- [x] тест: `Up → Migrate(5) → Up` — таблицы есть, данные плана 16 целы, триггер `holdings` срабатывает; на двух базах (A — `Up()`, B — `Up → Migrate(5) → Up`) схемы совпадают по `table_info` / `foreign_key_list` / `index_list`
+- [x] `make fmt && make test && make lint`
 
 ### Task 2: Позиции — домен, репозиторий, сервис, маршруты
 

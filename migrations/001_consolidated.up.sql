@@ -143,6 +143,33 @@ CREATE TABLE IF NOT EXISTS account_reconciliations (
     CHECK (bank_expense_minor >= 0)
 );
 
+-- Позиция капитала (план 17): знак даёт side, значения — снимки в holding_values. kind проверяет домен.
+CREATE TABLE IF NOT EXISTS holdings (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    name_key TEXT NOT NULL,
+    side TEXT NOT NULL CHECK (side IN ('asset', 'liability')),
+    kind TEXT NOT NULL,
+    is_archived INTEGER NOT NULL DEFAULT 0 CHECK (is_archived IN (0, 1)),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    CHECK (LENGTH(TRIM(name)) > 0),
+    UNIQUE (family_id, name_key)
+);
+
+-- Снимок стоимости позиции на дату. Триггера updated_at нет: его пишет upsert.
+CREATE TABLE IF NOT EXISTS holding_values (
+    holding_id TEXT NOT NULL REFERENCES holdings(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,
+    value_minor INTEGER NOT NULL CHECK (value_minor >= 0),
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (holding_id, date),
+    CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')
+);
+
 -- Только хеш токена; срок продлевается активностью (см. internal/auth/session.go)
 CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
@@ -181,6 +208,8 @@ CREATE INDEX IF NOT EXISTS idx_budgets_family_period ON budgets(family_id, start
 -- которого клиент уже не видит (GetByID и все списки фильтруют is_active).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_budgets_name_period_active
     ON budgets(family_id, name, start_date, end_date) WHERE is_active = 1;
+
+CREATE INDEX IF NOT EXISTS idx_holdings_family_archived ON holdings(family_id, is_archived);
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 
@@ -222,6 +251,12 @@ CREATE TRIGGER IF NOT EXISTS update_budgets_updated_at
 AFTER UPDATE ON budgets
 BEGIN
     UPDATE budgets SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS update_holdings_updated_at
+AFTER UPDATE ON holdings
+BEGIN
+    UPDATE holdings SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
 
 ANALYZE;
