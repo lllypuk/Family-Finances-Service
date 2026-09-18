@@ -246,6 +246,11 @@ Retrofit, R8 однажды удалил, и приложение падало �
 `/stats/reconciliation`. Клиенты `0.6`/`0.7` с `v0.6.0` работают — они не шлют `account_id`, и
 счёт операции при их правке сохраняется.
 
+Клиент `0.9.0` (план 17) требует сервер `v0.7.0`: без него нет `/holdings` и `/stats/net-worth`, и
+вкладка «Капитал» остаётся с ошибкой загрузки. `assets_minor`/`liabilities_minor`/`net_minor` ряда —
+суммы позиций, в спеке это `int64` без `Money.maximum`: держать их в `Long` и не проверять потолком
+ввода, `net_minor` бывает отрицательным.
+
 ## CI
 
 Versions live only in `android/gradle/libs.versions.toml`, `compileSdk`/`minSdk`/`jvmTarget` included.

@@ -310,7 +310,7 @@ API (`financeAccess`, кроме помеченного):
 **Files:**
 - Modify: `android/CLAUDE.md`
 
-- [ ] требование сервера `v0.7.0`; итоги ряда — `Long`, не модель `Money`
+- [x] требование сервера `v0.7.0`; итоги ряда — `Long`, не модель `Money`
 
 ### Task 9: Verify acceptance criteria
 
