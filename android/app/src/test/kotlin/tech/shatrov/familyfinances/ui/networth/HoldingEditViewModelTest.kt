@@ -68,7 +68,7 @@ class HoldingEditViewModelTest {
             id?.let(UUID::fromString),
             draft,
             side,
-            today,
+            { today },
             isAdmin,
         )
     }
@@ -167,6 +167,19 @@ class HoldingEditViewModelTest {
         val archive = server.takeRequest()
         assertEquals("/api/v1/holdings/$FLAT_ID", archive.url.encodedPath)
         assertEquals("""{"is_archived":true}""", archive.body?.utf8())
+    }
+
+    @Test
+    fun archiveFailureAfterZeroSnapshotMarksChanged() = runTest {
+        open(FLAT_ID)
+        server.enqueueJson(200, HOLDING_VALUE_OK)
+        server.enqueueJson(409, HOLDING_NAME_EXISTS_ERROR)
+
+        model.onToggleArchive(zeroFirst = true)
+
+        val state = settled()
+        assertFalse(state.done)
+        assertTrue(state.changed)
     }
 
     @Test

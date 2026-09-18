@@ -80,6 +80,7 @@ data class HoldingEditUiState(
     val error: UiError? = null,
     val fieldErrors: Map<String, String> = emptyMap(),
     val done: Boolean = false,
+    val changed: Boolean = false,
 ) {
     val editing: Boolean get() = id != null
 
@@ -103,7 +104,7 @@ class HoldingEditViewModel(
     id: UUID?,
     draft: UUID,
     side: HoldingSide,
-    private val today: LocalDate,
+    private val today: () -> LocalDate,
     private val isAdmin: Boolean,
 ) : ViewModel() {
     private val mutable = MutableStateFlow(
@@ -190,7 +191,9 @@ class HoldingEditViewModel(
         val saved = mutable.value.saved ?: return
         mutate {
             if (zeroFirst && !saved.isArchived) {
-                api.client.unwrap { api.holdings.putHoldingValue(saved.id, today, HoldingValueRequest(0L)) }
+                api.client.unwrap { api.holdings.putHoldingValue(saved.id, today(), HoldingValueRequest(0L)) }
+                // Снимок уже в капитале, даже если архив ниже не пройдёт.
+                mutable.update { it.copy(changed = true) }
             }
             api.client.unwrap {
                 api.holdings.updateHolding(saved.id, UpdateHoldingRequest(isArchived = !saved.isArchived))

@@ -528,7 +528,7 @@ fun AppRoot(graph: AppGraph) {
                         current.id,
                         current.draft,
                         current.side,
-                        LocalDate.now(active.zone),
+                        { LocalDate.now(active.zone) },
                         active.isAdmin,
                     )
                 }
@@ -540,7 +540,12 @@ fun AppRoot(graph: AppGraph) {
                 }
             }
             // Как у формы операции: уход во время отправки убил бы корутину, которую сервер уже мог применить.
-            val leave = { if (!edit.submitting) screen = AppScreen.NetWorth }
+            val leave = {
+                if (!edit.submitting) {
+                    if (edit.changed) netWorthStale = true
+                    screen = AppScreen.NetWorth
+                }
+            }
             BackHandler { leave() }
             HoldingEditScreen(
                 state = edit,
