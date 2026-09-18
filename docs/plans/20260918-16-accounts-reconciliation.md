@@ -328,15 +328,16 @@ API (`financeAccess`, кроме помеченного):
 **Files:**
 - Create: `ui/reconciliation/ReconciliationScreen.kt`, `ReconciliationViewModel.kt` + тест
 - Modify: `AppScreen.kt`, `MainActivity.kt`, `app/src/test/…/AppScreenSaverTest.kt`, `ui/home/HomeScreen.kt`, `HomeViewModel.kt`, `ui/transactions/Filters.kt`, `TransactionsViewModel.kt`, `strings.xml`
+- ➕ `AppScreen.Transactions(filters, reconciliation)`: «назад» с расшифровки ведёт на сверку её месяца и сбрасывает фильтр списка; удаление сверки — через подтверждение; карточка — отдельный `HomeViewModel.card`, второй запрос после сводки
 
-- [ ] карточка на «Главной» по макету из Technical Details: месяц по правилу 10-го числа (`LocalDate.now(session.zone)`), «N из M», пустое состояние ведёт в «Счета»; ошибка загрузки карточки не роняет «Главную»
-- [ ] `MainActivity`: `BackHandler` со «Сверки» на «Главную» (:283 — образец), модель — `viewModel(key = "reconciliation-${user.id}-$epoch")` (:349); `AppScreen.Reconciliation` в `Saver` и в `AppScreenSaverTest`
-- [ ] переключатель месяца; строка на счёт: записано / в банке / разница; строка «Без счёта»
-- [ ] ввод цифры банка и заметки по тапу на «в банке», удаление сверки
-- [ ] тап по строке → операции с `type=expense`, границами выбранного месяца и `account_id` либо `unassigned=true`: `Filters.kt:8` знает только ALL/THIS_MONTH/PREV_MONTH по часам телефона — нужен период с явными датами и поля `accountId` / `unassigned` в `TransactionFilters` (`Filters.kt:19-23`), а `AppScreen.Transactions` (`AppScreen.kt:21`, сейчас `data object`) и его `Saver` — начальный фильтр (сохраняются период, тип, счёт, `unassigned`)
-- [ ] состояния: нет счетов → действие «Завести счёт»; сошлось (`diff = 0`) отмечено
-- [ ] тесты ViewModel: загрузка, сохранение, смена месяца, ошибка сети; `HomeViewModel` — выбор месяца карточки 9-го и 10-го числа, «N из M», карточка при ошибке; Compose-тесты: лист ввода суммы банка, удаление сверки, пустое состояние ведёт в «Счета»
-- [ ] `make -C android check`
+- [x] карточка на «Главной» по макету из Technical Details: месяц по правилу 10-го числа (`LocalDate.now(session.zone)`), «N из M», пустое состояние ведёт в «Счета»; ошибка загрузки карточки не роняет «Главную»
+- [x] `MainActivity`: `BackHandler` со «Сверки» на «Главную» (:283 — образец), модель — `viewModel(key = "reconciliation-${user.id}-$epoch")` (:349); `AppScreen.Reconciliation` в `Saver` и в `AppScreenSaverTest`
+- [x] переключатель месяца; строка на счёт: записано / в банке / разница; строка «Без счёта»
+- [x] ввод цифры банка и заметки по тапу на «в банке», удаление сверки
+- [x] тап по строке → операции с `type=expense`, границами выбранного месяца и `account_id` либо `unassigned=true`: `Filters.kt:8` знает только ALL/THIS_MONTH/PREV_MONTH по часам телефона — нужен период с явными датами и поля `accountId` / `unassigned` в `TransactionFilters` (`Filters.kt:19-23`), а `AppScreen.Transactions` (`AppScreen.kt:21`, сейчас `data object`) и его `Saver` — начальный фильтр (сохраняются период, тип, счёт, `unassigned`)
+- [x] состояния: нет счетов → действие «Завести счёт»; сошлось (`diff = 0`) отмечено
+- [x] тесты ViewModel: загрузка, сохранение, смена месяца, ошибка сети; `HomeViewModel` — выбор месяца карточки 9-го и 10-го числа, «N из M», карточка при ошибке; Compose-тесты: лист ввода суммы банка, удаление сверки, пустое состояние ведёт в «Счета»
+- [x] `make -C android check`
 
 ### Task 10: Документация клиента
 

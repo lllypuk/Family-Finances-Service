@@ -399,3 +399,36 @@ internal const val ACCOUNT_IN_USE_ERROR = """
 {"error":{"code":"ACCOUNT_IN_USE","message":"account is in use"},
 "meta":{"request_id":"r-74","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0"}}
 """
+
+internal const val CASH_ACCOUNT_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3"
+
+/**
+ * Сверка августа: карта сошлась, наличные не сверены, архивная карта с нулевой сверкой — «N из M»
+ * её не считает, иначе вышло бы «2 из 3».
+ */
+internal const val RECONCILIATION_OK = """
+{"data":{"month":"2026-08","unassigned_minor":125000,"accounts":[
+{"account":{"id":"$CARD_ACCOUNT_ID","name":"Тинькофф","is_archived":false,
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"},
+"recorded_minor":4310000,"bank_expense_minor":4310000,"diff_minor":0,"note":"выписка",
+"updated_at":"2026-09-01T10:00:00Z"},
+{"account":{"id":"$CASH_ACCOUNT_ID","name":"Наличные","is_archived":false,
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"},
+"recorded_minor":325000,"bank_expense_minor":null,"diff_minor":null,"note":null,"updated_at":null},
+{"account":{"id":"$OLD_ACCOUNT_ID","name":"Старая карта","is_archived":true,
+"created_at":"2026-09-01T10:00:00Z","updated_at":"2026-09-10T10:00:00Z"},
+"recorded_minor":0,"bank_expense_minor":0,"diff_minor":0,"note":"",
+"updated_at":"2026-09-01T10:00:00Z"}]},
+"meta":{"request_id":"r-80","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0"}}
+"""
+
+internal const val RECONCILIATION_EMPTY = """
+{"data":{"month":"2026-08","unassigned_minor":0,"accounts":[]},
+"meta":{"request_id":"r-81","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0"}}
+"""
+
+internal const val RECONCILIATION_PUT_OK = """
+{"data":{"account_id":"$CASH_ACCOUNT_ID","month":"2026-08","bank_expense_minor":350000,"note":"",
+"updated_at":"2026-09-18T10:00:00Z"},
+"meta":{"request_id":"r-82","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0"}}
+"""

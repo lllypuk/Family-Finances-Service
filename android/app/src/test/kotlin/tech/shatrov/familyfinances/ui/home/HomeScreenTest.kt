@@ -1,6 +1,9 @@
 package tech.shatrov.familyfinances.ui.home
 
 import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -8,6 +11,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -25,6 +29,7 @@ import tech.shatrov.familyfinances.ui.format.formatMoney
 import tech.shatrov.familyfinances.ui.format.formatMonth
 import tech.shatrov.familyfinances.ui.format.formatPercent
 import java.time.LocalDate
+import java.time.YearMonth
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [ROBOLECTRIC_SDK])
@@ -106,5 +111,34 @@ class HomeScreenTest {
         composeRule.onNodeWithText(res.getString(R.string.home_add_transaction)).performClick()
 
         assertTrue(added)
+    }
+
+    // Без счетов карточка ведёт в «Счета», со счетами — на сверку своего месяца.
+    @Test
+    fun reconciliationCardLeadsToAccountsOrMonth() {
+        var accounts = 0
+        var opened: YearMonth? = null
+        var card by mutableStateOf<ReconciliationCard>(ReconciliationCard.NoAccounts)
+        composeRule.setContent {
+            AppTheme {
+                HomeScreen(
+                    state = ready(statsSummary()),
+                    onRetry = {},
+                    onAddTransaction = {},
+                    onSettings = {},
+                    card = card,
+                    onReconciliation = { opened = it },
+                    onAccounts = { accounts++ },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText(res.getString(R.string.home_reconciliation_no_accounts)).performClick()
+        assertEquals(1, accounts)
+
+        card = ReconciliationCard.Ready(YearMonth.of(2026, 8), matched = 1, total = 3)
+        composeRule.onNodeWithText(res.getString(R.string.home_reconciliation_matched, 1, 3)).performClick()
+        assertEquals(YearMonth.of(2026, 8), opened)
+        composeRule.onNodeWithText(res.getString(R.string.home_reconciliation, "август")).assertIsDisplayed()
     }
 }

@@ -40,6 +40,7 @@ import tech.shatrov.familyfinances.liveToken
 import tech.shatrov.familyfinances.testSession
 import tech.shatrov.familyfinances.ui.UiError
 import java.time.LocalDate
+import java.time.YearMonth
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
@@ -402,5 +403,28 @@ class TransactionsViewModelTest {
         // Архивные тоже в справочнике: по старой карте фильтровать можно.
         assertEquals(listOf("Тинькофф", "Старая карта"), model.accounts.value.map { it.name })
         assertEquals(CARD_ACCOUNT_ID, lastRequestUrl(5).queryParameter("account_id"))
+    }
+
+    // Расшифровка сверки: условия те же, что у `recorded_minor`, иначе список с ней не сойдётся.
+    @Test
+    fun reconciliationFiltersGoToQuery() = runTest {
+        enqueueFirstPage()
+        createModel()
+        settle()
+
+        server.enqueueJson(200, TRANSACTIONS_PAGE_1)
+        model.applyFilters(TransactionFilters.reconciliation(YearMonth.of(2026, 8), accountId = null))
+        settle()
+
+        val url = lastRequestUrl(5)
+        assertEquals("expense", url.queryParameter("type"))
+        assertEquals("2026-08-01", url.queryParameter("date_from"))
+        assertEquals("2026-08-31", url.queryParameter("date_to"))
+        assertEquals("true", url.queryParameter("unassigned"))
+        assertNull(url.queryParameter("account_id"))
+
+        // Тот же фильтр после поворота список не перечитывает.
+        model.applyFilters(TransactionFilters.reconciliation(YearMonth.of(2026, 8), accountId = null))
+        assertEquals(5, server.requestCount)
     }
 }

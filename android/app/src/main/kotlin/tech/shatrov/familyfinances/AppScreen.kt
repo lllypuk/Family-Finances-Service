@@ -1,9 +1,13 @@
 package tech.shatrov.familyfinances
 
 import androidx.compose.runtime.saveable.Saver
+import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.ui.settings.SettingsPage
 import tech.shatrov.familyfinances.ui.settings.restoreSettingsPage
 import tech.shatrov.familyfinances.ui.settings.saveKey
+import tech.shatrov.familyfinances.ui.transactions.TransactionFilters
+import tech.shatrov.familyfinances.ui.transactions.TransactionPeriod
+import java.time.YearMonth
 import java.util.UUID
 
 /**
@@ -18,7 +22,14 @@ sealed interface AppScreen {
 
     data object Home : AppScreen
 
-    data object Transactions : AppScreen
+    /**
+     * Список операций. [filters] — фильтр, с которым его открыли снаружи (расшифровка сверки), и
+     * [reconciliation] — месяц сверки, куда ведёт «назад»; у вкладки оба `null`.
+     */
+    data class Transactions(
+        val filters: TransactionFilters? = null,
+        val reconciliation: YearMonth? = null,
+    ) : AppScreen
 
     data object Categories : AppScreen
 
@@ -43,6 +54,9 @@ sealed interface AppScreen {
     /** Распознавание импорта [importId] из [ImportStore]; после смерти процесса импорта уже нет. */
     data class Recognize(val importId: UUID) : AppScreen
 
+    /** Сверка счетов за [month]. */
+    data class Reconciliation(val month: YearMonth) : AppScreen
+
     /** Настройки целиком: страницы внутри переключает свой хост, а не этот `when`. */
     data class Settings(val page: SettingsPage = SettingsPage.Root()) : AppScreen
 }
@@ -57,6 +71,7 @@ private const val KEY_BUDGETS = "budgets"
 private const val KEY_BUDGET_EDIT = "budget-edit"
 private const val KEY_SETTINGS = "settings"
 private const val KEY_RECOGNIZE = "recognize"
+private const val KEY_RECONCILIATION = "reconciliation"
 
 /** Экран переживает поворот; всё остальное восстанавливается из хранилища токена. */
 val AppScreenSaver: Saver<AppScreen, String> = Saver(
@@ -65,13 +80,14 @@ val AppScreenSaver: Saver<AppScreen, String> = Saver(
             AppScreen.Loading -> KEY_LOADING
             AppScreen.Login -> KEY_LOGIN
             AppScreen.Home -> KEY_HOME
-            AppScreen.Transactions -> KEY_TRANSACTIONS
+            is AppScreen.Transactions -> screen.saveKey()
             AppScreen.Categories -> KEY_CATEGORIES
             AppScreen.Budgets -> KEY_BUDGETS
             is AppScreen.TransactionEdit -> "$KEY_TRANSACTION_EDIT:${screen.id ?: ""}:${screen.draft}"
             is AppScreen.BudgetEdit -> "$KEY_BUDGET_EDIT:${screen.id ?: ""}:${screen.draft}"
             is AppScreen.Settings -> "$KEY_SETTINGS:${screen.page.saveKey()}"
             is AppScreen.Recognize -> "$KEY_RECOGNIZE:${screen.importId}"
+            is AppScreen.Reconciliation -> "$KEY_RECONCILIATION:${screen.month}"
         }
     },
     // Ключ мог прийти из бандла прошлой версии: разбор чужого формата — не крэш, а загрузка.
@@ -85,7 +101,9 @@ private fun restoreScreen(key: String): AppScreen? = when {
 
     key == KEY_HOME -> AppScreen.Home
 
-    key == KEY_TRANSACTIONS -> AppScreen.Transactions
+    key == KEY_TRANSACTIONS -> AppScreen.Transactions()
+
+    key.startsWith("$KEY_TRANSACTIONS:") -> restoreTransactions(key.removePrefix("$KEY_TRANSACTIONS:"))
 
     key == KEY_CATEGORIES -> AppScreen.Categories
 
@@ -114,5 +132,37 @@ private fun restoreScreen(key: String): AppScreen? = when {
 
     key.startsWith("$KEY_RECOGNIZE:") -> AppScreen.Recognize(UUID.fromString(key.removePrefix("$KEY_RECOGNIZE:")))
 
+    key.startsWith("$KEY_RECONCILIATION:") ->
+        AppScreen.Reconciliation(YearMonth.parse(key.removePrefix("$KEY_RECONCILIATION:")))
+
     else -> null
+}
+
+// Категория не сохраняется: снаружи список открывают только со сверки, а она категорию не задаёт.
+private fun AppScreen.Transactions.saveKey(): String {
+    val f = filters ?: return KEY_TRANSACTIONS
+    return listOf(
+        f.period.name,
+        f.month?.toString().orEmpty(),
+        f.type?.name.orEmpty(),
+        f.accountId?.toString().orEmpty(),
+        f.unassigned.toString(),
+        reconciliation?.toString().orEmpty(),
+    ).joinToString(":", prefix = "$KEY_TRANSACTIONS:")
+}
+
+private fun restoreTransactions(value: String): AppScreen.Transactions {
+    val parts = value.split(':')
+    val (period, month, type, account, unassigned) = parts
+    val reconciliation = parts[5]
+    return AppScreen.Transactions(
+        filters = TransactionFilters(
+            period = TransactionPeriod.valueOf(period),
+            month = month.takeIf { it.isNotEmpty() }?.let(YearMonth::parse),
+            type = type.takeIf { it.isNotEmpty() }?.let(TransactionType::valueOf),
+            accountId = account.takeIf { it.isNotEmpty() }?.let(UUID::fromString),
+            unassigned = unassigned.toBooleanStrict(),
+        ),
+        reconciliation = reconciliation.takeIf { it.isNotEmpty() }?.let(YearMonth::parse),
+    )
 }

@@ -37,10 +37,12 @@ import tech.shatrov.familyfinances.ui.RowPlace
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.format.formatMoney
 import tech.shatrov.familyfinances.ui.format.formatMonth
+import tech.shatrov.familyfinances.ui.format.formatMonthName
 import tech.shatrov.familyfinances.ui.format.formatPercent
 import tech.shatrov.familyfinances.ui.groupedRow
 import tech.shatrov.familyfinances.ui.message
 import tech.shatrov.familyfinances.ui.rowPlace
+import java.time.YearMonth
 
 /** Сколько категорий помещается в карточку: остальное живёт на экране транзакций. */
 private const val TOP_CATEGORIES = 5
@@ -52,6 +54,9 @@ fun HomeScreen(
     onAddTransaction: () -> Unit,
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    card: ReconciliationCard = ReconciliationCard.Hidden,
+    onReconciliation: (YearMonth) -> Unit = {},
+    onAccounts: () -> Unit = {},
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         Row(
@@ -112,14 +117,19 @@ fun HomeScreen(
                         }
                     }
                 } else {
-                    Summary(state)
+                    Summary(state, card, onReconciliation, onAccounts)
                 }
         }
     }
 }
 
 @Composable
-private fun Summary(state: HomeUiState.Ready) {
+private fun Summary(
+    state: HomeUiState.Ready,
+    card: ReconciliationCard,
+    onReconciliation: (YearMonth) -> Unit,
+    onAccounts: () -> Unit,
+) {
     val summary = state.summary
     val topCategories = summary.expenseCategories.take(TOP_CATEGORIES)
     // Строки секции сливаются в одну панель, поэтому зазор между элементами нулевой: воздух
@@ -132,6 +142,10 @@ private fun Summary(state: HomeUiState.Ready) {
     ) {
         item {
             Totals(state)
+        }
+
+        if (card is ReconciliationCard.Ready || card is ReconciliationCard.NoAccounts) {
+            item { ReconciliationCardRow(card, onReconciliation, onAccounts) }
         }
 
         if (topCategories.isNotEmpty()) {
@@ -198,6 +212,51 @@ private fun Totals(state: HomeUiState.Ready) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+@Composable
+private fun ReconciliationCardRow(
+    card: ReconciliationCard,
+    onReconciliation: (YearMonth) -> Unit,
+    onAccounts: () -> Unit,
+) {
+    val ready = card as? ReconciliationCard.Ready
+    Row(
+        modifier = Modifier
+            .padding(top = Dimens.SPACE_4)
+            .fillMaxWidth()
+            .groupedRow(RowPlace.ONLY, LocalAppColors.current) {
+                if (ready == null) onAccounts() else onReconciliation(ready.month)
+            },
+        horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = if (ready == null) {
+                    stringResource(R.string.reconciliation_title)
+                } else {
+                    stringResource(R.string.home_reconciliation, formatMonthName(ready.month))
+                },
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            if (ready == null) {
+                Text(
+                    text = stringResource(R.string.home_reconciliation_no_accounts),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (ready != null) {
+            Text(
+                text = stringResource(R.string.home_reconciliation_matched, ready.matched, ready.total),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Icon(AppIcons.ChevronRight, contentDescription = null)
     }
 }
 

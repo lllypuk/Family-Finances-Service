@@ -114,6 +114,11 @@ class TransactionsViewModel(
         load(fromStart = true, reloadReferences = false)
     }
 
+    /** Фильтр, с которым экран открыли снаружи; тот же самый повторно список не перечитывает. */
+    fun applyFilters(next: TransactionFilters) {
+        if (mutableFilters.value != next) onFiltersChange(next)
+    }
+
     /**
      * Заход на экран и возврат из фона. Дата пересчитывается только в запросе, а кончившиеся
      * страницы запросов больше не делают: без этой проверки «этот месяц» остался бы прошлым.
@@ -182,6 +187,7 @@ class TransactionsViewModel(
         offset = offset,
         categoryId = mutableFilters.value.categoryId,
         accountId = mutableFilters.value.accountId,
+        unassigned = mutableFilters.value.unassigned.takeIf { it },
         type = mutableFilters.value.type,
         dateFrom = bounds.from,
         dateTo = bounds.to,

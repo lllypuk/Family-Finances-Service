@@ -13,6 +13,7 @@ import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import tech.shatrov.familyfinances.ui.UiError
 import tech.shatrov.familyfinances.ui.toUiError
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 
 sealed interface HomeUiState {
@@ -29,7 +30,35 @@ sealed interface HomeUiState {
     }
 }
 
-/** Главная — один `GET /stats/summary`: складывать несколько ответов на клиенте не приходится. */
+/** Карточка сверки на главной; [Loading] и [Hidden] не рисуются. */
+sealed interface ReconciliationCard {
+    data object Loading : ReconciliationCard
+
+    /** Пустая главная или отказ: сводка важнее, и карточка без неё не роняет экран. */
+    data object Hidden : ReconciliationCard
+
+    data object NoAccounts : ReconciliationCard
+
+    /** [matched] из [total] неархивных счетов сошлись с банком. */
+    data class Ready(
+        val month: YearMonth,
+        val matched: Int,
+        val total: Int,
+    ) : ReconciliationCard
+}
+
+/** День, с которого карточка переходит на текущий месяц: до него сверяют закончившийся. */
+private const val RECONCILE_CURRENT_FROM_DAY = 10
+
+fun reconciliationMonth(today: LocalDate): YearMonth {
+    val month = YearMonth.from(today)
+    return if (today.dayOfMonth < RECONCILE_CURRENT_FROM_DAY) month.minusMonths(1) else month
+}
+
+/**
+ * Главная — `GET /stats/summary`, за ним сверка месяца для карточки. Второй запрос идёт только
+ * после сводки: пустой семье карточка не рисуется.
+ */
 class HomeViewModel(
     private val api: ApiGraph,
     private val currency: String,
@@ -40,6 +69,10 @@ class HomeViewModel(
     private val mutable = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
 
     val state: StateFlow<HomeUiState> = mutable.asStateFlow()
+
+    private val mutableCard = MutableStateFlow<ReconciliationCard>(ReconciliationCard.Loading)
+
+    val card: StateFlow<ReconciliationCard> = mutableCard.asStateFlow()
 
     private var requestedOn: LocalDate? = null
     private var job: Job? = null
@@ -64,17 +97,38 @@ class HomeViewModel(
 
     fun refresh() {
         job?.cancel()
-        requestedOn = today()
+        val day = today()
+        requestedOn = day
         mutable.value = HomeUiState.Loading
+        mutableCard.value = ReconciliationCard.Loading
         job = viewModelScope.launch {
-            mutable.value = try {
+            val ready = try {
                 // Границы периода не задаём: текущий месяц сервер считает в часовом поясе семьи
                 // (A-06), а телефон может стоять в другом.
                 val summary = api.client.unwrap { api.stats.getStatsSummary() }.`data`
                 HomeUiState.Ready(summary, currency)
             } catch (failure: ApiFailure) {
-                HomeUiState.Failure(failure.toUiError())
+                mutable.value = HomeUiState.Failure(failure.toUiError())
+                mutableCard.value = ReconciliationCard.Hidden
+                return@launch
             }
+            mutable.value = ready
+            mutableCard.value = if (ready.isEmpty) ReconciliationCard.Hidden else loadCard(reconciliationMonth(day))
         }
+    }
+
+    private suspend fun loadCard(month: YearMonth): ReconciliationCard = try {
+        val rows = api.client
+            .unwrap { api.stats.getReconciliationStats(month.toString()) }
+            .`data`
+            .accounts
+            .filterNot { it.account.isArchived }
+        if (rows.isEmpty()) {
+            ReconciliationCard.NoAccounts
+        } else {
+            ReconciliationCard.Ready(month, matched = rows.count { it.diffMinor == 0L }, total = rows.size)
+        }
+    } catch (_: ApiFailure) {
+        ReconciliationCard.Hidden
     }
 }

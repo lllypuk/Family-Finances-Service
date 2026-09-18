@@ -66,10 +66,14 @@ import tech.shatrov.familyfinances.ui.message
 import tech.shatrov.familyfinances.ui.recognize.RecognizeScreen
 import tech.shatrov.familyfinances.ui.recognize.RecognizeViewModel
 import tech.shatrov.familyfinances.ui.recognize.rememberImportLaunchers
+import tech.shatrov.familyfinances.ui.reconciliation.ReconciliationScreen
+import tech.shatrov.familyfinances.ui.reconciliation.ReconciliationViewModel
 import tech.shatrov.familyfinances.ui.settings.SettingsHost
+import tech.shatrov.familyfinances.ui.settings.SettingsPage
 import tech.shatrov.familyfinances.ui.toUiError
 import tech.shatrov.familyfinances.ui.transactions.TransactionEditScreen
 import tech.shatrov.familyfinances.ui.transactions.TransactionEditViewModel
+import tech.shatrov.familyfinances.ui.transactions.TransactionFilters
 import tech.shatrov.familyfinances.ui.transactions.TransactionsScreen
 import tech.shatrov.familyfinances.ui.transactions.TransactionsViewModel
 import java.time.LocalDate
@@ -167,7 +171,8 @@ fun AppRoot(graph: AppGraph) {
         val id = pending ?: return@LaunchedEffect
         if (session == null) return@LaunchedEffect
         when (val current = screen) {
-            AppScreen.Home, AppScreen.Transactions, AppScreen.Budgets -> screen = AppScreen.Recognize(id)
+            AppScreen.Home, is AppScreen.Transactions, AppScreen.Budgets, is AppScreen.Reconciliation ->
+                screen = AppScreen.Recognize(id)
 
             AppScreen.Categories -> {
                 listStale = true
@@ -241,6 +246,7 @@ fun AppRoot(graph: AppGraph) {
                 HomeViewModel(graph.api, active.currency, active.zone)
             }
             val home by model.state.collectAsStateWithLifecycle()
+            val card by model.card.collectAsStateWithLifecycle()
             // На возврате из фона, а не только при заходе: модель живёт всю сессию, а сводка
             // посчитана по «сегодня» и границам месяца, которые под свёрнутым экраном сменились.
             LifecycleResumeEffect(homeStale) {
@@ -258,11 +264,14 @@ fun AppRoot(graph: AppGraph) {
                     onRetry = model::refresh,
                     onAddTransaction = { screen = AppScreen.TransactionEdit(null) },
                     onSettings = { screen = AppScreen.Settings() },
+                    card = card,
+                    onReconciliation = { screen = AppScreen.Reconciliation(it) },
+                    onAccounts = { screen = AppScreen.Settings(SettingsPage.Accounts()) },
                 )
             }
         }
 
-        AppScreen.Transactions -> WithSession(session) { active ->
+        is AppScreen.Transactions -> WithSession(session) { active ->
             val model: TransactionsViewModel = viewModel(key = "transactions-${active.user.id}-$epoch") {
                 TransactionsViewModel(graph.api, active)
             }
@@ -281,7 +290,19 @@ fun AppRoot(graph: AppGraph) {
                 }
                 onPauseOrDispose {}
             }
-            BackHandler { screen = AppScreen.Home }
+            // Фильтр снаружи ставится один раз на ключ экрана: повторная композиция после поворота
+            // иначе вернула бы его поверх того, что пользователь выбрал чипами.
+            LaunchedEffect(current.filters) { current.filters?.let(model::applyFilters) }
+            val drillFrom = current.reconciliation
+            BackHandler {
+                if (drillFrom == null) {
+                    screen = AppScreen.Home
+                } else {
+                    // Вкладка «Операции» после сверки открывалась бы на расшифровке её строки.
+                    model.onFiltersChange(TransactionFilters())
+                    screen = AppScreen.Reconciliation(drillFrom)
+                }
+            }
             WithNavBar(
                 AppTab.TRANSACTIONS,
                 onSelect = { screen = it.screen },
@@ -293,7 +314,10 @@ fun AppRoot(graph: AppGraph) {
                     categories = categories,
                     accounts = accounts,
                     onRetry = model::refresh,
-                    onFiltersChange = model::onFiltersChange,
+                    onFiltersChange = { next ->
+                        model.onFiltersChange(next)
+                        if (current.filters != null) screen = current.copy(filters = next)
+                    },
                     onLoadMore = model::loadMore,
                     onCreate = { screen = AppScreen.TransactionEdit(null) },
                     onOpen = { screen = AppScreen.TransactionEdit(it) },
@@ -380,6 +404,47 @@ fun AppRoot(graph: AppGraph) {
                     onOpen = { screen = AppScreen.BudgetEdit(it) },
                 )
             }
+        }
+
+        is AppScreen.Reconciliation -> WithSession(session) { active ->
+            val model: ReconciliationViewModel = viewModel(key = "reconciliation-${active.user.id}-$epoch") {
+                ReconciliationViewModel(graph.api)
+            }
+            val reconciliation by model.state.collectAsStateWithLifecycle()
+            val editor by model.editor.collectAsStateWithLifecycle()
+            // Каждый заход и смена месяца: строки считаются из операций, а их правят и на расшифровке.
+            LifecycleResumeEffect(current.month) {
+                model.load(current.month)
+                onPauseOrDispose {}
+            }
+            // Карточка главной считает «N из M» по тем же сверкам.
+            val leave = {
+                homeStale = true
+                screen = AppScreen.Home
+            }
+            BackHandler { leave() }
+            ReconciliationScreen(
+                month = current.month,
+                state = reconciliation,
+                editor = editor,
+                currency = active.currency,
+                onBack = leave,
+                onMonthChange = { screen = AppScreen.Reconciliation(it) },
+                onRetry = model::refresh,
+                onOpenTransactions = { account ->
+                    screen = AppScreen.Transactions(
+                        filters = TransactionFilters.reconciliation(current.month, account),
+                        reconciliation = current.month,
+                    )
+                },
+                onOpenBank = model::onOpenBank,
+                onAddAccount = { screen = AppScreen.Settings(SettingsPage.Accounts()) },
+                onAmountChange = model::onAmountChange,
+                onNoteChange = model::onNoteChange,
+                onSave = model::onSave,
+                onDelete = model::onDelete,
+                onDismissBank = model::onDismissBank,
+            )
         }
 
         is AppScreen.Settings -> WithSession(session) { active ->
@@ -490,7 +555,7 @@ fun AppRoot(graph: AppGraph) {
                     budgetsStale = true
                 }
             }
-            val leave = { if (!recognize.saving) screen = AppScreen.Transactions }
+            val leave = { if (!recognize.saving) screen = AppScreen.Transactions() }
             BackHandler { leave() }
             RecognizeScreen(
                 state = recognize,
@@ -530,12 +595,12 @@ fun AppRoot(graph: AppGraph) {
                     homeStale = true
                     // Операция меняет `spent` бюджета своей категории.
                     budgetsStale = true
-                    screen = AppScreen.Transactions
+                    screen = AppScreen.Transactions()
                 }
             }
             // Уход с формы во время отправки убил бы её корутину: запись сервер уже мог
             // принять, а список о ней не узнал бы — и повтор создал бы вторую с новым черновиком.
-            val leave = { if (!edit.submitting) screen = AppScreen.Transactions }
+            val leave = { if (!edit.submitting) screen = AppScreen.Transactions() }
             BackHandler { leave() }
             TransactionEditScreen(
                 state = edit,
@@ -621,7 +686,7 @@ private fun AddFab(
 private val AppTab.screen: AppScreen
     get() = when (this) {
         AppTab.HOME -> AppScreen.Home
-        AppTab.TRANSACTIONS -> AppScreen.Transactions
+        AppTab.TRANSACTIONS -> AppScreen.Transactions()
         AppTab.CATEGORIES -> AppScreen.Categories
         AppTab.BUDGETS -> AppScreen.Budgets
     }

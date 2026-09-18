@@ -41,6 +41,7 @@ import tech.shatrov.familyfinances.ui.RowPlace
 import tech.shatrov.familyfinances.ui.SegmentedChoice
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.format.formatMoney
+import tech.shatrov.familyfinances.ui.format.formatMonth
 import tech.shatrov.familyfinances.ui.groupedRow
 import tech.shatrov.familyfinances.ui.message
 import tech.shatrov.familyfinances.ui.recognize.ImportLaunchers
@@ -123,7 +124,7 @@ fun TransactionsScreen(
             selected = filters.accountId,
             noneLabel = stringResource(R.string.filter_all_accounts),
             onSelect = {
-                onFiltersChange(filters.copy(accountId = it))
+                onFiltersChange(filters.withAccount(it))
                 accountSheet = false
             },
             onDismiss = { accountSheet = false },
@@ -150,6 +151,7 @@ private fun Filters(
         else -> categories.firstOrNull { it.id == filters.categoryId }?.path(categories) ?: "—"
     }
     val accountLabel = when {
+        filters.unassigned -> stringResource(R.string.transaction_no_account)
         filters.accountId == null -> stringResource(R.string.filter_all_accounts)
         else -> accounts.firstOrNull { it.id == filters.accountId }?.label() ?: "—"
     }
@@ -165,9 +167,15 @@ private fun Filters(
             modifier = Modifier.padding(horizontal = Dimens.SPACE_4),
         )
         ChipRow(Modifier.padding(horizontal = Dimens.SPACE_4)) {
+            // Месяц приходит только со сверки: своего чипа у него нет, а без этого выбранный
+            // период не был бы виден ни в одном из трёх.
+            val month = filters.month
+            if (filters.period == TransactionPeriod.MONTH && month != null) {
+                item { Chip(formatMonth(month.atDay(1)), selected = true) {} }
+            }
             item {
                 Chip(stringResource(R.string.filter_all), filters.period == TransactionPeriod.ALL) {
-                    onChange(filters.copy(period = TransactionPeriod.ALL))
+                    onChange(filters.withPeriod(TransactionPeriod.ALL))
                 }
             }
             item {
@@ -175,7 +183,7 @@ private fun Filters(
                     stringResource(R.string.filter_this_month),
                     filters.period == TransactionPeriod.THIS_MONTH,
                 ) {
-                    onChange(filters.copy(period = TransactionPeriod.THIS_MONTH))
+                    onChange(filters.withPeriod(TransactionPeriod.THIS_MONTH))
                 }
             }
             item {
@@ -183,16 +191,16 @@ private fun Filters(
                     stringResource(R.string.filter_prev_month),
                     filters.period == TransactionPeriod.PREV_MONTH,
                 ) {
-                    onChange(filters.copy(period = TransactionPeriod.PREV_MONTH))
+                    onChange(filters.withPeriod(TransactionPeriod.PREV_MONTH))
                 }
             }
             item {
                 Chip(categoryLabel, filters.categoryId != null, onClick = onPickCategory)
             }
             // Без счетов у семьи чип был бы выбором из одного «Все счета».
-            if (accounts.isNotEmpty() || filters.accountId != null) {
+            if (accounts.isNotEmpty() || filters.accountId != null || filters.unassigned) {
                 item {
-                    Chip(accountLabel, filters.accountId != null, onClick = onPickAccount)
+                    Chip(accountLabel, filters.accountId != null || filters.unassigned, onClick = onPickAccount)
                 }
             }
         }
