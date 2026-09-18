@@ -170,6 +170,9 @@ opposite case: it drops `budgets.recurring` and `budgets.series_id`, so every re
 becomes an ordinary one and the link between the instances of a series is gone for good. If series
 already exist, the rollback is a snapshot restore, not `migrate --to 2`.
 
+`005` (v0.6.0) is the same kind: `migrate --to 4` drops `accounts`, `account_reconciliations` and every
+`transactions.account_id`. Once accounts are in use, roll back by snapshot restore.
+
 ## Backups
 
 `family-budget-service backup` runs `VACUUM INTO` against the live database and keeps the newest

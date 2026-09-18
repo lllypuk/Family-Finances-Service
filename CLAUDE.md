@@ -121,8 +121,8 @@ it is a plain `404`, with a token and without one.
   applies until the proxy CIDR is listed. Integration tests that need the IP limit pass
   `testhelpers.WithTrustedProxies(t, "192.0.2.0/24")` (httptest's `RemoteAddr`).
 - **Role gates** are built from `auth.RequireRole(roles...)`: `adminOnly` for `/api/v1/users`,
-  `DELETE /api/v1/categories/:id`, `/api/v1/backups` and `PUT /api/v1/family`; `financeAccess` (admin or member)
-  for categories/transactions/budgets/stats; `GET /api/v1/family` and the `/auth/*`, `/me*` routes are
+  `DELETE /api/v1/categories/:id`, `DELETE /api/v1/accounts/:id`, `/api/v1/backups` and `PUT /api/v1/family`;
+  `financeAccess` (admin or member) for categories/accounts/transactions/budgets/stats; `GET /api/v1/family` and the `/auth/*`, `/me*` routes are
   open to any authenticated role. Wrong role → `403 FORBIDDEN`.
 - **User writes are column-scoped, and session revocation rides along.** `UserRepository.Update` writes only
   `email`/`first_name`/`last_name`; password, role and `is_active` go through
@@ -293,7 +293,7 @@ on it.
 - **A transaction date is `date.Date`** (`internal/domain/date`) — a calendar `YYYY-MM-DD` with no time or zone,
   `TEXT` in SQLite (CHECK GLOB). Only `created_at`/`updated_at`/`expires_at` stay RFC3339 UTC. Period bounds
   ("current month") are computed in `family.Timezone`, not in the server's zone.
-- **`POST` of a transaction, budget or category is idempotent** when the body carries a client-generated
+- **`POST` of a transaction, budget, category or account is idempotent** when the body carries a client-generated
   `id` (any valid UUID): an existing record answers `200` with itself and the repeated body is ignored — the id is
   the only thing compared. The check is a plain read-then-insert; two simultaneous retries can still collide.
 - **Budget business refusals are `409` with their own codes** — `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`,

@@ -37,10 +37,13 @@ sealed interface AppScreen {
      * Форма операции; `id` = `null` — новая, тело правки перечитывается с сервера.
      * `draft` — клиентский UUID создаваемой записи: он же ключ модели, поэтому следующий заход
      * на форму получает чистую, а повтор после обрыва — ту же и не создаёт вторую запись.
+     * `back` — список, куда форма возвращает; в бандл не пишется: после смерти процесса фильтра
+     * расшифровки в модели списка уже нет.
      */
     data class TransactionEdit(
         val id: UUID?,
         val draft: UUID = UUID.randomUUID(),
+        val back: Transactions = Transactions(),
     ) : AppScreen
 
     data object Budgets : AppScreen

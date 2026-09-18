@@ -294,19 +294,18 @@ fun AppRoot(graph: AppGraph) {
             // иначе вернула бы его поверх того, что пользователь выбрал чипами.
             LaunchedEffect(current.filters) { current.filters?.let(model::applyFilters) }
             val drillFrom = current.reconciliation
-            BackHandler {
-                if (drillFrom == null) {
-                    screen = AppScreen.Home
-                } else {
-                    // Вкладка «Операции» после сверки открывалась бы на расшифровке её строки.
-                    model.onFiltersChange(TransactionFilters())
-                    screen = AppScreen.Reconciliation(drillFrom)
-                }
+            // Вкладка «Операции» после сверки открывалась бы на расшифровке её строки.
+            val leave = { next: AppScreen ->
+                if (drillFrom != null) model.onFiltersChange(TransactionFilters())
+                screen = next
             }
+            BackHandler { leave(drillFrom?.let(AppScreen::Reconciliation) ?: AppScreen.Home) }
             WithNavBar(
                 AppTab.TRANSACTIONS,
-                onSelect = { screen = it.screen },
-                fab = { AddFab({ screen = AppScreen.TransactionEdit(null) }, R.string.transactions_add) },
+                onSelect = { leave(it.screen) },
+                fab = {
+                    AddFab({ screen = AppScreen.TransactionEdit(null, back = current) }, R.string.transactions_add)
+                },
             ) {
                 TransactionsScreen(
                     state = transactions,
@@ -319,8 +318,8 @@ fun AppRoot(graph: AppGraph) {
                         if (current.filters != null) screen = current.copy(filters = next)
                     },
                     onLoadMore = model::loadMore,
-                    onCreate = { screen = AppScreen.TransactionEdit(null) },
-                    onOpen = { screen = AppScreen.TransactionEdit(it) },
+                    onCreate = { screen = AppScreen.TransactionEdit(null, back = current) },
+                    onOpen = { screen = AppScreen.TransactionEdit(it, back = current) },
                     importLaunchers = importLaunchers,
                 )
             }
@@ -595,12 +594,12 @@ fun AppRoot(graph: AppGraph) {
                     homeStale = true
                     // Операция меняет `spent` бюджета своей категории.
                     budgetsStale = true
-                    screen = AppScreen.Transactions()
+                    screen = current.back
                 }
             }
             // Уход с формы во время отправки убил бы её корутину: запись сервер уже мог
             // принять, а список о ней не узнал бы — и повтор создал бы вторую с новым черновиком.
-            val leave = { if (!edit.submitting) screen = AppScreen.Transactions() }
+            val leave = { if (!edit.submitting) screen = current.back }
             BackHandler { leave() }
             TransactionEditScreen(
                 state = edit,

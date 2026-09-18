@@ -10,9 +10,6 @@ import (
 	"family-budget-service/internal/domain/money"
 )
 
-// MaxNoteLength — предел заметки в символах.
-const MaxNoteLength = 500
-
 var (
 	ErrNotFound = errors.New("reconciliation not found")
 	// ErrAmountOutOfRange — сумма банка вне 0…money.MaxAmount.

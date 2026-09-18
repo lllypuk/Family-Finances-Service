@@ -127,6 +127,8 @@ func TestTransactionAccounts_CreateAndFilter(t *testing.T) {
 
 	rec = s.do(t, http.MethodGet, "/api/v1/transactions?unassigned=true&account_id="+card.String(), "")
 	requireFieldError(t, rec, "unassigned")
+	requireFieldError(t, s.do(t, http.MethodGet, "/api/v1/transactions?account_id=not-a-uuid", ""), "account_id")
+	requireFieldError(t, s.do(t, http.MethodGet, "/api/v1/transactions?unassigned=maybe", ""), "unassigned")
 }
 
 func TestTransactionAccounts_RefusedAccounts(t *testing.T) {
@@ -166,6 +168,24 @@ func TestTransactionAccounts_Update(t *testing.T) {
 	rec = s.do(t, http.MethodPut, path, `{"clear_account":true}`)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.Nil(t, decodeTransaction(t, rec).AccountID)
+	assert.Nil(t, s.stored(t, tx.ID).AccountID)
+
+	cash := s.account(t, "Наличные")
+	rec = s.do(t, http.MethodPut, path, fmt.Sprintf(`{"account_id":%q}`, cash))
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	stored := s.stored(t, tx.ID).AccountID
+	require.NotNil(t, stored)
+	assert.Equal(t, cash, *stored)
+}
+
+// stored перечитывает операцию: ответ PUT отдаёт объект из памяти сервиса, а не из базы.
+func (s *accountStand) stored(t *testing.T, id uuid.UUID) handlers.TransactionResponse {
+	t.Helper()
+
+	rec := s.do(t, http.MethodGet, "/api/v1/transactions/"+id.String(), "")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	return decodeTransaction(t, rec)
 }
 
 func TestTransactionAccounts_DeleteAccountInUse(t *testing.T) {

@@ -2,8 +2,10 @@ package integration_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -104,6 +106,17 @@ func TestReconciliationAPI_Errors(t *testing.T) {
 	}{
 		{"unknown account", http.MethodPut, "/api/v1/accounts/" + uuid.NewString() + "/reconciliations/2026-09",
 			`{"bank_expense_minor":1}`, http.StatusNotFound, handlers.ErrCodeAccountNotFound},
+		{
+			"delete unknown account",
+			http.MethodDelete,
+			"/api/v1/accounts/" + uuid.NewString() + "/reconciliations/2026-09",
+			"",
+			http.StatusNotFound,
+			handlers.ErrCodeAccountNotFound,
+		},
+		{"note too long", http.MethodPut, base + "2026-09",
+			fmt.Sprintf(`{"bank_expense_minor":1,"note":%q}`, strings.Repeat("я", 501)),
+			http.StatusUnprocessableEntity, handlers.ErrCodeValidationError},
 		{"no reconciliation", http.MethodDelete, base + "2026-09", "",
 			http.StatusNotFound, handlers.ErrCodeReconciliationNotFound},
 		{"bad month", http.MethodPut, base + "2026-13", `{"bank_expense_minor":1}`,
