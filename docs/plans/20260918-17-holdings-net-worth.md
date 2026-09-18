@@ -314,10 +314,11 @@ API (`financeAccess`, кроме помеченного):
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] все пункты Overview реализованы
-- [ ] `make fmt && make test && make lint` — 0 issues; `make compose-config`
-- [ ] `make -C android check`; `make -C android api-check` — на чистом дереве после коммита
-- [ ] копия прод-базы: `migrate --to 6` → `--to 5` → `--to 6`, `PRAGMA foreign_key_check`
+- [x] все пункты Overview реализованы
+- [x] `make fmt && make test && make lint` — 0 issues; `make compose-config`
+- [x] `make -C android check`; `make -C android api-check` — на чистом дереве после коммита
+- [x] копия прод-базы: `migrate --to 6` → `--to 5` → `--to 6`, `PRAGMA foreign_key_check`
+  - ⚠️ прогнано на копии локальной `data/budget.db` (1 → 6 → 5 → 6, FK чисто); копия прод-базы (skipped - not automatable) — повторить перед выкаткой `v0.7.0`
 
 ### Task 10: [Final] Update documentation
 
