@@ -2,6 +2,20 @@
 
 All notable changes to database migrations will be documented in this file.
 
+## [2026-09-18] - Plan 16: accounts and reconciliations
+
+### Added
+- `accounts` (`name_key` UNIQUE в семье, `is_archived`, триггер `update_accounts_updated_at`),
+  `account_reconciliations` (PK `(account_id, month)`, `bank_expense_minor >= 0`),
+  `transactions.account_id` (FK `RESTRICT`) и `idx_transactions_account_date`.
+- `005_accounts.{up,down}.sql` — то же для базы версии 4. `account_id` добавляется пересборкой
+  `transactions`, чтобы колонка встала на тот же `cid`, что в `001`; блок `transactions` в `005`
+  заморожен на схеме `v0.6.0`, как `budgets` в `002`.
+
+### Rollback
+- `005.down` удаляет счета, сверки и `account_id`: операции остаются, их привязка к счетам и все сверки
+  теряются. Перед `migrate --to 4` — бэкап.
+
 ## [2026-09-14] - Plan 12: recurring budgets
 
 ### Added

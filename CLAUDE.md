@@ -220,7 +220,7 @@ list is in `docs/plans/completed/20260915-14-prometheus-metrics.md`, the deploym
 ## Database & migrations
 
 The whole schema lives in `migrations/001_consolidated.{up,down}.sql`
-(tables: families, users, categories, transactions, budgets, sessions) — that file is the readable
+(tables: families, users, categories, accounts, transactions, account_reconciliations, budgets, sessions) — that file is the readable
 picture of the database, and a fresh DB is built from it.
 
 **Editing `001` does not touch an existing database.** golang-migrate stores only the version number, so on a DB
@@ -235,7 +235,9 @@ table definition must stay frozen on the `v0.2.0` schema: a column added later l
 `004` puts it back. Never add a column to the `budgets` block inside `002` — it must keep reproducing the
 released schema, or the upgrade path it tests is not the one the server runs. Cover it in
 `internal/infrastructure/migrations_test.go`: `Migrate(1)` puts the released schema back, so the upgrade path is
-testable. See `migrations/README.md`, and `make migrate-create` for the reminder.
+testable. The same freeze holds for `transactions` inside `005_accounts`: it rebuilds the table (not
+`ADD COLUMN`, which would fail on a fresh DB and put `account_id` at a different `cid`), so its definition stays
+on the `v0.6.0` schema, and the next transaction column goes into `001` *and* its own `NNN`. See `migrations/README.md`, and `make migrate-create` for the reminder.
 
 `go run ./cmd/server migrate` prints the schema version, `migrate --to N` moves it in either direction
 (`--to 0` is rejected: golang-migrate answers `Migrate(0)` with "file does not exist"). This is the rollback
@@ -247,7 +249,8 @@ Two independent code paths apply migrations, and **both must keep working**:
 - production/dev: golang-migrate (`internal/infrastructure/migrations.go`)
 - tests: `internal/testhelpers/sqlite.go` reads and executes the `*.up.sql` files directly
 
-`testhelpers.SQLiteTestDB.CleanTables` has a hardcoded, FK-ordered table list — add any new table to it.
+`testhelpers.SQLiteTestDB.CleanTables` has a hardcoded, FK-ordered table list — add any new table to it
+(`account_reconciliations` before `transactions` before `accounts`: both FKs to `accounts` are `RESTRICT`).
 
 SQLite is opened with `_txlock=immediate` (`infrastructure.NewSQLiteConnection`), so every `BeginTx` takes the
 write lock up front; with `MaxOpenConns=1` this is invisible, but do not "optimise" it away — `Bootstrap` relies
@@ -320,6 +323,18 @@ on it.
   materialisation cannot both land on one month; `Update` never writes the `spent_minor` it is handed —
   it recomputes it from the transactions inside its own transaction (`syncSpent`), so a shifted period and the
   expense sum commit together and a concurrent expense cannot be overwritten by a stale total.
+- **Accounts are optional on a transaction.** In `PUT /transactions/:id` a missing (or `null`) `account_id` keeps
+  the stored one — the client sends with `explicitNulls = false`, so `null` cannot mean "unbind"; unbinding is
+  `clear_account: true`, both at once is `422`. An unknown or archived account is `422 field: account_id`, but only
+  when the id differs from the stored one: editing a transaction whose account was archived later still passes.
+  Deleting an account used by a transaction **or** a reconciliation is `409 ACCOUNT_IN_USE` (both FKs `RESTRICT`,
+  a cascade would take the reconciliation history); a reissued card is archived. The name is unique per family by
+  `names.Key` (Go-side `ToLower(TrimSpace)`, since `NOCASE` folds ASCII only) — never change it after a release,
+  it defines the stored `name_key`.
+- **A reconciliation stores only the bank's figure.** `recorded_minor` of `GET /stats/reconciliation` is summed
+  on read over `type = 'expense'` of the month (`RecordedByAccount`), so a late transaction closes the gap
+  without a new `PUT`; a refund booked as income does not reduce it. Having a reconciliation means having the
+  row — a `0` counts, and blocks `CURRENCY_LOCKED` like a transaction does (`FamilyRepository.HasMonetaryData`).
 - **Fractions come in two units.** Shares (`share`, `*_delta`, `stats.budgets[].utilization`) are 0…1; fields named
   `percentage` and `budgets[].utilization` on `/budgets` are percent 0…100. Both are documented per field in
   `docs/api/openapi.yaml`.

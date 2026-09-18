@@ -291,9 +291,9 @@ API (`financeAccess`, кроме помеченного):
 **Files:**
 - Modify: `CLAUDE.md`, `migrations/README.md`, `migrations/CHANGELOG.md`, `docs/api/README.md`, `docs/backlog.md`
 
-- [ ] `CLAUDE.md`: таблицы схемы; заморозка блока `transactions` в `005` рядом с правилом про `002`; «Conventions» — счёт без отвязки, `recorded` только расходы и на чтении, `ACCOUNT_IN_USE`; `CleanTables`
-- [ ] `migrations/README.md` и `CHANGELOG.md`: `005`, потери при откате (связи со счетами, сверки)
-- [ ] `docs/api/README.md`: новые операции
+- [x] `CLAUDE.md`: таблицы схемы; заморозка блока `transactions` в `005` рядом с правилом про `002`; «Conventions» — счёт без отвязки, `recorded` только расходы и на чтении, `ACCOUNT_IN_USE`; `CleanTables`
+- [x] `migrations/README.md` и `CHANGELOG.md`: `005`, потери при откате (связи со счетами, сверки)
+- [x] `docs/api/README.md`: новые операции
 
 ### Task 7: Клиент — `ApiGraph` и «Счета» в настройках
 

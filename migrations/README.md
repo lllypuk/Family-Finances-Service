@@ -13,6 +13,7 @@ migration next to it — an already-applied `001` is never re-run (see "Changing
 - `002_budgets_name_period_partial_unique.{up,down}.sql` - the budget name/period `UNIQUE` → partial index
 - `003_drop_reports.{up,down}.sql` - the `reports` table dropped (plan 10)
 - `004_budgets_recurring.{up,down}.sql` - `budgets.recurring` / `budgets.series_id` (plan 12)
+- `005_accounts.{up,down}.sql` - `accounts`, `account_reconciliations`, `transactions.account_id` (plan 16)
 
 ### Why Consolidated Migrations?
 
@@ -34,12 +35,14 @@ Contains all database objects in order of dependencies:
    | `families` | `singleton` UNIQUE — ровно одна семья на инсталляцию; `timezone` (IANA) |
    | `users` | `role` CHECK (`admin`/`member`), `is_active` |
    | `categories` | `income`/`expense`, самоссылка `parent_id`, `color`/`icon` для клиента |
-   | `transactions` | `amount_minor INTEGER > 0`, `date TEXT 'YYYY-MM-DD'` (CHECK GLOB) |
+   | `accounts` | справочник счетов; `name_key` UNIQUE в семье, `is_archived` |
+   | `transactions` | `amount_minor INTEGER > 0`, `date TEXT 'YYYY-MM-DD'` (CHECK GLOB), `account_id` nullable, FK `RESTRICT` |
+   | `account_reconciliations` | цифра банка на счёт и месяц (`YYYY-MM`), PK `(account_id, month)`, FK `RESTRICT` |
    | `budgets` | `amount_minor`, `spent_minor`, период `start_date`/`end_date` — `TEXT`-даты |
    | `sessions` | bearer-токены: только `token_hash` |
 
 2. **Indexes**: только те, что закрывают реальные запросы (семья+дата, категория, автор)
-3. **Triggers**: `updated_at` для families, users, categories, transactions, budgets
+3. **Triggers**: `updated_at` для families, users, categories, accounts, transactions, budgets; у сверок триггера нет — `updated_at` пишет upsert
 4. **Analytics**: Statistics updates (ANALYZE)
 
 `budget_alerts`, `invites` и `user_sessions` удалены; таблицу `schema_migrations` ведёт golang-migrate.
@@ -71,6 +74,10 @@ column added later lives in `001` (for a new install) and in its own `NNN` — a
 drops what `001` created, because its `INSERT ... SELECT` lists the columns of that older table. `004` then puts
 `recurring` / `series_id` back. Do not add new columns to the `budgets` definition inside `002`: it must keep
 reproducing the released schema, or the upgrade path it tests stops being the one the server runs.
+
+`005` has the same shape for `transactions`: `account_id` comes in by a rebuild (`ADD COLUMN` would fail with
+`duplicate column` on a fresh database, where `001` already created it), so the `transactions` block inside
+`005` is frozen on the `v0.6.0` schema. A later transaction column goes into `001` and its own `NNN`.
 
 Cover the step in `internal/infrastructure/migrations_test.go`: `manager.Migrate(N-1)` puts the released schema
 back on a temp file, so the upgrade a server will actually run is what the test exercises.
@@ -204,6 +211,7 @@ SELECT * FROM schema_migrations;
 | 002 | Plan 09: табличный `UNIQUE` бюджетов → частичный индекс `idx_budgets_name_period_active` (`WHERE is_active = 1`) пересборкой таблицы | 2026-09-12 |
 | 003 | Plan 10: таблица `reports` и её индексы удалены вместе с `/api/v1/reports` | 2026-09-13 |
 | 004 | Plan 12: `budgets.recurring` и `budgets.series_id` — периодические бюджеты | 2026-09-14 |
+| 005 | Plan 16: счета, сверки, `transactions.account_id` пересборкой таблицы; откат теряет счета, сверки и привязку операций | 2026-09-18 |
 
 ## See Also
 
