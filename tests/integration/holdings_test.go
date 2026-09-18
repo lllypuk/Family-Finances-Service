@@ -120,6 +120,8 @@ func TestHoldingsAPI_Validation(t *testing.T) {
 		`{"name":"Квартира","side":"asset","kind":"property"}`))
 	rec = doAccountRequest(t, ts, admin, http.MethodPut, "/api/v1/holdings/"+created.ID.String(), `{"kind":"loan"}`)
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+	rec = doAccountRequest(t, ts, admin, http.MethodPut, "/api/v1/holdings/"+created.ID.String(), `{"name":"  "}`)
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, "пустое имя в PUT — 422, а не CHECK базы")
 
 	rec = doAccountRequest(t, ts, admin, http.MethodPost, "/api/v1/holdings",
 		`{"name":" квартира","side":"liability","kind":"loan"}`)
@@ -139,10 +141,20 @@ func TestHoldingsAPI_Roles(t *testing.T) {
 	rec = doAccountRequest(t, ts, member, http.MethodPut, "/api/v1/holdings/"+id, `{"is_archived":true}`)
 	assert.Equal(t, http.StatusOK, rec.Code)
 
+	day := date.Today(ts.AuthFamily.Location()).String()
+	rec = doAccountRequest(t, ts, member, http.MethodPut, "/api/v1/holdings/"+id+"/values/"+day, `{"value_minor":1}`)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	rec = doGET(t, ts, member, "/api/v1/holdings/"+id+"/values")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	rec = doAccountRequest(t, ts, member, http.MethodDelete, "/api/v1/holdings/"+id+"/values/"+day, "")
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+
 	rec = doAccountRequest(t, ts, member, http.MethodDelete, "/api/v1/holdings/"+id, "")
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 
 	rec = doAccountRequest(t, ts, nil, http.MethodGet, "/api/v1/holdings", "")
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	rec = doAccountRequest(t, ts, nil, http.MethodGet, "/api/v1/holdings/"+id+"/values", "")
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 

@@ -85,8 +85,8 @@ func ValidSide(side Side) bool {
 	return side == SideAsset || side == SideLiability
 }
 
-// Kinds — допустимые виды стороны; в SQL этого списка нет.
-func Kinds(side Side) []Kind {
+// kinds — допустимые виды стороны; в SQL этого списка нет.
+func kinds(side Side) []Kind {
 	switch side {
 	case SideAsset:
 		return []Kind{KindCash, KindDeposit, KindInvestment, KindProperty, KindVehicle, KindOther}
@@ -98,7 +98,7 @@ func Kinds(side Side) []Kind {
 }
 
 func ValidKind(side Side, kind Kind) bool {
-	return slices.Contains(Kinds(side), kind)
+	return slices.Contains(kinds(side), kind)
 }
 
 // NormalizeName обрезает пробелы по краям и проверяет длину.

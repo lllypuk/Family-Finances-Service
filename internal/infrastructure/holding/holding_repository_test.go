@@ -152,6 +152,12 @@ func TestHoldingRepository_Update_KeepsFieldsNotGiven(t *testing.T) {
 	assert.True(t, got.IsArchived)
 	assert.Equal(t, holding.SideLiability, got.Side)
 
+	restored := false
+	require.NoError(t, repo.Update(t.Context(), h.ID, nil, nil, &restored))
+	got, err = repo.GetByID(t.Context(), h.ID, today())
+	require.NoError(t, err)
+	assert.False(t, got.IsArchived, "false — это значение, а не «не передано»")
+
 	clash := "КРЕДИТ"
 	require.ErrorIs(t, repo.Update(t.Context(), h.ID, &clash, nil, nil), holding.ErrNameExists)
 	require.ErrorIs(t, repo.Update(t.Context(), uuid.New(), &name, nil, nil), holding.ErrNotFound)
@@ -249,6 +255,9 @@ func TestHoldingRepository_SeriesValues(t *testing.T) {
 	putValue(t, db, loan.ID, "2026-03-05", 50)
 	putValue(t, db, loan.ID, "2026-03-20", 40)
 	putValue(t, db, loan.ID, "2026-06-01", 10)
+	edge := create(t, repo, "Вклад", holding.SideAsset)
+	putValue(t, db, edge.ID, "2026-03-15", 5)
+	putValue(t, db, edge.ID, "2026-05-31", 6)
 	putValue(t, db, old.ID, "2025-02-01", 70)
 	archive(t, repo, old.ID)
 
@@ -269,7 +278,9 @@ func TestHoldingRepository_SeriesValues(t *testing.T) {
 		{old.ID, holding.SideAsset, "2025-02-01", 70},
 		{flat.ID, holding.SideAsset, "2025-12-01", 300},
 		{loan.ID, holding.SideLiability, "2026-03-05", 50},
+		{edge.ID, holding.SideAsset, "2026-03-15", 5},
 		{loan.ID, holding.SideLiability, "2026-03-20", 40},
 		{flat.ID, holding.SideAsset, "2026-04-01", 400},
+		{edge.ID, holding.SideAsset, "2026-05-31", 6},
 	}, actual, "из снимков до from — только последний, в том числе внутри месяца from; архивная на месте; по дате")
 }

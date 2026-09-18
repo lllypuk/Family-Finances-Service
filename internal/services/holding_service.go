@@ -137,9 +137,6 @@ func (s *holdingService) PutValue(
 	if err = holding.CheckValueDate(day, today); err != nil {
 		return nil, err
 	}
-	if _, err = s.repo.GetByID(ctx, id, today); err != nil {
-		return nil, err
-	}
 
 	v := &holding.Value{Date: day, ValueMinor: value}
 	if err = s.repo.UpsertValue(ctx, id, v); err != nil {

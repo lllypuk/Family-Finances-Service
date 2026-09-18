@@ -45,7 +45,8 @@ Layered/Clean architecture, single Go module `family-budget-service`. Wiring hap
    `services.NewServices(...)` → `*services.Services` (`Services.Auth`). `StatsService.Summary(ctx, from, to)` owns
    the dashboard arithmetic behind `GET /api/v1/stats/summary`, `StatsService.Monthly(ctx, from, to)` the month
    series behind `GET /api/v1/stats/monthly` (capped at `monthlyMaxMonths` = 120 buckets, since the bounds
-   come from the client); the handler only formats.
+   come from the client), `StatsService.NetWorth(ctx, from, to)` the one behind `GET /api/v1/stats/net-worth`
+   (same bounds and cap, `to` after today is `422`); the handler only formats.
 5. `application.NewHTTPServerWithObservability(...)` — builds the Echo instance and registers `/health` and
    `/api/v1`. Nothing else is served: no HTML, no static files, no CORS. The metrics registry reaches it as
    `application.Config.Metrics`.

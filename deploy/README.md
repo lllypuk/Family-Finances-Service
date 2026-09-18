@@ -173,6 +173,9 @@ already exist, the rollback is a snapshot restore, not `migrate --to 2`.
 `005` (v0.6.0) is the same kind: `migrate --to 4` drops `accounts`, `account_reconciliations` and every
 `transactions.account_id`. Once accounts are in use, roll back by snapshot restore.
 
+`006` (v0.7.0): `migrate --to 5` drops `holdings` and `holding_values` with the whole snapshot history.
+Once holdings are in use, roll back by snapshot restore.
+
 ## Backups
 
 `family-budget-service backup` runs `VACUUM INTO` against the live database and keeps the newest

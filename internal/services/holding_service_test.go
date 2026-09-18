@@ -156,6 +156,23 @@ func TestHoldingService_Update_KindCheckedAgainstStoredSide(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
+func TestHoldingService_Update_Name(t *testing.T) {
+	svc, repo, today := setupHoldingService(t)
+	id := uuid.New()
+	trimmed := "Дача"
+	repo.On("Update", mock.Anything, id, &trimmed, (*holding.Kind)(nil), (*bool)(nil)).Return(nil)
+	repo.On("GetByID", mock.Anything, id, today).Return(&holding.Holding{ID: id, Name: trimmed}, nil)
+
+	name := "  Дача "
+	_, err := svc.Update(t.Context(), id, &name, nil, nil)
+	require.NoError(t, err)
+
+	blank := "   "
+	_, err = svc.Update(t.Context(), id, &blank, nil, nil)
+	require.ErrorIs(t, err, holding.ErrNameEmpty)
+	repo.AssertNumberOfCalls(t, "Update", 1)
+}
+
 func TestHoldingService_Update_NotFound(t *testing.T) {
 	svc, repo, _ := setupHoldingService(t)
 	id := uuid.New()
@@ -170,7 +187,6 @@ func TestHoldingService_Update_NotFound(t *testing.T) {
 func TestHoldingService_PutValue_Checks(t *testing.T) {
 	svc, repo, today := setupHoldingService(t)
 	id := uuid.New()
-	repo.On("GetByID", mock.Anything, id, today).Return(&holding.Holding{ID: id, IsArchived: true}, nil)
 	repo.On("UpsertValue", mock.Anything, id, mock.MatchedBy(func(v *holding.Value) bool {
 		return v.Date == today && v.ValueMinor == 0
 	})).Return(nil)
@@ -194,11 +210,13 @@ func TestHoldingService_Values_HoldingMissing(t *testing.T) {
 	svc, repo, today := setupHoldingService(t)
 	id := uuid.New()
 	repo.On("GetByID", mock.Anything, id, today).Return(nil, holding.ErrNotFound)
+	repo.On("UpsertValue", mock.Anything, id, mock.Anything).Return(holding.ErrNotFound)
 
 	_, err := svc.PutValue(t.Context(), id, today, 1)
 	require.ErrorIs(t, err, holding.ErrNotFound)
 	require.ErrorIs(t, svc.DeleteValue(t.Context(), id, today), holding.ErrNotFound)
 	_, _, err = svc.ListValues(t.Context(), id, 10, 0)
 	require.ErrorIs(t, err, holding.ErrNotFound)
-	repo.AssertNotCalled(t, "UpsertValue", mock.Anything, mock.Anything, mock.Anything)
+	repo.AssertNotCalled(t, "DeleteValue", mock.Anything, mock.Anything, mock.Anything)
+	repo.AssertNotCalled(t, "ListValues", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }

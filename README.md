@@ -6,7 +6,7 @@ API for the Android client. One instance = one family.
 ## 🎯 Project Status: IN DEVELOPMENT 🚧
 
 > **Direction (September 2026):** API-only backend for an Android app. Decisions and the implementation
-> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–10 and 12–14 are done: the
+> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–10 and 12–17 are done: the
 > web interface, cookie sessions and CSRF are gone, money is integer minor units, dates are calendar dates,
 > the deployment is one compose with Caddy, the Android client lives in `android/` with its settings screen,
 > stored reports are gone in favour of `GET /api/v1/stats/monthly`, budgets can repeat as a series, and the
@@ -14,13 +14,14 @@ API for the Android client. One instance = one family.
 > moved onto a second listener (plan 14 — the contract did not move either), and bank screenshots can be
 recognized into candidate transactions (plan 15, `POST /api/v1/transactions/recognize`; client `0.7.0`, not
 tagged yet, needs a server that has it), and transactions can be bound to accounts with a monthly
-reconciliation against the bank (plan 16, server `v0.6.0`, client `0.8.0`, not tagged yet);
+reconciliation against the bank (plan 16, server `v0.6.0`, client `0.8.0`, not tagged yet), and holdings
+with a monthly net-worth series (plan 17, server `v0.7.0`, client `0.9.0`, not tagged yet);
 > the sections below describe the code as it is today. Releases: server `v0.3.0` (plan 10), `v0.4.0`
 > (plan 12) and `v0.5.0` (plan 14), client `app-v0.6.0` — it needs a server of `v0.4.0` or newer (`recurring` is required in the
 > generated model). Left: plan 11, the client's "Обзор" screen over `summary` + `monthly` and multi-select
 > over transactions ([docs/backlog.md](docs/backlog.md)).
 
-- ✅ REST API for family, users, categories, accounts, transactions, budgets, stats, backups
+- ✅ REST API for family, users, categories, accounts, transactions, budgets, holdings, stats, backups
 - ✅ Bearer-token authentication with server-side sessions and a login rate limiter
 - ✅ Family bootstrap, password reset and schema moves from the CLI (`setup`, `reset-password`, `migrate`)
 - ✅ Screenshot recognition over an Ollama daemon (`LLM_OLLAMA_HOST`, off by default): candidates for review,
@@ -63,8 +64,8 @@ There are two roles, `admin` and `member`; both see all of the family's data. Th
 creates a user with `POST /api/v1/users`.
 
 - `/api/v1/users` and `/api/v1/backups`, `PUT /api/v1/family`, `DELETE /api/v1/categories/:id`,
-  `DELETE /api/v1/accounts/:id` — **admin only**
-- `/api/v1/{categories,accounts,transactions,budgets,stats}` — **admin or member**
+  `DELETE /api/v1/accounts/:id`, `DELETE /api/v1/holdings/:id` — **admin only**
+- `/api/v1/{categories,accounts,transactions,budgets,holdings,stats}` — **admin or member**
 - `GET /api/v1/family`, `/api/v1/me*`, `/api/v1/auth/*` — any authenticated role
 
 The author of a record is taken from the token, so `user_id` in a request body is ignored.
@@ -90,14 +91,19 @@ The author of a record is taken from the token, so `user_id` in a request body i
 - Reconciliation: `PUT`/`DELETE /api/v1/accounts/:id/reconciliations/YYYY-MM` store the bank's expense figure
   for the month; `GET /api/v1/stats/reconciliation?month=YYYY-MM` answers recorded expenses (summed on read),
   the bank figure and the difference per account, plus the expenses with no account
+- Holdings: `GET /api/v1/holdings` (`?archived=true` adds archived ones), `POST` (`{id?, name, side, kind}`), `PUT`
+  (`side` cannot change), `DELETE` (admin, takes the snapshot history with it); `409 HOLDING_NAME_EXISTS`.
+  Snapshots: `PUT`/`DELETE /api/v1/holdings/:id/values/YYYY-MM-DD` (a future date is `422`), history in
+  `GET /api/v1/holdings/:id/values`; `GET /api/v1/stats/net-worth?from&to` answers monthly assets, liabilities
+  and net, each value carried forward until the next snapshot
 - `POST /api/v1/transactions/recognize` — multipart `images` (1–5 PNG/JPEG, ≤ 2 MiB each), answers candidate
   transactions for review and saves nothing; the client saves the chosen ones with ordinary `POST /transactions`.
   A paid, non-idempotent call — neither side retries it on its own; it may run up to ~205 s. `503
   RECOGNITION_UNAVAILABLE` when switched off or the model is unreachable (`Retry-After` when known), `502
   RECOGNITION_FAILED` for an answer that does not parse, `413`, `408` for a too slow upload, `422` with `field: images[i]`
 - Money is `amount_minor` — an integer in the family's minor units (kopeks/cents); percentages and utilization
-  stay fractional. `PUT /api/v1/family` returns `409 CURRENCY_LOCKED` if a transaction or a
-  reconciliation already exists
+  stay fractional. `PUT /api/v1/family` returns `409 CURRENCY_LOCKED` if a transaction, a
+  reconciliation or a holding snapshot already exists
 - Transaction and budget dates are calendar `YYYY-MM-DD`; period bounds use the family's `timezone`
 - `POST` of a transaction, budget, category or account accepts a client-generated `id` (any valid UUID): a retry with the same
   `id` answers `200` with the existing record instead of creating a duplicate
@@ -119,7 +125,7 @@ The author of a record is taken from the token, so `user_id` in a request body i
 - Users are never deleted, only deactivated (`PATCH /users/:id {"is_active": false}`)
 - Backup **restore** is deliberately not exposed over the API and has no subcommand — in production it is
   manual over ssh ([deploy/README.md](deploy/README.md)); `make sqlite-restore` is a dev-only `cp`
-- More than one currency: a family has exactly one, and it can no longer be changed once a transaction or a reconciliation exists
+- More than one currency: a family has exactly one, and it can no longer be changed once a transaction, a reconciliation or a holding snapshot exists
 
 ## 🏗️ Architecture and Technology Stack
 

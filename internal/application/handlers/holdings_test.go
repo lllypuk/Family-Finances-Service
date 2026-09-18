@@ -3,6 +3,7 @@ package handlers_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -163,6 +164,8 @@ func TestHoldingHandler_ErrorMapping(t *testing.T) {
 		{"blank name", holding.ErrNameEmpty, http.StatusUnprocessableEntity, handlers.ErrCodeValidationError, "name"},
 		{"wrong kind", holding.ErrInvalidKind, http.StatusUnprocessableEntity, handlers.ErrCodeValidationError, "kind"},
 		{"not found", holding.ErrNotFound, http.StatusNotFound, handlers.ErrCodeHoldingNotFound, ""},
+		{"long name", holding.ErrNameLong, http.StatusUnprocessableEntity, handlers.ErrCodeValidationError, "name"},
+		{"internal", errors.New("boom"), http.StatusInternalServerError, handlers.ErrCodeInternal, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
