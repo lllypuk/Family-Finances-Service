@@ -349,10 +349,10 @@ API (`financeAccess`, кроме помеченного):
 
 ### Task 11: Verify acceptance criteria
 
-- [ ] все пункты Overview реализованы; клиент `0.7.0` против нового сервера создаёт и правит операции, счёт при правке не теряется
-- [ ] `make fmt && make test && make lint` — 0 issues; `make compose-config`
-- [ ] `make -C android check`; `make -C android api-check` — на чистом дереве после коммита: цель сравнивает `generated` с Git
-- [ ] обновление копии прод-базы: `DATABASE_PATH=<копия бэкапа>`, `migrate --to 5` → `--to 4` → `--to 5` (`migrate` без `--to` только печатает версию), после каждого шага — число операций и `PRAGMA foreign_key_check`
+- [x] все пункты Overview реализованы; клиент `0.7.0` против нового сервера создаёт и правит операции, счёт при правке не теряется
+- [x] `make fmt && make test && make lint` — 0 issues; `make compose-config`
+- [x] `make -C android check`; `make -C android api-check` — на чистом дереве после коммита: цель сравнивает `generated` с Git
+- [x] (бэкап mini от 18.09: 53 операции, fk пусто на каждом шаге) обновление копии прод-базы: `DATABASE_PATH=<копия бэкапа>`, `migrate --to 5` → `--to 4` → `--to 5` (`migrate` без `--to` только печатает версию), после каждого шага — число операций и `PRAGMA foreign_key_check`
 - метрики и R8 не трогаем: `StateReader` считает существующие сущности, keep-правило в `consumer-rules.pro:4` — wildcard по всем моделям API
 
 ### Task 12: [Final] Update documentation
