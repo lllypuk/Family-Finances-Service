@@ -432,3 +432,59 @@ internal const val RECONCILIATION_PUT_OK = """
 "updated_at":"2026-09-18T10:00:00Z"},
 "meta":{"request_id":"r-82","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0"}}
 """
+
+internal const val FLAT_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1"
+internal const val MORTGAGE_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2"
+internal const val CRYPTO_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb3"
+internal const val OLD_CAR_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb4"
+
+/**
+ * Квартира и ипотека со снимками, актив незнакомого клиенту вида без снимка и проданная машина в
+ * архиве — её нулевой снимок в капитале остаётся.
+ */
+internal const val HOLDINGS_OK = """
+{"data":[
+{"id":"$FLAT_ID","name":"Квартира","side":"asset","kind":"property","is_archived":false,
+"current":{"date":"2026-01-12","value_minor":1100000000},
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"},
+{"id":"$MORTGAGE_ID","name":"Ипотека","side":"liability","kind":"mortgage","is_archived":false,
+"current":{"date":"2026-09-01","value_minor":640000000},
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"},
+{"id":"$CRYPTO_ID","name":"Биткоин","side":"asset","kind":"crypto","is_archived":false,"current":null,
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"},
+{"id":"$OLD_CAR_ID","name":"Машина","side":"asset","kind":"vehicle","is_archived":true,
+"current":{"date":"2026-05-01","value_minor":0},
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"}],
+"meta":{"request_id":"r-90","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0",
+"pagination":{"limit":200,"offset":0,"total":4}}}
+"""
+
+internal const val HOLDINGS_EMPTY = """
+{"data":[],"meta":{"request_id":"r-91","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0",
+"pagination":{"limit":200,"offset":0,"total":0}}}
+"""
+
+/** Ряд по умолчанию: итог шапки — последняя корзина, а не сумма строк списка. */
+internal const val NET_WORTH_OK = """
+{"data":{"from":"2025-10-01","to":"2026-09-18","months":[
+{"month":"2026-08","assets_minor":1100000000,"liabilities_minor":650000000,"net_minor":450000000},
+{"month":"2026-09","assets_minor":1100000000,"liabilities_minor":640000000,"net_minor":460000000}]},
+"meta":{"request_id":"r-92","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0"}}
+"""
+
+internal const val HOLDING_OK = """
+{"data":{"id":"$FLAT_ID","name":"Квартира","side":"asset","kind":"property","is_archived":false,
+"current":{"date":"2026-01-12","value_minor":1100000000},
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"},
+"meta":{"request_id":"r-93","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0"}}
+"""
+
+internal const val HOLDING_VALUE_OK = """
+{"data":{"date":"2026-09-18","value_minor":0,"updated_at":"2026-09-18T10:00:00Z"},
+"meta":{"request_id":"r-94","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0"}}
+"""
+
+internal const val HOLDING_NAME_EXISTS_ERROR = """
+{"error":{"code":"HOLDING_NAME_EXISTS","message":"holding name already exists"},
+"meta":{"request_id":"r-95","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0"}}
+"""

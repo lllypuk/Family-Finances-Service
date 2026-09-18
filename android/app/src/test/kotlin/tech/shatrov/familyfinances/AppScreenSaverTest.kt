@@ -3,6 +3,7 @@ package tech.shatrov.familyfinances
 import androidx.compose.runtime.saveable.SaverScope
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import tech.shatrov.familyfinances.core.api.HoldingSide
 import tech.shatrov.familyfinances.ui.settings.SettingsPage
 import tech.shatrov.familyfinances.ui.transactions.TransactionFilters
 import tech.shatrov.familyfinances.ui.transactions.TransactionPeriod
@@ -18,9 +19,31 @@ class AppScreenSaverTest {
 
     @Test
     fun rootScreensSurviveRoundTrip() {
-        for (screen in listOf(AppScreen.Home, AppScreen.Transactions(), AppScreen.Categories, AppScreen.Budgets)) {
+        for (screen in listOf(
+            AppScreen.Home,
+            AppScreen.Transactions(),
+            AppScreen.Categories,
+            AppScreen.Budgets,
+            AppScreen.NetWorth,
+        )) {
             assertEquals(screen, roundTrip(screen))
         }
+    }
+
+    @Test
+    fun holdingEditKeepsSideOfNewHolding() {
+        val screen = AppScreen.HoldingEdit(
+            id = null,
+            draft = UUID.fromString(FOOD_BUDGET_ID),
+            side = HoldingSide.liability,
+        )
+        assertEquals(screen, roundTrip(screen))
+    }
+
+    @Test
+    fun holdingEditKeepsBothIds() {
+        val screen = AppScreen.HoldingEdit(id = UUID.fromString(FLAT_ID), draft = UUID.fromString(FOOD_BUDGET_ID))
+        assertEquals(screen, roundTrip(screen))
     }
 
     @Test

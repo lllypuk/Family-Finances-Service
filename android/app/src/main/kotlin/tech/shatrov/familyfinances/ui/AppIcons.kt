@@ -37,6 +37,9 @@ object AppIcons {
             "M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
         )
 
+    val Landmark: ImageVector =
+        icon("landmark", "M3 22h18", "M6 18v-7", "M10 18v-7", "M14 18v-7", "M18 18v-7", "M12 2l8 5H4z")
+
     val Plus: ImageVector = icon("plus", "M12 5v14M5 12h14")
 
     val ArrowLeft: ImageVector = icon("arrow-left", "m12 19-7-7 7-7M19 12H5")

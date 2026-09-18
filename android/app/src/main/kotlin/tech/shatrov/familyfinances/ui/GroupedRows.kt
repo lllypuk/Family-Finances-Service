@@ -1,7 +1,9 @@
 package tech.shatrov.familyfinances.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
@@ -31,9 +33,12 @@ internal fun rowPlace(
  * волосяная линия по цвету рамки. `onClick` ставится до внутреннего отступа, чтобы нажималась
  * вся строка и волна не выходила за скругление.
  */
+@OptIn(ExperimentalFoundationApi::class)
 internal fun Modifier.groupedRow(
     place: RowPlace,
     colors: AppColors,
+    onLongClick: (() -> Unit)? = null,
+    onLongClickLabel: String? = null,
     onClick: (() -> Unit)? = null,
 ): Modifier {
     val radius = Dimens.RADIUS_M
@@ -47,7 +52,19 @@ internal fun Modifier.groupedRow(
     return this
         .clip(shape)
         .background(colors.surface)
-        .then(if (onClick == null) Modifier else Modifier.clickable(onClick = onClick))
+        .then(
+            when {
+                onClick == null -> Modifier
+
+                onLongClick == null -> Modifier.clickable(onClick = onClick)
+
+                else -> Modifier.combinedClickable(
+                    onLongClickLabel = onLongClickLabel,
+                    onLongClick = onLongClick,
+                    onClick = onClick,
+                )
+            },
+        )
         .drawBehind {
             if (divided) {
                 val inset = Dimens.SPACE_3.toPx()

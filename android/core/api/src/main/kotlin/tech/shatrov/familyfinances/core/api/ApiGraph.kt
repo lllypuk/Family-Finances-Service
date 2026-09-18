@@ -44,6 +44,9 @@ class ApiGraph(
     val accounts: AccountsApi = client.create(AccountsApi::class)
     val users: UsersApi = client.create(UsersApi::class)
 
+    // Позиции капитала: `POST` идемпотентен по `id`, снимок — upsert по дате.
+    val holdings: HoldingsApi = client.create(HoldingsApi::class)
+
     // `POST /backups` неидемпотентен: повтор создал бы второй файл и второй прогон retention.
     val backups: BackupsApi = client.createWithoutRetries(BackupsApi::class)
     val stats: StatsApi = client.create(StatsApi::class)

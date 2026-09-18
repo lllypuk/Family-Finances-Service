@@ -1,6 +1,7 @@
 package tech.shatrov.familyfinances
 
 import androidx.compose.runtime.saveable.Saver
+import tech.shatrov.familyfinances.core.api.HoldingSide
 import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.ui.settings.SettingsPage
 import tech.shatrov.familyfinances.ui.settings.restoreSettingsPage
@@ -54,6 +55,15 @@ sealed interface AppScreen {
         val draft: UUID = UUID.randomUUID(),
     ) : AppScreen
 
+    data object NetWorth : AppScreen
+
+    /** Форма позиции капитала; `id` и `draft` — как у [TransactionEdit], [side] выбран заранее для новой. */
+    data class HoldingEdit(
+        val id: UUID?,
+        val draft: UUID = UUID.randomUUID(),
+        val side: HoldingSide = HoldingSide.asset,
+    ) : AppScreen
+
     /** Распознавание импорта [importId] из [ImportStore]; после смерти процесса импорта уже нет. */
     data class Recognize(val importId: UUID) : AppScreen
 
@@ -72,6 +82,8 @@ private const val KEY_TRANSACTION_EDIT = "transaction-edit"
 private const val KEY_CATEGORIES = "categories"
 private const val KEY_BUDGETS = "budgets"
 private const val KEY_BUDGET_EDIT = "budget-edit"
+private const val KEY_NET_WORTH = "net-worth"
+private const val KEY_HOLDING_EDIT = "holding-edit"
 private const val KEY_SETTINGS = "settings"
 private const val KEY_RECOGNIZE = "recognize"
 private const val KEY_RECONCILIATION = "reconciliation"
@@ -96,6 +108,10 @@ val AppScreenSaver: Saver<AppScreen, String> = Saver(
                 "$KEY_TRANSACTION_EDIT:${screen.id ?: ""}:${screen.draft}:${screen.back.saveKey()}"
 
             is AppScreen.BudgetEdit -> "$KEY_BUDGET_EDIT:${screen.id ?: ""}:${screen.draft}"
+
+            AppScreen.NetWorth -> KEY_NET_WORTH
+
+            is AppScreen.HoldingEdit -> "$KEY_HOLDING_EDIT:${screen.id ?: ""}:${screen.draft}:${screen.side.value}"
 
             is AppScreen.Settings -> "$KEY_SETTINGS:${screen.page.saveKey()}"
 
@@ -137,6 +153,17 @@ private fun restoreScreen(key: String): AppScreen? = when {
         AppScreen.BudgetEdit(
             id = target.takeIf { it.isNotEmpty() }?.let(UUID::fromString),
             draft = UUID.fromString(draft),
+        )
+    }
+
+    key == KEY_NET_WORTH -> AppScreen.NetWorth
+
+    key.startsWith("$KEY_HOLDING_EDIT:") -> {
+        val (target, draft, side) = key.removePrefix("$KEY_HOLDING_EDIT:").split(':')
+        AppScreen.HoldingEdit(
+            id = target.takeIf { it.isNotEmpty() }?.let(UUID::fromString),
+            draft = UUID.fromString(draft),
+            side = requireNotNull(HoldingSide.decode(side)),
         )
     }
 

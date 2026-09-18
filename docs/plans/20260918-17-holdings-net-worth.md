@@ -279,16 +279,18 @@ API (`financeAccess`, кроме помеченного):
 - Modify: `android/core/api/…/ApiGraph.kt`, `AppScreen.kt` (+ `Saver`), `MainActivity.kt`, `ui/AppNavBar.kt` (`AppTab.NET_WORTH`), `ui/AppIcons.kt` (`Landmark`), `strings.xml`, `app/src/test/…/AppScreenSaverTest.kt`
 - Create: `ui/networth/NetWorthScreen.kt`, `NetWorthViewModel.kt`, `HoldingEditScreen.kt`, `HoldingEditViewModel.kt`, `ValueSheet.kt` + тесты
 
-- [ ] вкладка `NET_WORTH` и экран по макету из Technical Details; подписи пяти вкладок помещаются на ширине 360dp (проверка в превью и на телефоне)
-- [ ] `MainActivity`: ветка в исчерпывающем `AppTab.screen` (:615); `BackHandler` на «Главную», как у остальных корней (:283); `AppScreen.NetWorth` в `when` маршрутизации share-импорта (:170 — там `else -> Unit`, пропуск молчит); форма позиции в `onForm` (:143); модель — `viewModel(key = "networth-${user.id}-$epoch")` (:349), `epoch` двигает смена валюты и зоны
-- [ ] `settings_error_currency_locked` (`strings.xml:171`): операции, сверки или снимки
-- [ ] экран: итог капитала — из последней корзины `net-worth`, не суммой списка; группы «Активы» и «Пассивы» с `current` и датой снимка; сворачиваемая группа архивных (`?archived=true`) — она объясняет разницу между итогом и видимым списком; пустое состояние с действием
-- [ ] создание и правка позиции: сторона выбирается только при создании, вид — из списка своей стороны
-- [ ] ввод снимка по тапу: сумма и дата; «сегодня» и потолок пикера — `LocalDate.now(session.zone)` (`Session.kt:20`), не `LocalDate.now()` как в `TransactionEditViewModel.kt:53`
-- [ ] архивация позиции с ненулевым `current` предлагает сначала снимок `0`
-- [ ] тесты ViewModel: загрузка, создание, снимок, `HOLDING_NAME_EXISTS`, сценарий архивации, неизвестный `kind` → `other`
-- [ ] Compose-тесты: пустое состояние с обеими кнопками, лист снимка (сумма и дата), подтверждение удаления позиции; `AppScreenSaverTest` — новые экраны
-- [ ] `make -C android check`
+- [x] вкладка `NET_WORTH` и экран по макету из Technical Details; подписи пяти вкладок помещаются на ширине 360dp (проверка в превью и на телефоне)
+  - ➕ вместо превью — `AppNavBarTest` на `w360dp` с `GraphicsMode.NATIVE`: одна строка, без многоточия, подписи не перекрываются; телефон (skipped - not automatable). График шапки — задача 7
+- [x] `MainActivity`: ветка в исчерпывающем `AppTab.screen` (:615); `BackHandler` на «Главную», как у остальных корней (:283); `AppScreen.NetWorth` в `when` маршрутизации share-импорта (:170 — там `else -> Unit`, пропуск молчит); форма позиции в `onForm` (:143); модель — `viewModel(key = "networth-${user.id}-$epoch")` (:349), `epoch` двигает смена валюты и зоны
+- [x] `settings_error_currency_locked` (`strings.xml:171`): операции, сверки или снимки
+- [x] экран: итог капитала — из последней корзины `net-worth`, не суммой списка; группы «Активы» и «Пассивы» с `current` и датой снимка; сворачиваемая группа архивных (`?archived=true`) — она объясняет разницу между итогом и видимым списком; пустое состояние с действием
+- [x] создание и правка позиции: сторона выбирается только при создании, вид — из списка своей стороны
+- [x] ввод снимка по тапу: сумма и дата; «сегодня» и потолок пикера — `LocalDate.now(session.zone)` (`Session.kt:20`), не `LocalDate.now()` как в `TransactionEditViewModel.kt:53`
+- [x] архивация позиции с ненулевым `current` предлагает сначала снимок `0`
+- [x] тесты ViewModel: загрузка, создание, снимок, `HOLDING_NAME_EXISTS`, сценарий архивации, неизвестный `kind` → `other`
+- [x] Compose-тесты: пустое состояние с обеими кнопками, лист снимка (сумма и дата), подтверждение удаления позиции; `AppScreenSaverTest` — новые экраны
+- [x] `make -C android check`
+  - ➕ флаг `netWorthStale` в `AppRoot` взводит форма позиции; `DatePickerSheet(latest)` — потолок выбора; `groupedRow(onLongClick)` для правки по долгому тапу
 
 ### Task 7: Клиент — история и график
 
