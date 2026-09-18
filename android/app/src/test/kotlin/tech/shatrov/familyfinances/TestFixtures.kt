@@ -360,3 +360,165 @@ internal fun statsSummary(
     recent = recent,
     transactionsTotal = transactionsTotal,
 )
+
+internal const val CARD_ACCOUNT_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1"
+internal const val OLD_ACCOUNT_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2"
+
+/** Активная карта и перевыпущенная, ушедшая в архив. */
+internal const val ACCOUNTS_OK = """
+{"data":[
+{"id":"$CARD_ACCOUNT_ID","name":"Тинькофф","is_archived":false,
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"},
+{"id":"$OLD_ACCOUNT_ID","name":"Старая карта","is_archived":true,
+"created_at":"2026-09-01T10:00:00Z","updated_at":"2026-09-10T10:00:00Z"}],
+"meta":{"request_id":"r-70","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0",
+"pagination":{"limit":200,"offset":0,"total":2}}}
+"""
+
+/** [TRANSACTION_OK], привязанная к счёту [accountId]. */
+internal fun transactionOnAccount(accountId: String): String =
+    TRANSACTION_OK.replace("\"tags\":[]", "\"account_id\":\"$accountId\",\"tags\":[]")
+
+internal const val ACCOUNTS_EMPTY = """
+{"data":[],"meta":{"request_id":"r-71","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0",
+"pagination":{"limit":200,"offset":0,"total":0}}}
+"""
+
+internal const val ACCOUNT_OK = """
+{"data":{"id":"$CARD_ACCOUNT_ID","name":"Тинькофф","is_archived":false,
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"},
+"meta":{"request_id":"r-72","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0"}}
+"""
+
+internal const val ACCOUNT_NAME_EXISTS_ERROR = """
+{"error":{"code":"ACCOUNT_NAME_EXISTS","message":"account name already exists"},
+"meta":{"request_id":"r-73","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0"}}
+"""
+
+internal const val ACCOUNT_IN_USE_ERROR = """
+{"error":{"code":"ACCOUNT_IN_USE","message":"account is in use"},
+"meta":{"request_id":"r-74","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0"}}
+"""
+
+internal const val CASH_ACCOUNT_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3"
+
+/**
+ * Сверка августа: карта сошлась, наличные не сверены, архивная карта с нулевой сверкой — «N из M»
+ * её не считает, иначе вышло бы «2 из 3».
+ */
+internal const val RECONCILIATION_OK = """
+{"data":{"month":"2026-08","unassigned_minor":125000,"accounts":[
+{"account":{"id":"$CARD_ACCOUNT_ID","name":"Тинькофф","is_archived":false,
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"},
+"recorded_minor":4310000,"bank_expense_minor":4310000,"diff_minor":0,"note":"выписка",
+"updated_at":"2026-09-01T10:00:00Z"},
+{"account":{"id":"$CASH_ACCOUNT_ID","name":"Наличные","is_archived":false,
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"},
+"recorded_minor":325000,"bank_expense_minor":null,"diff_minor":null,"note":null,"updated_at":null},
+{"account":{"id":"$OLD_ACCOUNT_ID","name":"Старая карта","is_archived":true,
+"created_at":"2026-09-01T10:00:00Z","updated_at":"2026-09-10T10:00:00Z"},
+"recorded_minor":0,"bank_expense_minor":0,"diff_minor":0,"note":"",
+"updated_at":"2026-09-01T10:00:00Z"}]},
+"meta":{"request_id":"r-80","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0"}}
+"""
+
+internal const val RECONCILIATION_EMPTY = """
+{"data":{"month":"2026-08","unassigned_minor":0,"accounts":[]},
+"meta":{"request_id":"r-81","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0"}}
+"""
+
+internal const val RECONCILIATION_PUT_OK = """
+{"data":{"account_id":"$CASH_ACCOUNT_ID","month":"2026-08","bank_expense_minor":350000,"note":"",
+"updated_at":"2026-09-18T10:00:00Z"},
+"meta":{"request_id":"r-82","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0"}}
+"""
+
+internal const val FLAT_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1"
+internal const val MORTGAGE_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2"
+internal const val CRYPTO_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb3"
+internal const val OLD_CAR_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb4"
+
+/**
+ * Квартира и ипотека со снимками, актив незнакомого клиенту вида без снимка и проданная машина в
+ * архиве — её нулевой снимок в капитале остаётся.
+ */
+internal const val HOLDINGS_OK = """
+{"data":[
+{"id":"$FLAT_ID","name":"Квартира","side":"asset","kind":"property","is_archived":false,
+"current":{"date":"2026-01-12","value_minor":1100000000},
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"},
+{"id":"$MORTGAGE_ID","name":"Ипотека","side":"liability","kind":"mortgage","is_archived":false,
+"current":{"date":"2026-09-01","value_minor":640000000},
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"},
+{"id":"$CRYPTO_ID","name":"Биткоин","side":"asset","kind":"crypto","is_archived":false,"current":null,
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"},
+{"id":"$OLD_CAR_ID","name":"Машина","side":"asset","kind":"vehicle","is_archived":true,
+"current":{"date":"2026-05-01","value_minor":0},
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"}],
+"meta":{"request_id":"r-90","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0",
+"pagination":{"limit":200,"offset":0,"total":4}}}
+"""
+
+internal const val HOLDINGS_EMPTY = """
+{"data":[],"meta":{"request_id":"r-91","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0",
+"pagination":{"limit":200,"offset":0,"total":0}}}
+"""
+
+/** Ряд по умолчанию: итог шапки — последняя корзина, а не сумма строк списка. */
+internal const val NET_WORTH_OK = """
+{"data":{"from":"2025-10-01","to":"2026-09-18","months":[
+{"month":"2026-08","assets_minor":1100000000,"liabilities_minor":650000000,"net_minor":450000000},
+{"month":"2026-09","assets_minor":1100000000,"liabilities_minor":640000000,"net_minor":460000000}]},
+"meta":{"request_id":"r-92","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0"}}
+"""
+
+internal const val HOLDING_OK = """
+{"data":{"id":"$FLAT_ID","name":"Квартира","side":"asset","kind":"property","is_archived":false,
+"current":{"date":"2026-01-12","value_minor":1100000000},
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"},
+"meta":{"request_id":"r-93","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0"}}
+"""
+
+internal const val HOLDING_VALUE_OK = """
+{"data":{"date":"2026-09-18","value_minor":0,"updated_at":"2026-09-18T10:00:00Z"},
+"meta":{"request_id":"r-94","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0"}}
+"""
+
+internal const val HOLDING_NAME_EXISTS_ERROR = """
+{"error":{"code":"HOLDING_NAME_EXISTS","message":"holding name already exists"},
+"meta":{"request_id":"r-95","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0"}}
+"""
+
+/** Первая страница истории квартиры: два снимка из трёх, третий — на второй. */
+internal const val FLAT_VALUES_PAGE_1 = """
+{"data":[
+{"date":"2026-01-12","value_minor":1100000000,"updated_at":"2026-01-12T10:00:00Z"},
+{"date":"2025-01-10","value_minor":1000000000,"updated_at":"2025-01-10T10:00:00Z"}],
+"meta":{"request_id":"r-96","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0",
+"pagination":{"limit":2,"offset":0,"total":3}}}
+"""
+
+internal const val FLAT_VALUES_PAGE_2 = """
+{"data":[
+{"date":"2024-01-15","value_minor":950000000,"updated_at":"2024-01-15T10:00:00Z"}],
+"meta":{"request_id":"r-97","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0",
+"pagination":{"limit":2,"offset":2,"total":3}}}
+"""
+
+/** История после удаления январского снимка 2026: `current` квартиры откатился на 2025 год. */
+internal const val HOLDINGS_AFTER_VALUE_DELETE = """
+{"data":[
+{"id":"$FLAT_ID","name":"Квартира","side":"asset","kind":"property","is_archived":false,
+"current":{"date":"2025-01-10","value_minor":1000000000},
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"}],
+"meta":{"request_id":"r-98","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0",
+"pagination":{"limit":200,"offset":0,"total":1}}}
+"""
+
+internal const val FLAT_VALUES_AFTER_DELETE = """
+{"data":[
+{"date":"2025-01-10","value_minor":1000000000,"updated_at":"2025-01-10T10:00:00Z"},
+{"date":"2024-01-15","value_minor":950000000,"updated_at":"2024-01-15T10:00:00Z"}],
+"meta":{"request_id":"r-99","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0",
+"pagination":{"limit":50,"offset":0,"total":2}}}
+"""

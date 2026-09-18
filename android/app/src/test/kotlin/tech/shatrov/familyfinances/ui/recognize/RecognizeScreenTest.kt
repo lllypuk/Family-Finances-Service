@@ -66,6 +66,7 @@ class RecognizeScreenTest {
                     onDateChange = { _, _ -> },
                     onCategoryChange = { _, _ -> },
                     onDescriptionChange = onDescriptionChange,
+                    onAccountChange = {},
                     onSave = onSave,
                     onRetry = {},
                     onRetryRow = onRetryRow,

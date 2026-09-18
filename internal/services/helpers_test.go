@@ -51,6 +51,11 @@ func (m *MockFamilyRepository) Exists(ctx context.Context) (bool, error) {
 	return args.Bool(0), args.Error(1)
 }
 
+func (m *MockFamilyRepository) HasMonetaryData(ctx context.Context) (bool, error) {
+	args := m.Called(ctx)
+	return args.Bool(0), args.Error(1)
+}
+
 func (m *MockFamilyRepository) Bootstrap(
 	ctx context.Context,
 	family *user.Family,
@@ -348,6 +353,17 @@ func (m *MockTransactionRepository) GetTotalsByMonth(
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]transaction.MonthTotal), args.Error(1)
+}
+
+func (m *MockTransactionRepository) RecordedByAccount(
+	ctx context.Context,
+	startDate, endDate date.Date,
+) ([]transaction.AccountTotal, error) {
+	args := m.Called(ctx, startDate, endDate)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]transaction.AccountTotal), args.Error(1)
 }
 
 // Common Mock Services
@@ -733,14 +749,29 @@ func setupTransactionService() (
 	*MockCategoryRepository,
 	*MockUserRepository,
 ) {
+	service, txRepo, budgetRepo, categoryRepo, userRepo, _ := setupTransactionServiceWithAccounts()
+
+	return service, txRepo, budgetRepo, categoryRepo, userRepo
+}
+
+// setupTransactionServiceWithAccounts — то же плюс мок счетов для тестов account_id.
+func setupTransactionServiceWithAccounts() (
+	services.TransactionService,
+	*MockTransactionRepository,
+	*MockBudgetRepository,
+	*MockCategoryRepository,
+	*MockUserRepository,
+	*mockAccountRepo,
+) {
 	txRepo := &MockTransactionRepository{}
 	budgetRepo := &MockBudgetRepository{}
 	categoryRepo := &MockCategoryRepository{}
 	userRepo := &MockUserRepository{}
+	accountRepo := &mockAccountRepo{}
 
-	service := services.NewTransactionService(txRepo, budgetRepo, categoryRepo, userRepo)
+	service := services.NewTransactionService(txRepo, budgetRepo, categoryRepo, userRepo, accountRepo)
 
-	return service, txRepo, budgetRepo, categoryRepo, userRepo
+	return service, txRepo, budgetRepo, categoryRepo, userRepo, accountRepo
 }
 
 // MockFamilyService is a mock implementation of FamilyService

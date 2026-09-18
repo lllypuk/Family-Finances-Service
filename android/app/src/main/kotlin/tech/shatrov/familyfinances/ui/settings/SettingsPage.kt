@@ -11,6 +11,7 @@ private const val SLUG_USER_EDIT = "user-edit"
 private const val SLUG_USER_PASSWORD = "user-password"
 private const val SLUG_FAMILY = "family"
 private const val SLUG_BACKUPS = "backups"
+private const val SLUG_ACCOUNTS = "accounts"
 
 /**
  * Страница настроек. `visit` — идентичность захода: он же ключ модели, поэтому повторный заход
@@ -71,6 +72,11 @@ sealed interface SettingsPage {
     data class Backups(override val visit: UUID = UUID.randomUUID()) : SettingsPage {
         override val slug: String get() = SLUG_BACKUPS
     }
+
+    /** Счета: список и форма поверх него в одной модели, как у категорий. */
+    data class Accounts(override val visit: UUID = UUID.randomUUID()) : SettingsPage {
+        override val slug: String get() = SLUG_ACCOUNTS
+    }
 }
 
 /** Часть ключа `AppScreenSaver` — фиксированные три поля, чтобы `restore` разбирал их как есть. */
@@ -94,6 +100,7 @@ internal fun restoreSettingsPage(
         SLUG_USER_PASSWORD -> id?.let { SettingsPage.UserPassword(it, at) }
         SLUG_FAMILY -> SettingsPage.Family(at)
         SLUG_BACKUPS -> SettingsPage.Backups(at)
+        SLUG_ACCOUNTS -> SettingsPage.Accounts(at)
         else -> null
     }
 }

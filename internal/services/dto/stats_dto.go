@@ -95,3 +95,19 @@ type RecentTransaction struct {
 	Date         date.Date        `json:"date"`
 	CreatedAt    time.Time        `json:"created_at"`
 }
+
+// StatsNetWorth — помесячный ряд капитала за период [From, To] для GET /stats/net-worth.
+type StatsNetWorth struct {
+	From   date.Date       `json:"from"`
+	To     date.Date       `json:"to"`
+	Months []NetWorthMonth `json:"months"`
+}
+
+// NetWorthMonth — активы и пассивы на конец месяца "YYYY-MM" (на To — для последнего); суммы
+// нескольких позиций, поэтому могут превышать money.MaxAmount.
+type NetWorthMonth struct {
+	Month            string      `json:"month"`
+	AssetsMinor      money.Minor `json:"assets_minor"`
+	LiabilitiesMinor money.Minor `json:"liabilities_minor"`
+	NetMinor         money.Minor `json:"net_minor"`
+}

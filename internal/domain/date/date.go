@@ -55,6 +55,18 @@ func Parse(s string) (Date, error) {
 	return FromTime(t), nil
 }
 
+// ParseMonth разбирает "YYYY-MM" в первый и последний день месяца.
+func ParseMonth(s string) (Date, Date, error) {
+	t, err := time.Parse(monthLayout, s)
+	if err != nil {
+		return Date{}, Date{}, fmt.Errorf("%w: month %q", ErrInvalidDate, s)
+	}
+
+	first, last := FromTime(t).MonthBounds()
+
+	return first, last, nil
+}
+
 func (d Date) String() string {
 	return d.In(time.UTC).Format(Layout)
 }

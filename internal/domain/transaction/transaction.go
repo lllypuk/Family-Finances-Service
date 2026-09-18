@@ -18,6 +18,7 @@ type Transaction struct {
 	Type        Type        `json:"type"`
 	Description string      `json:"description"`
 	CategoryID  uuid.UUID   `json:"category_id"`
+	AccountID   *uuid.UUID  `json:"account_id"`
 	UserID      uuid.UUID   `json:"user_id"` // Кто создал транзакцию
 	Date        date.Date   `json:"date"`    // Календарная дата операции
 	Tags        []string    `json:"tags"`    // Теги для поиска
@@ -33,8 +34,11 @@ const (
 )
 
 type Filter struct {
-	UserID          *uuid.UUID
-	CategoryID      *uuid.UUID
+	UserID     *uuid.UUID
+	CategoryID *uuid.UUID
+	AccountID  *uuid.UUID
+	// Unassigned — только операции без счёта; с AccountID несовместим.
+	Unassigned      bool
 	Type            *Type
 	DateFrom        *date.Date
 	DateTo          *date.Date
@@ -91,6 +95,12 @@ type CategoryTotal struct {
 	Type        Type
 	AmountMinor money.Minor
 	Count       int
+}
+
+// AccountTotal — сумма расходов по счёту за период; AccountID nil — операции без счёта.
+type AccountTotal struct {
+	AccountID   *uuid.UUID
+	AmountMinor money.Minor
 }
 
 // MonthTotal — сумма и число операций одного типа за календарный месяц `YYYY-MM`.

@@ -37,16 +37,19 @@ type HTTPServer struct {
 	healthService        *observability.HealthService
 
 	// API Handlers
-	authHandler        *handlers.AuthHandler
-	meHandler          *handlers.MeHandler
-	userHandler        *handlers.UserHandler
-	familyHandler      *handlers.FamilyHandler
-	categoryHandler    *handlers.CategoryHandler
-	transactionHandler *handlers.TransactionHandler
-	budgetHandler      *handlers.BudgetHandler
-	statsHandler       *handlers.StatsHandler
-	backupHandler      *handlers.BackupHandler
-	recognizeHandler   *handlers.RecognizeHandler
+	authHandler           *handlers.AuthHandler
+	meHandler             *handlers.MeHandler
+	userHandler           *handlers.UserHandler
+	familyHandler         *handlers.FamilyHandler
+	categoryHandler       *handlers.CategoryHandler
+	accountHandler        *handlers.AccountHandler
+	holdingHandler        *handlers.HoldingHandler
+	transactionHandler    *handlers.TransactionHandler
+	budgetHandler         *handlers.BudgetHandler
+	statsHandler          *handlers.StatsHandler
+	reconciliationHandler *handlers.ReconciliationHandler
+	backupHandler         *handlers.BackupHandler
+	recognizeHandler      *handlers.RecognizeHandler
 }
 
 type Config struct {
@@ -152,16 +155,19 @@ func NewHTTPServerWithObservability(
 		healthService:        healthService,
 
 		// Инициализация API handlers
-		authHandler:        handlers.NewAuthHandler(services.Auth, limiter, logger, loginObserver(config.Metrics)),
-		meHandler:          handlers.NewMeHandler(services.User, services.Auth),
-		userHandler:        handlers.NewUserHandler(services.User, services.Auth),
-		familyHandler:      handlers.NewFamilyHandler(services.Family),
-		categoryHandler:    handlers.NewCategoryHandler(services.Category),
-		transactionHandler: handlers.NewTransactionHandler(services.Transaction),
-		budgetHandler:      handlers.NewBudgetHandler(repositories, services.Budget),
-		statsHandler:       handlers.NewStatsHandler(services.Stats),
-		backupHandler:      handlers.NewBackupHandler(services.Backup),
-		recognizeHandler:   handlers.NewRecognizeHandler(services.Recognize, uploadTimeout),
+		authHandler:           handlers.NewAuthHandler(services.Auth, limiter, logger, loginObserver(config.Metrics)),
+		meHandler:             handlers.NewMeHandler(services.User, services.Auth),
+		userHandler:           handlers.NewUserHandler(services.User, services.Auth),
+		familyHandler:         handlers.NewFamilyHandler(services.Family),
+		categoryHandler:       handlers.NewCategoryHandler(services.Category),
+		accountHandler:        handlers.NewAccountHandler(services.Account),
+		holdingHandler:        handlers.NewHoldingHandler(services.Holding),
+		transactionHandler:    handlers.NewTransactionHandler(services.Transaction),
+		budgetHandler:         handlers.NewBudgetHandler(repositories, services.Budget),
+		statsHandler:          handlers.NewStatsHandler(services.Stats),
+		reconciliationHandler: handlers.NewReconciliationHandler(services.Reconciliation),
+		backupHandler:         handlers.NewBackupHandler(services.Backup),
+		recognizeHandler:      handlers.NewRecognizeHandler(services.Recognize, uploadTimeout),
 	}
 
 	server.setupRoutes()
@@ -227,6 +233,18 @@ func (s *HTTPServer) setupRoutes() {
 	s.setupResourceRoutes(api)
 }
 
+// setupHoldingRoutes — активы и пассивы; удаление уносит историю снимков, поэтому только админ.
+func (s *HTTPServer) setupHoldingRoutes(api *echo.Group, financeAccess, adminOnly echo.MiddlewareFunc) {
+	holdings := api.Group("/holdings", financeAccess)
+	holdings.GET("", s.holdingHandler.ListHoldings)
+	holdings.POST("", s.holdingHandler.CreateHolding)
+	holdings.PUT("/:id", s.holdingHandler.UpdateHolding)
+	holdings.DELETE("/:id", s.holdingHandler.DeleteHolding, adminOnly)
+	holdings.GET("/:id/values", s.holdingHandler.ListHoldingValues)
+	holdings.PUT("/:id/values/:date", s.holdingHandler.PutHoldingValue)
+	holdings.DELETE("/:id/values/:date", s.holdingHandler.DeleteHoldingValue)
+}
+
 // setupResourceRoutes — ролевая модель: управление пользователями — только админ,
 // финансовые разделы — админ и member. Удаление категории закрыто до админа:
 // через API оно необратимо и без подтверждения.
@@ -254,6 +272,16 @@ func (s *HTTPServer) setupResourceRoutes(api *echo.Group) {
 	categories.PUT("/:id", s.categoryHandler.UpdateCategory)
 	categories.DELETE("/:id", s.categoryHandler.DeleteCategory, adminOnly)
 
+	accounts := api.Group("/accounts", financeAccess)
+	accounts.GET("", s.accountHandler.ListAccounts)
+	accounts.POST("", s.accountHandler.CreateAccount)
+	accounts.PUT("/:id", s.accountHandler.UpdateAccount)
+	accounts.DELETE("/:id", s.accountHandler.DeleteAccount, adminOnly)
+	accounts.PUT("/:id/reconciliations/:month", s.reconciliationHandler.PutReconciliation)
+	accounts.DELETE("/:id/reconciliations/:month", s.reconciliationHandler.DeleteReconciliation)
+
+	s.setupHoldingRoutes(api, financeAccess, adminOnly)
+
 	transactions := api.Group("/transactions", financeAccess)
 	transactions.POST("", s.transactionHandler.CreateTransaction)
 	transactions.GET("", s.transactionHandler.GetTransactions)
@@ -273,6 +301,8 @@ func (s *HTTPServer) setupResourceRoutes(api *echo.Group) {
 	stats := api.Group("/stats", financeAccess)
 	stats.GET("/summary", s.statsHandler.GetSummary)
 	stats.GET("/monthly", s.statsHandler.GetMonthly)
+	stats.GET("/net-worth", s.statsHandler.GetNetWorth)
+	stats.GET("/reconciliation", s.reconciliationHandler.GetReconciliationStats)
 
 	backups := api.Group("/backups", adminOnly)
 	backups.POST("", s.backupHandler.CreateBackup)

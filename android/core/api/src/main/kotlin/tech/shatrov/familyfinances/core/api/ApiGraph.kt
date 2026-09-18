@@ -39,7 +39,13 @@ class ApiGraph(
     val categories: CategoriesApi = client.create(CategoriesApi::class)
     val transactions: TransactionsApi = client.create(TransactionsApi::class)
     val budgets: BudgetsApi = client.create(BudgetsApi::class)
+
+    // Счета и их сверки: `POST` идемпотентен по клиентскому `id`, `PUT` сверки — полная замена.
+    val accounts: AccountsApi = client.create(AccountsApi::class)
     val users: UsersApi = client.create(UsersApi::class)
+
+    // Позиции капитала: `POST` идемпотентен по `id`, снимок — upsert по дате.
+    val holdings: HoldingsApi = client.create(HoldingsApi::class)
 
     // `POST /backups` неидемпотентен: повтор создал бы второй файл и второй прогон retention.
     val backups: BackupsApi = client.createWithoutRetries(BackupsApi::class)

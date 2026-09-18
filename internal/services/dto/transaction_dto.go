@@ -24,6 +24,7 @@ type CreateTransactionDTO struct {
 	Type        transaction.Type `validate:"required,oneof=income expense"`
 	Description string           `validate:"required,min=2,max=200"`
 	CategoryID  uuid.UUID        `validate:"required"`
+	AccountID   *uuid.UUID       `validate:"omitempty"`
 	UserID      uuid.UUID        `validate:"required"`
 	Date        date.Date        `validate:"required"`
 	Tags        []string         `validate:"omitempty,dive,min=1,max=50"`
@@ -35,15 +36,20 @@ type UpdateTransactionDTO struct {
 	Type        *transaction.Type `validate:"omitempty,oneof=income expense"`
 	Description *string           `validate:"omitempty,min=2,max=200"`
 	CategoryID  *uuid.UUID        `validate:"omitempty"`
-	Date        *date.Date        `validate:"omitempty"`
-	Tags        []string          `validate:"omitempty,dive,min=1,max=50"`
+	// AccountID — nil не трогает счёт; ClearAccount отвязывает, вместе с AccountID не приходит.
+	AccountID    *uuid.UUID `validate:"omitempty"`
+	ClearAccount bool
+	Date         *date.Date `validate:"omitempty"`
+	Tags         []string   `validate:"omitempty,dive,min=1,max=50"`
 }
 
 // TransactionFilterDTO represents filtering and pagination options for transactions
 type TransactionFilterDTO struct {
 	// Core filters
-	UserID     *uuid.UUID        `validate:"omitempty"`
-	CategoryID *uuid.UUID        `validate:"omitempty"`
+	UserID     *uuid.UUID `validate:"omitempty"`
+	CategoryID *uuid.UUID `validate:"omitempty"`
+	AccountID  *uuid.UUID `validate:"omitempty"`
+	Unassigned bool
 	Type       *transaction.Type `validate:"omitempty,oneof=income expense"`
 
 	// Date range filters

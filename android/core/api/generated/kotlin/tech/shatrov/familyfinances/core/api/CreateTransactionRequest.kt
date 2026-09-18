@@ -38,6 +38,7 @@ import kotlinx.serialization.Contextual
  * @param categoryId 
  * @param date Календарная дата без времени в часовом поясе семьи (A-06)
  * @param id Необязательный клиентский UUID для идемпотентного повтора; тело повтора игнорируется (A-07)
+ * @param accountId Существующий неархивный счёт, иначе `422`
  * @param tags 
  */
 @Serializable
@@ -64,6 +65,10 @@ data class CreateTransactionRequest (
     /* Необязательный клиентский UUID для идемпотентного повтора; тело повтора игнорируется (A-07) */
     @Contextual @SerialName(value = "id")
     val id: java.util.UUID? = null,
+
+    /* Существующий неархивный счёт, иначе `422` */
+    @Contextual @SerialName(value = "account_id")
+    val accountId: java.util.UUID? = null,
 
     @SerialName(value = "tags")
     val tags: kotlin.collections.List<kotlin.String>? = null

@@ -57,6 +57,8 @@ type FamilyRepository interface {
 	Get(ctx context.Context) (*user.Family, error)
 	Update(ctx context.Context, family *user.Family) error
 	Exists(ctx context.Context) (bool, error)
+	// HasMonetaryData — есть ли операции, сверки или снимки позиций: пока есть, валюту не сменить.
+	HasMonetaryData(ctx context.Context) (bool, error)
 	// Bootstrap — семья, категории и админ одной транзакцией; повтор → user.ErrFamilyExists.
 	Bootstrap(ctx context.Context, family *user.Family, categories []*category.Category, admin *user.User) error
 }

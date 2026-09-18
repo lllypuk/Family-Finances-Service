@@ -22,6 +22,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import tech.shatrov.familyfinances.ACCOUNTS_OK
+import tech.shatrov.familyfinances.CARD_ACCOUNT_ID
 import tech.shatrov.familyfinances.CATEGORIES_OK
 import tech.shatrov.familyfinances.FakeTokenVault
 import tech.shatrov.familyfinances.GROCERIES_ID
@@ -38,6 +40,7 @@ import tech.shatrov.familyfinances.liveToken
 import tech.shatrov.familyfinances.testSession
 import tech.shatrov.familyfinances.ui.UiError
 import java.time.LocalDate
+import java.time.YearMonth
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
@@ -84,6 +87,7 @@ class TransactionsViewModelTest {
 
     private fun enqueueFirstPage(body: String = TRANSACTIONS_PAGE_1) {
         server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
         server.enqueueJson(200, USERS_OK)
         server.enqueueJson(200, body)
     }
@@ -117,7 +121,7 @@ class TransactionsViewModelTest {
         assertTrue(state.hasMore)
         assertEquals("RUB", state.currency)
 
-        val url = lastRequestUrl(3)
+        val url = lastRequestUrl(4)
         assertEquals("/api/v1/transactions", url.encodedPath)
         assertEquals("0", url.queryParameter("offset"))
     }
@@ -136,7 +140,7 @@ class TransactionsViewModelTest {
         assertEquals(LocalDate.parse("2026-09-06"), state.groups[1].date)
         assertFalse(state.hasMore)
         // Справочники за второй страницей не перезапрашиваются: их всего один запрос на экран.
-        assertEquals("2", lastRequestUrl(4).queryParameter("offset"))
+        assertEquals("2", lastRequestUrl(5).queryParameter("offset"))
     }
 
     // Сосед вставил запись перед окном: страница приходит той же, и total её уже считает.
@@ -206,7 +210,7 @@ class TransactionsViewModelTest {
         model.loadMore()
         val state = settleMore()
 
-        val url = lastRequestUrl(5)
+        val url = lastRequestUrl(6)
         assertEquals("0", url.queryParameter("offset"))
         assertEquals("2026-10-01", url.queryParameter("date_from"))
         assertEquals("2026-10-31", url.queryParameter("date_to"))
@@ -232,7 +236,7 @@ class TransactionsViewModelTest {
         model.revalidate()
         settle()
 
-        val url = lastRequestUrl(5)
+        val url = lastRequestUrl(6)
         assertEquals("0", url.queryParameter("offset"))
         assertEquals("2026-10-01", url.queryParameter("date_from"))
         assertEquals("2026-10-31", url.queryParameter("date_to"))
@@ -246,6 +250,8 @@ class TransactionsViewModelTest {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when {
                 request.url.encodedPath.endsWith("/categories") -> jsonResponse(CATEGORIES_OK)
+
+                request.url.encodedPath.endsWith("/accounts") -> jsonResponse(ACCOUNTS_OK)
 
                 request.url.encodedPath.endsWith("/users") -> jsonResponse(USERS_OK)
 
@@ -283,7 +289,7 @@ class TransactionsViewModelTest {
         model.revalidate()
 
         assertTrue(model.state.value is TransactionsUiState.Ready)
-        assertEquals(4, server.requestCount)
+        assertEquals(5, server.requestCount)
     }
 
     // Отказ запроса нового месяца: сентябрьский список нельзя оставить на экране как «этот
@@ -326,7 +332,7 @@ class TransactionsViewModelTest {
         settle()
 
         assertEquals(listOf("Продукты", "Зарплата"), model.categories.value.map { it.name })
-        val url = lastRequestUrl(4)
+        val url = lastRequestUrl(5)
         assertEquals("expense", url.queryParameter("type"))
         assertEquals(GROCERIES_ID, url.queryParameter("category_id"))
         assertEquals("2026-09-01", url.queryParameter("date_from"))
@@ -341,6 +347,8 @@ class TransactionsViewModelTest {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when {
                 request.url.encodedPath.endsWith("/categories") -> jsonResponse(CATEGORIES_OK)
+
+                request.url.encodedPath.endsWith("/accounts") -> jsonResponse(ACCOUNTS_OK)
 
                 request.url.encodedPath.endsWith("/users") -> jsonResponse(USERS_OK)
 
@@ -371,6 +379,7 @@ class TransactionsViewModelTest {
     @Test
     fun memberDoesNotAskForUsers() = runTest {
         server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
         server.enqueueJson(200, TRANSACTIONS_PAGE_1)
 
         createModel(Role.member)
@@ -378,6 +387,44 @@ class TransactionsViewModelTest {
 
         assertNull(state.groups[0].rows[0].authorName)
         assertTrue(state.groups[0].rows[1].isMine)
-        assertEquals("/api/v1/transactions", lastRequestUrl(2).encodedPath)
+        assertEquals("/api/v1/transactions", lastRequestUrl(3).encodedPath)
+    }
+
+    @Test
+    fun accountFilterGoesToQuery() = runTest {
+        enqueueFirstPage()
+        createModel()
+        settle()
+
+        server.enqueueJson(200, TRANSACTIONS_PAGE_1)
+        model.onFiltersChange(TransactionFilters(accountId = UUID.fromString(CARD_ACCOUNT_ID)))
+        settle()
+
+        // Архивные тоже в справочнике: по старой карте фильтровать можно.
+        assertEquals(listOf("Тинькофф", "Старая карта"), model.accounts.value.map { it.name })
+        assertEquals(CARD_ACCOUNT_ID, lastRequestUrl(5).queryParameter("account_id"))
+    }
+
+    // Расшифровка сверки: условия те же, что у `recorded_minor`, иначе список с ней не сойдётся.
+    @Test
+    fun reconciliationFiltersGoToQuery() = runTest {
+        enqueueFirstPage()
+        createModel()
+        settle()
+
+        server.enqueueJson(200, TRANSACTIONS_PAGE_1)
+        model.applyFilters(TransactionFilters.reconciliation(YearMonth.of(2026, 8), accountId = null))
+        settle()
+
+        val url = lastRequestUrl(5)
+        assertEquals("expense", url.queryParameter("type"))
+        assertEquals("2026-08-01", url.queryParameter("date_from"))
+        assertEquals("2026-08-31", url.queryParameter("date_to"))
+        assertEquals("true", url.queryParameter("unassigned"))
+        assertNull(url.queryParameter("account_id"))
+
+        // Тот же фильтр после поворота список не перечитывает.
+        model.applyFilters(TransactionFilters.reconciliation(YearMonth.of(2026, 8), accountId = null))
+        assertEquals(5, server.requestCount)
     }
 }

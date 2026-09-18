@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"time"
 
+	"family-budget-service/internal/domain/account"
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/holding"
 	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
@@ -48,6 +50,16 @@ func CreateTestUser(_ uuid.UUID) *user.User {
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
+}
+
+// CreateTestAccount — активный счёт, ещё не записанный в базу.
+func CreateTestAccount(name string) *account.Account {
+	return &account.Account{ID: uuid.New(), Name: name}
+}
+
+// CreateTestHolding — активная позиция, ещё не записанная в базу.
+func CreateTestHolding(name string, side holding.Side, kind holding.Kind) *holding.Holding {
+	return &holding.Holding{ID: uuid.New(), Name: name, Side: side, Kind: kind}
 }
 
 // CreateTestCategory creates a test category

@@ -18,9 +18,12 @@ import (
 	"family-budget-service/internal/application/handlers"
 	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/user"
+	accountrepo "family-budget-service/internal/infrastructure/account"
 	authrepo "family-budget-service/internal/infrastructure/auth"
 	budgetrepo "family-budget-service/internal/infrastructure/budget"
 	categoryrepo "family-budget-service/internal/infrastructure/category"
+	holdingrepo "family-budget-service/internal/infrastructure/holding"
+	reconciliationrepo "family-budget-service/internal/infrastructure/reconciliation"
 	transactionrepo "family-budget-service/internal/infrastructure/transaction"
 	userrepo "family-budget-service/internal/infrastructure/user"
 	"family-budget-service/internal/metrics"
@@ -86,12 +89,15 @@ func SetupHTTPServer(t *testing.T, opts ...ServerOption) *TestServer {
 	userRepo := userrepo.NewSQLiteRepository(db)
 	categoryRepo := categoryrepo.NewSQLiteRepository(db)
 	repos := &handlers.Repositories{
-		User:        userRepo,
-		Family:      userrepo.NewSQLiteFamilyRepository(db, categoryRepo, userRepo),
-		Budget:      budgetrepo.NewSQLiteRepository(db),
-		Category:    categoryRepo,
-		Transaction: transactionrepo.NewSQLiteRepository(db),
-		Session:     authrepo.NewSessionSQLiteRepository(db),
+		User:           userRepo,
+		Family:         userrepo.NewSQLiteFamilyRepository(db, categoryRepo, userRepo),
+		Budget:         budgetrepo.NewSQLiteRepository(db),
+		Category:       categoryRepo,
+		Account:        accountrepo.NewSQLiteRepository(db),
+		Holding:        holdingrepo.NewSQLiteRepository(db),
+		Reconciliation: reconciliationrepo.NewSQLiteRepository(db),
+		Transaction:    transactionrepo.NewSQLiteRepository(db),
+		Session:        authrepo.NewSessionSQLiteRepository(db),
 	}
 
 	authService := auth.NewService(repos.Session, repos.User, repos.Family)
@@ -120,14 +126,17 @@ func SetupHTTPServer(t *testing.T, opts ...ServerOption) *TestServer {
 
 	// Create services for testing - use simplified version to avoid circular dependencies
 	servicesContainer := services.NewServices(
-		repos.User,        // userRepo
-		repos.Family,      // familyRepo
-		repos.Category,    // categoryRepo
-		repos.Transaction, // transactionRepo
-		repos.Budget,      // budgetRepo for transactions
-		repos.Budget,      // fullBudgetRepo
-		backupService,     // backupService
-		authService,       // authService
+		repos.User,           // userRepo
+		repos.Family,         // familyRepo
+		repos.Category,       // categoryRepo
+		repos.Account,        // accountRepo
+		repos.Holding,        // holdingRepo
+		repos.Reconciliation, // reconciliationRepo
+		repos.Transaction,    // transactionRepo
+		repos.Budget,         // budgetRepo for transactions
+		repos.Budget,         // fullBudgetRepo
+		backupService,        // backupService
+		authService,          // authService
 		params.recognizer,
 		registry.Recognize(),
 		slog.Default(), // logger

@@ -63,11 +63,11 @@ internal fun CategorySheetContent(
         }
         if (allowAll) {
             item {
-                CategoryRow(stringResource(R.string.filter_all_categories), selected == null) { onSelect(null) }
+                SheetRow(stringResource(R.string.filter_all_categories), selected == null) { onSelect(null) }
             }
         }
         items(categories, key = { it.id }) { category ->
-            CategoryRow(category.path(categories), selected == category.id) { onSelect(category.id) }
+            SheetRow(category.path(categories), selected == category.id) { onSelect(category.id) }
         }
     }
 }
@@ -79,7 +79,7 @@ internal fun Category.path(categories: List<Category>): String {
 }
 
 @Composable
-private fun CategoryRow(
+internal fun SheetRow(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,

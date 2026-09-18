@@ -6,12 +6,15 @@ import (
 )
 
 type Repositories struct {
-	User        UserRepository
-	Family      FamilyRepository
-	Category    CategoryRepository
-	Transaction TransactionRepository
-	Budget      BudgetRepository
-	Session     auth.SessionRepository
+	User           UserRepository
+	Family         FamilyRepository
+	Category       CategoryRepository
+	Account        AccountRepository
+	Holding        HoldingRepository
+	Reconciliation ReconciliationRepository
+	Transaction    TransactionRepository
+	Budget         BudgetRepository
+	Session        auth.SessionRepository
 }
 
 // UserRepository переиспользует сервисный контракт.
@@ -22,6 +25,15 @@ type FamilyRepository = services.FamilyRepository
 
 // CategoryRepository переиспользует сервисный контракт.
 type CategoryRepository = services.CategoryRepository
+
+// AccountRepository переиспользует сервисный контракт.
+type AccountRepository = services.AccountRepository
+
+// HoldingRepository переиспользует сервисный контракт.
+type HoldingRepository = services.HoldingRepository
+
+// ReconciliationRepository переиспользует сервисный контракт.
+type ReconciliationRepository = services.ReconciliationRepository
 
 // TransactionRepository переиспользует сервисный контракт.
 type TransactionRepository = services.TransactionRepository

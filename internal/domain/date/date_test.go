@@ -46,6 +46,36 @@ func TestParse_LeapDay(t *testing.T) {
 	require.ErrorIs(t, err, date.ErrInvalidDate)
 }
 
+func TestParseMonth_Valid(t *testing.T) {
+	tests := []struct {
+		input string
+		first date.Date
+		last  date.Date
+	}{
+		{"2026-02", date.New(2026, time.February, 1), date.New(2026, time.February, 28)},
+		{"2024-02", date.New(2024, time.February, 1), date.New(2024, time.February, 29)},
+		{"2026-12", date.New(2026, time.December, 1), date.New(2026, time.December, 31)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			first, last, err := date.ParseMonth(tt.input)
+			require.NoError(t, err)
+			assert.Equal(t, tt.first, first)
+			assert.Equal(t, tt.last, last)
+		})
+	}
+}
+
+func TestParseMonth_Invalid(t *testing.T) {
+	for _, input := range []string{"", "2026-13", "2026-00", "2026-1", "2026-09-01", "09-2026"} {
+		t.Run(input, func(t *testing.T) {
+			_, _, err := date.ParseMonth(input)
+			require.ErrorIs(t, err, date.ErrInvalidDate)
+		})
+	}
+}
+
 func TestDate_New_Normalizes(t *testing.T) {
 	assert.Equal(t, date.Date{Year: 2027, Month: time.January, Day: 1}, date.New(2026, 13, 1))
 	assert.Equal(t, date.Date{Year: 2026, Month: time.March, Day: 1}, date.New(2026, time.February, 29))

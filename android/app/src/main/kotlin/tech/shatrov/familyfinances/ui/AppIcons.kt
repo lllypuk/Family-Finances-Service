@@ -37,9 +37,23 @@ object AppIcons {
             "M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
         )
 
+    val Landmark: ImageVector =
+        icon("landmark", "M3 22h18", "M6 18v-7", "M10 18v-7", "M14 18v-7", "M18 18v-7", "M12 2l8 5H4z")
+
+    val Pencil: ImageVector =
+        icon("pencil", "M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z", "m15 5 4 4")
+
     val Plus: ImageVector = icon("plus", "M12 5v14M5 12h14")
 
     val ArrowLeft: ImageVector = icon("arrow-left", "m12 19-7-7 7-7M19 12H5")
+
+    val ChevronDown: ImageVector = icon("chevron-down", "m6 9 6 6 6-6")
+
+    val ChevronUp: ImageVector = icon("chevron-up", "m18 15-6-6-6 6")
+
+    val ChevronLeft: ImageVector = icon("chevron-left", "m15 18-6-6 6-6")
+
+    val ChevronRight: ImageVector = icon("chevron-right", "m9 18 6-6-6-6")
 
     val Repeat: ImageVector =
         icon("repeat", "m17 2 4 4-4 4", "M3 11v-1a4 4 0 0 1 4-4h14", "m7 22-4-4 4-4", "M21 13v1a4 4 0 0 1-4 4H3")

@@ -8,10 +8,45 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 import tech.shatrov.familyfinances.core.api.Error
+import tech.shatrov.familyfinances.core.api.GetNetWorthStats200Response
 import tech.shatrov.familyfinances.core.api.GetStatsMonthly200Response
 import tech.shatrov.familyfinances.core.api.GetStatsSummary200Response
+import tech.shatrov.familyfinances.core.api.ReconciliationStatsOk
 
 interface StatsApi {
+    /**
+     * GET api/v1/stats/net-worth
+     * Ряд чистого капитала по месяцам
+     * admin и member. По корзине на каждый календарный месяц, попадающий в &#x60;[from, to]&#x60;; корзина — состояние на последний день месяца (для последней — на &#x60;to&#x60;). Значение позиции на дату — её последний снимок не позже этой даты, без срока давности; позиция до первого снимка не входит, архивные входят по своим снимкам. Снимок строго до &#x60;from&#x60; — начальное состояние, снимок ровно на &#x60;from&#x60; — уже изменение. Границы по умолчанию — как у &#x60;getStatsMonthly&#x60;. &#x60;to&#x60; позже сегодняшнего дня в часовом поясе семьи — &#x60;422&#x60; полем &#x60;to&#x60; (проверяется раньше потолка), период шире 120 месяцев — &#x60;422&#x60; полем &#x60;from&#x60;. 
+     * Responses:
+     *  - 200: Помесячный ряд капитала
+     *  - 401: Токена нет, он истёк или отозван (`UNAUTHORIZED`)
+     *  - 403: Роль не даёт доступа к операции (`FORBIDDEN`)
+     *  - 422: Тело или параметры не прошли валидацию (`VALIDATION_ERROR`); поля — в `error.details`
+     *
+     * @param from Начало периода включительно; по умолчанию первое число месяца одиннадцать месяцев назад (optional)
+     * @param to Конец периода включительно, не позже сегодня; по умолчанию сегодня (optional)
+     * @return [GetNetWorthStats200Response]
+     */
+    @GET("api/v1/stats/net-worth")
+    suspend fun getNetWorthStats(@Query("from") from: java.time.LocalDate? = null, @Query("to") to: java.time.LocalDate? = null): Response<GetNetWorthStats200Response>
+
+    /**
+     * GET api/v1/stats/reconciliation
+     * Сверка счетов за месяц
+     * admin и member. Строка на каждый неархивный счёт и на архивный, у которого в месяце есть расход или сверка. &#x60;recorded_minor&#x60; — сумма расходов (&#x60;type &#x3D; expense&#x60;) по счёту за календарный месяц; доходы её не уменьшают. &#x60;unassigned_minor&#x60; — расходы без счёта. 
+     * Responses:
+     *  - 200: Сверка счетов за месяц
+     *  - 401: Токена нет, он истёк или отозван (`UNAUTHORIZED`)
+     *  - 403: Роль не даёт доступа к операции (`FORBIDDEN`)
+     *  - 422: Тело или параметры не прошли валидацию (`VALIDATION_ERROR`); поля — в `error.details`
+     *
+     * @param month Календарный месяц &#x60;YYYY-MM&#x60;; по умолчанию текущий в часовом поясе семьи (optional)
+     * @return [ReconciliationStatsOk]
+     */
+    @GET("api/v1/stats/reconciliation")
+    suspend fun getReconciliationStats(@Query("month") month: kotlin.String? = null): Response<ReconciliationStatsOk>
+
     /**
      * GET api/v1/stats/monthly
      * Ряд итогов по месяцам

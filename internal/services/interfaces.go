@@ -6,10 +6,13 @@ import (
 
 	"github.com/google/uuid"
 
+	"family-budget-service/internal/domain/account"
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/holding"
 	"family-budget-service/internal/domain/money"
+	"family-budget-service/internal/domain/reconciliation"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/recognize"
@@ -56,6 +59,54 @@ type CategoryService interface {
 	GetCategoryHierarchy(ctx context.Context) ([]*category.Category, error)
 	ValidateCategoryHierarchy(ctx context.Context, categoryID, parentID uuid.UUID) error
 	CheckCategoryUsage(ctx context.Context, categoryID uuid.UUID) (bool, error)
+}
+
+// AccountService — справочник счетов; id в Create — клиентский, nil — сгенерировать.
+type AccountService interface {
+	Create(ctx context.Context, id *uuid.UUID, name string) (*account.Account, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*account.Account, error)
+	List(ctx context.Context, includeArchived bool) ([]*account.Account, error)
+	Update(ctx context.Context, id uuid.UUID, name *string, archived *bool) (*account.Account, error)
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+// HoldingService — справочник активов и пассивов; current считается на сегодня в зоне семьи.
+type HoldingService interface {
+	Create(
+		ctx context.Context,
+		id *uuid.UUID,
+		name string,
+		side holding.Side,
+		kind holding.Kind,
+	) (*holding.Holding, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*holding.Holding, error)
+	List(ctx context.Context, includeArchived bool) ([]*holding.Holding, error)
+	Update(
+		ctx context.Context,
+		id uuid.UUID,
+		name *string,
+		kind *holding.Kind,
+		archived *bool,
+	) (*holding.Holding, error)
+	Delete(ctx context.Context, id uuid.UUID) error
+	PutValue(ctx context.Context, id uuid.UUID, day date.Date, value money.Minor) (*holding.Value, error)
+	DeleteValue(ctx context.Context, id uuid.UUID, day date.Date) error
+	ListValues(ctx context.Context, id uuid.UUID, limit, offset int) ([]*holding.Value, int, error)
+}
+
+// ReconciliationService — сверка счетов по месяцам; month — любой день месяца.
+type ReconciliationService interface {
+	// Put заменяет сверку целиком; неизвестный счёт — account.ErrNotFound.
+	Put(
+		ctx context.Context,
+		accountID uuid.UUID,
+		month date.Date,
+		bankExpense money.Minor,
+		note string,
+	) (*reconciliation.Reconciliation, error)
+	Delete(ctx context.Context, accountID uuid.UUID, month date.Date) error
+	// Summary — записанное против банка по счетам; nil — текущий месяц в поясе семьи.
+	Summary(ctx context.Context, month *date.Date) (*dto.ReconciliationStats, error)
 }
 
 // TransactionService defines business operations for transaction management
@@ -127,6 +178,8 @@ type StatsService interface {
 	Summary(ctx context.Context, from, to *date.Date) (*dto.StatsSummary, error)
 	// Monthly — ряд по месяцам периода; пустые границы означают двенадцать месяцев по сегодняшний.
 	Monthly(ctx context.Context, from, to *date.Date) (*dto.StatsMonthly, error)
+	// NetWorth — ряд капитала; границы как у Monthly, to позже сегодня — ErrStatsPeriodInFuture.
+	NetWorth(ctx context.Context, from, to *date.Date) (*dto.StatsNetWorth, error)
 }
 
 // RecognizeService — кандидаты операций со скриншотов; Budget — худший срок вызова модели, ноль у выключенного плеча.

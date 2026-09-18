@@ -34,7 +34,7 @@ const (
 	ErrCodeCannotDeactivateSelf = "CANNOT_DEACTIVATE_SELF"
 	// ErrCodeLastAdmin signals an attempt to deactivate or demote the last active admin.
 	ErrCodeLastAdmin = "LAST_ADMIN"
-	// ErrCodeCurrencyLocked signals a currency change on a family that already has transactions.
+	// ErrCodeCurrencyLocked signals a currency change on a family that already has transactions, reconciliations or holding values.
 	ErrCodeCurrencyLocked = "CURRENCY_LOCKED"
 	// ErrCodeBudgetOverlap signals a budget whose period overlaps another budget of the same scope.
 	ErrCodeBudgetOverlap = "BUDGET_OVERLAP"
@@ -46,6 +46,20 @@ const (
 	ErrCodeBudgetIDExists = "BUDGET_ID_EXISTS"
 	// ErrCodeBudgetNotTail signals an operation on a stale tail: the series has already advanced.
 	ErrCodeBudgetNotTail = "BUDGET_NOT_TAIL"
+	// ErrCodeAccountNotFound signals that the requested account does not exist.
+	ErrCodeAccountNotFound = "ACCOUNT_NOT_FOUND"
+	// ErrCodeAccountNameExists signals an account name already taken, by an archived account too.
+	ErrCodeAccountNameExists = "ACCOUNT_NAME_EXISTS"
+	// ErrCodeAccountInUse signals a delete of an account referenced by transactions or reconciliations.
+	ErrCodeAccountInUse = "ACCOUNT_IN_USE"
+	// ErrCodeHoldingNotFound signals that the requested holding does not exist.
+	ErrCodeHoldingNotFound = "HOLDING_NOT_FOUND"
+	// ErrCodeHoldingNameExists signals a holding name already taken, by an archived holding too.
+	ErrCodeHoldingNameExists = "HOLDING_NAME_EXISTS"
+	// ErrCodeHoldingValueNotFound signals that the holding has no value on the date.
+	ErrCodeHoldingValueNotFound = "HOLDING_VALUE_NOT_FOUND"
+	// ErrCodeReconciliationNotFound signals that the account has no reconciliation for the month.
+	ErrCodeReconciliationNotFound = "RECONCILIATION_NOT_FOUND"
 	// ErrCodeInvalidQueryParam маркирует деталь ошибки 422 по query-параметру.
 	ErrCodeInvalidQueryParam = "INVALID_QUERY_PARAM"
 	// ErrCodeInvalidBackupName signals a backup filename outside the `backup_*.db` pattern.
@@ -84,12 +98,22 @@ const (
 	ErrMessageCannotDeactivate       = "Cannot deactivate your own account"
 	ErrMessageEmailTaken             = "Email already exists"
 	ErrMessageLastAdmin              = "Cannot deactivate or demote the last administrator"
-	ErrMessageCurrencyLocked         = "Currency cannot be changed while transactions exist"
+	ErrMessageCurrencyLocked         = "Currency cannot be changed while transactions, reconciliations or holding values exist"
 	ErrMessageBudgetOverlap          = "Budget period overlaps with an existing budget"
 	ErrMessageBudgetNameExists       = "Budget with this name already exists for this period"
 	ErrMessageBudgetBelowSpent       = "Budget amount is less than already spent"
 	ErrMessageBudgetIDExists         = "Budget id is already taken by a deleted budget"
 	ErrMessageBudgetNotTail          = "Budget has already advanced to the next period"
+	ErrMessageInvalidAccountID       = "Invalid account ID format"
+	ErrMessageAccountNotFound        = "Account not found"
+	ErrMessageAccountNameExists      = "Account with this name already exists"
+	ErrMessageAccountInUse           = "Account has transactions or reconciliations; archive it instead"
+	ErrMessageReconciliationNotFound = "Reconciliation not found"
+	ErrMessageInvalidHoldingID       = "Invalid holding ID format"
+	ErrMessageHoldingNotFound        = "Holding not found"
+	ErrMessageHoldingNameExists      = "Holding with this name already exists"
+	ErrMessageHoldingValueNotFound   = "Holding value not found"
+	ErrMessageInvalidValueDate       = "Invalid date format, expected YYYY-MM-DD"
 	ErrMessageInvalidBackupName      = "Invalid backup filename"
 	ErrMessageBackupNotFound         = "Backup not found"
 	ErrMessageBackupFailed           = "Failed to create backup"
@@ -115,4 +139,10 @@ const (
 	fieldStartDate   = "start_date"
 	fieldEndDate     = "end_date"
 	fieldRecurring   = "recurring"
+	fieldAccountID   = "account_id"
+	fieldClearAcct   = "clear_account"
+	fieldUnassigned  = "unassigned"
+	fieldSide        = "side"
+	fieldKind        = "kind"
+	fieldValueMinor  = "value_minor"
 )

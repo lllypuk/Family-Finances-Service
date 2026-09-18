@@ -28,13 +28,13 @@ interface FamilyApi {
     /**
      * PUT api/v1/family
      * Изменить семью
-     * Только admin. Смена &#x60;currency&#x60; при наличии транзакций запрещена — &#x60;409 CURRENCY_LOCKED&#x60; (A-05). &#x60;timezone&#x60; — IANA-имя, в нём считаются «сегодня» и границы периодов (A-06). 
+     * Только admin. Смена &#x60;currency&#x60; при наличии транзакций, сверок или снимков позиций запрещена — &#x60;409 CURRENCY_LOCKED&#x60; (A-05). &#x60;timezone&#x60; — IANA-имя, в нём считаются «сегодня» и границы периодов (A-06). 
      * Responses:
      *  - 200: Семья
      *  - 400: Тело или идентификатор не разобрались: `INVALID_REQUEST` (сломанный JSON или неверный тип поля), `INVALID_ID` (в пути не UUID). Ошибки валидации значений — это `422`. 
      *  - 401: Токена нет, он истёк или отозван (`UNAUTHORIZED`)
      *  - 403: Роль не даёт доступа к операции (`FORBIDDEN`)
-     *  - 409: Состояние не допускает операцию: `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`, `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN`, `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`, `BUDGET_BELOW_SPENT`, `BUDGET_ID_EXISTS`, `BUDGET_NOT_TAIL` 
+     *  - 409: Состояние не допускает операцию: `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`, `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN`, `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`, `BUDGET_BELOW_SPENT`, `BUDGET_ID_EXISTS`, `BUDGET_NOT_TAIL`, `ACCOUNT_NAME_EXISTS`, `ACCOUNT_IN_USE`, `HOLDING_NAME_EXISTS` 
      *  - 422: Тело или параметры не прошли валидацию (`VALIDATION_ERROR`); поля — в `error.details`
      *
      * @param updateFamilyRequest 

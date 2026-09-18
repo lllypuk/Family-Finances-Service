@@ -26,7 +26,7 @@ info:
     `VALIDATION_ERROR` (422 — тело или query-параметры не прошли проверку, поля в `error.details`),
     `SETUP_REQUIRED` / `CURRENCY_LOCKED` / `LAST_ADMIN` / `CANNOT_DEACTIVATE_SELF` /
     `EMAIL_TAKEN` / `BUDGET_OVERLAP` / `BUDGET_NAME_EXISTS` / `BUDGET_BELOW_SPENT` /
-    `BUDGET_ID_EXISTS` / `BUDGET_NOT_TAIL` (409),
+    `BUDGET_ID_EXISTS` / `BUDGET_NOT_TAIL` / `HOLDING_NAME_EXISTS` (409),
     `RATE_LIMITED` (429, с `Retry-After`), `INTERNAL_ERROR` (500),
     `RECOGNITION_FAILED` (502), `RECOGNITION_UNAVAILABLE` (503, `Retry-After`, когда известен).
   license:
@@ -48,6 +48,10 @@ tags:
     description: Управление пользователями, только admin
   - name: categories
     description: Категории доходов и расходов
+  - name: accounts
+    description: Платёжные счета семьи для ежемесячной сверки расходов
+  - name: holdings
+    description: Активы и пассивы семьи для расчёта чистого капитала
   - name: transactions
     description: Операции семьи
   - name: budgets
@@ -229,7 +233,7 @@ paths:
       tags: [family]
       summary: Изменить семью
       description: |
-        Только admin. Смена `currency` при наличии транзакций запрещена — `409 CURRENCY_LOCKED` (A-05).
+        Только admin. Смена `currency` при наличии транзакций, сверок или снимков позиций запрещена — `409 CURRENCY_LOCKED` (A-05).
         `timezone` — IANA-имя, в нём считаются «сегодня» и границы периодов (A-06).
       requestBody:
         required: true
@@ -464,6 +468,301 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /api/v1/accounts:
+    get:
+      operationId: listAccounts
+      tags: [accounts]
+      summary: Счета семьи
+      description: admin и member. Порядок — по имени без учёта регистра.
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Offset' }
+        - name: archived
+          in: query
+          required: false
+          description: '`true` добавляет в список архивные счета'
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Список счетов
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Account' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    post:
+      operationId: createAccount
+      tags: [accounts]
+      summary: Создать счёт
+      description: |
+        admin и member. Повтор с тем же `id` возвращает `200` с существующим счётом; остальное тело
+        при этом игнорируется (A-07). Имя уникально в семье без учёта регистра и пробелов по краям,
+        архивный счёт его тоже занимает — `409 ACCOUNT_NAME_EXISTS`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAccountRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/AccountOk' }
+        '200': { $ref: '#/components/responses/AccountOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /api/v1/accounts/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/PathID' }
+    put:
+      operationId: updateAccount
+      tags: [accounts]
+      summary: Переименовать, архивировать или вернуть счёт
+      description: admin и member. Архивный счёт скрыт из списка без `?archived=true` и не назначается
+        новым операциям.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateAccountRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/AccountOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      operationId: deleteAccount
+      tags: [accounts]
+      summary: Удалить счёт
+      description: |
+        Только admin. Счёт с операциями или сверками не удаляется — `409 ACCOUNT_IN_USE`;
+        перевыпущенную карту архивируют.
+      responses:
+        '204': { description: Счёт удалён }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/v1/holdings:
+    get:
+      operationId: listHoldings
+      tags: [holdings]
+      summary: Активы и пассивы семьи
+      description: |
+        admin и member. Порядок — по имени без учёта регистра. `current` — последний снимок с датой не позже
+        сегодняшнего дня в часовом поясе семьи, `null` — снимков нет.
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Offset' }
+        - name: archived
+          in: query
+          required: false
+          description: '`true` добавляет в список архивные позиции'
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Список позиций
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Holding' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    post:
+      operationId: createHolding
+      tags: [holdings]
+      summary: Создать актив или пассив
+      description: |
+        admin и member. Повтор с тем же `id` возвращает `200` с существующей позицией; остальное тело
+        при этом игнорируется (A-07). Имя уникально в семье без учёта регистра и пробелов по краям,
+        архивная позиция его тоже занимает — `409 HOLDING_NAME_EXISTS`. `kind` не из списка своей
+        стороны — `422`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateHoldingRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/HoldingOk' }
+        '200': { $ref: '#/components/responses/HoldingOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /api/v1/holdings/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/PathID' }
+    put:
+      operationId: updateHolding
+      tags: [holdings]
+      summary: Переименовать, сменить вид, архивировать или вернуть позицию
+      description: |
+        admin и member. `side` не меняется: поля в запросе нет, присланное игнорируется. Архив только
+        прячет позицию из списка без `?archived=true` — в капитале она остаётся по своим снимкам;
+        прекращение стоимости — снимок `0`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateHoldingRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/HoldingOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      operationId: deleteHolding
+      tags: [holdings]
+      summary: Удалить позицию
+      description: |
+        Только admin. Снимки удаляются вместе с позицией, и прошлые значения капитала меняются — это
+        исправление ошибочно заведённой позиции. Проданное имущество — снимок `0` и архив.
+      responses:
+        '204': { description: Позиция удалена }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/holdings/{id}/values:
+    parameters:
+      - { $ref: '#/components/parameters/PathID' }
+    get:
+      operationId: listHoldingValues
+      tags: [holdings]
+      summary: История снимков позиции
+      description: admin и member. Новые сверху; архивной позиции тоже.
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Offset' }
+      responses:
+        '200':
+          description: Снимки позиции
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/HoldingValue' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /api/v1/holdings/{id}/values/{date}:
+    parameters:
+      - { $ref: '#/components/parameters/PathID' }
+      - name: date
+        in: path
+        required: true
+        description: Дата снимка `YYYY-MM-DD`; иное — `400`
+        schema: { $ref: '#/components/schemas/CalendarDate' }
+    put:
+      operationId: putHoldingValue
+      tags: [holdings]
+      summary: Записать стоимость позиции на дату
+      description: |
+        admin и member. Снимок на ту же дату заменяется. Дата позже сегодняшнего дня в часовом поясе
+        семьи — `422` с `field: date`. `0` законен: так закрывают проданное и погашенное. Архивной
+        позиции снимки тоже пишутся — история правится независимо от видимости.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HoldingValueRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/HoldingValueOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      operationId: deleteHoldingValue
+      tags: [holdings]
+      summary: Удалить снимок
+      description: |
+        admin и member. `HOLDING_NOT_FOUND` или `HOLDING_VALUE_NOT_FOUND` — `404`. Прошлые значения
+        капитала пересчитываются: позиция переносит вперёд предыдущий снимок.
+      responses:
+        '204': { description: Снимок удалён }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/accounts/{id}/reconciliations/{month}:
+    parameters:
+      - { $ref: '#/components/parameters/PathID' }
+      - name: month
+        in: path
+        required: true
+        description: Календарный месяц `YYYY-MM`; иное — `422`
+        schema: { type: string, examples: ['2026-09'] }
+    put:
+      operationId: putReconciliation
+      tags: [accounts]
+      summary: Записать цифру банка за месяц
+      description: |
+        admin и member. Полная замена: без `note` заметка очищается. Записанное не хранится — его
+        считает `GET /stats/reconciliation`, поэтому дописанная операция меняет разницу без нового
+        `PUT`. Месяц не блокируется. `bank_expense_minor` — `0 … 99999999999`, иначе `422`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReconciliationRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/ReconciliationOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      operationId: deleteReconciliation
+      tags: [accounts]
+      summary: Удалить сверку за месяц
+      description: admin и member. `ACCOUNT_NOT_FOUND` или `RECONCILIATION_NOT_FOUND` — `404`.
+      responses:
+        '204': { description: Сверка удалена }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
   /api/v1/transactions:
     get:
       operationId: listTransactions
@@ -479,6 +778,14 @@ paths:
         - name: category_id
           in: query
           schema: { type: string, format: uuid }
+        - name: account_id
+          in: query
+          description: Только операции этого счёта; вместе с `unassigned=true` — `422`
+          schema: { type: string, format: uuid }
+        - name: unassigned
+          in: query
+          description: '`true` — только операции без счёта'
+          schema: { type: boolean }
         - name: type
           in: query
           schema: { $ref: '#/components/schemas/TransactionType' }
@@ -859,6 +1166,63 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
 
+  /api/v1/stats/net-worth:
+    get:
+      operationId: getNetWorthStats
+      tags: [stats]
+      summary: Ряд чистого капитала по месяцам
+      description: |
+        admin и member. По корзине на каждый календарный месяц, попадающий в `[from, to]`;
+        корзина — состояние на последний день месяца (для последней — на `to`). Значение позиции на
+        дату — её последний снимок не позже этой даты, без срока давности; позиция до первого снимка
+        не входит, архивные входят по своим снимкам. Снимок строго до `from` — начальное состояние,
+        снимок ровно на `from` — уже изменение. Границы по умолчанию — как у `getStatsMonthly`.
+        `to` позже сегодняшнего дня в часовом поясе семьи — `422` полем `to` (проверяется раньше
+        потолка), период шире 120 месяцев — `422` полем `from`.
+      parameters:
+        - name: from
+          in: query
+          description: Начало периода включительно; по умолчанию первое число месяца одиннадцать месяцев назад
+          schema: { $ref: '#/components/schemas/CalendarDate' }
+        - name: to
+          in: query
+          description: Конец периода включительно, не позже сегодня; по умолчанию сегодня
+          schema: { $ref: '#/components/schemas/CalendarDate' }
+      responses:
+        '200':
+          description: Помесячный ряд капитала
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { $ref: '#/components/schemas/StatsNetWorth' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /api/v1/stats/reconciliation:
+    get:
+      operationId: getReconciliationStats
+      tags: [stats]
+      summary: Сверка счетов за месяц
+      description: |
+        admin и member. Строка на каждый неархивный счёт и на архивный, у которого в месяце есть
+        расход или сверка. `recorded_minor` — сумма расходов (`type = expense`) по счёту за
+        календарный месяц; доходы её не уменьшают. `unassigned_minor` — расходы без счёта.
+      parameters:
+        - name: month
+          in: query
+          description: Календарный месяц `YYYY-MM`; по умолчанию текущий в часовом поясе семьи
+          schema: { type: string, examples: ['2026-09'] }
+      responses:
+        '200': { $ref: '#/components/responses/ReconciliationStatsOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
   /api/v1/backups:
     get:
       operationId: listBackups
@@ -1019,7 +1383,8 @@ components:
       description: |
         Состояние не допускает операцию: `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`,
         `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN`, `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`,
-        `BUDGET_BELOW_SPENT`, `BUDGET_ID_EXISTS`, `BUDGET_NOT_TAIL`
+        `BUDGET_BELOW_SPENT`, `BUDGET_ID_EXISTS`, `BUDGET_NOT_TAIL`, `ACCOUNT_NAME_EXISTS`,
+        `ACCOUNT_IN_USE`, `HOLDING_NAME_EXISTS`
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1052,6 +1417,31 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/CategoryOk' }
+    AccountOk:
+      description: Счёт
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/AccountOk' }
+    HoldingOk:
+      description: Позиция
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/HoldingOk' }
+    HoldingValueOk:
+      description: Снимок стоимости
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/HoldingValueOk' }
+    ReconciliationOk:
+      description: Сверка
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ReconciliationOk' }
+    ReconciliationStatsOk:
+      description: Сверка счетов за месяц
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ReconciliationStatsOk' }
     TransactionOk:
       description: Транзакция
       content:
@@ -1163,6 +1553,36 @@ components:
       required: [data, meta]
       properties:
         data: { $ref: '#/components/schemas/Category' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    AccountOk:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/Account' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    HoldingOk:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/Holding' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    HoldingValueOk:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/HoldingValue' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    ReconciliationOk:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/Reconciliation' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    ReconciliationStatsOk:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/ReconciliationStats' }
         meta: { $ref: '#/components/schemas/Meta' }
     TransactionOk:
       type: object
@@ -1334,7 +1754,7 @@ components:
         currency:
           type: string
           pattern: '^[A-Z]{3}$'
-          description: Меняется только пока в семье нет транзакций, иначе `409 CURRENCY_LOCKED`
+          description: Меняется только пока в семье нет транзакций, сверок и снимков позиций, иначе `409 CURRENCY_LOCKED`
         timezone: { type: string }
 
     Category:
@@ -1378,6 +1798,171 @@ components:
         color: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
         icon: { type: string }
 
+    Account:
+      type: object
+      required: [id, name, is_archived, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        is_archived: { type: boolean }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    CreateAccountRequest:
+      type: object
+      required: [name]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Необязательный клиентский UUID для идемпотентного повтора; тело повтора игнорируется (A-07)
+        name:
+          type: string
+          maxLength: 50
+          description: Пробелы по краям обрезаются; пустое после обрезки — `422`
+    UpdateAccountRequest:
+      type: object
+      minProperties: 1
+      description: Хотя бы одно поле обязательно
+      properties:
+        name: { type: string, maxLength: 50 }
+        is_archived: { type: boolean }
+    HoldingSide:
+      type: string
+      enum: [asset, liability]
+      description: Знак вклада в капитал; задаётся при создании и не меняется
+    HoldingKind:
+      type: string
+      description: |
+        Вид позиции. Активы — `cash`, `deposit`, `investment`, `property`, `vehicle`, `other`;
+        пассивы — `mortgage`, `loan`, `credit_card`, `other`. Не `enum`: список может расти, и
+        неизвестный вид клиент показывает как `other`.
+    Holding:
+      type: object
+      required: [id, name, side, kind, is_archived, current, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        side: { $ref: '#/components/schemas/HoldingSide' }
+        kind: { $ref: '#/components/schemas/HoldingKind' }
+        is_archived: { type: boolean }
+        current:
+          oneOf:
+            - { $ref: '#/components/schemas/HoldingCurrent' }
+            - { type: 'null' }
+          description: Последний снимок не позже сегодняшнего дня семьи; `null` — снимков нет
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    HoldingCurrent:
+      type: object
+      required: [date, value_minor]
+      properties:
+        date: { $ref: '#/components/schemas/CalendarDate' }
+        value_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          minimum: 0
+    CreateHoldingRequest:
+      type: object
+      required: [name, side, kind]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Необязательный клиентский UUID для идемпотентного повтора; тело повтора игнорируется (A-07)
+        name:
+          type: string
+          maxLength: 50
+          description: Пробелы по краям обрезаются; пустое после обрезки — `422`
+        side: { $ref: '#/components/schemas/HoldingSide' }
+        kind: { $ref: '#/components/schemas/HoldingKind' }
+    UpdateHoldingRequest:
+      type: object
+      minProperties: 1
+      description: Хотя бы одно поле обязательно; `side` не меняется
+      properties:
+        name: { type: string, maxLength: 50 }
+        kind: { $ref: '#/components/schemas/HoldingKind' }
+        is_archived: { type: boolean }
+    HoldingValueRequest:
+      type: object
+      required: [value_minor]
+      properties:
+        value_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          minimum: 0
+          description: Стоимость позиции на дату; знак даёт `side`, отрицательное — `422`
+    HoldingValue:
+      type: object
+      required: [date, value_minor, updated_at]
+      properties:
+        date: { $ref: '#/components/schemas/CalendarDate' }
+        value_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          minimum: 0
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    ReconciliationRequest:
+      type: object
+      required: [bank_expense_minor]
+      properties:
+        bank_expense_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: Траты по счёту за месяц по данным банка; отрицательное — `422`
+        note:
+          type: string
+          maxLength: 500
+          description: Нет поля — заметка очищается
+    Reconciliation:
+      type: object
+      required: [account_id, month, bank_expense_minor, note, updated_at]
+      properties:
+        account_id: { type: string, format: uuid }
+        month:
+          type: string
+          description: Календарный месяц `YYYY-MM`
+          examples: ['2026-09']
+        bank_expense_minor: { $ref: '#/components/schemas/Money' }
+        note: { type: string }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    ReconciliationStats:
+      type: object
+      required: [month, unassigned_minor, accounts]
+      properties:
+        month:
+          type: string
+          description: Календарный месяц `YYYY-MM`
+          examples: ['2026-09']
+        unassigned_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: Расходы месяца без счёта
+        accounts:
+          type: array
+          description: По имени счёта без учёта регистра
+          items: { $ref: '#/components/schemas/ReconciliationRow' }
+    ReconciliationRow:
+      type: object
+      required: [account, recorded_minor, bank_expense_minor, diff_minor, note, updated_at]
+      description: Пока сверки нет, `bank_expense_minor`, `diff_minor`, `note` и `updated_at` — null
+      properties:
+        account: { $ref: '#/components/schemas/Account' }
+        recorded_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: Записанные расходы по счёту за месяц
+        bank_expense_minor:
+          oneOf:
+            - { $ref: '#/components/schemas/Money' }
+            - { type: 'null' }
+        diff_minor:
+          oneOf:
+            - { $ref: '#/components/schemas/Money' }
+            - { type: 'null' }
+          description: '`bank_expense_minor - recorded_minor`; больше нуля — не записали, меньше — лишнее'
+        note:
+          oneOf:
+            - { type: string }
+            - { type: 'null' }
+        updated_at:
+          oneOf:
+            - { $ref: '#/components/schemas/Timestamp' }
+            - { type: 'null' }
     Transaction:
       type: object
       required: [id, amount_minor, type, description, category_id, user_id, date, tags, created_at, updated_at]
@@ -1387,6 +1972,11 @@ components:
         type: { $ref: '#/components/schemas/TransactionType' }
         description: { type: string }
         category_id: { type: string, format: uuid }
+        account_id:
+          oneOf:
+            - { type: string, format: uuid }
+            - { type: 'null' }
+          description: Счёт операции; null — без счёта
         user_id:
           type: string
           format: uuid
@@ -1411,6 +2001,10 @@ components:
         type: { $ref: '#/components/schemas/TransactionType' }
         description: { type: string, minLength: 2, maxLength: 200 }
         category_id: { type: string, format: uuid }
+        account_id:
+          type: string
+          format: uuid
+          description: Существующий неархивный счёт, иначе `422`
         date: { $ref: '#/components/schemas/CalendarDate' }
         tags:
           type: array
@@ -1426,6 +2020,15 @@ components:
         type: { $ref: '#/components/schemas/TransactionType' }
         description: { type: string, minLength: 2, maxLength: 200 }
         category_id: { type: string, format: uuid }
+        account_id:
+          type: string
+          format: uuid
+          description: |
+            Назначить счёт; без поля счёт не меняется. Проверяется (существует, не в архиве), только если
+            отличается от сохранённого
+        clear_account:
+          type: boolean
+          description: '`true` — отвязать счёт; вместе с `account_id` — `422`'
         date: { $ref: '#/components/schemas/CalendarDate' }
         tags:
           type: array
@@ -1642,6 +2245,33 @@ components:
           allOf: [{ $ref: '#/components/schemas/Money' }]
           description: '`income_minor - expenses_minor`'
         transaction_count: { type: integer }
+    StatsNetWorth:
+      type: object
+      required: [from, to, months]
+      properties:
+        from: { $ref: '#/components/schemas/CalendarDate' }
+        to: { $ref: '#/components/schemas/CalendarDate' }
+        months:
+          type: array
+          description: По корзине на каждый месяц периода, по возрастанию месяца; без снимков — нули
+          items: { $ref: '#/components/schemas/NetWorthMonth' }
+    NetWorthMonth:
+      type: object
+      required: [month, assets_minor, liabilities_minor, net_minor]
+      description: |
+        Суммы нескольких позиций, поэтому не `Money`: `maximum` у них нет, в минимальных единицах
+        валюты семьи.
+      properties:
+        month:
+          type: string
+          description: Календарный месяц `YYYY-MM`
+          examples: ['2026-09']
+        assets_minor: { type: integer, format: int64, minimum: 0 }
+        liabilities_minor: { type: integer, format: int64, minimum: 0 }
+        net_minor:
+          type: integer
+          format: int64
+          description: '`assets_minor - liabilities_minor`, может быть отрицательным'
     RecentTransactionItem:
       type: object
       required: [id, type, amount_minor, description, date, created_at]

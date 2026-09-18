@@ -166,17 +166,94 @@ type CategoryResponse struct {
 	UpdatedAt time.Time  `json:"updated_at"`
 }
 
+type CreateAccountRequest struct {
+	ID   *uuid.UUID `json:"id,omitempty"`
+	Name string     `json:"name"         validate:"required,max=50"`
+}
+
+// UpdateAccountRequest — частичное обновление; пустое тело — 422.
+type UpdateAccountRequest struct {
+	Name       *string `json:"name,omitempty"        validate:"omitempty,max=50"`
+	IsArchived *bool   `json:"is_archived,omitempty"`
+}
+
+type AccountResponse struct {
+	ID         uuid.UUID `json:"id"`
+	Name       string    `json:"name"`
+	IsArchived bool      `json:"is_archived"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+type CreateHoldingRequest struct {
+	ID   *uuid.UUID `json:"id,omitempty"`
+	Name string     `json:"name"         validate:"required,max=50"`
+	Side string     `json:"side"         validate:"required,oneof=asset liability"`
+	Kind string     `json:"kind"         validate:"required"`
+}
+
+// UpdateHoldingRequest — частичное обновление; side здесь нет, присланный ключ игнорируется.
+type UpdateHoldingRequest struct {
+	Name       *string `json:"name,omitempty"        validate:"omitempty,max=50"`
+	Kind       *string `json:"kind,omitempty"`
+	IsArchived *bool   `json:"is_archived,omitempty"`
+}
+
+type HoldingResponse struct {
+	ID         uuid.UUID               `json:"id"`
+	Name       string                  `json:"name"`
+	Side       string                  `json:"side"`
+	Kind       string                  `json:"kind"`
+	IsArchived bool                    `json:"is_archived"`
+	Current    *HoldingCurrentResponse `json:"current"`
+	CreatedAt  time.Time               `json:"created_at"`
+	UpdatedAt  time.Time               `json:"updated_at"`
+}
+
+// HoldingCurrentResponse — последний снимок не позже сегодняшнего дня семьи.
+type HoldingCurrentResponse struct {
+	Date       date.Date   `json:"date"`
+	ValueMinor money.Minor `json:"value_minor"`
+}
+
+// HoldingValueRequest — ValueMinor указатель, иначе required отверг бы законный 0.
+type HoldingValueRequest struct {
+	ValueMinor *money.Minor `json:"value_minor" validate:"required"`
+}
+
+type HoldingValueResponse struct {
+	Date       date.Date   `json:"date"`
+	ValueMinor money.Minor `json:"value_minor"`
+	UpdatedAt  time.Time   `json:"updated_at"`
+}
+
+// ReconciliationRequest — полная замена сверки: без note заметка очищается.
+// BankExpenseMinor — указатель, иначе required отверг бы законный 0.
+type ReconciliationRequest struct {
+	BankExpenseMinor *money.Minor `json:"bank_expense_minor" validate:"required"`
+	Note             string       `json:"note"               validate:"max=500"`
+}
+
+type ReconciliationResponse struct {
+	AccountID        uuid.UUID   `json:"account_id"`
+	Month            string      `json:"month"`
+	BankExpenseMinor money.Minor `json:"bank_expense_minor"`
+	Note             string      `json:"note"`
+	UpdatedAt        time.Time   `json:"updated_at"`
+}
+
 // CreateTransactionRequest represents the request payload for creating a new transaction.
 // Поля user_id здесь нет намеренно: автор записи берётся из сессии
 // (CreateTransaction читает её через auth.FromContext),
 // иначе клиент писал бы от чужого имени — S-01.
 type CreateTransactionRequest struct {
 	ID          *uuid.UUID  `json:"id,omitempty"`
-	AmountMinor money.Minor `json:"amount_minor"   validate:"required,gt=0"`
-	Type        string      `json:"type"           validate:"required,oneof=income expense"`
-	Description string      `json:"description"    validate:"required,min=2,max=200"`
-	CategoryID  uuid.UUID   `json:"category_id"    validate:"required"`
-	Date        date.Date   `json:"date"           validate:"required"`
+	AmountMinor money.Minor `json:"amount_minor"         validate:"required,gt=0"`
+	Type        string      `json:"type"                 validate:"required,oneof=income expense"`
+	Description string      `json:"description"          validate:"required,min=2,max=200"`
+	CategoryID  uuid.UUID   `json:"category_id"          validate:"required"`
+	AccountID   *uuid.UUID  `json:"account_id,omitempty"`
+	Date        date.Date   `json:"date"                 validate:"required"`
 	Tags        []string    `json:"tags,omitempty"`
 }
 
@@ -185,14 +262,17 @@ type UpdateTransactionRequest struct {
 	Type        *string      `json:"type,omitempty"         validate:"omitempty,oneof=income expense"`
 	Description *string      `json:"description,omitempty"  validate:"omitempty,min=2,max=200"`
 	CategoryID  *uuid.UUID   `json:"category_id,omitempty"`
-	Date        *date.Date   `json:"date,omitempty"`
-	Tags        []string     `json:"tags,omitempty"`
+	// AccountID: нет поля или null — счёт не трогается; отвязывает ClearAccount.
+	AccountID    *uuid.UUID `json:"account_id,omitempty"`
+	ClearAccount *bool      `json:"clear_account,omitempty"`
+	Date         *date.Date `json:"date,omitempty"`
+	Tags         []string   `json:"tags,omitempty"`
 }
 
 // isEmpty — ни одного поля; `"tags": []` считается полем (очистка тегов).
 func (r UpdateTransactionRequest) isEmpty() bool {
 	return r.AmountMinor == nil && r.Type == nil && r.Description == nil &&
-		r.CategoryID == nil && r.Date == nil && r.Tags == nil
+		r.CategoryID == nil && r.AccountID == nil && r.ClearAccount == nil && r.Date == nil && r.Tags == nil
 }
 
 type TransactionResponse struct {
@@ -201,6 +281,7 @@ type TransactionResponse struct {
 	Type        string      `json:"type"`
 	Description string      `json:"description"`
 	CategoryID  uuid.UUID   `json:"category_id"`
+	AccountID   *uuid.UUID  `json:"account_id"`
 	UserID      uuid.UUID   `json:"user_id"`
 	Date        date.Date   `json:"date"`
 	Tags        []string    `json:"tags"`
@@ -222,6 +303,8 @@ type BulkDeleteResponse struct {
 type TransactionFilterParams struct {
 	UserID          *uuid.UUID
 	CategoryID      *uuid.UUID
+	AccountID       *uuid.UUID
+	Unassigned      bool
 	Type            *string
 	DateFrom        *date.Date
 	DateTo          *date.Date

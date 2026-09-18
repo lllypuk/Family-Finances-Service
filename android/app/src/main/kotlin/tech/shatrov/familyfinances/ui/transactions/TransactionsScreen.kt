@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import tech.shatrov.familyfinances.R
+import tech.shatrov.familyfinances.core.api.Account
 import tech.shatrov.familyfinances.core.api.Category
 import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.theme.Dimens
@@ -40,6 +41,7 @@ import tech.shatrov.familyfinances.ui.RowPlace
 import tech.shatrov.familyfinances.ui.SegmentedChoice
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.format.formatMoney
+import tech.shatrov.familyfinances.ui.format.formatMonth
 import tech.shatrov.familyfinances.ui.groupedRow
 import tech.shatrov.familyfinances.ui.message
 import tech.shatrov.familyfinances.ui.recognize.ImportLaunchers
@@ -52,6 +54,7 @@ fun TransactionsScreen(
     state: TransactionsUiState,
     filters: TransactionFilters,
     categories: List<Category>,
+    accounts: List<Account>,
     onRetry: () -> Unit,
     onFiltersChange: (TransactionFilters) -> Unit,
     onLoadMore: () -> Unit,
@@ -61,6 +64,7 @@ fun TransactionsScreen(
     modifier: Modifier = Modifier,
 ) {
     var sheet by rememberSaveable { mutableStateOf(false) }
+    var accountSheet by rememberSaveable { mutableStateOf(false) }
     var importSheet by rememberSaveable { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxSize()) {
         Row(
@@ -81,7 +85,7 @@ fun TransactionsScreen(
 
         // Фильтры вне `when`: на отказе запроса переключиться иначе некуда, а «Повторить»
         // повторяет ровно его.
-        Filters(filters, categories, onFiltersChange) { sheet = true }
+        Filters(filters, categories, accounts, onFiltersChange, { sheet = true }, { accountSheet = true })
 
         when (state) {
             TransactionsUiState.Loading -> Centered { CircularProgressIndicator() }
@@ -114,6 +118,18 @@ fun TransactionsScreen(
             onDismiss = { sheet = false },
         )
     }
+    if (accountSheet) {
+        AccountSheet(
+            accounts = accounts,
+            selected = filters.accountId,
+            noneLabel = stringResource(R.string.filter_all_accounts),
+            onSelect = {
+                onFiltersChange(filters.withAccount(it))
+                accountSheet = false
+            },
+            onDismiss = { accountSheet = false },
+        )
+    }
     if (importSheet) {
         ImportSourceSheet(importLaunchers, onDismiss = { importSheet = false })
     }
@@ -123,14 +139,21 @@ fun TransactionsScreen(
 private fun Filters(
     filters: TransactionFilters,
     categories: List<Category>,
+    accounts: List<Account>,
     onChange: (TransactionFilters) -> Unit,
     onPickCategory: () -> Unit,
+    onPickAccount: () -> Unit,
 ) {
     // Категория, которой нет в справочнике (удалена), — прочерк: «Все категории» на включённом
     // фильтре сказали бы, что фильтра нет, а список при этом остаётся пустым.
     val categoryLabel = when {
         filters.categoryId == null -> stringResource(R.string.filter_all_categories)
         else -> categories.firstOrNull { it.id == filters.categoryId }?.path(categories) ?: "—"
+    }
+    val accountLabel = when {
+        filters.unassigned -> stringResource(R.string.transaction_no_account)
+        filters.accountId == null -> stringResource(R.string.filter_all_accounts)
+        else -> accounts.firstOrNull { it.id == filters.accountId }?.label() ?: "—"
     }
     Column(verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_1)) {
         SegmentedChoice(
@@ -144,9 +167,15 @@ private fun Filters(
             modifier = Modifier.padding(horizontal = Dimens.SPACE_4),
         )
         ChipRow(Modifier.padding(horizontal = Dimens.SPACE_4)) {
+            // Месяц приходит только со сверки: своего чипа у него нет, а без этого выбранный
+            // период не был бы виден ни в одном из трёх.
+            val month = filters.month
+            if (filters.period == TransactionPeriod.MONTH && month != null) {
+                item { Chip(formatMonth(month.atDay(1)), selected = true) {} }
+            }
             item {
                 Chip(stringResource(R.string.filter_all), filters.period == TransactionPeriod.ALL) {
-                    onChange(filters.copy(period = TransactionPeriod.ALL))
+                    onChange(filters.withPeriod(TransactionPeriod.ALL))
                 }
             }
             item {
@@ -154,7 +183,7 @@ private fun Filters(
                     stringResource(R.string.filter_this_month),
                     filters.period == TransactionPeriod.THIS_MONTH,
                 ) {
-                    onChange(filters.copy(period = TransactionPeriod.THIS_MONTH))
+                    onChange(filters.withPeriod(TransactionPeriod.THIS_MONTH))
                 }
             }
             item {
@@ -162,11 +191,17 @@ private fun Filters(
                     stringResource(R.string.filter_prev_month),
                     filters.period == TransactionPeriod.PREV_MONTH,
                 ) {
-                    onChange(filters.copy(period = TransactionPeriod.PREV_MONTH))
+                    onChange(filters.withPeriod(TransactionPeriod.PREV_MONTH))
                 }
             }
             item {
                 Chip(categoryLabel, filters.categoryId != null, onClick = onPickCategory)
+            }
+            // Без счетов у семьи чип был бы выбором из одного «Все счета».
+            if (accounts.isNotEmpty() || filters.accountId != null || filters.unassigned) {
+                item {
+                    Chip(accountLabel, filters.accountId != null || filters.unassigned, onClick = onPickAccount)
+                }
             }
         }
     }

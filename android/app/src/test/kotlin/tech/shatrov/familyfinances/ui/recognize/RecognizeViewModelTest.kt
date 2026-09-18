@@ -30,12 +30,15 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import tech.shatrov.familyfinances.ACCOUNTS_OK
+import tech.shatrov.familyfinances.CARD_ACCOUNT_ID
 import tech.shatrov.familyfinances.CATEGORIES_OK
 import tech.shatrov.familyfinances.COFFEE_ID
 import tech.shatrov.familyfinances.FakeTokenVault
 import tech.shatrov.familyfinances.GROCERIES_ID
 import tech.shatrov.familyfinances.INTERNAL_ERROR
 import tech.shatrov.familyfinances.ImportStore
+import tech.shatrov.familyfinances.MemoryLastAccountStore
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.ROBOLECTRIC_SDK
 import tech.shatrov.familyfinances.SALARY_ID
@@ -89,6 +92,7 @@ class RecognizeViewModelTest {
     private lateinit var store: ImportStore
     private lateinit var importId: UUID
     private lateinit var model: RecognizeViewModel
+    private val lastAccount = MemoryLastAccountStore()
 
     @Before
     fun start() {
@@ -123,6 +127,7 @@ class RecognizeViewModelTest {
         store,
         importId,
         "RUB",
+        lastAccount,
     )
 
     private fun createModel(uris: List<Uri> = listOf(shot("a.png"), junk(), shot("b.png"))) {
@@ -142,6 +147,7 @@ class RecognizeViewModelTest {
 
     private suspend fun recognized(): List<RecognizedRow> {
         server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
         server.enqueueJson(200, RECOGNIZE_OK)
         createModel()
         reviewed()
@@ -151,6 +157,7 @@ class RecognizeViewModelTest {
     @Test
     fun rowsComeFromReadyImagesAndSecondShareWaits() = runTest {
         server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
         server.enqueue(
             MockResponse.Builder()
                 .body(RECOGNIZE_OK)
@@ -180,8 +187,8 @@ class RecognizeViewModelTest {
         assertEquals(1, state.toSave)
 
         val sent = requests()
-        assertEquals(listOf("/api/v1/categories", RECOGNIZE_PATH), sent.map { it.url.encodedPath })
-        assertEquals(2, Regex("name=\"images\"").findAll(sent[1].text()).count())
+        assertEquals(listOf("/api/v1/categories", "/api/v1/accounts", RECOGNIZE_PATH), sent.map { it.url.encodedPath })
+        assertEquals(2, Regex("name=\"images\"").findAll(sent[2].text()).count())
 
         server.enqueueJson(201, TRANSACTION_OK)
         model.save()
@@ -201,6 +208,7 @@ class RecognizeViewModelTest {
     @Test
     fun slowUploadIsRetryable() = runTest {
         server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
         server.enqueueJson(408, UPLOAD_TIMEOUT)
         createModel()
 
@@ -212,6 +220,7 @@ class RecognizeViewModelTest {
     @Test
     fun rejectedRequestIsNotRetried() = runTest {
         server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
         server.enqueueJson(422, VALIDATION_ERROR)
         createModel()
 
@@ -219,19 +228,20 @@ class RecognizeViewModelTest {
         assertFalse(failed.retryable)
 
         model.retry()
-        assertEquals(2, server.requestCount)
+        assertEquals(3, server.requestCount)
     }
 
     @Test
     fun unavailableIsOneCallAndRetriedOnlyOnTap() = runTest {
         server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
         server.enqueueJson(503, UNAVAILABLE)
         createModel()
 
         val failed = reviewed().phase as RecognizePhase.Failure
         assertTrue(failed.retryable)
         assertEquals(UiError.Resource(R.string.recognize_error_unavailable), failed.error)
-        assertEquals(2, server.requestCount)
+        assertEquals(3, server.requestCount)
 
         server.enqueueJson(200, RECOGNIZE_OK)
         model.retry()
@@ -239,7 +249,7 @@ class RecognizeViewModelTest {
 
         // Справочник уже есть: повтор — только сам вызов модели.
         assertEquals(
-            listOf("/api/v1/categories", RECOGNIZE_PATH, RECOGNIZE_PATH),
+            listOf("/api/v1/categories", "/api/v1/accounts", RECOGNIZE_PATH, RECOGNIZE_PATH),
             requests().map {
                 it.url.encodedPath
             },
@@ -370,6 +380,7 @@ class RecognizeViewModelTest {
     @Test
     fun waitingShareKeepsFailedRowsUntilRetried() = runTest {
         server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
         server.enqueue(
             MockResponse.Builder()
                 .body(RECOGNIZE_OK)
@@ -401,6 +412,7 @@ class RecognizeViewModelTest {
     @Test
     fun waitingShareKeepsRowsRejectedUnderFields() = runTest {
         server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
         server.enqueue(
             MockResponse.Builder()
                 .body(RECOGNIZE_OK)
@@ -431,6 +443,7 @@ class RecognizeViewModelTest {
     @Test
     fun clearingModelDiscardsFilesAndReleasesHold() = runTest {
         server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
         server.enqueueJson(200, RECOGNIZE_OK)
         importId = store.offer(listOf(shot("a.png")))
         val owner = ViewModelStore()
@@ -445,5 +458,35 @@ class RecognizeViewModelTest {
         assertFalse(dir.exists())
         val next = store.offer(emptyList())
         assertEquals(next, store.pending.value)
+    }
+
+    @Test
+    fun batchGoesWithLastAccountAndLocksIt() = runTest {
+        lastAccount.write(UUID.fromString(CARD_ACCOUNT_ID))
+        recognized()
+        assertEquals(UUID.fromString(CARD_ACCOUNT_ID), model.state.value.accountId)
+
+        server.enqueueJson(201, TRANSACTION_OK)
+        model.save()
+        reviewed()
+
+        val posts = requests().filter { it.url.encodedPath == TRANSACTIONS_PATH }.map { it.text() }
+        assertTrue(posts.isNotEmpty())
+        assertTrue(posts.all { it.contains("\"account_id\":\"$CARD_ACCOUNT_ID\"") })
+        model.onAccountChange(null)
+        assertEquals(UUID.fromString(CARD_ACCOUNT_ID), model.state.value.accountId)
+    }
+
+    @Test
+    fun chosenAccountIsRemembered() = runTest {
+        recognized()
+        assertNull(model.state.value.accountId)
+
+        model.onAccountChange(UUID.fromString(CARD_ACCOUNT_ID))
+        server.enqueueJson(201, TRANSACTION_OK)
+        model.save()
+        reviewed()
+
+        assertEquals(UUID.fromString(CARD_ACCOUNT_ID), lastAccount.read())
     }
 }

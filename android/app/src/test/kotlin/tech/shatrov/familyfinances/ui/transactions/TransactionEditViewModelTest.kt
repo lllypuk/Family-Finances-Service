@@ -19,11 +19,15 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import tech.shatrov.familyfinances.ACCOUNTS_OK
+import tech.shatrov.familyfinances.CARD_ACCOUNT_ID
 import tech.shatrov.familyfinances.CATEGORIES_OK
 import tech.shatrov.familyfinances.COFFEE_ID
 import tech.shatrov.familyfinances.FakeTokenVault
 import tech.shatrov.familyfinances.GROCERIES_ID
 import tech.shatrov.familyfinances.INTERNAL_ERROR
+import tech.shatrov.familyfinances.MemoryLastAccountStore
+import tech.shatrov.familyfinances.OLD_ACCOUNT_ID
 import tech.shatrov.familyfinances.ROBOLECTRIC_SDK
 import tech.shatrov.familyfinances.TRANSACTION_OK
 import tech.shatrov.familyfinances.VALIDATION_ERROR
@@ -31,6 +35,7 @@ import tech.shatrov.familyfinances.core.api.ApiGraph
 import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.enqueueJson
 import tech.shatrov.familyfinances.liveToken
+import tech.shatrov.familyfinances.transactionOnAccount
 import java.time.LocalDate
 import java.util.UUID
 
@@ -41,6 +46,7 @@ import java.util.UUID
 class TransactionEditViewModelTest {
     private lateinit var server: MockWebServer
     private lateinit var model: TransactionEditViewModel
+    private val lastAccount = MemoryLastAccountStore()
 
     @Before
     fun start() {
@@ -58,6 +64,7 @@ class TransactionEditViewModelTest {
     private fun createModel(transactionId: UUID? = null) {
         model = TransactionEditViewModel(
             ApiGraph(server.url("/").toString(), FakeTokenVault(liveToken())),
+            lastAccount,
             transactionId,
             DRAFT_ID,
             LocalDate.parse("2026-09-15"),
@@ -81,6 +88,7 @@ class TransactionEditViewModelTest {
     @Test
     fun emptyFormCannotBeSubmitted() = runTest {
         server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
 
         createModel()
         val state = loaded()
@@ -93,6 +101,7 @@ class TransactionEditViewModelTest {
     @Test
     fun createSendsDraftIdAmountAndDate() = runTest {
         server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
         createModel()
         loaded()
         fill()
@@ -102,7 +111,7 @@ class TransactionEditViewModelTest {
         val state = settled()
 
         assertTrue(state.done)
-        val request = lastRequest(2)
+        val request = lastRequest(3)
         assertEquals("POST", request.method)
         assertEquals("/api/v1/transactions", request.url.encodedPath)
         val body = request.text()
@@ -116,6 +125,7 @@ class TransactionEditViewModelTest {
     @Test
     fun retryRepeatsTheSameDraftId() = runTest {
         server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
         createModel()
         loaded()
         fill()
@@ -129,14 +139,15 @@ class TransactionEditViewModelTest {
         model.onSubmit()
         assertTrue(settled().done)
 
-        val requests = (1..3).map { server.takeRequest() }
-        assertTrue(requests[1].text().contains("\"id\":\"$DRAFT_ID\""))
+        val requests = (1..4).map { server.takeRequest() }
         assertTrue(requests[2].text().contains("\"id\":\"$DRAFT_ID\""))
+        assertTrue(requests[3].text().contains("\"id\":\"$DRAFT_ID\""))
     }
 
     @Test
     fun editPrefillsFormAndSendsPut() = runTest {
         server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
         server.enqueueJson(200, TRANSACTION_OK)
 
         createModel(UUID.fromString(COFFEE_ID))
@@ -153,7 +164,7 @@ class TransactionEditViewModelTest {
         model.onSubmit()
         assertTrue(settled().done)
 
-        val request = lastRequest(3)
+        val request = lastRequest(4)
         assertEquals("PUT", request.method)
         assertEquals("/api/v1/transactions/$COFFEE_ID", request.url.encodedPath)
         val body = request.text()
@@ -165,6 +176,7 @@ class TransactionEditViewModelTest {
     @Test
     fun deleteRemovesTransaction() = runTest {
         server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
         server.enqueueJson(200, TRANSACTION_OK)
         createModel(UUID.fromString(COFFEE_ID))
         loaded()
@@ -173,7 +185,7 @@ class TransactionEditViewModelTest {
         model.onDelete()
         assertTrue(settled().done)
 
-        val request = lastRequest(3)
+        val request = lastRequest(4)
         assertEquals("DELETE", request.method)
         assertEquals("/api/v1/transactions/$COFFEE_ID", request.url.encodedPath)
     }
@@ -181,6 +193,7 @@ class TransactionEditViewModelTest {
     @Test
     fun validationDetailsLandUnderFields() = runTest {
         server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
         createModel()
         loaded()
         fill()
@@ -203,5 +216,113 @@ class TransactionEditViewModelTest {
 
     private companion object {
         val DRAFT_ID: UUID = UUID.fromString("99999999-9999-9999-9999-999999999999")
+    }
+
+    @Test
+    fun newFormTakesLastAccount() = runTest {
+        lastAccount.write(UUID.fromString(CARD_ACCOUNT_ID))
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        createModel()
+        assertEquals(UUID.fromString(CARD_ACCOUNT_ID), loaded().accountId)
+        fill()
+
+        server.enqueueJson(201, TRANSACTION_OK)
+        model.onSubmit()
+        assertTrue(settled().done)
+
+        val body = lastRequest(3).text()
+        assertTrue(body, body.contains("\"account_id\":\"$CARD_ACCOUNT_ID\""))
+    }
+
+    // Перевыпущенная карта ушла в архив: новая операция на неё не попадает.
+    @Test
+    fun archivedLastAccountIsNotTaken() = runTest {
+        lastAccount.write(UUID.fromString(OLD_ACCOUNT_ID))
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        createModel()
+        val state = loaded()
+
+        assertNull(state.accountId)
+        assertEquals(listOf(UUID.fromString(CARD_ACCOUNT_ID)), state.selectableAccounts.map { it.id })
+    }
+
+    @Test
+    fun savingWithoutAccountSendsNoneAndRemembersIt() = runTest {
+        lastAccount.write(UUID.fromString(CARD_ACCOUNT_ID))
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        createModel()
+        loaded()
+        fill()
+        model.onAccountChange(null)
+
+        server.enqueueJson(201, TRANSACTION_OK)
+        model.onSubmit()
+        assertTrue(settled().done)
+
+        val body = lastRequest(3).text()
+        assertFalse(body, body.contains("account_id"))
+        assertNull(lastAccount.read())
+    }
+
+    @Test
+    fun editWithoutAccountChangeLeavesItOut() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        server.enqueueJson(200, transactionOnAccount(CARD_ACCOUNT_ID))
+        createModel(UUID.fromString(COFFEE_ID))
+        assertEquals(UUID.fromString(CARD_ACCOUNT_ID), loaded().accountId)
+
+        model.onAmountChange("2000")
+        server.enqueueJson(200, TRANSACTION_OK)
+        model.onSubmit()
+        assertTrue(settled().done)
+
+        val body = lastRequest(4).text()
+        assertFalse(body, body.contains("account_id"))
+        assertFalse(body, body.contains("clear_account"))
+    }
+
+    // `explicitNulls = false` не пошлёт `null`: отвязка уходит флагом.
+    @Test
+    fun unbindingSendsClearAccount() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        server.enqueueJson(200, transactionOnAccount(CARD_ACCOUNT_ID))
+        createModel(UUID.fromString(COFFEE_ID))
+        loaded()
+
+        model.onAccountChange(null)
+        server.enqueueJson(200, TRANSACTION_OK)
+        model.onSubmit()
+        assertTrue(settled().done)
+
+        val body = lastRequest(4).text()
+        assertTrue(body, body.contains("\"clear_account\":true"))
+        assertFalse(body, body.contains("account_id"))
+    }
+
+    @Test
+    fun archivedAccountOfEditedTransactionIsShownButNotOffered() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        server.enqueueJson(200, transactionOnAccount(OLD_ACCOUNT_ID))
+        createModel(UUID.fromString(COFFEE_ID))
+        val state = loaded()
+
+        assertEquals("Старая карта", state.account?.name)
+        assertTrue(state.showsAccount)
+        assertFalse(state.selectableAccounts.any { it.id == UUID.fromString(OLD_ACCOUNT_ID) })
+
+        model.onAccountChange(UUID.fromString(CARD_ACCOUNT_ID))
+        server.enqueueJson(200, TRANSACTION_OK)
+        model.onSubmit()
+        assertTrue(settled().done)
+
+        val body = lastRequest(4).text()
+        assertTrue(body, body.contains("\"account_id\":\"$CARD_ACCOUNT_ID\""))
+        assertFalse(body, body.contains("clear_account"))
     }
 }

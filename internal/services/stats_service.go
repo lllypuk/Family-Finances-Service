@@ -10,6 +10,7 @@ import (
 
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/holding"
 	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/services/dto"
@@ -20,6 +21,9 @@ var ErrInvalidStatsPeriod = errors.New("stats period end is before start")
 
 // ErrStatsPeriodTooLong возвращается, когда период запрошен шире monthlyMaxMonths.
 var ErrStatsPeriodTooLong = errors.New("stats period is too long")
+
+// ErrStatsPeriodInFuture возвращается, когда конец ряда капитала позже сегодняшнего дня семьи.
+var ErrStatsPeriodInFuture = errors.New("stats period end is later than today")
 
 const (
 	statsRecentLimit = 10
@@ -43,6 +47,11 @@ type statsAggregates interface {
 	GetTotalsByMonth(ctx context.Context, startDate, endDate date.Date) ([]transaction.MonthTotal, error)
 }
 
+// holdingSeries — снимки позиций для ряда капитала.
+type holdingSeries interface {
+	SeriesValues(ctx context.Context, from, to date.Date) ([]holding.SeriesRow, error)
+}
+
 // statsService считает агрегаты поверх остальных сервисов; за суммами периода ходит в statsAggregates.
 type statsService struct {
 	transactions TransactionService
@@ -50,6 +59,7 @@ type statsService struct {
 	categories   CategoryService
 	families     FamilyService
 	aggregates   statsAggregates
+	holdings     holdingSeries
 }
 
 // NewStatsService создаёт сервис статистики
@@ -59,6 +69,7 @@ func NewStatsService(
 	categories CategoryService,
 	families FamilyService,
 	aggregates statsAggregates,
+	holdings holdingSeries,
 ) StatsService {
 	return &statsService{
 		transactions: transactions,
@@ -66,6 +77,7 @@ func NewStatsService(
 		categories:   categories,
 		families:     families,
 		aggregates:   aggregates,
+		holdings:     holdings,
 	}
 }
 
@@ -145,20 +157,9 @@ func (s *statsService) Monthly(ctx context.Context, from, to *date.Date) (*dto.S
 		return nil, err
 	}
 
-	today := date.Today(family.Location())
-	monthStart, _ := today.MonthBounds()
-	start, end := monthStart.AddMonths(-(monthlyDefaultMonths - 1)), today
-	if from != nil {
-		start = *from
-	}
-	if to != nil {
-		end = *to
-	}
-	if end.Before(start) {
-		return nil, ErrInvalidStatsPeriod
-	}
-	if monthsBetween(start, end) > monthlyMaxMonths {
-		return nil, ErrStatsPeriodTooLong
+	start, end, err := statsPeriod(date.Today(family.Location()), from, to)
+	if err != nil {
+		return nil, err
 	}
 
 	rows, err := s.aggregates.GetTotalsByMonth(ctx, start, end)
@@ -167,6 +168,32 @@ func (s *statsService) Monthly(ctx context.Context, from, to *date.Date) (*dto.S
 	}
 
 	return &dto.StatsMonthly{From: start, To: end, Months: monthBuckets(start, end, rows)}, nil
+}
+
+// NetWorth собирает ряд капитала за [from, to]; границы — как у Monthly, но to позже сегодня — отказ.
+func (s *statsService) NetWorth(ctx context.Context, from, to *date.Date) (*dto.StatsNetWorth, error) {
+	family, err := s.families.GetFamily(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	today := date.Today(family.Location())
+	// До statsPeriod: иначе будущая граница пряталась бы за ErrStatsPeriodTooLong.
+	if to != nil && to.After(today) {
+		return nil, ErrStatsPeriodInFuture
+	}
+
+	start, end, err := statsPeriod(today, from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := s.holdings.SeriesValues(ctx, start, end)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read holding values: %w", err)
+	}
+
+	return &dto.StatsNetWorth{From: start, To: end, Months: foldNetWorth(rows, start, end)}, nil
 }
 
 // totalsByCategory отдаёт итоги периода и строки агрегата, из которых они собраны.

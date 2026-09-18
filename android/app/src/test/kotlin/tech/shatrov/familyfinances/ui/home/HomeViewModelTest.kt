@@ -22,6 +22,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import tech.shatrov.familyfinances.FakeTokenVault
+import tech.shatrov.familyfinances.INTERNAL_ERROR
+import tech.shatrov.familyfinances.RECONCILIATION_EMPTY
+import tech.shatrov.familyfinances.RECONCILIATION_OK
 import tech.shatrov.familyfinances.ROBOLECTRIC_SDK
 import tech.shatrov.familyfinances.STATS_EMPTY
 import tech.shatrov.familyfinances.STATS_OK
@@ -30,6 +33,7 @@ import tech.shatrov.familyfinances.enqueueJson
 import tech.shatrov.familyfinances.liveToken
 import tech.shatrov.familyfinances.ui.UiError
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -61,6 +65,14 @@ class HomeViewModelTest {
     /** Ответ приходит с сетевого потока, поэтому итог ждём по состоянию, а не по планировщику. */
     private suspend fun settle(): HomeUiState = model.state.first { it != HomeUiState.Loading }
 
+    /** Карточка приходит вторым запросом, уже после сводки. */
+    private suspend fun settleCard(): ReconciliationCard = model.card.first { it != ReconciliationCard.Loading }
+
+    private fun enqueueSummary() {
+        server.enqueueJson(200, STATS_OK)
+        server.enqueueJson(200, RECONCILIATION_OK)
+    }
+
     /** Дата модели: тест переставляет её, чтобы проверить переход через полночь. */
     private var today = LocalDate.parse("2026-09-07")
 
@@ -75,7 +87,7 @@ class HomeViewModelTest {
 
     @Test
     fun summaryArrivesWithCurrencyFromSession() = runTest {
-        server.enqueueJson(200, STATS_OK)
+        enqueueSummary()
 
         createModel()
         val state = settle() as HomeUiState.Ready
@@ -89,7 +101,7 @@ class HomeViewModelTest {
     // Границы периода не шлём: текущий месяц сервер считает в часовом поясе семьи, а не телефона.
     @Test
     fun periodIsLeftToTheServer() = runTest {
-        server.enqueueJson(200, STATS_OK)
+        enqueueSummary()
 
         createModel()
         settle()
@@ -117,7 +129,7 @@ class HomeViewModelTest {
 
         server = MockWebServer()
         server.start()
-        server.enqueueJson(200, STATS_OK)
+        enqueueSummary()
         // Повтор идёт в новый сокет, поэтому модель пересобирается вместе с адресом.
         createModel()
 
@@ -131,7 +143,7 @@ class HomeViewModelTest {
         createModel()
         assertEquals(HomeUiState.Failure(UiError.Server("всё сломалось")), settle())
 
-        server.enqueueJson(200, STATS_OK)
+        enqueueSummary()
         model.refresh()
 
         assertTrue(settle() is HomeUiState.Ready)
@@ -141,29 +153,29 @@ class HomeViewModelTest {
     // прошлый месяц до перезапуска процесса.
     @Test
     fun revalidateAfterMidnightReloadsSummary() = runTest {
-        server.enqueueJson(200, STATS_OK)
+        enqueueSummary()
         createModel()
-        settle()
+        settleCard()
 
         today = LocalDate.parse("2026-10-01")
         server.enqueueJson(200, STATS_EMPTY)
         model.revalidate()
 
         assertTrue((settle() as HomeUiState.Ready).isEmpty)
-        assertEquals(2, server.requestCount)
+        assertEquals(3, server.requestCount)
     }
 
     // Тот же день лишнего запроса не делает: сводка уже за него.
     @Test
     fun revalidateWithinSameDayKeepsSummary() = runTest {
-        server.enqueueJson(200, STATS_OK)
+        enqueueSummary()
         createModel()
-        settle()
+        settleCard()
 
         model.revalidate()
 
         assertTrue(model.state.value is HomeUiState.Ready)
-        assertEquals(1, server.requestCount)
+        assertEquals(2, server.requestCount)
     }
 
     // Возврат из фона под идущим запросом: он ушёл до полуночи, и без сверки с его датой
@@ -198,6 +210,63 @@ class HomeViewModelTest {
         .setHeader("Content-Type", "application/json")
         .bodyDelay(delayMs, TimeUnit.MILLISECONDS)
         .build()
+
+    // Сверяют закончившийся месяц: до 10-го числа карточка ещё на прошлом.
+    @Test
+    fun cardShowsPreviousMonthBeforeTenth() = runTest {
+        today = LocalDate.parse("2026-09-09")
+        enqueueSummary()
+
+        createModel()
+
+        assertEquals(ReconciliationCard.Ready(YearMonth.of(2026, 8), matched = 1, total = 2), settleCard())
+        server.takeRequest()
+        assertEquals("month=2026-08", server.takeRequest().url.query)
+    }
+
+    @Test
+    fun cardShowsCurrentMonthFromTenth() = runTest {
+        today = LocalDate.parse("2026-09-10")
+        enqueueSummary()
+
+        createModel()
+        settleCard()
+
+        server.takeRequest()
+        assertEquals("month=2026-09", server.takeRequest().url.query)
+    }
+
+    @Test
+    fun cardWithoutAccountsLeadsToAccounts() = runTest {
+        server.enqueueJson(200, STATS_OK)
+        server.enqueueJson(200, RECONCILIATION_EMPTY)
+
+        createModel()
+
+        assertEquals(ReconciliationCard.NoAccounts, settleCard())
+    }
+
+    // Отказ карточки главную не роняет: сводка остаётся, карточки просто нет.
+    @Test
+    fun cardFailureKeepsSummary() = runTest {
+        server.enqueueJson(200, STATS_OK)
+        server.enqueueJson(500, INTERNAL_ERROR)
+
+        createModel()
+
+        assertEquals(ReconciliationCard.Hidden, settleCard())
+        assertTrue(model.state.value is HomeUiState.Ready)
+    }
+
+    @Test
+    fun emptyFamilyAsksNoCard() = runTest {
+        server.enqueueJson(200, STATS_EMPTY)
+
+        createModel()
+
+        assertEquals(ReconciliationCard.Hidden, settleCard())
+        assertEquals(1, server.requestCount)
+    }
 
     @Test
     fun unreadableBodyIsMalformed() = runTest {

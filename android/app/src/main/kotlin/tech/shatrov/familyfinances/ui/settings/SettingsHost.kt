@@ -141,6 +141,16 @@ fun SettingsHost(
             onBack = leave,
         )
 
+        is SettingsPage.Accounts -> AccountsPage(
+            graph = graph,
+            session = session,
+            models = models,
+            page = page,
+            onSubmitting = { submitting = it },
+            onForbidden = toRoot,
+            onBack = leave,
+        )
+
         is SettingsPage.Backups -> BackupsPage(
             graph = graph,
             session = session,
@@ -308,6 +318,54 @@ private fun BackupsPage(
         onDelete = model::onDelete,
         onBack = onBack,
     )
+}
+
+/**
+ * Счета: форма открывается поверх списка в той же модели, поэтому «назад» из формы закрывает её,
+ * а не страницу. Пока форма отправляет запрос, закрыть её нельзя — как и уйти со страницы.
+ */
+@Composable
+private fun AccountsPage(
+    graph: AppGraph,
+    session: Session,
+    models: ViewModelStoreOwner,
+    page: SettingsPage.Accounts,
+    onSubmitting: (Boolean) -> Unit,
+    onForbidden: () -> Unit,
+    onBack: () -> Unit,
+) {
+    val model: AccountsViewModel = viewModel(viewModelStoreOwner = models, key = page.modelKey) {
+        AccountsViewModel(graph.api, session.isAdmin)
+    }
+    val state by model.state.collectAsStateWithLifecycle()
+    val editor by model.editor.collectAsStateWithLifecycle()
+    val form = editor
+
+    val forbidden = (state as? AccountsUiState.Failure)?.forbidden == true
+
+    LaunchedEffect(form?.submitting) { onSubmitting(form?.submitting == true) }
+    LaunchedEffect(forbidden) { if (forbidden) onForbidden() }
+    // Зарегистрирован после хостового и потому перехватывает «назад», пока открыта форма.
+    BackHandler(enabled = form != null) { model.onDismiss() }
+
+    if (form == null) {
+        AccountsScreen(
+            state = state,
+            onRetry = model::refresh,
+            onAdd = model::onAdd,
+            onOpen = model::onOpen,
+            onBack = onBack,
+        )
+    } else {
+        AccountEditScreen(
+            state = form,
+            onNameChange = model::onNameChange,
+            onSubmit = model::onSubmit,
+            onToggleArchive = model::onToggleArchive,
+            onDelete = model::onDelete,
+            onBack = model::onDismiss,
+        )
+    }
 }
 
 /** Список пользователей: правки в нём нет, уходить можно всегда. */

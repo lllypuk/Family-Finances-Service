@@ -30,7 +30,7 @@ func validSetupDTO() dto.SetupFamilyDTO {
 
 func TestFamilyService_SetupFamily_Success(t *testing.T) {
 	familyRepo := new(MockFamilyRepository)
-	svc := services.NewFamilyService(familyRepo, new(MockTransactionRepository))
+	svc := services.NewFamilyService(familyRepo)
 	req := validSetupDTO()
 
 	var gotAdmin *user.User
@@ -57,7 +57,7 @@ func TestFamilyService_SetupFamily_Success(t *testing.T) {
 
 func TestFamilyService_SetupFamily_AlreadyExists(t *testing.T) {
 	familyRepo := new(MockFamilyRepository)
-	svc := services.NewFamilyService(familyRepo, new(MockTransactionRepository))
+	svc := services.NewFamilyService(familyRepo)
 	familyRepo.On("Bootstrap", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(user.ErrFamilyExists)
 
@@ -67,7 +67,7 @@ func TestFamilyService_SetupFamily_AlreadyExists(t *testing.T) {
 
 func TestFamilyService_SetupFamily_BootstrapFailure(t *testing.T) {
 	familyRepo := new(MockFamilyRepository)
-	svc := services.NewFamilyService(familyRepo, new(MockTransactionRepository))
+	svc := services.NewFamilyService(familyRepo)
 	boom := errors.New("disk full")
 	familyRepo.On("Bootstrap", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(boom)
 
@@ -90,7 +90,7 @@ func TestFamilyService_SetupFamily_Validation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			familyRepo := new(MockFamilyRepository)
-			svc := services.NewFamilyService(familyRepo, new(MockTransactionRepository))
+			svc := services.NewFamilyService(familyRepo)
 			req := validSetupDTO()
 			tt.mutate(&req)
 
@@ -116,14 +116,13 @@ func TestDefaultCategories(t *testing.T) {
 	assert.NotEqual(t, defaults[0].ID, services.DefaultCategories()[0].ID)
 }
 
-func TestFamilyService_UpdateFamily_CurrencyLockedByTransactions(t *testing.T) {
+func TestFamilyService_UpdateFamily_CurrencyLockedByMonetaryData(t *testing.T) {
 	familyRepo := new(MockFamilyRepository)
-	txRepo := new(MockTransactionRepository)
-	svc := services.NewFamilyService(familyRepo, txRepo)
+	svc := services.NewFamilyService(familyRepo)
 
 	familyRepo.On("Get", mock.Anything).
 		Return(&user.Family{Name: "Test", Currency: "RUB", Timezone: "Europe/Moscow"}, nil)
-	txRepo.On("CountByFilter", mock.Anything, mock.Anything).Return(1, nil)
+	familyRepo.On("HasMonetaryData", mock.Anything).Return(true, nil)
 
 	usd := "USD"
 	_, err := svc.UpdateFamily(context.Background(), dto.UpdateFamilyDTO{Currency: &usd})
@@ -132,14 +131,13 @@ func TestFamilyService_UpdateFamily_CurrencyLockedByTransactions(t *testing.T) {
 	familyRepo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
 }
 
-func TestFamilyService_UpdateFamily_CurrencyChangedWithoutTransactions(t *testing.T) {
+func TestFamilyService_UpdateFamily_CurrencyChangedWithoutMonetaryData(t *testing.T) {
 	familyRepo := new(MockFamilyRepository)
-	txRepo := new(MockTransactionRepository)
-	svc := services.NewFamilyService(familyRepo, txRepo)
+	svc := services.NewFamilyService(familyRepo)
 
 	familyRepo.On("Get", mock.Anything).
 		Return(&user.Family{Name: "Test", Currency: "RUB", Timezone: "Europe/Moscow"}, nil)
-	txRepo.On("CountByFilter", mock.Anything, mock.Anything).Return(0, nil)
+	familyRepo.On("HasMonetaryData", mock.Anything).Return(false, nil)
 	familyRepo.On("Update", mock.Anything, mock.AnythingOfType("*user.Family")).Return(nil)
 
 	usd := "USD"
@@ -151,7 +149,7 @@ func TestFamilyService_UpdateFamily_CurrencyChangedWithoutTransactions(t *testin
 
 func TestFamilyService_UpdateFamily_Timezone(t *testing.T) {
 	familyRepo := new(MockFamilyRepository)
-	svc := services.NewFamilyService(familyRepo, new(MockTransactionRepository))
+	svc := services.NewFamilyService(familyRepo)
 
 	familyRepo.On("Get", mock.Anything).
 		Return(&user.Family{Name: "Test", Currency: "RUB", Timezone: "Europe/Moscow"}, nil)
@@ -166,7 +164,7 @@ func TestFamilyService_UpdateFamily_Timezone(t *testing.T) {
 
 func TestFamilyService_UpdateFamily_InvalidTimezone(t *testing.T) {
 	familyRepo := new(MockFamilyRepository)
-	svc := services.NewFamilyService(familyRepo, new(MockTransactionRepository))
+	svc := services.NewFamilyService(familyRepo)
 
 	tz := "Mars/Olympus"
 	_, err := svc.UpdateFamily(context.Background(), dto.UpdateFamilyDTO{Timezone: &tz})

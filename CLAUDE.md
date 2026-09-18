@@ -45,7 +45,8 @@ Layered/Clean architecture, single Go module `family-budget-service`. Wiring hap
    `services.NewServices(...)` → `*services.Services` (`Services.Auth`). `StatsService.Summary(ctx, from, to)` owns
    the dashboard arithmetic behind `GET /api/v1/stats/summary`, `StatsService.Monthly(ctx, from, to)` the month
    series behind `GET /api/v1/stats/monthly` (capped at `monthlyMaxMonths` = 120 buckets, since the bounds
-   come from the client); the handler only formats.
+   come from the client), `StatsService.NetWorth(ctx, from, to)` the one behind `GET /api/v1/stats/net-worth`
+   (same bounds and cap, `to` after today is `422`); the handler only formats.
 5. `application.NewHTTPServerWithObservability(...)` — builds the Echo instance and registers `/health` and
    `/api/v1`. Nothing else is served: no HTML, no static files, no CORS. The metrics registry reaches it as
    `application.Config.Metrics`.
@@ -121,8 +122,8 @@ it is a plain `404`, with a token and without one.
   applies until the proxy CIDR is listed. Integration tests that need the IP limit pass
   `testhelpers.WithTrustedProxies(t, "192.0.2.0/24")` (httptest's `RemoteAddr`).
 - **Role gates** are built from `auth.RequireRole(roles...)`: `adminOnly` for `/api/v1/users`,
-  `DELETE /api/v1/categories/:id`, `/api/v1/backups` and `PUT /api/v1/family`; `financeAccess` (admin or member)
-  for categories/transactions/budgets/stats; `GET /api/v1/family` and the `/auth/*`, `/me*` routes are
+  `DELETE /api/v1/categories/:id`, `DELETE /api/v1/accounts/:id`, `DELETE /api/v1/holdings/:id`, `/api/v1/backups` and `PUT /api/v1/family`;
+  `financeAccess` (admin or member) for categories/accounts/transactions/budgets/stats; `GET /api/v1/family` and the `/auth/*`, `/me*` routes are
   open to any authenticated role. Wrong role → `403 FORBIDDEN`.
 - **User writes are column-scoped, and session revocation rides along.** `UserRepository.Update` writes only
   `email`/`first_name`/`last_name`; password, role and `is_active` go through
@@ -220,7 +221,8 @@ list is in `docs/plans/completed/20260915-14-prometheus-metrics.md`, the deploym
 ## Database & migrations
 
 The whole schema lives in `migrations/001_consolidated.{up,down}.sql`
-(tables: families, users, categories, transactions, budgets, sessions) — that file is the readable
+(tables: families, users, categories, accounts, transactions, account_reconciliations, budgets, holdings,
+holding_values, sessions) — that file is the readable
 picture of the database, and a fresh DB is built from it.
 
 **Editing `001` does not touch an existing database.** golang-migrate stores only the version number, so on a DB
@@ -235,7 +237,9 @@ table definition must stay frozen on the `v0.2.0` schema: a column added later l
 `004` puts it back. Never add a column to the `budgets` block inside `002` — it must keep reproducing the
 released schema, or the upgrade path it tests is not the one the server runs. Cover it in
 `internal/infrastructure/migrations_test.go`: `Migrate(1)` puts the released schema back, so the upgrade path is
-testable. See `migrations/README.md`, and `make migrate-create` for the reminder.
+testable. The same freeze holds for `transactions` inside `005_accounts`: it rebuilds the table (not
+`ADD COLUMN`, which would fail on a fresh DB and put `account_id` at a different `cid`), so its definition stays
+on the `v0.6.0` schema, and the next transaction column goes into `001` *and* its own `NNN`. See `migrations/README.md`, and `make migrate-create` for the reminder.
 
 `go run ./cmd/server migrate` prints the schema version, `migrate --to N` moves it in either direction
 (`--to 0` is rejected: golang-migrate answers `Migrate(0)` with "file does not exist"). This is the rollback
@@ -247,7 +251,9 @@ Two independent code paths apply migrations, and **both must keep working**:
 - production/dev: golang-migrate (`internal/infrastructure/migrations.go`)
 - tests: `internal/testhelpers/sqlite.go` reads and executes the `*.up.sql` files directly
 
-`testhelpers.SQLiteTestDB.CleanTables` has a hardcoded, FK-ordered table list — add any new table to it.
+`testhelpers.SQLiteTestDB.CleanTables` has a hardcoded, FK-ordered table list — add any new table to it
+(`account_reconciliations` before `transactions` before `accounts`: both FKs to `accounts` are `RESTRICT`;
+`holding_values` before `holdings`).
 
 SQLite is opened with `_txlock=immediate` (`infrastructure.NewSQLiteConnection`), so every `BeginTx` takes the
 write lock up front; with `MaxOpenConns=1` this is invisible, but do not "optimise" it away — `Bootstrap` relies
@@ -290,7 +296,7 @@ on it.
 - **A transaction date is `date.Date`** (`internal/domain/date`) — a calendar `YYYY-MM-DD` with no time or zone,
   `TEXT` in SQLite (CHECK GLOB). Only `created_at`/`updated_at`/`expires_at` stay RFC3339 UTC. Period bounds
   ("current month") are computed in `family.Timezone`, not in the server's zone.
-- **`POST` of a transaction, budget or category is idempotent** when the body carries a client-generated
+- **`POST` of a transaction, budget, category or account is idempotent** when the body carries a client-generated
   `id` (any valid UUID): an existing record answers `200` with itself and the repeated body is ignored — the id is
   the only thing compared. The check is a plain read-then-insert; two simultaneous retries can still collide.
 - **Budget business refusals are `409` with their own codes** — `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`,
@@ -320,6 +326,28 @@ on it.
   materialisation cannot both land on one month; `Update` never writes the `spent_minor` it is handed —
   it recomputes it from the transactions inside its own transaction (`syncSpent`), so a shifted period and the
   expense sum commit together and a concurrent expense cannot be overwritten by a stale total.
+- **Accounts are optional on a transaction.** In `PUT /transactions/:id` a missing (or `null`) `account_id` keeps
+  the stored one — the client sends with `explicitNulls = false`, so `null` cannot mean "unbind"; unbinding is
+  `clear_account: true`, both at once is `422`. An unknown or archived account is `422 field: account_id`, but only
+  when the id differs from the stored one: editing a transaction whose account was archived later still passes.
+  Deleting an account used by a transaction **or** a reconciliation is `409 ACCOUNT_IN_USE` (both FKs `RESTRICT`,
+  a cascade would take the reconciliation history); a reissued card is archived. The name is unique per family by
+  `names.Key` (Go-side `ToLower(TrimSpace)`, since `NOCASE` folds ASCII only) — never change it after a release,
+  it defines the stored `name_key`.
+- **A reconciliation stores only the bank's figure.** `recorded_minor` of `GET /stats/reconciliation` is summed
+  on read over `type = 'expense'` of the month (`RecordedByAccount`), so a late transaction closes the gap
+  without a new `PUT`; a refund booked as income does not reduce it. Having a reconciliation means having the
+  row — a `0` counts, and blocks `CURRENCY_LOCKED` like a transaction does (`FamilyRepository.HasMonetaryData`:
+  transactions, reconciliations and holding values, archived and zero ones included).
+- **Holdings carry their sign in `side`, not in the number.** `value_minor >= 0`, and `side` is fixed at creation
+  (`UpdateHoldingRequest` has no such field) — changing it would flip the whole history. A holding's value on a
+  day is its latest snapshot with `date <=` that day, carried forward with no expiry (a flat is revalued once a
+  year); before its first snapshot it counts for nothing. A future snapshot date is `422`, and `current` is cut
+  at today in `family.Timezone` all the same, so it equals the holding's share of the last bucket of the default
+  `GET /stats/net-worth`. `is_archived` only hides a holding from the list: the series has no archive filter,
+  so archiving never rewrites the past — a sold or repaid holding gets a `0` snapshot. `DELETE /holdings/:id`
+  (admin) cascades its snapshots and changes past buckets. `assets_minor`/`liabilities_minor`/`net_minor` are
+  sums, so the spec types them as `int64` without `Money.maximum`; in Go they stay `money.Minor`.
 - **Fractions come in two units.** Shares (`share`, `*_delta`, `stats.budgets[].utilization`) are 0…1; fields named
   `percentage` and `budgets[].utilization` on `/budgets` are percent 0…100. Both are documented per field in
   `docs/api/openapi.yaml`.
@@ -346,9 +374,11 @@ with an action, password visibility — client only, the contract did not move; 
 Releases: server `v0.3.0` (plan 10), `v0.4.0` (plan 12) and `v0.5.0` (plan 14 — `/metrics`, the contract did
 not move), client `app-v0.6.0` — it needs a server of `v0.4.0` or newer (`recurring` is required in the
 generated model). Plan 11 is the client side of
-10: an "Обзор" screen over `summary` + `monthly`, and multi-select over transactions. Plan 15
-(`docs/plans/20260916-15-recognize-screenshots.md`) is screenshot recognition on both sides; its client is
-`0.7.0`, not tagged yet, and needs the server that has `POST /transactions/recognize`.
+10: an "Обзор" screen over `summary` + `monthly`, and multi-select over transactions. Plans 15 (screenshot
+recognition, client `0.7.0`), 16 (accounts and the monthly reconciliation, server `v0.6.0`, client `0.8.0`) and
+17 (holdings and net worth, server `v0.7.0`, client `0.9.0`) are done on both sides but not tagged yet; each
+client needs the server of its plan, older clients keep working against a newer server. Before tagging `v0.7.0`,
+step a copy of the prod database `migrate --to 6` → `--to 5` → `--to 6` (plan 17 ran it on a local copy only).
 
 `docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates
 from it, and code and spec now match. **A registered route with no operation in the spec fails `make test`**

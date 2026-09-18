@@ -9,7 +9,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import tech.shatrov.familyfinances.ImportStore
+import tech.shatrov.familyfinances.LastAccountStore
 import tech.shatrov.familyfinances.R
+import tech.shatrov.familyfinances.core.api.Account
 import tech.shatrov.familyfinances.core.api.ApiGraph
 import tech.shatrov.familyfinances.core.api.Category
 import tech.shatrov.familyfinances.core.api.CreateTransactionRequest
@@ -111,11 +113,20 @@ data class RecognizeUiState(
     val images: List<ImportImage> = emptyList(),
     val dropped: Int = 0,
     val categories: List<Category> = emptyList(),
+    val accounts: List<Account> = emptyList(),
+    val accountId: UUID? = null,
     val incomplete: Boolean = false,
     val savedCount: Int = 0,
 ) {
     val saving: Boolean
         get() = (phase as? RecognizePhase.Review)?.saving == true
+
+    val selectableAccounts: List<Account>
+        get() = accounts.filter { !it.isArchived }
+
+    /** Счёт один на пачку: после первой записанной строки остальные уходят с тем же. */
+    val accountLocked: Boolean
+        get() = saving || savedCount > 0
 
     val toSave: Int
         get() = (phase as? RecognizePhase.Review)?.rows?.count { it.included && it.savable } ?: 0
@@ -131,6 +142,7 @@ class RecognizeViewModel(
     private val imports: ImportStore,
     private val importId: UUID,
     private val currency: String,
+    private val lastAccount: LastAccountStore,
 ) : AndroidViewModel(application) {
     private val mutable = MutableStateFlow(RecognizeUiState())
 
@@ -182,6 +194,10 @@ class RecognizeViewModel(
         description: String,
     ) = edit(draft, TransactionField.DESCRIPTION) { it.copy(description = description) }
 
+    fun onAccountChange(accountId: UUID?) {
+        mutable.update { if (it.accountLocked) it else it.copy(accountId = accountId) }
+    }
+
     fun save() = send(rows().filter { it.included && it.savable }.map { it.draft })
 
     fun retryRow(draft: UUID) = send(listOf(draft))
@@ -202,7 +218,9 @@ class RecognizeViewModel(
             }
             if (mutable.value.categories.isEmpty()) {
                 val categories = api.client.unwrap { api.categories.listCategories(limit = CATEGORY_LIMIT) }.`data`
-                mutable.update { it.copy(categories = categories) }
+                val accounts = api.client.unwrap { api.accounts.listAccounts(limit = CATEGORY_LIMIT) }.`data`
+                val last = lastAccount.read()?.takeIf { id -> accounts.any { it.id == id } }
+                mutable.update { it.copy(categories = categories, accounts = accounts, accountId = last) }
             }
             mutable.update { it.copy(phase = RecognizePhase.Recognizing) }
             val files = readyAt.map { (mutable.value.images[it] as ImportImage.Ready).file }
@@ -267,9 +285,11 @@ class RecognizeViewModel(
                         categoryId = categoryId,
                         date = date,
                         id = draft,
+                        accountId = mutable.value.accountId,
                     ),
                 )
             }
+            lastAccount.write(mutable.value.accountId)
             // `200` — запись с этим id уже была: показывается записанное, а не правка после обрыва.
             replace(draft) { if (code == HTTP_CREATED) it.copy(status = RowStatus.Saved) else it.saved(body.`data`) }
             mutable.update { it.copy(savedCount = it.savedCount + 1) }

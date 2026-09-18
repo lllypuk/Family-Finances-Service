@@ -63,13 +63,25 @@ import tech.shatrov.familyfinances.ui.home.HomeViewModel
 import tech.shatrov.familyfinances.ui.login.LoginScreen
 import tech.shatrov.familyfinances.ui.login.LoginViewModel
 import tech.shatrov.familyfinances.ui.message
+import tech.shatrov.familyfinances.ui.networth.HoldingEditScreen
+import tech.shatrov.familyfinances.ui.networth.HoldingEditViewModel
+import tech.shatrov.familyfinances.ui.networth.HoldingHistoryScreen
+import tech.shatrov.familyfinances.ui.networth.HoldingHistoryUiState
+import tech.shatrov.familyfinances.ui.networth.HoldingHistoryViewModel
+import tech.shatrov.familyfinances.ui.networth.NetWorthScreen
+import tech.shatrov.familyfinances.ui.networth.NetWorthViewModel
+import tech.shatrov.familyfinances.ui.networth.ValueSheet
 import tech.shatrov.familyfinances.ui.recognize.RecognizeScreen
 import tech.shatrov.familyfinances.ui.recognize.RecognizeViewModel
 import tech.shatrov.familyfinances.ui.recognize.rememberImportLaunchers
+import tech.shatrov.familyfinances.ui.reconciliation.ReconciliationScreen
+import tech.shatrov.familyfinances.ui.reconciliation.ReconciliationViewModel
 import tech.shatrov.familyfinances.ui.settings.SettingsHost
+import tech.shatrov.familyfinances.ui.settings.SettingsPage
 import tech.shatrov.familyfinances.ui.toUiError
 import tech.shatrov.familyfinances.ui.transactions.TransactionEditScreen
 import tech.shatrov.familyfinances.ui.transactions.TransactionEditViewModel
+import tech.shatrov.familyfinances.ui.transactions.TransactionFilters
 import tech.shatrov.familyfinances.ui.transactions.TransactionsScreen
 import tech.shatrov.familyfinances.ui.transactions.TransactionsViewModel
 import java.time.LocalDate
@@ -132,6 +144,9 @@ fun AppRoot(graph: AppGraph) {
     var listStale by rememberSaveable { mutableStateOf(false) }
     var homeStale by rememberSaveable { mutableStateOf(false) }
     var budgetsStale by rememberSaveable { mutableStateOf(false) }
+    var netWorthStale by rememberSaveable { mutableStateOf(false) }
+    // Распознавание уводит с расшифровки сверки мимо её выхода, а модель списка фильтр помнит.
+    var dropDrill by rememberSaveable { mutableStateOf(false) }
     // Модели экранов лежат в store активити и переживают выход. Ключа по пользователю мало:
     // повторный вход тем же человеком показал бы данные прошлой сессии и не перечитал бы их.
     var epoch by rememberSaveable { mutableIntStateOf(0) }
@@ -140,7 +155,11 @@ fun AppRoot(graph: AppGraph) {
     // Модель формы живёт в своём store: ключ у неё свой на каждый заход, а store активити
     // отдаёт брошенные модели только вместе с активити.
     val forms: ScopedModels = viewModel(key = "forms") { ScopedModels() }
-    val onForm = screen is AppScreen.TransactionEdit || screen is AppScreen.BudgetEdit || screen is AppScreen.Recognize
+    val onForm = screen is AppScreen.TransactionEdit ||
+        screen is AppScreen.BudgetEdit ||
+        screen is AppScreen.HoldingEdit ||
+        screen is AppScreen.HoldingHistory ||
+        screen is AppScreen.Recognize
     LaunchedEffect(onForm) { if (!onForm) forms.viewModelStore.clear() }
     // Свой store: модели подразделов настроек чистятся на каждом переходе, а модели форм — нет.
     val settings: ScopedModels = viewModel(key = "settings") { ScopedModels() }
@@ -167,7 +186,13 @@ fun AppRoot(graph: AppGraph) {
         val id = pending ?: return@LaunchedEffect
         if (session == null) return@LaunchedEffect
         when (val current = screen) {
-            AppScreen.Home, AppScreen.Transactions, AppScreen.Budgets -> screen = AppScreen.Recognize(id)
+            AppScreen.Home, AppScreen.Budgets, AppScreen.NetWorth, is AppScreen.Reconciliation ->
+                screen = AppScreen.Recognize(id)
+
+            is AppScreen.Transactions -> {
+                if (current.reconciliation != null) dropDrill = true
+                screen = AppScreen.Recognize(id)
+            }
 
             AppScreen.Categories -> {
                 listStale = true
@@ -241,6 +266,7 @@ fun AppRoot(graph: AppGraph) {
                 HomeViewModel(graph.api, active.currency, active.zone)
             }
             val home by model.state.collectAsStateWithLifecycle()
+            val card by model.card.collectAsStateWithLifecycle()
             // На возврате из фона, а не только при заходе: модель живёт всю сессию, а сводка
             // посчитана по «сегодня» и границам месяца, которые под свёрнутым экраном сменились.
             LifecycleResumeEffect(homeStale) {
@@ -258,17 +284,21 @@ fun AppRoot(graph: AppGraph) {
                     onRetry = model::refresh,
                     onAddTransaction = { screen = AppScreen.TransactionEdit(null) },
                     onSettings = { screen = AppScreen.Settings() },
+                    card = card,
+                    onReconciliation = { screen = AppScreen.Reconciliation(it) },
+                    onAccounts = { screen = AppScreen.Settings(SettingsPage.Accounts()) },
                 )
             }
         }
 
-        AppScreen.Transactions -> WithSession(session) { active ->
+        is AppScreen.Transactions -> WithSession(session) { active ->
             val model: TransactionsViewModel = viewModel(key = "transactions-${active.user.id}-$epoch") {
                 TransactionsViewModel(graph.api, active)
             }
             val transactions by model.state.collectAsStateWithLifecycle()
             val filters by model.filters.collectAsStateWithLifecycle()
             val categories by model.categories.collectAsStateWithLifecycle()
+            val accounts by model.accounts.collectAsStateWithLifecycle()
             // На возврате из фона, а не только при заходе: модель живёт всю сессию, и месяц
             // под фильтром «этот» мог смениться, пока экран лежал свёрнутым.
             LifecycleResumeEffect(listStale) {
@@ -280,21 +310,42 @@ fun AppRoot(graph: AppGraph) {
                 }
                 onPauseOrDispose {}
             }
-            BackHandler { screen = AppScreen.Home }
+            // Фильтр снаружи ставится один раз на ключ экрана: повторная композиция после поворота
+            // иначе вернула бы его поверх того, что пользователь выбрал чипами.
+            LaunchedEffect(current.filters) {
+                if (dropDrill) {
+                    dropDrill = false
+                    if (current.filters == null) model.onFiltersChange(TransactionFilters())
+                }
+                current.filters?.let(model::applyFilters)
+            }
+            val drillFrom = current.reconciliation
+            // Вкладка «Операции» после сверки открывалась бы на расшифровке её строки.
+            val leave = { next: AppScreen ->
+                if (drillFrom != null) model.onFiltersChange(TransactionFilters())
+                screen = next
+            }
+            BackHandler { leave(drillFrom?.let(AppScreen::Reconciliation) ?: AppScreen.Home) }
             WithNavBar(
                 AppTab.TRANSACTIONS,
-                onSelect = { screen = it.screen },
-                fab = { AddFab({ screen = AppScreen.TransactionEdit(null) }, R.string.transactions_add) },
+                onSelect = { leave(it.screen) },
+                fab = {
+                    AddFab({ screen = AppScreen.TransactionEdit(null, back = current) }, R.string.transactions_add)
+                },
             ) {
                 TransactionsScreen(
                     state = transactions,
                     filters = filters,
                     categories = categories,
+                    accounts = accounts,
                     onRetry = model::refresh,
-                    onFiltersChange = model::onFiltersChange,
+                    onFiltersChange = { next ->
+                        model.onFiltersChange(next)
+                        if (current.filters != null) screen = current.copy(filters = next)
+                    },
                     onLoadMore = model::loadMore,
-                    onCreate = { screen = AppScreen.TransactionEdit(null) },
-                    onOpen = { screen = AppScreen.TransactionEdit(it) },
+                    onCreate = { screen = AppScreen.TransactionEdit(null, back = current) },
+                    onOpen = { screen = AppScreen.TransactionEdit(it, back = current) },
                     importLaunchers = importLaunchers,
                 )
             }
@@ -378,6 +429,176 @@ fun AppRoot(graph: AppGraph) {
                     onOpen = { screen = AppScreen.BudgetEdit(it) },
                 )
             }
+        }
+
+        AppScreen.NetWorth -> WithSession(session) { active ->
+            val model: NetWorthViewModel = viewModel(key = "networth-${active.user.id}-$epoch") {
+                NetWorthViewModel(graph.api, active.zone)
+            }
+            val netWorth by model.state.collectAsStateWithLifecycle()
+            val editor by model.editor.collectAsStateWithLifecycle()
+            // `current` и последняя корзина отсечены по «сегодня» семьи, а оно под свёрнутым экраном сменилось.
+            LifecycleResumeEffect(netWorthStale) {
+                if (netWorthStale) {
+                    model.refresh()
+                    netWorthStale = false
+                } else {
+                    model.revalidate()
+                }
+                onPauseOrDispose {}
+            }
+            BackHandler { screen = AppScreen.Home }
+            WithNavBar(
+                AppTab.NET_WORTH,
+                onSelect = { screen = it.screen },
+                fab = { AddFab({ screen = AppScreen.HoldingEdit(null) }, R.string.net_worth_add) },
+            ) {
+                NetWorthScreen(
+                    state = netWorth,
+                    currency = active.currency,
+                    today = LocalDate.now(active.zone),
+                    onRetry = model::refresh,
+                    onAdd = { screen = AppScreen.HoldingEdit(null, side = it) },
+                    onOpenValue = model::onOpenValue,
+                    onEdit = { screen = AppScreen.HoldingEdit(it) },
+                )
+            }
+            editor?.let { value ->
+                ValueSheet(
+                    state = value,
+                    currency = active.currency,
+                    onAmountChange = model::onAmountChange,
+                    onDateChange = model::onDateChange,
+                    onSave = model::onSaveValue,
+                    onDismiss = model::onDismissValue,
+                    onHistory = {
+                        model.onDismissValue()
+                        screen = AppScreen.HoldingHistory(value.holdingId)
+                    },
+                )
+            }
+        }
+
+        is AppScreen.HoldingHistory -> WithSession(session) { active ->
+            val model: HoldingHistoryViewModel =
+                viewModel(viewModelStoreOwner = forms, key = "holding-history-${current.id}") {
+                    HoldingHistoryViewModel(graph.api, current.id, active.zone)
+                }
+            val history by model.state.collectAsStateWithLifecycle()
+            val editor by model.editor.collectAsStateWithLifecycle()
+            // Правка истории двигает `current` и ряд: капитал перечитывается на возврате.
+            val leave = {
+                netWorthStale = true
+                screen = AppScreen.NetWorth
+            }
+            LaunchedEffect(history is HoldingHistoryUiState.Gone) {
+                if (history is HoldingHistoryUiState.Gone) leave()
+            }
+            BackHandler { leave() }
+            HoldingHistoryScreen(
+                state = history,
+                currency = active.currency,
+                onRetry = model::refresh,
+                onLoadMore = model::loadMore,
+                onOpenValue = model::onOpenValue,
+                onEdit = {
+                    netWorthStale = true
+                    screen = AppScreen.HoldingEdit(current.id)
+                },
+                onBack = leave,
+            )
+            editor?.let { value ->
+                ValueSheet(
+                    state = value,
+                    currency = active.currency,
+                    onAmountChange = model::onAmountChange,
+                    onDateChange = model::onDateChange,
+                    onSave = model::onSaveValue,
+                    onDismiss = model::onDismissValue,
+                    onDelete = model::onDeleteValue,
+                )
+            }
+        }
+
+        is AppScreen.HoldingEdit -> WithSession(session) { active ->
+            val model: HoldingEditViewModel =
+                viewModel(viewModelStoreOwner = forms, key = "holding-${current.draft}") {
+                    HoldingEditViewModel(
+                        graph.api,
+                        current.id,
+                        current.draft,
+                        current.side,
+                        { LocalDate.now(active.zone) },
+                        active.isAdmin,
+                    )
+                }
+            val edit by model.state.collectAsStateWithLifecycle()
+            LaunchedEffect(edit.done) {
+                if (edit.done) {
+                    netWorthStale = true
+                    screen = AppScreen.NetWorth
+                }
+            }
+            // Как у формы операции: уход во время отправки убил бы корутину, которую сервер уже мог применить.
+            val leave = {
+                if (!edit.submitting) {
+                    if (edit.changed) netWorthStale = true
+                    screen = AppScreen.NetWorth
+                }
+            }
+            BackHandler { leave() }
+            HoldingEditScreen(
+                state = edit,
+                onSideChange = model::onSideChange,
+                onNameChange = model::onNameChange,
+                onKindChange = model::onKindChange,
+                onSubmit = model::onSubmit,
+                onToggleArchive = model::onToggleArchive,
+                onDelete = model::onDelete,
+                onRetry = model::load,
+                onBack = leave,
+            )
+        }
+
+        is AppScreen.Reconciliation -> WithSession(session) { active ->
+            val model: ReconciliationViewModel = viewModel(key = "reconciliation-${active.user.id}-$epoch") {
+                ReconciliationViewModel(graph.api)
+            }
+            val reconciliation by model.state.collectAsStateWithLifecycle()
+            val editor by model.editor.collectAsStateWithLifecycle()
+            // Каждый заход и смена месяца: строки считаются из операций, а их правят и на расшифровке.
+            LifecycleResumeEffect(current.month) {
+                model.load(current.month)
+                onPauseOrDispose {}
+            }
+            // Карточка главной считает «N из M» по тем же сверкам.
+            val leave = {
+                homeStale = true
+                screen = AppScreen.Home
+            }
+            BackHandler { leave() }
+            ReconciliationScreen(
+                month = current.month,
+                state = reconciliation,
+                editor = editor,
+                currency = active.currency,
+                onBack = leave,
+                onMonthChange = { screen = AppScreen.Reconciliation(it) },
+                onRetry = model::refresh,
+                onOpenTransactions = { account ->
+                    screen = AppScreen.Transactions(
+                        filters = TransactionFilters.reconciliation(current.month, account),
+                        reconciliation = current.month,
+                    )
+                },
+                onOpenBank = model::onOpenBank,
+                onAddAccount = { screen = AppScreen.Settings(SettingsPage.Accounts()) },
+                onAmountChange = model::onAmountChange,
+                onNoteChange = model::onNoteChange,
+                onSave = model::onSave,
+                onDelete = model::onDelete,
+                onDismissBank = model::onDismissBank,
+            )
         }
 
         is AppScreen.Settings -> WithSession(session) { active ->
@@ -476,6 +697,7 @@ fun AppRoot(graph: AppGraph) {
                         graph.imports,
                         current.importId,
                         active.currency,
+                        graph.lastAccount,
                     )
                 }
             val recognize by model.state.collectAsStateWithLifecycle()
@@ -487,7 +709,7 @@ fun AppRoot(graph: AppGraph) {
                     budgetsStale = true
                 }
             }
-            val leave = { if (!recognize.saving) screen = AppScreen.Transactions }
+            val leave = { if (!recognize.saving) screen = AppScreen.Transactions() }
             BackHandler { leave() }
             RecognizeScreen(
                 state = recognize,
@@ -498,6 +720,7 @@ fun AppRoot(graph: AppGraph) {
                 onDateChange = model::onDateChange,
                 onCategoryChange = model::onCategoryChange,
                 onDescriptionChange = model::onDescriptionChange,
+                onAccountChange = model::onAccountChange,
                 onSave = model::save,
                 onRetry = model::retry,
                 onRetryRow = model::retryRow,
@@ -512,6 +735,7 @@ fun AppRoot(graph: AppGraph) {
                 viewModel(viewModelStoreOwner = forms, key = "edit-${current.draft}") {
                     TransactionEditViewModel(
                         graph.api,
+                        graph.lastAccount,
                         current.id,
                         current.draft,
                         LocalDate.now(active.zone),
@@ -525,18 +749,19 @@ fun AppRoot(graph: AppGraph) {
                     homeStale = true
                     // Операция меняет `spent` бюджета своей категории.
                     budgetsStale = true
-                    screen = AppScreen.Transactions
+                    screen = current.back
                 }
             }
             // Уход с формы во время отправки убил бы её корутину: запись сервер уже мог
             // принять, а список о ней не узнал бы — и повтор создал бы вторую с новым черновиком.
-            val leave = { if (!edit.submitting) screen = AppScreen.Transactions }
+            val leave = { if (!edit.submitting) screen = current.back }
             BackHandler { leave() }
             TransactionEditScreen(
                 state = edit,
                 onAmountChange = model::onAmountChange,
                 onTypeChange = model::onTypeChange,
                 onCategoryChange = model::onCategoryChange,
+                onAccountChange = model::onAccountChange,
                 onDateChange = model::onDateChange,
                 onDescriptionChange = model::onDescriptionChange,
                 onSubmit = model::onSubmit,
@@ -601,7 +826,7 @@ private fun WithNavBar(
     }
 }
 
-/** Кнопка «добавить» вкладки: одна на операции, категории и бюджеты, чтобы ход был одинаковым. */
+/** Кнопка «добавить» вкладки: одна на все вкладки со списком, чтобы ход был одинаковым. */
 @Composable
 private fun AddFab(
     onClick: () -> Unit,
@@ -615,9 +840,10 @@ private fun AddFab(
 private val AppTab.screen: AppScreen
     get() = when (this) {
         AppTab.HOME -> AppScreen.Home
-        AppTab.TRANSACTIONS -> AppScreen.Transactions
+        AppTab.TRANSACTIONS -> AppScreen.Transactions()
         AppTab.CATEGORIES -> AppScreen.Categories
         AppTab.BUDGETS -> AppScreen.Budgets
+        AppTab.NET_WORTH -> AppScreen.NetWorth
     }
 
 /** Сессия гаснет на выходе раньше, чем сменится экран: без валюты и роли рисовать нечего. */

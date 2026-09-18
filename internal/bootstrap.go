@@ -107,7 +107,7 @@ func verifySchema(db *sql.DB) error {
 // Повтор → services.ErrFamilyAlreadyExists.
 func Setup(ctx context.Context, db *sql.DB, req dto.SetupFamilyDTO) (*user.Family, error) {
 	repos := infrastructure.NewRepositoriesSQLite(db)
-	return services.NewFamilyService(repos.Family, repos.Transaction).SetupFamily(ctx, req)
+	return services.NewFamilyService(repos.Family).SetupFamily(ctx, req)
 }
 
 // ResetPassword ставит новый пароль по email и отзывает все сессии пользователя.

@@ -68,6 +68,7 @@ func (h *TransactionHandler) CreateTransaction(c echo.Context) error {
 		Type:        transaction.Type(req.Type),
 		Description: req.Description,
 		CategoryID:  req.CategoryID,
+		AccountID:   req.AccountID,
 		UserID:      userID,
 		Date:        req.Date,
 		Tags:        req.Tags,
@@ -87,7 +88,17 @@ func (h *TransactionHandler) findTransaction(c echo.Context, id uuid.UUID) (*tra
 	return tx, err == nil
 }
 
+// respondAccountInvalid — 422 на счёт, который нельзя привязать к операции.
+func respondAccountInvalid(c echo.Context) error {
+	return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		ErrorDetail{Field: fieldAccountID, Message: "must be an existing active account", Code: ErrCodeValidationError})
+}
+
 func (h *TransactionHandler) handleCreateTransactionServiceError(c echo.Context, err error) error {
+	if errors.Is(err, services.ErrTransactionAccountInvalid) {
+		return respondAccountInvalid(c)
+	}
+
 	message := "Failed to create transaction"
 
 	switch {
@@ -131,6 +142,7 @@ func (h *TransactionHandler) buildTransactionResponse(tx *transaction.Transactio
 		Type:        string(tx.Type),
 		Description: tx.Description,
 		CategoryID:  tx.CategoryID,
+		AccountID:   tx.AccountID,
 		UserID:      tx.UserID,
 		Date:        tx.Date,
 		Tags:        tags,
@@ -217,6 +229,10 @@ func (h *TransactionHandler) parseOptionalFilters(c echo.Context, filters *Trans
 		filters.CategoryID = &categoryID
 	}
 
+	if err := h.parseAccountFilters(c, filters); err != nil {
+		return err
+	}
+
 	if typeParam := c.QueryParam("type"); typeParam != "" {
 		filters.Type = &typeParam
 	}
@@ -231,6 +247,31 @@ func (h *TransactionHandler) parseOptionalFilters(c echo.Context, filters *Trans
 
 	if descriptionParam := c.QueryParam("description"); descriptionParam != "" {
 		filters.Description = &descriptionParam
+	}
+
+	return nil
+}
+
+// parseAccountFilters — account_id и unassigned=true вместе дали бы заведомо пустую выборку, поэтому 422.
+func (h *TransactionHandler) parseAccountFilters(c echo.Context, filters *TransactionFilterParams) error {
+	if raw := c.QueryParam(fieldAccountID); raw != "" {
+		accountID, parseErr := uuid.Parse(raw)
+		if parseErr != nil {
+			return writeInvalidQueryParam(c, fieldAccountID, raw, "must be a valid UUID")
+		}
+		filters.AccountID = &accountID
+	}
+
+	if raw := c.QueryParam(fieldUnassigned); raw != "" {
+		unassigned, parseErr := strconv.ParseBool(raw)
+		if parseErr != nil {
+			return writeInvalidQueryParam(c, fieldUnassigned, raw, "must be a boolean")
+		}
+		filters.Unassigned = unassigned
+	}
+
+	if filters.AccountID != nil && filters.Unassigned {
+		return writeInvalidQueryParam(c, fieldUnassigned, "true", "must not be combined with account_id")
 	}
 
 	return nil
@@ -306,6 +347,8 @@ func (h *TransactionHandler) buildTransactionServiceFilter(filters TransactionFi
 	filter := dto.NewTransactionFilterDTO()
 	filter.UserID = filters.UserID
 	filter.CategoryID = filters.CategoryID
+	filter.AccountID = filters.AccountID
+	filter.Unassigned = filters.Unassigned
 	if filters.Type != nil {
 		t := transaction.Type(*filters.Type)
 		filter.Type = &t
@@ -369,11 +412,19 @@ func (h *TransactionHandler) UpdateTransaction(c echo.Context) error {
 		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, ErrMessageNoFields))
 	}
+	clearAccount := req.ClearAccount != nil && *req.ClearAccount
+	if clearAccount && req.AccountID != nil {
+		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+			ErrorDetail{Field: fieldClearAcct, Message: "must not be combined with account_id",
+				Code: ErrCodeValidationError})
+	}
 
 	serviceReq := dto.UpdateTransactionDTO{
-		Description: req.Description,
-		CategoryID:  req.CategoryID,
-		Tags:        req.Tags,
+		Description:  req.Description,
+		CategoryID:   req.CategoryID,
+		AccountID:    req.AccountID,
+		ClearAccount: clearAccount,
+		Tags:         req.Tags,
 	}
 	serviceReq.AmountMinor = req.AmountMinor
 	serviceReq.Date = req.Date
@@ -420,6 +471,8 @@ func (h *TransactionHandler) handleUpdateTransactionServiceError(c echo.Context,
 	switch {
 	case errors.Is(err, services.ErrTransactionNotFound):
 		return HandleNotFoundError(c, "Transaction")
+	case errors.Is(err, services.ErrTransactionAccountInvalid):
+		return respondAccountInvalid(c)
 	case errors.Is(err, services.ErrInsufficientBudget),
 		errors.Is(err, services.ErrInvalidTransactionAmount),
 		errors.Is(err, services.ErrInvalidTransactionType),
