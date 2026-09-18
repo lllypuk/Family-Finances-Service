@@ -34,7 +34,7 @@ const (
 	ErrCodeCannotDeactivateSelf = "CANNOT_DEACTIVATE_SELF"
 	// ErrCodeLastAdmin signals an attempt to deactivate or demote the last active admin.
 	ErrCodeLastAdmin = "LAST_ADMIN"
-	// ErrCodeCurrencyLocked signals a currency change on a family that already has transactions or reconciliations.
+	// ErrCodeCurrencyLocked signals a currency change on a family that already has transactions, reconciliations or holding values.
 	ErrCodeCurrencyLocked = "CURRENCY_LOCKED"
 	// ErrCodeBudgetOverlap signals a budget whose period overlaps another budget of the same scope.
 	ErrCodeBudgetOverlap = "BUDGET_OVERLAP"
@@ -56,6 +56,8 @@ const (
 	ErrCodeHoldingNotFound = "HOLDING_NOT_FOUND"
 	// ErrCodeHoldingNameExists signals a holding name already taken, by an archived holding too.
 	ErrCodeHoldingNameExists = "HOLDING_NAME_EXISTS"
+	// ErrCodeHoldingValueNotFound signals that the holding has no value on the date.
+	ErrCodeHoldingValueNotFound = "HOLDING_VALUE_NOT_FOUND"
 	// ErrCodeReconciliationNotFound signals that the account has no reconciliation for the month.
 	ErrCodeReconciliationNotFound = "RECONCILIATION_NOT_FOUND"
 	// ErrCodeInvalidQueryParam маркирует деталь ошибки 422 по query-параметру.
@@ -96,7 +98,7 @@ const (
 	ErrMessageCannotDeactivate       = "Cannot deactivate your own account"
 	ErrMessageEmailTaken             = "Email already exists"
 	ErrMessageLastAdmin              = "Cannot deactivate or demote the last administrator"
-	ErrMessageCurrencyLocked         = "Currency cannot be changed while transactions or reconciliations exist"
+	ErrMessageCurrencyLocked         = "Currency cannot be changed while transactions, reconciliations or holding values exist"
 	ErrMessageBudgetOverlap          = "Budget period overlaps with an existing budget"
 	ErrMessageBudgetNameExists       = "Budget with this name already exists for this period"
 	ErrMessageBudgetBelowSpent       = "Budget amount is less than already spent"
@@ -110,6 +112,8 @@ const (
 	ErrMessageInvalidHoldingID       = "Invalid holding ID format"
 	ErrMessageHoldingNotFound        = "Holding not found"
 	ErrMessageHoldingNameExists      = "Holding with this name already exists"
+	ErrMessageHoldingValueNotFound   = "Holding value not found"
+	ErrMessageInvalidValueDate       = "Invalid date format, expected YYYY-MM-DD"
 	ErrMessageInvalidBackupName      = "Invalid backup filename"
 	ErrMessageBackupNotFound         = "Backup not found"
 	ErrMessageBackupFailed           = "Failed to create backup"
@@ -140,4 +144,5 @@ const (
 	fieldUnassigned  = "unassigned"
 	fieldSide        = "side"
 	fieldKind        = "kind"
+	fieldValueMinor  = "value_minor"
 )

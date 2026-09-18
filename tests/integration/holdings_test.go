@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/testhelpers"
 )
@@ -142,4 +144,82 @@ func TestHoldingsAPI_Roles(t *testing.T) {
 
 	rec = doAccountRequest(t, ts, nil, http.MethodGet, "/api/v1/holdings", "")
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func holdingValuesPath(id uuid.UUID, day string) string {
+	path := "/api/v1/holdings/" + id.String() + "/values"
+	if day != "" {
+		path += "/" + day
+	}
+	return path
+}
+
+func TestHoldingsAPI_Values(t *testing.T) {
+	ts := testhelpers.SetupHTTPServer(t)
+	admin := ts.Auth(t)
+	h := decodeHolding(t, doAccountRequest(t, ts, admin, http.MethodPost, "/api/v1/holdings",
+		`{"name":"Вклад","side":"asset","kind":"deposit"}`))
+	today := date.Today(ts.AuthFamily.Location())
+	earlier := today.AddDays(-10)
+
+	rec := doAccountRequest(t, ts, admin, http.MethodPut, holdingValuesPath(h.ID, today.String()),
+		`{"value_minor":500}`)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	rec = doAccountRequest(t, ts, admin, http.MethodPut, holdingValuesPath(h.ID, today.String()),
+		`{"value_minor":700}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+	rec = doAccountRequest(t, ts, admin, http.MethodPut, holdingValuesPath(h.ID, earlier.String()),
+		`{"value_minor":0}`)
+	require.Equal(t, http.StatusOK, rec.Code, "0 принимается")
+
+	rec = doGET(t, ts, admin, holdingValuesPath(h.ID, ""))
+	require.Equal(t, http.StatusOK, rec.Code)
+	var history handlers.APIResponse[[]handlers.HoldingValueResponse]
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &history))
+	require.Len(t, history.Data, 2, "повторный PUT на дату — одна строка")
+	assert.Equal(t, 2, history.Meta.Pagination.Total)
+	assert.Equal(t, today, history.Data[0].Date)
+	assert.Equal(t, money.Minor(700), history.Data[0].ValueMinor)
+
+	var list handlers.APIResponse[[]handlers.HoldingResponse]
+	require.NoError(t, json.Unmarshal(doGET(t, ts, admin, "/api/v1/holdings").Body.Bytes(), &list))
+	require.NotNil(t, list.Data[0].Current)
+	assert.Equal(t, today, list.Data[0].Current.Date, "current — по дате, а не последний записанный")
+	assert.Equal(t, money.Minor(700), list.Data[0].Current.ValueMinor)
+
+	rec = doAccountRequest(t, ts, admin, http.MethodPut, holdingValuesPath(h.ID, today.AddDays(1).String()),
+		`{"value_minor":1}`)
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, "завтра")
+	rec = doAccountRequest(t, ts, admin, http.MethodPut, holdingValuesPath(h.ID, "yesterday"), `{"value_minor":1}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	rec = doAccountRequest(t, ts, admin, http.MethodDelete, holdingValuesPath(h.ID, earlier.String()), "")
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+	rec = doAccountRequest(t, ts, admin, http.MethodDelete, holdingValuesPath(h.ID, earlier.String()), "")
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, handlers.ErrCodeHoldingValueNotFound, errorCodeOf(t, rec))
+	rec = doAccountRequest(t, ts, admin, http.MethodPut, holdingValuesPath(uuid.New(), today.String()),
+		`{"value_minor":1}`)
+	assert.Equal(t, handlers.ErrCodeHoldingNotFound, errorCodeOf(t, rec))
+
+	rec = doAccountRequest(t, ts, admin, http.MethodDelete, "/api/v1/holdings/"+h.ID.String(), "")
+	require.Equal(t, http.StatusNoContent, rec.Code)
+	rec = doGET(t, ts, admin, holdingValuesPath(h.ID, ""))
+	assert.Equal(t, http.StatusNotFound, rec.Code, "позиция ушла вместе со снимками")
+}
+
+func TestHoldingsAPI_ZeroValueLocksCurrency(t *testing.T) {
+	ts := testhelpers.SetupHTTPServer(t)
+	admin := ts.Auth(t)
+	h := decodeHolding(t, doAccountRequest(t, ts, admin, http.MethodPost, "/api/v1/holdings",
+		`{"name":"Вклад","side":"asset","kind":"deposit"}`))
+	today := date.Today(ts.AuthFamily.Location())
+
+	rec := doAccountRequest(t, ts, admin, http.MethodPut, holdingValuesPath(h.ID, today.String()),
+		`{"value_minor":0}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	rec = doAccountRequest(t, ts, admin, http.MethodPut, "/api/v1/family", `{"currency":"USD"}`)
+	assert.Equal(t, http.StatusConflict, rec.Code, rec.Body.String())
+	assert.Equal(t, handlers.ErrCodeCurrencyLocked, errorCodeOf(t, rec))
 }

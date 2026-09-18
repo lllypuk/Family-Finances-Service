@@ -233,7 +233,7 @@ paths:
       tags: [family]
       summary: Изменить семью
       description: |
-        Только admin. Смена `currency` при наличии транзакций или сверок запрещена — `409 CURRENCY_LOCKED` (A-05).
+        Только admin. Смена `currency` при наличии транзакций, сверок или снимков позиций запрещена — `409 CURRENCY_LOCKED` (A-05).
         `timezone` — IANA-имя, в нём считаются «сегодня» и границы периодов (A-06).
       requestBody:
         required: true
@@ -645,6 +645,78 @@ paths:
         исправление ошибочно заведённой позиции. Проданное имущество — снимок `0` и архив.
       responses:
         '204': { description: Позиция удалена }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/holdings/{id}/values:
+    parameters:
+      - { $ref: '#/components/parameters/PathID' }
+    get:
+      operationId: listHoldingValues
+      tags: [holdings]
+      summary: История снимков позиции
+      description: admin и member. Новые сверху; архивной позиции тоже.
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Offset' }
+      responses:
+        '200':
+          description: Снимки позиции
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/HoldingValue' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /api/v1/holdings/{id}/values/{date}:
+    parameters:
+      - { $ref: '#/components/parameters/PathID' }
+      - name: date
+        in: path
+        required: true
+        description: Дата снимка `YYYY-MM-DD`; иное — `400`
+        schema: { $ref: '#/components/schemas/CalendarDate' }
+    put:
+      operationId: putHoldingValue
+      tags: [holdings]
+      summary: Записать стоимость позиции на дату
+      description: |
+        admin и member. Снимок на ту же дату заменяется. Дата позже сегодняшнего дня в часовом поясе
+        семьи — `422` с `field: date`. `0` законен: так закрывают проданное и погашенное. Архивной
+        позиции снимки тоже пишутся — история правится независимо от видимости.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HoldingValueRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/HoldingValueOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      operationId: deleteHoldingValue
+      tags: [holdings]
+      summary: Удалить снимок
+      description: |
+        admin и member. `HOLDING_NOT_FOUND` или `HOLDING_VALUE_NOT_FOUND` — `404`. Прошлые значения
+        капитала пересчитываются: позиция переносит вперёд предыдущий снимок.
+      responses:
+        '204': { description: Снимок удалён }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1318,6 +1390,11 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/HoldingOk' }
+    HoldingValueOk:
+      description: Снимок стоимости
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/HoldingValueOk' }
     ReconciliationOk:
       description: Сверка
       content:
@@ -1451,6 +1528,12 @@ components:
       required: [data, meta]
       properties:
         data: { $ref: '#/components/schemas/Holding' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    HoldingValueOk:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/HoldingValue' }
         meta: { $ref: '#/components/schemas/Meta' }
     ReconciliationOk:
       type: object
@@ -1634,7 +1717,7 @@ components:
         currency:
           type: string
           pattern: '^[A-Z]{3}$'
-          description: Меняется только пока в семье нет транзакций, иначе `409 CURRENCY_LOCKED`
+          description: Меняется только пока в семье нет транзакций, сверок и снимков позиций, иначе `409 CURRENCY_LOCKED`
         timezone: { type: string }
 
     Category:
@@ -1762,6 +1845,23 @@ components:
         name: { type: string, maxLength: 50 }
         kind: { $ref: '#/components/schemas/HoldingKind' }
         is_archived: { type: boolean }
+    HoldingValueRequest:
+      type: object
+      required: [value_minor]
+      properties:
+        value_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          minimum: 0
+          description: Стоимость позиции на дату; знак даёт `side`, отрицательное — `422`
+    HoldingValue:
+      type: object
+      required: [date, value_minor, updated_at]
+      properties:
+        date: { $ref: '#/components/schemas/CalendarDate' }
+        value_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          minimum: 0
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
     ReconciliationRequest:
       type: object
       required: [bank_expense_minor]

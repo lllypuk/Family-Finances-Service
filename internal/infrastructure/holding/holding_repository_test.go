@@ -169,3 +169,68 @@ func TestHoldingRepository_Delete_CascadesValues(t *testing.T) {
 	require.NoError(t, db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM holding_values`).Scan(&n))
 	assert.Zero(t, n)
 }
+
+func TestHoldingRepository_UpsertValue_ReplacesOnSameDate(t *testing.T) {
+	repo, db := setupRepo(t)
+	h := create(t, repo, "Вклад", holding.SideAsset)
+	day := date.New(2026, 9, 1)
+
+	first := &holding.Value{Date: day, ValueMinor: 100}
+	require.NoError(t, repo.UpsertValue(t.Context(), h.ID, first))
+	assert.False(t, first.UpdatedAt.IsZero())
+	require.NoError(t, repo.UpsertValue(t.Context(), h.ID, &holding.Value{Date: day, ValueMinor: 0}))
+
+	var n int
+	require.NoError(t, db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM holding_values`).Scan(&n))
+	assert.Equal(t, 1, n)
+	got, err := repo.GetByID(t.Context(), h.ID, today())
+	require.NoError(t, err)
+	require.NotNil(t, got.Current)
+	assert.Zero(t, got.Current.ValueMinor, "0 заменяет прежнее значение")
+
+	err = repo.UpsertValue(t.Context(), uuid.New(), &holding.Value{Date: day, ValueMinor: 1})
+	require.ErrorIs(t, err, holding.ErrNotFound)
+}
+
+func TestHoldingRepository_Current_AfterDeleteValue(t *testing.T) {
+	repo, db := setupRepo(t)
+	h := create(t, repo, "Вклад", holding.SideAsset)
+	putValue(t, db, h.ID, "2026-07-01", 100)
+	putValue(t, db, h.ID, "2026-08-01", 200)
+	putValue(t, db, h.ID, "2026-09-01", 300)
+
+	current := func() *holding.Value {
+		got, err := repo.GetByID(t.Context(), h.ID, today())
+		require.NoError(t, err)
+		return got.Current
+	}
+
+	require.NoError(t, repo.DeleteValue(t.Context(), h.ID, date.New(2026, 8, 1)))
+	assert.Equal(t, money.Minor(300), current().ValueMinor, "удалён непоследний — current прежний")
+
+	require.NoError(t, repo.DeleteValue(t.Context(), h.ID, date.New(2026, 9, 1)))
+	assert.Equal(t, date.New(2026, 7, 1), current().Date, "удалён последний — current предыдущий")
+
+	require.NoError(t, repo.DeleteValue(t.Context(), h.ID, date.New(2026, 7, 1)))
+	assert.Nil(t, current(), "удалён единственный — current пуст")
+
+	require.ErrorIs(t, repo.DeleteValue(t.Context(), h.ID, date.New(2026, 7, 1)), holding.ErrValueNotFound)
+}
+
+func TestHoldingRepository_ListValues_NewestFirstWithTotal(t *testing.T) {
+	repo, db := setupRepo(t)
+	h := create(t, repo, "Вклад", holding.SideAsset)
+	other := create(t, repo, "Ипотека", holding.SideLiability)
+	putValue(t, db, h.ID, "2026-07-01", 100)
+	putValue(t, db, h.ID, "2026-09-01", 300)
+	putValue(t, db, h.ID, "2026-08-01", 200)
+	putValue(t, db, other.ID, "2026-09-01", 900)
+
+	values, total, err := repo.ListValues(t.Context(), h.ID, 2, 1)
+	require.NoError(t, err)
+	assert.Equal(t, 3, total, "total — все снимки позиции, не страница")
+	require.Len(t, values, 2)
+	assert.Equal(t, date.New(2026, 8, 1), values[0].Date)
+	assert.Equal(t, date.New(2026, 7, 1), values[1].Date)
+	assert.False(t, values[0].UpdatedAt.IsZero())
+}

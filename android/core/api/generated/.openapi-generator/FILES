@@ -39,11 +39,15 @@ kotlin/tech/shatrov/familyfinances/core/api/Holding.kt
 kotlin/tech/shatrov/familyfinances/core/api/HoldingCurrent.kt
 kotlin/tech/shatrov/familyfinances/core/api/HoldingOk.kt
 kotlin/tech/shatrov/familyfinances/core/api/HoldingSide.kt
+kotlin/tech/shatrov/familyfinances/core/api/HoldingValue.kt
+kotlin/tech/shatrov/familyfinances/core/api/HoldingValueOk.kt
+kotlin/tech/shatrov/familyfinances/core/api/HoldingValueRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/HoldingsApi.kt
 kotlin/tech/shatrov/familyfinances/core/api/ListAccounts200Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/ListBackups200Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/ListBudgets200Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/ListCategories200Response.kt
+kotlin/tech/shatrov/familyfinances/core/api/ListHoldingValues200Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/ListHoldings200Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/ListMeta.kt
 kotlin/tech/shatrov/familyfinances/core/api/ListSessions200Response.kt

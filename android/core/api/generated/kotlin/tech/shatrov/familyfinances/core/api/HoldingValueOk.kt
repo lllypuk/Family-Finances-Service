@@ -23,31 +23,28 @@
 
 package tech.shatrov.familyfinances.core.api
 
+import tech.shatrov.familyfinances.core.api.HoldingValue
+import tech.shatrov.familyfinances.core.api.Meta
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Contextual
 
 /**
- * Хотя бы одно поле обязательно
+ * 
  *
- * @param name 
- * @param currency Меняется только пока в семье нет транзакций, сверок и снимков позиций, иначе `409 CURRENCY_LOCKED`
- * @param timezone 
+ * @param `data` 
+ * @param meta 
  */
 @Serializable
 
-data class UpdateFamilyRequest (
+data class HoldingValueOk (
 
-    @SerialName(value = "name")
-    val name: kotlin.String? = null,
+    @SerialName(value = "data")
+    val `data`: HoldingValue,
 
-    /* Меняется только пока в семье нет транзакций, сверок и снимков позиций, иначе `409 CURRENCY_LOCKED` */
-    @SerialName(value = "currency")
-    val currency: kotlin.String? = null,
-
-    @SerialName(value = "timezone")
-    val timezone: kotlin.String? = null
+    @SerialName(value = "meta")
+    val meta: Meta
 
 ) {
 

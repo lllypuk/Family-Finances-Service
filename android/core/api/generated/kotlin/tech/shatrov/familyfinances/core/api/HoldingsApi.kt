@@ -10,6 +10,9 @@ import kotlinx.serialization.Serializable
 import tech.shatrov.familyfinances.core.api.CreateHoldingRequest
 import tech.shatrov.familyfinances.core.api.Error
 import tech.shatrov.familyfinances.core.api.HoldingOk
+import tech.shatrov.familyfinances.core.api.HoldingValueOk
+import tech.shatrov.familyfinances.core.api.HoldingValueRequest
+import tech.shatrov.familyfinances.core.api.ListHoldingValues200Response
 import tech.shatrov.familyfinances.core.api.ListHoldings200Response
 import tech.shatrov.familyfinances.core.api.UpdateHoldingRequest
 
@@ -51,6 +54,44 @@ interface HoldingsApi {
     suspend fun deleteHolding(@Path("id") id: java.util.UUID): Response<Unit>
 
     /**
+     * DELETE api/v1/holdings/{id}/values/{date}
+     * Удалить снимок
+     * admin и member. &#x60;HOLDING_NOT_FOUND&#x60; или &#x60;HOLDING_VALUE_NOT_FOUND&#x60; — &#x60;404&#x60;. Прошлые значения капитала пересчитываются: позиция переносит вперёд предыдущий снимок. 
+     * Responses:
+     *  - 204: Снимок удалён
+     *  - 400: Тело или идентификатор не разобрались: `INVALID_REQUEST` (сломанный JSON или неверный тип поля), `INVALID_ID` (в пути не UUID). Ошибки валидации значений — это `422`. 
+     *  - 401: Токена нет, он истёк или отозван (`UNAUTHORIZED`)
+     *  - 403: Роль не даёт доступа к операции (`FORBIDDEN`)
+     *  - 404: Объект не найден: `NOT_FOUND` для неизвестного пути, `<ENTITY>_NOT_FOUND` (`USER_NOT_FOUND`, `SESSION_NOT_FOUND`, `CATEGORY_NOT_FOUND`, …) для отсутствующей записи 
+     *
+     * @param id 
+     * @param date Дата снимка &#x60;YYYY-MM-DD&#x60;; иное — &#x60;400&#x60;
+     * @return [Unit]
+     */
+    @DELETE("api/v1/holdings/{id}/values/{date}")
+    suspend fun deleteHoldingValue(@Path("id") id: java.util.UUID, @Path("date") date: java.time.LocalDate): Response<Unit>
+
+    /**
+     * GET api/v1/holdings/{id}/values
+     * История снимков позиции
+     * admin и member. Новые сверху; архивной позиции тоже.
+     * Responses:
+     *  - 200: Снимки позиции
+     *  - 400: Тело или идентификатор не разобрались: `INVALID_REQUEST` (сломанный JSON или неверный тип поля), `INVALID_ID` (в пути не UUID). Ошибки валидации значений — это `422`. 
+     *  - 401: Токена нет, он истёк или отозван (`UNAUTHORIZED`)
+     *  - 403: Роль не даёт доступа к операции (`FORBIDDEN`)
+     *  - 404: Объект не найден: `NOT_FOUND` для неизвестного пути, `<ENTITY>_NOT_FOUND` (`USER_NOT_FOUND`, `SESSION_NOT_FOUND`, `CATEGORY_NOT_FOUND`, …) для отсутствующей записи 
+     *  - 422: Тело или параметры не прошли валидацию (`VALIDATION_ERROR`); поля — в `error.details`
+     *
+     * @param id 
+     * @param limit  (optional, default to 50)
+     * @param offset  (optional, default to 0)
+     * @return [ListHoldingValues200Response]
+     */
+    @GET("api/v1/holdings/{id}/values")
+    suspend fun listHoldingValues(@Path("id") id: java.util.UUID, @Query("limit") limit: kotlin.Int? = 50, @Query("offset") offset: kotlin.Int? = 0): Response<ListHoldingValues200Response>
+
+    /**
      * GET api/v1/holdings
      * Активы и пассивы семьи
      * admin и member. Порядок — по имени без учёта регистра. &#x60;current&#x60; — последний снимок с датой не позже сегодняшнего дня в часовом поясе семьи, &#x60;null&#x60; — снимков нет. 
@@ -67,6 +108,26 @@ interface HoldingsApi {
      */
     @GET("api/v1/holdings")
     suspend fun listHoldings(@Query("limit") limit: kotlin.Int? = 50, @Query("offset") offset: kotlin.Int? = 0, @Query("archived") archived: kotlin.Boolean? = false): Response<ListHoldings200Response>
+
+    /**
+     * PUT api/v1/holdings/{id}/values/{date}
+     * Записать стоимость позиции на дату
+     * admin и member. Снимок на ту же дату заменяется. Дата позже сегодняшнего дня в часовом поясе семьи — &#x60;422&#x60; с &#x60;field: date&#x60;. &#x60;0&#x60; законен: так закрывают проданное и погашенное. Архивной позиции снимки тоже пишутся — история правится независимо от видимости. 
+     * Responses:
+     *  - 200: Снимок стоимости
+     *  - 400: Тело или идентификатор не разобрались: `INVALID_REQUEST` (сломанный JSON или неверный тип поля), `INVALID_ID` (в пути не UUID). Ошибки валидации значений — это `422`. 
+     *  - 401: Токена нет, он истёк или отозван (`UNAUTHORIZED`)
+     *  - 403: Роль не даёт доступа к операции (`FORBIDDEN`)
+     *  - 404: Объект не найден: `NOT_FOUND` для неизвестного пути, `<ENTITY>_NOT_FOUND` (`USER_NOT_FOUND`, `SESSION_NOT_FOUND`, `CATEGORY_NOT_FOUND`, …) для отсутствующей записи 
+     *  - 422: Тело или параметры не прошли валидацию (`VALIDATION_ERROR`); поля — в `error.details`
+     *
+     * @param id 
+     * @param date Дата снимка &#x60;YYYY-MM-DD&#x60;; иное — &#x60;400&#x60;
+     * @param holdingValueRequest 
+     * @return [HoldingValueOk]
+     */
+    @PUT("api/v1/holdings/{id}/values/{date}")
+    suspend fun putHoldingValue(@Path("id") id: java.util.UUID, @Path("date") date: java.time.LocalDate, @Body holdingValueRequest: HoldingValueRequest): Response<HoldingValueOk>
 
     /**
      * PUT api/v1/holdings/{id}

@@ -89,6 +89,9 @@ type HoldingService interface {
 		archived *bool,
 	) (*holding.Holding, error)
 	Delete(ctx context.Context, id uuid.UUID) error
+	PutValue(ctx context.Context, id uuid.UUID, day date.Date, value money.Minor) (*holding.Value, error)
+	DeleteValue(ctx context.Context, id uuid.UUID, day date.Date) error
+	ListValues(ctx context.Context, id uuid.UUID, limit, offset int) ([]*holding.Value, int, error)
 }
 
 // ReconciliationService — сверка счетов по месяцам; month — любой день месяца.

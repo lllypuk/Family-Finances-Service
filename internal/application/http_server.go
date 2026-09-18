@@ -240,6 +240,9 @@ func (s *HTTPServer) setupHoldingRoutes(api *echo.Group, financeAccess, adminOnl
 	holdings.POST("", s.holdingHandler.CreateHolding)
 	holdings.PUT("/:id", s.holdingHandler.UpdateHolding)
 	holdings.DELETE("/:id", s.holdingHandler.DeleteHolding, adminOnly)
+	holdings.GET("/:id/values", s.holdingHandler.ListHoldingValues)
+	holdings.PUT("/:id/values/:date", s.holdingHandler.PutHoldingValue)
+	holdings.DELETE("/:id/values/:date", s.holdingHandler.DeleteHoldingValue)
 }
 
 // setupResourceRoutes — ролевая модель: управление пользователями — только админ,

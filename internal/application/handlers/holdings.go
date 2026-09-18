@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
+	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/holding"
 	"family-budget-service/internal/services"
 )
@@ -118,11 +119,89 @@ func (h *HoldingHandler) DeleteHolding(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+// ListHoldingValues — история снимков позиции, новые сверху.
+func (h *HoldingHandler) ListHoldingValues(c echo.Context) error {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidHoldingID)
+	}
+	page, err := parsePagination(c)
+	if err != nil {
+		return ignoreWritten(err)
+	}
+
+	values, total, err := h.holdings.ListValues(c.Request().Context(), id, page.Limit, page.Offset)
+	if err != nil {
+		return respondHoldingError(c, err)
+	}
+
+	items := make([]HoldingValueResponse, 0, len(values))
+	for _, v := range values {
+		items = append(items, toHoldingValueResponse(v))
+	}
+
+	return respondList(c, items, page, total)
+}
+
+func (h *HoldingHandler) PutHoldingValue(c echo.Context) error {
+	id, day, err := parseHoldingValuePath(c)
+	if err != nil {
+		return ignoreWritten(err)
+	}
+
+	var req HoldingValueRequest
+	if err = c.Bind(&req); err != nil {
+		return respondBindError(c, err)
+	}
+	if err = h.validator.Struct(req); err != nil {
+		return respondValidationErrors(c, err)
+	}
+
+	v, err := h.holdings.PutValue(c.Request().Context(), id, day, *req.ValueMinor)
+	if err != nil {
+		return respondHoldingError(c, err)
+	}
+
+	return respondAPI(c, http.StatusOK, toHoldingValueResponse(v))
+}
+
+func (h *HoldingHandler) DeleteHoldingValue(c echo.Context) error {
+	id, day, err := parseHoldingValuePath(c)
+	if err != nil {
+		return ignoreWritten(err)
+	}
+
+	if err = h.holdings.DeleteValue(c.Request().Context(), id, day); err != nil {
+		return respondHoldingError(c, err)
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+
+// parseHoldingValuePath пишет 400 сам и возвращает errResponseAlreadyWritten.
+func parseHoldingValuePath(c echo.Context) (uuid.UUID, date.Date, error) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return uuid.Nil, date.Date{}, written(
+			respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidHoldingID))
+	}
+
+	day, err := date.Parse(c.Param(fieldDate))
+	if err != nil {
+		return uuid.Nil, date.Date{}, written(
+			respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidValueDate))
+	}
+
+	return id, day, nil
+}
+
 func respondHoldingError(c echo.Context, err error) error {
 	var field string
 	switch {
 	case errors.Is(err, holding.ErrNotFound):
 		return respondError(c, http.StatusNotFound, ErrCodeHoldingNotFound, ErrMessageHoldingNotFound)
+	case errors.Is(err, holding.ErrValueNotFound):
+		return respondError(c, http.StatusNotFound, ErrCodeHoldingValueNotFound, ErrMessageHoldingValueNotFound)
 	case errors.Is(err, holding.ErrNameExists):
 		return respondError(c, http.StatusConflict, ErrCodeHoldingNameExists, ErrMessageHoldingNameExists)
 	case errors.Is(err, holding.ErrNameEmpty), errors.Is(err, holding.ErrNameLong):
@@ -131,6 +210,10 @@ func respondHoldingError(c echo.Context, err error) error {
 		field = fieldSide
 	case errors.Is(err, holding.ErrInvalidKind):
 		field = fieldKind
+	case errors.Is(err, holding.ErrValueOutOfRange):
+		field = fieldValueMinor
+	case errors.Is(err, holding.ErrValueDateFuture):
+		field = fieldDate
 	default:
 		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
@@ -154,4 +237,8 @@ func toHoldingResponse(h *holding.Holding) HoldingResponse {
 	}
 
 	return resp
+}
+
+func toHoldingValueResponse(v *holding.Value) HoldingValueResponse {
+	return HoldingValueResponse{Date: v.Date, ValueMinor: v.ValueMinor, UpdatedAt: v.UpdatedAt}
 }

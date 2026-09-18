@@ -140,6 +140,83 @@ func (r *SQLiteRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return requireAffected(res, id)
 }
 
+// UpsertValue заменяет снимок на дату; позиции нет — ErrNotFound по внешнему ключу.
+func (r *SQLiteRepository) UpsertValue(ctx context.Context, holdingID uuid.UUID, v *holding.Value) error {
+	err := r.db.QueryRowContext(ctx, `
+		INSERT INTO holding_values (holding_id, date, value_minor) VALUES (?, ?, ?)
+		ON CONFLICT(holding_id, date) DO UPDATE SET
+			value_minor = excluded.value_minor,
+			updated_at = CURRENT_TIMESTAMP
+		RETURNING updated_at`,
+		sqlitehelpers.UUIDToString(holdingID), v.Date, v.ValueMinor,
+	).Scan(&v.UpdatedAt)
+	if err != nil {
+		if strings.Contains(err.Error(), "FOREIGN KEY constraint failed") {
+			return fmt.Errorf("%w: %s", holding.ErrNotFound, holdingID)
+		}
+		return fmt.Errorf("failed to upsert holding value: %w", err)
+	}
+
+	return nil
+}
+
+func (r *SQLiteRepository) DeleteValue(ctx context.Context, holdingID uuid.UUID, day date.Date) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM holding_values WHERE holding_id = ? AND date = ?`,
+		sqlitehelpers.UUIDToString(holdingID), day)
+	if err != nil {
+		return fmt.Errorf("failed to delete holding value: %w", err)
+	}
+
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to read affected rows: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("%w: %s %s", holding.ErrValueNotFound, holdingID, day)
+	}
+
+	return nil
+}
+
+// ListValues — страница истории позиции, новые сверху, и число всех её снимков.
+func (r *SQLiteRepository) ListValues(
+	ctx context.Context,
+	holdingID uuid.UUID,
+	limit, offset int,
+) ([]*holding.Value, int, error) {
+	id := sqlitehelpers.UUIDToString(holdingID)
+
+	var total int
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM holding_values WHERE holding_id = ?`, id).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("failed to count holding values: %w", err)
+	}
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT date, value_minor, updated_at FROM holding_values
+		WHERE holding_id = ?
+		ORDER BY date DESC
+		LIMIT ? OFFSET ?`, id, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to list holding values: %w", err)
+	}
+	defer rows.Close()
+
+	values := make([]*holding.Value, 0)
+	for rows.Next() {
+		var v holding.Value
+		if err = rows.Scan(&v.Date, &v.ValueMinor, &v.UpdatedAt); err != nil {
+			return nil, 0, fmt.Errorf("failed to scan holding value: %w", err)
+		}
+		values = append(values, &v)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("failed to iterate holding values: %w", err)
+	}
+
+	return values, total, nil
+}
+
 type rowScanner interface {
 	Scan(dest ...any) error
 }

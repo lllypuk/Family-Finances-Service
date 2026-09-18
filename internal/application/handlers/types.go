@@ -216,6 +216,17 @@ type HoldingCurrentResponse struct {
 	ValueMinor money.Minor `json:"value_minor"`
 }
 
+// HoldingValueRequest — ValueMinor указатель, иначе required отверг бы законный 0.
+type HoldingValueRequest struct {
+	ValueMinor *money.Minor `json:"value_minor" validate:"required"`
+}
+
+type HoldingValueResponse struct {
+	Date       date.Date   `json:"date"`
+	ValueMinor money.Minor `json:"value_minor"`
+	UpdatedAt  time.Time   `json:"updated_at"`
+}
+
 // ReconciliationRequest — полная замена сверки: без note заметка очищается.
 // BankExpenseMinor — указатель, иначе required отверг бы законный 0.
 type ReconciliationRequest struct {

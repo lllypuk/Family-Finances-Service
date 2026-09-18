@@ -25,6 +25,10 @@ var (
 	ErrNameLong    = errors.New("holding name is too long")
 	ErrInvalidSide = errors.New("side must be asset or liability")
 	ErrInvalidKind = errors.New("kind is not allowed for this side")
+
+	ErrValueNotFound   = errors.New("holding value not found")
+	ErrValueOutOfRange = errors.New("value is out of range")
+	ErrValueDateFuture = errors.New("value date is later than today in the family timezone")
 )
 
 // Side задаёт знак вклада позиции в капитал и после создания не меняется.
@@ -53,6 +57,8 @@ const (
 type Value struct {
 	Date       date.Date
 	ValueMinor money.Minor
+	// UpdatedAt заполняют только запись и история; у Current он нулевой.
+	UpdatedAt time.Time
 }
 
 type Holding struct {
@@ -98,4 +104,18 @@ func NormalizeName(name string) (string, error) {
 	}
 
 	return trimmed, nil
+}
+
+// ValidValue — 0 законен: так закрывают проданное и погашенное.
+func ValidValue(v money.Minor) bool {
+	return v >= 0 && v <= money.MaxAmount
+}
+
+// CheckValueDate отказывает снимку позже today — дня семьи, который считает вызывающий.
+func CheckValueDate(d, today date.Date) error {
+	if d.After(today) {
+		return ErrValueDateFuture
+	}
+
+	return nil
 }

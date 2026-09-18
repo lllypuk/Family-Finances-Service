@@ -12,6 +12,7 @@ import (
 
 	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/holding"
+	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services"
 )
@@ -49,6 +50,23 @@ func (m *mockHoldingRepo) Update(
 
 func (m *mockHoldingRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	return m.Called(ctx, id).Error(0)
+}
+
+func (m *mockHoldingRepo) UpsertValue(ctx context.Context, holdingID uuid.UUID, v *holding.Value) error {
+	return m.Called(ctx, holdingID, v).Error(0)
+}
+
+func (m *mockHoldingRepo) DeleteValue(ctx context.Context, holdingID uuid.UUID, day date.Date) error {
+	return m.Called(ctx, holdingID, day).Error(0)
+}
+
+func (m *mockHoldingRepo) ListValues(
+	ctx context.Context,
+	holdingID uuid.UUID,
+	limit, offset int,
+) ([]*holding.Value, int, error) {
+	args := m.Called(ctx, holdingID, limit, offset)
+	return args.Get(0).([]*holding.Value), args.Int(1), args.Error(2)
 }
 
 // setupHoldingService — «сегодня» семьи в зоне, далёкой от UTC, чтобы сервер в UTC дал другую дату.
@@ -139,4 +157,40 @@ func TestHoldingService_Update_NotFound(t *testing.T) {
 
 	_, err := svc.Update(t.Context(), id, nil, nil, &archived)
 	require.ErrorIs(t, err, holding.ErrNotFound)
+}
+
+func TestHoldingService_PutValue_Checks(t *testing.T) {
+	svc, repo, today := setupHoldingService(t)
+	id := uuid.New()
+	repo.On("GetByID", mock.Anything, id, today).Return(&holding.Holding{ID: id, IsArchived: true}, nil)
+	repo.On("UpsertValue", mock.Anything, id, mock.MatchedBy(func(v *holding.Value) bool {
+		return v.Date == today && v.ValueMinor == 0
+	})).Return(nil)
+
+	v, err := svc.PutValue(t.Context(), id, today, 0)
+	require.NoError(t, err, "0 законен, архивной позиции тоже можно")
+	assert.Zero(t, v.ValueMinor)
+
+	_, err = svc.PutValue(t.Context(), id, today.AddDays(1), 1)
+	require.ErrorIs(t, err, holding.ErrValueDateFuture, "завтра по зоне семьи")
+
+	_, err = svc.PutValue(t.Context(), id, today, -1)
+	require.ErrorIs(t, err, holding.ErrValueOutOfRange)
+	_, err = svc.PutValue(t.Context(), id, today, money.MaxAmount+1)
+	require.ErrorIs(t, err, holding.ErrValueOutOfRange)
+
+	repo.AssertNumberOfCalls(t, "UpsertValue", 1)
+}
+
+func TestHoldingService_Values_HoldingMissing(t *testing.T) {
+	svc, repo, today := setupHoldingService(t)
+	id := uuid.New()
+	repo.On("GetByID", mock.Anything, id, today).Return(nil, holding.ErrNotFound)
+
+	_, err := svc.PutValue(t.Context(), id, today, 1)
+	require.ErrorIs(t, err, holding.ErrNotFound)
+	require.ErrorIs(t, svc.DeleteValue(t.Context(), id, today), holding.ErrNotFound)
+	_, _, err = svc.ListValues(t.Context(), id, 10, 0)
+	require.ErrorIs(t, err, holding.ErrNotFound)
+	repo.AssertNotCalled(t, "UpsertValue", mock.Anything, mock.Anything, mock.Anything)
 }

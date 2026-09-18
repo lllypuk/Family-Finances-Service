@@ -16,9 +16,11 @@ import (
 
 var (
 	ErrFamilyAlreadyExists = errors.New("family already exists")
-	// ErrCurrencyLocked — валюту нельзя сменить, пока есть операции или сверки: суммы хранятся
+	// ErrCurrencyLocked — валюту нельзя сменить, пока есть операции, сверки или снимки: суммы хранятся
 	// в валюте семьи, и смена молча переименовала бы всю историю (A-05).
-	ErrCurrencyLocked = errors.New("currency cannot be changed while transactions or reconciliations exist")
+	ErrCurrencyLocked = errors.New(
+		"currency cannot be changed while transactions, reconciliations or holding values exist",
+	)
 )
 
 // familyService implements FamilyService interface

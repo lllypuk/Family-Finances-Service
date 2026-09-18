@@ -236,14 +236,14 @@ API (`financeAccess`, кроме помеченного):
 - Modify: `infrastructure/user/family_repository_sqlite.go` (`HasMonetaryData`) и его тест, `handlers/errors.go` (`ErrMessageCurrencyLocked` после плана 16 говорит про операции и сверки — дописать снимки)
 - Modify: `docs/api/openapi.yaml`; `make -C android api-gen`
 
-- [ ] репозиторий: `UpsertValue` (`DO UPDATE SET value_minor = excluded.value_minor, updated_at = CURRENT_TIMESTAMP`), `DeleteValue`, `ListValues(holdingID, page)` с `COUNT`
-- [ ] сервис: позиция существует; `0 … MaxAmount`; дата не позже сегодня в `family.Location()` → иначе `422` с `field: date` («сегодня» приходит параметром в чистую проверку — для тестов); архивной позиции можно писать и удалять любые снимки: история правится, и удаление закрывающего `0` вернёт её вклад в капитал — это цена правки истории
-- [ ] handler'ы трёх маршрутов; `:date` разбирает `date.Parse`, мусор — `400`
-- [ ] третий `EXISTS` в `HasMonetaryData`
-- [ ] спека: `listHoldingValues`, `putHoldingValue`, `deleteHoldingValue` — тег `holdings`; схемы `HoldingValue`, `HoldingValueOk`, `HoldingValueRequest`; описание `currency` (`openapi.yaml:232`, `:1337`): валюту держат операции, сверки и снимки
-- [ ] тесты: upsert дважды → одна строка, `current` — самый поздний по дате, а не последний записанный; `0` принимается; завтра → `422`; `DELETE` позиции уносит снимки; смена валюты при одном нулевом снимке → `409`
-- [ ] тесты `current` в репозитории: удалён последний снимок → предыдущий; удалён единственный → `null`; удалён непоследний → без изменений; снимок с датой позже `today` в `current` не попадает
-- [ ] `make fmt && make test && make lint`; `make -C android check`
+- [x] репозиторий: `UpsertValue` (`DO UPDATE SET value_minor = excluded.value_minor, updated_at = CURRENT_TIMESTAMP`), `DeleteValue`, `ListValues(holdingID, page)` с `COUNT`
+- [x] сервис: позиция существует; `0 … MaxAmount`; дата не позже сегодня в `family.Location()` → иначе `422` с `field: date` («сегодня» приходит параметром в чистую проверку — для тестов); архивной позиции можно писать и удалять любые снимки: история правится, и удаление закрывающего `0` вернёт её вклад в капитал — это цена правки истории
+- [x] handler'ы трёх маршрутов; `:date` разбирает `date.Parse`, мусор — `400`
+- [x] третий `EXISTS` в `HasMonetaryData`
+- [x] спека: `listHoldingValues`, `putHoldingValue`, `deleteHoldingValue` — тег `holdings`; схемы `HoldingValue`, `HoldingValueOk`, `HoldingValueRequest`; описание `currency` (`openapi.yaml:232`, `:1337`): валюту держат операции, сверки и снимки
+- [x] тесты: upsert дважды → одна строка, `current` — самый поздний по дате, а не последний записанный; `0` принимается; завтра → `422`; `DELETE` позиции уносит снимки; смена валюты при одном нулевом снимке → `409`
+- [x] тесты `current` в репозитории: удалён последний снимок → предыдущий; удалён единственный → `null`; удалён непоследний → без изменений; снимок с датой позже `today` в `current` не попадает
+- [x] `make fmt && make test && make lint`; `make -C android check`
 
 ### Task 4: `GET /stats/net-worth`
 
