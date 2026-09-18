@@ -31,6 +31,14 @@ func create(t *testing.T, repo *accountrepo.SQLiteRepository, name string) *acco
 	return a
 }
 
+func archive(t *testing.T, repo *accountrepo.SQLiteRepository, id uuid.UUID) {
+	t.Helper()
+
+	archived := true
+	_, err := repo.Update(t.Context(), id, nil, &archived)
+	require.NoError(t, err)
+}
+
 func TestAccountRepository_Create_GetByID(t *testing.T) {
 	repo, _, _ := setupRepo(t)
 	created := create(t, repo, "Тинькофф")
@@ -48,8 +56,7 @@ func TestAccountRepository_Create_GetByID(t *testing.T) {
 func TestAccountRepository_Create_NameKeyUnique(t *testing.T) {
 	repo, _, _ := setupRepo(t)
 	archived := create(t, repo, "Карта")
-	archived.IsArchived = true
-	require.NoError(t, repo.Update(t.Context(), archived))
+	archive(t, repo, archived.ID)
 
 	err := repo.Create(t.Context(), &account.Account{ID: uuid.New(), Name: " карта "})
 	require.ErrorIs(t, err, account.ErrNameExists, "архивный счёт имя занимает")
@@ -69,8 +76,7 @@ func TestAccountRepository_List(t *testing.T) {
 	create(t, repo, "сбер")
 	create(t, repo, "Альфа")
 	old := create(t, repo, "Архив")
-	old.IsArchived = true
-	require.NoError(t, repo.Update(t.Context(), old))
+	archive(t, repo, old.ID)
 
 	active, err := repo.List(t.Context(), false)
 	require.NoError(t, err)
@@ -88,16 +94,41 @@ func TestAccountRepository_Update(t *testing.T) {
 	a := create(t, repo, "Сбер")
 	other := create(t, repo, "Альфа")
 
-	a.Name = "Сбер 2"
-	require.NoError(t, repo.Update(t.Context(), a))
+	name := "Сбер 2"
+	updated, err := repo.Update(t.Context(), a.ID, &name, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "Сбер 2", updated.Name)
 	got, err := repo.GetByID(t.Context(), a.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "Сбер 2", got.Name)
 
-	other.Name = "СБЕР 2"
-	require.ErrorIs(t, repo.Update(t.Context(), other), account.ErrNameExists)
+	clash := "СБЕР 2"
+	_, err = repo.Update(t.Context(), other.ID, &clash, nil)
+	require.ErrorIs(t, err, account.ErrNameExists)
 
-	require.ErrorIs(t, repo.Update(t.Context(), &account.Account{ID: uuid.New(), Name: "x"}), account.ErrNotFound)
+	_, err = repo.Update(t.Context(), uuid.New(), &name, nil)
+	require.ErrorIs(t, err, account.ErrNotFound)
+}
+
+func TestAccountRepository_Update_KeepsFieldsNotGiven(t *testing.T) {
+	repo, _, _ := setupRepo(t)
+	a := create(t, repo, "Сбер")
+
+	archive(t, repo, a.ID)
+	name := "Сбер старый"
+	updated, err := repo.Update(t.Context(), a.ID, &name, nil)
+	require.NoError(t, err)
+	assert.True(t, updated.IsArchived, "переименование не снимает архив")
+
+	archived := false
+	updated, err = repo.Update(t.Context(), a.ID, nil, &archived)
+	require.NoError(t, err)
+	assert.Equal(t, "Сбер старый", updated.Name)
+
+	create(t, repo, "Карта")
+	key := "карта"
+	_, err = repo.Update(t.Context(), a.ID, &key, nil)
+	require.ErrorIs(t, err, account.ErrNameExists)
 }
 
 func TestAccountRepository_Delete(t *testing.T) {

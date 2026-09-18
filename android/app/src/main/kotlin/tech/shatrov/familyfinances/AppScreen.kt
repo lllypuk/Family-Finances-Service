@@ -37,8 +37,8 @@ sealed interface AppScreen {
      * Форма операции; `id` = `null` — новая, тело правки перечитывается с сервера.
      * `draft` — клиентский UUID создаваемой записи: он же ключ модели, поэтому следующий заход
      * на форму получает чистую, а повтор после обрыва — ту же и не создаёт вторую запись.
-     * `back` — список, куда форма возвращает; в бандл не пишется: после смерти процесса фильтра
-     * расшифровки в модели списка уже нет.
+     * `back` — список, куда форма возвращает; пишется в бандл вместе с фильтром расшифровки,
+     * иначе после поворота форма вернула бы на вкладку, а модель списка — фильтр сверки.
      */
     data class TransactionEdit(
         val id: UUID?,
@@ -81,15 +81,26 @@ val AppScreenSaver: Saver<AppScreen, String> = Saver(
     save = { screen ->
         when (screen) {
             AppScreen.Loading -> KEY_LOADING
+
             AppScreen.Login -> KEY_LOGIN
+
             AppScreen.Home -> KEY_HOME
+
             is AppScreen.Transactions -> screen.saveKey()
+
             AppScreen.Categories -> KEY_CATEGORIES
+
             AppScreen.Budgets -> KEY_BUDGETS
-            is AppScreen.TransactionEdit -> "$KEY_TRANSACTION_EDIT:${screen.id ?: ""}:${screen.draft}"
+
+            is AppScreen.TransactionEdit ->
+                "$KEY_TRANSACTION_EDIT:${screen.id ?: ""}:${screen.draft}:${screen.back.saveKey()}"
+
             is AppScreen.BudgetEdit -> "$KEY_BUDGET_EDIT:${screen.id ?: ""}:${screen.draft}"
+
             is AppScreen.Settings -> "$KEY_SETTINGS:${screen.page.saveKey()}"
+
             is AppScreen.Recognize -> "$KEY_RECOGNIZE:${screen.importId}"
+
             is AppScreen.Reconciliation -> "$KEY_RECONCILIATION:${screen.month}"
         }
     },
@@ -113,10 +124,11 @@ private fun restoreScreen(key: String): AppScreen? = when {
     key == KEY_BUDGETS -> AppScreen.Budgets
 
     key.startsWith("$KEY_TRANSACTION_EDIT:") -> {
-        val (target, draft) = key.removePrefix("$KEY_TRANSACTION_EDIT:").split(':')
+        val parts = key.removePrefix("$KEY_TRANSACTION_EDIT:").split(':', limit = 3)
         AppScreen.TransactionEdit(
-            id = target.takeIf { it.isNotEmpty() }?.let(UUID::fromString),
-            draft = UUID.fromString(draft),
+            id = parts[0].takeIf { it.isNotEmpty() }?.let(UUID::fromString),
+            draft = UUID.fromString(parts[1]),
+            back = parts.getOrNull(2)?.let(::restoreScreen) as? AppScreen.Transactions ?: AppScreen.Transactions(),
         )
     }
 

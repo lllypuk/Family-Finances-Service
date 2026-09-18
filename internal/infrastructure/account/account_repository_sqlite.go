@@ -84,19 +84,37 @@ func (r *SQLiteRepository) List(ctx context.Context, includeArchived bool) ([]*a
 	return accounts, nil
 }
 
-func (r *SQLiteRepository) Update(ctx context.Context, a *account.Account) error {
-	a.UpdatedAt = time.Now().UTC()
-
-	res, err := r.db.ExecContext(ctx,
-		`UPDATE accounts SET name = ?, name_key = ?, is_archived = ?, updated_at = ? WHERE id = ?`,
-		a.Name, names.Key(a.Name), sqlitehelpers.BoolToInt(a.IsArchived), a.UpdatedAt,
-		sqlitehelpers.UUIDToString(a.ID),
-	)
-	if err != nil {
-		return writeError("update", err)
+// Update пишет только переданные поля одним UPDATE: переименование и архивация не затирают друг друга.
+func (r *SQLiteRepository) Update(
+	ctx context.Context,
+	id uuid.UUID,
+	name *string,
+	archived *bool,
+) (*account.Account, error) {
+	var nameKey, archivedInt any
+	if name != nil {
+		nameKey = names.Key(*name)
+	}
+	if archived != nil {
+		archivedInt = sqlitehelpers.BoolToInt(*archived)
 	}
 
-	return requireAffected(res, a.ID)
+	a, err := scanAccount(r.db.QueryRowContext(ctx, `
+		UPDATE accounts
+		SET name = COALESCE(?, name), name_key = COALESCE(?, name_key),
+		    is_archived = COALESCE(?, is_archived), updated_at = ?
+		WHERE id = ?
+		RETURNING id, name, is_archived, created_at, updated_at`,
+		name, nameKey, archivedInt, time.Now().UTC(), sqlitehelpers.UUIDToString(id),
+	))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("%w: %s", account.ErrNotFound, id)
+	}
+	if err != nil {
+		return nil, writeError("update", err)
+	}
+
+	return a, nil
 }
 
 func (r *SQLiteRepository) Delete(ctx context.Context, id uuid.UUID) error {

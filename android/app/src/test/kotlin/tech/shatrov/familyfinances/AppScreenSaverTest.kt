@@ -47,6 +47,27 @@ class AppScreenSaverTest {
         assertEquals(screen, roundTrip(screen))
     }
 
+    // Без `back` форма после поворота вернула бы на вкладку, а модель списка — фильтр сверки.
+    @Test
+    fun transactionEditKeepsReconciliationBack() {
+        val month = YearMonth.of(2026, 8)
+        val screen = AppScreen.TransactionEdit(
+            id = UUID.fromString(COFFEE_ID),
+            draft = UUID.fromString(FOOD_BUDGET_ID),
+            back = AppScreen.Transactions(
+                TransactionFilters.reconciliation(month, UUID.fromString(ALL_BUDGET_ID)),
+                month,
+            ),
+        )
+        assertEquals(screen, roundTrip(screen))
+    }
+
+    @Test
+    fun transactionEditFromOldBundleReturnsToTab() {
+        val restored = AppScreenSaver.restore("transaction-edit::$FOOD_BUDGET_ID")
+        assertEquals(AppScreen.TransactionEdit(id = null, draft = UUID.fromString(FOOD_BUDGET_ID)), restored)
+    }
+
     @Test
     fun recognizeKeepsImportId() {
         val screen = AppScreen.Recognize(UUID.fromString(COFFEE_ID))

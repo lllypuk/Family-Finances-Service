@@ -136,6 +136,8 @@ fun AppRoot(graph: AppGraph) {
     var listStale by rememberSaveable { mutableStateOf(false) }
     var homeStale by rememberSaveable { mutableStateOf(false) }
     var budgetsStale by rememberSaveable { mutableStateOf(false) }
+    // Распознавание уводит с расшифровки сверки мимо её выхода, а модель списка фильтр помнит.
+    var dropDrill by rememberSaveable { mutableStateOf(false) }
     // Модели экранов лежат в store активити и переживают выход. Ключа по пользователю мало:
     // повторный вход тем же человеком показал бы данные прошлой сессии и не перечитал бы их.
     var epoch by rememberSaveable { mutableIntStateOf(0) }
@@ -171,8 +173,12 @@ fun AppRoot(graph: AppGraph) {
         val id = pending ?: return@LaunchedEffect
         if (session == null) return@LaunchedEffect
         when (val current = screen) {
-            AppScreen.Home, is AppScreen.Transactions, AppScreen.Budgets, is AppScreen.Reconciliation ->
+            AppScreen.Home, AppScreen.Budgets, is AppScreen.Reconciliation -> screen = AppScreen.Recognize(id)
+
+            is AppScreen.Transactions -> {
+                if (current.reconciliation != null) dropDrill = true
                 screen = AppScreen.Recognize(id)
+            }
 
             AppScreen.Categories -> {
                 listStale = true
@@ -292,7 +298,13 @@ fun AppRoot(graph: AppGraph) {
             }
             // Фильтр снаружи ставится один раз на ключ экрана: повторная композиция после поворота
             // иначе вернула бы его поверх того, что пользователь выбрал чипами.
-            LaunchedEffect(current.filters) { current.filters?.let(model::applyFilters) }
+            LaunchedEffect(current.filters) {
+                if (dropDrill) {
+                    dropDrill = false
+                    if (current.filters == null) model.onFiltersChange(TransactionFilters())
+                }
+                current.filters?.let(model::applyFilters)
+            }
             val drillFrom = current.reconciliation
             // Вкладка «Операции» после сверки открывалась бы на расшифровке её строки.
             val leave = { next: AppScreen ->

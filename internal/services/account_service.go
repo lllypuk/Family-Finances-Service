@@ -15,7 +15,7 @@ type AccountRepository interface {
 	Create(ctx context.Context, a *account.Account) error
 	GetByID(ctx context.Context, id uuid.UUID) (*account.Account, error)
 	List(ctx context.Context, includeArchived bool) ([]*account.Account, error)
-	Update(ctx context.Context, a *account.Account) error
+	Update(ctx context.Context, id uuid.UUID, name *string, archived *bool) (*account.Account, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 
@@ -55,21 +55,16 @@ func (s *accountService) Update(
 	name *string,
 	archived *bool,
 ) (*account.Account, error) {
-	a, err := s.repo.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
 	if name != nil {
-		if a.Name, err = account.NormalizeName(*name); err != nil {
+		normalized, err := account.NormalizeName(*name)
+		if err != nil {
 			return nil, err
 		}
-	}
-	if archived != nil {
-		a.IsArchived = *archived
+		name = &normalized
 	}
 
-	if err = s.repo.Update(ctx, a); err != nil {
+	a, err := s.repo.Update(ctx, id, name, archived)
+	if err != nil {
 		return nil, fmt.Errorf("failed to update account: %w", err)
 	}
 
