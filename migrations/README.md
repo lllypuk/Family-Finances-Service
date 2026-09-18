@@ -14,6 +14,7 @@ migration next to it — an already-applied `001` is never re-run (see "Changing
 - `003_drop_reports.{up,down}.sql` - the `reports` table dropped (plan 10)
 - `004_budgets_recurring.{up,down}.sql` - `budgets.recurring` / `budgets.series_id` (plan 12)
 - `005_accounts.{up,down}.sql` - `accounts`, `account_reconciliations`, `transactions.account_id` (plan 16)
+- `006_holdings.{up,down}.sql` - `holdings`, `holding_values` (plan 17)
 
 ### Why Consolidated Migrations?
 
@@ -39,10 +40,12 @@ Contains all database objects in order of dependencies:
    | `transactions` | `amount_minor INTEGER > 0`, `date TEXT 'YYYY-MM-DD'` (CHECK GLOB), `account_id` nullable, FK `RESTRICT` |
    | `account_reconciliations` | цифра банка на счёт и месяц (`YYYY-MM`), PK `(account_id, month)`, FK `RESTRICT` |
    | `budgets` | `amount_minor`, `spent_minor`, период `start_date`/`end_date` — `TEXT`-даты |
+   | `holdings` | активы и пассивы: `side` (`asset`/`liability`), `kind`, `name_key` UNIQUE в семье, `is_archived` |
+   | `holding_values` | снимки стоимости, PK `(holding_id, date)`, `value_minor >= 0`, FK `CASCADE` |
    | `sessions` | bearer-токены: только `token_hash` |
 
 2. **Indexes**: только те, что закрывают реальные запросы (семья+дата, категория, автор)
-3. **Triggers**: `updated_at` для families, users, categories, accounts, transactions, budgets; у сверок триггера нет — `updated_at` пишет upsert
+3. **Triggers**: `updated_at` для families, users, categories, accounts, transactions, budgets, holdings; у сверок и снимков триггера нет — `updated_at` пишет upsert
 4. **Analytics**: Statistics updates (ANALYZE)
 
 `budget_alerts`, `invites` и `user_sessions` удалены; таблицу `schema_migrations` ведёт golang-migrate.
@@ -212,6 +215,7 @@ SELECT * FROM schema_migrations;
 | 003 | Plan 10: таблица `reports` и её индексы удалены вместе с `/api/v1/reports` | 2026-09-13 |
 | 004 | Plan 12: `budgets.recurring` и `budgets.series_id` — периодические бюджеты | 2026-09-14 |
 | 005 | Plan 16: счета, сверки, `transactions.account_id` пересборкой таблицы; откат теряет счета, сверки и привязку операций | 2026-09-18 |
+| 006 | Plan 17: `holdings` и `holding_values` — активы, пассивы и снимки; откат теряет все позиции и всю их историю | 2026-09-18 |
 
 ## See Also
 

@@ -2,6 +2,18 @@
 
 All notable changes to database migrations will be documented in this file.
 
+## [2026-09-18] - Plan 17: holdings and net worth
+
+### Added
+- `holdings` (`side` CHECK `asset`/`liability`, `kind` проверяется в домене, `name_key` UNIQUE в семье,
+  `is_archived`, триггер `update_holdings_updated_at`) и `holding_values` (PK `(holding_id, date)`,
+  `value_minor >= 0`, FK `CASCADE`).
+- `006_holdings.{up,down}.sql` — обе таблицы новые, `CREATE ... IF NOT EXISTS` без пересборок, на свежей
+  базе — no-op.
+
+### Rollback
+- `006.down` удаляет обе таблицы: теряются все позиции и вся история снимков. Перед `migrate --to 5` — бэкап.
+
 ## [2026-09-18] - Plan 16: accounts and reconciliations
 
 ### Added

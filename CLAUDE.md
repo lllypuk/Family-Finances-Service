@@ -121,7 +121,7 @@ it is a plain `404`, with a token and without one.
   applies until the proxy CIDR is listed. Integration tests that need the IP limit pass
   `testhelpers.WithTrustedProxies(t, "192.0.2.0/24")` (httptest's `RemoteAddr`).
 - **Role gates** are built from `auth.RequireRole(roles...)`: `adminOnly` for `/api/v1/users`,
-  `DELETE /api/v1/categories/:id`, `DELETE /api/v1/accounts/:id`, `/api/v1/backups` and `PUT /api/v1/family`;
+  `DELETE /api/v1/categories/:id`, `DELETE /api/v1/accounts/:id`, `DELETE /api/v1/holdings/:id`, `/api/v1/backups` and `PUT /api/v1/family`;
   `financeAccess` (admin or member) for categories/accounts/transactions/budgets/stats; `GET /api/v1/family` and the `/auth/*`, `/me*` routes are
   open to any authenticated role. Wrong role → `403 FORBIDDEN`.
 - **User writes are column-scoped, and session revocation rides along.** `UserRepository.Update` writes only
@@ -220,7 +220,8 @@ list is in `docs/plans/completed/20260915-14-prometheus-metrics.md`, the deploym
 ## Database & migrations
 
 The whole schema lives in `migrations/001_consolidated.{up,down}.sql`
-(tables: families, users, categories, accounts, transactions, account_reconciliations, budgets, sessions) — that file is the readable
+(tables: families, users, categories, accounts, transactions, account_reconciliations, budgets, holdings,
+holding_values, sessions) — that file is the readable
 picture of the database, and a fresh DB is built from it.
 
 **Editing `001` does not touch an existing database.** golang-migrate stores only the version number, so on a DB
@@ -250,7 +251,8 @@ Two independent code paths apply migrations, and **both must keep working**:
 - tests: `internal/testhelpers/sqlite.go` reads and executes the `*.up.sql` files directly
 
 `testhelpers.SQLiteTestDB.CleanTables` has a hardcoded, FK-ordered table list — add any new table to it
-(`account_reconciliations` before `transactions` before `accounts`: both FKs to `accounts` are `RESTRICT`).
+(`account_reconciliations` before `transactions` before `accounts`: both FKs to `accounts` are `RESTRICT`;
+`holding_values` before `holdings`).
 
 SQLite is opened with `_txlock=immediate` (`infrastructure.NewSQLiteConnection`), so every `BeginTx` takes the
 write lock up front; with `MaxOpenConns=1` this is invisible, but do not "optimise" it away — `Bootstrap` relies
@@ -334,7 +336,17 @@ on it.
 - **A reconciliation stores only the bank's figure.** `recorded_minor` of `GET /stats/reconciliation` is summed
   on read over `type = 'expense'` of the month (`RecordedByAccount`), so a late transaction closes the gap
   without a new `PUT`; a refund booked as income does not reduce it. Having a reconciliation means having the
-  row — a `0` counts, and blocks `CURRENCY_LOCKED` like a transaction does (`FamilyRepository.HasMonetaryData`).
+  row — a `0` counts, and blocks `CURRENCY_LOCKED` like a transaction does (`FamilyRepository.HasMonetaryData`:
+  transactions, reconciliations and holding values, archived and zero ones included).
+- **Holdings carry their sign in `side`, not in the number.** `value_minor >= 0`, and `side` is fixed at creation
+  (`UpdateHoldingRequest` has no such field) — changing it would flip the whole history. A holding's value on a
+  day is its latest snapshot with `date <=` that day, carried forward with no expiry (a flat is revalued once a
+  year); before its first snapshot it counts for nothing. A future snapshot date is `422`, and `current` is cut
+  at today in `family.Timezone` all the same, so it equals the holding's share of the last bucket of the default
+  `GET /stats/net-worth`. `is_archived` only hides a holding from the list: the series has no archive filter,
+  so archiving never rewrites the past — a sold or repaid holding gets a `0` snapshot. `DELETE /holdings/:id`
+  (admin) cascades its snapshots and changes past buckets. `assets_minor`/`liabilities_minor`/`net_minor` are
+  sums, so the spec types them as `int64` without `Money.maximum`; in Go they stay `money.Minor`.
 - **Fractions come in two units.** Shares (`share`, `*_delta`, `stats.budgets[].utilization`) are 0…1; fields named
   `percentage` and `budgets[].utilization` on `/budgets` are percent 0…100. Both are documented per field in
   `docs/api/openapi.yaml`.

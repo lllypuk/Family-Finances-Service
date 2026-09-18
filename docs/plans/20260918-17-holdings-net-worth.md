@@ -269,9 +269,9 @@ API (`financeAccess`, кроме помеченного):
 **Files:**
 - Modify: `CLAUDE.md`, `migrations/README.md`, `migrations/CHANGELOG.md`, `docs/api/README.md`
 
-- [ ] `CLAUDE.md`: таблицы; «Conventions» — знак от `side`, перенос вперёд, архив не вычёркивает прошлое, итоги вне `Money.maximum`, `CURRENCY_LOCKED` от трёх источников; `CleanTables`
-- [ ] `migrations/*`: `006`, при откате теряется вся история позиций
-- [ ] `docs/api/README.md`: новые операции; `docs/backlog.md`
+- [x] `CLAUDE.md`: таблицы; «Conventions» — знак от `side`, перенос вперёд, архив не вычёркивает прошлое, итоги вне `Money.maximum`, `CURRENCY_LOCKED` от трёх источников; `CleanTables`
+- [x] `migrations/*`: `006`, при откате теряется вся история позиций
+- [x] `docs/api/README.md`: новые операции; `docs/backlog.md`
 
 ### Task 6: Клиент — `ApiGraph`, список позиций, ввод снимка
 
