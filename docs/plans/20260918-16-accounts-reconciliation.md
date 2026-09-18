@@ -203,9 +203,9 @@ API (`financeAccess`, кроме помеченного):
 **Files:**
 - Modify: `internal/domain/date/date.go`, `date_test.go`
 
-- [ ] `ParseMonth(s string) (first, last Date, err error)` поверх `MonthBounds`; `date.New` нормализует месяц 13 — отсекать до него
-- [ ] тесты: `2026-02` → 01…28, `2024-02` → 29, отказ на `2026-13`, `2026-1`, `2026-09-01`, пустой строке
-- [ ] `make fmt && make test && make lint`
+- [x] `ParseMonth(s string) (first, last Date, err error)` поверх `MonthBounds`; `date.New` нормализует месяц 13 — отсекать до него
+- [x] тесты: `2026-02` → 01…28, `2024-02` → 29, отказ на `2026-13`, `2026-1`, `2026-09-01`, пустой строке
+- [x] `make fmt && make test && make lint`
 
 ### Task 2: Миграция `005`
 
