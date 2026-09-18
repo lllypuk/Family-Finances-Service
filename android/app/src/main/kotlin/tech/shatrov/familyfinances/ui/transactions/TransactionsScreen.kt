@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import tech.shatrov.familyfinances.R
+import tech.shatrov.familyfinances.core.api.Account
 import tech.shatrov.familyfinances.core.api.Category
 import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.theme.Dimens
@@ -52,6 +53,7 @@ fun TransactionsScreen(
     state: TransactionsUiState,
     filters: TransactionFilters,
     categories: List<Category>,
+    accounts: List<Account>,
     onRetry: () -> Unit,
     onFiltersChange: (TransactionFilters) -> Unit,
     onLoadMore: () -> Unit,
@@ -61,6 +63,7 @@ fun TransactionsScreen(
     modifier: Modifier = Modifier,
 ) {
     var sheet by rememberSaveable { mutableStateOf(false) }
+    var accountSheet by rememberSaveable { mutableStateOf(false) }
     var importSheet by rememberSaveable { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxSize()) {
         Row(
@@ -81,7 +84,7 @@ fun TransactionsScreen(
 
         // Фильтры вне `when`: на отказе запроса переключиться иначе некуда, а «Повторить»
         // повторяет ровно его.
-        Filters(filters, categories, onFiltersChange) { sheet = true }
+        Filters(filters, categories, accounts, onFiltersChange, { sheet = true }, { accountSheet = true })
 
         when (state) {
             TransactionsUiState.Loading -> Centered { CircularProgressIndicator() }
@@ -114,6 +117,18 @@ fun TransactionsScreen(
             onDismiss = { sheet = false },
         )
     }
+    if (accountSheet) {
+        AccountSheet(
+            accounts = accounts,
+            selected = filters.accountId,
+            noneLabel = stringResource(R.string.filter_all_accounts),
+            onSelect = {
+                onFiltersChange(filters.copy(accountId = it))
+                accountSheet = false
+            },
+            onDismiss = { accountSheet = false },
+        )
+    }
     if (importSheet) {
         ImportSourceSheet(importLaunchers, onDismiss = { importSheet = false })
     }
@@ -123,14 +138,20 @@ fun TransactionsScreen(
 private fun Filters(
     filters: TransactionFilters,
     categories: List<Category>,
+    accounts: List<Account>,
     onChange: (TransactionFilters) -> Unit,
     onPickCategory: () -> Unit,
+    onPickAccount: () -> Unit,
 ) {
     // Категория, которой нет в справочнике (удалена), — прочерк: «Все категории» на включённом
     // фильтре сказали бы, что фильтра нет, а список при этом остаётся пустым.
     val categoryLabel = when {
         filters.categoryId == null -> stringResource(R.string.filter_all_categories)
         else -> categories.firstOrNull { it.id == filters.categoryId }?.path(categories) ?: "—"
+    }
+    val accountLabel = when {
+        filters.accountId == null -> stringResource(R.string.filter_all_accounts)
+        else -> accounts.firstOrNull { it.id == filters.accountId }?.label() ?: "—"
     }
     Column(verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_1)) {
         SegmentedChoice(
@@ -167,6 +188,12 @@ private fun Filters(
             }
             item {
                 Chip(categoryLabel, filters.categoryId != null, onClick = onPickCategory)
+            }
+            // Без счетов у семьи чип был бы выбором из одного «Все счета».
+            if (accounts.isNotEmpty() || filters.accountId != null) {
+                item {
+                    Chip(accountLabel, filters.accountId != null, onClick = onPickAccount)
+                }
             }
         }
     }

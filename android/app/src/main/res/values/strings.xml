@@ -38,6 +38,7 @@
     <string name="filter_expense">Расходы</string>
     <string name="filter_all_categories">Все категории</string>
     <string name="filter_category">Категория</string>
+    <string name="filter_all_accounts">Все счета</string>
     <string name="transactions_add">Добавить</string>
     <string name="transactions_add_first">Добавить операцию</string>
     <string name="transactions_reset_filters">Сбросить фильтры</string>
@@ -52,6 +53,10 @@
     <string name="transaction_delete_confirm">Удалить операцию?</string>
     <string name="transaction_date">Дата: %1$s</string>
     <string name="transaction_date_pick">Выбрать</string>
+    <string name="transaction_account">Счёт</string>
+    <string name="transaction_account_value">Счёт: %1$s</string>
+    <string name="transaction_no_account">Без счёта</string>
+    <string name="account_archived_label">%1$s (в архиве)</string>
     <string name="type_income">Доход</string>
     <string name="type_expense">Расход</string>
     <string name="cancel">Отмена</string>

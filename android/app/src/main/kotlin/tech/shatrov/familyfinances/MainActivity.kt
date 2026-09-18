@@ -269,6 +269,7 @@ fun AppRoot(graph: AppGraph) {
             val transactions by model.state.collectAsStateWithLifecycle()
             val filters by model.filters.collectAsStateWithLifecycle()
             val categories by model.categories.collectAsStateWithLifecycle()
+            val accounts by model.accounts.collectAsStateWithLifecycle()
             // На возврате из фона, а не только при заходе: модель живёт всю сессию, и месяц
             // под фильтром «этот» мог смениться, пока экран лежал свёрнутым.
             LifecycleResumeEffect(listStale) {
@@ -290,6 +291,7 @@ fun AppRoot(graph: AppGraph) {
                     state = transactions,
                     filters = filters,
                     categories = categories,
+                    accounts = accounts,
                     onRetry = model::refresh,
                     onFiltersChange = model::onFiltersChange,
                     onLoadMore = model::loadMore,
@@ -476,6 +478,7 @@ fun AppRoot(graph: AppGraph) {
                         graph.imports,
                         current.importId,
                         active.currency,
+                        graph.lastAccount,
                     )
                 }
             val recognize by model.state.collectAsStateWithLifecycle()
@@ -498,6 +501,7 @@ fun AppRoot(graph: AppGraph) {
                 onDateChange = model::onDateChange,
                 onCategoryChange = model::onCategoryChange,
                 onDescriptionChange = model::onDescriptionChange,
+                onAccountChange = model::onAccountChange,
                 onSave = model::save,
                 onRetry = model::retry,
                 onRetryRow = model::retryRow,
@@ -512,6 +516,7 @@ fun AppRoot(graph: AppGraph) {
                 viewModel(viewModelStoreOwner = forms, key = "edit-${current.draft}") {
                     TransactionEditViewModel(
                         graph.api,
+                        graph.lastAccount,
                         current.id,
                         current.draft,
                         LocalDate.now(active.zone),
@@ -537,6 +542,7 @@ fun AppRoot(graph: AppGraph) {
                 onAmountChange = model::onAmountChange,
                 onTypeChange = model::onTypeChange,
                 onCategoryChange = model::onCategoryChange,
+                onAccountChange = model::onAccountChange,
                 onDateChange = model::onDateChange,
                 onDescriptionChange = model::onDescriptionChange,
                 onSubmit = model::onSubmit,

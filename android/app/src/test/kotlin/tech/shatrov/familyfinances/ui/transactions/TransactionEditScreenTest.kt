@@ -53,6 +53,7 @@ class TransactionEditScreenTest {
                     onAmountChange = onAmountChange,
                     onTypeChange = onTypeChange,
                     onCategoryChange = {},
+                    onAccountChange = {},
                     onDateChange = {},
                     onDescriptionChange = {},
                     onSubmit = {},

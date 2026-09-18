@@ -57,6 +57,7 @@ fun TransactionEditScreen(
     onAmountChange: (String) -> Unit,
     onTypeChange: (TransactionType) -> Unit,
     onCategoryChange: (UUID) -> Unit,
+    onAccountChange: (UUID?) -> Unit,
     onDateChange: (LocalDate) -> Unit,
     onDescriptionChange: (String) -> Unit,
     onSubmit: () -> Unit,
@@ -66,6 +67,7 @@ fun TransactionEditScreen(
     modifier: Modifier = Modifier,
 ) {
     var datePickerShown by remember { mutableStateOf(false) }
+    var accountSheetShown by remember { mutableStateOf(false) }
     var deleteConfirmShown by remember { mutableStateOf(false) }
 
     Column(
@@ -122,6 +124,18 @@ fun TransactionEditScreen(
             }
         }
         FieldError(state.fieldErrors[TransactionField.CATEGORY])
+
+        if (state.showsAccount) {
+            OutlinedButton(
+                onClick = { accountSheetShown = true },
+                enabled = !state.submitting,
+                modifier = Modifier.heightIn(min = Dimens.TOUCH_MIN),
+            ) {
+                val name = state.account?.label() ?: stringResource(R.string.transaction_no_account)
+                Text(stringResource(R.string.transaction_account_value, name))
+            }
+            FieldError(state.fieldErrors[TransactionField.ACCOUNT])
+        }
 
         OutlinedButton(
             onClick = { datePickerShown = true },
@@ -197,6 +211,19 @@ fun TransactionEditScreen(
                 datePickerShown = false
             },
             onDismiss = { datePickerShown = false },
+        )
+    }
+
+    if (accountSheetShown) {
+        AccountSheet(
+            accounts = state.selectableAccounts,
+            selected = state.accountId,
+            noneLabel = stringResource(R.string.transaction_no_account),
+            onSelect = {
+                onAccountChange(it)
+                accountSheetShown = false
+            },
+            onDismiss = { accountSheetShown = false },
         )
     }
 

@@ -58,6 +58,7 @@ import tech.shatrov.familyfinances.ui.format.formatMoney
 import tech.shatrov.familyfinances.ui.groupedRow
 import tech.shatrov.familyfinances.ui.message
 import tech.shatrov.familyfinances.ui.rowPlace
+import tech.shatrov.familyfinances.ui.transactions.AccountSheet
 import tech.shatrov.familyfinances.ui.transactions.CategorySheet
 import tech.shatrov.familyfinances.ui.transactions.TransactionField
 import tech.shatrov.familyfinances.ui.transactions.asCategoryType
@@ -79,6 +80,7 @@ fun RecognizeScreen(
     onDateChange: (UUID, LocalDate) -> Unit,
     onCategoryChange: (UUID, UUID) -> Unit,
     onDescriptionChange: (UUID, String) -> Unit,
+    onAccountChange: (UUID?) -> Unit,
     onSave: () -> Unit,
     onRetry: () -> Unit,
     onRetryRow: (UUID) -> Unit,
@@ -87,6 +89,7 @@ fun RecognizeScreen(
 ) {
     var dateFor by rememberSaveable { mutableStateOf<String?>(null) }
     var categoryFor by rememberSaveable { mutableStateOf<String?>(null) }
+    var accountSheet by rememberSaveable { mutableStateOf(false) }
     val saving = state.saving
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -150,6 +153,19 @@ fun RecognizeScreen(
                     ) {
                         groups(state.images, phase.rows, actions)
                     }
+                    if (state.selectableAccounts.isNotEmpty()) {
+                        val account = state.accounts.firstOrNull { it.id == state.accountId }
+                        PickButton(
+                            text = stringResource(
+                                R.string.transaction_account_value,
+                                account?.name ?: stringResource(R.string.transaction_no_account),
+                            ),
+                            attention = false,
+                            enabled = !state.accountLocked,
+                            onClick = { accountSheet = true },
+                            modifier = Modifier.padding(horizontal = Dimens.SPACE_4),
+                        )
+                    }
                     Button(
                         onClick = onSave,
                         enabled = !saving && state.toSave > 0,
@@ -177,6 +193,18 @@ fun RecognizeScreen(
                 dateFor = null
             },
             onDismiss = { dateFor = null },
+        )
+    }
+    if (accountSheet) {
+        AccountSheet(
+            accounts = state.selectableAccounts,
+            selected = state.accountId,
+            noneLabel = stringResource(R.string.transaction_no_account),
+            onSelect = {
+                onAccountChange(it)
+                accountSheet = false
+            },
+            onDismiss = { accountSheet = false },
         )
     }
     rows.firstOrNull { it.draft.toString() == categoryFor }?.let { row ->
@@ -413,9 +441,10 @@ private fun PickButton(
     text: String,
     attention: Boolean,
     enabled: Boolean,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    TextButton(onClick = onClick, enabled = enabled, modifier = Modifier.heightIn(min = Dimens.TOUCH_MIN)) {
+    TextButton(onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = Dimens.TOUCH_MIN)) {
         Text(text = text, color = if (attention && enabled) LocalAppColors.current.warning else Color.Unspecified)
     }
 }

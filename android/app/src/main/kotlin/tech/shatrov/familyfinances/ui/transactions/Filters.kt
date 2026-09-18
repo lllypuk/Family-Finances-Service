@@ -20,6 +20,7 @@ data class TransactionFilters(
     val period: TransactionPeriod = TransactionPeriod.ALL,
     val type: TransactionType? = null,
     val categoryId: UUID? = null,
+    val accountId: UUID? = null,
 ) {
     fun dateFrom(today: LocalDate): LocalDate? = when (period) {
         TransactionPeriod.ALL -> null

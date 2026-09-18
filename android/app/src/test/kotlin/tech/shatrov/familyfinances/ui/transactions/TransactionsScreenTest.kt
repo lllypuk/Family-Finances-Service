@@ -20,6 +20,7 @@ import org.robolectric.annotation.Config
 import tech.shatrov.familyfinances.GROCERIES_ID
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.ROBOLECTRIC_SDK
+import tech.shatrov.familyfinances.core.api.Account
 import tech.shatrov.familyfinances.core.api.Category
 import tech.shatrov.familyfinances.core.api.CategoryType
 import tech.shatrov.familyfinances.core.api.Transaction
@@ -47,6 +48,7 @@ class TransactionsScreenTest {
         state: TransactionsUiState,
         filters: TransactionFilters = TransactionFilters(),
         categories: List<Category> = emptyList(),
+        accounts: List<Account> = emptyList(),
         onFiltersChange: (TransactionFilters) -> Unit = {},
         onCreate: () -> Unit = {},
         onOpen: (UUID) -> Unit = {},
@@ -57,6 +59,7 @@ class TransactionsScreenTest {
                     state = state,
                     filters = filters,
                     categories = categories,
+                    accounts = accounts,
                     onRetry = {},
                     onFiltersChange = onFiltersChange,
                     onLoadMore = {},

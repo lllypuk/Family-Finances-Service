@@ -375,6 +375,10 @@ internal const val ACCOUNTS_OK = """
 "pagination":{"limit":200,"offset":0,"total":2}}}
 """
 
+/** [TRANSACTION_OK], привязанная к счёту [accountId]. */
+internal fun transactionOnAccount(accountId: String): String =
+    TRANSACTION_OK.replace("\"tags\":[]", "\"account_id\":\"$accountId\",\"tags\":[]")
+
 internal const val ACCOUNTS_EMPTY = """
 {"data":[],"meta":{"request_id":"r-71","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0",
 "pagination":{"limit":200,"offset":0,"total":0}}}

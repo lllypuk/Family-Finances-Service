@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import tech.shatrov.familyfinances.LastAccountStore
+import tech.shatrov.familyfinances.core.api.Account
 import tech.shatrov.familyfinances.core.api.ApiGraph
 import tech.shatrov.familyfinances.core.api.Category
 import tech.shatrov.familyfinances.core.api.CategoryType
@@ -22,7 +24,7 @@ import tech.shatrov.familyfinances.ui.toUiError
 import java.time.LocalDate
 import java.util.UUID
 
-/** Справочник категорий берётся одной страницей: их у семьи считанные единицы. */
+/** Справочники берутся одной страницей: категорий и счетов у семьи считанные единицы. */
 private const val CATEGORY_LIMIT = 200
 
 /** Нижние границы контракта: `amount_minor > 0`, `description` от двух символов. */
@@ -35,6 +37,7 @@ object TransactionField {
     const val CATEGORY = "category_id"
     const val DATE = "date"
     const val DESCRIPTION = "description"
+    const val ACCOUNT = "account_id"
 }
 
 private val formFields = setOf(
@@ -43,6 +46,7 @@ private val formFields = setOf(
     TransactionField.CATEGORY,
     TransactionField.DATE,
     TransactionField.DESCRIPTION,
+    TransactionField.ACCOUNT,
 )
 
 data class TransactionEditUiState(
@@ -52,7 +56,10 @@ data class TransactionEditUiState(
     val categoryId: UUID? = null,
     val date: LocalDate = LocalDate.now(),
     val description: String = "",
+    val accountId: UUID? = null,
+    val storedAccountId: UUID? = null,
     val categories: List<Category> = emptyList(),
+    val accounts: List<Account> = emptyList(),
     val editing: Boolean = false,
     val loading: Boolean = true,
     val loaded: Boolean = false,
@@ -64,6 +71,17 @@ data class TransactionEditUiState(
     /** Категория показывается только своего типа: расходную в доход сервер всё равно не примет. */
     val visibleCategories: List<Category>
         get() = categories.filter { it.type == type.asCategoryType() }
+
+    /** В выборе только действующие: архивный виден лишь как уже привязанный к операции. */
+    val selectableAccounts: List<Account>
+        get() = accounts.filter { !it.isArchived }
+
+    val account: Account?
+        get() = accounts.firstOrNull { it.id == accountId }
+
+    /** Счетов у семьи нет и к операции ничего не привязано — поле было бы пустым выбором. */
+    val showsAccount: Boolean
+        get() = selectableAccounts.isNotEmpty() || accountId != null
 
     val canSubmit: Boolean
         get() = (parseAmountMinor(amount) ?: 0L) > 0L &&
@@ -79,6 +97,7 @@ data class TransactionEditUiState(
  */
 class TransactionEditViewModel(
     private val api: ApiGraph,
+    private val lastAccount: LastAccountStore,
     private val transactionId: UUID? = null,
     private val draftId: UUID = UUID.randomUUID(),
     today: LocalDate = LocalDate.now(),
@@ -101,10 +120,14 @@ class TransactionEditViewModel(
                 val categories = api.client
                     .unwrap { api.categories.listCategories(limit = CATEGORY_LIMIT) }
                     .`data`
+                // С архивными: привязанный к операции архивный счёт показывается по имени.
+                val accounts = api.client
+                    .unwrap { api.accounts.listAccounts(limit = CATEGORY_LIMIT, archived = true) }
+                    .`data`
                 val existing = transactionId?.let { id ->
                     api.client.unwrap { api.transactions.getTransaction(id) }.`data`
                 }
-                mutable.update { it.filled(categories, existing) }
+                mutable.update { it.filled(categories, accounts, existing, lastAccount.read()) }
             } catch (failure: ApiFailure) {
                 mutable.update { it.copy(loading = false, error = failure.toUiError()) }
             }
@@ -127,6 +150,11 @@ class TransactionEditViewModel(
 
     fun onCategoryChange(categoryId: UUID) {
         mutable.update { it.copy(categoryId = categoryId).cleared(TransactionField.CATEGORY) }
+    }
+
+    /** `null` — «Без счёта»: у сохранённой операции уходит `clear_account`. */
+    fun onAccountChange(accountId: UUID?) {
+        mutable.update { it.copy(accountId = accountId).cleared(TransactionField.ACCOUNT) }
     }
 
     fun onDateChange(date: LocalDate) {
@@ -182,10 +210,13 @@ class TransactionEditViewModel(
                         categoryId = categoryId,
                         date = current.date,
                         id = draftId,
+                        accountId = current.accountId,
                     ),
                 )
             }
+            lastAccount.write(current.accountId)
         } else {
+            val changed = current.accountId != current.storedAccountId
             api.client.unwrap {
                 api.transactions.updateTransaction(
                     transactionId,
@@ -195,6 +226,10 @@ class TransactionEditViewModel(
                         description = description,
                         categoryId = categoryId,
                         date = current.date,
+                        // Без поля счёт не трогается: `explicitNulls = false` не шлёт `null`,
+                        // поэтому отвязка — отдельный флаг.
+                        accountId = current.accountId.takeIf { changed },
+                        clearAccount = true.takeIf { changed && current.accountId == null },
                     ),
                 )
             }
@@ -207,14 +242,26 @@ internal fun TransactionType.asCategoryType(): CategoryType =
 
 private fun TransactionEditUiState.filled(
     categories: List<Category>,
+    accounts: List<Account>,
     existing: Transaction?,
+    last: UUID?,
 ): TransactionEditUiState = if (existing == null) {
-    copy(loading = false, loaded = true, categories = categories)
+    val usable = accounts.any { it.id == last && !it.isArchived }
+    copy(
+        loading = false,
+        loaded = true,
+        categories = categories,
+        accounts = accounts,
+        accountId = last.takeIf { usable },
+    )
 } else {
     copy(
         loading = false,
         loaded = true,
         categories = categories,
+        accounts = accounts,
+        accountId = existing.accountId,
+        storedAccountId = existing.accountId,
         amount = formatAmountInput(existing.amountMinor),
         type = existing.type,
         categoryId = existing.categoryId,

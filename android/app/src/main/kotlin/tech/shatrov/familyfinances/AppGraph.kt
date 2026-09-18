@@ -16,7 +16,10 @@ import java.util.concurrent.atomic.AtomicInteger
  * Composition root приложения: сеть, хранилище токена и текущая сессия.
  * Hilt и Koin не подключаются — граф собирается в одном месте и целиком виден.
  */
-class AppGraph(val api: ApiGraph) {
+class AppGraph(
+    val api: ApiGraph,
+    val lastAccount: LastAccountStore = MemoryLastAccountStore(),
+) {
     private val mutableSession = MutableStateFlow<Session?>(null)
 
     // Номер публикации сессии: перечитка, начатая до выхода или до другой публикации, не должна
@@ -104,6 +107,6 @@ class AppGraph(val api: ApiGraph) {
         fun create(
             context: Context,
             baseUrl: String,
-        ): AppGraph = AppGraph(ApiGraph(baseUrl, KeystoreTokenVault(context)))
+        ): AppGraph = AppGraph(ApiGraph(baseUrl, KeystoreTokenVault(context)), PrefsLastAccountStore(context))
     }
 }

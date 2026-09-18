@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import tech.shatrov.familyfinances.Session
+import tech.shatrov.familyfinances.core.api.Account
 import tech.shatrov.familyfinances.core.api.ApiGraph
 import tech.shatrov.familyfinances.core.api.Category
 import tech.shatrov.familyfinances.core.api.Transaction
@@ -20,7 +21,7 @@ import java.util.UUID
 /** Страница списка: `limit` сервера — 200, но экран пролистывается, а не грузится целиком. */
 private const val PAGE_SIZE = 50
 
-/** Справочники берём одной страницей: категорий и пользователей у семьи считанные единицы. */
+/** Справочники берём одной страницей: категорий, счетов и пользователей у семьи считанные единицы. */
 private const val REFERENCE_LIMIT = 200
 
 /** Строка списка: имена подставлены здесь, чтобы разметка не искала их по словарям. */
@@ -82,6 +83,11 @@ class TransactionsViewModel(
     private val mutableCategories = MutableStateFlow(emptyList<Category>())
 
     val categories: StateFlow<List<Category>> = mutableCategories.asStateFlow()
+
+    private val mutableAccounts = MutableStateFlow(emptyList<Account>())
+
+    /** С архивными: выписку по перевыпущенной карте тоже бывает нужно найти. */
+    val accounts: StateFlow<List<Account>> = mutableAccounts.asStateFlow()
 
     private var loaded = emptyList<Transaction>()
     private var loadedWindow: DateWindow? = null
@@ -175,6 +181,7 @@ class TransactionsViewModel(
         limit = PAGE_SIZE,
         offset = offset,
         categoryId = mutableFilters.value.categoryId,
+        accountId = mutableFilters.value.accountId,
         type = mutableFilters.value.type,
         dateFrom = bounds.from,
         dateTo = bounds.to,
@@ -193,6 +200,8 @@ class TransactionsViewModel(
         referencesLoaded = false
         mutableCategories.value =
             api.client.unwrap { api.categories.listCategories(limit = REFERENCE_LIMIT) }.`data`
+        mutableAccounts.value =
+            api.client.unwrap { api.accounts.listAccounts(limit = REFERENCE_LIMIT, archived = true) }.`data`
         if (session.isAdmin) {
             authors = api.client
                 .unwrap { api.users.listUsers(limit = REFERENCE_LIMIT) }
