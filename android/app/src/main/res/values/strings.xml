@@ -153,6 +153,11 @@
     <string name="holding_value_date">Дата: %1$s</string>
     <string name="holding_value_save">Сохранить</string>
     <string name="holding_value_error_amount">Введите сумму, например 850000,00</string>
+    <string name="holding_value_history">История</string>
+    <string name="holding_value_delete">Удалить снимок</string>
+    <string name="holding_value_delete_confirm">Удалить снимок?</string>
+    <string name="holding_history_title">История</string>
+    <string name="holding_history_empty">Снимков пока нет</string>
     <string name="holding_new_title">Новая позиция</string>
     <string name="holding_edit_title">Позиция</string>
     <string name="holding_side_asset">Актив</string>

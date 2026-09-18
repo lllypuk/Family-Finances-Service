@@ -64,6 +64,9 @@ sealed interface AppScreen {
         val side: HoldingSide = HoldingSide.asset,
     ) : AppScreen
 
+    /** История снимков позиции [id]. */
+    data class HoldingHistory(val id: UUID) : AppScreen
+
     /** Распознавание импорта [importId] из [ImportStore]; после смерти процесса импорта уже нет. */
     data class Recognize(val importId: UUID) : AppScreen
 
@@ -84,6 +87,7 @@ private const val KEY_BUDGETS = "budgets"
 private const val KEY_BUDGET_EDIT = "budget-edit"
 private const val KEY_NET_WORTH = "net-worth"
 private const val KEY_HOLDING_EDIT = "holding-edit"
+private const val KEY_HOLDING_HISTORY = "holding-history"
 private const val KEY_SETTINGS = "settings"
 private const val KEY_RECOGNIZE = "recognize"
 private const val KEY_RECONCILIATION = "reconciliation"
@@ -112,6 +116,8 @@ val AppScreenSaver: Saver<AppScreen, String> = Saver(
             AppScreen.NetWorth -> KEY_NET_WORTH
 
             is AppScreen.HoldingEdit -> "$KEY_HOLDING_EDIT:${screen.id ?: ""}:${screen.draft}:${screen.side.value}"
+
+            is AppScreen.HoldingHistory -> "$KEY_HOLDING_HISTORY:${screen.id}"
 
             is AppScreen.Settings -> "$KEY_SETTINGS:${screen.page.saveKey()}"
 
@@ -166,6 +172,9 @@ private fun restoreScreen(key: String): AppScreen? = when {
             side = requireNotNull(HoldingSide.decode(side)),
         )
     }
+
+    key.startsWith("$KEY_HOLDING_HISTORY:") ->
+        AppScreen.HoldingHistory(UUID.fromString(key.removePrefix("$KEY_HOLDING_HISTORY:")))
 
     key.startsWith("$KEY_SETTINGS:") -> {
         val (page, target, visit) = key.removePrefix("$KEY_SETTINGS:").split(':')

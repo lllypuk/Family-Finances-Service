@@ -488,3 +488,37 @@ internal const val HOLDING_NAME_EXISTS_ERROR = """
 {"error":{"code":"HOLDING_NAME_EXISTS","message":"holding name already exists"},
 "meta":{"request_id":"r-95","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0"}}
 """
+
+/** Первая страница истории квартиры: два снимка из трёх, третий — на второй. */
+internal const val FLAT_VALUES_PAGE_1 = """
+{"data":[
+{"date":"2026-01-12","value_minor":1100000000,"updated_at":"2026-01-12T10:00:00Z"},
+{"date":"2025-01-10","value_minor":1000000000,"updated_at":"2025-01-10T10:00:00Z"}],
+"meta":{"request_id":"r-96","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0",
+"pagination":{"limit":2,"offset":0,"total":3}}}
+"""
+
+internal const val FLAT_VALUES_PAGE_2 = """
+{"data":[
+{"date":"2024-01-15","value_minor":950000000,"updated_at":"2024-01-15T10:00:00Z"}],
+"meta":{"request_id":"r-97","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0",
+"pagination":{"limit":2,"offset":2,"total":3}}}
+"""
+
+/** История после удаления январского снимка 2026: `current` квартиры откатился на 2025 год. */
+internal const val HOLDINGS_AFTER_VALUE_DELETE = """
+{"data":[
+{"id":"$FLAT_ID","name":"Квартира","side":"asset","kind":"property","is_archived":false,
+"current":{"date":"2025-01-10","value_minor":1000000000},
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"}],
+"meta":{"request_id":"r-98","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0",
+"pagination":{"limit":200,"offset":0,"total":1}}}
+"""
+
+internal const val FLAT_VALUES_AFTER_DELETE = """
+{"data":[
+{"date":"2025-01-10","value_minor":1000000000,"updated_at":"2025-01-10T10:00:00Z"},
+{"date":"2024-01-15","value_minor":950000000,"updated_at":"2024-01-15T10:00:00Z"}],
+"meta":{"request_id":"r-99","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0",
+"pagination":{"limit":50,"offset":0,"total":2}}}
+"""

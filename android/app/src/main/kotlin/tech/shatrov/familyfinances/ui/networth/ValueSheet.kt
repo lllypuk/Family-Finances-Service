@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -15,6 +16,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -35,7 +37,10 @@ import tech.shatrov.familyfinances.ui.format.formatFullDay
 import tech.shatrov.familyfinances.ui.message
 import java.time.LocalDate
 
-/** Лист снимка стоимости; пока снимок уходит, смахнуть его нельзя. */
+/**
+ * Лист снимка стоимости; пока снимок уходит, смахнуть его нельзя. [onHistory] — ссылка на историю
+ * позиции, [onDelete] — удаление записанного снимка; `null` прячет кнопку.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ValueSheet(
@@ -45,6 +50,8 @@ fun ValueSheet(
     onDateChange: (LocalDate) -> Unit,
     onSave: () -> Unit,
     onDismiss: () -> Unit,
+    onHistory: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
 ) {
     val submitting by rememberUpdatedState(state.submitting)
     val sheetState = rememberModalBottomSheetState(
@@ -52,7 +59,7 @@ fun ValueSheet(
         confirmValueChange = { it != SheetValue.Hidden || !submitting },
     )
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        ValueSheetContent(state, currency, onAmountChange, onDateChange, onSave)
+        ValueSheetContent(state, currency, onAmountChange, onDateChange, onSave, onHistory, onDelete)
     }
 }
 
@@ -64,8 +71,11 @@ internal fun ValueSheetContent(
     onAmountChange: (String) -> Unit,
     onDateChange: (LocalDate) -> Unit,
     onSave: () -> Unit,
+    onHistory: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
 ) {
     var pickerShown by remember { mutableStateOf(false) }
+    var deleteConfirmShown by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -88,7 +98,7 @@ internal fun ValueSheetContent(
         )
         OutlinedButton(
             onClick = { pickerShown = true },
-            enabled = !state.submitting,
+            enabled = !state.submitting && !state.existing,
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = Dimens.TOUCH_MIN),
@@ -116,6 +126,49 @@ internal fun ValueSheetContent(
                 Text(stringResource(R.string.holding_value_save))
             }
         }
+        if (onHistory != null) {
+            TextButton(
+                onClick = onHistory,
+                enabled = !state.submitting,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = Dimens.TOUCH_MIN),
+            ) {
+                Text(stringResource(R.string.holding_value_history))
+            }
+        }
+        if (onDelete != null && state.existing) {
+            TextButton(
+                onClick = { deleteConfirmShown = true },
+                enabled = !state.submitting,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = Dimens.TOUCH_MIN),
+            ) {
+                Text(stringResource(R.string.holding_value_delete), color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+
+    if (deleteConfirmShown && onDelete != null) {
+        AlertDialog(
+            onDismissRequest = { deleteConfirmShown = false },
+            title = { Text(stringResource(R.string.holding_value_delete_confirm)) },
+            text = { Text(formatFullDay(state.date)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    deleteConfirmShown = false
+                    onDelete()
+                }) {
+                    Text(stringResource(R.string.holding_value_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteConfirmShown = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
     }
 
     // Потолок — «сегодня» семьи: будущий снимок сервер отвергнет `422`.

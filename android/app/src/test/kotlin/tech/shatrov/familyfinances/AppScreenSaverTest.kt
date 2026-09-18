@@ -47,6 +47,12 @@ class AppScreenSaverTest {
     }
 
     @Test
+    fun holdingHistoryKeepsId() {
+        val screen = AppScreen.HoldingHistory(UUID.fromString(FLAT_ID))
+        assertEquals(screen, roundTrip(screen))
+    }
+
+    @Test
     fun budgetEditKeepsDraftWithoutId() {
         val screen = AppScreen.BudgetEdit(id = null, draft = UUID.fromString(FOOD_BUDGET_ID))
         assertEquals(screen, roundTrip(screen))

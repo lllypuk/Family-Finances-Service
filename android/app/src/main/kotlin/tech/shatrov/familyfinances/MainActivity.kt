@@ -65,6 +65,9 @@ import tech.shatrov.familyfinances.ui.login.LoginViewModel
 import tech.shatrov.familyfinances.ui.message
 import tech.shatrov.familyfinances.ui.networth.HoldingEditScreen
 import tech.shatrov.familyfinances.ui.networth.HoldingEditViewModel
+import tech.shatrov.familyfinances.ui.networth.HoldingHistoryScreen
+import tech.shatrov.familyfinances.ui.networth.HoldingHistoryUiState
+import tech.shatrov.familyfinances.ui.networth.HoldingHistoryViewModel
 import tech.shatrov.familyfinances.ui.networth.NetWorthScreen
 import tech.shatrov.familyfinances.ui.networth.NetWorthViewModel
 import tech.shatrov.familyfinances.ui.networth.ValueSheet
@@ -155,6 +158,7 @@ fun AppRoot(graph: AppGraph) {
     val onForm = screen is AppScreen.TransactionEdit ||
         screen is AppScreen.BudgetEdit ||
         screen is AppScreen.HoldingEdit ||
+        screen is AppScreen.HoldingHistory ||
         screen is AppScreen.Recognize
     LaunchedEffect(onForm) { if (!onForm) forms.viewModelStore.clear() }
     // Свой store: модели подразделов настроек чистятся на каждом переходе, а модели форм — нет.
@@ -467,6 +471,51 @@ fun AppRoot(graph: AppGraph) {
                     onDateChange = model::onDateChange,
                     onSave = model::onSaveValue,
                     onDismiss = model::onDismissValue,
+                    onHistory = {
+                        model.onDismissValue()
+                        screen = AppScreen.HoldingHistory(value.holdingId)
+                    },
+                )
+            }
+        }
+
+        is AppScreen.HoldingHistory -> WithSession(session) { active ->
+            val model: HoldingHistoryViewModel =
+                viewModel(viewModelStoreOwner = forms, key = "holding-history-${current.id}") {
+                    HoldingHistoryViewModel(graph.api, current.id, active.zone)
+                }
+            val history by model.state.collectAsStateWithLifecycle()
+            val editor by model.editor.collectAsStateWithLifecycle()
+            // Правка истории двигает `current` и ряд: капитал перечитывается на возврате.
+            val leave = {
+                netWorthStale = true
+                screen = AppScreen.NetWorth
+            }
+            LaunchedEffect(history is HoldingHistoryUiState.Gone) {
+                if (history is HoldingHistoryUiState.Gone) leave()
+            }
+            BackHandler { leave() }
+            HoldingHistoryScreen(
+                state = history,
+                currency = active.currency,
+                onRetry = model::refresh,
+                onLoadMore = model::loadMore,
+                onOpenValue = model::onOpenValue,
+                onEdit = {
+                    netWorthStale = true
+                    screen = AppScreen.HoldingEdit(current.id)
+                },
+                onBack = leave,
+            )
+            editor?.let { value ->
+                ValueSheet(
+                    state = value,
+                    currency = active.currency,
+                    onAmountChange = model::onAmountChange,
+                    onDateChange = model::onDateChange,
+                    onSave = model::onSaveValue,
+                    onDismiss = model::onDismissValue,
+                    onDelete = model::onDeleteValue,
                 )
             }
         }

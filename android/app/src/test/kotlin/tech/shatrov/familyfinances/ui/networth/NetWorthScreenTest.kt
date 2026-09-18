@@ -73,7 +73,7 @@ class NetWorthScreenTest {
         composeRule.setContent {
             AppTheme {
                 NetWorthScreen(
-                    state = NetWorthUiState.Ready(emptyList(), emptyList(), emptyList(), latest = null),
+                    state = NetWorthUiState.Ready(emptyList(), emptyList(), emptyList(), months = emptyList()),
                     currency = "RUB",
                     today = today,
                     onRetry = {},
@@ -115,6 +115,41 @@ class NetWorthScreenTest {
 
         assertEquals(85_000_000L, state.amountMinor)
         assertEquals(1, saved)
+    }
+
+    @Test
+    fun valueDeleteWaitsForConfirmation() {
+        val state = ValueEditUiState(
+            holdingId = flat.id,
+            name = flat.name,
+            today = today,
+            amount = "11000000",
+            date = LocalDate.of(2026, 1, 12),
+            existing = true,
+        )
+        var deleted = false
+        composeRule.setContent {
+            AppTheme {
+                ValueSheetContent(
+                    state = state,
+                    currency = "RUB",
+                    onAmountChange = {},
+                    onDateChange = {},
+                    onSave = {},
+                    onDelete = { deleted = true },
+                )
+            }
+        }
+
+        composeRule.onNode(hasText(res.getString(R.string.holding_value_date, "12 января 2026"))).assertIsNotEnabled()
+        composeRule.onNodeWithText(res.getString(R.string.holding_value_delete)).performClick()
+        assertFalse(deleted)
+
+        composeRule.onNodeWithText(res.getString(R.string.holding_value_delete_confirm)).assertExists()
+        composeRule.onNode(
+            hasText(res.getString(R.string.holding_value_delete)) and hasAnyAncestor(isDialog()),
+        ).performClick()
+        assertTrue(deleted)
     }
 
     @Test

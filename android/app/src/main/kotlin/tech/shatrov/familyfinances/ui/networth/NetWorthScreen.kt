@@ -121,7 +121,7 @@ private fun Groups(
             .padding(horizontal = Dimens.SPACE_4),
         contentPadding = PaddingValues(top = Dimens.SPACE_2, bottom = Dimens.FAB_CLEARANCE),
     ) {
-        state.latest?.let { latest -> item(key = "total") { Total(latest, currency) } }
+        state.latest?.let { latest -> item(key = "total") { Total(latest, state.months, currency) } }
         group("assets", R.string.net_worth_assets, state.assets, row)
         group("liabilities", R.string.net_worth_liabilities, state.liabilities, row)
         if (state.archived.isNotEmpty()) {
@@ -150,6 +150,7 @@ private fun Groups(
 @Composable
 private fun Total(
     latest: NetWorthMonth,
+    months: List<NetWorthMonth>,
     currency: String,
 ) {
     Column(
@@ -166,6 +167,7 @@ private fun Total(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        NetWorthChart(months.map { it.netMinor }, Modifier.padding(top = Dimens.SPACE_2))
     }
 }
 
