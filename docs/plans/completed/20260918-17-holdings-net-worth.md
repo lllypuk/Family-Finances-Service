@@ -322,8 +322,8 @@ API (`financeAccess`, кроме помеченного):
 
 ### Task 10: [Final] Update documentation
 
-- [ ] `CLAUDE.md` «Current direction»: план 17, версии
-- [ ] перенести план в `docs/plans/completed/`
+- [x] `CLAUDE.md` «Current direction»: план 17, версии
+- [x] перенести план в `docs/plans/completed/`
 
 ## Post-Completion
 
