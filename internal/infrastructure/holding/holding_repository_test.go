@@ -234,3 +234,42 @@ func TestHoldingRepository_ListValues_NewestFirstWithTotal(t *testing.T) {
 	assert.Equal(t, date.New(2026, 7, 1), values[1].Date)
 	assert.False(t, values[0].UpdatedAt.IsZero())
 }
+
+func TestHoldingRepository_SeriesValues(t *testing.T) {
+	repo, db := setupRepo(t)
+	flat := create(t, repo, "Квартира", holding.SideAsset)
+	loan := create(t, repo, "Кредит", holding.SideLiability)
+	old := create(t, repo, "Машина", holding.SideAsset)
+	create(t, repo, "Пустая", holding.SideAsset)
+
+	putValue(t, db, flat.ID, "2025-01-01", 100)
+	putValue(t, db, flat.ID, "2025-06-01", 200)
+	putValue(t, db, flat.ID, "2025-12-01", 300)
+	putValue(t, db, flat.ID, "2026-04-01", 400)
+	putValue(t, db, loan.ID, "2026-03-05", 50)
+	putValue(t, db, loan.ID, "2026-03-20", 40)
+	putValue(t, db, loan.ID, "2026-06-01", 10)
+	putValue(t, db, old.ID, "2025-02-01", 70)
+	archive(t, repo, old.ID)
+
+	rows, err := repo.SeriesValues(t.Context(), date.New(2026, 3, 15), date.New(2026, 5, 31))
+	require.NoError(t, err)
+
+	type got struct {
+		id    uuid.UUID
+		side  holding.Side
+		day   string
+		value money.Minor
+	}
+	actual := make([]got, 0, len(rows))
+	for _, r := range rows {
+		actual = append(actual, got{r.HoldingID, r.Side, r.Date.String(), r.ValueMinor})
+	}
+	assert.Equal(t, []got{
+		{old.ID, holding.SideAsset, "2025-02-01", 70},
+		{flat.ID, holding.SideAsset, "2025-12-01", 300},
+		{loan.ID, holding.SideLiability, "2026-03-05", 50},
+		{loan.ID, holding.SideLiability, "2026-03-20", 40},
+		{flat.ID, holding.SideAsset, "2026-04-01", 400},
+	}, actual, "из снимков до from — только последний, в том числе внутри месяца from; архивная на месте; по дате")
+}

@@ -217,6 +217,51 @@ func (r *SQLiteRepository) ListValues(
 	return values, total, nil
 }
 
+// SeriesValues — последний снимок каждой позиции строго до from и все снимки в [from, to],
+// по возрастанию даты; архив не фильтруется. Одним запросом, чтобы обе части видели одно состояние.
+// CROSS JOIN в SQLite фиксирует порядок: снаружи позиции, снимки ищутся по PK, без него план сканирует снимки.
+func (r *SQLiteRepository) SeriesValues(ctx context.Context, from, to date.Date) ([]holding.SeriesRow, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT h.id, h.side, v.date, v.value_minor
+		FROM holdings h
+		CROSS JOIN holding_values v ON v.holding_id = h.id AND v.date = (
+			SELECT x.date FROM holding_values x
+			WHERE x.holding_id = h.id AND x.date < ?
+			ORDER BY x.date DESC LIMIT 1
+		)
+		UNION ALL
+		SELECT h.id, h.side, v.date, v.value_minor
+		FROM holdings h
+		CROSS JOIN holding_values v ON v.holding_id = h.id AND v.date >= ? AND v.date <= ?
+		ORDER BY 3, 1`, from, from, to)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read holding series: %w", err)
+	}
+	defer rows.Close()
+
+	series := make([]holding.SeriesRow, 0)
+	for rows.Next() {
+		var (
+			row   holding.SeriesRow
+			idStr string
+			side  string
+		)
+		if err = rows.Scan(&idStr, &side, &row.Date, &row.ValueMinor); err != nil {
+			return nil, fmt.Errorf("failed to scan holding series row: %w", err)
+		}
+		if row.HoldingID, err = uuid.Parse(idStr); err != nil {
+			return nil, fmt.Errorf("invalid holding id %q: %w", idStr, err)
+		}
+		row.Side = holding.Side(side)
+		series = append(series, row)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate holding series: %w", err)
+	}
+
+	return series, nil
+}
+
 type rowScanner interface {
 	Scan(dest ...any) error
 }

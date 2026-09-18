@@ -1166,6 +1166,43 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
 
+  /api/v1/stats/net-worth:
+    get:
+      operationId: getNetWorthStats
+      tags: [stats]
+      summary: Ряд чистого капитала по месяцам
+      description: |
+        admin и member. По корзине на каждый календарный месяц, попадающий в `[from, to]`;
+        корзина — состояние на последний день месяца (для последней — на `to`). Значение позиции на
+        дату — её последний снимок не позже этой даты, без срока давности; позиция до первого снимка
+        не входит, архивные входят по своим снимкам. Снимок строго до `from` — начальное состояние,
+        снимок ровно на `from` — уже изменение. Границы по умолчанию — как у `getStatsMonthly`.
+        `to` позже сегодняшнего дня в часовом поясе семьи — `422` полем `to` (проверяется раньше
+        потолка), период шире 120 месяцев — `422` полем `from`.
+      parameters:
+        - name: from
+          in: query
+          description: Начало периода включительно; по умолчанию первое число месяца одиннадцать месяцев назад
+          schema: { $ref: '#/components/schemas/CalendarDate' }
+        - name: to
+          in: query
+          description: Конец периода включительно, не позже сегодня; по умолчанию сегодня
+          schema: { $ref: '#/components/schemas/CalendarDate' }
+      responses:
+        '200':
+          description: Помесячный ряд капитала
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { $ref: '#/components/schemas/StatsNetWorth' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
   /api/v1/stats/reconciliation:
     get:
       operationId: getReconciliationStats
@@ -2208,6 +2245,33 @@ components:
           allOf: [{ $ref: '#/components/schemas/Money' }]
           description: '`income_minor - expenses_minor`'
         transaction_count: { type: integer }
+    StatsNetWorth:
+      type: object
+      required: [from, to, months]
+      properties:
+        from: { $ref: '#/components/schemas/CalendarDate' }
+        to: { $ref: '#/components/schemas/CalendarDate' }
+        months:
+          type: array
+          description: По корзине на каждый месяц периода, по возрастанию месяца; без снимков — нули
+          items: { $ref: '#/components/schemas/NetWorthMonth' }
+    NetWorthMonth:
+      type: object
+      required: [month, assets_minor, liabilities_minor, net_minor]
+      description: |
+        Суммы нескольких позиций, поэтому не `Money`: `maximum` у них нет, в минимальных единицах
+        валюты семьи.
+      properties:
+        month:
+          type: string
+          description: Календарный месяц `YYYY-MM`
+          examples: ['2026-09']
+        assets_minor: { type: integer, format: int64, minimum: 0 }
+        liabilities_minor: { type: integer, format: int64, minimum: 0 }
+        net_minor:
+          type: integer
+          format: int64
+          description: '`assets_minor - liabilities_minor`, может быть отрицательным'
     RecentTransactionItem:
       type: object
       required: [id, type, amount_minor, description, date, created_at]

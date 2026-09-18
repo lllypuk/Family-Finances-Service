@@ -69,6 +69,14 @@ func (m *mockHoldingRepo) ListValues(
 	return args.Get(0).([]*holding.Value), args.Int(1), args.Error(2)
 }
 
+func (m *mockHoldingRepo) SeriesValues(ctx context.Context, from, to date.Date) ([]holding.SeriesRow, error) {
+	args := m.Called(ctx, from, to)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]holding.SeriesRow), args.Error(1)
+}
+
 // setupHoldingService — «сегодня» семьи в зоне, далёкой от UTC, чтобы сервер в UTC дал другую дату.
 func setupHoldingService(t *testing.T) (services.HoldingService, *mockHoldingRepo, date.Date) {
 	t.Helper()

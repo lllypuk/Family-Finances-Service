@@ -178,6 +178,8 @@ type StatsService interface {
 	Summary(ctx context.Context, from, to *date.Date) (*dto.StatsSummary, error)
 	// Monthly — ряд по месяцам периода; пустые границы означают двенадцать месяцев по сегодняшний.
 	Monthly(ctx context.Context, from, to *date.Date) (*dto.StatsMonthly, error)
+	// NetWorth — ряд капитала; границы как у Monthly, to позже сегодня — ErrStatsPeriodInFuture.
+	NetWorth(ctx context.Context, from, to *date.Date) (*dto.StatsNetWorth, error)
 }
 
 // RecognizeService — кандидаты операций со скриншотов; Budget — худший срок вызова модели, ноль у выключенного плеча.

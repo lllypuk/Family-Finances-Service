@@ -13,6 +13,7 @@ import (
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/holding"
 	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
@@ -28,6 +29,7 @@ type statsMocks struct {
 	categories   *MockCategoryService
 	families     *MockFamilyService
 	aggregates   *MockTransactionRepository
+	holdings     *mockHoldingRepo
 }
 
 // totals объявляет агрегат за период; без него сводка за этот период не соберётся.
@@ -51,6 +53,7 @@ func newStatsMocks() *statsMocks {
 		categories:   new(MockCategoryService),
 		families:     new(MockFamilyService),
 		aggregates:   new(MockTransactionRepository),
+		holdings:     new(mockHoldingRepo),
 	}
 }
 
@@ -59,7 +62,7 @@ func newStatsService() (services.StatsService, *statsMocks) {
 	m.families.On("GetFamily", mock.Anything).
 		Return(&user.Family{Currency: "RUB", Timezone: "Europe/Moscow"}, nil).Maybe()
 
-	return services.NewStatsService(m.transactions, m.budgets, m.categories, m.families, m.aggregates), m
+	return services.NewStatsService(m.transactions, m.budgets, m.categories, m.families, m.aggregates, m.holdings), m
 }
 
 // recentFilter матчит выборку последних транзакций (без дат).
@@ -456,7 +459,7 @@ func TestStatsService_Summary_DefaultPeriodUsesFamilyTimezone(t *testing.T) {
 func TestStatsService_Summary_FamilyError(t *testing.T) {
 	m := newStatsMocks()
 	m.families.On("GetFamily", mock.Anything).Return(nil, errors.New("family repository down"))
-	svc := services.NewStatsService(m.transactions, m.budgets, m.categories, m.families, m.aggregates)
+	svc := services.NewStatsService(m.transactions, m.budgets, m.categories, m.families, m.aggregates, m.holdings)
 
 	summary, err := svc.Summary(t.Context(), nil, nil)
 
@@ -574,7 +577,7 @@ func TestStatsService_Monthly_MaxPeriod(t *testing.T) {
 func TestStatsService_Monthly_FamilyError(t *testing.T) {
 	m := newStatsMocks()
 	m.families.On("GetFamily", mock.Anything).Return(nil, errors.New("family repository down"))
-	svc := services.NewStatsService(m.transactions, m.budgets, m.categories, m.families, m.aggregates)
+	svc := services.NewStatsService(m.transactions, m.budgets, m.categories, m.families, m.aggregates, m.holdings)
 
 	monthly, err := svc.Monthly(t.Context(), nil, nil)
 
@@ -594,4 +597,62 @@ func TestStatsService_Monthly_AggregateError(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Nil(t, monthly)
+}
+
+// TestStatsService_NetWorth_DefaultPeriod — без границ ряд капитала берёт границы Monthly.
+func TestStatsService_NetWorth_DefaultPeriod(t *testing.T) {
+	svc, m := newStatsService()
+	loc, err := time.LoadLocation("Europe/Moscow")
+	require.NoError(t, err)
+	today := date.Today(loc)
+	monthStart, _ := today.MonthBounds()
+	from := monthStart.AddMonths(-11)
+
+	m.holdings.On("SeriesValues", mock.Anything, from, today).Return([]holding.SeriesRow{
+		{HoldingID: uuid.New(), Side: holding.SideLiability, Date: from.AddDays(-1), ValueMinor: 700},
+	}, nil)
+
+	series, err := svc.NetWorth(t.Context(), nil, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, from, series.From)
+	assert.Equal(t, today, series.To)
+	require.Len(t, series.Months, 12)
+	assert.Equal(t, money.Minor(-700), series.Months[11].NetMinor)
+	m.holdings.AssertExpectations(t)
+}
+
+// TestStatsService_NetWorth_FutureTo — будущий конец отбивается раньше потолка периода.
+func TestStatsService_NetWorth_FutureTo(t *testing.T) {
+	svc, m := newStatsService()
+	from := date.New(1, time.January, 1)
+	to := date.New(9999, time.December, 31)
+
+	series, err := svc.NetWorth(t.Context(), &from, &to)
+
+	require.ErrorIs(t, err, services.ErrStatsPeriodInFuture)
+	assert.Nil(t, series)
+	m.holdings.AssertNotCalled(t, "SeriesValues", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestStatsService_NetWorth_PeriodTooLong(t *testing.T) {
+	svc, _ := newStatsService()
+	from := date.New(2000, time.January, 1)
+	to := date.New(2020, time.January, 1)
+
+	_, err := svc.NetWorth(t.Context(), &from, &to)
+
+	require.ErrorIs(t, err, services.ErrStatsPeriodTooLong)
+}
+
+func TestStatsService_NetWorth_RepositoryError(t *testing.T) {
+	svc, m := newStatsService()
+	from := date.New(2026, time.January, 1)
+	to := date.New(2026, time.January, 31)
+	m.holdings.On("SeriesValues", mock.Anything, from, to).Return(nil, errors.New("database error"))
+
+	series, err := svc.NetWorth(t.Context(), &from, &to)
+
+	require.Error(t, err)
+	assert.Nil(t, series)
 }

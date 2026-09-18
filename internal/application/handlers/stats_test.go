@@ -41,6 +41,14 @@ func (m *MockStatsService) Monthly(ctx context.Context, from, to *date.Date) (*d
 	return args.Get(0).(*dto.StatsMonthly), args.Error(1)
 }
 
+func (m *MockStatsService) NetWorth(ctx context.Context, from, to *date.Date) (*dto.StatsNetWorth, error) {
+	args := m.Called(ctx, from, to)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dto.StatsNetWorth), args.Error(1)
+}
+
 func statsRequest(target string) (echo.Context, *httptest.ResponseRecorder) {
 	e := echo.New()
 	httpReq := httptest.NewRequest(http.MethodGet, target, nil)
@@ -270,4 +278,52 @@ func TestStatsHandler_GetMonthly_ServiceError(t *testing.T) {
 
 	require.NoError(t, handler.GetMonthly(c))
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+}
+
+func TestStatsHandler_GetNetWorth_Success(t *testing.T) {
+	mockService := &MockStatsService{}
+	handler := handlers.NewStatsHandler(mockService)
+
+	from := date.New(2026, time.August, 1)
+	to := date.New(2026, time.September, 13)
+	series := &dto.StatsNetWorth{
+		From: from,
+		To:   to,
+		Months: []dto.NetWorthMonth{
+			{Month: "2026-08", AssetsMinor: 100, LiabilitiesMinor: 300, NetMinor: -200},
+			{Month: "2026-09", AssetsMinor: 500, LiabilitiesMinor: 300, NetMinor: 200},
+		},
+	}
+	mockService.On("NetWorth", mock.Anything, &from, &to).Return(series, nil)
+
+	c, rec := statsRequest("/stats/net-worth?from=2026-08-01&to=2026-09-13")
+
+	require.NoError(t, handler.GetNetWorth(c))
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var response handlers.APIResponse[dto.StatsNetWorth]
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Data.Months, 2)
+	assert.Equal(t, money.Minor(-200), response.Data.Months[0].NetMinor)
+
+	mockService.AssertExpectations(t)
+}
+
+// TestStatsHandler_GetNetWorth_FutureTo — будущий конец ряда — ошибка поля to.
+func TestStatsHandler_GetNetWorth_FutureTo(t *testing.T) {
+	mockService := &MockStatsService{}
+	handler := handlers.NewStatsHandler(mockService)
+
+	mockService.On("NetWorth", mock.Anything, (*date.Date)(nil), mock.Anything).
+		Return(nil, services.ErrStatsPeriodInFuture)
+
+	c, rec := statsRequest("/stats/net-worth?to=2999-01-01")
+
+	require.NoError(t, handler.GetNetWorth(c))
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+
+	var response handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Error.Details, 1)
+	assert.Equal(t, "to", response.Error.Details[0].Field)
 }

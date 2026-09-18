@@ -61,6 +61,14 @@ type Value struct {
 	UpdatedAt time.Time
 }
 
+// SeriesRow — снимок позиции со стороной, из которого складывается ряд капитала.
+type SeriesRow struct {
+	HoldingID  uuid.UUID
+	Side       Side
+	Date       date.Date
+	ValueMinor money.Minor
+}
+
 type Holding struct {
 	ID         uuid.UUID
 	Name       string

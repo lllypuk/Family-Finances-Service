@@ -22,6 +22,7 @@ type HoldingRepository interface {
 	UpsertValue(ctx context.Context, holdingID uuid.UUID, v *holding.Value) error
 	DeleteValue(ctx context.Context, holdingID uuid.UUID, day date.Date) error
 	ListValues(ctx context.Context, holdingID uuid.UUID, limit, offset int) ([]*holding.Value, int, error)
+	SeriesValues(ctx context.Context, from, to date.Date) ([]holding.SeriesRow, error)
 }
 
 type holdingService struct {

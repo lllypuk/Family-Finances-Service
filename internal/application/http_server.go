@@ -301,6 +301,7 @@ func (s *HTTPServer) setupResourceRoutes(api *echo.Group) {
 	stats := api.Group("/stats", financeAccess)
 	stats.GET("/summary", s.statsHandler.GetSummary)
 	stats.GET("/monthly", s.statsHandler.GetMonthly)
+	stats.GET("/net-worth", s.statsHandler.GetNetWorth)
 	stats.GET("/reconciliation", s.reconciliationHandler.GetReconciliationStats)
 
 	backups := api.Group("/backups", adminOnly)

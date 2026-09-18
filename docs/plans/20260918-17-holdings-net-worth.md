@@ -253,15 +253,16 @@ API (`financeAccess`, кроме помеченного):
 - Create: `tests/integration/net_worth_test.go`
 - Modify: `docs/api/openapi.yaml`; `make -C android api-gen`
 
-- [ ] репозиторий: `SeriesValues(familyID, from, to)` — один `SELECT … UNION ALL` из Solution Overview, строки с `side`, по возрастанию даты; `EXPLAIN QUERY PLAN` посмотреть руками в `make sqlite-shell` — поиск по PK, не скан; в тест не класть, текст плана SQLite не контракт
-- [ ] `statsPeriod(today, from, to) (start, end, error)` вынести из `stats_service.go:149-162` (:148 `today` остаётся у вызывающего) вместе с обеими проверками (`ErrInvalidStatsPeriod`, затем `ErrStatsPeriodTooLong`), без изменения поведения: отсутствующие границы подставляются **независимо** (только `to` → `from` всё равно от сегодня), дефолт — начало текущего месяца минус 11 → сегодня, не `today.AddMonths(-12)`; тесты `TestStatsService_Monthly_DefaultPeriod` (:469), `_InvalidPeriod` (:537), `_PeriodTooLong` (:550), `_MaxPeriod` (:562 — ровно 120 проходит) остаются зелёными без правок
-- [ ] чистая `foldNetWorth(rows, from, to)` по правилам корзины из Solution Overview
-- [ ] `StatsService.NetWorth`: `to > today` → `422` с `field: to` проверяется **до** `statsPeriod`, чтобы будущая граница не маскировалась потолком; `stats.GET("/net-worth", …)` рядом с `/monthly` (`http_server.go:275`)
-- [ ] тест репозитория `SeriesValues`: три снимка до `from` → в выборке последний; снимок строго до `from`, но внутри его месяца (`from = 2026-03-15`, снимок `2026-03-05`) — в начальном состоянии; архивная позиция есть; порядок по дате
-- [ ] спека: `getNetWorthStats`; `assets_minor`, `liabilities_minor`, `net_minor` — `int64` без `maximum`, `net_minor` без `minimum`
-- [ ] тесты свёртки: перенос через пустые месяцы; позиция до первого снимка не входит; два снимка в месяце → поздний; снимок `0` обнуляет вклад; архивная остаётся; начальное состояние до `from`; `from` посреди месяца; снимок ровно на `from`; ровно в последний день месяца; `from = to`; `to` в середине месяца отсекает поздний снимок; пустая история → корзины с нулями; пассивы больше активов → отрицательный `net`; сумма двух позиций выше `MaxAmount`; `from = 31.01` не теряет февраль; удалённый снимок меняет прошлые корзины
-- [ ] интеграция: ряд на стенде под admin и под member (`financeAccess` пускает обоих), без токена `401`, период 121 месяц → `422`, `to` завтра → `422`
-- [ ] `make fmt && make test && make lint`; `make -C android check`
+- [x] репозиторий: `SeriesValues(from, to)` — один `SELECT … UNION ALL` из Solution Overview, строки с `side`, по возрастанию даты; `EXPLAIN QUERY PLAN` посмотреть руками в `make sqlite-shell` — поиск по PK, не скан; в тест не класть, текст плана SQLite не контракт
+  - ➕ без `familyID`, как `List`: семья одна. Обычный `JOIN` без `ANALYZE` сканирует `holding_values`; `CROSS JOIN` фиксирует позиции снаружи, и обе ветки ищут снимки по PK
+- [x] `statsPeriod(today, from, to) (start, end, error)` вынести из `stats_service.go:149-162` (:148 `today` остаётся у вызывающего) вместе с обеими проверками (`ErrInvalidStatsPeriod`, затем `ErrStatsPeriodTooLong`), без изменения поведения: отсутствующие границы подставляются **независимо** (только `to` → `from` всё равно от сегодня), дефолт — начало текущего месяца минус 11 → сегодня, не `today.AddMonths(-12)`; тесты `TestStatsService_Monthly_DefaultPeriod` (:469), `_InvalidPeriod` (:537), `_PeriodTooLong` (:550), `_MaxPeriod` (:562 — ровно 120 проходит) остаются зелёными без правок
+- [x] чистая `foldNetWorth(rows, from, to)` по правилам корзины из Solution Overview
+- [x] `StatsService.NetWorth`: `to > today` → `422` с `field: to` проверяется **до** `statsPeriod`, чтобы будущая граница не маскировалась потолком; `stats.GET("/net-worth", …)` рядом с `/monthly` (`http_server.go:275`)
+- [x] тест репозитория `SeriesValues`: три снимка до `from` → в выборке последний; снимок строго до `from`, но внутри его месяца (`from = 2026-03-15`, снимок `2026-03-05`) — в начальном состоянии; архивная позиция есть; порядок по дате
+- [x] спека: `getNetWorthStats`; `assets_minor`, `liabilities_minor`, `net_minor` — `int64` без `maximum`, `net_minor` без `minimum`
+- [x] тесты свёртки: перенос через пустые месяцы; позиция до первого снимка не входит; два снимка в месяце → поздний; снимок `0` обнуляет вклад; архивная остаётся; начальное состояние до `from`; `from` посреди месяца; снимок ровно на `from`; ровно в последний день месяца; `from = to`; `to` в середине месяца отсекает поздний снимок; пустая история → корзины с нулями; пассивы больше активов → отрицательный `net`; сумма двух позиций выше `MaxAmount`; `from = 31.01` не теряет февраль; удалённый снимок меняет прошлые корзины
+- [x] интеграция: ряд на стенде под admin и под member (`financeAccess` пускает обоих), без токена `401`, период 121 месяц → `422`, `to` завтра → `422`
+- [x] `make fmt && make test && make lint`; `make -C android check`
 
 ### Task 5: Документация сервера
 

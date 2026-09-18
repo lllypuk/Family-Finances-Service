@@ -31,6 +31,7 @@ kotlin/tech/shatrov/familyfinances/core/api/ErrorError.kt
 kotlin/tech/shatrov/familyfinances/core/api/Family.kt
 kotlin/tech/shatrov/familyfinances/core/api/FamilyApi.kt
 kotlin/tech/shatrov/familyfinances/core/api/FamilyOk.kt
+kotlin/tech/shatrov/familyfinances/core/api/GetNetWorthStats200Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/GetStatsMonthly200Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/GetStatsSummary200Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/Health.kt
@@ -59,6 +60,7 @@ kotlin/tech/shatrov/familyfinances/core/api/LoginResponse.kt
 kotlin/tech/shatrov/familyfinances/core/api/MeApi.kt
 kotlin/tech/shatrov/familyfinances/core/api/Meta.kt
 kotlin/tech/shatrov/familyfinances/core/api/MonthTotals.kt
+kotlin/tech/shatrov/familyfinances/core/api/NetWorthMonth.kt
 kotlin/tech/shatrov/familyfinances/core/api/Pagination.kt
 kotlin/tech/shatrov/familyfinances/core/api/PatchUserRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/PeriodTotals.kt
@@ -78,6 +80,7 @@ kotlin/tech/shatrov/familyfinances/core/api/SetPasswordRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/SimilarTransaction.kt
 kotlin/tech/shatrov/familyfinances/core/api/StatsApi.kt
 kotlin/tech/shatrov/familyfinances/core/api/StatsMonthly.kt
+kotlin/tech/shatrov/familyfinances/core/api/StatsNetWorth.kt
 kotlin/tech/shatrov/familyfinances/core/api/StatsSummary.kt
 kotlin/tech/shatrov/familyfinances/core/api/SystemApi.kt
 kotlin/tech/shatrov/familyfinances/core/api/Transaction.kt
