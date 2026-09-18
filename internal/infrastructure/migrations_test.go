@@ -3,7 +3,9 @@ package infrastructure_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,7 +29,8 @@ func TestMigrations_UpAndDownOnEmptyDatabase(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, db.Close()) })
 
-	tables := []string{"families", "users", "categories", "transactions", "budgets", "sessions"}
+	tables := []string{"families", "users", "categories", "transactions", "budgets", "sessions",
+		"accounts", "account_reconciliations"}
 	for _, table := range tables {
 		var count int
 		require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&count), table)
@@ -218,4 +221,152 @@ func TestMigrations_BudgetsRecurring(t *testing.T) {
 
 	_, err = db.ExecContext(ctx, "UPDATE budgets SET recurring = 2 WHERE id = 'budget-recurring'")
 	require.Error(t, err, "recurring вне 0/1 обязан отбиваться CHECK-ом")
+}
+
+// 005 пересобирает transactions базе на версии 4: строки, timestamps и триггер обязаны пережить пересборку.
+func TestMigrations_AccountsUpgradeKeepsTransactions(t *testing.T) {
+	ctx := t.Context()
+	manager, db := migratedDB(t)
+
+	// Up → Migrate(4), а не Migrate(4) на пустой базе: так воспроизводится выпущенная v4.
+	require.NoError(t, manager.Migrate(4))
+	assert.Empty(t, columnType(ctx, t, db, "transactions", "account_id"))
+
+	familyID, userID, categoryID := seedForChecks(ctx, t, db)
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO transactions (id, amount_minor, type, description, date, category_id, user_id, family_id,
+		                          tags, created_at, updated_at)
+		VALUES ('tx-old', 1500, 'expense', 'check', '2026-09-04', ?, ?, ?, '["a"]',
+		        '2026-09-04 10:00:00', '2026-09-05 11:00:00')`, categoryID, userID, familyID)
+	require.NoError(t, err)
+
+	require.NoError(t, manager.Up())
+
+	var amount int64
+	var tags, createdAt, updatedAt string
+	var accountID sql.NullString
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT amount_minor, tags, created_at, updated_at, account_id FROM transactions WHERE id = 'tx-old'`).
+		Scan(&amount, &tags, &createdAt, &updatedAt, &accountID))
+	assert.Equal(t, int64(1500), amount)
+	assert.JSONEq(t, `["a"]`, tags)
+	assert.Contains(t, createdAt, "2026-09-04")
+	assert.Contains(t, updatedAt, "2026-09-05", "пересборка не переписывает updated_at")
+	assert.False(t, accountID.Valid)
+
+	for _, index := range []string{
+		"idx_transactions_family_date", "idx_transactions_family_type_date", "idx_transactions_category_id",
+		"idx_transactions_user_id", "idx_transactions_account_date",
+	} {
+		assert.Equal(t, 1, objectCount(ctx, t, db, "type = 'index' AND name = '"+index+"'"), index)
+	}
+
+	_, err = db.ExecContext(ctx, "UPDATE transactions SET description = 'edited' WHERE id = 'tx-old'")
+	require.NoError(t, err)
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT updated_at FROM transactions WHERE id = 'tx-old'").
+		Scan(&updatedAt))
+	assert.NotContains(t, updatedAt, "2026-09-05", "триггер updated_at пересоздан")
+}
+
+// 005.down снимает счета и сверки, а операции оставляет.
+func TestMigrations_AccountsRollback(t *testing.T) {
+	ctx := t.Context()
+	manager, db := migratedDB(t)
+
+	familyID, userID, categoryID := seedForChecks(ctx, t, db)
+	_, err := db.ExecContext(ctx,
+		`INSERT INTO accounts (id, family_id, name, name_key) VALUES ('acc-1', ?, 'Карта', 'карта')`, familyID)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, insertTransaction, "tx-1", 100, "2026-09-04", categoryID, userID, familyID)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, "UPDATE transactions SET account_id = 'acc-1' WHERE id = 'tx-1'")
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO account_reconciliations (account_id, month, bank_expense_minor) VALUES ('acc-1', '2026-09', 100)`)
+	require.NoError(t, err)
+
+	require.NoError(t, manager.Migrate(4))
+
+	var count int
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM transactions").Scan(&count))
+	assert.Equal(t, 1, count, "операции переживают откат")
+	assert.Empty(t, columnType(ctx, t, db, "transactions", "account_id"))
+	for _, dropped := range []string{"accounts", "account_reconciliations", "update_accounts_updated_at",
+		"idx_transactions_account_date"} {
+		assert.Equal(t, 0, objectCount(ctx, t, db, "name = '"+dropped+"'"), dropped)
+	}
+
+	require.NoError(t, manager.Up())
+	assert.Equal(t, "TEXT", columnType(ctx, t, db, "transactions", "account_id"))
+}
+
+// Живая база (v4 → 005) и свежая (001 уже со счетами) обязаны прийти к одной схеме. Сравнение идёт
+// по pragma, а не по тексту sqlite_master: DDL в 001 и 005 оформлен по-разному.
+func TestMigrations_AccountsSchemaMatchesFreshInstall(t *testing.T) {
+	ctx := t.Context()
+	_, fresh := migratedDB(t)
+	upgradedManager, upgraded := migratedDB(t)
+	require.NoError(t, upgradedManager.Migrate(4))
+	require.NoError(t, upgradedManager.Up())
+
+	for _, table := range []string{"transactions", "accounts", "account_reconciliations"} {
+		assert.Equal(t, schemaOf(ctx, t, fresh, table), schemaOf(ctx, t, upgraded, table), table)
+	}
+}
+
+func migratedDB(t *testing.T) (*infrastructure.MigrationManager, *sql.DB) {
+	t.Helper()
+	dbPath := filepath.Join(t.TempDir(), "accounts.db")
+	manager := infrastructure.NewMigrationManager("sqlite://"+dbPath,
+		filepath.Join(testhelpers.RepoRoot(t), "migrations"))
+	require.NoError(t, manager.Up())
+
+	db, err := sql.Open("sqlite", dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, db.Close()) })
+
+	return manager, db
+}
+
+// schemaOf снимает колонки, внешние ключи и индексы таблицы в сравнимом виде.
+func schemaOf(ctx context.Context, t *testing.T, db *sql.DB, table string) []string {
+	t.Helper()
+
+	schema := pragmaRows(ctx, t, db, "SELECT * FROM pragma_table_info(?)", table)
+	schema = append(schema, pragmaRows(ctx, t, db, "SELECT * FROM pragma_foreign_key_list(?)", table)...)
+	indexes := pragmaRows(ctx, t, db,
+		`SELECT name || '|' || "unique" || '|' || origin || '|' || partial FROM pragma_index_list(?) ORDER BY name`,
+		table)
+	schema = append(schema, indexes...)
+	for _, index := range indexes {
+		name, _, _ := strings.Cut(index, "|")
+		schema = append(schema, pragmaRows(ctx, t, db, "SELECT * FROM pragma_index_xinfo(?)", name)...)
+	}
+
+	return schema
+}
+
+func pragmaRows(ctx context.Context, t *testing.T, db *sql.DB, query, arg string) []string {
+	t.Helper()
+
+	rows, err := db.QueryContext(ctx, query, arg)
+	require.NoError(t, err)
+	defer func() { assert.NoError(t, rows.Close()) }()
+
+	columns, err := rows.Columns()
+	require.NoError(t, err)
+
+	var out []string
+	for rows.Next() {
+		values := make([]any, len(columns))
+		ptrs := make([]any, len(columns))
+		for i := range values {
+			ptrs[i] = &values[i]
+		}
+		require.NoError(t, rows.Scan(ptrs...))
+		out = append(out, fmt.Sprint(values...))
+	}
+	require.NoError(t, rows.Err())
+
+	return out
 }

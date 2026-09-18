@@ -214,14 +214,14 @@ API (`financeAccess`, кроме помеченного):
 - Create: `migrations/005_accounts.{up,down}.sql`
 - Modify: `internal/infrastructure/migrations_test.go`
 
-- [ ] `001`: `accounts` перед `transactions`, колонка и индекс, `account_reconciliations`, триггер `update_accounts_updated_at`; в `001.down` — `DROP TRIGGER/INDEX/TABLE IF EXISTS` поимённо (включая `idx_transactions_account_date`): `005.down` уже снёс эти объекты
-- [ ] `005.up`: `CREATE TABLE IF NOT EXISTS` для `accounts` **и** `account_reconciliations` (на свежей базе обе уже есть из `001`); пересборка `transactions` (`transactions_rebuilt`, как `budgets_rebuilt` в `002`, со всеми `CHECK` из `001:69` → `INSERT … SELECT` с явным списком колонок, включая `tags`, `created_at`, `updated_at`, и `account_id = NULL` → `DROP` → `RENAME`), четыре индекса `001:141-144`, новый индекс; триггер `update_transactions_updated_at` — последним, после копирования. Своего `BEGIN` в файле нет: golang-migrate уже открыл транзакцию
-- [ ] `005.down`: `DROP TABLE account_reconciliations`, `DROP TRIGGER update_accounts_updated_at`, `DROP INDEX idx_transactions_account_date`, `ALTER TABLE transactions DROP COLUMN account_id`, `DROP TABLE accounts`
-- [ ] `CleanTables`: `sessions, budgets, account_reconciliations, transactions, accounts, categories, users, families`; фабрики операций (`testhelpers/sqlite.go:193`, `:212`) пишут явный список колонок — их не трогать; список `tables` в `migrations_test.go:30` дополнить
-- [ ] тест: `Up()` → `Migrate(4)` (как `Up → Migrate(1)` в `migrations_test.go:124-126`; `Migrate(4)` на пустой базе выпущенную v4 не воспроизводит) → семья, категория, операции → `Up()` → строки и timestamps целы, триггер работает, `account_id IS NULL`, индексы на месте
-- [ ] тест: заполненные `account_id` и сверка → `Migrate(4)` → операции целы, колонки и таблиц нет → снова `Up()`
-- [ ] тест на двух базах: A — `Up()`; B — `Up() → Migrate(4) → Up()`; схемы совпадают по `table_info`, `foreign_key_list`, `index_list`/`index_xinfo` трёх таблиц, не по тексту `sqlite_master` (DDL в `001` и `005` оформлен по-разному)
-- [ ] `make fmt && make test && make lint`
+- [x] `001`: `accounts` перед `transactions`, колонка и индекс, `account_reconciliations`, триггер `update_accounts_updated_at`; в `001.down` — `DROP TRIGGER/INDEX/TABLE IF EXISTS` поимённо (включая `idx_transactions_account_date`): `005.down` уже снёс эти объекты
+- [x] `005.up`: `CREATE TABLE IF NOT EXISTS` для `accounts` **и** `account_reconciliations` (на свежей базе обе уже есть из `001`); пересборка `transactions` (`transactions_rebuilt`, как `budgets_rebuilt` в `002`, со всеми `CHECK` из `001:69` → `INSERT … SELECT` с явным списком колонок, включая `tags`, `created_at`, `updated_at`, и `account_id = NULL` → `DROP` → `RENAME`), четыре индекса `001:141-144`, новый индекс; триггер `update_transactions_updated_at` — последним, после копирования. Своего `BEGIN` в файле нет: golang-migrate уже открыл транзакцию
+- [x] `005.down`: `DROP TABLE account_reconciliations`, `DROP TRIGGER update_accounts_updated_at`, `DROP INDEX idx_transactions_account_date`, `ALTER TABLE transactions DROP COLUMN account_id`, `DROP TABLE accounts`
+- [x] `CleanTables`: `sessions, budgets, account_reconciliations, transactions, accounts, categories, users, families`; фабрики операций (`testhelpers/sqlite.go:193`, `:212`) пишут явный список колонок — их не трогать; список `tables` в `migrations_test.go:30` дополнить
+- [x] тест: `Up()` → `Migrate(4)` (как `Up → Migrate(1)` в `migrations_test.go:124-126`; `Migrate(4)` на пустой базе выпущенную v4 не воспроизводит) → семья, категория, операции → `Up()` → строки и timestamps целы, триггер работает, `account_id IS NULL`, индексы на месте
+- [x] тест: заполненные `account_id` и сверка → `Migrate(4)` → операции целы, колонки и таблиц нет → снова `Up()`
+- [x] тест на двух базах: A — `Up()`; B — `Up() → Migrate(4) → Up()`; схемы совпадают по `table_info`, `foreign_key_list`, `index_list`/`index_xinfo` трёх таблиц, не по тексту `sqlite_master` (DDL в `001` и `005` оформлен по-разному)
+- [x] `make fmt && make test && make lint`
 
 ### Task 3: Счета — домен, репозиторий, сервис, маршруты
 
