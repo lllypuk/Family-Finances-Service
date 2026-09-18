@@ -97,6 +97,12 @@ type CategoryTotal struct {
 	Count       int
 }
 
+// AccountTotal — сумма расходов по счёту за период; AccountID nil — операции без счёта.
+type AccountTotal struct {
+	AccountID   *uuid.UUID
+	AmountMinor money.Minor
+}
+
 // MonthTotal — сумма и число операций одного типа за календарный месяц `YYYY-MM`.
 type MonthTotal struct {
 	Month       string

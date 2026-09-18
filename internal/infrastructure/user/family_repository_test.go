@@ -163,3 +163,44 @@ func TestFamilyRepository_TimezoneRoundTrip(t *testing.T) {
 	_, err = db.ExecContext(ctx, "UPDATE families SET timezone = '' WHERE id = ?", family.ID.String())
 	require.ErrorContains(t, err, "CHECK constraint failed", "пустая зона обязана отбиваться CHECK-ом")
 }
+
+func TestFamilyRepository_HasMonetaryData(t *testing.T) {
+	container := testutils.SetupSQLiteTestDB(t)
+	ctx := context.Background()
+	db := container.GetTestDatabase(t)
+	repo := newFamilyRepo(db)
+
+	has, err := repo.HasMonetaryData(ctx)
+	require.NoError(t, err)
+	assert.False(t, has, "семьи нет")
+
+	helper := testutils.NewTestDataHelper(db)
+	familyID, err := helper.CreateTestFamily(ctx, "Family", "RUB")
+	require.NoError(t, err)
+	has, err = repo.HasMonetaryData(ctx)
+	require.NoError(t, err)
+	assert.False(t, has)
+
+	accountID := uuid.New().String()
+	_, err = db.ExecContext(ctx,
+		`INSERT INTO accounts (id, family_id, name, name_key) VALUES (?, ?, 'Карта', 'карта')`, accountID, familyID)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `INSERT INTO account_reconciliations (account_id, month, bank_expense_minor)
+		VALUES (?, '2026-09', 0)`, accountID)
+	require.NoError(t, err)
+	has, err = repo.HasMonetaryData(ctx)
+	require.NoError(t, err)
+	assert.True(t, has, "нулевая сверка тоже блокирует валюту")
+
+	_, err = db.ExecContext(ctx, `DELETE FROM account_reconciliations`)
+	require.NoError(t, err)
+	userID, err := helper.CreateTestUser(ctx, "m@example.com", "M", "U", "admin", familyID)
+	require.NoError(t, err)
+	categoryID, err := helper.CreateTestCategory(ctx, "Food", "expense", familyID, nil)
+	require.NoError(t, err)
+	_, err = helper.CreateTestTransaction(ctx, 100, "x", "expense", categoryID, userID, familyID)
+	require.NoError(t, err)
+	has, err = repo.HasMonetaryData(ctx)
+	require.NoError(t, err)
+	assert.True(t, has)
+}

@@ -185,6 +185,21 @@ type AccountResponse struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
+// ReconciliationRequest — полная замена сверки: без note заметка очищается.
+// BankExpenseMinor — указатель, иначе required отверг бы законный 0.
+type ReconciliationRequest struct {
+	BankExpenseMinor *money.Minor `json:"bank_expense_minor" validate:"required"`
+	Note             string       `json:"note"               validate:"max=500"`
+}
+
+type ReconciliationResponse struct {
+	AccountID        uuid.UUID   `json:"account_id"`
+	Month            string      `json:"month"`
+	BankExpenseMinor money.Minor `json:"bank_expense_minor"`
+	Note             string      `json:"note"`
+	UpdatedAt        time.Time   `json:"updated_at"`
+}
+
 // CreateTransactionRequest represents the request payload for creating a new transaction.
 // Поля user_id здесь нет намеренно: автор записи берётся из сессии
 // (CreateTransaction читает её через auth.FromContext),

@@ -231,7 +231,7 @@ paths:
       tags: [family]
       summary: Изменить семью
       description: |
-        Только admin. Смена `currency` при наличии транзакций запрещена — `409 CURRENCY_LOCKED` (A-05).
+        Только admin. Смена `currency` при наличии транзакций или сверок запрещена — `409 CURRENCY_LOCKED` (A-05).
         `timezone` — IANA-имя, в нём считаются «сегодня» и границы периодов (A-06).
       requestBody:
         required: true
@@ -554,6 +554,47 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/v1/accounts/{id}/reconciliations/{month}:
+    parameters:
+      - { $ref: '#/components/parameters/PathID' }
+      - name: month
+        in: path
+        required: true
+        description: Календарный месяц `YYYY-MM`; иное — `422`
+        schema: { type: string, examples: ['2026-09'] }
+    put:
+      operationId: putReconciliation
+      tags: [accounts]
+      summary: Записать цифру банка за месяц
+      description: |
+        admin и member. Полная замена: без `note` заметка очищается. Записанное не хранится — его
+        считает `GET /stats/reconciliation`, поэтому дописанная операция меняет разницу без нового
+        `PUT`. Месяц не блокируется. `bank_expense_minor` — `0 … 99999999999`, иначе `422`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReconciliationRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/ReconciliationOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      operationId: deleteReconciliation
+      tags: [accounts]
+      summary: Удалить сверку за месяц
+      description: admin и member. `ACCOUNT_NOT_FOUND` или `RECONCILIATION_NOT_FOUND` — `404`.
+      responses:
+        '204': { description: Сверка удалена }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
 
   /api/v1/transactions:
     get:
@@ -958,6 +999,26 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
 
+  /api/v1/stats/reconciliation:
+    get:
+      operationId: getReconciliationStats
+      tags: [stats]
+      summary: Сверка счетов за месяц
+      description: |
+        admin и member. Строка на каждый неархивный счёт и на архивный, у которого в месяце есть
+        расход или сверка. `recorded_minor` — сумма расходов (`type = expense`) по счёту за
+        календарный месяц; доходы её не уменьшают. `unassigned_minor` — расходы без счёта.
+      parameters:
+        - name: month
+          in: query
+          description: Календарный месяц `YYYY-MM`; по умолчанию текущий в часовом поясе семьи
+          schema: { type: string, examples: ['2026-09'] }
+      responses:
+        '200': { $ref: '#/components/responses/ReconciliationStatsOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
   /api/v1/backups:
     get:
       operationId: listBackups
@@ -1157,6 +1218,16 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/AccountOk' }
+    ReconciliationOk:
+      description: Сверка
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ReconciliationOk' }
+    ReconciliationStatsOk:
+      description: Сверка счетов за месяц
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ReconciliationStatsOk' }
     TransactionOk:
       description: Транзакция
       content:
@@ -1274,6 +1345,18 @@ components:
       required: [data, meta]
       properties:
         data: { $ref: '#/components/schemas/Account' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    ReconciliationOk:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/Reconciliation' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    ReconciliationStatsOk:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/ReconciliationStats' }
         meta: { $ref: '#/components/schemas/Meta' }
     TransactionOk:
       type: object
@@ -1517,6 +1600,70 @@ components:
       properties:
         name: { type: string, maxLength: 50 }
         is_archived: { type: boolean }
+    ReconciliationRequest:
+      type: object
+      required: [bank_expense_minor]
+      properties:
+        bank_expense_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: Траты по счёту за месяц по данным банка; отрицательное — `422`
+        note:
+          type: string
+          maxLength: 500
+          description: Нет поля — заметка очищается
+    Reconciliation:
+      type: object
+      required: [account_id, month, bank_expense_minor, note, updated_at]
+      properties:
+        account_id: { type: string, format: uuid }
+        month:
+          type: string
+          description: Календарный месяц `YYYY-MM`
+          examples: ['2026-09']
+        bank_expense_minor: { $ref: '#/components/schemas/Money' }
+        note: { type: string }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    ReconciliationStats:
+      type: object
+      required: [month, unassigned_minor, accounts]
+      properties:
+        month:
+          type: string
+          description: Календарный месяц `YYYY-MM`
+          examples: ['2026-09']
+        unassigned_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: Расходы месяца без счёта
+        accounts:
+          type: array
+          description: По имени счёта без учёта регистра
+          items: { $ref: '#/components/schemas/ReconciliationRow' }
+    ReconciliationRow:
+      type: object
+      required: [account, recorded_minor, bank_expense_minor, diff_minor, note, updated_at]
+      description: Пока сверки нет, `bank_expense_minor`, `diff_minor`, `note` и `updated_at` — null
+      properties:
+        account: { $ref: '#/components/schemas/Account' }
+        recorded_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: Записанные расходы по счёту за месяц
+        bank_expense_minor:
+          oneOf:
+            - { $ref: '#/components/schemas/Money' }
+            - { type: 'null' }
+        diff_minor:
+          oneOf:
+            - { $ref: '#/components/schemas/Money' }
+            - { type: 'null' }
+          description: '`bank_expense_minor - recorded_minor`; больше нуля — не записали, меньше — лишнее'
+        note:
+          oneOf:
+            - { type: string }
+            - { type: 'null' }
+        updated_at:
+          oneOf:
+            - { $ref: '#/components/schemas/Timestamp' }
+            - { type: 'null' }
     Transaction:
       type: object
       required: [id, amount_minor, type, description, category_id, user_id, date, tags, created_at, updated_at]

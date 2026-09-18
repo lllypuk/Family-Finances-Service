@@ -10,8 +10,25 @@ import kotlinx.serialization.Serializable
 import tech.shatrov.familyfinances.core.api.Error
 import tech.shatrov.familyfinances.core.api.GetStatsMonthly200Response
 import tech.shatrov.familyfinances.core.api.GetStatsSummary200Response
+import tech.shatrov.familyfinances.core.api.ReconciliationStatsOk
 
 interface StatsApi {
+    /**
+     * GET api/v1/stats/reconciliation
+     * Сверка счетов за месяц
+     * admin и member. Строка на каждый неархивный счёт и на архивный, у которого в месяце есть расход или сверка. &#x60;recorded_minor&#x60; — сумма расходов (&#x60;type &#x3D; expense&#x60;) по счёту за календарный месяц; доходы её не уменьшают. &#x60;unassigned_minor&#x60; — расходы без счёта. 
+     * Responses:
+     *  - 200: Сверка счетов за месяц
+     *  - 401: Токена нет, он истёк или отозван (`UNAUTHORIZED`)
+     *  - 403: Роль не даёт доступа к операции (`FORBIDDEN`)
+     *  - 422: Тело или параметры не прошли валидацию (`VALIDATION_ERROR`); поля — в `error.details`
+     *
+     * @param month Календарный месяц &#x60;YYYY-MM&#x60;; по умолчанию текущий в часовом поясе семьи (optional)
+     * @return [ReconciliationStatsOk]
+     */
+    @GET("api/v1/stats/reconciliation")
+    suspend fun getReconciliationStats(@Query("month") month: kotlin.String? = null): Response<ReconciliationStatsOk>
+
     /**
      * GET api/v1/stats/monthly
      * Ряд итогов по месяцам

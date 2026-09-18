@@ -11,6 +11,7 @@ import (
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/money"
+	"family-budget-service/internal/domain/reconciliation"
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/recognize"
@@ -66,6 +67,21 @@ type AccountService interface {
 	List(ctx context.Context, includeArchived bool) ([]*account.Account, error)
 	Update(ctx context.Context, id uuid.UUID, name *string, archived *bool) (*account.Account, error)
 	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+// ReconciliationService — сверка счетов по месяцам; month — любой день месяца.
+type ReconciliationService interface {
+	// Put заменяет сверку целиком; неизвестный счёт — account.ErrNotFound.
+	Put(
+		ctx context.Context,
+		accountID uuid.UUID,
+		month date.Date,
+		bankExpense money.Minor,
+		note string,
+	) (*reconciliation.Reconciliation, error)
+	Delete(ctx context.Context, accountID uuid.UUID, month date.Date) error
+	// Summary — записанное против банка по счетам; nil — текущий месяц в поясе семьи.
+	Summary(ctx context.Context, month *date.Date) (*dto.ReconciliationStats, error)
 }
 
 // TransactionService defines business operations for transaction management

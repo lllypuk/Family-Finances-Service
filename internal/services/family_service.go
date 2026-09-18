@@ -10,31 +10,28 @@ import (
 	"github.com/google/uuid"
 
 	"family-budget-service/internal/auth"
-	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services/dto"
 )
 
 var (
 	ErrFamilyAlreadyExists = errors.New("family already exists")
-	// ErrCurrencyLocked — валюту нельзя сменить, пока есть транзакции: суммы хранятся
+	// ErrCurrencyLocked — валюту нельзя сменить, пока есть операции или сверки: суммы хранятся
 	// в валюте семьи, и смена молча переименовала бы всю историю (A-05).
-	ErrCurrencyLocked = errors.New("currency cannot be changed while transactions exist")
+	ErrCurrencyLocked = errors.New("currency cannot be changed while transactions or reconciliations exist")
 )
 
 // familyService implements FamilyService interface
 type familyService struct {
-	familyRepo      FamilyRepository
-	transactionRepo TransactionRepository
-	validator       *validator.Validate
+	familyRepo FamilyRepository
+	validator  *validator.Validate
 }
 
 // NewFamilyService creates a new FamilyService instance
-func NewFamilyService(familyRepo FamilyRepository, transactionRepo TransactionRepository) FamilyService {
+func NewFamilyService(familyRepo FamilyRepository) FamilyService {
 	return &familyService{
-		familyRepo:      familyRepo,
-		transactionRepo: transactionRepo,
-		validator:       newValidator(),
+		familyRepo: familyRepo,
+		validator:  newValidator(),
 	}
 }
 
@@ -101,9 +98,9 @@ func (s *familyService) UpdateFamily(ctx context.Context, req dto.UpdateFamilyDT
 		existingFamily.Name = *req.Name
 	}
 	if req.Currency != nil && *req.Currency != existingFamily.Currency {
-		locked, lockErr := s.hasTransactions(ctx)
+		locked, lockErr := s.familyRepo.HasMonetaryData(ctx)
 		if lockErr != nil {
-			return nil, lockErr
+			return nil, fmt.Errorf("failed to check monetary data: %w", lockErr)
 		}
 		if locked {
 			return nil, ErrCurrencyLocked
@@ -121,15 +118,6 @@ func (s *familyService) UpdateFamily(ctx context.Context, req dto.UpdateFamilyDT
 	}
 
 	return existingFamily, nil
-}
-
-func (s *familyService) hasTransactions(ctx context.Context) (bool, error) {
-	count, err := s.transactionRepo.CountByFilter(ctx, transaction.Filter{})
-	if err != nil {
-		return false, fmt.Errorf("failed to count transactions: %w", err)
-	}
-
-	return count > 0, nil
 }
 
 // IsSetupComplete checks if the initial setup has been done

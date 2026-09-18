@@ -55,6 +55,12 @@ kotlin/tech/shatrov/familyfinances/core/api/RecentTransactionItem.kt
 kotlin/tech/shatrov/familyfinances/core/api/RecognizeOk.kt
 kotlin/tech/shatrov/familyfinances/core/api/RecognizeResult.kt
 kotlin/tech/shatrov/familyfinances/core/api/RecognizedTransaction.kt
+kotlin/tech/shatrov/familyfinances/core/api/Reconciliation.kt
+kotlin/tech/shatrov/familyfinances/core/api/ReconciliationOk.kt
+kotlin/tech/shatrov/familyfinances/core/api/ReconciliationRequest.kt
+kotlin/tech/shatrov/familyfinances/core/api/ReconciliationRow.kt
+kotlin/tech/shatrov/familyfinances/core/api/ReconciliationStats.kt
+kotlin/tech/shatrov/familyfinances/core/api/ReconciliationStatsOk.kt
 kotlin/tech/shatrov/familyfinances/core/api/Role.kt
 kotlin/tech/shatrov/familyfinances/core/api/Session.kt
 kotlin/tech/shatrov/familyfinances/core/api/SetPasswordRequest.kt

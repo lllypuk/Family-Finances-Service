@@ -189,6 +189,30 @@ func (r *SQLiteFamilyRepository) Exists(ctx context.Context) (bool, error) {
 	return count > 0, nil
 }
 
+// HasMonetaryData — есть ли у семьи суммы в её валюте: операции или сверки, нулевая тоже.
+func (r *SQLiteFamilyRepository) HasMonetaryData(ctx context.Context) (bool, error) {
+	query := `
+		SELECT EXISTS (SELECT 1 FROM transactions WHERE family_id = f.id)
+			OR EXISTS (
+				SELECT 1 FROM account_reconciliations r
+				JOIN accounts a ON a.id = r.account_id
+				WHERE a.family_id = f.id
+			)
+		FROM families f
+		LIMIT 1`
+
+	var has bool
+	err := r.db.QueryRowContext(ctx, query).Scan(&has)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to check monetary data: %w", err)
+	}
+
+	return has, nil
+}
+
 // GetFamilyStatistics returns statistics about the single family
 func (r *SQLiteFamilyRepository) GetFamilyStatistics(ctx context.Context) (*FamilyStatistics, error) {
 	// Single-family model: no family_id in other tables, use subqueries for counts

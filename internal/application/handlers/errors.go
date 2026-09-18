@@ -34,7 +34,7 @@ const (
 	ErrCodeCannotDeactivateSelf = "CANNOT_DEACTIVATE_SELF"
 	// ErrCodeLastAdmin signals an attempt to deactivate or demote the last active admin.
 	ErrCodeLastAdmin = "LAST_ADMIN"
-	// ErrCodeCurrencyLocked signals a currency change on a family that already has transactions.
+	// ErrCodeCurrencyLocked signals a currency change on a family that already has transactions or reconciliations.
 	ErrCodeCurrencyLocked = "CURRENCY_LOCKED"
 	// ErrCodeBudgetOverlap signals a budget whose period overlaps another budget of the same scope.
 	ErrCodeBudgetOverlap = "BUDGET_OVERLAP"
@@ -52,6 +52,8 @@ const (
 	ErrCodeAccountNameExists = "ACCOUNT_NAME_EXISTS"
 	// ErrCodeAccountInUse signals a delete of an account referenced by transactions or reconciliations.
 	ErrCodeAccountInUse = "ACCOUNT_IN_USE"
+	// ErrCodeReconciliationNotFound signals that the account has no reconciliation for the month.
+	ErrCodeReconciliationNotFound = "RECONCILIATION_NOT_FOUND"
 	// ErrCodeInvalidQueryParam маркирует деталь ошибки 422 по query-параметру.
 	ErrCodeInvalidQueryParam = "INVALID_QUERY_PARAM"
 	// ErrCodeInvalidBackupName signals a backup filename outside the `backup_*.db` pattern.
@@ -90,7 +92,7 @@ const (
 	ErrMessageCannotDeactivate       = "Cannot deactivate your own account"
 	ErrMessageEmailTaken             = "Email already exists"
 	ErrMessageLastAdmin              = "Cannot deactivate or demote the last administrator"
-	ErrMessageCurrencyLocked         = "Currency cannot be changed while transactions exist"
+	ErrMessageCurrencyLocked         = "Currency cannot be changed while transactions or reconciliations exist"
 	ErrMessageBudgetOverlap          = "Budget period overlaps with an existing budget"
 	ErrMessageBudgetNameExists       = "Budget with this name already exists for this period"
 	ErrMessageBudgetBelowSpent       = "Budget amount is less than already spent"
@@ -100,6 +102,7 @@ const (
 	ErrMessageAccountNotFound        = "Account not found"
 	ErrMessageAccountNameExists      = "Account with this name already exists"
 	ErrMessageAccountInUse           = "Account has transactions or reconciliations; archive it instead"
+	ErrMessageReconciliationNotFound = "Reconciliation not found"
 	ErrMessageInvalidBackupName      = "Invalid backup filename"
 	ErrMessageBackupNotFound         = "Backup not found"
 	ErrMessageBackupFailed           = "Failed to create backup"

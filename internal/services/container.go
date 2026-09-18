@@ -8,15 +8,17 @@ import (
 
 // Services contains all business services
 type Services struct {
-	User        UserService
-	Family      FamilyService
-	Category    CategoryService
-	Account     AccountService
-	Transaction TransactionService
-	Budget      BudgetService
-	Stats       StatsService
-	Backup      BackupService
-	Recognize   RecognizeService
+	User     UserService
+	Family   FamilyService
+	Category CategoryService
+	Account  AccountService
+	// Reconciliation — сверки счетов и GET /stats/reconciliation.
+	Reconciliation ReconciliationService
+	Transaction    TransactionService
+	Budget         BudgetService
+	Stats          StatsService
+	Backup         BackupService
+	Recognize      RecognizeService
 	// Auth — bearer-сессии; собирается снаружи, как и Backup: ему нужны репозитории, а не сервисы.
 	Auth *auth.Service
 }
@@ -27,6 +29,7 @@ func NewServices(
 	familyRepo FamilyRepository,
 	categoryRepo CategoryRepository,
 	accountRepo AccountRepository,
+	reconciliationRepo ReconciliationRepository,
 	transactionRepo TransactionRepository,
 	budgetRepo BudgetRepositoryForTransactions,
 	fullBudgetRepo BudgetRepository,
@@ -41,7 +44,7 @@ func NewServices(
 	// Create core services first
 	userService := NewUserService(userRepo, familyRepo)
 	categoryService := NewCategoryService(categoryRepo, familyRepo, usageChecker)
-	familyService := NewFamilyService(familyRepo, transactionRepo)
+	familyService := NewFamilyService(familyRepo)
 	transactionService := NewTransactionServiceWithLogger(
 		transactionRepo, budgetRepo, categoryRepo, userRepo, accountRepo, logger,
 	)
@@ -50,15 +53,16 @@ func NewServices(
 	statsService := NewStatsService(transactionService, budgetService, categoryService, familyService, transactionRepo)
 
 	return &Services{
-		User:        userService,
-		Family:      familyService,
-		Category:    categoryService,
-		Account:     NewAccountService(accountRepo),
-		Transaction: transactionService,
-		Budget:      budgetService,
-		Stats:       statsService,
-		Backup:      backupService,
-		Recognize:   NewRecognizeService(recognizer, familyRepo, categoryRepo, transactionRepo, recognizeObserver),
-		Auth:        authService,
+		User:           userService,
+		Family:         familyService,
+		Category:       categoryService,
+		Account:        NewAccountService(accountRepo),
+		Reconciliation: NewReconciliationService(reconciliationRepo, accountRepo, transactionRepo, familyRepo),
+		Transaction:    transactionService,
+		Budget:         budgetService,
+		Stats:          statsService,
+		Backup:         backupService,
+		Recognize:      NewRecognizeService(recognizer, familyRepo, categoryRepo, transactionRepo, recognizeObserver),
+		Auth:           authService,
 	}
 }
