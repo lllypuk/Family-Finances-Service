@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"family-budget-service/internal/domain/account"
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/date"
@@ -48,6 +49,11 @@ func CreateTestUser(_ uuid.UUID) *user.User {
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
+}
+
+// CreateTestAccount — активный счёт, ещё не записанный в базу.
+func CreateTestAccount(name string) *account.Account {
+	return &account.Account{ID: uuid.New(), Name: name}
 }
 
 // CreateTestCategory creates a test category

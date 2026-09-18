@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"family-budget-service/internal/domain/account"
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/date"
@@ -56,6 +57,15 @@ type CategoryService interface {
 	GetCategoryHierarchy(ctx context.Context) ([]*category.Category, error)
 	ValidateCategoryHierarchy(ctx context.Context, categoryID, parentID uuid.UUID) error
 	CheckCategoryUsage(ctx context.Context, categoryID uuid.UUID) (bool, error)
+}
+
+// AccountService — справочник счетов; id в Create — клиентский, nil — сгенерировать.
+type AccountService interface {
+	Create(ctx context.Context, id *uuid.UUID, name string) (*account.Account, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*account.Account, error)
+	List(ctx context.Context, includeArchived bool) ([]*account.Account, error)
+	Update(ctx context.Context, id uuid.UUID, name *string, archived *bool) (*account.Account, error)
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 // TransactionService defines business operations for transaction management

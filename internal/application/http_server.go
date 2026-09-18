@@ -42,6 +42,7 @@ type HTTPServer struct {
 	userHandler        *handlers.UserHandler
 	familyHandler      *handlers.FamilyHandler
 	categoryHandler    *handlers.CategoryHandler
+	accountHandler     *handlers.AccountHandler
 	transactionHandler *handlers.TransactionHandler
 	budgetHandler      *handlers.BudgetHandler
 	statsHandler       *handlers.StatsHandler
@@ -157,6 +158,7 @@ func NewHTTPServerWithObservability(
 		userHandler:        handlers.NewUserHandler(services.User, services.Auth),
 		familyHandler:      handlers.NewFamilyHandler(services.Family),
 		categoryHandler:    handlers.NewCategoryHandler(services.Category),
+		accountHandler:     handlers.NewAccountHandler(services.Account),
 		transactionHandler: handlers.NewTransactionHandler(services.Transaction),
 		budgetHandler:      handlers.NewBudgetHandler(repositories, services.Budget),
 		statsHandler:       handlers.NewStatsHandler(services.Stats),
@@ -253,6 +255,12 @@ func (s *HTTPServer) setupResourceRoutes(api *echo.Group) {
 	categories.GET("/:id", s.categoryHandler.GetCategoryByID)
 	categories.PUT("/:id", s.categoryHandler.UpdateCategory)
 	categories.DELETE("/:id", s.categoryHandler.DeleteCategory, adminOnly)
+
+	accounts := api.Group("/accounts", financeAccess)
+	accounts.GET("", s.accountHandler.ListAccounts)
+	accounts.POST("", s.accountHandler.CreateAccount)
+	accounts.PUT("/:id", s.accountHandler.UpdateAccount)
+	accounts.DELETE("/:id", s.accountHandler.DeleteAccount, adminOnly)
 
 	transactions := api.Group("/transactions", financeAccess)
 	transactions.POST("", s.transactionHandler.CreateTransaction)

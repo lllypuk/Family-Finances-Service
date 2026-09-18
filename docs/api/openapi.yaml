@@ -48,6 +48,8 @@ tags:
     description: Управление пользователями, только admin
   - name: categories
     description: Категории доходов и расходов
+  - name: accounts
+    description: Платёжные счета семьи для ежемесячной сверки расходов
   - name: transactions
     description: Операции семьи
   - name: budgets
@@ -463,6 +465,95 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/accounts:
+    get:
+      operationId: listAccounts
+      tags: [accounts]
+      summary: Счета семьи
+      description: admin и member. Порядок — по имени без учёта регистра.
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Offset' }
+        - name: archived
+          in: query
+          required: false
+          description: '`true` добавляет в список архивные счета'
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Список счетов
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Account' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    post:
+      operationId: createAccount
+      tags: [accounts]
+      summary: Создать счёт
+      description: |
+        admin и member. Повтор с тем же `id` возвращает `200` с существующим счётом; остальное тело
+        при этом игнорируется (A-07). Имя уникально в семье без учёта регистра и пробелов по краям,
+        архивный счёт его тоже занимает — `409 ACCOUNT_NAME_EXISTS`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAccountRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/AccountOk' }
+        '200': { $ref: '#/components/responses/AccountOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /api/v1/accounts/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/PathID' }
+    put:
+      operationId: updateAccount
+      tags: [accounts]
+      summary: Переименовать, архивировать или вернуть счёт
+      description: admin и member. Архивный счёт скрыт из списка без `?archived=true` и не назначается
+        новым операциям.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateAccountRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/AccountOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      operationId: deleteAccount
+      tags: [accounts]
+      summary: Удалить счёт
+      description: |
+        Только admin. Счёт с операциями или сверками не удаляется — `409 ACCOUNT_IN_USE`;
+        перевыпущенную карту архивируют.
+      responses:
+        '204': { description: Счёт удалён }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
 
   /api/v1/transactions:
     get:
@@ -1019,7 +1110,8 @@ components:
       description: |
         Состояние не допускает операцию: `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`,
         `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN`, `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`,
-        `BUDGET_BELOW_SPENT`, `BUDGET_ID_EXISTS`, `BUDGET_NOT_TAIL`
+        `BUDGET_BELOW_SPENT`, `BUDGET_ID_EXISTS`, `BUDGET_NOT_TAIL`, `ACCOUNT_NAME_EXISTS`,
+        `ACCOUNT_IN_USE`
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1052,6 +1144,11 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/CategoryOk' }
+    AccountOk:
+      description: Счёт
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/AccountOk' }
     TransactionOk:
       description: Транзакция
       content:
@@ -1163,6 +1260,12 @@ components:
       required: [data, meta]
       properties:
         data: { $ref: '#/components/schemas/Category' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    AccountOk:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/Account' }
         meta: { $ref: '#/components/schemas/Meta' }
     TransactionOk:
       type: object
@@ -1378,6 +1481,34 @@ components:
         color: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
         icon: { type: string }
 
+    Account:
+      type: object
+      required: [id, name, is_archived, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        is_archived: { type: boolean }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    CreateAccountRequest:
+      type: object
+      required: [name]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Необязательный клиентский UUID для идемпотентного повтора; тело повтора игнорируется (A-07)
+        name:
+          type: string
+          maxLength: 50
+          description: Пробелы по краям обрезаются; пустое после обрезки — `422`
+    UpdateAccountRequest:
+      type: object
+      minProperties: 1
+      description: Хотя бы одно поле обязательно
+      properties:
+        name: { type: string, maxLength: 50 }
+        is_archived: { type: boolean }
     Transaction:
       type: object
       required: [id, amount_minor, type, description, category_id, user_id, date, tags, created_at, updated_at]

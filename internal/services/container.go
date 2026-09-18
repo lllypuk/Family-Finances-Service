@@ -11,6 +11,7 @@ type Services struct {
 	User        UserService
 	Family      FamilyService
 	Category    CategoryService
+	Account     AccountService
 	Transaction TransactionService
 	Budget      BudgetService
 	Stats       StatsService
@@ -25,6 +26,7 @@ func NewServices(
 	userRepo UserRepository,
 	familyRepo FamilyRepository,
 	categoryRepo CategoryRepository,
+	accountRepo AccountRepository,
 	transactionRepo TransactionRepository,
 	budgetRepo BudgetRepositoryForTransactions,
 	fullBudgetRepo BudgetRepository,
@@ -49,6 +51,7 @@ func NewServices(
 		User:        userService,
 		Family:      familyService,
 		Category:    categoryService,
+		Account:     NewAccountService(accountRepo),
 		Transaction: transactionService,
 		Budget:      budgetService,
 		Stats:       statsService,

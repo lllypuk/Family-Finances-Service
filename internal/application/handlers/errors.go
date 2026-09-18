@@ -46,6 +46,12 @@ const (
 	ErrCodeBudgetIDExists = "BUDGET_ID_EXISTS"
 	// ErrCodeBudgetNotTail signals an operation on a stale tail: the series has already advanced.
 	ErrCodeBudgetNotTail = "BUDGET_NOT_TAIL"
+	// ErrCodeAccountNotFound signals that the requested account does not exist.
+	ErrCodeAccountNotFound = "ACCOUNT_NOT_FOUND"
+	// ErrCodeAccountNameExists signals an account name already taken, by an archived account too.
+	ErrCodeAccountNameExists = "ACCOUNT_NAME_EXISTS"
+	// ErrCodeAccountInUse signals a delete of an account referenced by transactions or reconciliations.
+	ErrCodeAccountInUse = "ACCOUNT_IN_USE"
 	// ErrCodeInvalidQueryParam маркирует деталь ошибки 422 по query-параметру.
 	ErrCodeInvalidQueryParam = "INVALID_QUERY_PARAM"
 	// ErrCodeInvalidBackupName signals a backup filename outside the `backup_*.db` pattern.
@@ -90,6 +96,10 @@ const (
 	ErrMessageBudgetBelowSpent       = "Budget amount is less than already spent"
 	ErrMessageBudgetIDExists         = "Budget id is already taken by a deleted budget"
 	ErrMessageBudgetNotTail          = "Budget has already advanced to the next period"
+	ErrMessageInvalidAccountID       = "Invalid account ID format"
+	ErrMessageAccountNotFound        = "Account not found"
+	ErrMessageAccountNameExists      = "Account with this name already exists"
+	ErrMessageAccountInUse           = "Account has transactions or reconciliations; archive it instead"
 	ErrMessageInvalidBackupName      = "Invalid backup filename"
 	ErrMessageBackupNotFound         = "Backup not found"
 	ErrMessageBackupFailed           = "Failed to create backup"

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/infrastructure/account"
 	"family-budget-service/internal/infrastructure/auth"
 	"family-budget-service/internal/infrastructure/budget"
 	"family-budget-service/internal/infrastructure/category"
@@ -19,6 +20,7 @@ func NewRepositoriesSQLite(db *sql.DB) *handlers.Repositories {
 		User:        userRepo,
 		Family:      user.NewSQLiteFamilyRepository(db, categoryRepo, userRepo),
 		Category:    categoryRepo,
+		Account:     account.NewSQLiteRepository(db),
 		Transaction: transaction.NewSQLiteRepository(db),
 		Budget:      budget.NewSQLiteRepository(db),
 		Session:     auth.NewSessionSQLiteRepository(db),

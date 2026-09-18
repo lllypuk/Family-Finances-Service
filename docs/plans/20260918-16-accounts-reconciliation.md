@@ -233,16 +233,16 @@ API (`financeAccess`, кроме помеченного):
 - Modify: `services/interfaces.go`, `services/container.go`, `infrastructure/repositories_sqlite.go`, `handlers/repositories.go`, `handlers/types.go`, `handlers/errors.go`, `application/http_server.go`, `internal/run.go`, `internal/testhelpers` (стенд, фабрика `CreateTestAccount`)
 - Modify: `docs/api/openapi.yaml`; `make -C android api-gen`
 
-- [ ] `internal/domain/names`: `Key(name)` + тест; домен: `Account`, `ErrNameExists`, `ErrInUse`, `ErrNotFound`
-- [ ] репозиторий: `Create`, `GetByID`, `List(includeArchived)`, `Update`, `Delete`; в `ErrNameExists` превращается только нарушение `name_key` (по тексту ошибки, как `budgets.id` у бюджетов), FK-нарушение при `DELETE` → `ErrInUse`
-- [ ] сервис: `Create`, `Update` пересчитывает `name_key`
-- [ ] handler: повтор по `id` — `respondClientID` до вызова сервиса (`categories.go:39`); `respondList` + `pageSlice`, `ignoreWritten(parsePagination)`; коды `ACCOUNT_NAME_EXISTS`, `ACCOUNT_IN_USE`
-- [ ] маршруты в группе `financeAccess`, `DELETE` — `adminOnly`
-- [ ] спека: новый тег `accounts`; `listAccounts`, `createAccount`, `updateAccount`, `deleteAccount`; схемы `Account`, `AccountOk` (+ `components/responses/AccountOk` — иначе генератор даст `InlineObject…`), `CreateAccountRequest`, `UpdateAccountRequest`; список — инлайновый объект с `ListMeta`, как у `listCategories`; коды `ACCOUNT_NAME_EXISTS`, `ACCOUNT_IN_USE` — в описание `components/responses/Conflict`; `npx @redocly/cli lint`
-- [ ] `dupl` включён и для handler'ов (порог 150 токенов): `accounts.go` и репозиторий не копировать с категорий целиком — общее выносить
-- [ ] unit-тесты: `names.Key` («Карта» = « карта »), репозиторий (уникальность, архив в списке), сервис, handler
-- [ ] интеграция: CRUD, архивный счёт скрыт без `?archived=true`, пустой `PUT` → `422`, повтор `POST` с тем же `id` → `200`, дубль имени → `409`, `member` не удаляет → `403`, без токена → `401`
-- [ ] `make fmt && make test && make lint`; `make -C android check`
+- [x] `internal/domain/names`: `Key(name)` + тест; домен: `Account`, `ErrNameExists`, `ErrInUse`, `ErrNotFound`
+- [x] репозиторий: `Create`, `GetByID`, `List(includeArchived)`, `Update`, `Delete`; в `ErrNameExists` превращается только нарушение `name_key` (по тексту ошибки, как `budgets.id` у бюджетов), FK-нарушение при `DELETE` → `ErrInUse`
+- [x] сервис: `Create`, `Update` (имя обрезается, `account.NormalizeName`); ➕ `name_key` пересчитывает репозиторий при каждой записи — рассинхрон с `name` невозможен
+- [x] handler: повтор по `id` — `respondClientID` до вызова сервиса (`categories.go:39`); `respondList` + `pageSlice`, `ignoreWritten(parsePagination)`; коды `ACCOUNT_NAME_EXISTS`, `ACCOUNT_IN_USE`
+- [x] маршруты в группе `financeAccess`, `DELETE` — `adminOnly`
+- [x] спека: новый тег `accounts`; `listAccounts`, `createAccount`, `updateAccount`, `deleteAccount`; схемы `Account`, `AccountOk` (+ `components/responses/AccountOk` — иначе генератор даст `InlineObject…`), `CreateAccountRequest`, `UpdateAccountRequest`; список — инлайновый объект с `ListMeta`, как у `listCategories`; коды `ACCOUNT_NAME_EXISTS`, `ACCOUNT_IN_USE` — в описание `components/responses/Conflict`; `npx @redocly/cli lint`
+- [x] `dupl` включён и для handler'ов (порог 150 токенов): `accounts.go` и репозиторий не копировать с категорий целиком — общее выносить
+- [x] unit-тесты: `names.Key` («Карта» = « карта »), репозиторий (уникальность, архив в списке), сервис, handler
+- [x] интеграция: CRUD, архивный счёт скрыт без `?archived=true`, пустой `PUT` → `422`, повтор `POST` с тем же `id` → `200`, дубль имени → `409`, `member` не удаляет → `403`, без токена → `401`
+- [x] `make fmt && make test && make lint`; `make -C android check`
 
 ### Task 4: `account_id` в операциях
 

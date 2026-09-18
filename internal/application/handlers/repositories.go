@@ -9,6 +9,7 @@ type Repositories struct {
 	User        UserRepository
 	Family      FamilyRepository
 	Category    CategoryRepository
+	Account     AccountRepository
 	Transaction TransactionRepository
 	Budget      BudgetRepository
 	Session     auth.SessionRepository
@@ -22,6 +23,9 @@ type FamilyRepository = services.FamilyRepository
 
 // CategoryRepository переиспользует сервисный контракт.
 type CategoryRepository = services.CategoryRepository
+
+// AccountRepository переиспользует сервисный контракт.
+type AccountRepository = services.AccountRepository
 
 // TransactionRepository переиспользует сервисный контракт.
 type TransactionRepository = services.TransactionRepository

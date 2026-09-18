@@ -1,3 +1,6 @@
+kotlin/tech/shatrov/familyfinances/core/api/Account.kt
+kotlin/tech/shatrov/familyfinances/core/api/AccountOk.kt
+kotlin/tech/shatrov/familyfinances/core/api/AccountsApi.kt
 kotlin/tech/shatrov/familyfinances/core/api/AuthApi.kt
 kotlin/tech/shatrov/familyfinances/core/api/Backup.kt
 kotlin/tech/shatrov/familyfinances/core/api/BackupsApi.kt
@@ -15,6 +18,7 @@ kotlin/tech/shatrov/familyfinances/core/api/CategoryOk.kt
 kotlin/tech/shatrov/familyfinances/core/api/CategoryShare.kt
 kotlin/tech/shatrov/familyfinances/core/api/CategoryType.kt
 kotlin/tech/shatrov/familyfinances/core/api/ChangePasswordRequest.kt
+kotlin/tech/shatrov/familyfinances/core/api/CreateAccountRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/CreateBackup201Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/CreateBudgetRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/CreateCategoryRequest.kt
@@ -30,6 +34,7 @@ kotlin/tech/shatrov/familyfinances/core/api/GetStatsMonthly200Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/GetStatsSummary200Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/Health.kt
 kotlin/tech/shatrov/familyfinances/core/api/HealthChecksValue.kt
+kotlin/tech/shatrov/familyfinances/core/api/ListAccounts200Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/ListBackups200Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/ListBudgets200Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/ListCategories200Response.kt
@@ -62,6 +67,7 @@ kotlin/tech/shatrov/familyfinances/core/api/Transaction.kt
 kotlin/tech/shatrov/familyfinances/core/api/TransactionOk.kt
 kotlin/tech/shatrov/familyfinances/core/api/TransactionType.kt
 kotlin/tech/shatrov/familyfinances/core/api/TransactionsApi.kt
+kotlin/tech/shatrov/familyfinances/core/api/UpdateAccountRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/UpdateBudgetRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/UpdateCategoryRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/UpdateFamilyRequest.kt

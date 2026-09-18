@@ -166,6 +166,25 @@ type CategoryResponse struct {
 	UpdatedAt time.Time  `json:"updated_at"`
 }
 
+type CreateAccountRequest struct {
+	ID   *uuid.UUID `json:"id,omitempty"`
+	Name string     `json:"name"         validate:"required,max=50"`
+}
+
+// UpdateAccountRequest — частичное обновление; пустое тело — 422.
+type UpdateAccountRequest struct {
+	Name       *string `json:"name,omitempty"        validate:"omitempty,max=50"`
+	IsArchived *bool   `json:"is_archived,omitempty"`
+}
+
+type AccountResponse struct {
+	ID         uuid.UUID `json:"id"`
+	Name       string    `json:"name"`
+	IsArchived bool      `json:"is_archived"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
 // CreateTransactionRequest represents the request payload for creating a new transaction.
 // Поля user_id здесь нет намеренно: автор записи берётся из сессии
 // (CreateTransaction читает её через auth.FromContext),
