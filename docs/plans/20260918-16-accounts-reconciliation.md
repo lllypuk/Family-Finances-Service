@@ -344,8 +344,8 @@ API (`financeAccess`, кроме помеченного):
 **Files:**
 - Modify: `android/CLAUDE.md`, `android/core/api/CLAUDE.md`
 
-- [ ] требование сервера `v0.6.0`; почему отвязка — флагом `clear_account` (`explicitNulls = false`)
-- [ ] `make -C android check`
+- [x] требование сервера `v0.6.0`; почему отвязка — флагом `clear_account` (`explicitNulls = false`)
+- [x] `make -C android check`
 
 ### Task 11: Verify acceptance criteria
 
