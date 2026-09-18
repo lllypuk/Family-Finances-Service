@@ -65,6 +65,7 @@ class AppScreenSaverTest {
             SettingsPage.UserPassword(target, visit),
             SettingsPage.Family(visit),
             SettingsPage.Backups(visit),
+            SettingsPage.Accounts(visit),
         )
 
         for (page in pages) {

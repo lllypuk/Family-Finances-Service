@@ -360,3 +360,38 @@ internal fun statsSummary(
     recent = recent,
     transactionsTotal = transactionsTotal,
 )
+
+internal const val CARD_ACCOUNT_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1"
+internal const val OLD_ACCOUNT_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2"
+
+/** Активная карта и перевыпущенная, ушедшая в архив. */
+internal const val ACCOUNTS_OK = """
+{"data":[
+{"id":"$CARD_ACCOUNT_ID","name":"Тинькофф","is_archived":false,
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"},
+{"id":"$OLD_ACCOUNT_ID","name":"Старая карта","is_archived":true,
+"created_at":"2026-09-01T10:00:00Z","updated_at":"2026-09-10T10:00:00Z"}],
+"meta":{"request_id":"r-70","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0",
+"pagination":{"limit":200,"offset":0,"total":2}}}
+"""
+
+internal const val ACCOUNTS_EMPTY = """
+{"data":[],"meta":{"request_id":"r-71","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0",
+"pagination":{"limit":200,"offset":0,"total":0}}}
+"""
+
+internal const val ACCOUNT_OK = """
+{"data":{"id":"$CARD_ACCOUNT_ID","name":"Тинькофф","is_archived":false,
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"},
+"meta":{"request_id":"r-72","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0"}}
+"""
+
+internal const val ACCOUNT_NAME_EXISTS_ERROR = """
+{"error":{"code":"ACCOUNT_NAME_EXISTS","message":"account name already exists"},
+"meta":{"request_id":"r-73","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0"}}
+"""
+
+internal const val ACCOUNT_IN_USE_ERROR = """
+{"error":{"code":"ACCOUNT_IN_USE","message":"account is in use"},
+"meta":{"request_id":"r-74","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0"}}
+"""

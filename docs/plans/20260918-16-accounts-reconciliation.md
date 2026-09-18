@@ -300,13 +300,14 @@ API (`financeAccess`, кроме помеченного):
 **Files:**
 - Modify: `android/core/api/…/ApiGraph.kt`, `ui/settings/SettingsRootScreen.kt`, `SettingsHost.kt`, `SettingsPage.kt`, `SettingsConflicts.kt`, `strings.xml`
 - Create: `ui/settings/AccountsScreen.kt`, `AccountsViewModel.kt`, `AccountEditScreen.kt` + тесты
+- ➕ форма — поверх списка в одной модели, как у категорий (`SettingsPage.Accounts` без отдельной страницы формы); архив/возврат уходят сразу и закрывают форму; иконки `ChevronDown`/`ChevronUp` в `AppIcons`
 
-- [ ] методы счетов и сверок в `ApiGraph`
-- [ ] список: активные, сворачиваемая группа архивных, пустое состояние с действием
-- [ ] создание и переименование (клиентский `id`), архив/возврат, удаление для admin; `409` → текст через `SettingsConflicts.kt`
-- [ ] `settings_error_currency_locked` (`strings.xml:171`): операции или сверки
-- [ ] тесты ViewModel: загрузка, создание, `ACCOUNT_NAME_EXISTS`, `ACCOUNT_IN_USE`; Compose-тесты: пустое состояние с кнопкой, подтверждение удаления счёта
-- [ ] `make -C android check`
+- [x] методы счетов и сверок в `ApiGraph`
+- [x] список: активные, сворачиваемая группа архивных, пустое состояние с действием
+- [x] создание и переименование (клиентский `id`), архив/возврат, удаление для admin; `409` → текст через `SettingsConflicts.kt`
+- [x] `settings_error_currency_locked` (`strings.xml:171`): операции или сверки
+- [x] тесты ViewModel: загрузка, создание, `ACCOUNT_NAME_EXISTS`, `ACCOUNT_IN_USE`; Compose-тесты: пустое состояние с кнопкой, подтверждение удаления счёта
+- [x] `make -C android check`
 
 ### Task 8: Клиент — счёт в операции, фильтре и распознавании
 

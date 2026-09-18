@@ -111,6 +111,7 @@ fun SettingsRootScreen(
         SettingsItem(R.string.settings_profile) { onOpen(SettingsPage.Profile()) }
         SettingsItem(R.string.settings_password) { onOpen(SettingsPage.Password()) }
         SettingsItem(R.string.settings_sessions) { onOpen(SettingsPage.Sessions()) }
+        SettingsItem(R.string.settings_accounts) { onOpen(SettingsPage.Accounts()) }
         if (session.isAdmin) {
             SettingsItem(R.string.settings_users) { onOpen(SettingsPage.Users()) }
             SettingsItem(R.string.settings_family) { onOpen(SettingsPage.Family()) }
