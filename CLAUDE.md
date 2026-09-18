@@ -361,9 +361,10 @@ with an action, password visibility — client only, the contract did not move; 
 Releases: server `v0.3.0` (plan 10), `v0.4.0` (plan 12) and `v0.5.0` (plan 14 — `/metrics`, the contract did
 not move), client `app-v0.6.0` — it needs a server of `v0.4.0` or newer (`recurring` is required in the
 generated model). Plan 11 is the client side of
-10: an "Обзор" screen over `summary` + `monthly`, and multi-select over transactions. Plan 15
-(`docs/plans/20260916-15-recognize-screenshots.md`) is screenshot recognition on both sides; its client is
-`0.7.0`, not tagged yet, and needs the server that has `POST /transactions/recognize`.
+10: an "Обзор" screen over `summary` + `monthly`, and multi-select over transactions. Plans 15 (screenshot
+recognition, client `0.7.0`) and 16 (accounts and the monthly reconciliation, server `v0.6.0`, client `0.8.0`)
+are done on both sides but not tagged yet; client `0.8.0` needs server `v0.6.0`, clients `0.6`/`0.7` keep
+working against it. Plan 17 (`docs/plans/20260918-17-holdings-net-worth.md`) is holdings and net worth.
 
 `docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates
 from it, and code and spec now match. **A registered route with no operation in the spec fails `make test`**
