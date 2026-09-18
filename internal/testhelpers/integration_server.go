@@ -22,6 +22,7 @@ import (
 	authrepo "family-budget-service/internal/infrastructure/auth"
 	budgetrepo "family-budget-service/internal/infrastructure/budget"
 	categoryrepo "family-budget-service/internal/infrastructure/category"
+	holdingrepo "family-budget-service/internal/infrastructure/holding"
 	reconciliationrepo "family-budget-service/internal/infrastructure/reconciliation"
 	transactionrepo "family-budget-service/internal/infrastructure/transaction"
 	userrepo "family-budget-service/internal/infrastructure/user"
@@ -93,6 +94,7 @@ func SetupHTTPServer(t *testing.T, opts ...ServerOption) *TestServer {
 		Budget:         budgetrepo.NewSQLiteRepository(db),
 		Category:       categoryRepo,
 		Account:        accountrepo.NewSQLiteRepository(db),
+		Holding:        holdingrepo.NewSQLiteRepository(db),
 		Reconciliation: reconciliationrepo.NewSQLiteRepository(db),
 		Transaction:    transactionrepo.NewSQLiteRepository(db),
 		Session:        authrepo.NewSessionSQLiteRepository(db),
@@ -128,6 +130,7 @@ func SetupHTTPServer(t *testing.T, opts ...ServerOption) *TestServer {
 		repos.Family,         // familyRepo
 		repos.Category,       // categoryRepo
 		repos.Account,        // accountRepo
+		repos.Holding,        // holdingRepo
 		repos.Reconciliation, // reconciliationRepo
 		repos.Transaction,    // transactionRepo
 		repos.Budget,         // budgetRepo for transactions

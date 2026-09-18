@@ -185,6 +185,37 @@ type AccountResponse struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
+type CreateHoldingRequest struct {
+	ID   *uuid.UUID `json:"id,omitempty"`
+	Name string     `json:"name"         validate:"required,max=50"`
+	Side string     `json:"side"         validate:"required,oneof=asset liability"`
+	Kind string     `json:"kind"         validate:"required"`
+}
+
+// UpdateHoldingRequest — частичное обновление; side здесь нет, присланный ключ игнорируется.
+type UpdateHoldingRequest struct {
+	Name       *string `json:"name,omitempty"        validate:"omitempty,max=50"`
+	Kind       *string `json:"kind,omitempty"`
+	IsArchived *bool   `json:"is_archived,omitempty"`
+}
+
+type HoldingResponse struct {
+	ID         uuid.UUID               `json:"id"`
+	Name       string                  `json:"name"`
+	Side       string                  `json:"side"`
+	Kind       string                  `json:"kind"`
+	IsArchived bool                    `json:"is_archived"`
+	Current    *HoldingCurrentResponse `json:"current"`
+	CreatedAt  time.Time               `json:"created_at"`
+	UpdatedAt  time.Time               `json:"updated_at"`
+}
+
+// HoldingCurrentResponse — последний снимок не позже сегодняшнего дня семьи.
+type HoldingCurrentResponse struct {
+	Date       date.Date   `json:"date"`
+	ValueMinor money.Minor `json:"value_minor"`
+}
+
 // ReconciliationRequest — полная замена сверки: без note заметка очищается.
 // BankExpenseMinor — указатель, иначе required отверг бы законный 0.
 type ReconciliationRequest struct {

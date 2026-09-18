@@ -3,7 +3,6 @@ package handlers
 import (
 	"errors"
 	"net/http"
-	"strconv"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
@@ -31,13 +30,9 @@ func (h *AccountHandler) ListAccounts(c echo.Context) error {
 		return ignoreWritten(pageErr)
 	}
 
-	includeArchived := false
-	if raw := c.QueryParam("archived"); raw != "" {
-		parsed, err := strconv.ParseBool(raw)
-		if err != nil {
-			return ignoreWritten(writeInvalidQueryParam(c, "archived", raw, "must be true or false"))
-		}
-		includeArchived = parsed
+	includeArchived, archivedErr := parseArchivedParam(c)
+	if archivedErr != nil {
+		return ignoreWritten(archivedErr)
 	}
 
 	all, err := h.accounts.List(c.Request().Context(), includeArchived)

@@ -418,3 +418,18 @@ func HandleIDParseError(c echo.Context, entityType string) error {
 		"Invalid "+strings.ToLower(entityType)+" ID format",
 	)
 }
+
+// parseArchivedParam читает ?archived=; мусор — 422, записанный здесь же (errResponseAlreadyWritten).
+func parseArchivedParam(c echo.Context) (bool, error) {
+	raw := c.QueryParam("archived")
+	if raw == "" {
+		return false, nil
+	}
+
+	parsed, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false, writeInvalidQueryParam(c, "archived", raw, "must be true or false")
+	}
+
+	return parsed, nil
+}

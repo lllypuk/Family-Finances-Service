@@ -220,14 +220,14 @@ API (`financeAccess`, кроме помеченного):
 - Modify: `services/interfaces.go`, `services/container.go`, `infrastructure/repositories_sqlite.go`, `handlers/repositories.go`, `handlers/types.go`, `handlers/errors.go`, `application/http_server.go`, `internal/run.go` (:123 — `NewServices`), `testhelpers/integration_server.go`, `testhelpers/factories.go`
 - Modify: `docs/api/openapi.yaml`; `make -C android api-gen`
 
-- [ ] домен: `Holding`, `Side`, `Kind`, `ValidKind(side, kind)`; имя — через `names.Key` (план 16)
-- [ ] репозиторий: CRUD; `List(includeArchived, today)` — одна строка на позицию, `LEFT JOIN` на последний снимок с `date <= today` (по `date`, не по `updated_at`), `ORDER BY name_key, id`; нарушение `name_key` → `ErrNameExists`
-- [ ] сервис берёт `FamilyRepository` (как `RecognizeService`, `container.go:56`) и считает `today = date.Today(family.Location())` — тот же источник нужен Task 3
-- [ ] handler: `respondClientID` до сервиса, `respondList` + `pageSlice` (`total` — до среза); маршруты в группе `financeAccess`, `DELETE` — `adminOnly`; `dupl` — не копировать `accounts.go` целиком
-- [ ] спека: `listHoldings`, `createHolding`, `updateHolding`, `deleteHolding`; схемы `Holding`, `HoldingCurrent`, запросы, `HoldingOk` + `components/responses/HoldingOk`; новый тег `holdings`; `side` — enum, `kind` — строка; `HOLDING_NAME_EXISTS` — в перечни 409 (`openapi.yaml:27-29`, `:1020-1022`)
-- [ ] unit-тесты: `ValidKind` по обеим сторонам, уникальность имени, архив в списке
-- [ ] интеграция: CRUD, у позиции без снимков `current: null`, архивная скрыта без `?archived=true`, повтор `POST` → `200`, `mortgage` у актива → `422`, `side` в `PUT` игнорируется, `member` не удаляет → `403`
-- [ ] `make fmt && make test && make lint`; `make -C android check`
+- [x] домен: `Holding`, `Side`, `Kind`, `ValidKind(side, kind)`; имя — через `names.Key` (план 16)
+- [x] репозиторий: CRUD; `List(includeArchived, today)` — одна строка на позицию, `LEFT JOIN` на последний снимок с `date <= today` (по `date`, не по `updated_at`), `ORDER BY name_key, id`; нарушение `name_key` → `ErrNameExists`
+- [x] сервис берёт `FamilyRepository` (как `RecognizeService`, `container.go:56`) и считает `today = date.Today(family.Location())` — тот же источник нужен Task 3
+- [x] handler: `respondClientID` до сервиса, `respondList` + `pageSlice` (`total` — до среза); маршруты в группе `financeAccess`, `DELETE` — `adminOnly`; `dupl` — не копировать `accounts.go` целиком
+- [x] спека: `listHoldings`, `createHolding`, `updateHolding`, `deleteHolding`; схемы `Holding`, `HoldingCurrent`, запросы, `HoldingOk` + `components/responses/HoldingOk`; новый тег `holdings`; `side` — enum, `kind` — строка; `HOLDING_NAME_EXISTS` — в перечни 409 (`openapi.yaml:27-29`, `:1020-1022`)
+- [x] unit-тесты: `ValidKind` по обеим сторонам, уникальность имени, архив в списке
+- [x] интеграция: CRUD, у позиции без снимков `current: null`, архивная скрыта без `?archived=true`, повтор `POST` → `200`, `mortgage` у актива → `422`, `side` в `PUT` игнорируется, `member` не удаляет → `403`
+- [x] `make fmt && make test && make lint`; `make -C android check`
 
 ### Task 3: Снимки стоимости
 

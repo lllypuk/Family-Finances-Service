@@ -10,6 +10,7 @@ import (
 	"family-budget-service/internal/domain/budget"
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/date"
+	"family-budget-service/internal/domain/holding"
 	"family-budget-service/internal/domain/money"
 	"family-budget-service/internal/domain/reconciliation"
 	"family-budget-service/internal/domain/transaction"
@@ -66,6 +67,27 @@ type AccountService interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*account.Account, error)
 	List(ctx context.Context, includeArchived bool) ([]*account.Account, error)
 	Update(ctx context.Context, id uuid.UUID, name *string, archived *bool) (*account.Account, error)
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+// HoldingService — справочник активов и пассивов; current считается на сегодня в зоне семьи.
+type HoldingService interface {
+	Create(
+		ctx context.Context,
+		id *uuid.UUID,
+		name string,
+		side holding.Side,
+		kind holding.Kind,
+	) (*holding.Holding, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*holding.Holding, error)
+	List(ctx context.Context, includeArchived bool) ([]*holding.Holding, error)
+	Update(
+		ctx context.Context,
+		id uuid.UUID,
+		name *string,
+		kind *holding.Kind,
+		archived *bool,
+	) (*holding.Holding, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 

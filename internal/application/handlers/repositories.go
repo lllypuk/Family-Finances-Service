@@ -10,6 +10,7 @@ type Repositories struct {
 	Family         FamilyRepository
 	Category       CategoryRepository
 	Account        AccountRepository
+	Holding        HoldingRepository
 	Reconciliation ReconciliationRepository
 	Transaction    TransactionRepository
 	Budget         BudgetRepository
@@ -27,6 +28,9 @@ type CategoryRepository = services.CategoryRepository
 
 // AccountRepository переиспользует сервисный контракт.
 type AccountRepository = services.AccountRepository
+
+// HoldingRepository переиспользует сервисный контракт.
+type HoldingRepository = services.HoldingRepository
 
 // ReconciliationRepository переиспользует сервисный контракт.
 type ReconciliationRepository = services.ReconciliationRepository

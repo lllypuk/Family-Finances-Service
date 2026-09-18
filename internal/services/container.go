@@ -12,6 +12,7 @@ type Services struct {
 	Family   FamilyService
 	Category CategoryService
 	Account  AccountService
+	Holding  HoldingService
 	// Reconciliation — сверки счетов и GET /stats/reconciliation.
 	Reconciliation ReconciliationService
 	Transaction    TransactionService
@@ -29,6 +30,7 @@ func NewServices(
 	familyRepo FamilyRepository,
 	categoryRepo CategoryRepository,
 	accountRepo AccountRepository,
+	holdingRepo HoldingRepository,
 	reconciliationRepo ReconciliationRepository,
 	transactionRepo TransactionRepository,
 	budgetRepo BudgetRepositoryForTransactions,
@@ -57,6 +59,7 @@ func NewServices(
 		Family:         familyService,
 		Category:       categoryService,
 		Account:        NewAccountService(accountRepo),
+		Holding:        NewHoldingService(holdingRepo, familyRepo),
 		Reconciliation: NewReconciliationService(reconciliationRepo, accountRepo, transactionRepo, familyRepo),
 		Transaction:    transactionService,
 		Budget:         budgetService,

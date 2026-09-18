@@ -52,6 +52,10 @@ const (
 	ErrCodeAccountNameExists = "ACCOUNT_NAME_EXISTS"
 	// ErrCodeAccountInUse signals a delete of an account referenced by transactions or reconciliations.
 	ErrCodeAccountInUse = "ACCOUNT_IN_USE"
+	// ErrCodeHoldingNotFound signals that the requested holding does not exist.
+	ErrCodeHoldingNotFound = "HOLDING_NOT_FOUND"
+	// ErrCodeHoldingNameExists signals a holding name already taken, by an archived holding too.
+	ErrCodeHoldingNameExists = "HOLDING_NAME_EXISTS"
 	// ErrCodeReconciliationNotFound signals that the account has no reconciliation for the month.
 	ErrCodeReconciliationNotFound = "RECONCILIATION_NOT_FOUND"
 	// ErrCodeInvalidQueryParam маркирует деталь ошибки 422 по query-параметру.
@@ -103,6 +107,9 @@ const (
 	ErrMessageAccountNameExists      = "Account with this name already exists"
 	ErrMessageAccountInUse           = "Account has transactions or reconciliations; archive it instead"
 	ErrMessageReconciliationNotFound = "Reconciliation not found"
+	ErrMessageInvalidHoldingID       = "Invalid holding ID format"
+	ErrMessageHoldingNotFound        = "Holding not found"
+	ErrMessageHoldingNameExists      = "Holding with this name already exists"
 	ErrMessageInvalidBackupName      = "Invalid backup filename"
 	ErrMessageBackupNotFound         = "Backup not found"
 	ErrMessageBackupFailed           = "Failed to create backup"
@@ -131,4 +138,6 @@ const (
 	fieldAccountID   = "account_id"
 	fieldClearAcct   = "clear_account"
 	fieldUnassigned  = "unassigned"
+	fieldSide        = "side"
+	fieldKind        = "kind"
 )

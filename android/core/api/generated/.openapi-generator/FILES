@@ -22,6 +22,7 @@ kotlin/tech/shatrov/familyfinances/core/api/CreateAccountRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/CreateBackup201Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/CreateBudgetRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/CreateCategoryRequest.kt
+kotlin/tech/shatrov/familyfinances/core/api/CreateHoldingRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/CreateTransactionRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/CreateUserRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/Error.kt
@@ -34,10 +35,16 @@ kotlin/tech/shatrov/familyfinances/core/api/GetStatsMonthly200Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/GetStatsSummary200Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/Health.kt
 kotlin/tech/shatrov/familyfinances/core/api/HealthChecksValue.kt
+kotlin/tech/shatrov/familyfinances/core/api/Holding.kt
+kotlin/tech/shatrov/familyfinances/core/api/HoldingCurrent.kt
+kotlin/tech/shatrov/familyfinances/core/api/HoldingOk.kt
+kotlin/tech/shatrov/familyfinances/core/api/HoldingSide.kt
+kotlin/tech/shatrov/familyfinances/core/api/HoldingsApi.kt
 kotlin/tech/shatrov/familyfinances/core/api/ListAccounts200Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/ListBackups200Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/ListBudgets200Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/ListCategories200Response.kt
+kotlin/tech/shatrov/familyfinances/core/api/ListHoldings200Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/ListMeta.kt
 kotlin/tech/shatrov/familyfinances/core/api/ListSessions200Response.kt
 kotlin/tech/shatrov/familyfinances/core/api/ListTransactions200Response.kt
@@ -77,6 +84,7 @@ kotlin/tech/shatrov/familyfinances/core/api/UpdateAccountRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/UpdateBudgetRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/UpdateCategoryRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/UpdateFamilyRequest.kt
+kotlin/tech/shatrov/familyfinances/core/api/UpdateHoldingRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/UpdateTransactionRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/UpdateUserRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/User.kt

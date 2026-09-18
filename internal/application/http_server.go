@@ -43,6 +43,7 @@ type HTTPServer struct {
 	familyHandler         *handlers.FamilyHandler
 	categoryHandler       *handlers.CategoryHandler
 	accountHandler        *handlers.AccountHandler
+	holdingHandler        *handlers.HoldingHandler
 	transactionHandler    *handlers.TransactionHandler
 	budgetHandler         *handlers.BudgetHandler
 	statsHandler          *handlers.StatsHandler
@@ -160,6 +161,7 @@ func NewHTTPServerWithObservability(
 		familyHandler:         handlers.NewFamilyHandler(services.Family),
 		categoryHandler:       handlers.NewCategoryHandler(services.Category),
 		accountHandler:        handlers.NewAccountHandler(services.Account),
+		holdingHandler:        handlers.NewHoldingHandler(services.Holding),
 		transactionHandler:    handlers.NewTransactionHandler(services.Transaction),
 		budgetHandler:         handlers.NewBudgetHandler(repositories, services.Budget),
 		statsHandler:          handlers.NewStatsHandler(services.Stats),
@@ -231,6 +233,15 @@ func (s *HTTPServer) setupRoutes() {
 	s.setupResourceRoutes(api)
 }
 
+// setupHoldingRoutes — активы и пассивы; удаление уносит историю снимков, поэтому только админ.
+func (s *HTTPServer) setupHoldingRoutes(api *echo.Group, financeAccess, adminOnly echo.MiddlewareFunc) {
+	holdings := api.Group("/holdings", financeAccess)
+	holdings.GET("", s.holdingHandler.ListHoldings)
+	holdings.POST("", s.holdingHandler.CreateHolding)
+	holdings.PUT("/:id", s.holdingHandler.UpdateHolding)
+	holdings.DELETE("/:id", s.holdingHandler.DeleteHolding, adminOnly)
+}
+
 // setupResourceRoutes — ролевая модель: управление пользователями — только админ,
 // финансовые разделы — админ и member. Удаление категории закрыто до админа:
 // через API оно необратимо и без подтверждения.
@@ -265,6 +276,8 @@ func (s *HTTPServer) setupResourceRoutes(api *echo.Group) {
 	accounts.DELETE("/:id", s.accountHandler.DeleteAccount, adminOnly)
 	accounts.PUT("/:id/reconciliations/:month", s.reconciliationHandler.PutReconciliation)
 	accounts.DELETE("/:id/reconciliations/:month", s.reconciliationHandler.DeleteReconciliation)
+
+	s.setupHoldingRoutes(api, financeAccess, adminOnly)
 
 	transactions := api.Group("/transactions", financeAccess)
 	transactions.POST("", s.transactionHandler.CreateTransaction)

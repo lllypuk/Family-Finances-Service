@@ -26,7 +26,7 @@ info:
     `VALIDATION_ERROR` (422 — тело или query-параметры не прошли проверку, поля в `error.details`),
     `SETUP_REQUIRED` / `CURRENCY_LOCKED` / `LAST_ADMIN` / `CANNOT_DEACTIVATE_SELF` /
     `EMAIL_TAKEN` / `BUDGET_OVERLAP` / `BUDGET_NAME_EXISTS` / `BUDGET_BELOW_SPENT` /
-    `BUDGET_ID_EXISTS` / `BUDGET_NOT_TAIL` (409),
+    `BUDGET_ID_EXISTS` / `BUDGET_NOT_TAIL` / `HOLDING_NAME_EXISTS` (409),
     `RATE_LIMITED` (429, с `Retry-After`), `INTERNAL_ERROR` (500),
     `RECOGNITION_FAILED` (502), `RECOGNITION_UNAVAILABLE` (503, `Retry-After`, когда известен).
   license:
@@ -50,6 +50,8 @@ tags:
     description: Категории доходов и расходов
   - name: accounts
     description: Платёжные счета семьи для ежемесячной сверки расходов
+  - name: holdings
+    description: Активы и пассивы семьи для расчёта чистого капитала
   - name: transactions
     description: Операции семьи
   - name: budgets
@@ -554,6 +556,99 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/v1/holdings:
+    get:
+      operationId: listHoldings
+      tags: [holdings]
+      summary: Активы и пассивы семьи
+      description: |
+        admin и member. Порядок — по имени без учёта регистра. `current` — последний снимок с датой не позже
+        сегодняшнего дня в часовом поясе семьи, `null` — снимков нет.
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Offset' }
+        - name: archived
+          in: query
+          required: false
+          description: '`true` добавляет в список архивные позиции'
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Список позиций
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Holding' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    post:
+      operationId: createHolding
+      tags: [holdings]
+      summary: Создать актив или пассив
+      description: |
+        admin и member. Повтор с тем же `id` возвращает `200` с существующей позицией; остальное тело
+        при этом игнорируется (A-07). Имя уникально в семье без учёта регистра и пробелов по краям,
+        архивная позиция его тоже занимает — `409 HOLDING_NAME_EXISTS`. `kind` не из списка своей
+        стороны — `422`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateHoldingRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/HoldingOk' }
+        '200': { $ref: '#/components/responses/HoldingOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /api/v1/holdings/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/PathID' }
+    put:
+      operationId: updateHolding
+      tags: [holdings]
+      summary: Переименовать, сменить вид, архивировать или вернуть позицию
+      description: |
+        admin и member. `side` не меняется: поля в запросе нет, присланное игнорируется. Архив только
+        прячет позицию из списка без `?archived=true` — в капитале она остаётся по своим снимкам;
+        прекращение стоимости — снимок `0`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateHoldingRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/HoldingOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      operationId: deleteHolding
+      tags: [holdings]
+      summary: Удалить позицию
+      description: |
+        Только admin. Снимки удаляются вместе с позицией, и прошлые значения капитала меняются — это
+        исправление ошибочно заведённой позиции. Проданное имущество — снимок `0` и архив.
+      responses:
+        '204': { description: Позиция удалена }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /api/v1/accounts/{id}/reconciliations/{month}:
     parameters:
@@ -1180,7 +1275,7 @@ components:
         Состояние не допускает операцию: `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`,
         `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN`, `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`,
         `BUDGET_BELOW_SPENT`, `BUDGET_ID_EXISTS`, `BUDGET_NOT_TAIL`, `ACCOUNT_NAME_EXISTS`,
-        `ACCOUNT_IN_USE`
+        `ACCOUNT_IN_USE`, `HOLDING_NAME_EXISTS`
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1218,6 +1313,11 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/AccountOk' }
+    HoldingOk:
+      description: Позиция
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/HoldingOk' }
     ReconciliationOk:
       description: Сверка
       content:
@@ -1345,6 +1445,12 @@ components:
       required: [data, meta]
       properties:
         data: { $ref: '#/components/schemas/Account' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    HoldingOk:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/Holding' }
         meta: { $ref: '#/components/schemas/Meta' }
     ReconciliationOk:
       type: object
@@ -1599,6 +1705,62 @@ components:
       description: Хотя бы одно поле обязательно
       properties:
         name: { type: string, maxLength: 50 }
+        is_archived: { type: boolean }
+    HoldingSide:
+      type: string
+      enum: [asset, liability]
+      description: Знак вклада в капитал; задаётся при создании и не меняется
+    HoldingKind:
+      type: string
+      description: |
+        Вид позиции. Активы — `cash`, `deposit`, `investment`, `property`, `vehicle`, `other`;
+        пассивы — `mortgage`, `loan`, `credit_card`, `other`. Не `enum`: список может расти, и
+        неизвестный вид клиент показывает как `other`.
+    Holding:
+      type: object
+      required: [id, name, side, kind, is_archived, current, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        side: { $ref: '#/components/schemas/HoldingSide' }
+        kind: { $ref: '#/components/schemas/HoldingKind' }
+        is_archived: { type: boolean }
+        current:
+          oneOf:
+            - { $ref: '#/components/schemas/HoldingCurrent' }
+            - { type: 'null' }
+          description: Последний снимок не позже сегодняшнего дня семьи; `null` — снимков нет
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    HoldingCurrent:
+      type: object
+      required: [date, value_minor]
+      properties:
+        date: { $ref: '#/components/schemas/CalendarDate' }
+        value_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          minimum: 0
+    CreateHoldingRequest:
+      type: object
+      required: [name, side, kind]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Необязательный клиентский UUID для идемпотентного повтора; тело повтора игнорируется (A-07)
+        name:
+          type: string
+          maxLength: 50
+          description: Пробелы по краям обрезаются; пустое после обрезки — `422`
+        side: { $ref: '#/components/schemas/HoldingSide' }
+        kind: { $ref: '#/components/schemas/HoldingKind' }
+    UpdateHoldingRequest:
+      type: object
+      minProperties: 1
+      description: Хотя бы одно поле обязательно; `side` не меняется
+      properties:
+        name: { type: string, maxLength: 50 }
+        kind: { $ref: '#/components/schemas/HoldingKind' }
         is_archived: { type: boolean }
     ReconciliationRequest:
       type: object
