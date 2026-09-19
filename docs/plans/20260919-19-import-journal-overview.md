@@ -320,11 +320,11 @@ overview`, чтение по индексу; строка другой длин�
 **Files:**
 - Modify: `android/gradle/libs.versions.toml`, `android/CLAUDE.md`, `docs/backlog.md`, `CLAUDE.md`
 
-- [ ] `appVersionName = "0.11.0"`, `appVersionCode = "11"`
-- [ ] `android/CLAUDE.md`: «Обзор» — не корень панели; `monthly` без параметров и почему; `RANGE` — состояние «открыт снаружи», расшифровка несёт даты `summary`; дельта — к отрезку той же длины; **пять** флагов устаревания
-- [ ] `docs/backlog.md:46`: «Обзор» закрыт, мультивыбор и `bulkDeleteTransactions` остаются
-- [ ] `CLAUDE.md`: «Releases» — фактические теги (`v0.8.0`, `app-v0.10.0`; `v0.5.0`–`v0.7.0` и `app-v0.6.0`–`app-v0.9.0` не нарезались: серверный тег выкатывает образ, на старый коммит его ставить нельзя); «Current direction» — план 19
-- [ ] `make -C android check`
+- [x] `appVersionName = "0.11.0"`, `appVersionCode = "11"`
+- [x] `android/CLAUDE.md`: «Обзор» — не корень панели; `monthly` без параметров и почему; `RANGE` — состояние «открыт снаружи», расшифровка несёт даты `summary`; дельта — к отрезку той же длины; **пять** флагов устаревания
+- [x] `docs/backlog.md:46`: «Обзор» закрыт, мультивыбор и `bulkDeleteTransactions` остаются
+- [x] `CLAUDE.md`: «Releases» — фактические теги (`v0.8.0`, `app-v0.10.0`; `v0.5.0`–`v0.7.0` и `app-v0.6.0`–`app-v0.9.0` не нарезались: серверный тег выкатывает образ, на старый коммит его ставить нельзя); «Current direction» — план 19
+- [x] `make -C android check`
 
 ### Task 9: Verify acceptance criteria
 
