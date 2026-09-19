@@ -191,6 +191,7 @@ func TestHoldingHandler_ErrorMapping(t *testing.T) {
 			assert.Equal(t, tt.code, resp.Error.Code)
 			if tt.field != "" {
 				assert.Equal(t, tt.field, resp.Error.Details[0].Field)
+				assert.NotContains(t, resp.Error.Details[0].Message, "failed to", "обёртка сервиса не уходит клиенту")
 			}
 		})
 	}

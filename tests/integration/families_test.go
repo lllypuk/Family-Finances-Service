@@ -180,6 +180,9 @@ func TestFamilyAPI_Integration(t *testing.T) {
 			`{"monthly_income_minor":0,"monthly_expense_minor":0}`)
 		require.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
 
+		// Валюта уже USD: смена обязана быть настоящей, иначе запирание не проверяется.
+		rec = do(t, http.MethodPut, `{"currency":"EUR"}`, adminAuth)
+		require.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
 		rec = do(t, http.MethodPut, `{"currency":"USD"}`, adminAuth)
 		require.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
 	})

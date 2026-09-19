@@ -138,13 +138,12 @@ private fun planTotal(active: List<HoldingRow>): PlanTotal? {
     val planned = active.map { it.holding }.filter { it.hasPlan }
     if (planned.isEmpty()) return null
     return PlanTotal(
-        incomeMinor = planned.sumOf { it.monthlyIncomeMinor ?: 0 },
-        expenseMinor = planned.sumOf { it.monthlyExpenseMinor ?: 0 },
+        incomeMinor = planned.sumOf { it.incomeMinor },
+        expenseMinor = planned.sumOf { it.expenseMinor },
         planned = planned.size,
         active = active.size,
     )
 }
 
-/** Сервер до `v0.8.0` полей плана не шлёт — это то же, что нули. */
 internal val Holding.hasPlan: Boolean
-    get() = (monthlyIncomeMinor ?: 0) > 0 || (monthlyExpenseMinor ?: 0) > 0
+    get() = incomeMinor > 0 || expenseMinor > 0

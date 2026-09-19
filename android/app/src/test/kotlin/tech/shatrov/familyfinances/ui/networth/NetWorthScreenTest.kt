@@ -38,6 +38,7 @@ import tech.shatrov.familyfinances.core.api.HoldingSide
 import tech.shatrov.familyfinances.theme.AppTheme
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.util.UUID
 
@@ -128,6 +129,68 @@ class NetWorthScreenTest {
             .onNodeWithText("+45\u00A0000,00\u00A0₽ · -8\u00A0300,00\u00A0₽ в мес · план от 03.2026")
             .assertExists()
         composeRule.onAllNodesWithText("в мес", substring = true).assertCountEquals(1)
+    }
+
+    @Test
+    fun planLineWithoutDateSkipsSeparatorAndUsesFamilyZone() {
+        val expenseOnly = flat.copy(monthlyExpenseMinor = 830_000L)
+        val dated = flat.copy(
+            id = UUID.fromString(MORTGAGE_ID),
+            name = "Вклад",
+            monthlyIncomeMinor = 4_500_000L,
+            planUpdatedAt = OffsetDateTime.parse("2026-03-31T22:00:00Z"),
+        )
+        setScreen(
+            NetWorthUiState.Ready(
+                assets = listOf(HoldingRow(expenseOnly, HoldingKind.PROPERTY), HoldingRow(dated, HoldingKind.PROPERTY)),
+                liabilities = emptyList(),
+                archived = emptyList(),
+                months = emptyList(),
+            ),
+            zone = ZoneId.of("Europe/Moscow"),
+        )
+
+        composeRule.onNodeWithText("-8\u00A0300,00\u00A0₽ в мес").assertExists()
+        composeRule.onNodeWithText("+45\u00A0000,00\u00A0₽ в мес · план от 04.2026").assertExists()
+    }
+
+    @Test
+    fun planTotalIsShownWithoutSeriesAndNamesCoverage() {
+        setScreen(
+            NetWorthUiState.Ready(
+                assets = listOf(HoldingRow(flat, HoldingKind.PROPERTY)),
+                liabilities = emptyList(),
+                archived = emptyList(),
+                months = emptyList(),
+                plan = PlanTotal(incomeMinor = 4_500_000L, expenseMinor = 8_300_000L, planned = 1, active = 3),
+            ),
+        )
+
+        composeRule.onNodeWithText(res.getString(R.string.net_worth_plan)).assertExists()
+        composeRule
+            .onNodeWithText("+45\u00A0000,00\u00A0₽ · -83\u00A0000,00\u00A0₽ = -38\u00A0000,00\u00A0₽")
+            .assertExists()
+        composeRule.onNodeWithText(res.getQuantityString(R.plurals.net_worth_plan_coverage, 3, 1, 3)).assertExists()
+    }
+
+    private fun setScreen(
+        state: NetWorthUiState.Ready,
+        zone: ZoneId = ZoneOffset.UTC,
+    ) {
+        composeRule.setContent {
+            AppTheme {
+                NetWorthScreen(
+                    state = state,
+                    currency = "RUB",
+                    today = today,
+                    zone = zone,
+                    onRetry = {},
+                    onAdd = {},
+                    onOpenValue = {},
+                    onEdit = {},
+                )
+            }
+        }
     }
 
     @Test

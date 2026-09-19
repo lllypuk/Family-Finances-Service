@@ -322,12 +322,12 @@ private fun PlanLine(
         ?.let { stringResource(R.string.net_worth_plan_row_dated, formatPlanMonth(it, actions.zone)) }
         ?: stringResource(R.string.net_worth_plan_row)
     val text = buildAnnotatedString {
-        holding.monthlyIncomeMinor?.takeIf { it > 0 }?.let {
+        holding.incomeMinor.takeIf { it > 0 }?.let {
             withStyle(SpanStyle(color = if (holding.isArchived) muted else colors.income)) {
                 append(formatMoney(it, actions.currency, true))
             }
         }
-        holding.monthlyExpenseMinor?.takeIf { it > 0 }?.let {
+        holding.expenseMinor.takeIf { it > 0 }?.let {
             if (length > 0) append(" · ")
             withStyle(SpanStyle(color = if (holding.isArchived) muted else colors.expense)) {
                 append(formatMoney(-it, actions.currency, true))

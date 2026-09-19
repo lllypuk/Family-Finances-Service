@@ -201,6 +201,7 @@ func parseHoldingValuePath(c echo.Context) (uuid.UUID, date.Date, error) {
 func respondHoldingError(c echo.Context, err error) error {
 	var (
 		field   string
+		message = err.Error()
 		planErr *holding.PlanError
 	)
 	switch {
@@ -221,13 +222,14 @@ func respondHoldingError(c echo.Context, err error) error {
 	case errors.Is(err, holding.ErrValueDateFuture):
 		field = fieldDate
 	case errors.As(err, &planErr):
-		field = planErr.Field
+		// На PUT ошибка приходит обёрнутой сервисом, а текст уходит клиенту в поле формы.
+		field, message = planErr.Field, planErr.Error()
 	default:
 		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 
 	return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
-		ErrorDetail{Field: field, Message: err.Error(), Code: ErrCodeValidationError})
+		ErrorDetail{Field: field, Message: message, Code: ErrCodeValidationError})
 }
 
 func toHoldingResponse(h *holding.Holding) HoldingResponse {

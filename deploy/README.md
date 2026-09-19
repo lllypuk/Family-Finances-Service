@@ -176,6 +176,9 @@ already exist, the rollback is a snapshot restore, not `migrate --to 2`.
 `006` (v0.7.0): `migrate --to 5` drops `holdings` and `holding_values` with the whole snapshot history.
 Once holdings are in use, roll back by snapshot restore.
 
+`007` (v0.8.0): `migrate --to 6` drops `holding_plans` — every holding's monthly plan is lost, holdings
+and snapshots stay.
+
 ## Backups
 
 `family-budget-service backup` runs `VACUUM INTO` against the live database and keeps the newest

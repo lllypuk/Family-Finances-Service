@@ -352,7 +352,15 @@ func TestHoldingRepository_Update_Plan(t *testing.T) {
 	assert.True(t, planAt.Equal(*got.Plan.UpdatedAt), "переименование и архив дату плана не двигают")
 	assert.Equal(t, money.Minor(7_000_000), got.Plan.MonthlyExpenseMinor)
 
-	require.NoError(t, repo.Update(t.Context(), h.ID, nil, nil, nil, minor(0), minor(0)))
+	require.NoError(t, repo.Update(t.Context(), h.ID, nil, nil, nil, minor(0), nil))
+	got, err = repo.GetByID(t.Context(), h.ID, today())
+	require.NoError(t, err)
+	assert.Equal(t, 1, planRows(t, db, h.ID), "один 0 при ненулевом втором строку не удаляет")
+	assert.Equal(t, money.Minor(0), got.Plan.MonthlyIncomeMinor)
+	assert.Equal(t, money.Minor(7_000_000), got.Plan.MonthlyExpenseMinor)
+	assert.True(t, got.Plan.UpdatedAt.After(planAt))
+
+	require.NoError(t, repo.Update(t.Context(), h.ID, nil, nil, nil, nil, minor(0)))
 	assert.Equal(t, 0, planRows(t, db, h.ID), "0/0 удаляет строку")
 	got, err = repo.GetByID(t.Context(), h.ID, today())
 	require.NoError(t, err)
