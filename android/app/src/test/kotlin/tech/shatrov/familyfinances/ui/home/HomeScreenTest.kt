@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
@@ -30,6 +31,8 @@ import tech.shatrov.familyfinances.ui.format.formatMonth
 import tech.shatrov.familyfinances.ui.format.formatPercent
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.ZoneId
+import java.util.UUID
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [ROBOLECTRIC_SDK])
@@ -42,6 +45,7 @@ class HomeScreenTest {
     private fun show(
         state: HomeUiState,
         onAddTransaction: () -> Unit = {},
+        onOverview: () -> Unit = {},
     ) {
         composeRule.setContent {
             AppTheme {
@@ -50,6 +54,7 @@ class HomeScreenTest {
                     onRetry = {},
                     onAddTransaction = onAddTransaction,
                     onSettings = {},
+                    onOverview = onOverview,
                 )
             }
         }
@@ -113,6 +118,24 @@ class HomeScreenTest {
         assertTrue(added)
     }
 
+    @Test
+    fun overviewRowOpensOverview() {
+        var opened = false
+        show(ready(statsSummary()), onOverview = { opened = true })
+
+        composeRule.onNodeWithText(res.getString(R.string.overview_title)).performClick()
+
+        assertTrue(opened)
+    }
+
+    // В пустом состоянии обзору нечего показать: вместо строки — кнопка добавить операцию.
+    @Test
+    fun emptyStateHasNoOverviewRow() {
+        show(ready(statsSummary(transactionsTotal = 0)))
+
+        composeRule.onAllNodesWithText(res.getString(R.string.overview_title)).assertCountEquals(0)
+    }
+
     // Без счетов карточка ведёт в «Счета», со счетами — на сверку своего месяца.
     @Test
     fun reconciliationCardLeadsToAccountsOrMonth() {
@@ -140,5 +163,113 @@ class HomeScreenTest {
         composeRule.onNodeWithText(res.getString(R.string.home_reconciliation_matched, 1, 3)).performClick()
         assertEquals(YearMonth.of(2026, 8), opened)
         composeRule.onNodeWithText(res.getString(R.string.home_reconciliation, "август")).assertIsDisplayed()
+    }
+
+    private val today = LocalDate.of(2026, 9, 19)
+
+    private val draft = ImportDraft(
+        importId = UUID.randomUUID(),
+        recognized = true,
+        rows = 5,
+        saved = 2,
+        images = 3,
+        updatedAt = today.atTime(14, 20).atZone(ZoneId.of("Europe/Moscow")),
+    )
+
+    private fun showDraft(
+        state: HomeUiState,
+        onResume: (UUID) -> Unit = {},
+        onDelete: () -> Unit = {},
+    ) {
+        composeRule.setContent {
+            AppTheme {
+                HomeScreen(
+                    state = state,
+                    onRetry = {},
+                    onAddTransaction = {},
+                    onSettings = {},
+                    importDraft = draft,
+                    onResumeImport = onResume,
+                    onDeleteImport = onDelete,
+                    today = today,
+                )
+            }
+        }
+    }
+
+    private fun draftDetails(): String {
+        val at = res.getString(R.string.home_import_today, "14:20")
+        return res.getQuantityString(R.plurals.home_import_rows, 5, 5, 2, at)
+    }
+
+    // Журнал локальный: плашка не ждёт сервера и не пропадает при его отказе.
+    @Test
+    fun importCardShowsOnLoadingFailureAndEmpty() {
+        var state by mutableStateOf<HomeUiState>(HomeUiState.Loading)
+        composeRule.setContent {
+            AppTheme {
+                HomeScreen(
+                    state = state,
+                    onRetry = {},
+                    onAddTransaction = {},
+                    onSettings = {},
+                    importDraft = draft,
+                    today = today,
+                )
+            }
+        }
+        composeRule.onNodeWithText(draftDetails()).assertIsDisplayed()
+
+        state = HomeUiState.Failure(UiError.Network)
+        composeRule.onNodeWithText(draftDetails()).assertIsDisplayed()
+
+        state = ready(statsSummary(transactionsTotal = 0))
+        composeRule.onNodeWithText(draftDetails()).assertIsDisplayed()
+        composeRule.onNodeWithText(res.getString(R.string.home_add_transaction)).assertIsDisplayed()
+    }
+
+    @Test
+    fun interruptedImportTalksAboutScreenshots() {
+        composeRule.setContent {
+            AppTheme {
+                HomeScreen(
+                    state = HomeUiState.Loading,
+                    onRetry = {},
+                    onAddTransaction = {},
+                    onSettings = {},
+                    importDraft = draft.copy(recognized = false),
+                    today = today,
+                )
+            }
+        }
+
+        composeRule.onNodeWithText(res.getQuantityString(R.plurals.home_import_interrupted, 3, 3)).assertIsDisplayed()
+    }
+
+    @Test
+    fun resumeOpensTheImport() {
+        var resumed: UUID? = null
+        showDraft(HomeUiState.Loading, onResume = { resumed = it })
+
+        composeRule.onNodeWithText(res.getString(R.string.home_import_resume)).performClick()
+
+        assertEquals(draft.importId, resumed)
+    }
+
+    @Test
+    fun deleteAsksForConfirmation() {
+        var deleted = 0
+        showDraft(HomeUiState.Loading, onDelete = { deleted++ })
+
+        composeRule.onNodeWithText(res.getString(R.string.home_import_delete)).performClick()
+        composeRule.onNodeWithText(res.getString(R.string.home_import_delete_confirm)).assertIsDisplayed()
+        assertEquals(0, deleted)
+
+        composeRule.onNodeWithText(res.getString(R.string.cancel)).performClick()
+        assertEquals(0, deleted)
+
+        composeRule.onNodeWithText(res.getString(R.string.home_import_delete)).performClick()
+        composeRule.onAllNodesWithText(res.getString(R.string.home_import_delete)).onLast().performClick()
+        assertEquals(1, deleted)
     }
 }

@@ -42,6 +42,7 @@ import tech.shatrov.familyfinances.ui.SegmentedChoice
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.format.formatMoney
 import tech.shatrov.familyfinances.ui.format.formatMonth
+import tech.shatrov.familyfinances.ui.format.formatPeriod
 import tech.shatrov.familyfinances.ui.groupedRow
 import tech.shatrov.familyfinances.ui.message
 import tech.shatrov.familyfinances.ui.recognize.ImportLaunchers
@@ -167,11 +168,16 @@ private fun Filters(
             modifier = Modifier.padding(horizontal = Dimens.SPACE_4),
         )
         ChipRow(Modifier.padding(horizontal = Dimens.SPACE_4)) {
-            // Месяц приходит только со сверки: своего чипа у него нет, а без этого выбранный
+            // Месяц и диапазон приходят только снаружи: своего чипа у них нет, а без этого выбранный
             // период не был бы виден ни в одном из трёх.
             val month = filters.month
             if (filters.period == TransactionPeriod.MONTH && month != null) {
                 item { Chip(formatMonth(month.atDay(1)), selected = true) {} }
+            }
+            val from = filters.from
+            val to = filters.to
+            if (filters.period == TransactionPeriod.RANGE && from != null && to != null) {
+                item { Chip(formatPeriod(from, to), selected = true) {} }
             }
             item {
                 Chip(stringResource(R.string.filter_all), filters.period == TransactionPeriod.ALL) {

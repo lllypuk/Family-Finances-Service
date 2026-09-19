@@ -30,6 +30,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import tech.shatrov.familyfinances.ACCOUNTS_EMPTY
 import tech.shatrov.familyfinances.ACCOUNTS_OK
 import tech.shatrov.familyfinances.CARD_ACCOUNT_ID
 import tech.shatrov.familyfinances.CATEGORIES_OK
@@ -68,6 +69,11 @@ private const val RECOGNIZE_OK = """
 "meta":{"request_id":"r-70","timestamp":"2026-09-16T10:00:00Z","version":"v0.5.0"}}
 """
 
+private const val RECOGNIZE_EMPTY = """
+{"data":{"items":[],"incomplete":false,"model":"gemma4:31b"},
+"meta":{"request_id":"r-71","timestamp":"2026-09-16T10:00:00Z","version":"v0.5.0"}}
+"""
+
 private const val UNAVAILABLE = """{"error":{"code":"RECOGNITION_UNAVAILABLE","message":"недоступно"}}"""
 
 private const val UPLOAD_TIMEOUT = """{"error":{"code":"REQUEST_TIMEOUT","message":"upload timed out"}}"""
@@ -90,17 +96,23 @@ class RecognizeViewModelTest {
     private lateinit var server: MockWebServer
     private lateinit var app: Application
     private lateinit var store: ImportStore
+    private lateinit var journals: ImportJournalStore
     private lateinit var importId: UUID
     private lateinit var model: RecognizeViewModel
+    private var owner = ViewModelStore()
     private val lastAccount = MemoryLastAccountStore()
+
+    // Запись журнала на нём же: к следующей строке теста она уже на диске.
+    private val main = UnconfinedTestDispatcher()
 
     @Before
     fun start() {
-        Dispatchers.setMain(UnconfinedTestDispatcher())
+        Dispatchers.setMain(main)
         server = MockWebServer()
         server.start()
         app = ApplicationProvider.getApplicationContext()
         store = ImportStore()
+        journals = ImportJournalStore(ImportFiles.filesRoot(app))
     }
 
     @After
@@ -121,14 +133,34 @@ class RecognizeViewModelTest {
 
     private fun junk(): Uri = Uri.fromFile(File(app.filesDir, "junk.txt").apply { writeText("не картинка") })
 
-    private fun newModel() = RecognizeViewModel(
-        app,
-        ApiGraph(server.url("/").toString(), FakeTokenVault(liveToken())),
-        store,
-        importId,
-        "RUB",
-        lastAccount,
-    )
+    private fun newModel(): RecognizeViewModel = ViewModelProvider(
+        owner,
+        viewModelFactory {
+            initializer {
+                RecognizeViewModel(
+                    app,
+                    ApiGraph(server.url("/").toString(), FakeTokenVault(liveToken())),
+                    store,
+                    journals,
+                    importId,
+                    "RUB",
+                    lastAccount,
+                    main,
+                )
+            }
+        },
+    )["recognize-$importId", RecognizeViewModel::class.java]
+
+    /** Смерть процесса: модель и память уходят, на диске остаётся то, что успело записаться. */
+    private fun restart() {
+        owner.clear()
+        owner = ViewModelStore()
+        store = ImportStore()
+        journals = ImportJournalStore(ImportFiles.filesRoot(app))
+        model = newModel()
+    }
+
+    private fun importDir() = File(app.filesDir, "import/$importId")
 
     private fun createModel(uris: List<Uri> = listOf(shot("a.png"), junk(), shot("b.png"))) {
         importId = store.offer(uris)
@@ -262,7 +294,7 @@ class RecognizeViewModelTest {
         store.claim(importId)
         model = newModel()
 
-        val failed = model.state.value.phase as RecognizePhase.Failure
+        val failed = reviewed().phase as RecognizePhase.Failure
         assertFalse(failed.retryable)
         assertEquals(0, server.requestCount)
     }
@@ -441,23 +473,275 @@ class RecognizeViewModelTest {
     }
 
     @Test
-    fun clearingModelDiscardsFilesAndReleasesHold() = runTest {
-        server.enqueueJson(200, CATEGORIES_OK)
-        server.enqueueJson(200, ACCOUNTS_OK)
-        server.enqueueJson(200, RECOGNIZE_OK)
-        importId = store.offer(listOf(shot("a.png")))
-        val owner = ViewModelStore()
-        model =
-            ViewModelProvider(owner, viewModelFactory { initializer { newModel() } })[RecognizeViewModel::class.java]
-        reviewed()
-        val dir = File(app.cacheDir, "import/$importId")
-        assertTrue(dir.exists())
+    fun clearingModelKeepsJournalAndReleasesHold() = runTest {
+        recognized()
+        assertTrue(File(importDir(), "journal.json").exists())
 
         owner.clear()
 
-        assertFalse(dir.exists())
+        assertTrue(File(importDir(), "journal.json").exists())
         val next = store.offer(emptyList())
         assertEquals(next, store.pending.value)
+    }
+
+    @Test
+    fun abandonDeletesImportDirectory() = runTest {
+        recognized()
+
+        model.abandon()
+        owner.clear()
+
+        assertFalse(importDir().exists())
+    }
+
+    @Test
+    fun savingEverySavableRowClosesJournalAndKeepsPreviews() = runTest {
+        val (_, salary, foreign) = recognized().map { it.draft }
+        model.onIncludedChange(salary, false)
+        model.onIncludedChange(foreign, false)
+        server.enqueueJson(201, TRANSACTION_OK)
+        model.save()
+        reviewed()
+
+        assertTrue(File(importDir(), "journal.json").exists())
+
+        model.onIncludedChange(salary, true)
+        model.onDateChange(salary, LocalDate.parse("2026-09-01"))
+        server.enqueueJson(201, TRANSACTION_OK)
+        model.save()
+        reviewed()
+
+        assertFalse(File(importDir(), "journal.json").exists())
+        assertTrue(File(importDir(), "0.jpg").exists())
+    }
+
+    @Test
+    fun unwrittenCheckpointSkipsPaidCall() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        importId = store.offer(listOf(shot("a.png")))
+        File(importDir(), "journal.json.tmp").mkdirs()
+        model = newModel()
+
+        val failed = reviewed().phase as RecognizePhase.Failure
+        assertTrue(failed.retryable)
+        assertEquals(UiError.Resource(R.string.recognize_error_journal), failed.error)
+        assertEquals(listOf("/api/v1/categories", "/api/v1/accounts"), requests().map { it.url.encodedPath })
+    }
+
+    @Test
+    fun emptyAnswerLeavesNoJournal() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        server.enqueueJson(200, RECOGNIZE_EMPTY)
+        createModel()
+
+        assertTrue(reviewed().phase is RecognizePhase.Review)
+        assertFalse(File(importDir(), "journal.json").exists())
+    }
+
+    @Test
+    fun importWithoutReadyImagesLeavesNoJournal() = runTest {
+        createModel(listOf(junk()))
+
+        val failed = reviewed().phase as RecognizePhase.Failure
+        assertEquals(UiError.Resource(R.string.recognize_no_images), failed.error)
+        assertFalse(File(importDir(), "journal.json").exists())
+    }
+
+    @Test
+    fun newImportDeletesOtherJournals() = runTest {
+        recognized()
+        val first = importDir()
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        server.enqueueJson(200, RECOGNIZE_OK)
+
+        createModel(listOf(shot("c.png")))
+        reviewed()
+
+        assertFalse(first.exists())
+        assertTrue(File(importDir(), "journal.json").exists())
+    }
+
+    @Test
+    fun deathBeforeCallRecognizesOnRestore() = runTest {
+        server.enqueueJson(500, INTERNAL_ERROR)
+        createModel()
+        assertTrue(reviewed().phase is RecognizePhase.Failure)
+
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        server.enqueueJson(200, RECOGNIZE_OK)
+        restart()
+        reviewed()
+
+        assertEquals(3, rows().size)
+        assertTrue(model.state.value.images[1] is ImportImage.Failed)
+        assertEquals(listOf(0, 2, null), rows().map { it.image })
+        assertEquals(
+            listOf("/api/v1/categories", "/api/v1/categories", "/api/v1/accounts", RECOGNIZE_PATH),
+            requests().map { it.url.encodedPath },
+        )
+    }
+
+    @Test
+    fun deathDuringCallIsRetriedOnlyOnTap() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        server.enqueueJson(503, UNAVAILABLE)
+        createModel()
+        reviewed()
+
+        restart()
+
+        val failed = reviewed().phase as RecognizePhase.Failure
+        assertTrue(failed.retryable)
+        assertEquals(UiError.Resource(R.string.recognize_error_interrupted), failed.error)
+        assertEquals(3, server.requestCount)
+        assertNull(store.pending.value)
+
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        server.enqueueJson(200, RECOGNIZE_OK)
+        model.retry()
+        reviewed()
+        assertEquals(3, rows().size)
+    }
+
+    @Test
+    fun restoredAnswerKeepsEditsWithoutPaidCall() = runTest {
+        val (shawarma, salary) = recognized().map { it.draft }
+        model.onDescriptionChange(shawarma, "Шавуха большая")
+        model.onDateChange(salary, LocalDate.parse("2026-09-01"))
+        model.onIncludedChange(salary, false)
+        model.onAccountChange(UUID.fromString(CARD_ACCOUNT_ID))
+        val before = rows()
+        val served = server.requestCount
+
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        restart()
+        val state = reviewed()
+
+        assertEquals(before, rows())
+        assertTrue(state.incomplete)
+        assertEquals(UUID.fromString(CARD_ACCOUNT_ID), state.accountId)
+        assertEquals(
+            listOf("/api/v1/categories", "/api/v1/accounts"),
+            requests().drop(served).map { it.url.encodedPath },
+        )
+    }
+
+    @Test
+    fun restoredCatalogFailureRetriesWithoutPaidCall() = runTest {
+        recognized()
+        val served = server.requestCount
+
+        server.enqueueJson(403, VALIDATION_ERROR)
+        restart()
+        val failed = reviewed().phase as RecognizePhase.Failure
+        assertTrue(failed.retryable)
+
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        model.retry()
+        reviewed()
+
+        assertEquals(3, rows().size)
+        assertTrue(requests().drop(served).none { it.url.encodedPath == RECOGNIZE_PATH })
+    }
+
+    @Test
+    fun restoredAccountThatIsGoneIsDropped() = runTest {
+        recognized()
+        model.onAccountChange(UUID.fromString(CARD_ACCOUNT_ID))
+
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_EMPTY)
+        restart()
+
+        assertNull(reviewed().accountId)
+    }
+
+    @Test
+    fun interruptedSaveResendsSameDraftAndTakesServerFields() = runTest {
+        val draft = recognized()[0].draft
+        server.enqueue(
+            MockResponse.Builder()
+                .body(TRANSACTION_OK)
+                .setHeader("Content-Type", "application/json")
+                .headersDelay(30, TimeUnit.SECONDS)
+                .build(),
+        )
+        model.save()
+        model.state.first { state ->
+            (state.phase as RecognizePhase.Review).rows[0].status == RowStatus.Saving
+        }
+
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        restart()
+        reviewed()
+        assertEquals(RowStatus.Failed(UiError.Resource(R.string.recognize_row_interrupted)), rows()[0].status)
+        assertEquals(draft, rows()[0].draft)
+
+        server.enqueueJson(200, TRANSACTION_OK)
+        model.retryRow(draft)
+        reviewed()
+
+        val row = rows()[0]
+        assertEquals(RowStatus.Saved, row.status)
+        assertEquals("Кофе", row.description)
+        assertEquals(150000L, row.amountMinor)
+        val posts = requests().filter { it.url.encodedPath == TRANSACTIONS_PATH }
+        assertEquals(2, posts.size)
+        assertTrue(posts.all { it.text().contains("\"id\":\"$draft\"") })
+    }
+
+    @Test
+    fun restoredSavedRowKeepsServerFieldsAndLocksAccount() = runTest {
+        val draft = recognized()[0].draft
+        server.enqueueJson(200, TRANSACTION_OK)
+        model.retryRow(draft)
+        reviewed()
+
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        restart()
+        val state = reviewed()
+
+        val row = rows()[0]
+        assertEquals(RowStatus.Saved, row.status)
+        assertEquals("Кофе", row.description)
+        assertEquals(150000L, row.amountMinor)
+        assertEquals(1, state.savedCount)
+        assertTrue(state.accountLocked)
+    }
+
+    // `null` в журнале с ответом — выбор пользователя, а не повод взять прошлый счёт.
+    @Test
+    fun restoredNoAccountDoesNotFallBackToLast() = runTest {
+        lastAccount.write(UUID.fromString(CARD_ACCOUNT_ID))
+        recognized()
+        model.onAccountChange(null)
+
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        restart()
+
+        assertNull(reviewed().accountId)
+    }
+
+    @Test
+    fun missingJournalIsLostImport() = runTest {
+        importId = UUID.randomUUID()
+        model = newModel()
+
+        val failed = reviewed().phase as RecognizePhase.Failure
+        assertEquals(UiError.Resource(R.string.recognize_import_lost), failed.error)
+        assertEquals(0, server.requestCount)
+        assertNull(store.pending.value)
     }
 
     @Test

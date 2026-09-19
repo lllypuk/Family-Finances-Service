@@ -9,6 +9,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+apply(plugin = "org.jetbrains.kotlin.plugin.serialization")
+
 // Подпись: путь и пароль приходят снаружи — с ноутбука через Makefile, в CI из защищённых
 // переменных. Файл в дерево репозитория не кладётся никогда.
 val keystorePath: String? = System.getenv("FFS_KEYSTORE_PATH")
@@ -107,6 +109,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.serialization.json)
 
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)

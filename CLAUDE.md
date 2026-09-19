@@ -371,21 +371,19 @@ reference): `docs/README.md` (navigation), `docs/product_brief.md`, `docs/tech_s
 status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the finished ones.
 
 **Current direction:** `docs/specs/005-api-only-redesign.md` — the service is an API-only backend for an
-Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–10 and 12–14 are
+Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–10 and 12–18 are
 done (`docs/plans/completed/`, 06 = the Android client, 07 = its budgets tab, 08 = its settings screen,
 09 = the server findings of 07–08, 10 = `/reports` removed and `GET /stats/monthly` added, 12 = recurring
 budgets, both sides, 13 = the client's UI audit: segments instead of chips, a FAB on "Операции", empty states
 with an action, password visibility — client only, the contract did not move; 14 = the `/metrics` listener).
-Releases: server `v0.3.0` (plan 10), `v0.4.0` (plan 12) and `v0.5.0` (plan 14 — `/metrics`, the contract did
-not move), client `app-v0.6.0` — it needs a server of `v0.4.0` or newer (`recurring` is required in the
-generated model). Plan 11 is the client side of
-10: an "Обзор" screen over `summary` + `monthly`, and multi-select over transactions. Plans 15 (screenshot
-recognition, client `0.7.0`), 16 (accounts and the monthly reconciliation, server `v0.6.0`, client `0.8.0`),
-17 (holdings and net worth, server `v0.7.0`, client `0.9.0`) and 18 (a holding's monthly plan, server `v0.8.0`,
-client `0.10.0`) are done on both sides but not tagged yet; each client needs the server of its plan to show
-that plan's feature, older clients keep working against a newer server. Before tagging `v0.7.0` and `v0.8.0`,
-step a copy of the prod database `migrate --to 6` → `--to 5` → `--to 6` and `--to 7` → `--to 6` → `--to 7`
-(plans 17 and 18 ran it on a local copy only).
+Tagged releases: server `v0.3.0` (plan 10), `v0.4.0` (plan 12), `v0.8.0` (plans 14–18), client up to
+`app-v0.5.0`, then `app-v0.10.0` (client side of plans 13–18). `v0.5.0`–`v0.7.0` and `app-v0.6.0`–`app-v0.9.0` were never cut
+and will not be: a server tag deploys its image, so it cannot go on an old commit. Plans 15 (screenshot
+recognition), 16 (accounts and the monthly reconciliation), 17 (holdings and net worth) and 18 (a holding's
+monthly plan) shipped together in `v0.8.0`/`app-v0.10.0`; older clients keep working against a newer server.
+Plan 19 (client `0.11.0`, contract untouched) closes half of plan 11: a journal that lets an unfinished
+screenshot import survive process death, and the "Обзор" screen over `summary` + `monthly`; multi-select over
+transactions and `bulkDeleteTransactions` remain.
 
 `docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates
 from it, and code and spec now match. **A registered route with no operation in the spec fails `make test`**

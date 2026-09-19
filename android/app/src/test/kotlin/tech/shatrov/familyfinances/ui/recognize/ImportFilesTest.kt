@@ -116,12 +116,12 @@ class ImportFilesTest {
         assertTrue(result.images[2] is ImportImage.Ready)
     }
 
-    // Файл на месте каталога: запись падает так же, как после `discard` посреди пережатия.
+    // Файл на месте каталога: запись падает так же, как после удаления каталога посреди пережатия.
     @Test
     fun unwritableTargetFailsRowWithoutThrowing() = runTest {
         val importId = UUID.randomUUID()
-        File(context.cacheDir, "import").mkdirs()
-        File(context.cacheDir, "import/$importId").writeText("x")
+        File(context.filesDir, "import").mkdirs()
+        File(context.filesDir, "import/$importId").writeText("x")
         val png = Uri.fromFile(image("a.png", 40, 40, Bitmap.CompressFormat.PNG))
 
         val result = ImportFiles.prepare(context, importId, listOf(png))
@@ -130,14 +130,9 @@ class ImportFilesTest {
     }
 
     @Test
-    fun sweepKeepsOnlyFreshCameraShots() = runTest {
-        val importId = UUID.randomUUID()
-        val left = ImportFiles.prepare(
-            context,
-            importId,
-            listOf(Uri.fromFile(image("left.png", 40, 40, Bitmap.CompressFormat.PNG))),
-        )
-        val leftFile = (left.images.single() as ImportImage.Ready).file
+    fun sweepKeepsOnlyFreshCameraShotsInCache() = runTest {
+        val legacy = File(context.cacheDir, "import/${UUID.randomUUID()}").apply { mkdirs() }
+        File(legacy, "0.jpg").writeText("x")
         val camera = File(context.cacheDir, "import/camera").apply { mkdirs() }
         val now = System.currentTimeMillis()
         val stale = File(camera, "stale.jpg").apply { writeText("x") }.apply { setLastModified(now - 2 * DAY_MS) }
@@ -145,24 +140,43 @@ class ImportFilesTest {
 
         ImportFiles.sweep(context, now)
 
-        assertFalse(leftFile.parentFile!!.exists())
+        assertFalse(legacy.exists())
         assertFalse(stale.exists())
         assertTrue(fresh.exists())
     }
 
     @Test
-    fun discardRemovesImportDirectory() = runTest {
-        val importId = UUID.randomUUID()
-        val result = ImportFiles.prepare(
-            context,
-            importId,
-            listOf(Uri.fromFile(image("a.png", 40, 40, Bitmap.CompressFormat.PNG))),
+    fun sweepKeepsOnlyImportsWithLiveJournal() = runTest {
+        val now = System.currentTimeMillis()
+        val journals = ImportJournalStore(ImportFiles.filesRoot(context)) { now }
+        suspend fun prepared(): UUID {
+            val id = UUID.randomUUID()
+            ImportFiles.prepare(context, id, listOf(Uri.fromFile(image("$id.png", 40, 40, Bitmap.CompressFormat.PNG))))
+            return id
+        }
+        fun journal(
+            id: UUID,
+            updatedAt: Long = now,
+            version: Int = JOURNAL_VERSION,
+        ) = journals.write(
+            ImportJournal(version, id.toString(), updatedAt, emptyList(), 0, false, null, null, emptyList(), 0),
         )
 
-        ImportFiles.discard(context, importId)
+        val live = prepared().also { journal(it) }
+        val bare = prepared()
+        val expired = prepared().also { journal(it, updatedAt = now - 2 * DAY_MS) }
+        val foreign = prepared().also { journal(it, version = JOURNAL_VERSION + 1) }
+        val garbage = prepared().also { dir(it).resolve("journal.json").writeText("{") }
+        val stray = File(ImportFiles.filesRoot(context), "stray").apply { writeText("x") }
 
-        assertFalse((result.images.single() as ImportImage.Ready).file.parentFile!!.exists())
+        ImportFiles.sweep(context, now)
+
+        assertTrue(dir(live).resolve("0.jpg").exists())
+        listOf(bare, expired, foreign, garbage).forEach { assertFalse(it.toString(), dir(it).exists()) }
+        assertFalse(stray.exists())
     }
+
+    private fun dir(id: UUID) = File(context.filesDir, "import/$id")
 
     @Test
     fun cameraUriGoesThroughFileProvider() {
@@ -171,6 +185,7 @@ class ImportFilesTest {
         assertEquals("content", uri.scheme)
         assertEquals(ImportFiles.authority(context), uri.authority)
         assertTrue(uri.path!!.startsWith("/camera/"))
+        assertTrue(File(context.cacheDir, "import/camera").isDirectory)
     }
 
     private companion object {

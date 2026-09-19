@@ -4,9 +4,12 @@ import androidx.compose.runtime.saveable.SaverScope
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import tech.shatrov.familyfinances.core.api.HoldingSide
+import tech.shatrov.familyfinances.core.api.TransactionType
+import tech.shatrov.familyfinances.ui.overview.OverviewPeriod
 import tech.shatrov.familyfinances.ui.settings.SettingsPage
 import tech.shatrov.familyfinances.ui.transactions.TransactionFilters
 import tech.shatrov.familyfinances.ui.transactions.TransactionPeriod
+import java.time.LocalDate
 import java.time.YearMonth
 import java.util.UUID
 
@@ -21,6 +24,7 @@ class AppScreenSaverTest {
     fun rootScreensSurviveRoundTrip() {
         for (screen in listOf(
             AppScreen.Home,
+            AppScreen.Overview(),
             AppScreen.Transactions(),
             AppScreen.Categories,
             AppScreen.Budgets,
@@ -123,6 +127,36 @@ class AppScreenSaverTest {
         }
     }
 
+    // Без категории после поворота расшифровка «Обзора» показала бы все операции диапазона,
+    // без периода «назад» вернуло бы в «Обзор» на другом чипе.
+    @Test
+    fun transactionsKeepOverviewRangeCategoryAndPeriod() {
+        val screen = AppScreen.Transactions(
+            TransactionFilters.overview(
+                TransactionType.expense,
+                UUID.fromString(COFFEE_ID),
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 9, 19),
+            ),
+            overview = OverviewPeriod.ThreeMonths,
+        )
+        assertEquals(screen, roundTrip(screen))
+    }
+
+    @Test
+    fun overviewKeepsEveryPeriod() {
+        for (period in OverviewPeriod.chips + OverviewPeriod.Month(YearMonth.of(2026, 8))) {
+            val screen = AppScreen.Overview(period)
+            assertEquals(screen, roundTrip(screen))
+        }
+    }
+
+    @Test
+    fun transactionsFromOldBundleLoad() {
+        assertEquals(AppScreen.Loading, AppScreenSaver.restore("transactions:MONTH:2026-08:expense::true:2026-08"))
+        assertEquals(AppScreen.Loading, AppScreenSaver.restore("transactions:ALL:::::false:::"))
+    }
+
     @Test
     fun settingsPagesSurviveRoundTrip() {
         val visit = UUID.fromString(FOOD_BUDGET_ID)
@@ -162,6 +196,7 @@ class AppScreenSaverTest {
             "budget-edit:x:y",
             "transactions:MONTH:2026-08",
             "reconciliation:август",
+            "overview:WEEK",
         )
         for (key in keys) {
             assertEquals(AppScreen.Loading, AppScreenSaver.restore(key))

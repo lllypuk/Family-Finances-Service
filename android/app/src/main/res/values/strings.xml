@@ -29,6 +29,34 @@
     <string name="home_reconciliation">Сверка · %1$s</string>
     <string name="home_reconciliation_matched">%1$d из %2$d</string>
     <string name="home_reconciliation_no_accounts">Заведите счета, чтобы сверять</string>
+    <string name="overview_title">Обзор</string>
+    <string name="overview_this_month">Этот месяц</string>
+    <string name="overview_prev_month">Прошлый</string>
+    <string name="overview_three_months">3 мес</string>
+    <string name="overview_year">Год</string>
+    <string name="overview_delta_caption">к предыдущему периоду той же длины</string>
+    <string name="overview_empty">За период операций нет</string>
+    <string name="overview_expense_categories">Расходы по категориям</string>
+    <string name="overview_income_categories">Доходы по категориям</string>
+    <string name="overview_bar_description">%1$s: доход %2$s, расход %3$s</string>
+    <string name="home_import_title">Незавершённый импорт</string>
+    <plurals name="home_import_rows">
+        <item quantity="one">%1$d строка, сохранено %2$d · %3$s</item>
+        <item quantity="few">%1$d строки, сохранено %2$d · %3$s</item>
+        <item quantity="many">%1$d строк, сохранено %2$d · %3$s</item>
+        <item quantity="other">%1$d строки, сохранено %2$d · %3$s</item>
+    </plurals>
+    <plurals name="home_import_interrupted">
+        <item quantity="one">Распознавание прервано · %1$d скриншот</item>
+        <item quantity="few">Распознавание прервано · %1$d скриншота</item>
+        <item quantity="many">Распознавание прервано · %1$d скриншотов</item>
+        <item quantity="other">Распознавание прервано · %1$d скриншота</item>
+    </plurals>
+    <string name="home_import_today">сегодня %1$s</string>
+    <string name="home_import_yesterday">вчера %1$s</string>
+    <string name="home_import_resume">Продолжить</string>
+    <string name="home_import_delete">Удалить</string>
+    <string name="home_import_delete_confirm">Удалить незавершённый импорт? Повторное распознавание — новый платный вызов</string>
     <string name="reconciliation_title">Сверка</string>
     <string name="reconciliation_prev_month">Предыдущий месяц</string>
     <string name="reconciliation_next_month">Следующий месяц</string>
@@ -290,6 +318,9 @@
     <string name="sign_out">Выйти</string>
     <string name="loading">Загрузка…</string>
 
+    <string name="recognize_error_interrupted">Распознавание прервано: неизвестно, дошёл ли запрос. Повтор — новый платный вызов</string>
+    <string name="recognize_error_journal">Не удалось записать импорт на диск — освободите место и повторите</string>
+    <string name="recognize_row_interrupted">Сохранение прервано — повторите</string>
     <string name="recognize_import_lost">Картинки потерялись — поделитесь ими ещё раз</string>
     <string name="recognize_no_images">Ни одну картинку не удалось прочитать</string>
     <string name="recognize_title">Распознавание</string>
