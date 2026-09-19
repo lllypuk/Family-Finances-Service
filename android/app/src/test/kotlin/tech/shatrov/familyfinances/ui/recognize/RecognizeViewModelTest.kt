@@ -87,6 +87,11 @@ private const val ROW_INVALID = """
 private const val RECOGNIZE_PATH = "/api/v1/transactions/recognize"
 private const val TRANSACTIONS_PATH = "/api/v1/transactions"
 
+// Справочники и распознавание — то, что `recognized()` уже отправил.
+private const val RECOGNIZED_REQUESTS = 3
+private const val REQUEST_WAIT_SECONDS = 20L
+private const val REQUEST_POLL_MILLIS = 10L
+
 // Нативная графика нужна ImportFiles: без неё Robolectric не кодирует JPEG.
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -173,6 +178,18 @@ class RecognizeViewModelTest {
 
     private fun rows(): List<RecognizedRow> = (model.state.value.phase as RecognizePhase.Review).rows
 
+    /** Модель отпускает импорт уже после публикации состояния: `pending` дожидаются, а не читают сразу. */
+    private suspend fun pending(): UUID? = store.pending.first { it != null }
+
+    /** Пока запрос не дошёл до сервера, отложенный ответ из очереди достанется следующему. */
+    private fun awaitRequests(count: Int) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(REQUEST_WAIT_SECONDS)
+        while (server.requestCount < count) {
+            check(System.nanoTime() < deadline) { "сервер получил ${server.requestCount} из $count запросов" }
+            Thread.sleep(REQUEST_POLL_MILLIS)
+        }
+    }
+
     private fun requests(): List<RecordedRequest> = (1..server.requestCount).map { server.takeRequest() }
 
     private fun RecordedRequest.text(): String = body?.utf8().orEmpty()
@@ -225,7 +242,7 @@ class RecognizeViewModelTest {
         server.enqueueJson(201, TRANSACTION_OK)
         model.save()
         reviewed()
-        assertEquals(next, store.pending.value)
+        assertEquals(next, pending())
     }
 
     @Test
@@ -234,7 +251,7 @@ class RecognizeViewModelTest {
 
         val next = store.offer(listOf(shot("c.png")))
 
-        assertEquals(next, store.pending.value)
+        assertEquals(next, pending())
     }
 
     @Test
@@ -438,7 +455,7 @@ class RecognizeViewModelTest {
         server.enqueueJson(201, TRANSACTION_OK)
         model.retryRow(salary)
         reviewed()
-        assertEquals(next, store.pending.value)
+        assertEquals(next, pending())
     }
 
     @Test
@@ -469,7 +486,7 @@ class RecognizeViewModelTest {
         server.enqueueJson(201, TRANSACTION_OK)
         model.save()
         reviewed()
-        assertEquals(next, store.pending.value)
+        assertEquals(next, pending())
     }
 
     @Test
@@ -678,6 +695,7 @@ class RecognizeViewModelTest {
         model.state.first { state ->
             (state.phase as RecognizePhase.Review).rows[0].status == RowStatus.Saving
         }
+        awaitRequests(RECOGNIZED_REQUESTS + 1)
 
         server.enqueueJson(200, CATEGORIES_OK)
         server.enqueueJson(200, ACCOUNTS_OK)
