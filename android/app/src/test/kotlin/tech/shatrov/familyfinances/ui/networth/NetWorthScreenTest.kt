@@ -15,6 +15,7 @@ import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
@@ -159,7 +160,7 @@ class NetWorthScreenTest {
             AppTheme { EditScreen(editState(), onDelete = { deleted = true }) }
         }
 
-        composeRule.onNodeWithText(res.getString(R.string.holding_delete)).performClick()
+        composeRule.onNodeWithText(res.getString(R.string.holding_delete)).performScrollTo().performClick()
         assertFalse(deleted)
 
         composeRule.onNodeWithText(res.getString(R.string.holding_delete_confirm)).assertExists()
@@ -177,7 +178,7 @@ class NetWorthScreenTest {
             AppTheme { EditScreen(editState(), onToggleArchive = { archived += it }) }
         }
 
-        composeRule.onNodeWithText(res.getString(R.string.holding_archive)).performClick()
+        composeRule.onNodeWithText(res.getString(R.string.holding_archive)).performScrollTo().performClick()
         assertTrue(archived.isEmpty())
 
         composeRule.onNodeWithText(res.getString(R.string.holding_archive_zero_confirm)).performClick()
@@ -201,9 +202,12 @@ class NetWorthScreenTest {
     ) {
         HoldingEditScreen(
             state = state,
+            currency = "RUB",
             onSideChange = {},
             onNameChange = {},
             onKindChange = {},
+            onIncomeChange = {},
+            onExpenseChange = {},
             onSubmit = {},
             onToggleArchive = onToggleArchive,
             onDelete = onDelete,

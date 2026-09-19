@@ -174,6 +174,12 @@
     <string name="holding_archive_only">Только в архив</string>
     <string name="holding_delete">Удалить</string>
     <string name="holding_delete_confirm">Удалить позицию вместе со всеми снимками?</string>
+    <string name="holding_plan">План в месяц</string>
+    <string name="holding_plan_income">Поступления</string>
+    <string name="holding_plan_expense">Выплаты</string>
+    <string name="holding_plan_hint">Среднее за месяц; годовые — поделив на 12</string>
+    <string name="holding_plan_error_amount">Введите сумму, например 45000,00</string>
+    <string name="holding_error_beyond_page">Позиций больше, чем помещается в список: эту форма не нашла</string>
     <string name="holding_error_name_exists">Позиция с таким названием уже есть, возможно в архиве</string>
     <string name="holding_kind_cash">Наличные</string>
     <string name="holding_kind_deposit">Вклад</string>

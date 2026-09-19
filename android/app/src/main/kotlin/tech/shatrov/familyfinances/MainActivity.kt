@@ -549,9 +549,12 @@ fun AppRoot(graph: AppGraph) {
             BackHandler { leave() }
             HoldingEditScreen(
                 state = edit,
+                currency = active.currency,
                 onSideChange = model::onSideChange,
                 onNameChange = model::onNameChange,
                 onKindChange = model::onKindChange,
+                onIncomeChange = model::onIncomeChange,
+                onExpenseChange = model::onExpenseChange,
                 onSubmit = model::onSubmit,
                 onToggleArchive = model::onToggleArchive,
                 onDelete = model::onDelete,

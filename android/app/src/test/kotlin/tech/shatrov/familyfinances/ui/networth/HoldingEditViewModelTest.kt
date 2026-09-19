@@ -22,6 +22,7 @@ import tech.shatrov.familyfinances.FakeTokenVault
 import tech.shatrov.familyfinances.HOLDINGS_OK
 import tech.shatrov.familyfinances.HOLDING_NAME_EXISTS_ERROR
 import tech.shatrov.familyfinances.HOLDING_OK
+import tech.shatrov.familyfinances.HOLDING_PLAN_ERROR
 import tech.shatrov.familyfinances.HOLDING_VALUE_OK
 import tech.shatrov.familyfinances.MORTGAGE_ID
 import tech.shatrov.familyfinances.OLD_CAR_ID
@@ -99,6 +100,96 @@ class HoldingEditViewModelTest {
         assertTrue(body, body.contains("\"name\":\"Ипотека\""))
         assertTrue(body, body.contains("\"side\":\"liability\""))
         assertTrue(body, body.contains("\"kind\":\"loan\""))
+        assertFalse(body, body.contains("monthly_"))
+    }
+
+    @Test
+    fun createSendsPlan() = runTest {
+        createModel()
+        model.onNameChange("Квартира")
+        model.onIncomeChange("45 000")
+        model.onExpenseChange("8300,5")
+        server.enqueueJson(201, HOLDING_OK)
+
+        model.onSubmit()
+
+        assertTrue(settled().done)
+        val body = server.takeRequest().body?.utf8().orEmpty()
+        assertTrue(body, body.contains("\"monthly_income_minor\":4500000"))
+        assertTrue(body, body.contains("\"monthly_expense_minor\":830050"))
+    }
+
+    @Test
+    fun unreadablePlanIsNotSent() = runTest {
+        createModel()
+        model.onNameChange("Квартира")
+        model.onIncomeChange("45к")
+
+        assertEquals(null, model.state.value.incomeMinor)
+        assertFalse(model.state.value.canSubmit)
+        model.onSubmit()
+
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun savedPlanOpensAsInput() = runTest {
+        val state = open(FLAT_ID)
+
+        assertEquals("45000", state.income)
+        assertEquals("8300", state.expense)
+        assertFalse(state.canSubmit)
+    }
+
+    @Test
+    fun serverWithoutPlanOpensEmptyFields() = runTest {
+        val state = open(MORTGAGE_ID)
+
+        assertEquals("", state.income)
+        assertEquals("", state.expense)
+        assertEquals(0L, state.incomeMinor)
+        assertFalse(state.canSubmit)
+    }
+
+    @Test
+    fun editOfOneNumberSendsOnlyIt() = runTest {
+        open(FLAT_ID)
+        model.onExpenseChange("9000")
+        server.enqueueJson(200, HOLDING_OK)
+
+        model.onSubmit()
+
+        assertTrue(settled().done)
+        assertEquals("""{"monthly_expense_minor":900000}""", server.takeRequest().body?.utf8())
+    }
+
+    @Test
+    fun clearedFieldSendsZero() = runTest {
+        open(FLAT_ID)
+        model.onIncomeChange("")
+        server.enqueueJson(200, HOLDING_OK)
+
+        model.onSubmit()
+
+        assertTrue(settled().done)
+        assertEquals("""{"monthly_income_minor":0}""", server.takeRequest().body?.utf8())
+    }
+
+    @Test
+    fun planErrorFromServerLandsUnderItsField() = runTest {
+        open(FLAT_ID)
+        model.onIncomeChange("99999999999")
+        server.enqueueJson(422, HOLDING_PLAN_ERROR)
+
+        model.onSubmit()
+
+        val state = settled()
+        assertFalse(state.done)
+        assertEquals(null, state.error)
+        assertEquals("слишком большое число", state.fieldErrors[HOLDING_FIELD_INCOME])
+
+        model.onIncomeChange("100")
+        assertFalse(model.state.value.fieldErrors.containsKey(HOLDING_FIELD_INCOME))
     }
 
     @Test
@@ -226,5 +317,15 @@ class HoldingEditViewModelTest {
         createModel("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb9")
 
         assertTrue(model.state.first { !it.loading }.done)
+    }
+
+    @Test
+    fun holdingBeyondFirstPageIsLoadError() = runTest {
+        server.enqueueJson(200, HOLDINGS_OK.replace("\"total\":4", "\"total\":201"))
+        createModel("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb9")
+
+        val state = model.state.first { !it.loading }
+        assertFalse(state.done)
+        assertEquals(UiError.Resource(R.string.holding_error_beyond_page), state.loadError)
     }
 }
