@@ -30,10 +30,15 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Contextual
 
 /**
- * 
+ * Суммы нескольких счетов или операций, поэтому не `Money`: `maximum` у них нет, в минимальных единицах валюты семьи. 
  *
  * @param month Календарный месяц `YYYY-MM`
- * @param unassignedMinor Расходы месяца без счёта
+ * @param openingMinor Сумма остатков на конец прошлого месяца
+ * @param closingMinor Сумма остатков на конец этого месяца
+ * @param incomeMinor 
+ * @param expenseMinor 
+ * @param gapMinor `(closing_minor - opening_minor) - (income_minor - expense_minor)`
+ * @param complete Оба края заполнены у всех счетов списка; тогда `gap_minor` не `null`. Без счетов — `false`
  * @param accounts По имени счёта без учёта регистра
  */
 @Serializable
@@ -44,9 +49,27 @@ data class ReconciliationStats (
     @SerialName(value = "month")
     val month: kotlin.String,
 
-    /* Расходы месяца без счёта */
-    @SerialName(value = "unassigned_minor")
-    val unassignedMinor: kotlin.Long,
+    /* Сумма остатков на конец прошлого месяца */
+    @SerialName(value = "opening_minor")
+    val openingMinor: kotlin.Long?,
+
+    /* Сумма остатков на конец этого месяца */
+    @SerialName(value = "closing_minor")
+    val closingMinor: kotlin.Long?,
+
+    @SerialName(value = "income_minor")
+    val incomeMinor: kotlin.Long,
+
+    @SerialName(value = "expense_minor")
+    val expenseMinor: kotlin.Long,
+
+    /* `(closing_minor - opening_minor) - (income_minor - expense_minor)` */
+    @SerialName(value = "gap_minor")
+    val gapMinor: kotlin.Long?,
+
+    /* Оба края заполнены у всех счетов списка; тогда `gap_minor` не `null`. Без счетов — `false` */
+    @SerialName(value = "complete")
+    val complete: kotlin.Boolean,
 
     /* По имени счёта без учёта регистра */
     @SerialName(value = "accounts")

@@ -39,7 +39,7 @@ DROP TABLE IF EXISTS sessions;
 DROP TABLE IF EXISTS holding_plans;
 DROP TABLE IF EXISTS holding_values;
 DROP TABLE IF EXISTS holdings;
-DROP TABLE IF EXISTS account_reconciliations;
+DROP TABLE IF EXISTS account_balances;
 DROP TABLE IF EXISTS reports;
 DROP TABLE IF EXISTS budgets;
 DROP TABLE IF EXISTS transactions;

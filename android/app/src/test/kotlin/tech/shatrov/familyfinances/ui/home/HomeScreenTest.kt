@@ -159,10 +159,18 @@ class HomeScreenTest {
         composeRule.onNodeWithText(res.getString(R.string.home_reconciliation_no_accounts)).performClick()
         assertEquals(1, accounts)
 
-        card = ReconciliationCard.Ready(YearMonth.of(2026, 8), matched = 1, total = 3)
-        composeRule.onNodeWithText(res.getString(R.string.home_reconciliation_matched, 1, 3)).performClick()
+        card = ReconciliationCard.Incomplete(YearMonth.of(2026, 8))
+        composeRule.onNodeWithText(res.getString(R.string.home_reconciliation_incomplete)).performClick()
         assertEquals(YearMonth.of(2026, 8), opened)
         composeRule.onNodeWithText(res.getString(R.string.home_reconciliation, "август")).assertIsDisplayed()
+
+        card = ReconciliationCard.Ready(YearMonth.of(2026, 7), gapMinor = 0)
+        composeRule.onNodeWithText(res.getString(R.string.reconciliation_matched)).performClick()
+        assertEquals(YearMonth.of(2026, 7), opened)
+
+        card = ReconciliationCard.Ready(YearMonth.of(2026, 7), gapMinor = 10000)
+        val gap = res.getString(R.string.reconciliation_gap, formatMoney(10000, "RUB", signed = true))
+        composeRule.onNodeWithText(gap).assertIsDisplayed()
     }
 
     private val today = LocalDate.of(2026, 9, 19)

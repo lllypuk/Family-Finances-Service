@@ -25,9 +25,10 @@ bearer-аутентификацию, деньги в минимальных ед
 - `account_id` у операции необязателен. В `PUT /transactions/{id}` отсутствие поля (и `null`) оставляет
   счёт, отвязка — `clear_account: true`: клиент шлёт с `explicitNulls = false` и `null` передать не
   может. Выборка «без счёта» — `?unassigned=true`, не `account_id=none`, чтобы параметр оставался UUID.
-- Сверки — `PUT`/`DELETE /accounts/{id}/reconciliations/{month}`, сводка — `GET /stats/reconciliation`:
-  объект без пагинации, `recorded_minor` считается по расходам на чтении, `bank_expense_minor`,
-  `diff_minor`, `note`, `updated_at` — `null`, пока сверки нет.
+- Остатки — `PUT`/`DELETE /accounts/{id}/balances/{month}` (со знаком, месяц не позже текущего), сводка —
+  `GET /stats/reconciliation`: объект без пагинации, приход и расход месяца считаются на чтении, поэтому
+  дописанная операция закрывает `gap_minor` без нового `PUT`. Суммы краёв и `gap_minor` — `int64` без
+  `maximum` и `null`, пока край заполнен не у всех счетов списка.
 
 ## Активы, пассивы и капитал
 

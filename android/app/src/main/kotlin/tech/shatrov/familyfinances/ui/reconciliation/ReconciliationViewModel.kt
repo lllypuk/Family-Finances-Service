@@ -8,17 +8,60 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import tech.shatrov.familyfinances.core.api.AccountBalanceRequest
 import tech.shatrov.familyfinances.core.api.ApiGraph
-import tech.shatrov.familyfinances.core.api.ReconciliationRequest
 import tech.shatrov.familyfinances.core.api.ReconciliationRow
 import tech.shatrov.familyfinances.core.api.ReconciliationStats
+import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import tech.shatrov.familyfinances.ui.UiError
 import tech.shatrov.familyfinances.ui.format.formatAmountInput
-import tech.shatrov.familyfinances.ui.format.parseAmountMinor
+import tech.shatrov.familyfinances.ui.format.parseSignedAmountMinor
 import tech.shatrov.familyfinances.ui.toUiError
+import tech.shatrov.familyfinances.ui.transactions.TransactionPrefill
+import java.time.LocalDate
 import java.time.YearMonth
 import java.util.UUID
+import kotlin.math.abs
+
+/** Что подписать под разницей: знак `gap` словами, а не плюсом и минусом. */
+enum class GapVerdict { MATCHED, MISSING_INCOME, MISSING_EXPENSE }
+
+/** `gap > 0` — остатки выросли больше записанного: не записан приход или записан лишний расход. */
+fun gapVerdict(gap: Long): GapVerdict = when {
+    gap == 0L -> GapVerdict.MATCHED
+    gap > 0 -> GapVerdict.MISSING_INCOME
+    else -> GapVerdict.MISSING_EXPENSE
+}
+
+/**
+ * «Закрыть разницу»: операция на `|gap|` последним днём [month], но не позже [today] —
+ * будущую дату сервер отвергает, а текущий месяц ещё не кончился.
+ */
+fun gapCorrection(
+    month: YearMonth,
+    gap: Long,
+    today: LocalDate,
+    description: String,
+): TransactionPrefill = TransactionPrefill(
+    amountMinor = abs(gap),
+    type = if (gap > 0) TransactionType.income else TransactionType.expense,
+    date = minOf(month.atEndOfMonth(), today),
+    description = description,
+)
+
+/** Итог месяца; пока край не заполнен, сравнивать нечего — экран зовёт его заполнить. */
+sealed interface ReconciliationTotal {
+    data class Complete(
+        val openingMinor: Long,
+        val closingMinor: Long,
+        val gapMinor: Long,
+    ) : ReconciliationTotal
+
+    data class MissingClosing(val accounts: Int) : ReconciliationTotal
+
+    data class MissingOpening(val prev: YearMonth) : ReconciliationTotal
+}
 
 sealed interface ReconciliationUiState {
     data object Loading : ReconciliationUiState
@@ -30,47 +73,57 @@ sealed interface ReconciliationUiState {
         val stats: ReconciliationStats,
     ) : ReconciliationUiState {
         val isEmpty: Boolean get() = stats.accounts.isEmpty()
+
+        val total: ReconciliationTotal get() {
+            val opening = stats.openingMinor
+            val closing = stats.closingMinor
+            val gap = stats.gapMinor
+            return when {
+                closing == null -> ReconciliationTotal.MissingClosing(stats.accounts.count { it.closingMinor == null })
+                opening == null || gap == null -> ReconciliationTotal.MissingOpening(month.minusMonths(1))
+                else -> ReconciliationTotal.Complete(opening, closing, gap)
+            }
+        }
     }
 }
 
-/** Лист «в банке»: цифра банка и заметка счёта [accountId] за [month]; [exists] — сверка уже записана. */
-data class BankEditUiState(
+/** Диалог остатка счёта [accountId] на конец [month]; [exists] — остаток уже записан. */
+data class BalanceEditUiState(
     val accountId: UUID,
     val accountName: String,
     val month: YearMonth,
     val amount: String = "",
-    val note: String = "",
     val exists: Boolean = false,
     val submitting: Boolean = false,
     val error: UiError? = null,
 ) {
-    val amountMinor: Long? get() = parseAmountMinor(amount)
+    val amountMinor: Long? get() = parseSignedAmountMinor(amount)
 
     val canSubmit: Boolean get() = amountMinor != null && !submitting
 }
 
-/** Сверка месяца: одна строка на счёт из `GET /stats/reconciliation`, правка — `PUT`/`DELETE` сверки. */
+/** Сверка остатков месяца из `GET /stats/reconciliation`, правка — `PUT`/`DELETE` остатка счёта. */
 class ReconciliationViewModel(private val api: ApiGraph) : ViewModel() {
     private val mutable = MutableStateFlow<ReconciliationUiState>(ReconciliationUiState.Loading)
-    private val mutableEditor = MutableStateFlow<BankEditUiState?>(null)
+    private val mutableEditor = MutableStateFlow<BalanceEditUiState?>(null)
 
     val state: StateFlow<ReconciliationUiState> = mutable.asStateFlow()
 
-    /** `null` — лист закрыт. */
-    val editor: StateFlow<BankEditUiState?> = mutableEditor.asStateFlow()
+    /** `null` — диалог закрыт. */
+    val editor: StateFlow<BalanceEditUiState?> = mutableEditor.asStateFlow()
 
     private var month: YearMonth? = null
     private var job: Job? = null
 
-    /** Каждый заход перечитывает месяц: операции могли поменяться, пока экран был закрыт. */
-    fun load(month: YearMonth) {
-        this.month = month
+    /** Каждый заход перечитывает месяц: операции могли поменяться. Будущий месяц сервер не примет — обрезает экран. */
+    fun load(target: YearMonth) {
+        this.month = target
         job?.cancel()
         mutable.value = ReconciliationUiState.Loading
         job = viewModelScope.launch {
             mutable.value = try {
-                val stats = api.client.unwrap { api.stats.getReconciliationStats(month.toString()) }.`data`
-                ReconciliationUiState.Ready(month, stats)
+                val stats = api.client.unwrap { api.stats.getReconciliationStats(target.toString()) }.`data`
+                ReconciliationUiState.Ready(target, stats)
             } catch (failure: ApiFailure) {
                 ReconciliationUiState.Failure(failure.toUiError())
             }
@@ -81,15 +134,28 @@ class ReconciliationViewModel(private val api: ApiGraph) : ViewModel() {
         month?.let(::load)
     }
 
-    fun onOpenBank(row: ReconciliationRow) {
+    fun onOpenBalance(row: ReconciliationRow) {
         val ready = mutable.value as? ReconciliationUiState.Ready ?: return
-        mutableEditor.value = BankEditUiState(
+        mutableEditor.value = BalanceEditUiState(
             accountId = row.account.id,
             accountName = row.account.name,
             month = ready.month,
-            amount = row.bankExpenseMinor?.let(::formatAmountInput).orEmpty(),
-            note = row.note.orEmpty(),
-            exists = row.bankExpenseMinor != null,
+            amount = row.closingMinor?.let(::formatAmountInput).orEmpty(),
+            exists = row.closingMinor != null,
+        )
+    }
+
+    /**
+     * Остаток на конец прошлого месяца: счёт, заведённый в этом, в прошлом не показан, а его `opening` без строки — 0.
+     * Есть ли строка, по такому 0 не понять, поэтому «Очистить» здесь нет.
+     */
+    fun onOpenOpening(row: ReconciliationRow) {
+        val ready = mutable.value as? ReconciliationUiState.Ready ?: return
+        mutableEditor.value = BalanceEditUiState(
+            accountId = row.account.id,
+            accountName = row.account.name,
+            month = ready.month.minusMonths(1),
+            amount = row.openingMinor?.let(::formatAmountInput).orEmpty(),
         )
     }
 
@@ -97,11 +163,17 @@ class ReconciliationViewModel(private val api: ApiGraph) : ViewModel() {
         mutableEditor.update { it?.copy(amount = amount, error = null) }
     }
 
-    fun onNoteChange(note: String) {
-        mutableEditor.update { it?.copy(note = note, error = null) }
+    /** Минуса нет на цифровой клавиатуре многих телефонов, поэтому знак переключается кнопкой. */
+    fun onToggleSign() {
+        mutableEditor.update { current ->
+            current?.copy(
+                amount = if (current.amount.startsWith('-')) current.amount.drop(1) else "-${current.amount}",
+                error = null,
+            )
+        }
     }
 
-    fun onDismissBank() {
+    fun onDismissBalance() {
         if (mutableEditor.value?.submitting == true) return
         mutableEditor.value = null
     }
@@ -109,27 +181,31 @@ class ReconciliationViewModel(private val api: ApiGraph) : ViewModel() {
     fun onSave() {
         val current = mutableEditor.value ?: return
         val amount = current.amountMinor?.takeIf { !current.submitting } ?: return
-        // Пустая заметка не отправляется: `PUT` — полная замена, и отсутствие поля её очищает.
-        val request = ReconciliationRequest(bankExpenseMinor = amount, note = current.note.trim().ifEmpty { null })
         mutate(current) {
-            api.client.unwrap { api.accounts.putReconciliation(current.accountId, current.month.toString(), request) }
+            api.client.unwrap {
+                api.accounts.putAccountBalance(
+                    current.accountId,
+                    current.month.toString(),
+                    AccountBalanceRequest(balanceMinor = amount),
+                )
+            }
         }
     }
 
-    fun onDelete() {
+    fun onClear() {
         val current = mutableEditor.value?.takeIf { it.exists && !it.submitting } ?: return
         mutate(current) {
             try {
-                api.client.send { api.accounts.deleteReconciliation(current.accountId, current.month.toString()) }
+                api.client.send { api.accounts.deleteAccountBalance(current.accountId, current.month.toString()) }
             } catch (failure: ApiFailure.Api) {
-                // Сверку уже удалили с другого телефона: цель достигнута.
+                // Остаток уже удалили с другого телефона: цель достигнута.
                 if (!failure.isNotFound) throw failure
             }
         }
     }
 
     private fun mutate(
-        current: BankEditUiState,
+        current: BalanceEditUiState,
         call: suspend () -> Any,
     ) {
         mutableEditor.value = current.copy(submitting = true, error = null)
@@ -137,7 +213,7 @@ class ReconciliationViewModel(private val api: ApiGraph) : ViewModel() {
             try {
                 call()
                 mutableEditor.value = null
-                load(current.month)
+                refresh()
             } catch (failure: ApiFailure) {
                 mutableEditor.update { it?.copy(submitting = false, error = failure.toUiError()) }
             }

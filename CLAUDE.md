@@ -221,7 +221,7 @@ list is in `docs/plans/completed/20260915-14-prometheus-metrics.md`, the deploym
 ## Database & migrations
 
 The whole schema lives in `migrations/001_consolidated.{up,down}.sql`
-(tables: families, users, categories, accounts, transactions, account_reconciliations, budgets, holdings,
+(tables: families, users, categories, accounts, transactions, account_balances, budgets, holdings,
 holding_values, holding_plans, sessions) — that file is the readable
 picture of the database, and a fresh DB is built from it.
 
@@ -252,7 +252,7 @@ Two independent code paths apply migrations, and **both must keep working**:
 - tests: `internal/testhelpers/sqlite.go` reads and executes the `*.up.sql` files directly
 
 `testhelpers.SQLiteTestDB.CleanTables` has a hardcoded, FK-ordered table list — add any new table to it
-(`account_reconciliations` before `transactions` before `accounts`: both FKs to `accounts` are `RESTRICT`;
+(`account_balances` before `transactions` before `accounts`: both FKs to `accounts` are `RESTRICT`;
 `holding_values` and `holding_plans` before `holdings`).
 
 SQLite is opened with `_txlock=immediate` (`infrastructure.NewSQLiteConnection`), so every `BeginTx` takes the
@@ -330,15 +330,20 @@ on it.
   the stored one — the client sends with `explicitNulls = false`, so `null` cannot mean "unbind"; unbinding is
   `clear_account: true`, both at once is `422`. An unknown or archived account is `422 field: account_id`, but only
   when the id differs from the stored one: editing a transaction whose account was archived later still passes.
-  Deleting an account used by a transaction **or** a reconciliation is `409 ACCOUNT_IN_USE` (both FKs `RESTRICT`,
-  a cascade would take the reconciliation history); a reissued card is archived. The name is unique per family by
+  Deleting an account used by a transaction **or** a balance row is `409 ACCOUNT_IN_USE` (both FKs `RESTRICT`,
+  a cascade would take the balance history); a reissued card is archived. The name is unique per family by
   `names.Key` (Go-side `ToLower(TrimSpace)`, since `NOCASE` folds ASCII only) — never change it after a release,
   it defines the stored `name_key`.
-- **A reconciliation stores only the bank's figure.** `recorded_minor` of `GET /stats/reconciliation` is summed
-  on read over `type = 'expense'` of the month (`RecordedByAccount`), so a late transaction closes the gap
-  without a new `PUT`; a refund booked as income does not reduce it. Having a reconciliation means having the
-  row — a `0` counts, and blocks `CURRENCY_LOCKED` like a transaction does (`FamilyRepository.HasMonetaryData`:
-  transactions, reconciliations, holding values and holding plans, archived and zero ones included).
+- **A reconciliation stores only month-end balances.** `PUT /accounts/:id/balances/:month` keeps one signed
+  `balance_minor` per account and month (a credit card is negative); `GET /stats/reconciliation` computes
+  `gap = (closing − opening) − (income − expense)` on read, so a late transaction closes the gap without a new
+  `PUT`, and the correction is an ordinary transaction the client prefills. Which accounts count on each edge
+  (created inside the month → `opening = 0`, archived without a row → `closing = 0`, created after the month →
+  absent) is `reconciliationService.Summary`; an empty list is `null`, not a zero gap. A future month is `422`.
+  A transfer between own accounts is not a transaction — booked as one, it shows up as `gap`. Having a balance
+  means having the row — a `0` counts, and blocks `CURRENCY_LOCKED` like a transaction does
+  (`FamilyRepository.HasMonetaryData`: transactions, balances, holding values and holding plans, archived and
+  zero ones included).
 - **Holdings carry their sign in `side`, not in the number.** `value_minor >= 0`, and `side` is fixed at creation
   (`UpdateHoldingRequest` has no such field) — changing it would flip the whole history. A holding's value on a
   day is its latest snapshot with `date <=` that day, carried forward with no expiry (a flat is revalued once a
@@ -371,7 +376,7 @@ reference): `docs/README.md` (navigation), `docs/product_brief.md`, `docs/tech_s
 status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the finished ones.
 
 **Current direction:** `docs/specs/005-api-only-redesign.md` — the service is an API-only backend for an
-Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–10 and 12–18 are
+Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–10 and 12–20 are
 done (`docs/plans/completed/`, 06 = the Android client, 07 = its budgets tab, 08 = its settings screen,
 09 = the server findings of 07–08, 10 = `/reports` removed and `GET /stats/monthly` added, 12 = recurring
 budgets, both sides, 13 = the client's UI audit: segments instead of chips, a FAB on "Операции", empty states
@@ -384,6 +389,11 @@ monthly plan) shipped together in `v0.8.0`/`app-v0.10.0`; older clients keep wor
 Plan 19 (client `0.11.0`, contract untouched) closes half of plan 11: a journal that lets an unfinished
 screenshot import survive process death, and the "Обзор" screen over `summary` + `monthly`; multi-select over
 transactions and `bulkDeleteTransactions` remain.
+Plan 20 (server `v0.9.0`, client `0.12.0`, one MR) replaces plan 16's bank-figure reconciliation with month-end
+balances (`008_account_balances`) and breaks the contract: a `0.11.0` client loses its reconciliation screen
+and, silently, the reconciliation card on the home screen (the old model requires `recorded_minor`).
+`008.down` recreates `account_reconciliations` empty, so run `migrate --to 8 → 7 → 8` on a copy of the production
+DB before tagging.
 
 `docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates
 from it, and code and spec now match. **A registered route with no operation in the spec fails `make test`**

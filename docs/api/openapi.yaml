@@ -49,7 +49,7 @@ tags:
   - name: categories
     description: Категории доходов и расходов
   - name: accounts
-    description: Платёжные счета семьи для ежемесячной сверки расходов
+    description: Платёжные счета семьи для ежемесячной сверки остатков
   - name: holdings
     description: Активы и пассивы семьи для расчёта чистого капитала
   - name: transactions
@@ -233,7 +233,7 @@ paths:
       tags: [family]
       summary: Изменить семью
       description: |
-        Только admin. Смена `currency` при наличии транзакций, сверок, снимков или планов позиций запрещена — `409 CURRENCY_LOCKED` (A-05).
+        Только admin. Смена `currency` при наличии транзакций, остатков счетов, снимков или планов позиций запрещена — `409 CURRENCY_LOCKED` (A-05).
         `timezone` — IANA-имя, в нём считаются «сегодня» и границы периодов (A-06).
       requestBody:
         required: true
@@ -547,7 +547,7 @@ paths:
       tags: [accounts]
       summary: Удалить счёт
       description: |
-        Только admin. Счёт с операциями или сверками не удаляется — `409 ACCOUNT_IN_USE`;
+        Только admin. Счёт с операциями или остатками не удаляется — `409 ACCOUNT_IN_USE`;
         перевыпущенную карту архивируют.
       responses:
         '204': { description: Счёт удалён }
@@ -722,41 +722,41 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  /api/v1/accounts/{id}/reconciliations/{month}:
+  /api/v1/accounts/{id}/balances/{month}:
     parameters:
       - { $ref: '#/components/parameters/PathID' }
       - name: month
         in: path
         required: true
-        description: Календарный месяц `YYYY-MM`; иное — `422`
+        description: Календарный месяц `YYYY-MM` не позже текущего в часовом поясе семьи; иное — `422`
         schema: { type: string, examples: ['2026-09'] }
     put:
-      operationId: putReconciliation
+      operationId: putAccountBalance
       tags: [accounts]
-      summary: Записать цифру банка за месяц
+      summary: Записать остаток счёта на конец месяца
       description: |
-        admin и member. Полная замена: без `note` заметка очищается. Записанное не хранится — его
-        считает `GET /stats/reconciliation`, поэтому дописанная операция меняет разницу без нового
-        `PUT`. Месяц не блокируется. `bank_expense_minor` — `0 … 99999999999`, иначе `422`.
+        admin и member. Полная замена. Сверку с операциями считает `GET /stats/reconciliation`, поэтому
+        дописанная операция меняет разницу без нового `PUT`. Архивный счёт разрешён — прошлое
+        дозаполняется. `|balance_minor|` больше `99999999999` — `422`.
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/ReconciliationRequest' }
+            schema: { $ref: '#/components/schemas/AccountBalanceRequest' }
       responses:
-        '200': { $ref: '#/components/responses/ReconciliationOk' }
+        '200': { $ref: '#/components/responses/AccountBalanceOk' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
     delete:
-      operationId: deleteReconciliation
+      operationId: deleteAccountBalance
       tags: [accounts]
-      summary: Удалить сверку за месяц
-      description: admin и member. `ACCOUNT_NOT_FOUND` или `RECONCILIATION_NOT_FOUND` — `404`.
+      summary: Удалить остаток счёта за месяц
+      description: admin и member. `ACCOUNT_NOT_FOUND` или `BALANCE_NOT_FOUND` — `404`.
       responses:
-        '204': { description: Сверка удалена }
+        '204': { description: Остаток удалён }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1207,15 +1207,21 @@ paths:
     get:
       operationId: getReconciliationStats
       tags: [stats]
-      summary: Сверка счетов за месяц
+      summary: Сверка остатков с операциями за месяц
       description: |
-        admin и member. Строка на каждый неархивный счёт и на архивный, у которого в месяце есть
-        расход или сверка. `recorded_minor` — сумма расходов (`type = expense`) по счёту за
-        календарный месяц; доходы её не уменьшают. `unassigned_minor` — расходы без счёта.
+        admin и member. `gap_minor = (closing_minor - opening_minor) - (income_minor - expense_minor)`:
+        больше нуля — не записан приход или записан лишний расход, меньше — наоборот. `opening_minor` —
+        остатки на конец прошлого месяца, `closing_minor` — этого; каждая сумма `null`, пока свой край
+        заполнен не у всех счетов списка, `gap_minor` — пока не заполнен любой. Без счетов всё `null`.
+
+        Список: неархивные счета, заведённые не позже конца месяца, и архивные, у которых есть остаток
+        за этот месяц или ненулевой за прошлый. Остаток на начало у счёта, заведённого в этом месяце,
+        без строки за прошлый — `0`; на конец у архивного без строки — `0`. Месяц позже текущего — `422`.
       parameters:
         - name: month
           in: query
-          description: Календарный месяц `YYYY-MM`; по умолчанию текущий в часовом поясе семьи
+          description: |
+            Календарный месяц `YYYY-MM` не позже текущего; по умолчанию текущий в часовом поясе семьи
           schema: { type: string, examples: ['2026-09'] }
       responses:
         '200': { $ref: '#/components/responses/ReconciliationStatsOk' }
@@ -1432,13 +1438,13 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/HoldingValueOk' }
-    ReconciliationOk:
-      description: Сверка
+    AccountBalanceOk:
+      description: Остаток счёта
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/ReconciliationOk' }
+          schema: { $ref: '#/components/schemas/AccountBalanceOk' }
     ReconciliationStatsOk:
-      description: Сверка счетов за месяц
+      description: Сверка остатков с операциями за месяц
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ReconciliationStatsOk' }
@@ -1572,11 +1578,11 @@ components:
       properties:
         data: { $ref: '#/components/schemas/HoldingValue' }
         meta: { $ref: '#/components/schemas/Meta' }
-    ReconciliationOk:
+    AccountBalanceOk:
       type: object
       required: [data, meta]
       properties:
-        data: { $ref: '#/components/schemas/Reconciliation' }
+        data: { $ref: '#/components/schemas/AccountBalance' }
         meta: { $ref: '#/components/schemas/Meta' }
     ReconciliationStatsOk:
       type: object
@@ -1754,7 +1760,7 @@ components:
         currency:
           type: string
           pattern: '^[A-Z]{3}$'
-          description: Меняется только пока в семье нет транзакций, сверок, снимков и планов позиций, иначе `409 CURRENCY_LOCKED`
+          description: Меняется только пока в семье нет транзакций, остатков счетов, снимков и планов позиций, иначе `409 CURRENCY_LOCKED`
         timezone: { type: string }
 
     Category:
@@ -1928,70 +1934,81 @@ components:
           allOf: [{ $ref: '#/components/schemas/Money' }]
           minimum: 0
         updated_at: { $ref: '#/components/schemas/Timestamp' }
-    ReconciliationRequest:
+    AccountBalanceRequest:
       type: object
-      required: [bank_expense_minor]
+      required: [balance_minor]
       properties:
-        bank_expense_minor:
+        balance_minor:
           allOf: [{ $ref: '#/components/schemas/Money' }]
-          description: Траты по счёту за месяц по данным банка; отрицательное — `422`
-        note:
-          type: string
-          maxLength: 500
-          description: Нет поля — заметка очищается
-    Reconciliation:
+          description: Остаток на конец месяца; у кредитки отрицательный, не меньше `-99999999999`
+    AccountBalance:
       type: object
-      required: [account_id, month, bank_expense_minor, note, updated_at]
+      required: [account_id, month, balance_minor, updated_at]
       properties:
         account_id: { type: string, format: uuid }
         month:
           type: string
           description: Календарный месяц `YYYY-MM`
           examples: ['2026-09']
-        bank_expense_minor: { $ref: '#/components/schemas/Money' }
-        note: { type: string }
+        balance_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: Может быть отрицательным
         updated_at: { $ref: '#/components/schemas/Timestamp' }
     ReconciliationStats:
       type: object
-      required: [month, unassigned_minor, accounts]
+      required: [month, opening_minor, closing_minor, income_minor, expense_minor, gap_minor, complete, accounts]
+      description: |
+        Суммы нескольких счетов или операций, поэтому не `Money`: `maximum` у них нет, в минимальных
+        единицах валюты семьи.
       properties:
         month:
           type: string
           description: Календарный месяц `YYYY-MM`
           examples: ['2026-09']
-        unassigned_minor:
-          allOf: [{ $ref: '#/components/schemas/Money' }]
-          description: Расходы месяца без счёта
+        opening_minor:
+          oneOf:
+            - { type: integer, format: int64 }
+            - { type: 'null' }
+          description: Сумма остатков на конец прошлого месяца
+        closing_minor:
+          oneOf:
+            - { type: integer, format: int64 }
+            - { type: 'null' }
+          description: Сумма остатков на конец этого месяца
+        income_minor: { type: integer, format: int64, minimum: 0 }
+        expense_minor: { type: integer, format: int64, minimum: 0 }
+        gap_minor:
+          oneOf:
+            - { type: integer, format: int64 }
+            - { type: 'null' }
+          description: '`(closing_minor - opening_minor) - (income_minor - expense_minor)`'
+        complete:
+          type: boolean
+          description: Оба края заполнены у всех счетов списка; тогда `gap_minor` не `null`. Без счетов — `false`
         accounts:
           type: array
           description: По имени счёта без учёта регистра
           items: { $ref: '#/components/schemas/ReconciliationRow' }
     ReconciliationRow:
       type: object
-      required: [account, recorded_minor, bank_expense_minor, diff_minor, note, updated_at]
-      description: Пока сверки нет, `bank_expense_minor`, `diff_minor`, `note` и `updated_at` — null
+      required: [account, opening_minor, closing_minor, updated_at]
       properties:
         account: { $ref: '#/components/schemas/Account' }
-        recorded_minor:
-          allOf: [{ $ref: '#/components/schemas/Money' }]
-          description: Записанные расходы по счёту за месяц
-        bank_expense_minor:
+        opening_minor:
           oneOf:
             - { $ref: '#/components/schemas/Money' }
             - { type: 'null' }
-        diff_minor:
+          description: Остаток на конец прошлого месяца; может быть отрицательным
+        closing_minor:
           oneOf:
             - { $ref: '#/components/schemas/Money' }
             - { type: 'null' }
-          description: '`bank_expense_minor - recorded_minor`; больше нуля — не записали, меньше — лишнее'
-        note:
-          oneOf:
-            - { type: string }
-            - { type: 'null' }
+          description: Остаток на конец этого месяца; может быть отрицательным
         updated_at:
           oneOf:
             - { $ref: '#/components/schemas/Timestamp' }
             - { type: 'null' }
+          description: Время записи остатка на конец месяца
     Transaction:
       type: object
       required: [id, amount_minor, type, description, category_id, user_id, date, tags, created_at, updated_at]

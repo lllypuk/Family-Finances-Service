@@ -355,17 +355,6 @@ func (m *MockTransactionRepository) GetTotalsByMonth(
 	return args.Get(0).([]transaction.MonthTotal), args.Error(1)
 }
 
-func (m *MockTransactionRepository) RecordedByAccount(
-	ctx context.Context,
-	startDate, endDate date.Date,
-) ([]transaction.AccountTotal, error) {
-	args := m.Called(ctx, startDate, endDate)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]transaction.AccountTotal), args.Error(1)
-}
-
 // Common Mock Services
 
 // MockTransactionService is a mock implementation of TransactionService

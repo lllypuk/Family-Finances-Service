@@ -33,13 +33,12 @@ import kotlinx.serialization.Contextual
  *
  * @param accountId 
  * @param month Календарный месяц `YYYY-MM`
- * @param bankExpenseMinor Сумма в минимальных единицах валюты семьи (копейки для RUB, центы для EUR/USD). Поддерживаются только валюты с двумя знаками после запятой (A-05). 
- * @param note 
+ * @param balanceMinor Может быть отрицательным
  * @param updatedAt Служебная метка времени, RFC3339 UTC
  */
 @Serializable
 
-data class Reconciliation (
+data class AccountBalance (
 
     @Contextual @SerialName(value = "account_id")
     val accountId: java.util.UUID,
@@ -48,12 +47,9 @@ data class Reconciliation (
     @SerialName(value = "month")
     val month: kotlin.String,
 
-    /* Сумма в минимальных единицах валюты семьи (копейки для RUB, центы для EUR/USD). Поддерживаются только валюты с двумя знаками после запятой (A-05).  */
-    @SerialName(value = "bank_expense_minor")
-    val bankExpenseMinor: kotlin.Long,
-
-    @SerialName(value = "note")
-    val note: kotlin.String,
+    /* Может быть отрицательным */
+    @SerialName(value = "balance_minor")
+    val balanceMinor: kotlin.Long,
 
     /* Служебная метка времени, RFC3339 UTC */
     @Contextual @SerialName(value = "updated_at")

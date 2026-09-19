@@ -48,12 +48,14 @@ sealed interface ReconciliationCard {
 
     data object NoAccounts : ReconciliationCard
 
-    /** [matched] из [total] неархивных счетов сошлись с банком. */
+    /** Оба края [month] заполнены; [gapMinor] — остатки против операций. */
     data class Ready(
         val month: YearMonth,
-        val matched: Int,
-        val total: Int,
+        val gapMinor: Long,
     ) : ReconciliationCard
+
+    /** Хотя бы у одного края [month] не хватает остатков. */
+    data class Incomplete(val month: YearMonth) : ReconciliationCard
 }
 
 /** Незавершённый импорт для плашки; [recognized] — оплаченный ответ уже в журнале. */
@@ -169,20 +171,32 @@ class HomeViewModel(
                 return@launch
             }
             mutable.value = ready
-            mutableCard.value = if (ready.isEmpty) ReconciliationCard.Hidden else loadCard(reconciliationMonth(day))
+            mutableCard.value =
+                if (ready.isEmpty) {
+                    ReconciliationCard.Hidden
+                } else {
+                    loadCard(
+                        reconciliationMonth(day),
+                        YearMonth.from(day),
+                    )
+                }
         }
     }
 
-    private suspend fun loadCard(month: YearMonth): ReconciliationCard = try {
-        val rows = api.client
-            .unwrap { api.stats.getReconciliationStats(month.toString()) }
-            .`data`
-            .accounts
-            .filterNot { it.account.isArchived }
-        if (rows.isEmpty()) {
-            ReconciliationCard.NoAccounts
-        } else {
-            ReconciliationCard.Ready(month, matched = rows.count { it.diffMinor == 0L }, total = rows.size)
+    /** Счета, заведённые в [current], в прошлом месяце не числятся: без них карточка переходит на [current]. */
+    private suspend fun loadCard(
+        month: YearMonth,
+        current: YearMonth,
+    ): ReconciliationCard = try {
+        val stats = api.client.unwrap { api.stats.getReconciliationStats(month.toString()) }.`data`
+        val gap = stats.gapMinor
+        when {
+            stats.accounts.none { !it.account.isArchived } ->
+                if (month < current) loadCard(current, current) else ReconciliationCard.NoAccounts
+
+            stats.complete && gap != null -> ReconciliationCard.Ready(month, gap)
+
+            else -> ReconciliationCard.Incomplete(month)
         }
     } catch (_: ApiFailure) {
         ReconciliationCard.Hidden

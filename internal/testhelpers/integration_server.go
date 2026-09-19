@@ -89,15 +89,15 @@ func SetupHTTPServer(t *testing.T, opts ...ServerOption) *TestServer {
 	userRepo := userrepo.NewSQLiteRepository(db)
 	categoryRepo := categoryrepo.NewSQLiteRepository(db)
 	repos := &handlers.Repositories{
-		User:           userRepo,
-		Family:         userrepo.NewSQLiteFamilyRepository(db, categoryRepo, userRepo),
-		Budget:         budgetrepo.NewSQLiteRepository(db),
-		Category:       categoryRepo,
-		Account:        accountrepo.NewSQLiteRepository(db),
-		Holding:        holdingrepo.NewSQLiteRepository(db),
-		Reconciliation: reconciliationrepo.NewSQLiteRepository(db),
-		Transaction:    transactionrepo.NewSQLiteRepository(db),
-		Session:        authrepo.NewSessionSQLiteRepository(db),
+		User:        userRepo,
+		Family:      userrepo.NewSQLiteFamilyRepository(db, categoryRepo, userRepo),
+		Budget:      budgetrepo.NewSQLiteRepository(db),
+		Category:    categoryRepo,
+		Account:     accountrepo.NewSQLiteRepository(db),
+		Holding:     holdingrepo.NewSQLiteRepository(db),
+		Balance:     reconciliationrepo.NewBalanceSQLiteRepository(db),
+		Transaction: transactionrepo.NewSQLiteRepository(db),
+		Session:     authrepo.NewSessionSQLiteRepository(db),
 	}
 
 	authService := auth.NewService(repos.Session, repos.User, repos.Family)
@@ -126,17 +126,17 @@ func SetupHTTPServer(t *testing.T, opts ...ServerOption) *TestServer {
 
 	// Create services for testing - use simplified version to avoid circular dependencies
 	servicesContainer := services.NewServices(
-		repos.User,           // userRepo
-		repos.Family,         // familyRepo
-		repos.Category,       // categoryRepo
-		repos.Account,        // accountRepo
-		repos.Holding,        // holdingRepo
-		repos.Reconciliation, // reconciliationRepo
-		repos.Transaction,    // transactionRepo
-		repos.Budget,         // budgetRepo for transactions
-		repos.Budget,         // fullBudgetRepo
-		backupService,        // backupService
-		authService,          // authService
+		repos.User,        // userRepo
+		repos.Family,      // familyRepo
+		repos.Category,    // categoryRepo
+		repos.Account,     // accountRepo
+		repos.Holding,     // holdingRepo
+		repos.Balance,     // balanceRepo
+		repos.Transaction, // transactionRepo
+		repos.Budget,      // budgetRepo for transactions
+		repos.Budget,      // fullBudgetRepo
+		backupService,     // backupService
+		authService,       // authService
 		params.recognizer,
 		registry.Recognize(),
 		slog.Default(), // logger

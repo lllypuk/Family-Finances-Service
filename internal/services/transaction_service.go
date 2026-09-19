@@ -81,8 +81,6 @@ type TransactionRepository interface {
 	) ([]transaction.CategoryTotal, error)
 	// GetTotalsByMonth — то же по месяцам `YYYY-MM`; крайние месяцы покрывают только дни внутри периода.
 	GetTotalsByMonth(ctx context.Context, startDate, endDate date.Date) ([]transaction.MonthTotal, error)
-	// RecordedByAccount — расходы периода строкой на счёт, операции без счёта — строкой с nil.
-	RecordedByAccount(ctx context.Context, startDate, endDate date.Date) ([]transaction.AccountTotal, error)
 	// Note: UpdateBulkCategory may need to be implemented in the repository
 	// For now, we'll use individual updates in a transaction
 }

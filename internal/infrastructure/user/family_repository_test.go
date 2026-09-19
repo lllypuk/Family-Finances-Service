@@ -185,14 +185,14 @@ func TestFamilyRepository_HasMonetaryData(t *testing.T) {
 	_, err = db.ExecContext(ctx,
 		`INSERT INTO accounts (id, family_id, name, name_key) VALUES (?, ?, 'Карта', 'карта')`, accountID, familyID)
 	require.NoError(t, err)
-	_, err = db.ExecContext(ctx, `INSERT INTO account_reconciliations (account_id, month, bank_expense_minor)
+	_, err = db.ExecContext(ctx, `INSERT INTO account_balances (account_id, month, balance_minor)
 		VALUES (?, '2026-09', 0)`, accountID)
 	require.NoError(t, err)
 	has, err = repo.HasMonetaryData(ctx)
 	require.NoError(t, err)
-	assert.True(t, has, "нулевая сверка тоже блокирует валюту")
+	assert.True(t, has, "нулевой остаток тоже блокирует валюту")
 
-	_, err = db.ExecContext(ctx, `DELETE FROM account_reconciliations`)
+	_, err = db.ExecContext(ctx, `DELETE FROM account_balances`)
 	require.NoError(t, err)
 	holdingID := uuid.New().String()
 	_, err = db.ExecContext(ctx, `INSERT INTO holdings (id, family_id, name, name_key, side, kind, is_archived)

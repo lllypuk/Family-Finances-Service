@@ -9,6 +9,9 @@ import tech.shatrov.familyfinances.ui.settings.restoreSettingsPage
 import tech.shatrov.familyfinances.ui.settings.saveKey
 import tech.shatrov.familyfinances.ui.transactions.TransactionFilters
 import tech.shatrov.familyfinances.ui.transactions.TransactionPeriod
+import tech.shatrov.familyfinances.ui.transactions.TransactionPrefill
+import java.net.URLDecoder
+import java.net.URLEncoder
 import java.time.LocalDate
 import java.time.YearMonth
 import java.util.UUID
@@ -45,13 +48,15 @@ sealed interface AppScreen {
      * Форма операции; `id` = `null` — новая, тело правки перечитывается с сервера.
      * `draft` — клиентский UUID создаваемой записи: он же ключ модели, поэтому следующий заход
      * на форму получает чистую, а повтор после обрыва — ту же и не создаёт вторую запись.
-     * `back` — список, куда форма возвращает; пишется в бандл вместе с фильтром расшифровки,
+     * `back` — экран, куда форма возвращает; пишется в бандл вместе с фильтром расшифровки,
      * иначе после поворота форма вернула бы на вкладку, а модель списка — фильтр сверки.
+     * `prefill` — поля новой операции, которые открывший экран заполнил за пользователя.
      */
     data class TransactionEdit(
         val id: UUID?,
         val draft: UUID = UUID.randomUUID(),
-        val back: Transactions = Transactions(),
+        val back: AppScreen = Transactions(),
+        val prefill: TransactionPrefill? = null,
     ) : AppScreen
 
     data object Budgets : AppScreen
@@ -105,45 +110,46 @@ private const val TRANSACTIONS_KEY_FIELDS = 10
 
 /** Экран переживает поворот; всё остальное восстанавливается из хранилища токена. */
 val AppScreenSaver: Saver<AppScreen, String> = Saver(
-    save = { screen ->
-        when (screen) {
-            AppScreen.Loading -> KEY_LOADING
-
-            AppScreen.Login -> KEY_LOGIN
-
-            AppScreen.Home -> KEY_HOME
-
-            is AppScreen.Overview -> "$KEY_OVERVIEW:${screen.period.saveKey()}"
-
-            is AppScreen.Transactions -> screen.saveKey()
-
-            AppScreen.Categories -> KEY_CATEGORIES
-
-            AppScreen.Budgets -> KEY_BUDGETS
-
-            is AppScreen.TransactionEdit ->
-                "$KEY_TRANSACTION_EDIT:${screen.id ?: ""}:${screen.draft}:${screen.back.saveKey()}"
-
-            is AppScreen.BudgetEdit -> "$KEY_BUDGET_EDIT:${screen.id ?: ""}:${screen.draft}"
-
-            AppScreen.NetWorth -> KEY_NET_WORTH
-
-            is AppScreen.HoldingEdit -> "$KEY_HOLDING_EDIT:${screen.id ?: ""}:${screen.draft}:${screen.side.value}"
-
-            is AppScreen.HoldingHistory -> "$KEY_HOLDING_HISTORY:${screen.id}"
-
-            is AppScreen.Settings -> "$KEY_SETTINGS:${screen.page.saveKey()}"
-
-            is AppScreen.Recognize -> "$KEY_RECOGNIZE:${screen.importId}"
-
-            is AppScreen.Reconciliation -> "$KEY_RECONCILIATION:${screen.month}"
-        }
-    },
+    save = { screen -> saveScreen(screen) },
     // Ключ мог прийти из бандла прошлой версии: разбор чужого формата — не крэш, а загрузка.
     restore = { key ->
         runCatching { restoreScreen(key) }.getOrNull() ?: AppScreen.Loading
     },
 )
+
+private fun saveScreen(screen: AppScreen): String = when (screen) {
+    AppScreen.Loading -> KEY_LOADING
+
+    AppScreen.Login -> KEY_LOGIN
+
+    AppScreen.Home -> KEY_HOME
+
+    is AppScreen.Overview -> "$KEY_OVERVIEW:${screen.period.saveKey()}"
+
+    is AppScreen.Transactions -> screen.saveKey()
+
+    AppScreen.Categories -> KEY_CATEGORIES
+
+    AppScreen.Budgets -> KEY_BUDGETS
+
+    is AppScreen.TransactionEdit ->
+        "$KEY_TRANSACTION_EDIT:${screen.id ?: ""}:${screen.draft}:${screen.prefill?.saveKey().orEmpty()}:" +
+            saveScreen(screen.back)
+
+    is AppScreen.BudgetEdit -> "$KEY_BUDGET_EDIT:${screen.id ?: ""}:${screen.draft}"
+
+    AppScreen.NetWorth -> KEY_NET_WORTH
+
+    is AppScreen.HoldingEdit -> "$KEY_HOLDING_EDIT:${screen.id ?: ""}:${screen.draft}:${screen.side.value}"
+
+    is AppScreen.HoldingHistory -> "$KEY_HOLDING_HISTORY:${screen.id}"
+
+    is AppScreen.Settings -> "$KEY_SETTINGS:${screen.page.saveKey()}"
+
+    is AppScreen.Recognize -> "$KEY_RECOGNIZE:${screen.importId}"
+
+    is AppScreen.Reconciliation -> "$KEY_RECONCILIATION:${screen.month}"
+}
 
 private fun restoreScreen(key: String): AppScreen? = when {
     key == KEY_LOGIN -> AppScreen.Login
@@ -163,10 +169,18 @@ private fun restoreScreen(key: String): AppScreen? = when {
 
     key.startsWith("$KEY_TRANSACTION_EDIT:") -> {
         val parts = key.removePrefix("$KEY_TRANSACTION_EDIT:").split(':', limit = 3)
+        val rest = parts.getOrNull(2)
+        // Ключ до плана 20: сразу `back`, всегда список операций. `back` с двоеточиями идёт последним.
+        val (prefill, back) = when {
+            rest == null -> null to null
+            rest.startsWith(KEY_TRANSACTIONS) -> null to rest
+            else -> rest.split(':', limit = 2).let { (p, b) -> p.takeIf { it.isNotEmpty() } to b }
+        }
         AppScreen.TransactionEdit(
             id = parts[0].takeIf { it.isNotEmpty() }?.let(UUID::fromString),
             draft = UUID.fromString(parts[1]),
-            back = parts.getOrNull(2)?.let(::restoreScreen) as? AppScreen.Transactions ?: AppScreen.Transactions(),
+            back = back?.let(::restoreScreen) ?: AppScreen.Transactions(),
+            prefill = prefill?.let(::restorePrefill),
         )
     }
 
@@ -203,6 +217,24 @@ private fun restoreScreen(key: String): AppScreen? = when {
         AppScreen.Reconciliation(YearMonth.parse(key.removePrefix("$KEY_RECONCILIATION:")))
 
     else -> null
+}
+
+// Описание кодируется: в нём может оказаться двоеточие, разделитель ключа.
+private fun TransactionPrefill.saveKey(): String = listOf(
+    amountMinor.toString(),
+    type.name,
+    date.toString(),
+    URLEncoder.encode(description, "UTF-8"),
+).joinToString(",")
+
+private fun restorePrefill(value: String): TransactionPrefill {
+    val (amount, type, date, description) = value.split(',')
+    return TransactionPrefill(
+        amountMinor = amount.toLong(),
+        type = TransactionType.valueOf(type),
+        date = LocalDate.parse(date),
+        description = URLDecoder.decode(description, "UTF-8"),
+    )
 }
 
 private fun AppScreen.Transactions.saveKey(): String {

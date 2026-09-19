@@ -49,6 +49,14 @@ private val formFields = setOf(
     TransactionField.ACCOUNT,
 )
 
+/** Поля новой операции, заполненные за пользователя (корректировка сверки); категория остаётся за ним. */
+data class TransactionPrefill(
+    val amountMinor: Long,
+    val type: TransactionType,
+    val date: LocalDate,
+    val description: String,
+)
+
 data class TransactionEditUiState(
     val amount: String = "",
     val currency: String = "",
@@ -102,9 +110,11 @@ class TransactionEditViewModel(
     private val draftId: UUID = UUID.randomUUID(),
     today: LocalDate = LocalDate.now(),
     currency: String = "",
+    prefill: TransactionPrefill? = null,
 ) : ViewModel() {
     private val mutable = MutableStateFlow(
-        TransactionEditUiState(currency = currency, date = today, editing = transactionId != null),
+        TransactionEditUiState(currency = currency, date = today, editing = transactionId != null)
+            .prefilled(prefill.takeIf { transactionId == null }),
     )
 
     val state: StateFlow<TransactionEditUiState> = mutable.asStateFlow()
@@ -269,6 +279,18 @@ private fun TransactionEditUiState.filled(
         description = existing.description,
     )
 }
+
+private fun TransactionEditUiState.prefilled(prefill: TransactionPrefill?): TransactionEditUiState =
+    if (prefill == null) {
+        this
+    } else {
+        copy(
+            amount = formatAmountInput(prefill.amountMinor),
+            type = prefill.type,
+            date = prefill.date,
+            description = prefill.description,
+        )
+    }
 
 /** Правка поля гасит ошибку под ним: она была про прошлую попытку. */
 private fun TransactionEditUiState.cleared(field: String): TransactionEditUiState =

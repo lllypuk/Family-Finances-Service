@@ -6,17 +6,18 @@ API for the Android client. One instance = one family.
 ## 🎯 Project Status: IN DEVELOPMENT 🚧
 
 > **Direction (September 2026):** API-only backend for an Android app. Decisions and the implementation
-> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–10 and 12–18 are done: the
+> plans: [docs/specs/005-api-only-redesign.md](docs/specs/005-api-only-redesign.md). Plans 01–10 and 12–20 are done: the
 > web interface, cookie sessions and CSRF are gone, money is integer minor units, dates are calendar dates,
 > the deployment is one compose with Caddy, the Android client lives in `android/` with its settings screen,
 > stored reports are gone in favour of `GET /api/v1/stats/monthly`, budgets can repeat as a series, and the
 > client's UI audit is closed (plan 13, client only — the contract did not move), and Prometheus metrics
 > moved onto a second listener (plan 14 — the contract did not move either), and bank screenshots can be
 > recognized into candidate transactions (plan 15, `POST /api/v1/transactions/recognize`), transactions can be
-> bound to accounts with a monthly reconciliation against the bank (plan 16), holdings carry a monthly
+> bound to accounts (plan 16), holdings carry a monthly
 > net-worth series (plan 17) and a planned monthly income and expense (plan 18). Plan 19 (client `0.11.0`,
 > contract untouched): a screenshot import survives process death, and the "Обзор" screen over `summary` +
-> `monthly`. The sections below describe the code as it is today. Releases: server `v0.3.0` (plan 10),
+> `monthly`. Plan 20 (server `v0.9.0`, client `0.12.0`) reconciles month-end account balances against the
+> month's transactions instead of plan 16's bank figure; a `0.11.0` client loses its reconciliation screen and the home-screen reconciliation card. The sections below describe the code as it is today. Releases: server `v0.3.0` (plan 10),
 > `v0.4.0` (plan 12), `v0.8.0` (plans 14–18), client `app-v0.10.0`; `v0.5.0`–`v0.7.0` and
 > `app-v0.6.0`–`app-v0.9.0` were never cut. Left from plan 11: multi-select over transactions
 > ([docs/backlog.md](docs/backlog.md)).
@@ -84,13 +85,14 @@ The author of a record is taken from the token, so `user_id` in a request body i
   `DELETE /api/v1/backups/:name`
 - `POST /api/v1/transactions/bulk-delete`
 - Accounts: `GET /api/v1/accounts` (`?archived=true` adds archived ones), `POST` (`{id?, name}`), `PUT`
-  (`name`, `is_archived`), `DELETE` — `409 ACCOUNT_IN_USE` while a transaction or reconciliation refers to it
+  (`name`, `is_archived`), `DELETE` — `409 ACCOUNT_IN_USE` while a transaction or a month-end balance refers to it
   (archive it instead); the name is unique case-insensitively, `409 ACCOUNT_NAME_EXISTS`
 - `account_id` on a transaction is optional: in `PUT` a missing or `null` field keeps the stored one,
   `clear_account: true` unbinds it; `GET /api/v1/transactions?account_id=…` or `?unassigned=true`
-- Reconciliation: `PUT`/`DELETE /api/v1/accounts/:id/reconciliations/YYYY-MM` store the bank's expense figure
-  for the month; `GET /api/v1/stats/reconciliation?month=YYYY-MM` answers recorded expenses (summed on read),
-  the bank figure and the difference per account, plus the expenses with no account
+- Reconciliation: `PUT`/`DELETE /api/v1/accounts/:id/balances/YYYY-MM` store a signed month-end balance
+  (`balance_minor`, a credit card is negative; a future month is `422`); `GET /api/v1/stats/reconciliation?month=YYYY-MM`
+  answers the opening and closing sums, the month's income and expense and
+  `gap_minor = (closing − opening) − (income − expense)`, computed on read, so a late transaction closes the gap
 - Holdings: `GET /api/v1/holdings` (`?archived=true` adds archived ones), `POST` (`{id?, name, side, kind,
   monthly_income_minor?, monthly_expense_minor?}`), `PUT` (`side` cannot change; a missing plan number is left
   alone, `0` clears it; `plan_updated_at` is answered only while a plan exists), `DELETE` (admin, takes the snapshot history with it); `409 HOLDING_NAME_EXISTS`.
@@ -104,7 +106,7 @@ The author of a record is taken from the token, so `user_id` in a request body i
   RECOGNITION_FAILED` for an answer that does not parse, `413`, `408` for a too slow upload, `422` with `field: images[i]`
 - Money is `amount_minor` — an integer in the family's minor units (kopeks/cents); percentages and utilization
   stay fractional. `PUT /api/v1/family` returns `409 CURRENCY_LOCKED` if a transaction, a
-  reconciliation, a holding snapshot or a holding plan already exists
+  month-end balance (a `0` counts), a holding snapshot or a holding plan already exists
 - Transaction and budget dates are calendar `YYYY-MM-DD`; period bounds use the family's `timezone`
 - `POST` of a transaction, budget, category or account accepts a client-generated `id` (any valid UUID): a retry with the same
   `id` answers `200` with the existing record instead of creating a duplicate
@@ -126,7 +128,7 @@ The author of a record is taken from the token, so `user_id` in a request body i
 - Users are never deleted, only deactivated (`PATCH /users/:id {"is_active": false}`)
 - Backup **restore** is deliberately not exposed over the API and has no subcommand — in production it is
   manual over ssh ([deploy/README.md](deploy/README.md)); `make sqlite-restore` is a dev-only `cp`
-- More than one currency: a family has exactly one, and it can no longer be changed once a transaction, a reconciliation, a holding snapshot or a holding plan exists
+- More than one currency: a family has exactly one, and it can no longer be changed once a transaction, a month-end balance, a holding snapshot or a holding plan exists
 
 ## 🏗️ Architecture and Technology Stack
 

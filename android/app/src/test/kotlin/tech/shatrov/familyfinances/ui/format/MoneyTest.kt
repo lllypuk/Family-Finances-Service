@@ -86,5 +86,15 @@ class MoneyTest {
         assertEquals("1500", formatAmountInput(150000))
         assertEquals("1500,05", formatAmountInput(150005))
         assertEquals("0", formatAmountInput(0))
+        assertEquals("-1500,05", formatAmountInput(-150005))
+    }
+
+    @Test
+    fun signedAmountTakesEitherMinus() {
+        assertEquals(-150050L, parseSignedAmountMinor("-1500,50"))
+        assertEquals(-150000L, parseSignedAmountMinor("\u22121500"))
+        assertEquals(150000L, parseSignedAmountMinor(" 1500 "))
+        assertNull(parseSignedAmountMinor("-"))
+        assertNull(parseSignedAmountMinor("--1"))
     }
 }

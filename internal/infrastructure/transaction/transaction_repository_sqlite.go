@@ -870,49 +870,6 @@ func (r *SQLiteRepository) GetTotalsByCategoryAndDateRange(
 	return totals, nil
 }
 
-// RecordedByAccount — расходы периода по счетам; без JOIN accounts, чтобы не потерять операции без счёта.
-func (r *SQLiteRepository) RecordedByAccount(
-	ctx context.Context,
-	startDate, endDate date.Date,
-) ([]transaction.AccountTotal, error) {
-	familyID, err := r.getSingleFamilyID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT account_id, SUM(amount_minor)
-		FROM transactions
-		WHERE family_id = ? AND type = 'expense' AND date >= ? AND date <= ?
-		GROUP BY account_id`,
-		sqlitehelpers.UUIDToString(familyID), startDate, endDate,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get recorded by account: %w", err)
-	}
-	defer rows.Close()
-
-	var totals []transaction.AccountTotal
-	for rows.Next() {
-		var (
-			total        transaction.AccountTotal
-			accountIDStr sql.NullString
-		)
-		if err = rows.Scan(&accountIDStr, &total.AmountMinor); err != nil {
-			return nil, fmt.Errorf("failed to scan account total: %w", err)
-		}
-		if total.AccountID, err = accountIDFromNull(accountIDStr); err != nil {
-			return nil, err
-		}
-		totals = append(totals, total)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to iterate account totals: %w", err)
-	}
-
-	return totals, nil
-}
-
 // GetTotalsByMonth — суммы и число операций по каждой паре (месяц `YYYY-MM`, тип) за период;
 // крайние месяцы покрывают только дни внутри интервала.
 func (r *SQLiteRepository) GetTotalsByMonth(

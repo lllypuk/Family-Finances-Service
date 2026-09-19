@@ -242,8 +242,8 @@ private fun Summary(
 
         item { OverviewRow(onOverview) }
 
-        if (card is ReconciliationCard.Ready || card is ReconciliationCard.NoAccounts) {
-            item { ReconciliationCardRow(card, onReconciliation, onAccounts) }
+        if (card != ReconciliationCard.Loading && card != ReconciliationCard.Hidden) {
+            item { ReconciliationCardRow(card, state.currency, onReconciliation, onAccounts) }
         }
 
         if (topCategories.isNotEmpty()) {
@@ -334,42 +334,53 @@ private fun OverviewRow(onClick: () -> Unit) {
 @Composable
 private fun ReconciliationCardRow(
     card: ReconciliationCard,
+    currency: String,
     onReconciliation: (YearMonth) -> Unit,
     onAccounts: () -> Unit,
 ) {
-    val ready = card as? ReconciliationCard.Ready
+    val month = when (card) {
+        is ReconciliationCard.Ready -> card.month
+        is ReconciliationCard.Incomplete -> card.month
+        else -> null
+    }
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
         modifier = Modifier
             .padding(top = Dimens.SPACE_4)
             .fillMaxWidth()
             .groupedRow(RowPlace.ONLY, LocalAppColors.current) {
-                if (ready == null) onAccounts() else onReconciliation(ready.month)
+                if (month == null) onAccounts() else onReconciliation(month)
             },
         horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = if (ready == null) {
+                text = if (month == null) {
                     stringResource(R.string.reconciliation_title)
                 } else {
-                    stringResource(R.string.home_reconciliation, formatMonthName(ready.month))
+                    stringResource(R.string.home_reconciliation, formatMonthName(month))
                 },
                 style = MaterialTheme.typography.bodyMedium,
             )
-            if (ready == null) {
-                Text(
-                    text = stringResource(R.string.home_reconciliation_no_accounts),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            val hint = when (card) {
+                is ReconciliationCard.Incomplete -> stringResource(R.string.home_reconciliation_incomplete)
+                ReconciliationCard.NoAccounts -> stringResource(R.string.home_reconciliation_no_accounts)
+                else -> null
+            }
+            if (hint != null) {
+                Text(text = hint, style = MaterialTheme.typography.bodySmall, color = muted)
             }
         }
-        if (ready != null) {
+        if (card is ReconciliationCard.Ready) {
             Text(
-                text = stringResource(R.string.home_reconciliation_matched, ready.matched, ready.total),
+                text = if (card.gapMinor == 0L) {
+                    stringResource(R.string.reconciliation_matched)
+                } else {
+                    stringResource(R.string.reconciliation_gap, formatMoney(card.gapMinor, currency, signed = true))
+                },
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = muted,
             )
         }
         Icon(AppIcons.ChevronRight, contentDescription = null)

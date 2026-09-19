@@ -30,14 +30,12 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Contextual
 
 /**
- * Пока сверки нет, `bank_expense_minor`, `diff_minor`, `note` и `updated_at` — null
+ * 
  *
  * @param account 
- * @param recordedMinor Записанные расходы по счёту за месяц
- * @param bankExpenseMinor Сумма в минимальных единицах валюты семьи (копейки для RUB, центы для EUR/USD). Поддерживаются только валюты с двумя знаками после запятой (A-05). 
- * @param diffMinor `bank_expense_minor - recorded_minor`; больше нуля — не записали, меньше — лишнее
- * @param note 
- * @param updatedAt Служебная метка времени, RFC3339 UTC
+ * @param openingMinor Остаток на конец прошлого месяца; может быть отрицательным
+ * @param closingMinor Остаток на конец этого месяца; может быть отрицательным
+ * @param updatedAt Время записи остатка на конец месяца
  */
 @Serializable
 
@@ -46,22 +44,15 @@ data class ReconciliationRow (
     @SerialName(value = "account")
     val account: Account,
 
-    /* Записанные расходы по счёту за месяц */
-    @SerialName(value = "recorded_minor")
-    val recordedMinor: kotlin.Long,
+    /* Остаток на конец прошлого месяца; может быть отрицательным */
+    @SerialName(value = "opening_minor")
+    val openingMinor: kotlin.Long?,
 
-    /* Сумма в минимальных единицах валюты семьи (копейки для RUB, центы для EUR/USD). Поддерживаются только валюты с двумя знаками после запятой (A-05).  */
-    @SerialName(value = "bank_expense_minor")
-    val bankExpenseMinor: kotlin.Long?,
+    /* Остаток на конец этого месяца; может быть отрицательным */
+    @SerialName(value = "closing_minor")
+    val closingMinor: kotlin.Long?,
 
-    /* `bank_expense_minor - recorded_minor`; больше нуля — не записали, меньше — лишнее */
-    @SerialName(value = "diff_minor")
-    val diffMinor: kotlin.Long?,
-
-    @SerialName(value = "note")
-    val note: kotlin.String?,
-
-    /* Служебная метка времени, RFC3339 UTC */
+    /* Время записи остатка на конец месяца */
     @Contextual @SerialName(value = "updated_at")
     val updatedAt: java.time.OffsetDateTime?
 

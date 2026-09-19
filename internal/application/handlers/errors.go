@@ -50,7 +50,7 @@ const (
 	ErrCodeAccountNotFound = "ACCOUNT_NOT_FOUND"
 	// ErrCodeAccountNameExists signals an account name already taken, by an archived account too.
 	ErrCodeAccountNameExists = "ACCOUNT_NAME_EXISTS"
-	// ErrCodeAccountInUse signals a delete of an account referenced by transactions or reconciliations.
+	// ErrCodeAccountInUse signals a delete of an account referenced by transactions or balances.
 	ErrCodeAccountInUse = "ACCOUNT_IN_USE"
 	// ErrCodeHoldingNotFound signals that the requested holding does not exist.
 	ErrCodeHoldingNotFound = "HOLDING_NOT_FOUND"
@@ -58,8 +58,8 @@ const (
 	ErrCodeHoldingNameExists = "HOLDING_NAME_EXISTS"
 	// ErrCodeHoldingValueNotFound signals that the holding has no value on the date.
 	ErrCodeHoldingValueNotFound = "HOLDING_VALUE_NOT_FOUND"
-	// ErrCodeReconciliationNotFound signals that the account has no reconciliation for the month.
-	ErrCodeReconciliationNotFound = "RECONCILIATION_NOT_FOUND"
+	// ErrCodeBalanceNotFound signals that the account has no balance for the month.
+	ErrCodeBalanceNotFound = "BALANCE_NOT_FOUND"
 	// ErrCodeInvalidQueryParam маркирует деталь ошибки 422 по query-параметру.
 	ErrCodeInvalidQueryParam = "INVALID_QUERY_PARAM"
 	// ErrCodeInvalidBackupName signals a backup filename outside the `backup_*.db` pattern.
@@ -98,7 +98,7 @@ const (
 	ErrMessageCannotDeactivate       = "Cannot deactivate your own account"
 	ErrMessageEmailTaken             = "Email already exists"
 	ErrMessageLastAdmin              = "Cannot deactivate or demote the last administrator"
-	ErrMessageCurrencyLocked         = "Currency cannot be changed while transactions, reconciliations or holding values or plans exist"
+	ErrMessageCurrencyLocked         = "Currency cannot be changed while transactions, account balances or holding values or plans exist"
 	ErrMessageBudgetOverlap          = "Budget period overlaps with an existing budget"
 	ErrMessageBudgetNameExists       = "Budget with this name already exists for this period"
 	ErrMessageBudgetBelowSpent       = "Budget amount is less than already spent"
@@ -107,8 +107,8 @@ const (
 	ErrMessageInvalidAccountID       = "Invalid account ID format"
 	ErrMessageAccountNotFound        = "Account not found"
 	ErrMessageAccountNameExists      = "Account with this name already exists"
-	ErrMessageAccountInUse           = "Account has transactions or reconciliations; archive it instead"
-	ErrMessageReconciliationNotFound = "Reconciliation not found"
+	ErrMessageAccountInUse           = "Account has transactions or balances; archive it instead"
+	ErrMessageBalanceNotFound        = "Account balance not found"
 	ErrMessageInvalidHoldingID       = "Invalid holding ID format"
 	ErrMessageHoldingNotFound        = "Holding not found"
 	ErrMessageHoldingNameExists      = "Holding with this name already exists"

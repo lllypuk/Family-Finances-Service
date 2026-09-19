@@ -1,5 +1,6 @@
 package tech.shatrov.familyfinances.ui.reconciliation
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,30 +15,26 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.window.DialogProperties
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.core.api.ReconciliationRow
+import tech.shatrov.familyfinances.core.api.ReconciliationStats
 import tech.shatrov.familyfinances.theme.Dimens
 import tech.shatrov.familyfinances.theme.LocalAppColors
 import tech.shatrov.familyfinances.ui.AppIcons
@@ -47,40 +44,40 @@ import tech.shatrov.familyfinances.ui.RowPlace
 import tech.shatrov.familyfinances.ui.currencySuffix
 import tech.shatrov.familyfinances.ui.format.formatMoney
 import tech.shatrov.familyfinances.ui.format.formatMonth
+import tech.shatrov.familyfinances.ui.format.formatMonthName
 import tech.shatrov.familyfinances.ui.groupedRow
 import tech.shatrov.familyfinances.ui.message
 import tech.shatrov.familyfinances.ui.rowPlace
 import tech.shatrov.familyfinances.ui.settings.SettingsHeader
 import java.time.YearMonth
-import java.util.UUID
 
-/**
- * Сверка месяца. Тап по строке открывает её расходы (`null` — операции без счёта), тап по «в банке» —
- * лист с цифрой банка.
- */
+/** Сверка остатков месяца: итог сверху, под ним счета; тап по счёту — остаток на конец месяца, по «было» — прошлого. */
 @Composable
 fun ReconciliationScreen(
     month: YearMonth,
+    today: YearMonth,
     state: ReconciliationUiState,
-    editor: BankEditUiState?,
+    editor: BalanceEditUiState?,
     currency: String,
     onBack: () -> Unit,
     onMonthChange: (YearMonth) -> Unit,
     onRetry: () -> Unit,
-    onOpenTransactions: (UUID?) -> Unit,
-    onOpenBank: (ReconciliationRow) -> Unit,
+    onOpenBalance: (ReconciliationRow) -> Unit,
+    onOpenOpening: (ReconciliationRow) -> Unit,
     onAddAccount: () -> Unit,
+    onOpenTransactions: () -> Unit,
+    onCloseGap: (Long) -> Unit,
     onAmountChange: (String) -> Unit,
-    onNoteChange: (String) -> Unit,
+    onToggleSign: () -> Unit,
     onSave: () -> Unit,
-    onDelete: () -> Unit,
-    onDismissBank: () -> Unit,
+    onClear: () -> Unit,
+    onDismissBalance: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.padding(horizontal = Dimens.SPACE_4, vertical = Dimens.SPACE_2)) {
             SettingsHeader(R.string.reconciliation_title, enabled = true, onBack = onBack)
-            MonthSwitcher(month, onMonthChange)
+            MonthSwitcher(month, today, onMonthChange)
         }
 
         when (state) {
@@ -105,19 +102,21 @@ fun ReconciliationScreen(
                         }
                     }
                 } else {
-                    Rows(state, currency, onOpenTransactions, onOpenBank)
+                    Rows(state, currency, onMonthChange, onOpenBalance, onOpenOpening, onOpenTransactions, onCloseGap)
                 }
         }
     }
 
     if (editor != null) {
-        BankSheet(editor, currency, onAmountChange, onNoteChange, onSave, onDelete, onDismissBank)
+        BalanceDialog(editor, currency, onAmountChange, onToggleSign, onSave, onClear, onDismissBalance)
     }
 }
 
+/** Вперёд не дальше [today]: будущий месяц сервер отвергает. */
 @Composable
 private fun MonthSwitcher(
     month: YearMonth,
+    today: YearMonth,
     onMonthChange: (YearMonth) -> Unit,
 ) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -129,7 +128,7 @@ private fun MonthSwitcher(
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.weight(1f),
         )
-        IconButton(onClick = { onMonthChange(month.plusMonths(1)) }) {
+        IconButton(onClick = { onMonthChange(month.plusMonths(1)) }, enabled = month < today) {
             Icon(AppIcons.ChevronRight, contentDescription = stringResource(R.string.reconciliation_next_month))
         }
     }
@@ -139,8 +138,11 @@ private fun MonthSwitcher(
 private fun Rows(
     state: ReconciliationUiState.Ready,
     currency: String,
-    onOpenTransactions: (UUID?) -> Unit,
-    onOpenBank: (ReconciliationRow) -> Unit,
+    onMonthChange: (YearMonth) -> Unit,
+    onOpenBalance: (ReconciliationRow) -> Unit,
+    onOpenOpening: (ReconciliationRow) -> Unit,
+    onOpenTransactions: () -> Unit,
+    onCloseGap: (Long) -> Unit,
 ) {
     val rows = state.stats.accounts
     LazyColumn(
@@ -149,16 +151,125 @@ private fun Rows(
             .padding(horizontal = Dimens.SPACE_4),
         contentPadding = PaddingValues(vertical = Dimens.SPACE_3),
     ) {
+        item { TotalCard(state.total, state.stats, currency, onMonthChange, onOpenTransactions, onCloseGap) }
         itemsIndexed(rows, key = { _, row -> row.account.id }) { index, row ->
-            AccountRow(row, currency, rowPlace(index, rows.size), onOpenTransactions, onOpenBank)
+            AccountRow(row, currency, rowPlace(index, rows.size), onOpenBalance, onOpenOpening)
         }
-        // Строки нет, когда без счёта ничего не потрачено: расшифровывать нечего.
-        if (state.stats.unassignedMinor > 0) {
-            item {
-                UnassignedRow(state.stats.unassignedMinor, currency) { onOpenTransactions(null) }
+        item {
+            Text(
+                text = stringResource(R.string.reconciliation_transfer_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = Dimens.SPACE_3),
+            )
+        }
+    }
+}
+
+@Composable
+private fun TotalCard(
+    total: ReconciliationTotal,
+    stats: ReconciliationStats,
+    currency: String,
+    onMonthChange: (YearMonth) -> Unit,
+    onOpenTransactions: () -> Unit,
+    onCloseGap: (Long) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .padding(bottom = Dimens.SPACE_4)
+            .fillMaxWidth()
+            .groupedRow(RowPlace.ONLY, LocalAppColors.current),
+        verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_1),
+    ) {
+        when (total) {
+            is ReconciliationTotal.Complete -> {
+                val muted = MaterialTheme.colorScheme.onSurfaceVariant
+                Text(
+                    text = stringResource(
+                        R.string.reconciliation_balances,
+                        formatMoney(total.openingMinor, currency),
+                        formatMoney(total.closingMinor, currency),
+                        formatMoney(total.closingMinor - total.openingMinor, currency, signed = true),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = muted,
+                )
+                Text(
+                    text = stringResource(
+                        R.string.reconciliation_operations,
+                        formatMoney(stats.incomeMinor, currency),
+                        formatMoney(stats.expenseMinor, currency),
+                        formatMoney(stats.incomeMinor - stats.expenseMinor, currency, signed = true),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = muted,
+                )
+                GapLine(total.gapMinor, currency)
+            }
+
+            is ReconciliationTotal.MissingClosing -> Text(
+                text = pluralStringResource(
+                    R.plurals.reconciliation_missing_closing,
+                    total.accounts,
+                    total.accounts,
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+
+            is ReconciliationTotal.MissingOpening -> {
+                val prev = formatMonthName(total.prev)
+                Text(
+                    text = stringResource(R.string.reconciliation_missing_opening, prev),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                TextButton(onClick = { onMonthChange(total.prev) }) {
+                    Text(stringResource(R.string.reconciliation_enter_opening, prev))
+                }
+            }
+        }
+        Row {
+            TextButton(onClick = onOpenTransactions) {
+                Text(stringResource(R.string.reconciliation_transactions))
+            }
+            if (total is ReconciliationTotal.Complete && total.gapMinor != 0L) {
+                TextButton(onClick = { onCloseGap(total.gapMinor) }) {
+                    Text(stringResource(R.string.reconciliation_close_gap))
+                }
             }
         }
     }
+}
+
+@Composable
+private fun GapLine(
+    gap: Long,
+    currency: String,
+) {
+    val verdict = gapVerdict(gap)
+    if (verdict == GapVerdict.MATCHED) {
+        Text(
+            text = stringResource(R.string.reconciliation_matched),
+            style = MaterialTheme.typography.titleMedium,
+            color = LocalAppColors.current.income,
+        )
+        return
+    }
+    Text(
+        text = stringResource(R.string.reconciliation_gap, formatMoney(gap, currency, signed = true)),
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.error,
+    )
+    Text(
+        text = stringResource(
+            if (verdict == GapVerdict.MISSING_INCOME) {
+                R.string.reconciliation_missing_income
+            } else {
+                R.string.reconciliation_missing_expense
+            },
+        ),
+        style = MaterialTheme.typography.bodySmall,
+    )
 }
 
 @Composable
@@ -166,162 +277,108 @@ private fun AccountRow(
     row: ReconciliationRow,
     currency: String,
     place: RowPlace,
-    onOpenTransactions: (UUID?) -> Unit,
-    onOpenBank: (ReconciliationRow) -> Unit,
+    onOpenBalance: (ReconciliationRow) -> Unit,
+    onOpenOpening: (ReconciliationRow) -> Unit,
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    Column(
+    val none = stringResource(R.string.reconciliation_no_balance)
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .groupedRow(place, LocalAppColors.current) { onOpenTransactions(row.account.id) },
+            .groupedRow(place, LocalAppColors.current) { onOpenBalance(row) },
+        horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = row.account.name,
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (row.account.isArchived) muted else MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
             )
-            DiffStatus(row.diffMinor, currency)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = stringResource(R.string.reconciliation_recorded, formatMoney(row.recordedMinor, currency)),
+                text = stringResource(
+                    R.string.reconciliation_opening,
+                    row.openingMinor?.let { formatMoney(it, currency) } ?: none,
+                ),
                 style = MaterialTheme.typography.bodySmall,
                 color = muted,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.clickable { onOpenOpening(row) },
             )
-            val bank = row.bankExpenseMinor
-            TextButton(onClick = { onOpenBank(row) }) {
-                Text(
-                    text = if (bank == null) {
-                        stringResource(R.string.reconciliation_bank_none)
-                    } else {
-                        stringResource(R.string.reconciliation_bank, formatMoney(bank, currency))
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
         }
-        val note = row.note
-        if (!note.isNullOrBlank()) {
-            Text(text = note, style = MaterialTheme.typography.bodySmall, color = muted)
-        }
-    }
-}
-
-/** Разница словами и без знака: «не записано» и «лишнее» читаются быстрее, чем плюс и минус. */
-@Composable
-private fun DiffStatus(
-    diff: Long?,
-    currency: String,
-) {
-    val (text, color) = when {
-        diff == null -> stringResource(R.string.reconciliation_not_checked) to
-            MaterialTheme.colorScheme.onSurfaceVariant
-
-        diff == 0L -> stringResource(R.string.reconciliation_matched) to LocalAppColors.current.income
-
-        diff > 0 -> stringResource(R.string.reconciliation_missing, formatMoney(diff, currency)) to
-            MaterialTheme.colorScheme.error
-
-        else -> stringResource(R.string.reconciliation_extra, formatMoney(-diff, currency)) to
-            MaterialTheme.colorScheme.error
-    }
-    Text(text = text, style = MaterialTheme.typography.bodySmall, color = color)
-}
-
-@Composable
-private fun UnassignedRow(
-    amount: Long,
-    currency: String,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .padding(top = Dimens.SPACE_4)
-            .fillMaxWidth()
-            .groupedRow(RowPlace.ONLY, LocalAppColors.current, onClick),
-        horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
         Text(
-            text = stringResource(R.string.reconciliation_unassigned),
+            text = row.closingMinor?.let { formatMoney(it, currency) } ?: none,
             style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
         )
-        Text(text = formatMoney(amount, currency), style = MaterialTheme.typography.displaySmall)
-        Icon(AppIcons.ChevronRight, contentDescription = null)
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BankSheet(
-    state: BankEditUiState,
+private fun BalanceDialog(
+    state: BalanceEditUiState,
     currency: String,
     onAmountChange: (String) -> Unit,
-    onNoteChange: (String) -> Unit,
+    onToggleSign: () -> Unit,
     onSave: () -> Unit,
-    onDelete: () -> Unit,
+    onClear: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    // Во время отправки лист не закрывается: модель отказ закрыть проигнорирует, а скрытый
-    // жестом лист остался бы в композиции невидимым.
-    val submitting by rememberUpdatedState(state.submitting)
-    val sheetState = rememberModalBottomSheetState(
-        skipPartiallyExpanded = true,
-        confirmValueChange = { it != SheetValue.Hidden || !submitting },
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(dismissOnClickOutside = !state.submitting),
+        title = { Text(state.accountName) },
+        text = { BalanceDialogContent(state, currency, onAmountChange, onToggleSign) },
+        confirmButton = {
+            TextButton(onClick = onSave, enabled = state.canSubmit) {
+                Text(stringResource(R.string.reconciliation_save))
+            }
+        },
+        dismissButton = {
+            if (state.exists) {
+                TextButton(onClick = onClear, enabled = !state.submitting) {
+                    Text(stringResource(R.string.reconciliation_clear), color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
     )
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        BankSheetContent(state, currency, onAmountChange, onNoteChange, onSave, onDelete)
-    }
 }
 
 @Composable
-internal fun BankSheetContent(
-    state: BankEditUiState,
+internal fun BalanceDialogContent(
+    state: BalanceEditUiState,
     currency: String,
     onAmountChange: (String) -> Unit,
-    onNoteChange: (String) -> Unit,
-    onSave: () -> Unit,
-    onDelete: () -> Unit,
+    onToggleSign: () -> Unit,
 ) {
-    var deleteConfirmShown by remember { mutableStateOf(false) }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = Dimens.SPACE_4, vertical = Dimens.SPACE_2),
-        verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_3),
-    ) {
-        Column {
-            Text(text = state.accountName, style = MaterialTheme.typography.titleMedium)
-            Text(
-                text = formatMonth(state.month.atDay(1)),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+    Column(verticalArrangement = Arrangement.spacedBy(Dimens.SPACE_2)) {
+        Text(
+            text = formatMonth(state.month.atDay(1)),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         val invalid = state.amount.isNotBlank() && state.amountMinor == null
         OutlinedTextField(
             value = state.amount,
             onValueChange = onAmountChange,
-            label = { Text(stringResource(R.string.reconciliation_bank_amount)) },
+            label = { Text(stringResource(R.string.reconciliation_balance_amount)) },
             singleLine = true,
+            leadingIcon = {
+                val label = stringResource(R.string.reconciliation_toggle_sign)
+                TextButton(
+                    onClick = onToggleSign,
+                    enabled = !state.submitting,
+                    modifier = Modifier.semantics { contentDescription = label },
+                ) {
+                    Text("±")
+                }
+            },
             suffix = currencySuffix(currency),
             isError = invalid,
             supportingText = {
                 FieldError(if (invalid) stringResource(R.string.reconciliation_error_amount) else null)
             },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        OutlinedTextField(
-            value = state.note,
-            onValueChange = onNoteChange,
-            label = { Text(stringResource(R.string.reconciliation_note)) },
             modifier = Modifier.fillMaxWidth(),
         )
         val error = state.error
@@ -332,50 +389,5 @@ internal fun BankSheetContent(
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
-        Button(
-            onClick = onSave,
-            enabled = state.canSubmit,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = Dimens.TOUCH_MIN),
-        ) {
-            if (state.submitting) {
-                CircularProgressIndicator(modifier = Modifier.heightIn(max = Dimens.ICON_SIZE))
-            } else {
-                Text(stringResource(R.string.reconciliation_save))
-            }
-        }
-        if (state.exists) {
-            TextButton(
-                onClick = { deleteConfirmShown = true },
-                enabled = !state.submitting,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = Dimens.TOUCH_MIN),
-            ) {
-                Text(stringResource(R.string.reconciliation_delete), color = MaterialTheme.colorScheme.error)
-            }
-        }
-    }
-
-    if (deleteConfirmShown) {
-        AlertDialog(
-            onDismissRequest = { deleteConfirmShown = false },
-            title = { Text(stringResource(R.string.reconciliation_delete_confirm)) },
-            text = { Text(state.accountName) },
-            confirmButton = {
-                TextButton(onClick = {
-                    deleteConfirmShown = false
-                    onDelete()
-                }) {
-                    Text(stringResource(R.string.reconciliation_delete))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { deleteConfirmShown = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            },
-        )
     }
 }

@@ -78,7 +78,7 @@ func (c *SQLiteTestDB) CleanTables(t *testing.T) {
 	tables := []string{
 		"sessions",
 		"budgets",
-		"account_reconciliations",
+		"account_balances",
 		"transactions",
 		"accounts",
 		"holding_values",

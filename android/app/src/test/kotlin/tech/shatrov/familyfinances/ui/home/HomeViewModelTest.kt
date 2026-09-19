@@ -23,7 +23,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import tech.shatrov.familyfinances.FakeTokenVault
 import tech.shatrov.familyfinances.INTERNAL_ERROR
+import tech.shatrov.familyfinances.RECONCILIATION_COMPLETE
 import tech.shatrov.familyfinances.RECONCILIATION_EMPTY
+import tech.shatrov.familyfinances.RECONCILIATION_NO_OPENING
 import tech.shatrov.familyfinances.RECONCILIATION_OK
 import tech.shatrov.familyfinances.ROBOLECTRIC_SDK
 import tech.shatrov.familyfinances.STATS_EMPTY
@@ -327,9 +329,40 @@ class HomeViewModelTest {
 
         createModel()
 
-        assertEquals(ReconciliationCard.Ready(YearMonth.of(2026, 8), matched = 1, total = 2), settleCard())
+        assertEquals(ReconciliationCard.Incomplete(YearMonth.of(2026, 8)), settleCard())
         server.takeRequest()
         assertEquals("month=2026-08", server.takeRequest().url.query)
+    }
+
+    @Test
+    fun completeMonthShowsGap() = runTest {
+        server.enqueueJson(200, STATS_OK)
+        server.enqueueJson(200, RECONCILIATION_COMPLETE)
+
+        createModel()
+
+        assertEquals(ReconciliationCard.Ready(YearMonth.of(2026, 8), gapMinor = 10000), settleCard())
+    }
+
+    @Test
+    fun completeMonthWithZeroGap() = runTest {
+        server.enqueueJson(200, STATS_OK)
+        server.enqueueJson(200, RECONCILIATION_COMPLETE.replace("\"gap_minor\":10000", "\"gap_minor\":0"))
+
+        createModel()
+
+        assertEquals(ReconciliationCard.Ready(YearMonth.of(2026, 8), gapMinor = 0), settleCard())
+    }
+
+    // Не хватает начала месяца: итога нет, карточка зовёт заполнить остатки.
+    @Test
+    fun missingOpeningIsIncomplete() = runTest {
+        server.enqueueJson(200, STATS_OK)
+        server.enqueueJson(200, RECONCILIATION_NO_OPENING)
+
+        createModel()
+
+        assertEquals(ReconciliationCard.Incomplete(YearMonth.of(2026, 8)), settleCard())
     }
 
     @Test
@@ -348,10 +381,26 @@ class HomeViewModelTest {
     fun cardWithoutAccountsLeadsToAccounts() = runTest {
         server.enqueueJson(200, STATS_OK)
         server.enqueueJson(200, RECONCILIATION_EMPTY)
+        server.enqueueJson(200, RECONCILIATION_EMPTY)
 
         createModel()
 
         assertEquals(ReconciliationCard.NoAccounts, settleCard())
+    }
+
+    // Счета заведены в сентябре: август их не знает, и до 10-го карточка сверяет сентябрь, а не зовёт заводить.
+    @Test
+    fun accountsOfCurrentMonthMoveCardToIt() = runTest {
+        server.enqueueJson(200, STATS_OK)
+        server.enqueueJson(200, RECONCILIATION_EMPTY)
+        server.enqueueJson(200, RECONCILIATION_NO_OPENING)
+
+        createModel()
+
+        assertEquals(ReconciliationCard.Incomplete(YearMonth.of(2026, 9)), settleCard())
+        server.takeRequest()
+        assertEquals("month=2026-08", server.takeRequest().url.query)
+        assertEquals("month=2026-09", server.takeRequest().url.query)
     }
 
     // Отказ карточки главную не роняет: сводка остаётся, карточки просто нет.

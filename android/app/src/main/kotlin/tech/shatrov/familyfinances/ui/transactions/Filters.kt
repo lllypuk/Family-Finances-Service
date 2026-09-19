@@ -56,17 +56,9 @@ data class TransactionFilters(
     fun withAccount(id: UUID?): TransactionFilters = copy(accountId = id, unassigned = false)
 
     companion object {
-        /** Расшифровка строки сверки: те же условия, по которым сервер считает `recorded_minor`. */
-        fun reconciliation(
-            month: YearMonth,
-            accountId: UUID?,
-        ): TransactionFilters = TransactionFilters(
-            period = TransactionPeriod.MONTH,
-            type = TransactionType.expense,
-            accountId = accountId,
-            month = month,
-            unassigned = accountId == null,
-        )
+        /** «Операции месяца» сверки: её приход и расход считаются по всем операциям месяца, без счёта. */
+        fun reconciliation(month: YearMonth): TransactionFilters =
+            TransactionFilters(period = TransactionPeriod.MONTH, month = month)
 
         /** Расшифровка строки «Обзора»: те же даты, что ушли в `summary`, иначе суммы не сойдутся. */
         fun overview(

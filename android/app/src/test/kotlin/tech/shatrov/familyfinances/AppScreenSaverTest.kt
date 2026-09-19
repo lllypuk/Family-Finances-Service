@@ -9,6 +9,7 @@ import tech.shatrov.familyfinances.ui.overview.OverviewPeriod
 import tech.shatrov.familyfinances.ui.settings.SettingsPage
 import tech.shatrov.familyfinances.ui.transactions.TransactionFilters
 import tech.shatrov.familyfinances.ui.transactions.TransactionPeriod
+import tech.shatrov.familyfinances.ui.transactions.TransactionPrefill
 import java.time.LocalDate
 import java.time.YearMonth
 import java.util.UUID
@@ -88,11 +89,50 @@ class AppScreenSaverTest {
             id = UUID.fromString(COFFEE_ID),
             draft = UUID.fromString(FOOD_BUDGET_ID),
             back = AppScreen.Transactions(
-                TransactionFilters.reconciliation(month, UUID.fromString(ALL_BUDGET_ID)),
+                TransactionFilters.reconciliation(month),
                 month,
             ),
         )
         assertEquals(screen, roundTrip(screen))
+    }
+
+    // «Закрыть разницу»: после поворота форма не теряет предзаполнение и возвращает в сверку.
+    @Test
+    fun transactionEditKeepsPrefillAndReconciliationBack() {
+        val screen = AppScreen.TransactionEdit(
+            id = null,
+            draft = UUID.fromString(FOOD_BUDGET_ID),
+            back = AppScreen.Reconciliation(YearMonth.of(2026, 8)),
+            prefill = TransactionPrefill(
+                amountMinor = 150_050,
+                type = TransactionType.income,
+                date = LocalDate.of(2026, 8, 31),
+                description = "Корректировка: сверки, 100%",
+            ),
+        )
+        assertEquals(screen, roundTrip(screen))
+    }
+
+    // Ключ версии 0.11: сразу за черновиком `back`, без поля предзаполнения.
+    @Test
+    fun transactionEditFromPreviousVersionKeepsBack() {
+        val month = YearMonth.of(2026, 8)
+        val restored = AppScreenSaver.restore(
+            "transaction-edit:$COFFEE_ID:$FOOD_BUDGET_ID:transactions:MONTH:2026-08:expense:::true:::2026-08:",
+        )
+        val back = AppScreen.Transactions(
+            TransactionFilters(
+                period = TransactionPeriod.MONTH,
+                type = TransactionType.expense,
+                month = month,
+                unassigned = true,
+            ),
+            month,
+        )
+        assertEquals(
+            AppScreen.TransactionEdit(UUID.fromString(COFFEE_ID), UUID.fromString(FOOD_BUDGET_ID), back),
+            restored,
+        )
     }
 
     @Test
@@ -118,8 +158,7 @@ class AppScreenSaverTest {
     fun transactionsKeepReconciliationFilters() {
         val month = YearMonth.of(2026, 8)
         val screens = listOf(
-            AppScreen.Transactions(TransactionFilters.reconciliation(month, UUID.fromString(COFFEE_ID)), month),
-            AppScreen.Transactions(TransactionFilters.reconciliation(month, null), month),
+            AppScreen.Transactions(TransactionFilters.reconciliation(month), month),
             AppScreen.Transactions(TransactionFilters(period = TransactionPeriod.THIS_MONTH), month),
         )
         for (screen in screens) {
