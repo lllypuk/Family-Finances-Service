@@ -72,6 +72,7 @@ fun HomeScreen(
     importDraft: ImportDraft? = null,
     onResumeImport: (UUID) -> Unit = {},
     onDeleteImport: () -> Unit = {},
+    onOverview: () -> Unit = {},
     today: LocalDate = LocalDate.now(),
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -138,7 +139,7 @@ fun HomeScreen(
                         }
                     }
                 } else {
-                    Summary(state, card, onReconciliation, onAccounts)
+                    Summary(state, card, onReconciliation, onAccounts, onOverview)
                 }
         }
     }
@@ -223,6 +224,7 @@ private fun Summary(
     card: ReconciliationCard,
     onReconciliation: (YearMonth) -> Unit,
     onAccounts: () -> Unit,
+    onOverview: () -> Unit,
 ) {
     val summary = state.summary
     val topCategories = summary.expenseCategories.take(TOP_CATEGORIES)
@@ -237,6 +239,8 @@ private fun Summary(
         item {
             Totals(state)
         }
+
+        item { OverviewRow(onOverview) }
 
         if (card is ReconciliationCard.Ready || card is ReconciliationCard.NoAccounts) {
             item { ReconciliationCardRow(card, onReconciliation, onAccounts) }
@@ -310,6 +314,24 @@ private fun Totals(state: HomeUiState.Ready) {
 }
 
 @Composable
+private fun OverviewRow(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .padding(top = Dimens.SPACE_4)
+            .fillMaxWidth()
+            .groupedRow(RowPlace.ONLY, LocalAppColors.current, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.overview_title),
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(AppIcons.ChevronRight, contentDescription = null)
+    }
+}
+
+@Composable
 private fun ReconciliationCardRow(
     card: ReconciliationCard,
     onReconciliation: (YearMonth) -> Unit,
@@ -355,7 +377,7 @@ private fun ReconciliationCardRow(
 }
 
 @Composable
-private fun TotalRow(
+internal fun TotalRow(
     label: String,
     amount: String,
     delta: String?,

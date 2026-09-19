@@ -45,6 +45,7 @@ class HomeScreenTest {
     private fun show(
         state: HomeUiState,
         onAddTransaction: () -> Unit = {},
+        onOverview: () -> Unit = {},
     ) {
         composeRule.setContent {
             AppTheme {
@@ -53,6 +54,7 @@ class HomeScreenTest {
                     onRetry = {},
                     onAddTransaction = onAddTransaction,
                     onSettings = {},
+                    onOverview = onOverview,
                 )
             }
         }
@@ -114,6 +116,24 @@ class HomeScreenTest {
         composeRule.onNodeWithText(res.getString(R.string.home_add_transaction)).performClick()
 
         assertTrue(added)
+    }
+
+    @Test
+    fun overviewRowOpensOverview() {
+        var opened = false
+        show(ready(statsSummary()), onOverview = { opened = true })
+
+        composeRule.onNodeWithText(res.getString(R.string.overview_title)).performClick()
+
+        assertTrue(opened)
+    }
+
+    // В пустом состоянии обзору нечего показать: вместо строки — кнопка добавить операцию.
+    @Test
+    fun emptyStateHasNoOverviewRow() {
+        show(ready(statsSummary(transactionsTotal = 0)))
+
+        composeRule.onAllNodesWithText(res.getString(R.string.overview_title)).assertCountEquals(0)
     }
 
     // Без счетов карточка ведёт в «Счета», со счетами — на сверку своего месяца.

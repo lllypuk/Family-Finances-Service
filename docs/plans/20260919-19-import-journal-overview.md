@@ -303,16 +303,17 @@ overview`, чтение по индексу; строка другой длин�
 - Create: `ui/overview/OverviewScreen.kt`, `ui/overview/MonthlyBars.kt`, `OverviewScreenTest.kt`, `MonthlyBarsTest.kt`
 - Modify: `AppScreen.kt`, `MainActivity.kt`, `ui/home/HomeScreen.kt`, `strings.xml`, `AppScreenSaverTest.kt`, `HomeScreenTest.kt`, `AppRootImportTest.kt`
 
-- [ ] `barGeometry(months)`: общий масштаб, нулевой месяц — нулевая высота, ряд из нулей не делит на ноль
-- [ ] `MonthlyBars`: парные столбики цветами дохода и расхода, месяцы вне периода приглушены, тап выбирает месяц; `contentDescription` пары — месяц и обе суммы
-- [ ] экран по макету: `ChipRow`, итоги в стиле `Totals`, подпись дельты, списки категорий (`groupedRow`), пустой период, ошибка итогов на месте
-- [ ] `AppScreen.Overview(period)` и поле `overview: OverviewPeriod?` у `AppScreen.Transactions` — десятое поле `Saver`'а; `Overview` входит в запоминаемые экраны задачи 2
-- [ ] `MainActivity`: ветка экрана; `BackHandler` на «Главную»; модель `overview-${user.id}-$epoch`; «открыт снаружи» = `reconciliation != null || overview != null` для `drillFrom` и `dropDrill` (:192, :315-328); «назад» из расшифровки — в «Обзор» с тем же периодом; ветка в `when` share-импорта (:185-212), как у `Home`
-- [ ] пятый флаг `overviewStale`: взводится там же, где `homeStale` (:709, :750), гасится `LifecycleResumeEffect` «Обзора»
-- [ ] вход: строка «Обзор ›» под `Totals` на «Главной» (в пустом состоянии её нет)
-- [ ] тесты: геометрия; Compose — чип зовёт модель, тап по категории и по столбику зовут колбэки с верными аргументами, пустой период, ошибка итогов не прячет график
-- [ ] тесты `AppRoot` и `Saver`: «назад» из расшифровки → «Обзор» с тем же периодом; вкладка «Операции» после расшифровки открывается без фильтра; после «Обзора» «Главная» всё ещё перечитывается; share на «Обзоре» открывает распознавание; круг `Transactions` с `RANGE` + категорией + `overview`; `Overview` с каждым видом периода
-- [ ] `make -C android check`
+- [x] `barGeometry(months)`: общий масштаб, нулевой месяц — нулевая высота, ряд из нулей не делит на ноль
+- [x] `MonthlyBars`: парные столбики цветами дохода и расхода, месяцы вне периода приглушены, тап выбирает месяц; `contentDescription` пары — месяц и обе суммы
+- [x] экран по макету: `ChipRow`, итоги в стиле `Totals`, подпись дельты, списки категорий (`groupedRow`), пустой период, ошибка итогов на месте
+- [x] `AppScreen.Overview(period)` и поле `overview: OverviewPeriod?` у `AppScreen.Transactions` — десятое поле `Saver`'а; `Overview` входит в запоминаемые экраны задачи 2
+- [x] `MainActivity`: ветка экрана; `BackHandler` на «Главную»; модель `overview-${user.id}-$epoch`; «открыт снаружи» = `reconciliation != null || overview != null` для `drillFrom` и `dropDrill` (:192, :315-328); «назад» из расшифровки — в «Обзор» с тем же периодом; ветка в `when` share-импорта (:185-212), как у `Home`
+- [x] пятый флаг `overviewStale`: взводится там же, где `homeStale` (:709, :750), гасится `LifecycleResumeEffect` «Обзора»
+- [x] вход: строка «Обзор ›» под `Totals` на «Главной» (в пустом состоянии её нет)
+- [x] тесты: геометрия; Compose — чип зовёт модель, тап по категории и по столбику зовут колбэки с верными аргументами, пустой период, ошибка итогов не прячет график
+- [x] тесты `AppRoot` и `Saver`: «назад» из расшифровки → «Обзор» с тем же периодом; вкладка «Операции» после расшифровки открывается без фильтра; после «Обзора» «Главная» всё ещё перечитывается; share на «Обзоре» открывает распознавание; круг `Transactions` с `RANGE` + категорией + `overview`; `Overview` с каждым видом периода
+- [x] `make -C android check`
+- ➕ `overviewStale` взводит и уход с «Категорий» (имена в строках «Обзора»), не только формы; AppRoot-тесты «Обзора» — в своём `AppRootOverviewTest` (нужна системная «назад», а это `createAndroidComposeRule`)
 
 ### Task 8: Версия и документация
 

@@ -73,6 +73,8 @@ import tech.shatrov.familyfinances.ui.networth.HoldingHistoryViewModel
 import tech.shatrov.familyfinances.ui.networth.NetWorthScreen
 import tech.shatrov.familyfinances.ui.networth.NetWorthViewModel
 import tech.shatrov.familyfinances.ui.networth.ValueSheet
+import tech.shatrov.familyfinances.ui.overview.OverviewScreen
+import tech.shatrov.familyfinances.ui.overview.OverviewViewModel
 import tech.shatrov.familyfinances.ui.recognize.RecognizeScreen
 import tech.shatrov.familyfinances.ui.recognize.RecognizeViewModel
 import tech.shatrov.familyfinances.ui.recognize.rememberImportLaunchers
@@ -147,7 +149,9 @@ fun AppRoot(graph: AppGraph) {
     var homeStale by rememberSaveable { mutableStateOf(false) }
     var budgetsStale by rememberSaveable { mutableStateOf(false) }
     var netWorthStale by rememberSaveable { mutableStateOf(false) }
-    // Распознавание уводит с расшифровки сверки мимо её выхода, а модель списка фильтр помнит.
+    // Свой, а не `homeStale`: флаг гасит прочитавший, и «Обзор» оставил бы «Главную» со старыми итогами.
+    var overviewStale by rememberSaveable { mutableStateOf(false) }
+    // Распознавание уводит с расшифровки мимо её выхода, а модель списка фильтр помнит.
     var dropDrill by rememberSaveable { mutableStateOf(false) }
     // Модели экранов лежат в store активити и переживают выход. Ключа по пользователю мало:
     // повторный вход тем же человеком показал бы данные прошлой сессии и не перечитал бы их.
@@ -196,17 +200,22 @@ fun AppRoot(graph: AppGraph) {
         val id = pending ?: return@LaunchedEffect
         if (session == null) return@LaunchedEffect
         when (val current = screen) {
-            AppScreen.Home, AppScreen.Budgets, AppScreen.NetWorth, is AppScreen.Reconciliation ->
-                screen = AppScreen.Recognize(id)
+            AppScreen.Home,
+            is AppScreen.Overview,
+            AppScreen.Budgets,
+            AppScreen.NetWorth,
+            is AppScreen.Reconciliation,
+            -> screen = AppScreen.Recognize(id)
 
             is AppScreen.Transactions -> {
-                if (current.reconciliation != null) dropDrill = true
+                if (current.drilled) dropDrill = true
                 screen = AppScreen.Recognize(id)
             }
 
             AppScreen.Categories -> {
                 listStale = true
                 homeStale = true
+                overviewStale = true
                 budgetsStale = true
                 screen = AppScreen.Recognize(id)
             }
@@ -314,9 +323,43 @@ fun AppRoot(graph: AppGraph) {
                     importDraft = importDraft.takeIf { pending == null && !waiting },
                     onResumeImport = { screen = AppScreen.Recognize(it) },
                     onDeleteImport = model::deleteImport,
+                    onOverview = { screen = AppScreen.Overview() },
                     today = LocalDate.now(active.zone),
                 )
             }
+        }
+
+        is AppScreen.Overview -> WithSession(session) { active ->
+            val model: OverviewViewModel = viewModel(key = "overview-${active.user.id}-$epoch") {
+                OverviewViewModel(graph.api, active.currency, current.period, active.zone)
+            }
+            val overview by model.state.collectAsStateWithLifecycle()
+            // Период живёт в экране, чтобы пережить смерть процесса; модель его только догоняет.
+            LaunchedEffect(current.period) { model.select(current.period) }
+            LifecycleResumeEffect(overviewStale) {
+                if (overviewStale) {
+                    model.refresh()
+                    overviewStale = false
+                } else {
+                    model.revalidate()
+                }
+                onPauseOrDispose {}
+            }
+            BackHandler { screen = AppScreen.Home }
+            OverviewScreen(
+                state = overview,
+                onBack = { screen = AppScreen.Home },
+                onSelect = { screen = AppScreen.Overview(it) },
+                onRetryMonthly = model::retryMonthly,
+                onRetrySummary = model::retrySummary,
+                onOpenCategory = { type, category ->
+                    val range = overview.range
+                    screen = AppScreen.Transactions(
+                        filters = TransactionFilters.overview(type, category, range.from, range.to),
+                        overview = overview.period,
+                    )
+                },
+            )
         }
 
         is AppScreen.Transactions -> WithSession(session) { active ->
@@ -347,13 +390,18 @@ fun AppRoot(graph: AppGraph) {
                 }
                 current.filters?.let(model::applyFilters)
             }
-            val drillFrom = current.reconciliation
-            // Вкладка «Операции» после сверки открывалась бы на расшифровке её строки.
+            // Вкладка «Операции» после сверки или «Обзора» открывалась бы на их расшифровке.
             val leave = { next: AppScreen ->
-                if (drillFrom != null) model.onFiltersChange(TransactionFilters())
+                if (current.drilled) model.onFiltersChange(TransactionFilters())
                 screen = next
             }
-            BackHandler { leave(drillFrom?.let(AppScreen::Reconciliation) ?: AppScreen.Home) }
+            BackHandler {
+                leave(
+                    current.reconciliation?.let(AppScreen::Reconciliation)
+                        ?: current.overview?.let(AppScreen::Overview)
+                        ?: AppScreen.Home,
+                )
+            }
             WithNavBar(
                 AppTab.TRANSACTIONS,
                 onSelect = { leave(it.screen) },
@@ -392,6 +440,7 @@ fun AppRoot(graph: AppGraph) {
             val leave = { next: AppScreen ->
                 listStale = true
                 homeStale = true
+                overviewStale = true
                 budgetsStale = true
                 screen = next
             }
@@ -739,6 +788,7 @@ fun AppRoot(graph: AppGraph) {
                 if (recognize.savedCount > 0) {
                     listStale = true
                     homeStale = true
+                    overviewStale = true
                     budgetsStale = true
                 }
             }
@@ -785,6 +835,7 @@ fun AppRoot(graph: AppGraph) {
                 if (edit.done) {
                     listStale = true
                     homeStale = true
+                    overviewStale = true
                     // Операция меняет `spent` бюджета своей категории.
                     budgetsStale = true
                     screen = current.back
@@ -890,6 +941,7 @@ private suspend fun resumable(
     screen: AppScreen,
 ): Boolean = when (screen) {
     is AppScreen.Recognize -> withContext(Dispatchers.IO) { graph.journals.read(screen.importId) != null }
+    is AppScreen.Overview -> true
     else -> false
 }
 

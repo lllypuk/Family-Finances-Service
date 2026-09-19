@@ -3,6 +3,7 @@ package tech.shatrov.familyfinances
 import androidx.compose.runtime.saveable.Saver
 import tech.shatrov.familyfinances.core.api.HoldingSide
 import tech.shatrov.familyfinances.core.api.TransactionType
+import tech.shatrov.familyfinances.ui.overview.OverviewPeriod
 import tech.shatrov.familyfinances.ui.settings.SettingsPage
 import tech.shatrov.familyfinances.ui.settings.restoreSettingsPage
 import tech.shatrov.familyfinances.ui.settings.saveKey
@@ -24,14 +25,19 @@ sealed interface AppScreen {
 
     data object Home : AppScreen
 
+    data class Overview(val period: OverviewPeriod = OverviewPeriod.ThisMonth) : AppScreen
+
     /**
-     * Список операций. [filters] — фильтр, с которым его открыли снаружи (расшифровка сверки), и
-     * [reconciliation] — месяц сверки, куда ведёт «назад»; у вкладки оба `null`.
+     * Список операций. [filters] — фильтр, с которым его открыли снаружи (расшифровка сверки или
+     * «Обзора»), [reconciliation] и [overview] — куда ведёт «назад»; у вкладки все `null`.
      */
     data class Transactions(
         val filters: TransactionFilters? = null,
         val reconciliation: YearMonth? = null,
-    ) : AppScreen
+        val overview: OverviewPeriod? = null,
+    ) : AppScreen {
+        val drilled: Boolean get() = reconciliation != null || overview != null
+    }
 
     data object Categories : AppScreen
 
@@ -81,6 +87,7 @@ sealed interface AppScreen {
 private const val KEY_LOADING = "loading"
 private const val KEY_LOGIN = "login"
 private const val KEY_HOME = "home"
+private const val KEY_OVERVIEW = "overview"
 private const val KEY_TRANSACTIONS = "transactions"
 private const val KEY_TRANSACTION_EDIT = "transaction-edit"
 private const val KEY_CATEGORIES = "categories"
@@ -94,7 +101,7 @@ private const val KEY_RECOGNIZE = "recognize"
 private const val KEY_RECONCILIATION = "reconciliation"
 
 // Ключ другой длины — из прошлой версии: `restore` уводит его в загрузку, а не читает поля не по местам.
-private const val TRANSACTIONS_KEY_FIELDS = 9
+private const val TRANSACTIONS_KEY_FIELDS = 10
 
 /** Экран переживает поворот; всё остальное восстанавливается из хранилища токена. */
 val AppScreenSaver: Saver<AppScreen, String> = Saver(
@@ -105,6 +112,8 @@ val AppScreenSaver: Saver<AppScreen, String> = Saver(
             AppScreen.Login -> KEY_LOGIN
 
             AppScreen.Home -> KEY_HOME
+
+            is AppScreen.Overview -> "$KEY_OVERVIEW:${screen.period.saveKey()}"
 
             is AppScreen.Transactions -> screen.saveKey()
 
@@ -140,6 +149,9 @@ private fun restoreScreen(key: String): AppScreen? = when {
     key == KEY_LOGIN -> AppScreen.Login
 
     key == KEY_HOME -> AppScreen.Home
+
+    key.startsWith("$KEY_OVERVIEW:") ->
+        AppScreen.Overview(OverviewPeriod.fromSaveKey(key.removePrefix("$KEY_OVERVIEW:")))
 
     key == KEY_TRANSACTIONS -> AppScreen.Transactions()
 
@@ -205,6 +217,7 @@ private fun AppScreen.Transactions.saveKey(): String {
         f.from?.toString().orEmpty(),
         f.to?.toString().orEmpty(),
         reconciliation?.toString().orEmpty(),
+        overview?.saveKey().orEmpty(),
     ).joinToString(":", prefix = "$KEY_TRANSACTIONS:")
 }
 
@@ -223,5 +236,6 @@ private fun restoreTransactions(value: String): AppScreen.Transactions {
             to = parts[7].takeIf { it.isNotEmpty() }?.let(LocalDate::parse),
         ),
         reconciliation = parts[8].takeIf { it.isNotEmpty() }?.let(YearMonth::parse),
+        overview = parts[9].takeIf { it.isNotEmpty() }?.let(OverviewPeriod::fromSaveKey),
     )
 }
