@@ -34,6 +34,7 @@ import tech.shatrov.familyfinances.ui.recognize.ImportJournal
 import tech.shatrov.familyfinances.ui.recognize.ImportJournalStore
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 private const val WAIT_MS = 5_000L
 
@@ -141,6 +142,39 @@ class AppRootImportTest {
         val add = res.getString(R.string.home_add_transaction)
         composeRule.waitUntil(WAIT_MS) { composeRule.onAllNodesWithText(add).fetchSemanticsNodes().isNotEmpty() }
         composeRule.onAllNodesWithText(res.getString(R.string.recognize_title)).assertCountEquals(0)
+    }
+
+    // Плашка ведёт на экран без `offer`: модель поднимается из журнала, прерванный вызов сама не повторяет.
+    @Test
+    fun resumeFromHomeRestoresImportFromJournal() {
+        serveHome()
+        val graph = graph()
+        graph.journals.write(
+            ImportJournal(
+                importId = UUID.randomUUID().toString(),
+                updatedAt = System.currentTimeMillis(),
+                images = emptyList(),
+                dropped = 0,
+                recognizing = true,
+                result = null,
+                accountId = null,
+                rows = emptyList(),
+                savedCount = 0,
+            ),
+        )
+        composeRule.setContent { AppTheme { AppRoot(graph) } }
+
+        val resume = res.getString(R.string.home_import_resume)
+        composeRule.waitUntil(WAIT_MS) { composeRule.onAllNodesWithText(resume).fetchSemanticsNodes().isNotEmpty() }
+        composeRule.onNodeWithText(resume).performClick()
+
+        val interrupted = res.getString(R.string.recognize_error_interrupted)
+        composeRule.waitUntil(WAIT_MS) {
+            composeRule.onAllNodesWithText(interrupted).fetchSemanticsNodes().isNotEmpty()
+        }
+        assertNull(graph.imports.pending.value)
+        val paths = generateSequence { server.takeRequest(0, TimeUnit.SECONDS) }.map { it.url.encodedPath }
+        assertTrue(paths.none { it == "/api/v1/transactions/recognize" })
     }
 
     @Test

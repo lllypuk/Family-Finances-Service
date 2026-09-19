@@ -283,10 +283,12 @@ fun AppRoot(graph: AppGraph) {
         // пользователем прежняя роль показала бы ему чужие действия.
         AppScreen.Home -> WithSession(session) { active ->
             val model: HomeViewModel = viewModel(key = "home-${active.user.id}-$epoch") {
-                HomeViewModel(graph.api, active.currency, active.zone)
+                HomeViewModel(graph.api, active.currency, active.zone, journals = graph.journals)
             }
             val home by model.state.collectAsStateWithLifecycle()
             val card by model.card.collectAsStateWithLifecycle()
+            val importDraft by model.import.collectAsStateWithLifecycle()
+            val waiting by graph.imports.waiting.collectAsStateWithLifecycle()
             // На возврате из фона, а не только при заходе: модель живёт всю сессию, а сводка
             // посчитана по «сегодня» и границам месяца, которые под свёрнутым экраном сменились.
             LifecycleResumeEffect(homeStale) {
@@ -296,6 +298,7 @@ fun AppRoot(graph: AppGraph) {
                 } else {
                     model.revalidate()
                 }
+                model.loadImport()
                 onPauseOrDispose {}
             }
             WithNavBar(AppTab.HOME, onSelect = { screen = it.screen }) {
@@ -307,6 +310,11 @@ fun AppRoot(graph: AppGraph) {
                     card = card,
                     onReconciliation = { screen = AppScreen.Reconciliation(it) },
                     onAccounts = { screen = AppScreen.Settings(SettingsPage.Accounts()) },
+                    // Пришедший импорт сейчас откроется сам и удалит этот журнал.
+                    importDraft = importDraft.takeIf { pending == null && !waiting },
+                    onResumeImport = { screen = AppScreen.Recognize(it) },
+                    onDeleteImport = model::deleteImport,
+                    today = LocalDate.now(active.zone),
                 )
             }
         }

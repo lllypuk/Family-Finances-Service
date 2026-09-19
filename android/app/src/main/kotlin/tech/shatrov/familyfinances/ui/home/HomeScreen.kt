@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -17,11 +18,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import tech.shatrov.familyfinances.R
@@ -42,10 +49,15 @@ import tech.shatrov.familyfinances.ui.format.formatPercent
 import tech.shatrov.familyfinances.ui.groupedRow
 import tech.shatrov.familyfinances.ui.message
 import tech.shatrov.familyfinances.ui.rowPlace
+import java.time.LocalDate
 import java.time.YearMonth
+import java.time.format.DateTimeFormatter
+import java.util.UUID
 
 /** Сколько категорий помещается в карточку: остальное живёт на экране транзакций. */
 private const val TOP_CATEGORIES = 5
+
+private val importTime = DateTimeFormatter.ofPattern("HH:mm")
 
 @Composable
 fun HomeScreen(
@@ -57,6 +69,10 @@ fun HomeScreen(
     card: ReconciliationCard = ReconciliationCard.Hidden,
     onReconciliation: (YearMonth) -> Unit = {},
     onAccounts: () -> Unit = {},
+    importDraft: ImportDraft? = null,
+    onResumeImport: (UUID) -> Unit = {},
+    onDeleteImport: () -> Unit = {},
+    today: LocalDate = LocalDate.now(),
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         Row(
@@ -87,6 +103,11 @@ fun HomeScreen(
             IconButton(onClick = onSettings) {
                 Icon(AppIcons.User, contentDescription = stringResource(R.string.settings_title))
             }
+        }
+
+        // Над сводкой, а не в ней: журнал локальный и нужен и тогда, когда сервер недоступен.
+        if (importDraft != null) {
+            ImportDraftCard(importDraft, today, onResumeImport, onDeleteImport)
         }
 
         when (state) {
@@ -121,6 +142,79 @@ fun HomeScreen(
                 }
         }
     }
+}
+
+@Composable
+private fun ImportDraftCard(
+    draft: ImportDraft,
+    today: LocalDate,
+    onResume: (UUID) -> Unit,
+    onDelete: () -> Unit,
+) {
+    var confirmShown by rememberSaveable { mutableStateOf(false) }
+    Column(
+        modifier = Modifier
+            .padding(horizontal = Dimens.SPACE_4)
+            .fillMaxWidth()
+            .groupedRow(RowPlace.ONLY, LocalAppColors.current),
+    ) {
+        Text(stringResource(R.string.home_import_title), style = MaterialTheme.typography.bodyMedium)
+        Text(
+            text = importDetails(draft, today),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            TextButton(onClick = { onResume(draft.importId) }) {
+                Text(stringResource(R.string.home_import_resume))
+            }
+            TextButton(onClick = { confirmShown = true }) {
+                Text(stringResource(R.string.home_import_delete))
+            }
+        }
+    }
+
+    // Удалённый журнал — это оплаченный ответ распознавания: вернуть его можно только новым вызовом.
+    if (confirmShown) {
+        AlertDialog(
+            onDismissRequest = { confirmShown = false },
+            title = { Text(stringResource(R.string.home_import_delete_confirm)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmShown = false
+                    onDelete()
+                }) {
+                    Text(stringResource(R.string.home_import_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmShown = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun importDetails(
+    draft: ImportDraft,
+    today: LocalDate,
+): String {
+    if (!draft.recognized) {
+        return pluralStringResource(R.plurals.home_import_interrupted, draft.images, draft.images)
+    }
+    val time = draft.updatedAt.format(importTime)
+    val day = draft.updatedAt.toLocalDate()
+    val at = when (day) {
+        today -> stringResource(R.string.home_import_today, time)
+        today.minusDays(1) -> stringResource(R.string.home_import_yesterday, time)
+        else -> "${formatDay(day, today)} $time"
+    }
+    return pluralStringResource(R.plurals.home_import_rows, draft.rows, draft.rows, draft.saved, at)
 }
 
 @Composable

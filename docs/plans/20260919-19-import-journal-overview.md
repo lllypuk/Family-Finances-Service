@@ -256,12 +256,12 @@ overview`, чтение по индексу; строка другой длин�
 - Modify: `ui/home/HomeScreen.kt`, `HomeViewModel.kt`, `MainActivity.kt` (:264), `strings.xml`
 - Modify: `HomeViewModelTest.kt`, `HomeScreenTest.kt`, `AppRootImportTest.kt`
 
-- [ ] `HomeViewModel` отдаёт сводку `latest()`: строк, сохранено, `updatedAt`, фаза; перечитывается при возврате на «Главную»
-- [ ] плашка над `when (state)`; скрыта параметром при непустых `pending` / `waiting`; «Продолжить» → `AppScreen.Recognize(importId)`; «Удалить» → подтверждение → `delete`
-- [ ] тесты ViewModel: журнала нет — плашки нет; `recognizing` — свой текст; удаление убирает плашку
-- [ ] Compose-тест: плашка видна на загрузке, отказе и пустом состоянии; «Удалить» спрашивает подтверждение
-- [ ] `AppRootImportTest`: «Продолжить» открывает экран, и тот восстанавливается без `offer`
-- [ ] `make -C android check`
+- [x] `HomeViewModel` отдаёт сводку `latest()`: строк, сохранено, `updatedAt`, фаза; перечитывается при возврате на «Главную»
+- [x] плашка над `when (state)`; скрыта параметром при непустых `pending` / `waiting`; «Продолжить» → `AppScreen.Recognize(importId)`; «Удалить» → подтверждение → `delete`
+- [x] тесты ViewModel: журнала нет — плашки нет; `recognizing` — свой текст; удаление убирает плашку
+- [x] Compose-тест: плашка видна на загрузке, отказе и пустом состоянии; «Удалить» спрашивает подтверждение
+- [x] `AppRootImportTest`: «Продолжить» открывает экран, и тот восстанавливается без `offer`
+- [x] `make -C android check`
 
 ### Task 4: Документация журнала
 

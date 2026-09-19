@@ -29,12 +29,20 @@ import tech.shatrov.familyfinances.ROBOLECTRIC_SDK
 import tech.shatrov.familyfinances.STATS_EMPTY
 import tech.shatrov.familyfinances.STATS_OK
 import tech.shatrov.familyfinances.core.api.ApiGraph
+import tech.shatrov.familyfinances.core.api.RecognizeResult
+import tech.shatrov.familyfinances.core.api.RecognizedTransaction
+import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.enqueueJson
 import tech.shatrov.familyfinances.liveToken
+import tech.shatrov.familyfinances.tempJournals
 import tech.shatrov.familyfinances.ui.UiError
+import tech.shatrov.familyfinances.ui.recognize.ImportJournal
+import tech.shatrov.familyfinances.ui.recognize.ImportJournalStore
+import tech.shatrov.familyfinances.ui.recognize.JournalImage
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -76,13 +84,113 @@ class HomeViewModelTest {
     /** Дата модели: тест переставляет её, чтобы проверить переход через полночь. */
     private var today = LocalDate.parse("2026-09-07")
 
+    private val journals: ImportJournalStore = tempJournals()
+
     private fun createModel() {
         model = HomeViewModel(
             ApiGraph(server.url("/").toString(), FakeTokenVault(liveToken())),
             "RUB",
             ZoneId.of("Europe/Moscow"),
             { today },
+            journals,
+            UnconfinedTestDispatcher(),
         )
+    }
+
+    private fun journal(
+        id: UUID = UUID.randomUUID(),
+        recognizing: Boolean = false,
+        withResult: Boolean = true,
+    ): ImportJournal {
+        val item = RecognizedTransaction(
+            source = 0,
+            amountMinor = 45_000,
+            currency = null,
+            type = TransactionType.expense,
+            date = LocalDate.of(2026, 9, 7),
+            dateAssumed = false,
+            description = "Шаверма",
+            categoryId = null,
+            similar = emptyList(),
+        )
+        val result = if (withResult) RecognizeResult(listOf(item, item), incomplete = false, model = "m") else null
+        return ImportJournal(
+            importId = id.toString(),
+            updatedAt = System.currentTimeMillis(),
+            images = listOf(JournalImage("content://a", "0.jpg"), JournalImage("content://b", "1.jpg")),
+            dropped = 0,
+            recognizing = recognizing,
+            result = result,
+            accountId = null,
+            rows = emptyList(),
+            savedCount = 1,
+        )
+    }
+
+    @Test
+    fun noJournalNoImportCard() = runTest {
+        enqueueSummary()
+
+        createModel()
+        settle()
+
+        assertNull(model.import.value)
+    }
+
+    @Test
+    fun journalWithResultReportsRowsAndSaved() = runTest {
+        enqueueSummary()
+        val id = UUID.randomUUID()
+        journals.write(journal(id))
+
+        createModel()
+
+        val draft = model.import.value!!
+        assertEquals(id, draft.importId)
+        assertTrue(draft.recognized)
+        assertEquals(2, draft.rows)
+        assertEquals(1, draft.saved)
+    }
+
+    // Ответа нет, распознавание прервано: плашка говорит о скриншотах, а не о строках.
+    @Test
+    fun interruptedRecognitionIsItsOwnPhase() = runTest {
+        enqueueSummary()
+        journals.write(journal(recognizing = true, withResult = false))
+
+        createModel()
+
+        val draft = model.import.value!!
+        assertFalse(draft.recognized)
+        assertEquals(2, draft.images)
+    }
+
+    @Test
+    fun deletingRemovesCardAndJournal() = runTest {
+        enqueueSummary()
+        val id = UUID.randomUUID()
+        journals.write(journal(id))
+        createModel()
+
+        model.deleteImport()
+
+        assertNull(model.import.value)
+        assertNull(journals.read(id))
+        model.loadImport()
+        assertNull(model.import.value)
+    }
+
+    // Журнал пишет экран распознавания, пока главная в стеке: возврат перечитывает его.
+    @Test
+    fun loadImportPicksUpJournalWrittenLater() = runTest {
+        enqueueSummary()
+        createModel()
+        assertNull(model.import.value)
+
+        journals.write(journal())
+        model.loadImport()
+
+        assertTrue(model.import.value != null)
     }
 
     @Test
