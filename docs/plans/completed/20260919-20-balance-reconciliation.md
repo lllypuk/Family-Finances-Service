@@ -327,13 +327,13 @@ accounts[]: { account, opening_minor | null, closing_minor | null, updated_at | 
 
 ### Task 9: [Final] Update documentation
 
-- [ ] `CLAUDE.md`: список таблиц, порядок `CleanTables`, абзац «A reconciliation stores only the bank's figure»
+- [x] `CLAUDE.md`: список таблиц, порядок `CleanTables`, абзац «A reconciliation stores only the bank's figure»
   → остатки, `HasMonetaryData`, удаление счёта, «Current direction» (план 20, `v0.9.0`/`0.12.0`, прогон
   `--to 8 → 7 → 8` на копии прода перед тегом)
-- [ ] `android/CLAUDE.md`: экран сверки, переход в операции, предзаполнение формы
-- [ ] `deploy/README.md:173-179`: абзац отката `008` — `migrate --to 7` пересоздаёт `account_reconciliations`
+- [x] `android/CLAUDE.md`: экран сверки, переход в операции, предзаполнение формы
+- [x] `deploy/README.md:173-179`: абзац отката `008` — `migrate --to 7` пересоздаёт `account_reconciliations`
   пустой и удаляет все остатки
-- [ ] перенести план в `docs/plans/completed/`
+- [x] перенести план в `docs/plans/completed/`
 
 ## Post-Completion
 

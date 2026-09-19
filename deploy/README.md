@@ -179,6 +179,9 @@ Once holdings are in use, roll back by snapshot restore.
 `007` (v0.8.0): `migrate --to 6` drops `holding_plans` — every holding's monthly plan is lost, holdings
 and snapshots stay.
 
+`008` (v0.9.0): `migrate --to 7` drops `account_balances` — every entered month-end balance is lost — and
+recreates `account_reconciliations` empty (the bank figures were already dropped on the way up).
+
 ## Backups
 
 `family-budget-service backup` runs `VACUUM INTO` against the live database and keeps the newest
