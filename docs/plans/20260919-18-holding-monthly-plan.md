@@ -225,9 +225,9 @@ CREATE TABLE holding_plans (
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] все пункты Overview реализованы; клиент `0.9.0` против нового сервера открывает «Капитал» и правит позицию, план при этом не теряется
-- [ ] `make fmt && make test && make lint` — 0 issues; `make -C android check`; `make -C android api-check` — на чистом дереве после коммита
-- [ ] копия прод-базы: `migrate --to 7` → `--to 6` → `--to 7`, `PRAGMA foreign_key_check`
+- [x] все пункты Overview реализованы; клиент `0.9.0` против нового сервера открывает «Капитал» и правит позицию, план при этом не теряется (интеграционный тест `PUT` только с `name`; на устройстве не проверялось)
+- [x] `make fmt && make test && make lint` — 0 issues; `make -C android check`; `make -C android api-check` — на чистом дереве после коммита
+- [x] копия прод-базы: `migrate --to 7` → `--to 6` → `--to 7`, `PRAGMA foreign_key_check` (на копии локальной `data/budget.db` с версии 1; копии прода здесь нет — повторить перед тегом `v0.8.0`)
 
 ### Task 7: [Final] Update documentation
 
