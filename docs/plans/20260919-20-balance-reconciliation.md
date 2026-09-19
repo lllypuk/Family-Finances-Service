@@ -266,12 +266,12 @@ accounts[]: { account, opening_minor | null, closing_minor | null, updated_at | 
 **Files:**
 - Modify: `tests/integration/reconciliation_test.go`
 
-- [ ] сценарий ритуала: остатки за два месяца → `gap` → `POST /transactions` на `|gap|` → `gap = 0` без нового
+- [x] сценарий ритуала: остатки за два месяца → `gap` → `POST /transactions` на `|gap|` → `gap = 0` без нового
   `PUT`
-- [ ] роли: admin и member пишут, без токена `401`; `PUT` на архивный счёт — `200`
-- [ ] `PUT /family` со сменой валюты при одном нулевом остатке — `409 CURRENCY_LOCKED`; `DELETE /accounts/:id` со
+- [x] роли: admin и member пишут, без токена `401`; `PUT` на архивный счёт — `200`
+- [x] `PUT /family` со сменой валюты при одном нулевом остатке — `409 CURRENCY_LOCKED`; `DELETE /accounts/:id` со
   строкой остатка — `409 ACCOUNT_IN_USE`
-- [ ] `make fmt && make test && make lint`
+- [x] `make fmt && make test && make lint`
 
 ### Task 5: Клиент — контракт, модель и экран «Сверки»
 
