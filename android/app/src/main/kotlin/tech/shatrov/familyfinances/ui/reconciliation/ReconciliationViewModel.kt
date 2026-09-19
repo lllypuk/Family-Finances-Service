@@ -12,14 +12,17 @@ import tech.shatrov.familyfinances.core.api.AccountBalanceRequest
 import tech.shatrov.familyfinances.core.api.ApiGraph
 import tech.shatrov.familyfinances.core.api.ReconciliationRow
 import tech.shatrov.familyfinances.core.api.ReconciliationStats
+import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import tech.shatrov.familyfinances.ui.UiError
 import tech.shatrov.familyfinances.ui.format.formatAmountInput
 import tech.shatrov.familyfinances.ui.format.parseSignedAmountMinor
 import tech.shatrov.familyfinances.ui.toUiError
+import tech.shatrov.familyfinances.ui.transactions.TransactionPrefill
 import java.time.LocalDate
 import java.time.YearMonth
 import java.util.UUID
+import kotlin.math.abs
 
 /** Что подписать под разницей: знак `gap` словами, а не плюсом и минусом. */
 enum class GapVerdict { MATCHED, MISSING_INCOME, MISSING_EXPENSE }
@@ -30,6 +33,22 @@ fun gapVerdict(gap: Long): GapVerdict = when {
     gap > 0 -> GapVerdict.MISSING_INCOME
     else -> GapVerdict.MISSING_EXPENSE
 }
+
+/**
+ * «Закрыть разницу»: операция на `|gap|` последним днём [month], но не позже [today] —
+ * будущую дату сервер отвергает, а текущий месяц ещё не кончился.
+ */
+fun gapCorrection(
+    month: YearMonth,
+    gap: Long,
+    today: LocalDate,
+    description: String,
+): TransactionPrefill = TransactionPrefill(
+    amountMinor = abs(gap),
+    type = if (gap > 0) TransactionType.income else TransactionType.expense,
+    date = minOf(month.atEndOfMonth(), today),
+    description = description,
+)
 
 /** Итог месяца; пока край не заполнен, сравнивать нечего — экран зовёт его заполнить. */
 sealed interface ReconciliationTotal {

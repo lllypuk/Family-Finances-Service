@@ -84,6 +84,9 @@
     <string name="reconciliation_save">Сохранить</string>
     <string name="reconciliation_clear">Очистить</string>
     <string name="reconciliation_error_amount">Введите сумму</string>
+    <string name="reconciliation_transactions">Операции месяца</string>
+    <string name="reconciliation_close_gap">Закрыть разницу</string>
+    <string name="reconciliation_correction">Корректировка сверки</string>
 
     <string name="transactions_title">Операции</string>
     <string name="transactions_empty">Операций не найдено</string>

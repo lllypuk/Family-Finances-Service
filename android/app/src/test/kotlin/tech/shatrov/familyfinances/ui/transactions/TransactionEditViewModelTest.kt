@@ -61,13 +61,17 @@ class TransactionEditViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createModel(transactionId: UUID? = null) {
+    private fun createModel(
+        transactionId: UUID? = null,
+        prefill: TransactionPrefill? = null,
+    ) {
         model = TransactionEditViewModel(
             ApiGraph(server.url("/").toString(), FakeTokenVault(liveToken())),
             lastAccount,
             transactionId,
             DRAFT_ID,
             LocalDate.parse("2026-09-15"),
+            prefill = prefill,
         )
     }
 
@@ -119,6 +123,30 @@ class TransactionEditViewModelTest {
         assertTrue(body, body.contains("\"amount_minor\":150050"))
         assertTrue(body, body.contains("\"date\":\"2026-09-15\""))
         assertTrue(body, body.contains("\"description\":\"Кофе\""))
+    }
+
+    // Корректировка сверки: всё, кроме категории, уже заполнено, и приходная категория видна под типом.
+    @Test
+    fun prefillFillsNewTransactionButCategory() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        createModel(
+            prefill = TransactionPrefill(
+                150050,
+                TransactionType.income,
+                LocalDate.parse("2026-08-31"),
+                "Корректировка",
+            ),
+        )
+        val state = loaded()
+
+        assertEquals("1500,50", state.amount)
+        assertEquals(TransactionType.income, state.type)
+        assertEquals(LocalDate.parse("2026-08-31"), state.date)
+        assertEquals("Корректировка", state.description)
+        assertNull(state.categoryId)
+        assertFalse(state.canSubmit)
+        assertEquals(listOf("Зарплата"), state.visibleCategories.map { it.name })
     }
 
     // Повтор после обрыва уходит с тем же id: сервер отвечает существующей записью, а не создаёт вторую.

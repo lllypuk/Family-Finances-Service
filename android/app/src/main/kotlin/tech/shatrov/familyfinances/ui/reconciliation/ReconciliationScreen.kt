@@ -63,6 +63,8 @@ fun ReconciliationScreen(
     onRetry: () -> Unit,
     onOpenBalance: (ReconciliationRow) -> Unit,
     onAddAccount: () -> Unit,
+    onOpenTransactions: () -> Unit,
+    onCloseGap: (Long) -> Unit,
     onAmountChange: (String) -> Unit,
     onToggleSign: () -> Unit,
     onSave: () -> Unit,
@@ -98,7 +100,7 @@ fun ReconciliationScreen(
                         }
                     }
                 } else {
-                    Rows(state, currency, onMonthChange, onOpenBalance)
+                    Rows(state, currency, onMonthChange, onOpenBalance, onOpenTransactions, onCloseGap)
                 }
         }
     }
@@ -136,6 +138,8 @@ private fun Rows(
     currency: String,
     onMonthChange: (YearMonth) -> Unit,
     onOpenBalance: (ReconciliationRow) -> Unit,
+    onOpenTransactions: () -> Unit,
+    onCloseGap: (Long) -> Unit,
 ) {
     val rows = state.stats.accounts
     LazyColumn(
@@ -144,7 +148,7 @@ private fun Rows(
             .padding(horizontal = Dimens.SPACE_4),
         contentPadding = PaddingValues(vertical = Dimens.SPACE_3),
     ) {
-        item { TotalCard(state.total, state.stats, currency, onMonthChange) }
+        item { TotalCard(state.total, state.stats, currency, onMonthChange, onOpenTransactions, onCloseGap) }
         itemsIndexed(rows, key = { _, row -> row.account.id }) { index, row ->
             AccountRow(row, currency, rowPlace(index, rows.size), onOpenBalance)
         }
@@ -165,6 +169,8 @@ private fun TotalCard(
     stats: ReconciliationStats,
     currency: String,
     onMonthChange: (YearMonth) -> Unit,
+    onOpenTransactions: () -> Unit,
+    onCloseGap: (Long) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -216,6 +222,16 @@ private fun TotalCard(
                 )
                 TextButton(onClick = { onMonthChange(total.prev) }) {
                     Text(stringResource(R.string.reconciliation_enter_opening, prev))
+                }
+            }
+        }
+        Row {
+            TextButton(onClick = onOpenTransactions) {
+                Text(stringResource(R.string.reconciliation_transactions))
+            }
+            if (total is ReconciliationTotal.Complete && total.gapMinor != 0L) {
+                TextButton(onClick = { onCloseGap(total.gapMinor) }) {
+                    Text(stringResource(R.string.reconciliation_close_gap))
                 }
             }
         }

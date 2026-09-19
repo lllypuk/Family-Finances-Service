@@ -80,6 +80,7 @@ import tech.shatrov.familyfinances.ui.recognize.RecognizeViewModel
 import tech.shatrov.familyfinances.ui.recognize.rememberImportLaunchers
 import tech.shatrov.familyfinances.ui.reconciliation.ReconciliationScreen
 import tech.shatrov.familyfinances.ui.reconciliation.ReconciliationViewModel
+import tech.shatrov.familyfinances.ui.reconciliation.gapCorrection
 import tech.shatrov.familyfinances.ui.settings.SettingsHost
 import tech.shatrov.familyfinances.ui.settings.SettingsPage
 import tech.shatrov.familyfinances.ui.toUiError
@@ -661,6 +662,7 @@ fun AppRoot(graph: AppGraph) {
                 screen = AppScreen.Home
             }
             BackHandler { leave() }
+            val correction = stringResource(R.string.reconciliation_correction)
             ReconciliationScreen(
                 month = month,
                 today = today,
@@ -672,6 +674,16 @@ fun AppRoot(graph: AppGraph) {
                 onRetry = model::refresh,
                 onOpenBalance = model::onOpenBalance,
                 onAddAccount = { screen = AppScreen.Settings(SettingsPage.Accounts()) },
+                onOpenTransactions = {
+                    screen = AppScreen.Transactions(TransactionFilters.reconciliation(month), reconciliation = month)
+                },
+                onCloseGap = { gap ->
+                    screen = AppScreen.TransactionEdit(
+                        id = null,
+                        back = current,
+                        prefill = gapCorrection(month, gap, LocalDate.now(active.zone), correction),
+                    )
+                },
                 onAmountChange = model::onAmountChange,
                 onToggleSign = model::onToggleSign,
                 onSave = model::onSave,
@@ -826,6 +838,7 @@ fun AppRoot(graph: AppGraph) {
                         current.draft,
                         LocalDate.now(active.zone),
                         active.currency,
+                        current.prefill,
                     )
                 }
             val edit by model.state.collectAsStateWithLifecycle()

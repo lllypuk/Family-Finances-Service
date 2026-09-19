@@ -29,9 +29,11 @@ import tech.shatrov.familyfinances.RECONCILIATION_NO_OPENING
 import tech.shatrov.familyfinances.RECONCILIATION_OK
 import tech.shatrov.familyfinances.ROBOLECTRIC_SDK
 import tech.shatrov.familyfinances.core.api.ApiGraph
+import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.enqueueJson
 import tech.shatrov.familyfinances.liveToken
 import tech.shatrov.familyfinances.ui.UiError
+import tech.shatrov.familyfinances.ui.transactions.TransactionPrefill
 import java.time.LocalDate
 import java.time.YearMonth
 import java.util.UUID
@@ -114,6 +116,24 @@ class ReconciliationViewModelTest {
         assertEquals(GapVerdict.MATCHED, gapVerdict(0))
         assertEquals(GapVerdict.MISSING_INCOME, gapVerdict(10000))
         assertEquals(GapVerdict.MISSING_EXPENSE, gapVerdict(-1))
+    }
+
+    // `gap > 0` — не записан приход: корректировка приходом; дата — конец прошлого месяца.
+    @Test
+    fun positiveGapIsClosedByIncomeAtMonthEnd() {
+        assertEquals(
+            TransactionPrefill(10000, TransactionType.income, LocalDate.of(2026, 8, 31), "Корректировка"),
+            gapCorrection(AUGUST, 10000, TODAY, "Корректировка"),
+        )
+    }
+
+    // Текущий месяц ещё не кончился: конец месяца — будущая дата, которую сервер отвергнет.
+    @Test
+    fun negativeGapInCurrentMonthIsExpenseToday() {
+        assertEquals(
+            TransactionPrefill(2550, TransactionType.expense, TODAY, "Корректировка"),
+            gapCorrection(YearMonth.from(TODAY), -2550, TODAY, "Корректировка"),
+        )
     }
 
     @Test

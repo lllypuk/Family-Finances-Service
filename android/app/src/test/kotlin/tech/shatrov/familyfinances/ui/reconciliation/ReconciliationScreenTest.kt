@@ -24,8 +24,11 @@ import org.robolectric.annotation.Config
 import tech.shatrov.familyfinances.CARD_ACCOUNT_ID
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.ROBOLECTRIC_SDK
+import tech.shatrov.familyfinances.core.api.Account
+import tech.shatrov.familyfinances.core.api.ReconciliationRow
 import tech.shatrov.familyfinances.core.api.ReconciliationStats
 import tech.shatrov.familyfinances.theme.AppTheme
+import java.time.OffsetDateTime
 import java.time.YearMonth
 import java.util.UUID
 
@@ -56,6 +59,8 @@ class ReconciliationScreenTest {
         onSave: () -> Unit = {},
         onClear: () -> Unit = {},
         onAddAccount: () -> Unit = {},
+        onOpenTransactions: () -> Unit = {},
+        onCloseGap: (Long) -> Unit = {},
     ) {
         composeRule.setContent {
             AppTheme {
@@ -70,6 +75,8 @@ class ReconciliationScreenTest {
                     onRetry = {},
                     onOpenBalance = {},
                     onAddAccount = onAddAccount,
+                    onOpenTransactions = onOpenTransactions,
+                    onCloseGap = onCloseGap,
                     onAmountChange = onAmountChange,
                     onToggleSign = onToggleSign,
                     onSave = onSave,
@@ -93,6 +100,37 @@ class ReconciliationScreenTest {
         assertEquals(1, added)
     }
 
+    private fun complete(gap: Long): ReconciliationUiState.Ready {
+        val at = OffsetDateTime.parse("2026-09-01T10:00:00Z")
+        val card = Account(UUID.fromString(CARD_ACCOUNT_ID), "Тинькофф", false, at, at)
+        val row = ReconciliationRow(card, 5_000_000, 5_000_000 + gap, at)
+        return ReconciliationUiState.Ready(
+            AUGUST,
+            ReconciliationStats("2026-08", 5_000_000, 5_000_000 + gap, 0, 0, gap, true, listOf(row)),
+        )
+    }
+
+    @Test
+    fun gapIsClosedWithItsSign() {
+        var closed: Long? = null
+        var opened = 0
+        setScreen(complete(-2550), editor = null, onOpenTransactions = { opened++ }, onCloseGap = { closed = it })
+
+        composeRule.onNodeWithText(res.getString(R.string.reconciliation_close_gap)).performClick()
+        composeRule.onNodeWithText(res.getString(R.string.reconciliation_transactions)).performClick()
+
+        assertEquals(-2550L, closed)
+        assertEquals(1, opened)
+    }
+
+    @Test
+    fun matchedMonthHasNothingToClose() {
+        setScreen(complete(0), editor = null)
+
+        composeRule.onNodeWithText(res.getString(R.string.reconciliation_matched)).assertExists()
+        composeRule.onNodeWithText(res.getString(R.string.reconciliation_close_gap)).assertDoesNotExist()
+    }
+
     @Test
     fun negativeBalanceIsTypedAndSaved() {
         var editor by mutableStateOf(balance(exists = false))
@@ -110,6 +148,8 @@ class ReconciliationScreenTest {
                     onRetry = {},
                     onOpenBalance = {},
                     onAddAccount = {},
+                    onOpenTransactions = {},
+                    onCloseGap = {},
                     onAmountChange = { editor = editor.copy(amount = it) },
                     onToggleSign = { editor = editor.copy(amount = "-${editor.amount}") },
                     onSave = { saved = editor.amountMinor },

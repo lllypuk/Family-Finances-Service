@@ -298,14 +298,14 @@ accounts[]: { account, opening_minor | null, closing_minor | null, updated_at | 
   (`ui/transactions/…Edit…`), `ReconciliationScreen.kt`,
   тесты: `TransactionsViewModelTest`, `AppScreenSaverTest`, `ReconciliationViewModelTest`, `app/src/main/res/values/strings.xml`
 
-- [ ] `Filters.reconciliation(month)` — только даты месяца, без счёта; «назад» возвращает в сверку (как сейчас)
-- [ ] `TransactionEdit.back: AppScreen`, поля предзаполнения в ключе `Saver` перед `back`, параметры
+- [x] `Filters.reconciliation(month)` — только даты месяца, без счёта; «назад» возвращает в сверку (как сейчас)
+- [x] `TransactionEdit.back: AppScreen`, поля предзаполнения в ключе `Saver` перед `back`, параметры
   `TransactionEditViewModel` (см. «Клиент» в Technical Details)
-- [ ] после сохранения — возврат в `AppScreen.Reconciliation(month)`; флаги `*Stale` выставлены
-- [ ] тесты: предзаполнение по знаку `gap`; дата = конец месяца для прошлого и «сегодня» для текущего;
+- [x] после сохранения — возврат в `AppScreen.Reconciliation(month)`; флаги `*Stale` выставлены
+- [x] тесты: предзаполнение по знаку `gap`; дата = конец месяца для прошлого и «сегодня» для текущего;
   `AppScreenSaverTest`: `TransactionEdit` с предзаполнением и `back = Reconciliation` переживает `Saver`, прежние
   ключи читаются; фильтр без счёта
-- [ ] `make -C android check`
+- [x] `make -C android check`
 
 ### Task 7: Клиент — карточка на «Главной», версия
 
