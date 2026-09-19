@@ -381,8 +381,8 @@ done (`docs/plans/completed/`, 06 = the Android client, 07 = its budgets tab, 08
 09 = the server findings of 07–08, 10 = `/reports` removed and `GET /stats/monthly` added, 12 = recurring
 budgets, both sides, 13 = the client's UI audit: segments instead of chips, a FAB on "Операции", empty states
 with an action, password visibility — client only, the contract did not move; 14 = the `/metrics` listener).
-Tagged releases: server `v0.3.0` (plan 10), `v0.4.0` (plan 12), `v0.8.0` (plans 14–18), client up to
-`app-v0.5.0`, then `app-v0.10.0` (client side of plans 13–18). `v0.5.0`–`v0.7.0` and `app-v0.6.0`–`app-v0.9.0` were never cut
+Tagged releases: server `v0.3.0` (plan 10), `v0.4.0` (plan 12), `v0.8.0` (plans 14–18), `v0.9.0` (plan 20), client up to
+`app-v0.5.0`, then `app-v0.10.0` (client side of plans 13–18), `app-v0.11.0` (plan 19), `app-v0.12.0` (plan 20). `v0.5.0`–`v0.7.0` and `app-v0.6.0`–`app-v0.9.0` were never cut
 and will not be: a server tag deploys its image, so it cannot go on an old commit. Plans 15 (screenshot
 recognition), 16 (accounts and the monthly reconciliation), 17 (holdings and net worth) and 18 (a holding's
 monthly plan) shipped together in `v0.8.0`/`app-v0.10.0`; older clients keep working against a newer server.
@@ -392,8 +392,8 @@ transactions and `bulkDeleteTransactions` remain.
 Plan 20 (server `v0.9.0`, client `0.12.0`, one MR) replaces plan 16's bank-figure reconciliation with month-end
 balances (`008_account_balances`) and breaks the contract: a `0.11.0` client loses its reconciliation screen
 and, silently, the reconciliation card on the home screen (the old model requires `recorded_minor`).
-`008.down` recreates `account_reconciliations` empty, so run `migrate --to 8 → 7 → 8` on a copy of the production
-DB before tagging.
+`008.down` recreates `account_reconciliations` empty; `migrate --to 8 → 7 → 8` was run on a copy of the production
+DB before `v0.9.0` was tagged (19.09.2026).
 
 `docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates
 from it, and code and spec now match. **A registered route with no operation in the spec fails `make test`**
