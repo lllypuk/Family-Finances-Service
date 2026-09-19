@@ -21,8 +21,10 @@ import (
 // selectWithCurrent присоединяет последний по дате снимок не позже today (первый параметр):
 // updated_at здесь ни при чём, поздняя правка старой даты текущей не становится.
 const selectWithCurrent = `
-	SELECT h.id, h.name, h.side, h.kind, h.is_archived, h.created_at, h.updated_at, v.date, v.value_minor
+	SELECT h.id, h.name, h.side, h.kind, h.is_archived, h.created_at, h.updated_at, v.date, v.value_minor,
+		COALESCE(p.monthly_income_minor, 0), COALESCE(p.monthly_expense_minor, 0), p.updated_at
 	FROM holdings h
+	LEFT JOIN holding_plans p ON p.holding_id = h.id
 	LEFT JOIN holding_values v ON v.holding_id = h.id AND v.date = (
 		SELECT x.date FROM holding_values x
 		WHERE x.holding_id = h.id AND x.date <= ?
@@ -38,11 +40,18 @@ func NewSQLiteRepository(db *sql.DB) *SQLiteRepository {
 	return &SQLiteRepository{db: db}
 }
 
+// Create пишет позицию и её план одной транзакцией; строка плана 0/0 не пишется — её отверг бы CHECK.
 func (r *SQLiteRepository) Create(ctx context.Context, h *holding.Holding) error {
 	now := time.Now().UTC()
 	h.CreatedAt, h.UpdatedAt = now, now
 
-	_, err := r.db.ExecContext(ctx, `
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	_, err = tx.ExecContext(ctx, `
 		INSERT INTO holdings (id, family_id, name, name_key, side, kind, is_archived, created_at, updated_at)
 		VALUES (?, (SELECT id FROM families LIMIT 1), ?, ?, ?, ?, ?, ?, ?)`,
 		sqlitehelpers.UUIDToString(h.ID), h.Name, names.Key(h.Name), string(h.Side), string(h.Kind),
@@ -50,6 +59,18 @@ func (r *SQLiteRepository) Create(ctx context.Context, h *holding.Holding) error
 	)
 	if err != nil {
 		return writeError("create", err)
+	}
+
+	h.Plan.UpdatedAt = nil
+	if !h.Plan.IsZero() {
+		if err = writePlan(ctx, tx, h.ID, h.Plan, now); err != nil {
+			return err
+		}
+		h.Plan.UpdatedAt = &now
+	}
+
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit holding: %w", err)
 	}
 
 	return nil
@@ -100,13 +121,15 @@ func (r *SQLiteRepository) List(
 	return holdings, nil
 }
 
-// Update пишет только переданные поля одним UPDATE; side не пишется никогда.
+// Update пишет только переданные поля; side не пишется никогда. Присланные числа плана сливаются
+// с сохранёнными внутри транзакции: при MaxOpenConns=1 обращение к r.db здесь ждало бы само себя.
 func (r *SQLiteRepository) Update(
 	ctx context.Context,
 	id uuid.UUID,
 	name *string,
 	kind *holding.Kind,
 	archived *bool,
+	income, expense *money.Minor,
 ) error {
 	var nameKey, archivedInt any
 	if name != nil {
@@ -115,19 +138,86 @@ func (r *SQLiteRepository) Update(
 	if archived != nil {
 		archivedInt = sqlitehelpers.BoolToInt(*archived)
 	}
+	now := time.Now().UTC()
 
-	res, err := r.db.ExecContext(ctx, `
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	res, err := tx.ExecContext(ctx, `
 		UPDATE holdings
 		SET name = COALESCE(?, name), name_key = COALESCE(?, name_key), kind = COALESCE(?, kind),
 		    is_archived = COALESCE(?, is_archived), updated_at = ?
 		WHERE id = ?`,
-		name, nameKey, kind, archivedInt, time.Now().UTC(), sqlitehelpers.UUIDToString(id),
+		name, nameKey, kind, archivedInt, now, sqlitehelpers.UUIDToString(id),
 	)
 	if err != nil {
 		return writeError("update", err)
 	}
+	if err = requireAffected(res, id); err != nil {
+		return err
+	}
 
-	return requireAffected(res, id)
+	if income != nil || expense != nil {
+		if err = mergePlan(ctx, tx, id, income, expense, now); err != nil {
+			return err
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit holding: %w", err)
+	}
+
+	return nil
+}
+
+// mergePlan накладывает присланные числа на сохранённый план и проверяет итог.
+func mergePlan(ctx context.Context, tx *sql.Tx, id uuid.UUID, income, expense *money.Minor, now time.Time) error {
+	var plan holding.Plan
+	err := tx.QueryRowContext(ctx,
+		`SELECT monthly_income_minor, monthly_expense_minor FROM holding_plans WHERE holding_id = ?`,
+		sqlitehelpers.UUIDToString(id),
+	).Scan(&plan.MonthlyIncomeMinor, &plan.MonthlyExpenseMinor)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("failed to read holding plan: %w", err)
+	}
+
+	if income != nil {
+		plan.MonthlyIncomeMinor = *income
+	}
+	if expense != nil {
+		plan.MonthlyExpenseMinor = *expense
+	}
+	if err = holding.CheckPlan(plan.MonthlyIncomeMinor, plan.MonthlyExpenseMinor); err != nil {
+		return err
+	}
+
+	return writePlan(ctx, tx, id, plan, now)
+}
+
+// writePlan держит строку плана только ненулевой: 0/0 удаляет её.
+func writePlan(ctx context.Context, tx *sql.Tx, id uuid.UUID, plan holding.Plan, now time.Time) error {
+	var err error
+	if plan.IsZero() {
+		_, err = tx.ExecContext(ctx, `DELETE FROM holding_plans WHERE holding_id = ?`,
+			sqlitehelpers.UUIDToString(id))
+	} else {
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO holding_plans (holding_id, monthly_income_minor, monthly_expense_minor, updated_at)
+			VALUES (?, ?, ?, ?)
+			ON CONFLICT(holding_id) DO UPDATE SET
+				monthly_income_minor = excluded.monthly_income_minor,
+				monthly_expense_minor = excluded.monthly_expense_minor,
+				updated_at = excluded.updated_at`,
+			sqlitehelpers.UUIDToString(id), plan.MonthlyIncomeMinor, plan.MonthlyExpenseMinor, now)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to write holding plan: %w", err)
+	}
+
+	return nil
 }
 
 // Delete уносит снимки каскадом.
@@ -274,9 +364,10 @@ func scanHolding(row rowScanner) (*holding.Holding, error) {
 		archived    int
 		currentDate date.Date
 		currentVal  sql.NullInt64
+		planAt      sql.NullTime
 	)
 	if err := row.Scan(&idStr, &h.Name, &side, &kind, &archived, &h.CreatedAt, &h.UpdatedAt,
-		&currentDate, &currentVal); err != nil {
+		&currentDate, &currentVal, &h.Plan.MonthlyIncomeMinor, &h.Plan.MonthlyExpenseMinor, &planAt); err != nil {
 		return nil, err
 	}
 
@@ -290,6 +381,10 @@ func scanHolding(row rowScanner) (*holding.Holding, error) {
 	h.IsArchived = sqlitehelpers.IntToBool(archived)
 	if currentVal.Valid {
 		h.Current = &holding.Value{Date: currentDate, ValueMinor: money.Minor(currentVal.Int64)}
+	}
+
+	if planAt.Valid {
+		h.Plan.UpdatedAt = &planAt.Time
 	}
 
 	return &h, nil

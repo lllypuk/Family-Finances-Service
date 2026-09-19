@@ -3,6 +3,7 @@ package holding
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -77,8 +78,47 @@ type Holding struct {
 	IsArchived bool
 	// Current — последний снимок не позже сегодняшнего дня семьи; nil, если снимков нет.
 	Current   *Value
+	Plan      Plan
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+// Поля плана — json-имена: PlanError.Field уходит клиенту как есть.
+const (
+	FieldMonthlyIncome  = "monthly_income_minor"
+	FieldMonthlyExpense = "monthly_expense_minor"
+)
+
+// Plan — плановые средние поступления и выплаты позиции в месяц; 0/0 — плана нет.
+type Plan struct {
+	MonthlyIncomeMinor  money.Minor
+	MonthlyExpenseMinor money.Minor
+	// UpdatedAt — время последней правки чисел плана; nil без плана.
+	UpdatedAt *time.Time
+}
+
+func (p Plan) IsZero() bool {
+	return p.MonthlyIncomeMinor == 0 && p.MonthlyExpenseMinor == 0
+}
+
+// PlanError — число плана вне 0 … MaxAmount.
+type PlanError struct {
+	Field string
+}
+
+func (e *PlanError) Error() string {
+	return fmt.Sprintf("%s must be between 0 and %d", e.Field, money.MaxAmount)
+}
+
+func CheckPlan(income, expense money.Minor) error {
+	if !ValidValue(income) {
+		return &PlanError{Field: FieldMonthlyIncome}
+	}
+	if !ValidValue(expense) {
+		return &PlanError{Field: FieldMonthlyExpense}
+	}
+
+	return nil
 }
 
 func ValidSide(side Side) bool {

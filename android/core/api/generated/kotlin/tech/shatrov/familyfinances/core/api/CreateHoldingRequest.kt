@@ -36,6 +36,8 @@ import kotlinx.serialization.Contextual
  * @param side 
  * @param kind Вид позиции. Активы — `cash`, `deposit`, `investment`, `property`, `vehicle`, `other`; пассивы — `mortgage`, `loan`, `credit_card`, `other`. Не `enum`: список может расти, и неизвестный вид клиент показывает как `other`. 
  * @param id Необязательный клиентский UUID для идемпотентного повтора; тело повтора игнорируется (A-07)
+ * @param monthlyIncomeMinor Плановые средние поступления в месяц; нет поля — `0`
+ * @param monthlyExpenseMinor Плановые средние выплаты в месяц; нет поля — `0`
  */
 @Serializable
 
@@ -54,7 +56,15 @@ data class CreateHoldingRequest (
 
     /* Необязательный клиентский UUID для идемпотентного повтора; тело повтора игнорируется (A-07) */
     @Contextual @SerialName(value = "id")
-    val id: java.util.UUID? = null
+    val id: java.util.UUID? = null,
+
+    /* Плановые средние поступления в месяц; нет поля — `0` */
+    @SerialName(value = "monthly_income_minor")
+    val monthlyIncomeMinor: kotlin.Long? = null,
+
+    /* Плановые средние выплаты в месяц; нет поля — `0` */
+    @SerialName(value = "monthly_expense_minor")
+    val monthlyExpenseMinor: kotlin.Long? = null
 
 ) {
 

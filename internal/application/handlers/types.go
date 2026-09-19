@@ -190,6 +190,9 @@ type CreateHoldingRequest struct {
 	Name string     `json:"name"         validate:"required,max=50"`
 	Side string     `json:"side"         validate:"required,oneof=asset liability"`
 	Kind string     `json:"kind"         validate:"required"`
+	// Диапазон плана проверяет домен (holding.CheckPlan), отказ приходит как PlanError с полем.
+	MonthlyIncomeMinor  money.Minor `json:"monthly_income_minor,omitempty"`
+	MonthlyExpenseMinor money.Minor `json:"monthly_expense_minor,omitempty"`
 }
 
 // UpdateHoldingRequest — частичное обновление; side здесь нет, присланный ключ игнорируется.
@@ -197,6 +200,9 @@ type UpdateHoldingRequest struct {
 	Name       *string `json:"name,omitempty"        validate:"omitempty,max=50"`
 	Kind       *string `json:"kind,omitempty"`
 	IsArchived *bool   `json:"is_archived,omitempty"`
+	// Числа плана: нет поля — не трогать, 0 — убрать.
+	MonthlyIncomeMinor  *money.Minor `json:"monthly_income_minor,omitempty"`
+	MonthlyExpenseMinor *money.Minor `json:"monthly_expense_minor,omitempty"`
 }
 
 type HoldingResponse struct {
@@ -206,8 +212,12 @@ type HoldingResponse struct {
 	Kind       string                  `json:"kind"`
 	IsArchived bool                    `json:"is_archived"`
 	Current    *HoldingCurrentResponse `json:"current"`
-	CreatedAt  time.Time               `json:"created_at"`
-	UpdatedAt  time.Time               `json:"updated_at"`
+	// MonthlyIncomeMinor и MonthlyExpenseMinor отдаются всегда, 0 — без плана; PlanUpdatedAt — только при плане.
+	MonthlyIncomeMinor  money.Minor `json:"monthly_income_minor"`
+	MonthlyExpenseMinor money.Minor `json:"monthly_expense_minor"`
+	PlanUpdatedAt       *time.Time  `json:"plan_updated_at,omitempty"`
+	CreatedAt           time.Time   `json:"created_at"`
+	UpdatedAt           time.Time   `json:"updated_at"`
 }
 
 // HoldingCurrentResponse — последний снимок не позже сегодняшнего дня семьи.

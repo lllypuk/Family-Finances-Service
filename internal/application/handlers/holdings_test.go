@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -30,8 +32,9 @@ func (m *mockHoldingService) Create(
 	name string,
 	side holding.Side,
 	kind holding.Kind,
+	plan holding.Plan,
 ) (*holding.Holding, error) {
-	args := m.Called(ctx, id, name, side, kind)
+	args := m.Called(ctx, id, name, side, kind, plan)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -57,8 +60,9 @@ func (m *mockHoldingService) Update(
 	name *string,
 	kind *holding.Kind,
 	archived *bool,
+	income, expense *money.Minor,
 ) (*holding.Holding, error) {
-	args := m.Called(ctx, id, name, kind, archived)
+	args := m.Called(ctx, id, name, kind, archived, income, expense)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -135,7 +139,8 @@ func TestHoldingHandler_CreateHolding_RepeatByIDSkipsService(t *testing.T) {
 		`{"id":"`+id.String()+`","name":"Другое","side":"asset","kind":"cash"}`, nil)
 	require.NoError(t, h.CreateHolding(c))
 	assert.Equal(t, http.StatusOK, rec.Code)
-	svc.AssertNotCalled(t, "Create", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	svc.AssertNotCalled(t, "Create",
+		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestHoldingHandler_CreateHolding_Validation(t *testing.T) {
@@ -166,11 +171,14 @@ func TestHoldingHandler_ErrorMapping(t *testing.T) {
 		{"not found", holding.ErrNotFound, http.StatusNotFound, handlers.ErrCodeHoldingNotFound, ""},
 		{"long name", holding.ErrNameLong, http.StatusUnprocessableEntity, handlers.ErrCodeValidationError, "name"},
 		{"internal", errors.New("boom"), http.StatusInternalServerError, handlers.ErrCodeInternal, ""},
+		{"plan", fmt.Errorf("failed to update holding: %w", &holding.PlanError{Field: holding.FieldMonthlyIncome}),
+			http.StatusUnprocessableEntity, handlers.ErrCodeValidationError, "monthly_income_minor"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := &mockHoldingService{}
-			svc.On("Update", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			svc.On("Update", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+				mock.Anything, mock.Anything).
 				Return(nil, tt.err)
 			h := handlers.NewHoldingHandler(svc)
 
@@ -196,6 +204,50 @@ func TestHoldingHandler_UpdateHolding_EmptyBody(t *testing.T) {
 	c.SetParamValues(uuid.NewString())
 	require.NoError(t, h.UpdateHolding(c))
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, "одна side — это пустое обновление")
+}
+
+func TestHoldingHandler_UpdateHolding_PlanOnly(t *testing.T) {
+	svc := &mockHoldingService{}
+	id := uuid.New()
+	zero := money.Minor(0)
+	svc.On("Update", mock.Anything, id, (*string)(nil), (*holding.Kind)(nil), (*bool)(nil),
+		(*money.Minor)(nil), &zero).Return(&holding.Holding{ID: id, Name: "Ипотека"}, nil)
+	h := handlers.NewHoldingHandler(svc)
+
+	c, rec := principalContext(http.MethodPut, "/", `{"monthly_expense_minor":0}`, nil)
+	c.SetParamNames("id")
+	c.SetParamValues(id.String())
+	require.NoError(t, h.UpdateHolding(c))
+	assert.Equal(t, http.StatusOK, rec.Code, "одно число плана — не пустое тело, 0 доходит до сервиса")
+	svc.AssertExpectations(t)
+}
+
+func TestHoldingHandler_CreateHolding_PlanInResponse(t *testing.T) {
+	svc := &mockHoldingService{}
+	at := time.Date(2026, 9, 19, 8, 0, 0, 0, time.UTC)
+	plan := holding.Plan{MonthlyIncomeMinor: 320_000}
+	svc.On("Create", mock.Anything, (*uuid.UUID)(nil), "Вклад", holding.SideAsset, holding.KindDeposit, plan).
+		Return(&holding.Holding{ID: uuid.New(), Name: "Вклад",
+			Plan: holding.Plan{MonthlyIncomeMinor: 320_000, UpdatedAt: &at}}, nil)
+	h := handlers.NewHoldingHandler(svc)
+
+	c, rec := principalContext(http.MethodPost, "/api/v1/holdings",
+		`{"name":"Вклад","side":"asset","kind":"deposit","monthly_income_minor":320000}`, nil)
+	require.NoError(t, h.CreateHolding(c))
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	var resp struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.InDelta(t, 320000, resp.Data["monthly_income_minor"], 0)
+	assert.InDelta(t, 0, resp.Data["monthly_expense_minor"], 0, "ноль отдаётся явно")
+	assert.Equal(t, "2026-09-19T08:00:00Z", resp.Data["plan_updated_at"])
+
+	svc.On("List", mock.Anything, false).Return([]*holding.Holding{{ID: uuid.New(), Name: "Без плана"}}, nil)
+	c, rec = principalContext(http.MethodGet, "/api/v1/holdings", "", nil)
+	require.NoError(t, h.ListHoldings(c))
+	assert.NotContains(t, rec.Body.String(), "plan_updated_at", "без плана даты нет")
 }
 
 func valueContext(method, body, id, day string) (echo.Context, *httptest.ResponseRecorder) {

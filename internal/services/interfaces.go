@@ -78,6 +78,7 @@ type HoldingService interface {
 		name string,
 		side holding.Side,
 		kind holding.Kind,
+		plan holding.Plan,
 	) (*holding.Holding, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*holding.Holding, error)
 	List(ctx context.Context, includeArchived bool) ([]*holding.Holding, error)
@@ -87,6 +88,7 @@ type HoldingService interface {
 		name *string,
 		kind *holding.Kind,
 		archived *bool,
+		income, expense *money.Minor,
 	) (*holding.Holding, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	PutValue(ctx context.Context, id uuid.UUID, day date.Date, value money.Minor) (*holding.Value, error)

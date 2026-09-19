@@ -17,7 +17,15 @@ type HoldingRepository interface {
 	Create(ctx context.Context, h *holding.Holding) error
 	GetByID(ctx context.Context, id uuid.UUID, today date.Date) (*holding.Holding, error)
 	List(ctx context.Context, includeArchived bool, today date.Date) ([]*holding.Holding, error)
-	Update(ctx context.Context, id uuid.UUID, name *string, kind *holding.Kind, archived *bool) error
+	// Update сливает присланные числа плана с сохранёнными и проверяет итог сам, в своей транзакции.
+	Update(
+		ctx context.Context,
+		id uuid.UUID,
+		name *string,
+		kind *holding.Kind,
+		archived *bool,
+		income, expense *money.Minor,
+	) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	UpsertValue(ctx context.Context, holdingID uuid.UUID, v *holding.Value) error
 	DeleteValue(ctx context.Context, holdingID uuid.UUID, day date.Date) error
@@ -40,6 +48,7 @@ func (s *holdingService) Create(
 	name string,
 	side holding.Side,
 	kind holding.Kind,
+	plan holding.Plan,
 ) (*holding.Holding, error) {
 	normalized, err := holding.NormalizeName(name)
 	if err != nil {
@@ -51,8 +60,11 @@ func (s *holdingService) Create(
 	if !holding.ValidKind(side, kind) {
 		return nil, holding.ErrInvalidKind
 	}
+	if err = holding.CheckPlan(plan.MonthlyIncomeMinor, plan.MonthlyExpenseMinor); err != nil {
+		return nil, err
+	}
 
-	h := &holding.Holding{ID: dto.EntityID(id), Name: normalized, Side: side, Kind: kind}
+	h := &holding.Holding{ID: dto.EntityID(id), Name: normalized, Side: side, Kind: kind, Plan: plan}
 	if err = s.repo.Create(ctx, h); err != nil {
 		return nil, fmt.Errorf("failed to create holding: %w", err)
 	}
@@ -85,6 +97,7 @@ func (s *holdingService) Update(
 	name *string,
 	kind *holding.Kind,
 	archived *bool,
+	income, expense *money.Minor,
 ) (*holding.Holding, error) {
 	if name != nil {
 		normalized, err := holding.NormalizeName(*name)
@@ -109,7 +122,7 @@ func (s *holdingService) Update(
 		}
 	}
 
-	if err = s.repo.Update(ctx, id, name, kind, archived); err != nil {
+	if err = s.repo.Update(ctx, id, name, kind, archived, income, expense); err != nil {
 		return nil, fmt.Errorf("failed to update holding: %w", err)
 	}
 
