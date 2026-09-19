@@ -157,11 +157,11 @@ CREATE TABLE holding_plans (
 - Modify: `migrations/001_consolidated.{up,down}.sql`, `internal/testhelpers/sqlite.go`, `internal/infrastructure/migrations_test.go`
 - Create: `migrations/007_holding_plans.{up,down}.sql`
 
-- [ ] `001`: таблица после `holding_values`; в `001.down` — `DROP TABLE IF EXISTS holding_plans` перед `holding_values`
-- [ ] `007.up`: `CREATE TABLE IF NOT EXISTS`; `007.down`: `DROP TABLE holding_plans`
-- [ ] `CleanTables`: `holding_plans` перед `holdings`; список `tables` в `migrations_test.go:33`
-- [ ] тест: `Up → Migrate(6) → Up` — таблица есть, позиции и снимки целы; на двух базах схемы совпадают по `table_info` / `foreign_key_list`; `CHECK` отвергает строку `0/0` и отрицательные; удаление позиции уносит план; `Migrate(6)` с заполненным планом: позиции и снимки целы, планы потеряны — это записать в `migrations/CHANGELOG.md`
-- [ ] `make fmt && make test && make lint`
+- [x] `001`: таблица после `holding_values`; в `001.down` — `DROP TABLE IF EXISTS holding_plans` перед `holding_values`
+- [x] `007.up`: `CREATE TABLE IF NOT EXISTS`; `007.down`: `DROP TABLE holding_plans`
+- [x] `CleanTables`: `holding_plans` перед `holdings`; список `tables` в `migrations_test.go:33`
+- [x] тест: `Up → Migrate(6) → Up` — таблица есть, позиции и снимки целы; на двух базах схемы совпадают по `table_info` / `foreign_key_list`; `CHECK` отвергает строку `0/0` и отрицательные; удаление позиции уносит план; `Migrate(6)` с заполненным планом: позиции и снимки целы, планы потеряны — это записать в `migrations/CHANGELOG.md`
+- [x] `make fmt && make test && make lint`
 
 ### Task 2: План в домене, репозитории, сервисе и контракте
 

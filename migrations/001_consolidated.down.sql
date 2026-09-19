@@ -36,6 +36,7 @@ DROP INDEX IF EXISTS idx_users_email_active;
 DROP INDEX IF EXISTS idx_users_family_id;
 
 DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS holding_plans;
 DROP TABLE IF EXISTS holding_values;
 DROP TABLE IF EXISTS holdings;
 DROP TABLE IF EXISTS account_reconciliations;
