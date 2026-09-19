@@ -320,10 +320,10 @@ accounts[]: { account, opening_minor | null, closing_minor | null, updated_at | 
 
 ### Task 8: Verify acceptance criteria
 
-- [ ] все пункты Overview реализованы; `grep -ri "bank_expense\|RecordedByAccount\|AccountTotal\|reconciliations/\|RECONCILIATION_NOT_FOUND\|unassigned_minor\|recorded_minor\|diff_minor"`
-  по `internal`, `tests`, `docs/api`, `android` (кроме `build/`) пуст (`diff_minor` — кроме чужих схем)
-- [ ] `make fmt && make test && make lint` (0 issues), `make -C android check`, `make -C android api-check`
-- [ ] `go run ./cmd/server migrate --to 7` и обратно `--to 8` на локальной БД с данными
+- [x] все пункты Overview реализованы; `grep -ri "bank_expense\|RecordedByAccount\|AccountTotal\|reconciliations/\|RECONCILIATION_NOT_FOUND\|unassigned_minor\|recorded_minor\|diff_minor"`
+  по `internal`, `tests`, `docs/api`, `android` (кроме `build/`) пуст (`diff_minor` — кроме чужих схем); остались только `migrations_test.go` — вставки в `account_reconciliations` на схеме v7
+- [x] `make fmt && make test && make lint` (0 issues), `make -C android check`, `make -C android api-check`
+- [x] `go run ./cmd/server migrate --to 7` и обратно `--to 8` на локальной БД с данными (на даунгрейде `account_balances` теряется — таблица удаляется)
 
 ### Task 9: [Final] Update documentation
 
