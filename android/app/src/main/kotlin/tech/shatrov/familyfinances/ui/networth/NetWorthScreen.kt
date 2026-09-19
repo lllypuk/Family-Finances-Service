@@ -181,31 +181,25 @@ private fun PlanTotalLine(
     currency: String,
 ) {
     val colors = LocalAppColors.current
-    Row(
+    Text(
+        text = stringResource(R.string.net_worth_plan),
+        style = MaterialTheme.typography.bodyMedium,
         modifier = Modifier.padding(top = Dimens.SPACE_2),
-        horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = stringResource(R.string.net_worth_plan),
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = buildAnnotatedString {
-                withStyle(SpanStyle(color = colors.income)) { append(formatMoney(plan.incomeMinor, currency, true)) }
-                append(" · ")
-                withStyle(SpanStyle(color = colors.expense)) {
-                    append(formatMoney(-plan.expenseMinor, currency, true))
-                }
-                append(" = ")
-                withStyle(SpanStyle(color = if (plan.netMinor < 0) colors.expense else colors.income)) {
-                    append(formatMoney(plan.netMinor, currency, true))
-                }
-            },
-            style = MaterialTheme.typography.displaySmall,
-        )
-    }
+    )
+    Text(
+        text = buildAnnotatedString {
+            withStyle(SpanStyle(color = colors.income)) { append(formatMoney(plan.incomeMinor, currency, true)) }
+            append(" · ")
+            withStyle(SpanStyle(color = colors.expense)) {
+                append(formatMoney(-plan.expenseMinor, currency, true))
+            }
+            append(" = ")
+            withStyle(SpanStyle(color = if (plan.netMinor < 0) colors.expense else colors.income)) {
+                append(formatMoney(plan.netMinor, currency, true))
+            }
+        },
+        style = MaterialTheme.typography.displaySmall,
+    )
     // «В месяц» — среднее: годовой платёж в плане поделён на 12, а в месяц оплаты нужен целиком.
     Text(
         text = if (plan.planned == plan.active) {
