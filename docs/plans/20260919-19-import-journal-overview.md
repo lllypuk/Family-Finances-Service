@@ -238,15 +238,17 @@ overview`, чтение по индексу; строка другой длин�
 - Modify: `ui/recognize/RecognizeViewModel.kt`, `MainActivity.kt` (:171-175, :177, :204-208, :220-237, :638, :694), `AppGraph.kt`
 - Modify: `RecognizeViewModelTest.kt`, `AppRootImportTest.kt`, `TestFixtures.kt`
 
-- [ ] писатель: `Channel(CONFLATED)` + сборщик на `Dispatchers.IO`; записи после `prepare` и после ответа — ожидаемые, вне слияния; `recognizing = true` пишется до вызова
-- [ ] `init`: новый импорт — `deleteOthers(keep = importId)`; `claim == null` → `read(importId)`; восстановление по таблице; `JournalImage` → `ImportImage` через сохранённую строку URI
-- [ ] `recognize()` с готовым `result` платный вызов не делает: справочники → `Review`; их отказ — `Failure` с «Повторить» тем же путём; `accountId` из журнала, которого нет в списке счетов, сбрасывается
-- [ ] `onCleared` — только `release`; `abandon()` удаляет каталог, его зовёт `leave`; всё сохранено — журнал удаляется сразу
-- [ ] `signOut` (оба места) и `sessionExpired` зовут `deleteAll()`
-- [ ] `AppRoot`: экран перед уходом в `Loading` запоминается (`rememberSaveable` + `AppScreenSaver`); после бутстрапа — `pending` ▸ запомненный ▸ «Главная»; запоминается `Recognize` только при существующем журнале
-- [ ] тесты модели: каждое состояние таблицы; после восстановления с ответом к `recognize` нет запросов; повтор прерванной строки → `200` принимает поля сервера; `abandon` удаляет каталог, `onCleared` — нет; удалённый счёт сбрасывается
-- [ ] тесты `AppRoot`: смерть процесса на `Recognize` с журналом → после бутстрапа снова `Recognize`; без журнала → «Главная»; после `signOut` каталога `files/import` нет
-- [ ] `make -C android check`
+- [x] писатель: `Channel(CONFLATED)` + сборщик на `Dispatchers.IO`; записи после `prepare` и после ответа — ожидаемые, вне слияния; `recognizing = true` пишется до вызова
+- [x] `init`: новый импорт — `deleteOthers(keep = importId)`; `claim == null` → `read(importId)`; восстановление по таблице; `JournalImage` → `ImportImage` через сохранённую строку URI
+- [x] `recognize()` с готовым `result` платный вызов не делает: справочники → `Review`; их отказ — `Failure` с «Повторить» тем же путём; `accountId` из журнала, которого нет в списке счетов, сбрасывается
+- [x] `onCleared` — только `release`; `abandon()` удаляет каталог, его зовёт `leave`; всё сохранено — журнал удаляется сразу
+- [x] `signOut` (оба места) и `sessionExpired` зовут `deleteAll()`
+- [x] `AppRoot`: экран перед уходом в `Loading` запоминается (`rememberSaveable` + `AppScreenSaver`); после бутстрапа — `pending` ▸ запомненный ▸ «Главная»; запоминается `Recognize` только при существующем журнале
+- [x] тесты модели: каждое состояние таблицы; после восстановления с ответом к `recognize` нет запросов; повтор прерванной строки → `200` принимает поля сервера; `abandon` удаляет каталог, `onCleared` — нет; удалённый счёт сбрасывается
+- [x] тесты `AppRoot`: смерть процесса на `Recognize` с журналом → после бутстрапа снова `Recognize`; без журнала → «Главная»; после `signOut` каталога `files/import` нет
+- [x] `make -C android check`
+- ➕ `JournalRow` получил `dateAssumed`, `amountMinor`, `type`: без них подтверждённый год и поля сервера после `200` терялись бы при восстановлении
+- ➕ `ImportJournalStore` помнит удалённые в процессе id: запись, начатая до `delete`/`deleteAll`, журнал не возвращает; `recognizing` остаётся взведённым и после отказа вызова
 
 ### Task 3: Плашка на «Главной»
 

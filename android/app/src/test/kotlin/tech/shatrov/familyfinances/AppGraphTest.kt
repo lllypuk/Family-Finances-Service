@@ -22,7 +22,7 @@ class AppGraphTest {
     fun start() {
         server = MockWebServer()
         server.start()
-        graph = AppGraph(ApiGraph(server.url("/").toString(), FakeTokenVault(liveToken())))
+        graph = AppGraph(ApiGraph(server.url("/").toString(), FakeTokenVault(liveToken())), tempJournals())
     }
 
     @After

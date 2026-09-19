@@ -42,7 +42,9 @@ import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import tech.shatrov.familyfinances.theme.AppTheme
 import tech.shatrov.familyfinances.theme.Dimens
@@ -166,16 +168,24 @@ fun AppRoot(graph: AppGraph) {
     val inSettings = screen is AppScreen.Settings
     LaunchedEffect(inSettings) { if (!inSettings) settings.viewModelStore.clear() }
 
+    // Экран, куда вернуться после бутстрапа; `Loading` — никуда.
+    var resumeTo by rememberSaveable(stateSaver = AppScreenSaver) { mutableStateOf<AppScreen>(AppScreen.Loading) }
+
     // Смерть процесса возвращает сохранённый экран, но не сессию: без роли и валюты главной
     // нечего показывать, поэтому бутстрап прогоняется заново.
     LaunchedEffect(screen, session) {
-        if (session == null && screen != AppScreen.Loading && screen != AppScreen.Login) {
+        val current = screen
+        if (session == null && current != AppScreen.Loading && current != AppScreen.Login) {
+            resumeTo = if (resumable(graph, current)) current else AppScreen.Loading
             screen = AppScreen.Loading
         }
     }
 
     LaunchedEffect(Unit) {
-        graph.api.sessionExpired.collect { screen = AppScreen.Login }
+        graph.api.sessionExpired.collect {
+            screen = AppScreen.Login
+            withContext(Dispatchers.IO) { graph.journals.deleteAll() }
+        }
     }
 
     val pending by graph.imports.pending.collectAsStateWithLifecycle()
@@ -201,7 +211,7 @@ fun AppRoot(graph: AppGraph) {
                 screen = AppScreen.Recognize(id)
             }
 
-            // Прежний импорт в просмотре или отказе вытесняется: его модель и файлы уходят сразу.
+            // Прежний импорт в просмотре или отказе вытесняется: модель уходит сразу, журнал удалит новая.
             is AppScreen.Recognize -> if (current.importId != id) {
                 forms.viewModelStore.clear()
                 screen = AppScreen.Recognize(id)
@@ -221,8 +231,15 @@ fun AppRoot(graph: AppGraph) {
                 failure = null
                 val error = graph.bootstrap()
                 when {
-                    error == null -> screen = graph.imports.pending.value?.let(AppScreen::Recognize) ?: AppScreen.Home
+                    error == null -> {
+                        screen = graph.imports.pending.value?.let(AppScreen::Recognize)
+                            ?: resumeTo.takeIf { it != AppScreen.Loading }
+                            ?: AppScreen.Home
+                        resumeTo = AppScreen.Loading
+                    }
+
                     error is ApiFailure.Api && error.isUnauthorized -> screen = AppScreen.Login
+
                     else -> failure = error.toUiError()
                 }
             }
@@ -239,7 +256,10 @@ fun AppRoot(graph: AppGraph) {
         }
 
         AppScreen.Login -> {
-            LaunchedEffect(Unit) { epoch++ }
+            LaunchedEffect(Unit) {
+                epoch++
+                resumeTo = AppScreen.Loading
+            }
             val model: LoginViewModel = viewModel { LoginViewModel(graph.api) }
             val state by model.state.collectAsStateWithLifecycle()
             // Токен уже записан хранилищем: дальше бутстрап, а не сразу главная. Флаг снимается
@@ -699,6 +719,7 @@ fun AppRoot(graph: AppGraph) {
                         context.applicationContext as Application,
                         graph.api,
                         graph.imports,
+                        graph.journals,
                         current.importId,
                         active.currency,
                         graph.lastAccount,
@@ -713,7 +734,12 @@ fun AppRoot(graph: AppGraph) {
                     budgetsStale = true
                 }
             }
-            val leave = { if (!recognize.saving) screen = AppScreen.Transactions() }
+            val leave = {
+                if (!recognize.saving) {
+                    model.abandon()
+                    screen = AppScreen.Transactions()
+                }
+            }
             BackHandler { leave() }
             RecognizeScreen(
                 state = recognize,
@@ -849,6 +875,15 @@ private val AppTab.screen: AppScreen
         AppTab.BUDGETS -> AppScreen.Budgets
         AppTab.NET_WORTH -> AppScreen.NetWorth
     }
+
+/** Возвращаются только экраны без живой модели формы; распознавание — пока его журнал на диске. */
+private suspend fun resumable(
+    graph: AppGraph,
+    screen: AppScreen,
+): Boolean = when (screen) {
+    is AppScreen.Recognize -> withContext(Dispatchers.IO) { graph.journals.read(screen.importId) != null }
+    else -> false
+}
 
 /** Сессия гаснет на выходе раньше, чем сменится экран: без валюты и роли рисовать нечего. */
 @Composable

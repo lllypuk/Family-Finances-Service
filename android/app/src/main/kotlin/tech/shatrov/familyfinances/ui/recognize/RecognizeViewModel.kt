@@ -1,13 +1,20 @@
 package tech.shatrov.familyfinances.ui.recognize
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import tech.shatrov.familyfinances.ImportStore
 import tech.shatrov.familyfinances.LastAccountStore
 import tech.shatrov.familyfinances.R
@@ -15,6 +22,7 @@ import tech.shatrov.familyfinances.core.api.Account
 import tech.shatrov.familyfinances.core.api.ApiGraph
 import tech.shatrov.familyfinances.core.api.Category
 import tech.shatrov.familyfinances.core.api.CreateTransactionRequest
+import tech.shatrov.familyfinances.core.api.RecognizeResult
 import tech.shatrov.familyfinances.core.api.RecognizedTransaction
 import tech.shatrov.familyfinances.core.api.SimilarTransaction
 import tech.shatrov.familyfinances.core.api.Transaction
@@ -23,6 +31,8 @@ import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import tech.shatrov.familyfinances.ui.UiError
 import tech.shatrov.familyfinances.ui.toUiError
 import tech.shatrov.familyfinances.ui.transactions.TransactionField
+import java.io.File
+import java.io.IOException
 import java.time.LocalDate
 import java.util.UUID
 
@@ -135,34 +145,38 @@ data class RecognizeUiState(
 /**
  * Импорт [importId]: картинки в JPEG, один платный вызов распознавания и сохранение выбранных строк.
  * Распознавание повторяется только по [retry]; импорт держится в [ImportStore], пока модель занята.
+ * Состояние пишется в [journals] и после смерти процесса восстанавливается без повторного вызова.
  */
 class RecognizeViewModel(
     application: Application,
     private val api: ApiGraph,
     private val imports: ImportStore,
+    private val journals: ImportJournalStore,
     private val importId: UUID,
     private val currency: String,
     private val lastAccount: LastAccountStore,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : AndroidViewModel(application) {
     private val mutable = MutableStateFlow(RecognizeUiState())
 
     val state: StateFlow<RecognizeUiState> = mutable.asStateFlow()
 
+    private val writes = Channel<Unit>(Channel.CONFLATED)
+
+    // Слитая запись и ожидаемая не должны разойтись: снимок и запись идут под одним замком.
+    private val writeLock = Mutex()
+
+    @Volatile private var result: RecognizeResult? = null
+
+    @Volatile private var recognizing = false
+
+    private var restored: ImportJournal? = null
+
     init {
+        viewModelScope.launch(io) { for (ignored in writes) writeJournal() }
         val claimed = imports.claim(importId)
-        if (claimed == null) {
-            mutable.value = RecognizeUiState(
-                phase = RecognizePhase.Failure(UiError.Resource(R.string.recognize_import_lost), retryable = false),
-            )
-        } else {
-            imports.hold(importId)
-            viewModelScope.launch {
-                // URI читаются сразу: права на чужой контент живут не дольше задачи, которая их выдала.
-                val prepared = ImportFiles.prepare(getApplication(), importId, claimed.uris)
-                mutable.update { it.copy(images = prepared.images, dropped = prepared.dropped) }
-                recognize()
-            }
-        }
+        imports.hold(importId)
+        viewModelScope.launch { if (claimed != null) start(claimed.uris) else restore() }
     }
 
     fun retry() {
@@ -196,15 +210,55 @@ class RecognizeViewModel(
 
     fun onAccountChange(accountId: UUID?) {
         mutable.update { if (it.accountLocked) it else it.copy(accountId = accountId) }
+        persist()
     }
 
     fun save() = send(rows().filter { it.included && it.savable }.map { it.draft })
 
     fun retryRow(draft: UUID) = send(listOf(draft))
 
+    /** Уход с экрана: импорт брошен, журнал и картинки удаляются. */
+    fun abandon() = journals.delete(importId)
+
+    // Не удаляет журнал: смахивание иногда доходит до `onCleared`, а журнал нужен именно тогда.
     override fun onCleared() {
         imports.release(importId)
-        ImportFiles.discard(getApplication(), importId)
+    }
+
+    private suspend fun start(uris: List<Uri>) {
+        withContext(io) { journals.deleteOthers(keep = importId) }
+        // URI читаются сразу: права на чужой контент живут не дольше задачи, которая их выдала.
+        val prepared = ImportFiles.prepare(getApplication(), importId, uris)
+        mutable.update { it.copy(images = prepared.images, dropped = prepared.dropped) }
+        writeJournal()
+        recognize()
+    }
+
+    private suspend fun restore() {
+        val journal = withContext(io) { journals.read(importId) }
+        if (journal == null) {
+            imports.release(importId)
+            fail(UiError.Resource(R.string.recognize_import_lost), retryable = false)
+            return
+        }
+        restored = journal
+        result = journal.result
+        recognizing = journal.recognizing
+        val dir = File(ImportFiles.filesRoot(getApplication()), importId.toString())
+        mutable.update {
+            it.copy(
+                images = journal.images.map { image -> image.restore(dir) },
+                dropped = journal.dropped,
+                savedCount = journal.savedCount,
+            )
+        }
+        if (journal.result == null && journal.recognizing) {
+            // Исход прерванного платного вызова неизвестен: повторить его может только пользователь.
+            imports.release(importId)
+            fail(UiError.Resource(R.string.recognize_error_interrupted), retryable = true)
+        } else {
+            recognize()
+        }
     }
 
     // Справочник — до платного вызова: его отказ не должен стоить распознавания.
@@ -216,33 +270,79 @@ class RecognizeViewModel(
                 fail(UiError.Resource(R.string.recognize_no_images), retryable = false)
                 return
             }
-            if (mutable.value.categories.isEmpty()) {
-                val categories = api.client.unwrap { api.categories.listCategories(limit = CATEGORY_LIMIT) }.`data`
-                val accounts = api.client.unwrap { api.accounts.listAccounts(limit = CATEGORY_LIMIT) }.`data`
-                val last = lastAccount.read()?.takeIf { id -> accounts.any { it.id == id } }
-                mutable.update { it.copy(categories = categories, accounts = accounts, accountId = last) }
-            }
-            mutable.update { it.copy(phase = RecognizePhase.Recognizing) }
-            val files = readyAt.map { (mutable.value.images[it] as ImportImage.Ready).file }
-            val result = api.recognize(files).`data`
+            if (mutable.value.categories.isEmpty()) loadCatalogs()
+            val answer = result ?: paidCall(readyAt)
             // Ждущий share не вытесняет оплаченный ответ: импорт держится до сохранения или ухода.
-            keepHold = result.items.isNotEmpty() && imports.waiting.value
-            mutable.update { state ->
-                state.copy(
-                    phase = RecognizePhase.Review(result.items.map { it.toRow(readyAt, currency) }),
-                    incomplete = result.incomplete,
-                )
+            keepHold = answer.items.isNotEmpty() && imports.waiting.value
+            val saved = restored?.rows.orEmpty()
+            val rows = answer.items.mapIndexed { i, item ->
+                item.toRow(readyAt, currency).let { row -> saved.getOrNull(i)?.let(row::restored) ?: row }
             }
+            writeJournal(rows)
+            mutable.update { it.copy(phase = RecognizePhase.Review(rows), incomplete = answer.incomplete) }
         } catch (failure: ApiFailure) {
             fail(
                 failure.toUiError(recognizeFailures),
-                retryable = failure !is ApiFailure.Api ||
+                retryable = result != null ||
+                    failure !is ApiFailure.Api ||
                     failure.status == HTTP_REQUEST_TIMEOUT ||
                     failure.status >= HTTP_SERVER_ERROR,
             )
         } finally {
             if (!keepHold) imports.release(importId)
         }
+    }
+
+    private suspend fun loadCatalogs() {
+        val categories = api.client.unwrap { api.categories.listCategories(limit = CATEGORY_LIMIT) }.`data`
+        val accounts = api.client.unwrap { api.accounts.listAccounts(limit = CATEGORY_LIMIT) }.`data`
+        // Ответ в журнале — счёт уже выбирали: `null` там тоже выбор, а не повод взять прошлый.
+        val journal = restored?.takeIf { it.result != null }
+        val wanted = if (journal != null) journal.accountId?.let(UUID::fromString) else lastAccount.read()
+        val account = wanted?.takeIf { id -> accounts.any { it.id == id } }
+        mutable.update { it.copy(categories = categories, accounts = accounts, accountId = account) }
+    }
+
+    // `recognizing` остаётся взведённым и при отказе: дошёл ли запрос до модели, клиент не знает.
+    private suspend fun paidCall(readyAt: List<Int>): RecognizeResult {
+        mutable.update { it.copy(phase = RecognizePhase.Recognizing) }
+        recognizing = true
+        writeJournal()
+        val files = readyAt.map { (mutable.value.images[it] as ImportImage.Ready).file }
+        val answer = api.recognize(files).`data`
+        result = answer
+        recognizing = false
+        return answer
+    }
+
+    private fun persist() {
+        writes.trySend(Unit)
+    }
+
+    // Журнал — страховка: отказ диска не должен ронять импорт, который ещё жив в памяти.
+    private suspend fun writeJournal(rows: List<RecognizedRow> = rows()) = withContext(io) {
+        writeLock.withLock {
+            try {
+                journals.write(journal(rows))
+            } catch (_: IOException) {
+                // Следующая запись попробует снова.
+            }
+        }
+    }
+
+    private fun journal(rows: List<RecognizedRow>): ImportJournal {
+        val state = mutable.value
+        return ImportJournal(
+            importId = importId.toString(),
+            updatedAt = System.currentTimeMillis(),
+            images = state.images.map { it.toJournal() },
+            dropped = state.dropped,
+            recognizing = recognizing,
+            result = result,
+            accountId = state.accountId?.toString(),
+            rows = rows.map { it.toJournal() },
+            savedCount = state.savedCount,
+        )
     }
 
     private fun fail(
@@ -260,6 +360,10 @@ class RecognizeViewModel(
         viewModelScope.launch {
             try {
                 drafts.forEach { saveRow(it) }
+                val included = rows().filter { it.included }
+                if (included.isNotEmpty() && included.all { it.status == RowStatus.Saved }) {
+                    withContext(io) { journals.delete(importId) }
+                }
             } finally {
                 setSaving(false)
                 // Ждущий share не уносит строки с отказом (и `422` под полями), пока их не повторили или не ушли с экрана.
@@ -293,6 +397,7 @@ class RecognizeViewModel(
             // `200` — запись с этим id уже была: показывается записанное, а не правка после обрыва.
             replace(draft) { if (code == HTTP_CREATED) it.copy(status = RowStatus.Saved) else it.saved(body.`data`) }
             mutable.update { it.copy(savedCount = it.savedCount + 1) }
+            persist()
         } catch (failure: ApiFailure) {
             replace(draft) { it.failed(failure) }
         }
@@ -315,6 +420,7 @@ class RecognizeViewModel(
             val review = state.phase as? RecognizePhase.Review ?: return@update state
             state.copy(phase = review.copy(rows = review.rows.map { if (it.draft == draft) change(it) else it }))
         }
+        persist()
     }
 
     private fun edit(
@@ -374,5 +480,57 @@ private fun RecognizedRow.failed(failure: ApiFailure): RecognizedRow {
     return copy(
         status = if (allUnderFields) RowStatus.Pending else RowStatus.Failed(failure.toUiError()),
         fieldErrors = underFields,
+    )
+}
+
+private fun ImportImage.toJournal(): JournalImage = when (this) {
+    is ImportImage.Ready -> JournalImage(uri.toString(), file = file.name)
+    is ImportImage.Failed -> JournalImage(uri.toString(), failure = reason)
+}
+
+private fun JournalImage.restore(dir: File): ImportImage = if (file != null) {
+    ImportImage.Ready(Uri.parse(uri), File(dir, file))
+} else {
+    ImportImage.Failed(Uri.parse(uri), failure ?: ImportFailure.UNREADABLE)
+}
+
+private fun RecognizedRow.toJournal(): JournalRow = JournalRow(
+    draft = draft.toString(),
+    included = included,
+    date = date?.toString(),
+    categoryId = categoryId?.toString(),
+    description = description,
+    status = when (status) {
+        RowStatus.Pending -> JournalRowStatus.PENDING
+        RowStatus.Saving -> JournalRowStatus.SAVING
+        RowStatus.Saved -> JournalRowStatus.SAVED
+        is RowStatus.Failed -> JournalRowStatus.FAILED
+    },
+    dateAssumed = dateAssumed,
+    amountMinor = amountMinor,
+    type = type,
+)
+
+// Прерванное сохранение повторяется тем же `draft`: `200` или `201`, дубля нет.
+private fun RecognizedRow.restored(saved: JournalRow): RecognizedRow {
+    val savedDate = saved.date?.let(LocalDate::parse)
+    return copy(
+        draft = UUID.fromString(saved.draft),
+        included = saved.included,
+        date = savedDate,
+        dateAssumed = saved.dateAssumed,
+        description = saved.description,
+        categoryId = saved.categoryId?.let(UUID::fromString),
+        amountMinor = saved.amountMinor ?: amountMinor,
+        type = saved.type ?: type,
+        similarTo = if (savedDate == date && saved.dateAssumed == dateAssumed) similarTo else emptyList(),
+        status = when (saved.status) {
+            JournalRowStatus.PENDING -> RowStatus.Pending
+
+            JournalRowStatus.SAVED -> RowStatus.Saved
+
+            JournalRowStatus.SAVING, JournalRowStatus.FAILED ->
+                RowStatus.Failed(UiError.Resource(R.string.recognize_row_interrupted))
+        },
     )
 }

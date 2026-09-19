@@ -67,7 +67,7 @@ sealed interface AppScreen {
     /** История снимков позиции [id]. */
     data class HoldingHistory(val id: UUID) : AppScreen
 
-    /** Распознавание импорта [importId] из [ImportStore]; после смерти процесса импорта уже нет. */
+    /** Распознавание импорта [importId] из [ImportStore]; после смерти процесса — из его журнала. */
     data class Recognize(val importId: UUID) : AppScreen
 
     /** Сверка счетов за [month]. */

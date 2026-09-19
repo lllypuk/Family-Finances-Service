@@ -27,7 +27,7 @@ class SessionTest {
         server = MockWebServer()
         server.start()
         vault = FakeTokenVault(liveToken())
-        graph = AppGraph(ApiGraph(server.url("/").toString(), vault))
+        graph = AppGraph(ApiGraph(server.url("/").toString(), vault), tempJournals())
     }
 
     @After

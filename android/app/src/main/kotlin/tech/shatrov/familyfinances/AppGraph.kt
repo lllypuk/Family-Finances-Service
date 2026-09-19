@@ -1,14 +1,19 @@
 package tech.shatrov.familyfinances
 
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
 import tech.shatrov.familyfinances.core.api.ApiGraph
 import tech.shatrov.familyfinances.core.api.Family
 import tech.shatrov.familyfinances.core.api.User
 import tech.shatrov.familyfinances.core.api.auth.KeystoreTokenVault
 import tech.shatrov.familyfinances.core.api.net.ApiFailure
+import tech.shatrov.familyfinances.ui.recognize.ImportFiles
+import tech.shatrov.familyfinances.ui.recognize.ImportJournalStore
 import java.time.OffsetDateTime
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -18,6 +23,8 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 class AppGraph(
     val api: ApiGraph,
+    /** Журналы незавершённых импортов: один на процесс, иначе запоздалая запись вернёт удалённый. */
+    val journals: ImportJournalStore,
     val lastAccount: LastAccountStore = MemoryLastAccountStore(),
 ) {
     private val mutableSession = MutableStateFlow<Session?>(null)
@@ -86,7 +93,10 @@ class AppGraph(
         publish(current.copy(family = family))
     }
 
-    /** Выход: хранилище чистится в любом случае — отказ сервера не повод оставить токен на телефоне. */
+    /**
+     * Выход: хранилище чистится в любом случае — отказ сервера не повод оставить токен на телефоне.
+     * Журнал импорта с банковскими данными не должен достаться следующему пользователю.
+     */
     suspend fun signOut() {
         try {
             api.client.send { api.auth.logout() }
@@ -94,6 +104,7 @@ class AppGraph(
             // Сессия кончается на этом телефоне независимо от того, услышал ли её конец сервер.
         } finally {
             api.tokens.clear()
+            withContext(NonCancellable + Dispatchers.IO) { journals.deleteAll() }
             publish(null)
         }
     }
@@ -107,6 +118,10 @@ class AppGraph(
         fun create(
             context: Context,
             baseUrl: String,
-        ): AppGraph = AppGraph(ApiGraph(baseUrl, KeystoreTokenVault(context)), PrefsLastAccountStore(context))
+        ): AppGraph = AppGraph(
+            ApiGraph(baseUrl, KeystoreTokenVault(context)),
+            ImportJournalStore(ImportFiles.filesRoot(context)),
+            PrefsLastAccountStore(context),
+        )
     }
 }

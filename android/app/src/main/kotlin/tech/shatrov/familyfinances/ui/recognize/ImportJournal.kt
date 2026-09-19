@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import tech.shatrov.familyfinances.core.api.RecognizeResult
+import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.core.api.net.apiSerializersModule
 import java.io.File
 import java.io.IOException
@@ -35,7 +36,7 @@ data class JournalImage(
     val failure: ImportFailure? = null,
 )
 
-/** Наложение на `result.items` по индексу. */
+/** Наложение на `result.items` по индексу; сумма и тип расходятся с ответом после `200` на `POST`. */
 @Serializable
 data class JournalRow(
     val draft: String,
@@ -44,6 +45,9 @@ data class JournalRow(
     val categoryId: String?,
     val description: String,
     val status: JournalRowStatus,
+    val dateAssumed: Boolean = false,
+    val amountMinor: Long? = null,
+    val type: TransactionType? = null,
 )
 
 @Serializable
@@ -63,8 +67,14 @@ class ImportJournalStore(
     private val root: File,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
+    private val lock = Any()
+
+    // Удалённые в этом процессе: запись, начатая до удаления, не должна вернуть журнал.
+    private val closed = mutableSetOf<String>()
+
     // Временный файл + rename: оборванная запись оставляет прежний журнал целым.
-    fun write(journal: ImportJournal) {
+    fun write(journal: ImportJournal): Unit = synchronized(lock) {
+        if (journal.importId in closed) return
         val dir = File(root, journal.importId).apply { mkdirs() }
         val tmp = File(dir, TMP)
         tmp.writeText(journalJson.encodeToString(ImportJournal.serializer(), journal))
@@ -75,15 +85,20 @@ class ImportJournalStore(
 
     fun latest(): ImportJournal? = root.listFiles().orEmpty().mapNotNull(::readDir).maxByOrNull { it.updatedAt }
 
-    fun delete(importId: UUID) {
+    fun delete(importId: UUID): Unit = synchronized(lock) {
+        closed += importId.toString()
         File(root, importId.toString()).deleteRecursively()
     }
 
-    fun deleteOthers(keep: UUID) {
-        root.listFiles().orEmpty().filter { it.name != keep.toString() }.forEach { it.deleteRecursively() }
+    fun deleteOthers(keep: UUID): Unit = synchronized(lock) {
+        root.listFiles().orEmpty().filter { it.name != keep.toString() }.forEach {
+            closed += it.name
+            it.deleteRecursively()
+        }
     }
 
-    fun deleteAll() {
+    fun deleteAll(): Unit = synchronized(lock) {
+        closed += root.listFiles().orEmpty().map { it.name }
         root.deleteRecursively()
     }
 

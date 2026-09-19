@@ -290,6 +290,8 @@
     <string name="sign_out">Выйти</string>
     <string name="loading">Загрузка…</string>
 
+    <string name="recognize_error_interrupted">Распознавание прервано: неизвестно, дошёл ли запрос. Повтор — новый платный вызов</string>
+    <string name="recognize_row_interrupted">Сохранение прервано — повторите</string>
     <string name="recognize_import_lost">Картинки потерялись — поделитесь ими ещё раз</string>
     <string name="recognize_no_images">Ни одну картинку не удалось прочитать</string>
     <string name="recognize_title">Распознавание</string>

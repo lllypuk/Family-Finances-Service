@@ -13,6 +13,8 @@ import tech.shatrov.familyfinances.core.api.User
 import tech.shatrov.familyfinances.core.api.auth.SessionToken
 import tech.shatrov.familyfinances.core.api.auth.TokenVault
 import tech.shatrov.familyfinances.core.api.auth.TokenVaultException
+import tech.shatrov.familyfinances.ui.recognize.ImportJournalStore
+import java.nio.file.Files
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -42,6 +44,9 @@ internal class FakeTokenVault(
         return true
     }
 }
+
+/** Журналы импорта во временном каталоге — для графа без Android-контекста. */
+internal fun tempJournals(): ImportJournalStore = ImportJournalStore(Files.createTempDirectory("import").toFile())
 
 internal fun liveToken(token: String = "t-1"): SessionToken = SessionToken(token, OffsetDateTime.now().plusDays(30))
 
