@@ -92,6 +92,10 @@ data class RecognizedRow(
     val rejected: Boolean
         get() = status is RowStatus.Failed || fieldErrors.isNotEmpty()
 
+    /** Сохранена или не сохранится никогда: сумму и валюту правкой не исправить. */
+    val settled: Boolean
+        get() = status == RowStatus.Saved || amountMinor <= 0 || currencyMismatch
+
     val savable: Boolean
         get() = !locked &&
             amountMinor > 0 &&
@@ -274,7 +278,10 @@ class RecognizeViewModel(
                 return
             }
             if (mutable.value.categories.isEmpty()) loadCatalogs()
-            val answer = result ?: paidCall(readyAt)
+            val answer = result ?: paidCall(readyAt) ?: return fail(
+                UiError.Resource(R.string.recognize_error_journal),
+                retryable = true,
+            )
             // Ждущий share не вытесняет оплаченный ответ: импорт держится до сохранения или ухода.
             keepHold = answer.items.isNotEmpty() && imports.waiting.value
             val saved = restored?.rows.orEmpty()
@@ -306,11 +313,17 @@ class RecognizeViewModel(
         mutable.update { it.copy(categories = categories, accounts = accounts, accountId = account) }
     }
 
-    // `recognizing` остаётся взведённым и при отказе: дошёл ли запрос до модели, клиент не знает.
-    private suspend fun paidCall(readyAt: List<Int>): RecognizeResult {
+    /**
+     * `null` — отметка `recognizing` не легла на диск, и вызова не было: после смерти процесса старый журнал
+     * повторил бы оплаченный запрос сам. При отказе самого вызова `recognizing` остаётся взведённым.
+     */
+    private suspend fun paidCall(readyAt: List<Int>): RecognizeResult? {
         mutable.update { it.copy(phase = RecognizePhase.Recognizing) }
         recognizing = true
-        writeJournal()
+        if (!writeJournal()) {
+            recognizing = false
+            return null
+        }
         val files = readyAt.map { (mutable.value.images[it] as ImportImage.Ready).file }
         val answer = api.recognize(files).`data`
         result = answer
@@ -323,12 +336,13 @@ class RecognizeViewModel(
     }
 
     // Журнал — страховка: отказ диска не должен ронять импорт, который ещё жив в памяти.
-    private suspend fun writeJournal(rows: List<RecognizedRow> = rows()) = withContext(io) {
+    private suspend fun writeJournal(rows: List<RecognizedRow> = rows()): Boolean = withContext(io) {
         writeLock.withLock {
             try {
                 journals.write(journal(rows))
+                true
             } catch (_: IOException) {
-                // Следующая запись попробует снова.
+                false
             }
         }
     }
@@ -363,8 +377,9 @@ class RecognizeViewModel(
         viewModelScope.launch {
             try {
                 drafts.forEach { saveRow(it) }
-                val included = rows().filter { it.included }
-                if (included.isNotEmpty() && included.all { it.status == RowStatus.Saved }) {
+                // Снятая строка ещё может быть сохранена позже, и её правки с `draft` журнал держит.
+                val rows = rows()
+                if (rows.any { it.status == RowStatus.Saved } && rows.all { it.settled }) {
                     withContext(io) { journals.close(importId) }
                 }
             } finally {

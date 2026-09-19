@@ -495,17 +495,38 @@ class RecognizeViewModelTest {
     }
 
     @Test
-    fun savingEveryIncludedRowClosesJournalAndKeepsPreviews() = runTest {
+    fun savingEverySavableRowClosesJournalAndKeepsPreviews() = runTest {
         val (_, salary, foreign) = recognized().map { it.draft }
         model.onIncludedChange(salary, false)
         model.onIncludedChange(foreign, false)
         server.enqueueJson(201, TRANSACTION_OK)
+        model.save()
+        reviewed()
 
+        assertTrue(File(importDir(), "journal.json").exists())
+
+        model.onIncludedChange(salary, true)
+        model.onDateChange(salary, LocalDate.parse("2026-09-01"))
+        server.enqueueJson(201, TRANSACTION_OK)
         model.save()
         reviewed()
 
         assertFalse(File(importDir(), "journal.json").exists())
         assertTrue(File(importDir(), "0.jpg").exists())
+    }
+
+    @Test
+    fun unwrittenCheckpointSkipsPaidCall() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        importId = store.offer(listOf(shot("a.png")))
+        File(importDir(), "journal.json.tmp").mkdirs()
+        model = newModel()
+
+        val failed = reviewed().phase as RecognizePhase.Failure
+        assertTrue(failed.retryable)
+        assertEquals(UiError.Resource(R.string.recognize_error_journal), failed.error)
+        assertEquals(listOf("/api/v1/categories", "/api/v1/accounts"), requests().map { it.url.encodedPath })
     }
 
     @Test
