@@ -38,7 +38,7 @@ import kotlinx.serialization.Contextual
  * @param incomeMinor 
  * @param expenseMinor 
  * @param gapMinor `(closing_minor - opening_minor) - (income_minor - expense_minor)`
- * @param complete Оба края заполнены у всех счетов списка; тогда `gap_minor` не `null`
+ * @param complete Оба края заполнены у всех счетов списка; тогда `gap_minor` не `null`. Без счетов — `false`
  * @param accounts По имени счёта без учёта регистра
  */
 @Serializable
@@ -67,7 +67,7 @@ data class ReconciliationStats (
     @SerialName(value = "gap_minor")
     val gapMinor: kotlin.Long?,
 
-    /* Оба края заполнены у всех счетов списка; тогда `gap_minor` не `null` */
+    /* Оба края заполнены у всех счетов списка; тогда `gap_minor` не `null`. Без счетов — `false` */
     @SerialName(value = "complete")
     val complete: kotlin.Boolean,
 

@@ -171,16 +171,31 @@ class HomeViewModel(
                 return@launch
             }
             mutable.value = ready
-            mutableCard.value = if (ready.isEmpty) ReconciliationCard.Hidden else loadCard(reconciliationMonth(day))
+            mutableCard.value =
+                if (ready.isEmpty) {
+                    ReconciliationCard.Hidden
+                } else {
+                    loadCard(
+                        reconciliationMonth(day),
+                        YearMonth.from(day),
+                    )
+                }
         }
     }
 
-    private suspend fun loadCard(month: YearMonth): ReconciliationCard = try {
+    /** Счета, заведённые в [current], в прошлом месяце не числятся: без них карточка переходит на [current]. */
+    private suspend fun loadCard(
+        month: YearMonth,
+        current: YearMonth,
+    ): ReconciliationCard = try {
         val stats = api.client.unwrap { api.stats.getReconciliationStats(month.toString()) }.`data`
         val gap = stats.gapMinor
         when {
-            stats.accounts.none { !it.account.isArchived } -> ReconciliationCard.NoAccounts
+            stats.accounts.none { !it.account.isArchived } ->
+                if (month < current) loadCard(current, current) else ReconciliationCard.NoAccounts
+
             stats.complete && gap != null -> ReconciliationCard.Ready(month, gap)
+
             else -> ReconciliationCard.Incomplete(month)
         }
     } catch (_: ApiFailure) {

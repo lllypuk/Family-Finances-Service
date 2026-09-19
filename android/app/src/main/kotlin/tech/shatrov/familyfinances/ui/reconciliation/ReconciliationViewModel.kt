@@ -103,10 +103,7 @@ data class BalanceEditUiState(
 }
 
 /** Сверка остатков месяца из `GET /stats/reconciliation`, правка — `PUT`/`DELETE` остатка счёта. */
-class ReconciliationViewModel(
-    private val api: ApiGraph,
-    private val today: () -> LocalDate = { LocalDate.now() },
-) : ViewModel() {
+class ReconciliationViewModel(private val api: ApiGraph) : ViewModel() {
     private val mutable = MutableStateFlow<ReconciliationUiState>(ReconciliationUiState.Loading)
     private val mutableEditor = MutableStateFlow<BalanceEditUiState?>(null)
 
@@ -118,9 +115,8 @@ class ReconciliationViewModel(
     private var month: YearMonth? = null
     private var job: Job? = null
 
-    /** Каждый заход перечитывает месяц: операции могли поменяться. Будущий месяц сервер не примет. */
-    fun load(month: YearMonth) {
-        val target = minOf(month, YearMonth.from(today()))
+    /** Каждый заход перечитывает месяц: операции могли поменяться. Будущий месяц сервер не примет — обрезает экран. */
+    fun load(target: YearMonth) {
         this.month = target
         job?.cancel()
         mutable.value = ReconciliationUiState.Loading
@@ -146,6 +142,20 @@ class ReconciliationViewModel(
             month = ready.month,
             amount = row.closingMinor?.let(::formatAmountInput).orEmpty(),
             exists = row.closingMinor != null,
+        )
+    }
+
+    /**
+     * Остаток на конец прошлого месяца: счёт, заведённый в этом, в прошлом не показан, а его `opening` без строки — 0.
+     * Есть ли строка, по такому 0 не понять, поэтому «Очистить» здесь нет.
+     */
+    fun onOpenOpening(row: ReconciliationRow) {
+        val ready = mutable.value as? ReconciliationUiState.Ready ?: return
+        mutableEditor.value = BalanceEditUiState(
+            accountId = row.account.id,
+            accountName = row.account.name,
+            month = ready.month.minusMonths(1),
+            amount = row.openingMinor?.let(::formatAmountInput).orEmpty(),
         )
     }
 
@@ -203,7 +213,7 @@ class ReconciliationViewModel(
             try {
                 call()
                 mutableEditor.value = null
-                load(current.month)
+                refresh()
             } catch (failure: ApiFailure) {
                 mutableEditor.update { it?.copy(submitting = false, error = failure.toUiError()) }
             }

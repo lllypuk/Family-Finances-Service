@@ -645,7 +645,7 @@ fun AppRoot(graph: AppGraph) {
 
         is AppScreen.Reconciliation -> WithSession(session) { active ->
             val model: ReconciliationViewModel = viewModel(key = "reconciliation-${active.user.id}-$epoch") {
-                ReconciliationViewModel(graph.api) { LocalDate.now(active.zone) }
+                ReconciliationViewModel(graph.api)
             }
             val reconciliation by model.state.collectAsStateWithLifecycle()
             val editor by model.editor.collectAsStateWithLifecycle()
@@ -673,6 +673,7 @@ fun AppRoot(graph: AppGraph) {
                 onMonthChange = { screen = AppScreen.Reconciliation(it) },
                 onRetry = model::refresh,
                 onOpenBalance = model::onOpenBalance,
+                onOpenOpening = model::onOpenOpening,
                 onAddAccount = { screen = AppScreen.Settings(SettingsPage.Accounts()) },
                 onOpenTransactions = {
                     screen = AppScreen.Transactions(TransactionFilters.reconciliation(month), reconciliation = month)

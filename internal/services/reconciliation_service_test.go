@@ -168,14 +168,24 @@ func TestReconciliationService_Summary_Archived(t *testing.T) {
 	card := &account.Account{ID: uuid.New(), Name: "Карта", CreatedAt: longAgo()}
 	closed := &account.Account{ID: uuid.New(), Name: "Закрытая", IsArchived: true, CreatedAt: longAgo()}
 	idle := &account.Account{ID: uuid.New(), Name: "Пустая", IsArchived: true, CreatedAt: longAgo()}
+	late := &account.Account{ID: uuid.New(), Name: "Поздняя", IsArchived: true, CreatedAt: longAgo()}
+	fresh := &account.Account{
+		ID:         uuid.New(),
+		Name:       "Новая",
+		IsArchived: true,
+		CreatedAt:  time.Date(2026, time.August, 5, 0, 0, 0, 0, time.UTC),
+	}
 
-	stats := summarize(t, []*account.Account{card, closed, idle},
+	stats := summarize(t, []*account.Account{card, closed, idle, late, fresh},
 		balance(card, "2026-07", 100), balance(closed, "2026-07", 500), balance(idle, "2026-07", 0),
-		balance(card, "2026-08", 1_200))
-	require.Len(t, stats.Accounts, 2, "архивный с нулём за прошлый месяц и без строки — не в списке")
+		balance(card, "2026-08", 1_200), balance(late, "2026-07", 0), balance(late, "2026-08", 300))
+	require.Len(t, stats.Accounts, 3, "архивный без строки за месяц и без ненулевой за прошлый — не в списке")
 	assert.Equal(t, closed.ID, stats.Accounts[1].Account.ID)
 	assert.Equal(t, minor(0), stats.Accounts[1].ClosingMinor, "закрытая карта без строки — 0")
 	assert.Nil(t, stats.Accounts[1].UpdatedAt)
+	assert.Equal(t, late.ID, stats.Accounts[2].Account.ID)
+	assert.Equal(t, minor(300), stats.Accounts[2].ClosingMinor, "строка побеждает архивный 0")
+	assert.NotNil(t, stats.Accounts[2].UpdatedAt)
 	assert.True(t, stats.Complete)
 
 	// Следующий месяц: у закрытой строка за август — 0, за сентябрь нет.
@@ -263,6 +273,11 @@ func TestReconciliationService_PutBalance(t *testing.T) {
 	require.NoError(t, err, "архивный счёт и отрицательный остаток разрешены")
 	assert.Equal(t, "2026-08", b.Month)
 
+	today := date.Today(time.UTC)
+	b, err = m.svc.PutBalance(t.Context(), id, today, 1)
+	require.NoError(t, err, "любой день текущего месяца — не будущее")
+	assert.Equal(t, today.MonthKey(), b.Month)
+
 	_, err = m.svc.PutBalance(t.Context(), id, august, money.MaxAmount+1)
 	require.ErrorIs(t, err, reconciliation.ErrBalanceOutOfRange)
 	_, err = m.svc.PutBalance(t.Context(), id, august, -money.MaxAmount-1)
@@ -272,7 +287,7 @@ func TestReconciliationService_PutBalance(t *testing.T) {
 	m.accounts.On("GetByID", mock.Anything, unknown).Return(nil, account.ErrNotFound)
 	_, err = m.svc.PutBalance(t.Context(), unknown, august, 1)
 	require.ErrorIs(t, err, account.ErrNotFound)
-	m.balances.AssertNumberOfCalls(t, "Upsert", 1)
+	m.balances.AssertNumberOfCalls(t, "Upsert", 2)
 }
 
 func TestReconciliationService_DeleteBalance(t *testing.T) {

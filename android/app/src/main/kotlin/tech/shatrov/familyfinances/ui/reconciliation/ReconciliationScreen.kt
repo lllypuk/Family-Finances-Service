@@ -1,5 +1,6 @@
 package tech.shatrov.familyfinances.ui.reconciliation
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -50,7 +51,7 @@ import tech.shatrov.familyfinances.ui.rowPlace
 import tech.shatrov.familyfinances.ui.settings.SettingsHeader
 import java.time.YearMonth
 
-/** Сверка остатков месяца: итог сверху, под ним счета; тап по счёту — диалог остатка на конец месяца. */
+/** Сверка остатков месяца: итог сверху, под ним счета; тап по счёту — остаток на конец месяца, по «было» — прошлого. */
 @Composable
 fun ReconciliationScreen(
     month: YearMonth,
@@ -62,6 +63,7 @@ fun ReconciliationScreen(
     onMonthChange: (YearMonth) -> Unit,
     onRetry: () -> Unit,
     onOpenBalance: (ReconciliationRow) -> Unit,
+    onOpenOpening: (ReconciliationRow) -> Unit,
     onAddAccount: () -> Unit,
     onOpenTransactions: () -> Unit,
     onCloseGap: (Long) -> Unit,
@@ -100,7 +102,7 @@ fun ReconciliationScreen(
                         }
                     }
                 } else {
-                    Rows(state, currency, onMonthChange, onOpenBalance, onOpenTransactions, onCloseGap)
+                    Rows(state, currency, onMonthChange, onOpenBalance, onOpenOpening, onOpenTransactions, onCloseGap)
                 }
         }
     }
@@ -138,6 +140,7 @@ private fun Rows(
     currency: String,
     onMonthChange: (YearMonth) -> Unit,
     onOpenBalance: (ReconciliationRow) -> Unit,
+    onOpenOpening: (ReconciliationRow) -> Unit,
     onOpenTransactions: () -> Unit,
     onCloseGap: (Long) -> Unit,
 ) {
@@ -150,7 +153,7 @@ private fun Rows(
     ) {
         item { TotalCard(state.total, state.stats, currency, onMonthChange, onOpenTransactions, onCloseGap) }
         itemsIndexed(rows, key = { _, row -> row.account.id }) { index, row ->
-            AccountRow(row, currency, rowPlace(index, rows.size), onOpenBalance)
+            AccountRow(row, currency, rowPlace(index, rows.size), onOpenBalance, onOpenOpening)
         }
         item {
             Text(
@@ -275,6 +278,7 @@ private fun AccountRow(
     currency: String,
     place: RowPlace,
     onOpenBalance: (ReconciliationRow) -> Unit,
+    onOpenOpening: (ReconciliationRow) -> Unit,
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val none = stringResource(R.string.reconciliation_no_balance)
@@ -300,6 +304,7 @@ private fun AccountRow(
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = muted,
+                modifier = Modifier.clickable { onOpenOpening(row) },
             )
         }
         Text(

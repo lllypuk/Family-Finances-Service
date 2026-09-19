@@ -381,10 +381,26 @@ class HomeViewModelTest {
     fun cardWithoutAccountsLeadsToAccounts() = runTest {
         server.enqueueJson(200, STATS_OK)
         server.enqueueJson(200, RECONCILIATION_EMPTY)
+        server.enqueueJson(200, RECONCILIATION_EMPTY)
 
         createModel()
 
         assertEquals(ReconciliationCard.NoAccounts, settleCard())
+    }
+
+    // Счета заведены в сентябре: август их не знает, и до 10-го карточка сверяет сентябрь, а не зовёт заводить.
+    @Test
+    fun accountsOfCurrentMonthMoveCardToIt() = runTest {
+        server.enqueueJson(200, STATS_OK)
+        server.enqueueJson(200, RECONCILIATION_EMPTY)
+        server.enqueueJson(200, RECONCILIATION_NO_OPENING)
+
+        createModel()
+
+        assertEquals(ReconciliationCard.Incomplete(YearMonth.of(2026, 9)), settleCard())
+        server.takeRequest()
+        assertEquals("month=2026-08", server.takeRequest().url.query)
+        assertEquals("month=2026-09", server.takeRequest().url.query)
     }
 
     // Отказ карточки главную не роняет: сводка остаётся, карточки просто нет.

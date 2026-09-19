@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"testing"
 	"time"
@@ -123,6 +124,10 @@ func TestReconciliationHandler_DeleteAccountBalance(t *testing.T) {
 	aug := date.New(2026, time.August, 1)
 	svc.On("DeleteBalance", mock.Anything, id, aug).Return(reconciliation.ErrBalanceNotFound).Once()
 	svc.On("DeleteBalance", mock.Anything, id, aug).Return(nil).Once()
+	dec := date.New(2026, time.December, 1)
+	svc.On("DeleteBalance", mock.Anything, id, dec).Return(services.ErrReconciliationMonthInFuture)
+	broken := uuid.New()
+	svc.On("DeleteBalance", mock.Anything, broken, aug).Return(errors.New("disk I/O error"))
 
 	status, resp := callBalance(t, h.DeleteAccountBalance, http.MethodDelete, id.String(), "2026-08", "")
 	assert.Equal(t, http.StatusNotFound, status)
@@ -133,6 +138,14 @@ func TestReconciliationHandler_DeleteAccountBalance(t *testing.T) {
 
 	status, _ = callBalance(t, h.DeleteAccountBalance, http.MethodDelete, "x", "2026-08", "")
 	assert.Equal(t, http.StatusBadRequest, status)
+
+	status, resp = callBalance(t, h.DeleteAccountBalance, http.MethodDelete, id.String(), "2026-12", "")
+	assert.Equal(t, http.StatusUnprocessableEntity, status)
+	require.Len(t, resp.Error.Details, 1)
+	assert.Equal(t, "month", resp.Error.Details[0].Field)
+
+	status, _ = callBalance(t, h.DeleteAccountBalance, http.MethodDelete, broken.String(), "2026-08", "")
+	assert.Equal(t, http.StatusInternalServerError, status)
 }
 
 func TestReconciliationHandler_GetReconciliationStats(t *testing.T) {

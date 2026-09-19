@@ -87,7 +87,8 @@ func (s *reconciliationService) checkMonth(ctx context.Context, month date.Date)
 	if err != nil {
 		return err
 	}
-	if current, _ := date.Today(loc).MonthBounds(); current.Before(month) {
+	current, _ := date.Today(loc).MonthBounds()
+	if first, _ := month.MonthBounds(); current.Before(first) {
 		return ErrReconciliationMonthInFuture
 	}
 

@@ -41,6 +41,11 @@ import java.util.UUID
 private val AUGUST = YearMonth.of(2026, 8)
 private val TODAY = LocalDate.of(2026, 9, 18)
 
+private const val BALANCE_NOT_FOUND = """
+{"error":{"code":"BALANCE_NOT_FOUND","message":"balance not found"},
+"meta":{"request_id":"r-1","timestamp":"2026-09-18T10:00:00Z","version":"v0.9.0"}}
+"""
+
 /** Сверка остатков: итог по краям, знак разницы, запись и очистка остатка, отказы. */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -63,8 +68,7 @@ class ReconciliationViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun newModel() =
-        ReconciliationViewModel(ApiGraph(server.url("/").toString(), FakeTokenVault(liveToken()))) { TODAY }
+    private fun newModel() = ReconciliationViewModel(ApiGraph(server.url("/").toString(), FakeTokenVault(liveToken())))
 
     private suspend fun settle(): ReconciliationUiState = model.state.first { it != ReconciliationUiState.Loading }
 
@@ -148,16 +152,6 @@ class ReconciliationViewModelTest {
         assertEquals("month=2026-09", server.takeRequest().url.query)
     }
 
-    // Будущий месяц сервер отвергает `422`: запрос уходит за текущий.
-    @Test
-    fun futureMonthIsClampedToCurrent() = runTest {
-        server.enqueueJson(200, RECONCILIATION_EMPTY)
-        model.load(YearMonth.of(2026, 11))
-
-        assertEquals(YearMonth.of(2026, 9), (settle() as ReconciliationUiState.Ready).month)
-        assertEquals("month=2026-09", server.takeRequest().url.query)
-    }
-
     @Test
     fun networkFailureIsRetried() = runTest {
         server.close()
@@ -196,6 +190,27 @@ class ReconciliationViewModelTest {
         assertEquals("/api/v1/stats/reconciliation", server.takeRequest().url.encodedPath)
     }
 
+    // Счёт, заведённый в августе, в июле не показан: его старт пишется отсюда, а экран остаётся на августе.
+    @Test
+    fun openingIsSavedForPreviousMonthAndCurrentMonthReloads() = runTest {
+        loadAugust()
+        model.onOpenOpening(row(CASH_ACCOUNT_ID))
+        val editor = model.editor.value!!
+        assertEquals(YearMonth.of(2026, 7), editor.month)
+        assertFalse(editor.exists)
+
+        model.onAmountChange("100")
+        server.enqueueJson(200, BALANCE_PUT_OK)
+        server.enqueueJson(200, RECONCILIATION_OK)
+        model.onSave()
+
+        model.editor.first { it == null }
+        assertEquals(AUGUST, (settle() as ReconciliationUiState.Ready).month)
+        server.takeRequest()
+        assertEquals("/api/v1/accounts/$CASH_ACCOUNT_ID/balances/2026-07", server.takeRequest().url.encodedPath)
+        assertEquals("month=2026-08", server.takeRequest().url.query)
+    }
+
     // Отказ оставляет диалог с введённым: остаток не надо набирать заново.
     @Test
     fun saveFailureKeepsDialog() = runTest {
@@ -229,6 +244,22 @@ class ReconciliationViewModelTest {
         val delete = server.takeRequest()
         assertEquals("DELETE", delete.method)
         assertEquals("/api/v1/accounts/$CARD_ACCOUNT_ID/balances/2026-08", delete.url.encodedPath)
+    }
+
+    // Остаток уже удалили с другого телефона: 404 закрывает диалог, как успех.
+    @Test
+    fun clearOfMissingBalanceClosesDialog() = runTest {
+        loadAugust()
+        model.onOpenBalance(row(CARD_ACCOUNT_ID))
+        server.enqueueJson(404, BALANCE_NOT_FOUND)
+        server.enqueueJson(200, RECONCILIATION_OK)
+        model.onClear()
+
+        assertNull(model.editor.first { it == null })
+        settle()
+        server.takeRequest()
+        assertEquals("DELETE", server.takeRequest().method)
+        assertEquals("/api/v1/stats/reconciliation", server.takeRequest().url.encodedPath)
     }
 
     @Test
