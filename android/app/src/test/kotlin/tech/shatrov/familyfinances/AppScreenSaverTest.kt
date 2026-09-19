@@ -4,9 +4,11 @@ import androidx.compose.runtime.saveable.SaverScope
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import tech.shatrov.familyfinances.core.api.HoldingSide
+import tech.shatrov.familyfinances.core.api.TransactionType
 import tech.shatrov.familyfinances.ui.settings.SettingsPage
 import tech.shatrov.familyfinances.ui.transactions.TransactionFilters
 import tech.shatrov.familyfinances.ui.transactions.TransactionPeriod
+import java.time.LocalDate
 import java.time.YearMonth
 import java.util.UUID
 
@@ -121,6 +123,25 @@ class AppScreenSaverTest {
         for (screen in screens) {
             assertEquals(screen, roundTrip(screen))
         }
+    }
+
+    // Без категории после поворота расшифровка «Обзора» показала бы все операции диапазона.
+    @Test
+    fun transactionsKeepOverviewRangeAndCategory() {
+        val screen = AppScreen.Transactions(
+            TransactionFilters.overview(
+                TransactionType.expense,
+                UUID.fromString(COFFEE_ID),
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 9, 19),
+            ),
+        )
+        assertEquals(screen, roundTrip(screen))
+    }
+
+    @Test
+    fun transactionsFromOldBundleLoad() {
+        assertEquals(AppScreen.Loading, AppScreenSaver.restore("transactions:MONTH:2026-08:expense::true:2026-08"))
     }
 
     @Test

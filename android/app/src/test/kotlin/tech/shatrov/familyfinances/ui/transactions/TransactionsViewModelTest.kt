@@ -427,4 +427,40 @@ class TransactionsViewModelTest {
         model.applyFilters(TransactionFilters.reconciliation(YearMonth.of(2026, 8), accountId = null))
         assertEquals(5, server.requestCount)
     }
+
+    // Расшифровка «Обзора»: список обязан сойтись с суммой категории за те же даты.
+    @Test
+    fun overviewRangeGoesToQuery() = runTest {
+        enqueueFirstPage()
+        createModel()
+        settle()
+
+        val from = LocalDate.of(2026, 7, 1)
+        val to = LocalDate.of(2026, 9, 19)
+        server.enqueueJson(200, TRANSACTIONS_PAGE_1)
+        model.applyFilters(
+            TransactionFilters.overview(TransactionType.expense, UUID.fromString(GROCERIES_ID), from, to),
+        )
+        settle()
+
+        val url = lastRequestUrl(5)
+        assertEquals("expense", url.queryParameter("type"))
+        assertEquals(GROCERIES_ID, url.queryParameter("category_id"))
+        assertEquals("2026-07-01", url.queryParameter("date_from"))
+        assertEquals("2026-09-19", url.queryParameter("date_to"))
+    }
+
+    @Test
+    fun periodChipDropsRange() {
+        val filters = TransactionFilters.overview(
+            TransactionType.income,
+            UUID.fromString(GROCERIES_ID),
+            LocalDate.of(2026, 7, 1),
+            LocalDate.of(2026, 7, 31),
+        ).withPeriod(TransactionPeriod.ALL)
+
+        assertNull(filters.from)
+        assertNull(filters.to)
+        assertNull(filters.dateFrom(LocalDate.of(2026, 9, 19)))
+    }
 }

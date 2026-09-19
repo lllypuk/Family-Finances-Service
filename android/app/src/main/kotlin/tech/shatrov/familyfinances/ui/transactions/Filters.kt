@@ -13,12 +13,14 @@ enum class TransactionPeriod {
 
     /** Явный месяц [TransactionFilters.month]: переход со сверки, где месяц выбран не по часам телефона. */
     MONTH,
+
+    /** Явный диапазон [TransactionFilters.from]…[TransactionFilters.to]: расшифровка «Обзора» с датами его `summary`. */
+    RANGE,
 }
 
 /**
  * Что просим у сервера: фильтрация целиком в query, потому что на клиенте лежит только
- * загруженная часть списка. Границы периода считаются по дате телефона — часовой пояс семьи
- * отличается от него не больше чем на день, а лишнего запроса это не стоит.
+ * загруженная часть списка. Границы периода считаются от `today` в зоне семьи.
  *
  * [unassigned] и [accountId] взаимоисключающие: вместе сервер отвечает `422`.
  */
@@ -29,12 +31,15 @@ data class TransactionFilters(
     val accountId: UUID? = null,
     val month: YearMonth? = null,
     val unassigned: Boolean = false,
+    val from: LocalDate? = null,
+    val to: LocalDate? = null,
 ) {
     fun dateFrom(today: LocalDate): LocalDate? = when (period) {
         TransactionPeriod.ALL -> null
         TransactionPeriod.THIS_MONTH -> today.withDayOfMonth(1)
         TransactionPeriod.PREV_MONTH -> today.minusMonths(1).withDayOfMonth(1)
         TransactionPeriod.MONTH -> month?.atDay(1)
+        TransactionPeriod.RANGE -> from
     }
 
     fun dateTo(today: LocalDate): LocalDate? = when (period) {
@@ -42,9 +47,11 @@ data class TransactionFilters(
         TransactionPeriod.THIS_MONTH -> today.with(TemporalAdjusters.lastDayOfMonth())
         TransactionPeriod.PREV_MONTH -> today.minusMonths(1).with(TemporalAdjusters.lastDayOfMonth())
         TransactionPeriod.MONTH -> month?.atEndOfMonth()
+        TransactionPeriod.RANGE -> to
     }
 
-    fun withPeriod(next: TransactionPeriod): TransactionFilters = copy(period = next, month = null)
+    fun withPeriod(next: TransactionPeriod): TransactionFilters =
+        copy(period = next, month = null, from = null, to = null)
 
     fun withAccount(id: UUID?): TransactionFilters = copy(accountId = id, unassigned = false)
 
@@ -59,6 +66,20 @@ data class TransactionFilters(
             accountId = accountId,
             month = month,
             unassigned = accountId == null,
+        )
+
+        /** Расшифровка строки «Обзора»: те же даты, что ушли в `summary`, иначе суммы не сойдутся. */
+        fun overview(
+            type: TransactionType,
+            categoryId: UUID,
+            from: LocalDate,
+            to: LocalDate,
+        ): TransactionFilters = TransactionFilters(
+            period = TransactionPeriod.RANGE,
+            type = type,
+            categoryId = categoryId,
+            from = from,
+            to = to,
         )
     }
 }

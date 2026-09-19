@@ -278,12 +278,12 @@ overview`, чтение по индексу; строка другой длин�
 - Modify: `ui/transactions/Filters.kt`, `TransactionsViewModel.kt`, `TransactionsScreen.kt`, `AppScreen.kt`
 - Modify: тесты фильтра, `TransactionsViewModelTest.kt`, `AppScreenSaverTest.kt`
 
-- [ ] `TransactionPeriod.RANGE`, поля `from` / `to`; `dateFrom` / `dateTo`; `withPeriod` их сбрасывает; фабрика `TransactionFilters.overview(type, categoryId, from, to)` рядом с `reconciliation`
-- [ ] `RANGE` — статичный чип с диапазоном, как `MONTH` (`TransactionsScreen.kt:171`)
-- [ ] `Saver`: поля `categoryId`, `from`, `to` (пока восемь, `overview` — в задаче 7), чтение по индексу; комментарий `AppScreen.kt:192` про несохраняемую категорию убрать
-- [ ] KDoc `Filters.kt:19-22`: границы — в зоне семьи
-- [ ] тесты: `RANGE` шлёт серверу обе даты; смена чипа периода сбрасывает диапазон; `Saver` — круг с диапазоном и категорией
-- [ ] `make -C android check`
+- [x] `TransactionPeriod.RANGE`, поля `from` / `to`; `dateFrom` / `dateTo`; `withPeriod` их сбрасывает; фабрика `TransactionFilters.overview(type, categoryId, from, to)` рядом с `reconciliation`
+- [x] `RANGE` — статичный чип с диапазоном, как `MONTH` (`TransactionsScreen.kt:171`)
+- [x] `Saver`: поля `categoryId`, `from`, `to` (пока восемь, `overview` — в задаче 7), чтение по индексу; комментарий `AppScreen.kt:192` про несохраняемую категорию убрать
+- [x] KDoc `Filters.kt:19-22`: границы — в зоне семьи
+- [x] тесты: `RANGE` шлёт серверу обе даты; смена чипа периода сбрасывает диапазон; `Saver` — круг с диапазоном и категорией
+- [x] `make -C android check`
 
 ### Task 6: Модель «Обзора»
 

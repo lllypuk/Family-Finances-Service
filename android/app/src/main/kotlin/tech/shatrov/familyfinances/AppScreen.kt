@@ -8,6 +8,7 @@ import tech.shatrov.familyfinances.ui.settings.restoreSettingsPage
 import tech.shatrov.familyfinances.ui.settings.saveKey
 import tech.shatrov.familyfinances.ui.transactions.TransactionFilters
 import tech.shatrov.familyfinances.ui.transactions.TransactionPeriod
+import java.time.LocalDate
 import java.time.YearMonth
 import java.util.UUID
 
@@ -91,6 +92,9 @@ private const val KEY_HOLDING_HISTORY = "holding-history"
 private const val KEY_SETTINGS = "settings"
 private const val KEY_RECOGNIZE = "recognize"
 private const val KEY_RECONCILIATION = "reconciliation"
+
+// Ключ другой длины — из прошлой версии: `restore` уводит его в загрузку, а не читает поля не по местам.
+private const val TRANSACTIONS_KEY_FIELDS = 9
 
 /** Экран переживает поворот; всё остальное восстанавливается из хранилища токена. */
 val AppScreenSaver: Saver<AppScreen, String> = Saver(
@@ -189,31 +193,35 @@ private fun restoreScreen(key: String): AppScreen? = when {
     else -> null
 }
 
-// Категория не сохраняется: снаружи список открывают только со сверки, а она категорию не задаёт.
 private fun AppScreen.Transactions.saveKey(): String {
     val f = filters ?: return KEY_TRANSACTIONS
     return listOf(
         f.period.name,
         f.month?.toString().orEmpty(),
         f.type?.name.orEmpty(),
+        f.categoryId?.toString().orEmpty(),
         f.accountId?.toString().orEmpty(),
         f.unassigned.toString(),
+        f.from?.toString().orEmpty(),
+        f.to?.toString().orEmpty(),
         reconciliation?.toString().orEmpty(),
     ).joinToString(":", prefix = "$KEY_TRANSACTIONS:")
 }
 
 private fun restoreTransactions(value: String): AppScreen.Transactions {
     val parts = value.split(':')
-    val (period, month, type, account, unassigned) = parts
-    val reconciliation = parts[5]
+    require(parts.size == TRANSACTIONS_KEY_FIELDS)
     return AppScreen.Transactions(
         filters = TransactionFilters(
-            period = TransactionPeriod.valueOf(period),
-            month = month.takeIf { it.isNotEmpty() }?.let(YearMonth::parse),
-            type = type.takeIf { it.isNotEmpty() }?.let(TransactionType::valueOf),
-            accountId = account.takeIf { it.isNotEmpty() }?.let(UUID::fromString),
-            unassigned = unassigned.toBooleanStrict(),
+            period = TransactionPeriod.valueOf(parts[0]),
+            month = parts[1].takeIf { it.isNotEmpty() }?.let(YearMonth::parse),
+            type = parts[2].takeIf { it.isNotEmpty() }?.let(TransactionType::valueOf),
+            categoryId = parts[3].takeIf { it.isNotEmpty() }?.let(UUID::fromString),
+            accountId = parts[4].takeIf { it.isNotEmpty() }?.let(UUID::fromString),
+            unassigned = parts[5].toBooleanStrict(),
+            from = parts[6].takeIf { it.isNotEmpty() }?.let(LocalDate::parse),
+            to = parts[7].takeIf { it.isNotEmpty() }?.let(LocalDate::parse),
         ),
-        reconciliation = reconciliation.takeIf { it.isNotEmpty() }?.let(YearMonth::parse),
+        reconciliation = parts[8].takeIf { it.isNotEmpty() }?.let(YearMonth::parse),
     )
 }
