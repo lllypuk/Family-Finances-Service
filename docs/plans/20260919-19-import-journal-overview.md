@@ -328,8 +328,8 @@ overview`, чтение по индексу; строка другой длин�
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] все пункты Overview реализованы; `make -C android check`
-- [ ] сценарии Post-Completion выполнимы на релизной сборке без правок кода
+- [x] все пункты Overview реализованы; `make -C android check`
+- [x] сценарии Post-Completion выполнимы на релизной сборке без правок кода (прогон на телефоне — вручную, не автоматизируется; R8-сборка проходит `r8-check`)
 
 ### Task 10: [Final] Update documentation
 
