@@ -203,13 +203,13 @@ accounts[]: { account, opening_minor | null, closing_minor | null, updated_at | 
 - Modify: `internal/domain/reconciliation/reconciliation.go`
 - Create: `internal/infrastructure/reconciliation/balance_repository_sqlite.go` (+ `_test.go`)
 
-- [ ] `reconciliation.Balance{AccountID, Month, BalanceMinor, UpdatedAt}`, `ValidBalance` — `|x| ≤ money.MaxAmount`,
+- [x] `reconciliation.Balance{AccountID, Month, BalanceMinor, UpdatedAt}`, `ValidBalance` — `|x| ≤ money.MaxAmount`,
   `ErrBalanceNotFound`
-- [ ] репозиторий: `Upsert` (`updated_at` из Go), `Delete` (`ErrBalanceNotFound` по `RowsAffected`),
+- [x] репозиторий: `Upsert` (`updated_at` из Go), `Delete` (`ErrBalanceNotFound` по `RowsAffected`),
   `ByMonths(ctx, prev, month)` через `JOIN accounts` по семье
-- [ ] тесты: upsert поверх меняет `updated_at`, отрицательный и нулевой остаток, `ByMonths` отдаёт оба месяца и
+- [x] тесты: upsert поверх меняет `updated_at`, отрицательный и нулевой остаток, `ByMonths` отдаёт оба месяца и
   только их, delete несуществующего, FK `RESTRICT` при удалении счёта
-- [ ] `make fmt && make test && make lint`
+- [x] `make fmt && make test && make lint`
 
 ### Task 3: Переключение: сервис, хендлеры, маршруты, спека, снос старой сверки
 

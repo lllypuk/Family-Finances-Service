@@ -29,3 +29,19 @@ type Reconciliation struct {
 func ValidAmount(amount money.Minor) bool {
 	return amount >= 0 && amount <= money.MaxAmount
 }
+
+// ErrBalanceNotFound — у счёта нет остатка за месяц.
+var ErrBalanceNotFound = errors.New("account balance not found")
+
+// Balance — остаток счёта на конец месяца `YYYY-MM`; отрицательный у кредитки.
+type Balance struct {
+	AccountID    uuid.UUID
+	Month        string
+	BalanceMinor money.Minor
+	UpdatedAt    time.Time
+}
+
+// ValidBalance — |x| ≤ money.MaxAmount.
+func ValidBalance(balance money.Minor) bool {
+	return balance >= -money.MaxAmount && balance <= money.MaxAmount
+}
