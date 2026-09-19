@@ -390,7 +390,8 @@ Plan 19 (client `0.11.0`, contract untouched) closes half of plan 11: a journal 
 screenshot import survive process death, and the "Обзор" screen over `summary` + `monthly`; multi-select over
 transactions and `bulkDeleteTransactions` remain.
 Plan 20 (server `v0.9.0`, client `0.12.0`, one MR) replaces plan 16's bank-figure reconciliation with month-end
-balances (`008_account_balances`) and breaks the contract: a `0.11.0` client loses only its reconciliation screen.
+balances (`008_account_balances`) and breaks the contract: a `0.11.0` client loses its reconciliation screen
+and, silently, the reconciliation card on the home screen (the old model requires `recorded_minor`).
 `008.down` recreates `account_reconciliations` empty, so run `migrate --to 8 → 7 → 8` on a copy of the production
 DB before tagging.
 

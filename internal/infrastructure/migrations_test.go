@@ -272,7 +272,7 @@ func TestMigrations_AccountsUpgradeKeepsTransactions(t *testing.T) {
 func TestMigrations_AccountsRollback(t *testing.T) {
 	ctx := t.Context()
 	manager, db := migratedDB(t)
-	// account_reconciliations есть до 008 включительно.
+	// account_reconciliations есть до 007 включительно: 008 её роняет.
 	require.NoError(t, manager.Migrate(7))
 
 	familyID, userID, categoryID := seedForChecks(ctx, t, db)
