@@ -291,11 +291,11 @@ overview`, чтение по индексу; строка другой длин�
 - Create: `ui/overview/OverviewPeriod.kt`, `ui/overview/OverviewViewModel.kt`, тесты к обоим
 - Modify: `TestFixtures.kt` (`STATS_MONTHLY_OK`, `STATS_SUMMARY_RANGE_OK`)
 
-- [ ] `OverviewPeriod`: четыре чипа и `Month(YearMonth)`; `bounds(today)` по таблице; `saveKey()` без `:`
-- [ ] модель: `today` из `session.zone`; `getStatsMonthly()` без параметров — один раз и при `refresh`; `summary(from, to)` — на смену периода, прежний запрос отменяется
-- [ ] состояние: ряд, итоги, дельты (`null` без `has_previous_data`), категории обоих типов, раздельные ошибки ряда и итогов; `revalidate` при смене дня
-- [ ] тесты: границы каждого периода на 1-е, 31-е и 29 февраля; «Год» = первая и последняя корзина `monthly`; смена периода шлёт один `summary` и не трогает `monthly`; быстрая двойная смена — ответ последней; ошибка `summary` сохраняет ряд
-- [ ] `make -C android check`
+- [x] `OverviewPeriod`: четыре чипа и `Month(YearMonth)`; `bounds(today)` по таблице; `saveKey()` без `:`
+- [x] модель: `today` из `session.zone`; `getStatsMonthly()` без параметров — один раз и при `refresh`; `summary(from, to)` — на смену периода, прежний запрос отменяется
+- [x] состояние: ряд, итоги, дельты (`null` без `has_previous_data`), категории обоих типов, раздельные ошибки ряда и итогов; `revalidate` при смене дня
+- [x] тесты: границы каждого периода на 1-е, 31-е и 29 февраля; «Год» = первая и последняя корзина `monthly`; смена периода шлёт один `summary` и не трогает `monthly`; быстрая двойная смена — ответ последней; ошибка `summary` сохраняет ряд
+- [x] `make -C android check`
 
 ### Task 7: Экран, график, вход и возврат
 

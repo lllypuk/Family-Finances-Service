@@ -550,3 +550,39 @@ internal const val FLAT_VALUES_AFTER_DELETE = """
 "meta":{"request_id":"r-99","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0",
 "pagination":{"limit":50,"offset":0,"total":2}}}
 """
+
+/** Ряд по умолчанию на 19.09.2026: 12 корзин с октября 2025. */
+internal const val STATS_MONTHLY_OK = """
+{"data":{"from":"2025-10-01","to":"2026-09-19","months":[
+{"month":"2025-10","income_minor":0,"expenses_minor":4000000,"net_minor":-4000000,"transaction_count":5},
+{"month":"2025-11","income_minor":15000000,"expenses_minor":4100000,"net_minor":10900000,"transaction_count":6},
+{"month":"2025-12","income_minor":15000000,"expenses_minor":4200000,"net_minor":10800000,"transaction_count":7},
+{"month":"2026-01","income_minor":0,"expenses_minor":4300000,"net_minor":-4300000,"transaction_count":8},
+{"month":"2026-02","income_minor":15000000,"expenses_minor":0,"net_minor":15000000,"transaction_count":9},
+{"month":"2026-03","income_minor":15000000,"expenses_minor":4500000,"net_minor":10500000,"transaction_count":10},
+{"month":"2026-04","income_minor":0,"expenses_minor":4600000,"net_minor":-4600000,"transaction_count":11},
+{"month":"2026-05","income_minor":15000000,"expenses_minor":4700000,"net_minor":10300000,"transaction_count":12},
+{"month":"2026-06","income_minor":15000000,"expenses_minor":4800000,"net_minor":10200000,"transaction_count":13},
+{"month":"2026-07","income_minor":0,"expenses_minor":4900000,"net_minor":-4900000,"transaction_count":14},
+{"month":"2026-08","income_minor":15000000,"expenses_minor":5000000,"net_minor":10000000,"transaction_count":15},
+{"month":"2026-09","income_minor":15000000,"expenses_minor":5100000,"net_minor":9900000,"transaction_count":16}]},
+"meta":{"request_id":"r-40","timestamp":"2026-09-19T10:00:00Z","version":"v0.8.0"}}
+"""
+
+/** «3 месяца» на 19.09.2026: перед периодом операций не было, дельты сервер шлёт нулями. */
+internal const val STATS_SUMMARY_RANGE_OK = """
+{"data":{"from":"2026-07-01","to":"2026-09-19",
+"current":{"from":"2026-07-01","to":"2026-09-19","income_minor":45000000,"expenses_minor":13000000,
+"net_minor":32000000,"transaction_count":30},
+"previous":{"from":"2026-04-11","to":"2026-06-30","income_minor":0,"expenses_minor":0,
+"net_minor":0,"transaction_count":0},
+"has_previous_data":false,"income_delta":0,"expenses_delta":0,
+"expense_categories":[{"category_id":"88888888-8888-8888-8888-888888888888","name":"Ипотека",
+"amount_minor":3000000,"transaction_count":3,"share":0.2307},
+{"category_id":"44444444-4444-4444-4444-444444444444","name":"Продукты",
+"amount_minor":10000000,"transaction_count":27,"share":0.7693}],
+"income_categories":[{"category_id":"55555555-5555-5555-5555-555555555555","name":"Зарплата",
+"amount_minor":45000000,"transaction_count":3,"share":1.0}],
+"budgets":[],"recent":[],"transactions_total":42},
+"meta":{"request_id":"r-41","timestamp":"2026-09-19T10:00:00Z","version":"v0.8.0"}}
+"""
