@@ -74,8 +74,17 @@ fun parseAmountMinor(text: String): Long? {
     return units.toLong() * MINOR_IN_UNIT + fraction.padEnd(FRACTION_DIGITS, '0').toLong()
 }
 
+/** Остаток кредитки: [parseAmountMinor] с минусом впереди (дефис или типографский). */
+fun parseSignedAmountMinor(text: String): Long? {
+    val trimmed = text.trim()
+    val negative = trimmed.startsWith('-') || trimmed.startsWith('\u2212')
+    val absolute = parseAmountMinor(if (negative) trimmed.substring(1) else trimmed) ?: return null
+    return if (negative) -absolute else absolute
+}
+
 /** Обратно в поле ввода: разряды не группируются, иначе правка строки ломает разбор. */
 fun formatAmountInput(minor: Long): String {
+    if (minor < 0) return "-" + formatAmountInput(-minor)
     val units = minor / MINOR_IN_UNIT
     val fraction = minor % MINOR_IN_UNIT
     return if (fraction == 0L) units.toString() else "$units,${fraction.toString().padStart(FRACTION_DIGITS, '0')}"

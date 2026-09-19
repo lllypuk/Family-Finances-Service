@@ -32,7 +32,7 @@ import kotlinx.serialization.Contextual
  * Хотя бы одно поле обязательно
  *
  * @param name 
- * @param currency Меняется только пока в семье нет транзакций, сверок, снимков и планов позиций, иначе `409 CURRENCY_LOCKED`
+ * @param currency Меняется только пока в семье нет транзакций, остатков счетов, снимков и планов позиций, иначе `409 CURRENCY_LOCKED`
  * @param timezone 
  */
 @Serializable
@@ -42,7 +42,7 @@ data class UpdateFamilyRequest (
     @SerialName(value = "name")
     val name: kotlin.String? = null,
 
-    /* Меняется только пока в семье нет транзакций, сверок, снимков и планов позиций, иначе `409 CURRENCY_LOCKED` */
+    /* Меняется только пока в семье нет транзакций, остатков счетов, снимков и планов позиций, иначе `409 CURRENCY_LOCKED` */
     @SerialName(value = "currency")
     val currency: kotlin.String? = null,
 

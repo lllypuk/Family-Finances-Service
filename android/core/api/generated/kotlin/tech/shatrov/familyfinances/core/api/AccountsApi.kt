@@ -7,12 +7,12 @@ import okhttp3.RequestBody
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+import tech.shatrov.familyfinances.core.api.AccountBalanceOk
+import tech.shatrov.familyfinances.core.api.AccountBalanceRequest
 import tech.shatrov.familyfinances.core.api.AccountOk
 import tech.shatrov.familyfinances.core.api.CreateAccountRequest
 import tech.shatrov.familyfinances.core.api.Error
 import tech.shatrov.familyfinances.core.api.ListAccounts200Response
-import tech.shatrov.familyfinances.core.api.ReconciliationOk
-import tech.shatrov.familyfinances.core.api.ReconciliationRequest
 import tech.shatrov.familyfinances.core.api.UpdateAccountRequest
 
 interface AccountsApi {
@@ -38,7 +38,7 @@ interface AccountsApi {
     /**
      * DELETE api/v1/accounts/{id}
      * Удалить счёт
-     * Только admin. Счёт с операциями или сверками не удаляется — &#x60;409 ACCOUNT_IN_USE&#x60;; перевыпущенную карту архивируют. 
+     * Только admin. Счёт с операциями или остатками не удаляется — &#x60;409 ACCOUNT_IN_USE&#x60;; перевыпущенную карту архивируют. 
      * Responses:
      *  - 204: Счёт удалён
      *  - 400: Тело или идентификатор не разобрались: `INVALID_REQUEST` (сломанный JSON или неверный тип поля), `INVALID_ID` (в пути не UUID). Ошибки валидации значений — это `422`. 
@@ -54,11 +54,11 @@ interface AccountsApi {
     suspend fun deleteAccount(@Path("id") id: java.util.UUID): Response<Unit>
 
     /**
-     * DELETE api/v1/accounts/{id}/reconciliations/{month}
-     * Удалить сверку за месяц
-     * admin и member. &#x60;ACCOUNT_NOT_FOUND&#x60; или &#x60;RECONCILIATION_NOT_FOUND&#x60; — &#x60;404&#x60;.
+     * DELETE api/v1/accounts/{id}/balances/{month}
+     * Удалить остаток счёта за месяц
+     * admin и member. &#x60;ACCOUNT_NOT_FOUND&#x60; или &#x60;BALANCE_NOT_FOUND&#x60; — &#x60;404&#x60;.
      * Responses:
-     *  - 204: Сверка удалена
+     *  - 204: Остаток удалён
      *  - 400: Тело или идентификатор не разобрались: `INVALID_REQUEST` (сломанный JSON или неверный тип поля), `INVALID_ID` (в пути не UUID). Ошибки валидации значений — это `422`. 
      *  - 401: Токена нет, он истёк или отозван (`UNAUTHORIZED`)
      *  - 403: Роль не даёт доступа к операции (`FORBIDDEN`)
@@ -66,11 +66,11 @@ interface AccountsApi {
      *  - 422: Тело или параметры не прошли валидацию (`VALIDATION_ERROR`); поля — в `error.details`
      *
      * @param id 
-     * @param month Календарный месяц &#x60;YYYY-MM&#x60;; иное — &#x60;422&#x60;
+     * @param month Календарный месяц &#x60;YYYY-MM&#x60; не позже текущего в часовом поясе семьи; иное — &#x60;422&#x60;
      * @return [Unit]
      */
-    @DELETE("api/v1/accounts/{id}/reconciliations/{month}")
-    suspend fun deleteReconciliation(@Path("id") id: java.util.UUID, @Path("month") month: kotlin.String): Response<Unit>
+    @DELETE("api/v1/accounts/{id}/balances/{month}")
+    suspend fun deleteAccountBalance(@Path("id") id: java.util.UUID, @Path("month") month: kotlin.String): Response<Unit>
 
     /**
      * GET api/v1/accounts
@@ -91,11 +91,11 @@ interface AccountsApi {
     suspend fun listAccounts(@Query("limit") limit: kotlin.Int? = 50, @Query("offset") offset: kotlin.Int? = 0, @Query("archived") archived: kotlin.Boolean? = false): Response<ListAccounts200Response>
 
     /**
-     * PUT api/v1/accounts/{id}/reconciliations/{month}
-     * Записать цифру банка за месяц
-     * admin и member. Полная замена: без &#x60;note&#x60; заметка очищается. Записанное не хранится — его считает &#x60;GET /stats/reconciliation&#x60;, поэтому дописанная операция меняет разницу без нового &#x60;PUT&#x60;. Месяц не блокируется. &#x60;bank_expense_minor&#x60; — &#x60;0 … 99999999999&#x60;, иначе &#x60;422&#x60;. 
+     * PUT api/v1/accounts/{id}/balances/{month}
+     * Записать остаток счёта на конец месяца
+     * admin и member. Полная замена. Сверку с операциями считает &#x60;GET /stats/reconciliation&#x60;, поэтому дописанная операция меняет разницу без нового &#x60;PUT&#x60;. Архивный счёт разрешён — прошлое дозаполняется. &#x60;|balance_minor|&#x60; больше &#x60;99999999999&#x60; — &#x60;422&#x60;. 
      * Responses:
-     *  - 200: Сверка
+     *  - 200: Остаток счёта
      *  - 400: Тело или идентификатор не разобрались: `INVALID_REQUEST` (сломанный JSON или неверный тип поля), `INVALID_ID` (в пути не UUID). Ошибки валидации значений — это `422`. 
      *  - 401: Токена нет, он истёк или отозван (`UNAUTHORIZED`)
      *  - 403: Роль не даёт доступа к операции (`FORBIDDEN`)
@@ -103,12 +103,12 @@ interface AccountsApi {
      *  - 422: Тело или параметры не прошли валидацию (`VALIDATION_ERROR`); поля — в `error.details`
      *
      * @param id 
-     * @param month Календарный месяц &#x60;YYYY-MM&#x60;; иное — &#x60;422&#x60;
-     * @param reconciliationRequest 
-     * @return [ReconciliationOk]
+     * @param month Календарный месяц &#x60;YYYY-MM&#x60; не позже текущего в часовом поясе семьи; иное — &#x60;422&#x60;
+     * @param accountBalanceRequest 
+     * @return [AccountBalanceOk]
      */
-    @PUT("api/v1/accounts/{id}/reconciliations/{month}")
-    suspend fun putReconciliation(@Path("id") id: java.util.UUID, @Path("month") month: kotlin.String, @Body reconciliationRequest: ReconciliationRequest): Response<ReconciliationOk>
+    @PUT("api/v1/accounts/{id}/balances/{month}")
+    suspend fun putAccountBalance(@Path("id") id: java.util.UUID, @Path("month") month: kotlin.String, @Body accountBalanceRequest: AccountBalanceRequest): Response<AccountBalanceOk>
 
     /**
      * PUT api/v1/accounts/{id}

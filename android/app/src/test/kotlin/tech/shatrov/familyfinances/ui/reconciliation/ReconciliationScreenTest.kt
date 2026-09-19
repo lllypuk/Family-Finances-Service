@@ -6,19 +6,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -34,7 +31,7 @@ import java.util.UUID
 
 private val AUGUST = YearMonth.of(2026, 8)
 
-/** Сверка: пустое состояние ведёт в «Счета», лист цифры банка, удаление сверки через подтверждение. */
+/** Сверка: пустое состояние ведёт в «Счета», диалог остатка со знаком, «Очистить» без подтверждения. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [ROBOLECTRIC_SDK])
 class ReconciliationScreenTest {
@@ -43,7 +40,7 @@ class ReconciliationScreenTest {
 
     private val res = ApplicationProvider.getApplicationContext<Context>().resources
 
-    private fun bank(exists: Boolean) = BankEditUiState(
+    private fun balance(exists: Boolean) = BalanceEditUiState(
         accountId = UUID.fromString(CARD_ACCOUNT_ID),
         accountName = "Тинькофф",
         month = AUGUST,
@@ -51,30 +48,43 @@ class ReconciliationScreenTest {
         exists = exists,
     )
 
-    @Test
-    fun emptyStateLeadsToAccounts() {
-        var added = 0
+    private fun setScreen(
+        state: ReconciliationUiState,
+        editor: BalanceEditUiState?,
+        onAmountChange: (String) -> Unit = {},
+        onToggleSign: () -> Unit = {},
+        onSave: () -> Unit = {},
+        onClear: () -> Unit = {},
+        onAddAccount: () -> Unit = {},
+    ) {
         composeRule.setContent {
             AppTheme {
                 ReconciliationScreen(
                     month = AUGUST,
-                    state = ReconciliationUiState.Ready(AUGUST, ReconciliationStats("2026-08", 0, emptyList())),
-                    editor = null,
+                    today = AUGUST.plusMonths(1),
+                    state = state,
+                    editor = editor,
                     currency = "RUB",
                     onBack = {},
                     onMonthChange = {},
                     onRetry = {},
-                    onOpenTransactions = {},
-                    onOpenBank = {},
-                    onAddAccount = { added++ },
-                    onAmountChange = {},
-                    onNoteChange = {},
-                    onSave = {},
-                    onDelete = {},
-                    onDismissBank = {},
+                    onOpenBalance = {},
+                    onAddAccount = onAddAccount,
+                    onAmountChange = onAmountChange,
+                    onToggleSign = onToggleSign,
+                    onSave = onSave,
+                    onClear = onClear,
+                    onDismissBalance = {},
                 )
             }
         }
+    }
+
+    @Test
+    fun emptyStateLeadsToAccounts() {
+        var added = 0
+        val empty = ReconciliationStats("2026-08", null, null, 0, 0, null, false, emptyList())
+        setScreen(ReconciliationUiState.Ready(AUGUST, empty), editor = null, onAddAccount = { added++ })
 
         composeRule.onNodeWithText(res.getString(R.string.reconciliation_empty)).assertExists()
         composeRule
@@ -84,59 +94,59 @@ class ReconciliationScreenTest {
     }
 
     @Test
-    fun bankAmountIsTypedAndSaved() {
-        var state by mutableStateOf(bank(exists = false))
-        var saved = 0
+    fun negativeBalanceIsTypedAndSaved() {
+        var editor by mutableStateOf(balance(exists = false))
+        var saved: Long? = null
         composeRule.setContent {
             AppTheme {
-                BankSheetContent(
-                    state = state,
+                ReconciliationScreen(
+                    month = AUGUST,
+                    today = AUGUST.plusMonths(1),
+                    state = ReconciliationUiState.Loading,
+                    editor = editor,
                     currency = "RUB",
-                    onAmountChange = { state = state.copy(amount = it) },
-                    onNoteChange = {},
-                    onSave = { saved++ },
-                    onDelete = {},
+                    onBack = {},
+                    onMonthChange = {},
+                    onRetry = {},
+                    onOpenBalance = {},
+                    onAddAccount = {},
+                    onAmountChange = { editor = editor.copy(amount = it) },
+                    onToggleSign = { editor = editor.copy(amount = "-${editor.amount}") },
+                    onSave = { saved = editor.amountMinor },
+                    onClear = {},
+                    onDismissBalance = {},
                 )
             }
         }
 
-        val save = composeRule.onNodeWithText(res.getString(R.string.reconciliation_save))
-        save.assertIsNotEnabled()
-        // Удалять нечего, пока сверки нет.
-        composeRule.onNodeWithText(res.getString(R.string.reconciliation_delete)).assertDoesNotExist()
-
         composeRule
-            .onNode(hasSetTextAction() and hasText(res.getString(R.string.reconciliation_bank_amount)))
+            .onNode(hasSetTextAction() and hasText(res.getString(R.string.reconciliation_balance_amount)))
             .performTextInput("1900,5")
-        save.assertIsEnabled().performClick()
+        composeRule.onNodeWithContentDescription(res.getString(R.string.reconciliation_toggle_sign)).performClick()
+        composeRule.onNodeWithText(res.getString(R.string.reconciliation_save)).performClick()
 
-        assertEquals("1900,5", state.amount)
-        assertEquals(1, saved)
+        assertEquals(-190050L, saved)
     }
 
     @Test
-    fun deleteWaitsForConfirmation() {
-        var deleted = false
-        composeRule.setContent {
-            AppTheme {
-                BankSheetContent(
-                    state = bank(exists = true),
-                    currency = "RUB",
-                    onAmountChange = {},
-                    onNoteChange = {},
-                    onSave = {},
-                    onDelete = { deleted = true },
-                )
-            }
-        }
+    fun saveIsDisabledWithoutAmountAndClearIsHidden() {
+        setScreen(ReconciliationUiState.Loading, balance(exists = false))
 
-        composeRule.onNodeWithText(res.getString(R.string.reconciliation_delete)).performClick()
-        assertFalse(deleted)
+        composeRule.onNodeWithText(res.getString(R.string.reconciliation_save)).assertIsNotEnabled()
+        // Очищать нечего, пока остатка нет.
+        composeRule.onNodeWithText(res.getString(R.string.reconciliation_clear)).assertDoesNotExist()
+    }
 
-        composeRule.onNodeWithText(res.getString(R.string.reconciliation_delete_confirm)).assertExists()
-        composeRule
-            .onNode(hasText(res.getString(R.string.reconciliation_delete)) and hasAnyAncestor(isDialog()))
-            .performClick()
-        assertTrue(deleted)
+    @Test
+    fun saveAndClearReachTheModel() {
+        var saved = 0
+        var cleared = 0
+        setScreen(ReconciliationUiState.Loading, balance(exists = true), onSave = { saved++ }, onClear = { cleared++ })
+
+        composeRule.onNodeWithText(res.getString(R.string.reconciliation_save)).assertIsEnabled().performClick()
+        composeRule.onNodeWithText(res.getString(R.string.reconciliation_clear)).performClick()
+
+        assertEquals(1, saved)
+        assertEquals(1, cleared)
     }
 }

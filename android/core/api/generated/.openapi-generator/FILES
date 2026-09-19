@@ -1,4 +1,7 @@
 kotlin/tech/shatrov/familyfinances/core/api/Account.kt
+kotlin/tech/shatrov/familyfinances/core/api/AccountBalance.kt
+kotlin/tech/shatrov/familyfinances/core/api/AccountBalanceOk.kt
+kotlin/tech/shatrov/familyfinances/core/api/AccountBalanceRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/AccountOk.kt
 kotlin/tech/shatrov/familyfinances/core/api/AccountsApi.kt
 kotlin/tech/shatrov/familyfinances/core/api/AuthApi.kt
@@ -68,9 +71,6 @@ kotlin/tech/shatrov/familyfinances/core/api/RecentTransactionItem.kt
 kotlin/tech/shatrov/familyfinances/core/api/RecognizeOk.kt
 kotlin/tech/shatrov/familyfinances/core/api/RecognizeResult.kt
 kotlin/tech/shatrov/familyfinances/core/api/RecognizedTransaction.kt
-kotlin/tech/shatrov/familyfinances/core/api/Reconciliation.kt
-kotlin/tech/shatrov/familyfinances/core/api/ReconciliationOk.kt
-kotlin/tech/shatrov/familyfinances/core/api/ReconciliationRequest.kt
 kotlin/tech/shatrov/familyfinances/core/api/ReconciliationRow.kt
 kotlin/tech/shatrov/familyfinances/core/api/ReconciliationStats.kt
 kotlin/tech/shatrov/familyfinances/core/api/ReconciliationStatsOk.kt

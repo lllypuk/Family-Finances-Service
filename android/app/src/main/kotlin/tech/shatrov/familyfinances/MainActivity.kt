@@ -89,6 +89,7 @@ import tech.shatrov.familyfinances.ui.transactions.TransactionFilters
 import tech.shatrov.familyfinances.ui.transactions.TransactionsScreen
 import tech.shatrov.familyfinances.ui.transactions.TransactionsViewModel
 import java.time.LocalDate
+import java.time.YearMonth
 
 class MainActivity : ComponentActivity() {
     private val graph: AppGraph
@@ -643,42 +644,39 @@ fun AppRoot(graph: AppGraph) {
 
         is AppScreen.Reconciliation -> WithSession(session) { active ->
             val model: ReconciliationViewModel = viewModel(key = "reconciliation-${active.user.id}-$epoch") {
-                ReconciliationViewModel(graph.api)
+                ReconciliationViewModel(graph.api) { LocalDate.now(active.zone) }
             }
             val reconciliation by model.state.collectAsStateWithLifecycle()
             val editor by model.editor.collectAsStateWithLifecycle()
-            // Каждый заход и смена месяца: строки считаются из операций, а их правят и на расшифровке.
-            LifecycleResumeEffect(current.month) {
-                model.load(current.month)
+            val today = YearMonth.now(active.zone)
+            val month = minOf(current.month, today)
+            // Каждый заход и смена месяца: итог считается из операций, а их правят и в других экранах.
+            LifecycleResumeEffect(month) {
+                model.load(month)
                 onPauseOrDispose {}
             }
-            // Карточка главной считает «N из M» по тем же сверкам.
+            // Карточка главной считается по тем же остаткам.
             val leave = {
                 homeStale = true
                 screen = AppScreen.Home
             }
             BackHandler { leave() }
             ReconciliationScreen(
-                month = current.month,
+                month = month,
+                today = today,
                 state = reconciliation,
                 editor = editor,
                 currency = active.currency,
                 onBack = leave,
                 onMonthChange = { screen = AppScreen.Reconciliation(it) },
                 onRetry = model::refresh,
-                onOpenTransactions = { account ->
-                    screen = AppScreen.Transactions(
-                        filters = TransactionFilters.reconciliation(current.month, account),
-                        reconciliation = current.month,
-                    )
-                },
-                onOpenBank = model::onOpenBank,
+                onOpenBalance = model::onOpenBalance,
                 onAddAccount = { screen = AppScreen.Settings(SettingsPage.Accounts()) },
                 onAmountChange = model::onAmountChange,
-                onNoteChange = model::onNoteChange,
+                onToggleSign = model::onToggleSign,
                 onSave = model::onSave,
-                onDelete = model::onDelete,
-                onDismissBank = model::onDismissBank,
+                onClear = model::onClear,
+                onDismissBalance = model::onDismissBalance,
             )
         }
 

@@ -408,34 +408,60 @@ internal const val ACCOUNT_IN_USE_ERROR = """
 internal const val CASH_ACCOUNT_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3"
 
 /**
- * Сверка августа: карта сошлась, наличные не сверены, архивная карта с нулевой сверкой — «N из M»
- * её не считает, иначе вышло бы «2 из 3».
+ * Остатки августа: у наличных нет остатка на конец месяца, архивная карта закрыта нулём — «N из M»
+ * главной её не считает, иначе вышло бы «2 из 3».
  */
 internal const val RECONCILIATION_OK = """
-{"data":{"month":"2026-08","unassigned_minor":125000,"accounts":[
+{"data":{"month":"2026-08","opening_minor":5100000,"closing_minor":null,"income_minor":2000000,
+"expense_minor":1500000,"gap_minor":null,"complete":false,"accounts":[
 {"account":{"id":"$CARD_ACCOUNT_ID","name":"Тинькофф","is_archived":false,
-"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"},
-"recorded_minor":4310000,"bank_expense_minor":4310000,"diff_minor":0,"note":"выписка",
-"updated_at":"2026-09-01T10:00:00Z"},
+"created_at":"2026-07-01T10:00:00Z","updated_at":"2026-07-01T10:00:00Z"},
+"opening_minor":5000000,"closing_minor":-450000,"updated_at":"2026-09-01T10:00:00Z"},
 {"account":{"id":"$CASH_ACCOUNT_ID","name":"Наличные","is_archived":false,
-"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"},
-"recorded_minor":325000,"bank_expense_minor":null,"diff_minor":null,"note":null,"updated_at":null},
+"created_at":"2026-07-01T10:00:00Z","updated_at":"2026-07-01T10:00:00Z"},
+"opening_minor":100000,"closing_minor":null,"updated_at":null},
 {"account":{"id":"$OLD_ACCOUNT_ID","name":"Старая карта","is_archived":true,
-"created_at":"2026-09-01T10:00:00Z","updated_at":"2026-09-10T10:00:00Z"},
-"recorded_minor":0,"bank_expense_minor":0,"diff_minor":0,"note":"",
-"updated_at":"2026-09-01T10:00:00Z"}]},
-"meta":{"request_id":"r-80","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0"}}
+"created_at":"2026-07-01T10:00:00Z","updated_at":"2026-08-10T10:00:00Z"},
+"opening_minor":0,"closing_minor":0,"updated_at":"2026-09-01T10:00:00Z"}]},
+"meta":{"request_id":"r-80","timestamp":"2026-09-18T10:00:00Z","version":"v0.9.0"}}
+"""
+
+/** Август заполнен целиком: остатки выросли на 5 100,00, операции дали 5 000,00 — не записано 100,00. */
+internal const val RECONCILIATION_COMPLETE = """
+{"data":{"month":"2026-08","opening_minor":5100000,"closing_minor":5610000,"income_minor":2000000,
+"expense_minor":1500000,"gap_minor":10000,"complete":true,"accounts":[
+{"account":{"id":"$CARD_ACCOUNT_ID","name":"Тинькофф","is_archived":false,
+"created_at":"2026-07-01T10:00:00Z","updated_at":"2026-07-01T10:00:00Z"},
+"opening_minor":5000000,"closing_minor":5500000,"updated_at":"2026-09-01T10:00:00Z"},
+{"account":{"id":"$CASH_ACCOUNT_ID","name":"Наличные","is_archived":false,
+"created_at":"2026-07-01T10:00:00Z","updated_at":"2026-07-01T10:00:00Z"},
+"opening_minor":100000,"closing_minor":110000,"updated_at":"2026-09-01T10:00:00Z"}]},
+"meta":{"request_id":"r-83","timestamp":"2026-09-18T10:00:00Z","version":"v0.9.0"}}
+"""
+
+/** Конец августа заполнен, конец июля — нет: первый месяц в приложении. */
+internal const val RECONCILIATION_NO_OPENING = """
+{"data":{"month":"2026-08","opening_minor":null,"closing_minor":5610000,"income_minor":2000000,
+"expense_minor":1500000,"gap_minor":null,"complete":false,"accounts":[
+{"account":{"id":"$CARD_ACCOUNT_ID","name":"Тинькофф","is_archived":false,
+"created_at":"2026-07-01T10:00:00Z","updated_at":"2026-07-01T10:00:00Z"},
+"opening_minor":null,"closing_minor":5500000,"updated_at":"2026-09-01T10:00:00Z"},
+{"account":{"id":"$CASH_ACCOUNT_ID","name":"Наличные","is_archived":false,
+"created_at":"2026-07-01T10:00:00Z","updated_at":"2026-07-01T10:00:00Z"},
+"opening_minor":null,"closing_minor":110000,"updated_at":"2026-09-01T10:00:00Z"}]},
+"meta":{"request_id":"r-84","timestamp":"2026-09-18T10:00:00Z","version":"v0.9.0"}}
 """
 
 internal const val RECONCILIATION_EMPTY = """
-{"data":{"month":"2026-08","unassigned_minor":0,"accounts":[]},
-"meta":{"request_id":"r-81","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0"}}
+{"data":{"month":"2026-08","opening_minor":null,"closing_minor":null,"income_minor":0,"expense_minor":0,
+"gap_minor":null,"complete":false,"accounts":[]},
+"meta":{"request_id":"r-81","timestamp":"2026-09-18T10:00:00Z","version":"v0.9.0"}}
 """
 
-internal const val RECONCILIATION_PUT_OK = """
-{"data":{"account_id":"$CASH_ACCOUNT_ID","month":"2026-08","bank_expense_minor":350000,"note":"",
+internal const val BALANCE_PUT_OK = """
+{"data":{"account_id":"$CASH_ACCOUNT_ID","month":"2026-08","balance_minor":-350000,
 "updated_at":"2026-09-18T10:00:00Z"},
-"meta":{"request_id":"r-82","timestamp":"2026-09-18T10:00:00Z","version":"v0.6.0"}}
+"meta":{"request_id":"r-82","timestamp":"2026-09-18T10:00:00Z","version":"v0.9.0"}}
 """
 
 internal const val FLAT_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1"

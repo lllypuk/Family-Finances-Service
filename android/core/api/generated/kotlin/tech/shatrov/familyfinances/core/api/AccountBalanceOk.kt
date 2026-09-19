@@ -23,6 +23,8 @@
 
 package tech.shatrov.familyfinances.core.api
 
+import tech.shatrov.familyfinances.core.api.AccountBalance
+import tech.shatrov.familyfinances.core.api.Meta
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
@@ -31,20 +33,18 @@ import kotlinx.serialization.Contextual
 /**
  * 
  *
- * @param bankExpenseMinor Траты по счёту за месяц по данным банка; отрицательное — `422`
- * @param note Нет поля — заметка очищается
+ * @param `data` 
+ * @param meta 
  */
 @Serializable
 
-data class ReconciliationRequest (
+data class AccountBalanceOk (
 
-    /* Траты по счёту за месяц по данным банка; отрицательное — `422` */
-    @SerialName(value = "bank_expense_minor")
-    val bankExpenseMinor: kotlin.Long,
+    @SerialName(value = "data")
+    val `data`: AccountBalance,
 
-    /* Нет поля — заметка очищается */
-    @SerialName(value = "note")
-    val note: kotlin.String? = null
+    @SerialName(value = "meta")
+    val meta: Meta
 
 ) {
 

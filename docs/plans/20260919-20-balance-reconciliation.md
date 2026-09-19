@@ -279,15 +279,17 @@ accounts[]: { account, opening_minor | null, closing_minor | null, updated_at | 
 - Modify: `android/core/api/…` (генерация), `ui/reconciliation/{ReconciliationViewModel,ReconciliationScreen}.kt`,
   `app/src/test/…/ui/reconciliation/{ReconciliationViewModelTest,ReconciliationScreenTest}.kt`, `TestFixtures.kt`, `app/src/main/res/values/strings.xml`
 
-- [ ] `make -C android api-gen`; починить компиляцию
-- [ ] ViewModel: состояние итога (заполнен / не заполнен этот край / не заполнен прошлый), подпись по знаку,
+- [x] `make -C android api-gen`; починить компиляцию
+- [x] ViewModel: состояние итога (заполнен / не заполнен этот край / не заполнен прошлый), подпись по знаку,
   `saveBalance`/`clearBalance`, перечитывание; месяц не позже текущего
-- [ ] экран: карточка итога, строки счетов, диалог остатка со знаком, кнопка «Ввести остатки за <месяц>»,
+- [x] экран: карточка итога, строки счетов, диалог остатка со знаком, кнопка «Ввести остатки за <месяц>»,
   `today` в `MonthSwitcher`, подсказка про переводы; отжившие строки `reconciliation_*` (`strings.xml:29-31,60-78`)
   удалить
-- [ ] тесты ViewModel: три состояния края, знак подписи, `0` → «Сошлось», ошибка сети; Compose: диалог
+  ➕ `home_reconciliation*` (`strings.xml:29-31`) пока живы: карточка «Главной» до задачи 7 считает «N из M»
+  по `closing_minor != null`; знак вводится кнопкой «±» — на цифровой клавиатуре минуса часто нет
+- [x] тесты ViewModel: три состояния края, знак подписи, `0` → «Сошлось», ошибка сети; Compose: диалог
   сохраняет отрицательное число, «Очистить» зовёт `DELETE`
-- [ ] `make -C android check`
+- [x] `make -C android check`
 
 ### Task 6: Клиент — «Операции месяца» и «Закрыть разницу»
 

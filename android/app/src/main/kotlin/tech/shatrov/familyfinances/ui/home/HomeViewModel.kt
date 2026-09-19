@@ -182,7 +182,7 @@ class HomeViewModel(
         if (rows.isEmpty()) {
             ReconciliationCard.NoAccounts
         } else {
-            ReconciliationCard.Ready(month, matched = rows.count { it.diffMinor == 0L }, total = rows.size)
+            ReconciliationCard.Ready(month, matched = rows.count { it.closingMinor != null }, total = rows.size)
         }
     } catch (_: ApiFailure) {
         ReconciliationCard.Hidden
