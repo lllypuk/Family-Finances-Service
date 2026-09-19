@@ -203,6 +203,11 @@ func (r *SQLiteFamilyRepository) HasMonetaryData(ctx context.Context) (bool, err
 				JOIN holdings h ON h.id = v.holding_id
 				WHERE h.family_id = f.id
 			)
+			OR EXISTS (
+				SELECT 1 FROM holding_plans p
+				JOIN holdings h ON h.id = p.holding_id
+				WHERE h.family_id = f.id
+			)
 		FROM families f
 		LIMIT 1`
 

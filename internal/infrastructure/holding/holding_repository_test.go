@@ -1,8 +1,11 @@
 package holding_test
 
 import (
+	"context"
 	"database/sql"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -11,6 +14,7 @@ import (
 	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/holding"
 	"family-budget-service/internal/domain/money"
+	"family-budget-service/internal/infrastructure"
 	holdingrepo "family-budget-service/internal/infrastructure/holding"
 	"family-budget-service/internal/testhelpers"
 )
@@ -51,7 +55,7 @@ func archive(t *testing.T, repo *holdingrepo.SQLiteRepository, id uuid.UUID) {
 	t.Helper()
 
 	archived := true
-	require.NoError(t, repo.Update(t.Context(), id, nil, nil, &archived))
+	require.NoError(t, repo.Update(t.Context(), id, nil, nil, &archived, nil, nil))
 }
 
 func TestHoldingRepository_Create_GetByID(t *testing.T) {
@@ -140,10 +144,10 @@ func TestHoldingRepository_Update_KeepsFieldsNotGiven(t *testing.T) {
 	create(t, repo, "Кредит", holding.SideLiability)
 
 	kind := holding.KindCreditCard
-	require.NoError(t, repo.Update(t.Context(), h.ID, nil, &kind, nil))
+	require.NoError(t, repo.Update(t.Context(), h.ID, nil, &kind, nil, nil, nil))
 	archive(t, repo, h.ID)
 	name := "Карта Сбер"
-	require.NoError(t, repo.Update(t.Context(), h.ID, &name, nil, nil))
+	require.NoError(t, repo.Update(t.Context(), h.ID, &name, nil, nil, nil, nil))
 
 	got, err := repo.GetByID(t.Context(), h.ID, today())
 	require.NoError(t, err)
@@ -153,14 +157,14 @@ func TestHoldingRepository_Update_KeepsFieldsNotGiven(t *testing.T) {
 	assert.Equal(t, holding.SideLiability, got.Side)
 
 	restored := false
-	require.NoError(t, repo.Update(t.Context(), h.ID, nil, nil, &restored))
+	require.NoError(t, repo.Update(t.Context(), h.ID, nil, nil, &restored, nil, nil))
 	got, err = repo.GetByID(t.Context(), h.ID, today())
 	require.NoError(t, err)
 	assert.False(t, got.IsArchived, "false — это значение, а не «не передано»")
 
 	clash := "КРЕДИТ"
-	require.ErrorIs(t, repo.Update(t.Context(), h.ID, &clash, nil, nil), holding.ErrNameExists)
-	require.ErrorIs(t, repo.Update(t.Context(), uuid.New(), &name, nil, nil), holding.ErrNotFound)
+	require.ErrorIs(t, repo.Update(t.Context(), h.ID, &clash, nil, nil, nil, nil), holding.ErrNameExists)
+	require.ErrorIs(t, repo.Update(t.Context(), uuid.New(), &name, nil, nil, nil, nil), holding.ErrNotFound)
 }
 
 func TestHoldingRepository_Delete_CascadesValues(t *testing.T) {
@@ -283,4 +287,131 @@ func TestHoldingRepository_SeriesValues(t *testing.T) {
 		{flat.ID, holding.SideAsset, "2026-04-01", 400},
 		{edge.ID, holding.SideAsset, "2026-05-31", 6},
 	}, actual, "из снимков до from — только последний, в том числе внутри месяца from; архивная на месте; по дате")
+}
+
+func minor(v int64) *money.Minor {
+	m := money.Minor(v)
+	return &m
+}
+
+func planRows(t *testing.T, db *sql.DB, id uuid.UUID) int {
+	t.Helper()
+
+	var n int
+	require.NoError(t, db.QueryRowContext(t.Context(),
+		`SELECT COUNT(*) FROM holding_plans WHERE holding_id = ?`, id.String()).Scan(&n))
+	return n
+}
+
+func TestHoldingRepository_Create_Plan(t *testing.T) {
+	repo, db := setupRepo(t)
+
+	withPlan := testhelpers.CreateTestHolding("Квартира", holding.SideAsset, holding.KindProperty)
+	withPlan.Plan = holding.Plan{MonthlyIncomeMinor: 4_500_000, MonthlyExpenseMinor: 830_000}
+	require.NoError(t, repo.Create(t.Context(), withPlan))
+	require.NotNil(t, withPlan.Plan.UpdatedAt, "POST отдаёт дату плана без перечитывания")
+
+	got, err := repo.GetByID(t.Context(), withPlan.ID, today())
+	require.NoError(t, err)
+	assert.Equal(t, money.Minor(4_500_000), got.Plan.MonthlyIncomeMinor)
+	assert.Equal(t, money.Minor(830_000), got.Plan.MonthlyExpenseMinor)
+	require.NotNil(t, got.Plan.UpdatedAt)
+	assert.True(t, withPlan.Plan.UpdatedAt.Equal(*got.Plan.UpdatedAt))
+
+	plain := create(t, repo, "Вклад", holding.SideAsset)
+	assert.Nil(t, plain.Plan.UpdatedAt)
+	assert.Equal(t, 0, planRows(t, db, plain.ID), "0/0 строку плана не пишет")
+	got, err = repo.GetByID(t.Context(), plain.ID, today())
+	require.NoError(t, err)
+	assert.Equal(t, holding.Plan{}, got.Plan)
+}
+
+func TestHoldingRepository_Update_Plan(t *testing.T) {
+	repo, db := setupRepo(t)
+	h := create(t, repo, "Ипотека", holding.SideLiability)
+
+	require.NoError(t, repo.Update(t.Context(), h.ID, nil, nil, nil, minor(10_000), minor(7_430_000)))
+	first, err := repo.GetByID(t.Context(), h.ID, today())
+	require.NoError(t, err)
+	require.NotNil(t, first.Plan.UpdatedAt)
+	assert.Equal(t, money.Minor(10_000), first.Plan.MonthlyIncomeMinor, "доход у пассива законен")
+
+	require.NoError(t, repo.Update(t.Context(), h.ID, nil, nil, nil, nil, minor(7_000_000)))
+	got, err := repo.GetByID(t.Context(), h.ID, today())
+	require.NoError(t, err)
+	assert.Equal(t, money.Minor(10_000), got.Plan.MonthlyIncomeMinor, "неприсланное число сохраняется")
+	assert.Equal(t, money.Minor(7_000_000), got.Plan.MonthlyExpenseMinor)
+	assert.True(t, got.Plan.UpdatedAt.After(*first.Plan.UpdatedAt), "правка плана двигает дату")
+
+	planAt := *got.Plan.UpdatedAt
+	name := "Ипотека ВТБ"
+	archived := true
+	require.NoError(t, repo.Update(t.Context(), h.ID, &name, nil, &archived, nil, nil))
+	got, err = repo.GetByID(t.Context(), h.ID, today())
+	require.NoError(t, err)
+	assert.True(t, planAt.Equal(*got.Plan.UpdatedAt), "переименование и архив дату плана не двигают")
+	assert.Equal(t, money.Minor(7_000_000), got.Plan.MonthlyExpenseMinor)
+
+	require.NoError(t, repo.Update(t.Context(), h.ID, nil, nil, nil, minor(0), nil))
+	got, err = repo.GetByID(t.Context(), h.ID, today())
+	require.NoError(t, err)
+	assert.Equal(t, 1, planRows(t, db, h.ID), "один 0 при ненулевом втором строку не удаляет")
+	assert.Equal(t, money.Minor(0), got.Plan.MonthlyIncomeMinor)
+	assert.Equal(t, money.Minor(7_000_000), got.Plan.MonthlyExpenseMinor)
+	assert.True(t, got.Plan.UpdatedAt.After(planAt))
+
+	require.NoError(t, repo.Update(t.Context(), h.ID, nil, nil, nil, nil, minor(0)))
+	assert.Equal(t, 0, planRows(t, db, h.ID), "0/0 удаляет строку")
+	got, err = repo.GetByID(t.Context(), h.ID, today())
+	require.NoError(t, err)
+	assert.Equal(t, holding.Plan{}, got.Plan)
+
+	require.ErrorIs(t, repo.Update(t.Context(), uuid.New(), nil, nil, nil, minor(1), nil), holding.ErrNotFound)
+}
+
+func TestHoldingRepository_Update_PlanRefusalRollsBackRename(t *testing.T) {
+	repo, db := setupRepo(t)
+	h := create(t, repo, "Машина", holding.SideAsset)
+	require.NoError(t, repo.Update(t.Context(), h.ID, nil, nil, nil, nil, minor(500_000)))
+
+	name := "Машина Лада"
+	err := repo.Update(t.Context(), h.ID, &name, nil, nil, minor(-1), nil)
+	var planErr *holding.PlanError
+	require.ErrorAs(t, err, &planErr)
+	assert.Equal(t, holding.FieldMonthlyIncome, planErr.Field)
+
+	got, err := repo.GetByID(t.Context(), h.ID, today())
+	require.NoError(t, err)
+	assert.Equal(t, "Машина", got.Name, "отказ плана откатывает переименование")
+	assert.Equal(t, money.Minor(500_000), got.Plan.MonthlyExpenseMinor)
+	assert.Equal(t, 1, planRows(t, db, h.ID))
+}
+
+// Тестовый DSN не несёт MaxOpenConns=1 и _txlock=immediate; чтение через r.db внутри транзакции
+// повисло бы только здесь.
+func TestHoldingRepository_Update_PlanOnProductionConnection(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "prod.db")
+	manager := infrastructure.NewMigrationManager("sqlite://"+dbPath,
+		filepath.Join(testhelpers.RepoRoot(t), "migrations"))
+	require.NoError(t, manager.Up())
+
+	conn, err := infrastructure.NewSQLiteConnection(dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, conn.Close()) })
+	_, err = testhelpers.NewTestDataHelper(conn.DB()).CreateTestFamily(t.Context(), "Family", "RUB")
+	require.NoError(t, err)
+
+	repo := holdingrepo.NewSQLiteRepository(conn.DB())
+	h := testhelpers.CreateTestHolding("Квартира", holding.SideAsset, holding.KindProperty)
+	require.NoError(t, repo.Create(t.Context(), h))
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	require.NoError(t, repo.Update(ctx, h.ID, nil, nil, nil, minor(4_500_000), nil))
+	require.NoError(t, repo.Update(ctx, h.ID, nil, nil, nil, nil, minor(830_000)))
+
+	got, err := repo.GetByID(ctx, h.ID, today())
+	require.NoError(t, err)
+	assert.Equal(t, money.Minor(4_500_000), got.Plan.MonthlyIncomeMinor)
+	assert.Equal(t, money.Minor(830_000), got.Plan.MonthlyExpenseMinor)
 }

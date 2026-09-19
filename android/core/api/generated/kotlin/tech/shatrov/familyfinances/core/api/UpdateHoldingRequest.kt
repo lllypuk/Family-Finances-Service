@@ -34,6 +34,8 @@ import kotlinx.serialization.Contextual
  * @param name 
  * @param kind Вид позиции. Активы — `cash`, `deposit`, `investment`, `property`, `vehicle`, `other`; пассивы — `mortgage`, `loan`, `credit_card`, `other`. Не `enum`: список может расти, и неизвестный вид клиент показывает как `other`. 
  * @param isArchived 
+ * @param monthlyIncomeMinor Нет поля — план не трогается, `0` — число убирается; `0` в обоих числах удаляет план
+ * @param monthlyExpenseMinor Как `monthly_income_minor`
  */
 @Serializable
 
@@ -47,7 +49,15 @@ data class UpdateHoldingRequest (
     val kind: kotlin.String? = null,
 
     @SerialName(value = "is_archived")
-    val isArchived: kotlin.Boolean? = null
+    val isArchived: kotlin.Boolean? = null,
+
+    /* Нет поля — план не трогается, `0` — число убирается; `0` в обоих числах удаляет план */
+    @SerialName(value = "monthly_income_minor")
+    val monthlyIncomeMinor: kotlin.Long? = null,
+
+    /* Как `monthly_income_minor` */
+    @SerialName(value = "monthly_expense_minor")
+    val monthlyExpenseMinor: kotlin.Long? = null
 
 ) {
 

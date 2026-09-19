@@ -457,6 +457,7 @@ fun AppRoot(graph: AppGraph) {
                     state = netWorth,
                     currency = active.currency,
                     today = LocalDate.now(active.zone),
+                    zone = active.zone,
                     onRetry = model::refresh,
                     onAdd = { screen = AppScreen.HoldingEdit(null, side = it) },
                     onOpenValue = model::onOpenValue,
@@ -549,9 +550,12 @@ fun AppRoot(graph: AppGraph) {
             BackHandler { leave() }
             HoldingEditScreen(
                 state = edit,
+                currency = active.currency,
                 onSideChange = model::onSideChange,
                 onNameChange = model::onNameChange,
                 onKindChange = model::onKindChange,
+                onIncomeChange = model::onIncomeChange,
+                onExpenseChange = model::onExpenseChange,
                 onSubmit = model::onSubmit,
                 onToggleArchive = model::onToggleArchive,
                 onDelete = model::onDelete,

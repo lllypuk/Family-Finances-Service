@@ -233,7 +233,7 @@ paths:
       tags: [family]
       summary: Изменить семью
       description: |
-        Только admin. Смена `currency` при наличии транзакций, сверок или снимков позиций запрещена — `409 CURRENCY_LOCKED` (A-05).
+        Только admin. Смена `currency` при наличии транзакций, сверок, снимков или планов позиций запрещена — `409 CURRENCY_LOCKED` (A-05).
         `timezone` — IANA-имя, в нём считаются «сегодня» и границы периодов (A-06).
       requestBody:
         required: true
@@ -1754,7 +1754,7 @@ components:
         currency:
           type: string
           pattern: '^[A-Z]{3}$'
-          description: Меняется только пока в семье нет транзакций, сверок и снимков позиций, иначе `409 CURRENCY_LOCKED`
+          description: Меняется только пока в семье нет транзакций, сверок, снимков и планов позиций, иначе `409 CURRENCY_LOCKED`
         timezone: { type: string }
 
     Category:
@@ -1850,6 +1850,19 @@ components:
             - { $ref: '#/components/schemas/HoldingCurrent' }
             - { type: 'null' }
           description: Последний снимок не позже сегодняшнего дня семьи; `null` — снимков нет
+        monthly_income_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          minimum: 0
+          description: |
+            Плановые средние поступления в месяц; `0` — не заданы. Сервер `v0.8.0+` шлёт всегда, в `required` нет,
+            чтобы клиент разбирал ответ сервера без планов.
+        monthly_expense_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          minimum: 0
+          description: Плановые средние выплаты в месяц; `0` — не заданы. Как `monthly_income_minor`
+        plan_updated_at:
+          allOf: [{ $ref: '#/components/schemas/Timestamp' }]
+          description: Время последней правки чисел плана; нет поля — плана нет. Переименование и архив его не двигают
         created_at: { $ref: '#/components/schemas/Timestamp' }
         updated_at: { $ref: '#/components/schemas/Timestamp' }
     HoldingCurrent:
@@ -1874,6 +1887,14 @@ components:
           description: Пробелы по краям обрезаются; пустое после обрезки — `422`
         side: { $ref: '#/components/schemas/HoldingSide' }
         kind: { $ref: '#/components/schemas/HoldingKind' }
+        monthly_income_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          minimum: 0
+          description: Плановые средние поступления в месяц; нет поля — `0`
+        monthly_expense_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          minimum: 0
+          description: Плановые средние выплаты в месяц; нет поля — `0`
     UpdateHoldingRequest:
       type: object
       minProperties: 1
@@ -1882,6 +1903,14 @@ components:
         name: { type: string, maxLength: 50 }
         kind: { $ref: '#/components/schemas/HoldingKind' }
         is_archived: { type: boolean }
+        monthly_income_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          minimum: 0
+          description: Нет поля — план не трогается, `0` — число убирается; `0` в обоих числах удаляет план
+        monthly_expense_minor:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          minimum: 0
+          description: Как `monthly_income_minor`
     HoldingValueRequest:
       type: object
       required: [value_minor]

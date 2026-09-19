@@ -34,7 +34,7 @@ const (
 	ErrCodeCannotDeactivateSelf = "CANNOT_DEACTIVATE_SELF"
 	// ErrCodeLastAdmin signals an attempt to deactivate or demote the last active admin.
 	ErrCodeLastAdmin = "LAST_ADMIN"
-	// ErrCodeCurrencyLocked signals a currency change on a family that already has transactions, reconciliations or holding values.
+	// ErrCodeCurrencyLocked signals a currency change on a family that already has money data (HasMonetaryData).
 	ErrCodeCurrencyLocked = "CURRENCY_LOCKED"
 	// ErrCodeBudgetOverlap signals a budget whose period overlaps another budget of the same scope.
 	ErrCodeBudgetOverlap = "BUDGET_OVERLAP"
@@ -98,7 +98,7 @@ const (
 	ErrMessageCannotDeactivate       = "Cannot deactivate your own account"
 	ErrMessageEmailTaken             = "Email already exists"
 	ErrMessageLastAdmin              = "Cannot deactivate or demote the last administrator"
-	ErrMessageCurrencyLocked         = "Currency cannot be changed while transactions, reconciliations or holding values exist"
+	ErrMessageCurrencyLocked         = "Currency cannot be changed while transactions, reconciliations or holding values or plans exist"
 	ErrMessageBudgetOverlap          = "Budget period overlaps with an existing budget"
 	ErrMessageBudgetNameExists       = "Budget with this name already exists for this period"
 	ErrMessageBudgetBelowSpent       = "Budget amount is less than already spent"

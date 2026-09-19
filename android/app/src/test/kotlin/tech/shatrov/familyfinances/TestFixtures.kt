@@ -440,13 +440,15 @@ internal const val OLD_CAR_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb4"
 
 /**
  * Квартира и ипотека со снимками, актив незнакомого клиенту вида без снимка и проданная машина в
- * архиве — её нулевой снимок в капитале остаётся.
+ * архиве — её нулевой снимок в капитале остаётся. План есть у квартиры; остальные — в форме сервера
+ * до `v0.8.0`, без полей плана.
  */
 internal const val HOLDINGS_OK = """
 {"data":[
 {"id":"$FLAT_ID","name":"Квартира","side":"asset","kind":"property","is_archived":false,
 "current":{"date":"2026-01-12","value_minor":1100000000},
-"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"},
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z",
+"monthly_income_minor":4500000,"monthly_expense_minor":830000,"plan_updated_at":"2026-03-05T10:00:00Z"},
 {"id":"$MORTGAGE_ID","name":"Ипотека","side":"liability","kind":"mortgage","is_archived":false,
 "current":{"date":"2026-09-01","value_minor":640000000},
 "created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"},
@@ -457,6 +459,27 @@ internal const val HOLDINGS_OK = """
 "created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z"}],
 "meta":{"request_id":"r-90","timestamp":"2026-09-18T10:00:00Z","version":"v0.7.0",
 "pagination":{"limit":200,"offset":0,"total":4}}}
+"""
+
+/** Только выплаты у действующей ипотеки; план проданной машины в итог не входит. */
+internal const val HOLDINGS_EXPENSE_PLAN = """
+{"data":[
+{"id":"$MORTGAGE_ID","name":"Ипотека","side":"liability","kind":"mortgage","is_archived":false,
+"current":{"date":"2026-09-01","value_minor":640000000},
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z",
+"monthly_income_minor":0,"monthly_expense_minor":7430000,"plan_updated_at":"2026-09-01T10:00:00Z"},
+{"id":"$OLD_CAR_ID","name":"Машина","side":"asset","kind":"vehicle","is_archived":true,
+"current":{"date":"2026-05-01","value_minor":0},
+"created_at":"2026-09-18T10:00:00Z","updated_at":"2026-09-18T10:00:00Z",
+"monthly_income_minor":0,"monthly_expense_minor":1500000,"plan_updated_at":"2026-01-10T10:00:00Z"}],
+"meta":{"request_id":"r-90","timestamp":"2026-09-18T10:00:00Z","version":"v0.8.0",
+"pagination":{"limit":200,"offset":0,"total":2}}}
+"""
+
+internal const val HOLDING_PLAN_ERROR = """
+{"error":{"code":"VALIDATION_ERROR","message":"Проверьте поля",
+"details":[{"field":"monthly_income_minor","message":"слишком большое число","code":"lte"}]},
+"meta":{"request_id":"r-98","timestamp":"2026-09-18T10:00:00Z","version":"v0.8.0"}}
 """
 
 internal const val HOLDINGS_EMPTY = """

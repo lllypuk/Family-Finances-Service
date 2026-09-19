@@ -60,7 +60,8 @@ func (h *HoldingHandler) CreateHolding(c echo.Context) error {
 	}
 
 	created, err := h.holdings.Create(c.Request().Context(), req.ID, req.Name,
-		holding.Side(req.Side), holding.Kind(req.Kind))
+		holding.Side(req.Side), holding.Kind(req.Kind),
+		holding.Plan{MonthlyIncomeMinor: req.MonthlyIncomeMinor, MonthlyExpenseMinor: req.MonthlyExpenseMinor})
 	if err != nil {
 		return respondHoldingError(c, err)
 	}
@@ -87,7 +88,8 @@ func (h *HoldingHandler) UpdateHolding(c echo.Context) error {
 	if err = h.validator.Struct(req); err != nil {
 		return respondValidationErrors(c, err)
 	}
-	if req.Name == nil && req.Kind == nil && req.IsArchived == nil {
+	if req.Name == nil && req.Kind == nil && req.IsArchived == nil &&
+		req.MonthlyIncomeMinor == nil && req.MonthlyExpenseMinor == nil {
 		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, ErrMessageNoFields))
 	}
@@ -98,7 +100,8 @@ func (h *HoldingHandler) UpdateHolding(c echo.Context) error {
 		kind = &k
 	}
 
-	updated, err := h.holdings.Update(c.Request().Context(), id, req.Name, kind, req.IsArchived)
+	updated, err := h.holdings.Update(c.Request().Context(), id, req.Name, kind, req.IsArchived,
+		req.MonthlyIncomeMinor, req.MonthlyExpenseMinor)
 	if err != nil {
 		return respondHoldingError(c, err)
 	}
@@ -196,7 +199,11 @@ func parseHoldingValuePath(c echo.Context) (uuid.UUID, date.Date, error) {
 }
 
 func respondHoldingError(c echo.Context, err error) error {
-	var field string
+	var (
+		field   string
+		message = err.Error()
+		planErr *holding.PlanError
+	)
 	switch {
 	case errors.Is(err, holding.ErrNotFound):
 		return respondError(c, http.StatusNotFound, ErrCodeHoldingNotFound, ErrMessageHoldingNotFound)
@@ -214,12 +221,15 @@ func respondHoldingError(c echo.Context, err error) error {
 		field = fieldValueMinor
 	case errors.Is(err, holding.ErrValueDateFuture):
 		field = fieldDate
+	case errors.As(err, &planErr):
+		// На PUT ошибка приходит обёрнутой сервисом, а текст уходит клиенту в поле формы.
+		field, message = planErr.Field, planErr.Error()
 	default:
 		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 
 	return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
-		ErrorDetail{Field: field, Message: err.Error(), Code: ErrCodeValidationError})
+		ErrorDetail{Field: field, Message: message, Code: ErrCodeValidationError})
 }
 
 func toHoldingResponse(h *holding.Holding) HoldingResponse {
@@ -231,6 +241,10 @@ func toHoldingResponse(h *holding.Holding) HoldingResponse {
 		IsArchived: h.IsArchived,
 		CreatedAt:  h.CreatedAt,
 		UpdatedAt:  h.UpdatedAt,
+
+		MonthlyIncomeMinor:  h.Plan.MonthlyIncomeMinor,
+		MonthlyExpenseMinor: h.Plan.MonthlyExpenseMinor,
+		PlanUpdatedAt:       h.Plan.UpdatedAt,
 	}
 	if h.Current != nil {
 		resp.Current = &HoldingCurrentResponse{Date: h.Current.Date, ValueMinor: h.Current.ValueMinor}

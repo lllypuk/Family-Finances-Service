@@ -1,5 +1,6 @@
 package tech.shatrov.familyfinances.ui.networth
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -25,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.core.api.HoldingSide
 import tech.shatrov.familyfinances.theme.Dimens
@@ -33,6 +36,7 @@ import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
 import tech.shatrov.familyfinances.ui.FieldError
 import tech.shatrov.familyfinances.ui.SegmentedChoice
+import tech.shatrov.familyfinances.ui.currencySuffix
 import tech.shatrov.familyfinances.ui.message
 import tech.shatrov.familyfinances.ui.settings.SettingsHeader
 
@@ -40,9 +44,12 @@ import tech.shatrov.familyfinances.ui.settings.SettingsHeader
 @Composable
 fun HoldingEditScreen(
     state: HoldingEditUiState,
+    currency: String,
     onSideChange: (HoldingSide) -> Unit,
     onNameChange: (String) -> Unit,
     onKindChange: (HoldingKind) -> Unit,
+    onIncomeChange: (String) -> Unit,
+    onExpenseChange: (String) -> Unit,
     onSubmit: () -> Unit,
     onToggleArchive: (zeroFirst: Boolean) -> Unit,
     onDelete: () -> Unit,
@@ -79,9 +86,12 @@ fun HoldingEditScreen(
 
             else -> Form(
                 state = state,
+                currency = currency,
                 onSideChange = onSideChange,
                 onNameChange = onNameChange,
                 onKindChange = onKindChange,
+                onIncomeChange = onIncomeChange,
+                onExpenseChange = onExpenseChange,
                 onSubmit = onSubmit,
                 onArchive = {
                     if (state.archiveNeedsZero) zeroOfferShown = true else onToggleArchive(false)
@@ -140,9 +150,12 @@ fun HoldingEditScreen(
 @Composable
 private fun Form(
     state: HoldingEditUiState,
+    currency: String,
     onSideChange: (HoldingSide) -> Unit,
     onNameChange: (String) -> Unit,
     onKindChange: (HoldingKind) -> Unit,
+    onIncomeChange: (String) -> Unit,
+    onExpenseChange: (String) -> Unit,
     onSubmit: () -> Unit,
     onArchive: () -> Unit,
     onDelete: () -> Unit,
@@ -182,6 +195,31 @@ private fun Form(
             )
         }
     }
+
+    Text(stringResource(R.string.holding_plan), style = MaterialTheme.typography.labelLarge)
+    PlanField(
+        value = state.income,
+        parsed = state.incomeMinor,
+        serverError = state.fieldErrors[HOLDING_FIELD_INCOME],
+        label = R.string.holding_plan_income,
+        currency = currency,
+        enabled = !state.submitting,
+        onChange = onIncomeChange,
+    )
+    PlanField(
+        value = state.expense,
+        parsed = state.expenseMinor,
+        serverError = state.fieldErrors[HOLDING_FIELD_EXPENSE],
+        label = R.string.holding_plan_expense,
+        currency = currency,
+        enabled = !state.submitting,
+        onChange = onExpenseChange,
+    )
+    Text(
+        text = stringResource(R.string.holding_plan_hint),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 
     if (state.archived) {
         Text(
@@ -238,4 +276,30 @@ private fun Form(
             Text(stringResource(R.string.holding_delete), color = MaterialTheme.colorScheme.error)
         }
     }
+}
+
+/** Число плана; [parsed] `null` — ввод не читается, и ошибка видна до отправки. */
+@Composable
+private fun PlanField(
+    value: String,
+    parsed: Long?,
+    serverError: String?,
+    @StringRes label: Int,
+    currency: String,
+    enabled: Boolean,
+    onChange: (String) -> Unit,
+) {
+    val error = serverError ?: stringResource(R.string.holding_plan_error_amount).takeIf { parsed == null }
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        label = { Text(stringResource(label)) },
+        suffix = currencySuffix(currency),
+        singleLine = true,
+        enabled = enabled,
+        isError = error != null,
+        supportingText = { FieldError(error) },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        modifier = Modifier.fillMaxWidth(),
+    )
 }

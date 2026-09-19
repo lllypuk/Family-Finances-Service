@@ -41,6 +41,9 @@ import kotlinx.serialization.Contextual
  * @param current Последний снимок не позже сегодняшнего дня семьи; `null` — снимков нет
  * @param createdAt Служебная метка времени, RFC3339 UTC
  * @param updatedAt Служебная метка времени, RFC3339 UTC
+ * @param monthlyIncomeMinor Плановые средние поступления в месяц; `0` — не заданы. Сервер `v0.8.0+` шлёт всегда, в `required` нет, чтобы клиент разбирал ответ сервера без планов. 
+ * @param monthlyExpenseMinor Плановые средние выплаты в месяц; `0` — не заданы. Как `monthly_income_minor`
+ * @param planUpdatedAt Время последней правки чисел плана; нет поля — плана нет. Переименование и архив его не двигают
  */
 @Serializable
 
@@ -72,7 +75,19 @@ data class Holding (
 
     /* Служебная метка времени, RFC3339 UTC */
     @Contextual @SerialName(value = "updated_at")
-    val updatedAt: java.time.OffsetDateTime
+    val updatedAt: java.time.OffsetDateTime,
+
+    /* Плановые средние поступления в месяц; `0` — не заданы. Сервер `v0.8.0+` шлёт всегда, в `required` нет, чтобы клиент разбирал ответ сервера без планов.  */
+    @SerialName(value = "monthly_income_minor")
+    val monthlyIncomeMinor: kotlin.Long? = null,
+
+    /* Плановые средние выплаты в месяц; `0` — не заданы. Как `monthly_income_minor` */
+    @SerialName(value = "monthly_expense_minor")
+    val monthlyExpenseMinor: kotlin.Long? = null,
+
+    /* Время последней правки чисел плана; нет поля — плана нет. Переименование и архив его не двигают */
+    @Contextual @SerialName(value = "plan_updated_at")
+    val planUpdatedAt: java.time.OffsetDateTime? = null
 
 ) {
 

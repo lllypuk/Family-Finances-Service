@@ -210,6 +210,15 @@ func TestFamilyRepository_HasMonetaryData(t *testing.T) {
 
 	_, err = db.ExecContext(ctx, `DELETE FROM holding_values`)
 	require.NoError(t, err)
+	_, err = db.ExecContext(ctx,
+		`INSERT INTO holding_plans (holding_id, monthly_income_minor) VALUES (?, 100)`, holdingID)
+	require.NoError(t, err)
+	has, err = repo.HasMonetaryData(ctx)
+	require.NoError(t, err)
+	assert.True(t, has, "план архивной позиции тоже блокирует валюту")
+
+	_, err = db.ExecContext(ctx, `DELETE FROM holding_plans`)
+	require.NoError(t, err)
 	userID, err := helper.CreateTestUser(ctx, "m@example.com", "M", "U", "admin", familyID)
 	require.NoError(t, err)
 	categoryID, err := helper.CreateTestCategory(ctx, "Food", "expense", familyID, nil)

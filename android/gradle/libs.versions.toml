@@ -4,8 +4,8 @@ compileSdk = "37"
 targetSdk = "37"
 minSdk = "26"
 jvmTarget = "17"
-appVersionCode = "9"
-appVersionName = "0.9.0"
+appVersionCode = "10"
+appVersionName = "0.10.0"
 
 agp = "9.3.2"
 # Kotlin той же версии, что у соседнего проекта: AGP 9 несёт свой, более старый,

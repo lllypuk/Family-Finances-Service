@@ -30,7 +30,7 @@ func TestMigrations_UpAndDownOnEmptyDatabase(t *testing.T) {
 	t.Cleanup(func() { assert.NoError(t, db.Close()) })
 
 	tables := []string{"families", "users", "categories", "transactions", "budgets", "sessions",
-		"accounts", "account_reconciliations", "holdings", "holding_values"}
+		"accounts", "account_reconciliations", "holdings", "holding_values", "holding_plans"}
 	for _, table := range tables {
 		var count int
 		require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&count), table)
@@ -369,6 +369,83 @@ func TestMigrations_HoldingsSchemaMatchesFreshInstall(t *testing.T) {
 	for _, table := range []string{"holdings", "holding_values"} {
 		assert.Equal(t, schemaOf(ctx, t, fresh, table), schemaOf(ctx, t, upgraded, table), table)
 	}
+}
+
+// 007 на живой базе версии 6: план появляется, позиции и снимки не трогаются; откат теряет только планы.
+func TestMigrations_HoldingPlansUpgradeAndRollback(t *testing.T) {
+	ctx := t.Context()
+	manager, db := migratedDB(t)
+	require.NoError(t, manager.Migrate(6))
+	assert.Equal(t, 0, objectCount(ctx, t, db, "name = 'holding_plans'"))
+
+	familyID, _, _ := seedForChecks(ctx, t, db)
+	for _, id := range []string{"h-1", "h-2"} {
+		_, err := db.ExecContext(ctx, `
+			INSERT INTO holdings (id, family_id, name, name_key, side, kind) VALUES (?, ?, ?, ?, 'asset', 'deposit')`,
+			id, familyID, id, id)
+		require.NoError(t, err)
+		_, err = db.ExecContext(ctx,
+			`INSERT INTO holding_values (holding_id, date, value_minor) VALUES (?, '2026-09-01', 500)`, id)
+		require.NoError(t, err)
+	}
+
+	require.NoError(t, manager.Up())
+	assert.Equal(t, 2, rowCount(ctx, t, db, "holdings"))
+	assert.Equal(t, 2, rowCount(ctx, t, db, "holding_values"))
+
+	// Каскад работает только с foreign_keys=ON, а pragma живёт на соединении.
+	conn, err := db.Conn(ctx)
+	require.NoError(t, err)
+	defer func() { assert.NoError(t, conn.Close()) }()
+	_, err = conn.ExecContext(ctx, "PRAGMA foreign_keys = ON")
+	require.NoError(t, err)
+
+	const insertPlan = `
+		INSERT INTO holding_plans (holding_id, monthly_income_minor, monthly_expense_minor) VALUES (?, ?, ?)`
+	_, err = conn.ExecContext(ctx, insertPlan, "h-1", 0, 0)
+	require.Error(t, err, "план 0/0 обязан отбиваться CHECK-ом")
+	_, err = conn.ExecContext(ctx, insertPlan, "h-1", -1, 100)
+	require.Error(t, err, "отрицательный доход обязан отбиваться CHECK-ом")
+	_, err = conn.ExecContext(ctx, insertPlan, "h-1", 100, -1)
+	require.Error(t, err, "отрицательный расход обязан отбиваться CHECK-ом")
+	_, err = conn.ExecContext(ctx, insertPlan, "h-1", 4500000, 0)
+	require.NoError(t, err)
+	_, err = conn.ExecContext(ctx, insertPlan, "h-2", 0, 830000)
+	require.NoError(t, err)
+
+	_, err = conn.ExecContext(ctx, "DELETE FROM holdings WHERE id = 'h-2'")
+	require.NoError(t, err)
+	var plans int
+	require.NoError(t, conn.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM holding_plans WHERE holding_id = 'h-2'").Scan(&plans))
+	assert.Equal(t, 0, plans, "удаление позиции уносит план")
+
+	require.NoError(t, manager.Migrate(6))
+	assert.Equal(t, 0, objectCount(ctx, t, db, "name = 'holding_plans'"), "откат теряет планы")
+	assert.Equal(t, 1, rowCount(ctx, t, db, "holdings"))
+	assert.Equal(t, 1, rowCount(ctx, t, db, "holding_values"))
+
+	require.NoError(t, manager.Up())
+	assert.Equal(t, 0, rowCount(ctx, t, db, "holding_plans"))
+	assert.Equal(t, 1, rowCount(ctx, t, db, "holdings"))
+}
+
+// Живая база (v6 → 007) и свежая (001 уже с планами) обязаны прийти к одной схеме.
+func TestMigrations_HoldingPlansSchemaMatchesFreshInstall(t *testing.T) {
+	ctx := t.Context()
+	_, fresh := migratedDB(t)
+	upgradedManager, upgraded := migratedDB(t)
+	require.NoError(t, upgradedManager.Migrate(6))
+	require.NoError(t, upgradedManager.Up())
+
+	assert.Equal(t, schemaOf(ctx, t, fresh, "holding_plans"), schemaOf(ctx, t, upgraded, "holding_plans"))
+}
+
+func rowCount(ctx context.Context, t *testing.T, db *sql.DB, table string) int {
+	t.Helper()
+	var count int
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&count))
+	return count
 }
 
 func migratedDB(t *testing.T) (*infrastructure.MigrationManager, *sql.DB) {

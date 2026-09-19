@@ -2,6 +2,16 @@
 
 All notable changes to database migrations will be documented in this file.
 
+## [2026-09-19] - Plan 18: holding monthly plans
+
+### Added
+- `holding_plans` (PK `holding_id`, FK `CASCADE`, оба числа `>= 0`, CHECK «хоть одно больше нуля»):
+  строка есть, пока план ненулевой.
+- `007_holding_plans.{up,down}.sql` — таблица новая, `CREATE ... IF NOT EXISTS`, на свежей базе — no-op.
+
+### Rollback
+- `007.down` удаляет таблицу: теряются все планы, позиции и снимки остаются. Перед `migrate --to 6` — бэкап.
+
 ## [2026-09-18] - Plan 17: holdings and net worth
 
 ### Added

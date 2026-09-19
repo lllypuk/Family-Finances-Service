@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/domain/holding"
+	"family-budget-service/internal/domain/money"
 )
 
 func TestValidKind(t *testing.T) {
@@ -55,4 +56,31 @@ func TestNormalizeName(t *testing.T) {
 
 	_, err = holding.NormalizeName(strings.Repeat("я", holding.MaxNameLength+1))
 	require.ErrorIs(t, err, holding.ErrNameLong)
+}
+
+func TestCheckPlan(t *testing.T) {
+	tests := []struct {
+		name            string
+		income, expense money.Minor
+		field           string
+	}{
+		{"zero", 0, 0, ""},
+		{"max", money.MaxAmount, money.MaxAmount, ""},
+		{"negative income", -1, 0, holding.FieldMonthlyIncome},
+		{"income over max", money.MaxAmount + 1, 0, holding.FieldMonthlyIncome},
+		{"negative expense", 5, -1, holding.FieldMonthlyExpense},
+		{"expense over max", 0, money.MaxAmount + 1, holding.FieldMonthlyExpense},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := holding.CheckPlan(tt.income, tt.expense)
+			if tt.field == "" {
+				require.NoError(t, err)
+				return
+			}
+			var planErr *holding.PlanError
+			require.ErrorAs(t, err, &planErr)
+			assert.Equal(t, tt.field, planErr.Field)
+		})
+	}
 }

@@ -235,3 +235,85 @@ func TestHoldingsAPI_ZeroValueLocksCurrency(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, rec.Code, rec.Body.String())
 	assert.Equal(t, handlers.ErrCodeCurrencyLocked, errorCodeOf(t, rec))
 }
+
+func planFieldOf(t *testing.T, rec *httptest.ResponseRecorder) string {
+	t.Helper()
+
+	var resp handlers.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Error.Details, 1)
+
+	return resp.Error.Details[0].Field
+}
+
+func TestHoldingsAPI_Plan(t *testing.T) {
+	ts := testhelpers.SetupHTTPServer(t)
+	admin := ts.Auth(t)
+
+	rec := doAccountRequest(t, ts, admin, http.MethodPost, "/api/v1/holdings",
+		`{"name":"Квартира","side":"asset","kind":"property",`+
+			`"monthly_income_minor":4500000,"monthly_expense_minor":830000}`)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	created := decodeHolding(t, rec)
+	assert.Equal(t, money.Minor(4_500_000), created.MonthlyIncomeMinor)
+	assert.Equal(t, money.Minor(830_000), created.MonthlyExpenseMinor)
+	require.NotNil(t, created.PlanUpdatedAt)
+	path := "/api/v1/holdings/" + created.ID.String()
+
+	rec = doAccountRequest(t, ts, admin, http.MethodPut, path, `{"monthly_expense_minor":900000}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+	got := decodeHolding(t, rec)
+	assert.Equal(t, money.Minor(4_500_000), got.MonthlyIncomeMinor)
+	assert.Equal(t, money.Minor(900_000), got.MonthlyExpenseMinor)
+
+	rec = doAccountRequest(t, ts, admin, http.MethodPut, path, `{"name":"Квартира на Лесной"}`)
+	require.Equal(t, http.StatusOK, rec.Code, "так шлёт клиент 0.9.0")
+	renamed := decodeHolding(t, rec)
+	assert.Equal(t, money.Minor(900_000), renamed.MonthlyExpenseMinor)
+	require.NotNil(t, renamed.PlanUpdatedAt)
+	assert.True(t, got.PlanUpdatedAt.Equal(*renamed.PlanUpdatedAt))
+
+	repeat := doAccountRequest(t, ts, admin, http.MethodPost, "/api/v1/holdings",
+		`{"id":"`+created.ID.String()+`","name":"Квартира","side":"asset","kind":"property",`+
+			`"monthly_income_minor":1}`)
+	require.Equal(t, http.StatusOK, repeat.Code)
+	assert.Equal(t, money.Minor(4_500_000), decodeHolding(t, repeat).MonthlyIncomeMinor, "план повтора не применяется")
+
+	rec = doAccountRequest(t, ts, admin, http.MethodPut, path, `{"monthly_income_minor":0,"monthly_expense_minor":0}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"monthly_income_minor":0`)
+	assert.NotContains(t, rec.Body.String(), "plan_updated_at")
+
+	rec = doAccountRequest(t, ts, admin, http.MethodPost, "/api/v1/holdings",
+		`{"name":"Кредитка","side":"liability","kind":"credit_card","monthly_income_minor":50000}`)
+	require.Equal(t, http.StatusCreated, rec.Code, "доход у пассива законен")
+	assert.Equal(t, money.Minor(50_000), decodeHolding(t, rec).MonthlyIncomeMinor)
+}
+
+func TestHoldingsAPI_PlanValidation(t *testing.T) {
+	ts := testhelpers.SetupHTTPServer(t)
+	admin := ts.Auth(t)
+
+	rec := doAccountRequest(t, ts, admin, http.MethodPost, "/api/v1/holdings",
+		`{"name":"Вклад","side":"asset","kind":"deposit","monthly_income_minor":-1}`)
+	require.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+	assert.Equal(t, "monthly_income_minor", planFieldOf(t, rec))
+
+	created := decodeHolding(t, doAccountRequest(t, ts, admin, http.MethodPost, "/api/v1/holdings",
+		`{"name":"Вклад","side":"asset","kind":"deposit"}`))
+	path := "/api/v1/holdings/" + created.ID.String()
+
+	rec = doAccountRequest(t, ts, admin, http.MethodPut, path, `{"monthly_expense_minor":100000000000}`)
+	require.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+	assert.Equal(t, "monthly_expense_minor", planFieldOf(t, rec))
+
+	rec = doAccountRequest(t, ts, admin, http.MethodPut, path, `{"name":"Вклад Сбер","monthly_income_minor":-5}`)
+	require.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+	assert.Equal(t, []string{"Вклад"}, listHoldingNames(t, ts, "/api/v1/holdings"),
+		"отказ плана откатывает переименование")
+
+	_, member := ts.AuthAs(t, user.RoleMember)
+	rec = doAccountRequest(t, ts, member, http.MethodPut, path, `{"monthly_income_minor":320000}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, money.Minor(320_000), decodeHolding(t, rec).MonthlyIncomeMinor)
+}

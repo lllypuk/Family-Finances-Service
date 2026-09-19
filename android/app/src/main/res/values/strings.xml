@@ -149,6 +149,16 @@
     <string name="net_worth_add">Добавить позицию</string>
     <string name="net_worth_no_value">нет значения</string>
     <string name="net_worth_edit_holding">Изменить позицию</string>
+    <string name="net_worth_plan">План в месяц</string>
+    <string name="net_worth_plan_average">среднее</string>
+    <plurals name="net_worth_plan_coverage">
+        <item quantity="one">среднее · по %1$d из %2$d позиции</item>
+        <item quantity="few">среднее · по %1$d из %2$d позиций</item>
+        <item quantity="many">среднее · по %1$d из %2$d позиций</item>
+        <item quantity="other">среднее · по %1$d из %2$d позиции</item>
+    </plurals>
+    <string name="net_worth_plan_row">в мес</string>
+    <string name="net_worth_plan_row_dated">в мес · план от %1$s</string>
     <string name="holding_value_amount">Сумма</string>
     <string name="holding_value_date">Дата: %1$s</string>
     <string name="holding_value_save">Сохранить</string>
@@ -174,6 +184,12 @@
     <string name="holding_archive_only">Только в архив</string>
     <string name="holding_delete">Удалить</string>
     <string name="holding_delete_confirm">Удалить позицию вместе со всеми снимками?</string>
+    <string name="holding_plan">План в месяц</string>
+    <string name="holding_plan_income">Поступления</string>
+    <string name="holding_plan_expense">Выплаты</string>
+    <string name="holding_plan_hint">Среднее за месяц; годовые — поделив на 12</string>
+    <string name="holding_plan_error_amount">Введите сумму, например 45000,00</string>
+    <string name="holding_error_beyond_page">Позиций больше, чем помещается в список: эту форма не нашла</string>
     <string name="holding_error_name_exists">Позиция с таким названием уже есть, возможно в архиве</string>
     <string name="holding_kind_cash">Наличные</string>
     <string name="holding_kind_deposit">Вклад</string>
@@ -256,7 +272,7 @@
     <string name="settings_family_currency_hint">Код ISO 4217, например RUB</string>
     <string name="settings_family_timezone">Часовой пояс</string>
     <string name="settings_family_timezone_hint">Имя IANA, например Europe/Moscow</string>
-    <string name="settings_error_currency_locked">Валюту нельзя сменить: в семье уже есть операции, сверки или снимки стоимости</string>
+    <string name="settings_error_currency_locked">Валюту нельзя сменить: в семье уже есть операции, сверки, снимки стоимости или планы позиций</string>
     <string name="settings_error_last_admin">В семье должен остаться хотя бы один активный администратор</string>
     <string name="settings_error_deactivate_self">Себя деактивировать нельзя</string>
     <string name="settings_backup_create">Создать копию</string>

@@ -17,6 +17,8 @@ import tech.shatrov.familyfinances.core.api.HoldingValueRequest
 import tech.shatrov.familyfinances.core.api.UpdateHoldingRequest
 import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import tech.shatrov.familyfinances.ui.UiError
+import tech.shatrov.familyfinances.ui.format.formatAmountInput
+import tech.shatrov.familyfinances.ui.format.parseAmountMinor
 import tech.shatrov.familyfinances.ui.toUiError
 import java.time.LocalDate
 import java.util.UUID
@@ -27,8 +29,14 @@ internal const val HOLDING_LIMIT = 200
 /** Верхняя граница контракта для `name`. */
 const val HOLDING_NAME_MAX = 50
 
-/** Имя поля формы — то же, что в `error.details[].field`. */
+/** Имена полей формы — те же, что в `error.details[].field`. */
 const val HOLDING_FIELD_NAME = "name"
+
+const val HOLDING_FIELD_INCOME = "monthly_income_minor"
+
+const val HOLDING_FIELD_EXPENSE = "monthly_expense_minor"
+
+private val HOLDING_FORM_FIELDS = setOf(HOLDING_FIELD_NAME, HOLDING_FIELD_INCOME, HOLDING_FIELD_EXPENSE)
 
 private const val HOLDING_NAME_EXISTS = "HOLDING_NAME_EXISTS"
 
@@ -72,6 +80,8 @@ data class HoldingEditUiState(
     val side: HoldingSide,
     val name: String = "",
     val kind: String = HoldingKind.OTHER.wire,
+    val income: String = "",
+    val expense: String = "",
     val saved: Holding? = null,
     val loading: Boolean = false,
     val loadError: UiError? = null,
@@ -89,14 +99,32 @@ data class HoldingEditUiState(
     /** Архив без нулевого снимка оставил бы последнюю стоимость в капитале. */
     val archiveNeedsZero: Boolean get() = !archived && (saved?.current?.valueMinor ?: 0L) != 0L
 
+    /** `null` — введено не число; пустое поле — `0`, то есть «плана нет». */
+    val incomeMinor: Long? get() = planMinor(income)
+
+    val expenseMinor: Long? get() = planMinor(expense)
+
     val canSubmit: Boolean
         get() {
             val trimmed = name.trim()
             if (trimmed.isEmpty() || trimmed.length > HOLDING_NAME_MAX || submitting || loading) return false
+            val income = incomeMinor ?: return false
+            val expense = expenseMinor ?: return false
             val before = saved ?: return true
-            return trimmed != before.name || kind != before.kind
+            return trimmed != before.name || kind != before.kind ||
+                income != before.incomeMinor || expense != before.expenseMinor
         }
 }
+
+private fun planMinor(text: String): Long? = if (text.isBlank()) 0L else parseAmountMinor(text)
+
+/** Сервер до `v0.8.0` полей плана не шлёт: для формы это «плана нет». */
+internal val Holding.incomeMinor: Long get() = monthlyIncomeMinor ?: 0L
+
+internal val Holding.expenseMinor: Long get() = monthlyExpenseMinor ?: 0L
+
+/** Сохранённый `0` открывается пустым полем, а не «0». */
+private fun planInput(minor: Long): String = if (minor == 0L) "" else formatAmountInput(minor)
 
 /** Создание, правка, архив и удаление позиции (удаление — только админу, снимки уходят каскадом). */
 class HoldingEditViewModel(
@@ -130,15 +158,27 @@ class HoldingEditViewModel(
         mutable.update { it.copy(loading = true, loadError = null) }
         viewModelScope.launch {
             try {
-                val found = api.client
-                    .unwrap { api.holdings.listHoldings(limit = HOLDING_LIMIT, archived = true) }
-                    .`data`
-                    .firstOrNull { it.id == id }
+                val page = api.client.unwrap { api.holdings.listHoldings(limit = HOLDING_LIMIT, archived = true) }
+                val found = page.`data`.firstOrNull { it.id == id }
                 mutable.update {
-                    if (found == null) {
-                        it.copy(loading = false, done = true)
-                    } else {
-                        it.copy(loading = false, saved = found, side = found.side, name = found.name, kind = found.kind)
+                    when {
+                        found != null -> it.copy(
+                            loading = false,
+                            saved = found,
+                            side = found.side,
+                            name = found.name,
+                            kind = found.kind,
+                            income = planInput(found.incomeMinor),
+                            expense = planInput(found.expenseMinor),
+                        )
+
+                        // Позиция может быть за первой страницей: закрыть форму значило бы соврать, что её нет.
+                        page.meta.pagination.total > page.`data`.size -> it.copy(
+                            loading = false,
+                            loadError = UiError.Resource(R.string.holding_error_beyond_page),
+                        )
+
+                        else -> it.copy(loading = false, done = true)
                     }
                 }
             } catch (failure: ApiFailure) {
@@ -161,22 +201,41 @@ class HoldingEditViewModel(
         mutable.update { it.copy(kind = kind.wire) }
     }
 
+    fun onIncomeChange(income: String) {
+        mutable.update { it.copy(income = income, fieldErrors = it.fieldErrors - HOLDING_FIELD_INCOME) }
+    }
+
+    fun onExpenseChange(expense: String) {
+        mutable.update { it.copy(expense = expense, fieldErrors = it.fieldErrors - HOLDING_FIELD_EXPENSE) }
+    }
+
     fun onSubmit() {
         val current = mutable.value
         if (!current.canSubmit) return
         val name = current.name.trim()
+        val income = current.incomeMinor ?: return
+        val expense = current.expenseMinor ?: return
         val saved = current.saved
         mutate {
             if (saved == null) {
                 api.client.unwrap {
                     api.holdings.createHolding(
-                        CreateHoldingRequest(name = name, side = current.side, kind = current.kind, id = current.draft),
+                        CreateHoldingRequest(
+                            name = name,
+                            side = current.side,
+                            kind = current.kind,
+                            id = current.draft,
+                            monthlyIncomeMinor = income.takeIf { it != 0L },
+                            monthlyExpenseMinor = expense.takeIf { it != 0L },
+                        ),
                     )
                 }
             } else {
                 val request = UpdateHoldingRequest(
                     name = name.takeIf { it != saved.name },
                     kind = current.kind.takeIf { it != saved.kind },
+                    monthlyIncomeMinor = income.takeIf { it != saved.incomeMinor },
+                    monthlyExpenseMinor = expense.takeIf { it != saved.expenseMinor },
                 )
                 api.client.unwrap { api.holdings.updateHolding(saved.id, request) }
             }
@@ -228,11 +287,11 @@ class HoldingEditViewModel(
 
 private fun HoldingEditUiState.failed(failure: ApiFailure): HoldingEditUiState {
     val details = (failure as? ApiFailure.Api)?.details.orEmpty()
-    val underName = details.filter { it.`field` == HOLDING_FIELD_NAME }.associate { it.`field` to it.message }
+    val underFields = details.filter { it.`field` in HOLDING_FORM_FIELDS }.associate { it.`field` to it.message }
     return copy(
         submitting = false,
-        fieldErrors = underName,
-        error = if (details.isNotEmpty() && underName.size == details.size) {
+        fieldErrors = underFields,
+        error = if (details.isNotEmpty() && underFields.size == details.size) {
             null
         } else {
             failure.toUiError(mapOf(HOLDING_NAME_EXISTS to R.string.holding_error_name_exists))
