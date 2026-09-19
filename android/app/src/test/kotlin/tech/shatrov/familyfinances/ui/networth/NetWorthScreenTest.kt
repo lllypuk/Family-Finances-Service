@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasAnyAncestor
@@ -13,6 +14,7 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -27,6 +29,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import tech.shatrov.familyfinances.FLAT_ID
+import tech.shatrov.familyfinances.MORTGAGE_ID
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.ROBOLECTRIC_SDK
 import tech.shatrov.familyfinances.core.api.Holding
@@ -35,6 +38,7 @@ import tech.shatrov.familyfinances.core.api.HoldingSide
 import tech.shatrov.familyfinances.theme.AppTheme
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import java.util.UUID
 
 /** Капитал: пустое состояние ведёт в форму обеих сторон, лист снимка, необратимое — через подтверждение. */
@@ -77,6 +81,7 @@ class NetWorthScreenTest {
                     state = NetWorthUiState.Ready(emptyList(), emptyList(), emptyList(), months = emptyList()),
                     currency = "RUB",
                     today = today,
+                    zone = ZoneOffset.UTC,
                     onRetry = {},
                     onAdd = { added += it },
                     onOpenValue = {},
@@ -89,6 +94,40 @@ class NetWorthScreenTest {
         composeRule.onNode(hasText(res.getString(R.string.net_worth_add_asset)) and hasClickAction()).performClick()
         composeRule.onNode(hasText(res.getString(R.string.net_worth_add_liability)) and hasClickAction()).performClick()
         assertEquals(listOf(HoldingSide.asset, HoldingSide.liability), added)
+    }
+
+    @Test
+    fun planLineIsShownOnlyForHoldingWithPlan() {
+        val planned = flat.copy(
+            monthlyIncomeMinor = 4_500_000L,
+            monthlyExpenseMinor = 830_000L,
+            planUpdatedAt = OffsetDateTime.parse("2026-03-05T10:00:00Z"),
+        )
+        val mortgage = flat.copy(id = UUID.fromString(MORTGAGE_ID), name = "Ипотека", side = HoldingSide.liability)
+        composeRule.setContent {
+            AppTheme {
+                NetWorthScreen(
+                    state = NetWorthUiState.Ready(
+                        assets = listOf(HoldingRow(planned, HoldingKind.PROPERTY)),
+                        liabilities = listOf(HoldingRow(mortgage, HoldingKind.of("mortgage"))),
+                        archived = emptyList(),
+                        months = emptyList(),
+                    ),
+                    currency = "RUB",
+                    today = today,
+                    zone = ZoneOffset.UTC,
+                    onRetry = {},
+                    onAdd = {},
+                    onOpenValue = {},
+                    onEdit = {},
+                )
+            }
+        }
+
+        composeRule
+            .onNodeWithText("+45\u00A0000,00\u00A0₽ · -8\u00A0300,00\u00A0₽ в мес · план от 03.2026")
+            .assertExists()
+        composeRule.onAllNodesWithText("в мес", substring = true).assertCountEquals(1)
     }
 
     @Test

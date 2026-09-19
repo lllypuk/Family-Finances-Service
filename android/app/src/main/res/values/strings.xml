@@ -149,6 +149,16 @@
     <string name="net_worth_add">Добавить позицию</string>
     <string name="net_worth_no_value">нет значения</string>
     <string name="net_worth_edit_holding">Изменить позицию</string>
+    <string name="net_worth_plan">План в месяц</string>
+    <string name="net_worth_plan_average">среднее</string>
+    <plurals name="net_worth_plan_coverage">
+        <item quantity="one">среднее · по %1$d из %2$d позиции</item>
+        <item quantity="few">среднее · по %1$d из %2$d позиций</item>
+        <item quantity="many">среднее · по %1$d из %2$d позиций</item>
+        <item quantity="other">среднее · по %1$d из %2$d позиции</item>
+    </plurals>
+    <string name="net_worth_plan_row">в мес</string>
+    <string name="net_worth_plan_row_dated">в мес · план от %1$s</string>
     <string name="holding_value_amount">Сумма</string>
     <string name="holding_value_date">Дата: %1$s</string>
     <string name="holding_value_save">Сохранить</string>

@@ -14,6 +14,7 @@ private val dayMonthYear = DateTimeFormatter.ofPattern("d MMMM yyyy", locale)
 private val dayMonthYearTime = DateTimeFormatter.ofPattern("d MMMM yyyy, HH:mm", locale)
 private val monthYear = DateTimeFormatter.ofPattern("LLLL yyyy", locale)
 private val monthName = DateTimeFormatter.ofPattern("LLLL", locale)
+private val monthNumber = DateTimeFormatter.ofPattern("MM.yyyy", locale)
 
 /** Дата операции: год показывается только чужой — в списке за текущий месяц он лишний шум. */
 fun formatDay(
@@ -41,3 +42,9 @@ fun formatDateTime(
     at: OffsetDateTime,
     zone: ZoneId,
 ): String = at.atZoneSameInstant(zone).format(dayMonthYearTime)
+
+/** Месяц правки плана «03.2026» в зоне семьи: на стыке месяцев телефон в поездке показал бы соседний. */
+fun formatPlanMonth(
+    at: OffsetDateTime,
+    zone: ZoneId,
+): String = at.atZoneSameInstant(zone).format(monthNumber)

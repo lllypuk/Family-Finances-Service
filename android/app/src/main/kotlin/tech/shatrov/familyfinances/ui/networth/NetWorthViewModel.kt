@@ -24,6 +24,19 @@ data class HoldingRow(
     val kind: HoldingKind,
 )
 
+/**
+ * Итог «План в месяц» по неархивным позициям: проданная квартира аренду не приносит.
+ * [planned] из [active] — сколько позиций с планом: незаполненная ипотека в сумме выглядит бесплатной.
+ */
+data class PlanTotal(
+    val incomeMinor: Long,
+    val expenseMinor: Long,
+    val planned: Int,
+    val active: Int,
+) {
+    val netMinor: Long get() = incomeMinor - expenseMinor
+}
+
 sealed interface NetWorthUiState {
     data object Loading : NetWorthUiState
 
@@ -31,13 +44,15 @@ sealed interface NetWorthUiState {
 
     /**
      * [months] — ряд по умолчанию (`to` = сегодня), [latest] — его последняя корзина: итог берётся из неё,
-     * а не суммой строк, потому что архивные позиции в капитале остаются.
+     * а не суммой строк, потому что архивные позиции в капитале остаются. [plan] — `null`, когда планов нет
+     * или список не уместился в страницу: итог по части позиций был бы неверным.
      */
     data class Ready(
         val assets: List<HoldingRow>,
         val liabilities: List<HoldingRow>,
         val archived: List<HoldingRow>,
         val months: List<NetWorthMonth>,
+        val plan: PlanTotal? = null,
     ) : NetWorthUiState {
         val latest: NetWorthMonth? get() = months.lastOrNull()
 
@@ -80,9 +95,8 @@ class NetWorthViewModel(
         mutable.value = NetWorthUiState.Loading
         job = viewModelScope.launch {
             mutable.value = try {
-                val holdings = api.client
-                    .unwrap { api.holdings.listHoldings(limit = HOLDING_LIMIT, archived = true) }
-                    .`data`
+                val page = api.client.unwrap { api.holdings.listHoldings(limit = HOLDING_LIMIT, archived = true) }
+                val holdings = page.`data`
                 val series = api.client.unwrap { api.stats.getNetWorthStats() }.`data`
                 val rows = holdings.map { HoldingRow(it, HoldingKind.of(it.kind)) }
                 val (archived, active) = rows.partition { it.holding.isArchived }
@@ -91,6 +105,7 @@ class NetWorthViewModel(
                     liabilities = active.filter { it.holding.side == HoldingSide.liability },
                     archived = archived,
                     months = series.months,
+                    plan = if (page.meta.pagination.total > holdings.size) null else planTotal(active),
                 )
             } catch (failure: ApiFailure) {
                 NetWorthUiState.Failure(failure.toUiError())
@@ -118,3 +133,18 @@ class NetWorthViewModel(
 
     fun onSaveValue() = values.onSave()
 }
+
+private fun planTotal(active: List<HoldingRow>): PlanTotal? {
+    val planned = active.map { it.holding }.filter { it.hasPlan }
+    if (planned.isEmpty()) return null
+    return PlanTotal(
+        incomeMinor = planned.sumOf { it.monthlyIncomeMinor ?: 0 },
+        expenseMinor = planned.sumOf { it.monthlyExpenseMinor ?: 0 },
+        planned = planned.size,
+        active = active.size,
+    )
+}
+
+/** Сервер до `v0.8.0` полей плана не шлёт — это то же, что нули. */
+internal val Holding.hasPlan: Boolean
+    get() = (monthlyIncomeMinor ?: 0) > 0 || (monthlyExpenseMinor ?: 0) > 0

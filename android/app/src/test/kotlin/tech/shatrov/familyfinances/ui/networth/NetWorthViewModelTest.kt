@@ -19,6 +19,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import tech.shatrov.familyfinances.FLAT_ID
 import tech.shatrov.familyfinances.FakeTokenVault
+import tech.shatrov.familyfinances.HOLDINGS_AFTER_VALUE_DELETE
+import tech.shatrov.familyfinances.HOLDINGS_EXPENSE_PLAN
 import tech.shatrov.familyfinances.HOLDINGS_OK
 import tech.shatrov.familyfinances.HOLDING_VALUE_OK
 import tech.shatrov.familyfinances.NET_WORTH_OK
@@ -51,8 +53,8 @@ class NetWorthViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private suspend fun loaded(): NetWorthUiState.Ready {
-        server.enqueueJson(200, HOLDINGS_OK)
+    private suspend fun loaded(holdings: String = HOLDINGS_OK): NetWorthUiState.Ready {
+        server.enqueueJson(200, holdings)
         server.enqueueJson(200, NET_WORTH_OK)
         model = NetWorthViewModel(ApiGraph(server.url("/").toString(), FakeTokenVault(liveToken())), today = { today })
         return model.state.first { it !is NetWorthUiState.Loading } as NetWorthUiState.Ready
@@ -144,5 +146,29 @@ class NetWorthViewModelTest {
         model.revalidate()
         model.state.first { it is NetWorthUiState.Ready }
         assertEquals(4, server.requestCount)
+    }
+
+    @Test
+    fun planTotalCountsActiveHoldingsAndHowManyHavePlan() = runTest {
+        // У ипотеки и биткоина полей плана нет — ответ сервера до `v0.8.0` разбирается как нули.
+        assertEquals(PlanTotal(4_500_000L, 830_000L, planned = 1, active = 3), loaded().plan)
+    }
+
+    @Test
+    fun planTotalSkipsArchivedAndGoesNegativeOnExpensesOnly() = runTest {
+        val plan = loaded(HOLDINGS_EXPENSE_PLAN).plan
+
+        assertEquals(PlanTotal(0L, 7_430_000L, planned = 1, active = 1), plan)
+        assertEquals(-7_430_000L, plan?.netMinor)
+    }
+
+    @Test
+    fun noPlansMeansNoPlanTotal() = runTest {
+        assertNull(loaded(HOLDINGS_AFTER_VALUE_DELETE).plan)
+    }
+
+    @Test
+    fun planTotalIsHiddenWhenListDoesNotFitOnePage() = runTest {
+        assertNull(loaded(HOLDINGS_OK.replace("\"total\":4", "\"total\":201")).plan)
     }
 }

@@ -457,6 +457,7 @@ fun AppRoot(graph: AppGraph) {
                     state = netWorth,
                     currency = active.currency,
                     today = LocalDate.now(active.zone),
+                    zone = active.zone,
                     onRetry = model::refresh,
                     onAdd = { screen = AppScreen.HoldingEdit(null, side = it) },
                     onOpenValue = model::onOpenValue,
