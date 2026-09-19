@@ -48,12 +48,14 @@ sealed interface ReconciliationCard {
 
     data object NoAccounts : ReconciliationCard
 
-    /** [matched] из [total] неархивных счетов сошлись с банком. */
+    /** Оба края [month] заполнены; [gapMinor] — остатки против операций. */
     data class Ready(
         val month: YearMonth,
-        val matched: Int,
-        val total: Int,
+        val gapMinor: Long,
     ) : ReconciliationCard
+
+    /** Хотя бы у одного края [month] не хватает остатков. */
+    data class Incomplete(val month: YearMonth) : ReconciliationCard
 }
 
 /** Незавершённый импорт для плашки; [recognized] — оплаченный ответ уже в журнале. */
@@ -174,15 +176,12 @@ class HomeViewModel(
     }
 
     private suspend fun loadCard(month: YearMonth): ReconciliationCard = try {
-        val rows = api.client
-            .unwrap { api.stats.getReconciliationStats(month.toString()) }
-            .`data`
-            .accounts
-            .filterNot { it.account.isArchived }
-        if (rows.isEmpty()) {
-            ReconciliationCard.NoAccounts
-        } else {
-            ReconciliationCard.Ready(month, matched = rows.count { it.closingMinor != null }, total = rows.size)
+        val stats = api.client.unwrap { api.stats.getReconciliationStats(month.toString()) }.`data`
+        val gap = stats.gapMinor
+        when {
+            stats.accounts.none { !it.account.isArchived } -> ReconciliationCard.NoAccounts
+            stats.complete && gap != null -> ReconciliationCard.Ready(month, gap)
+            else -> ReconciliationCard.Incomplete(month)
         }
     } catch (_: ApiFailure) {
         ReconciliationCard.Hidden

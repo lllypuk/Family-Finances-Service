@@ -407,10 +407,7 @@ internal const val ACCOUNT_IN_USE_ERROR = """
 
 internal const val CASH_ACCOUNT_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3"
 
-/**
- * Остатки августа: у наличных нет остатка на конец месяца, архивная карта закрыта нулём — «N из M»
- * главной её не считает, иначе вышло бы «2 из 3».
- */
+/** Остатки августа: у наличных нет остатка на конец месяца, архивная карта закрыта нулём. */
 internal const val RECONCILIATION_OK = """
 {"data":{"month":"2026-08","opening_minor":5100000,"closing_minor":null,"income_minor":2000000,
 "expense_minor":1500000,"gap_minor":null,"complete":false,"accounts":[

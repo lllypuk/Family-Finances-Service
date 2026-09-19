@@ -313,10 +313,10 @@ accounts[]: { account, opening_minor | null, closing_minor | null, updated_at | 
 - Modify: `ui/home/{HomeViewModel,HomeScreen}.kt`, `HomeViewModelTest`, `HomeScreenTest`,
   `android/gradle/libs.versions.toml`, `app/src/main/res/values/strings.xml`
 
-- [ ] `ReconciliationCard.Ready(month, gapMinor)` / `Incomplete(month)`; тексты карточки
-- [ ] `appVersionCode = 12`, `appVersionName = 0.12.0`
-- [ ] тесты: `complete` с нулевым и ненулевым `gap`, незаполненный край, нет счетов, ошибка → `Hidden`
-- [ ] `make -C android check`
+- [x] `ReconciliationCard.Ready(month, gapMinor)` / `Incomplete(month)`; тексты карточки
+- [x] `appVersionCode = 12`, `appVersionName = 0.12.0`
+- [x] тесты: `complete` с нулевым и ненулевым `gap`, незаполненный край, нет счетов, ошибка → `Hidden`
+- [x] `make -C android check`
 
 ### Task 8: Verify acceptance criteria
 

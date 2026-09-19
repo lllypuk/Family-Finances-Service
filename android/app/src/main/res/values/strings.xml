@@ -27,7 +27,7 @@
     <string name="home_empty">Операций пока нет</string>
     <string name="home_add_transaction">Добавить операцию</string>
     <string name="home_reconciliation">Сверка · %1$s</string>
-    <string name="home_reconciliation_matched">%1$d из %2$d</string>
+    <string name="home_reconciliation_incomplete">Заполните остатки</string>
     <string name="home_reconciliation_no_accounts">Заведите счета, чтобы сверять</string>
     <string name="overview_title">Обзор</string>
     <string name="overview_this_month">Этот месяц</string>
