@@ -30,7 +30,7 @@ func TestMigrations_UpAndDownOnEmptyDatabase(t *testing.T) {
 	t.Cleanup(func() { assert.NoError(t, db.Close()) })
 
 	tables := []string{"families", "users", "categories", "transactions", "budgets", "sessions",
-		"accounts", "account_reconciliations", "holdings", "holding_values", "holding_plans"}
+		"accounts", "account_reconciliations", "account_balances", "holdings", "holding_values", "holding_plans"}
 	for _, table := range tables {
 		var count int
 		require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&count), table)
@@ -439,6 +439,47 @@ func TestMigrations_HoldingPlansSchemaMatchesFreshInstall(t *testing.T) {
 	require.NoError(t, upgradedManager.Up())
 
 	assert.Equal(t, schemaOf(ctx, t, fresh, "holding_plans"), schemaOf(ctx, t, upgraded, "holding_plans"))
+}
+
+// 008 на живой базе версии 7: остатки появляются, счета не трогаются; откат теряет только остатки.
+func TestMigrations_AccountBalancesUpgradeAndRollback(t *testing.T) {
+	ctx := t.Context()
+	manager, db := migratedDB(t)
+	require.NoError(t, manager.Migrate(7))
+	assert.Equal(t, 0, objectCount(ctx, t, db, "name = 'account_balances'"))
+
+	familyID, _, _ := seedForChecks(ctx, t, db)
+	_, err := db.ExecContext(ctx,
+		`INSERT INTO accounts (id, family_id, name, name_key) VALUES ('a-1', ?, 'Карта', 'карта')`, familyID)
+	require.NoError(t, err)
+
+	require.NoError(t, manager.Up())
+
+	const insertBalance = `INSERT INTO account_balances (account_id, month, balance_minor) VALUES ('a-1', ?, ?)`
+	_, err = db.ExecContext(ctx, insertBalance, "2026-9", 100)
+	require.Error(t, err, "месяц не в формате YYYY-MM обязан отбиваться CHECK-ом")
+	_, err = db.ExecContext(ctx, insertBalance, "2026-08", -1500)
+	require.NoError(t, err, "остаток кредитки отрицательный")
+	_, err = db.ExecContext(ctx, insertBalance, "2026-09", 0)
+	require.NoError(t, err)
+
+	require.NoError(t, manager.Migrate(7))
+	assert.Equal(t, 0, objectCount(ctx, t, db, "name = 'account_balances'"), "откат теряет остатки")
+	assert.Equal(t, 1, rowCount(ctx, t, db, "accounts"))
+
+	require.NoError(t, manager.Up())
+	assert.Equal(t, 0, rowCount(ctx, t, db, "account_balances"))
+}
+
+// Живая база (v7 → 008) и свежая (001 уже с остатками) обязаны прийти к одной схеме.
+func TestMigrations_AccountBalancesSchemaMatchesFreshInstall(t *testing.T) {
+	ctx := t.Context()
+	_, fresh := migratedDB(t)
+	upgradedManager, upgraded := migratedDB(t)
+	require.NoError(t, upgradedManager.Migrate(7))
+	require.NoError(t, upgradedManager.Up())
+
+	assert.Equal(t, schemaOf(ctx, t, fresh, "account_balances"), schemaOf(ctx, t, upgraded, "account_balances"))
 }
 
 func rowCount(ctx context.Context, t *testing.T, db *sql.DB, table string) int {

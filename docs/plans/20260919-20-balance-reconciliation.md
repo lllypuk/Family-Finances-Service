@@ -190,12 +190,12 @@ accounts[]: { account, opening_minor | null, closing_minor | null, updated_at | 
 - Modify: `migrations/001_consolidated.{up,down}.sql`, `internal/testhelpers/sqlite.go`,
   `internal/infrastructure/migrations_test.go`
 
-- [ ] `008.up` = `CREATE TABLE account_balances`, `008.down` = `DROP`; `005` не трогать
-- [ ] `001`: добавить `account_balances` рядом с `account_reconciliations` (старая пока остаётся)
-- [ ] `CleanTables`: добавить `account_balances` перед `transactions` (старая запись пока остаётся)
-- [ ] тесты: `expectedTables` (`migrations_test.go:33`) + `account_balances`; свежая БД и upgrade с `7` совпадают
+- [x] `008.up` = `CREATE TABLE account_balances`, `008.down` = `DROP`; `005` не трогать
+- [x] `001`: добавить `account_balances` рядом с `account_reconciliations` (старая пока остаётся)
+- [x] `CleanTables`: добавить `account_balances` перед `transactions` (старая запись пока остаётся)
+- [x] тесты: `expectedTables` (`migrations_test.go:33`) + `account_balances`; свежая БД и upgrade с `7` совпадают
   по `schemaOf`/pragma (не по тексту `sqlite_master` — пробелы в `001` и `008` разные)
-- [ ] `make fmt && make test && make lint`
+- [x] `make fmt && make test && make lint`
 
 ### Task 2: Домен и репозиторий остатков (старый код не трогается)
 

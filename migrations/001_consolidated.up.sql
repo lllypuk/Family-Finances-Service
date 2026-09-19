@@ -143,6 +143,18 @@ CREATE TABLE IF NOT EXISTS account_reconciliations (
     CHECK (bank_expense_minor >= 0)
 );
 
+-- Остаток счёта на конец месяца (план 20), со знаком: кредитка уходит в минус. updated_at пишет upsert из Go —
+-- CURRENT_TIMESTAMP с секундной точностью не различил бы два upsert подряд.
+CREATE TABLE IF NOT EXISTS account_balances (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+    month TEXT NOT NULL,
+    balance_minor INTEGER NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (account_id, month),
+    CHECK (month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]')
+);
+
 -- Позиция капитала (план 17): знак даёт side, значения — снимки в holding_values. kind проверяет домен.
 CREATE TABLE IF NOT EXISTS holdings (
     id TEXT PRIMARY KEY,
