@@ -38,7 +38,10 @@ data class PreparedImport(
     val dropped: Int,
 )
 
-/** URI из share, галереи и камеры → JPEG под лимиты сервера в `cacheDir/import/<importId>/`. */
+/**
+ * URI из share, галереи и камеры → JPEG под лимиты сервера в `filesDir/import/<importId>/`.
+ * Снимки камеры — в `cacheDir/import/camera/`: наружу `FileProvider` отдаёт только его.
+ */
 object ImportFiles {
     const val MAX_IMAGES = 5
     const val MAX_SIDE = 2048
@@ -72,14 +75,19 @@ object ImportFiles {
     }
 
     /**
-     * Снимок камеры переживает смерть процесса, пока камера открыта, поэтому его каталог
-     * чистится по возрасту, а не целиком.
+     * Импорт без живого журнала удаляется. Снимок камеры переживает смерть процесса, пока камера
+     * открыта, поэтому его каталог чистится по возрасту, а не целиком.
      */
     fun sweep(
         context: Context,
         now: Long = System.currentTimeMillis(),
     ) {
-        root(context).listFiles().orEmpty().forEach { entry ->
+        val journals = ImportJournalStore(filesRoot(context)) { now }
+        filesRoot(context).listFiles().orEmpty().forEach { entry ->
+            val id = runCatching { UUID.fromString(entry.name) }.getOrNull()
+            if (id == null || journals.read(id) == null) entry.deleteRecursively()
+        }
+        cacheRoot(context).listFiles().orEmpty().forEach { entry ->
             if (entry.name == CAMERA) {
                 entry.listFiles().orEmpty().filter { now - it.lastModified() > CAMERA_TTL_MS }.forEach { it.delete() }
             } else {
@@ -90,18 +98,20 @@ object ImportFiles {
 
     /** URI для `TakePicture`; каталог создаётся здесь — `FileProvider` без него файл не откроет. */
     fun cameraUri(context: Context): Uri {
-        val dir = File(root(context), CAMERA).apply { mkdirs() }
+        val dir = File(cacheRoot(context), CAMERA).apply { mkdirs() }
         return FileProvider.getUriForFile(context, authority(context), File(dir, "${UUID.randomUUID()}.jpg"))
     }
 
     fun authority(context: Context): String = "${context.packageName}.files"
 
-    private fun root(context: Context) = File(context.cacheDir, ROOT)
+    fun filesRoot(context: Context) = File(context.filesDir, ROOT)
+
+    private fun cacheRoot(context: Context) = File(context.cacheDir, ROOT)
 
     private fun importDir(
         context: Context,
         importId: UUID,
-    ) = File(root(context), importId.toString())
+    ) = File(filesRoot(context), importId.toString())
 
     private fun convert(
         resolver: ContentResolver,
@@ -131,7 +141,7 @@ object ImportFiles {
         return ImportImage.Failed(uri, ImportFailure.TOO_LARGE)
     }
 
-    // Каталог импорта удаляет `discard` модели, ушедшей с экрана посреди пережатия.
+    // Каталог импорта могут удалить посреди пережатия — уход с экрана, выход из аккаунта.
     private fun write(
         uri: Uri,
         target: File,

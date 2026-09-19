@@ -225,12 +225,12 @@ overview`, чтение по индексу; строка другой длин�
 - Modify: `android/app/build.gradle.kts`, `ui/recognize/ImportFiles.kt`, `app/src/test/…/ui/recognize/ImportFilesTest.kt`
 - Create: `ui/recognize/ImportJournal.kt`, `app/src/test/…/ui/recognize/ImportJournalTest.kt`
 
-- [ ] плагин сериализации в `:app` и явный `implementation(libs.kotlinx.serialization.json)`; `Json` с `apiSerializersModule`
-- [ ] `ImportFiles`: `filesRoot` = `filesDir/import` для импортов, `cacheRoot` = `cacheDir/import` для `camera/`; `cameraUri` и его ветка `sweep` остаются на `cacheRoot`; устаревший комментарий `:134` про `discard` модели поправить
-- [ ] `ImportJournalStore`: `write` атомарно, `read(importId)`, `latest()`, `delete`, `deleteOthers(keep)`, `deleteAll()`; нечитаемый файл, чужая версия и возраст больше 24 ч — `null`
-- [ ] `sweep`: каталоги без журнала, с нечитаемым, чужой версии, старше 24 ч; в старом `cacheDir/import` — всё, кроме `camera/`
-- [ ] тесты: круг запись→чтение с непустым `result` (`date`, `category_id`); обрыв записи не портит прежний журнал; мусор; версия; `latest` не отдаёт вчерашний; `sweep` по каждому правилу; `cameraUri` по-прежнему под `cacheDir`
-- [ ] `make -C android check`
+- [x] плагин сериализации в `:app` и явный `implementation(libs.kotlinx.serialization.json)`; `Json` с `apiSerializersModule`
+- [x] `ImportFiles`: `filesRoot` = `filesDir/import` для импортов, `cacheRoot` = `cacheDir/import` для `camera/`; `cameraUri` и его ветка `sweep` остаются на `cacheRoot`; устаревший комментарий `:134` про `discard` модели поправить
+- [x] `ImportJournalStore`: `write` атомарно, `read(importId)`, `latest()`, `delete`, `deleteOthers(keep)`, `deleteAll()`; нечитаемый файл, чужая версия и возраст больше 24 ч — `null`
+- [x] `sweep`: каталоги без журнала, с нечитаемым, чужой версии, старше 24 ч; в старом `cacheDir/import` — всё, кроме `camera/`
+- [x] тесты: круг запись→чтение с непустым `result` (`date`, `category_id`); обрыв записи не портит прежний журнал; мусор; версия; `latest` не отдаёт вчерашний; `sweep` по каждому правилу; `cameraUri` по-прежнему под `cacheDir`
+- [x] `make -C android check`
 
 ### Task 2: Модель пишет журнал и восстанавливается; экран возвращается после бутстрапа
 

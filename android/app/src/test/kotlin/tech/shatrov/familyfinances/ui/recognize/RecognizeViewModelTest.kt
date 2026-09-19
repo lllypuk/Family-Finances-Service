@@ -450,7 +450,7 @@ class RecognizeViewModelTest {
         model =
             ViewModelProvider(owner, viewModelFactory { initializer { newModel() } })[RecognizeViewModel::class.java]
         reviewed()
-        val dir = File(app.cacheDir, "import/$importId")
+        val dir = File(app.filesDir, "import/$importId")
         assertTrue(dir.exists())
 
         owner.clear()
