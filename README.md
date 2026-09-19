@@ -12,15 +12,14 @@ API for the Android client. One instance = one family.
 > stored reports are gone in favour of `GET /api/v1/stats/monthly`, budgets can repeat as a series, and the
 > client's UI audit is closed (plan 13, client only — the contract did not move), and Prometheus metrics
 > moved onto a second listener (plan 14 — the contract did not move either), and bank screenshots can be
-recognized into candidate transactions (plan 15, `POST /api/v1/transactions/recognize`; client `0.7.0`, not
-tagged yet, needs a server that has it), and transactions can be bound to accounts with a monthly
-reconciliation against the bank (plan 16, server `v0.6.0`, client `0.8.0`, not tagged yet), and holdings
-with a monthly net-worth series (plan 17, server `v0.7.0`, client `0.9.0`, not tagged yet), and a holding's
-planned monthly income and expense (plan 18, server `v0.8.0`, client `0.10.0`, not tagged yet);
-> the sections below describe the code as it is today. Releases: server `v0.3.0` (plan 10), `v0.4.0`
-> (plan 12) and `v0.5.0` (plan 14), client `app-v0.6.0` — it needs a server of `v0.4.0` or newer (`recurring` is required in the
-> generated model). Left: plan 11, the client's "Обзор" screen over `summary` + `monthly` and multi-select
-> over transactions ([docs/backlog.md](docs/backlog.md)).
+> recognized into candidate transactions (plan 15, `POST /api/v1/transactions/recognize`), transactions can be
+> bound to accounts with a monthly reconciliation against the bank (plan 16), holdings carry a monthly
+> net-worth series (plan 17) and a planned monthly income and expense (plan 18). Plan 19 (client `0.11.0`,
+> contract untouched): a screenshot import survives process death, and the "Обзор" screen over `summary` +
+> `monthly`. The sections below describe the code as it is today. Releases: server `v0.3.0` (plan 10),
+> `v0.4.0` (plan 12), `v0.8.0` (plans 14–18), client `app-v0.10.0`; `v0.5.0`–`v0.7.0` and
+> `app-v0.6.0`–`app-v0.9.0` were never cut. Left from plan 11: multi-select over transactions
+> ([docs/backlog.md](docs/backlog.md)).
 
 - ✅ REST API for family, users, categories, accounts, transactions, budgets, holdings, stats, backups
 - ✅ Bearer-token authentication with server-side sessions and a login rate limiter
@@ -342,8 +341,9 @@ Details: [deploy/README.md](deploy/README.md).
 
 ## 📱 Android client
 
-`android/` — the online Kotlin/Compose client to `/api/v1` (login, home, transactions, categories, budgets;
-the four roots are switched by a bottom tab bar). The profile icon on home opens settings: own profile and
+`android/` — the online Kotlin/Compose client to `/api/v1` (login, home, transactions, categories, budgets,
+holdings; the five roots are switched by a bottom tab bar). Home opens "Обзор" (period totals and a 12-month
+chart) and offers to resume an unfinished screenshot import. The profile icon on home opens settings: own profile and
 password, sessions with revoke, and — for an admin — users, family and backups; sign-out lives there too.
 Models and typed interfaces are generated from `docs/api/openapi.yaml` into `android/core/api/generated`
 and committed; generation needs the network, so it stays out of `check` and its freshness is a separate

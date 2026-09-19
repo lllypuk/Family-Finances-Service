@@ -333,7 +333,7 @@ overview`, чтение по индексу; строка другой длин�
 
 ### Task 10: [Final] Update documentation
 
-- [ ] перенести план в `docs/plans/completed/`
+- [x] перенести план в `docs/plans/completed/`
 
 ## Post-Completion
 

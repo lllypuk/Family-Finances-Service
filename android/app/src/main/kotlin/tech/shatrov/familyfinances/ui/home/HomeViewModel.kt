@@ -84,7 +84,7 @@ class HomeViewModel(
     private val zone: ZoneId = ZoneId.systemDefault(),
     // Дата берётся на каждую сверку, а не один раз: модель живёт всю сессию приложения.
     private val today: () -> LocalDate = { LocalDate.now(zone) },
-    private val journals: ImportJournalStore? = null,
+    private val journals: ImportJournalStore,
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 
@@ -111,20 +111,18 @@ class HomeViewModel(
 
     /** На каждый заход: журнал пишет и удаляет экран распознавания, а модель живёт всю сессию. */
     fun loadImport() {
-        val store = journals ?: return
         importJob?.cancel()
         importJob = viewModelScope.launch {
-            mutableImport.value = withContext(io) { store.latest() }?.let(::draft)
+            mutableImport.value = withContext(io) { journals.latest() }?.let(::draft)
         }
     }
 
     fun deleteImport() {
-        val store = journals ?: return
         val id = mutableImport.value?.importId ?: return
         importJob?.cancel()
         mutableImport.value = null
         // Отменённое чтение не должно вернуть плашку, а отмена — оставить журнал на диске.
-        importJob = viewModelScope.launch { withContext(NonCancellable + io) { store.delete(id) } }
+        importJob = viewModelScope.launch { withContext(NonCancellable + io) { journals.delete(id) } }
     }
 
     private fun draft(journal: ImportJournal): ImportDraft? {

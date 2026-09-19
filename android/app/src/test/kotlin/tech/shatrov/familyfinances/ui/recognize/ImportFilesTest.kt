@@ -116,7 +116,7 @@ class ImportFilesTest {
         assertTrue(result.images[2] is ImportImage.Ready)
     }
 
-    // Файл на месте каталога: запись падает так же, как после `discard` посреди пережатия.
+    // Файл на месте каталога: запись падает так же, как после удаления каталога посреди пережатия.
     @Test
     fun unwritableTargetFailsRowWithoutThrowing() = runTest {
         val importId = UUID.randomUUID()
@@ -177,20 +177,6 @@ class ImportFilesTest {
     }
 
     private fun dir(id: UUID) = File(context.filesDir, "import/$id")
-
-    @Test
-    fun discardRemovesImportDirectory() = runTest {
-        val importId = UUID.randomUUID()
-        val result = ImportFiles.prepare(
-            context,
-            importId,
-            listOf(Uri.fromFile(image("a.png", 40, 40, Bitmap.CompressFormat.PNG))),
-        )
-
-        ImportFiles.discard(context, importId)
-
-        assertFalse((result.images.single() as ImportImage.Ready).file.parentFile!!.exists())
-    }
 
     @Test
     fun cameraUriGoesThroughFileProvider() {

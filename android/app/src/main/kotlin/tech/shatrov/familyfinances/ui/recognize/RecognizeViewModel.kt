@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -217,8 +218,8 @@ class RecognizeViewModel(
 
     fun retryRow(draft: UUID) = send(listOf(draft))
 
-    /** Уход с экрана: импорт брошен, журнал и картинки удаляются. */
-    fun abandon() = journals.delete(importId)
+    /** Уход с экрана: импорт брошен, журнал и картинки удаляются. Зовётся из скоупа, переживающего модель. */
+    suspend fun abandon() = withContext(NonCancellable + io) { journals.delete(importId) }
 
     // Не удаляет журнал: смахивание иногда доходит до `onCleared`, а журнал нужен именно тогда.
     override fun onCleared() {
@@ -267,6 +268,8 @@ class RecognizeViewModel(
         try {
             val readyAt = mutable.value.images.indices.filter { mutable.value.images[it] is ImportImage.Ready }
             if (readyAt.isEmpty()) {
+                // Продолжать нечего: плашка на главной вела бы в тот же отказ.
+                withContext(io) { journals.close(importId) }
                 fail(UiError.Resource(R.string.recognize_no_images), retryable = false)
                 return
             }
@@ -278,7 +281,7 @@ class RecognizeViewModel(
             val rows = answer.items.mapIndexed { i, item ->
                 item.toRow(readyAt, currency).let { row -> saved.getOrNull(i)?.let(row::restored) ?: row }
             }
-            writeJournal(rows)
+            if (rows.isEmpty()) withContext(io) { journals.close(importId) } else writeJournal(rows)
             mutable.update { it.copy(phase = RecognizePhase.Review(rows), incomplete = answer.incomplete) }
         } catch (failure: ApiFailure) {
             fail(
@@ -362,7 +365,7 @@ class RecognizeViewModel(
                 drafts.forEach { saveRow(it) }
                 val included = rows().filter { it.included }
                 if (included.isNotEmpty() && included.all { it.status == RowStatus.Saved }) {
-                    withContext(io) { journals.delete(importId) }
+                    withContext(io) { journals.close(importId) }
                 }
             } finally {
                 setSaving(false)

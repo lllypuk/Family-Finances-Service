@@ -77,7 +77,7 @@ S-03 (лимитер логина в `internal/auth/ratelimit.go`), `CSRF_SECRET
 
 `/metrics` на служебном слушателе `METRICS_ADDR` есть, имена `ffs_*` приняты репозиторием observability
 (сессия `observability-d2`); детали — [план 14](plans/completed/20260915-14-prometheus-metrics.md), выкат —
-`deploy/README.md`. Сервер выходит `v0.5.0`, контракт `/api/v1` не изменился.
+`deploy/README.md`. Сервер вышел в `v0.8.0`, контракт `/api/v1` не изменился.
 
 Сознательно не сделано:
 
@@ -93,7 +93,7 @@ S-03 (лимитер логина в `internal/auth/ratelimit.go`), `CSRF_SECRET
 
 ## Android-клиент: отложенное планом 13 (15.09.2026)
 
-UI-аудит клиента закрыт [планом 13](plans/completed/20260915-13-android-ui-polish.md) (`app-v0.6.0`);
+UI-аудит клиента закрыт [планом 13](plans/completed/20260915-13-android-ui-polish.md) (вышел в `app-v0.10.0`);
 сервер и контракт он не трогал. Сознательно не сделано — codex не нашёл доказанной пользы:
 
 - **Светлая тема.** `appColorScheme` остаётся тёмной (`theme/Colors.kt`): второй набор ролей — это

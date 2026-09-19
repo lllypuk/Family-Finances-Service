@@ -116,14 +116,17 @@ class AppRootImportTest {
         serveHome()
         var graph = graph()
         val restoration = StateRestorationTester(composeRule)
+        writeInterruptedJournal(graph)
         restoration.setContent { AppTheme { AppRoot(graph) } }
-        openRecognize(graph)
+        openRecognize()
 
         graph = graph()
         restoration.emulateSavedInstanceStateRestore()
 
-        val refused = res.getString(R.string.recognize_no_images)
-        composeRule.waitUntil(WAIT_MS) { composeRule.onAllNodesWithText(refused).fetchSemanticsNodes().isNotEmpty() }
+        val interrupted = res.getString(R.string.recognize_error_interrupted)
+        composeRule.waitUntil(WAIT_MS) {
+            composeRule.onAllNodesWithText(interrupted).fetchSemanticsNodes().isNotEmpty()
+        }
         composeRule.onNodeWithText(res.getString(R.string.recognize_title)).assertExists()
     }
 
@@ -132,8 +135,9 @@ class AppRootImportTest {
         serveHome()
         var graph = graph()
         val restoration = StateRestorationTester(composeRule)
+        writeInterruptedJournal(graph)
         restoration.setContent { AppTheme { AppRoot(graph) } }
-        openRecognize(graph)
+        openRecognize()
         graph.journals.deleteAll()
 
         graph = graph()
@@ -210,6 +214,41 @@ class AppRootImportTest {
         assertFalse(importRoot().exists())
     }
 
+    @Test
+    fun expiredSessionDeletesImportJournals() {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when (request.url.encodedPath) {
+                "/api/v1/me" -> json(ME_OK)
+
+                "/api/v1/family" -> json(FAMILY_OK)
+
+                else -> MockResponse.Builder().code(
+                    401,
+                ).body("""{"error":{"code":"UNAUTHORIZED","message":"токен истёк"}}""").build()
+            }
+        }
+        val graph = graph()
+        graph.journals.write(
+            ImportJournal(
+                importId = UUID.randomUUID().toString(),
+                updatedAt = System.currentTimeMillis(),
+                images = emptyList(),
+                dropped = 0,
+                recognizing = false,
+                result = null,
+                accountId = null,
+                rows = emptyList(),
+                savedCount = 0,
+            ),
+        )
+        composeRule.setContent { AppTheme { AppRoot(graph) } }
+
+        composeRule.waitUntil(WAIT_MS) {
+            composeRule.onAllNodesWithText(res.getString(R.string.login_submit)).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.waitUntil(WAIT_MS) { !importRoot().exists() }
+    }
+
     private fun graph(vault: TokenVault = FakeTokenVault(liveToken())) =
         AppGraph(ApiGraph(server.url("/").toString(), vault), ImportJournalStore(ImportFiles.filesRoot(app)))
 
@@ -228,14 +267,31 @@ class AppRootImportTest {
         }
     }
 
-    // Нечитаемый URI: журнал пишется после подготовки, а распознавание отказывает до платного вызова.
-    private fun openRecognize(graph: AppGraph) {
-        val add = res.getString(R.string.home_add_transaction)
-        composeRule.waitUntil(WAIT_MS) { composeRule.onAllNodesWithText(add).fetchSemanticsNodes().isNotEmpty() }
-        val id = graph.imports.offer(listOf(Uri.fromFile(File(app.filesDir, "missing.png"))))
-        val refused = res.getString(R.string.recognize_no_images)
-        composeRule.waitUntil(WAIT_MS) { composeRule.onAllNodesWithText(refused).fetchSemanticsNodes().isNotEmpty() }
-        assertTrue(File(importRoot(), "$id/journal.json").exists())
+    // Прерванный платный вызов: экран открывается плашкой главной и сам вызов не повторяет.
+    private fun writeInterruptedJournal(graph: AppGraph) {
+        graph.journals.write(
+            ImportJournal(
+                importId = UUID.randomUUID().toString(),
+                updatedAt = System.currentTimeMillis(),
+                images = emptyList(),
+                dropped = 0,
+                recognizing = true,
+                result = null,
+                accountId = null,
+                rows = emptyList(),
+                savedCount = 0,
+            ),
+        )
+    }
+
+    private fun openRecognize() {
+        val resume = res.getString(R.string.home_import_resume)
+        composeRule.waitUntil(WAIT_MS) { composeRule.onAllNodesWithText(resume).fetchSemanticsNodes().isNotEmpty() }
+        composeRule.onNodeWithText(resume).performClick()
+        val interrupted = res.getString(R.string.recognize_error_interrupted)
+        composeRule.waitUntil(WAIT_MS) {
+            composeRule.onAllNodesWithText(interrupted).fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     private fun json(body: String) = MockResponse.Builder()

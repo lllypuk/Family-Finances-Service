@@ -69,6 +69,11 @@ private const val RECOGNIZE_OK = """
 "meta":{"request_id":"r-70","timestamp":"2026-09-16T10:00:00Z","version":"v0.5.0"}}
 """
 
+private const val RECOGNIZE_EMPTY = """
+{"data":{"items":[],"incomplete":false,"model":"gemma4:31b"},
+"meta":{"request_id":"r-71","timestamp":"2026-09-16T10:00:00Z","version":"v0.5.0"}}
+"""
+
 private const val UNAVAILABLE = """{"error":{"code":"RECOGNITION_UNAVAILABLE","message":"недоступно"}}"""
 
 private const val UPLOAD_TIMEOUT = """{"error":{"code":"REQUEST_TIMEOUT","message":"upload timed out"}}"""
@@ -490,7 +495,7 @@ class RecognizeViewModelTest {
     }
 
     @Test
-    fun savingEveryIncludedRowDeletesJournal() = runTest {
+    fun savingEveryIncludedRowClosesJournalAndKeepsPreviews() = runTest {
         val (_, salary, foreign) = recognized().map { it.draft }
         model.onIncludedChange(salary, false)
         model.onIncludedChange(foreign, false)
@@ -499,7 +504,28 @@ class RecognizeViewModelTest {
         model.save()
         reviewed()
 
-        assertFalse(importDir().exists())
+        assertFalse(File(importDir(), "journal.json").exists())
+        assertTrue(File(importDir(), "0.jpg").exists())
+    }
+
+    @Test
+    fun emptyAnswerLeavesNoJournal() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        server.enqueueJson(200, RECOGNIZE_EMPTY)
+        createModel()
+
+        assertTrue(reviewed().phase is RecognizePhase.Review)
+        assertFalse(File(importDir(), "journal.json").exists())
+    }
+
+    @Test
+    fun importWithoutReadyImagesLeavesNoJournal() = runTest {
+        createModel(listOf(junk()))
+
+        val failed = reviewed().phase as RecognizePhase.Failure
+        assertEquals(UiError.Resource(R.string.recognize_no_images), failed.error)
+        assertFalse(File(importDir(), "journal.json").exists())
     }
 
     @Test
@@ -650,6 +676,40 @@ class RecognizeViewModelTest {
         val posts = requests().filter { it.url.encodedPath == TRANSACTIONS_PATH }
         assertEquals(2, posts.size)
         assertTrue(posts.all { it.text().contains("\"id\":\"$draft\"") })
+    }
+
+    @Test
+    fun restoredSavedRowKeepsServerFieldsAndLocksAccount() = runTest {
+        val draft = recognized()[0].draft
+        server.enqueueJson(200, TRANSACTION_OK)
+        model.retryRow(draft)
+        reviewed()
+
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        restart()
+        val state = reviewed()
+
+        val row = rows()[0]
+        assertEquals(RowStatus.Saved, row.status)
+        assertEquals("Кофе", row.description)
+        assertEquals(150000L, row.amountMinor)
+        assertEquals(1, state.savedCount)
+        assertTrue(state.accountLocked)
+    }
+
+    // `null` в журнале с ответом — выбор пользователя, а не повод взять прошлый счёт.
+    @Test
+    fun restoredNoAccountDoesNotFallBackToLast() = runTest {
+        lastAccount.write(UUID.fromString(CARD_ACCOUNT_ID))
+        recognized()
+        model.onAccountChange(null)
+
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        restart()
+
+        assertNull(reviewed().accountId)
     }
 
     @Test

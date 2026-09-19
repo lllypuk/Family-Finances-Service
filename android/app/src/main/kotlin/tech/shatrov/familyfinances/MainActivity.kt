@@ -794,7 +794,7 @@ fun AppRoot(graph: AppGraph) {
             }
             val leave = {
                 if (!recognize.saving) {
-                    model.abandon()
+                    scope.launch { model.abandon() }
                     screen = AppScreen.Transactions()
                 }
             }

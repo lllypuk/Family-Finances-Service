@@ -2,6 +2,7 @@ package tech.shatrov.familyfinances.ui.recognize
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -108,6 +109,46 @@ class ImportJournalTest {
         store.write(j)
 
         assertNull(store.read(UUID.fromString(j.importId)))
+    }
+
+    @Test
+    fun versionIsWrittenToDisk() {
+        val j = journal()
+        store.write(j)
+
+        assertTrue(file(j.importId).readText().contains("\"version\":$JOURNAL_VERSION"))
+    }
+
+    @Test
+    fun writeAfterRemovalDoesNotReviveJournal() {
+        val removals = listOf<(UUID) -> Unit>(
+            { store.delete(it) },
+            { store.deleteOthers(keep = UUID.randomUUID()) },
+            { store.deleteAll() },
+            { store.close(it) },
+        )
+        removals.forEach { remove ->
+            val j = journal()
+            val id = UUID.fromString(j.importId)
+            store.write(j)
+
+            remove(id)
+            store.write(j)
+
+            assertNull(store.read(id))
+        }
+    }
+
+    @Test
+    fun closeKeepsImages() {
+        val j = journal()
+        store.write(j)
+        val image = File(root, "${j.importId}/0.jpg").apply { writeText("x") }
+
+        store.close(UUID.fromString(j.importId))
+
+        assertNull(store.read(UUID.fromString(j.importId)))
+        assertTrue(image.exists())
     }
 
     @Test

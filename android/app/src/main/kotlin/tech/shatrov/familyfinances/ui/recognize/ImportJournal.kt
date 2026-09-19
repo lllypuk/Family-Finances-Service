@@ -1,7 +1,6 @@
 package tech.shatrov.familyfinances.ui.recognize
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import tech.shatrov.familyfinances.core.api.RecognizeResult
 import tech.shatrov.familyfinances.core.api.TransactionType
@@ -54,8 +53,10 @@ data class JournalRow(
 enum class JournalRowStatus { PENDING, SAVING, SAVED, FAILED }
 
 // `RecognizeResult` помечает даты и UUID `@Contextual`: без модуля он не сериализуется.
+// Без `encodeDefaults` `version` не пишется и при чтении всегда равен текущему.
 private val journalJson = Json {
     ignoreUnknownKeys = true
+    encodeDefaults = true
     serializersModule = apiSerializersModule
 }
 
@@ -90,6 +91,12 @@ class ImportJournalStore(
         File(root, importId.toString()).deleteRecursively()
     }
 
+    /** Журнал закрыт, картинки остаются открытому экрану; каталог уберёт [delete] или `sweep`. */
+    fun close(importId: UUID): Unit = synchronized(lock) {
+        closed += importId.toString()
+        File(root, "$importId/$FILE").delete()
+    }
+
     fun deleteOthers(keep: UUID): Unit = synchronized(lock) {
         root.listFiles().orEmpty().filter { it.name != keep.toString() }.forEach {
             closed += it.name
@@ -108,8 +115,6 @@ class ImportJournalStore(
         val journal = try {
             journalJson.decodeFromString(ImportJournal.serializer(), file.readText())
         } catch (_: IOException) {
-            return null
-        } catch (_: SerializationException) {
             return null
         } catch (_: IllegalArgumentException) {
             return null

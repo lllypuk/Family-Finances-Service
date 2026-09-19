@@ -67,13 +67,6 @@ object ImportFiles {
         PreparedImport(images, dropped = (uris.size - MAX_IMAGES).coerceAtLeast(0))
     }
 
-    fun discard(
-        context: Context,
-        importId: UUID,
-    ) {
-        importDir(context, importId).deleteRecursively()
-    }
-
     /**
      * Импорт без живого журнала удаляется. Снимок камеры переживает смерть процесса, пока камера
      * открыта, поэтому его каталог чистится по возрасту, а не целиком.
