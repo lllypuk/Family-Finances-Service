@@ -18,7 +18,7 @@ API for the Android client. One instance = one family.
 > contract untouched): a screenshot import survives process death, and the "Обзор" screen over `summary` +
 > `monthly`. Plan 20 (server `v0.9.0`, client `0.12.0`) reconciles month-end account balances against the
 > month's transactions instead of plan 16's bank figure; a `0.11.0` client loses its reconciliation screen and the home-screen reconciliation card. The sections below describe the code as it is today. Releases: server `v0.3.0` (plan 10),
-> `v0.4.0` (plan 12), `v0.8.0` (plans 14–18), client `app-v0.10.0`; `v0.5.0`–`v0.7.0` and
+> `v0.4.0` (plan 12), `v0.8.0` (plans 14–18), `v0.9.0` (plan 20), client `app-v0.10.0`, `app-v0.11.0`, `app-v0.12.0`; `v0.5.0`–`v0.7.0` and
 > `app-v0.6.0`–`app-v0.9.0` were never cut. Left from plan 11: multi-select over transactions
 > ([docs/backlog.md](docs/backlog.md)).
 
