@@ -96,18 +96,18 @@ type HoldingService interface {
 	ListValues(ctx context.Context, id uuid.UUID, limit, offset int) ([]*holding.Value, int, error)
 }
 
-// ReconciliationService — сверка счетов по месяцам; month — любой день месяца.
+// ReconciliationService — остатки счетов против операций по месяцам; month — любой день месяца,
+// месяц позже текущего — ErrReconciliationMonthInFuture.
 type ReconciliationService interface {
-	// Put заменяет сверку целиком; неизвестный счёт — account.ErrNotFound.
-	Put(
+	// PutBalance — неизвестный счёт account.ErrNotFound; архивный разрешён.
+	PutBalance(
 		ctx context.Context,
 		accountID uuid.UUID,
 		month date.Date,
-		bankExpense money.Minor,
-		note string,
-	) (*reconciliation.Reconciliation, error)
-	Delete(ctx context.Context, accountID uuid.UUID, month date.Date) error
-	// Summary — записанное против банка по счетам; nil — текущий месяц в поясе семьи.
+		balance money.Minor,
+	) (*reconciliation.Balance, error)
+	DeleteBalance(ctx context.Context, accountID uuid.UUID, month date.Date) error
+	// Summary — nil month — текущий месяц в поясе семьи.
 	Summary(ctx context.Context, month *date.Date) (*dto.ReconciliationStats, error)
 }
 

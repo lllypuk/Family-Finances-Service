@@ -1,4 +1,4 @@
-// Package account — платёжные счета семьи, по которым сверяются расходы.
+// Package account — платёжные счета семьи, по остаткам которых сверяются операции.
 package account
 
 import (
@@ -17,8 +17,8 @@ var (
 	ErrNotFound = errors.New("account not found")
 	// ErrNameExists — имя занято другим счётом семьи, архивным в том числе.
 	ErrNameExists = errors.New("account with this name already exists")
-	// ErrInUse — на счёт ссылаются операции или сверки.
-	ErrInUse     = errors.New("account is referenced by transactions or reconciliations")
+	// ErrInUse — на счёт ссылаются операции или остатки.
+	ErrInUse     = errors.New("account is referenced by transactions or balances")
 	ErrNameEmpty = errors.New("account name is empty")
 	ErrNameLong  = errors.New("account name is too long")
 )

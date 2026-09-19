@@ -1,3 +1,4 @@
+// Package reconciliation — SQLite-репозиторий остатков счетов.
 package reconciliation
 
 import (

@@ -13,7 +13,7 @@ type Services struct {
 	Category CategoryService
 	Account  AccountService
 	Holding  HoldingService
-	// Reconciliation — сверки счетов и GET /stats/reconciliation.
+	// Reconciliation — остатки счетов и GET /stats/reconciliation.
 	Reconciliation ReconciliationService
 	Transaction    TransactionService
 	Budget         BudgetService
@@ -31,7 +31,7 @@ func NewServices(
 	categoryRepo CategoryRepository,
 	accountRepo AccountRepository,
 	holdingRepo HoldingRepository,
-	reconciliationRepo ReconciliationRepository,
+	balanceRepo BalanceRepository,
 	transactionRepo TransactionRepository,
 	budgetRepo BudgetRepositoryForTransactions,
 	fullBudgetRepo BudgetRepository,
@@ -62,7 +62,7 @@ func NewServices(
 		Category:       categoryService,
 		Account:        NewAccountService(accountRepo),
 		Holding:        NewHoldingService(holdingRepo, familyRepo),
-		Reconciliation: NewReconciliationService(reconciliationRepo, accountRepo, transactionRepo, familyRepo),
+		Reconciliation: NewReconciliationService(balanceRepo, accountRepo, transactionRepo, familyRepo),
 		Transaction:    transactionService,
 		Budget:         budgetService,
 		Stats:          statsService,

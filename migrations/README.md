@@ -16,6 +16,7 @@ migration next to it — an already-applied `001` is never re-run (see "Changing
 - `005_accounts.{up,down}.sql` - `accounts`, `account_reconciliations`, `transactions.account_id` (plan 16)
 - `006_holdings.{up,down}.sql` - `holdings`, `holding_values` (plan 17)
 - `007_holding_plans.{up,down}.sql` - `holding_plans` (plan 18)
+- `008_account_balances.{up,down}.sql` - `account_balances` instead of `account_reconciliations` (plan 20)
 
 ### Why Consolidated Migrations?
 
@@ -39,14 +40,14 @@ Contains all database objects in order of dependencies:
    | `categories` | `income`/`expense`, самоссылка `parent_id`, `color`/`icon` для клиента |
    | `accounts` | справочник счетов; `name_key` UNIQUE в семье, `is_archived` |
    | `transactions` | `amount_minor INTEGER > 0`, `date TEXT 'YYYY-MM-DD'` (CHECK GLOB), `account_id` nullable, FK `RESTRICT` |
-   | `account_reconciliations` | цифра банка на счёт и месяц (`YYYY-MM`), PK `(account_id, month)`, FK `RESTRICT` |
+   | `account_balances` | остаток счёта на конец месяца (`YYYY-MM`) со знаком, PK `(account_id, month)`, FK `RESTRICT` |
    | `budgets` | `amount_minor`, `spent_minor`, период `start_date`/`end_date` — `TEXT`-даты |
    | `holdings` | активы и пассивы: `side` (`asset`/`liability`), `kind`, `name_key` UNIQUE в семье, `is_archived` |
    | `holding_values` | снимки стоимости, PK `(holding_id, date)`, `value_minor >= 0`, FK `CASCADE` |
    | `sessions` | bearer-токены: только `token_hash` |
 
 2. **Indexes**: только те, что закрывают реальные запросы (семья+дата, категория, автор)
-3. **Triggers**: `updated_at` для families, users, categories, accounts, transactions, budgets, holdings; у сверок и снимков триггера нет — `updated_at` пишет upsert
+3. **Triggers**: `updated_at` для families, users, categories, accounts, transactions, budgets, holdings; у остатков и снимков триггера нет — `updated_at` пишет upsert
 4. **Analytics**: Statistics updates (ANALYZE)
 
 `budget_alerts`, `invites` и `user_sessions` удалены; таблицу `schema_migrations` ведёт golang-migrate.

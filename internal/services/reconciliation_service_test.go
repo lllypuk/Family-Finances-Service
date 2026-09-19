@@ -17,132 +17,270 @@ import (
 	"family-budget-service/internal/domain/transaction"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services"
+	"family-budget-service/internal/services/dto"
 )
 
-type mockReconciliationRepo struct {
+type mockBalanceRepo struct {
 	mock.Mock
 }
 
-func (m *mockReconciliationRepo) Upsert(ctx context.Context, rec *reconciliation.Reconciliation) error {
-	return m.Called(ctx, rec).Error(0)
+func (m *mockBalanceRepo) Upsert(ctx context.Context, b *reconciliation.Balance) error {
+	return m.Called(ctx, b).Error(0)
 }
 
-func (m *mockReconciliationRepo) Delete(ctx context.Context, accountID uuid.UUID, month string) error {
+func (m *mockBalanceRepo) Delete(ctx context.Context, accountID uuid.UUID, month string) error {
 	return m.Called(ctx, accountID, month).Error(0)
 }
 
-func (m *mockReconciliationRepo) ListByMonth(
-	ctx context.Context,
-	month string,
-) ([]*reconciliation.Reconciliation, error) {
-	args := m.Called(ctx, month)
-	return args.Get(0).([]*reconciliation.Reconciliation), args.Error(1)
+func (m *mockBalanceRepo) ByMonths(ctx context.Context, prev, month string) ([]*reconciliation.Balance, error) {
+	args := m.Called(ctx, prev, month)
+	return args.Get(0).([]*reconciliation.Balance), args.Error(1)
 }
 
 type reconciliationMocks struct {
-	repo     *mockReconciliationRepo
+	balances *mockBalanceRepo
 	accounts *mockAccountRepo
 	txs      *MockTransactionRepository
 	families *MockFamilyRepository
 	svc      services.ReconciliationService
 }
 
-func newReconciliationMocks() reconciliationMocks {
+func newReconciliationMocks(family *user.Family) reconciliationMocks {
 	m := reconciliationMocks{
-		repo:     &mockReconciliationRepo{},
+		balances: &mockBalanceRepo{},
 		accounts: &mockAccountRepo{},
 		txs:      &MockTransactionRepository{},
 		families: &MockFamilyRepository{},
 	}
-	m.svc = services.NewReconciliationService(m.repo, m.accounts, m.txs, m.families)
+	m.families.On("Get", mock.Anything).Return(family, nil)
+	m.svc = services.NewReconciliationService(m.balances, m.accounts, m.txs, m.families)
 
 	return m
 }
 
-func TestReconciliationService_Summary(t *testing.T) {
-	m := newReconciliationMocks()
-	active := &account.Account{ID: uuid.New(), Name: "Альфа"}
-	unreconciled := &account.Account{ID: uuid.New(), Name: "Наличные"}
-	archivedSpent := &account.Account{ID: uuid.New(), Name: "Старая", IsArchived: true}
-	archivedZero := &account.Account{ID: uuid.New(), Name: "Закрытая", IsArchived: true}
-	archivedIdle := &account.Account{ID: uuid.New(), Name: "Пустая", IsArchived: true}
-	first, last := date.New(2026, time.August, 1), date.New(2026, time.August, 31)
+func augustBounds() (date.Date, date.Date) {
+	return date.New(2026, time.August, 1), date.New(2026, time.August, 31)
+}
 
-	m.accounts.On("List", mock.Anything, true).Return(
-		[]*account.Account{active, unreconciled, archivedSpent, archivedZero, archivedIdle}, nil)
-	m.txs.On("RecordedByAccount", mock.Anything, first, last).Return([]transaction.AccountTotal{
-		{AccountID: &active.ID, AmountMinor: 5_000},
-		{AccountID: &unreconciled.ID, AmountMinor: 300},
-		{AccountID: &archivedSpent.ID, AmountMinor: 10},
-		{AccountID: nil, AmountMinor: 125},
-	}, nil)
-	m.repo.On("ListByMonth", mock.Anything, "2026-08").Return([]*reconciliation.Reconciliation{
-		{AccountID: active.ID, Month: "2026-08", BankExpenseMinor: 4_000, Note: "лишнее"},
-		{AccountID: archivedZero.ID, Month: "2026-08", BankExpenseMinor: 0},
+// longAgo — счёт заведён задолго до сверяемого месяца.
+func longAgo() time.Time {
+	return time.Date(2025, time.January, 10, 12, 0, 0, 0, time.UTC)
+}
+
+func balance(a *account.Account, month string, v money.Minor) *reconciliation.Balance {
+	return &reconciliation.Balance{AccountID: a.ID, Month: month, BalanceMinor: v}
+}
+
+// summarize — сводка за август 2026 с приходом 1000 и расходом 400.
+func summarize(
+	t *testing.T,
+	accounts []*account.Account,
+	balances ...*reconciliation.Balance,
+) *dto.ReconciliationStats {
+	t.Helper()
+
+	m := newReconciliationMocks(&user.Family{Timezone: "UTC"})
+	m.accounts.On("List", mock.Anything, true).Return(accounts, nil)
+	m.balances.On("ByMonths", mock.Anything, "2026-07", "2026-08").Return(balances, nil)
+	august, augustLast := augustBounds()
+	m.txs.On("GetTotalsByMonth", mock.Anything, august, augustLast).Return([]transaction.MonthTotal{
+		{Month: "2026-08", Type: transaction.TypeIncome, AmountMinor: 1_000},
+		{Month: "2026-08", Type: transaction.TypeExpense, AmountMinor: 400},
 	}, nil)
 
-	month := date.New(2026, time.August, 17)
-	stats, err := m.svc.Summary(t.Context(), &month)
+	day := date.New(2026, time.August, 17)
+	stats, err := m.svc.Summary(t.Context(), &day)
 	require.NoError(t, err)
-
 	assert.Equal(t, "2026-08", stats.Month)
-	assert.Equal(t, money.Minor(125), stats.UnassignedMinor)
-	require.Len(t, stats.Accounts, 4, "архивный без расхода и сверки не входит")
+	assert.Equal(t, money.Minor(1_000), stats.IncomeMinor)
+	assert.Equal(t, money.Minor(400), stats.ExpenseMinor)
 
-	row := stats.Accounts[0]
-	assert.Equal(t, active.ID, row.Account.ID)
-	assert.Equal(t, money.Minor(5_000), row.RecordedMinor)
-	require.NotNil(t, row.DiffMinor)
-	assert.Equal(t, money.Minor(-1_000), *row.DiffMinor)
-	assert.Equal(t, "лишнее", *row.Note)
+	return stats
+}
 
-	row = stats.Accounts[1]
-	assert.Equal(t, money.Minor(300), row.RecordedMinor)
-	assert.Nil(t, row.BankExpenseMinor)
-	assert.Nil(t, row.DiffMinor)
-	assert.Nil(t, row.Note)
-	assert.Nil(t, row.UpdatedAt)
+func minor(v money.Minor) *money.Minor { return &v }
 
-	assert.Equal(t, archivedSpent.ID, stats.Accounts[2].Account.ID)
-	assert.True(t, stats.Accounts[2].Account.IsArchived)
-	assert.Equal(t, archivedZero.ID, stats.Accounts[3].Account.ID, "нулевая сверка считается")
-	assert.Equal(t, money.Minor(0), *stats.Accounts[3].DiffMinor)
+func TestReconciliationService_Summary_BothEdges(t *testing.T) {
+	card := &account.Account{ID: uuid.New(), Name: "Карта", CreatedAt: longAgo()}
+	credit := &account.Account{ID: uuid.New(), Name: "Кредитка", CreatedAt: longAgo()}
+
+	stats := summarize(t, []*account.Account{card, credit},
+		balance(card, "2026-07", 10_000), balance(credit, "2026-07", -2_000),
+		balance(card, "2026-08", 11_000), balance(credit, "2026-08", -2_500))
+
+	assert.True(t, stats.Complete)
+	assert.Equal(t, minor(8_000), stats.OpeningMinor)
+	assert.Equal(t, minor(8_500), stats.ClosingMinor)
+	// (8500 − 8000) − (1000 − 400)
+	assert.Equal(t, minor(-100), stats.GapMinor)
+	require.Len(t, stats.Accounts, 2)
+	assert.Equal(t, minor(-2_500), stats.Accounts[1].ClosingMinor, "остаток кредитки отрицательный")
+	assert.NotNil(t, stats.Accounts[0].UpdatedAt)
+}
+
+func TestReconciliationService_Summary_MissingEdge(t *testing.T) {
+	card := &account.Account{ID: uuid.New(), Name: "Карта", CreatedAt: longAgo()}
+	cash := &account.Account{ID: uuid.New(), Name: "Наличные", CreatedAt: longAgo()}
+
+	stats := summarize(t, []*account.Account{card, cash},
+		balance(card, "2026-07", 10_000), balance(cash, "2026-07", 500), balance(card, "2026-08", 11_000))
+	assert.Equal(t, minor(10_500), stats.OpeningMinor)
+	assert.Nil(t, stats.ClosingMinor)
+	assert.Nil(t, stats.GapMinor)
+	assert.False(t, stats.Complete)
+	assert.Nil(t, stats.Accounts[1].ClosingMinor)
+	assert.Nil(t, stats.Accounts[1].UpdatedAt)
+
+	stats = summarize(t, []*account.Account{card, cash},
+		balance(card, "2026-07", 10_000), balance(card, "2026-08", 11_000), balance(cash, "2026-08", 0))
+	assert.Nil(t, stats.OpeningMinor, "у давнего счёта без строки за прошлый месяц — пропуск")
+	assert.Equal(t, minor(11_000), stats.ClosingMinor)
+	assert.Nil(t, stats.GapMinor)
+	assert.False(t, stats.Complete)
+}
+
+func TestReconciliationService_Summary_AccountCreatedInMonth(t *testing.T) {
+	fresh := &account.Account{
+		ID: uuid.New(), Name: "Новая", CreatedAt: time.Date(2026, time.August, 5, 0, 0, 0, 0, time.UTC),
+	}
+	stats := summarize(t, []*account.Account{fresh}, balance(fresh, "2026-08", 700))
+	assert.Equal(t, minor(0), stats.Accounts[0].OpeningMinor)
+	assert.Equal(t, minor(100), stats.GapMinor)
+
+	stats = summarize(t, []*account.Account{fresh}, balance(fresh, "2026-07", 300), balance(fresh, "2026-08", 700))
+	assert.Equal(t, minor(300), stats.OpeningMinor, "строка за прошлый месяц побеждает исключение")
+}
+
+func TestReconciliationService_Summary_AccountCreatedAfterMonth(t *testing.T) {
+	card := &account.Account{ID: uuid.New(), Name: "Карта", CreatedAt: longAgo()}
+	later := &account.Account{
+		ID: uuid.New(), Name: "Позже", CreatedAt: time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC),
+	}
+
+	stats := summarize(t, []*account.Account{card, later},
+		balance(card, "2026-07", 100), balance(card, "2026-08", 700))
+	require.Len(t, stats.Accounts, 1)
+	assert.Equal(t, card.ID, stats.Accounts[0].Account.ID)
+	assert.True(t, stats.Complete)
+}
+
+func TestReconciliationService_Summary_Archived(t *testing.T) {
+	card := &account.Account{ID: uuid.New(), Name: "Карта", CreatedAt: longAgo()}
+	closed := &account.Account{ID: uuid.New(), Name: "Закрытая", IsArchived: true, CreatedAt: longAgo()}
+	idle := &account.Account{ID: uuid.New(), Name: "Пустая", IsArchived: true, CreatedAt: longAgo()}
+
+	stats := summarize(t, []*account.Account{card, closed, idle},
+		balance(card, "2026-07", 100), balance(closed, "2026-07", 500), balance(idle, "2026-07", 0),
+		balance(card, "2026-08", 1_200))
+	require.Len(t, stats.Accounts, 2, "архивный с нулём за прошлый месяц и без строки — не в списке")
+	assert.Equal(t, closed.ID, stats.Accounts[1].Account.ID)
+	assert.Equal(t, minor(0), stats.Accounts[1].ClosingMinor, "закрытая карта без строки — 0")
+	assert.Nil(t, stats.Accounts[1].UpdatedAt)
+	assert.True(t, stats.Complete)
+
+	// Следующий месяц: у закрытой строка за август — 0, за сентябрь нет.
+	m := newReconciliationMocks(&user.Family{Timezone: "UTC"})
+	m.accounts.On("List", mock.Anything, true).Return([]*account.Account{card, closed}, nil)
+	m.balances.On("ByMonths", mock.Anything, "2026-08", "2026-09").Return([]*reconciliation.Balance{
+		balance(card, "2026-08", 1_200),
+	}, nil)
+	m.txs.On("GetTotalsByMonth", mock.Anything, mock.Anything, mock.Anything).Return([]transaction.MonthTotal{}, nil)
+	sept := date.New(2026, time.September, 1)
+	next, err := m.svc.Summary(t.Context(), &sept)
+	require.NoError(t, err)
+	require.Len(t, next.Accounts, 1, "закрытая карта выпала через месяц")
+}
+
+func TestReconciliationService_Summary_NoAccounts(t *testing.T) {
+	stats := summarize(t, []*account.Account{})
+	assert.Empty(t, stats.Accounts)
+	assert.Nil(t, stats.OpeningMinor)
+	assert.Nil(t, stats.ClosingMinor)
+	assert.Nil(t, stats.GapMinor)
+	assert.False(t, stats.Complete)
+}
+
+func TestReconciliationService_Summary_CreatedAtInFamilyZone(t *testing.T) {
+	// 31 июля 22:00 UTC — это уже 1 августа во Владивостоке: счёт заведён в сверяемом месяце.
+	edge := &account.Account{
+		ID: uuid.New(), Name: "Граница", CreatedAt: time.Date(2026, time.July, 31, 22, 0, 0, 0, time.UTC),
+	}
+	august, augustLast := augustBounds()
+	for _, tt := range []struct {
+		zone    string
+		opening *money.Minor
+	}{
+		{"Asia/Vladivostok", minor(0)},
+		{"UTC", nil},
+	} {
+		m := newReconciliationMocks(&user.Family{Timezone: tt.zone})
+		m.accounts.On("List", mock.Anything, true).Return([]*account.Account{edge}, nil)
+		m.balances.On("ByMonths", mock.Anything, "2026-07", "2026-08").Return([]*reconciliation.Balance{}, nil)
+		m.txs.On("GetTotalsByMonth", mock.Anything, august, augustLast).Return([]transaction.MonthTotal{}, nil)
+
+		stats, err := m.svc.Summary(t.Context(), &august)
+		require.NoError(t, err)
+		assert.Equal(t, tt.opening, stats.Accounts[0].OpeningMinor, tt.zone)
+	}
 }
 
 func TestReconciliationService_Summary_DefaultMonthFromFamilyZone(t *testing.T) {
-	m := newReconciliationMocks()
 	family := &user.Family{Timezone: "Pacific/Kiritimati"}
-	m.families.On("Get", mock.Anything).Return(family, nil)
+	m := newReconciliationMocks(family)
 	first, last := date.Today(family.Location()).MonthBounds()
 	m.accounts.On("List", mock.Anything, true).Return([]*account.Account{}, nil)
-	m.txs.On("RecordedByAccount", mock.Anything, first, last).Return([]transaction.AccountTotal(nil), nil)
-	m.repo.On("ListByMonth", mock.Anything, first.MonthKey()).Return([]*reconciliation.Reconciliation{}, nil)
+	m.balances.On("ByMonths", mock.Anything, first.AddMonths(-1).MonthKey(), first.MonthKey()).
+		Return([]*reconciliation.Balance{}, nil)
+	m.txs.On("GetTotalsByMonth", mock.Anything, first, last).Return([]transaction.MonthTotal(nil), nil)
 
 	stats, err := m.svc.Summary(t.Context(), nil)
 	require.NoError(t, err)
 	assert.Equal(t, first.MonthKey(), stats.Month)
-	assert.Empty(t, stats.Accounts)
-	assert.Equal(t, money.Minor(0), stats.UnassignedMinor)
 }
 
-func TestReconciliationService_Put(t *testing.T) {
-	m := newReconciliationMocks()
+func TestReconciliationService_FutureMonth(t *testing.T) {
+	family := &user.Family{Timezone: "UTC"}
+	m := newReconciliationMocks(family)
+	next := date.Today(family.Location()).AddMonths(1)
 	id := uuid.New()
-	m.accounts.On("GetByID", mock.Anything, id).Return(&account.Account{ID: id}, nil)
-	m.repo.On("Upsert", mock.Anything, mock.AnythingOfType("*reconciliation.Reconciliation")).Return(nil)
 
-	rec, err := m.svc.Put(t.Context(), id, date.New(2026, time.September, 1), 0, "")
-	require.NoError(t, err)
-	assert.Equal(t, "2026-09", rec.Month)
+	_, err := m.svc.Summary(t.Context(), &next)
+	require.ErrorIs(t, err, services.ErrReconciliationMonthInFuture)
+	_, err = m.svc.PutBalance(t.Context(), id, next, 1)
+	require.ErrorIs(t, err, services.ErrReconciliationMonthInFuture)
+	require.ErrorIs(t, m.svc.DeleteBalance(t.Context(), id, next), services.ErrReconciliationMonthInFuture)
+	m.accounts.AssertNotCalled(t, "GetByID", mock.Anything, mock.Anything)
+}
 
-	_, err = m.svc.Put(t.Context(), id, date.New(2026, time.September, 1), -1, "")
-	require.ErrorIs(t, err, reconciliation.ErrAmountOutOfRange)
-	_, err = m.svc.Put(t.Context(), id, date.New(2026, time.September, 1), money.MaxAmount+1, "")
-	require.ErrorIs(t, err, reconciliation.ErrAmountOutOfRange)
+func TestReconciliationService_PutBalance(t *testing.T) {
+	m := newReconciliationMocks(&user.Family{Timezone: "UTC"})
+	august, _ := augustBounds()
+	id := uuid.New()
+	m.accounts.On("GetByID", mock.Anything, id).Return(&account.Account{ID: id, IsArchived: true}, nil)
+	m.balances.On("Upsert", mock.Anything, mock.AnythingOfType("*reconciliation.Balance")).Return(nil)
+
+	b, err := m.svc.PutBalance(t.Context(), id, august, -money.MaxAmount)
+	require.NoError(t, err, "архивный счёт и отрицательный остаток разрешены")
+	assert.Equal(t, "2026-08", b.Month)
+
+	_, err = m.svc.PutBalance(t.Context(), id, august, money.MaxAmount+1)
+	require.ErrorIs(t, err, reconciliation.ErrBalanceOutOfRange)
+	_, err = m.svc.PutBalance(t.Context(), id, august, -money.MaxAmount-1)
+	require.ErrorIs(t, err, reconciliation.ErrBalanceOutOfRange)
 
 	unknown := uuid.New()
 	m.accounts.On("GetByID", mock.Anything, unknown).Return(nil, account.ErrNotFound)
-	_, err = m.svc.Put(t.Context(), unknown, date.New(2026, time.September, 1), 1, "")
+	_, err = m.svc.PutBalance(t.Context(), unknown, august, 1)
 	require.ErrorIs(t, err, account.ErrNotFound)
-	m.repo.AssertNumberOfCalls(t, "Upsert", 1)
+	m.balances.AssertNumberOfCalls(t, "Upsert", 1)
+}
+
+func TestReconciliationService_DeleteBalance(t *testing.T) {
+	m := newReconciliationMocks(&user.Family{Timezone: "UTC"})
+	august, _ := augustBounds()
+	id := uuid.New()
+	m.accounts.On("GetByID", mock.Anything, id).Return(&account.Account{ID: id}, nil)
+	m.balances.On("Delete", mock.Anything, id, "2026-08").Return(reconciliation.ErrBalanceNotFound)
+
+	require.ErrorIs(t, m.svc.DeleteBalance(t.Context(), id, august), reconciliation.ErrBalanceNotFound)
 }

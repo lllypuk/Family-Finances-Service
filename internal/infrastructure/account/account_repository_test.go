@@ -148,7 +148,7 @@ func TestAccountRepository_Delete(t *testing.T) {
 		`UPDATE transactions SET account_id = ? WHERE id = ?`, used.ID.String(), txID)
 	require.NoError(t, err)
 	_, err = container.DB.ExecContext(t.Context(),
-		`INSERT INTO account_reconciliations (account_id, month, bank_expense_minor) VALUES (?, '2026-09', 0)`,
+		`INSERT INTO account_balances (account_id, month, balance_minor) VALUES (?, '2026-09', 0)`,
 		reconciled.ID.String())
 	require.NoError(t, err)
 

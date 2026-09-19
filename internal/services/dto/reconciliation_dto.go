@@ -8,21 +8,25 @@ import (
 	"family-budget-service/internal/domain/money"
 )
 
-// ReconciliationStats — сверка за месяц `YYYY-MM` для GET /stats/reconciliation.
+// ReconciliationStats — остатки против операций за месяц `YYYY-MM` для GET /stats/reconciliation.
+// Суммы остатков null, пока свой край заполнен не у всех счетов; gap — пока не заполнен любой.
 type ReconciliationStats struct {
-	Month           string              `json:"month"`
-	UnassignedMinor money.Minor         `json:"unassigned_minor"`
-	Accounts        []ReconciliationRow `json:"accounts"`
+	Month        string              `json:"month"`
+	OpeningMinor *money.Minor        `json:"opening_minor"`
+	ClosingMinor *money.Minor        `json:"closing_minor"`
+	IncomeMinor  money.Minor         `json:"income_minor"`
+	ExpenseMinor money.Minor         `json:"expense_minor"`
+	GapMinor     *money.Minor        `json:"gap_minor"`
+	Complete     bool                `json:"complete"`
+	Accounts     []ReconciliationRow `json:"accounts"`
 }
 
-// ReconciliationRow — строка счёта; пока сверки нет, поля банка, разницы, заметки и времени — null.
+// ReconciliationRow — остатки счёта на начало и конец месяца; updated_at — у остатка на конец.
 type ReconciliationRow struct {
-	Account          ReconciliationAccount `json:"account"`
-	RecordedMinor    money.Minor           `json:"recorded_minor"`
-	BankExpenseMinor *money.Minor          `json:"bank_expense_minor"`
-	DiffMinor        *money.Minor          `json:"diff_minor"`
-	Note             *string               `json:"note"`
-	UpdatedAt        *time.Time            `json:"updated_at"`
+	Account      ReconciliationAccount `json:"account"`
+	OpeningMinor *money.Minor          `json:"opening_minor"`
+	ClosingMinor *money.Minor          `json:"closing_minor"`
+	UpdatedAt    *time.Time            `json:"updated_at"`
 }
 
 // ReconciliationAccount — форма Account из openapi, чтобы клиент не заводил вторую модель счёта.

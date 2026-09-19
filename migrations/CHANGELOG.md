@@ -2,6 +2,19 @@
 
 All notable changes to database migrations will be documented in this file.
 
+## [2026-09-19] - Plan 20: account balances instead of reconciliations
+
+### Added
+- `account_balances` (PK `(account_id, month)`, FK `RESTRICT`, `balance_minor` со знаком, без `note`).
+
+### Removed
+- `account_reconciliations`: `008.up` удаляет таблицу вместе с цифрами банка. На свежей базе `005` её
+  создаёт, `008` роняет; `CREATE ... IF NOT EXISTS` в `008` — no-op.
+
+### Rollback
+- `008.down` удаляет `account_balances` (теряются все остатки) и пересоздаёт `account_reconciliations`
+  пустой, в виде из `005`. Перед `migrate --to 7` — бэкап.
+
 ## [2026-09-19] - Plan 18: holding monthly plans
 
 ### Added

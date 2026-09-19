@@ -79,7 +79,6 @@ func (c *SQLiteTestDB) CleanTables(t *testing.T) {
 		"sessions",
 		"budgets",
 		"account_balances",
-		"account_reconciliations",
 		"transactions",
 		"accounts",
 		"holding_values",

@@ -126,7 +126,7 @@ func NewApplication() (*Application, error) {
 		app.repositories.Category,
 		app.repositories.Account,
 		app.repositories.Holding,
-		app.repositories.Reconciliation,
+		app.repositories.Balance,
 		app.repositories.Transaction,
 		app.repositories.Budget, // BudgetRepositoryForTransactions
 		app.repositories.Budget, // BudgetRepository

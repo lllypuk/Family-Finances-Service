@@ -232,32 +232,34 @@ accounts[]: { account, opening_minor | null, closing_minor | null, updated_at | 
 - Delete: `internal/infrastructure/reconciliation/reconciliation_repository_sqlite.go` (+ `_test.go`),
   `internal/infrastructure/transaction/recorded_by_account_test.go`
 
-- [ ] `008.up` + `DROP TABLE account_reconciliations`, `008.down` + пересоздание из `005`; из `001` старый блок
+- [x] `008.up` + `DROP TABLE account_reconciliations`, `008.down` + пересоздание из `005`; из `001` старый блок
   убрать, комментарий про `updated_at` перенести; `CleanTables` — убрать старую запись
-- [ ] `migrations_test.go`, не удаляя гарантий замороженных схем: `expectedTables` (:33);
+- [x] `migrations_test.go`, не удаляя гарантий замороженных схем: `expectedTables` (:33);
   `TestMigrations_AccountsRollback` (:272-300) вставляет в старую таблицу на head — опустить до версии 7 или
   перевести на `account_balances`; `TestMigrations_AccountsSchemaMatchesFreshInstall` (:303-315) — сравнивать
   `account_balances`; `TestMigrations_HoldingsUpgradeKeepsAccounts` (:318-346) читает `bank_expense_minor`
   после `Up()` — читать до `008` либо проверять остальное; новый тест `7 → 8 → 7 → 8` с заполненной старой
   таблицей (после `down` она есть и пуста)
-- [ ] `ReconciliationService`: `PutBalance`, `DeleteBalance`, `Summary` по «Правилам расчёта»;
+- [x] `ReconciliationService`: `PutBalance`, `DeleteBalance`, `Summary` по «Правилам расчёта»;
   `ErrReconciliationMonthInFuture`
-- [ ] `RecordedByAccount`, `transaction.AccountTotal`, старый репозиторий, алиас в `repositories.go:35-36` —
+- [x] `RecordedByAccount`, `transaction.AccountTotal`, старый репозиторий, алиас в `repositories.go:35-36` —
   удалить; `HasMonetaryData` смотрит в `account_balances`; тексты `ErrInUse`, `CURRENCY_LOCKED`,
   `ACCOUNT_IN_USE` (`family_service.go:22`, `errors.go:53,101,110`) — «balances» вместо «reconciliations»
-- [ ] хендлеры и маршруты `…/balances/:month`, старые убрать; `BALANCE_NOT_FOUND` вместо
+- [x] хендлеры и маршруты `…/balances/:month`, старые убрать; `BALANCE_NOT_FOUND` вместо
   `RECONCILIATION_NOT_FOUND`; ветка `422` в `GetReconciliationStats`
-- [ ] спека: `putAccountBalance`, `deleteAccountBalance`, новые `ReconciliationStats`/`ReconciliationRow`,
+- [x] спека: `putAccountBalance`, `deleteAccountBalance`, новые `ReconciliationStats`/`ReconciliationRow`,
   `AccountBalance`; старые операции и схемы удалить
-- [ ] тесты сервиса: оба края заполнены; пропуск на каждом краю → `gap = null`; счёт создан в месяце →
+- [x] тесты сервиса: оба края заполнены; пропуск на каждом краю → `gap = null`; счёт создан в месяце →
   `opening = 0`; создан в месяце, но строка за `prev` есть → `opening` из строки; создан раньше без строки за
   `prev` → пропуск; создан позже месяца → в списке нет; архивный с ненулевым `opening` без `closing` →
   `closing = 0`, `complete`, в следующем месяце его нет; архивный с нулевым `prev` и без строки → нет; счетов
   нет → всё `null`; отрицательный остаток; граница месяца и `created_at` в таймзоне; будущий месяц; мок
   `GetTotalsByMonth`
-- [ ] тесты хендлеров: `422` (формат месяца, будущий — `PUT` и `GET`, диапазон), `404`, `400` на битый id;
+- [x] тесты хендлеров: `422` (формат месяца, будущий — `PUT` и `GET`, диапазон), `404`, `400` на битый id;
   `HasMonetaryData` при нулевом остатке
-- [ ] `make fmt && make test && make lint`
+- [x] `make fmt && make test && make lint`
+- ➕ `Repositories.Reconciliation` → `Repositories.Balance` (алиас `BalanceRepository`); будущий месяц
+  отбивается и в `DELETE`, не только в `PUT`/`GET`
 
 ### Task 4: Интеграционные тесты
 

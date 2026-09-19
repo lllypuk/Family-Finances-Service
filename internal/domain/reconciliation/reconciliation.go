@@ -1,4 +1,4 @@
-// Package reconciliation — цифра банка «траты за месяц» по счёту; записанное считается на чтении.
+// Package reconciliation — остатки счетов на конец месяца; сверка с операциями считается на чтении.
 package reconciliation
 
 import (
@@ -11,27 +11,11 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("reconciliation not found")
-	// ErrAmountOutOfRange — сумма банка вне 0…money.MaxAmount.
-	ErrAmountOutOfRange = errors.New("bank expense amount is out of range")
+	// ErrBalanceNotFound — у счёта нет остатка за месяц.
+	ErrBalanceNotFound = errors.New("account balance not found")
+	// ErrBalanceOutOfRange — |остаток| больше money.MaxAmount.
+	ErrBalanceOutOfRange = errors.New("account balance is out of range")
 )
-
-// Reconciliation — сверка счёта за месяц `YYYY-MM`.
-type Reconciliation struct {
-	AccountID        uuid.UUID
-	Month            string
-	BankExpenseMinor money.Minor
-	Note             string
-	UpdatedAt        time.Time
-}
-
-// ValidAmount — 0 законен: по счёту в месяце могло не быть трат.
-func ValidAmount(amount money.Minor) bool {
-	return amount >= 0 && amount <= money.MaxAmount
-}
-
-// ErrBalanceNotFound — у счёта нет остатка за месяц.
-var ErrBalanceNotFound = errors.New("account balance not found")
 
 // Balance — остаток счёта на конец месяца `YYYY-MM`; отрицательный у кредитки.
 type Balance struct {

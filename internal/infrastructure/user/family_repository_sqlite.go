@@ -189,13 +189,13 @@ func (r *SQLiteFamilyRepository) Exists(ctx context.Context) (bool, error) {
 	return count > 0, nil
 }
 
-// HasMonetaryData — есть ли у семьи суммы в её валюте: операции, сверки или снимки позиций, нулевые тоже.
+// HasMonetaryData — есть ли у семьи суммы в её валюте: операции, остатки счетов или снимки и планы позиций, нулевые тоже.
 func (r *SQLiteFamilyRepository) HasMonetaryData(ctx context.Context) (bool, error) {
 	query := `
 		SELECT EXISTS (SELECT 1 FROM transactions WHERE family_id = f.id)
 			OR EXISTS (
-				SELECT 1 FROM account_reconciliations r
-				JOIN accounts a ON a.id = r.account_id
+				SELECT 1 FROM account_balances b
+				JOIN accounts a ON a.id = b.account_id
 				WHERE a.family_id = f.id
 			)
 			OR EXISTS (

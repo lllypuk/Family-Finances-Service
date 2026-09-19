@@ -19,7 +19,7 @@ var (
 	// ErrCurrencyLocked — валюту нельзя сменить, пока есть операции, сверки, снимки или планы позиций: суммы хранятся
 	// в валюте семьи, и смена молча переименовала бы всю историю (A-05).
 	ErrCurrencyLocked = errors.New(
-		"currency cannot be changed while transactions, reconciliations or holding values or plans exist",
+		"currency cannot be changed while transactions, account balances or holding values or plans exist",
 	)
 )
 

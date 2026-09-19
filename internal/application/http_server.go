@@ -277,8 +277,8 @@ func (s *HTTPServer) setupResourceRoutes(api *echo.Group) {
 	accounts.POST("", s.accountHandler.CreateAccount)
 	accounts.PUT("/:id", s.accountHandler.UpdateAccount)
 	accounts.DELETE("/:id", s.accountHandler.DeleteAccount, adminOnly)
-	accounts.PUT("/:id/reconciliations/:month", s.reconciliationHandler.PutReconciliation)
-	accounts.DELETE("/:id/reconciliations/:month", s.reconciliationHandler.DeleteReconciliation)
+	accounts.PUT("/:id/balances/:month", s.reconciliationHandler.PutAccountBalance)
+	accounts.DELETE("/:id/balances/:month", s.reconciliationHandler.DeleteAccountBalance)
 
 	s.setupHoldingRoutes(api, financeAccess, adminOnly)
 

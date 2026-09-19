@@ -237,19 +237,16 @@ type HoldingValueResponse struct {
 	UpdatedAt  time.Time   `json:"updated_at"`
 }
 
-// ReconciliationRequest — полная замена сверки: без note заметка очищается.
-// BankExpenseMinor — указатель, иначе required отверг бы законный 0.
-type ReconciliationRequest struct {
-	BankExpenseMinor *money.Minor `json:"bank_expense_minor" validate:"required"`
-	Note             string       `json:"note"               validate:"max=500"`
+// AccountBalanceRequest — остаток на конец месяца; указатель, иначе required отверг бы законный 0.
+type AccountBalanceRequest struct {
+	BalanceMinor *money.Minor `json:"balance_minor" validate:"required"`
 }
 
-type ReconciliationResponse struct {
-	AccountID        uuid.UUID   `json:"account_id"`
-	Month            string      `json:"month"`
-	BankExpenseMinor money.Minor `json:"bank_expense_minor"`
-	Note             string      `json:"note"`
-	UpdatedAt        time.Time   `json:"updated_at"`
+type AccountBalanceResponse struct {
+	AccountID    uuid.UUID   `json:"account_id"`
+	Month        string      `json:"month"`
+	BalanceMinor money.Minor `json:"balance_minor"`
+	UpdatedAt    time.Time   `json:"updated_at"`
 }
 
 // CreateTransactionRequest represents the request payload for creating a new transaction.

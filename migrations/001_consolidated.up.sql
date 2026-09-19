@@ -130,19 +130,6 @@ CREATE TABLE IF NOT EXISTS budgets (
     CHECK (is_active IN (0, 1))
 );
 
--- Цифра расходов по счёту за месяц из выписки банка. Триггера updated_at нет: его пишет upsert.
-CREATE TABLE IF NOT EXISTS account_reconciliations (
-    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
-    month TEXT NOT NULL,
-    bank_expense_minor INTEGER NOT NULL,
-    note TEXT NOT NULL DEFAULT '',
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
-    PRIMARY KEY (account_id, month),
-    CHECK (month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'),
-    CHECK (bank_expense_minor >= 0)
-);
-
 -- Остаток счёта на конец месяца (план 20), со знаком: кредитка уходит в минус. updated_at пишет upsert из Go —
 -- CURRENT_TIMESTAMP с секундной точностью не различил бы два upsert подряд.
 CREATE TABLE IF NOT EXISTS account_balances (
