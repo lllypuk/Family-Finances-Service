@@ -189,12 +189,12 @@ CREATE TABLE holding_plans (
 - Modify: `internal/infrastructure/user/family_repository_sqlite.go` и его тест, `handlers/errors.go` (`ErrMessageCurrencyLocked`, :101), `tests/integration/families_test.go`
 - Modify: `CLAUDE.md`, `migrations/README.md`, `migrations/CHANGELOG.md`, `docs/api/README.md`, `docs/backlog.md`, `android/app/src/main/res/values/strings.xml`
 
-- [ ] Android-текст `settings_error_currency_locked` (`strings.xml:259`) — дописать планы позиций
-- [ ] четвёртый `EXISTS` в `HasMonetaryData` — `holding_plans` через `holdings.family_id`
-- [ ] тест: позиция с планом без снимков и операций → смена валюты `409`; после очистки плана нулями — проходит
-- [ ] `migrations/README.md` и `CHANGELOG.md`: `007`, при откате планы теряются; `docs/api/README.md`: три поля `Holding`; `docs/backlog.md`: отложенное из «Не входит»
-- [ ] `CLAUDE.md`: таблица в списке схемы, `CleanTables`, «Conventions» — план позиции: строка живёт, пока ненулевая; `0` очищает; итог считает клиент
-- [ ] `make fmt && make test && make lint`
+- [x] Android-текст `settings_error_currency_locked` (`strings.xml:259`) — дописать планы позиций
+- [x] четвёртый `EXISTS` в `HasMonetaryData` — `holding_plans` через `holdings.family_id`
+- [x] тест: позиция с планом без снимков и операций → смена валюты `409`; после очистки плана нулями — проходит
+- [x] `migrations/README.md` и `CHANGELOG.md`: `007`, при откате планы теряются; `docs/api/README.md`: три поля `Holding`; `docs/backlog.md`: отложенное из «Не входит»
+- [x] `CLAUDE.md`: таблица в списке схемы, `CleanTables`, «Conventions» — план позиции: строка живёт, пока ненулевая; `0` очищает; итог считает клиент
+- [x] `make fmt && make test && make lint`
 
 ### Task 4: Клиент — поля плана в форме позиции
 

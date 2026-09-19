@@ -256,7 +256,7 @@
     <string name="settings_family_currency_hint">Код ISO 4217, например RUB</string>
     <string name="settings_family_timezone">Часовой пояс</string>
     <string name="settings_family_timezone_hint">Имя IANA, например Europe/Moscow</string>
-    <string name="settings_error_currency_locked">Валюту нельзя сменить: в семье уже есть операции, сверки или снимки стоимости</string>
+    <string name="settings_error_currency_locked">Валюту нельзя сменить: в семье уже есть операции, сверки, снимки стоимости или планы позиций</string>
     <string name="settings_error_last_admin">В семье должен остаться хотя бы один активный администратор</string>
     <string name="settings_error_deactivate_self">Себя деактивировать нельзя</string>
     <string name="settings_backup_create">Создать копию</string>

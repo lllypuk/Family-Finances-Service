@@ -15,6 +15,7 @@ migration next to it — an already-applied `001` is never re-run (see "Changing
 - `004_budgets_recurring.{up,down}.sql` - `budgets.recurring` / `budgets.series_id` (plan 12)
 - `005_accounts.{up,down}.sql` - `accounts`, `account_reconciliations`, `transactions.account_id` (plan 16)
 - `006_holdings.{up,down}.sql` - `holdings`, `holding_values` (plan 17)
+- `007_holding_plans.{up,down}.sql` - `holding_plans` (plan 18)
 
 ### Why Consolidated Migrations?
 
@@ -216,6 +217,7 @@ SELECT * FROM schema_migrations;
 | 004 | Plan 12: `budgets.recurring` и `budgets.series_id` — периодические бюджеты | 2026-09-14 |
 | 005 | Plan 16: счета, сверки, `transactions.account_id` пересборкой таблицы; откат теряет счета, сверки и привязку операций | 2026-09-18 |
 | 006 | Plan 17: `holdings` и `holding_values` — активы, пассивы и снимки; откат теряет все позиции и всю их историю | 2026-09-18 |
+| 007 | Plan 18: `holding_plans` — плановые поступления и выплаты позиций; откат теряет все планы | 2026-09-19 |
 
 ## See Also
 

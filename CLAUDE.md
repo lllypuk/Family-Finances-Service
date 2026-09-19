@@ -222,7 +222,7 @@ list is in `docs/plans/completed/20260915-14-prometheus-metrics.md`, the deploym
 
 The whole schema lives in `migrations/001_consolidated.{up,down}.sql`
 (tables: families, users, categories, accounts, transactions, account_reconciliations, budgets, holdings,
-holding_values, sessions) — that file is the readable
+holding_values, holding_plans, sessions) — that file is the readable
 picture of the database, and a fresh DB is built from it.
 
 **Editing `001` does not touch an existing database.** golang-migrate stores only the version number, so on a DB
@@ -253,7 +253,7 @@ Two independent code paths apply migrations, and **both must keep working**:
 
 `testhelpers.SQLiteTestDB.CleanTables` has a hardcoded, FK-ordered table list — add any new table to it
 (`account_reconciliations` before `transactions` before `accounts`: both FKs to `accounts` are `RESTRICT`;
-`holding_values` before `holdings`).
+`holding_values` and `holding_plans` before `holdings`).
 
 SQLite is opened with `_txlock=immediate` (`infrastructure.NewSQLiteConnection`), so every `BeginTx` takes the
 write lock up front; with `MaxOpenConns=1` this is invisible, but do not "optimise" it away — `Bootstrap` relies
@@ -338,7 +338,7 @@ on it.
   on read over `type = 'expense'` of the month (`RecordedByAccount`), so a late transaction closes the gap
   without a new `PUT`; a refund booked as income does not reduce it. Having a reconciliation means having the
   row — a `0` counts, and blocks `CURRENCY_LOCKED` like a transaction does (`FamilyRepository.HasMonetaryData`:
-  transactions, reconciliations and holding values, archived and zero ones included).
+  transactions, reconciliations, holding values and holding plans, archived and zero ones included).
 - **Holdings carry their sign in `side`, not in the number.** `value_minor >= 0`, and `side` is fixed at creation
   (`UpdateHoldingRequest` has no such field) — changing it would flip the whole history. A holding's value on a
   day is its latest snapshot with `date <=` that day, carried forward with no expiry (a flat is revalued once a
@@ -348,6 +348,11 @@ on it.
   so archiving never rewrites the past — a sold or repaid holding gets a `0` snapshot. `DELETE /holdings/:id`
   (admin) cascades its snapshots and changes past buckets. `assets_minor`/`liabilities_minor`/`net_minor` are
   sums, so the spec types them as `int64` without `Money.maximum`; in Go they stay `money.Minor`.
+- **A holding's monthly plan is a row in `holding_plans` that exists only while non-zero.** In `PUT /holdings/:id`
+  a missing number is left alone and `0` clears it; both at `0` delete the row, so "has a plan" is "has a row"
+  (that is all `HasMonetaryData` checks) and `plan_updated_at` does not outlive the plan. The holding and its plan
+  are written in one `BeginTx`, merged inside it — never through `r.db` or `GetByID` there, with one connection
+  that deadlocks. The "План в месяц" total is the client's, over non-archived holdings; there is no server aggregate.
 - **Fractions come in two units.** Shares (`share`, `*_delta`, `stats.budgets[].utilization`) are 0…1; fields named
   `percentage` and `budgets[].utilization` on `/budgets` are percent 0…100. Both are documented per field in
   `docs/api/openapi.yaml`.

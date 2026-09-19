@@ -166,6 +166,24 @@ func TestFamilyAPI_Integration(t *testing.T) {
 		assert.Equal(t, "timezone", response.Error.Details[0].Field)
 	})
 
+	t.Run("UpdateFamily_CurrencyLockedWithHoldingPlan", func(t *testing.T) {
+		rec := doAccountRequest(t, testServer, adminAuth, http.MethodPost, "/api/v1/holdings",
+			`{"name":"Ипотека","side":"liability","kind":"loan","monthly_expense_minor":5000000}`)
+		require.Equal(t, http.StatusCreated, rec.Code, "тело: %s", rec.Body.String())
+		created := decodeHolding(t, rec)
+
+		rec = do(t, http.MethodPut, `{"currency":"EUR"}`, adminAuth)
+		require.Equal(t, http.StatusConflict, rec.Code, "тело: %s", rec.Body.String())
+		assert.Equal(t, handlers.ErrCodeCurrencyLocked, errorCodeOf(t, rec))
+
+		rec = doAccountRequest(t, testServer, adminAuth, http.MethodPut, "/api/v1/holdings/"+created.ID.String(),
+			`{"monthly_income_minor":0,"monthly_expense_minor":0}`)
+		require.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
+
+		rec = do(t, http.MethodPut, `{"currency":"USD"}`, adminAuth)
+		require.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
+	})
+
 	// Подтест идёт последним: он заводит транзакцию, после которой валюта заперта навсегда.
 	t.Run("UpdateFamily_CurrencyLockedWithTransactions", func(t *testing.T) {
 		ctx := context.Background()
