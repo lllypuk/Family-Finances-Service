@@ -1,5 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- Тёмная: схема Compose одна и тёмная, светлый родитель давал белую вспышку на старте. -->
-    <style name="Theme.FamilyFinances" parent="android:Theme.Material.NoActionBar" />
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Вспышки на старте нет: фон окна = canvas своей темы, тёмный вариант — в values-night. -->
+    <style name="Theme.FamilyFinances" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/canvas_light</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">true</item>
+    </style>
+
+    <!-- Переопределения из настроек. parent= обязателен: без него под night .Light унаследовала бы тёмную. -->
+    <style name="Theme.FamilyFinances.Light" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/canvas_light</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">true</item>
+    </style>
+
+    <style name="Theme.FamilyFinances.Dark" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/canvas_dark</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
+    </style>
 </resources>

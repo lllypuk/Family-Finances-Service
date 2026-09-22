@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -36,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.IntentCompat
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
@@ -48,6 +50,8 @@ import kotlinx.coroutines.withContext
 import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import tech.shatrov.familyfinances.theme.AppTheme
 import tech.shatrov.familyfinances.theme.Dimens
+import tech.shatrov.familyfinances.theme.ThemeMode
+import tech.shatrov.familyfinances.theme.isDark
 import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.AppNavBar
 import tech.shatrov.familyfinances.ui.AppTab
@@ -100,8 +104,22 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // Пересозданная активити получает тот же intent: картинки уже предложены до поворота.
         if (savedInstanceState == null) offerShared(intent)
+        when (graph.theme.mode.value) {
+            ThemeMode.Light -> setTheme(R.style.Theme_FamilyFinances_Light)
+            ThemeMode.Dark -> setTheme(R.style.Theme_FamilyFinances_Dark)
+            ThemeMode.System -> Unit
+        }
         setContent {
-            AppTheme {
+            val mode by graph.theme.mode.collectAsStateWithLifecycle()
+            val dark = mode.isDark()
+            // Живое переключение: XML-атрибуты панелей читаются только при создании окна.
+            SideEffect {
+                WindowCompat.getInsetsController(window, window.decorView).run {
+                    isAppearanceLightStatusBars = !dark
+                    isAppearanceLightNavigationBars = !dark
+                }
+            }
+            AppTheme(mode) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     // С targetSdk 37 система рисует контент под своими панелями: без отступа
                     // верхний ряд каждого экрана уезжает под статус-бар.
