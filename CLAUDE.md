@@ -153,7 +153,8 @@ it is a plain `404`, with a token and without one.
   `parsePagination` **writes the 422 itself** and returns the `errResponseAlreadyWritten` sentinel: callers return
   `ignoreWritten(err)`, never the raw error, or Echo's error handler writes a second response over it. Lists the
   repository returns whole are windowed with `pageSlice(items, page)` and answered by `respondList(c, items, page,
-  len(all))`. The `field` in `error.details` is the json name (`start_date`), because every handler validator comes
+  len(all))`. `category_id` on `GET /transactions` repeats (`explode: true`, read via `c.QueryParams()`, duplicates
+  collapse) and matches any of the ids; an older server reads only the first and narrows the filter silently. The `field` in `error.details` is the json name (`start_date`), because every handler validator comes
   from `newAPIValidator()` — plain `validator.New()` would report Go field names.
 
 ### Screenshot recognition: `POST /api/v1/transactions/recognize`
@@ -376,7 +377,7 @@ reference): `docs/README.md` (navigation), `docs/product_brief.md`, `docs/tech_s
 status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the finished ones.
 
 **Current direction:** `docs/specs/005-api-only-redesign.md` — the service is an API-only backend for an
-Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–10 and 12–21 are
+Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–10 and 12–22 are
 done (`docs/plans/completed/`, 06 = the Android client, 07 = its budgets tab, 08 = its settings screen,
 09 = the server findings of 07–08, 10 = `/reports` removed and `GET /stats/monthly` added, 12 = recurring
 budgets, both sides, 13 = the client's UI audit: segments instead of chips, a FAB on "Операции", empty states
@@ -395,6 +396,8 @@ and, silently, the reconciliation card on the home screen (the old model require
 `008.down` recreates `account_reconciliations` empty; `migrate --to 8 → 7 → 8` was run on a copy of the production
 DB before `v0.9.0` was tagged (19.09.2026).
 Plan 21 (client `0.13.0`, contract untouched) adds a light theme with a System/Light/Dark switch in settings.
+Plan 22 (server `v0.10.0`, client `0.14.0`, one MR, additive) takes categories off the nav bar, draws icon and color
+as an avatar and makes `category_id` on `GET /transactions` an array; deploy the server first.
 
 `docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates
 from it, and code and spec now match. **A registered route with no operation in the spec fails `make test`**

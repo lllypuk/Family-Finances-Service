@@ -320,14 +320,14 @@ data class Categories(val back: AppScreen = Settings()) : AppScreen
 - [x] `make fmt && make test && make lint` (0 issues), `make -C android check`, `make -C android api-check`
 
 ### Task 9: [Final] Update documentation
-- [ ] `android/CLAUDE.md`: «Модули» (четыре корня, `Categories(back)`, `onForm` со справочником поверх формы,
+- [x] `android/CLAUDE.md`: «Модули» (четыре корня, `Categories(back)`, `onForm` со справочником поверх формы,
       `categoriesStale` и узкий `reloadCategories`), «Общие элементы» (`CategoryAvatar` вместо `CategoryDot`,
       `android.icu` для графем), «Версии» (клиент `0.14.0` требует `v0.10.0` для мультифильтра — старый
       сервер молча берёт первый `category_id`)
-- [ ] корневой `CLAUDE.md`: `category_id` как массив в «One HTTP surface», теги `v0.10.0`/`app-v0.14.0` в
+- [x] корневой `CLAUDE.md`: `category_id` как массив в «One HTTP surface», теги `v0.10.0`/`app-v0.14.0` в
       «Current direction»
-- [ ] `docs/api/README.md`, если там перечислены фильтры
-- [ ] перенести план в `docs/plans/completed/`
+- [x] `docs/api/README.md`, если там перечислены фильтры (не перечислены — без правок)
+- [x] перенести план в `docs/plans/completed/`
 
 ## Post-Completion
 
