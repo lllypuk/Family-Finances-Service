@@ -494,6 +494,7 @@ private fun BudgetRow(
                 budget.isNearLimit -> colors.warning
                 else -> colors.action
             },
+            trackColor = colors.border,
             modifier = Modifier.fillMaxWidth(),
         )
     }

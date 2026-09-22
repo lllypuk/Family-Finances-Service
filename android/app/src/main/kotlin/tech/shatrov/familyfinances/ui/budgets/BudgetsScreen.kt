@@ -209,6 +209,7 @@ private fun BudgetItem(
                 BudgetLevel.NEAR -> colors.warning
                 BudgetLevel.OK -> colors.action
             },
+            trackColor = colors.border,
             modifier = Modifier.fillMaxWidth(),
         )
     }
