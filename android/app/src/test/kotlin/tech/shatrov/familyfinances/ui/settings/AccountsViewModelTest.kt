@@ -66,6 +66,18 @@ class AccountsViewModelTest {
     /** Пропускает список и предыдущие попытки: интересен всегда последний запрос. */
     private fun lastRequest(count: Int): RecordedRequest = (1..count).map { server.takeRequest() }.last()
 
+    /**
+     * Мутация после списка: форма закрыта, перезагрузка списка дочитана. Без ожидания перезагрузки
+     * её `GET` приходит во время `server.close()` и на нагруженном раннере роняет его по таймауту.
+     */
+    private suspend fun mutated(): RecordedRequest {
+        assertNull(settled())
+        val request = lastRequest(2)
+        server.takeRequest()
+        ready()
+        return request
+    }
+
     private suspend fun openCard() {
         server.enqueueJson(200, ACCOUNTS_OK)
         createModel()
@@ -107,9 +119,8 @@ class AccountsViewModelTest {
         server.enqueueJson(201, ACCOUNT_OK)
         server.enqueueJson(200, ACCOUNTS_OK)
         model.onSubmit()
-        assertNull(settled())
 
-        val request = lastRequest(2)
+        val request = mutated()
         assertEquals("POST", request.method)
         assertEquals("/api/v1/accounts", request.url.encodedPath)
         val body = request.body?.utf8().orEmpty()
@@ -143,9 +154,8 @@ class AccountsViewModelTest {
         server.enqueueJson(200, ACCOUNT_OK)
         server.enqueueJson(200, ACCOUNTS_OK)
         model.onSubmit()
-        assertNull(settled())
 
-        val request = lastRequest(2)
+        val request = mutated()
         assertEquals("PUT", request.method)
         assertEquals("/api/v1/accounts/$CARD_ACCOUNT_ID", request.url.encodedPath)
         assertEquals("""{"name":"Т-Банк"}""", request.body?.utf8())
@@ -158,9 +168,8 @@ class AccountsViewModelTest {
         server.enqueueJson(200, ACCOUNT_OK)
         server.enqueueJson(200, ACCOUNTS_OK)
         model.onToggleArchive()
-        assertNull(settled())
 
-        assertEquals("""{"is_archived":true}""", lastRequest(2).body?.utf8())
+        assertEquals("""{"is_archived":true}""", mutated().body?.utf8())
     }
 
     @Test
