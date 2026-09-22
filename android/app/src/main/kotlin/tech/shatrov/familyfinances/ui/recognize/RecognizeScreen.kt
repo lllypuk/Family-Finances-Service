@@ -215,9 +215,8 @@ fun RecognizeScreen(
         CategorySheet(
             categories = state.categories.filter { it.type == row.type.asCategoryType() },
             selected = row.categoryId,
-            allowAll = false,
             onSelect = { picked ->
-                if (picked != null) onCategoryChange(row.draft, picked)
+                onCategoryChange(row.draft, picked)
                 categoryFor = null
             },
             onDismiss = { categoryFor = null },

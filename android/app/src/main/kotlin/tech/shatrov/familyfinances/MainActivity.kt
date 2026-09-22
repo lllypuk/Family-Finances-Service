@@ -463,7 +463,8 @@ fun AppRoot(graph: AppGraph) {
                 homeStale = true
                 overviewStale = true
                 budgetsStale = true
-                categoriesStale = true
+                // Гасят флаг только формы: взведённый из настроек, он дождался бы следующей формы.
+                if (current.back.isForm()) categoriesStale = true
                 screen = current.back
             }
             BackHandler { if (form == null) leave() else model.onDismiss() }
@@ -778,11 +779,9 @@ fun AppRoot(graph: AppGraph) {
                     screen = AppScreen.Budgets
                 }
             }
-            LaunchedEffect(categoriesStale) {
-                if (categoriesStale) {
-                    categoriesStale = false
-                    model.reloadCategories()
-                }
+            OnCategoriesStale(categoriesStale) {
+                categoriesStale = false
+                model.reloadCategories()
             }
             BackHandler { leave() }
             BudgetEditScreen(
@@ -832,11 +831,9 @@ fun AppRoot(graph: AppGraph) {
                     screen = AppScreen.Transactions()
                 }
             }
-            LaunchedEffect(categoriesStale) {
-                if (categoriesStale) {
-                    categoriesStale = false
-                    model.reloadCategories()
-                }
+            OnCategoriesStale(categoriesStale) {
+                categoriesStale = false
+                model.reloadCategories()
             }
             BackHandler { leave() }
             RecognizeScreen(
@@ -886,11 +883,9 @@ fun AppRoot(graph: AppGraph) {
             // Уход с формы во время отправки убил бы её корутину: запись сервер уже мог
             // принять, а список о ней не узнал бы — и повтор создал бы вторую с новым черновиком.
             val leave = { if (!edit.submitting) screen = current.back }
-            LaunchedEffect(categoriesStale) {
-                if (categoriesStale) {
-                    categoriesStale = false
-                    model.reloadCategories()
-                }
+            OnCategoriesStale(categoriesStale) {
+                categoriesStale = false
+                model.reloadCategories()
             }
             BackHandler { leave() }
             TransactionEditScreen(
@@ -996,7 +991,17 @@ private suspend fun resumable(
 ): Boolean = when (screen) {
     is AppScreen.Recognize -> withContext(Dispatchers.IO) { graph.journals.read(screen.importId) != null }
     is AppScreen.Overview -> true
+    is AppScreen.Categories -> (screen.back as? AppScreen.Recognize)?.let { resumable(graph, it) } ?: false
     else -> false
+}
+
+/** Форма под справочником перечитывает категории по возвращении; черновик остаётся. */
+@Composable
+private fun OnCategoriesStale(
+    stale: Boolean,
+    onStale: () -> Unit,
+) {
+    LaunchedEffect(stale) { if (stale) onStale() }
 }
 
 /** Сессия гаснет на выходе раньше, чем сменится экран: без валюты и роли рисовать нечего. */

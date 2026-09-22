@@ -36,34 +36,24 @@ import tech.shatrov.familyfinances.ui.categories.CategoryAvatar
 import java.util.UUID
 
 /** Категорий у семьи десятки — чипами ряд не влезает, выбор уезжает в лист. */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CategorySheet(
     categories: List<Category>,
     selected: UUID?,
-    onSelect: (UUID?) -> Unit,
+    onSelect: (UUID) -> Unit,
     onDismiss: () -> Unit,
-    allowAll: Boolean = true,
     onManage: (() -> Unit)? = null,
 ) {
-    val sheetState = rememberModalBottomSheetState()
-    val scope = rememberCoroutineScope()
-    // Снятие с композиции убрало бы лист одним кадром: сначала анимация, потом выбор или переход.
-    val afterHide = { action: () -> Unit ->
-        scope.launch { sheetState.hide() }.invokeOnCompletion { if (!sheetState.isVisible) action() }
-    }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    HidingSheet(onDismiss) { afterHide ->
         CategorySheetContent(
             categories,
             selected,
-            allowAll,
             onManage = onManage?.let { manage -> { afterHide(manage) } },
         ) { picked -> afterHide { onSelect(picked) } }
     }
 }
 
 /** Фильтр «Операций»: набор категорий уходит только по «Готово», закрытие жестом его отбрасывает. */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CategoryFilterSheet(
     categories: List<Category>,
@@ -72,12 +62,7 @@ internal fun CategoryFilterSheet(
     onDismiss: () -> Unit,
     onManage: (() -> Unit)? = null,
 ) {
-    val sheetState = rememberModalBottomSheetState()
-    val scope = rememberCoroutineScope()
-    val afterHide = { action: () -> Unit ->
-        scope.launch { sheetState.hide() }.invokeOnCompletion { if (!sheetState.isVisible) action() }
-    }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    HidingSheet(onDismiss) { afterHide ->
         CategorySheetContent(
             categories,
             selectedIds = selected,
@@ -86,23 +71,33 @@ internal fun CategoryFilterSheet(
     }
 }
 
+/** Лист, отдающий содержимому `afterHide`: снятие с композиции убрало бы его одним кадром, без анимации. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HidingSheet(
+    onDismiss: () -> Unit,
+    content: @Composable (afterHide: (() -> Unit) -> Unit) -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState()
+    val scope = rememberCoroutineScope()
+    val afterHide = { action: () -> Unit ->
+        scope.launch { sheetState.hide() }.invokeOnCompletion { if (!sheetState.isVisible) action() }
+        Unit
+    }
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) { content(afterHide) }
+}
+
 // Тело листа отдельно от `ModalBottomSheet`: тот живёт в своём окне с анимацией и в
 // Robolectric ненадёжен, а проверять нужно выбор.
 @Composable
 internal fun CategorySheetContent(
     categories: List<Category>,
     selected: UUID?,
-    allowAll: Boolean = true,
     onManage: (() -> Unit)? = null,
-    onSelect: (UUID?) -> Unit,
+    onSelect: (UUID) -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxWidth()) {
         item { SheetTitle() }
-        if (allowAll) {
-            item {
-                SheetRow(stringResource(R.string.filter_all_categories), selected == null) { onSelect(null) }
-            }
-        }
         items(categories, key = { it.id }) { category ->
             SheetRow(category.path(categories), selected == category.id, category) { onSelect(category.id) }
         }

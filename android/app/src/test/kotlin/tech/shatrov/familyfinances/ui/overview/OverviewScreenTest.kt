@@ -72,13 +72,8 @@ class OverviewScreenTest {
         totals = PeriodTotals(range.from, range.to, 312_000_00, 227_700_00, 84_300_00, count),
         incomeDelta = incomeDelta,
         expensesDelta = incomeDelta?.let { -0.11 },
-        expenseCategories = if (count ==
-            0
-        ) {
-            emptyList()
-        } else {
-            listOf(share(GROCERIES_ID, "Продукты", 68_400_00, 0.3, icon = "🛒"))
-        },
+        expenseCategories = listOf(share(GROCERIES_ID, "Продукты", 68_400_00, 0.3, icon = "🛒")).takeIf { count > 0 }
+            .orEmpty(),
         incomeCategories = if (count == 0) emptyList() else listOf(share(SALARY_ID, "Зарплата", 290_000_00, 0.93)),
     )
 

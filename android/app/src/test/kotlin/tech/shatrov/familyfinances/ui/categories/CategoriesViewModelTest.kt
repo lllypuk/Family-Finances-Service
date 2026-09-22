@@ -123,6 +123,20 @@ class CategoriesViewModelTest {
         assertEquals("🛒", model.editor.value?.icon)
     }
 
+    /** Эмодзи, набранный после прежнего значка, заменяет его. */
+    @Test
+    fun iconTypedAfterPreviousReplacesIt() = runTest {
+        server.enqueueJson(200, CATEGORIES_NESTED)
+        createModel()
+        ready()
+
+        model.onAdd()
+        model.onIconChange("🛒")
+        model.onIconChange("🛒🚗")
+
+        assertEquals("🚗", model.editor.value?.icon)
+    }
+
     /** Смена типа снимает родителя: под доходным типом расходных корней нет. */
     @Test
     fun typeChangeResetsParent() = runTest {

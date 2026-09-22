@@ -26,7 +26,6 @@ fun CategoryAvatar(
     name: String,
     size: Dp,
     modifier: Modifier = Modifier,
-    glyph: String = categoryGlyph(icon, name),
 ) {
     val tint = parseCategoryColor(color, MaterialTheme.colorScheme.outline)
     Box(
@@ -37,7 +36,7 @@ fun CategoryAvatar(
             .border(Dimens.HAIRLINE, tint, CircleShape)
             .clearAndSetSemantics { contentDescription = name },
     ) {
-        Text(text = glyph, color = tint, style = MaterialTheme.typography.titleMedium)
+        Text(text = categoryGlyph(icon, name), color = tint, style = MaterialTheme.typography.titleMedium)
     }
 }
 

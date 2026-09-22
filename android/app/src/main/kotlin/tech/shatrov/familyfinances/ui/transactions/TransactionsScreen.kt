@@ -331,7 +331,7 @@ private fun TransactionItem(
             CategoryAvatar(category.icon, category.color, category.name, Dimens.AVATAR_S)
         } else {
             val none = stringResource(R.string.transactions_no_category)
-            CategoryAvatar(icon = "", color = "", name = none, size = Dimens.AVATAR_S, glyph = "?")
+            CategoryAvatar(icon = "?", color = "", name = none, size = Dimens.AVATAR_S)
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(

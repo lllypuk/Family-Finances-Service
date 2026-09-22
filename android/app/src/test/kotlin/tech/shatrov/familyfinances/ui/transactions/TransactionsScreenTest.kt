@@ -223,20 +223,6 @@ class TransactionsScreenTest {
         composeRule.onNodeWithContentDescription("Прочее", useUnmergedTree = true).assertIsDisplayed()
     }
 
-    @Test
-    fun categorySheetResetReachesCallback() {
-        var picked: UUID? = CATEGORY_ID
-        composeRule.setContent {
-            AppTheme {
-                CategorySheetContent(listOf(category()), selected = CATEGORY_ID) { picked = it }
-            }
-        }
-
-        composeRule.onNodeWithText(res.getString(R.string.filter_all_categories)).performClick()
-
-        assertNull(picked)
-    }
-
     // Первое имя — по справочнику, не по порядку отметок: так же категории уходят в запрос.
     @Test
     fun categoryChipShowsFirstNameAndCountOfOthers() {

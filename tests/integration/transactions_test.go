@@ -603,6 +603,19 @@ func TestTransactionHandler_Integration_Filters(t *testing.T) {
 			got = append(got, tx.ID)
 		}
 		assert.ElementsMatch(t, []uuid.UUID{expenseTransaction.ID, incomeTransaction.ID}, got)
+		require.NotNil(t, response.Meta.Pagination)
+		assert.Equal(t, 2, response.Meta.Pagination.Total)
+	})
+
+	t.Run("GetTransactions_NilCategoryIDIs422", func(t *testing.T) {
+		query := url.Values{"category_id": {expenseCategory.ID.String(), uuid.Nil.String()}}
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions?"+query.Encode(), nil)
+		testServer.Auth(t).Apply(req)
+		rec := httptest.NewRecorder()
+
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
 	})
 
 	t.Run("GetTransactions_ByDateRange", func(t *testing.T) {

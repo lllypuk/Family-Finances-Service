@@ -20,6 +20,7 @@ import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import mockwebserver3.RecordedRequest
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -134,6 +135,37 @@ class AppRootCategoriesTest {
 
         composeRule.onNode(hasText("1234", substring = true)).assertExists()
         composeRule.waitUntil(WAIT_MS) { categoriesCount() > before }
+    }
+
+    // Уход из справочника, открытого не с формы, не оставляет флага: следующая форма грузит категории один раз.
+    @Test
+    fun catalogFromSettingsDoesNotReloadLaterForm() {
+        composeRule.setContent { AppTheme { AppRoot(graph()) } }
+        val settings = res.getString(R.string.settings_title)
+        composeRule.waitUntil(WAIT_MS) {
+            composeRule.onAllNodesWithContentDescription(settings).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithContentDescription(settings).performClick()
+        composeRule.onNodeWithText(res.getString(R.string.categories_title)).performScrollTo().performClick()
+        waitFor(res.getString(R.string.categories_income))
+        pressBack()
+        waitFor(res.getString(R.string.settings_profile))
+        pressBack()
+
+        val tab = res.getString(R.string.transactions_title)
+        waitFor(tab)
+        composeRule.onNode(hasText(tab) and hasClickAction()).performClick()
+        val add = res.getString(R.string.transactions_add)
+        composeRule.waitUntil(WAIT_MS) {
+            composeRule.onAllNodesWithContentDescription(add).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.waitForIdle()
+        val before = categoriesCount()
+        composeRule.onAllNodesWithContentDescription(add)[0].performClick()
+        waitFor(res.getString(R.string.categories_manage))
+        composeRule.waitForIdle()
+
+        assertEquals(before + 1, categoriesCount())
     }
 
     private fun categoriesCount() = requests.count { it.url.encodedPath == "/api/v1/categories" }
