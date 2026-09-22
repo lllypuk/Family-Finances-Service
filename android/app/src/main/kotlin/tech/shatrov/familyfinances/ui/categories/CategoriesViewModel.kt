@@ -32,7 +32,7 @@ val CategoryPalette = listOf(
     "#6D4C41",
 )
 
-private const val DEFAULT_ICON = "tag"
+private const val DEFAULT_ICON = "🏷️"
 
 /** Нижняя граница контракта для `name`. */
 private const val MIN_NAME = 2
@@ -168,7 +168,7 @@ class CategoriesViewModel(
     }
 
     fun onIconChange(icon: String) {
-        mutableEditor.update { it?.copy(icon = icon)?.cleared(CategoryField.ICON) }
+        mutableEditor.update { it?.copy(icon = firstGrapheme(icon.trimStart()))?.cleared(CategoryField.ICON) }
     }
 
     fun onParentChange(parentId: UUID?) {

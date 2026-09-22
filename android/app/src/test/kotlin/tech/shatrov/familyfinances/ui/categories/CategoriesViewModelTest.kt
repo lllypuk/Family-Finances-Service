@@ -88,7 +88,7 @@ class CategoriesViewModelTest {
 
         model.onAdd()
         model.onNameChange("Кафе")
-        model.onIconChange("cup")
+        model.onIconChange("☕")
         model.onColorChange(CategoryPalette.last())
         // Родителем предлагаются только корневые того же типа: подкатегория в список не попадает.
         assertEquals(listOf("Продукты"), model.editor.value?.parents?.map { it.name })
@@ -109,6 +109,18 @@ class CategoriesViewModelTest {
         assertTrue(body, body.contains("\"type\":\"expense\""))
         assertTrue(body, body.contains("\"color\":\"${CategoryPalette.last()}\""))
         assertTrue(body, body.contains("\"parent_id\":\"$GROCERIES_ID\""))
+    }
+
+    @Test
+    fun iconInputKeepsOneCluster() = runTest {
+        server.enqueueJson(200, CATEGORIES_NESTED)
+        createModel()
+        ready()
+
+        model.onAdd()
+        model.onIconChange("🛒🚗")
+
+        assertEquals("🛒", model.editor.value?.icon)
     }
 
     /** Смена типа снимает родителя: под доходным типом расходных корней нет. */

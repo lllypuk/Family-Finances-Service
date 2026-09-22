@@ -228,14 +228,14 @@ data class Categories(val back: AppScreen = Settings()) : AppScreen
 - Create: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/categories/CategoryAvatarTest.kt`
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/categories/{CategoriesScreenTest,CategoriesViewModelTest}.kt`
 
-- [ ] `categoryGlyph` + `CategoryAvatar` по «Аватар»; `Dimens.AVATAR_S/M`
-- [ ] справочник: `CategoryAvatar(AVATAR_M)` вместо `CategoryDot`; `CategoryDot.kt` удалён
-- [ ] форма: ввод значка обрезается до одного кластера, превью аватара рядом с полем
-- [ ] `CategoryAvatarTest`: `🛒` → `🛒`; `👨‍👩‍👧` и `1️⃣` целиком; `default`/`food`/пусто → `П` для «Продукты»;
+- [x] `categoryGlyph` + `CategoryAvatar` по «Аватар»; `Dimens.AVATAR_S/M`
+- [x] справочник: `CategoryAvatar(AVATAR_M)` вместо `CategoryDot`; `CategoryDot.kt` удалён
+- [x] форма: ввод значка обрезается до одного кластера, превью аватара рядом с полем
+- [x] `CategoryAvatarTest`: `🛒` → `🛒`; `👨‍👩‍👧` и `1️⃣` целиком; `default`/`food`/пусто → `П` для «Продукты»;
       `ё` → `Ё`; непарсибельный цвет не падает
-- [ ] `CategoriesViewModelTest`: `onIconChange("🛒🚗")` оставляет `🛒`
-- [ ] `CategoriesScreenTest`: аватар с `contentDescription` имени в строке
-- [ ] `make -C android check` зелёный
+- [x] `CategoriesViewModelTest`: `onIconChange("🛒🚗")` оставляет `🛒`
+- [x] `CategoriesScreenTest`: аватар с `contentDescription` имени в строке
+- [x] `make -C android check` зелёный
 
 ### Task 4: Аватар в строках операций, распознавании, главной и «Обзоре»
 

@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -135,7 +134,7 @@ private fun CategoryItem(
         horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CategoryDot(category.color, Modifier.size(Dimens.SPACE_3))
+        CategoryAvatar(category.icon, category.color, category.name, Dimens.AVATAR_M)
         Text(
             text = category.name,
             style = MaterialTheme.typography.bodyMedium,
