@@ -109,7 +109,17 @@ class TransactionsScreenTest {
         composeRule.onNodeWithText(formatDay(LocalDate.parse("2026-09-07"))).assertIsDisplayed()
         composeRule.onNodeWithText("Кофе").assertIsDisplayed()
         composeRule.onNodeWithText("Продукты · Член").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Продукты", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithText("-1 500,00 ₽").assertIsDisplayed()
+    }
+
+    @Test
+    fun rowWithoutCategoryShowsPlaceholderAvatar() {
+        show(ready(listOf(row(categoryName = null))))
+
+        composeRule
+            .onNodeWithContentDescription(res.getString(R.string.transactions_no_category), useUnmergedTree = true)
+            .assertIsDisplayed()
     }
 
     @Test
@@ -209,6 +219,7 @@ class TransactionsScreenTest {
         }
 
         composeRule.onNodeWithText("Продукты / Прочее").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Прочее", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -341,7 +352,7 @@ class TransactionsScreenTest {
             createdAt = OffsetDateTime.parse("2026-09-07T09:00:00Z"),
             updatedAt = OffsetDateTime.parse("2026-09-07T09:00:00Z"),
         ),
-        categoryName = categoryName,
+        category = categoryName?.let { category().copy(name = it) },
         authorName = authorName,
         isMine = isMine,
     )

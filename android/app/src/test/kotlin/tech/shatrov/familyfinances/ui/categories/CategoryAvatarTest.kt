@@ -34,6 +34,13 @@ class CategoryAvatarTest {
     }
 
     @Test
+    fun chipLabelPrefixesOnlyEmoji() {
+        assertEquals("🛒 Продукты", categoryChipLabel("🛒", "Продукты"))
+        assertEquals("Продукты", categoryChipLabel("food", "Продукты"))
+        assertEquals("Продукты", categoryChipLabel("", "Продукты"))
+    }
+
+    @Test
     fun wordsAndBlankFallBackToNameInitial() {
         listOf("default", "food", "", "  ").forEach {
             assertEquals(it, "П", categoryGlyph(it, "Продукты"))

@@ -42,6 +42,7 @@ import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
 import tech.shatrov.familyfinances.ui.DatePickerSheet
 import tech.shatrov.familyfinances.ui.FieldError
+import tech.shatrov.familyfinances.ui.categories.categoryChipLabel
 import tech.shatrov.familyfinances.ui.currencySuffix
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.message
@@ -304,7 +305,9 @@ private fun CategoryPicker(
             }
         }
         items(state.categories) { category: Category ->
-            Chip(category.name, state.categoryId == category.id, enabled) { onCategoryChange(category.id) }
+            Chip(categoryChipLabel(category.icon, category.name), state.categoryId == category.id, enabled) {
+                onCategoryChange(category.id)
+            }
         }
     }
 }

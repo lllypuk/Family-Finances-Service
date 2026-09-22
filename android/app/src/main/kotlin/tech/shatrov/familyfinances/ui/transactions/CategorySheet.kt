@@ -31,6 +31,7 @@ import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.core.api.Category
 import tech.shatrov.familyfinances.theme.Dimens
 import tech.shatrov.familyfinances.theme.LocalAppColors
+import tech.shatrov.familyfinances.ui.categories.CategoryAvatar
 import java.util.UUID
 
 /** Категорий у семьи десятки — чипами ряд не влезает, выбор уезжает в лист. */
@@ -88,7 +89,7 @@ internal fun CategorySheetContent(
             }
         }
         items(categories, key = { it.id }) { category ->
-            SheetRow(category.path(categories), selected == category.id) { onSelect(category.id) }
+            SheetRow(category.path(categories), selected == category.id, category) { onSelect(category.id) }
         }
     }
 }
@@ -110,7 +111,7 @@ internal fun CategorySheetContent(
             }
             items(categories, key = { it.id }) { category ->
                 val id = category.id.toString()
-                CheckRow(category.path(categories), id in draft) {
+                CheckRow(category.path(categories), id in draft, category) {
                     draft = if (id in draft) draft - id else draft + id
                 }
             }
@@ -140,6 +141,7 @@ private fun SheetTitle() {
 private fun CheckRow(
     label: String,
     checked: Boolean,
+    category: Category? = null,
     onToggle: () -> Unit,
 ) {
     Row(
@@ -151,6 +153,7 @@ private fun CheckRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(checked = checked, onCheckedChange = null)
+        category?.let { SheetAvatar(it, Modifier.padding(start = Dimens.SPACE_2)) }
         Text(
             text = label,
             style = MaterialTheme.typography.bodyLarge,
@@ -170,6 +173,7 @@ internal fun Category.path(categories: List<Category>): String {
 internal fun SheetRow(
     label: String,
     selected: Boolean,
+    category: Category? = null,
     onClick: () -> Unit,
 ) {
     Row(
@@ -181,10 +185,19 @@ internal fun SheetRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val colors = LocalAppColors.current
+        category?.let { SheetAvatar(it, Modifier.padding(end = Dimens.SPACE_2)) }
         Text(
             text = label,
             style = MaterialTheme.typography.bodyLarge,
             color = if (selected) colors.action else colors.textPrimary,
         )
     }
+}
+
+@Composable
+private fun SheetAvatar(
+    category: Category,
+    modifier: Modifier = Modifier,
+) {
+    CategoryAvatar(category.icon, category.color, category.name, Dimens.AVATAR_M, modifier)
 }

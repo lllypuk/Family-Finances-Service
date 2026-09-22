@@ -26,6 +26,7 @@ fun CategoryAvatar(
     name: String,
     size: Dp,
     modifier: Modifier = Modifier,
+    glyph: String = categoryGlyph(icon, name),
 ) {
     val tint = parseCategoryColor(color, MaterialTheme.colorScheme.outline)
     Box(
@@ -36,7 +37,7 @@ fun CategoryAvatar(
             .border(Dimens.HAIRLINE, tint, CircleShape)
             .clearAndSetSemantics { contentDescription = name },
     ) {
-        Text(text = categoryGlyph(icon, name), color = tint, style = MaterialTheme.typography.titleMedium)
+        Text(text = glyph, color = tint, style = MaterialTheme.typography.titleMedium)
     }
 }
 
@@ -47,11 +48,20 @@ fun CategoryAvatar(
 fun categoryGlyph(
     icon: String,
     name: String,
-): String {
+): String = categoryEmoji(icon) ?: firstGrapheme(name.trim()).uppercase().ifEmpty { "?" }
+
+/** Первый графемный кластер `icon`, если это эмодзи; слово или пустое поле — `null`. */
+fun categoryEmoji(icon: String): String? {
     val cluster = firstGrapheme(icon.trim())
-    if (cluster.length > 1 || (cluster.isNotEmpty() && !isAsciiLetterOrDigit(cluster.codePointAt(0)))) return cluster
-    return firstGrapheme(name.trim()).uppercase().ifEmpty { "?" }
+    val emoji = cluster.length > 1 || (cluster.isNotEmpty() && !isAsciiLetterOrDigit(cluster.codePointAt(0)))
+    return cluster.takeIf { emoji }
 }
+
+/** Подпись чипа: эмодзи перед именем; буква-заглушка в чипе только повторила бы имя. */
+fun categoryChipLabel(
+    icon: String,
+    name: String,
+): String = categoryEmoji(icon)?.let { "$it $name" } ?: name
 
 /** Первый графемный кластер; `java.text.BreakIterator` не знает ZWJ-последовательностей, `android.icu` знает. */
 fun firstGrapheme(text: String): String {

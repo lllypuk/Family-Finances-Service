@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -95,6 +96,14 @@ class RecognizeScreenTest {
         show(review(row("Лампочки", categoryId = other.id)).copy(categories = listOf(home, other)))
 
         composeRule.onNodeWithText("Дом / Прочее").assertIsDisplayed()
+    }
+
+    @Test
+    fun candidateShowsAvatarOfPickedCategoryOnly() {
+        show(review(row("Молоко"), row("Без категории", categoryId = null)))
+
+        composeRule.onNodeWithContentDescription("Продукты", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onAllNodesWithContentDescription("Продукты", useUnmergedTree = true).assertCountEquals(1)
     }
 
     @Test

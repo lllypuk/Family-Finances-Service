@@ -116,7 +116,7 @@ class TransactionsViewModelTest {
         assertEquals(1, state.groups.size)
         assertEquals(LocalDate.parse("2026-09-07"), state.groups[0].date)
         val rows = state.groups[0].rows
-        assertEquals(listOf("Продукты", "Продукты"), rows.map { it.categoryName })
+        assertEquals(listOf("Продукты", "Продукты"), rows.map { it.category?.name })
         assertTrue(rows[0].isMine)
         assertEquals("Член", rows[1].authorName)
         assertTrue(state.hasMore)

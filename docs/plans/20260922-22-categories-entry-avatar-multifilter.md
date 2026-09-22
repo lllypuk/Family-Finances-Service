@@ -247,13 +247,13 @@ data class Categories(val back: AppScreen = Settings()) : AppScreen
 - Modify: `android/app/src/main/kotlin/tech/shatrov/familyfinances/ui/overview/OverviewScreen.kt`
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/{transactions/TransactionsScreenTest,transactions/TransactionsViewModelTest,home/HomeScreenTest,overview/OverviewScreenTest,recognize/RecognizeScreenTest}.kt`
 
-- [ ] `TransactionRow.category: Category?`; `TransactionItem` — `AVATAR_S` слева, без категории — `?` цветом `outline`
-- [ ] `CategorySheetContent` — `AVATAR_M`; чипы форм операции и бюджета — префикс-глиф
-- [ ] `RecognizeScreen`: аватар у строки-кандидата
-- [ ] `HomeScreen.CategoryRow`, `OverviewScreen.categories` — `AVATAR_S` из `CategoryShare.icon/color` с `orEmpty()`
-- [ ] экранные тесты: аватар в строке операции, в топе главной (и без `icon`/`color` в ответе), в «Обзоре»,
+- [x] `TransactionRow.category: Category?`; `TransactionItem` — `AVATAR_S` слева, без категории — `?` цветом `outline`
+- [x] `CategorySheetContent` — `AVATAR_M`; чипы форм операции и бюджета — префикс-эмодзи (`categoryChipLabel`; буква-заглушка в чипе повторила бы имя — её нет)
+- [x] `RecognizeScreen`: аватар у строки-кандидата
+- [x] `HomeScreen.CategoryRow`, `OverviewScreen.categories` — `AVATAR_S` из `CategoryShare.icon/color` с `orEmpty()`
+- [x] экранные тесты: аватар в строке операции, в топе главной (и без `icon`/`color` в ответе), в «Обзоре»,
       в кандидате; `TransactionsViewModelTest` — `category` в строке
-- [ ] `make -C android check` зелёный
+- [x] `make -C android check` зелёный
 
 ### Task 5: Вкладка снята, `Categories(back)`, вход из настроек
 

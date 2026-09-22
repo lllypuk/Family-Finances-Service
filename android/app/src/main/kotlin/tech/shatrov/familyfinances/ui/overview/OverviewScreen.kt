@@ -32,6 +32,7 @@ import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
 import tech.shatrov.familyfinances.ui.UiError
+import tech.shatrov.familyfinances.ui.categories.CategoryAvatar
 import tech.shatrov.familyfinances.ui.format.formatMoney
 import tech.shatrov.familyfinances.ui.format.formatMonth
 import tech.shatrov.familyfinances.ui.format.formatPercent
@@ -211,6 +212,7 @@ private fun LazyListScope.categories(
             horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            CategoryAvatar(category.icon.orEmpty(), category.color.orEmpty(), category.name, Dimens.AVATAR_S)
             Text(
                 text = category.name,
                 style = MaterialTheme.typography.bodyMedium,

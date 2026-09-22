@@ -39,6 +39,7 @@ import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
 import tech.shatrov.familyfinances.ui.RowPlace
 import tech.shatrov.familyfinances.ui.SegmentedChoice
+import tech.shatrov.familyfinances.ui.categories.CategoryAvatar
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.format.formatMoney
 import tech.shatrov.familyfinances.ui.format.formatMonth
@@ -320,6 +321,13 @@ private fun TransactionItem(
         horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        val category = row.category
+        if (category != null) {
+            CategoryAvatar(category.icon, category.color, category.name, Dimens.AVATAR_S)
+        } else {
+            val none = stringResource(R.string.transactions_no_category)
+            CategoryAvatar(icon = "", color = "", name = none, size = Dimens.AVATAR_S, glyph = "?")
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = row.transaction.description,
@@ -327,7 +335,7 @@ private fun TransactionItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val subtitle = listOfNotNull(row.categoryName, author).joinToString(" · ")
+            val subtitle = listOfNotNull(row.category?.name, author).joinToString(" · ")
             if (subtitle.isNotEmpty()) {
                 Text(
                     text = subtitle,

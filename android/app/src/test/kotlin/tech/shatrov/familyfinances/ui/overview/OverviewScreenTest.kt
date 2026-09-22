@@ -72,7 +72,13 @@ class OverviewScreenTest {
         totals = PeriodTotals(range.from, range.to, 312_000_00, 227_700_00, 84_300_00, count),
         incomeDelta = incomeDelta,
         expensesDelta = incomeDelta?.let { -0.11 },
-        expenseCategories = if (count == 0) emptyList() else listOf(share(GROCERIES_ID, "Продукты", 68_400_00, 0.3)),
+        expenseCategories = if (count ==
+            0
+        ) {
+            emptyList()
+        } else {
+            listOf(share(GROCERIES_ID, "Продукты", 68_400_00, 0.3, icon = "🛒"))
+        },
         incomeCategories = if (count == 0) emptyList() else listOf(share(SALARY_ID, "Зарплата", 290_000_00, 0.93)),
     )
 
@@ -81,7 +87,8 @@ class OverviewScreenTest {
         name: String,
         amount: Long,
         share: Double,
-    ) = CategoryShare(UUID.fromString(id), name, amount, 1, share)
+        icon: String? = null,
+    ) = CategoryShare(UUID.fromString(id), name, amount, 1, share, color = icon?.let { "#4caf50" }, icon = icon)
 
     private fun bar(month: String) = res.getString(
         R.string.overview_bar_description,
@@ -105,6 +112,14 @@ class OverviewScreenTest {
         show(period = OverviewPeriod.Month(YearMonth.of(2026, 8)))
 
         composeRule.onNodeWithText(formatMonth(LocalDate.of(2026, 8, 1))).assertIsSelected()
+    }
+
+    @Test
+    fun categoriesShowAvatarWithAndWithoutIcon() {
+        show()
+
+        composeRule.onNodeWithContentDescription("Продукты", useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithContentDescription("Зарплата", useUnmergedTree = true).assertExists()
     }
 
     @Test
