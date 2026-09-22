@@ -17,7 +17,8 @@ API for the Android client. One instance = one family.
 > net-worth series (plan 17) and a planned monthly income and expense (plan 18). Plan 19 (client `0.11.0`,
 > contract untouched): a screenshot import survives process death, and the "Обзор" screen over `summary` +
 > `monthly`. Plan 20 (server `v0.9.0`, client `0.12.0`) reconciles month-end account balances against the
-> month's transactions instead of plan 16's bank figure; a `0.11.0` client loses its reconciliation screen and the home-screen reconciliation card. The sections below describe the code as it is today. Releases: server `v0.3.0` (plan 10),
+> month's transactions instead of plan 16's bank figure; a `0.11.0` client loses its reconciliation screen and the home-screen reconciliation card. Plan 21 (client `0.13.0`,
+> contract untouched) adds a light theme with a System/Light/Dark switch in settings. The sections below describe the code as it is today. Releases: server `v0.3.0` (plan 10),
 > `v0.4.0` (plan 12), `v0.8.0` (plans 14–18), `v0.9.0` (plan 20), client `app-v0.10.0`, `app-v0.11.0`, `app-v0.12.0`; `v0.5.0`–`v0.7.0` and
 > `app-v0.6.0`–`app-v0.9.0` were never cut. Left from plan 11: multi-select over transactions
 > ([docs/backlog.md](docs/backlog.md)).
@@ -346,7 +347,7 @@ Details: [deploy/README.md](deploy/README.md).
 `android/` — the online Kotlin/Compose client to `/api/v1` (login, home, transactions, categories, budgets,
 holdings; the five roots are switched by a bottom tab bar). Home opens "Обзор" (period totals and a 12-month
 chart) and offers to resume an unfinished screenshot import. The profile icon on home opens settings: own profile and
-password, sessions with revoke, and — for an admin — users, family and backups; sign-out lives there too.
+password, sessions with revoke, the theme (System / Light / Dark, System by default), and — for an admin — users, family and backups; sign-out lives there too.
 Models and typed interfaces are generated from `docs/api/openapi.yaml` into `android/core/api/generated`
 and committed; generation needs the network, so it stays out of `check` and its freshness is a separate
 target and CI step.

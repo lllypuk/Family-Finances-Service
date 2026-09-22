@@ -51,7 +51,7 @@ fun appColorScheme(
         surfaceContainerHighest = colors.elevated,
         error = colors.expense,
         onError = colors.textInverse,
-        outline = colors.border,
+        outline = colors.outline,
         outlineVariant = colors.border,
     )
 }

@@ -140,12 +140,17 @@ Reconciliation(month))`: сумма `|gap|`, `income` при `gap > 0`, дата
   и `.Dark` явный `parent=` — без него точечное имя наследует `Theme.FamilyFinances` с текущими
   квалификаторами, и `.Light` под `night` вышла бы тёмной. `canvas_light`/`canvas_dark` в `colors.xml`
   равны `canvas` палитр, это проверяет `MainActivityTest`;
-- цвета иконок панелей: `WindowInsetsControllerCompat` в `SideEffect` активити;
+- цвета иконок панелей: `WindowInsetsControllerCompat` в `SideEffect` активити (живое переключение —
+  `ThemeSwitchTest`);
 - Compose: `AppTheme(mode)`. Окно он не трогает — оно у активити, и превью/тесты остаются чистыми.
 
 Точка категории в списке — `CategoryDot` (`ui/categories/`): 1dp-кольцо `textSecondary`, потому что
 бледный цвет категории на светлом фоне пропадает, а `border` (1,4:1) его не спасает. Swatch в
 `CategoryEditScreen` кольца не получает: там 2dp-кольцо означает выбранность.
+
+M3-роль `outline` (рамка `OutlinedTextField`, выключенный `Switch`) — свой токен, а не `border`: в светлой
+`border` даёт 1,4:1, и поля пропадают. В тёмной `outline` равен `border`, как до плана 21, поэтому
+`ColorsTest` требует 3:1 только от светлой.
 
 Взаимоисключающий выбор из 2–3 вариантов — `SegmentedChoice` (`ui/Segments.kt`): тип операции, фильтр
 бюджетов, фильтр типа операций. Чипы (`ChipRow`, `ui/Chips.kt`) остаются там, где вариантов больше

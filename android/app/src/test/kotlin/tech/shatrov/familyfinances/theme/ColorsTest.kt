@@ -45,6 +45,15 @@ class ColorsTest {
         }
     }
 
+    // Тёмная оставлена как до плана 21 (1,8:1): без кольца поля и выключенный Switch в светлой не видны.
+    @Test
+    fun outline_visible_on_every_layer_in_light() {
+        assertPairs(MIN_UI, palettes = mapOf("light" to LightColors)) { c ->
+            listOf("canvas" to c.canvas, "surface" to c.surface, "elevated" to c.elevated)
+                .map { b -> ("outline" to c.outline) to b }
+        }
+    }
+
     @Test
     fun contrast_formula_matches_wcag_extremes() {
         assertTrue(contrast(Color.Black, Color.White) in 20.99..21.01)
@@ -53,6 +62,7 @@ class ColorsTest {
 
     private fun assertPairs(
         min: Double,
+        palettes: Map<String, AppColors> = this.palettes,
         pairs: (AppColors) -> List<Pair<Pair<String, Color>, Pair<String, Color>>>,
     ) {
         val failures = palettes.flatMap { (theme, colors) ->
