@@ -502,6 +502,7 @@ private fun SettingsRootPage(
     var refreshing by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<UiError?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
+    val themeMode by graph.theme.mode.collectAsStateWithLifecycle()
 
     // Роль, валюту и зону мог сменить второй телефон; отказ оставляет прежнюю сессию на экране.
     LaunchedEffect(page.visit, attempt) {
@@ -521,6 +522,8 @@ private fun SettingsRootPage(
         session = session,
         refreshing = refreshing,
         error = error,
+        themeMode = themeMode,
+        onThemeMode = graph.theme::write,
         onOpen = onOpen,
         onRetry = { attempt++ },
         onBack = onBack,

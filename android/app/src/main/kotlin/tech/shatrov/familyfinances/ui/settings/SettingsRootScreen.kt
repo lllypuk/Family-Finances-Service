@@ -30,6 +30,8 @@ import androidx.compose.ui.res.stringResource
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.Session
 import tech.shatrov.familyfinances.theme.Dimens
+import tech.shatrov.familyfinances.theme.ThemeMode
+import tech.shatrov.familyfinances.ui.SegmentedChoice
 import tech.shatrov.familyfinances.ui.UiError
 import tech.shatrov.familyfinances.ui.message
 
@@ -42,6 +44,8 @@ fun SettingsRootScreen(
     session: Session,
     refreshing: Boolean,
     error: UiError?,
+    themeMode: ThemeMode,
+    onThemeMode: (ThemeMode) -> Unit,
     onOpen: (SettingsPage) -> Unit,
     onRetry: () -> Unit,
     onBack: () -> Unit,
@@ -107,6 +111,17 @@ fun SettingsRootScreen(
                 )
             }
         }
+
+        Text(text = stringResource(R.string.settings_theme), style = MaterialTheme.typography.bodyMedium)
+        SegmentedChoice(
+            options = listOf(
+                ThemeMode.System to stringResource(R.string.settings_theme_system),
+                ThemeMode.Light to stringResource(R.string.settings_theme_light),
+                ThemeMode.Dark to stringResource(R.string.settings_theme_dark),
+            ),
+            selected = themeMode,
+            onSelect = onThemeMode,
+        )
 
         SettingsItem(R.string.settings_profile) { onOpen(SettingsPage.Profile()) }
         SettingsItem(R.string.settings_password) { onOpen(SettingsPage.Password()) }
