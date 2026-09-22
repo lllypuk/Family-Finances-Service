@@ -14,11 +14,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -137,11 +135,7 @@ private fun CategoryItem(
         horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Surface(
-            color = parseCategoryColor(category.color, MaterialTheme.colorScheme.outline),
-            shape = CircleShape,
-            modifier = Modifier.size(Dimens.SPACE_3),
-        ) {}
+        CategoryDot(category.color, Modifier.size(Dimens.SPACE_3))
         Text(
             text = category.name,
             style = MaterialTheme.typography.bodyMedium,

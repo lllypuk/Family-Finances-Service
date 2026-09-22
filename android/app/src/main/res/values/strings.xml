@@ -265,6 +265,10 @@
     <string name="settings_role_member">Участник</string>
     <string name="settings_currency">Валюта: %1$s</string>
     <string name="settings_timezone">Часовой пояс: %1$s</string>
+    <string name="settings_theme">Тема</string>
+    <string name="settings_theme_system">Система</string>
+    <string name="settings_theme_light">Светлая</string>
+    <string name="settings_theme_dark">Тёмная</string>
     <string name="settings_sign_out_confirm">Выйти из аккаунта?</string>
     <string name="settings_save">Сохранить</string>
     <string name="settings_email">Почта</string>

@@ -26,6 +26,7 @@ class AppGraph(
     /** Журналы незавершённых импортов: один на процесс, иначе запоздалая запись вернёт удалённый. */
     val journals: ImportJournalStore,
     val lastAccount: LastAccountStore = MemoryLastAccountStore(),
+    val theme: ThemeStore = MemoryThemeStore(),
 ) {
     private val mutableSession = MutableStateFlow<Session?>(null)
 
@@ -122,6 +123,7 @@ class AppGraph(
             ApiGraph(baseUrl, KeystoreTokenVault(context)),
             ImportJournalStore(ImportFiles.filesRoot(context)),
             PrefsLastAccountStore(context),
+            PrefsThemeStore(context),
         )
     }
 }

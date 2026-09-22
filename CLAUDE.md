@@ -376,7 +376,7 @@ reference): `docs/README.md` (navigation), `docs/product_brief.md`, `docs/tech_s
 status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the finished ones.
 
 **Current direction:** `docs/specs/005-api-only-redesign.md` — the service is an API-only backend for an
-Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–10 and 12–20 are
+Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–10 and 12–21 are
 done (`docs/plans/completed/`, 06 = the Android client, 07 = its budgets tab, 08 = its settings screen,
 09 = the server findings of 07–08, 10 = `/reports` removed and `GET /stats/monthly` added, 12 = recurring
 budgets, both sides, 13 = the client's UI audit: segments instead of chips, a FAB on "Операции", empty states
@@ -394,6 +394,7 @@ balances (`008_account_balances`) and breaks the contract: a `0.11.0` client los
 and, silently, the reconciliation card on the home screen (the old model requires `recorded_minor`).
 `008.down` recreates `account_reconciliations` empty; `migrate --to 8 → 7 → 8` was run on a copy of the production
 DB before `v0.9.0` was tagged (19.09.2026).
+Plan 21 (client `0.13.0`, contract untouched) adds a light theme with a System/Light/Dark switch in settings.
 
 `docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates
 from it, and code and spec now match. **A registered route with no operation in the spec fails `make test`**

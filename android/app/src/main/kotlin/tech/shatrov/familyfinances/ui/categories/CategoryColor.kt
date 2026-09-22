@@ -14,7 +14,7 @@ fun parseCategoryColor(
     fallback: Color,
 ): Color {
     val digits = hex.removePrefix("#")
-    if (digits.length != "RRGGBB".length) return fallback
-    val rgb = digits.toLongOrNull(HEX_RADIX) ?: return fallback
-    return Color(OPAQUE or rgb)
+    if (digits.length != "RRGGBB".length || digits.length == hex.length) return fallback
+    if (!digits.all { Character.digit(it, HEX_RADIX) >= 0 }) return fallback
+    return Color(OPAQUE or digits.toLong(HEX_RADIX))
 }

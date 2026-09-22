@@ -5,6 +5,8 @@ import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.net.Uri
+import androidx.compose.ui.graphics.toArgb
+import androidx.core.view.WindowCompat
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -17,6 +19,10 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import tech.shatrov.familyfinances.theme.AppColors
+import tech.shatrov.familyfinances.theme.DarkColors
+import tech.shatrov.familyfinances.theme.LightColors
+import tech.shatrov.familyfinances.theme.ThemeMode
 
 // Robolectric 4.16 не знает SDK 37, поэтому sdk задан явно.
 @RunWith(RobolectricTestRunner::class)
@@ -86,6 +92,49 @@ class MainActivityTest {
 
         assertEquals(listOf(shot("a"), shot("b"), shot("c")), sharedImages(intent))
         assertEquals(emptyList<Uri>(), sharedImages(Intent(Intent.ACTION_VIEW, shot("a"))))
+    }
+
+    @Test
+    @Config(qualifiers = "+notnight")
+    fun systemModeInLightPhoneStartsLight() {
+        assertWindow(expected = LightColors, mode = ThemeMode.System)
+    }
+
+    @Test
+    @Config(qualifiers = "+night")
+    fun systemModeInDarkPhoneStartsDark() {
+        assertWindow(expected = DarkColors, mode = ThemeMode.System)
+    }
+
+    @Test
+    @Config(qualifiers = "+notnight")
+    fun darkOverrideInLightPhoneStartsDark() {
+        assertWindow(expected = DarkColors, mode = ThemeMode.Dark)
+    }
+
+    @Test
+    @Config(qualifiers = "+night")
+    fun lightOverrideInDarkPhoneStartsLight() {
+        assertWindow(expected = LightColors, mode = ThemeMode.Light)
+    }
+
+    // Фон окна сверяется с палитрой Compose: расхождение colors.xml вернуло бы вспышку молча.
+    private fun assertWindow(
+        expected: AppColors,
+        mode: ThemeMode,
+    ) {
+        ApplicationProvider.getApplicationContext<FamilyFinancesApp>().graph.theme.write(mode)
+        Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
+            val activity = controller.get()
+            val attrs = activity.theme.obtainStyledAttributes(intArrayOf(android.R.attr.windowBackground))
+            val background = attrs.getColor(0, 0)
+            attrs.recycle()
+            assertEquals(expected.canvas.toArgb(), background)
+
+            val bars = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+            assertEquals(expected == LightColors, bars.isAppearanceLightStatusBars)
+            assertEquals(expected == LightColors, bars.isAppearanceLightNavigationBars)
+        }
     }
 
     private fun shot(name: String): Uri = Uri.parse("content://gallery/$name")
