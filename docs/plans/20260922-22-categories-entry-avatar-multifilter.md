@@ -309,8 +309,8 @@ data class Categories(val back: AppScreen = Settings()) : AppScreen
 **Files:**
 - Modify: `android/gradle/libs.versions.toml`
 
-- [ ] `appVersionCode = 14`, `appVersionName = "0.14.0"` (тестов нет — только номер)
-- [ ] `make -C android apk` собирается
+- [x] `appVersionCode = 14`, `appVersionName = "0.14.0"` (тестов нет — только номер)
+- [x] `make -C android apk` собирается
 
 ### Task 8: Verify acceptance criteria
 - [ ] панель — четыре вкладки; категории открываются из настроек и из «Управлять…», «назад» возвращает туда,
