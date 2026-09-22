@@ -34,9 +34,10 @@ const (
 )
 
 type Filter struct {
-	UserID     *uuid.UUID
-	CategoryID *uuid.UUID
-	AccountID  *uuid.UUID
+	UserID *uuid.UUID
+	// CategoryIDs — любая из категорий; пустой срез не фильтрует.
+	CategoryIDs []uuid.UUID
+	AccountID   *uuid.UUID
 	// Unassigned — только операции без счёта; с AccountID несовместим.
 	Unassigned      bool
 	Type            *Type

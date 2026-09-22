@@ -178,6 +178,49 @@ func TestTransactionRepositorySQLite_Integration(t *testing.T) {
 		assert.False(t, results[0].Date.Before(results[1].Date))
 	})
 
+	t.Run("GetByFilter_CategoryIDs", func(t *testing.T) {
+		db := container.GetTestDatabase(t)
+		repo := transactionrepo.NewSQLiteRepository(db)
+
+		familyID, err := helper.CreateTestFamily(ctx, "Category Filter Family", "USD")
+		require.NoError(t, err)
+		userID, err := helper.CreateTestUser(ctx, "categories@example.com", "Cat", "Test", "admin", familyID)
+		require.NoError(t, err)
+
+		categories := make([]uuid.UUID, 3)
+		for i, name := range []string{"Food", "Transport", "Fun"} {
+			id, createErr := helper.CreateTestCategory(ctx, name, "expense", familyID, nil)
+			require.NoError(t, createErr)
+			categories[i] = uuid.MustParse(id)
+		}
+		for _, categoryID := range categories {
+			require.NoError(t, repo.Create(ctx, &transaction.Transaction{
+				ID:          uuid.New(),
+				AmountMinor: 1_000,
+				Type:        transaction.TypeExpense,
+				Description: "Expense",
+				CategoryID:  categoryID,
+				UserID:      uuid.MustParse(userID),
+				Date:        date.Today(time.UTC),
+			}))
+		}
+
+		results, err := repo.GetByFilter(ctx, transaction.Filter{
+			CategoryIDs: []uuid.UUID{categories[0], categories[2]},
+			Limit:       10,
+		})
+		require.NoError(t, err)
+		got := make([]uuid.UUID, 0, len(results))
+		for _, tx := range results {
+			got = append(got, tx.CategoryID)
+		}
+		assert.ElementsMatch(t, []uuid.UUID{categories[0], categories[2]}, got)
+
+		all, err := repo.GetByFilter(ctx, transaction.Filter{CategoryIDs: []uuid.UUID{}, Limit: 10})
+		require.NoError(t, err)
+		assert.Len(t, all, 3)
+	})
+
 	t.Run("GetByFilter_TypeAndAmount", func(t *testing.T) {
 		db := container.GetTestDatabase(t)
 		repo := transactionrepo.NewSQLiteRepository(db)

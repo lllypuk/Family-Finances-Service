@@ -187,15 +187,15 @@ data class Categories(val back: AppScreen = Settings()) : AppScreen
 - Modify: `internal/infrastructure/transaction/transaction_repository_test.go`
 - Modify: `tests/integration/transactions_test.go`
 
-- [ ] спека по «Мультифильтр»
-- [ ] `CategoryIDs []uuid.UUID` в домене и dto (с тегом `validate`); `GetTransactionsByCategory`,
+- [x] спека по «Мультифильтр»
+- [x] `CategoryIDs []uuid.UUID` в домене и dto (с тегом `validate`); `GetTransactionsByCategory`,
       `buildTransactionServiceFilter`, `convertDTOFilterToRepoFilter` переведены
-- [ ] хендлер: `QueryParams()["category_id"]`, дубли схлопнуты
-- [ ] репозиторий: `category_id IN (…)`, пустой срез — без условия
-- [ ] тесты хендлера: один id (как раньше), два, дубль → один, невалидный (прежний код ответа)
-- [ ] тесты репозитория: `IN` по двум категориям возвращает обе и только их; пустой срез = все
-- [ ] интеграционный: два `category_id` сквозь сервис → операции обеих категорий и только они
-- [ ] `make fmt && make test && make lint` — 0 issues
+- [x] хендлер: `QueryParams()["category_id"]`, дубли схлопнуты
+- [x] репозиторий: `category_id IN (…)`, пустой срез — без условия
+- [x] тесты хендлера: один id (как раньше), два, дубль → один, невалидный (прежний код ответа)
+- [x] тесты репозитория: `IN` по двум категориям возвращает обе и только их; пустой срез = все
+- [x] интеграционный: два `category_id` сквозь сервис → операции обеих категорий и только они
+- [x] `make fmt && make test && make lint` — 0 issues
 
 ### Task 2: Клиент — фильтр `categoryIds` и мультивыбор в листе
 
