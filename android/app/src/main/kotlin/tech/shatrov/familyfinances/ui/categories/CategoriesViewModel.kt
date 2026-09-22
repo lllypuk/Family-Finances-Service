@@ -32,7 +32,7 @@ val CategoryPalette = listOf(
     "#6D4C41",
 )
 
-private const val DEFAULT_ICON = "tag"
+private const val DEFAULT_ICON = "🏷️"
 
 /** Нижняя граница контракта для `name`. */
 private const val MIN_NAME = 2
@@ -168,7 +168,12 @@ class CategoriesViewModel(
     }
 
     fun onIconChange(icon: String) {
-        mutableEditor.update { it?.copy(icon = icon)?.cleared(CategoryField.ICON) }
+        mutableEditor.update { current ->
+            // Набранное после прежнего значка заменяет его, а не отбрасывается срезом до первого кластера.
+            val typed = current?.icon?.takeIf { it.isNotEmpty() && icon.startsWith(it) && icon.length > it.length }
+                ?.let { icon.removePrefix(it) } ?: icon
+            current?.copy(icon = firstGrapheme(typed.trimStart()))?.cleared(CategoryField.ICON)
+        }
     }
 
     fun onParentChange(parentId: UUID?) {

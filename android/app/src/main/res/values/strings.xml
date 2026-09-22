@@ -98,7 +98,10 @@
     <string name="filter_income">Доходы</string>
     <string name="filter_expense">Расходы</string>
     <string name="filter_all_categories">Все категории</string>
+    <string name="transactions_no_category">Без категории</string>
     <string name="filter_category">Категория</string>
+    <string name="filter_categories_more">%1$s +%2$d</string>
+    <string name="filter_done">Готово</string>
     <string name="filter_all_accounts">Все счета</string>
     <string name="transactions_add">Добавить</string>
     <string name="transactions_add_first">Добавить операцию</string>
@@ -124,6 +127,7 @@
 
     <string name="categories_title">Категории</string>
     <string name="categories_add">Добавить</string>
+    <string name="categories_manage">Управлять категориями…</string>
     <string name="categories_empty">Категорий пока нет</string>
     <string name="categories_add_first">Добавить категорию</string>
     <string name="categories_income">Доходные</string>

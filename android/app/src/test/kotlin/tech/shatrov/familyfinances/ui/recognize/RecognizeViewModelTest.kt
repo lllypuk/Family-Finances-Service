@@ -33,6 +33,7 @@ import org.robolectric.annotation.GraphicsMode
 import tech.shatrov.familyfinances.ACCOUNTS_EMPTY
 import tech.shatrov.familyfinances.ACCOUNTS_OK
 import tech.shatrov.familyfinances.CARD_ACCOUNT_ID
+import tech.shatrov.familyfinances.CATEGORIES_NESTED
 import tech.shatrov.familyfinances.CATEGORIES_OK
 import tech.shatrov.familyfinances.COFFEE_ID
 import tech.shatrov.familyfinances.FakeTokenVault
@@ -790,5 +791,35 @@ class RecognizeViewModelTest {
         reviewed()
 
         assertEquals(UUID.fromString(CARD_ACCOUNT_ID), lastAccount.read())
+    }
+
+    // Только справочник: счёт уже выбран, а платный вызов не повторяется.
+    @Test
+    fun reloadCategoriesKeepsRowsAndAccountWithoutPaidCall() = runTest {
+        val shawarma = recognized().first().draft
+        model.onDescriptionChange(shawarma, "Шавуха большая")
+        model.onAccountChange(UUID.fromString(CARD_ACCOUNT_ID))
+        val before = rows()
+        val served = server.requestCount
+
+        server.enqueueJson(200, CATEGORIES_NESTED)
+        model.reloadCategories().join()
+        val state = model.state.value
+
+        assertEquals(3, state.categories.size)
+        assertEquals(before, rows())
+        assertEquals(UUID.fromString(CARD_ACCOUNT_ID), state.accountId)
+        assertEquals(listOf("/api/v1/categories"), requests().drop(served).map { it.url.encodedPath })
+    }
+
+    @Test
+    fun reloadCategoriesFailureKeepsPreviousList() = runTest {
+        recognized()
+
+        server.enqueueJson(500, INTERNAL_ERROR)
+        model.reloadCategories().join()
+
+        assertEquals(2, model.state.value.categories.size)
+        assertTrue(model.state.value.phase is RecognizePhase.Review)
     }
 }

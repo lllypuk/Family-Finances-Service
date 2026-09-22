@@ -83,7 +83,7 @@ func TestTransactionFilterDTO_ComplexFilter(t *testing.T) {
 
 	filter := TransactionFilterDTO{
 		UserID:          &userID,
-		CategoryID:      &categoryID,
+		CategoryIDs:     []uuid.UUID{categoryID},
 		Type:            &txType,
 		DateFrom:        &dateFrom,
 		DateTo:          &dateTo,
@@ -96,7 +96,7 @@ func TestTransactionFilterDTO_ComplexFilter(t *testing.T) {
 	}
 
 	assert.NotNil(t, filter.UserID)
-	assert.NotNil(t, filter.CategoryID)
+	assert.Len(t, filter.CategoryIDs, 1)
 	assert.NotNil(t, filter.Type)
 	assert.NotNil(t, filter.DateFrom)
 	assert.NotNil(t, filter.DateTo)

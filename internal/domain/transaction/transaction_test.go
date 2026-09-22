@@ -145,7 +145,7 @@ func TestFilter_StructFields(t *testing.T) {
 
 	filter := &transaction.Filter{
 		UserID:          &userID,
-		CategoryID:      &categoryID,
+		CategoryIDs:     []uuid.UUID{categoryID},
 		Type:            &transactionType,
 		DateFrom:        &dateFrom,
 		DateTo:          &dateTo,
@@ -159,7 +159,7 @@ func TestFilter_StructFields(t *testing.T) {
 
 	// Assert all fields are accessible
 	assert.Equal(t, userID, *filter.UserID)
-	assert.Equal(t, categoryID, *filter.CategoryID)
+	assert.Equal(t, []uuid.UUID{categoryID}, filter.CategoryIDs)
 	assert.Equal(t, transactionType, *filter.Type)
 	assert.Equal(t, dateFrom, *filter.DateFrom)
 	assert.Equal(t, dateTo, *filter.DateTo)

@@ -48,6 +48,7 @@ class SettingsRootScreenTest {
         themeMode: ThemeMode = ThemeMode.System,
         onThemeMode: (ThemeMode) -> Unit = {},
         onOpen: (SettingsPage) -> Unit = {},
+        onOpenCategories: () -> Unit = {},
         onSignOut: () -> Unit = {},
     ) {
         composeRule.setContent {
@@ -59,6 +60,7 @@ class SettingsRootScreenTest {
                     themeMode = themeMode,
                     onThemeMode = onThemeMode,
                     onOpen = onOpen,
+                    onOpenCategories = onOpenCategories,
                     onRetry = {},
                     onBack = {},
                     onSignOut = onSignOut,
@@ -76,6 +78,16 @@ class SettingsRootScreenTest {
         for (hidden in listOf(R.string.settings_users, R.string.settings_family, R.string.settings_backups)) {
             composeRule.onNodeWithText(res.getString(hidden)).assertDoesNotExist()
         }
+    }
+
+    @Test
+    fun categoriesRowOpensCategories() {
+        var opened = false
+        show(testSession(Role.member), onOpenCategories = { opened = true })
+
+        composeRule.onNodeWithText(res.getString(R.string.categories_title)).performScrollTo().performClick()
+
+        assertTrue(opened)
     }
 
     @Test
@@ -139,6 +151,7 @@ class SettingsRootScreenTest {
                     themeMode = mode,
                     onThemeMode = {},
                     onOpen = {},
+                    onOpenCategories = {},
                     onRetry = {},
                     onBack = {},
                     onSignOut = {},

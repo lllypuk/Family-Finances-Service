@@ -476,7 +476,7 @@ func (s *TransactionServiceImpl) GetTransactionsByCategory(
 	}
 
 	// Set category ID in filter
-	filter.CategoryID = &categoryID
+	filter.CategoryIDs = []uuid.UUID{categoryID}
 
 	// Convert DTO filter to domain filter
 	repoFilter := s.convertDTOFilterToRepoFilter(filter)
@@ -844,12 +844,12 @@ func (s *TransactionServiceImpl) adjustBudgetsForUpdate(
 
 func (s *TransactionServiceImpl) convertDTOFilterToRepoFilter(filter dto.TransactionFilterDTO) transaction.Filter {
 	repoFilter := transaction.Filter{
-		UserID:     filter.UserID,
-		CategoryID: filter.CategoryID,
-		AccountID:  filter.AccountID,
-		Unassigned: filter.Unassigned,
-		Limit:      filter.Limit,
-		Offset:     filter.Offset,
+		UserID:      filter.UserID,
+		CategoryIDs: filter.CategoryIDs,
+		AccountID:   filter.AccountID,
+		Unassigned:  filter.Unassigned,
+		Limit:       filter.Limit,
+		Offset:      filter.Offset,
 	}
 
 	repoFilter.DateFrom = filter.DateFrom

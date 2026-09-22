@@ -21,6 +21,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import tech.shatrov.familyfinances.ACCOUNTS_OK
 import tech.shatrov.familyfinances.CARD_ACCOUNT_ID
+import tech.shatrov.familyfinances.CATEGORIES_NESTED
 import tech.shatrov.familyfinances.CATEGORIES_OK
 import tech.shatrov.familyfinances.COFFEE_ID
 import tech.shatrov.familyfinances.FakeTokenVault
@@ -352,5 +353,43 @@ class TransactionEditViewModelTest {
         val body = lastRequest(4).text()
         assertTrue(body, body.contains("\"account_id\":\"$CARD_ACCOUNT_ID\""))
         assertFalse(body, body.contains("clear_account"))
+    }
+
+    // Возврат из справочника: `load()` затёр бы черновик, узкая перечитка трогает только список.
+    @Test
+    fun reloadCategoriesKeepsEnteredFields() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        createModel()
+        loaded()
+        fill()
+        model.onAccountChange(UUID.fromString(CARD_ACCOUNT_ID))
+
+        server.enqueueJson(200, CATEGORIES_NESTED)
+        model.reloadCategories().join()
+        val state = model.state.value
+
+        assertEquals(listOf("Продукты", "Молочное"), state.visibleCategories.map { it.name })
+        assertEquals("1500,50", state.amount)
+        assertEquals(" Кофе ", state.description)
+        assertEquals(UUID.fromString(GROCERIES_ID), state.categoryId)
+        assertEquals(UUID.fromString(CARD_ACCOUNT_ID), state.accountId)
+    }
+
+    @Test
+    fun reloadCategoriesFailureKeepsPreviousList() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        server.enqueueJson(200, ACCOUNTS_OK)
+        createModel()
+        loaded()
+        fill()
+
+        server.enqueueJson(500, INTERNAL_ERROR)
+        model.reloadCategories().join()
+        val state = model.state.value
+
+        assertEquals(listOf("Продукты", "Зарплата"), state.categories.map { it.name })
+        assertEquals("1500,50", state.amount)
+        assertNull(state.error)
     }
 }

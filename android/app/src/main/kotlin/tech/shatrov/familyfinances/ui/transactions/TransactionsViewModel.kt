@@ -27,7 +27,7 @@ private const val REFERENCE_LIMIT = 200
 /** Строка списка: имена подставлены здесь, чтобы разметка не искала их по словарям. */
 data class TransactionRow(
     val transaction: Transaction,
-    val categoryName: String?,
+    val category: Category?,
     val authorName: String?,
     val isMine: Boolean,
 )
@@ -185,13 +185,20 @@ class TransactionsViewModel(
     ) = api.transactions.listTransactions(
         limit = PAGE_SIZE,
         offset = offset,
-        categoryId = mutableFilters.value.categoryId,
+        categoryId = categoryQuery(),
         accountId = mutableFilters.value.accountId,
         unassigned = mutableFilters.value.unassigned.takeIf { it },
         type = mutableFilters.value.type,
         dateFrom = bounds.from,
         dateTo = bounds.to,
     )
+
+    // Порядок справочника, а не выбора: одинаковый набор — один и тот же запрос. Удалённые — в конце.
+    private fun categoryQuery(): List<UUID>? {
+        val ids = mutableFilters.value.categoryIds.takeIf { it.isNotEmpty() } ?: return null
+        val order = mutableCategories.value.withIndex().associate { (index, category) -> category.id to index }
+        return ids.sortedBy { order[it] ?: Int.MAX_VALUE }
+    }
 
     private fun window(day: LocalDate): DateWindow {
         val current = mutableFilters.value
@@ -218,12 +225,12 @@ class TransactionsViewModel(
     }
 
     private fun ready(): TransactionsUiState.Ready {
-        val names = mutableCategories.value.associate { it.id to it.name }
+        val byId = mutableCategories.value.associateBy { it.id }
         return TransactionsUiState.Ready(
             groups = loaded
                 .groupBy { it.date }
                 .map { (date, transactions) ->
-                    DayGroup(date, transactions.map { row(it, names) })
+                    DayGroup(date, transactions.map { row(it, byId) })
                 },
             currency = session.currency,
             hasMore = !exhausted && loaded.size < total,
@@ -232,10 +239,10 @@ class TransactionsViewModel(
 
     private fun row(
         transaction: Transaction,
-        names: Map<UUID, String>,
+        categories: Map<UUID, Category>,
     ): TransactionRow = TransactionRow(
         transaction = transaction,
-        categoryName = names[transaction.categoryId],
+        category = categories[transaction.categoryId],
         authorName = authors[transaction.userId],
         isMine = transaction.userId == session.user.id,
     )

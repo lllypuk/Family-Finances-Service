@@ -309,7 +309,7 @@ type BulkDeleteResponse struct {
 // date.Date и money.Minor не реализуют BindUnmarshaler, поэтому тегов query здесь нет.
 type TransactionFilterParams struct {
 	UserID          *uuid.UUID
-	CategoryID      *uuid.UUID
+	CategoryIDs     []uuid.UUID
 	AccountID       *uuid.UUID
 	Unassigned      bool
 	Type            *string

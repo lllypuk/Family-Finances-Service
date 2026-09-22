@@ -575,6 +575,49 @@ func TestTransactionHandler_Integration_Filters(t *testing.T) {
 		assert.Equal(t, incomeTransaction.ID, response.Data[0].ID)
 	})
 
+	t.Run("GetTransactions_ByTwoCategories", func(t *testing.T) {
+		otherCategory := testhelpers.CreateTestCategory(family.ID, category.TypeExpense)
+		otherCategory.Name = "Transport"
+		require.NoError(t, testServer.Repos.Category.Create(context.Background(), otherCategory))
+		otherTransaction := testhelpers.CreateTestTransaction(
+			family.ID, user.ID, otherCategory.ID, transaction.TypeExpense,
+		)
+		// за пределами ByDateRange
+		otherTransaction.Date = date.Today(time.UTC).AddDays(-10)
+		require.NoError(t, testServer.Repos.Transaction.Create(context.Background(), otherTransaction))
+
+		query := url.Values{"category_id": {expenseCategory.ID.String(), incomeCategory.ID.String()}}
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions?"+query.Encode(), nil)
+		testServer.Auth(t).Apply(req)
+		rec := httptest.NewRecorder()
+
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+		var response handlers.APIResponse[[]handlers.TransactionResponse]
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+
+		got := make([]uuid.UUID, 0, len(response.Data))
+		for _, tx := range response.Data {
+			got = append(got, tx.ID)
+		}
+		assert.ElementsMatch(t, []uuid.UUID{expenseTransaction.ID, incomeTransaction.ID}, got)
+		require.NotNil(t, response.Meta.Pagination)
+		assert.Equal(t, 2, response.Meta.Pagination.Total)
+	})
+
+	t.Run("GetTransactions_NilCategoryIDIs422", func(t *testing.T) {
+		query := url.Values{"category_id": {expenseCategory.ID.String(), uuid.Nil.String()}}
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions?"+query.Encode(), nil)
+		testServer.Auth(t).Apply(req)
+		rec := httptest.NewRecorder()
+
+		testServer.Server.Echo().ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
+	})
+
 	t.Run("GetTransactions_ByDateRange", func(t *testing.T) {
 		// Use a consistent time reference to avoid timing issues in CI
 		today := date.Today(time.UTC)

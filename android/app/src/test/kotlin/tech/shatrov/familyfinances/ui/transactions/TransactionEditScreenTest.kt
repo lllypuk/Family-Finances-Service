@@ -45,6 +45,7 @@ class TransactionEditScreenTest {
         onTypeChange: (TransactionType) -> Unit = {},
         onAmountChange: (String) -> Unit = {},
         onRetry: () -> Unit = {},
+        onManageCategories: () -> Unit = {},
     ) {
         composeRule.setContent {
             AppTheme {
@@ -60,6 +61,7 @@ class TransactionEditScreenTest {
                     onDelete = {},
                     onRetry = onRetry,
                     onBack = {},
+                    onManageCategories = onManageCategories,
                 )
             }
         }
@@ -185,4 +187,22 @@ class TransactionEditScreenTest {
         createdAt = OffsetDateTime.parse("2026-09-07T10:00:00Z"),
         updatedAt = OffsetDateTime.parse("2026-09-07T10:00:00Z"),
     )
+
+    @Test
+    fun manageCategoriesOpensCatalog() {
+        var opened = 0
+        show(form(), onManageCategories = { opened++ })
+
+        composeRule.onNodeWithText(res.getString(R.string.categories_manage)).performScrollTo().performClick()
+
+        assertEquals(1, opened)
+    }
+
+    // Уход во время отправки убил бы корутину, которую сервер уже мог принять.
+    @Test
+    fun manageCategoriesIsLockedWhileSubmitting() {
+        show(form().copy(submitting = true))
+
+        composeRule.onNodeWithText(res.getString(R.string.categories_manage)).assertIsNotEnabled()
+    }
 }

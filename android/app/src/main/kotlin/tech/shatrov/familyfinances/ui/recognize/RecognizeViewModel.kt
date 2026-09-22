@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -221,6 +222,15 @@ class RecognizeViewModel(
     fun save() = send(rows().filter { it.included && it.savable }.map { it.draft })
 
     fun retryRow(draft: UUID) = send(listOf(draft))
+
+    /** Возврат из справочника: только категории — счёт выбран, а платный вызов не повторяется. */
+    fun reloadCategories(): Job = viewModelScope.launch {
+        try {
+            val categories = api.client.unwrap { api.categories.listCategories(limit = CATEGORY_LIMIT) }.`data`
+            mutable.update { it.copy(categories = categories) }
+        } catch (_: ApiFailure) {
+        }
+    }
 
     /** Уход с экрана: импорт брошен, журнал и картинки удаляются. Зовётся из скоупа, переживающего модель. */
     suspend fun abandon() = withContext(NonCancellable + io) { journals.delete(importId) }

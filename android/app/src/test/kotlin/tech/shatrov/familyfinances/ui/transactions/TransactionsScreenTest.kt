@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -109,7 +110,17 @@ class TransactionsScreenTest {
         composeRule.onNodeWithText(formatDay(LocalDate.parse("2026-09-07"))).assertIsDisplayed()
         composeRule.onNodeWithText("Кофе").assertIsDisplayed()
         composeRule.onNodeWithText("Продукты · Член").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Продукты", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithText("-1 500,00 ₽").assertIsDisplayed()
+    }
+
+    @Test
+    fun rowWithoutCategoryShowsPlaceholderAvatar() {
+        show(ready(listOf(row(categoryName = null))))
+
+        composeRule
+            .onNodeWithContentDescription(res.getString(R.string.transactions_no_category), useUnmergedTree = true)
+            .assertIsDisplayed()
     }
 
     @Test
@@ -162,7 +173,7 @@ class TransactionsScreenTest {
     fun categoryChipShowsSelectedName() {
         show(
             ready(listOf(row(categoryName = null))),
-            filters = TransactionFilters(categoryId = CATEGORY_ID),
+            filters = TransactionFilters(categoryIds = setOf(CATEGORY_ID)),
             categories = listOf(category()),
         )
 
@@ -173,7 +184,7 @@ class TransactionsScreenTest {
     fun categoryChipShowsDashWhenSelectedCategoryIsGone() {
         show(
             ready(emptyList()),
-            filters = TransactionFilters(categoryId = CATEGORY_ID),
+            filters = TransactionFilters(categoryIds = setOf(CATEGORY_ID)),
             categories = emptyList(),
         )
 
@@ -209,20 +220,66 @@ class TransactionsScreenTest {
         }
 
         composeRule.onNodeWithText("Продукты / Прочее").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Прочее", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    // Первое имя — по справочнику, не по порядку отметок: так же категории уходят в запрос.
+    @Test
+    fun categoryChipShowsFirstNameAndCountOfOthers() {
+        val home = category().copy(id = UUID.randomUUID(), name = "Дом")
+        val cafe = category().copy(id = UUID.randomUUID(), name = "Кафе")
+        show(
+            ready(emptyList()),
+            filters = TransactionFilters(categoryIds = setOf(cafe.id, CATEGORY_ID, home.id)),
+            categories = listOf(category(), home, cafe),
+        )
+
+        composeRule.onNodeWithText("Продукты +2").assertIsDisplayed()
     }
 
     @Test
-    fun categorySheetResetReachesCallback() {
-        var picked: UUID? = CATEGORY_ID
+    fun multiSheetReturnsBothCheckedOnDone() {
+        val home = category().copy(id = UUID.randomUUID(), name = "Дом")
+        var done: Set<UUID>? = null
+        composeRule.setContent {
+            AppTheme { CategorySheetContent(listOf(category(), home), selectedIds = emptySet()) { done = it } }
+        }
+
+        composeRule.onNodeWithText("Продукты").performClick()
+        composeRule.onNodeWithText("Дом").performClick()
+        assertNull(done)
+        composeRule.onNodeWithText(res.getString(R.string.filter_done)).performClick()
+
+        assertEquals(setOf(CATEGORY_ID, home.id), done)
+    }
+
+    @Test
+    fun multiSheetUncheckDropsCategory() {
+        val home = category().copy(id = UUID.randomUUID(), name = "Дом")
+        var done: Set<UUID>? = null
         composeRule.setContent {
             AppTheme {
-                CategorySheetContent(listOf(category()), selected = CATEGORY_ID) { picked = it }
+                CategorySheetContent(listOf(category(), home), selectedIds = setOf(CATEGORY_ID, home.id)) { done = it }
             }
         }
 
-        composeRule.onNodeWithText(res.getString(R.string.filter_all_categories)).performClick()
+        composeRule.onNodeWithText("Дом").performClick()
+        composeRule.onNodeWithText(res.getString(R.string.filter_done)).performClick()
 
-        assertNull(picked)
+        assertEquals(setOf(CATEGORY_ID), done)
+    }
+
+    @Test
+    fun multiSheetAllClearsSelection() {
+        var done: Set<UUID>? = null
+        composeRule.setContent {
+            AppTheme { CategorySheetContent(listOf(category()), selectedIds = setOf(CATEGORY_ID)) { done = it } }
+        }
+
+        composeRule.onNodeWithText(res.getString(R.string.filter_all_categories)).performClick()
+        composeRule.onNodeWithText(res.getString(R.string.filter_done)).performClick()
+
+        assertEquals(emptySet<UUID>(), done)
     }
 
     @Test
@@ -282,8 +339,44 @@ class TransactionsScreenTest {
             createdAt = OffsetDateTime.parse("2026-09-07T09:00:00Z"),
             updatedAt = OffsetDateTime.parse("2026-09-07T09:00:00Z"),
         ),
-        categoryName = categoryName,
+        category = categoryName?.let { category().copy(name = it) },
         authorName = authorName,
         isMine = isMine,
     )
+
+    @Test
+    fun categorySheetManageReachesCallback() {
+        var managed = 0
+        var picked = false
+        composeRule.setContent {
+            AppTheme {
+                CategorySheetContent(listOf(category()), selected = null, onManage = { managed++ }) { picked = true }
+            }
+        }
+
+        composeRule.onNodeWithText(res.getString(R.string.categories_manage)).performClick()
+
+        assertEquals(1, managed)
+        assertFalse(picked)
+    }
+
+    // Переход в справочник отметки не применяет: «Готово» не нажата.
+    @Test
+    fun multiSheetManageDoesNotApplyDraft() {
+        var managed = 0
+        var done: Set<UUID>? = null
+        composeRule.setContent {
+            AppTheme {
+                CategorySheetContent(listOf(category()), selectedIds = emptySet(), onManage = { managed++ }) {
+                    done = it
+                }
+            }
+        }
+
+        composeRule.onNodeWithText("Продукты").performClick()
+        composeRule.onNodeWithText(res.getString(R.string.categories_manage)).performClick()
+
+        assertEquals(1, managed)
+        assertNull(done)
+    }
 }

@@ -41,6 +41,7 @@ import tech.shatrov.familyfinances.theme.LocalAppColors
 import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Centered
 import tech.shatrov.familyfinances.ui.RowPlace
+import tech.shatrov.familyfinances.ui.categories.CategoryAvatar
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.format.formatMoney
 import tech.shatrov.familyfinances.ui.format.formatMonth
@@ -435,6 +436,7 @@ private fun CategoryRow(
         horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        CategoryAvatar(category.icon.orEmpty(), category.color.orEmpty(), category.name, Dimens.AVATAR_S)
         Text(
             text = category.name,
             style = MaterialTheme.typography.bodyMedium,

@@ -12,7 +12,7 @@ private const val VIEWPORT = 24f
 private const val STROKE = 2f
 
 /**
- * Иконки интерфейса контурами Lucide. В `material-icons-core` нет ни метки, ни профиля в одном
+ * Иконки интерфейса контурами Lucide. В `material-icons-core` нет профиля в одном
  * стиле с домом и списком, а `material-icons-extended` тянет тысячи векторов ради семи.
  */
 object AppIcons {
@@ -21,13 +21,6 @@ object AppIcons {
 
     val List: ImageVector =
         icon("list", "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01")
-
-    val Tag: ImageVector =
-        icon(
-            "tag",
-            "M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z",
-            "M7.5 6.5a1 1 0 1 0 0 2 1 1 0 1 0 0-2z",
-        )
 
     val Target: ImageVector =
         icon(

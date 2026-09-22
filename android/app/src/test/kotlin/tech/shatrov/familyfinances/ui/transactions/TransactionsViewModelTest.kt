@@ -28,6 +28,7 @@ import tech.shatrov.familyfinances.CATEGORIES_OK
 import tech.shatrov.familyfinances.FakeTokenVault
 import tech.shatrov.familyfinances.GROCERIES_ID
 import tech.shatrov.familyfinances.ROBOLECTRIC_SDK
+import tech.shatrov.familyfinances.SALARY_ID
 import tech.shatrov.familyfinances.TRANSACTIONS_EMPTY
 import tech.shatrov.familyfinances.TRANSACTIONS_PAGE_1
 import tech.shatrov.familyfinances.TRANSACTIONS_PAGE_2
@@ -115,7 +116,7 @@ class TransactionsViewModelTest {
         assertEquals(1, state.groups.size)
         assertEquals(LocalDate.parse("2026-09-07"), state.groups[0].date)
         val rows = state.groups[0].rows
-        assertEquals(listOf("Продукты", "Продукты"), rows.map { it.categoryName })
+        assertEquals(listOf("Продукты", "Продукты"), rows.map { it.category?.name })
         assertTrue(rows[0].isMine)
         assertEquals("Член", rows[1].authorName)
         assertTrue(state.hasMore)
@@ -325,7 +326,7 @@ class TransactionsViewModelTest {
         val next = TransactionFilters(
             period = TransactionPeriod.THIS_MONTH,
             type = TransactionType.expense,
-            categoryId = UUID.fromString(GROCERIES_ID),
+            categoryIds = setOf(UUID.fromString(GROCERIES_ID)),
         )
         model.onFiltersChange(next)
         assertEquals(next, model.filters.value)
@@ -337,6 +338,37 @@ class TransactionsViewModelTest {
         assertEquals(GROCERIES_ID, url.queryParameter("category_id"))
         assertEquals("2026-09-01", url.queryParameter("date_from"))
         assertEquals("2026-09-30", url.queryParameter("date_to"))
+    }
+
+    // Порядок справочника, а не отметок: один набор — один запрос.
+    @Test
+    fun severalCategoriesGoAsRepeatedParamInReferenceOrder() = runTest {
+        enqueueFirstPage()
+        createModel()
+        settle()
+
+        server.enqueueJson(200, TRANSACTIONS_PAGE_1)
+        model.onFiltersChange(
+            TransactionFilters(categoryIds = linkedSetOf(UUID.fromString(SALARY_ID), UUID.fromString(GROCERIES_ID))),
+        )
+        settle()
+
+        assertEquals(listOf(GROCERIES_ID, SALARY_ID), lastRequestUrl(5).queryParameterValues("category_id"))
+    }
+
+    @Test
+    fun emptyCategorySetSendsNoParam() = runTest {
+        enqueueFirstPage()
+        createModel()
+        settle()
+
+        server.enqueueJson(200, TRANSACTIONS_PAGE_1)
+        model.onFiltersChange(TransactionFilters(categoryIds = emptySet(), type = TransactionType.income))
+        settle()
+
+        val url = lastRequestUrl(5)
+        assertEquals("income", url.queryParameter("type"))
+        assertNull(url.queryParameter("category_id"))
     }
 
     // Смена фильтра во время догрузки: страница прошлого запроса не должна дописаться к новому

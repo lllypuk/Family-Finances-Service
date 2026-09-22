@@ -344,8 +344,8 @@ Details: [deploy/README.md](deploy/README.md).
 
 ## 📱 Android client
 
-`android/` — the online Kotlin/Compose client to `/api/v1` (login, home, transactions, categories, budgets,
-holdings; the five roots are switched by a bottom tab bar). Home opens "Обзор" (period totals and a 12-month
+`android/` — the online Kotlin/Compose client to `/api/v1` (login, home, transactions, budgets, holdings —
+the four roots of the bottom tab bar; categories open from settings and from every category picker). Home opens "Обзор" (period totals and a 12-month
 chart) and offers to resume an unfinished screenshot import. The profile icon on home opens settings: own profile and
 password, sessions with revoke, the theme (System / Light / Dark, System by default), and — for an admin — users, family and backups; sign-out lives there too.
 Models and typed interfaces are generated from `docs/api/openapi.yaml` into `android/core/api/generated`

@@ -20,6 +20,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import tech.shatrov.familyfinances.BUDGET_OK
+import tech.shatrov.familyfinances.CATEGORIES_NESTED
 import tech.shatrov.familyfinances.CATEGORIES_OK
 import tech.shatrov.familyfinances.FOOD_BUDGET_ID
 import tech.shatrov.familyfinances.FakeTokenVault
@@ -589,5 +590,41 @@ class BudgetEditViewModelTest {
 
     private companion object {
         val DRAFT_ID: UUID = UUID.fromString(DRAFT)
+    }
+
+    @Test
+    fun reloadCategoriesKeepsEnteredFields() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        createModel()
+        loaded()
+        model.onNameChange("Еда")
+        model.onAmountChange("500")
+        model.onCategoryChange(UUID.fromString(GROCERIES_ID))
+
+        server.enqueueJson(200, CATEGORIES_NESTED)
+        model.reloadCategories().join()
+        val state = model.state.value
+
+        // Доходная «Зарплата» отсеяна и при перечитке.
+        assertEquals(listOf("Продукты", "Молочное"), state.categories.map { it.name })
+        assertEquals("Еда", state.name)
+        assertEquals("500", state.amount)
+        assertEquals(UUID.fromString(GROCERIES_ID), state.categoryId)
+    }
+
+    @Test
+    fun reloadCategoriesFailureKeepsPreviousList() = runTest {
+        server.enqueueJson(200, CATEGORIES_OK)
+        createModel()
+        loaded()
+        model.onNameChange("Еда")
+
+        server.enqueueJson(500, INTERNAL_ERROR)
+        model.reloadCategories().join()
+        val state = model.state.value
+
+        assertEquals(listOf("Продукты"), state.categories.map { it.name })
+        assertEquals("Еда", state.name)
+        assertNull(state.error)
     }
 }

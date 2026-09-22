@@ -41,6 +41,8 @@ import tech.shatrov.familyfinances.ui.ChipRow
 import tech.shatrov.familyfinances.ui.DatePickerSheet
 import tech.shatrov.familyfinances.ui.FieldError
 import tech.shatrov.familyfinances.ui.SegmentedChoice
+import tech.shatrov.familyfinances.ui.categories.CategoryFieldHeader
+import tech.shatrov.familyfinances.ui.categories.categoryChipLabel
 import tech.shatrov.familyfinances.ui.currencySuffix
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.message
@@ -64,6 +66,7 @@ fun TransactionEditScreen(
     onDelete: () -> Unit,
     onRetry: () -> Unit,
     onBack: () -> Unit,
+    onManageCategories: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var datePickerShown by remember { mutableStateOf(false) }
@@ -117,10 +120,12 @@ fun TransactionEditScreen(
         )
         FieldError(state.fieldErrors[TransactionField.TYPE])
 
-        Text(stringResource(R.string.transaction_category), style = MaterialTheme.typography.bodySmall)
+        CategoryFieldHeader(stringResource(R.string.transaction_category), !state.submitting, onManageCategories)
         ChipRow {
             items(state.visibleCategories) { category: Category ->
-                Chip(category.name, state.categoryId == category.id) { onCategoryChange(category.id) }
+                Chip(categoryChipLabel(category.icon, category.name), state.categoryId == category.id) {
+                    onCategoryChange(category.id)
+                }
             }
         }
         FieldError(state.fieldErrors[TransactionField.CATEGORY])

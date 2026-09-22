@@ -127,15 +127,21 @@ fun CategoryEditScreen(
         Palette(state.color, onColorChange)
         FieldError(state.fieldErrors[CategoryField.COLOR])
 
-        OutlinedTextField(
-            value = state.icon,
-            onValueChange = onIconChange,
-            label = { Text(stringResource(R.string.category_icon)) },
-            singleLine = true,
-            isError = state.fieldErrors.containsKey(CategoryField.ICON),
-            supportingText = { FieldError(state.fieldErrors[CategoryField.ICON]) },
-            modifier = Modifier.fillMaxWidth(),
-        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(Dimens.SPACE_3),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedTextField(
+                value = state.icon,
+                onValueChange = onIconChange,
+                label = { Text(stringResource(R.string.category_icon)) },
+                singleLine = true,
+                isError = state.fieldErrors.containsKey(CategoryField.ICON),
+                supportingText = { FieldError(state.fieldErrors[CategoryField.ICON]) },
+                modifier = Modifier.weight(1f),
+            )
+            CategoryAvatar(state.icon, state.color, state.name, Dimens.AVATAR_M)
+        }
 
         val error = state.error
         if (error != null) {

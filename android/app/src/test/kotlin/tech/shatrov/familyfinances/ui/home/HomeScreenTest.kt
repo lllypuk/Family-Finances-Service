@@ -6,11 +6,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onLast
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -21,6 +25,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.ROBOLECTRIC_SDK
+import tech.shatrov.familyfinances.core.api.CategoryShare
 import tech.shatrov.familyfinances.core.api.StatsSummary
 import tech.shatrov.familyfinances.statsSummary
 import tech.shatrov.familyfinances.theme.AppTheme
@@ -97,6 +102,19 @@ class HomeScreenTest {
         composeRule.onNodeWithText(formatMoney(summary.current.incomeMinor, "RUB")).assertIsDisplayed()
         composeRule.onNodeWithText(formatMoney(summary.current.expensesMinor, "RUB")).assertIsDisplayed()
         composeRule.onNodeWithText(formatPercent(0.25, signed = true)).assertIsDisplayed()
+    }
+
+    @Test
+    fun topCategoriesShowAvatarEvenWithoutIconAndColor() {
+        val categories = listOf(
+            CategoryShare(UUID.randomUUID(), "Продукты", 3_000_00, 5, 0.7, color = "#4caf50", icon = "🛒"),
+            CategoryShare(UUID.randomUUID(), "Прочее", 1_231_05, 7, 0.3),
+        )
+        show(ready(statsSummary(expenseCategories = categories)))
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasText("Прочее"))
+
+        composeRule.onNodeWithContentDescription("Продукты", useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithContentDescription("Прочее", useUnmergedTree = true).assertExists()
     }
 
     @Test

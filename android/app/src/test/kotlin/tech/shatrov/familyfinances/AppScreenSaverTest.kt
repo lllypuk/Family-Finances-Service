@@ -2,6 +2,7 @@ package tech.shatrov.familyfinances
 
 import androidx.compose.runtime.saveable.SaverScope
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import tech.shatrov.familyfinances.core.api.HoldingSide
 import tech.shatrov.familyfinances.core.api.TransactionType
@@ -27,7 +28,7 @@ class AppScreenSaverTest {
             AppScreen.Home,
             AppScreen.Overview(),
             AppScreen.Transactions(),
-            AppScreen.Categories,
+            AppScreen.Categories(),
             AppScreen.Budgets,
             AppScreen.NetWorth,
         )) {
@@ -142,6 +143,23 @@ class AppScreenSaverTest {
     }
 
     @Test
+    fun categoriesKeepFormBack() {
+        val screen = AppScreen.Categories(
+            back = AppScreen.TransactionEdit(
+                id = UUID.fromString(COFFEE_ID),
+                back = AppScreen.Transactions(TransactionFilters(type = TransactionType.expense)),
+            ),
+        )
+        assertEquals(screen, roundTrip(screen))
+    }
+
+    @Test
+    fun categoriesFromOldBundleReturnToSettings() {
+        val back = (AppScreenSaver.restore("categories") as AppScreen.Categories).back
+        assertTrue((back as AppScreen.Settings).page is SettingsPage.Root)
+    }
+
+    @Test
     fun recognizeKeepsImportId() {
         val screen = AppScreen.Recognize(UUID.fromString(COFFEE_ID))
         assertEquals(screen, roundTrip(screen))
@@ -180,6 +198,28 @@ class AppScreenSaverTest {
             overview = OverviewPeriod.ThreeMonths,
         )
         assertEquals(screen, roundTrip(screen))
+    }
+
+    @Test
+    fun transactionsKeepCategorySet() {
+        val two = linkedSetOf(UUID.fromString(COFFEE_ID), UUID.fromString(GROCERIES_ID))
+        for (ids in listOf(two, emptySet())) {
+            val screen = AppScreen.Transactions(TransactionFilters(categoryIds = ids))
+            val restored = roundTrip(screen) as AppScreen.Transactions
+            assertEquals(screen, restored)
+            assertEquals(ids.toList(), restored.filters!!.categoryIds.toList())
+        }
+    }
+
+    // Бандл 0.13.0: в поле категории один uuid.
+    @Test
+    fun transactionsFromBundleWithSingleCategoryLoad() {
+        val restored = AppScreenSaver.restore("transactions:ALL:::$GROCERIES_ID::false::::")
+
+        assertEquals(
+            AppScreen.Transactions(TransactionFilters(categoryIds = setOf(UUID.fromString(GROCERIES_ID)))),
+            restored,
+        )
     }
 
     @Test

@@ -5,11 +5,13 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -52,6 +54,7 @@ import tech.shatrov.familyfinances.ui.Centered
 import tech.shatrov.familyfinances.ui.DatePickerSheet
 import tech.shatrov.familyfinances.ui.FieldError
 import tech.shatrov.familyfinances.ui.RowPlace
+import tech.shatrov.familyfinances.ui.categories.CategoryAvatar
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.format.formatFullDay
 import tech.shatrov.familyfinances.ui.format.formatMoney
@@ -85,6 +88,7 @@ fun RecognizeScreen(
     onRetry: () -> Unit,
     onRetryRow: (UUID) -> Unit,
     onBack: () -> Unit,
+    onManageCategories: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var dateFor by rememberSaveable { mutableStateOf<String?>(null) }
@@ -211,12 +215,15 @@ fun RecognizeScreen(
         CategorySheet(
             categories = state.categories.filter { it.type == row.type.asCategoryType() },
             selected = row.categoryId,
-            allowAll = false,
             onSelect = { picked ->
-                if (picked != null) onCategoryChange(row.draft, picked)
+                onCategoryChange(row.draft, picked)
                 categoryFor = null
             },
             onDismiss = { categoryFor = null },
+            onManage = {
+                categoryFor = null
+                onManageCategories()
+            },
         )
     }
 }
@@ -387,6 +394,7 @@ private fun RowItem(
                 text = category?.path(actions.categories) ?: stringResource(R.string.recognize_pick_category),
                 attention = category == null,
                 enabled = editable,
+                leading = category?.let { { CategoryAvatar(it.icon, it.color, it.name, Dimens.AVATAR_S) } },
             ) { actions.onPickCategory(row.draft) }
             FieldError(row.fieldErrors[TransactionField.CATEGORY])
 
@@ -442,9 +450,14 @@ private fun PickButton(
     attention: Boolean,
     enabled: Boolean,
     modifier: Modifier = Modifier,
+    leading: (@Composable () -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     TextButton(onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = Dimens.TOUCH_MIN)) {
+        leading?.let {
+            it()
+            Spacer(Modifier.width(Dimens.SPACE_2))
+        }
         Text(text = text, color = if (attention && enabled) LocalAppColors.current.warning else Color.Unspecified)
     }
 }

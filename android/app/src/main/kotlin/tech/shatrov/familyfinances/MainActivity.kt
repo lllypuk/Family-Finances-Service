@@ -171,6 +171,8 @@ fun AppRoot(graph: AppGraph) {
     var netWorthStale by rememberSaveable { mutableStateOf(false) }
     // Свой, а не `homeStale`: флаг гасит прочитавший, и «Обзор» оставил бы «Главную» со старыми итогами.
     var overviewStale by rememberSaveable { mutableStateOf(false) }
+    // Формы держат справочник категорий в своих моделях и перечитывают его по возврату из справочника.
+    var categoriesStale by rememberSaveable { mutableStateOf(false) }
     // Распознавание уводит с расшифровки мимо её выхода, а модель списка фильтр помнит.
     var dropDrill by rememberSaveable { mutableStateOf(false) }
     // Модели экранов лежат в store активити и переживают выход. Ключа по пользователю мало:
@@ -181,11 +183,8 @@ fun AppRoot(graph: AppGraph) {
     // Модель формы живёт в своём store: ключ у неё свой на каждый заход, а store активити
     // отдаёт брошенные модели только вместе с активити.
     val forms: ScopedModels = viewModel(key = "forms") { ScopedModels() }
-    val onForm = screen is AppScreen.TransactionEdit ||
-        screen is AppScreen.BudgetEdit ||
-        screen is AppScreen.HoldingEdit ||
-        screen is AppScreen.HoldingHistory ||
-        screen is AppScreen.Recognize
+    // Справочник, открытый с формы, её черновик не убивает: модель ждёт возврата в store.
+    val onForm = screen.isForm() || (screen as? AppScreen.Categories)?.back?.isForm() == true
     LaunchedEffect(onForm) { if (!onForm) forms.viewModelStore.clear() }
     // Свой store: модели подразделов настроек чистятся на каждом переходе, а модели форм — нет.
     val settings: ScopedModels = viewModel(key = "settings") { ScopedModels() }
@@ -232,7 +231,8 @@ fun AppRoot(graph: AppGraph) {
                 screen = AppScreen.Recognize(id)
             }
 
-            AppScreen.Categories -> {
+            is AppScreen.Categories -> if (!current.back.isForm()) {
+                if ((current.back as? AppScreen.Transactions)?.drilled == true) dropDrill = true
                 listStale = true
                 homeStale = true
                 overviewStale = true
@@ -443,41 +443,39 @@ fun AppRoot(graph: AppGraph) {
                     onCreate = { screen = AppScreen.TransactionEdit(null, back = current) },
                     onOpen = { screen = AppScreen.TransactionEdit(it, back = current) },
                     importLaunchers = importLaunchers,
+                    onManageCategories = { screen = AppScreen.Categories(back = current) },
                 )
             }
         }
 
-        AppScreen.Categories -> WithSession(session) { active ->
+        is AppScreen.Categories -> WithSession(session) { active ->
             val model: CategoriesViewModel = viewModel(key = "categories-${active.user.id}-$epoch") {
                 CategoriesViewModel(graph.api, active.isAdmin)
             }
             val categories by model.state.collectAsStateWithLifecycle()
             val editor by model.editor.collectAsStateWithLifecycle()
             val form = editor
-            // Список подписывает строки именами категорий и фильтрует по ним, главная —
-            // расходы в сводке, бюджеты — имя категории в строке, поэтому уход с этого экрана
-            // помечает устаревшими все три: правку модель наружу не отдаёт.
-            val leave = { next: AppScreen ->
+            // Список подписывает строки именами категорий и фильтрует по ним, главная и «Обзор» —
+            // расходы в сводке, бюджеты — имя категории в строке, формы — выбор категории, поэтому
+            // уход с этого экрана помечает устаревшими всех: правку модель наружу не отдаёт.
+            val leave = {
                 listStale = true
                 homeStale = true
                 overviewStale = true
                 budgetsStale = true
-                screen = next
+                // Гасят флаг только формы: взведённый из настроек, он дождался бы следующей формы.
+                if (current.back.isForm()) categoriesStale = true
+                screen = current.back
             }
-            BackHandler { if (form == null) leave(AppScreen.Home) else model.onDismiss() }
+            BackHandler { if (form == null) leave() else model.onDismiss() }
             if (form == null) {
-                WithNavBar(
-                    AppTab.CATEGORIES,
-                    onSelect = { leave(it.screen) },
-                    fab = { AddFab(model::onAdd, R.string.categories_add) },
-                ) {
-                    CategoriesScreen(
-                        state = categories,
-                        onRetry = model::refresh,
-                        onAdd = model::onAdd,
-                        onOpen = model::onOpen,
-                    )
-                }
+                CategoriesScreen(
+                    state = categories,
+                    onRetry = model::refresh,
+                    onAdd = model::onAdd,
+                    onOpen = model::onOpen,
+                    onBack = leave,
+                )
             } else {
                 CategoryEditScreen(
                     state = form,
@@ -724,6 +722,7 @@ fun AppRoot(graph: AppGraph) {
                     screen = AppScreen.Settings(next)
                 },
                 onLeave = { screen = AppScreen.Home },
+                onOpenCategories = { screen = AppScreen.Categories(back = AppScreen.Settings()) },
                 onSessionChanged = { before, after ->
                     if (before.zone != after.zone ||
                         before.currency != after.currency ||
@@ -780,6 +779,10 @@ fun AppRoot(graph: AppGraph) {
                     screen = AppScreen.Budgets
                 }
             }
+            OnCategoriesStale(categoriesStale) {
+                categoriesStale = false
+                model.reloadCategories()
+            }
             BackHandler { leave() }
             BudgetEditScreen(
                 state = edit,
@@ -794,6 +797,7 @@ fun AppRoot(graph: AppGraph) {
                 onDelete = model::onDelete,
                 onRetry = model::load,
                 onBack = leave,
+                onManageCategories = { screen = AppScreen.Categories(back = current) },
             )
         }
 
@@ -827,6 +831,10 @@ fun AppRoot(graph: AppGraph) {
                     screen = AppScreen.Transactions()
                 }
             }
+            OnCategoriesStale(categoriesStale) {
+                categoriesStale = false
+                model.reloadCategories()
+            }
             BackHandler { leave() }
             RecognizeScreen(
                 state = recognize,
@@ -842,6 +850,7 @@ fun AppRoot(graph: AppGraph) {
                 onRetry = model::retry,
                 onRetryRow = model::retryRow,
                 onBack = leave,
+                onManageCategories = { screen = AppScreen.Categories(back = current) },
             )
         }
 
@@ -874,6 +883,10 @@ fun AppRoot(graph: AppGraph) {
             // Уход с формы во время отправки убил бы её корутину: запись сервер уже мог
             // принять, а список о ней не узнал бы — и повтор создал бы вторую с новым черновиком.
             val leave = { if (!edit.submitting) screen = current.back }
+            OnCategoriesStale(categoriesStale) {
+                categoriesStale = false
+                model.reloadCategories()
+            }
             BackHandler { leave() }
             TransactionEditScreen(
                 state = edit,
@@ -887,6 +900,7 @@ fun AppRoot(graph: AppGraph) {
                 onDelete = model::onDelete,
                 onRetry = model::load,
                 onBack = leave,
+                onManageCategories = { screen = AppScreen.Categories(back = current) },
             )
         }
     }
@@ -956,11 +970,16 @@ private fun AddFab(
     }
 }
 
+private fun AppScreen.isForm(): Boolean = this is AppScreen.TransactionEdit ||
+    this is AppScreen.BudgetEdit ||
+    this is AppScreen.HoldingEdit ||
+    this is AppScreen.HoldingHistory ||
+    this is AppScreen.Recognize
+
 private val AppTab.screen: AppScreen
     get() = when (this) {
         AppTab.HOME -> AppScreen.Home
         AppTab.TRANSACTIONS -> AppScreen.Transactions()
-        AppTab.CATEGORIES -> AppScreen.Categories
         AppTab.BUDGETS -> AppScreen.Budgets
         AppTab.NET_WORTH -> AppScreen.NetWorth
     }
@@ -972,7 +991,17 @@ private suspend fun resumable(
 ): Boolean = when (screen) {
     is AppScreen.Recognize -> withContext(Dispatchers.IO) { graph.journals.read(screen.importId) != null }
     is AppScreen.Overview -> true
+    is AppScreen.Categories -> (screen.back as? AppScreen.Recognize)?.let { resumable(graph, it) } ?: false
     else -> false
+}
+
+/** Форма под справочником перечитывает категории по возвращении; черновик остаётся. */
+@Composable
+private fun OnCategoriesStale(
+    stale: Boolean,
+    onStale: () -> Unit,
+) {
+    LaunchedEffect(stale) { if (stale) onStale() }
 }
 
 /** Сессия гаснет на выходе раньше, чем сменится экран: без валюты и роли рисовать нечего. */

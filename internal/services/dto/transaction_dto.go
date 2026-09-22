@@ -46,11 +46,11 @@ type UpdateTransactionDTO struct {
 // TransactionFilterDTO represents filtering and pagination options for transactions
 type TransactionFilterDTO struct {
 	// Core filters
-	UserID     *uuid.UUID `validate:"omitempty"`
-	CategoryID *uuid.UUID `validate:"omitempty"`
-	AccountID  *uuid.UUID `validate:"omitempty"`
-	Unassigned bool
-	Type       *transaction.Type `validate:"omitempty,oneof=income expense"`
+	UserID      *uuid.UUID  `validate:"omitempty"`
+	CategoryIDs []uuid.UUID `validate:"omitempty,dive,required"`
+	AccountID   *uuid.UUID  `validate:"omitempty"`
+	Unassigned  bool
+	Type        *transaction.Type `validate:"omitempty,oneof=income expense"`
 
 	// Date range filters
 	DateFrom *date.Date `validate:"omitempty"`

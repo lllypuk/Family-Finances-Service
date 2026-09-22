@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -221,12 +222,17 @@ func (h *TransactionHandler) parseOptionalFilters(c echo.Context, filters *Trans
 		filters.UserID = &userID
 	}
 
-	if categoryIDParam := c.QueryParam("category_id"); categoryIDParam != "" {
-		categoryID, parseErr := uuid.Parse(categoryIDParam)
-		if parseErr != nil {
-			return writeInvalidQueryParam(c, "category_id", categoryIDParam, "must be a valid UUID")
+	for _, raw := range c.QueryParams()["category_id"] {
+		if raw == "" {
+			continue
 		}
-		filters.CategoryID = &categoryID
+		categoryID, parseErr := uuid.Parse(raw)
+		if parseErr != nil {
+			return writeInvalidQueryParam(c, "category_id", raw, "must be a valid UUID")
+		}
+		if !slices.Contains(filters.CategoryIDs, categoryID) {
+			filters.CategoryIDs = append(filters.CategoryIDs, categoryID)
+		}
 	}
 
 	if err := h.parseAccountFilters(c, filters); err != nil {
@@ -346,7 +352,7 @@ func (h *TransactionHandler) validateTransactionFilters(c echo.Context, filters 
 func (h *TransactionHandler) buildTransactionServiceFilter(filters TransactionFilterParams) dto.TransactionFilterDTO {
 	filter := dto.NewTransactionFilterDTO()
 	filter.UserID = filters.UserID
-	filter.CategoryID = filters.CategoryID
+	filter.CategoryIDs = filters.CategoryIDs
 	filter.AccountID = filters.AccountID
 	filter.Unassigned = filters.Unassigned
 	if filters.Type != nil {

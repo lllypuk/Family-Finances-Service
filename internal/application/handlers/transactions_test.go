@@ -504,13 +504,52 @@ func TestTransactionHandler_GetTransactions_WithFilters(t *testing.T) {
 
 	require.NotNil(t, service.filter)
 	assert.Equal(t, &userID, service.filter.UserID)
-	assert.Equal(t, &categoryID, service.filter.CategoryID)
+	assert.Equal(t, []uuid.UUID{categoryID}, service.filter.CategoryIDs)
 	require.NotNil(t, service.filter.Type)
 	assert.Equal(t, transaction.TypeExpense, *service.filter.Type)
 	assert.Equal(t, &dateFrom, service.filter.DateFrom)
 	assert.Equal(t, &dateTo, service.filter.DateTo)
 	assert.Equal(t, 25, service.filter.Limit)
 	assert.Equal(t, 10, service.filter.Offset)
+}
+
+// TestTransactionHandler_GetTransactions_CategoryIDs — повторённый category_id доходит до сервиса
+// набором в порядке запроса, дубли схлопнуты.
+func TestTransactionHandler_GetTransactions_CategoryIDs(t *testing.T) {
+	first, second := uuid.New(), uuid.New()
+	tests := []struct {
+		name  string
+		query url.Values
+		want  []uuid.UUID
+	}{
+		{
+			name:  "two",
+			query: url.Values{"category_id": {first.String(), second.String()}},
+			want:  []uuid.UUID{first, second},
+		},
+		{
+			name:  "duplicate",
+			query: url.Values{"category_id": {second.String(), first.String(), second.String()}},
+			want:  []uuid.UUID{second, first},
+		},
+		{name: "none", query: url.Values{}, want: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := &stubTransactionService{txs: []*transaction.Transaction{}}
+			handler := setupTransactionHandler(service)
+
+			e := echo.New()
+			httpReq := httptest.NewRequest(http.MethodGet, "/transactions?"+tt.query.Encode(), nil)
+			rec := httptest.NewRecorder()
+
+			require.NoError(t, handler.GetTransactions(e.NewContext(httpReq, rec)))
+			require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+			require.NotNil(t, service.filter)
+			assert.Equal(t, tt.want, service.filter.CategoryIDs)
+		})
+	}
 }
 
 func TestTransactionHandler_GetTransactions_InvalidQueryParams(t *testing.T) {
@@ -523,6 +562,11 @@ func TestTransactionHandler_GetTransactions_InvalidQueryParams(t *testing.T) {
 			name:          "invalid user_id uuid",
 			query:         "/transactions?user_id=not-a-uuid",
 			expectedParam: "user_id",
+		},
+		{
+			name:          "invalid category_id uuid",
+			query:         "/transactions?category_id=" + uuid.NewString() + "&category_id=not-a-uuid",
+			expectedParam: "category_id",
 		},
 		{
 			name:          "invalid date_from",

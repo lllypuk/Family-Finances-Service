@@ -18,7 +18,7 @@ import org.robolectric.annotation.GraphicsMode
 import tech.shatrov.familyfinances.ROBOLECTRIC_SDK
 import tech.shatrov.familyfinances.theme.AppTheme
 
-/** Пять вкладок — предел панели: на самом узком телефоне подпись не переносится и не обрезается. */
+/** Четыре вкладки: на самом узком телефоне подпись не переносится и не обрезается. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [ROBOLECTRIC_SDK], qualifiers = "w360dp-h640dp")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -27,6 +27,14 @@ class AppNavBarTest {
     val composeRule = createComposeRule()
 
     private val res = ApplicationProvider.getApplicationContext<Context>().resources
+
+    @Test
+    fun fourTabs() {
+        assertEquals(
+            listOf(AppTab.HOME, AppTab.TRANSACTIONS, AppTab.BUDGETS, AppTab.NET_WORTH),
+            AppTab.entries,
+        )
+    }
 
     @Test
     fun labelsFitOnNarrowPhone() {

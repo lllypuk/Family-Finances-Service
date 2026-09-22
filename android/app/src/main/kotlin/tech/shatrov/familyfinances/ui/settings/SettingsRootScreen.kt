@@ -47,6 +47,7 @@ fun SettingsRootScreen(
     themeMode: ThemeMode,
     onThemeMode: (ThemeMode) -> Unit,
     onOpen: (SettingsPage) -> Unit,
+    onOpenCategories: () -> Unit,
     onRetry: () -> Unit,
     onBack: () -> Unit,
     onSignOut: () -> Unit,
@@ -127,6 +128,7 @@ fun SettingsRootScreen(
         SettingsItem(R.string.settings_password) { onOpen(SettingsPage.Password()) }
         SettingsItem(R.string.settings_sessions) { onOpen(SettingsPage.Sessions()) }
         SettingsItem(R.string.settings_accounts) { onOpen(SettingsPage.Accounts()) }
+        SettingsItem(R.string.categories_title, onOpenCategories)
         if (session.isAdmin) {
             SettingsItem(R.string.settings_users) { onOpen(SettingsPage.Users()) }
             SettingsItem(R.string.settings_family) { onOpen(SettingsPage.Family()) }

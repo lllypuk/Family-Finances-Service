@@ -358,6 +358,18 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id uuid.UUID) (*transact
 	return &t, nil
 }
 
+// categoryCondition — `category_id IN (?, …)` для непустого набора.
+func categoryCondition(ids []uuid.UUID) (string, []any, error) {
+	args := make([]any, 0, len(ids))
+	for _, id := range ids {
+		if validationErr := validation.ValidateUUID(id); validationErr != nil {
+			return "", nil, fmt.Errorf("invalid category ID: %w", validationErr)
+		}
+		args = append(args, sqlitehelpers.UUIDToString(id))
+	}
+	return "category_id IN (" + strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",") + ")", args, nil
+}
+
 // buildFilterConditions собирает WHERE-условия и аргументы для фильтра транзакций.
 // Пагинация (LIMIT/OFFSET) намеренно не добавляется: она нужна только выборке строк,
 // но не подсчёту общего количества (CountByFilter).
@@ -388,12 +400,13 @@ func (r *SQLiteRepository) buildFilterConditions(
 		args = append(args, sqlitehelpers.UUIDToString(*filter.UserID))
 	}
 
-	if filter.CategoryID != nil {
-		if validationErr := validation.ValidateUUID(*filter.CategoryID); validationErr != nil {
-			return nil, nil, fmt.Errorf("invalid category ID: %w", validationErr)
+	if len(filter.CategoryIDs) > 0 {
+		condition, categoryArgs, categoryErr := categoryCondition(filter.CategoryIDs)
+		if categoryErr != nil {
+			return nil, nil, categoryErr
 		}
-		conditions = append(conditions, "category_id = ?")
-		args = append(args, sqlitehelpers.UUIDToString(*filter.CategoryID))
+		conditions = append(conditions, condition)
+		args = append(args, categoryArgs...)
 	}
 
 	if filter.AccountID != nil {

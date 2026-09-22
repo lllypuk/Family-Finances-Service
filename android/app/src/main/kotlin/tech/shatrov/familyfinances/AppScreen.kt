@@ -42,7 +42,8 @@ sealed interface AppScreen {
         val drilled: Boolean get() = reconciliation != null || overview != null
     }
 
-    data object Categories : AppScreen
+    /** Справочник категорий; `back` — откуда открыт: настройки или форма, где выбирают категорию. */
+    data class Categories(val back: AppScreen = Settings()) : AppScreen
 
     /**
      * Форма операции; `id` = `null` — новая, тело правки перечитывается с сервера.
@@ -128,7 +129,7 @@ private fun saveScreen(screen: AppScreen): String = when (screen) {
 
     is AppScreen.Transactions -> screen.saveKey()
 
-    AppScreen.Categories -> KEY_CATEGORIES
+    is AppScreen.Categories -> "$KEY_CATEGORIES:${saveScreen(screen.back)}"
 
     AppScreen.Budgets -> KEY_BUDGETS
 
@@ -163,7 +164,11 @@ private fun restoreScreen(key: String): AppScreen? = when {
 
     key.startsWith("$KEY_TRANSACTIONS:") -> restoreTransactions(key.removePrefix("$KEY_TRANSACTIONS:"))
 
-    key == KEY_CATEGORIES -> AppScreen.Categories
+    // Ключ до плана 22 — вкладка без `back`.
+    key == KEY_CATEGORIES -> AppScreen.Categories()
+
+    key.startsWith("$KEY_CATEGORIES:") ->
+        AppScreen.Categories(restoreScreen(key.removePrefix("$KEY_CATEGORIES:")) ?: AppScreen.Settings())
 
     key == KEY_BUDGETS -> AppScreen.Budgets
 
@@ -243,7 +248,7 @@ private fun AppScreen.Transactions.saveKey(): String {
         f.period.name,
         f.month?.toString().orEmpty(),
         f.type?.name.orEmpty(),
-        f.categoryId?.toString().orEmpty(),
+        f.categoryIds.joinToString(","),
         f.accountId?.toString().orEmpty(),
         f.unassigned.toString(),
         f.from?.toString().orEmpty(),
@@ -261,7 +266,7 @@ private fun restoreTransactions(value: String): AppScreen.Transactions {
             period = TransactionPeriod.valueOf(parts[0]),
             month = parts[1].takeIf { it.isNotEmpty() }?.let(YearMonth::parse),
             type = parts[2].takeIf { it.isNotEmpty() }?.let(TransactionType::valueOf),
-            categoryId = parts[3].takeIf { it.isNotEmpty() }?.let(UUID::fromString),
+            categoryIds = parts[3].split(',').filter { it.isNotEmpty() }.mapTo(LinkedHashSet(), UUID::fromString),
             accountId = parts[4].takeIf { it.isNotEmpty() }?.let(UUID::fromString),
             unassigned = parts[5].toBooleanStrict(),
             from = parts[6].takeIf { it.isNotEmpty() }?.let(LocalDate::parse),

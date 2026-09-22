@@ -14,14 +14,13 @@ import androidx.compose.ui.res.stringResource
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.theme.LocalAppColors
 
-/** Пять корней приложения — предел панели; формы вкладок не имеют и панель не показывают. */
+/** Четыре корня приложения (панель вмещает пять); формы вкладок не имеют и панель не показывают. */
 enum class AppTab(
     @StringRes val label: Int,
     val icon: ImageVector,
 ) {
     HOME(R.string.home_title, AppIcons.Home),
     TRANSACTIONS(R.string.transactions_title, AppIcons.List),
-    CATEGORIES(R.string.categories_title, AppIcons.Tag),
     BUDGETS(R.string.budgets_title, AppIcons.Target),
     NET_WORTH(R.string.net_worth_title, AppIcons.Landmark),
 }

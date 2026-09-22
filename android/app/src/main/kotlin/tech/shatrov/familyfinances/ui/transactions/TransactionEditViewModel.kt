@@ -2,6 +2,7 @@ package tech.shatrov.familyfinances.ui.transactions
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -141,6 +142,17 @@ class TransactionEditViewModel(
             } catch (failure: ApiFailure) {
                 mutable.update { it.copy(loading = false, error = failure.toUiError()) }
             }
+        }
+    }
+
+    /** Возврат из справочника: `load()` затёр бы введённые поля. Отказ оставляет прежний список. */
+    fun reloadCategories(): Job = viewModelScope.launch {
+        try {
+            val categories = api.client
+                .unwrap { api.categories.listCategories(limit = CATEGORY_LIMIT) }
+                .`data`
+            mutable.update { it.copy(categories = categories) }
+        } catch (_: ApiFailure) {
         }
     }
 
