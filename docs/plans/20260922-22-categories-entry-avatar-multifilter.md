@@ -207,16 +207,16 @@ data class Categories(val back: AppScreen = Settings()) : AppScreen
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/transactions/{TransactionsViewModelTest,TransactionsScreenTest}.kt`
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/AppScreenSaverTest.kt`
 
-- [ ] `make -C android api-gen`; `git status` по каталогу генерации — только `listTransactions`
-- [ ] `TransactionFilters.categoryIds: Set<UUID>`; `Overview` → `setOf(id)`; `Saver` поле 3 через `,`
-- [ ] `CategorySheetContent(multi)`: чекбоксы, «Все», закреплённая «Готово»; фильтр — мультирежим,
+- [x] `make -C android api-gen`; `git status` по каталогу генерации — только `listTransactions`
+- [x] `TransactionFilters.categoryIds: Set<UUID>`; `Overview` → `setOf(id)`; `Saver` поле 3 через `,`
+- [x] `CategorySheetContent(multi)`: чекбоксы, «Все», закреплённая «Готово»; фильтр — мультирежим,
       распознавание — одиночный
-- [ ] подпись чипа: «Все категории» / `path` / «Имя +N»
-- [ ] `TransactionsViewModelTest`: два id уходят двумя `category_id` в порядке справочника; пустой набор — без
+- [x] подпись чипа: «Все категории» / `path` / «Имя +N»
+- [x] `TransactionsViewModelTest`: два id уходят двумя `category_id` в порядке справочника; пустой набор — без
       параметра
-- [ ] `TransactionsScreenTest`: отметить две → «Готово» → `onFiltersChange` с обоими; «Все» сбрасывает
-- [ ] `AppScreenSaverTest`: набор id туда и обратно, пустой набор, старая строка с одним uuid
-- [ ] `make -C android check` зелёный
+- [x] `TransactionsScreenTest`: отметить две → «Готово» → `onFiltersChange` с обоими; «Все» сбрасывает
+- [x] `AppScreenSaverTest`: набор id туда и обратно, пустой набор, старая строка с одним uuid
+- [x] `make -C android check` зелёный
 
 ### Task 3: `CategoryAvatar` и поле значка на форме
 

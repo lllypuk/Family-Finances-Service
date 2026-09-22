@@ -109,11 +109,11 @@ fun TransactionsScreen(
     }
 
     if (sheet) {
-        CategorySheet(
+        CategoryFilterSheet(
             categories = categories,
-            selected = filters.categoryId,
-            onSelect = {
-                onFiltersChange(filters.copy(categoryId = it))
+            selected = filters.categoryIds,
+            onDone = {
+                onFiltersChange(filters.copy(categoryIds = it))
                 sheet = false
             },
             onDismiss = { sheet = false },
@@ -136,6 +136,19 @@ fun TransactionsScreen(
     }
 }
 
+// Ни одной из выбранных в справочнике (удалены) — прочерк: «Все категории» на включённом фильтре
+// сказали бы, что фильтра нет. Первая — по справочнику, как в запросе; удалённые в «+N» считаются.
+@Composable
+private fun categoryChipLabel(
+    ids: Set<UUID>,
+    categories: List<Category>,
+): String {
+    if (ids.isEmpty()) return stringResource(R.string.filter_all_categories)
+    val first = categories.firstOrNull { it.id in ids } ?: return "—"
+    if (ids.size == 1) return first.path(categories)
+    return stringResource(R.string.filter_categories_more, first.name, ids.size - 1)
+}
+
 @Composable
 private fun Filters(
     filters: TransactionFilters,
@@ -145,12 +158,7 @@ private fun Filters(
     onPickCategory: () -> Unit,
     onPickAccount: () -> Unit,
 ) {
-    // Категория, которой нет в справочнике (удалена), — прочерк: «Все категории» на включённом
-    // фильтре сказали бы, что фильтра нет, а список при этом остаётся пустым.
-    val categoryLabel = when {
-        filters.categoryId == null -> stringResource(R.string.filter_all_categories)
-        else -> categories.firstOrNull { it.id == filters.categoryId }?.path(categories) ?: "—"
-    }
+    val categoryLabel = categoryChipLabel(filters.categoryIds, categories)
     val accountLabel = when {
         filters.unassigned -> stringResource(R.string.transaction_no_account)
         filters.accountId == null -> stringResource(R.string.filter_all_accounts)
@@ -201,7 +209,7 @@ private fun Filters(
                 }
             }
             item {
-                Chip(categoryLabel, filters.categoryId != null, onClick = onPickCategory)
+                Chip(categoryLabel, filters.categoryIds.isNotEmpty(), onClick = onPickCategory)
             }
             // Без счетов у семьи чип был бы выбором из одного «Все счета».
             if (accounts.isNotEmpty() || filters.accountId != null || filters.unassigned) {

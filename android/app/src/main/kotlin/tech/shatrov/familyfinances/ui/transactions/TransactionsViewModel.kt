@@ -185,13 +185,20 @@ class TransactionsViewModel(
     ) = api.transactions.listTransactions(
         limit = PAGE_SIZE,
         offset = offset,
-        categoryId = mutableFilters.value.categoryId,
+        categoryId = categoryQuery(),
         accountId = mutableFilters.value.accountId,
         unassigned = mutableFilters.value.unassigned.takeIf { it },
         type = mutableFilters.value.type,
         dateFrom = bounds.from,
         dateTo = bounds.to,
     )
+
+    // Порядок справочника, а не выбора: одинаковый набор — один и тот же запрос. Удалённые — в конце.
+    private fun categoryQuery(): List<UUID>? {
+        val ids = mutableFilters.value.categoryIds.takeIf { it.isNotEmpty() } ?: return null
+        val order = mutableCategories.value.withIndex().associate { (index, category) -> category.id to index }
+        return ids.sortedBy { order[it] ?: Int.MAX_VALUE }
+    }
 
     private fun window(day: LocalDate): DateWindow {
         val current = mutableFilters.value

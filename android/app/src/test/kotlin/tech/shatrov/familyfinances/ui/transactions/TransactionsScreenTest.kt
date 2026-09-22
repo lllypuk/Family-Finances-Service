@@ -162,7 +162,7 @@ class TransactionsScreenTest {
     fun categoryChipShowsSelectedName() {
         show(
             ready(listOf(row(categoryName = null))),
-            filters = TransactionFilters(categoryId = CATEGORY_ID),
+            filters = TransactionFilters(categoryIds = setOf(CATEGORY_ID)),
             categories = listOf(category()),
         )
 
@@ -173,7 +173,7 @@ class TransactionsScreenTest {
     fun categoryChipShowsDashWhenSelectedCategoryIsGone() {
         show(
             ready(emptyList()),
-            filters = TransactionFilters(categoryId = CATEGORY_ID),
+            filters = TransactionFilters(categoryIds = setOf(CATEGORY_ID)),
             categories = emptyList(),
         )
 
@@ -223,6 +223,65 @@ class TransactionsScreenTest {
         composeRule.onNodeWithText(res.getString(R.string.filter_all_categories)).performClick()
 
         assertNull(picked)
+    }
+
+    // Первое имя — по справочнику, не по порядку отметок: так же категории уходят в запрос.
+    @Test
+    fun categoryChipShowsFirstNameAndCountOfOthers() {
+        val home = category().copy(id = UUID.randomUUID(), name = "Дом")
+        val cafe = category().copy(id = UUID.randomUUID(), name = "Кафе")
+        show(
+            ready(emptyList()),
+            filters = TransactionFilters(categoryIds = setOf(cafe.id, CATEGORY_ID, home.id)),
+            categories = listOf(category(), home, cafe),
+        )
+
+        composeRule.onNodeWithText("Продукты +2").assertIsDisplayed()
+    }
+
+    @Test
+    fun multiSheetReturnsBothCheckedOnDone() {
+        val home = category().copy(id = UUID.randomUUID(), name = "Дом")
+        var done: Set<UUID>? = null
+        composeRule.setContent {
+            AppTheme { CategorySheetContent(listOf(category(), home), selectedIds = emptySet()) { done = it } }
+        }
+
+        composeRule.onNodeWithText("Продукты").performClick()
+        composeRule.onNodeWithText("Дом").performClick()
+        assertNull(done)
+        composeRule.onNodeWithText(res.getString(R.string.filter_done)).performClick()
+
+        assertEquals(setOf(CATEGORY_ID, home.id), done)
+    }
+
+    @Test
+    fun multiSheetUncheckDropsCategory() {
+        val home = category().copy(id = UUID.randomUUID(), name = "Дом")
+        var done: Set<UUID>? = null
+        composeRule.setContent {
+            AppTheme {
+                CategorySheetContent(listOf(category(), home), selectedIds = setOf(CATEGORY_ID, home.id)) { done = it }
+            }
+        }
+
+        composeRule.onNodeWithText("Дом").performClick()
+        composeRule.onNodeWithText(res.getString(R.string.filter_done)).performClick()
+
+        assertEquals(setOf(CATEGORY_ID), done)
+    }
+
+    @Test
+    fun multiSheetAllClearsSelection() {
+        var done: Set<UUID>? = null
+        composeRule.setContent {
+            AppTheme { CategorySheetContent(listOf(category()), selectedIds = setOf(CATEGORY_ID)) { done = it } }
+        }
+
+        composeRule.onNodeWithText(res.getString(R.string.filter_all_categories)).performClick()
+        composeRule.onNodeWithText(res.getString(R.string.filter_done)).performClick()
+
+        assertEquals(emptySet<UUID>(), done)
     }
 
     @Test

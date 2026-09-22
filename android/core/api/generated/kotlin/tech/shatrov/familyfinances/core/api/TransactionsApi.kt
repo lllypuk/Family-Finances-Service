@@ -102,7 +102,7 @@ interface TransactionsApi {
      * @param limit  (optional, default to 50)
      * @param offset  (optional, default to 0)
      * @param userId  (optional)
-     * @param categoryId  (optional)
+     * @param categoryId Несколько значений — операции любой из категорий (optional)
      * @param accountId Только операции этого счёта; вместе с &#x60;unassigned&#x3D;true&#x60; — &#x60;422&#x60; (optional)
      * @param unassigned &#x60;true&#x60; — только операции без счёта (optional)
      * @param type  (optional)
@@ -114,7 +114,7 @@ interface TransactionsApi {
      * @return [ListTransactions200Response]
      */
     @GET("api/v1/transactions")
-    suspend fun listTransactions(@Query("limit") limit: kotlin.Int? = 50, @Query("offset") offset: kotlin.Int? = 0, @Query("user_id") userId: java.util.UUID? = null, @Query("category_id") categoryId: java.util.UUID? = null, @Query("account_id") accountId: java.util.UUID? = null, @Query("unassigned") unassigned: kotlin.Boolean? = null, @Query("type") type: TransactionType? = null, @Query("date_from") dateFrom: java.time.LocalDate? = null, @Query("date_to") dateTo: java.time.LocalDate? = null, @Query("amount_from_minor") amountFromMinor: kotlin.Long? = null, @Query("amount_to_minor") amountToMinor: kotlin.Long? = null, @Query("description") description: kotlin.String? = null): Response<ListTransactions200Response>
+    suspend fun listTransactions(@Query("limit") limit: kotlin.Int? = 50, @Query("offset") offset: kotlin.Int? = 0, @Query("user_id") userId: java.util.UUID? = null, @Query("category_id") categoryId: @JvmSuppressWildcards kotlin.collections.List<java.util.UUID>? = null, @Query("account_id") accountId: java.util.UUID? = null, @Query("unassigned") unassigned: kotlin.Boolean? = null, @Query("type") type: TransactionType? = null, @Query("date_from") dateFrom: java.time.LocalDate? = null, @Query("date_to") dateTo: java.time.LocalDate? = null, @Query("amount_from_minor") amountFromMinor: kotlin.Long? = null, @Query("amount_to_minor") amountToMinor: kotlin.Long? = null, @Query("description") description: kotlin.String? = null): Response<ListTransactions200Response>
 
     /**
      * POST api/v1/transactions/recognize

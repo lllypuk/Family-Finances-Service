@@ -183,6 +183,28 @@ class AppScreenSaverTest {
     }
 
     @Test
+    fun transactionsKeepCategorySet() {
+        val two = linkedSetOf(UUID.fromString(COFFEE_ID), UUID.fromString(GROCERIES_ID))
+        for (ids in listOf(two, emptySet())) {
+            val screen = AppScreen.Transactions(TransactionFilters(categoryIds = ids))
+            val restored = roundTrip(screen) as AppScreen.Transactions
+            assertEquals(screen, restored)
+            assertEquals(ids.toList(), restored.filters!!.categoryIds.toList())
+        }
+    }
+
+    // Бандл 0.13.0: в поле категории один uuid.
+    @Test
+    fun transactionsFromBundleWithSingleCategoryLoad() {
+        val restored = AppScreenSaver.restore("transactions:ALL:::$GROCERIES_ID::false::::")
+
+        assertEquals(
+            AppScreen.Transactions(TransactionFilters(categoryIds = setOf(UUID.fromString(GROCERIES_ID)))),
+            restored,
+        )
+    }
+
+    @Test
     fun overviewKeepsEveryPeriod() {
         for (period in OverviewPeriod.chips + OverviewPeriod.Month(YearMonth.of(2026, 8))) {
             val screen = AppScreen.Overview(period)

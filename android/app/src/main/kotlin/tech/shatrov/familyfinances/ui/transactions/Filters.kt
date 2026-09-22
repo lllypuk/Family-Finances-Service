@@ -27,7 +27,7 @@ enum class TransactionPeriod {
 data class TransactionFilters(
     val period: TransactionPeriod = TransactionPeriod.ALL,
     val type: TransactionType? = null,
-    val categoryId: UUID? = null,
+    val categoryIds: Set<UUID> = emptySet(),
     val accountId: UUID? = null,
     val month: YearMonth? = null,
     val unassigned: Boolean = false,
@@ -69,7 +69,7 @@ data class TransactionFilters(
         ): TransactionFilters = TransactionFilters(
             period = TransactionPeriod.RANGE,
             type = type,
-            categoryId = categoryId,
+            categoryIds = setOf(categoryId),
             from = from,
             to = to,
         )
