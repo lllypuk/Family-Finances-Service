@@ -124,10 +124,28 @@ Reconciliation(month))`: сумма `|gap|`, `income` при `gap > 0`, дата
 ## Общие элементы экранов
 
 Роль, не заданная в `appColorScheme` (`theme/Theme.kt`), берётся из baseline-палитры M3 — фиолетовой:
-`secondaryContainer`/`onSecondaryContainer` заданы поэтому, их читают `FilterChip`, `SegmentedButton` и
-дорожка `LinearProgressIndicator`. Контраст `elevated` к `canvas` ~1,2:1, поэтому выбранность держит
-обводка `action` (`ui/Chips.kt`, `ui/Segments.kt`), а не заливка. Новый M3-компонент сначала проверяют
-на его ролях.
+`secondaryContainer`/`onSecondaryContainer` и `surfaceTint` заданы поэтому, их читают `FilterChip`,
+`SegmentedButton`, дорожка `LinearProgressIndicator` и tonal elevation `Surface`. Контраст `elevated` к
+`canvas` ~1,1–1,2:1 в обеих темах, поэтому выбранность держит обводка `action` (`ui/Chips.kt`,
+`ui/Segments.kt`), а не заливка. Новый M3-компонент сначала проверяют на его ролях.
+
+Тема — два набора, `DarkColors` и `LightColors` (`theme/Colors.kt`); третьего не будет. Новый токен
+добавляется в оба и в `ColorsTest` — тест контраста там источник истины для таблицы плана 21.
+Режим `ThemeMode { System, Light, Dark }` хранит `ThemeStore` (`PrefsThemeStore`, prefs `ui`, ключ
+`theme_mode`; неизвестная строка → `System`) и читается синхронно в конструкторе: он нужен до `setContent`.
+Синхронизировать надо три точки, и расхождение даёт вспышку или не те иконки молча:
+
+- стиль окна: `MainActivity` зовёт `setTheme(Theme_FamilyFinances_Light/Dark)` после `super.onCreate`,
+  до `setContent`, а `System` оставляет `Theme.FamilyFinances` из `values`/`values-night`. У `.Light`
+  и `.Dark` явный `parent=` — без него точечное имя наследует `Theme.FamilyFinances` с текущими
+  квалификаторами, и `.Light` под `night` вышла бы тёмной. `canvas_light`/`canvas_dark` в `colors.xml`
+  равны `canvas` палитр, это проверяет `MainActivityTest`;
+- цвета иконок панелей: `WindowInsetsControllerCompat` в `SideEffect` активити;
+- Compose: `AppTheme(mode)`. Окно он не трогает — оно у активити, и превью/тесты остаются чистыми.
+
+Точка категории в списке — `CategoryDot` (`ui/categories/`): 1dp-кольцо `textSecondary`, потому что
+бледный цвет категории на светлом фоне пропадает, а `border` (1,4:1) его не спасает. Swatch в
+`CategoryEditScreen` кольца не получает: там 2dp-кольцо означает выбранность.
 
 Взаимоисключающий выбор из 2–3 вариантов — `SegmentedChoice` (`ui/Segments.kt`): тип операции, фильтр
 бюджетов, фильтр типа операций. Чипы (`ChipRow`, `ui/Chips.kt`) остаются там, где вариантов больше
