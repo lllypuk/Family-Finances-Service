@@ -3,9 +3,11 @@ package tech.shatrov.familyfinances.ui.categories
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -15,7 +17,10 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -27,8 +32,10 @@ import androidx.compose.ui.unit.Dp
 import tech.shatrov.familyfinances.R
 import tech.shatrov.familyfinances.core.api.Category
 import tech.shatrov.familyfinances.theme.Dimens
+import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Centered
 import tech.shatrov.familyfinances.ui.message
+import tech.shatrov.familyfinances.ui.settings.SettingsHeader
 
 /** Список категорий: доходные и расходные врозь, подкатегории — с отступом под родителем. */
 @Composable
@@ -37,16 +44,36 @@ fun CategoriesScreen(
     onRetry: () -> Unit,
     onAdd: () -> Unit,
     onOpen: (Category) -> Unit,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Отступы под системные панели уже дал корень.
+    Scaffold(
+        modifier = modifier,
+        contentWindowInsets = WindowInsets(0),
+        floatingActionButton = {
+            FloatingActionButton(onClick = onAdd) {
+                Icon(AppIcons.Plus, contentDescription = stringResource(R.string.categories_add))
+            }
+        },
+    ) { padding ->
+        Content(state, onRetry, onAdd, onOpen, onBack, Modifier.padding(padding))
+    }
+}
+
+@Composable
+private fun Content(
+    state: CategoriesUiState,
+    onRetry: () -> Unit,
+    onAdd: () -> Unit,
+    onOpen: (Category) -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier,
+) {
     Column(modifier = modifier.fillMaxSize()) {
-        Text(
-            text = stringResource(R.string.categories_title),
-            style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = Dimens.SPACE_4, vertical = Dimens.SPACE_2),
-        )
+        Box(modifier = Modifier.padding(horizontal = Dimens.SPACE_4, vertical = Dimens.SPACE_2)) {
+            SettingsHeader(R.string.categories_title, enabled = true, onBack = onBack)
+        }
 
         when (state) {
             CategoriesUiState.Loading -> Centered { CircularProgressIndicator() }

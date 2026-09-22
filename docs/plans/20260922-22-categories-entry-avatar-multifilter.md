@@ -267,17 +267,17 @@ data class Categories(val back: AppScreen = Settings()) : AppScreen
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/{AppScreenSaverTest,AppRootOverviewTest}.kt`
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/{AppNavBarTest,categories/CategoriesScreenTest,settings/SettingsRootScreenTest}.kt`
 
-- [ ] `AppTab` без `CATEGORIES`; `AppScreen.Categories(back)`; `Saver` с `back` последним, старый бандл → `Settings()`
-- [ ] `CategoriesScreen(onBack)`: шапка с `ArrowLeft`, FAB внутри экрана
-- [ ] `AppRoot`: `Categories` без панели, «назад» → `back` + `listStale`/`homeStale`/`overviewStale`/
+- [x] `AppTab` без `CATEGORIES`; `AppScreen.Categories(back)`; `Saver` с `back` последним, старый бандл → `Settings()`
+- [x] `CategoriesScreen(onBack)`: шапка с `ArrowLeft`, FAB внутри экрана
+- [x] `AppRoot`: `Categories` без панели, «назад» → `back` + `listStale`/`homeStale`/`overviewStale`/
       `budgetsStale`/`categoriesStale`; `AppTab.CATEGORIES`-ветки удалены
-- [ ] `SettingsRootScreen`: строка «Категории» после «Счетов»; `SettingsHost.onOpenCategories`
-- [ ] `AppNavBarTest`: четыре вкладки; `AppScreenSaverTest`: `Categories(back = Settings())` и с `back =
+- [x] `SettingsRootScreen`: строка «Категории» после «Счетов»; `SettingsHost.onOpenCategories`
+- [x] `AppNavBarTest`: четыре вкладки; `AppScreenSaverTest`: `Categories(back = Settings())` и с `back =
       TransactionEdit(...)` туда-обратно; `CategoriesScreenTest`: «назад» и FAB
-- [ ] `AppRootOverviewTest` (или новый `AppRootCategoriesTest`): настройки → справочник → «назад» → настройки,
+- [x] новый `AppRootCategoriesTest`: настройки → справочник → «назад» → настройки,
       флаги взведены
-- [ ] `SettingsRootScreenTest`: тап «Категории» → `onOpenCategories`
-- [ ] `make -C android check` зелёный
+- [x] `SettingsRootScreenTest`: тап «Категории» → `onOpenCategories`
+- [x] `make -C android check` зелёный
 
 ### Task 6: «Управлять категориями…» из выбора и перечитка справочника
 

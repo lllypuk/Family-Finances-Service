@@ -32,10 +32,11 @@ class CategoriesScreenTest {
     private fun show(
         state: CategoriesUiState,
         onAdd: () -> Unit = {},
+        onBack: () -> Unit = {},
     ) {
         composeRule.setContent {
             AppTheme {
-                CategoriesScreen(state = state, onRetry = {}, onAdd = onAdd, onOpen = {})
+                CategoriesScreen(state = state, onRetry = {}, onAdd = onAdd, onOpen = {}, onBack = onBack)
             }
         }
     }
@@ -54,6 +55,26 @@ class CategoriesScreenTest {
         show(CategoriesUiState.Ready(emptyList(), emptyList()), onAdd = { added = true })
 
         composeRule.onNodeWithText(res.getString(R.string.categories_add_first)).performClick()
+
+        assertTrue(added)
+    }
+
+    @Test
+    fun backArrowReachesCallback() {
+        var back = false
+        show(CategoriesUiState.Loading, onBack = { back = true })
+
+        composeRule.onNodeWithContentDescription(res.getString(R.string.back)).performClick()
+
+        assertTrue(back)
+    }
+
+    @Test
+    fun fabReachesAdd() {
+        var added = false
+        show(CategoriesUiState.Ready(emptyList(), emptyList()), onAdd = { added = true })
+
+        composeRule.onNodeWithContentDescription(res.getString(R.string.categories_add)).performClick()
 
         assertTrue(added)
     }

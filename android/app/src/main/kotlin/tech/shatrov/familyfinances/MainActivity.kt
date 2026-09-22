@@ -171,6 +171,8 @@ fun AppRoot(graph: AppGraph) {
     var netWorthStale by rememberSaveable { mutableStateOf(false) }
     // Свой, а не `homeStale`: флаг гасит прочитавший, и «Обзор» оставил бы «Главную» со старыми итогами.
     var overviewStale by rememberSaveable { mutableStateOf(false) }
+    // Формы держат справочник категорий в своих моделях и перечитывают его по возврату из справочника.
+    var categoriesStale by rememberSaveable { mutableStateOf(false) }
     // Распознавание уводит с расшифровки мимо её выхода, а модель списка фильтр помнит.
     var dropDrill by rememberSaveable { mutableStateOf(false) }
     // Модели экранов лежат в store активити и переживают выход. Ключа по пользователю мало:
@@ -232,7 +234,7 @@ fun AppRoot(graph: AppGraph) {
                 screen = AppScreen.Recognize(id)
             }
 
-            AppScreen.Categories -> {
+            is AppScreen.Categories -> {
                 listStale = true
                 homeStale = true
                 overviewStale = true
@@ -447,37 +449,33 @@ fun AppRoot(graph: AppGraph) {
             }
         }
 
-        AppScreen.Categories -> WithSession(session) { active ->
+        is AppScreen.Categories -> WithSession(session) { active ->
             val model: CategoriesViewModel = viewModel(key = "categories-${active.user.id}-$epoch") {
                 CategoriesViewModel(graph.api, active.isAdmin)
             }
             val categories by model.state.collectAsStateWithLifecycle()
             val editor by model.editor.collectAsStateWithLifecycle()
             val form = editor
-            // Список подписывает строки именами категорий и фильтрует по ним, главная —
-            // расходы в сводке, бюджеты — имя категории в строке, поэтому уход с этого экрана
-            // помечает устаревшими все три: правку модель наружу не отдаёт.
-            val leave = { next: AppScreen ->
+            // Список подписывает строки именами категорий и фильтрует по ним, главная и «Обзор» —
+            // расходы в сводке, бюджеты — имя категории в строке, формы — выбор категории, поэтому
+            // уход с этого экрана помечает устаревшими всех: правку модель наружу не отдаёт.
+            val leave = {
                 listStale = true
                 homeStale = true
                 overviewStale = true
                 budgetsStale = true
-                screen = next
+                categoriesStale = true
+                screen = current.back
             }
-            BackHandler { if (form == null) leave(AppScreen.Home) else model.onDismiss() }
+            BackHandler { if (form == null) leave() else model.onDismiss() }
             if (form == null) {
-                WithNavBar(
-                    AppTab.CATEGORIES,
-                    onSelect = { leave(it.screen) },
-                    fab = { AddFab(model::onAdd, R.string.categories_add) },
-                ) {
-                    CategoriesScreen(
-                        state = categories,
-                        onRetry = model::refresh,
-                        onAdd = model::onAdd,
-                        onOpen = model::onOpen,
-                    )
-                }
+                CategoriesScreen(
+                    state = categories,
+                    onRetry = model::refresh,
+                    onAdd = model::onAdd,
+                    onOpen = model::onOpen,
+                    onBack = leave,
+                )
             } else {
                 CategoryEditScreen(
                     state = form,
@@ -724,6 +722,7 @@ fun AppRoot(graph: AppGraph) {
                     screen = AppScreen.Settings(next)
                 },
                 onLeave = { screen = AppScreen.Home },
+                onOpenCategories = { screen = AppScreen.Categories(back = AppScreen.Settings()) },
                 onSessionChanged = { before, after ->
                     if (before.zone != after.zone ||
                         before.currency != after.currency ||
@@ -960,7 +959,6 @@ private val AppTab.screen: AppScreen
     get() = when (this) {
         AppTab.HOME -> AppScreen.Home
         AppTab.TRANSACTIONS -> AppScreen.Transactions()
-        AppTab.CATEGORIES -> AppScreen.Categories
         AppTab.BUDGETS -> AppScreen.Budgets
         AppTab.NET_WORTH -> AppScreen.NetWorth
     }

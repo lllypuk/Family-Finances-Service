@@ -42,7 +42,8 @@ sealed interface AppScreen {
         val drilled: Boolean get() = reconciliation != null || overview != null
     }
 
-    data object Categories : AppScreen
+    /** Справочник категорий; `back` — откуда открыт: настройки или форма, где выбирают категорию. */
+    data class Categories(val back: AppScreen = Settings()) : AppScreen
 
     /**
      * Форма операции; `id` = `null` — новая, тело правки перечитывается с сервера.
@@ -128,7 +129,7 @@ private fun saveScreen(screen: AppScreen): String = when (screen) {
 
     is AppScreen.Transactions -> screen.saveKey()
 
-    AppScreen.Categories -> KEY_CATEGORIES
+    is AppScreen.Categories -> "$KEY_CATEGORIES:${saveScreen(screen.back)}"
 
     AppScreen.Budgets -> KEY_BUDGETS
 
@@ -163,7 +164,11 @@ private fun restoreScreen(key: String): AppScreen? = when {
 
     key.startsWith("$KEY_TRANSACTIONS:") -> restoreTransactions(key.removePrefix("$KEY_TRANSACTIONS:"))
 
-    key == KEY_CATEGORIES -> AppScreen.Categories
+    // Ключ до плана 22 — вкладка без `back`.
+    key == KEY_CATEGORIES -> AppScreen.Categories()
+
+    key.startsWith("$KEY_CATEGORIES:") ->
+        AppScreen.Categories(restoreScreen(key.removePrefix("$KEY_CATEGORIES:")) ?: AppScreen.Settings())
 
     key == KEY_BUDGETS -> AppScreen.Budgets
 

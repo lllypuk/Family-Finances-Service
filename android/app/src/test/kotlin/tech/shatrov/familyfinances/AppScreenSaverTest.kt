@@ -2,6 +2,7 @@ package tech.shatrov.familyfinances
 
 import androidx.compose.runtime.saveable.SaverScope
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import tech.shatrov.familyfinances.core.api.HoldingSide
 import tech.shatrov.familyfinances.core.api.TransactionType
@@ -27,7 +28,7 @@ class AppScreenSaverTest {
             AppScreen.Home,
             AppScreen.Overview(),
             AppScreen.Transactions(),
-            AppScreen.Categories,
+            AppScreen.Categories(),
             AppScreen.Budgets,
             AppScreen.NetWorth,
         )) {
@@ -139,6 +140,23 @@ class AppScreenSaverTest {
     fun transactionEditFromOldBundleReturnsToTab() {
         val restored = AppScreenSaver.restore("transaction-edit::$FOOD_BUDGET_ID")
         assertEquals(AppScreen.TransactionEdit(id = null, draft = UUID.fromString(FOOD_BUDGET_ID)), restored)
+    }
+
+    @Test
+    fun categoriesKeepFormBack() {
+        val screen = AppScreen.Categories(
+            back = AppScreen.TransactionEdit(
+                id = UUID.fromString(COFFEE_ID),
+                back = AppScreen.Transactions(TransactionFilters(type = TransactionType.expense)),
+            ),
+        )
+        assertEquals(screen, roundTrip(screen))
+    }
+
+    @Test
+    fun categoriesFromOldBundleReturnToSettings() {
+        val back = (AppScreenSaver.restore("categories") as AppScreen.Categories).back
+        assertTrue((back as AppScreen.Settings).page is SettingsPage.Root)
     }
 
     @Test
