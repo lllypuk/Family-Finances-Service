@@ -1,7 +1,9 @@
 package tech.shatrov.familyfinances
 
 import android.app.Application
+import android.net.Uri
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
@@ -11,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
@@ -27,6 +30,7 @@ import tech.shatrov.familyfinances.core.api.ApiGraph
 import tech.shatrov.familyfinances.theme.AppTheme
 import tech.shatrov.familyfinances.ui.recognize.ImportFiles
 import tech.shatrov.familyfinances.ui.recognize.ImportJournalStore
+import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 
 private const val WAIT_MS = 5_000L
@@ -56,6 +60,7 @@ class AppRootCategoriesTest {
                     "/api/v1/stats/monthly" -> json(STATS_MONTHLY_OK)
                     "/api/v1/categories" -> json(CATEGORIES_OK)
                     "/api/v1/transactions" -> json(TRANSACTIONS_PAGE_1)
+                    "/api/v1/accounts" -> json(ACCOUNTS_OK)
                     else -> MockResponse.Builder().code(404).build()
                 }
             }
@@ -98,6 +103,40 @@ class AppRootCategoriesTest {
         pressBack()
         composeRule.waitUntil(WAIT_MS) { homeSummaryCount() > before }
     }
+
+    // Справочник поверх формы: store форм не чистится, модель та же, а список категорий перечитан узко.
+    @Test
+    fun catalogOverFormKeepsDraftAndReloadsCategories() {
+        val graph = graph()
+        composeRule.setContent { AppTheme { AppRoot(graph) } }
+        val tab = res.getString(R.string.transactions_title)
+        waitFor(tab)
+        composeRule.onNode(hasText(tab) and hasClickAction()).performClick()
+        val add = res.getString(R.string.transactions_add)
+        composeRule.waitUntil(WAIT_MS) {
+            composeRule.onAllNodesWithContentDescription(add).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onAllNodesWithContentDescription(add)[0].performClick()
+        val manage = res.getString(R.string.categories_manage)
+        waitFor(manage)
+        composeRule.onNodeWithText(res.getString(R.string.transaction_amount)).performTextInput("1234")
+
+        composeRule.onNodeWithText(manage).performScrollTo().performClick()
+        waitFor(res.getString(R.string.categories_income))
+        // Share поверх справочника, открытого с формы, ждёт, как на самой форме.
+        graph.imports.offer(listOf(Uri.fromFile(File(app.filesDir, "missing.png"))))
+        composeRule.waitForIdle()
+        composeRule.onAllNodesWithText(res.getString(R.string.recognize_title)).assertCountEquals(0)
+        val before = categoriesCount()
+
+        composeRule.onNodeWithContentDescription(res.getString(R.string.back)).performClick()
+        waitFor(manage)
+
+        composeRule.onNode(hasText("1234", substring = true)).assertExists()
+        composeRule.waitUntil(WAIT_MS) { categoriesCount() > before }
+    }
+
+    private fun categoriesCount() = requests.count { it.url.encodedPath == "/api/v1/categories" }
 
     private fun waitFor(text: String) {
         composeRule.waitUntil(WAIT_MS) { composeRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }

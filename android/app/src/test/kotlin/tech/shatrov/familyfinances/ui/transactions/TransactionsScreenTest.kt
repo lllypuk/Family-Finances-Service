@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -356,4 +357,40 @@ class TransactionsScreenTest {
         authorName = authorName,
         isMine = isMine,
     )
+
+    @Test
+    fun categorySheetManageReachesCallback() {
+        var managed = 0
+        var picked = false
+        composeRule.setContent {
+            AppTheme {
+                CategorySheetContent(listOf(category()), selected = null, onManage = { managed++ }) { picked = true }
+            }
+        }
+
+        composeRule.onNodeWithText(res.getString(R.string.categories_manage)).performClick()
+
+        assertEquals(1, managed)
+        assertFalse(picked)
+    }
+
+    // Переход в справочник отметки не применяет: «Готово» не нажата.
+    @Test
+    fun multiSheetManageDoesNotApplyDraft() {
+        var managed = 0
+        var done: Set<UUID>? = null
+        composeRule.setContent {
+            AppTheme {
+                CategorySheetContent(listOf(category()), selectedIds = emptySet(), onManage = { managed++ }) {
+                    done = it
+                }
+            }
+        }
+
+        composeRule.onNodeWithText("Продукты").performClick()
+        composeRule.onNodeWithText(res.getString(R.string.categories_manage)).performClick()
+
+        assertEquals(1, managed)
+        assertNull(done)
+    }
 }

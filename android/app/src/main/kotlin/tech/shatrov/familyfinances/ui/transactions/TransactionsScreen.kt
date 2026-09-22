@@ -63,6 +63,7 @@ fun TransactionsScreen(
     onCreate: () -> Unit,
     onOpen: (UUID) -> Unit,
     importLaunchers: ImportLaunchers,
+    onManageCategories: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var sheet by rememberSaveable { mutableStateOf(false) }
@@ -118,6 +119,10 @@ fun TransactionsScreen(
                 sheet = false
             },
             onDismiss = { sheet = false },
+            onManage = {
+                sheet = false
+                onManageCategories()
+            },
         )
     }
     if (accountSheet) {

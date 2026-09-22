@@ -15,6 +15,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -43,14 +44,21 @@ internal fun CategorySheet(
     onSelect: (UUID?) -> Unit,
     onDismiss: () -> Unit,
     allowAll: Boolean = true,
+    onManage: (() -> Unit)? = null,
 ) {
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
+    // Снятие с композиции убрало бы лист одним кадром: сначала анимация, потом выбор или переход.
+    val afterHide = { action: () -> Unit ->
+        scope.launch { sheetState.hide() }.invokeOnCompletion { if (!sheetState.isVisible) action() }
+    }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        CategorySheetContent(categories, selected, allowAll) { picked ->
-            // Снятие с композиции убрало бы лист одним кадром: сначала анимация, потом выбор.
-            scope.launch { sheetState.hide() }.invokeOnCompletion { if (!sheetState.isVisible) onSelect(picked) }
-        }
+        CategorySheetContent(
+            categories,
+            selected,
+            allowAll,
+            onManage = onManage?.let { manage -> { afterHide(manage) } },
+        ) { picked -> afterHide { onSelect(picked) } }
     }
 }
 
@@ -62,13 +70,19 @@ internal fun CategoryFilterSheet(
     selected: Set<UUID>,
     onDone: (Set<UUID>) -> Unit,
     onDismiss: () -> Unit,
+    onManage: (() -> Unit)? = null,
 ) {
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
+    val afterHide = { action: () -> Unit ->
+        scope.launch { sheetState.hide() }.invokeOnCompletion { if (!sheetState.isVisible) action() }
+    }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        CategorySheetContent(categories, selectedIds = selected) { picked ->
-            scope.launch { sheetState.hide() }.invokeOnCompletion { if (!sheetState.isVisible) onDone(picked) }
-        }
+        CategorySheetContent(
+            categories,
+            selectedIds = selected,
+            onManage = onManage?.let { manage -> { afterHide(manage) } },
+        ) { picked -> afterHide { onDone(picked) } }
     }
 }
 
@@ -79,6 +93,7 @@ internal fun CategorySheetContent(
     categories: List<Category>,
     selected: UUID?,
     allowAll: Boolean = true,
+    onManage: (() -> Unit)? = null,
     onSelect: (UUID?) -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxWidth()) {
@@ -91,6 +106,7 @@ internal fun CategorySheetContent(
         items(categories, key = { it.id }) { category ->
             SheetRow(category.path(categories), selected == category.id, category) { onSelect(category.id) }
         }
+        onManage?.let { item { ManageRow(it) } }
     }
 }
 
@@ -99,6 +115,7 @@ internal fun CategorySheetContent(
 internal fun CategorySheetContent(
     categories: List<Category>,
     selectedIds: Set<UUID>,
+    onManage: (() -> Unit)? = null,
     onDone: (Set<UUID>) -> Unit,
 ) {
     // Строки, а не UUID: черновик отметок должен пережить поворот, пока лист открыт.
@@ -115,6 +132,7 @@ internal fun CategorySheetContent(
                     draft = if (id in draft) draft - id else draft + id
                 }
             }
+            onManage?.let { item { ManageRow(it) } }
         }
         Button(
             onClick = { onDone(draft.mapTo(LinkedHashSet(), UUID::fromString)) },
@@ -125,6 +143,18 @@ internal fun CategorySheetContent(
         ) {
             Text(stringResource(R.string.filter_done))
         }
+    }
+}
+
+@Composable
+private fun ManageRow(onManage: () -> Unit) {
+    TextButton(
+        onClick = onManage,
+        modifier = Modifier
+            .padding(horizontal = Dimens.SPACE_2)
+            .heightIn(min = Dimens.TOUCH_MIN),
+    ) {
+        Text(stringResource(R.string.categories_manage))
     }
 }
 

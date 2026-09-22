@@ -88,6 +88,7 @@ fun RecognizeScreen(
     onRetry: () -> Unit,
     onRetryRow: (UUID) -> Unit,
     onBack: () -> Unit,
+    onManageCategories: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var dateFor by rememberSaveable { mutableStateOf<String?>(null) }
@@ -220,6 +221,10 @@ fun RecognizeScreen(
                 categoryFor = null
             },
             onDismiss = { categoryFor = null },
+            onManage = {
+                categoryFor = null
+                onManageCategories()
+            },
         )
     }
 }

@@ -292,17 +292,17 @@ data class Categories(val back: AppScreen = Settings()) : AppScreen
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/ui/recognize/{RecognizeScreenTest,RecognizeViewModelTest}.kt`
 - Modify: `android/app/src/test/kotlin/tech/shatrov/familyfinances/AppRootOverviewTest.kt` (или `AppRootCategoriesTest`)
 
-- [ ] пункт внизу `CategorySheetContent` (фильтр, распознавание) — сперва `hide()`, потом навигация;
+- [x] пункт внизу `CategorySheetContent` (фильтр, распознавание) — сперва `hide()`, потом навигация;
       текстовая кнопка у «Категория» на формах операции и бюджета → `Categories(back = текущий экран)`
-- [ ] `AppRoot`: `onForm` включает `Categories` с `back`-формой; ждущий импорт при этом — `Unit`;
+- [x] `AppRoot`: `onForm` включает `Categories` с `back`-формой; ждущий импорт при этом — `Unit`;
       ветка формы гасит `categoriesStale` и зовёт `reloadCategories()`
-- [ ] `reloadCategories()` в трёх моделях — только `categories`; платный вызов распознавания не повторяется
-- [ ] `*ViewModelTest`: после `reloadCategories()` введённые сумма/описание/счёт на месте, список категорий
+- [x] `reloadCategories()` в трёх моделях — только `categories`; платный вызов распознавания не повторяется
+- [x] `*ViewModelTest`: после `reloadCategories()` введённые сумма/описание/счёт на месте, список категорий
       новый; отказ сети оставляет прежний список
-- [ ] `*ScreenTest`: пункт/кнопка зовут навигацию; лист скрыт до перехода
-- [ ] `AppRoot*Test`: форма с введённой суммой → справочник → «назад» → та же модель, сумма на месте,
+- [x] `*ScreenTest`: пункт/кнопка зовут навигацию; лист скрыт до перехода
+- [x] `AppRoot*Test`: форма с введённой суммой → справочник → «назад» → та же модель, сумма на месте,
       `reloadCategories` вызван; share во время справочника поверх формы не открывает `Recognize`
-- [ ] `make -C android check` зелёный
+- [x] `make -C android check` зелёный
 
 ### Task 7: Версия клиента
 

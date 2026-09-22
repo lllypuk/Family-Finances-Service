@@ -40,6 +40,8 @@ import java.util.UUID
 private val TODAY: LocalDate = LocalDate.parse("2026-09-16")
 
 // Высокий экран: строки кандидатов крупные, и ленивый список иначе не собрал бы нижние группы.
+private const val WAIT_MS = 5_000L
+
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [ROBOLECTRIC_SDK], qualifiers = "w411dp-h2400dp")
 class RecognizeScreenTest {
@@ -55,6 +57,7 @@ class RecognizeScreenTest {
         onDescriptionChange: (UUID, String) -> Unit = { _, _ -> },
         onSave: () -> Unit = {},
         onRetryRow: (UUID) -> Unit = {},
+        onManageCategories: () -> Unit = {},
     ) {
         composeRule.setContent {
             AppTheme {
@@ -72,6 +75,7 @@ class RecognizeScreenTest {
                     onRetry = {},
                     onRetryRow = onRetryRow,
                     onBack = {},
+                    onManageCategories = onManageCategories,
                 )
             }
         }
@@ -292,4 +296,20 @@ class RecognizeScreenTest {
         createdAt = OffsetDateTime.parse("2026-09-07T09:00:00Z"),
         updatedAt = OffsetDateTime.parse("2026-09-07T09:00:00Z"),
     )
+
+    // Сам `ModalBottomSheet`: переход идёт из `invokeOnCompletion` его скрытия, и тело листа этого не покажет.
+    @Test
+    fun manageCategoriesFromSheetClosesItAndNavigates() {
+        var opened = 0
+        val manage = res.getString(R.string.categories_manage)
+        show(review(row("Без категории", categoryId = null)), onManageCategories = { opened++ })
+
+        composeRule.onNodeWithText(res.getString(R.string.recognize_pick_category)).performClick()
+        composeRule.waitUntil(WAIT_MS) { composeRule.onAllNodesWithText(manage).fetchSemanticsNodes().isNotEmpty() }
+        composeRule.onNodeWithText(manage).performClick()
+        composeRule.waitUntil(WAIT_MS) { opened > 0 }
+
+        assertEquals(1, opened)
+        composeRule.onAllNodesWithText(manage).assertCountEquals(0)
+    }
 }

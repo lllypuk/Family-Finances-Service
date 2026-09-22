@@ -183,11 +183,8 @@ fun AppRoot(graph: AppGraph) {
     // Модель формы живёт в своём store: ключ у неё свой на каждый заход, а store активити
     // отдаёт брошенные модели только вместе с активити.
     val forms: ScopedModels = viewModel(key = "forms") { ScopedModels() }
-    val onForm = screen is AppScreen.TransactionEdit ||
-        screen is AppScreen.BudgetEdit ||
-        screen is AppScreen.HoldingEdit ||
-        screen is AppScreen.HoldingHistory ||
-        screen is AppScreen.Recognize
+    // Справочник, открытый с формы, её черновик не убивает: модель ждёт возврата в store.
+    val onForm = screen.isForm() || (screen as? AppScreen.Categories)?.back?.isForm() == true
     LaunchedEffect(onForm) { if (!onForm) forms.viewModelStore.clear() }
     // Свой store: модели подразделов настроек чистятся на каждом переходе, а модели форм — нет.
     val settings: ScopedModels = viewModel(key = "settings") { ScopedModels() }
@@ -234,7 +231,8 @@ fun AppRoot(graph: AppGraph) {
                 screen = AppScreen.Recognize(id)
             }
 
-            is AppScreen.Categories -> {
+            is AppScreen.Categories -> if (!current.back.isForm()) {
+                if ((current.back as? AppScreen.Transactions)?.drilled == true) dropDrill = true
                 listStale = true
                 homeStale = true
                 overviewStale = true
@@ -445,6 +443,7 @@ fun AppRoot(graph: AppGraph) {
                     onCreate = { screen = AppScreen.TransactionEdit(null, back = current) },
                     onOpen = { screen = AppScreen.TransactionEdit(it, back = current) },
                     importLaunchers = importLaunchers,
+                    onManageCategories = { screen = AppScreen.Categories(back = current) },
                 )
             }
         }
@@ -779,6 +778,12 @@ fun AppRoot(graph: AppGraph) {
                     screen = AppScreen.Budgets
                 }
             }
+            LaunchedEffect(categoriesStale) {
+                if (categoriesStale) {
+                    categoriesStale = false
+                    model.reloadCategories()
+                }
+            }
             BackHandler { leave() }
             BudgetEditScreen(
                 state = edit,
@@ -793,6 +798,7 @@ fun AppRoot(graph: AppGraph) {
                 onDelete = model::onDelete,
                 onRetry = model::load,
                 onBack = leave,
+                onManageCategories = { screen = AppScreen.Categories(back = current) },
             )
         }
 
@@ -826,6 +832,12 @@ fun AppRoot(graph: AppGraph) {
                     screen = AppScreen.Transactions()
                 }
             }
+            LaunchedEffect(categoriesStale) {
+                if (categoriesStale) {
+                    categoriesStale = false
+                    model.reloadCategories()
+                }
+            }
             BackHandler { leave() }
             RecognizeScreen(
                 state = recognize,
@@ -841,6 +853,7 @@ fun AppRoot(graph: AppGraph) {
                 onRetry = model::retry,
                 onRetryRow = model::retryRow,
                 onBack = leave,
+                onManageCategories = { screen = AppScreen.Categories(back = current) },
             )
         }
 
@@ -873,6 +886,12 @@ fun AppRoot(graph: AppGraph) {
             // Уход с формы во время отправки убил бы её корутину: запись сервер уже мог
             // принять, а список о ней не узнал бы — и повтор создал бы вторую с новым черновиком.
             val leave = { if (!edit.submitting) screen = current.back }
+            LaunchedEffect(categoriesStale) {
+                if (categoriesStale) {
+                    categoriesStale = false
+                    model.reloadCategories()
+                }
+            }
             BackHandler { leave() }
             TransactionEditScreen(
                 state = edit,
@@ -886,6 +905,7 @@ fun AppRoot(graph: AppGraph) {
                 onDelete = model::onDelete,
                 onRetry = model::load,
                 onBack = leave,
+                onManageCategories = { screen = AppScreen.Categories(back = current) },
             )
         }
     }
@@ -954,6 +974,12 @@ private fun AddFab(
         Icon(AppIcons.Plus, contentDescription = stringResource(label))
     }
 }
+
+private fun AppScreen.isForm(): Boolean = this is AppScreen.TransactionEdit ||
+    this is AppScreen.BudgetEdit ||
+    this is AppScreen.HoldingEdit ||
+    this is AppScreen.HoldingHistory ||
+    this is AppScreen.Recognize
 
 private val AppTab.screen: AppScreen
     get() = when (this) {

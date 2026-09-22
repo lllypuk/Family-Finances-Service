@@ -46,6 +46,7 @@ private fun Screen(
     state: BudgetEditUiState,
     onPeriodChange: (BudgetPeriod) -> Unit,
     onDelete: () -> Unit,
+    onManageCategories: () -> Unit = {},
 ) {
     BudgetEditScreen(
         state = state,
@@ -60,6 +61,7 @@ private fun Screen(
         onDelete = onDelete,
         onRetry = {},
         onBack = {},
+        onManageCategories = onManageCategories,
     )
 }
 
@@ -258,5 +260,25 @@ class BudgetEditScreenTest {
             categoryId = null,
         )
         return form().copy(loaded = budget, editing = true, recurring = recurring)
+    }
+
+    @Test
+    fun manageCategoriesOpensCatalogFromNewBudget() {
+        var opened = 0
+        composeRule.setContent {
+            AppTheme { Screen(form(), onPeriodChange = {}, onDelete = {}, onManageCategories = { opened++ }) }
+        }
+
+        composeRule.onNodeWithText(res.getString(R.string.categories_manage)).performScrollTo().performClick()
+
+        assertEquals(1, opened)
+    }
+
+    // Категорию существующего бюджета не сменить: вход в справочник отсюда ничего бы не дал.
+    @Test
+    fun editedBudgetHasNoManageCategories() {
+        show(edit())
+
+        composeRule.onNodeWithText(res.getString(R.string.categories_manage)).assertDoesNotExist()
     }
 }

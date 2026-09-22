@@ -42,6 +42,7 @@ import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
 import tech.shatrov.familyfinances.ui.DatePickerSheet
 import tech.shatrov.familyfinances.ui.FieldError
+import tech.shatrov.familyfinances.ui.categories.CategoryFieldHeader
 import tech.shatrov.familyfinances.ui.categories.categoryChipLabel
 import tech.shatrov.familyfinances.ui.currencySuffix
 import tech.shatrov.familyfinances.ui.format.formatDay
@@ -70,6 +71,7 @@ fun BudgetEditScreen(
     onDelete: () -> Unit,
     onRetry: () -> Unit,
     onBack: () -> Unit,
+    onManageCategories: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var pickingDate by remember { mutableStateOf<DateField?>(null) }
@@ -132,7 +134,12 @@ fun BudgetEditScreen(
         }
         FieldError(state.fieldErrors[BudgetField.RECURRING])
 
-        Label(R.string.budget_category)
+        // У существующего бюджета категорию не сменить: справочник отсюда ничего бы не дал.
+        if (state.editing) {
+            Label(R.string.budget_category)
+        } else {
+            CategoryFieldHeader(stringResource(R.string.budget_category), editable, onManageCategories)
+        }
         CategoryPicker(state, editable, onCategoryChange)
         FieldError(state.fieldErrors[BudgetField.CATEGORY])
 
