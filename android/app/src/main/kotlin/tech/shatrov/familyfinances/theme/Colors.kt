@@ -22,7 +22,9 @@ data class AppColors(
     val disabled: Color,
 )
 
-/** Тема одна и тёмная: светлого варианта в v1 нет, поэтому и параметра «светлая/тёмная» нет. */
+/**
+ * Наборов два, третьего не будет: новый токен добавляется в оба и в тест контраста (`ColorsTest`).
+ */
 val DarkColors = AppColors(
     canvas = Color(0xFF071014),
     surface = Color(0xFF121B20),
@@ -36,6 +38,21 @@ val DarkColors = AppColors(
     warning = Color(0xFFF2A833),
     expense = Color(0xFFF25A52),
     disabled = Color(0xFF59666A),
+)
+
+val LightColors = AppColors(
+    canvas = Color(0xFFEDF2F2),
+    surface = Color(0xFFF7FAFA),
+    elevated = Color(0xFFFFFFFF),
+    border = Color(0xFFC3D0D2),
+    textPrimary = Color(0xFF0F1C20),
+    textSecondary = Color(0xFF4F6166),
+    textInverse = Color(0xFFF7FAFA),
+    action = Color(0xFF087060),
+    income = Color(0xFF177A35),
+    warning = Color(0xFF9A5B00),
+    expense = Color(0xFFC4322B),
+    disabled = Color(0xFF9AA7AA),
 )
 
 // Знак суммы ставится текстом, а не только цветом: при нарушенном цветовосприятии зелёный
