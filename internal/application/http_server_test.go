@@ -247,17 +247,6 @@ func (m *MockTransactionService) BulkCategorizeTransactions(
 }
 
 //nolint:revive // test mock
-func (m *MockTransactionService) ValidateTransactionLimits(
-	ctx context.Context,
-	categoryID uuid.UUID,
-	amount money.Minor,
-	transactionType transaction.Type,
-	on date.Date,
-) error {
-	return nil
-}
-
-//nolint:revive // test mock
 func (m *MockTransactionService) GetAllTransactions(
 	ctx context.Context,
 	filter dto.TransactionFilterDTO,
@@ -335,16 +324,6 @@ func (m *MockBudgetService) CalculateBudgetUtilization(
 //nolint:revive // test mock
 func (m *MockBudgetService) GetBudgetsByCategory(ctx context.Context, categoryID uuid.UUID) ([]*budget.Budget, error) {
 	return nil, nil
-}
-
-//nolint:revive // test mock
-func (m *MockBudgetService) CheckBudgetLimits(
-	ctx context.Context,
-	categoryID uuid.UUID,
-	amount money.Minor,
-	on date.Date,
-) error {
-	return nil
 }
 
 //nolint:revive // test mock

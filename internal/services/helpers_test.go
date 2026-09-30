@@ -457,17 +457,6 @@ func (m *MockTransactionService) BulkCategorizeTransactions(
 	return args.Error(0)
 }
 
-func (m *MockTransactionService) ValidateTransactionLimits(
-	ctx context.Context,
-	categoryID uuid.UUID,
-	amount money.Minor,
-	transactionType transaction.Type,
-	on date.Date,
-) error {
-	args := m.Called(ctx, categoryID, amount, transactionType, on)
-	return args.Error(0)
-}
-
 // MockBudgetService is a mock implementation of BudgetService
 type MockBudgetService struct {
 	mock.Mock
@@ -541,16 +530,6 @@ func (m *MockBudgetService) GetActiveBudgets(
 
 func (m *MockBudgetService) UpdateBudgetSpent(ctx context.Context, budgetID uuid.UUID, amount money.Minor) error {
 	args := m.Called(ctx, budgetID, amount)
-	return args.Error(0)
-}
-
-func (m *MockBudgetService) CheckBudgetLimits(
-	ctx context.Context,
-	categoryID uuid.UUID,
-	amount money.Minor,
-	on date.Date,
-) error {
-	args := m.Called(ctx, categoryID, amount, on)
 	return args.Error(0)
 }
 

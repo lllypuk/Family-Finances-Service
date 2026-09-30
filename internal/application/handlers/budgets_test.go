@@ -236,7 +236,6 @@ func TestBudgetHandler_UpdateBudget_BusinessConflicts(t *testing.T) {
 	}{
 		{name: "overlap", err: services.ErrBudgetOverlapExists, code: handlers.ErrCodeBudgetOverlap},
 		{name: "name_exists", err: services.ErrBudgetNameExists, code: handlers.ErrCodeBudgetNameExists},
-		{name: "below_spent", err: services.ErrBudgetAlreadyExceeded, code: handlers.ErrCodeBudgetBelowSpent},
 		{name: "not_tail", err: services.ErrBudgetNotTail, code: handlers.ErrCodeBudgetNotTail},
 	}
 

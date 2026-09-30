@@ -101,7 +101,6 @@ type AuthorizationError struct {
 
 #### Бизнес-логика (BUSINESS_*)
 - **BUSINESS_INSUFFICIENT_FUNDS**: Недостаточно средств
-- **BUSINESS_BUDGET_EXCEEDED**: Превышен бюджет
 - **BUSINESS_INVALID_OPERATION**: Недопустимая операция
 - **BUSINESS_DEADLINE_PASSED**: Истек срок выполнения
 

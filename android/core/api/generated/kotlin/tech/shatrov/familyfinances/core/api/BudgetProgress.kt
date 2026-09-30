@@ -35,9 +35,9 @@ import kotlinx.serialization.Contextual
  * @param id 
  * @param name 
  * @param amountMinor Сумма в минимальных единицах валюты семьи (копейки для RUB, центы для EUR/USD). Поддерживаются только валюты с двумя знаками после запятой (A-05). 
- * @param spentMinor Сумма в минимальных единицах валюты семьи (копейки для RUB, центы для EUR/USD). Поддерживаются только валюты с двумя знаками после запятой (A-05). 
+ * @param spentMinor Сумма расходов за период в минимальных единицах; лимитом бюджета не ограничена
  * @param remainingMinor Сумма в минимальных единицах валюты семьи (копейки для RUB, центы для EUR/USD). Поддерживаются только валюты с двумя знаками после запятой (A-05). 
- * @param utilization `spent_minor / amount_minor`, доля (1.0 = лимит выбран)
+ * @param utilization `spent_minor / amount_minor`, доля (1.0 = лимит выбран), при перерасходе больше 1
  * @param period 
  * @param startDate Календарная дата без времени в часовом поясе семьи (A-06)
  * @param endDate Календарная дата без времени в часовом поясе семьи (A-06)
@@ -61,7 +61,7 @@ data class BudgetProgress (
     @SerialName(value = "amount_minor")
     val amountMinor: kotlin.Long,
 
-    /* Сумма в минимальных единицах валюты семьи (копейки для RUB, центы для EUR/USD). Поддерживаются только валюты с двумя знаками после запятой (A-05).  */
+    /* Сумма расходов за период в минимальных единицах; лимитом бюджета не ограничена */
     @SerialName(value = "spent_minor")
     val spentMinor: kotlin.Long,
 
@@ -69,7 +69,7 @@ data class BudgetProgress (
     @SerialName(value = "remaining_minor")
     val remainingMinor: kotlin.Long,
 
-    /* `spent_minor / amount_minor`, доля (1.0 = лимит выбран) */
+    /* `spent_minor / amount_minor`, доля (1.0 = лимит выбран), при перерасходе больше 1 */
     @SerialName(value = "utilization")
     val utilization: kotlin.Double,
 

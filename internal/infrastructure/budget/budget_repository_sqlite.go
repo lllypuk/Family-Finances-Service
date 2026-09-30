@@ -791,7 +791,7 @@ func syncSpent(ctx context.Context, ex sqlExecutor, budgetID uuid.UUID) error {
 }
 
 // syncSpentInto пересчитывает spent_minor строки и возвращает сумму в b: ответ обязан
-// показать то же значение, которое прочитает проверка лимита следующей транзакции.
+// показать то же значение, к которому прибавится следующая операция.
 func syncSpentInto(ctx context.Context, tx *sql.Tx, b *budget.Budget) error {
 	if err := syncSpent(ctx, tx, b.ID); err != nil {
 		return err
@@ -823,7 +823,7 @@ func materializeNext(
 	}
 
 	// Инстанс может материализоваться задним числом, когда расход его периода уже записан:
-	// лимит транзакции читает spent_minor из БД без пересчёта.
+	// следующая операция прибавляется к spent_minor из БД без пересчёта.
 	if err := syncSpent(ctx, ex, next.ID); err != nil {
 		return err
 	}

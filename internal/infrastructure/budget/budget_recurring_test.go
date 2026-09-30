@@ -279,8 +279,8 @@ func TestBudgetRepositorySQLite_Advance_BuildsWholeSeries(t *testing.T) {
 	require.ErrorIs(t, err, budget.ErrNotTail)
 }
 
-// Инстанс достраивается задним числом: расход своего периода у него уже есть, и лимит
-// транзакции читает spent_minor из БД без пересчёта.
+// Инстанс достраивается задним числом: расход своего периода у него уже есть, и следующая
+// операция прибавляется к spent_minor из БД без пересчёта.
 func TestBudgetRepositorySQLite_Advance_MaterializedInstanceCarriesSpent(t *testing.T) {
 	container := testutils.SetupSQLiteTestDB(t)
 	helper := testutils.NewTestDataHelper(container.DB)

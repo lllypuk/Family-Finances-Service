@@ -26,7 +26,6 @@ var (
 	ErrInvalidTransactionType    = errors.New("invalid transaction type")
 	ErrCategoryNotInFamily       = errors.New("category does not belong to the specified family")
 	ErrUserNotInFamily           = errors.New("user does not belong to the specified family")
-	ErrInsufficientBudget        = errors.New("transaction would exceed budget limit")
 	ErrBudgetNotFound            = errors.New("budget not found")
 	ErrTransactionUpdateFailed   = errors.New("failed to update transaction")
 	ErrTransactionDeleteFailed   = errors.New("failed to delete transaction")
@@ -189,13 +188,6 @@ func (s *TransactionServiceImpl) CreateTransaction(
 		}
 	}
 
-	// For expense transactions, check budget limits
-	if req.Type == transaction.TypeExpense {
-		if err := s.ValidateTransactionLimits(ctx, req.CategoryID, req.AmountMinor, req.Type, req.Date); err != nil {
-			return nil, err
-		}
-	}
-
 	// Create transaction
 	newTransaction := &transaction.Transaction{
 		ID:          dto.EntityID(req.ID),
@@ -354,12 +346,6 @@ func (s *TransactionServiceImpl) UpdateTransaction(
 
 	if err = validateTransactionBounds(existingTx.AmountMinor, existingTx.Date); err != nil {
 		return nil, err
-	}
-
-	if limitErr := s.validateUpdatedTransactionLimits(
-		ctx, existingTx, originalAmount, originalType, originalCategoryID, originalDate,
-	); limitErr != nil {
-		return nil, limitErr
 	}
 
 	// Update transaction
@@ -649,72 +635,6 @@ func attrsToAny(attrs []slog.Attr) []any {
 		out = append(out, attr)
 	}
 	return out
-}
-
-// ValidateTransactionLimits checks if a transaction would exceed budget limits
-func (s *TransactionServiceImpl) ValidateTransactionLimits(
-	ctx context.Context,
-	categoryID uuid.UUID,
-	amount money.Minor,
-	transactionType transaction.Type,
-	on date.Date,
-) error {
-	// Only check limits for expense transactions
-	if transactionType != transaction.TypeExpense {
-		return nil
-	}
-
-	// Get active budget for the category
-	budget, err := s.findBudgetByCategory(ctx, categoryID, on)
-	if err != nil {
-		// No budget means no limit - allow the transaction
-		return nil //nolint:nilerr // No budget found is acceptable, not an error condition
-	}
-
-	// Check if adding this transaction would exceed the budget limit
-	if budget.SpentMinor+amount > budget.AmountMinor {
-		return fmt.Errorf("%w: budget amount %d, current spent %d, transaction amount %d",
-			ErrInsufficientBudget, budget.AmountMinor, budget.SpentMinor, amount)
-	}
-
-	return nil
-}
-
-// validateUpdatedTransactionLimits — проверка лимита при правке операции. Сохранённая
-// версия уже сидит в budget.SpentMinor, поэтому её вклад вычитается: иначе операция
-// переставала бы редактироваться, как только съедала половину бюджета.
-func (s *TransactionServiceImpl) validateUpdatedTransactionLimits(
-	ctx context.Context,
-	updated *transaction.Transaction,
-	originalAmount money.Minor,
-	originalType transaction.Type,
-	originalCategoryID uuid.UUID,
-	originalDate date.Date,
-) error {
-	if updated.Type != transaction.TypeExpense {
-		return nil
-	}
-
-	target, err := s.findBudgetByCategory(ctx, updated.CategoryID, updated.Date)
-	if err != nil {
-		// Нет бюджета — нет лимита.
-		return nil //nolint:nilerr // No budget found is acceptable, not an error condition
-	}
-
-	spent := target.SpentMinor
-	if originalType == transaction.TypeExpense {
-		original, origErr := s.findBudgetByCategory(ctx, originalCategoryID, originalDate)
-		if origErr == nil && original.ID == target.ID {
-			spent -= originalAmount
-		}
-	}
-
-	if spent+updated.AmountMinor > target.AmountMinor {
-		return fmt.Errorf("%w: budget amount %d, current spent %d, transaction amount %d",
-			ErrInsufficientBudget, target.AmountMinor, spent, updated.AmountMinor)
-	}
-
-	return nil
 }
 
 // Helper methods

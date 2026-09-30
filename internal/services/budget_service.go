@@ -21,9 +21,7 @@ var (
 	ErrBudgetNotFoundService   = errors.New("budget not found")
 	ErrBudgetAmountInvalid     = errors.New("budget amount must be greater than 0")
 	ErrBudgetPeriodInvalid     = errors.New("budget end date must be after start date")
-	ErrBudgetAlreadyExceeded   = errors.New("cannot update budget: amount is less than already spent")
 	ErrBudgetCalculationFailed = errors.New("failed to calculate budget metrics")
-	ErrInsufficientBudgetFunds = errors.New("insufficient budget funds")
 	ErrBudgetAmountTooLarge    = errors.New("budget amount exceeds the maximum")
 	// ErrBudgetOverlapExists — тот же сентинел, что возвращает репозиторий: занятость
 	// периода проверяется в транзакции, а не в памяти сервиса.
@@ -267,14 +265,9 @@ func (s *BudgetServiceImpl) UpdateBudget(
 		return nil, err
 	}
 
-	// Расход считается по итоговому периоду: сузив даты, клиент может опустить и сумму.
 	spent, err := s.spentFor(ctx, existingBudget)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrBudgetCalculationFailed, err)
-	}
-	if req.AmountMinor != nil && *req.AmountMinor < spent {
-		return nil, fmt.Errorf("%w: new amount %d is less than spent %d",
-			ErrBudgetAlreadyExceeded, *req.AmountMinor, spent)
 	}
 	existingBudget.SpentMinor = spent
 
@@ -284,7 +277,7 @@ func (s *BudgetServiceImpl) UpdateBudget(
 		StopSeries: req.Recurring != nil && !*req.Recurring,
 	}
 	// Update пересчитывает spent_minor в своей транзакции: после сдвига дат сохранённая сумма
-	// осталась от старых границ, а лимит транзакции читает её из БД без пересчёта.
+	// осталась от старых границ, а учёт следующей операции прибавляет к ней без пересчёта.
 	if updateErr := s.budgetRepo.Update(ctx, existingBudget, expect); updateErr != nil {
 		return nil, fmt.Errorf("failed to update budget: %w", updateErr)
 	}
@@ -424,40 +417,6 @@ func (s *BudgetServiceImpl) UpdateBudgetSpent(ctx context.Context, budgetID uuid
 	}
 
 	return s.budgetRepo.UpdateSpent(ctx, budgetID, budget.SpentMinor+amount)
-}
-
-// CheckBudgetLimits checks if a transaction would exceed budget limits
-func (s *BudgetServiceImpl) CheckBudgetLimits(
-	ctx context.Context,
-	categoryID uuid.UUID,
-	amount money.Minor,
-	on date.Date,
-) error {
-	budgets, err := s.GetBudgetsByCategory(ctx, categoryID)
-	if err != nil {
-		// No budgets found is acceptable
-		return nil //nolint:nilerr // No budgets found is acceptable
-	}
-
-	// Check each active budget for the category
-	for _, b := range budgets {
-		if !s.isBudgetActiveOnDate(b, on) {
-			continue
-		}
-
-		// Recalculate spent amount to ensure accuracy
-		if recalcErr := s.recalculateAndUpdateSpent(ctx, b); recalcErr != nil {
-			s.logRecalculationWarning(ctx, "check_budget_limits", b.ID, recalcErr)
-		}
-
-		// Check if adding this amount would exceed the budget
-		if b.SpentMinor+amount > b.AmountMinor {
-			return fmt.Errorf("%w: budget '%s' limit %d, current spent %d, transaction amount %d",
-				ErrInsufficientBudgetFunds, b.Name, b.AmountMinor, b.SpentMinor, amount)
-		}
-	}
-
-	return nil
 }
 
 // GetBudgetStatus returns detailed status information for a budget
@@ -644,12 +603,6 @@ func (s *BudgetServiceImpl) recalculateAndUpdateSpent(ctx context.Context, b *bu
 	}
 
 	return nil
-}
-
-func (s *BudgetServiceImpl) isBudgetActiveOnDate(b *budget.Budget, on date.Date) bool {
-	return b.IsActive &&
-		!on.Before(b.StartDate) &&
-		!on.After(b.EndDate)
 }
 
 func (s *BudgetServiceImpl) calculateBudgetStatus(b *budget.Budget) *dto.BudgetStatusDTO {

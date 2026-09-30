@@ -301,8 +301,10 @@ on it.
   `id` (any valid UUID): an existing record answers `200` with itself and the repeated body is ignored — the id is
   the only thing compared. The check is a plain read-then-insert; two simultaneous retries can still collide.
 - **Budget business refusals are `409` with their own codes** — `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`,
-  `BUDGET_BELOW_SPENT`, `BUDGET_ID_EXISTS`, `BUDGET_NOT_TAIL`; only shape errors (`amount_minor` out of range,
-  reversed dates) stay `422`. Periods of one
+  `BUDGET_ID_EXISTS`, `BUDGET_NOT_TAIL`; only shape errors (`amount_minor` out of range,
+  reversed dates) stay `422`. A budget never refuses a transaction, and `amount_minor` may be set below what is
+  spent: overspend is just `remaining_minor < 0`, so `spent_minor` is an `int64` without `Money.maximum` in the
+  spec. Periods of one
   scope overlap **inclusively** — a shared boundary day is a conflict, because spending is summed over
   `date >= start AND date <= end`. The occupancy predicate matches on scope *or* on name, and the two answer with
   different codes (`takenBy.conflict`): a busy scope is `BUDGET_OVERLAP` and moves with the dates, a name taken in
@@ -360,8 +362,8 @@ on it.
   are written in one `BeginTx`, merged inside it — never through `r.db` or `GetByID` there, with one connection
   that deadlocks. The "План в месяц" total is the client's, over non-archived holdings; there is no server aggregate.
 - **Fractions come in two units.** Shares (`share`, `*_delta`, `stats.budgets[].utilization`) are 0…1; fields named
-  `percentage` and `budgets[].utilization` on `/budgets` are percent 0…100. Both are documented per field in
-  `docs/api/openapi.yaml`.
+  `percentage` and `budgets[].utilization` on `/budgets` are percent 0…100. Neither `utilization` is capped: an
+  overspent budget reports more than 1 / more than 100. Both are documented per field in `docs/api/openapi.yaml`.
 - Comments and log messages are a mix of Russian and English; match the surrounding file rather than converting it.
 - File names are snake_case-ish and descriptive: `transaction_service.go`, `user_repository_sqlite.go`.
 - Keep handlers thin — business logic belongs in `internal/services/`.
@@ -377,7 +379,7 @@ reference): `docs/README.md` (navigation), `docs/product_brief.md`, `docs/tech_s
 status; `docs/plans/` holds implementation plans, `docs/plans/completed/` the finished ones.
 
 **Current direction:** `docs/specs/005-api-only-redesign.md` — the service is an API-only backend for an
-Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–10 and 12–22 are
+Android app (one instance = one family, two users, `ffs.shatrov.tech` behind Caddy). Plans 01–10 and 12–23 are
 done (`docs/plans/completed/`, 06 = the Android client, 07 = its budgets tab, 08 = its settings screen,
 09 = the server findings of 07–08, 10 = `/reports` removed and `GET /stats/monthly` added, 12 = recurring
 budgets, both sides, 13 = the client's UI audit: segments instead of chips, a FAB on "Операции", empty states
@@ -398,6 +400,9 @@ DB before `v0.9.0` was tagged (19.09.2026).
 Plan 21 (client `0.13.0`, contract untouched) adds a light theme with a System/Light/Dark switch in settings.
 Plan 22 (server `v0.10.0`, client `0.14.0`, one MR, additive) takes categories off the nav bar, draws icon and color
 as an avatar and makes `category_id` on `GET /transactions` an array; deploy the server first.
+Plan 23 (server `v0.10.1`, no client release) stops a budget from refusing anything: an expense over the limit is
+saved on create and on update, and `409 BUDGET_BELOW_SPENT` is gone from `PUT /budgets/:id`. The client keeps its
+string for that code — it still talks to an older server.
 
 `docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates
 from it, and code and spec now match. **A registered route with no operation in the spec fails `make test`**

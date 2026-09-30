@@ -108,13 +108,10 @@ func (h *TransactionHandler) handleCreateTransactionServiceError(c echo.Context,
 		errors.Is(err, services.ErrCategoryNotInFamily),
 		errors.Is(err, services.ErrUserNotInFamily):
 		message = ErrMessageInvalidCategoryRef
-	case errors.Is(err, services.ErrInsufficientBudget):
-		message = "Transaction would exceed budget limit"
 	}
 
 	switch {
-	case errors.Is(err, services.ErrInsufficientBudget),
-		errors.Is(err, services.ErrInvalidTransactionAmount),
+	case errors.Is(err, services.ErrInvalidTransactionAmount),
 		errors.Is(err, services.ErrInvalidTransactionType),
 		errors.Is(err, services.ErrTransactionAmountTooLarge),
 		errors.Is(err, services.ErrTransactionDateOutOfRange),
@@ -479,8 +476,7 @@ func (h *TransactionHandler) handleUpdateTransactionServiceError(c echo.Context,
 		return HandleNotFoundError(c, "Transaction")
 	case errors.Is(err, services.ErrTransactionAccountInvalid):
 		return respondAccountInvalid(c)
-	case errors.Is(err, services.ErrInsufficientBudget),
-		errors.Is(err, services.ErrInvalidTransactionAmount),
+	case errors.Is(err, services.ErrInvalidTransactionAmount),
 		errors.Is(err, services.ErrInvalidTransactionType),
 		errors.Is(err, services.ErrTransactionAmountTooLarge),
 		errors.Is(err, services.ErrTransactionDateOutOfRange),

@@ -35,9 +35,9 @@ import kotlinx.serialization.Contextual
  * @param id 
  * @param name 
  * @param amountMinor Сумма в минимальных единицах валюты семьи (копейки для RUB, центы для EUR/USD). Поддерживаются только валюты с двумя знаками после запятой (A-05). 
- * @param spentMinor Сумма в минимальных единицах валюты семьи (копейки для RUB, центы для EUR/USD). Поддерживаются только валюты с двумя знаками после запятой (A-05). 
+ * @param spentMinor Сумма расходов за период в минимальных единицах; лимитом бюджета не ограничена
  * @param remainingMinor `amount_minor - spent_minor`; отрицательное при перерасходе
- * @param utilization Израсходованная доля лимита в процентах (проценты остаются float — A-05)
+ * @param utilization Израсходованная доля лимита в процентах, при перерасходе больше 100 (проценты остаются float — A-05)
  * @param period 
  * @param startDate Календарная дата без времени в часовом поясе семьи (A-06)
  * @param endDate Календарная дата без времени в часовом поясе семьи (A-06)
@@ -62,7 +62,7 @@ data class Budget (
     @SerialName(value = "amount_minor")
     val amountMinor: kotlin.Long,
 
-    /* Сумма в минимальных единицах валюты семьи (копейки для RUB, центы для EUR/USD). Поддерживаются только валюты с двумя знаками после запятой (A-05).  */
+    /* Сумма расходов за период в минимальных единицах; лимитом бюджета не ограничена */
     @SerialName(value = "spent_minor")
     val spentMinor: kotlin.Long,
 
@@ -70,7 +70,7 @@ data class Budget (
     @SerialName(value = "remaining_minor")
     val remainingMinor: kotlin.Long,
 
-    /* Израсходованная доля лимита в процентах (проценты остаются float — A-05) */
+    /* Израсходованная доля лимита в процентах, при перерасходе больше 100 (проценты остаются float — A-05) */
     @SerialName(value = "utilization")
     val utilization: kotlin.Double,
 

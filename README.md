@@ -112,7 +112,8 @@ The author of a record is taken from the token, so `user_id` in a request body i
 - `POST` of a transaction, budget, category or account accepts a client-generated `id` (any valid UUID): a retry with the same
   `id` answers `200` with the existing record instead of creating a duplicate
 - Budgets: business refusals are `409` with their own codes — `BUDGET_OVERLAP` (periods of one scope may not share
-  even a single day), `BUDGET_NAME_EXISTS`, `BUDGET_BELOW_SPENT`, `BUDGET_ID_EXISTS` and `BUDGET_NOT_TAIL`. `DELETE`
+  even a single day), `BUDGET_NAME_EXISTS`, `BUDGET_ID_EXISTS` and `BUDGET_NOT_TAIL`. A budget never refuses a
+  transaction: overspend shows as a negative `remaining_minor` and `utilization` above 100. `DELETE`
   is final: a deleted budget is `404` for GET/PUT/DELETE, its `id` stays taken (its name and period do not), and
   `is_active` can no longer be sent in `PUT /api/v1/budgets/:id`
 - A budget with `recurring: true` is the tail of a series, tied together by `series_id`. There is no background job:

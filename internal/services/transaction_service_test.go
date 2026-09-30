@@ -103,15 +103,15 @@ func TestTransactionService_CreateTransaction_UserNotFound(t *testing.T) {
 	userRepo.AssertExpectations(t)
 }
 
-func TestTransactionService_CreateTransaction_ExceedsBudget(t *testing.T) {
-	service, _, budgetRepo, categoryRepo, userRepo := setupTransactionService()
+func TestTransactionService_CreateTransaction_OverBudgetSaved(t *testing.T) {
+	service, txRepo, budgetRepo, categoryRepo, userRepo := setupTransactionService()
 	ctx := context.Background()
 
 	userID := uuid.New()
 	categoryID := uuid.New()
 
 	req := dto.CreateTransactionDTO{
-		AmountMinor: 50_000, // This exceeds the remaining budget (500 - 100 = 400)
+		AmountMinor: 50_000,
 		Type:        transaction.TypeExpense,
 		Description: "Large expense",
 		CategoryID:  categoryID,
@@ -125,27 +125,66 @@ func TestTransactionService_CreateTransaction_ExceedsBudget(t *testing.T) {
 	testCategory := createTestCategory(categoryID, category.TypeExpense)
 
 	testBudget := createTestBudget(uuid.New(), 50000, categoryID)
-	testBudget.SpentMinor = 10000 // Already spent 100 out of 500 budget
+	testBudget.SpentMinor = 10000
 
-	// Setup expectations
 	userRepo.On("GetByID", ctx, userID).Return(testUser, nil)
 	categoryRepo.On("GetByID", ctx, categoryID).Return(testCategory, nil)
 	budgetRepo.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).Return([]*budget.Budget{testBudget}, nil)
+	txRepo.On("Create", ctx, mock.AnythingOfType("*transaction.Transaction")).Return(nil)
+	budgetRepo.On("UpdateSpent", ctx, testBudget.ID, money.Minor(60_000)).Return(nil)
 
-	// Execute
 	result, err := service.CreateTransaction(ctx, req)
 
-	// Assert
-	require.Error(t, err)
-	assert.Nil(t, result)
-	assert.Contains(t, err.Error(), "transaction would exceed budget limit")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, req.AmountMinor, result.AmountMinor)
 
+	txRepo.AssertExpectations(t)
 	userRepo.AssertExpectations(t)
 	categoryRepo.AssertExpectations(t)
 	budgetRepo.AssertExpectations(t)
 }
 
-func TestTransactionService_CreateTransaction_IncomeNoLimitCheck(t *testing.T) {
+func TestTransactionService_UpdateTransaction_OverBudgetSaved(t *testing.T) {
+	service, txRepo, budgetRepo, _, _ := setupTransactionService()
+	ctx := context.Background()
+
+	categoryID := uuid.New()
+
+	testTx := createTestTransaction(uuid.New(), 10_000, date.Today(time.UTC))
+	testTx.CategoryID = categoryID
+
+	newAmount := money.Minor(60_000)
+	req := dto.UpdateTransactionDTO{AmountMinor: &newAmount}
+
+	testBudget := createTestBudget(uuid.New(), 50000, categoryID)
+	testBudget.SpentMinor = 10_000
+
+	txRepo.On("GetByID", ctx, testTx.ID).Return(testTx, nil)
+	budgetRepo.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).
+		Return([]*budget.Budget{testBudget}, nil)
+	txRepo.On("Update", ctx, mock.AnythingOfType("*transaction.Transaction")).Return(nil)
+	budgetRepo.On("UpdateSpent", ctx, testBudget.ID, mock.AnythingOfType("money.Minor")).
+		Run(func(args mock.Arguments) {
+			spent, ok := args.Get(2).(money.Minor)
+			require.True(t, ok)
+			testBudget.SpentMinor = spent
+		}).
+		Return(nil)
+
+	result, err := service.UpdateTransaction(ctx, testTx.ID, req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, newAmount, result.AmountMinor)
+	assert.Equal(t, newAmount, testBudget.SpentMinor)
+	assert.Greater(t, testBudget.SpentMinor, testBudget.AmountMinor)
+
+	txRepo.AssertExpectations(t)
+	budgetRepo.AssertExpectations(t)
+}
+
+func TestTransactionService_CreateTransaction_IncomeSkipsBudget(t *testing.T) {
 	service, txRepo, _, categoryRepo, userRepo := setupTransactionService()
 	ctx := context.Background()
 
@@ -167,7 +206,7 @@ func TestTransactionService_CreateTransaction_IncomeNoLimitCheck(t *testing.T) {
 
 	testCategory := createTestCategory(categoryID, category.TypeIncome)
 
-	// Setup expectations - no budget check for income
+	// Setup expectations - income never touches a budget
 	userRepo.On("GetByID", ctx, userID).Return(testUser, nil)
 	categoryRepo.On("GetByID", ctx, categoryID).Return(testCategory, nil)
 	txRepo.On("Create", ctx, mock.AnythingOfType("*transaction.Transaction")).Return(nil)
@@ -496,85 +535,6 @@ func TestTransactionService_GetTransactionsByDateRange_EmptyResult(t *testing.T)
 	require.Error(t, err)
 	assert.Nil(t, result)
 	assert.Contains(t, err.Error(), "date_to must be after date_from")
-}
-
-// Test ValidateTransactionLimits
-func TestTransactionService_ValidateTransactionLimits_WithinBudget(t *testing.T) {
-	service, _, budgetRepo, _, _ := setupTransactionService()
-	ctx := context.Background()
-
-	categoryID := uuid.New()
-	amount := money.Minor(20_000) // Within budget (500 - 100 = 400 remaining)
-
-	testBudget := createTestBudget(uuid.New(), 50000, categoryID)
-	testBudget.SpentMinor = 10000
-
-	// Setup expectations
-	budgetRepo.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).Return([]*budget.Budget{testBudget}, nil)
-
-	// Execute
-	err := service.ValidateTransactionLimits(ctx, categoryID, amount, transaction.TypeExpense, date.Today(time.UTC))
-
-	// Assert
-	require.NoError(t, err)
-
-	budgetRepo.AssertExpectations(t)
-}
-
-func TestTransactionService_ValidateTransactionLimits_ExceedsBudget(t *testing.T) {
-	service, _, budgetRepo, _, _ := setupTransactionService()
-	ctx := context.Background()
-
-	categoryID := uuid.New()
-	amount := money.Minor(50_000) // Exceeds budget (500 - 100 = 400 remaining)
-
-	testBudget := createTestBudget(uuid.New(), 50000, categoryID)
-	testBudget.SpentMinor = 10000
-
-	// Setup expectations
-	budgetRepo.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).Return([]*budget.Budget{testBudget}, nil)
-
-	// Execute
-	err := service.ValidateTransactionLimits(ctx, categoryID, amount, transaction.TypeExpense, date.Today(time.UTC))
-
-	// Assert
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "transaction would exceed budget limit")
-
-	budgetRepo.AssertExpectations(t)
-}
-
-func TestTransactionService_ValidateTransactionLimits_IncomeTransaction(t *testing.T) {
-	service, _, _, _, _ := setupTransactionService()
-	ctx := context.Background()
-
-	categoryID := uuid.New()
-	amount := money.Minor(100_000)
-
-	// Execute - income transactions should not check budget limits
-	err := service.ValidateTransactionLimits(ctx, categoryID, amount, transaction.TypeIncome, date.Today(time.UTC))
-
-	// Assert
-	require.NoError(t, err)
-}
-
-func TestTransactionService_ValidateTransactionLimits_NoBudget(t *testing.T) {
-	service, _, budgetRepo, _, _ := setupTransactionService()
-	ctx := context.Background()
-
-	categoryID := uuid.New()
-	amount := money.Minor(100_000)
-
-	// Setup expectations - no budget found
-	budgetRepo.On("GetActiveBudgets", ctx, mock.AnythingOfType("date.Date")).Return([]*budget.Budget{}, nil)
-
-	// Execute
-	err := service.ValidateTransactionLimits(ctx, categoryID, amount, transaction.TypeExpense, date.Today(time.UTC))
-
-	// Assert
-	require.NoError(t, err) // No budget means no limit
-
-	budgetRepo.AssertExpectations(t)
 }
 
 func TestTransactionService_BulkDelete_DeduplicatesIDs(t *testing.T) {

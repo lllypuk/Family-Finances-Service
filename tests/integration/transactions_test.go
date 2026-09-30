@@ -808,8 +808,8 @@ func TestTransactionAPI_CreateWithClientID_Idempotent(t *testing.T) {
 	assert.Len(t, stored, 1, "повтор POST не должен создавать вторую запись")
 }
 
-// TestTransactionAPI_UpdateCountsAgainstBudgetOnce — правка операции не должна упираться
-// в её собственный вклад: он уже сидит в budgets.spent_minor.
+// TestTransactionAPI_UpdateCountsAgainstBudgetOnce — правка операции заменяет её вклад
+// в budgets.spent_minor, а не добавляет второй; лимит бюджета правке не мешает.
 func TestTransactionAPI_UpdateCountsAgainstBudgetOnce(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	session := testServer.Auth(t)
@@ -822,7 +822,6 @@ func TestTransactionAPI_UpdateCountsAgainstBudgetOnce(t *testing.T) {
 	testBudget.AmountMinor = 100_000
 	require.NoError(t, testServer.Repos.Budget.Create(ctx, testBudget))
 
-	// 60% лимита: повторный учёт той же суммы вывел бы проверку за 100%.
 	createBody := mustJSON(t, map[string]any{
 		"amount_minor": 60_000,
 		"type":         "expense",
@@ -860,11 +859,9 @@ func TestTransactionAPI_UpdateCountsAgainstBudgetOnce(t *testing.T) {
 		return rec
 	}
 
-	// Правка описания сумму не меняет — лимит не может быть нарушен.
 	descRec := update(t, map[string]any{"description": "Исправленное описание"})
 	require.Equal(t, http.StatusOK, descRec.Code, "тело: %s", descRec.Body.String())
 
-	// Уменьшение суммы тем более.
 	lowerRec := update(t, map[string]any{"amount_minor": 40_000})
 	require.Equal(t, http.StatusOK, lowerRec.Code, "тело: %s", lowerRec.Body.String())
 
@@ -872,9 +869,12 @@ func TestTransactionAPI_UpdateCountsAgainstBudgetOnce(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, money.Minor(40_000), storedBudget.SpentMinor)
 
-	// Сумма сверх лимита по-прежнему отбивается.
 	overRec := update(t, map[string]any{"amount_minor": 140_000})
-	assert.Equal(t, http.StatusUnprocessableEntity, overRec.Code, "тело: %s", overRec.Body.String())
+	require.Equal(t, http.StatusOK, overRec.Code, "тело: %s", overRec.Body.String())
+
+	storedBudget, err = testServer.Repos.Budget.GetByID(ctx, testBudget.ID)
+	require.NoError(t, err)
+	assert.Equal(t, money.Minor(140_000), storedBudget.SpentMinor)
 }
 
 // TestTransactionAPI_CreateWithNilClientID — id из одних нулей не идентификатор: 422,
