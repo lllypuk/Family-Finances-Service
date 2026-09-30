@@ -40,8 +40,6 @@ const (
 	ErrCodeBudgetOverlap = "BUDGET_OVERLAP"
 	// ErrCodeBudgetNameExists signals a budget name already used for the same period.
 	ErrCodeBudgetNameExists = "BUDGET_NAME_EXISTS"
-	// ErrCodeBudgetBelowSpent signals a budget amount below what the period has already spent.
-	ErrCodeBudgetBelowSpent = "BUDGET_BELOW_SPENT"
 	// ErrCodeBudgetIDExists signals a client id already taken by a deleted budget.
 	ErrCodeBudgetIDExists = "BUDGET_ID_EXISTS"
 	// ErrCodeBudgetNotTail signals an operation on a stale tail: the series has already advanced.
@@ -101,7 +99,6 @@ const (
 	ErrMessageCurrencyLocked         = "Currency cannot be changed while transactions, account balances or holding values or plans exist"
 	ErrMessageBudgetOverlap          = "Budget period overlaps with an existing budget"
 	ErrMessageBudgetNameExists       = "Budget with this name already exists for this period"
-	ErrMessageBudgetBelowSpent       = "Budget amount is less than already spent"
 	ErrMessageBudgetIDExists         = "Budget id is already taken by a deleted budget"
 	ErrMessageBudgetNotTail          = "Budget has already advanced to the next period"
 	ErrMessageInvalidAccountID       = "Invalid account ID format"

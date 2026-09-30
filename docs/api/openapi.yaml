@@ -16,7 +16,8 @@ info:
       повтор с тем же `id` возвращает `200` с существующей записью, тело при этом игнорируется (A-07).
     - Дробные числа в двух единицах: доли 0…1 — `share`, `*_delta` и `utilization` в
       `StatsSummary.budgets[]` (`BudgetProgress`); проценты 0…100 — `percentage` и `utilization`
-      в `Budget` (`GET /api/v1/budgets`).
+      в `Budget` (`GET /api/v1/budgets`). `utilization` при перерасходе выходит за верхнюю
+      границу: бюджет не ограничивает запись расходов.
     - Списки: `limit` (по умолчанию 50, максимум 200) и `offset`; `meta.pagination.total` — общее число (A-08).
     - Ошибка всегда одной формы: `{"error": {...}, "meta": {...}}` (A-08).
 
@@ -25,7 +26,7 @@ info:
     `UNAUTHORIZED` (401), `FORBIDDEN` (403), `NOT_FOUND` / `<ENTITY>_NOT_FOUND` (404),
     `VALIDATION_ERROR` (422 — тело или query-параметры не прошли проверку, поля в `error.details`),
     `SETUP_REQUIRED` / `CURRENCY_LOCKED` / `LAST_ADMIN` / `CANNOT_DEACTIVATE_SELF` /
-    `EMAIL_TAKEN` / `BUDGET_OVERLAP` / `BUDGET_NAME_EXISTS` / `BUDGET_BELOW_SPENT` /
+    `EMAIL_TAKEN` / `BUDGET_OVERLAP` / `BUDGET_NAME_EXISTS` /
     `BUDGET_ID_EXISTS` / `BUDGET_NOT_TAIL` / `HOLDING_NAME_EXISTS` (409),
     `RATE_LIMITED` (429, с `Retry-After`), `INTERNAL_ERROR` (500),
     `RECOGNITION_FAILED` (502), `RECOGNITION_UNAVAILABLE` (503, `Retry-After`, когда известен).
@@ -1070,9 +1071,9 @@ paths:
       tags: [budgets]
       summary: Изменить бюджет
       description: admin и member. Бизнес-отказы отвечают `409` — `BUDGET_OVERLAP`,
-        `BUDGET_NAME_EXISTS`, `BUDGET_BELOW_SPENT` (новая сумма меньше уже потраченного
-        за период) и `BUDGET_NOT_TAIL` (серия продвинулась — форма клиента устарела, список
-        нужно перечитать).
+        `BUDGET_NAME_EXISTS` и `BUDGET_NOT_TAIL` (серия продвинулась — форма клиента устарела,
+        список нужно перечитать). Сумма ниже уже потраченного принимается — бюджет становится
+        перерасходованным.
       requestBody:
         required: true
         content:
@@ -1392,7 +1393,7 @@ components:
       description: |
         Состояние не допускает операцию: `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`,
         `CANNOT_DEACTIVATE_SELF`, `EMAIL_TAKEN`, `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`,
-        `BUDGET_BELOW_SPENT`, `BUDGET_ID_EXISTS`, `BUDGET_NOT_TAIL`, `ACCOUNT_NAME_EXISTS`,
+        `BUDGET_ID_EXISTS`, `BUDGET_NOT_TAIL`, `ACCOUNT_NAME_EXISTS`,
         `ACCOUNT_IN_USE`, `HOLDING_NAME_EXISTS`
       content:
         application/json:
@@ -2100,14 +2101,18 @@ components:
         id: { type: string, format: uuid }
         name: { type: string }
         amount_minor: { $ref: '#/components/schemas/Money' }
-        spent_minor: { $ref: '#/components/schemas/Money' }
+        spent_minor:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Сумма расходов за период в минимальных единицах; лимитом бюджета не ограничена
         remaining_minor:
           allOf: [{ $ref: '#/components/schemas/Money' }]
           description: '`amount_minor - spent_minor`; отрицательное при перерасходе'
         utilization:
           type: number
           format: double
-          description: Израсходованная доля лимита в процентах (проценты остаются float — A-05)
+          description: Израсходованная доля лимита в процентах, при перерасходе больше 100 (проценты остаются float — A-05)
         period: { $ref: '#/components/schemas/BudgetPeriod' }
         category_id:
           oneOf:
@@ -2212,12 +2217,16 @@ components:
         name: { type: string }
         category_name: { type: string }
         amount_minor: { $ref: '#/components/schemas/Money' }
-        spent_minor: { $ref: '#/components/schemas/Money' }
+        spent_minor:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Сумма расходов за период в минимальных единицах; лимитом бюджета не ограничена
         remaining_minor: { $ref: '#/components/schemas/Money' }
         utilization:
           type: number
           format: double
-          description: '`spent_minor / amount_minor`, доля (1.0 = лимит выбран)'
+          description: '`spent_minor / amount_minor`, доля (1.0 = лимит выбран), при перерасходе больше 1'
         period: { $ref: '#/components/schemas/BudgetPeriod' }
         start_date: { $ref: '#/components/schemas/CalendarDate' }
         end_date: { $ref: '#/components/schemas/CalendarDate' }

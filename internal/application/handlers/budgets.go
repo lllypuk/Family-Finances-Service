@@ -209,8 +209,6 @@ func (h *BudgetHandler) handleBudgetServiceError(c echo.Context, err error, oper
 		return respondError(c, http.StatusConflict, ErrCodeBudgetNameExists, ErrMessageBudgetNameExists)
 	case errors.Is(err, services.ErrBudgetIDExists):
 		return respondError(c, http.StatusConflict, ErrCodeBudgetIDExists, ErrMessageBudgetIDExists)
-	case errors.Is(err, services.ErrBudgetAlreadyExceeded):
-		return respondError(c, http.StatusConflict, ErrCodeBudgetBelowSpent, ErrMessageBudgetBelowSpent)
 	case errors.Is(err, services.ErrBudgetNotTail):
 		return respondError(c, http.StatusConflict, ErrCodeBudgetNotTail, ErrMessageBudgetNotTail)
 	case errors.Is(err, budget.ErrRecurringCustom):

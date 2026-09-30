@@ -59,7 +59,7 @@ DELETE /api/v1/transactions/{id}
 | 403 | `FORBIDDEN` — роль не подходит |
 | 404 | `NOT_FOUND` (неизвестный путь) / `<ENTITY>_NOT_FOUND` (нет записи) |
 | 408 | `REQUEST_TIMEOUT` — тело распознавания не успело загрузиться |
-| 409 | `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`, `EMAIL_TAKEN`, `CANNOT_DEACTIVATE_SELF`, `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`, `BUDGET_BELOW_SPENT`, `BUDGET_ID_EXISTS`, `BUDGET_NOT_TAIL`, `ACCOUNT_NAME_EXISTS`, `ACCOUNT_IN_USE`, `HOLDING_NAME_EXISTS` |
+| 409 | `SETUP_REQUIRED`, `CURRENCY_LOCKED`, `LAST_ADMIN`, `EMAIL_TAKEN`, `CANNOT_DEACTIVATE_SELF`, `BUDGET_OVERLAP`, `BUDGET_NAME_EXISTS`, `BUDGET_ID_EXISTS`, `BUDGET_NOT_TAIL`, `ACCOUNT_NAME_EXISTS`, `ACCOUNT_IN_USE`, `HOLDING_NAME_EXISTS` |
 | 413 | `PAYLOAD_TOO_LARGE` — тело больше лимита маршрута |
 | 422 | `VALIDATION_ERROR` — поля в `error.details` |
 | 429 | `RATE_LIMITED` + `Retry-After` |
@@ -168,9 +168,11 @@ email. Общего rate limiting на API нет.
 - **Деньги** (A-05): целые в минимальных единицах валюты семьи, поле с суффиксом `_minor`
   (`amount_minor`, `spent_minor`, `remaining_minor`), тип `integer/int64`. Валюта — у семьи
   (ISO 4217), в каждой сумме не повторяется. Поддерживаются только валюты с двумя знаками после
-  запятой; потолок суммы — 99 999 999 999 минимальных единиц.
+  запятой; потолок суммы операции и лимита бюджета — 99 999 999 999 минимальных единиц. `spent_minor`
+  потолка не имеет: бюджет расход не ограничивает, и `remaining_minor` при перерасходе отрицательный.
 - **Дробные числа** — `float64` в двух разных единицах: доли (`share`, `*_delta`, `utilization`
   в `/stats/summary`) — 0…1; поля `percentage` и `utilization` в `/budgets` — проценты 0…100.
+  `utilization` сверху не ограничен: при перерасходе он больше 1 / больше 100.
 - **Дата операции** (A-06): календарная `YYYY-MM-DD` (`format: date`), без времени и зоны.
 - **Служебные метки**: RFC3339 UTC (`created_at`, `updated_at`, `expires_at`).
 - «Сегодня» и границы периодов считаются в часовом поясе семьи (`family.timezone`, IANA).

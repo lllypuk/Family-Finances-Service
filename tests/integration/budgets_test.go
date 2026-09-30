@@ -863,8 +863,8 @@ func TestBudgetAPI_CreateOverlappingPeriod_Conflict(t *testing.T) {
 	assert.Empty(t, response.Error.Details)
 }
 
-// TestBudgetAPI_UpdateAmountBelowSpent_Conflict — сумма ниже уже потраченного за период → 409.
-func TestBudgetAPI_UpdateAmountBelowSpent_Conflict(t *testing.T) {
+// TestBudgetAPI_UpdateAmountBelowSpent_Saved — сумма ниже уже потраченного за период сохраняется.
+func TestBudgetAPI_UpdateAmountBelowSpent_Saved(t *testing.T) {
 	testServer := testhelpers.SetupHTTPServer(t)
 	session := testServer.Auth(t)
 	ctx := context.Background()
@@ -916,12 +916,12 @@ func TestBudgetAPI_UpdateAmountBelowSpent_Conflict(t *testing.T) {
 	updRec := httptest.NewRecorder()
 	testServer.Server.Echo().ServeHTTP(updRec, updReq)
 
-	require.Equal(t, http.StatusConflict, updRec.Code, "тело: %s", updRec.Body.String())
+	require.Equal(t, http.StatusOK, updRec.Code, "тело: %s", updRec.Body.String())
 
-	var response handlers.ErrorResponse
-	require.NoError(t, json.Unmarshal(updRec.Body.Bytes(), &response))
-	assert.Equal(t, handlers.ErrCodeBudgetBelowSpent, response.Error.Code)
-	assert.Empty(t, response.Error.Details)
+	var updated handlers.APIResponse[handlers.BudgetResponse]
+	require.NoError(t, json.Unmarshal(updRec.Body.Bytes(), &updated))
+	assert.Equal(t, money.Minor(10_000), updated.Data.AmountMinor)
+	assert.Equal(t, money.Minor(40_000), updated.Data.SpentMinor)
 }
 
 // TestBudgetAPI_CreateWithDeletedID_Conflict — id мягко удалённого бюджета занят навсегда:
@@ -1299,6 +1299,119 @@ func TestBudgetAPI_RecurringSeries_MaterializesOnRead(t *testing.T) {
 	require.Len(t, stats.Data.Budgets, 1)
 	assert.Equal(t, active[0].ID, stats.Data.Budgets[0].ID)
 	assert.Equal(t, money.Minor(12_000), stats.Data.Budgets[0].SpentMinor)
+}
+
+// postExpense заводит расход через API: в отличие от spend, путь идёт через сервис операций.
+func (a *recurringAPI) postExpense(amount money.Minor, on date.Date) handlers.TransactionResponse {
+	a.t.Helper()
+
+	rec := a.do(http.MethodPost, "/api/v1/transactions", map[string]any{
+		"amount_minor": amount,
+		"type":         "expense",
+		"description":  "Расход сверх лимита",
+		"category_id":  a.category.ID,
+		"date":         on.String(),
+	})
+	require.Equal(a.t, http.StatusCreated, rec.Code, "тело: %s", rec.Body.String())
+
+	var response handlers.APIResponse[handlers.TransactionResponse]
+	require.NoError(a.t, json.Unmarshal(rec.Body.Bytes(), &response))
+
+	return response.Data
+}
+
+// TestBudgetAPI_Overspend_TransactionSaved — расход сверх лимита создаётся и правится,
+// перерасход виден в /budgets (проценты) и в /stats/summary (доля).
+func TestBudgetAPI_Overspend_TransactionSaved(t *testing.T) {
+	api := newRecurringAPI(t)
+
+	created := api.createRecurring("Продукты", 0)
+	tx := api.postExpense(70_000, api.today)
+
+	budgets := api.list("")
+	require.Len(t, budgets, 1)
+	assert.Equal(t, money.Minor(70_000), budgets[0].SpentMinor)
+	assert.Equal(t, money.Minor(-20_000), budgets[0].RemainingMinor)
+	assert.InDelta(t, 140.0, budgets[0].Utilization, 0.001)
+
+	updRec := api.do(
+		http.MethodPut,
+		"/api/v1/transactions/"+tx.ID.String(),
+		map[string]any{"amount_minor": 90_000},
+	)
+	require.Equal(t, http.StatusOK, updRec.Code, "тело: %s", updRec.Body.String())
+
+	budgets = api.list("")
+	require.Len(t, budgets, 1)
+	assert.Equal(t, money.Minor(90_000), budgets[0].SpentMinor)
+	assert.Equal(t, money.Minor(-40_000), budgets[0].RemainingMinor)
+	assert.InDelta(t, 180.0, budgets[0].Utilization, 0.001)
+
+	statsRec := api.do(http.MethodGet, "/api/v1/stats/summary", nil)
+	require.Equal(t, http.StatusOK, statsRec.Code, "тело: %s", statsRec.Body.String())
+
+	var stats handlers.APIResponse[dto.StatsSummary]
+	require.NoError(t, json.Unmarshal(statsRec.Body.Bytes(), &stats))
+	require.Len(t, stats.Data.Budgets, 1)
+	assert.Equal(t, created.ID, stats.Data.Budgets[0].ID)
+	assert.Equal(t, money.Minor(90_000), stats.Data.Budgets[0].SpentMinor)
+	assert.InDelta(t, 1.8, stats.Data.Budgets[0].Utilization, 0.001)
+}
+
+// TestBudgetAPI_Overspend_BudgetStillEditable — перерасходованный бюджет правится любым телом:
+// имя, сумма ниже потраченного, остановка серии.
+func TestBudgetAPI_Overspend_BudgetStillEditable(t *testing.T) {
+	api := newRecurringAPI(t)
+
+	created := api.createRecurring("Продукты", 0)
+	api.postExpense(70_000, api.today)
+
+	bodies := []map[string]any{
+		{"name": "Еда"},
+		{"amount_minor": 60_000},
+		{"recurring": false},
+	}
+	for _, body := range bodies {
+		rec := api.put(created.ID, body)
+		require.Equal(t, http.StatusOK, rec.Code, "тело запроса: %v, ответ: %s", body, rec.Body.String())
+	}
+
+	budgets := api.list("")
+	require.Len(t, budgets, 1)
+	assert.Equal(t, "Еда", budgets[0].Name)
+	assert.Equal(t, money.Minor(60_000), budgets[0].AmountMinor)
+	assert.Equal(t, money.Minor(70_000), budgets[0].SpentMinor)
+	assert.Equal(t, money.Minor(-10_000), budgets[0].RemainingMinor)
+	assert.False(t, budgets[0].Recurring)
+}
+
+// TestBudgetAPI_RecurringSeries_OverspentPeriodAdvances — перерасход прошлого периода серию
+// не останавливает и в следующий период не переносится.
+func TestBudgetAPI_RecurringSeries_OverspentPeriodAdvances(t *testing.T) {
+	api := newRecurringAPI(t)
+
+	created := api.createRecurring("Продукты", -1)
+	previousStart, _ := api.monthOf(-1)
+	api.postExpense(70_000, previousStart)
+
+	all := api.list("")
+	require.Len(t, all, 2)
+
+	currentStart, _ := api.today.MonthBounds()
+	for _, b := range all {
+		if b.ID == created.ID {
+			assert.Equal(t, money.Minor(70_000), b.SpentMinor)
+			assert.Equal(t, money.Minor(-20_000), b.RemainingMinor)
+			assert.False(t, b.Recurring)
+
+			continue
+		}
+		assert.Equal(t, currentStart, b.StartDate)
+		assert.True(t, b.Recurring)
+		assert.Equal(t, created.AmountMinor, b.AmountMinor)
+		assert.Equal(t, money.Minor(0), b.SpentMinor)
+		assert.Equal(t, created.AmountMinor, b.RemainingMinor)
+	}
 }
 
 // TestBudgetAPI_RecurringSeries_StopAndResume — снятый флаг останавливает серию, возвращённый

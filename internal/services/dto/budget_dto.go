@@ -13,10 +13,9 @@ import (
 
 // DTO validation errors
 var (
-	ErrInvalidBudgetPeriod   = errors.New("budget end date must be after start date")
-	ErrInvalidBudgetAmount   = errors.New("budget amount must be greater than 0")
-	ErrBudgetPeriodOverlap   = errors.New("budget period overlaps with existing budget for this category")
-	ErrBudgetAlreadyExceeded = errors.New("budget amount is less than already spent amount")
+	ErrInvalidBudgetPeriod = errors.New("budget end date must be after start date")
+	ErrInvalidBudgetAmount = errors.New("budget amount must be greater than 0")
+	ErrBudgetPeriodOverlap = errors.New("budget period overlaps with existing budget for this category")
 )
 
 // CreateBudgetDTO represents the data required to create a new budget
