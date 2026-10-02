@@ -2,7 +2,11 @@ package tech.shatrov.familyfinances.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -23,6 +27,45 @@ internal fun Centered(content: @Composable () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         content()
+    }
+}
+
+/**
+ * Шапка вкладки. Строка заголовка всегда высотой с кнопку, с действием или без: иначе
+ * заголовок при переключении вкладок прыгает на 8dp.
+ */
+@Composable
+internal fun ScreenHeader(
+    title: String,
+    subtitle: String? = null,
+    action: (@Composable RowScope.() -> Unit)? = null,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                start = Dimens.SPACE_4,
+                end = if (action == null) Dimens.SPACE_4 else Dimens.SPACE_2,
+                top = Dimens.SPACE_2,
+                bottom = Dimens.SPACE_2,
+            ),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = Dimens.TOUCH_MIN),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text = title, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            action?.invoke(this)
+        }
+        if (subtitle != null) {
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
