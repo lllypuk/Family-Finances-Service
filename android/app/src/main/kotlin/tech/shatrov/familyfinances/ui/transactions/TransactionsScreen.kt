@@ -38,6 +38,7 @@ import tech.shatrov.familyfinances.ui.Centered
 import tech.shatrov.familyfinances.ui.Chip
 import tech.shatrov.familyfinances.ui.ChipRow
 import tech.shatrov.familyfinances.ui.RowPlace
+import tech.shatrov.familyfinances.ui.ScreenHeader
 import tech.shatrov.familyfinances.ui.SegmentedChoice
 import tech.shatrov.familyfinances.ui.categories.CategoryAvatar
 import tech.shatrov.familyfinances.ui.format.formatDay
@@ -70,17 +71,7 @@ fun TransactionsScreen(
     var accountSheet by rememberSaveable { mutableStateOf(false) }
     var importSheet by rememberSaveable { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = Dimens.SPACE_4, end = Dimens.SPACE_2, top = Dimens.SPACE_2, bottom = Dimens.SPACE_2),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = stringResource(R.string.transactions_title),
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.weight(1f),
-            )
+        ScreenHeader(stringResource(R.string.transactions_title)) {
             IconButton(onClick = { importSheet = true }) {
                 Icon(AppIcons.ScanLine, contentDescription = stringResource(R.string.recognize_scan))
             }

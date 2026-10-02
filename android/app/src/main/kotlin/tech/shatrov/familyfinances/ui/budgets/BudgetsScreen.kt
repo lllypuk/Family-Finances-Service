@@ -29,6 +29,7 @@ import tech.shatrov.familyfinances.theme.Dimens
 import tech.shatrov.familyfinances.theme.LocalAppColors
 import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Centered
+import tech.shatrov.familyfinances.ui.ScreenHeader
 import tech.shatrov.familyfinances.ui.SegmentedChoice
 import tech.shatrov.familyfinances.ui.format.formatMoney
 import tech.shatrov.familyfinances.ui.format.formatPeriod
@@ -51,13 +52,7 @@ fun BudgetsScreen(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
-        Text(
-            text = stringResource(R.string.budgets_title),
-            style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = Dimens.SPACE_4, vertical = Dimens.SPACE_2),
-        )
+        ScreenHeader(stringResource(R.string.budgets_title))
 
         // Чипы вне `when`: на отказе запроса «на сегодня» переключиться иначе некуда.
         Filters(filter, onFilterChange)

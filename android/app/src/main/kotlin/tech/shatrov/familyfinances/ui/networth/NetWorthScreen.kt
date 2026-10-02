@@ -41,6 +41,7 @@ import tech.shatrov.familyfinances.theme.LocalAppColors
 import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Centered
 import tech.shatrov.familyfinances.ui.RowPlace
+import tech.shatrov.familyfinances.ui.ScreenHeader
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.format.formatMoney
 import tech.shatrov.familyfinances.ui.format.formatPlanMonth
@@ -65,13 +66,7 @@ fun NetWorthScreen(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
-        Text(
-            text = stringResource(R.string.net_worth_title),
-            style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = Dimens.SPACE_4, vertical = Dimens.SPACE_2),
-        )
+        ScreenHeader(stringResource(R.string.net_worth_title))
 
         when (state) {
             NetWorthUiState.Loading -> Centered { CircularProgressIndicator() }

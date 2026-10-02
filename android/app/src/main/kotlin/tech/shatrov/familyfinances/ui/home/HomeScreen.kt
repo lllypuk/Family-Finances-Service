@@ -41,6 +41,7 @@ import tech.shatrov.familyfinances.theme.LocalAppColors
 import tech.shatrov.familyfinances.ui.AppIcons
 import tech.shatrov.familyfinances.ui.Centered
 import tech.shatrov.familyfinances.ui.RowPlace
+import tech.shatrov.familyfinances.ui.ScreenHeader
 import tech.shatrov.familyfinances.ui.categories.CategoryAvatar
 import tech.shatrov.familyfinances.ui.format.formatDay
 import tech.shatrov.familyfinances.ui.format.formatMoney
@@ -77,31 +78,11 @@ fun HomeScreen(
     today: LocalDate = LocalDate.now(),
 ) {
     Column(modifier = modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = Dimens.SPACE_4, end = Dimens.SPACE_2, top = Dimens.SPACE_2, bottom = Dimens.SPACE_2),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+        val ready = state as? HomeUiState.Ready
+        ScreenHeader(
+            title = if (ready == null) stringResource(R.string.home_title) else formatMonth(ready.summary.from),
+            subtitle = ready?.let { stringResource(R.string.home_through, formatDay(it.summary.to)) },
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                val ready = state as? HomeUiState.Ready
-                Text(
-                    text = if (ready == null) {
-                        stringResource(R.string.home_title)
-                    } else {
-                        formatMonth(ready.summary.from)
-                    },
-                    style = MaterialTheme.typography.headlineSmall,
-                )
-                if (ready != null) {
-                    Text(
-                        text = stringResource(R.string.home_through, formatDay(ready.summary.to)),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
             IconButton(onClick = onSettings) {
                 Icon(AppIcons.User, contentDescription = stringResource(R.string.settings_title))
             }
