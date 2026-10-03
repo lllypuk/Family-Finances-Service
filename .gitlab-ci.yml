@@ -290,6 +290,26 @@ android:apk:
     paths:
       - android/app/build/outputs/apk/release/*.apk
 
+# Раздаёт общий Caddy лендинга: ~/apk на mini смонтирован в него как /apk, блок ffs отдаёт
+# /app/* из /apk/ffs (https://ffs.shatrov.tech/app/ffs.apk). Ссылка на артефакт GitLab
+# отвечает 401 без входа, а установщик Android войти не умеет. Версии копятся рядом, ffs.apk
+# подменяется через mv, чтобы скачивание посреди выкладки не получило половину файла.
+android:publish:
+  extends: .deploy-ssh
+  stage: android
+  needs:
+    - android:apk
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^app-v\d+\.\d+\.\d+$/
+  variables:
+    APK_DIR: apk/ffs
+  script:
+    - run_ssh="ssh -p $DEPLOY_SSH_PORT $DEPLOY_USER@$DEPLOY_HOST"
+    - apk_name="ffs-${CI_COMMIT_TAG#app-v}.apk"
+    - $run_ssh mkdir -p "$APK_DIR"
+    - scp -P "$DEPLOY_SSH_PORT" android/app/build/outputs/apk/release/app-release.apk "$DEPLOY_USER@$DEPLOY_HOST:$APK_DIR/$apk_name"
+    - $run_ssh "cp '$APK_DIR/$apk_name' '$APK_DIR/.ffs.apk.tmp' && mv -f '$APK_DIR/.ffs.apk.tmp' '$APK_DIR/ffs.apk'"
+
 release-image:
   stage: release
   extends:
@@ -313,15 +333,8 @@ release-image:
   after_script:
     - docker logout "$CI_REGISTRY"
 
-deploy:
-  stage: deploy
-  extends: .release-tags
+.deploy-ssh:
   image: alpine:3.24.1
-  needs:
-    - release-image
-  environment:
-    name: production
-    url: https://ffs.shatrov.tech
   variables:
     DEPLOY_SSH_PORT: "22"
   before_script:
@@ -333,6 +346,17 @@ deploy:
     - (cat "$DEPLOY_SSH_KEY"; echo) > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
     - (cat "$DEPLOY_KNOWN_HOSTS"; echo) > ~/.ssh/known_hosts && chmod 600 ~/.ssh/known_hosts
     - printf 'IdentityFile ~/.ssh/id_deploy\nIdentitiesOnly yes\nBatchMode yes\n' > ~/.ssh/config
+
+deploy:
+  stage: deploy
+  extends:
+    - .release-tags
+    - .deploy-ssh
+  needs:
+    - release-image
+  environment:
+    name: production
+    url: https://ffs.shatrov.tech
   script:
     - run_ssh="ssh -p $DEPLOY_SSH_PORT $DEPLOY_USER@$DEPLOY_HOST"
     # Конфигурация окружения едет из репозитория целиком: иначе правка compose

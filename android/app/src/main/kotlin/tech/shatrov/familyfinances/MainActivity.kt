@@ -330,11 +330,16 @@ fun AppRoot(graph: AppGraph) {
                 model.loadImport()
                 onPauseOrDispose {}
             }
-            WithNavBar(AppTab.HOME, onSelect = { screen = it.screen }) {
+            val add = { screen = AppScreen.TransactionEdit(null, back = AppScreen.Home) }
+            WithNavBar(
+                AppTab.HOME,
+                onSelect = { screen = it.screen },
+                fab = { AddFab(add, R.string.transactions_add) },
+            ) {
                 HomeScreen(
                     state = home,
                     onRetry = model::refresh,
-                    onAddTransaction = { screen = AppScreen.TransactionEdit(null) },
+                    onAddTransaction = add,
                     onSettings = { screen = AppScreen.Settings() },
                     card = card,
                     onReconciliation = { screen = AppScreen.Reconciliation(it) },

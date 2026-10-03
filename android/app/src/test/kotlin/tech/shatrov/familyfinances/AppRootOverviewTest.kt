@@ -4,6 +4,7 @@ import android.app.Application
 import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
@@ -131,6 +132,18 @@ class AppRootOverviewTest {
         val list = requests.drop(before).last { it.url.encodedPath == "/api/v1/transactions" }.url
         assertNull(list.queryParameter("category_id"))
         assertNull(list.queryParameter("date_from"))
+    }
+
+    @Test
+    fun homeFabOpensFormAndBackReturnsHome() {
+        composeRule.setContent { AppTheme { AppRoot(graph()) } }
+        waitFor(res.getString(R.string.overview_title))
+        composeRule.onNodeWithContentDescription(res.getString(R.string.transactions_add)).performClick()
+        waitFor(res.getString(R.string.transaction_new_title))
+
+        pressBack()
+        waitFor(res.getString(R.string.overview_title))
+        composeRule.onAllNodesWithText(res.getString(R.string.transaction_new_title)).assertCountEquals(0)
     }
 
     // «Обзор» гасит свой флаг, а не общий с «Главной»: та после него всё ещё перечитывает итоги.

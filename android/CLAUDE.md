@@ -165,7 +165,7 @@ M3-роль `outline` (рамка `OutlinedTextField`, выключенный `S
 Пароль — всегда `SecretField` (`ui/SecretField.kt`), включая вход: переключатель видимости и
 `KeyboardType.Password` живут в одном месте, второго такого поля не заводим.
 
-FAB корней (операции, бюджеты, капитал) подставляет `WithNavBar` в `MainActivity` поверх содержимого, как и
+FAB корней (главная, операции, бюджеты, капитал) подставляет `WithNavBar` в `MainActivity` поверх содержимого, как и
 панель вкладок — экраны о нём не знают; `CategoriesScreen` без панели держит свой в `Scaffold`. Список под ним заканчивается `contentPadding`
 `Dimens.FAB_CLEARANCE` (88dp = 56 + 2×16), иначе кнопка накрывает последнюю строку и `Retry` подвала.
 
@@ -307,8 +307,10 @@ Retrofit, R8 однажды удалил, и приложение падало �
 (`make r8-check`, часть `check` и `assembleRelease`) сверяет `mapping.txt` со сгенерированными
 моделями — R8 для этого подписи не требует.
 
-Стора не будет: APK ставится с ноутбука. Тег `app-vX.Y.Z` собирает APK в CI и кладёт его в
-артефакты на неделю; серверные теги `vX.Y.Z` Android-джоб не запускают.
+Стора не будет. Тег `app-vX.Y.Z` собирает APK в CI, а `android:publish` кладёт его на mini в `~/apk/ffs`:
+последняя версия — `https://ffs.shatrov.tech/app/ffs.apk`, прежние — `ffs-X.Y.Z.apk` там же. Раздаёт их
+Caddy лендинга (блок `ffs` в `deploy/Caddyfile.prod` проекта `shatrov.tech/landing`), как APK соседнего DPP.
+Серверные теги `vX.Y.Z` Android-джоб не запускают.
 
 Релиз приложения: поднять `appVersionCode` и `appVersionName` в `gradle/libs.versions.toml`,
 смержить, поставить тег. Тег и `appVersionName` не связаны ничем, кроме рук; `versionCode` меньше
@@ -359,4 +361,5 @@ mechanism is unused. All three share one `GRADLE_USER_HOME`, which Gradle locks:
 branch, which is how they first failed. `android:apk` runs **only** on an `app-vX.Y.Z` tag and signs with
 the same keystore as the laptop: `FFS_KEYSTORE` is a protected *file* variable holding the **base64** of
 the JKS (a CI variable is text; the job decodes it) and `FFS_KEYSTORE_PASSWORD` is protected and masked —
-hence `app-v*` is a protected tag, or neither would reach the pipeline.
+hence `app-v*` is a protected tag, or neither would reach the pipeline. `android:publish` follows it on the
+same tag and copies the APK to mini over the server deploy's SSH key (`.deploy-ssh`).
