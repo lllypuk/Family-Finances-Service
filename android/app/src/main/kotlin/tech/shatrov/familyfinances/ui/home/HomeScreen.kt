@@ -216,7 +216,7 @@ private fun Summary(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = Dimens.SPACE_4),
-        contentPadding = PaddingValues(vertical = Dimens.SPACE_3),
+        contentPadding = PaddingValues(top = Dimens.SPACE_3, bottom = Dimens.FAB_CLEARANCE),
     ) {
         item {
             Totals(state)
