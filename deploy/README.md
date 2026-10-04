@@ -69,7 +69,7 @@ registry.gitlab.shatrov.tech` once, with a personal or deploy token that can rea
 2. Clone and run the installer as root:
 
    ```bash
-   git clone ssh://git@gitlab.shatrov.tech:2222/shatrov.tech/family-finances-service.git
+   git clone ssh://git@gitlab.shatrov.tech:2222/home/family-finances-service.git
    cd family-finances-service
    sudo ./deploy/scripts/install.sh --domain ffs.shatrov.tech --email you@example.com
    ```
@@ -141,7 +141,7 @@ Rollback is a previous image, no rebuild involved:
 ```bash
 cd /home/sasha/ffs
 grep FFS_IMAGE .env                      # what is running now
-sed -i 's|^FFS_IMAGE=.*|FFS_IMAGE=registry.gitlab.shatrov.tech/shatrov.tech/family-finances-service:main-1a2b3c4d|' .env
+sed -i 's|^FFS_IMAGE=.*|FFS_IMAGE=registry.gitlab.shatrov.tech/home/family-finances-service:main-1a2b3c4d|' .env
 docker compose up -d --wait
 ```
 

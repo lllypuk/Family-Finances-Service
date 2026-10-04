@@ -6,7 +6,7 @@ set -euo pipefail
 INSTALL_DIR="${INSTALL_DIR:-/opt/family-budget}"
 # Образ приезжает из реестра GitLab: на сервере ничего не собирается.
 # Реестр закрытый, поэтому до первого запуска нужен `docker login`.
-DEFAULT_IMAGE="registry.gitlab.shatrov.tech/shatrov.tech/family-finances-service:main"
+DEFAULT_IMAGE="registry.gitlab.shatrov.tech/home/family-finances-service:main"
 LOG_FILE="${LOG_FILE:-/var/log/family-budget-install.log}"
 DEFAULT_DOMAIN="ffs.shatrov.tech"
 
