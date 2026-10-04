@@ -318,7 +318,7 @@ mini-server runs it).
 Point an A record at the server, log in to the registry, then:
 
 ```bash
-git clone ssh://git@gitlab.shatrov.tech:2222/shatrov.tech/family-finances-service.git
+git clone ssh://git@gitlab.shatrov.tech:2222/home/family-finances-service.git
 cd family-finances-service
 sudo ./deploy/scripts/install.sh --domain ffs.shatrov.tech --email admin@example.com
 ```

@@ -106,7 +106,7 @@ ENVIRONMENT=production SESSION_SECRET=some-real-secret ./family-budget-service
 
 **Приоритет: P0.** — ✅ **Закрыта.** Сначала (задача 11 плана) выбрали «собирать
 на месте», а с переездом на GitLab 07.09.2026 образ снова приезжает готовым —
-`registry.gitlab.shatrov.tech/shatrov.tech/family-finances-service`, тег
+`registry.gitlab.shatrov.tech/home/family-finances-service`, тег
 `main-<sha>` на каждый пуш в `main` и `vX.Y.Z` на тег. GHCR и `docker.yml` из
 описания ниже больше нет; оно оставлено как история аудита.
 
