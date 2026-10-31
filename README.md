@@ -134,7 +134,7 @@ The author of a record is taken from the token, so `user_id` in a request body i
 
 ## 🏗️ Architecture and Technology Stack
 
-- **Go 1.26** with Echo v4.15
+- **Go 1.27** with Echo v4.15
 - **SQLite** (modernc.org/sqlite) — pure Go, no CGO; migrations applied automatically at startup
 - **Clean Architecture**: `domain` → `services` → repository interfaces → `infrastructure`; `internal/auth`
   (tokens, sessions, middleware, rate limiter) beside them

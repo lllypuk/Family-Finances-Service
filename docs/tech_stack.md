@@ -17,7 +17,7 @@
 ## 💻 Основной технологический стек
 
 ### Backend
-- **Язык**: Go 1.26+
+- **Язык**: Go 1.27+
 - **Framework**: Echo Web Framework v4.15.4
 - **База данных**: SQLite (modernc.org/sqlite — pure Go, без CGO)
 - **Валидация**: go-playground/validator v10.27.0

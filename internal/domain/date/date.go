@@ -4,9 +4,11 @@ package date
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 )
 
@@ -177,6 +179,23 @@ func (d *Date) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// UnmarshalJSONFrom нужен ради имени поля: с Go 1.27 json отдаёт ошибку UnmarshalJSON без него.
+func (d *Date) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	value, err := dec.ReadValue()
+	if err != nil {
+		return err
+	}
+
+	err = d.UnmarshalJSON(value)
+
+	var typeErr *json.UnmarshalTypeError
+	if errors.As(err, &typeErr) {
+		typeErr.Field = strings.ReplaceAll(strings.TrimPrefix(string(dec.StackPointer()), "/"), "/", ".")
+	}
+
+	return err
 }
 
 func jsonTypeError(value string) error {
