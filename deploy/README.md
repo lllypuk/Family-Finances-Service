@@ -182,6 +182,8 @@ and snapshots stay.
 `008` (v0.9.0): `migrate --to 7` drops `account_balances` — every entered month-end balance is lost — and
 recreates `account_reconciliations` empty (the bank figures were already dropped on the way up).
 
+`009`: `migrate --to 8` changes nothing — the old image rewrites `expires_at` on a session's next touch.
+
 ## Backups
 
 `family-budget-service backup` runs `VACUUM INTO` against the live database and keeps the newest

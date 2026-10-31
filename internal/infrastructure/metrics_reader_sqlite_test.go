@@ -21,7 +21,7 @@ func TestMetricsReader_EmptyDatabase(t *testing.T) {
 	reader := infrastructure.NewMetricsReader(container.GetTestDatabase(t))
 	ctx := context.Background()
 
-	sessions, err := reader.ActiveSessions(ctx, time.Now())
+	sessions, err := reader.ActiveSessions(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 0, sessions)
 
@@ -39,7 +39,7 @@ func TestMetricsReader_EmptyDatabase(t *testing.T) {
 	assert.False(t, complete)
 }
 
-func TestMetricsReader_ActiveSessions_SkipsExpired(t *testing.T) {
+func TestMetricsReader_ActiveSessions_CountsAll(t *testing.T) {
 	container := testutils.SetupSQLiteTestDB(t)
 	db := container.GetTestDatabase(t)
 	helper := testutils.NewTestDataHelper(db)
@@ -52,14 +52,12 @@ func TestMetricsReader_ActiveSessions_SkipsExpired(t *testing.T) {
 	require.NoError(t, err)
 
 	sessions := authrepo.NewSessionSQLiteRepository(db)
-	live := auth.NewSession(uuid.MustParse(userID), "hash-live", "Pixel", now)
-	require.NoError(t, sessions.Create(ctx, live))
-	expired := auth.NewSession(uuid.MustParse(userID), "hash-expired", "Pixel", now.Add(-2*auth.IdleTTL))
-	require.NoError(t, sessions.Create(ctx, expired))
+	require.NoError(t, sessions.Create(ctx, auth.NewSession(uuid.MustParse(userID), "hash-1", "Pixel", now)))
+	require.NoError(t, sessions.Create(ctx, auth.NewSession(uuid.MustParse(userID), "hash-2", "Pixel", now)))
 
-	count, err := infrastructure.NewMetricsReader(db).ActiveSessions(ctx, now)
+	count, err := infrastructure.NewMetricsReader(db).ActiveSessions(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, 1, count)
+	assert.Equal(t, 2, count)
 }
 
 func TestMetricsReader_CountsUsersTransactionsAndSetup(t *testing.T) {

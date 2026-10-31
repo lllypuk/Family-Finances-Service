@@ -2,6 +2,16 @@
 
 All notable changes to database migrations will be documented in this file.
 
+## [2026-10-31] - Sessions live until revoked
+
+### Changed
+- `009.up` удаляет истёкшие строки (иначе они бы ожили) и ставит остальным `expires_at` = `9999-12-31T23:59:59Z`.
+  Схема не меняется, `001` не тронут.
+
+### Rollback
+- `009.down` — no-op: старые сроки не восстановить, старый образ перепишет `expires_at` при первом обновлении
+  `last_used_at`.
+
 ## [2026-09-19] - Plan 20: account balances instead of reconciliations
 
 ### Added

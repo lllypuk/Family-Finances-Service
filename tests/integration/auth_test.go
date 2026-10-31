@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -90,7 +89,7 @@ func TestAuth_BearerFullCycle(t *testing.T) {
 	laptop := loginBearer(t, ts, member.Email, bearerPassword, "Laptop")
 	assert.Equal(t, member.ID, phone.User.ID)
 	assert.Equal(t, string(user.RoleMember), phone.User.Role)
-	assert.False(t, phone.ExpiresAt.IsZero())
+	assert.True(t, phone.ExpiresAt.Equal(auth.NoExpiry()))
 
 	t.Run("GET /me", func(t *testing.T) {
 		rec := bearerRequest(ts, http.MethodGet, "/api/v1/me", phone.Token, nil)
@@ -273,25 +272,6 @@ func TestAuth_Login_XForwardedFor(t *testing.T) {
 				"каждый X-Forwarded-For — отдельный клиент")
 		}
 	})
-}
-
-// Истёкшая сессия на настоящей SQLite: RFC3339 туда-обратно, сравнение с now и удаление строки.
-func TestAuth_ExpiredSession_IsRejectedAndDeleted(t *testing.T) {
-	ts := testhelpers.SetupHTTPServer(t)
-	member := createBearerMember(t, ts)
-
-	plain, hash := auth.GenerateToken()
-	stale := auth.NewSession(member.ID, hash, "old phone", time.Now().Add(-auth.IdleTTL-time.Hour))
-	require.NoError(t, ts.Repos.Session.Create(t.Context(), stale))
-	require.False(t, stale.ExpiresAt.After(time.Now()))
-
-	rec := bearerRequest(ts, http.MethodGet, "/api/v1/me", plain, nil)
-	assert.Equal(t, http.StatusUnauthorized, rec.Code, rec.Body.String())
-	assert.Equal(t, "UNAUTHORIZED", errorCode(t, rec))
-
-	left, err := ts.Repos.Session.ListByUser(t.Context(), member.ID)
-	require.NoError(t, err)
-	assert.Empty(t, left, "истёкшая сессия удалена при первом же обращении")
 }
 
 // Адрес, который репозиторий отвергает как подозрительный («update» в локальной части),

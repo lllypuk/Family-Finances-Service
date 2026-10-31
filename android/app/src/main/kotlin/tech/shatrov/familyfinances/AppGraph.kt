@@ -14,7 +14,6 @@ import tech.shatrov.familyfinances.core.api.auth.KeystoreTokenVault
 import tech.shatrov.familyfinances.core.api.net.ApiFailure
 import tech.shatrov.familyfinances.ui.recognize.ImportFiles
 import tech.shatrov.familyfinances.ui.recognize.ImportJournalStore
-import java.time.OffsetDateTime
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -40,9 +39,8 @@ class AppGraph(
     /** Картинки, пришедшие в приложение: переживают поворот вместе с графом, но не смерть процесса. */
     val imports: ImportStore = ImportStore()
 
-    /** Токен на месте и не просрочен — иначе стартуем с экрана входа, не тратя запрос. */
-    fun hasLiveToken(now: OffsetDateTime = OffsetDateTime.now()): Boolean =
-        api.tokens.read()?.expiresAt?.isAfter(now) == true
+    /** Токен на месте — иначе стартуем с экрана входа; его срок решает сервер, `401` уведёт на вход. */
+    fun hasToken(): Boolean = api.tokens.read() != null
 
     /**
      * Бутстрап сессии: `GET /me` и `GET /family` после логина и при старте с сохранённым токеном.

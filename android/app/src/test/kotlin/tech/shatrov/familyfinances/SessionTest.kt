@@ -82,24 +82,19 @@ class SessionTest {
         assertNotNull(vault.read())
     }
 
-    // Просроченный токен на старте: запроса не будет, сразу экран входа.
+    // Срок из логина мог устареть, а сессия жива: решает ответ сервера, а не дата в хранилище.
     @Test
-    fun expiredTokenIsNotLive() {
+    fun storedDateInPastStillOpensHome() {
         vault.write(SessionToken("t-old", OffsetDateTime.now().minusMinutes(1)))
 
-        assertFalse(graph.hasLiveToken())
+        assertTrue(graph.hasToken())
     }
 
     @Test
-    fun liveTokenOpensHome() {
-        assertTrue(graph.hasLiveToken())
-    }
-
-    @Test
-    fun emptyVaultIsNotLive() {
+    fun emptyVaultOpensLogin() {
         vault.clear()
 
-        assertFalse(graph.hasLiveToken())
+        assertFalse(graph.hasToken())
     }
 
     @Test
