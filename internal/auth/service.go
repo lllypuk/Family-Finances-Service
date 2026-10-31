@@ -71,7 +71,7 @@ func NewService(sessions SessionRepository, users UserLookup, setup SetupChecker
 	}
 }
 
-// Login проверяет пароль и выдаёт токен новой сессии; попутно чистит истёкшие сессии.
+// Login проверяет пароль и выдаёт токен новой сессии.
 func (s *Service) Login(ctx context.Context, email, password, device string) (*LoginResult, error) {
 	exists, err := s.setup.Exists(ctx)
 	if err != nil {
@@ -93,20 +93,15 @@ func (s *Service) Login(ctx context.Context, email, password, device string) (*L
 		return nil, ErrInvalidCredentials
 	}
 
-	now := s.now()
-	if err = s.sessions.DeleteExpired(ctx, now); err != nil {
-		return nil, fmt.Errorf("failed to delete expired sessions: %w", err)
-	}
-
 	plain, hash := GenerateToken()
-	sess := NewSession(u.ID, hash, device, now)
+	sess := NewSession(u.ID, hash, device, s.now())
 	if err = s.sessions.Create(ctx, sess); err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 	return &LoginResult{Token: plain, Session: sess, User: u}, nil
 }
 
-// Authenticate проверяет токен; просроченная сессия удаляется.
+// Authenticate проверяет токен и активность владельца.
 func (s *Service) Authenticate(ctx context.Context, token string) (*Principal, error) {
 	sess, u, err := s.sessions.FindByTokenHash(ctx, HashToken(token))
 	if err != nil {
@@ -121,15 +116,9 @@ func (s *Service) Authenticate(ctx context.Context, token string) (*Principal, e
 	}
 
 	now := s.now()
-	if !now.Before(sess.ExpiresAt) {
-		if err = s.sessions.Delete(ctx, sess.ID); err != nil && !errors.Is(err, ErrSessionNotFound) {
-			return nil, fmt.Errorf("failed to delete expired session: %w", err)
-		}
-		return nil, ErrUnauthorized
-	}
 	if now.Sub(sess.LastUsedAt) > TouchInterval {
 		// Отзыв между FindByTokenHash и Touch — сессии уже нет, это 401, а не сбой.
-		if err = s.sessions.Touch(ctx, sess.ID, now, sess.ExpiryAfter(now)); err != nil {
+		if err = s.sessions.Touch(ctx, sess.ID, now); err != nil {
 			if errors.Is(err, ErrSessionNotFound) {
 				return nil, ErrUnauthorized
 			}
@@ -148,20 +137,13 @@ func (s *Service) Logout(ctx context.Context, sessionID uuid.UUID) error {
 	return nil
 }
 
-// ListSessions — живые сессии пользователя, новые первыми; истёкшие лежат в БД до ближайшего логина.
+// ListSessions — сессии пользователя, новые первыми.
 func (s *Service) ListSessions(ctx context.Context, userID uuid.UUID) ([]*Session, error) {
-	all, err := s.sessions.ListByUser(ctx, userID)
+	sessions, err := s.sessions.ListByUser(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list sessions: %w", err)
 	}
-	now := s.now()
-	live := make([]*Session, 0, len(all))
-	for _, sess := range all {
-		if now.Before(sess.ExpiresAt) {
-			live = append(live, sess)
-		}
-	}
-	return live, nil
+	return sessions, nil
 }
 
 // RevokeSession удаляет сессию пользователя; чужая или неизвестная → ErrSessionNotFound.

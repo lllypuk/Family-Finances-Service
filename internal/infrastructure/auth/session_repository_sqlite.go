@@ -91,15 +91,15 @@ func (r *SessionSQLiteRepository) FindByTokenHash(
 func (r *SessionSQLiteRepository) Touch(
 	ctx context.Context,
 	id uuid.UUID,
-	lastUsedAt, expiresAt time.Time,
+	lastUsedAt time.Time,
 ) error {
 	if err := validation.ValidateUUID(id); err != nil {
 		return fmt.Errorf("invalid session ID: %w", err)
 	}
 
 	result, err := r.db.ExecContext(ctx,
-		`UPDATE sessions SET last_used_at = ?, expires_at = ? WHERE id = ?`,
-		formatTime(lastUsedAt), formatTime(expiresAt), id.String(),
+		`UPDATE sessions SET last_used_at = ? WHERE id = ?`,
+		formatTime(lastUsedAt), id.String(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to touch session: %w", err)
@@ -189,14 +189,6 @@ func (r *SessionSQLiteRepository) ListByUser(ctx context.Context, userID uuid.UU
 	return sessions, nil
 }
 
-// DeleteExpired удаляет сессии, истёкшие к моменту now.
-func (r *SessionSQLiteRepository) DeleteExpired(ctx context.Context, now time.Time) error {
-	if _, err := r.db.ExecContext(ctx, `DELETE FROM sessions WHERE expires_at < ?`, formatTime(now)); err != nil {
-		return fmt.Errorf("failed to delete expired sessions: %w", err)
-	}
-	return nil
-}
-
 func fillSession(s *auth.Session, idStr, userIDStr, createdAt, lastUsedAt, expiresAt string) error {
 	var err error
 	if s.ID, err = uuid.Parse(idStr); err != nil {
@@ -217,7 +209,7 @@ func fillSession(s *auth.Session, idStr, userIDStr, createdAt, lastUsedAt, expir
 	return nil
 }
 
-// Время хранится строкой RFC3339 в UTC: так `expires_at < ?` сравнивается лексикографически.
+// Время хранится строкой RFC3339 в UTC.
 func formatTime(t time.Time) string {
 	return t.UTC().Format(time.RFC3339)
 }

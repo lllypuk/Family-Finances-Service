@@ -5,14 +5,13 @@ import (
 	"errors"
 	"io/fs"
 	"os"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 // StateReader считает состояние базы на скрейпе.
 type StateReader interface {
-	ActiveSessions(ctx context.Context, now time.Time) (int, error)
+	ActiveSessions(ctx context.Context) (int, error)
 	UsersByActive(ctx context.Context) (active, inactive int, err error)
 	Transactions(ctx context.Context) (int, error)
 	SetupComplete(ctx context.Context) (bool, error)
@@ -96,7 +95,7 @@ func (c *stateCollector) collectDBSize(ch chan<- prometheus.Metric) {
 }
 
 func (c *stateCollector) collectSessions(ctx context.Context, ch chan<- prometheus.Metric) {
-	count, err := c.reader.ActiveSessions(ctx, time.Now())
+	count, err := c.reader.ActiveSessions(ctx)
 	if err != nil {
 		ch <- prometheus.NewInvalidMetric(c.sessions, err)
 		return

@@ -103,7 +103,8 @@ The spec coverage test skips `echo.RouteNotFound` routes, and `/metrics` is not 
 it is a plain `404`, with a token and without one.
 
 - **Tokens** (`internal/auth`): 32 random bytes, base64url on the wire, `hex(sha256)` in the `sessions` table.
-  `IdleTTL` 30 days sliding, `AbsoluteTTL` 180 days from creation; `last_used_at` is written at most once per
+  A session lives until revoked: the installed client still requires `expires_at`, so it stays in the contract
+  as `auth.NoExpiry()` (`9999-12-31T23:59:59Z`). `last_used_at` is written at most once per
   `TouchInterval` (1h) so reads do not turn into SQLite writes. `Service.Authenticate` re-reads the owner on every
   request (one `JOIN users`), so a deactivated user or a changed role takes effect on the next request — there is
   nothing cached client-side to invalidate. Password change (`PUT /me/password`) keeps the current session and

@@ -161,7 +161,7 @@ internal fun sharedImages(intent: Intent): List<Uri> {
 @Composable
 fun AppRoot(graph: AppGraph) {
     var screen by rememberSaveable(stateSaver = AppScreenSaver) {
-        mutableStateOf(if (graph.hasLiveToken()) AppScreen.Loading else AppScreen.Login)
+        mutableStateOf(if (graph.hasToken()) AppScreen.Loading else AppScreen.Login)
     }
     // Список и главная переживают правку формы вместе со своими моделями, поэтому
     // перечитываются по возврату, а не при каждом заходе.

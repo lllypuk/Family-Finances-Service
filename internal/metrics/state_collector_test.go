@@ -25,7 +25,7 @@ type fakeStateReader struct {
 	err          error
 }
 
-func (r fakeStateReader) ActiveSessions(_ context.Context, _ time.Time) (int, error) {
+func (r fakeStateReader) ActiveSessions(_ context.Context) (int, error) {
 	return r.sessions, r.err
 }
 
@@ -119,7 +119,7 @@ type deadlineStateReader struct {
 	left        time.Duration
 }
 
-func (r *deadlineStateReader) ActiveSessions(ctx context.Context, _ time.Time) (int, error) {
+func (r *deadlineStateReader) ActiveSessions(ctx context.Context) (int, error) {
 	deadline, ok := ctx.Deadline()
 	r.hadDeadline = ok
 	r.left = time.Until(deadline)

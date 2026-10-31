@@ -7,11 +7,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite" // Pure Go SQLite driver
 
+	"family-budget-service/internal/auth"
 	"family-budget-service/internal/infrastructure"
 	"family-budget-service/internal/testhelpers"
 )
@@ -493,6 +495,31 @@ func TestMigrations_AccountBalancesSchemaMatchesFreshInstall(t *testing.T) {
 	require.NoError(t, upgradedManager.Up())
 
 	assert.Equal(t, schemaOf(ctx, t, fresh, "account_balances"), schemaOf(ctx, t, upgraded, "account_balances"))
+}
+
+// 009 снимает срок с живых сессий и не оживляет истёкшие; откат строк не трогает.
+func TestMigrations_SessionsNoExpiry(t *testing.T) {
+	ctx := t.Context()
+	manager, db := migratedDB(t)
+	require.NoError(t, manager.Migrate(8))
+
+	_, userID, _ := seedForChecks(ctx, t, db)
+	const insert = `
+		INSERT INTO sessions (id, user_id, token_hash, device_name, created_at, last_used_at, expires_at)
+		VALUES (?, ?, ?, 'd', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', ?)`
+	_, err := db.ExecContext(ctx, insert, "live", userID, "hash-live", "2999-01-01T00:00:00Z")
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, insert, "dead", userID, "hash-dead", "2026-01-02T00:00:00Z")
+	require.NoError(t, err)
+
+	require.NoError(t, manager.Up())
+	assert.Equal(t, 1, rowCount(ctx, t, db, "sessions"), "истёкшая сессия удалена")
+	var expiresAt string
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT expires_at FROM sessions WHERE id = 'live'`).Scan(&expiresAt))
+	assert.Equal(t, auth.NoExpiry().Format(time.RFC3339), expiresAt)
+
+	require.NoError(t, manager.Migrate(8))
+	assert.Equal(t, 1, rowCount(ctx, t, db, "sessions"))
 }
 
 func rowCount(ctx context.Context, t *testing.T, db *sql.DB, table string) int {

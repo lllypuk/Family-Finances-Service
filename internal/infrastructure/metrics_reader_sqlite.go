@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 )
 
 // MetricsReader считает состояние базы для коллектора скрейпа: только COUNT,
@@ -18,11 +17,10 @@ func NewMetricsReader(db *sql.DB) *MetricsReader {
 	return &MetricsReader{db: db}
 }
 
-// ActiveSessions считает непросроченные на момент now сессии.
-func (r *MetricsReader) ActiveSessions(ctx context.Context, now time.Time) (int, error) {
+// ActiveSessions считает сессии.
+func (r *MetricsReader) ActiveSessions(ctx context.Context) (int, error) {
 	var count int
-	query := `SELECT COUNT(*) FROM sessions WHERE expires_at > ?`
-	if err := r.db.QueryRowContext(ctx, query, now.UTC().Format(time.RFC3339)).Scan(&count); err != nil {
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions`).Scan(&count); err != nil {
 		return 0, fmt.Errorf("failed to count active sessions: %w", err)
 	}
 	return count, nil

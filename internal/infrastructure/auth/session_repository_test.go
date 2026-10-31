@@ -44,7 +44,7 @@ func TestSessionRepositorySQLite_Integration(t *testing.T) {
 		assert.Equal(t, "Pixel 8", found.DeviceName)
 		assert.True(t, found.CreatedAt.Equal(now))
 		assert.True(t, found.LastUsedAt.Equal(now))
-		assert.True(t, found.ExpiresAt.Equal(now.Add(auth.IdleTTL)))
+		assert.True(t, found.ExpiresAt.Equal(auth.NoExpiry()))
 		assert.Equal(t, userID, owner.ID)
 		assert.Equal(t, "anna@example.com", owner.Email)
 		assert.Equal(t, "Anna", owner.FirstName)
@@ -80,15 +80,13 @@ func TestSessionRepositorySQLite_Integration(t *testing.T) {
 		require.NoError(t, repo.Create(ctx, s))
 
 		later := now.Add(2 * time.Hour)
-		expires := later.Add(auth.IdleTTL)
-		require.NoError(t, repo.Touch(ctx, s.ID, later, expires))
+		require.NoError(t, repo.Touch(ctx, s.ID, later))
 
 		got, _, err := repo.FindByTokenHash(ctx, "hash-touch")
 		require.NoError(t, err)
 		assert.True(t, got.LastUsedAt.Equal(later))
-		assert.True(t, got.ExpiresAt.Equal(expires))
 
-		require.ErrorIs(t, repo.Touch(ctx, uuid.New(), later, expires), auth.ErrSessionNotFound)
+		require.ErrorIs(t, repo.Touch(ctx, uuid.New(), later), auth.ErrSessionNotFound)
 	})
 
 	t.Run("Delete", func(t *testing.T) {
@@ -132,23 +130,6 @@ func TestSessionRepositorySQLite_Integration(t *testing.T) {
 		require.Len(t, list, 2)
 		assert.Equal(t, newer.ID, list[0].ID)
 		assert.Equal(t, older.ID, list[1].ID)
-	})
-
-	t.Run("DeleteExpired_OnlyExpired", func(t *testing.T) {
-		repo := authrepo.NewSessionSQLiteRepository(container.GetTestDatabase(t))
-		userID := createUser(t, "expired@example.com")
-
-		alive := auth.NewSession(userID, "hash-alive", "d", now)
-		require.NoError(t, repo.Create(ctx, alive))
-		expired := auth.NewSession(userID, "hash-expired", "d", now.Add(-auth.IdleTTL-time.Hour))
-		require.NoError(t, repo.Create(ctx, expired))
-
-		require.NoError(t, repo.DeleteExpired(ctx, now))
-
-		list, err := repo.ListByUser(ctx, userID)
-		require.NoError(t, err)
-		require.Len(t, list, 1)
-		assert.Equal(t, alive.ID, list[0].ID)
 	})
 }
 

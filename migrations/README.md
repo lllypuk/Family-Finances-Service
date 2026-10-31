@@ -17,6 +17,7 @@ migration next to it — an already-applied `001` is never re-run (see "Changing
 - `006_holdings.{up,down}.sql` - `holdings`, `holding_values` (plan 17)
 - `007_holding_plans.{up,down}.sql` - `holding_plans` (plan 18)
 - `008_account_balances.{up,down}.sql` - `account_balances` instead of `account_reconciliations` (plan 20)
+- `009_sessions_no_expiry.{up,down}.sql` - sessions live until revoked (data only)
 
 ### Why Consolidated Migrations?
 

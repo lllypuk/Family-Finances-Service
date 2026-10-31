@@ -26,8 +26,6 @@ type fakeSessions struct {
 	byHash  map[string]*auth.Session
 	owners  map[uuid.UUID]*user.User
 	touches int
-	deleted []uuid.UUID
-	expired []time.Time
 	fail    map[string]error
 }
 
@@ -62,7 +60,7 @@ func (f *fakeSessions) FindByTokenHash(_ context.Context, hash string) (*auth.Se
 	return s, f.owners[s.UserID], nil
 }
 
-func (f *fakeSessions) Touch(_ context.Context, id uuid.UUID, lastUsedAt, expiresAt time.Time) error {
+func (f *fakeSessions) Touch(_ context.Context, id uuid.UUID, lastUsedAt time.Time) error {
 	if err := f.fail["Touch"]; err != nil {
 		return err
 	}
@@ -70,7 +68,6 @@ func (f *fakeSessions) Touch(_ context.Context, id uuid.UUID, lastUsedAt, expire
 	for _, s := range f.byHash {
 		if s.ID == id {
 			s.LastUsedAt = lastUsedAt
-			s.ExpiresAt = expiresAt
 			return nil
 		}
 	}
@@ -81,7 +78,6 @@ func (f *fakeSessions) Delete(_ context.Context, id uuid.UUID) error {
 	if err := f.fail["Delete"]; err != nil {
 		return err
 	}
-	f.deleted = append(f.deleted, id)
 	for hash, s := range f.byHash {
 		if s.ID == id {
 			delete(f.byHash, hash)
@@ -115,19 +111,6 @@ func (f *fakeSessions) ListByUser(_ context.Context, userID uuid.UUID) ([]*auth.
 		}
 	}
 	return out, nil
-}
-
-func (f *fakeSessions) DeleteExpired(_ context.Context, now time.Time) error {
-	if err := f.fail["DeleteExpired"]; err != nil {
-		return err
-	}
-	f.expired = append(f.expired, now)
-	for hash, s := range f.byHash {
-		if s.ExpiresAt.Before(now) {
-			delete(f.byHash, hash)
-		}
-	}
-	return nil
 }
 
 // fakeUsers — UserLookup; UpdatePassword отзывает сессии сам, как транзакция репозитория.
@@ -242,21 +225,7 @@ func TestService_Login_Success(t *testing.T) {
 	assert.Equal(t, f.user.ID, s.UserID)
 	assert.Equal(t, testDevice, s.DeviceName)
 	assert.True(t, s.CreatedAt.Equal(f.now))
-	assert.True(t, s.ExpiresAt.Equal(f.now.Add(auth.IdleTTL)))
-	assert.Equal(t, []time.Time{f.now}, f.sessions.expired, "логин чистит истёкшие сессии")
-}
-
-// Истёкшая сессия, которой не пользовались, исчезает при следующем логине любого пользователя.
-func TestService_Login_DeletesExpiredSessions(t *testing.T) {
-	f := newFixture(t, true)
-	stale := f.login(t)
-	f.now = f.now.Add(auth.IdleTTL + time.Minute)
-
-	f.login(t)
-
-	_, ok := f.sessions.byHash[auth.HashToken(stale)]
-	assert.False(t, ok)
-	assert.Len(t, f.sessions.byHash, 1)
+	assert.True(t, s.ExpiresAt.Equal(auth.NoExpiry()))
 }
 
 func TestService_Login_WrongPassword(t *testing.T) {
@@ -347,7 +316,6 @@ func TestService_Authenticate_TouchAfterInterval(t *testing.T) {
 
 	s := f.sessions.byHash[auth.HashToken(token)]
 	assert.True(t, s.LastUsedAt.Equal(f.now))
-	assert.True(t, s.ExpiresAt.Equal(f.now.Add(auth.IdleTTL)))
 
 	_, err = f.svc.Authenticate(context.Background(), token)
 	require.NoError(t, err)
@@ -366,18 +334,16 @@ func TestService_Authenticate_RevokedBeforeTouch(t *testing.T) {
 	require.ErrorIs(t, err, auth.ErrUnauthorized)
 }
 
-func TestService_Authenticate_Expired(t *testing.T) {
+// Сессия живёт до отзыва, сколько бы ни простаивала.
+func TestService_Authenticate_IdleSessionStaysValid(t *testing.T) {
 	f := newFixture(t, true)
 	token := f.login(t)
-	sessionID := f.sessions.byHash[auth.HashToken(token)].ID
-	f.now = f.now.Add(auth.IdleTTL)
+	f.now = f.now.AddDate(10, 0, 0)
 
 	p, err := f.svc.Authenticate(context.Background(), token)
 
-	require.ErrorIs(t, err, auth.ErrUnauthorized)
-	assert.Nil(t, p)
-	assert.Equal(t, []uuid.UUID{sessionID}, f.sessions.deleted)
-	assert.Empty(t, f.sessions.byHash)
+	require.NoError(t, err)
+	assert.Equal(t, f.user.ID, p.UserID)
 }
 
 func TestService_Logout(t *testing.T) {
@@ -410,22 +376,6 @@ func TestService_RevokeSession(t *testing.T) {
 	assert.Empty(t, list)
 }
 
-// GET /auth/sessions не показывает истёкшие сессии, даже если строки ещё лежат в БД.
-func TestService_ListSessions_HidesExpired(t *testing.T) {
-	f := newFixture(t, true)
-	f.login(t)
-	f.now = f.now.Add(auth.IdleTTL - time.Hour)
-	fresh := f.login(t)
-	f.now = f.now.Add(2 * time.Hour)
-
-	list, err := f.svc.ListSessions(context.Background(), f.user.ID)
-
-	require.NoError(t, err)
-	require.Len(t, list, 1)
-	assert.Equal(t, auth.HashToken(fresh), list[0].TokenHash)
-	assert.Len(t, f.sessions.byHash, 2, "строка истёкшей сессии лежит до следующего логина")
-}
-
 // Сбой хранилища не схлопывается в ErrUnauthorized/ErrInvalidCredentials: клиент не должен
 // выбрасывать рабочий токен, а лимитер — считать сбой неверным паролем.
 func TestService_StorageFailure_IsNotAuthError(t *testing.T) {
@@ -443,11 +393,6 @@ func TestService_StorageFailure_IsNotAuthError(t *testing.T) {
 			_, err := f.svc.Login(ctx, f.user.Email, testPassword, testDevice)
 			return err
 		},
-		"Login: DeleteExpired": func(_ *testing.T, f *fixture) error {
-			f.sessions.fail["DeleteExpired"] = errDB
-			_, err := f.svc.Login(ctx, f.user.Email, testPassword, testDevice)
-			return err
-		},
 		"Login: Create": func(_ *testing.T, f *fixture) error {
 			f.sessions.fail["Create"] = errDB
 			_, err := f.svc.Login(ctx, f.user.Email, testPassword, testDevice)
@@ -456,13 +401,6 @@ func TestService_StorageFailure_IsNotAuthError(t *testing.T) {
 		"Authenticate: FindByTokenHash": func(t *testing.T, f *fixture) error {
 			token := f.login(t)
 			f.sessions.fail["FindByTokenHash"] = errDB
-			_, err := f.svc.Authenticate(ctx, token)
-			return err
-		},
-		"Authenticate: Delete of expired": func(t *testing.T, f *fixture) error {
-			token := f.login(t)
-			f.now = f.now.Add(auth.IdleTTL)
-			f.sessions.fail["Delete"] = errDB
 			_, err := f.svc.Authenticate(ctx, token)
 			return err
 		},
@@ -503,18 +441,6 @@ func TestService_StorageFailure_IsNotAuthError(t *testing.T) {
 			assert.NotErrorIs(t, err, auth.ErrSessionNotFound)
 		})
 	}
-}
-
-// Истёкшая сессия, уже удалённая кем-то другим, — всё равно 401, а не 500.
-func TestService_Authenticate_ExpiredAlreadyDeleted(t *testing.T) {
-	f := newFixture(t, true)
-	token := f.login(t)
-	f.now = f.now.Add(auth.IdleTTL)
-	f.sessions.fail["Delete"] = auth.ErrSessionNotFound
-
-	_, err := f.svc.Authenticate(context.Background(), token)
-
-	require.ErrorIs(t, err, auth.ErrUnauthorized)
 }
 
 func TestService_ChangePassword_WrongCurrent(t *testing.T) {
