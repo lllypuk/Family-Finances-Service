@@ -353,7 +353,7 @@ CI (`.gitlab-ci.yml`): `android:check`, `android:api-check`, `android:apk` — a
 `android` stage with `needs: []`, so they start at once and nothing waits for them: a red client check or an
 unreachable Maven Central must not hold back the server deploy. All three `extends: .android`,
 which overrides `image` **and** replaces the `default:` `before_script` (it would otherwise hand the job
-`golang:1.26`, `go version` and the Go cache paths) with the JDK/SDK setup. Rules come from `.android-rules`: the branch `main` and merge
+`golang:1.27`, `go version` and the Go cache paths) with the JDK/SDK setup. Rules come from `.android-rules`: the branch `main` and merge
 requests with `changes: [android/**/*, docs/api/openapi.yaml]`, plus the tag `app-vX.Y.Z`; a server tag
 `vX.Y.Z` is excluded explicitly, because `changes:` is always true in a tag pipeline. Android SDK and
 the Gradle/Robolectric caches sit in `/ci-cache/android/*`, like every other cache here — the `cache:`

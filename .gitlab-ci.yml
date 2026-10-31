@@ -20,14 +20,14 @@ variables:
   GOMODCACHE: /ci-cache/go/mod
   GOLANGCI_LINT_CACHE: /ci-cache/golangci
   CI_TOOLS: /ci-cache/tools
-  GOLANGCI_LINT_VERSION: v2.12.2
-  GOVULNCHECK_VERSION: v1.7.0
+  GOLANGCI_LINT_VERSION: v2.15.0
+  GOVULNCHECK_VERSION: v1.9.0
   # Каталог развёртывания на целевом хосте. Рядом с ним лежит .env, который CI
   # не знает и не переписывает целиком: release.sh правит в нём одну строку.
   FFS_TARGET_PATH: /home/sasha/ffs
 
 default:
-  image: golang:1.26
+  image: golang:1.27
   interruptible: true
   before_script:
     - mkdir -p "$GOCACHE" "$GOMODCACHE" "$GOLANGCI_LINT_CACHE" "$CI_TOOLS"
