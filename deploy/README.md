@@ -14,7 +14,7 @@ GitLab CI and pulled from `registry.gitlab.shatrov.tech`; nothing is compiled on
 | `scripts/uninstall.sh` | removal, `--keep-data` keeps the database and backups |
 | `scripts/health-check.sh` | `GET /health` with retries, for monitoring |
 
-There are **no secrets**: authentication is bearer tokens stored in the database.
+There are **no secrets** apart from `LLM_YANDEX_API_KEY` (see "Screenshot recognition"): authentication is bearer tokens stored in the database.
 
 ## Two layouts
 
@@ -247,9 +247,13 @@ configured in `.env` (see `.env.example`):
   container is the container. The daemon has to listen on that address, and the host firewall has
   to let the compose subnet reach port 11434.
 - `LLM_MODEL` (default `gemma4:31b-cloud`) and `LLM_TIMEOUT` (per attempt, default and maximum `60s`).
+- `LLM_PROVIDER=yandex` sends the call to Yandex AI Studio instead (OpenAI-compatible
+  `chat/completions`, request logging off): `LLM_YANDEX_FOLDER` and `LLM_YANDEX_API_KEY` are required,
+  the model defaults to `qwen3.6-35b-a3b` — the only Yandex model that takes images. **mini-server**
+  runs this, with the folder and key of the Digital Property Passport stands.
 
-There are still **no secrets**: the ollama.com key for cloud models belongs to the daemon
-(`ollama signin` on the host), the service sends no credentials.
+With Ollama the ollama.com key belongs to the daemon (`ollama signin` on the host); with Yandex the
+API key is the one secret in `.env`.
 
 A `503` means the model could not be asked: host not set, daemon unreachable, the daemon not signed
 in or the model missing (`needs_configuration`), or the call timed out after its two attempts.
@@ -278,7 +282,7 @@ cd /home/sasha/ffs
 docker compose run --rm --no-deps -T -v "$PWD/shots:/shots:ro" app recognize /shots/a.png /shots/b.jpg
 ```
 
-The result goes to stdout as JSON, the call report to stderr; without `LLM_OLLAMA_HOST` the command
+The result goes to stdout as JSON, the call report to stderr; with recognition off the command
 exits with code 2.
 
 ## Operations

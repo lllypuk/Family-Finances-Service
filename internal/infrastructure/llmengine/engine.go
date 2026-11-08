@@ -10,6 +10,7 @@ import (
 
 	"github.com/lllypuk/llm"
 	"github.com/lllypuk/llm/ollama"
+	"github.com/lllypuk/llm/yandex"
 
 	"family-budget-service/internal/recognize"
 )
@@ -20,23 +21,62 @@ const (
 	maxRetryAfter = 10 * time.Second
 
 	outcomeBadAnswer = "bad_answer"
+
+	yandexEndpoint = "https://ai.api.cloud.yandex.net/v1"
+	// yandexMaxOutputTokens — запас на рассуждения qwen3.6: с умолчанием ответ обрезается (`length`), а это RetryNever.
+	yandexMaxOutputTokens = 32768
 )
 
 // Engine распознаёт скриншоты одним вызовом модели; повторы — только транспортные, внутри llm.Client.
 type Engine struct {
 	client *llm.Client
 	model  string
+	opts   llm.Options
 	logger *slog.Logger
 }
 
-// New собирает движок над демоном Ollama; obs может быть nil.
-func New(host, model string, timeout time.Duration, obs llm.Observer, logger *slog.Logger) *Engine {
-	client := llm.New(ollama.New(host), timeout)
+// NewOllama собирает движок над демоном Ollama; obs может быть nil.
+func NewOllama(host, model string, timeout time.Duration, obs llm.Observer, logger *slog.Logger) (*Engine, error) {
+	return newEngine(ollama.New(host), model, timeout, llm.Options{}, obs, logger)
+}
+
+// NewYandex собирает движок над Yandex AI Studio с ключом API; obs может быть nil.
+func NewYandex(
+	folder, apiKey, model string,
+	timeout time.Duration,
+	obs llm.Observer,
+	logger *slog.Logger,
+) (*Engine, error) {
+	return newYandex(yandexEndpoint, folder, apiKey, model, timeout, obs, logger)
+}
+
+func newYandex(
+	endpoint, folder, apiKey, model string, timeout time.Duration, obs llm.Observer, logger *slog.Logger,
+) (*Engine, error) {
+	p, err := yandex.New(yandex.Config{Endpoint: endpoint, Folder: folder, Credentials: yandex.APIKey(apiKey)})
+	if err != nil {
+		return nil, fmt.Errorf("llmengine: %w", err)
+	}
+
+	return newEngine(p, model, timeout, llm.Options{MaxOutputTokens: yandexMaxOutputTokens}, obs, logger)
+}
+
+// newEngine отбивает модель, которой профиль плеча не обещает кадров: иначе отказ пришёл бы только на вызове.
+func newEngine(
+	p llm.Provider, model string, timeout time.Duration, opts llm.Options, obs llm.Observer, logger *slog.Logger,
+) (*Engine, error) {
+	if caps, ok := p.Capabilities(model); !ok || !caps.Vision {
+		return nil, fmt.Errorf("llmengine: %s model %q does not accept images", p.Name(), model)
+	}
+
+	client := llm.New(p, timeout)
 	client.Attempts = attempts
 	client.MaxRetryAfter = maxRetryAfter
 	client.Observe = obs
 
-	return &Engine{client: client, model: model, logger: logger}
+	opts.Temperature = llm.Ptr(0.0)
+
+	return &Engine{client: client, model: model, opts: opts, logger: logger}, nil
 }
 
 // Budget — худший срок вызова со всеми попытками и паузами.
@@ -91,11 +131,11 @@ func (e *Engine) request(input recognize.Input) llm.Request {
 	}
 
 	return llm.Request{
-		Task:        task,
-		Model:       e.model,
-		Messages:    messages,
-		Output:      llm.Output{Mode: llm.ModeJSON},
-		Temperature: llm.Ptr(0.0),
+		Task:     task,
+		Model:    e.model,
+		Messages: messages,
+		Output:   llm.Output{Mode: llm.ModeJSON},
+		Options:  e.opts,
 	}
 }
 
@@ -108,8 +148,8 @@ func (e *Engine) log(ctx context.Context, report llm.CallReport, class string, i
 		slog.String("outcome", report.Outcome),
 		slog.Int("attempts", report.Attempts),
 		slog.Duration("latency", report.Duration),
-		slog.Int("input_tokens", report.Usage.InputTokens),
-		slog.Int("output_tokens", report.Usage.OutputTokens),
+		slog.Int("input_tokens", report.Usage.InputTokens()),
+		slog.Int("output_tokens", report.Usage.OutputTokens()),
 		slog.Bool("usage_known", report.Usage.Known),
 	}
 	if class != "" {

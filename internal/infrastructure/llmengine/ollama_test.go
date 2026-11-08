@@ -68,7 +68,14 @@ func newEngine(t *testing.T, handler http.HandlerFunc) (*llmengine.Engine, *atom
 
 	var logs bytes.Buffer
 
-	engine := llmengine.New(srv.URL, testModel, 5*time.Second, nil, slog.New(slog.NewJSONHandler(&logs, nil)))
+	engine, err := llmengine.NewOllama(
+		srv.URL,
+		testModel,
+		5*time.Second,
+		nil,
+		slog.New(slog.NewJSONHandler(&logs, nil)),
+	)
+	require.NoError(t, err)
 	engine.SetPause(0)
 
 	return engine, &calls, &logs
@@ -220,7 +227,8 @@ func TestEngine_Recognize_ContextCancelled(t *testing.T) {
 }
 
 func TestEngine_Budget(t *testing.T) {
-	engine := llmengine.New("http://127.0.0.1:0", testModel, 60*time.Second, nil, slog.Default())
+	engine, err := llmengine.NewOllama("http://127.0.0.1:0", testModel, 60*time.Second, nil, slog.Default())
+	require.NoError(t, err)
 
 	assert.Equal(t, 130*time.Second, engine.Budget())
 }

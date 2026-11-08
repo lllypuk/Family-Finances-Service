@@ -31,7 +31,7 @@ Layered/Clean architecture, single Go module `family-budget-service`. Wiring hap
 1. `LoadConfig()` + `Validate()` (`internal/config.go`) — all config is env vars, no config files:
    `SERVER_*`, `DATABASE_PATH`, `BACKUP_DIR`, `BACKUP_KEEP`, `LOG_*`, `ENVIRONMENT`, `TRUSTED_PROXIES`,
    `METRICS_ADDR`, `LLM_*` (see "Screenshot recognition").
-   There are no secrets. `BACKUP_DIR` empty means `<dir(DATABASE_PATH)>/backups` (`Config.GetBackupDir()`,
+   The only secret is `LLM_YANDEX_API_KEY`. `BACKUP_DIR` empty means `<dir(DATABASE_PATH)>/backups` (`Config.GetBackupDir()`,
    compose mounts `/backups`); `BACKUP_KEEP` (default 30) is the retention shared by `POST /api/v1/backups`
    and the `backup` subcommand.
 2. `internal.OpenDatabase(cfg)` (`internal/bootstrap.go`) — `infrastructure.NewSQLiteConnection` + golang-migrate
@@ -177,10 +177,13 @@ paid call, so neither side retries it on its own.
   `github.com/lllypuk/llm`: it builds the request and maps failure classes onto `recognize.UnavailableError`.
   `services.RecognizeService` adds the family's categories, today in `family.Timezone`, the currency and
   `similar` (up to three transactions of the same amount and type within ±1 day — a badge, never a dedupe).
-  Moving to `llm.Router` touches only `llmengine` and `recognizer()` in `run.go`.
-- **Config.** `LLM_OLLAMA_HOST` empty (the default) builds no engine, and `ErrDisabled` becomes `503`;
-  `LLM_MODEL` and `LLM_TIMEOUT` are validated only when the host is set, `LLM_TIMEOUT` ≤ 60 s because the
-  deadline chain below is computed from it. The ollama.com key lives in the daemon — still no secrets.
+  Moving to `llm.Router` touches only `llmengine` and `NewRecognizeEngine` in `run.go`.
+- **Config.** `LLM_PROVIDER` is `ollama` (default) or `yandex`; `LLMConfig.Enabled()` is "yandex, or the
+  Ollama host is set", otherwise no engine is built and `ErrDisabled` becomes `503`. `LLM_MODEL` (default per
+  provider) and `LLM_TIMEOUT` are validated only when enabled, `LLM_TIMEOUT` ≤ 60 s because the deadline chain
+  below is computed from it. A model whose provider profile has no `Vision` fails `NewApplication`, not the
+  first call. Yandex needs `LLM_YANDEX_FOLDER` + `LLM_YANDEX_API_KEY` (the one secret) and runs `qwen3.6-35b-a3b`
+  with `max_output_tokens` 32768 — it reasons, and a cut answer is `length`, i.e. `RetryNever`.
 - **Codes.** `503 RECOGNITION_UNAVAILABLE` for off, unreachable, `needs_configuration` or timed out
   (`Retry-After` in whole seconds, only when > 0); `502 RECOGNITION_FAILED` when the model answered and
   `Parse` refused it; `413 PAYLOAD_TOO_LARGE` over `RecognizeBodyLimit` = 11 000 000 bytes (`http.MaxBytesError` is dug out of the
@@ -201,7 +204,7 @@ paid call, so neither side retries it on its own.
   `tests/integration/recognize_deadlines_test.go` checks the phases on a real socket.
 - **Subcommand.** `go run ./cmd/server recognize a.png b.jpg` runs one real call with the categories from
   `DATABASE_PATH` (`OpenDatabaseNoMigrate`), prints the `Result` JSON to stdout and the engine's report to
-  stderr; without `LLM_OLLAMA_HOST` it exits with 2. This is the only way to try real screenshots — CI has no
+  stderr; with recognition off it exits with 2. This is the only way to try real screenshots — CI has no
   model.
 - **Metrics:** `ffs_recognitions_total{outcome}` and `ffs_recognition_duration_seconds`, written by the service
   through `services.RecognizeObserver`; `llm.Observer` is not wired yet.

@@ -12,7 +12,6 @@ import (
 
 	"family-budget-service/internal"
 	"family-budget-service/internal/infrastructure"
-	"family-budget-service/internal/infrastructure/llmengine"
 	"family-budget-service/internal/recognize"
 	"family-budget-service/internal/services"
 )
@@ -20,7 +19,9 @@ import (
 const cmdRecognize = "recognize"
 
 // errRecognizeDisabled — вызывать некого; main выходит с кодом 2, как на неверной командной строке.
-var errRecognizeDisabled = errors.New("LLM_OLLAMA_HOST is not set, recognition is disabled")
+var errRecognizeDisabled = errors.New(
+	"recognition is disabled: LLM_OLLAMA_HOST is not set and LLM_PROVIDER is not yandex",
+)
 
 // recognizeCommand — подкоманда `recognize <file>...`: Result в stdout, отчёт вызова модели в stderr.
 func recognizeCommand(stderr io.Writer) command {
@@ -31,7 +32,7 @@ func recognizeCommand(stderr io.Writer) command {
 		}
 
 		cfg := internal.LoadConfig()
-		if cfg.LLM.OllamaHost == "" {
+		if !cfg.LLM.Enabled() {
 			return fmt.Errorf("%s: %w", cmdRecognize, errRecognizeDisabled)
 		}
 		if err = cfg.Validate(); err != nil {
@@ -55,9 +56,13 @@ func recognizeCommand(stderr io.Writer) command {
 		defer db.Close()
 
 		logger := slog.New(slog.NewTextHandler(stderr, nil))
+		engine, err := internal.NewRecognizeEngine(cfg.LLM, logger)
+		if err != nil {
+			return err
+		}
 		repos := infrastructure.NewRepositoriesSQLite(db)
 		service := services.NewRecognizeService(
-			llmengine.New(cfg.LLM.OllamaHost, cfg.LLM.Model, cfg.LLM.Timeout, nil, logger),
+			engine,
 			repos.Family,
 			repos.Category,
 			repos.Transaction,

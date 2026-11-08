@@ -24,8 +24,13 @@ const (
 	// maxPort — верхняя граница TCP-порта в METRICS_ADDR.
 	maxPort = 65535
 
-	defaultLLMModel   = "gemma4:31b-cloud"
-	defaultLLMTimeout = 60 * time.Second
+	// LLMProviderOllama и LLMProviderYandex — значения LLM_PROVIDER.
+	LLMProviderOllama = "ollama"
+	LLMProviderYandex = "yandex"
+
+	defaultOllamaModel = "gemma4:31b-cloud"
+	defaultYandexModel = "qwen3.6-35b-a3b"
+	defaultLLMTimeout  = 60 * time.Second
 	// maxLLMTimeout закрепляет верх цепочки дедлайнов: Budget() движка и срок чтения клиента считаются от него.
 	maxLLMTimeout = 60 * time.Second
 )
@@ -63,11 +68,16 @@ type DatabaseConfig struct {
 	BackupKeep int
 }
 
-// LLMConfig — плечо распознавания скриншотов; ключ облачных моделей живёт у демона Ollama, не здесь.
+// LLMConfig — плечо распознавания скриншотов: Ollama (ключ облачных моделей у демона) или Yandex AI Studio.
 type LLMConfig struct {
-	// OllamaHost — LLM_OLLAMA_HOST; пусто — распознавание выключено (503).
+	// Provider — LLM_PROVIDER, по умолчанию ollama.
+	Provider string
+	// OllamaHost — LLM_OLLAMA_HOST; у ollama пусто — распознавание выключено (503).
 	OllamaHost string
-	Model      string
+	// YandexFolder и YandexAPIKey — LLM_YANDEX_FOLDER и LLM_YANDEX_API_KEY, обязательны у yandex.
+	YandexFolder string
+	YandexAPIKey string
+	Model        string
 	// Timeout — срок одной попытки вызова модели.
 	Timeout time.Duration
 }
@@ -114,11 +124,7 @@ func LoadConfig() *Config {
 			Format:     getEnv("LOG_FORMAT", "json"),
 			OutputPath: getEnv("LOG_OUTPUT_PATH", "stdout"),
 		},
-		LLM: LLMConfig{
-			OllamaHost: getEnv("LLM_OLLAMA_HOST", ""),
-			Model:      getEnv("LLM_MODEL", defaultLLMModel),
-			Timeout:    getDurationEnv("LLM_TIMEOUT", defaultLLMTimeout),
-		},
+		LLM:         loadLLMConfig(),
 		Environment: getEnv("ENVIRONMENT", "development"),
 	}
 
@@ -164,19 +170,49 @@ func (c *Config) Validate() error {
 	return err
 }
 
-// validate проверяет плечо только при заданном хосте: выключенному модель и срок не нужны.
-func (c LLMConfig) validate() error {
-	if c.OllamaHost == "" {
-		return nil
+func loadLLMConfig() LLMConfig {
+	provider := getEnv("LLM_PROVIDER", LLMProviderOllama)
+	model := defaultOllamaModel
+	if provider == LLMProviderYandex {
+		model = defaultYandexModel
 	}
 
-	host, err := url.Parse(c.OllamaHost)
-	if err != nil || (host.Scheme != "http" && host.Scheme != "https") || host.Host == "" {
-		return fmt.Errorf("LLM_OLLAMA_HOST: want http(s)://host:port, got %q", c.OllamaHost)
+	return LLMConfig{
+		Provider:     provider,
+		OllamaHost:   getEnv("LLM_OLLAMA_HOST", ""),
+		YandexFolder: getEnv("LLM_YANDEX_FOLDER", ""),
+		YandexAPIKey: getEnv("LLM_YANDEX_API_KEY", ""),
+		Model:        getEnv("LLM_MODEL", model),
+		Timeout:      getDurationEnv("LLM_TIMEOUT", defaultLLMTimeout),
+	}
+}
+
+// Enabled — есть кого звать: yandex включён всегда, ollama — при заданном хосте.
+func (c LLMConfig) Enabled() bool {
+	return c.Provider == LLMProviderYandex || c.OllamaHost != ""
+}
+
+// validate проверяет только включённое плечо: выключенному модель и срок не нужны.
+func (c LLMConfig) validate() error {
+	switch c.Provider {
+	case "", LLMProviderOllama:
+		if c.OllamaHost == "" {
+			return nil
+		}
+		host, err := url.Parse(c.OllamaHost)
+		if err != nil || (host.Scheme != "http" && host.Scheme != "https") || host.Host == "" {
+			return fmt.Errorf("LLM_OLLAMA_HOST: want http(s)://host:port, got %q", c.OllamaHost)
+		}
+	case LLMProviderYandex:
+		if c.YandexFolder == "" || c.YandexAPIKey == "" {
+			return errors.New("LLM_YANDEX_FOLDER and LLM_YANDEX_API_KEY are required when LLM_PROVIDER=yandex")
+		}
+	default:
+		return fmt.Errorf("LLM_PROVIDER: want %s or %s, got %q", LLMProviderOllama, LLMProviderYandex, c.Provider)
 	}
 
 	if c.Model == "" {
-		return errors.New("LLM_MODEL is required when LLM_OLLAMA_HOST is set")
+		return errors.New("LLM_MODEL is required when recognition is enabled")
 	}
 
 	if c.Timeout <= 0 || c.Timeout > maxLLMTimeout {
