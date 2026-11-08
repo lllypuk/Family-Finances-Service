@@ -60,7 +60,7 @@ func TestNetWorthAPI_Unauthorized(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/net-worth", nil)
 	rec := httptest.NewRecorder()
-	ts.Server.Echo().ServeHTTP(rec, req)
+	ts.Server.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }

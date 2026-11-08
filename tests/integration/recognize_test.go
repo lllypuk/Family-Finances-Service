@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -62,13 +61,13 @@ func postRecognize(
 	t.Helper()
 
 	req := httptest.NewRequest(http.MethodPost, recognizePath, body)
-	req.Header.Set(echo.HeaderContentType, contentType)
+	req.Header.Set("Content-Type", contentType)
 	if sess != nil {
 		sess.Apply(req)
 	}
 
 	rec := httptest.NewRecorder()
-	ts.Server.Echo().ServeHTTP(rec, req)
+	ts.Server.ServeHTTP(rec, req)
 
 	return rec
 }
@@ -151,7 +150,7 @@ func TestRecognizeAPI_Refusals(t *testing.T) {
 			rec := postRecognize(t, ts, ts.Auth(t), bytes.NewReader(body), contentType)
 			require.Equal(t, tt.status, rec.Code, rec.Body.String())
 			assert.Equal(t, tt.code, errorCode(t, rec))
-			assert.Equal(t, tt.retryAfter, rec.Header().Get(echo.HeaderRetryAfter))
+			assert.Equal(t, tt.retryAfter, rec.Header().Get("Retry-After"))
 		})
 	}
 }

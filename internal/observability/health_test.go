@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -87,15 +86,12 @@ func TestHealthHandlers(t *testing.T) {
 		return nil
 	})
 
-	e := echo.New()
-
 	t.Run("HealthHandler", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
 
 		handler := service.HealthService.HealthHandler()
-		err := handler(c)
+		err := handler(rec, req)
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
@@ -110,7 +106,7 @@ func TestHealthHandlers(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		rec := httptest.NewRecorder()
 
-		require.NoError(t, hs.HealthHandler()(e.NewContext(req, rec)))
+		require.NoError(t, hs.HealthHandler()(rec, req))
 
 		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 		var status observability.HealthStatus
@@ -247,15 +243,13 @@ func BenchmarkHealthService(b *testing.B) {
 	})
 
 	b.Run("HealthHandler", func(b *testing.B) {
-		e := echo.New()
 		handler := service.HealthService.HealthHandler()
 
 		b.ResetTimer()
 		for b.Loop() {
 			req := httptest.NewRequest(http.MethodGet, "/health", nil)
 			rec := httptest.NewRecorder()
-			c := e.NewContext(req, rec)
-			handler(c)
+			_ = handler(rec, req)
 		}
 	})
 }

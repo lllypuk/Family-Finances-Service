@@ -30,7 +30,7 @@ func doAccountRequest(
 		sess.Apply(req)
 	}
 	rec := httptest.NewRecorder()
-	ts.Server.Echo().ServeHTTP(rec, req)
+	ts.Server.ServeHTTP(rec, req)
 
 	return rec
 }

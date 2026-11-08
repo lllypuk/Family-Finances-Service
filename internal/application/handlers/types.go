@@ -251,7 +251,7 @@ type AccountBalanceResponse struct {
 
 // CreateTransactionRequest represents the request payload for creating a new transaction.
 // Поля user_id здесь нет намеренно: автор записи берётся из сессии
-// (CreateTransaction читает её через auth.FromContext),
+// (CreateTransaction читает её через auth.PrincipalFromContext),
 // иначе клиент писал бы от чужого имени — S-01.
 type CreateTransactionRequest struct {
 	ID          *uuid.UUID  `json:"id,omitempty"`

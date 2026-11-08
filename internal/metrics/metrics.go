@@ -82,7 +82,7 @@ func (m *Metrics) Handler() http.Handler {
 	})
 }
 
-// HTTP возвращает наблюдателя для Echo-middleware.
+// HTTP возвращает наблюдателя для HTTP-middleware.
 func (m *Metrics) HTTP() *HTTPObserver {
 	return m.http
 }

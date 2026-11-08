@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
@@ -36,12 +35,12 @@ func bearerRequest(ts *testhelpers.TestServer, method, path, token string, body 
 		reader = bytes.NewBuffer(nil)
 	}
 	req := httptest.NewRequest(method, path, reader)
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set("Content-Type", "application/json")
 	if token != "" {
-		req.Header.Set(echo.HeaderAuthorization, "Bearer "+token)
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	rec := httptest.NewRecorder()
-	ts.Server.Echo().ServeHTTP(rec, req)
+	ts.Server.ServeHTTP(rec, req)
 	return rec
 }
 
@@ -233,7 +232,7 @@ func TestAuth_Login_RateLimited(t *testing.T) {
 	})
 	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
 	assert.Equal(t, "RATE_LIMITED", errorCode(t, rec))
-	assert.NotEmpty(t, rec.Header().Get(echo.HeaderRetryAfter))
+	assert.NotEmpty(t, rec.Header().Get("Retry-After"))
 }
 
 // X-Forwarded-For принимается только от TRUSTED_PROXIES: без них реальный IP неизвестен и
@@ -243,10 +242,10 @@ func TestAuth_Login_XForwardedFor(t *testing.T) {
 	spoofed := func(ts *testhelpers.TestServer, email string, i int) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBufferString(
 			`{"email":"`+email+`","password":"wrong-password-1"}`))
-		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-		req.Header.Set(echo.HeaderXForwardedFor, "203.0.113."+strconv.Itoa(i+1))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Forwarded-For", "203.0.113."+strconv.Itoa(i+1))
 		rec := httptest.NewRecorder()
-		ts.Server.Echo().ServeHTTP(rec, req)
+		ts.Server.ServeHTTP(rec, req)
 		return rec
 	}
 

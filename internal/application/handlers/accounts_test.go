@@ -71,8 +71,8 @@ func TestAccountHandler_ListAccounts_ArchivedParam(t *testing.T) {
 	svc.On("List", mock.Anything, true).Return([]*account.Account{{ID: uuid.New(), Name: "Сбер"}}, nil)
 	h := handlers.NewAccountHandler(svc)
 
-	c, rec := principalContext(http.MethodGet, "/api/v1/accounts?archived=true", "", nil)
-	require.NoError(t, h.ListAccounts(c))
+	req, rec := principalRequest(http.MethodGet, "/api/v1/accounts?archived=true", "", nil)
+	require.NoError(t, h.ListAccounts(rec, req))
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	var resp handlers.APIResponse[[]handlers.AccountResponse]
@@ -80,8 +80,8 @@ func TestAccountHandler_ListAccounts_ArchivedParam(t *testing.T) {
 	require.Len(t, resp.Data, 1)
 	assert.Equal(t, "Сбер", resp.Data[0].Name)
 
-	c, rec = principalContext(http.MethodGet, "/api/v1/accounts?archived=yes", "", nil)
-	require.NoError(t, h.ListAccounts(c))
+	req, rec = principalRequest(http.MethodGet, "/api/v1/accounts?archived=yes", "", nil)
+	require.NoError(t, h.ListAccounts(rec, req))
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 	assert.Equal(t, "archived", errorCode(t, rec.Body.Bytes()).Error.Details[0].Field)
 }
@@ -92,8 +92,8 @@ func TestAccountHandler_CreateAccount_RepeatByIDSkipsService(t *testing.T) {
 	svc.On("GetByID", mock.Anything, id).Return(&account.Account{ID: id, Name: "Сбер", IsArchived: true}, nil)
 	h := handlers.NewAccountHandler(svc)
 
-	c, rec := principalContext(http.MethodPost, "/api/v1/accounts", `{"id":"`+id.String()+`","name":"Другое"}`, nil)
-	require.NoError(t, h.CreateAccount(c))
+	req, rec := principalRequest(http.MethodPost, "/api/v1/accounts", `{"id":"`+id.String()+`","name":"Другое"}`, nil)
+	require.NoError(t, h.CreateAccount(rec, req))
 	assert.Equal(t, http.StatusOK, rec.Code)
 	svc.AssertNotCalled(t, "Create", mock.Anything, mock.Anything, mock.Anything)
 }
@@ -115,10 +115,9 @@ func TestAccountHandler_ErrorMapping(t *testing.T) {
 			svc.On("Update", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil, tt.err)
 			h := handlers.NewAccountHandler(svc)
 
-			c, rec := principalContext(http.MethodPut, "/", `{"name":" "}`, nil)
-			c.SetParamNames("id")
-			c.SetParamValues(uuid.NewString())
-			require.NoError(t, h.UpdateAccount(c))
+			req, rec := principalRequest(http.MethodPut, "/", `{"name":" "}`, nil)
+			req.SetPathValue("id", uuid.NewString())
+			require.NoError(t, h.UpdateAccount(rec, req))
 			assert.Equal(t, tt.status, rec.Code)
 			assert.Equal(t, tt.code, errorCode(t, rec.Body.Bytes()).Error.Code)
 		})
@@ -128,10 +127,9 @@ func TestAccountHandler_ErrorMapping(t *testing.T) {
 func TestAccountHandler_UpdateAccount_EmptyBody(t *testing.T) {
 	h := handlers.NewAccountHandler(&mockAccountService{})
 
-	c, rec := principalContext(http.MethodPut, "/", `{}`, nil)
-	c.SetParamNames("id")
-	c.SetParamValues(uuid.NewString())
-	require.NoError(t, h.UpdateAccount(c))
+	req, rec := principalRequest(http.MethodPut, "/", `{}`, nil)
+	req.SetPathValue("id", uuid.NewString())
+	require.NoError(t, h.UpdateAccount(rec, req))
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 }
 
@@ -141,16 +139,14 @@ func TestAccountHandler_DeleteAccount(t *testing.T) {
 	svc.On("Delete", mock.Anything, inUse).Return(account.ErrInUse)
 	h := handlers.NewAccountHandler(svc)
 
-	c, rec := principalContext(http.MethodDelete, "/", "", nil)
-	c.SetParamNames("id")
-	c.SetParamValues(inUse.String())
-	require.NoError(t, h.DeleteAccount(c))
+	req, rec := principalRequest(http.MethodDelete, "/", "", nil)
+	req.SetPathValue("id", inUse.String())
+	require.NoError(t, h.DeleteAccount(rec, req))
 	assert.Equal(t, http.StatusConflict, rec.Code)
 	assert.Equal(t, handlers.ErrCodeAccountInUse, errorCode(t, rec.Body.Bytes()).Error.Code)
 
-	c, rec = principalContext(http.MethodDelete, "/", "", nil)
-	c.SetParamNames("id")
-	c.SetParamValues("not-a-uuid")
-	require.NoError(t, h.DeleteAccount(c))
+	req, rec = principalRequest(http.MethodDelete, "/", "", nil)
+	req.SetPathValue("id", "not-a-uuid")
+	require.NoError(t, h.DeleteAccount(rec, req))
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }

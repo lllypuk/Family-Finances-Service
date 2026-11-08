@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -49,12 +48,11 @@ func (m *MockStatsService) NetWorth(ctx context.Context, from, to *date.Date) (*
 	return args.Get(0).(*dto.StatsNetWorth), args.Error(1)
 }
 
-func statsRequest(target string) (echo.Context, *httptest.ResponseRecorder) {
-	e := echo.New()
+func statsRequest(target string) (*http.Request, *httptest.ResponseRecorder) {
 	httpReq := httptest.NewRequest(http.MethodGet, target, nil)
 	rec := httptest.NewRecorder()
 
-	return e.NewContext(httpReq, rec), rec
+	return httpReq, rec
 }
 
 func TestStatsHandler_GetSummary_Success(t *testing.T) {
@@ -72,9 +70,9 @@ func TestStatsHandler_GetSummary_Success(t *testing.T) {
 	}
 	mockService.On("Summary", mock.Anything, &from, &to).Return(summary, nil)
 
-	c, rec := statsRequest("/stats/summary?from=2025-03-01&to=2025-03-31")
+	req, rec := statsRequest("/stats/summary?from=2025-03-01&to=2025-03-31")
 
-	require.NoError(t, handler.GetSummary(c))
+	require.NoError(t, handler.GetSummary(rec, req))
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	var response handlers.APIResponse[dto.StatsSummary]
@@ -94,9 +92,9 @@ func TestStatsHandler_GetSummary_DefaultPeriod(t *testing.T) {
 	mockService.On("Summary", mock.Anything, (*date.Date)(nil), (*date.Date)(nil)).
 		Return(&dto.StatsSummary{}, nil)
 
-	c, rec := statsRequest("/stats/summary")
+	req, rec := statsRequest("/stats/summary")
 
-	require.NoError(t, handler.GetSummary(c))
+	require.NoError(t, handler.GetSummary(rec, req))
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	mockService.AssertExpectations(t)
@@ -116,9 +114,9 @@ func TestStatsHandler_GetSummary_InvalidDate(t *testing.T) {
 			mockService := &MockStatsService{}
 			handler := handlers.NewStatsHandler(mockService)
 
-			c, rec := statsRequest(tt.target)
+			req, rec := statsRequest(tt.target)
 
-			require.NoError(t, handler.GetSummary(c))
+			require.NoError(t, handler.GetSummary(rec, req))
 			assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
 			var response handlers.ErrorResponse
@@ -139,9 +137,9 @@ func TestStatsHandler_GetSummary_InvertedPeriod(t *testing.T) {
 	mockService.On("Summary", mock.Anything, mock.Anything, mock.Anything).
 		Return(nil, services.ErrInvalidStatsPeriod)
 
-	c, rec := statsRequest("/stats/summary?from=2025-03-31&to=2025-03-01")
+	req, rec := statsRequest("/stats/summary?from=2025-03-31&to=2025-03-01")
 
-	require.NoError(t, handler.GetSummary(c))
+	require.NoError(t, handler.GetSummary(rec, req))
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
 	var response handlers.ErrorResponse
@@ -158,9 +156,9 @@ func TestStatsHandler_GetSummary_ServiceError(t *testing.T) {
 	mockService.On("Summary", mock.Anything, mock.Anything, mock.Anything).
 		Return(nil, errors.New("repository failure"))
 
-	c, rec := statsRequest("/stats/summary")
+	req, rec := statsRequest("/stats/summary")
 
-	require.NoError(t, handler.GetSummary(c))
+	require.NoError(t, handler.GetSummary(rec, req))
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 
 	var response handlers.ErrorResponse
@@ -184,9 +182,9 @@ func TestStatsHandler_GetMonthly_Success(t *testing.T) {
 	}
 	mockService.On("Monthly", mock.Anything, &from, &to).Return(monthly, nil)
 
-	c, rec := statsRequest("/stats/monthly?from=2026-08-01&to=2026-09-13")
+	req, rec := statsRequest("/stats/monthly?from=2026-08-01&to=2026-09-13")
 
-	require.NoError(t, handler.GetMonthly(c))
+	require.NoError(t, handler.GetMonthly(rec, req))
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	var response handlers.APIResponse[dto.StatsMonthly]
@@ -206,9 +204,9 @@ func TestStatsHandler_GetMonthly_DefaultPeriod(t *testing.T) {
 	mockService.On("Monthly", mock.Anything, (*date.Date)(nil), (*date.Date)(nil)).
 		Return(&dto.StatsMonthly{}, nil)
 
-	c, rec := statsRequest("/stats/monthly")
+	req, rec := statsRequest("/stats/monthly")
 
-	require.NoError(t, handler.GetMonthly(c))
+	require.NoError(t, handler.GetMonthly(rec, req))
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	mockService.AssertExpectations(t)
@@ -218,9 +216,9 @@ func TestStatsHandler_GetMonthly_InvalidDate(t *testing.T) {
 	mockService := &MockStatsService{}
 	handler := handlers.NewStatsHandler(mockService)
 
-	c, rec := statsRequest("/stats/monthly?to=2026-13-45")
+	req, rec := statsRequest("/stats/monthly?to=2026-13-45")
 
-	require.NoError(t, handler.GetMonthly(c))
+	require.NoError(t, handler.GetMonthly(rec, req))
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
 	var response handlers.ErrorResponse
@@ -238,9 +236,9 @@ func TestStatsHandler_GetMonthly_InvertedPeriod(t *testing.T) {
 	mockService.On("Monthly", mock.Anything, mock.Anything, mock.Anything).
 		Return(nil, services.ErrInvalidStatsPeriod)
 
-	c, rec := statsRequest("/stats/monthly?from=2026-09-30&to=2026-09-01")
+	req, rec := statsRequest("/stats/monthly?from=2026-09-30&to=2026-09-01")
 
-	require.NoError(t, handler.GetMonthly(c))
+	require.NoError(t, handler.GetMonthly(rec, req))
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
 	var response handlers.ErrorResponse
@@ -256,9 +254,9 @@ func TestStatsHandler_GetMonthly_PeriodTooLong(t *testing.T) {
 	mockService.On("Monthly", mock.Anything, mock.Anything, mock.Anything).
 		Return(nil, services.ErrStatsPeriodTooLong)
 
-	c, rec := statsRequest("/stats/monthly?from=0001-01-01&to=9999-12-31")
+	req, rec := statsRequest("/stats/monthly?from=0001-01-01&to=9999-12-31")
 
-	require.NoError(t, handler.GetMonthly(c))
+	require.NoError(t, handler.GetMonthly(rec, req))
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
 	var response handlers.ErrorResponse
@@ -274,9 +272,9 @@ func TestStatsHandler_GetMonthly_ServiceError(t *testing.T) {
 	mockService.On("Monthly", mock.Anything, mock.Anything, mock.Anything).
 		Return(nil, errors.New("repository failure"))
 
-	c, rec := statsRequest("/stats/monthly")
+	req, rec := statsRequest("/stats/monthly")
 
-	require.NoError(t, handler.GetMonthly(c))
+	require.NoError(t, handler.GetMonthly(rec, req))
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 }
 
@@ -296,9 +294,9 @@ func TestStatsHandler_GetNetWorth_Success(t *testing.T) {
 	}
 	mockService.On("NetWorth", mock.Anything, &from, &to).Return(series, nil)
 
-	c, rec := statsRequest("/stats/net-worth?from=2026-08-01&to=2026-09-13")
+	req, rec := statsRequest("/stats/net-worth?from=2026-08-01&to=2026-09-13")
 
-	require.NoError(t, handler.GetNetWorth(c))
+	require.NoError(t, handler.GetNetWorth(rec, req))
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	var response handlers.APIResponse[dto.StatsNetWorth]
@@ -317,9 +315,9 @@ func TestStatsHandler_GetNetWorth_FutureTo(t *testing.T) {
 	mockService.On("NetWorth", mock.Anything, (*date.Date)(nil), mock.Anything).
 		Return(nil, services.ErrStatsPeriodInFuture)
 
-	c, rec := statsRequest("/stats/net-worth?to=2999-01-01")
+	req, rec := statsRequest("/stats/net-worth?to=2999-01-01")
 
-	require.NoError(t, handler.GetNetWorth(c))
+	require.NoError(t, handler.GetNetWorth(rec, req))
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
 	var response handlers.ErrorResponse

@@ -28,7 +28,7 @@ func adminJSON(
 	req.Header.Set("Content-Type", "application/json")
 	sess.Apply(req)
 	rec := httptest.NewRecorder()
-	ts.Server.Echo().ServeHTTP(rec, req)
+	ts.Server.ServeHTTP(rec, req)
 	return rec
 }
 

@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.yaml.in/yaml/v3"
@@ -85,7 +84,7 @@ func loadOpenAPISpec(t *testing.T) openAPISpec {
 	return spec
 }
 
-// specRoutes переводит пути спецификации в форму echo: {id} → :id.
+// specRoutes переводит пути спецификации в форму шаблонов роутера: {id} → :id.
 func specRoutes(spec openAPISpec) map[string]bool {
 	pathParam := regexp.MustCompile(`\{([^}]+)\}`)
 	routes := make(map[string]bool)
@@ -99,17 +98,13 @@ func specRoutes(spec openAPISpec) map[string]bool {
 	return routes
 }
 
-// registeredAPIRoutes — роуты /api/v1 плюс GET /health. Заглушки echo для групп
-// (Any("") и Any("/*") из Group.Use) регистрируются с методом echo.RouteNotFound.
+// registeredAPIRoutes — роуты /api/v1 плюс GET /health; fallback'и групп в реестр не попадают.
 func registeredAPIRoutes(t *testing.T) []string {
 	t.Helper()
 
 	ts := testhelpers.SetupHTTPServer(t)
 	var routes []string
-	for _, route := range ts.Server.Echo().Routes() {
-		if route.Method == echo.RouteNotFound {
-			continue
-		}
+	for _, route := range ts.Server.Routes() {
 		if route.Path != "/health" && !strings.HasPrefix(route.Path, "/api/v1") {
 			continue
 		}

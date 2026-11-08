@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -51,7 +50,7 @@ func (s *slowRecognizer) Recognize(ctx context.Context, _ recognize.Input) (reco
 
 func (s *slowRecognizer) Budget() time.Duration { return deadlineEngineBudget }
 
-// startDeadlineServer поднимает Echo стенда на настоящем сокете: ResponseRecorder дедлайнов не знает.
+// startDeadlineServer поднимает сервер стенда на настоящем сокете: ResponseRecorder дедлайнов не знает.
 func startDeadlineServer(t *testing.T, engine services.Recognizer) (*testhelpers.TestServer, *httptest.Server) {
 	t.Helper()
 
@@ -60,7 +59,7 @@ func startDeadlineServer(t *testing.T, engine services.Recognizer) (*testhelpers
 		testhelpers.WithRecognizeUploadTimeout(deadlineUploadTimeout),
 	)
 
-	srv := httptest.NewUnstartedServer(ts.Server.Echo())
+	srv := httptest.NewUnstartedServer(ts.Server)
 	srv.Config.ReadTimeout = deadlineServerTimeout
 	srv.Config.WriteTimeout = deadlineServerTimeout
 	srv.Start()
@@ -81,7 +80,7 @@ func recognizeRequest(
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, srv.URL+recognizePath, body)
 	require.NoError(t, err)
-	req.Header.Set(echo.HeaderContentType, contentType)
+	req.Header.Set("Content-Type", contentType)
 	sess.Apply(req)
 
 	return req

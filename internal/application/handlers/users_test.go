@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/services"
 	"family-budget-service/internal/services/dto"
@@ -281,7 +281,6 @@ func TestUserHandler_CreateUser(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
-			e := echo.New()
 			mockService := &MockUserService{}
 			tt.mockSetup(mockService, uuid.New())
 
@@ -295,12 +294,11 @@ func TestUserHandler_CreateUser(t *testing.T) {
 				reqBody, _ = json.Marshal(tt.requestBody)
 			}
 			req := httptest.NewRequest(http.MethodPost, "/users", bytes.NewReader(reqBody))
-			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
-			c := e.NewContext(req, rec)
 
 			// Execute
-			err := handler.CreateUser(c)
+			err := handler.CreateUser(rec, req)
 
 			// Assert
 			require.NoError(t, err)
@@ -378,7 +376,6 @@ func TestUserHandler_GetUserByID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
-			e := echo.New()
 			mockService := &MockUserService{}
 			tt.mockSetup(mockService, uuid.New())
 
@@ -387,12 +384,10 @@ func TestUserHandler_GetUserByID(t *testing.T) {
 			// Create request
 			req := httptest.NewRequest(http.MethodGet, "/users/"+tt.userID, nil)
 			rec := httptest.NewRecorder()
-			c := e.NewContext(req, rec)
-			c.SetParamNames("id")
-			c.SetParamValues(tt.userID)
+			req.SetPathValue("id", tt.userID)
 
 			// Execute
-			err := handler.GetUserByID(c)
+			err := handler.GetUserByID(rec, req)
 
 			// Assert
 			require.NoError(t, err)
@@ -483,7 +478,6 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
-			e := echo.New()
 			mockService := &MockUserService{}
 			tt.mockSetup(mockService, uuid.New())
 
@@ -492,14 +486,12 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 			// Create request
 			jsonBody, _ := json.Marshal(tt.requestBody)
 			req := httptest.NewRequest(http.MethodPut, "/users/"+tt.userID, bytes.NewReader(jsonBody))
-			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
-			c := e.NewContext(req, rec)
-			c.SetParamNames("id")
-			c.SetParamValues(tt.userID)
+			req.SetPathValue("id", tt.userID)
 
 			// Execute
-			err := handler.UpdateUser(c)
+			err := handler.UpdateUser(rec, req)
 
 			// Assert
 			require.NoError(t, err)
@@ -513,12 +505,11 @@ func TestUserHandler_UpdateUser(t *testing.T) {
 func listUsersRequest(t *testing.T, service *MockUserService) *httptest.ResponseRecorder {
 	t.Helper()
 
-	e := echo.New()
 	handler := handlers.NewUserHandler(service, newFakeAuthService())
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
 	rec := httptest.NewRecorder()
-	require.NoError(t, handler.GetUsers(e.NewContext(req, rec)))
+	require.NoError(t, handler.GetUsers(rec, req))
 
 	return rec
 }
@@ -529,20 +520,21 @@ func patchUserRequest(
 ) *httptest.ResponseRecorder {
 	t.Helper()
 
-	e := echo.New()
 	handler := handlers.NewUserHandler(service, newFakeAuthService())
 
 	req := httptest.NewRequest(http.MethodPatch, "/api/v1/users/"+targetID, bytes.NewBufferString(body))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(targetID)
+	req.SetPathValue("id", targetID)
 	if actorID != uuid.Nil {
-		withSessionUser(c, actorID)
+		req = req.WithContext(auth.WithPrincipal(req.Context(), &auth.Principal{
+			UserID: actorID,
+			Role:   user.RoleAdmin,
+			Email:  "session@example.com",
+		}))
 	}
 
-	require.NoError(t, handler.PatchUser(c))
+	require.NoError(t, handler.PatchUser(rec, req))
 
 	return rec
 }
@@ -552,17 +544,14 @@ func setUserPasswordRequest(
 ) *httptest.ResponseRecorder {
 	t.Helper()
 
-	e := echo.New()
 	handler := handlers.NewUserHandler(&MockUserService{}, svc)
 
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/users/"+targetID+"/password", bytes.NewBufferString(body))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(targetID)
+	req.SetPathValue("id", targetID)
 
-	require.NoError(t, handler.SetUserPassword(c))
+	require.NoError(t, handler.SetUserPassword(rec, req))
 
 	return rec
 }

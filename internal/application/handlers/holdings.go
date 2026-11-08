@@ -6,7 +6,6 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/holding"
@@ -23,19 +22,19 @@ func NewHoldingHandler(holdings services.HoldingService) *HoldingHandler {
 }
 
 // ListHoldings — активные позиции; ?archived=true добавляет архивные.
-func (h *HoldingHandler) ListHoldings(c echo.Context) error {
-	page, pageErr := parsePagination(c)
+func (h *HoldingHandler) ListHoldings(w http.ResponseWriter, r *http.Request) error {
+	page, pageErr := parsePagination(w, r)
 	if pageErr != nil {
 		return ignoreWritten(pageErr)
 	}
-	includeArchived, archivedErr := parseArchivedParam(c)
+	includeArchived, archivedErr := parseArchivedParam(w, r)
 	if archivedErr != nil {
 		return ignoreWritten(archivedErr)
 	}
 
-	all, err := h.holdings.List(c.Request().Context(), includeArchived)
+	all, err := h.holdings.List(r.Context(), includeArchived)
 	if err != nil {
-		return respondError(c, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch holdings")
+		return respondError(w, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch holdings")
 	}
 
 	items := make([]HoldingResponse, 0, page.Limit)
@@ -43,54 +42,54 @@ func (h *HoldingHandler) ListHoldings(c echo.Context) error {
 		items = append(items, toHoldingResponse(item))
 	}
 
-	return respondList(c, items, page, len(all))
+	return respondList(w, items, page, len(all))
 }
 
-func (h *HoldingHandler) CreateHolding(c echo.Context) error {
+func (h *HoldingHandler) CreateHolding(w http.ResponseWriter, r *http.Request) error {
 	var req CreateHoldingRequest
-	if err := c.Bind(&req); err != nil {
-		return respondBindError(c, err)
+	if err := decodeJSON(r, &req); err != nil {
+		return respondBindError(w, err)
 	}
 	if err := h.validator.Struct(req); err != nil {
-		return respondValidationErrors(c, err)
+		return respondValidationErrors(w, err)
 	}
 
-	if handled, err := respondClientID(c, req.ID, h.findHolding, toHoldingResponse); handled {
+	if handled, err := respondClientID(w, r, req.ID, h.findHolding, toHoldingResponse); handled {
 		return err
 	}
 
-	created, err := h.holdings.Create(c.Request().Context(), req.ID, req.Name,
+	created, err := h.holdings.Create(r.Context(), req.ID, req.Name,
 		holding.Side(req.Side), holding.Kind(req.Kind),
 		holding.Plan{MonthlyIncomeMinor: req.MonthlyIncomeMinor, MonthlyExpenseMinor: req.MonthlyExpenseMinor})
 	if err != nil {
-		return respondHoldingError(c, err)
+		return respondHoldingError(w, err)
 	}
 
-	return respondAPI(c, http.StatusCreated, toHoldingResponse(created))
+	return respondAPI(w, http.StatusCreated, toHoldingResponse(created))
 }
 
-func (h *HoldingHandler) findHolding(c echo.Context, id uuid.UUID) (*holding.Holding, bool) {
-	found, err := h.holdings.GetByID(c.Request().Context(), id)
+func (h *HoldingHandler) findHolding(r *http.Request, id uuid.UUID) (*holding.Holding, bool) {
+	found, err := h.holdings.GetByID(r.Context(), id)
 
 	return found, err == nil
 }
 
-func (h *HoldingHandler) UpdateHolding(c echo.Context) error {
-	id, err := uuid.Parse(c.Param("id"))
+func (h *HoldingHandler) UpdateHolding(w http.ResponseWriter, r *http.Request) error {
+	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidHoldingID)
+		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidHoldingID)
 	}
 
 	var req UpdateHoldingRequest
-	if err = c.Bind(&req); err != nil {
-		return respondBindError(c, err)
+	if err = decodeJSON(r, &req); err != nil {
+		return respondBindError(w, err)
 	}
 	if err = h.validator.Struct(req); err != nil {
-		return respondValidationErrors(c, err)
+		return respondValidationErrors(w, err)
 	}
 	if req.Name == nil && req.Kind == nil && req.IsArchived == nil &&
 		req.MonthlyIncomeMinor == nil && req.MonthlyExpenseMinor == nil {
-		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, ErrMessageNoFields))
 	}
 
@@ -100,42 +99,42 @@ func (h *HoldingHandler) UpdateHolding(c echo.Context) error {
 		kind = &k
 	}
 
-	updated, err := h.holdings.Update(c.Request().Context(), id, req.Name, kind, req.IsArchived,
+	updated, err := h.holdings.Update(r.Context(), id, req.Name, kind, req.IsArchived,
 		req.MonthlyIncomeMinor, req.MonthlyExpenseMinor)
 	if err != nil {
-		return respondHoldingError(c, err)
+		return respondHoldingError(w, err)
 	}
 
-	return respondAPI(c, http.StatusOK, toHoldingResponse(updated))
+	return respondAPI(w, http.StatusOK, toHoldingResponse(updated))
 }
 
-func (h *HoldingHandler) DeleteHolding(c echo.Context) error {
-	id, err := uuid.Parse(c.Param("id"))
+func (h *HoldingHandler) DeleteHolding(w http.ResponseWriter, r *http.Request) error {
+	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidHoldingID)
+		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidHoldingID)
 	}
 
-	if err = h.holdings.Delete(c.Request().Context(), id); err != nil {
-		return respondHoldingError(c, err)
+	if err = h.holdings.Delete(r.Context(), id); err != nil {
+		return respondHoldingError(w, err)
 	}
 
-	return c.NoContent(http.StatusNoContent)
+	return noContent(w)
 }
 
 // ListHoldingValues — история снимков позиции, новые сверху.
-func (h *HoldingHandler) ListHoldingValues(c echo.Context) error {
-	id, err := uuid.Parse(c.Param("id"))
+func (h *HoldingHandler) ListHoldingValues(w http.ResponseWriter, r *http.Request) error {
+	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidHoldingID)
+		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidHoldingID)
 	}
-	page, err := parsePagination(c)
+	page, err := parsePagination(w, r)
 	if err != nil {
 		return ignoreWritten(err)
 	}
 
-	values, total, err := h.holdings.ListValues(c.Request().Context(), id, page.Limit, page.Offset)
+	values, total, err := h.holdings.ListValues(r.Context(), id, page.Limit, page.Offset)
 	if err != nil {
-		return respondHoldingError(c, err)
+		return respondHoldingError(w, err)
 	}
 
 	items := make([]HoldingValueResponse, 0, len(values))
@@ -143,62 +142,62 @@ func (h *HoldingHandler) ListHoldingValues(c echo.Context) error {
 		items = append(items, toHoldingValueResponse(v))
 	}
 
-	return respondList(c, items, page, total)
+	return respondList(w, items, page, total)
 }
 
-func (h *HoldingHandler) PutHoldingValue(c echo.Context) error {
-	id, day, err := parseHoldingValuePath(c)
+func (h *HoldingHandler) PutHoldingValue(w http.ResponseWriter, r *http.Request) error {
+	id, day, err := parseHoldingValuePath(w, r)
 	if err != nil {
 		return ignoreWritten(err)
 	}
 
 	var req HoldingValueRequest
-	if err = c.Bind(&req); err != nil {
-		return respondBindError(c, err)
+	if err = decodeJSON(r, &req); err != nil {
+		return respondBindError(w, err)
 	}
 	if err = h.validator.Struct(req); err != nil {
-		return respondValidationErrors(c, err)
+		return respondValidationErrors(w, err)
 	}
 
-	v, err := h.holdings.PutValue(c.Request().Context(), id, day, *req.ValueMinor)
+	v, err := h.holdings.PutValue(r.Context(), id, day, *req.ValueMinor)
 	if err != nil {
-		return respondHoldingError(c, err)
+		return respondHoldingError(w, err)
 	}
 
-	return respondAPI(c, http.StatusOK, toHoldingValueResponse(v))
+	return respondAPI(w, http.StatusOK, toHoldingValueResponse(v))
 }
 
-func (h *HoldingHandler) DeleteHoldingValue(c echo.Context) error {
-	id, day, err := parseHoldingValuePath(c)
+func (h *HoldingHandler) DeleteHoldingValue(w http.ResponseWriter, r *http.Request) error {
+	id, day, err := parseHoldingValuePath(w, r)
 	if err != nil {
 		return ignoreWritten(err)
 	}
 
-	if err = h.holdings.DeleteValue(c.Request().Context(), id, day); err != nil {
-		return respondHoldingError(c, err)
+	if err = h.holdings.DeleteValue(r.Context(), id, day); err != nil {
+		return respondHoldingError(w, err)
 	}
 
-	return c.NoContent(http.StatusNoContent)
+	return noContent(w)
 }
 
 // parseHoldingValuePath пишет 400 сам и возвращает errResponseAlreadyWritten.
-func parseHoldingValuePath(c echo.Context) (uuid.UUID, date.Date, error) {
-	id, err := uuid.Parse(c.Param("id"))
+func parseHoldingValuePath(w http.ResponseWriter, r *http.Request) (uuid.UUID, date.Date, error) {
+	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
 		return uuid.Nil, date.Date{}, written(
-			respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidHoldingID))
+			respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidHoldingID))
 	}
 
-	day, err := date.Parse(c.Param(fieldDate))
+	day, err := date.Parse(r.PathValue(fieldDate))
 	if err != nil {
 		return uuid.Nil, date.Date{}, written(
-			respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidValueDate))
+			respondError(w, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidValueDate))
 	}
 
 	return id, day, nil
 }
 
-func respondHoldingError(c echo.Context, err error) error {
+func respondHoldingError(w http.ResponseWriter, err error) error {
 	var (
 		field   string
 		message = err.Error()
@@ -206,11 +205,11 @@ func respondHoldingError(c echo.Context, err error) error {
 	)
 	switch {
 	case errors.Is(err, holding.ErrNotFound):
-		return respondError(c, http.StatusNotFound, ErrCodeHoldingNotFound, ErrMessageHoldingNotFound)
+		return respondError(w, http.StatusNotFound, ErrCodeHoldingNotFound, ErrMessageHoldingNotFound)
 	case errors.Is(err, holding.ErrValueNotFound):
-		return respondError(c, http.StatusNotFound, ErrCodeHoldingValueNotFound, ErrMessageHoldingValueNotFound)
+		return respondError(w, http.StatusNotFound, ErrCodeHoldingValueNotFound, ErrMessageHoldingValueNotFound)
 	case errors.Is(err, holding.ErrNameExists):
-		return respondError(c, http.StatusConflict, ErrCodeHoldingNameExists, ErrMessageHoldingNameExists)
+		return respondError(w, http.StatusConflict, ErrCodeHoldingNameExists, ErrMessageHoldingNameExists)
 	case errors.Is(err, holding.ErrNameEmpty), errors.Is(err, holding.ErrNameLong):
 		field = fieldName
 	case errors.Is(err, holding.ErrInvalidSide):
@@ -225,10 +224,10 @@ func respondHoldingError(c echo.Context, err error) error {
 		// На PUT ошибка приходит обёрнутой сервисом, а текст уходит клиенту в поле формы.
 		field, message = planErr.Field, planErr.Error()
 	default:
-		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+		return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 
-	return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+	return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 		ErrorDetail{Field: field, Message: message, Code: ErrCodeValidationError})
 }
 

@@ -6,7 +6,6 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/user"
@@ -31,37 +30,37 @@ func NewUserHandler(userService services.UserService, authService AuthService) *
 }
 
 // respondUserServiceError — ошибки UserService в envelope; общая для /users и /me.
-func respondUserServiceError(c echo.Context, err error) error {
+func respondUserServiceError(w http.ResponseWriter, err error) error {
 	switch {
 	case errors.Is(err, services.ErrValidationFailed):
-		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, err.Error()))
 	case errors.Is(err, services.ErrEmailAlreadyExists):
-		return respondError(c, http.StatusConflict, ErrCodeEmailTaken, ErrMessageEmailTaken)
+		return respondError(w, http.StatusConflict, ErrCodeEmailTaken, ErrMessageEmailTaken)
 	case errors.Is(err, services.ErrUserNotFound):
-		return HandleNotFoundError(c, entityUser)
+		return handleNotFoundError(w, entityUser)
 	case errors.Is(err, services.ErrFamilyNotFound):
-		return respondError(c, http.StatusBadRequest, ErrCodeFamilyNotFound, ErrMessageFamilyNotFound)
+		return respondError(w, http.StatusBadRequest, ErrCodeFamilyNotFound, ErrMessageFamilyNotFound)
 	case errors.Is(err, services.ErrCannotDeactivateSelf):
-		return respondError(c, http.StatusConflict, ErrCodeCannotDeactivateSelf, ErrMessageCannotDeactivate)
+		return respondError(w, http.StatusConflict, ErrCodeCannotDeactivateSelf, ErrMessageCannotDeactivate)
 	case errors.Is(err, services.ErrLastAdmin):
-		return respondError(c, http.StatusConflict, ErrCodeLastAdmin, ErrMessageLastAdmin)
+		return respondError(w, http.StatusConflict, ErrCodeLastAdmin, ErrMessageLastAdmin)
 	case errors.Is(err, services.ErrInvalidRole):
-		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			ErrorDetail{Field: fieldRole, Message: "invalid role", Code: ErrCodeValidationError})
 	default:
-		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+		return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 }
 
-func (h *UserHandler) CreateUser(c echo.Context) error {
+func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) error {
 	var req CreateUserRequest
-	if err := c.Bind(&req); err != nil {
-		return respondBindError(c, err)
+	if err := decodeJSON(r, &req); err != nil {
+		return respondBindError(w, err)
 	}
 
 	if validationErr := h.validator.Struct(&req); validationErr != nil {
-		return respondValidationErrors(c, validationErr)
+		return respondValidationErrors(w, validationErr)
 	}
 
 	// Convert API request to DTO
@@ -74,49 +73,49 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 	}
 
 	// Call service
-	createdUser, err := h.userService.CreateUser(c.Request().Context(), userDTO)
+	createdUser, err := h.userService.CreateUser(r.Context(), userDTO)
 	if err != nil {
-		return respondUserServiceError(c, err)
+		return respondUserServiceError(w, err)
 	}
 
 	// Convert to API response
 	response := toUserResponse(createdUser)
 
-	return respondAPI(c, http.StatusCreated, response)
+	return respondAPI(w, http.StatusCreated, response)
 }
 
-func (h *UserHandler) GetUserByID(c echo.Context) error {
-	idParam := c.Param("id")
+func (h *UserHandler) GetUserByID(w http.ResponseWriter, r *http.Request) error {
+	idParam := r.PathValue("id")
 	id, err := uuid.Parse(idParam)
 	if err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
+		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
 	}
 
 	// Call service
-	foundUser, err := h.userService.GetUserByID(c.Request().Context(), id)
+	foundUser, err := h.userService.GetUserByID(r.Context(), id)
 	if err != nil {
-		return respondUserServiceError(c, err)
+		return respondUserServiceError(w, err)
 	}
 
 	// Convert to API response
 	response := toUserResponse(foundUser)
 
-	return respondAPI(c, http.StatusOK, response)
+	return respondAPI(w, http.StatusOK, response)
 }
 
-func (h *UserHandler) UpdateUser(c echo.Context) error {
-	idParam := c.Param("id")
+func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) error {
+	idParam := r.PathValue("id")
 	id, err := uuid.Parse(idParam)
 	if err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
+		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
 	}
 
 	var req UpdateUserRequest
-	if bindErr := c.Bind(&req); bindErr != nil {
-		return respondBindError(c, bindErr)
+	if bindErr := decodeJSON(r, &req); bindErr != nil {
+		return respondBindError(w, bindErr)
 	}
 	if validationErr := h.validator.Struct(&req); validationErr != nil {
-		return respondValidationErrors(c, validationErr)
+		return respondValidationErrors(w, validationErr)
 	}
 
 	// Convert API request to DTO
@@ -127,15 +126,15 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 	}
 
 	// Call service
-	updatedUser, err := h.userService.UpdateUser(c.Request().Context(), id, updateDTO)
+	updatedUser, err := h.userService.UpdateUser(r.Context(), id, updateDTO)
 	if err != nil {
-		return respondUserServiceError(c, err)
+		return respondUserServiceError(w, err)
 	}
 
 	// Convert to API response
 	response := toUserResponse(updatedUser)
 
-	return respondAPI(c, http.StatusOK, response)
+	return respondAPI(w, http.StatusOK, response)
 }
 
 // toUserResponse раскладывает доменного пользователя в API-форму.
@@ -153,15 +152,15 @@ func toUserResponse(u *user.User) UserResponse {
 }
 
 // GetUsers отдаёт всех пользователей семьи; группа /users закрыта adminOnly.
-func (h *UserHandler) GetUsers(c echo.Context) error {
-	page, pageErr := parsePagination(c)
+func (h *UserHandler) GetUsers(w http.ResponseWriter, r *http.Request) error {
+	page, pageErr := parsePagination(w, r)
 	if pageErr != nil {
 		return ignoreWritten(pageErr)
 	}
 
-	users, err := h.userService.GetUsers(c.Request().Context())
+	users, err := h.userService.GetUsers(r.Context())
 	if err != nil {
-		return respondUserServiceError(c, err)
+		return respondUserServiceError(w, err)
 	}
 
 	response := make([]UserResponse, 0, page.Limit)
@@ -169,80 +168,80 @@ func (h *UserHandler) GetUsers(c echo.Context) error {
 		response = append(response, toUserResponse(u))
 	}
 
-	return respondList(c, response, page, len(users))
+	return respondList(w, response, page, len(users))
 }
 
 // PatchUser меняет роль и/или активность одной записью: при отказе не применено ни одно поле.
 // Оба правила (последний админ, самодеактивация) приходят сюда как sentinel-ошибки -> 409.
-func (h *UserHandler) PatchUser(c echo.Context) error {
-	idParam := c.Param("id")
+func (h *UserHandler) PatchUser(w http.ResponseWriter, r *http.Request) error {
+	idParam := r.PathValue("id")
 	id, err := uuid.Parse(idParam)
 	if err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
+		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
 	}
 
 	var req PatchUserRequest
-	if bindErr := c.Bind(&req); bindErr != nil {
-		return respondBindError(c, bindErr)
+	if bindErr := decodeJSON(r, &req); bindErr != nil {
+		return respondBindError(w, bindErr)
 	}
 
 	if validationErr := h.validator.Struct(&req); validationErr != nil {
-		return respondValidationErrors(c, validationErr)
+		return respondValidationErrors(w, validationErr)
 	}
 	if req.Role == nil && req.IsActive == nil {
-		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, ErrMessageNoFields))
 	}
 
 	// Актор — владелец токена: запрет самодеактивации.
-	principal, principalErr := auth.FromContext(c)
+	principal, principalErr := auth.PrincipalFromContext(r.Context())
 	if principalErr != nil {
-		return respondUnauthorized(c)
+		return respondUnauthorized(w)
 	}
 
-	ctx := c.Request().Context()
+	ctx := r.Context()
 	var role *user.Role
 	if req.Role != nil {
-		r := user.Role(*req.Role)
-		role = &r
+		parsed := user.Role(*req.Role)
+		role = &parsed
 	}
 	if patchErr := h.userService.PatchUser(ctx, id, role, req.IsActive, principal.UserID); patchErr != nil {
-		return respondUserServiceError(c, patchErr)
+		return respondUserServiceError(w, patchErr)
 	}
 
 	updatedUser, err := h.userService.GetUserByID(ctx, id)
 	if err != nil {
-		return respondUserServiceError(c, err)
+		return respondUserServiceError(w, err)
 	}
 
-	return respondAPI(c, http.StatusOK, toUserResponse(updatedUser))
+	return respondAPI(w, http.StatusOK, toUserResponse(updatedUser))
 }
 
 // SetUserPassword задаёт пароль без текущего; все сессии пользователя отзываются.
-func (h *UserHandler) SetUserPassword(c echo.Context) error {
-	id, err := uuid.Parse(c.Param("id"))
+func (h *UserHandler) SetUserPassword(w http.ResponseWriter, r *http.Request) error {
+	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
+		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
 	}
 
 	var req SetPasswordRequest
-	if bindErr := c.Bind(&req); bindErr != nil {
-		return respondBindError(c, bindErr)
+	if bindErr := decodeJSON(r, &req); bindErr != nil {
+		return respondBindError(w, bindErr)
 	}
 	if validationErr := h.validator.Struct(&req); validationErr != nil {
-		return respondValidationErrors(c, validationErr)
+		return respondValidationErrors(w, validationErr)
 	}
 
-	if err = h.authService.AdminSetPassword(c.Request().Context(), id, req.NewPassword); err != nil {
+	if err = h.authService.AdminSetPassword(r.Context(), id, req.NewPassword); err != nil {
 		switch {
 		case errors.Is(err, user.ErrNotFound):
-			return HandleNotFoundError(c, entityUser)
+			return handleNotFoundError(w, entityUser)
 		case errors.Is(err, auth.ErrInvalidPassword):
-			return respondPasswordPolicyError(c)
+			return respondPasswordPolicyError(w)
 		default:
-			return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+			return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 		}
 	}
 
-	return c.NoContent(http.StatusNoContent)
+	return noContent(w)
 }

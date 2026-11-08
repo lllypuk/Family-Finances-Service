@@ -47,7 +47,7 @@ type listener interface {
 	Shutdown(ctx context.Context) error
 }
 
-// metricsListener приводит служебный *http.Server к listener: он поднимается сам, без echo.
+// metricsListener приводит служебный *http.Server к listener: он поднимается сам, сам.
 type metricsListener struct {
 	*http.Server
 }

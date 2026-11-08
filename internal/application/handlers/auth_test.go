@@ -1,7 +1,6 @@
 package handlers_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,7 +14,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -138,24 +136,22 @@ func newAuthHandler(svc *fakeAuthService) *handlers.AuthHandler {
 		auth.NewRateLimiter(nil),
 		slog.New(slog.DiscardHandler),
 		handlers.NopLoginObserver{},
+		auth.ClientIP(nil),
 	)
 }
 
-// principalContext — контекст запроса с principal, как его кладёт auth.RequireBearer.
-func principalContext(method, path string, body string, p *auth.Principal) (echo.Context, *httptest.ResponseRecorder) {
-	e := echo.New()
+// principalRequest — запрос с principal в контексте, как его кладёт auth.RequireBearerHTTP.
+func principalRequest(method, path string, body string, p *auth.Principal) (*http.Request, *httptest.ResponseRecorder) {
 	var reader io.Reader
 	if body != "" {
 		reader = strings.NewReader(body)
 	}
 	req := httptest.NewRequest(method, path, reader)
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
+	req.Header.Set("Content-Type", "application/json")
 	if p != nil {
-		c.Set(auth.ContextKey, p)
+		req = req.WithContext(auth.WithPrincipal(req.Context(), p))
 	}
-	return c, rec
+	return req, httptest.NewRecorder()
 }
 
 func principalFor(svc *fakeAuthService) *auth.Principal {
@@ -181,9 +177,9 @@ func loginBody(email, password string) string {
 // loginFrom — POST /auth/login с указанного RemoteAddr; лимитер по IP считает именно его.
 func loginFrom(t *testing.T, h *handlers.AuthHandler, ip, email, password string) *httptest.ResponseRecorder {
 	t.Helper()
-	c, rec := principalContext(http.MethodPost, "/api/v1/auth/login", loginBody(email, password), nil)
-	c.Request().RemoteAddr = ip + ":4242"
-	require.NoError(t, h.Login(c))
+	req, rec := principalRequest(http.MethodPost, "/api/v1/auth/login", loginBody(email, password), nil)
+	req.RemoteAddr = ip + ":4242"
+	require.NoError(t, h.Login(rec, req))
 	return rec
 }
 
@@ -193,9 +189,14 @@ func ipN(n int) string {
 
 func TestAuthHandler_Login_Success(t *testing.T) {
 	svc := newFakeAuthService()
-	c, rec := principalContext(http.MethodPost, "/api/v1/auth/login", loginBody(fakeLoginEmail, fakeLoginPassword), nil)
+	req, rec := principalRequest(
+		http.MethodPost,
+		"/api/v1/auth/login",
+		loginBody(fakeLoginEmail, fakeLoginPassword),
+		nil,
+	)
 
-	require.NoError(t, newAuthHandler(svc).Login(c))
+	require.NoError(t, newAuthHandler(svc).Login(rec, req))
 
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	var body handlers.APIResponse[handlers.LoginResponse]
@@ -209,19 +210,24 @@ func TestAuthHandler_Login_Success(t *testing.T) {
 
 func TestAuthHandler_Login_EmailNormalized(t *testing.T) {
 	svc := newFakeAuthService()
-	c, rec := principalContext(http.MethodPost, "/api/v1/auth/login",
+	req, rec := principalRequest(http.MethodPost, "/api/v1/auth/login",
 		loginBody("Member@Example.COM", fakeLoginPassword), nil)
 
-	require.NoError(t, newAuthHandler(svc).Login(c))
+	require.NoError(t, newAuthHandler(svc).Login(rec, req))
 
 	assert.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 }
 
 func TestAuthHandler_Login_InvalidCredentials(t *testing.T) {
 	svc := newFakeAuthService()
-	c, rec := principalContext(http.MethodPost, "/api/v1/auth/login", loginBody(fakeLoginEmail, "wrong-password"), nil)
+	req, rec := principalRequest(
+		http.MethodPost,
+		"/api/v1/auth/login",
+		loginBody(fakeLoginEmail, "wrong-password"),
+		nil,
+	)
 
-	require.NoError(t, newAuthHandler(svc).Login(c))
+	require.NoError(t, newAuthHandler(svc).Login(rec, req))
 
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	assert.Equal(t, "INVALID_CREDENTIALS", decodeError(t, rec).Error.Code)
@@ -230,9 +236,14 @@ func TestAuthHandler_Login_InvalidCredentials(t *testing.T) {
 func TestAuthHandler_Login_SetupRequired(t *testing.T) {
 	svc := newFakeAuthService()
 	svc.loginErr = auth.ErrSetupRequired
-	c, rec := principalContext(http.MethodPost, "/api/v1/auth/login", loginBody(fakeLoginEmail, fakeLoginPassword), nil)
+	req, rec := principalRequest(
+		http.MethodPost,
+		"/api/v1/auth/login",
+		loginBody(fakeLoginEmail, fakeLoginPassword),
+		nil,
+	)
 
-	require.NoError(t, newAuthHandler(svc).Login(c))
+	require.NoError(t, newAuthHandler(svc).Login(rec, req))
 
 	assert.Equal(t, http.StatusConflict, rec.Code)
 	assert.Equal(t, "SETUP_REQUIRED", decodeError(t, rec).Error.Code)
@@ -241,9 +252,14 @@ func TestAuthHandler_Login_SetupRequired(t *testing.T) {
 func TestAuthHandler_Login_StorageFailure(t *testing.T) {
 	svc := newFakeAuthService()
 	svc.loginErr = errors.New("db down")
-	c, rec := principalContext(http.MethodPost, "/api/v1/auth/login", loginBody(fakeLoginEmail, fakeLoginPassword), nil)
+	req, rec := principalRequest(
+		http.MethodPost,
+		"/api/v1/auth/login",
+		loginBody(fakeLoginEmail, fakeLoginPassword),
+		nil,
+	)
 
-	require.NoError(t, newAuthHandler(svc).Login(c))
+	require.NoError(t, newAuthHandler(svc).Login(rec, req))
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.Equal(t, "INTERNAL_ERROR", decodeError(t, rec).Error.Code)
@@ -275,9 +291,9 @@ func TestAuthHandler_Login_Validation(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			svc := newFakeAuthService()
-			c, rec := principalContext(http.MethodPost, "/api/v1/auth/login", tc.body, nil)
+			req, rec := principalRequest(http.MethodPost, "/api/v1/auth/login", tc.body, nil)
 
-			require.NoError(t, newAuthHandler(svc).Login(c))
+			require.NoError(t, newAuthHandler(svc).Login(rec, req))
 
 			assert.Equal(t, tc.code, rec.Code, rec.Body.String())
 			if tc.field != "" {
@@ -295,22 +311,27 @@ func TestAuthHandler_Login_RateLimited(t *testing.T) {
 	handler := newAuthHandler(svc)
 
 	for range auth.IPLimit {
-		c, rec := principalContext(
+		req, rec := principalRequest(
 			http.MethodPost,
 			"/api/v1/auth/login",
 			loginBody(fakeLoginEmail, "wrong-password"),
 			nil,
 		)
-		require.NoError(t, handler.Login(c))
+		require.NoError(t, handler.Login(rec, req))
 		require.Equal(t, http.StatusUnauthorized, rec.Code)
 	}
 
-	c, rec := principalContext(http.MethodPost, "/api/v1/auth/login", loginBody(fakeLoginEmail, fakeLoginPassword), nil)
-	require.NoError(t, handler.Login(c))
+	req, rec := principalRequest(
+		http.MethodPost,
+		"/api/v1/auth/login",
+		loginBody(fakeLoginEmail, fakeLoginPassword),
+		nil,
+	)
+	require.NoError(t, handler.Login(rec, req))
 
 	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
 	assert.Equal(t, "RATE_LIMITED", decodeError(t, rec).Error.Code)
-	assert.Equal(t, strconv.Itoa(int(auth.IPWindow.Seconds())), rec.Header().Get(echo.HeaderRetryAfter))
+	assert.Equal(t, strconv.Itoa(int(auth.IPWindow.Seconds())), rec.Header().Get("Retry-After"))
 }
 
 // Успешный вход сбрасывает счётчик email (иначе владелец, перебравший пароли с разных
@@ -355,9 +376,9 @@ func TestAuthHandler_Login_EmailLimitIgnoresCase(t *testing.T) {
 func TestAuthHandler_Logout(t *testing.T) {
 	t.Run("current session removed", func(t *testing.T) {
 		svc := newFakeAuthService()
-		c, rec := principalContext(http.MethodPost, "/api/v1/auth/logout", "", principalFor(svc))
+		req, rec := principalRequest(http.MethodPost, "/api/v1/auth/logout", "", principalFor(svc))
 
-		require.NoError(t, newAuthHandler(svc).Logout(c))
+		require.NoError(t, newAuthHandler(svc).Logout(rec, req))
 
 		assert.Equal(t, http.StatusNoContent, rec.Code)
 		assert.Equal(t, []uuid.UUID{svc.session.ID}, svc.loggedOut)
@@ -366,18 +387,18 @@ func TestAuthHandler_Logout(t *testing.T) {
 	t.Run("already revoked is still 204", func(t *testing.T) {
 		svc := newFakeAuthService()
 		svc.logoutErr = auth.ErrSessionNotFound
-		c, rec := principalContext(http.MethodPost, "/api/v1/auth/logout", "", principalFor(svc))
+		req, rec := principalRequest(http.MethodPost, "/api/v1/auth/logout", "", principalFor(svc))
 
-		require.NoError(t, newAuthHandler(svc).Logout(c))
+		require.NoError(t, newAuthHandler(svc).Logout(rec, req))
 
 		assert.Equal(t, http.StatusNoContent, rec.Code)
 	})
 
 	t.Run("no principal", func(t *testing.T) {
 		svc := newFakeAuthService()
-		c, rec := principalContext(http.MethodPost, "/api/v1/auth/logout", "", nil)
+		req, rec := principalRequest(http.MethodPost, "/api/v1/auth/logout", "", nil)
 
-		require.NoError(t, newAuthHandler(svc).Logout(c))
+		require.NoError(t, newAuthHandler(svc).Logout(rec, req))
 
 		assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	})
@@ -385,9 +406,9 @@ func TestAuthHandler_Logout(t *testing.T) {
 	t.Run("storage failure is 500", func(t *testing.T) {
 		svc := newFakeAuthService()
 		svc.logoutErr = errors.New("db down")
-		c, rec := principalContext(http.MethodPost, "/api/v1/auth/logout", "", principalFor(svc))
+		req, rec := principalRequest(http.MethodPost, "/api/v1/auth/logout", "", principalFor(svc))
 
-		require.NoError(t, newAuthHandler(svc).Logout(c))
+		require.NoError(t, newAuthHandler(svc).Logout(rec, req))
 
 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
 		assert.Equal(t, "INTERNAL_ERROR", decodeError(t, rec).Error.Code)
@@ -400,8 +421,8 @@ func TestAuthHandler_ListSessions(t *testing.T) {
 	foreign := auth.NewSession(uuid.New(), "foreign-hash", "Stranger", time.Now())
 	svc.sessions = []*auth.Session{svc.session, other, foreign}
 
-	c, rec := principalContext(http.MethodGet, "/api/v1/auth/sessions", "", principalFor(svc))
-	require.NoError(t, newAuthHandler(svc).ListSessions(c))
+	req, rec := principalRequest(http.MethodGet, "/api/v1/auth/sessions", "", principalFor(svc))
+	require.NoError(t, newAuthHandler(svc).ListSessions(rec, req))
 
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	var body handlers.APIResponse[[]handlers.SessionResponse]
@@ -420,9 +441,9 @@ func TestAuthHandler_ListSessions(t *testing.T) {
 
 func TestAuthHandler_ListSessions_BadLimit(t *testing.T) {
 	svc := newFakeAuthService()
-	c, rec := principalContext(http.MethodGet, "/api/v1/auth/sessions?limit=0", "", principalFor(svc))
+	req, rec := principalRequest(http.MethodGet, "/api/v1/auth/sessions?limit=0", "", principalFor(svc))
 
-	require.NoError(t, newAuthHandler(svc).ListSessions(c))
+	require.NoError(t, newAuthHandler(svc).ListSessions(rec, req))
 
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 }
@@ -430,9 +451,9 @@ func TestAuthHandler_ListSessions_BadLimit(t *testing.T) {
 func TestAuthHandler_ListSessions_StorageFailure(t *testing.T) {
 	svc := newFakeAuthService()
 	svc.listErr = errors.New("db down")
-	c, rec := principalContext(http.MethodGet, "/api/v1/auth/sessions", "", principalFor(svc))
+	req, rec := principalRequest(http.MethodGet, "/api/v1/auth/sessions", "", principalFor(svc))
 
-	require.NoError(t, newAuthHandler(svc).ListSessions(c))
+	require.NoError(t, newAuthHandler(svc).ListSessions(rec, req))
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.Equal(t, "INTERNAL_ERROR", decodeError(t, rec).Error.Code)
@@ -446,10 +467,9 @@ func TestAuthHandler_RevokeSession(t *testing.T) {
 	handler := newAuthHandler(svc)
 
 	revoke := func(id string) *httptest.ResponseRecorder {
-		c, rec := principalContext(http.MethodDelete, "/api/v1/auth/sessions/"+id, "", principalFor(svc))
-		c.SetParamNames("id")
-		c.SetParamValues(id)
-		require.NoError(t, handler.RevokeSession(c))
+		req, rec := principalRequest(http.MethodDelete, "/api/v1/auth/sessions/"+id, "", principalFor(svc))
+		req.SetPathValue("id", id)
+		require.NoError(t, handler.RevokeSession(rec, req))
 		return rec
 	}
 
@@ -481,19 +501,22 @@ func TestAuthHandler_RevokeSession(t *testing.T) {
 // Ответ логина не должен зависеть от того, есть ли тело: пустой JSON — 422, не 500.
 func TestAuthHandler_Login_EmptyBody(t *testing.T) {
 	svc := newFakeAuthService()
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBufferString("{}"))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
+	req, rec := principalRequest(http.MethodPost, "/api/v1/auth/login", "{}", nil)
 
-	require.NoError(t, newAuthHandler(svc).Login(e.NewContext(req, rec)))
+	require.NoError(t, newAuthHandler(svc).Login(rec, req))
 
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 }
 
 // outcomeHandler — хендлер с настоящим счётчиком реестра вместо заглушки.
 func outcomeHandler(svc *fakeAuthService, m *metrics.Metrics) *handlers.AuthHandler {
-	return handlers.NewAuthHandler(svc, auth.NewRateLimiter(nil), slog.New(slog.DiscardHandler), m.Login())
+	return handlers.NewAuthHandler(
+		svc,
+		auth.NewRateLimiter(nil),
+		slog.New(slog.DiscardHandler),
+		m.Login(),
+		auth.ClientIP(nil),
+	)
 }
 
 func scrapeMetrics(t *testing.T, m *metrics.Metrics) string {
@@ -536,9 +559,9 @@ func TestAuthHandler_Login_CountsOutcomes(t *testing.T) {
 				tt.setup(svc)
 			}
 			m := metrics.New("test", slog.New(slog.DiscardHandler))
-			c, _ := principalContext(http.MethodPost, "/api/v1/auth/login", tt.body, nil)
+			req, rec := principalRequest(http.MethodPost, "/api/v1/auth/login", tt.body, nil)
 
-			require.NoError(t, outcomeHandler(svc, m).Login(c))
+			require.NoError(t, outcomeHandler(svc, m).Login(rec, req))
 
 			assert.Contains(t, scrapeMetrics(t, m),
 				`ffs_login_attempts_total{outcome="`+tt.outcome+`"} 1`)
@@ -551,9 +574,9 @@ func TestAuthHandler_Login_CountsRateLimited(t *testing.T) {
 	handler := outcomeHandler(newFakeAuthService(), m)
 
 	for range auth.IPLimit + 1 {
-		c, _ := principalContext(http.MethodPost, "/api/v1/auth/login",
+		req, rec := principalRequest(http.MethodPost, "/api/v1/auth/login",
 			loginBody(fakeLoginEmail, "wrong-password"), nil)
-		require.NoError(t, handler.Login(c))
+		require.NoError(t, handler.Login(rec, req))
 	}
 
 	body := scrapeMetrics(t, m)

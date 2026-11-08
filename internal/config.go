@@ -186,7 +186,7 @@ func (c LLMConfig) validate() error {
 	return nil
 }
 
-// TrustedProxyRanges — разобранный TRUSTED_PROXIES для echo.IPExtractor.
+// TrustedProxyRanges — разобранный TRUSTED_PROXIES для auth.ClientIP.
 func (c *Config) TrustedProxyRanges() ([]*net.IPNet, error) {
 	ranges, err := auth.ParseTrustedProxies(c.Server.TrustedProxies)
 	if err != nil {

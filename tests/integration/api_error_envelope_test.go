@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -45,16 +44,16 @@ func TestAPIErrorEnvelope_ErrorsOutsideHandlers(t *testing.T) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			req := httptest.NewRequest(testCase.method, testCase.target, strings.NewReader(`{}`))
-			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Content-Type", "application/json")
 			if testCase.withAuth {
 				session.Apply(req)
 			}
 			rec := httptest.NewRecorder()
 
-			testServer.Server.Echo().ServeHTTP(rec, req)
+			testServer.Server.ServeHTTP(rec, req)
 
 			require.Equal(t, testCase.status, rec.Code, "тело: %s", rec.Body.String())
-			assert.Contains(t, rec.Header().Get(echo.HeaderContentType), echo.MIMEApplicationJSON)
+			assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
 
 			var response handlers.ErrorResponse
 			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
@@ -157,6 +156,59 @@ func snapshotCases() []snapshotCase {
 			code:   handlers.ErrCodeInvalidBackupName,
 			route:  "/api/v1/backups/:name/download",
 		},
+		{name: "TerminalParamWithSlash", method: http.MethodGet, target: "/api/v1/transactions/a/b", who: whoAdmin,
+			status: 400, code: handlers.ErrCodeInvalidID, route: "/api/v1/transactions/:id"},
+		{name: "EmptyInteriorParam", method: http.MethodPut, target: "/api/v1/users//password", who: whoAdmin,
+			status: 400, code: handlers.ErrCodeInvalidID, route: "/api/v1/users/:id/password"},
+		{name: "NonLeafParamGetPassword", method: http.MethodGet, target: "/api/v1/users/x/password", who: whoAdmin,
+			status: 404, code: notFound, route: "/api/v1/users/*"},
+		{
+			name:   "NonLeafParamDeletePassword",
+			method: http.MethodDelete,
+			target: "/api/v1/users/x/password",
+			who:    whoAdmin,
+			status: 404,
+			code:   notFound,
+			route:  "/api/v1/users/*",
+		},
+		{name: "NonLeafParamUsersTwoSegments", method: http.MethodGet, target: "/api/v1/users/a/b", who: whoAdmin,
+			status: 404, code: notFound, route: "/api/v1/users/*"},
+		{name: "NonLeafParamPasswordTail", method: http.MethodPut, target: "/api/v1/users/x/password/y", who: whoAdmin,
+			status: 404, code: notFound, route: "/api/v1/users/*"},
+		{
+			name:   "NonLeafParamAccountsBalances",
+			method: http.MethodGet,
+			target: "/api/v1/accounts/a/balances",
+			who:    whoAdmin,
+			status: 404,
+			code:   notFound,
+			route:  "/api/v1/accounts/*",
+		},
+		{
+			name:   "NonLeafParamAccountsThreeSegments",
+			method: http.MethodPut,
+			target: "/api/v1/accounts/a/b/c",
+			who:    whoAdmin,
+			status: 404,
+			code:   notFound,
+			route:  "/api/v1/accounts/*",
+		},
+		{name: "NonLeafParamBackupsTwoSegments", method: http.MethodGet, target: "/api/v1/backups/a/b", who: whoAdmin,
+			status: 404, code: notFound, route: "/api/v1/backups/*"},
+		{name: "NonLeafParamBackupDeleteDownload", method: http.MethodDelete, target: "/api/v1/backups/a/download",
+			who: whoAdmin, status: 404, code: notFound, route: "/api/v1/backups/*"},
+		{
+			name:   "LeafParamSessionWithSlash",
+			method: http.MethodDelete,
+			target: "/api/v1/auth/sessions/a/b",
+			who:    whoAdmin,
+			status: 400,
+			code:   handlers.ErrCodeInvalidID,
+			route:  "/api/v1/auth/sessions/:id",
+		},
+		{name: "PercentEncodedUUIDDigit", method: http.MethodGet,
+			target: "/api/v1/transactions/%3123e4567-e89b-12d3-a456-426614174000", who: whoAdmin,
+			status: 400, code: handlers.ErrCodeInvalidID, route: "/api/v1/transactions/:id"},
 		{name: "BodyEmpty", method: http.MethodPost, target: "/api/v1/transactions", who: whoAdmin, body: "",
 			status: 422, code: handlers.ErrCodeValidationError, route: "/api/v1/transactions"},
 		{name: "BodyNull", method: http.MethodPost, target: "/api/v1/transactions", who: whoAdmin, body: "null",
@@ -175,6 +227,11 @@ func snapshotCases() []snapshotCase {
 			code:   handlers.ErrCodeValidationError,
 			route:  "/api/v1/transactions",
 		},
+		{name: "StaticMethodMissGetFallsToParam", method: http.MethodGet, target: "/api/v1/transactions/recognize",
+			who: whoAdmin, status: 400, code: handlers.ErrCodeInvalidID, route: "/api/v1/transactions/:id"},
+		{name: "StaticMethodMissDeleteFallsToParam", method: http.MethodDelete,
+			target: "/api/v1/transactions/bulk-delete", who: whoAdmin, status: 400, code: handlers.ErrCodeInvalidID,
+			route: "/api/v1/transactions/:id"},
 		{name: "Panic", method: http.MethodGet, target: testhelpers.PanicPath,
 			status: 500, code: handlers.ErrCodeInternal, route: testhelpers.PanicPath},
 	}
@@ -183,7 +240,7 @@ func snapshotCases() []snapshotCase {
 func (c snapshotCase) do(t *testing.T, ts *testhelpers.TestServer) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(c.method, c.target, strings.NewReader(c.body))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set("Content-Type", "application/json")
 	switch c.who {
 	case whoAdmin:
 		ts.Auth(t).Apply(req)
@@ -192,7 +249,7 @@ func (c snapshotCase) do(t *testing.T, ts *testhelpers.TestServer) *httptest.Res
 		sess.Apply(req)
 	}
 	rec := httptest.NewRecorder()
-	ts.Server.Echo().ServeHTTP(rec, req)
+	ts.Server.ServeHTTP(rec, req)
 	return rec
 }
 
@@ -206,12 +263,12 @@ func TestAPISnapshot_StatusCodeAndHeaders(t *testing.T) {
 			rec := c.do(t, ts)
 
 			require.Equal(t, c.status, rec.Code, "тело: %s", rec.Body.String())
-			assert.NotEmpty(t, rec.Header().Get(echo.HeaderXRequestID))
+			assert.NotEmpty(t, rec.Header().Get("X-Request-ID"))
 			if c.code == "" {
 				return
 			}
 			assert.Equal(t, c.code, errorCode(t, rec))
-			assert.Contains(t, rec.Header().Get(echo.HeaderContentType), echo.MIMEApplicationJSON)
+			assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
 			for name, want := range c.headers {
 				assert.Equal(t, want, rec.Header().Get(name), name)
 			}
@@ -231,7 +288,7 @@ func TestAPISnapshot_DownloadHeaders(t *testing.T) {
 	rec = bearerRequest(ts, http.MethodGet, "/api/v1/backups/"+created.Data.Name+"/download", admin.Token, nil)
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, `attachment; filename="`+created.Data.Name+`"`, rec.Header().Get("Content-Disposition"))
-	assert.NotEmpty(t, rec.Header().Get(echo.HeaderXRequestID))
+	assert.NotEmpty(t, rec.Header().Get("X-Request-ID"))
 }
 
 func TestAPISnapshot_LoginRateLimitedRetryAfter(t *testing.T) {
@@ -247,5 +304,26 @@ func TestAPISnapshot_LoginRateLimitedRetryAfter(t *testing.T) {
 	require.Equal(t, http.StatusTooManyRequests, rec.Code)
 	assert.Equal(t, handlers.ErrCodeRateLimited, errorCode(t, rec))
 	assert.NotEmpty(t, rec.Header().Get("Retry-After"))
-	assert.NotEmpty(t, rec.Header().Get(echo.HeaderXRequestID))
+	assert.NotEmpty(t, rec.Header().Get("X-Request-ID"))
+}
+
+func TestAPISnapshot_BodyContentType(t *testing.T) {
+	ts := testhelpers.SetupHTTPServer(t)
+	sess := ts.Auth(t)
+
+	for _, ct := range []string{"", "text/plain", "application/jsonp", "Application/JSON"} {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", strings.NewReader(`{}`))
+		if ct != "" {
+			req.Header.Set("Content-Type", ct)
+		}
+		sess.Apply(req)
+		rec := httptest.NewRecorder()
+
+		ts.Server.ServeHTTP(rec, req)
+
+		require.Equal(t, http.StatusBadRequest, rec.Code, "Content-Type %q: %s", ct, rec.Body.String())
+		var resp handlers.ErrorResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		assert.Equal(t, handlers.ErrCodeInvalidRequest, resp.Error.Code)
+	}
 }

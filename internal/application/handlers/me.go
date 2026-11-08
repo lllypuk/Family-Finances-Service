@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/auth"
 	"family-budget-service/internal/services"
@@ -28,79 +27,79 @@ func NewMeHandler(userService services.UserService, authService AuthService) *Me
 }
 
 // GetMe отдаёт текущего пользователя из БД, а не из токена: имя и updated_at в principal не лежат.
-func (h *MeHandler) GetMe(c echo.Context) error {
-	principal, err := auth.FromContext(c)
+func (h *MeHandler) GetMe(w http.ResponseWriter, r *http.Request) error {
+	principal, err := auth.PrincipalFromContext(r.Context())
 	if err != nil {
-		return respondUnauthorized(c)
+		return respondUnauthorized(w)
 	}
 
-	u, err := h.userService.GetUserByID(c.Request().Context(), principal.UserID)
+	u, err := h.userService.GetUserByID(r.Context(), principal.UserID)
 	if err != nil {
-		return respondUserServiceError(c, err)
+		return respondUserServiceError(w, err)
 	}
 
-	return respondAPI(c, http.StatusOK, toUserResponse(u))
+	return respondAPI(w, http.StatusOK, toUserResponse(u))
 }
 
 // UpdateMe меняет имя и email; роль через этот роут не меняется.
-func (h *MeHandler) UpdateMe(c echo.Context) error {
-	principal, err := auth.FromContext(c)
+func (h *MeHandler) UpdateMe(w http.ResponseWriter, r *http.Request) error {
+	principal, err := auth.PrincipalFromContext(r.Context())
 	if err != nil {
-		return respondUnauthorized(c)
+		return respondUnauthorized(w)
 	}
 
 	var req UpdateUserRequest
-	if bindErr := c.Bind(&req); bindErr != nil {
-		return respondBindError(c, bindErr)
+	if bindErr := decodeJSON(r, &req); bindErr != nil {
+		return respondBindError(w, bindErr)
 	}
 	if validationErr := h.validator.Struct(&req); validationErr != nil {
-		return respondValidationErrors(c, validationErr)
+		return respondValidationErrors(w, validationErr)
 	}
 	if req.FirstName == nil && req.LastName == nil && req.Email == nil {
-		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, ErrMessageNoFields))
 	}
 
-	updated, err := h.userService.UpdateUser(c.Request().Context(), principal.UserID, dto.UpdateUserDTO{
+	updated, err := h.userService.UpdateUser(r.Context(), principal.UserID, dto.UpdateUserDTO{
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
 		Email:     req.Email,
 	})
 	if err != nil {
-		return respondUserServiceError(c, err)
+		return respondUserServiceError(w, err)
 	}
 
-	return respondAPI(c, http.StatusOK, toUserResponse(updated))
+	return respondAPI(w, http.StatusOK, toUserResponse(updated))
 }
 
 // ChangePassword — по текущему паролю; отзывает все сессии, кроме той, чьим токеном сделан запрос.
-func (h *MeHandler) ChangePassword(c echo.Context) error {
-	principal, err := auth.FromContext(c)
+func (h *MeHandler) ChangePassword(w http.ResponseWriter, r *http.Request) error {
+	principal, err := auth.PrincipalFromContext(r.Context())
 	if err != nil {
-		return respondUnauthorized(c)
+		return respondUnauthorized(w)
 	}
 
 	var req ChangePasswordRequest
-	if bindErr := c.Bind(&req); bindErr != nil {
-		return respondBindError(c, bindErr)
+	if bindErr := decodeJSON(r, &req); bindErr != nil {
+		return respondBindError(w, bindErr)
 	}
 	if validationErr := h.validator.Struct(&req); validationErr != nil {
-		return respondValidationErrors(c, validationErr)
+		return respondValidationErrors(w, validationErr)
 	}
 
 	err = h.authService.ChangePassword(
-		c.Request().Context(), principal.UserID, req.CurrentPassword, req.NewPassword, principal.SessionID,
+		r.Context(), principal.UserID, req.CurrentPassword, req.NewPassword, principal.SessionID,
 	)
 	if err != nil {
 		switch {
 		case errors.Is(err, auth.ErrInvalidCredentials):
-			return respondError(c, http.StatusUnauthorized, ErrCodeInvalidCredentials, ErrMessageInvalidCredentials)
+			return respondError(w, http.StatusUnauthorized, ErrCodeInvalidCredentials, ErrMessageInvalidCredentials)
 		case errors.Is(err, auth.ErrInvalidPassword):
-			return respondPasswordPolicyError(c)
+			return respondPasswordPolicyError(w)
 		default:
-			return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+			return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 		}
 	}
 
-	return c.NoContent(http.StatusNoContent)
+	return noContent(w)
 }

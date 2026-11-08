@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/services"
@@ -26,17 +25,17 @@ func NewCategoryHandler(categoryService services.CategoryService) *CategoryHandl
 	}
 }
 
-func (h *CategoryHandler) CreateCategory(c echo.Context) error {
+func (h *CategoryHandler) CreateCategory(w http.ResponseWriter, r *http.Request) error {
 	var req CreateCategoryRequest
-	if bindErr := c.Bind(&req); bindErr != nil {
-		return respondBindError(c, bindErr)
+	if bindErr := decodeJSON(r, &req); bindErr != nil {
+		return respondBindError(w, bindErr)
 	}
 
 	if validationErr := h.validator.Struct(req); validationErr != nil {
-		return respondValidationErrors(c, validationErr)
+		return respondValidationErrors(w, validationErr)
 	}
 
-	if handled, err := respondClientID(c, req.ID, h.findCategory, dto.ToCategoryAPIResponse); handled {
+	if handled, err := respondClientID(w, r, req.ID, h.findCategory, dto.ToCategoryAPIResponse); handled {
 		return err
 	}
 
@@ -49,28 +48,28 @@ func (h *CategoryHandler) CreateCategory(c echo.Context) error {
 		ParentID: req.ParentID,
 	}
 
-	newCategory, err := h.categoryService.CreateCategory(c.Request().Context(), createDTO)
+	newCategory, err := h.categoryService.CreateCategory(r.Context(), createDTO)
 	if err != nil {
-		return handleCreateCategoryServiceError(c, err)
+		return handleCreateCategoryServiceError(w, err)
 	}
 
-	return respondAPI(c, http.StatusCreated, dto.ToCategoryAPIResponse(newCategory))
+	return respondAPI(w, http.StatusCreated, dto.ToCategoryAPIResponse(newCategory))
 }
 
 // findCategory ищет категорию по клиентскому id; ошибка означает «не найдена».
-func (h *CategoryHandler) findCategory(c echo.Context, id uuid.UUID) (*category.Category, bool) {
-	found, err := h.categoryService.GetCategoryByID(c.Request().Context(), id)
+func (h *CategoryHandler) findCategory(r *http.Request, id uuid.UUID) (*category.Category, bool) {
+	found, err := h.categoryService.GetCategoryByID(r.Context(), id)
 
 	return found, err == nil
 }
 
-func (h *CategoryHandler) GetCategories(c echo.Context) error {
-	page, pageErr := parsePagination(c)
+func (h *CategoryHandler) GetCategories(w http.ResponseWriter, r *http.Request) error {
+	page, pageErr := parsePagination(w, r)
 	if pageErr != nil {
 		return ignoreWritten(pageErr)
 	}
 
-	typeParam := c.QueryParam("type")
+	typeParam := r.URL.Query().Get("type")
 
 	var typeFilter *category.Type
 	if typeParam != "" {
@@ -78,9 +77,9 @@ func (h *CategoryHandler) GetCategories(c echo.Context) error {
 		typeFilter = &categoryType
 	}
 
-	categories, err := h.categoryService.GetCategories(c.Request().Context(), typeFilter)
+	categories, err := h.categoryService.GetCategories(r.Context(), typeFilter)
 	if err != nil {
-		return respondError(c, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch categories")
+		return respondError(w, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch categories")
 	}
 
 	response := make([]dto.CategoryAPIResponse, 0, page.Limit)
@@ -88,39 +87,39 @@ func (h *CategoryHandler) GetCategories(c echo.Context) error {
 		response = append(response, dto.ToCategoryAPIResponse(cat))
 	}
 
-	return respondList(c, response, page, len(categories))
+	return respondList(w, response, page, len(categories))
 }
 
-func (h *CategoryHandler) GetCategoryByID(c echo.Context) error {
-	id, err := uuid.Parse(c.Param("id"))
+func (h *CategoryHandler) GetCategoryByID(w http.ResponseWriter, r *http.Request) error {
+	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidCategoryID)
+		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidCategoryID)
 	}
 
-	foundCategory, err := h.categoryService.GetCategoryByID(c.Request().Context(), id)
+	foundCategory, err := h.categoryService.GetCategoryByID(r.Context(), id)
 	if err != nil {
-		return respondError(c, http.StatusNotFound, ErrCodeCategoryNotFound, ErrMessageCategoryNotFound)
+		return respondError(w, http.StatusNotFound, ErrCodeCategoryNotFound, ErrMessageCategoryNotFound)
 	}
 
-	return respondAPI(c, http.StatusOK, dto.ToCategoryAPIResponse(foundCategory))
+	return respondAPI(w, http.StatusOK, dto.ToCategoryAPIResponse(foundCategory))
 }
 
-func (h *CategoryHandler) UpdateCategory(c echo.Context) error {
-	id, err := uuid.Parse(c.Param("id"))
+func (h *CategoryHandler) UpdateCategory(w http.ResponseWriter, r *http.Request) error {
+	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidCategoryID)
+		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidCategoryID)
 	}
 
 	var req UpdateCategoryRequest
-	if bindErr := c.Bind(&req); bindErr != nil {
-		return respondBindError(c, bindErr)
+	if bindErr := decodeJSON(r, &req); bindErr != nil {
+		return respondBindError(w, bindErr)
 	}
 
 	if validationErr := h.validator.Struct(req); validationErr != nil {
-		return respondValidationErrors(c, validationErr)
+		return respondValidationErrors(w, validationErr)
 	}
 	if req.Name == nil && req.Color == nil && req.Icon == nil {
-		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, ErrMessageNoFields))
 	}
 
@@ -130,46 +129,46 @@ func (h *CategoryHandler) UpdateCategory(c echo.Context) error {
 		Icon:  req.Icon,
 	}
 
-	updatedCategory, err := h.categoryService.UpdateCategory(c.Request().Context(), id, updateDTO)
+	updatedCategory, err := h.categoryService.UpdateCategory(r.Context(), id, updateDTO)
 	if err != nil {
-		return handleUpdateCategoryServiceError(c, err)
+		return handleUpdateCategoryServiceError(w, err)
 	}
 
-	return respondAPI(c, http.StatusOK, dto.ToCategoryAPIResponse(updatedCategory))
+	return respondAPI(w, http.StatusOK, dto.ToCategoryAPIResponse(updatedCategory))
 }
 
-func (h *CategoryHandler) DeleteCategory(c echo.Context) error {
-	id, err := uuid.Parse(c.Param("id"))
+func (h *CategoryHandler) DeleteCategory(w http.ResponseWriter, r *http.Request) error {
+	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidCategoryID)
+		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidCategoryID)
 	}
 
-	if delErr := h.categoryService.DeleteCategory(c.Request().Context(), id); delErr != nil {
-		return handleDeleteCategoryServiceError(c, delErr)
+	if delErr := h.categoryService.DeleteCategory(r.Context(), id); delErr != nil {
+		return handleDeleteCategoryServiceError(w, delErr)
 	}
 
-	return c.NoContent(http.StatusNoContent)
+	return noContent(w)
 }
 
-func handleCreateCategoryServiceError(c echo.Context, err error) error {
-	return handleCategoryServiceError(c, err, "CREATE_FAILED", "Failed to create category")
+func handleCreateCategoryServiceError(w http.ResponseWriter, err error) error {
+	return handleCategoryServiceError(w, err, "CREATE_FAILED", "Failed to create category")
 }
 
-func handleUpdateCategoryServiceError(c echo.Context, err error) error {
-	return handleCategoryServiceError(c, err, "UPDATE_FAILED", "Failed to update category")
+func handleUpdateCategoryServiceError(w http.ResponseWriter, err error) error {
+	return handleCategoryServiceError(w, err, "UPDATE_FAILED", "Failed to update category")
 }
 
-func handleDeleteCategoryServiceError(c echo.Context, err error) error {
-	return handleCategoryServiceError(c, err, "DELETE_FAILED", "Failed to delete category")
+func handleDeleteCategoryServiceError(w http.ResponseWriter, err error) error {
+	return handleCategoryServiceError(w, err, "DELETE_FAILED", "Failed to delete category")
 }
 
 // handleCategoryServiceError переводит ошибки CategoryService в ответ API: некорректный ввод
 // (несуществующий родитель, третий уровень иерархии, дубль имени) — 422, а не 500;
 // всё остальное — failCode/failMessage вызывающей операции.
-func handleCategoryServiceError(c echo.Context, err error, failCode, failMessage string) error {
+func handleCategoryServiceError(w http.ResponseWriter, err error, failCode, failMessage string) error {
 	switch {
 	case errors.Is(err, services.ErrCategoryNotFound):
-		return respondError(c, http.StatusNotFound, ErrCodeCategoryNotFound, ErrMessageCategoryNotFound)
+		return respondError(w, http.StatusNotFound, ErrCodeCategoryNotFound, ErrMessageCategoryNotFound)
 	case errors.Is(err, services.ErrParentCategoryNotFound),
 		errors.Is(err, services.ErrParentCategoryWrongType),
 		errors.Is(err, services.ErrCategoriesDifferentTypes),
@@ -177,9 +176,9 @@ func handleCategoryServiceError(c echo.Context, err error, failCode, failMessage
 		errors.Is(err, services.ErrCategorySelfParent),
 		errors.Is(err, services.ErrCategoryNameExists),
 		strings.Contains(err.Error(), "validation failed"):
-		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, err.Error()))
 	default:
-		return respondError(c, http.StatusInternalServerError, failCode, failMessage)
+		return respondError(w, http.StatusInternalServerError, failCode, failMessage)
 	}
 }

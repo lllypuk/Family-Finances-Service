@@ -44,7 +44,7 @@ func TestMetrics_ScrapeAfterRequests(t *testing.T) {
 	assert.Contains(t, body, "ffs_build_info{")
 }
 
-// /metrics живёт на отдельном слушателе, поэтому у Echo его нет ни для кого:
+// /metrics живёт на отдельном слушателе, поэтому у API-роутера его нет ни для кого:
 // RequireBearer висит только на группе /api/v1, значит это 404, а не 401.
 func TestMetrics_NotServedByEcho(t *testing.T) {
 	ts := testhelpers.SetupHTTPServer(t)

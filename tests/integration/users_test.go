@@ -43,7 +43,7 @@ func TestUserHandler_Integration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusCreated, rec.Code)
 
@@ -75,7 +75,7 @@ func TestUserHandler_Integration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
@@ -108,7 +108,7 @@ func TestUserHandler_Integration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		require.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
 
@@ -138,7 +138,7 @@ func TestUserHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
@@ -159,7 +159,7 @@ func TestUserHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusNotFound, rec.Code)
 
@@ -195,7 +195,7 @@ func TestUserHandler_Integration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
@@ -223,7 +223,7 @@ func TestUserHandler_Integration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 		require.Equal(t, http.StatusConflict, rec.Code, rec.Body.String())
 
 		var response handlers.ErrorResponse
@@ -247,7 +247,7 @@ func TestUserHandler_Integration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
 		// Настоящего удаления нет: пользователь остаётся, но с is_active=false.
@@ -255,7 +255,7 @@ func TestUserHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec = httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 		require.Equal(t, http.StatusOK, rec.Code)
 
 		var response handlers.APIResponse[handlers.UserResponse]
@@ -281,7 +281,7 @@ func TestUsersAPI_ListAndPatch(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		auth.Apply(req)
 		rec := httptest.NewRecorder()
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		return rec
 	}

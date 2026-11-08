@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -120,14 +119,14 @@ func createValidTransactionRequest() handlers.CreateTransactionRequest {
 	}
 }
 
-// withSessionUser кладёт в контекст владельца токена так же, как auth.RequireBearer
+// withSessionUser кладёт в контекст владельца токена так же, как auth.RequireBearerHTTP
 // на группе /api/v1. Без него API-хендлеры не знают автора записи.
-func withSessionUser(c echo.Context, userID uuid.UUID) {
-	c.Set(auth.ContextKey, &auth.Principal{
+func withSessionUser(r *http.Request, userID uuid.UUID) *http.Request {
+	return r.WithContext(auth.WithPrincipal(r.Context(), &auth.Principal{
 		UserID: userID,
 		Role:   user.RoleAdmin,
 		Email:  "session@example.com",
-	})
+	}))
 }
 
 func testTransaction(id uuid.UUID) *transaction.Transaction {
@@ -153,16 +152,14 @@ func postTransaction(
 ) *httptest.ResponseRecorder {
 	t.Helper()
 
-	e := echo.New()
 	httpReq := httptest.NewRequest(http.MethodPost, "/transactions", bytes.NewBuffer(body))
-	httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	httpReq.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	c := e.NewContext(httpReq, rec)
 	if userID != nil {
-		withSessionUser(c, *userID)
+		httpReq = withSessionUser(httpReq, *userID)
 	}
 
-	require.NoError(t, handler.CreateTransaction(c))
+	require.NoError(t, handler.CreateTransaction(rec, httpReq))
 
 	return rec
 }
@@ -428,11 +425,10 @@ func TestTransactionHandler_GetTransactions_Success(t *testing.T) {
 	service := &stubTransactionService{txs: expectedTransactions, total: len(expectedTransactions)}
 	handler := setupTransactionHandler(service)
 
-	e := echo.New()
 	httpReq := httptest.NewRequest(http.MethodGet, "/transactions", nil)
 	rec := httptest.NewRecorder()
 
-	require.NoError(t, handler.GetTransactions(e.NewContext(httpReq, rec)))
+	require.NoError(t, handler.GetTransactions(rec, httpReq))
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
 	var response handlers.APIResponse[[]handlers.TransactionResponse]
@@ -450,11 +446,10 @@ func TestTransactionHandler_GetTransactions_Success(t *testing.T) {
 func TestTransactionHandler_GetTransactions_FilterErrorIs422(t *testing.T) {
 	handler := setupTransactionHandler(&stubTransactionService{err: dto.ErrInvalidDateRange})
 
-	e := echo.New()
 	httpReq := httptest.NewRequest(http.MethodGet, "/transactions", nil)
 	rec := httptest.NewRecorder()
 
-	require.NoError(t, handler.GetTransactions(e.NewContext(httpReq, rec)))
+	require.NoError(t, handler.GetTransactions(rec, httpReq))
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
 
 	var response handlers.ErrorResponse
@@ -465,11 +460,10 @@ func TestTransactionHandler_GetTransactions_FilterErrorIs422(t *testing.T) {
 func TestTransactionHandler_GetTransactions_ServiceError(t *testing.T) {
 	handler := setupTransactionHandler(&stubTransactionService{err: errors.New("database error")})
 
-	e := echo.New()
 	httpReq := httptest.NewRequest(http.MethodGet, "/transactions", nil)
 	rec := httptest.NewRecorder()
 
-	require.NoError(t, handler.GetTransactions(e.NewContext(httpReq, rec)))
+	require.NoError(t, handler.GetTransactions(rec, httpReq))
 	assert.Equal(t, http.StatusInternalServerError, rec.Code, rec.Body.String())
 
 	var response handlers.ErrorResponse
@@ -495,11 +489,10 @@ func TestTransactionHandler_GetTransactions_WithFilters(t *testing.T) {
 	query.Set("limit", "25")
 	query.Set("offset", "10")
 
-	e := echo.New()
 	httpReq := httptest.NewRequest(http.MethodGet, "/transactions?"+query.Encode(), nil)
 	rec := httptest.NewRecorder()
 
-	require.NoError(t, handler.GetTransactions(e.NewContext(httpReq, rec)))
+	require.NoError(t, handler.GetTransactions(rec, httpReq))
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
 	require.NotNil(t, service.filter)
@@ -540,11 +533,10 @@ func TestTransactionHandler_GetTransactions_CategoryIDs(t *testing.T) {
 			service := &stubTransactionService{txs: []*transaction.Transaction{}}
 			handler := setupTransactionHandler(service)
 
-			e := echo.New()
 			httpReq := httptest.NewRequest(http.MethodGet, "/transactions?"+tt.query.Encode(), nil)
 			rec := httptest.NewRecorder()
 
-			require.NoError(t, handler.GetTransactions(e.NewContext(httpReq, rec)))
+			require.NoError(t, handler.GetTransactions(rec, httpReq))
 			require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 			require.NotNil(t, service.filter)
 			assert.Equal(t, tt.want, service.filter.CategoryIDs)
@@ -590,11 +582,10 @@ func TestTransactionHandler_GetTransactions_InvalidQueryParams(t *testing.T) {
 			service := &stubTransactionService{}
 			handler := setupTransactionHandler(service)
 
-			e := echo.New()
 			httpReq := httptest.NewRequest(http.MethodGet, "http://example.com"+tt.query, nil)
 			rec := httptest.NewRecorder()
 
-			require.NoError(t, handler.GetTransactions(e.NewContext(httpReq, rec)))
+			require.NoError(t, handler.GetTransactions(rec, httpReq))
 			assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
 			var response handlers.ErrorResponse
@@ -762,14 +753,11 @@ func transactionByIDRequest(
 ) *httptest.ResponseRecorder {
 	t.Helper()
 
-	e := echo.New()
 	httpReq := httptest.NewRequest(http.MethodGet, "/transactions/"+id, nil)
 	rec := httptest.NewRecorder()
-	c := e.NewContext(httpReq, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(id)
+	httpReq.SetPathValue("id", id)
 
-	require.NoError(t, handler.GetTransactionByID(c))
+	require.NoError(t, handler.GetTransactionByID(rec, httpReq))
 
 	return rec
 }
@@ -781,15 +769,12 @@ func updateTransactionRequest(
 ) *httptest.ResponseRecorder {
 	t.Helper()
 
-	e := echo.New()
 	httpReq := httptest.NewRequest(http.MethodPut, "/transactions/"+id, bytes.NewBufferString(body))
-	httpReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	httpReq.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	c := e.NewContext(httpReq, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(id)
+	httpReq.SetPathValue("id", id)
 
-	require.NoError(t, handler.UpdateTransaction(c))
+	require.NoError(t, handler.UpdateTransaction(rec, httpReq))
 
 	return rec
 }
@@ -801,14 +786,11 @@ func deleteTransactionRequest(
 ) *httptest.ResponseRecorder {
 	t.Helper()
 
-	e := echo.New()
 	httpReq := httptest.NewRequest(http.MethodDelete, "/transactions/"+id, nil)
 	rec := httptest.NewRecorder()
-	c := e.NewContext(httpReq, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(id)
+	httpReq.SetPathValue("id", id)
 
-	require.NoError(t, handler.DeleteTransaction(c))
+	require.NoError(t, handler.DeleteTransaction(rec, httpReq))
 
 	return rec
 }

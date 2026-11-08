@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -391,7 +390,7 @@ func TestNewHTTPServer(t *testing.T) {
 
 	// Assert
 	assert.NotNil(t, server)
-	assert.NotNil(t, server.Echo()) // Test public Echo() method
+	assert.NotEmpty(t, server.Routes())
 }
 
 func TestNewHTTPServerWithObservability(t *testing.T) {
@@ -414,22 +413,7 @@ func TestNewHTTPServerWithObservability(t *testing.T) {
 
 	// Assert
 	assert.NotNil(t, server)
-	assert.NotNil(t, server.Echo())
-}
-
-func TestHTTPServer_Echo(t *testing.T) {
-	// Setup
-	repos := NewMockRepositories()
-	mockServices := NewMockServices()
-	config := &application.Config{Port: "8080", Host: "localhost"}
-	server := application.NewHTTPServer(&repos.Repositories, mockServices, config)
-
-	// Execute
-	echoInstance := server.Echo()
-
-	// Assert
-	assert.NotNil(t, echoInstance)
-	assert.IsType(t, &echo.Echo{}, echoInstance)
+	assert.NotEmpty(t, server.Routes())
 }
 
 func TestHTTPServer_HealthEndpoint(t *testing.T) {
@@ -444,7 +428,7 @@ func TestHTTPServer_HealthEndpoint(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	// Execute
-	server.Echo().ServeHTTP(rec, req)
+	server.ServeHTTP(rec, req)
 
 	// Assert
 	assert.Equal(t, http.StatusOK, rec.Code)
@@ -460,8 +444,8 @@ func TestHTTPServer_RoutesSetup(t *testing.T) {
 	mockServices := NewMockServices()
 	server := application.NewHTTPServer(&repos.Repositories, mockServices, config)
 
-	// Test that routes are properly set up by checking if the echo instance has routes
-	routes := server.Echo().Routes()
+	// Test that routes are properly set up by checking the registered routes
+	routes := server.Routes()
 	assert.NotEmpty(t, routes)
 
 	// Check for key routes
@@ -490,7 +474,7 @@ func TestHTTPServer_RoutesSetup(t *testing.T) {
 
 	// Кроме /health ничего вне /api/v1 нет: веб-слой удалён (план 03, задача 8).
 	for _, route := range routes {
-		if route.Path == "/health" || route.Method == echo.RouteNotFound {
+		if route.Path == "/health" {
 			continue
 		}
 		assert.True(t, strings.HasPrefix(route.Path, "/api/v1"),
@@ -510,7 +494,7 @@ func TestHTTPServer_MiddlewareSetup(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	// Execute
-	server.Echo().ServeHTTP(rec, req)
+	server.ServeHTTP(rec, req)
 
 	// Assert that middleware headers are present
 	assert.NotEmpty(t, rec.Header().Get("X-Request-ID")) // RequestID middleware
@@ -529,7 +513,7 @@ func TestHTTPServer_WithObservabilityRoutes(t *testing.T) {
 	server := application.NewHTTPServerWithObservability(&repos.Repositories, mockServices, config, obsService)
 
 	// Test that observability routes are properly set up
-	routes := server.Echo().Routes()
+	routes := server.Routes()
 	routePaths := make(map[string]bool)
 	for _, route := range routes {
 		routePaths[route.Method+" "+route.Path] = true
@@ -574,17 +558,6 @@ func TestHTTPServer_StartShutdownInterface(t *testing.T) {
 	_ = ctx
 }
 
-// MockHealthService for testing observability integration
-type MockHealthService struct {
-	mock.Mock
-}
-
-func (m *MockHealthService) HealthHandler() echo.HandlerFunc {
-	return func(c echo.Context) error {
-		return c.JSON(200, map[string]string{"status": "ok"})
-	}
-}
-
 func TestHTTPServer_IntegrationWithRealEndpoints(t *testing.T) {
 	// Setup
 	repos := NewMockRepositories()
@@ -616,7 +589,7 @@ func TestHTTPServer_IntegrationWithRealEndpoints(t *testing.T) {
 		// токена здесь нет и любой запрос к API — 401. Аутентифицированный путь (200)
 		// проверяется на полном стеке: tests/integration/api_auth_test.go.
 		{"GET", "/api/v1/categories", http.StatusUnauthorized},
-		// Несуществующий путь внутри группы тоже отдаёт 401: Echo вешает
+		// Несуществующий путь внутри группы тоже отдаёт 401: роутер вешает
 		// group-middleware на catch-all маршрут группы, и это правильно — анонимный
 		// клиент не должен различать существующие и несуществующие маршруты API.
 		{"GET", "/api/v1/nonexistent", http.StatusUnauthorized},
@@ -627,7 +600,7 @@ func TestHTTPServer_IntegrationWithRealEndpoints(t *testing.T) {
 			req := httptest.NewRequest(tc.method, tc.path, nil)
 			rec := httptest.NewRecorder()
 
-			server.Echo().ServeHTTP(rec, req)
+			server.ServeHTTP(rec, req)
 
 			assert.Equal(t, tc.expected, rec.Code)
 		})
@@ -660,10 +633,10 @@ func TestHTTPServer_UnknownPath_Returns404JSON(t *testing.T) {
 			req := httptest.NewRequest(tc.method, tc.path, nil)
 			rec := httptest.NewRecorder()
 
-			server.Echo().ServeHTTP(rec, req)
+			server.ServeHTTP(rec, req)
 
 			require.Equal(t, tc.status, rec.Code, rec.Body.String())
-			assert.Contains(t, rec.Header().Get(echo.HeaderContentType), echo.MIMEApplicationJSON)
+			assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
 
 			var body handlers.ErrorResponse
 			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body), rec.Body.String())
@@ -705,7 +678,7 @@ func TestHTTPServer_Metrics_CountsRequestsByRouteTemplate(t *testing.T) {
 
 	for _, path := range []string{"/health", "/healthz"} {
 		rec := httptest.NewRecorder()
-		server.Echo().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 	}
 
 	body := metricsText(t, m)
@@ -721,7 +694,7 @@ func TestHTTPServer_Metrics_PanicIsCountedAndAnswered(t *testing.T) {
 	server := application.NewHTTPServer(&repos.Repositories, panickingServices(), config)
 
 	rec := httptest.NewRecorder()
-	server.Echo().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
 
 	require.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.Contains(t, rec.Body.String(), `"error"`)
@@ -740,7 +713,7 @@ func TestHTTPServer_WithoutMetrics_PanicStillAnswered(t *testing.T) {
 	server := application.NewHTTPServer(&repos.Repositories, panickingServices(), config)
 
 	rec := httptest.NewRecorder()
-	server.Echo().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 }

@@ -56,7 +56,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusCreated, rec.Code)
 
@@ -145,7 +145,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 				req.Header.Set("Content-Type", "application/json")
 				rec := httptest.NewRecorder()
 
-				testServer.Server.Echo().ServeHTTP(rec, req)
+				testServer.Server.ServeHTTP(rec, req)
 
 				assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
@@ -194,7 +194,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
 
@@ -225,7 +225,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
@@ -250,7 +250,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusNotFound, rec.Code)
 	})
@@ -262,7 +262,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 	})
@@ -296,7 +296,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
@@ -349,7 +349,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
@@ -397,7 +397,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		if rec.Code != http.StatusOK {
 			t.Logf("Update budget failed with status %d, response: %s", rec.Code, rec.Body.String())
@@ -449,7 +449,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		if rec.Code != http.StatusOK {
 			t.Logf("Partial update budget failed with status %d, response: %s", rec.Code, rec.Body.String())
@@ -493,7 +493,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
@@ -525,7 +525,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		if rec.Code != http.StatusNoContent {
 			t.Logf("Delete budget failed with status %d, response: %s", rec.Code, rec.Body.String())
@@ -547,7 +547,7 @@ func TestBudgetHandler_Integration(t *testing.T) {
 			afterReq.Header.Set("Content-Type", "application/json")
 			afterRec := httptest.NewRecorder()
 
-			testServer.Server.Echo().ServeHTTP(afterRec, afterReq)
+			testServer.Server.ServeHTTP(afterRec, afterReq)
 
 			assert.Equal(t, http.StatusNotFound, afterRec.Code, "%s %s: %s", tc.method, path, afterRec.Body.String())
 		}
@@ -583,7 +583,7 @@ func TestBudgetAPI_CreateWithClientID_Idempotent(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		session.Apply(req)
 		rec := httptest.NewRecorder()
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		return rec
 	}
@@ -625,7 +625,7 @@ func TestCategoryAPI_CreateWithClientID_Idempotent(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		session.Apply(req)
 		rec := httptest.NewRecorder()
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		return rec
 	}
@@ -678,7 +678,7 @@ func TestBudgetAPI_UtilizationIsPercent(t *testing.T) {
 	createReq.Header.Set("Content-Type", "application/json")
 	session.Apply(createReq)
 	createRec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(createRec, createReq)
+	testServer.Server.ServeHTTP(createRec, createReq)
 	require.Equal(t, http.StatusCreated, createRec.Code, "тело: %s", createRec.Body.String())
 
 	var created handlers.APIResponse[handlers.BudgetResponse]
@@ -695,13 +695,13 @@ func TestBudgetAPI_UtilizationIsPercent(t *testing.T) {
 	txReq.Header.Set("Content-Type", "application/json")
 	session.Apply(txReq)
 	txRec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(txRec, txReq)
+	testServer.Server.ServeHTTP(txRec, txReq)
 	require.Equal(t, http.StatusCreated, txRec.Code, "тело: %s", txRec.Body.String())
 
 	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/budgets/"+created.Data.ID.String(), nil)
 	session.Apply(getReq)
 	getRec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(getRec, getReq)
+	testServer.Server.ServeHTTP(getRec, getReq)
 	require.Equal(t, http.StatusOK, getRec.Code, "тело: %s", getRec.Body.String())
 
 	var fetched handlers.APIResponse[handlers.BudgetResponse]
@@ -723,7 +723,7 @@ func TestBudgetAPI_CreateInvalidStartDate(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	session.Apply(req)
 	rec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
 
@@ -745,7 +745,7 @@ func TestBudgetAPI_CreateMissingStartDate(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	session.Apply(req)
 	rec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
 
@@ -773,7 +773,7 @@ func TestBudgetAPI_CreateAmountAboveMaximum(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	session.Apply(req)
 	rec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
 }
@@ -807,7 +807,7 @@ func TestBudgetAPI_CreateDuplicateNameSamePeriod(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		session.Apply(req)
 		rec := httptest.NewRecorder()
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		return rec
 	}
@@ -847,7 +847,7 @@ func TestBudgetAPI_CreateOverlappingPeriod_Conflict(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		session.Apply(req)
 		rec := httptest.NewRecorder()
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		return rec
 	}
@@ -885,7 +885,7 @@ func TestBudgetAPI_UpdateAmountBelowSpent_Saved(t *testing.T) {
 	createReq.Header.Set("Content-Type", "application/json")
 	session.Apply(createReq)
 	createRec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(createRec, createReq)
+	testServer.Server.ServeHTTP(createRec, createReq)
 	require.Equal(t, http.StatusCreated, createRec.Code, "тело: %s", createRec.Body.String())
 
 	var created handlers.APIResponse[handlers.BudgetResponse]
@@ -902,7 +902,7 @@ func TestBudgetAPI_UpdateAmountBelowSpent_Saved(t *testing.T) {
 	txReq.Header.Set("Content-Type", "application/json")
 	session.Apply(txReq)
 	txRec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(txRec, txReq)
+	testServer.Server.ServeHTTP(txRec, txReq)
 	require.Equal(t, http.StatusCreated, txRec.Code, "тело: %s", txRec.Body.String())
 
 	updBody := mustJSON(t, map[string]any{"amount_minor": 10_000})
@@ -914,7 +914,7 @@ func TestBudgetAPI_UpdateAmountBelowSpent_Saved(t *testing.T) {
 	updReq.Header.Set("Content-Type", "application/json")
 	session.Apply(updReq)
 	updRec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(updRec, updReq)
+	testServer.Server.ServeHTTP(updRec, updReq)
 
 	require.Equal(t, http.StatusOK, updRec.Code, "тело: %s", updRec.Body.String())
 
@@ -951,7 +951,7 @@ func TestBudgetAPI_CreateWithDeletedID_Conflict(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		session.Apply(req)
 		rec := httptest.NewRecorder()
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		return rec
 	}
@@ -961,7 +961,7 @@ func TestBudgetAPI_CreateWithDeletedID_Conflict(t *testing.T) {
 	delReq := httptest.NewRequest(http.MethodDelete, "/api/v1/budgets/"+clientID.String(), nil)
 	session.Apply(delReq)
 	delRec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(delRec, delReq)
+	testServer.Server.ServeHTTP(delRec, delReq)
 	require.Equal(t, http.StatusNoContent, delRec.Code, "тело: %s", delRec.Body.String())
 
 	// Другое имя и другие даты: остаётся один конфликт — по id.
@@ -999,7 +999,7 @@ func TestBudgetAPI_RecreateDeletedNameAndPeriod(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		session.Apply(req)
 		rec := httptest.NewRecorder()
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		return rec
 	}
@@ -1010,7 +1010,7 @@ func TestBudgetAPI_RecreateDeletedNameAndPeriod(t *testing.T) {
 	delReq := httptest.NewRequest(http.MethodDelete, "/api/v1/budgets/"+firstID.String(), nil)
 	session.Apply(delReq)
 	delRec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(delRec, delReq)
+	testServer.Server.ServeHTTP(delRec, delReq)
 	require.Equal(t, http.StatusNoContent, delRec.Code, "тело: %s", delRec.Body.String())
 
 	rec := post(uuid.New())
@@ -1042,7 +1042,7 @@ func TestBudgetAPI_CreateSharedBoundaryDay_Conflict(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		session.Apply(req)
 		rec := httptest.NewRecorder()
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		return rec
 	}
@@ -1088,7 +1088,7 @@ func TestBudgetAPI_UpdateToTakenName_Conflict(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		session.Apply(req)
 		rec := httptest.NewRecorder()
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 		require.Equal(t, http.StatusCreated, rec.Code, "тело: %s", rec.Body.String())
 
 		var created handlers.APIResponse[handlers.BudgetResponse]
@@ -1106,7 +1106,7 @@ func TestBudgetAPI_UpdateToTakenName_Conflict(t *testing.T) {
 	putReq.Header.Set("Content-Type", "application/json")
 	session.Apply(putReq)
 	putRec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(putRec, putReq)
+	testServer.Server.ServeHTTP(putRec, putReq)
 
 	require.Equal(t, http.StatusConflict, putRec.Code, "тело: %s", putRec.Body.String())
 	var response handlers.ErrorResponse
@@ -1137,7 +1137,7 @@ func TestBudgetAPI_UpdateEmptyBody(t *testing.T) {
 	createReq.Header.Set("Content-Type", "application/json")
 	session.Apply(createReq)
 	createRec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(createRec, createReq)
+	testServer.Server.ServeHTTP(createRec, createReq)
 	require.Equal(t, http.StatusCreated, createRec.Code, "тело: %s", createRec.Body.String())
 
 	var created handlers.APIResponse[handlers.BudgetResponse]
@@ -1148,7 +1148,7 @@ func TestBudgetAPI_UpdateEmptyBody(t *testing.T) {
 	putReq.Header.Set("Content-Type", "application/json")
 	session.Apply(putReq)
 	putRec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(putRec, putReq)
+	testServer.Server.ServeHTTP(putRec, putReq)
 
 	require.Equal(t, http.StatusUnprocessableEntity, putRec.Code, "тело: %s", putRec.Body.String())
 	var response handlers.ErrorResponse
@@ -1195,7 +1195,7 @@ func (a *recurringAPI) do(method, path string, body map[string]any) *httptest.Re
 	}
 	a.session.Apply(req)
 	rec := httptest.NewRecorder()
-	a.server.Server.Echo().ServeHTTP(rec, req)
+	a.server.Server.ServeHTTP(rec, req)
 
 	return rec
 }

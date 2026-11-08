@@ -25,7 +25,7 @@ func listCategories(t *testing.T, testServer *testhelpers.TestServer) []handlers
 	testServer.Auth(t).Apply(req)
 	rec := httptest.NewRecorder()
 
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var response handlers.APIResponse[[]handlers.CategoryResponse]
@@ -58,7 +58,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusCreated, rec.Code)
 
@@ -97,7 +97,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
@@ -129,7 +129,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
@@ -174,7 +174,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
@@ -206,7 +206,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 	})
@@ -228,7 +228,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 	})
@@ -253,7 +253,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		require.Equal(t, http.StatusNoContent, rec.Code)
 
@@ -265,7 +265,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(listReq)
 		listRec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(listRec, listReq)
+		testServer.Server.ServeHTTP(listRec, listReq)
 
 		require.Equal(t, http.StatusOK, listRec.Code)
 
@@ -293,7 +293,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		require.Equal(t, http.StatusNoContent, rec.Code, "тело: %s", rec.Body.String())
 
@@ -327,7 +327,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		require.Equal(t, http.StatusNoContent, rec.Code, "тело: %s", rec.Body.String())
 
@@ -355,7 +355,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 			req := httptest.NewRequest(http.MethodDelete, "/api/v1/categories/"+target.ID.String(), nil)
 			testServer.Auth(t).Apply(req)
 			rec := httptest.NewRecorder()
-			testServer.Server.Echo().ServeHTTP(rec, req)
+			testServer.Server.ServeHTTP(rec, req)
 			return rec.Code
 		}
 
@@ -382,7 +382,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		delReq := httptest.NewRequest(http.MethodDelete, "/api/v1/categories/"+child.ID.String(), nil)
 		testServer.Auth(t).Apply(delReq)
 		delRec := httptest.NewRecorder()
-		testServer.Server.Echo().ServeHTTP(delRec, delReq)
+		testServer.Server.ServeHTTP(delRec, delReq)
 		require.Equal(t, http.StatusNoContent, delRec.Code)
 
 		body, err := json.Marshal(handlers.CreateCategoryRequest{
@@ -398,7 +398,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		require.Equal(t, http.StatusCreated, rec.Code, "тело: %s", rec.Body.String())
 
@@ -422,7 +422,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		delReq := httptest.NewRequest(http.MethodDelete, "/api/v1/categories/"+target.ID.String(), nil)
 		testServer.Auth(t).Apply(delReq)
 		delRec := httptest.NewRecorder()
-		testServer.Server.Echo().ServeHTTP(delRec, delReq)
+		testServer.Server.ServeHTTP(delRec, delReq)
 		require.Equal(t, http.StatusNoContent, delRec.Code)
 
 		newName := "Hobby renamed"
@@ -433,7 +433,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusNotFound, rec.Code, "тело: %s", rec.Body.String())
 	})
@@ -459,7 +459,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		// DELETE operations might return 200 or 204, both are valid
 		assert.True(t, rec.Code == http.StatusOK || rec.Code == http.StatusNoContent)
@@ -469,7 +469,7 @@ func TestCategoryHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec = httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
@@ -499,7 +499,7 @@ func TestCategoryAPI_ColorAndIcon_SurviveRoundTrip(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	session.Apply(req)
 	rec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusCreated, rec.Code, "тело: %s", rec.Body.String())
 
 	var created handlers.APIResponse[handlers.CategoryResponse]
@@ -525,7 +525,7 @@ func TestCategoryAPI_ColorAndIcon_SurviveRoundTrip(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	session.Apply(req)
 	rec = httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
 
 	updated := getCategory(t, testServer, session, created.Data.ID)
@@ -544,7 +544,7 @@ func getCategory(
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/categories/"+id.String(), nil)
 	session.Apply(req)
 	rec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
 
 	var response handlers.APIResponse[handlers.CategoryResponse]
@@ -567,7 +567,7 @@ func TestCategoryAPI_UpdateEmptyBody(t *testing.T) {
 	putReq.Header.Set("Content-Type", "application/json")
 	session.Apply(putReq)
 	putRec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(putRec, putReq)
+	testServer.Server.ServeHTTP(putRec, putReq)
 
 	require.Equal(t, http.StatusUnprocessableEntity, putRec.Code, "тело: %s", putRec.Body.String())
 	var response handlers.ErrorResponse

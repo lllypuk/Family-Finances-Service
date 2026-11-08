@@ -26,7 +26,7 @@ const (
 	ErrCodeBadRequest = "BAD_REQUEST"
 	// ErrCodeInternal signals a server-side failure; details stay in the log only.
 	ErrCodeInternal = "INTERNAL_ERROR"
-	// entityUser — имя сущности для HandleNotFoundError: USER_NOT_FOUND / "User not found".
+	// entityUser — имя сущности для handleNotFoundError: USER_NOT_FOUND / "User not found".
 	entityUser = "User"
 	// ErrCodeEmailTaken signals that another user already has the requested email.
 	ErrCodeEmailTaken = "EMAIL_TAKEN"

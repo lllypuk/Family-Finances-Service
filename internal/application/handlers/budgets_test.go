@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -118,14 +117,13 @@ func TestBudgetHandler_CreateBudget_Success(t *testing.T) {
 	service := &stubBudgetService{budget: created}
 	handler := setupBudgetHandler(service)
 
-	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/budgets", strings.NewReader(
 		`{"name":"Food","amount_minor":100000,"period":"monthly","start_date":"2026-01-01","end_date":"2026-01-31"}`,
 	))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
-	require.NoError(t, handler.CreateBudget(e.NewContext(req, rec)))
+	require.NoError(t, handler.CreateBudget(rec, req))
 	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
 
 	var response handlers.APIResponse[handlers.BudgetResponse]
@@ -144,11 +142,10 @@ func TestBudgetHandler_GetBudgets_ActiveOnlyUsesFamilyTimezone(t *testing.T) {
 	service := &stubBudgetService{budgets: []*budget.Budget{testBudget(uuid.New())}}
 	handler := setupBudgetHandler(service)
 
-	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/budgets?active_only=true", nil)
 	rec := httptest.NewRecorder()
 
-	require.NoError(t, handler.GetBudgets(e.NewContext(req, rec)))
+	require.NoError(t, handler.GetBudgets(rec, req))
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
 	var response handlers.APIResponse[[]handlers.BudgetResponse]
@@ -169,11 +166,10 @@ func TestBudgetHandler_GetBudgets_FullListPassesFamilyToday(t *testing.T) {
 	service := &stubBudgetService{budgets: []*budget.Budget{testBudget(uuid.New())}, total: 1}
 	handler := setupBudgetHandler(service)
 
-	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/budgets", nil)
 	rec := httptest.NewRecorder()
 
-	require.NoError(t, handler.GetBudgets(e.NewContext(req, rec)))
+	require.NoError(t, handler.GetBudgets(rec, req))
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
 	tokyo, err := time.LoadLocation("Asia/Tokyo")
@@ -192,14 +188,11 @@ func TestBudgetHandler_BudgetResponse_CarriesSeries(t *testing.T) {
 	handler := setupBudgetHandler(&stubBudgetService{budget: tail})
 
 	budgetID := tail.ID
-	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/budgets/"+budgetID.String(), nil)
 	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(budgetID.String())
+	req.SetPathValue("id", budgetID.String())
 
-	require.NoError(t, handler.GetBudgetByID(c))
+	require.NoError(t, handler.GetBudgetByID(rec, req))
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
 	var response handlers.APIResponse[handlers.BudgetResponse]
@@ -213,14 +206,11 @@ func TestBudgetHandler_GetBudgetByID_NotFound(t *testing.T) {
 	handler := setupBudgetHandler(&stubBudgetService{err: services.ErrBudgetNotFoundService})
 
 	budgetID := uuid.New()
-	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/budgets/"+budgetID.String(), nil)
 	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(budgetID.String())
+	req.SetPathValue("id", budgetID.String())
 
-	require.NoError(t, handler.GetBudgetByID(c))
+	require.NoError(t, handler.GetBudgetByID(rec, req))
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 
 	var response handlers.ErrorResponse
@@ -336,15 +326,14 @@ func TestBudgetHandler_CreateBudget_PassesRecurring(t *testing.T) {
 	service := &stubBudgetService{budget: testBudget(uuid.New())}
 	handler := setupBudgetHandler(service)
 
-	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/budgets", strings.NewReader(
 		`{"name":"Food","amount_minor":100000,"period":"monthly",`+
 			`"start_date":"2026-01-01","end_date":"2026-01-31","recurring":true}`,
 	))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
-	require.NoError(t, handler.CreateBudget(e.NewContext(req, rec)))
+	require.NoError(t, handler.CreateBudget(rec, req))
 	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
 
 	require.NotNil(t, service.created)
@@ -356,14 +345,11 @@ func TestBudgetHandler_DeleteBudget_Success(t *testing.T) {
 	handler := setupBudgetHandler(service)
 
 	budgetID := uuid.New()
-	e := echo.New()
 	req := httptest.NewRequest(http.MethodDelete, "/budgets/"+budgetID.String(), nil)
 	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(budgetID.String())
+	req.SetPathValue("id", budgetID.String())
 
-	require.NoError(t, handler.DeleteBudget(c))
+	require.NoError(t, handler.DeleteBudget(rec, req))
 	assert.Equal(t, http.StatusNoContent, rec.Code)
 	require.NotNil(t, service.deleted)
 	assert.Equal(t, budgetID, *service.deleted)
@@ -373,14 +359,11 @@ func TestBudgetHandler_DeleteBudget_NotFound(t *testing.T) {
 	handler := setupBudgetHandler(&stubBudgetService{err: services.ErrBudgetNotFoundService})
 
 	budgetID := uuid.New()
-	e := echo.New()
 	req := httptest.NewRequest(http.MethodDelete, "/budgets/"+budgetID.String(), nil)
 	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(budgetID.String())
+	req.SetPathValue("id", budgetID.String())
 
-	require.NoError(t, handler.DeleteBudget(c))
+	require.NoError(t, handler.DeleteBudget(rec, req))
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
 
@@ -388,15 +371,12 @@ func updateBudgetRequest(t *testing.T, handler *handlers.BudgetHandler, body str
 	t.Helper()
 
 	budgetID := uuid.New()
-	e := echo.New()
 	req := httptest.NewRequest(http.MethodPut, "/budgets/"+budgetID.String(), strings.NewReader(body))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(budgetID.String())
+	req.SetPathValue("id", budgetID.String())
 
-	require.NoError(t, handler.UpdateBudget(c))
+	require.NoError(t, handler.UpdateBudget(rec, req))
 
 	return rec
 }

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -60,7 +59,6 @@ func familyRequest(t *testing.T, service *MockFamilyService, method, body string
 
 	handler := handlers.NewFamilyHandler(service)
 
-	e := echo.New()
 	var reader *bytes.Reader
 	if body == "" {
 		reader = bytes.NewReader(nil)
@@ -68,14 +66,13 @@ func familyRequest(t *testing.T, service *MockFamilyService, method, body string
 		reader = bytes.NewReader([]byte(body))
 	}
 	req := httptest.NewRequest(method, "/api/v1/family", reader)
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
 
 	if method == http.MethodGet {
-		require.NoError(t, handler.GetFamily(c))
+		require.NoError(t, handler.GetFamily(rec, req))
 	} else {
-		require.NoError(t, handler.UpdateFamily(c))
+		require.NoError(t, handler.UpdateFamily(rec, req))
 	}
 
 	return rec

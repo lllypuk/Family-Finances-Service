@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/application"
@@ -191,7 +190,7 @@ type AuthSession struct {
 
 // Apply ставит заголовок Authorization: Bearer.
 func (s *AuthSession) Apply(req *http.Request) {
-	req.Header.Set(echo.HeaderAuthorization, "Bearer "+s.Token)
+	req.Header.Set("Authorization", "Bearer "+s.Token)
 }
 
 // LoginAs выдаёт токен указанному пользователю, минуя проверку пароля:
@@ -290,5 +289,7 @@ const PanicPath = "/__test/panic"
 
 // AddPanicRoute вешает на сервер маршрут, чей хендлер паникует, — для проверки recover и метрик.
 func (ts *TestServer) AddPanicRoute() {
-	ts.Server.Echo().GET(PanicPath, func(echo.Context) error { panic("test panic") })
+	ts.Server.Router().Register(http.MethodGet, PanicPath, func(http.ResponseWriter, *http.Request) error {
+		panic("test panic")
+	})
 }

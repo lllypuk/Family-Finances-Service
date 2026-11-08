@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -212,59 +211,45 @@ func TestParseTrustedProxies(t *testing.T) {
 	require.Error(t, err, "адрес без маски — не CIDR")
 }
 
-func realIP(t *testing.T, extractor echo.IPExtractor, remoteAddr string, xff ...string) string {
-	t.Helper()
-	e := echo.New()
-	e.IPExtractor = extractor
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil)
-	req.RemoteAddr = remoteAddr
-	for _, v := range xff {
-		req.Header.Add(echo.HeaderXForwardedFor, v)
-	}
-	return e.NewContext(req, httptest.NewRecorder()).RealIP()
-}
-
-func TestIPExtractor(t *testing.T) {
+func TestClientIP(t *testing.T) {
 	trusted, err := auth.ParseTrustedProxies("10.0.0.0/8")
 	require.NoError(t, err)
 
-	t.Run("no trusted proxies ignores XFF", func(t *testing.T) {
-		got := realIP(t, auth.IPExtractor(nil), "10.0.0.5:4321", "198.51.100.9")
-		assert.Equal(t, "10.0.0.5", got)
-	})
-
-	t.Run("XFF from trusted proxy", func(t *testing.T) {
-		got := realIP(t, auth.IPExtractor(trusted), "10.0.0.5:4321", "198.51.100.9")
-		assert.Equal(t, "198.51.100.9", got)
-	})
-
-	t.Run("XFF from untrusted peer", func(t *testing.T) {
-		got := realIP(t, auth.IPExtractor(trusted), "192.168.1.5:4321", "198.51.100.9")
-		assert.Equal(t, "192.168.1.5", got)
-	})
-
-	t.Run("XFF chain stops at first untrusted hop", func(t *testing.T) {
-		got := realIP(t, auth.IPExtractor(trusted), "10.0.0.5:4321", "198.51.100.9, 192.168.1.5")
-		assert.Equal(t, "192.168.1.5", got)
-	})
-
-	t.Run("several XFF headers read as one chain", func(t *testing.T) {
-		got := realIP(t, auth.IPExtractor(trusted), "10.0.0.5:4321", "198.51.100.9", "10.0.0.7")
-		assert.Equal(t, "198.51.100.9", got)
-	})
-
-	t.Run("untrusted hop in the middle is the client", func(t *testing.T) {
-		got := realIP(t, auth.IPExtractor(trusted), "10.0.0.5:4321", "203.0.113.1, 198.51.100.9, 10.0.0.7")
-		assert.Equal(t, "198.51.100.9", got)
-	})
-
-	t.Run("malformed XFF value", func(t *testing.T) {
-		got := realIP(t, auth.IPExtractor(trusted), "10.0.0.5:4321", "not-an-ip")
-		assert.Equal(t, "10.0.0.5", got)
-	})
-
-	t.Run("private address outside the listed CIDR is not trusted", func(t *testing.T) {
-		got := realIP(t, auth.IPExtractor(trusted), "10.0.0.5:4321", "192.168.7.7, 10.0.0.9")
-		assert.Equal(t, "192.168.7.7", got)
-	})
+	cases := map[string]struct {
+		trusted []*net.IPNet
+		remote  string
+		xff     []string
+		want    string
+	}{
+		"no trusted proxies ignores XFF": {nil, "10.0.0.5:4321", []string{"198.51.100.9"}, "10.0.0.5"},
+		"no XFF":                         {trusted, "10.0.0.5:4321", nil, "10.0.0.5"},
+		"XFF from trusted proxy":         {trusted, "10.0.0.5:4321", []string{"198.51.100.9"}, "198.51.100.9"},
+		"XFF from untrusted peer":        {trusted, "192.168.1.5:4321", []string{"198.51.100.9"}, "192.168.1.5"},
+		"chain stops at untrusted hop": {
+			trusted, "10.0.0.5:4321", []string{"198.51.100.9, 192.168.1.5"}, "192.168.1.5",
+		},
+		"several headers are one chain": {
+			trusted, "10.0.0.5:4321", []string{"198.51.100.9", "10.0.0.7"}, "198.51.100.9",
+		},
+		"untrusted hop in the middle": {
+			trusted, "10.0.0.5:4321", []string{"203.0.113.1, 198.51.100.9, 10.0.0.7"}, "198.51.100.9",
+		},
+		"malformed value":             {trusted, "10.0.0.5:4321", []string{"not-an-ip"}, "10.0.0.5"},
+		"all hops trusted, leftmost":  {trusted, "10.0.0.5:4321", []string{"10.0.0.2, 10.0.0.3"}, "10.0.0.2"},
+		"private outside CIDR":        {trusted, "10.0.0.5:4321", []string{"192.168.7.7, 10.0.0.9"}, "192.168.7.7"},
+		"bracketed IPv6":              {trusted, "10.0.0.5:4321", []string{"[2001:db8::1]"}, "2001:db8::1"},
+		"RemoteAddr without a port":   {nil, "203.0.113.4", nil, "203.0.113.4"},
+		"RemoteAddr that is no IP":    {nil, "garbage", nil, ""},
+		"IPv6 peer without trust set": {nil, "[2001:db8::2]:80", nil, "2001:db8::2"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.RemoteAddr = tc.remote
+			for _, v := range tc.xff {
+				req.Header.Add("X-Forwarded-For", v)
+			}
+			assert.Equal(t, tc.want, auth.ClientIP(tc.trusted)(req))
+		})
+	}
 }

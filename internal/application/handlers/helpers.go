@@ -5,13 +5,11 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/date"
@@ -52,37 +50,6 @@ func newAPIValidator() *validator.Validate {
 	return v
 }
 
-func apiResponseMeta(c echo.Context) ResponseMeta {
-	return ResponseMeta{
-		RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
-		Timestamp: time.Now(),
-		Version:   apiVersion,
-	}
-}
-
-func respondAPI[T any](c echo.Context, status int, data T) error {
-	return c.JSON(status, APIResponse[T]{
-		Data: data,
-		Meta: apiResponseMeta(c),
-	})
-}
-
-func respondError(
-	c echo.Context,
-	status int,
-	code, message string,
-	details ...ErrorDetail,
-) error {
-	return c.JSON(status, ErrorResponse{
-		Error: APIError{
-			Code:    code,
-			Message: message,
-			Details: details,
-		},
-		Meta: apiResponseMeta(c),
-	})
-}
-
 // familyToday — сегодняшняя дата в часовом поясе семьи (A-06). Семья не прочиталась —
 // UTC: в единственном месте вызова это выбор набора активных бюджетов, не отказ запроса.
 func familyToday(ctx context.Context, families FamilyRepository) date.Date {
@@ -104,95 +71,9 @@ func isNilClientID(id *uuid.UUID) bool {
 	return id != nil && *id == uuid.Nil
 }
 
-// respondNilClientID — 422 на клиентский id из одних нулей.
-func respondNilClientID(c echo.Context) error {
-	return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
-		ErrorDetail{Field: fieldID, Message: "must not be the nil UUID", Code: ErrCodeValidationError})
-}
-
-// respondClientID — контракт идемпотентного POST (A-07), общий для транзакций, бюджетов
-// и категорий: id из одних нулей — 422, уже созданная запись — 200 с ней. Первое значение
-// true означает, что ответ записан и создавать запись нельзя.
-func respondClientID[E, R any](
-	c echo.Context,
-	id *uuid.UUID,
-	find func(echo.Context, uuid.UUID) (E, bool),
-	build func(E) R,
-) (bool, error) {
-	if isNilClientID(id) {
-		return true, respondNilClientID(c)
-	}
-
-	if id == nil {
-		return false, nil
-	}
-
-	existing, found := find(c, *id)
-	if !found {
-		return false, nil
-	}
-
-	return true, respondAPI(c, http.StatusOK, build(existing))
-}
-
 // bodyDetail — деталь для ошибки, не привязанной к конкретному полю запроса.
 func bodyDetail(code, message string) ErrorDetail {
 	return ErrorDetail{Field: fieldBody, Message: message, Code: code}
-}
-
-// respondBindError — 400 на тело, которое не разобралось; текст ошибки Bind — в details.
-// Непонятная дата — ошибка поля, а не сломанный JSON, поэтому 422.
-func respondBindError(c echo.Context, err error) error {
-	if field, ok := date.JSONField(err); ok {
-		if field == "" {
-			field = fieldDate
-		}
-
-		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
-			ErrorDetail{Field: field, Message: "must be a date in YYYY-MM-DD format", Code: ErrCodeValidationError})
-	}
-
-	return respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
-		bodyDetail(ErrCodeInvalidRequest, err.Error()))
-}
-
-// parsePagination разбирает limit/offset. При выходе за границы ответ 422 уже записан,
-// а вызывающему возвращается errResponseAlreadyWritten — гасится через ignoreWritten.
-func parsePagination(c echo.Context) (pageParams, error) {
-	page := pageParams{Limit: defaultLimit, Offset: 0}
-
-	if limitParam := c.QueryParam("limit"); limitParam != "" {
-		limit, err := strconv.Atoi(limitParam)
-		if err != nil || limit < 1 || limit > maxLimit {
-			return page, writeInvalidQueryParam(c, "limit", limitParam,
-				"must be an integer between 1 and "+strconv.Itoa(maxLimit))
-		}
-		page.Limit = limit
-	}
-
-	if offsetParam := c.QueryParam("offset"); offsetParam != "" {
-		offset, err := strconv.Atoi(offsetParam)
-		if err != nil || offset < 0 {
-			return page, writeInvalidQueryParam(c, "offset", offsetParam, "must be a non-negative integer")
-		}
-		page.Offset = offset
-	}
-
-	return page, nil
-}
-
-func writeInvalidQueryParam(c echo.Context, param, value, reason string) error {
-	if err := respondError(
-		c,
-		http.StatusUnprocessableEntity,
-		ErrCodeValidationError,
-		ErrMessageValidationFailed,
-		ErrorDetail{Field: param, Message: reason + `, got "` + value + `"`, Code: ErrCodeInvalidQueryParam},
-	); err != nil {
-		return err
-	}
-
-	return errResponseAlreadyWritten
 }
 
 // ignoreWritten гасит sentinel: ответ уже отправлен тем, кто вернул ошибку.
@@ -202,18 +83,6 @@ func ignoreWritten(err error) error {
 	}
 
 	return err
-}
-
-// respondList отдаёт список с meta.pagination; data всегда массив, а не null.
-func respondList[T any](c echo.Context, items []T, page pageParams, total int) error {
-	meta := apiResponseMeta(c)
-	meta.Pagination = &PaginationMeta{Limit: page.Limit, Offset: page.Offset, Total: total}
-
-	if items == nil {
-		items = []T{}
-	}
-
-	return c.JSON(http.StatusOK, APIResponse[[]T]{Data: items, Meta: meta})
 }
 
 // pageSlice режет окно [offset, offset+limit) для списков, которые репозиторий отдаёт целиком.
@@ -228,16 +97,6 @@ func pageSlice[T any](items []T, page pageParams) []T {
 	}
 
 	return items[page.Offset:end]
-}
-
-// RespondAPIError пишет общий envelope для ошибки, не дошедшей до хендлера
-// (404 роутера, 405, отказ middleware); пустой code выводится из статуса.
-func RespondAPIError(c echo.Context, status int, code, message string) error {
-	if code == "" {
-		code = ErrorCodeForStatus(status)
-	}
-
-	return respondError(c, status, code, message)
 }
 
 // ErrorCodeForStatus — error.code, соответствующий HTTP-статусу; неизвестный статус
@@ -261,17 +120,12 @@ func ErrorCodeForStatus(status int) string {
 	case http.StatusInternalServerError:
 		return ErrCodeInternal
 	}
+
 	text := http.StatusText(status)
 	if text == "" {
 		return ErrCodeInternal
 	}
 	return strings.ToUpper(strings.ReplaceAll(text, " ", "_"))
-}
-
-// respondUnauthorized отдаёт 401 в общем формате ошибок API хендлерам,
-// которым без владельца токена нечего делать.
-func respondUnauthorized(c echo.Context) error {
-	return respondError(c, http.StatusUnauthorized, ErrCodeUnauthorized, ErrMessageUnauthorized)
 }
 
 // buildValidationErrors раскладывает ошибки validator по полям; на нераспознанной
@@ -314,122 +168,9 @@ func validationMessage(fieldErr validator.FieldError) string {
 	return "must satisfy " + fieldErr.Tag()
 }
 
-// respondValidationErrors — единственный вход для 422: тело или параметры не прошли проверку.
-func respondValidationErrors(c echo.Context, err error) error {
-	return respondError(
-		c,
-		http.StatusUnprocessableEntity,
-		ErrCodeValidationError,
-		ErrMessageValidationFailed,
-		buildValidationErrors(err)...,
-	)
-}
-
-// respondPasswordPolicyError — 422 на new_password, не прошедший auth.ValidatePassword в сервисе.
-func respondPasswordPolicyError(c echo.Context) error {
-	return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
-		ErrorDetail{Field: fieldNewPassword, Message: auth.ErrInvalidPassword.Error(), Code: ErrCodeValidationError})
-}
-
 // isNotFoundError отличает «сущности нет» от настоящего сбоя: спека требует 404, а не 500.
 func isNotFoundError(err error) bool {
 	return errors.Is(err, services.ErrTransactionNotFound) ||
 		errors.Is(err, services.ErrBudgetNotFoundService) ||
 		errors.Is(err, services.ErrCategoryNotFound)
-}
-
-// DeleteEntityHelper provides common delete functionality for all handlers
-func DeleteEntityHelper(c echo.Context, deleter func(uuid.UUID) error, entityType string) error {
-	idParam := c.Param("id")
-	id, err := uuid.Parse(idParam)
-	if err != nil {
-		return respondError(
-			c,
-			http.StatusBadRequest,
-			ErrCodeInvalidID,
-			"Invalid "+strings.ToLower(entityType)+" ID format",
-		)
-	}
-
-	err = deleter(id)
-	if err != nil {
-		if isNotFoundError(err) {
-			return HandleNotFoundError(c, entityType)
-		}
-
-		return respondError(
-			c,
-			http.StatusInternalServerError,
-			"DELETE_FAILED",
-			"Failed to delete "+strings.ToLower(entityType),
-		)
-	}
-
-	return c.NoContent(http.StatusNoContent)
-}
-
-// ParseIDParam extracts and validates UUID from request parameter
-func ParseIDParam(c echo.Context) (uuid.UUID, error) {
-	idParam := c.Param("id")
-	id, err := uuid.Parse(idParam)
-	if err != nil {
-		jsonErr := respondError(c, http.StatusBadRequest, ErrCodeInvalidID, "Invalid ID format")
-		return uuid.Nil, jsonErr
-	}
-	return id, nil
-}
-
-// HandleNotFoundError returns standardized not found error response
-func HandleNotFoundError(c echo.Context, entityType string) error {
-	return respondError(
-		c,
-		http.StatusNotFound,
-		strings.ToUpper(entityType)+"_NOT_FOUND",
-		entityType+" not found",
-	)
-}
-
-// ParseIDParamWithError extracts and validates UUID from request parameter with custom error message
-func ParseIDParamWithError(c echo.Context, entityType string) (uuid.UUID, error) {
-	idParam := c.Param("id")
-	id, err := uuid.Parse(idParam)
-	if err != nil {
-		// Return a sentinel error that the helper can detect and handle
-		return uuid.Nil, &IDParseError{EntityType: entityType}
-	}
-	return id, nil
-}
-
-// IDParseError represents an ID parsing error
-type IDParseError struct {
-	EntityType string
-}
-
-func (e *IDParseError) Error() string {
-	return "invalid " + strings.ToLower(e.EntityType) + " ID format"
-}
-
-// HandleIDParseError returns standardized ID parse error response
-func HandleIDParseError(c echo.Context, entityType string) error {
-	return respondError(
-		c,
-		http.StatusBadRequest,
-		ErrCodeInvalidID,
-		"Invalid "+strings.ToLower(entityType)+" ID format",
-	)
-}
-
-// parseArchivedParam читает ?archived=; мусор — 422, записанный здесь же (errResponseAlreadyWritten).
-func parseArchivedParam(c echo.Context) (bool, error) {
-	raw := c.QueryParam("archived")
-	if raw == "" {
-		return false, nil
-	}
-
-	parsed, err := strconv.ParseBool(raw)
-	if err != nil {
-		return false, writeInvalidQueryParam(c, "archived", raw, "must be true or false")
-	}
-
-	return parsed, nil
 }

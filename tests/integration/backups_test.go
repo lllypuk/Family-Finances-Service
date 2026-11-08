@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -27,7 +26,7 @@ func doBackupRequest(
 	req := httptest.NewRequest(method, path, nil)
 	auth.Apply(req)
 	rec := httptest.NewRecorder()
-	ts.Server.Echo().ServeHTTP(rec, req)
+	ts.Server.ServeHTTP(rec, req)
 
 	return rec
 }
@@ -60,7 +59,7 @@ func TestBackupsAPI_FullCycle(t *testing.T) {
 
 	rec = doBackupRequest(t, testServer, adminAuth, http.MethodGet, "/api/v1/backups/"+name+"/download")
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "application/octet-stream", rec.Header().Get(echo.HeaderContentType))
+	assert.Equal(t, "application/octet-stream", rec.Header().Get("Content-Type"))
 	assert.Contains(t, rec.Header().Get("Content-Disposition"), name)
 	assert.NotEmpty(t, rec.Body.Bytes())
 

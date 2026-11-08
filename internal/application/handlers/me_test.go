@@ -21,8 +21,8 @@ func TestMeHandler_GetMe(t *testing.T) {
 	users := &MockUserService{}
 	users.On("GetUserByID", mock.Anything, svc.user.ID).Return(svc.user, nil)
 
-	c, rec := principalContext(http.MethodGet, "/api/v1/me", "", principalFor(svc))
-	require.NoError(t, handlers.NewMeHandler(users, svc).GetMe(c))
+	req, rec := principalRequest(http.MethodGet, "/api/v1/me", "", principalFor(svc))
+	require.NoError(t, handlers.NewMeHandler(users, svc).GetMe(rec, req))
 
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	var body handlers.APIResponse[handlers.UserResponse]
@@ -48,8 +48,8 @@ func TestMeHandler_GetMe_ServiceErrors(t *testing.T) {
 			users := &MockUserService{}
 			users.On("GetUserByID", mock.Anything, svc.user.ID).Return(nil, tc.err)
 
-			c, rec := principalContext(http.MethodGet, "/api/v1/me", "", principalFor(svc))
-			require.NoError(t, handlers.NewMeHandler(users, svc).GetMe(c))
+			req, rec := principalRequest(http.MethodGet, "/api/v1/me", "", principalFor(svc))
+			require.NoError(t, handlers.NewMeHandler(users, svc).GetMe(rec, req))
 
 			assert.Equal(t, tc.code, rec.Code)
 			assert.Equal(t, tc.body, decodeError(t, rec).Error.Code)
@@ -59,9 +59,9 @@ func TestMeHandler_GetMe_ServiceErrors(t *testing.T) {
 
 func TestMeHandler_GetMe_NoPrincipal(t *testing.T) {
 	svc := newFakeAuthService()
-	c, rec := principalContext(http.MethodGet, "/api/v1/me", "", nil)
+	req, rec := principalRequest(http.MethodGet, "/api/v1/me", "", nil)
 
-	require.NoError(t, handlers.NewMeHandler(&MockUserService{}, svc).GetMe(c))
+	require.NoError(t, handlers.NewMeHandler(&MockUserService{}, svc).GetMe(rec, req))
 
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
@@ -74,8 +74,8 @@ func TestMeHandler_UpdateMe(t *testing.T) {
 			return req.FirstName != nil && *req.FirstName == "Janet" && req.LastName == nil && req.Email == nil
 		})).Return(svc.user, nil)
 
-		c, rec := principalContext(http.MethodPut, "/api/v1/me", `{"first_name":"Janet"}`, principalFor(svc))
-		require.NoError(t, handlers.NewMeHandler(users, svc).UpdateMe(c))
+		req, rec := principalRequest(http.MethodPut, "/api/v1/me", `{"first_name":"Janet"}`, principalFor(svc))
+		require.NoError(t, handlers.NewMeHandler(users, svc).UpdateMe(rec, req))
 
 		assert.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 		users.AssertExpectations(t)
@@ -83,9 +83,9 @@ func TestMeHandler_UpdateMe(t *testing.T) {
 
 	t.Run("empty body is 422", func(t *testing.T) {
 		svc := newFakeAuthService()
-		c, rec := principalContext(http.MethodPut, "/api/v1/me", `{}`, principalFor(svc))
+		req, rec := principalRequest(http.MethodPut, "/api/v1/me", `{}`, principalFor(svc))
 
-		require.NoError(t, handlers.NewMeHandler(&MockUserService{}, svc).UpdateMe(c))
+		require.NoError(t, handlers.NewMeHandler(&MockUserService{}, svc).UpdateMe(rec, req))
 
 		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 		assert.Equal(t, "VALIDATION_ERROR", decodeError(t, rec).Error.Code)
@@ -93,9 +93,9 @@ func TestMeHandler_UpdateMe(t *testing.T) {
 
 	t.Run("bad email is 422", func(t *testing.T) {
 		svc := newFakeAuthService()
-		c, rec := principalContext(http.MethodPut, "/api/v1/me", `{"email":"nope"}`, principalFor(svc))
+		req, rec := principalRequest(http.MethodPut, "/api/v1/me", `{"email":"nope"}`, principalFor(svc))
 
-		require.NoError(t, handlers.NewMeHandler(&MockUserService{}, svc).UpdateMe(c))
+		require.NoError(t, handlers.NewMeHandler(&MockUserService{}, svc).UpdateMe(rec, req))
 
 		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 		body := decodeError(t, rec)
@@ -108,8 +108,8 @@ func TestMeHandler_UpdateMe(t *testing.T) {
 		users := &MockUserService{}
 		users.On("UpdateUser", mock.Anything, svc.user.ID, mock.Anything).Return(nil, services.ErrEmailAlreadyExists)
 
-		c, rec := principalContext(http.MethodPut, "/api/v1/me", `{"email":"taken@example.com"}`, principalFor(svc))
-		require.NoError(t, handlers.NewMeHandler(users, svc).UpdateMe(c))
+		req, rec := principalRequest(http.MethodPut, "/api/v1/me", `{"email":"taken@example.com"}`, principalFor(svc))
+		require.NoError(t, handlers.NewMeHandler(users, svc).UpdateMe(rec, req))
 
 		assert.Equal(t, http.StatusConflict, rec.Code)
 		assert.Equal(t, "EMAIL_TAKEN", decodeError(t, rec).Error.Code)
@@ -120,8 +120,8 @@ func TestMeHandler_UpdateMe(t *testing.T) {
 		users := &MockUserService{}
 		users.On("UpdateUser", mock.Anything, svc.user.ID, mock.Anything).Return(nil, errors.New("db down"))
 
-		c, rec := principalContext(http.MethodPut, "/api/v1/me", `{"first_name":"Janet"}`, principalFor(svc))
-		require.NoError(t, handlers.NewMeHandler(users, svc).UpdateMe(c))
+		req, rec := principalRequest(http.MethodPut, "/api/v1/me", `{"first_name":"Janet"}`, principalFor(svc))
+		require.NoError(t, handlers.NewMeHandler(users, svc).UpdateMe(rec, req))
 
 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
 		assert.Equal(t, "INTERNAL_ERROR", decodeError(t, rec).Error.Code)
@@ -133,9 +133,9 @@ func TestMeHandler_ChangePassword(t *testing.T) {
 
 	t.Run("success keeps current session", func(t *testing.T) {
 		svc := newFakeAuthService()
-		c, rec := principalContext(http.MethodPut, "/api/v1/me/password", body, principalFor(svc))
+		req, rec := principalRequest(http.MethodPut, "/api/v1/me/password", body, principalFor(svc))
 
-		require.NoError(t, handlers.NewMeHandler(&MockUserService{}, svc).ChangePassword(c))
+		require.NoError(t, handlers.NewMeHandler(&MockUserService{}, svc).ChangePassword(rec, req))
 
 		assert.Equal(t, http.StatusNoContent, rec.Code, rec.Body.String())
 		require.NotNil(t, svc.changeCall)
@@ -148,9 +148,9 @@ func TestMeHandler_ChangePassword(t *testing.T) {
 	t.Run("wrong current is 401", func(t *testing.T) {
 		svc := newFakeAuthService()
 		svc.changeErr = auth.ErrInvalidCredentials
-		c, rec := principalContext(http.MethodPut, "/api/v1/me/password", body, principalFor(svc))
+		req, rec := principalRequest(http.MethodPut, "/api/v1/me/password", body, principalFor(svc))
 
-		require.NoError(t, handlers.NewMeHandler(&MockUserService{}, svc).ChangePassword(c))
+		require.NoError(t, handlers.NewMeHandler(&MockUserService{}, svc).ChangePassword(rec, req))
 
 		assert.Equal(t, http.StatusUnauthorized, rec.Code)
 		assert.Equal(t, "INVALID_CREDENTIALS", decodeError(t, rec).Error.Code)
@@ -158,10 +158,10 @@ func TestMeHandler_ChangePassword(t *testing.T) {
 
 	t.Run("weak new password is 422 before the service", func(t *testing.T) {
 		svc := newFakeAuthService()
-		c, rec := principalContext(http.MethodPut, "/api/v1/me/password",
+		req, rec := principalRequest(http.MethodPut, "/api/v1/me/password",
 			`{"current_password":"x","new_password":"short"}`, principalFor(svc))
 
-		require.NoError(t, handlers.NewMeHandler(&MockUserService{}, svc).ChangePassword(c))
+		require.NoError(t, handlers.NewMeHandler(&MockUserService{}, svc).ChangePassword(rec, req))
 
 		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 		assert.Nil(t, svc.changeCall)
@@ -173,18 +173,18 @@ func TestMeHandler_ChangePassword(t *testing.T) {
 	t.Run("storage failure is 500", func(t *testing.T) {
 		svc := newFakeAuthService()
 		svc.changeErr = errors.New("db down")
-		c, rec := principalContext(http.MethodPut, "/api/v1/me/password", body, principalFor(svc))
+		req, rec := principalRequest(http.MethodPut, "/api/v1/me/password", body, principalFor(svc))
 
-		require.NoError(t, handlers.NewMeHandler(&MockUserService{}, svc).ChangePassword(c))
+		require.NoError(t, handlers.NewMeHandler(&MockUserService{}, svc).ChangePassword(rec, req))
 
 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	})
 
 	t.Run("no principal", func(t *testing.T) {
 		svc := newFakeAuthService()
-		c, rec := principalContext(http.MethodPut, "/api/v1/me/password", body, nil)
+		req, rec := principalRequest(http.MethodPut, "/api/v1/me/password", body, nil)
 
-		require.NoError(t, handlers.NewMeHandler(&MockUserService{}, svc).ChangePassword(c))
+		require.NoError(t, handlers.NewMeHandler(&MockUserService{}, svc).ChangePassword(rec, req))
 
 		assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	})

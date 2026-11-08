@@ -48,7 +48,7 @@ func getJSON[T any](t *testing.T, ts *testhelpers.TestServer, target string) (in
 	req := httptest.NewRequest(http.MethodGet, target, nil)
 	ts.Auth(t).Apply(req)
 	rec := httptest.NewRecorder()
-	ts.Server.Echo().ServeHTTP(rec, req)
+	ts.Server.ServeHTTP(rec, req)
 
 	var body T
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
@@ -180,7 +180,7 @@ func TestAPIBulkDelete_Transactions_SkipsUnknownIDs(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	testServer.Auth(t).Apply(req)
 	rec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code)
 
@@ -208,7 +208,7 @@ func TestAPIBulkDelete_Transactions_EmptyIDsRejected(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	testServer.Auth(t).Apply(req)
 	rec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 }
@@ -224,7 +224,7 @@ func TestAPIBulkDelete_Transactions_NilIDRejected(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	testServer.Auth(t).Apply(req)
 	rec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
 
@@ -244,7 +244,7 @@ func TestAPIBulkDelete_Transactions_DuplicateIDCountedOnce(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	testServer.Auth(t).Apply(req)
 	rec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
 
@@ -281,7 +281,7 @@ func TestAPIPagination_ListsRejectOutOfRangeParams(t *testing.T) {
 				req := httptest.NewRequest(http.MethodGet, path+query, nil)
 				testServer.Auth(t).Apply(req)
 				rec := httptest.NewRecorder()
-				testServer.Server.Echo().ServeHTTP(rec, req)
+				testServer.Server.ServeHTTP(rec, req)
 
 				assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
 			})
@@ -318,7 +318,7 @@ func TestAPIBulkDelete_Transactions_RejectsBadBodies(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 			testServer.Auth(t).Apply(req)
 			rec := httptest.NewRecorder()
-			testServer.Server.Echo().ServeHTTP(rec, req)
+			testServer.Server.ServeHTTP(rec, req)
 
 			assert.Equal(t, tc.want, rec.Code, "тело: %s", rec.Body.String())
 		})
