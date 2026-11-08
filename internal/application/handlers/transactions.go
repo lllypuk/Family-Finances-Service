@@ -45,7 +45,7 @@ func (h *TransactionHandler) CreateTransaction(w http.ResponseWriter, r *http.Re
 	// транзакцию всё равно не от кого создавать.
 	principal, principalErr := auth.PrincipalFromContext(r.Context())
 	if principalErr != nil {
-		return respondUnauthorized(w)
+		return RespondError(w, http.StatusUnauthorized, ErrCodeUnauthorized, ErrMessageUnauthorized)
 	}
 	userID := principal.UserID
 
@@ -90,7 +90,7 @@ func (h *TransactionHandler) findTransaction(r *http.Request, id uuid.UUID) (*tr
 
 // respondAccountInvalid — 422 на счёт, который нельзя привязать к операции.
 func respondAccountInvalid(w http.ResponseWriter) error {
-	return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+	return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 		ErrorDetail{Field: fieldAccountID, Message: "must be an existing active account", Code: ErrCodeValidationError})
 }
 
@@ -119,10 +119,10 @@ func (h *TransactionHandler) handleCreateTransactionServiceError(w http.Response
 		strings.Contains(err.Error(), "validation failed"),
 		strings.Contains(err.Error(), "user not found"),
 		strings.Contains(err.Error(), "category not found"):
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, message,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, message,
 			bodyDetail(ErrCodeValidationError, err.Error()))
 	default:
-		return respondError(w, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create transaction")
+		return RespondError(w, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create transaction")
 	}
 }
 
@@ -169,19 +169,19 @@ func (h *TransactionHandler) GetTransactions(w http.ResponseWriter, r *http.Requ
 		if errors.Is(err, dto.ErrInvalidDateRange) ||
 			errors.Is(err, dto.ErrInvalidAmountRange) ||
 			strings.Contains(err.Error(), "validation failed") {
-			return respondError(w,
+			return RespondError(w,
 				http.StatusUnprocessableEntity,
 				ErrCodeValidationError,
 				"Invalid transaction filters",
 				bodyDetail(ErrCodeValidationError, err.Error()),
 			)
 		}
-		return respondError(w, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch transactions")
+		return RespondError(w, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch transactions")
 	}
 
 	total, err := h.transactionService.CountTransactions(r.Context(), serviceFilter)
 	if err != nil {
-		return respondError(w, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch transactions")
+		return RespondError(w, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch transactions")
 	}
 
 	return respondList(w,
@@ -424,12 +424,12 @@ func (h *TransactionHandler) UpdateTransaction(w http.ResponseWriter, r *http.Re
 		return respondValidationErrors(w, validationErr)
 	}
 	if req.isEmpty() {
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, ErrMessageNoFields))
 	}
 	clearAccount := req.ClearAccount != nil && *req.ClearAccount
 	if clearAccount && req.AccountID != nil {
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			ErrorDetail{Field: fieldClearAcct, Message: "must not be combined with account_id",
 				Code: ErrCodeValidationError})
 	}
@@ -476,7 +476,7 @@ func (h *TransactionHandler) BulkDeleteTransactions(w http.ResponseWriter, r *ht
 
 	deleted, err := h.transactionService.BulkDelete(r.Context(), req.IDs)
 	if err != nil {
-		return respondError(w, http.StatusInternalServerError, "DELETE_FAILED", "Failed to delete transactions")
+		return RespondError(w, http.StatusInternalServerError, "DELETE_FAILED", "Failed to delete transactions")
 	}
 
 	return respondAPI(w, http.StatusOK, BulkDeleteResponse{Deleted: deleted})
@@ -496,9 +496,9 @@ func (h *TransactionHandler) handleUpdateTransactionServiceError(w http.Response
 		errors.Is(err, dto.ErrInvalidAmountRange),
 		strings.Contains(err.Error(), "validation failed"),
 		strings.Contains(err.Error(), "category not found"):
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageInvalidTransaction,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageInvalidTransaction,
 			bodyDetail(ErrCodeValidationError, err.Error()))
 	default:
-		return respondError(w, http.StatusInternalServerError, "UPDATE_FAILED", "Failed to update transaction")
+		return RespondError(w, http.StatusInternalServerError, "UPDATE_FAILED", "Failed to update transaction")
 	}
 }

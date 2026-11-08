@@ -390,7 +390,7 @@ func TestNewHTTPServer(t *testing.T) {
 
 	// Assert
 	assert.NotNil(t, server)
-	assert.NotEmpty(t, server.Routes())
+	assert.NotEmpty(t, server.Router().Routes())
 }
 
 func TestNewHTTPServerWithObservability(t *testing.T) {
@@ -413,7 +413,7 @@ func TestNewHTTPServerWithObservability(t *testing.T) {
 
 	// Assert
 	assert.NotNil(t, server)
-	assert.NotEmpty(t, server.Routes())
+	assert.NotEmpty(t, server.Router().Routes())
 }
 
 func TestHTTPServer_HealthEndpoint(t *testing.T) {
@@ -445,7 +445,7 @@ func TestHTTPServer_RoutesSetup(t *testing.T) {
 	server := application.NewHTTPServer(&repos.Repositories, mockServices, config)
 
 	// Test that routes are properly set up by checking the registered routes
-	routes := server.Routes()
+	routes := server.Router().Routes()
 	assert.NotEmpty(t, routes)
 
 	// Check for key routes
@@ -513,7 +513,7 @@ func TestHTTPServer_WithObservabilityRoutes(t *testing.T) {
 	server := application.NewHTTPServerWithObservability(&repos.Repositories, mockServices, config, obsService)
 
 	// Test that observability routes are properly set up
-	routes := server.Routes()
+	routes := server.Router().Routes()
 	routePaths := make(map[string]bool)
 	for _, route := range routes {
 		routePaths[route.Method+" "+route.Path] = true

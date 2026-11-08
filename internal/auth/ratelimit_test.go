@@ -241,6 +241,17 @@ func TestClientIP(t *testing.T) {
 		"RemoteAddr without a port":   {nil, "203.0.113.4", nil, "203.0.113.4"},
 		"RemoteAddr that is no IP":    {nil, "garbage", nil, ""},
 		"IPv6 peer without trust set": {nil, "[2001:db8::2]:80", nil, "2001:db8::2"},
+		"empty XFF":                   {trusted, "10.0.0.5:4321", []string{""}, "10.0.0.5"},
+		"comma-only XFF":              {trusted, "10.0.0.5:4321", []string{","}, "10.0.0.5"},
+		"spoofed leftmost entries": {
+			trusted, "10.0.0.5:4321", []string{"6.6.6.6, 7.7.7.7, 198.51.100.9, 10.0.0.2"}, "198.51.100.9",
+		},
+		"IPv4-mapped trusted peer": {
+			trusted, "[::ffff:10.0.0.5]:4321", []string{"198.51.100.9"}, "198.51.100.9",
+		},
+		"IPv4-mapped untrusted peer": {
+			trusted, "[::ffff:192.168.1.5]:4321", []string{"6.6.6.6"}, "192.168.1.5",
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

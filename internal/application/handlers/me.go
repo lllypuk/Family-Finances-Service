@@ -30,7 +30,7 @@ func NewMeHandler(userService services.UserService, authService AuthService) *Me
 func (h *MeHandler) GetMe(w http.ResponseWriter, r *http.Request) error {
 	principal, err := auth.PrincipalFromContext(r.Context())
 	if err != nil {
-		return respondUnauthorized(w)
+		return RespondError(w, http.StatusUnauthorized, ErrCodeUnauthorized, ErrMessageUnauthorized)
 	}
 
 	u, err := h.userService.GetUserByID(r.Context(), principal.UserID)
@@ -45,7 +45,7 @@ func (h *MeHandler) GetMe(w http.ResponseWriter, r *http.Request) error {
 func (h *MeHandler) UpdateMe(w http.ResponseWriter, r *http.Request) error {
 	principal, err := auth.PrincipalFromContext(r.Context())
 	if err != nil {
-		return respondUnauthorized(w)
+		return RespondError(w, http.StatusUnauthorized, ErrCodeUnauthorized, ErrMessageUnauthorized)
 	}
 
 	var req UpdateUserRequest
@@ -56,7 +56,7 @@ func (h *MeHandler) UpdateMe(w http.ResponseWriter, r *http.Request) error {
 		return respondValidationErrors(w, validationErr)
 	}
 	if req.FirstName == nil && req.LastName == nil && req.Email == nil {
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, ErrMessageNoFields))
 	}
 
@@ -76,7 +76,7 @@ func (h *MeHandler) UpdateMe(w http.ResponseWriter, r *http.Request) error {
 func (h *MeHandler) ChangePassword(w http.ResponseWriter, r *http.Request) error {
 	principal, err := auth.PrincipalFromContext(r.Context())
 	if err != nil {
-		return respondUnauthorized(w)
+		return RespondError(w, http.StatusUnauthorized, ErrCodeUnauthorized, ErrMessageUnauthorized)
 	}
 
 	var req ChangePasswordRequest
@@ -93,11 +93,11 @@ func (h *MeHandler) ChangePassword(w http.ResponseWriter, r *http.Request) error
 	if err != nil {
 		switch {
 		case errors.Is(err, auth.ErrInvalidCredentials):
-			return respondError(w, http.StatusUnauthorized, ErrCodeInvalidCredentials, ErrMessageInvalidCredentials)
+			return RespondError(w, http.StatusUnauthorized, ErrCodeInvalidCredentials, ErrMessageInvalidCredentials)
 		case errors.Is(err, auth.ErrInvalidPassword):
 			return respondPasswordPolicyError(w)
 		default:
-			return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+			return RespondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 		}
 	}
 

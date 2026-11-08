@@ -24,7 +24,7 @@ func NewBackupHandler(backupService services.BackupService) *BackupHandler {
 func (h *BackupHandler) CreateBackup(w http.ResponseWriter, r *http.Request) error {
 	info, err := h.backupService.CreateBackup(r.Context())
 	if err != nil {
-		return respondError(w, http.StatusInternalServerError, ErrCodeBackupFailed, ErrMessageBackupFailed)
+		return RespondError(w, http.StatusInternalServerError, ErrCodeBackupFailed, ErrMessageBackupFailed)
 	}
 
 	return respondAPI(w, http.StatusCreated, toBackupResponse(info))
@@ -39,7 +39,7 @@ func (h *BackupHandler) ListBackups(w http.ResponseWriter, r *http.Request) erro
 
 	backups, err := h.backupService.ListBackups(r.Context())
 	if err != nil {
-		return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+		return RespondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 
 	responses := make([]BackupResponse, 0, page.Limit)
@@ -94,11 +94,11 @@ func (h *BackupHandler) DeleteBackup(w http.ResponseWriter, r *http.Request) err
 func (h *BackupHandler) handleBackupError(w http.ResponseWriter, err error) error {
 	switch {
 	case errors.Is(err, services.ErrInvalidBackupFilename):
-		return respondError(w, http.StatusBadRequest, ErrCodeInvalidBackupName, ErrMessageInvalidBackupName)
+		return RespondError(w, http.StatusBadRequest, ErrCodeInvalidBackupName, ErrMessageInvalidBackupName)
 	case errors.Is(err, services.ErrBackupNotFound):
-		return respondError(w, http.StatusNotFound, ErrCodeBackupNotFound, ErrMessageBackupNotFound)
+		return RespondError(w, http.StatusNotFound, ErrCodeBackupNotFound, ErrMessageBackupNotFound)
 	default:
-		return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+		return RespondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 }
 

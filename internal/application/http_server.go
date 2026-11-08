@@ -159,7 +159,7 @@ func (s *HTTPServer) buildChain(logger *slog.Logger, clientIP func(*http.Request
 		return r.Method == http.MethodPost && r.URL.EscapedPath() == recognizeRoute
 	})(h)
 	h = observability.Recover(s.onPanic(logger), func(w http.ResponseWriter, _ *http.Request) {
-		_ = handlers.RespondAPIError(w, http.StatusInternalServerError, handlers.ErrCodeInternal,
+		_ = handlers.RespondError(w, http.StatusInternalServerError, handlers.ErrCodeInternal,
 			statusMessage(http.StatusInternalServerError))
 	})(h)
 	h = observability.RequestID(h)
@@ -193,11 +193,6 @@ func (s *HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Router — роутер сервера; тестовые стенды добавляют в него свои маршруты.
 func (s *HTTPServer) Router() *router.Router {
 	return s.router
-}
-
-// Routes — зарегистрированные маршруты; по ним сверяется спецификация.
-func (s *HTTPServer) Routes() []router.Route {
-	return s.router.Routes()
 }
 
 func (s *HTTPServer) setupRoutes() {
@@ -305,6 +300,7 @@ func (s *HTTPServer) Shutdown(ctx context.Context) error {
 	return s.server.Shutdown(ctx)
 }
 
+// buildNetHTTPServer — http.Server с таймаутами из конфига; отдельно, чтобы их проверял тест.
 func (s *HTTPServer) buildNetHTTPServer(address string) *http.Server {
 	return &http.Server{
 		Addr:         address,

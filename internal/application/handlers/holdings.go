@@ -34,7 +34,7 @@ func (h *HoldingHandler) ListHoldings(w http.ResponseWriter, r *http.Request) er
 
 	all, err := h.holdings.List(r.Context(), includeArchived)
 	if err != nil {
-		return respondError(w, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch holdings")
+		return RespondError(w, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch holdings")
 	}
 
 	items := make([]HoldingResponse, 0, page.Limit)
@@ -77,7 +77,7 @@ func (h *HoldingHandler) findHolding(r *http.Request, id uuid.UUID) (*holding.Ho
 func (h *HoldingHandler) UpdateHolding(w http.ResponseWriter, r *http.Request) error {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidHoldingID)
+		return RespondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidHoldingID)
 	}
 
 	var req UpdateHoldingRequest
@@ -89,7 +89,7 @@ func (h *HoldingHandler) UpdateHolding(w http.ResponseWriter, r *http.Request) e
 	}
 	if req.Name == nil && req.Kind == nil && req.IsArchived == nil &&
 		req.MonthlyIncomeMinor == nil && req.MonthlyExpenseMinor == nil {
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, ErrMessageNoFields))
 	}
 
@@ -111,7 +111,7 @@ func (h *HoldingHandler) UpdateHolding(w http.ResponseWriter, r *http.Request) e
 func (h *HoldingHandler) DeleteHolding(w http.ResponseWriter, r *http.Request) error {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidHoldingID)
+		return RespondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidHoldingID)
 	}
 
 	if err = h.holdings.Delete(r.Context(), id); err != nil {
@@ -125,7 +125,7 @@ func (h *HoldingHandler) DeleteHolding(w http.ResponseWriter, r *http.Request) e
 func (h *HoldingHandler) ListHoldingValues(w http.ResponseWriter, r *http.Request) error {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidHoldingID)
+		return RespondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidHoldingID)
 	}
 	page, err := parsePagination(w, r)
 	if err != nil {
@@ -185,13 +185,13 @@ func parseHoldingValuePath(w http.ResponseWriter, r *http.Request) (uuid.UUID, d
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
 		return uuid.Nil, date.Date{}, written(
-			respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidHoldingID))
+			RespondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidHoldingID))
 	}
 
 	day, err := date.Parse(r.PathValue(fieldDate))
 	if err != nil {
 		return uuid.Nil, date.Date{}, written(
-			respondError(w, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidValueDate))
+			RespondError(w, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidValueDate))
 	}
 
 	return id, day, nil
@@ -205,11 +205,11 @@ func respondHoldingError(w http.ResponseWriter, err error) error {
 	)
 	switch {
 	case errors.Is(err, holding.ErrNotFound):
-		return respondError(w, http.StatusNotFound, ErrCodeHoldingNotFound, ErrMessageHoldingNotFound)
+		return RespondError(w, http.StatusNotFound, ErrCodeHoldingNotFound, ErrMessageHoldingNotFound)
 	case errors.Is(err, holding.ErrValueNotFound):
-		return respondError(w, http.StatusNotFound, ErrCodeHoldingValueNotFound, ErrMessageHoldingValueNotFound)
+		return RespondError(w, http.StatusNotFound, ErrCodeHoldingValueNotFound, ErrMessageHoldingValueNotFound)
 	case errors.Is(err, holding.ErrNameExists):
-		return respondError(w, http.StatusConflict, ErrCodeHoldingNameExists, ErrMessageHoldingNameExists)
+		return RespondError(w, http.StatusConflict, ErrCodeHoldingNameExists, ErrMessageHoldingNameExists)
 	case errors.Is(err, holding.ErrNameEmpty), errors.Is(err, holding.ErrNameLong):
 		field = fieldName
 	case errors.Is(err, holding.ErrInvalidSide):
@@ -224,10 +224,10 @@ func respondHoldingError(w http.ResponseWriter, err error) error {
 		// На PUT ошибка приходит обёрнутой сервисом, а текст уходит клиенту в поле формы.
 		field, message = planErr.Field, planErr.Error()
 	default:
-		return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+		return RespondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 
-	return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+	return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 		ErrorDetail{Field: field, Message: message, Code: ErrCodeValidationError})
 }
 

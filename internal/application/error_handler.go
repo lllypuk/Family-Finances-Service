@@ -62,7 +62,7 @@ func newAPIErrorHandler(logger *slog.Logger) router.ErrorHandler {
 			return
 		}
 
-		_ = handlers.RespondAPIError(w, status, code, message)
+		_ = handlers.RespondError(w, status, code, message)
 	}
 }
 

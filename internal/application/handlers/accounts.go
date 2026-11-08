@@ -36,7 +36,7 @@ func (h *AccountHandler) ListAccounts(w http.ResponseWriter, r *http.Request) er
 
 	all, err := h.accounts.List(r.Context(), includeArchived)
 	if err != nil {
-		return respondError(w, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch accounts")
+		return RespondError(w, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch accounts")
 	}
 
 	items := make([]AccountResponse, 0, page.Limit)
@@ -77,7 +77,7 @@ func (h *AccountHandler) findAccount(r *http.Request, id uuid.UUID) (*account.Ac
 func (h *AccountHandler) UpdateAccount(w http.ResponseWriter, r *http.Request) error {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidAccountID)
+		return RespondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidAccountID)
 	}
 
 	var req UpdateAccountRequest
@@ -88,7 +88,7 @@ func (h *AccountHandler) UpdateAccount(w http.ResponseWriter, r *http.Request) e
 		return respondValidationErrors(w, err)
 	}
 	if req.Name == nil && req.IsArchived == nil {
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, ErrMessageNoFields))
 	}
 
@@ -103,7 +103,7 @@ func (h *AccountHandler) UpdateAccount(w http.ResponseWriter, r *http.Request) e
 func (h *AccountHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) error {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidAccountID)
+		return RespondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidAccountID)
 	}
 
 	if err = h.accounts.Delete(r.Context(), id); err != nil {
@@ -116,16 +116,16 @@ func (h *AccountHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) e
 func respondAccountError(w http.ResponseWriter, err error) error {
 	switch {
 	case errors.Is(err, account.ErrNotFound):
-		return respondError(w, http.StatusNotFound, ErrCodeAccountNotFound, ErrMessageAccountNotFound)
+		return RespondError(w, http.StatusNotFound, ErrCodeAccountNotFound, ErrMessageAccountNotFound)
 	case errors.Is(err, account.ErrNameExists):
-		return respondError(w, http.StatusConflict, ErrCodeAccountNameExists, ErrMessageAccountNameExists)
+		return RespondError(w, http.StatusConflict, ErrCodeAccountNameExists, ErrMessageAccountNameExists)
 	case errors.Is(err, account.ErrInUse):
-		return respondError(w, http.StatusConflict, ErrCodeAccountInUse, ErrMessageAccountInUse)
+		return RespondError(w, http.StatusConflict, ErrCodeAccountInUse, ErrMessageAccountInUse)
 	case errors.Is(err, account.ErrNameEmpty), errors.Is(err, account.ErrNameLong):
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			ErrorDetail{Field: fieldName, Message: err.Error(), Code: ErrCodeValidationError})
 	default:
-		return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+		return RespondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 }
 
