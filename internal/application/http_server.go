@@ -138,13 +138,7 @@ func NewHTTPServerWithObservability(
 
 	server.setupRoutes()
 	server.handler = server.buildChain(logger, clientIP)
-	server.server = &http.Server{
-		Addr:         net.JoinHostPort(config.Host, config.Port),
-		Handler:      server,
-		ReadTimeout:  config.ReadTimeout,
-		WriteTimeout: config.WriteTimeout,
-		IdleTimeout:  config.IdleTimeout,
-	}
+	server.server = server.buildNetHTTPServer(net.JoinHostPort(config.Host, config.Port))
 
 	return server
 }
@@ -304,4 +298,15 @@ func (s *HTTPServer) Start() error {
 
 func (s *HTTPServer) Shutdown(ctx context.Context) error {
 	return s.server.Shutdown(ctx)
+}
+
+// buildNetHTTPServer — http.Server с таймаутами из конфига; отдельно, чтобы их проверял тест.
+func (s *HTTPServer) buildNetHTTPServer(address string) *http.Server {
+	return &http.Server{
+		Addr:         address,
+		Handler:      s,
+		ReadTimeout:  s.config.ReadTimeout,
+		WriteTimeout: s.config.WriteTimeout,
+		IdleTimeout:  s.config.IdleTimeout,
+	}
 }
