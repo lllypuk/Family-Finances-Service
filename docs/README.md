@@ -36,7 +36,7 @@
 - **Clean Architecture** реализована
 - **Domain models** с полным business logic
 - **Repository pattern** с SQLite интеграцией
-- **HTTP server** с Echo framework
+- **HTTP server** на `net/http` со своим роутером (`internal/application/router`)
 - **Configuration management** через переменные окружения
 
 ### ✅ API и аутентификация
@@ -66,7 +66,7 @@
 ### ✅ Observability
 - **Structured logging** (slog)
 - **Health checks** (/health эндпоинт)
-- **Метрики Prometheus** (`ffs_*` на `METRICS_ADDR`, `GET /metrics` вне Echo; пусто — выключено)
+- **Метрики Prometheus** (`ffs_*` на `METRICS_ADDR`, `GET /metrics` вне роутера API; пусто — выключено)
 
 ### ✅ CI/CD & DevOps
 - **GitLab CI** (`.gitlab-ci.yml`): проверки на MR, образ в реестр и выкат на mini-server с `main`

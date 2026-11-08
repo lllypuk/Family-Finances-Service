@@ -134,7 +134,7 @@ The author of a record is taken from the token, so `user_id` in a request body i
 
 ## 🏗️ Architecture and Technology Stack
 
-- **Go 1.27** with Echo v4.15
+- **Go 1.27** with `net/http` and its own segment router
 - **SQLite** (modernc.org/sqlite) — pure Go, no CGO; migrations applied automatically at startup
 - **Clean Architecture**: `domain` → `services` → repository interfaces → `infrastructure`; `internal/auth`
   (tokens, sessions, middleware, rate limiter) beside them
@@ -224,12 +224,12 @@ make help             # Show all commands
 ├── internal/
 │   ├── domain/              # Business entities (User, Family, Transaction, Budget, Category, …)
 │   ├── auth/                # Bearer tokens, sessions, RequireBearer/RequireRole, login rate limiter
-│   ├── application/         # Echo server, JSON error handler, /api/v1 handlers
+│   ├── application/         # HTTP server, router/, JSON error handler, /api/v1 handlers
 │   ├── services/            # Business logic
 │   ├── infrastructure/      # SQLite repositories, migrations, connection; llmengine/ — the Ollama call
 │   ├── recognize/           # Screenshot recognition: prompt, parsing and normalizing the model's answer
 │   ├── observability/       # Logging and /health
-│   ├── metrics/             # Prometheus registry, Echo middleware, scrape collectors, /metrics listener
+│   ├── metrics/             # Prometheus registry, HTTP middleware, scrape collectors, /metrics listener
 │   ├── version/             # Version reported by /health, set at link time by -ldflags
 │   ├── testhelpers/         # In-memory DB, full test server, bearer helpers, factories
 │   ├── bootstrap.go         # OpenDatabase (DB + migrations), Setup, ResetPassword — shared by server and CLI
