@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -50,4 +51,20 @@ func TestMetrics_NotServedByEcho(t *testing.T) {
 
 	assert.Equal(t, http.StatusNotFound, doGET(t, ts, nil, "/metrics").Code)
 	assert.Equal(t, http.StatusNotFound, doAuthedGET(t, ts, ts.Auth(t), "/metrics"))
+}
+
+// Метки route и method — контракт с observability: для каждого случая снимка ровно одна серия.
+func TestMetrics_RouteLabels(t *testing.T) {
+	for _, c := range snapshotCases() {
+		t.Run(c.name, func(t *testing.T) {
+			ts := testhelpers.SetupHTTPServer(t)
+			ts.AddPanicRoute()
+
+			c.do(t, ts)
+
+			want := fmt.Sprintf(`ffs_http_requests_total{method=%q,route=%q,status="%d"} 1`,
+				c.method, c.route, c.status)
+			assert.Contains(t, scrape(t, ts), want)
+		})
+	}
 }

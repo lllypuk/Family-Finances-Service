@@ -212,14 +212,14 @@ func TestParseTrustedProxies(t *testing.T) {
 	require.Error(t, err, "адрес без маски — не CIDR")
 }
 
-func realIP(t *testing.T, extractor echo.IPExtractor, remoteAddr, xff string) string {
+func realIP(t *testing.T, extractor echo.IPExtractor, remoteAddr string, xff ...string) string {
 	t.Helper()
 	e := echo.New()
 	e.IPExtractor = extractor
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil)
 	req.RemoteAddr = remoteAddr
-	if xff != "" {
-		req.Header.Set(echo.HeaderXForwardedFor, xff)
+	for _, v := range xff {
+		req.Header.Add(echo.HeaderXForwardedFor, v)
 	}
 	return e.NewContext(req, httptest.NewRecorder()).RealIP()
 }
@@ -246,5 +246,25 @@ func TestIPExtractor(t *testing.T) {
 	t.Run("XFF chain stops at first untrusted hop", func(t *testing.T) {
 		got := realIP(t, auth.IPExtractor(trusted), "10.0.0.5:4321", "198.51.100.9, 192.168.1.5")
 		assert.Equal(t, "192.168.1.5", got)
+	})
+
+	t.Run("several XFF headers read as one chain", func(t *testing.T) {
+		got := realIP(t, auth.IPExtractor(trusted), "10.0.0.5:4321", "198.51.100.9", "10.0.0.7")
+		assert.Equal(t, "198.51.100.9", got)
+	})
+
+	t.Run("untrusted hop in the middle is the client", func(t *testing.T) {
+		got := realIP(t, auth.IPExtractor(trusted), "10.0.0.5:4321", "203.0.113.1, 198.51.100.9, 10.0.0.7")
+		assert.Equal(t, "198.51.100.9", got)
+	})
+
+	t.Run("malformed XFF value", func(t *testing.T) {
+		got := realIP(t, auth.IPExtractor(trusted), "10.0.0.5:4321", "not-an-ip")
+		assert.Equal(t, "10.0.0.5", got)
+	})
+
+	t.Run("private address outside the listed CIDR is not trusted", func(t *testing.T) {
+		got := realIP(t, auth.IPExtractor(trusted), "10.0.0.5:4321", "192.168.7.7, 10.0.0.9")
+		assert.Equal(t, "192.168.7.7", got)
 	})
 }

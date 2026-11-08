@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/testhelpers"
 )
 
@@ -62,4 +63,189 @@ func TestAPIErrorEnvelope_ErrorsOutsideHandlers(t *testing.T) {
 			assert.NotEmpty(t, response.Meta.Version)
 		})
 	}
+}
+
+// snapshotCase — запрос и ответ, который обязан пережить смену HTTP-стека без правок;
+// route — метка метрик (TestMetrics_RouteLabels).
+type snapshotCase struct {
+	name    string
+	method  string
+	target  string
+	who     string // "", "admin" или "member"
+	body    string
+	status  int
+	code    string
+	route   string
+	headers map[string]string // ожидаемые значения, "" — заголовок обязан отсутствовать
+}
+
+const (
+	whoAdmin  = "admin"
+	whoMember = "member"
+)
+
+func snapshotCases() []snapshotCase {
+	const (
+		anyRoute = "/*"
+		apiRoute = "/api/v1/*"
+	)
+	notFound := handlers.ErrCodeNotFound
+	unauth := handlers.ErrCodeUnauthorized
+	forbidden := handlers.ErrCodeForbidden
+	return []snapshotCase{
+		{name: "UnknownInAPIAdmin", method: http.MethodGet, target: "/api/v1/nope", who: whoAdmin,
+			status: 404, code: notFound, route: apiRoute},
+		{name: "UnknownInAPINoToken", method: http.MethodGet, target: "/api/v1/nope",
+			status: 401, code: unauth, route: apiRoute},
+		{name: "UnknownOutsideAPIAdmin", method: http.MethodGet, target: "/nope", who: whoAdmin,
+			status: 404, code: notFound, route: anyRoute},
+		{name: "UnknownOutsideAPINoToken", method: http.MethodGet, target: "/nope",
+			status: 404, code: notFound, route: anyRoute},
+		{name: "WrongMethodHealth", method: http.MethodPost, target: "/health",
+			status: 404, code: notFound, route: anyRoute},
+		{name: "WrongMethodLogin", method: http.MethodGet, target: "/api/v1/auth/login",
+			status: 401, code: unauth, route: apiRoute},
+		{name: "WrongMethodTransactionsAdmin", method: http.MethodPatch, target: "/api/v1/transactions", who: whoAdmin,
+			status: 404, code: notFound, route: apiRoute},
+		{name: "WrongMethodTransactionsNoToken", method: http.MethodPatch, target: "/api/v1/transactions",
+			status: 401, code: unauth, route: apiRoute},
+		// Промах по методу на существующем пути уходит в fallback родителя (/api/v1/*),
+		// а не подгруппы: роль не проверяется — member получает 404, а не 403.
+		{name: "WrongMethodUsersRootMember", method: http.MethodDelete, target: "/api/v1/users", who: whoMember,
+			status: 404, code: notFound, route: apiRoute},
+		{name: "WrongMethodUsersRootAdmin", method: http.MethodDelete, target: "/api/v1/users", who: whoAdmin,
+			status: 404, code: notFound, route: apiRoute},
+		{name: "WrongMethodUsersDeepNoToken", method: http.MethodPost, target: "/api/v1/users/x/password",
+			status: 401, code: unauth, route: "/api/v1/users/*"},
+		{
+			name:   "WrongMethodUsersDeepMember",
+			method: http.MethodPost,
+			target: "/api/v1/users/x/password",
+			who:    whoMember,
+			status: 403,
+			code:   forbidden,
+			route:  "/api/v1/users/*",
+		},
+		{name: "WrongMethodUsersDeepAdmin", method: http.MethodPost, target: "/api/v1/users/x/password", who: whoAdmin,
+			status: 404, code: notFound, route: "/api/v1/users/*"},
+		{name: "MemberOnUsers", method: http.MethodGet, target: "/api/v1/users", who: whoMember,
+			status: 403, code: forbidden, route: "/api/v1/users"},
+		{name: "HeadHealth", method: http.MethodHead, target: "/health",
+			status: 404, code: notFound, route: anyRoute},
+		{name: "HeadAPINoToken", method: http.MethodHead, target: "/api/v1/transactions",
+			status: 401, route: apiRoute},
+		{name: "OptionsHealth", method: http.MethodOptions, target: "/health",
+			status: 404, code: notFound, route: anyRoute},
+		{name: "OptionsAPIAdmin", method: http.MethodOptions, target: "/api/v1/transactions", who: whoAdmin,
+			status: 404, code: notFound, route: apiRoute},
+		{name: "OptionsAPINoToken", method: http.MethodOptions, target: "/api/v1/transactions",
+			status: 401, code: unauth, route: apiRoute},
+		{name: "TrailingSlashList", method: http.MethodGet, target: "/api/v1/transactions/", who: whoAdmin,
+			status: 404, code: notFound, route: "/api/v1/transactions/*"},
+		{name: "TrailingSlashHealth", method: http.MethodGet, target: "/health/",
+			status: 404, code: notFound, route: anyRoute},
+		{name: "DoubleSlash", method: http.MethodGet, target: "//api/v1/transactions", who: whoAdmin,
+			status: 404, code: notFound, route: anyRoute},
+		{name: "EncodedSlashInID", method: http.MethodGet, target: "/api/v1/transactions/a%2Fb", who: whoAdmin,
+			status: 400, code: handlers.ErrCodeInvalidID, route: "/api/v1/transactions/:id"},
+		{
+			name:   "EncodedSlashInBackupName",
+			method: http.MethodGet,
+			target: "/api/v1/backups/a%2Fb/download",
+			who:    whoAdmin,
+			status: 400,
+			code:   handlers.ErrCodeInvalidBackupName,
+			route:  "/api/v1/backups/:name/download",
+		},
+		{name: "BodyEmpty", method: http.MethodPost, target: "/api/v1/transactions", who: whoAdmin, body: "",
+			status: 422, code: handlers.ErrCodeValidationError, route: "/api/v1/transactions"},
+		{name: "BodyNull", method: http.MethodPost, target: "/api/v1/transactions", who: whoAdmin, body: "null",
+			status: 422, code: handlers.ErrCodeValidationError, route: "/api/v1/transactions"},
+		{name: "BodyExtraFields", method: http.MethodPost, target: "/api/v1/transactions", who: whoAdmin,
+			body: `{"zzz":1}`, status: 422, code: handlers.ErrCodeValidationError, route: "/api/v1/transactions"},
+		{name: "BodyGarbage", method: http.MethodPost, target: "/api/v1/transactions", who: whoAdmin, body: "{{{",
+			status: 400, code: handlers.ErrCodeInvalidRequest, route: "/api/v1/transactions"},
+		{
+			name:   "BodyTrailingGarbage",
+			method: http.MethodPost,
+			target: "/api/v1/transactions",
+			who:    whoAdmin,
+			body:   `{"zzz":1}garbage`,
+			status: 422,
+			code:   handlers.ErrCodeValidationError,
+			route:  "/api/v1/transactions",
+		},
+		{name: "Panic", method: http.MethodGet, target: testhelpers.PanicPath,
+			status: 500, code: handlers.ErrCodeInternal, route: testhelpers.PanicPath},
+	}
+}
+
+func (c snapshotCase) do(t *testing.T, ts *testhelpers.TestServer) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(c.method, c.target, strings.NewReader(c.body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	switch c.who {
+	case whoAdmin:
+		ts.Auth(t).Apply(req)
+	case whoMember:
+		_, sess := ts.AuthAs(t, user.RoleMember)
+		sess.Apply(req)
+	}
+	rec := httptest.NewRecorder()
+	ts.Server.Echo().ServeHTTP(rec, req)
+	return rec
+}
+
+// Снимок поведения стека: ожидания не меняются при замене роутера (план 24).
+func TestAPISnapshot_StatusCodeAndHeaders(t *testing.T) {
+	for _, c := range snapshotCases() {
+		t.Run(c.name, func(t *testing.T) {
+			ts := testhelpers.SetupHTTPServer(t)
+			ts.AddPanicRoute()
+
+			rec := c.do(t, ts)
+
+			require.Equal(t, c.status, rec.Code, "тело: %s", rec.Body.String())
+			assert.NotEmpty(t, rec.Header().Get(echo.HeaderXRequestID))
+			if c.code == "" {
+				return
+			}
+			assert.Equal(t, c.code, errorCode(t, rec))
+			assert.Contains(t, rec.Header().Get(echo.HeaderContentType), echo.MIMEApplicationJSON)
+			for name, want := range c.headers {
+				assert.Equal(t, want, rec.Header().Get(name), name)
+			}
+		})
+	}
+}
+
+func TestAPISnapshot_DownloadHeaders(t *testing.T) {
+	ts := testhelpers.SetupHTTPServer(t)
+	admin := ts.Auth(t)
+
+	rec := bearerRequest(ts, http.MethodPost, "/api/v1/backups", admin.Token, nil)
+	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+	var created handlers.APIResponse[handlers.BackupResponse]
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &created))
+
+	rec = bearerRequest(ts, http.MethodGet, "/api/v1/backups/"+created.Data.Name+"/download", admin.Token, nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, `attachment; filename="`+created.Data.Name+`"`, rec.Header().Get("Content-Disposition"))
+	assert.NotEmpty(t, rec.Header().Get(echo.HeaderXRequestID))
+}
+
+func TestAPISnapshot_LoginRateLimitedRetryAfter(t *testing.T) {
+	ts := testhelpers.SetupHTTPServer(t)
+	member := createBearerMember(t, ts)
+	body := map[string]string{"email": member.Email, "password": "definitely-not-the-password", "device_name": "x"}
+
+	var rec *httptest.ResponseRecorder
+	for range 21 {
+		rec = bearerRequest(ts, http.MethodPost, "/api/v1/auth/login", "", body)
+	}
+
+	require.Equal(t, http.StatusTooManyRequests, rec.Code)
+	assert.Equal(t, handlers.ErrCodeRateLimited, errorCode(t, rec))
+	assert.NotEmpty(t, rec.Header().Get("Retry-After"))
+	assert.NotEmpty(t, rec.Header().Get(echo.HeaderXRequestID))
 }

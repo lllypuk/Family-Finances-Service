@@ -284,3 +284,11 @@ func (ts *TestServer) CheckTableExists(t *testing.T, tableName string) bool {
 	}
 	return exists > 0
 }
+
+// PanicPath — маршрут AddPanicRoute.
+const PanicPath = "/__test/panic"
+
+// AddPanicRoute вешает на сервер маршрут, чей хендлер паникует, — для проверки recover и метрик.
+func (ts *TestServer) AddPanicRoute() {
+	ts.Server.Echo().GET(PanicPath, func(echo.Context) error { panic("test panic") })
+}
