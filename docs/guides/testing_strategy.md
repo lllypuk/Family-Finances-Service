@@ -249,11 +249,11 @@ func TestTransactionAPI_Create(t *testing.T) {
     sess := ts.Auth(t)
 
     req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1/transactions", body)
-    req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+    req.Header.Set("Content-Type", "application/json")
     sess.Apply(req) // Authorization: Bearer
 
     rec := httptest.NewRecorder()
-    ts.Server.Echo().ServeHTTP(rec, req)
+    ts.Server.ServeHTTP(rec, req)
 }
 ```
 
@@ -269,8 +269,8 @@ func TestFamilyHandler_CreateFamily(t *testing.T) {
     mockService := &MockFamilyService{}
     handler := NewFamilyHandler(mockService)
 
-    router := echo.New()
-    router.POST("/families", handler.CreateFamily)
+    rt := router.New(errorHandler)
+    rt.Register(http.MethodPost, "/families", handler.CreateFamily)
 
     requestBody := CreateFamilyRequest{
         Name: "Test Family",
@@ -291,7 +291,7 @@ func TestFamilyHandler_CreateFamily(t *testing.T) {
     req.Header.Set("Content-Type", "application/json")
     req.Header.Set("Authorization", "Bearer valid-token")
 
-    router.ServeHTTP(w, req)
+    rt.ServeHTTP(w, req)
 
     // Assert
     assert.Equal(t, http.StatusCreated, w.Code)

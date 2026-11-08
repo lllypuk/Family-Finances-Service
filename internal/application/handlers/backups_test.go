@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -57,16 +56,13 @@ func (m *MockBackupService) GetBackupFilePath(filename string) string {
 
 const testBackupName = "backup_20260904_030000123.db"
 
-func backupContext(method, target, name string) (echo.Context, *httptest.ResponseRecorder) {
-	e := echo.New()
-	rec := httptest.NewRecorder()
-	c := e.NewContext(httptest.NewRequest(method, target, nil), rec)
+func backupRequest(method, target, name string) (*http.Request, *httptest.ResponseRecorder) {
+	req := httptest.NewRequest(method, target, nil)
 	if name != "" {
-		c.SetParamNames("name")
-		c.SetParamValues(name)
+		req.SetPathValue("name", name)
 	}
 
-	return c, rec
+	return req, httptest.NewRecorder()
 }
 
 func TestBackupHandler_CreateBackup_Success(t *testing.T) {
@@ -75,8 +71,8 @@ func TestBackupHandler_CreateBackup_Success(t *testing.T) {
 	mockService.On("CreateBackup", mock.Anything).
 		Return(&services.BackupInfo{Filename: testBackupName, Size: 4096, CreatedAt: created}, nil)
 
-	c, rec := backupContext(http.MethodPost, "/api/v1/backups", "")
-	require.NoError(t, handlers.NewBackupHandler(mockService).CreateBackup(c))
+	req, rec := backupRequest(http.MethodPost, "/api/v1/backups", "")
+	require.NoError(t, handlers.NewBackupHandler(mockService).CreateBackup(rec, req))
 
 	assert.Equal(t, http.StatusCreated, rec.Code)
 	var response handlers.APIResponse[handlers.BackupResponse]
@@ -90,8 +86,8 @@ func TestBackupHandler_CreateBackup_ServiceError(t *testing.T) {
 	mockService := &MockBackupService{}
 	mockService.On("CreateBackup", mock.Anything).Return(nil, assert.AnError)
 
-	c, rec := backupContext(http.MethodPost, "/api/v1/backups", "")
-	require.NoError(t, handlers.NewBackupHandler(mockService).CreateBackup(c))
+	req, rec := backupRequest(http.MethodPost, "/api/v1/backups", "")
+	require.NoError(t, handlers.NewBackupHandler(mockService).CreateBackup(rec, req))
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.Equal(t, handlers.ErrCodeBackupFailed, decodeErrorCode(t, rec))
@@ -103,8 +99,8 @@ func TestBackupHandler_ListBackups_Success(t *testing.T) {
 		{Filename: testBackupName, Size: 10, CreatedAt: time.Now()},
 	}, nil)
 
-	c, rec := backupContext(http.MethodGet, "/api/v1/backups", "")
-	require.NoError(t, handlers.NewBackupHandler(mockService).ListBackups(c))
+	req, rec := backupRequest(http.MethodGet, "/api/v1/backups", "")
+	require.NoError(t, handlers.NewBackupHandler(mockService).ListBackups(rec, req))
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	var response handlers.APIResponse[[]handlers.BackupResponse]
@@ -117,8 +113,8 @@ func TestBackupHandler_ListBackups_Empty(t *testing.T) {
 	mockService := &MockBackupService{}
 	mockService.On("ListBackups", mock.Anything).Return([]*services.BackupInfo{}, nil)
 
-	c, rec := backupContext(http.MethodGet, "/api/v1/backups", "")
-	require.NoError(t, handlers.NewBackupHandler(mockService).ListBackups(c))
+	req, rec := backupRequest(http.MethodGet, "/api/v1/backups", "")
+	require.NoError(t, handlers.NewBackupHandler(mockService).ListBackups(rec, req))
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), `"data":[]`)
@@ -133,11 +129,11 @@ func TestBackupHandler_DownloadBackup_Success(t *testing.T) {
 		Return(&services.BackupInfo{Filename: testBackupName, Size: 12, CreatedAt: time.Now()}, nil)
 	mockService.On("GetBackupFilePath", testBackupName).Return(path)
 
-	c, rec := backupContext(http.MethodGet, "/api/v1/backups/"+testBackupName+"/download", testBackupName)
-	require.NoError(t, handlers.NewBackupHandler(mockService).DownloadBackup(c))
+	req, rec := backupRequest(http.MethodGet, "/api/v1/backups/"+testBackupName+"/download", testBackupName)
+	require.NoError(t, handlers.NewBackupHandler(mockService).DownloadBackup(rec, req))
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Contains(t, rec.Header().Get(echo.HeaderContentDisposition), testBackupName)
+	assert.Contains(t, rec.Header().Get("Content-Disposition"), testBackupName)
 	assert.Equal(t, "sqlite-bytes", rec.Body.String())
 }
 
@@ -145,8 +141,8 @@ func TestBackupHandler_DownloadBackup_InvalidName(t *testing.T) {
 	mockService := &MockBackupService{}
 	mockService.On("GetBackup", mock.Anything, "../secrets.db").Return(nil, services.ErrInvalidBackupFilename)
 
-	c, rec := backupContext(http.MethodGet, "/api/v1/backups/x/download", "../secrets.db")
-	require.NoError(t, handlers.NewBackupHandler(mockService).DownloadBackup(c))
+	req, rec := backupRequest(http.MethodGet, "/api/v1/backups/x/download", "../secrets.db")
+	require.NoError(t, handlers.NewBackupHandler(mockService).DownloadBackup(rec, req))
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Equal(t, handlers.ErrCodeInvalidBackupName, decodeErrorCode(t, rec))
@@ -156,8 +152,8 @@ func TestBackupHandler_DownloadBackup_NotFound(t *testing.T) {
 	mockService := &MockBackupService{}
 	mockService.On("GetBackup", mock.Anything, testBackupName).Return(nil, services.ErrBackupNotFound)
 
-	c, rec := backupContext(http.MethodGet, "/api/v1/backups/x/download", testBackupName)
-	require.NoError(t, handlers.NewBackupHandler(mockService).DownloadBackup(c))
+	req, rec := backupRequest(http.MethodGet, "/api/v1/backups/x/download", testBackupName)
+	require.NoError(t, handlers.NewBackupHandler(mockService).DownloadBackup(rec, req))
 
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 	assert.Equal(t, handlers.ErrCodeBackupNotFound, decodeErrorCode(t, rec))
@@ -167,8 +163,8 @@ func TestBackupHandler_DeleteBackup_Success(t *testing.T) {
 	mockService := &MockBackupService{}
 	mockService.On("DeleteBackup", mock.Anything, testBackupName).Return(nil)
 
-	c, rec := backupContext(http.MethodDelete, "/api/v1/backups/"+testBackupName, testBackupName)
-	require.NoError(t, handlers.NewBackupHandler(mockService).DeleteBackup(c))
+	req, rec := backupRequest(http.MethodDelete, "/api/v1/backups/"+testBackupName, testBackupName)
+	require.NoError(t, handlers.NewBackupHandler(mockService).DeleteBackup(rec, req))
 
 	assert.Equal(t, http.StatusNoContent, rec.Code)
 	mockService.AssertExpectations(t)
@@ -178,8 +174,8 @@ func TestBackupHandler_DeleteBackup_InvalidName(t *testing.T) {
 	mockService := &MockBackupService{}
 	mockService.On("DeleteBackup", mock.Anything, "notes.txt").Return(services.ErrInvalidBackupFilename)
 
-	c, rec := backupContext(http.MethodDelete, "/api/v1/backups/notes.txt", "notes.txt")
-	require.NoError(t, handlers.NewBackupHandler(mockService).DeleteBackup(c))
+	req, rec := backupRequest(http.MethodDelete, "/api/v1/backups/notes.txt", "notes.txt")
+	require.NoError(t, handlers.NewBackupHandler(mockService).DeleteBackup(rec, req))
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Equal(t, handlers.ErrCodeInvalidBackupName, decodeErrorCode(t, rec))
@@ -189,8 +185,8 @@ func TestBackupHandler_DeleteBackup_NotFound(t *testing.T) {
 	mockService := &MockBackupService{}
 	mockService.On("DeleteBackup", mock.Anything, testBackupName).Return(services.ErrBackupNotFound)
 
-	c, rec := backupContext(http.MethodDelete, "/api/v1/backups/"+testBackupName, testBackupName)
-	require.NoError(t, handlers.NewBackupHandler(mockService).DeleteBackup(c))
+	req, rec := backupRequest(http.MethodDelete, "/api/v1/backups/"+testBackupName, testBackupName)
+	require.NoError(t, handlers.NewBackupHandler(mockService).DeleteBackup(rec, req))
 
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 	assert.Equal(t, handlers.ErrCodeBackupNotFound, decodeErrorCode(t, rec))

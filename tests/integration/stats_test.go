@@ -42,7 +42,7 @@ func TestStatsAPI_Summary(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/summary", nil)
 	session.Apply(req)
 	rec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
@@ -62,7 +62,7 @@ func TestStatsAPI_Summary_InvalidDate(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/summary?from=01.03.2025", nil)
 	session.Apply(req)
 	rec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
@@ -91,7 +91,7 @@ func TestStatsAPI_Summary_BeyondFormerPageCeiling(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/summary", nil)
 	session.Apply(req)
 	rec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
@@ -153,7 +153,7 @@ func TestStatsAPI_Monthly(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/monthly?from=2026-08-15&to=2026-09-13", nil)
 	session.Apply(req)
 	rec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
@@ -173,7 +173,7 @@ func TestStatsAPI_Monthly_Unauthorized(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/monthly", nil)
 	rec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
@@ -187,7 +187,7 @@ func TestStatsAPI_Monthly_PeriodTooLong(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/monthly?from=0001-01-01&to=9999-12-31", nil)
 	session.Apply(req)
 	rec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
 
@@ -206,7 +206,7 @@ func TestStatsAPI_Monthly_InvertedPeriod(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/monthly?from=2026-09-30&to=2026-09-01", nil)
 	session.Apply(req)
 	rec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 

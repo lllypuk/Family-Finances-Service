@@ -2,16 +2,14 @@ package application
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"time"
 
-	"github.com/go-playground/validator/v10"
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
-
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/application/router"
 	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/metrics"
@@ -25,11 +23,16 @@ const (
 	HTTPRequestTimeout = 30 * time.Second
 
 	// recognizeRoute живёт на своих дедлайнах (handlers.RecognizeHandler), общий таймаут его не касается.
-	recognizeRoute = "/api/v1/transactions/recognize"
+	recognizeRoute = apiV1Prefix + transactionsPrefix + recognizeSuffix
+
+	apiV1Prefix        = "/api/v1"
+	transactionsPrefix = "/transactions"
+	recognizeSuffix    = "/recognize"
 )
 
 type HTTPServer struct {
-	echo                 *echo.Echo
+	router               *router.Router
+	handler              http.Handler
 	server               *http.Server
 	services             *services.Services
 	config               *Config
@@ -58,7 +61,7 @@ type Config struct {
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
 	IdleTimeout  time.Duration
-	// TrustedProxies — сети, чей X-Forwarded-For определяет c.RealIP(); пусто — только RemoteAddr.
+	// TrustedProxies — сети, чей X-Forwarded-For определяет адрес клиента (auth.ClientIP); пусто — только RemoteAddr.
 	TrustedProxies []*net.IPNet
 	// LoginLimiter — лимитер POST /auth/login; nil — auth.NewRateLimiter, причём без TrustedProxies
 	// корзина per-IP отключена: за прокси все клиенты — один адрес, лимит закрывал бы вход всей семье.
@@ -82,8 +85,6 @@ func NewHTTPServerWithObservability(
 	config *Config,
 	obsService *observability.Service,
 ) *HTTPServer {
-	e := echo.New()
-
 	// Без observability /health всё равно отвечает по схеме Health (в том числе setup_complete).
 	healthService := observability.NewHealthService(version.String())
 	logger := slog.Default()
@@ -102,60 +103,25 @@ func NewHTTPServerWithObservability(
 		limiter = auth.NewRateLimiter(nil, opts...)
 	}
 
-	e.Validator = &CustomValidator{validator: validator.New()}
-	e.IPExtractor = auth.IPExtractor(config.TrustedProxies)
-	e.HTTPErrorHandler = newAPIErrorHandler(logger)
-
-	// Базовые middleware. Метрики — первыми, чтобы считать и запросы, отвергнутые дальше по цепочке.
-	if config.Metrics != nil {
-		e.Use(metrics.EchoMiddleware(config.Metrics.HTTP()))
-	}
-	e.Use(middleware.RecoverWithConfig(middleware.RecoverConfig{
-		LogErrorFunc: panicLogger(config.Metrics, logger),
-	}))
-	e.Use(middleware.RequestID())
-
-	// Timeout для всех запросов
-	e.Use(middleware.ContextTimeoutWithConfig(middleware.ContextTimeoutConfig{
-		Skipper: func(c echo.Context) bool { return c.Path() == recognizeRoute },
-		Timeout: HTTPRequestTimeout,
-	}))
-
-	// Добавляем observability middleware если сервис доступен
-	if obsService != nil {
-		// Structured logging
-		e.Use(observability.LoggingMiddleware(obsService.Logger))
-	} else {
-		// Fallback к стандартному логированию
-		e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
-			LogStatus: true,
-			LogURI:    true,
-			LogError:  true,
-			LogValuesFunc: func(_ echo.Context, v middleware.RequestLoggerValues) error {
-				e.Logger.Info("request",
-					"uri", v.URI,
-					"status", v.Status,
-					"error", v.Error,
-				)
-				return nil
-			},
-		}))
-	}
-
 	uploadTimeout := config.RecognizeUploadTimeout
 	if uploadTimeout == 0 {
 		uploadTimeout = handlers.RecognizeUploadTimeout
 	}
 
+	rt := router.New(newAPIErrorHandler(logger))
+	clientIP := auth.ClientIP(config.TrustedProxies)
+
 	server := &HTTPServer{
-		echo:                 e,
+		router:               rt,
 		services:             services,
 		config:               config,
 		observabilityService: obsService,
 		healthService:        healthService,
 
 		// Инициализация API handlers
-		authHandler:           handlers.NewAuthHandler(services.Auth, limiter, logger, loginObserver(config.Metrics)),
+		authHandler: handlers.NewAuthHandler(
+			services.Auth, limiter, logger, loginObserver(config.Metrics), clientIP,
+		),
 		meHandler:             handlers.NewMeHandler(services.User, services.Auth),
 		userHandler:           handlers.NewUserHandler(services.User, services.Auth),
 		familyHandler:         handlers.NewFamilyHandler(services.Family),
@@ -171,10 +137,9 @@ func NewHTTPServerWithObservability(
 	}
 
 	server.setupRoutes()
-	// e.Server — то, что гасит echo.Shutdown; configureServer его не заполняет,
-	// поэтому связать экземпляр надо здесь.
+	server.handler = server.buildChain(logger, clientIP)
 	server.server = server.buildNetHTTPServer(net.JoinHostPort(config.Host, config.Port))
-	e.Server = server.server
+
 	return server
 }
 
@@ -186,157 +151,166 @@ func loginObserver(m *metrics.Metrics) handlers.LoginObserver {
 	return m.Login()
 }
 
-// panicLogger считает панику и пишет стек в slog; штатный вывод Recover при заданном
-// callback выключается. Возврат nil подавил бы 500 — ошибку нужно вернуть как есть.
-func panicLogger(m *metrics.Metrics, logger *slog.Logger) middleware.LogErrorFunc {
-	return func(c echo.Context, err error, stack []byte) error {
-		if m != nil {
-			m.HTTP().ObservePanic()
+// buildChain оборачивает роутер: метрики, RequestID, Recover, Timeout, лог запроса — снаружи внутрь.
+func (s *HTTPServer) buildChain(logger *slog.Logger, clientIP func(*http.Request) string) http.Handler {
+	var h http.Handler = s.router
+	h = observability.RequestLogger(logger, clientIP)(h)
+	h = observability.Timeout(HTTPRequestTimeout, func(r *http.Request) bool {
+		return r.Method == http.MethodPost && r.URL.EscapedPath() == recognizeRoute
+	})(h)
+	h = observability.Recover(s.onPanic(logger), func(w http.ResponseWriter, _ *http.Request) {
+		_ = handlers.RespondAPIError(w, http.StatusInternalServerError, handlers.ErrCodeInternal,
+			statusMessage(http.StatusInternalServerError))
+	})(h)
+	h = observability.RequestID(h)
+	if s.config.Metrics != nil {
+		h = metrics.HTTPMiddleware(s.config.Metrics.HTTP())(h)
+	}
+
+	return h
+}
+
+// onPanic считает панику и пишет стек в slog.
+func (s *HTTPServer) onPanic(logger *slog.Logger) func(*http.Request, any, []byte) {
+	return func(r *http.Request, v any, stack []byte) {
+		if s.config.Metrics != nil {
+			s.config.Metrics.HTTP().ObservePanic()
 		}
-		logger.ErrorContext(c.Request().Context(), "HTTP handler panicked",
-			slog.String("method", c.Request().Method),
-			slog.String("path", c.Request().URL.Path),
-			slog.String("error", err.Error()),
+		logger.ErrorContext(r.Context(), "HTTP handler panicked",
+			slog.String("method", r.Method),
+			slog.String("path", r.URL.Path),
+			slog.String("error", fmt.Sprint(v)),
 			slog.String("stack", string(stack)),
 		)
-
-		return err
 	}
 }
 
-// Echo returns the echo instance for testing purposes
-func (s *HTTPServer) Echo() *echo.Echo {
-	return s.echo
+// ServeHTTP отдаёт запрос всей цепочке: middleware и роутеру.
+func (s *HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.handler.ServeHTTP(w, r)
+}
+
+// Router — роутер сервера; тестовые стенды добавляют в него свои маршруты.
+func (s *HTTPServer) Router() *router.Router {
+	return s.router
+}
+
+// Routes — зарегистрированные маршруты; по ним сверяется спецификация.
+func (s *HTTPServer) Routes() []router.Route {
+	return s.router.Routes()
 }
 
 func (s *HTTPServer) setupRoutes() {
-	s.echo.GET("/health", s.healthService.HealthHandler())
-
-	// Явный корневой catch-all: иначе у несматченного пути c.Path() пуст либо достаётся
-	// соседнему шаблону, и метка route у метрик врёт (/healthz → /health).
-	s.echo.RouteNotFound("/*", echo.NotFoundHandler)
+	s.router.Register(http.MethodGet, "/health", s.healthService.HealthHandler())
 
 	// Единственный публичный маршрут API. Зарегистрирован мимо группы, поэтому
 	// RequireBearer его не касается.
-	s.echo.POST("/api/v1/auth/login", s.authHandler.Login)
+	s.router.Register(http.MethodPost, apiV1Prefix+"/auth/login", s.authHandler.Login)
 
-	api := s.echo.Group("/api/v1", auth.RequireBearer(s.services.Auth))
+	api := s.router.Group(apiV1Prefix, auth.RequireBearer(s.services.Auth))
 
-	api.POST("/auth/logout", s.authHandler.Logout)
-	api.GET("/auth/sessions", s.authHandler.ListSessions)
-	api.DELETE("/auth/sessions/:id", s.authHandler.RevokeSession)
+	api.Register(http.MethodPost, "/auth/logout", s.authHandler.Logout)
+	api.Register(http.MethodGet, "/auth/sessions", s.authHandler.ListSessions)
+	api.Register(http.MethodDelete, "/auth/sessions/:id", s.authHandler.RevokeSession)
 
-	api.GET("/me", s.meHandler.GetMe)
-	api.PUT("/me", s.meHandler.UpdateMe)
-	api.PUT("/me/password", s.meHandler.ChangePassword)
+	api.Register(http.MethodGet, "/me", s.meHandler.GetMe)
+	api.Register(http.MethodPut, "/me", s.meHandler.UpdateMe)
+	api.Register(http.MethodPut, "/me/password", s.meHandler.ChangePassword)
 
 	s.setupResourceRoutes(api)
 }
 
 // setupHoldingRoutes — активы и пассивы; удаление уносит историю снимков, поэтому только админ.
-func (s *HTTPServer) setupHoldingRoutes(api *echo.Group, financeAccess, adminOnly echo.MiddlewareFunc) {
+func (s *HTTPServer) setupHoldingRoutes(api *router.Group, financeAccess, adminOnly router.Middleware) {
 	holdings := api.Group("/holdings", financeAccess)
-	holdings.GET("", s.holdingHandler.ListHoldings)
-	holdings.POST("", s.holdingHandler.CreateHolding)
-	holdings.PUT("/:id", s.holdingHandler.UpdateHolding)
-	holdings.DELETE("/:id", s.holdingHandler.DeleteHolding, adminOnly)
-	holdings.GET("/:id/values", s.holdingHandler.ListHoldingValues)
-	holdings.PUT("/:id/values/:date", s.holdingHandler.PutHoldingValue)
-	holdings.DELETE("/:id/values/:date", s.holdingHandler.DeleteHoldingValue)
+	holdings.Register(http.MethodGet, "", s.holdingHandler.ListHoldings)
+	holdings.Register(http.MethodPost, "", s.holdingHandler.CreateHolding)
+	holdings.Register(http.MethodPut, "/:id", s.holdingHandler.UpdateHolding)
+	holdings.Register(http.MethodDelete, "/:id", s.holdingHandler.DeleteHolding, adminOnly)
+	holdings.Register(http.MethodGet, "/:id/values", s.holdingHandler.ListHoldingValues)
+	holdings.Register(http.MethodPut, "/:id/values/:date", s.holdingHandler.PutHoldingValue)
+	holdings.Register(http.MethodDelete, "/:id/values/:date", s.holdingHandler.DeleteHoldingValue)
 }
 
-// setupResourceRoutes — ролевая модель: управление пользователями — только админ,
-// финансовые разделы — админ и member. Удаление категории закрыто до админа:
-// через API оно необратимо и без подтверждения.
-func (s *HTTPServer) setupResourceRoutes(api *echo.Group) {
+// setupResourceRoutes — users только админ, финансовые разделы админ и member; удаление категории необратимо, поэтому админ.
+func (s *HTTPServer) setupResourceRoutes(api *router.Group) {
 	adminOnly := auth.RequireRole(user.RoleAdmin)
 	financeAccess := auth.RequireRole(user.RoleAdmin, user.RoleMember)
 
 	// Семья: читают все роли, меняет только админ.
 	family := api.Group("/family")
-	family.GET("", s.familyHandler.GetFamily)
-	family.PUT("", s.familyHandler.UpdateFamily, adminOnly)
+	family.Register(http.MethodGet, "", s.familyHandler.GetFamily)
+	family.Register(http.MethodPut, "", s.familyHandler.UpdateFamily, adminOnly)
 
 	users := api.Group("/users", adminOnly)
-	users.POST("", s.userHandler.CreateUser)
-	users.GET("", s.userHandler.GetUsers)
-	users.GET("/:id", s.userHandler.GetUserByID)
-	users.PUT("/:id", s.userHandler.UpdateUser)
-	users.PATCH("/:id", s.userHandler.PatchUser)
-	users.PUT("/:id/password", s.userHandler.SetUserPassword)
+	users.Register(http.MethodPost, "", s.userHandler.CreateUser)
+	users.Register(http.MethodGet, "", s.userHandler.GetUsers)
+	users.Register(http.MethodGet, "/:id", s.userHandler.GetUserByID)
+	users.Register(http.MethodPut, "/:id", s.userHandler.UpdateUser)
+	users.Register(http.MethodPatch, "/:id", s.userHandler.PatchUser)
+	users.Register(http.MethodPut, "/:id/password", s.userHandler.SetUserPassword)
 
 	categories := api.Group("/categories", financeAccess)
-	categories.POST("", s.categoryHandler.CreateCategory)
-	categories.GET("", s.categoryHandler.GetCategories)
-	categories.GET("/:id", s.categoryHandler.GetCategoryByID)
-	categories.PUT("/:id", s.categoryHandler.UpdateCategory)
-	categories.DELETE("/:id", s.categoryHandler.DeleteCategory, adminOnly)
+	categories.Register(http.MethodPost, "", s.categoryHandler.CreateCategory)
+	categories.Register(http.MethodGet, "", s.categoryHandler.GetCategories)
+	categories.Register(http.MethodGet, "/:id", s.categoryHandler.GetCategoryByID)
+	categories.Register(http.MethodPut, "/:id", s.categoryHandler.UpdateCategory)
+	categories.Register(http.MethodDelete, "/:id", s.categoryHandler.DeleteCategory, adminOnly)
 
 	accounts := api.Group("/accounts", financeAccess)
-	accounts.GET("", s.accountHandler.ListAccounts)
-	accounts.POST("", s.accountHandler.CreateAccount)
-	accounts.PUT("/:id", s.accountHandler.UpdateAccount)
-	accounts.DELETE("/:id", s.accountHandler.DeleteAccount, adminOnly)
-	accounts.PUT("/:id/balances/:month", s.reconciliationHandler.PutAccountBalance)
-	accounts.DELETE("/:id/balances/:month", s.reconciliationHandler.DeleteAccountBalance)
+	accounts.Register(http.MethodGet, "", s.accountHandler.ListAccounts)
+	accounts.Register(http.MethodPost, "", s.accountHandler.CreateAccount)
+	accounts.Register(http.MethodPut, "/:id", s.accountHandler.UpdateAccount)
+	accounts.Register(http.MethodDelete, "/:id", s.accountHandler.DeleteAccount, adminOnly)
+	accounts.Register(http.MethodPut, "/:id/balances/:month", s.reconciliationHandler.PutAccountBalance)
+	accounts.Register(http.MethodDelete, "/:id/balances/:month", s.reconciliationHandler.DeleteAccountBalance)
 
 	s.setupHoldingRoutes(api, financeAccess, adminOnly)
 
-	transactions := api.Group("/transactions", financeAccess)
-	transactions.POST("", s.transactionHandler.CreateTransaction)
-	transactions.GET("", s.transactionHandler.GetTransactions)
-	transactions.POST("/bulk-delete", s.transactionHandler.BulkDeleteTransactions)
-	transactions.POST("/recognize", s.recognizeHandler.Recognize, middleware.BodyLimit(handlers.RecognizeBodyLimit))
-	transactions.GET("/:id", s.transactionHandler.GetTransactionByID)
-	transactions.PUT("/:id", s.transactionHandler.UpdateTransaction)
-	transactions.DELETE("/:id", s.transactionHandler.DeleteTransaction)
+	transactions := api.Group(transactionsPrefix, financeAccess)
+	transactions.Register(http.MethodPost, "", s.transactionHandler.CreateTransaction)
+	transactions.Register(http.MethodGet, "", s.transactionHandler.GetTransactions)
+	transactions.Register(http.MethodPost, "/bulk-delete", s.transactionHandler.BulkDeleteTransactions)
+	transactions.Register(http.MethodPost, recognizeSuffix, s.recognizeHandler.Recognize)
+	transactions.Register(http.MethodGet, "/:id", s.transactionHandler.GetTransactionByID)
+	transactions.Register(http.MethodPut, "/:id", s.transactionHandler.UpdateTransaction)
+	transactions.Register(http.MethodDelete, "/:id", s.transactionHandler.DeleteTransaction)
 
 	budgets := api.Group("/budgets", financeAccess)
-	budgets.POST("", s.budgetHandler.CreateBudget)
-	budgets.GET("", s.budgetHandler.GetBudgets)
-	budgets.GET("/:id", s.budgetHandler.GetBudgetByID)
-	budgets.PUT("/:id", s.budgetHandler.UpdateBudget)
-	budgets.DELETE("/:id", s.budgetHandler.DeleteBudget)
+	budgets.Register(http.MethodPost, "", s.budgetHandler.CreateBudget)
+	budgets.Register(http.MethodGet, "", s.budgetHandler.GetBudgets)
+	budgets.Register(http.MethodGet, "/:id", s.budgetHandler.GetBudgetByID)
+	budgets.Register(http.MethodPut, "/:id", s.budgetHandler.UpdateBudget)
+	budgets.Register(http.MethodDelete, "/:id", s.budgetHandler.DeleteBudget)
 
 	stats := api.Group("/stats", financeAccess)
-	stats.GET("/summary", s.statsHandler.GetSummary)
-	stats.GET("/monthly", s.statsHandler.GetMonthly)
-	stats.GET("/net-worth", s.statsHandler.GetNetWorth)
-	stats.GET("/reconciliation", s.reconciliationHandler.GetReconciliationStats)
+	stats.Register(http.MethodGet, "/summary", s.statsHandler.GetSummary)
+	stats.Register(http.MethodGet, "/monthly", s.statsHandler.GetMonthly)
+	stats.Register(http.MethodGet, "/net-worth", s.statsHandler.GetNetWorth)
+	stats.Register(http.MethodGet, "/reconciliation", s.reconciliationHandler.GetReconciliationStats)
 
 	backups := api.Group("/backups", adminOnly)
-	backups.POST("", s.backupHandler.CreateBackup)
-	backups.GET("", s.backupHandler.ListBackups)
-	backups.GET("/:name/download", s.backupHandler.DownloadBackup)
-	backups.DELETE("/:name", s.backupHandler.DeleteBackup)
+	backups.Register(http.MethodPost, "", s.backupHandler.CreateBackup)
+	backups.Register(http.MethodGet, "", s.backupHandler.ListBackups)
+	backups.Register(http.MethodGet, "/:name/download", s.backupHandler.DownloadBackup)
+	backups.Register(http.MethodDelete, "/:name", s.backupHandler.DeleteBackup)
 }
 
-// Start слушает до остановки; сам *http.Server собран в конструкторе, чтобы
-// Shutdown был возможен и до того, как горутина Start успела стартовать.
+// Start слушает до остановки; *http.Server собран в конструкторе, чтобы Shutdown был возможен до старта.
 func (s *HTTPServer) Start() error {
-	return s.echo.StartServer(s.server)
+	return s.server.ListenAndServe()
 }
 
 func (s *HTTPServer) Shutdown(ctx context.Context) error {
-	return s.echo.Shutdown(ctx)
+	return s.server.Shutdown(ctx)
 }
 
 func (s *HTTPServer) buildNetHTTPServer(address string) *http.Server {
 	return &http.Server{
 		Addr:         address,
-		Handler:      s.echo,
+		Handler:      s,
 		ReadTimeout:  s.config.ReadTimeout,
 		WriteTimeout: s.config.WriteTimeout,
 		IdleTimeout:  s.config.IdleTimeout,
 	}
-}
-
-// CustomValidator wraps go-playground/validator for Echo
-type CustomValidator struct {
-	validator *validator.Validate
-}
-
-// Validate validates structs using go-playground/validator
-func (cv *CustomValidator) Validate(i any) error {
-	return cv.validator.Struct(i)
 }

@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/application/router"
 	"family-budget-service/internal/domain/category"
 	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/transaction"
@@ -90,10 +90,10 @@ func TestAPIAuth_AnonymousRequestsRejected(t *testing.T) {
 
 	fixtures := createAPIFixtures(t, testServer)
 
-	// Список маршрутов не поддерживается руками: он берётся из роутера Echo,
+	// Список маршрутов не поддерживается руками: он берётся из роутера сервера,
 	// поэтому маршрут, зарегистрированный мимо защищённой группы, немедленно
 	// уронит тест, а не тихо останется без проверки.
-	routes := apiV1Routes(testServer.Server.Echo(), fixtures)
+	routes := apiV1Routes(testServer.Server.Routes(), fixtures)
 	require.NotEmpty(t, routes, "в роутере не нашлось ни одного маршрута /api/v1")
 
 	// Отозванный токен: сессия выдана и тут же удалена сменой пароля, сам токен остался у клиента.
@@ -139,10 +139,10 @@ func TestAPIAuth_AnonymousRequestsRejected(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", bytes.NewBuffer(body))
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set(echo.HeaderAuthorization, garbageBearer)
+		req.Header.Set("Authorization", garbageBearer)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		require.Equal(t, http.StatusUnauthorized, rec.Code,
 			"анонимный клиент создал транзакцию, тело ответа: %s", rec.Body.String())
@@ -157,11 +157,11 @@ func assertAPIUnauthorized(t *testing.T, ts *testhelpers.TestServer, route apiRo
 	req := httptest.NewRequest(route.method, route.path, bytes.NewBufferString("{}"))
 	req.Header.Set("Content-Type", "application/json")
 	if authorization != "" {
-		req.Header.Set(echo.HeaderAuthorization, authorization)
+		req.Header.Set("Authorization", authorization)
 	}
 	rec := httptest.NewRecorder()
 
-	ts.Server.Echo().ServeHTTP(rec, req)
+	ts.Server.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusUnauthorized, rec.Code,
 		"%s %s с Authorization=%q обязан получить 401, тело: %s",
@@ -197,7 +197,7 @@ func TestAPIAuth_AuthenticatedRequestsAllowed(t *testing.T) {
 				auth.Apply(req)
 				rec := httptest.NewRecorder()
 
-				testServer.Server.Echo().ServeHTTP(rec, req)
+				testServer.Server.ServeHTTP(rec, req)
 
 				assert.Equal(t, http.StatusOK, rec.Code,
 					"аутентифицированный GET %s обязан получить 200, тело: %s", tc.path, rec.Body.String())
@@ -220,7 +220,7 @@ func TestAPIAuth_AuthenticatedRequestsAllowed(t *testing.T) {
 		auth.Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusCreated, rec.Code, "тело ответа: %s", rec.Body.String())
 	})
@@ -231,7 +231,7 @@ func TestAPIAuth_AuthenticatedRequestsAllowed(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 	})
@@ -261,7 +261,7 @@ func TestAPIAuth_BodyUserIDIgnored(t *testing.T) {
 	auth.Apply(req)
 	rec := httptest.NewRecorder()
 
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusCreated, rec.Code, "тело ответа: %s", rec.Body.String())
 
@@ -284,7 +284,7 @@ func TestAPIAuth_BodyUserIDIgnored(t *testing.T) {
 	assert.Equal(t, testServer.AuthUser.ID, stored.UserID)
 }
 
-// apiRoute — конкретный запрос, собранный из шаблона маршрута Echo.
+// apiRoute — конкретный запрос, собранный из шаблона маршрута роутера.
 type apiRoute struct {
 	method string
 	path   string
@@ -292,18 +292,12 @@ type apiRoute struct {
 
 // apiV1Routes перечисляет все зарегистрированные маршруты группы /api/v1,
 // подставляя вместо `:param` идентификаторы существующих записей.
-// Wildcard-маршруты (`/*`), которые Echo сам вешает на группу с middleware,
-// пропускаются: за ними стоит NotFoundHandler, а не хендлер приложения.
-func apiV1Routes(e *echo.Echo, fixtures apiFixtures) []apiRoute {
+func apiV1Routes(registered []router.Route, fixtures apiFixtures) []apiRoute {
 	seen := make(map[apiRoute]struct{})
 	routes := make([]apiRoute, 0)
 
-	for _, route := range e.Routes() {
-		if !strings.HasPrefix(route.Path, apiV1Prefix) || strings.Contains(route.Path, "*") {
-			continue
-		}
-		// Псевдо-метод Echo для «маршрут не найден» — не запрос приложения.
-		if route.Method == echo.RouteNotFound {
+	for _, route := range registered {
+		if !strings.HasPrefix(route.Path, apiV1Prefix) {
 			continue
 		}
 		// Единственный публичный маршрут API: логин выдаёт токен анонимному клиенту.

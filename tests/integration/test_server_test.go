@@ -27,7 +27,7 @@ func TestSetupHTTPServer_BearerAccepted(t *testing.T) {
 		session.Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		// Тело пустое — ждём ошибку валидации, а не 401.
 		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
@@ -38,7 +38,7 @@ func TestSetupHTTPServer_BearerAccepted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusUnauthorized, rec.Code, rec.Body.String())
 	})
@@ -53,7 +53,7 @@ func TestSetupHTTPServer_EmptyDatabase(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
@@ -70,7 +70,7 @@ func TestSetupHTTPServer_EmptyDatabase(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, path, nil)
 			rec := httptest.NewRecorder()
 
-			testServer.Server.Echo().ServeHTTP(rec, req)
+			testServer.Server.ServeHTTP(rec, req)
 
 			assert.Equal(t, http.StatusNotFound, rec.Code, "GET %s отдал %d", path, rec.Code)
 			assert.Contains(t, rec.Header().Get("Content-Type"), "application/json", path)

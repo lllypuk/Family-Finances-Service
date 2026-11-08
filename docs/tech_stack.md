@@ -18,7 +18,7 @@
 
 ### Backend
 - **Язык**: Go 1.27+
-- **Framework**: Echo Web Framework v4.15.4
+- **HTTP**: `net/http` и собственный роутер сегментов (`internal/application/router`)
 - **База данных**: SQLite (modernc.org/sqlite — pure Go, без CGO)
 - **Валидация**: go-playground/validator v10.27.0
 - **UUID**: google/uuid v1.6.0 для идентификаторов
@@ -63,7 +63,7 @@ Family-Finances-Service/
 ├── internal/              # Приватный код приложения
 │   ├── domain/           # Domain entities и бизнес-логика
 │   ├── auth/             # Bearer-токены, сессии, middleware, лимитер логина
-│   ├── application/      # Echo, JSON error handler, хендлеры /api/v1
+│   ├── application/      # HTTP-сервер, router/, JSON error handler, хендлеры /api/v1
 │   ├── services/         # Бизнес-логика
 │   ├── infrastructure/   # Реализация репозиториев (SQLite), миграции; llmengine/ — вызов Ollama
 │   ├── recognize/        # Распознавание скриншотов: промпт, разбор и нормализация ответа модели
@@ -96,7 +96,7 @@ Family-Finances-Service/
 ### Observability
 - **Логирование**: slog (structured logging)
 - **Health checks**: /health эндпоинт
-- **Метрики**: Prometheus `ffs_*` на служебном слушателе `METRICS_ADDR` (`GET /metrics`, вне Echo);
+- **Метрики**: Prometheus `ffs_*` на служебном слушателе `METRICS_ADDR` (`GET /metrics`, вне роутера API);
   пусто — реестр не собирается
 
 ## 🗄️ База данных
@@ -195,7 +195,6 @@ make test
 
 ### Основные Go модули
 ```go
-github.com/labstack/echo/v4        # Web framework
 modernc.org/sqlite                 # SQLite driver (pure Go)
 github.com/google/uuid             # UUID generation
 golang.org/x/crypto                # bcrypt
@@ -235,7 +234,7 @@ github.com/stretchr/testify       # Testing utilities
 
 ### Оптимизации
 - **SQLite**: Индексы, WAL mode, prepared statements
-- **Compression**: gzip middleware Echo
+- **Compression**: нет (сжатие — на Caddy)
 - **Profiling**: pprof не включён
 - **Metrics**: `/metrics` на отдельном слушателе (`METRICS_ADDR`); коллекторы состояния читают БД
   на скрейпе, `MaxOpenConns=1` не меняется
@@ -261,7 +260,7 @@ github.com/stretchr/testify       # Testing utilities
 
 ### Документация
 - [Go Documentation](https://golang.org/doc/)
-- [Echo Framework](https://echo.labstack.com/guide/)
+- [net/http](https://pkg.go.dev/net/http)
 - [SQLite Documentation](https://www.sqlite.org/docs.html)
 - [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite)
 

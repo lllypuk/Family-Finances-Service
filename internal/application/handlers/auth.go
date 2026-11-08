@@ -10,7 +10,6 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/auth"
 )
@@ -53,6 +52,7 @@ type AuthHandler struct {
 	logger      *slog.Logger
 	validator   *validator.Validate
 	observer    LoginObserver
+	clientIP    func(*http.Request) string
 }
 
 func NewAuthHandler(
@@ -60,6 +60,7 @@ func NewAuthHandler(
 	limiter *auth.RateLimiter,
 	logger *slog.Logger,
 	observer LoginObserver,
+	clientIP func(*http.Request) string,
 ) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
@@ -67,30 +68,31 @@ func NewAuthHandler(
 		logger:      logger,
 		validator:   newAPIValidator(),
 		observer:    observer,
+		clientIP:    clientIP,
 	}
 }
 
 // Login — публичный роут: лимитер → пароль → токен. Ключ лимитера по email — после нормализации,
 // иначе регистр букв обходил бы лимит.
-func (h *AuthHandler) Login(c echo.Context) error {
+func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) error {
 	var req LoginRequest
-	if err := c.Bind(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		h.observer.ObserveLogin(loginOutcomeInvalidRequest)
-		return respondBindError(c, err)
+		return respondBindError(w, err)
 	}
 	if err := h.validator.Struct(&req); err != nil {
 		h.observer.ObserveLogin(loginOutcomeInvalidRequest)
-		return respondValidationErrors(c, err)
+		return respondValidationErrors(w, err)
 	}
 
-	ctx := c.Request().Context()
+	ctx := r.Context()
 	email := strings.ToLower(strings.TrimSpace(req.Email))
-	ip := c.RealIP()
+	ip := h.clientIP(r)
 
 	if retryAfter, ok := h.limiter.Allow(ip, email); !ok {
 		h.logLoginFailure(ctx, email, ip, loginOutcomeRateLimited)
-		c.Response().Header().Set(echo.HeaderRetryAfter, strconv.Itoa(int(retryAfter.Seconds())))
-		return respondError(c, http.StatusTooManyRequests, ErrCodeRateLimited, ErrMessageRateLimited)
+		w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Seconds())))
+		return respondError(w, http.StatusTooManyRequests, ErrCodeRateLimited, ErrMessageRateLimited)
 	}
 
 	result, err := h.authService.Login(ctx, email, req.Password, req.DeviceName)
@@ -98,22 +100,22 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		switch {
 		case errors.Is(err, auth.ErrSetupRequired):
 			h.logLoginFailure(ctx, email, ip, loginOutcomeSetupRequired)
-			return respondError(c, http.StatusConflict, ErrCodeSetupRequired, ErrMessageSetupRequired)
+			return respondError(w, http.StatusConflict, ErrCodeSetupRequired, ErrMessageSetupRequired)
 		case errors.Is(err, auth.ErrInvalidCredentials):
 			h.logLoginFailure(ctx, email, ip, loginOutcomeInvalidCredentials)
-			return respondError(c, http.StatusUnauthorized, ErrCodeInvalidCredentials, ErrMessageInvalidCredentials)
+			return respondError(w, http.StatusUnauthorized, ErrCodeInvalidCredentials, ErrMessageInvalidCredentials)
 		default:
 			h.observer.ObserveLogin(loginOutcomeError)
 			h.logger.ErrorContext(ctx, "login error",
 				slog.String("email", email), slog.String("ip", ip), slog.String("error", err.Error()))
-			return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+			return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 		}
 	}
 
 	h.limiter.Reset(email)
 	h.observer.ObserveLogin(loginOutcomeOK)
 
-	return respondAPI(c, http.StatusOK, LoginResponse{
+	return respondAPI(w, http.StatusOK, LoginResponse{
 		Token:     result.Token,
 		ExpiresAt: result.Session.ExpiresAt,
 		User:      toUserResponse(result.User),
@@ -128,35 +130,35 @@ func (h *AuthHandler) logLoginFailure(ctx context.Context, email, ip, reason str
 }
 
 // Logout отзывает сессию текущего токена; уже отозванная — тоже 204.
-func (h *AuthHandler) Logout(c echo.Context) error {
-	principal, err := auth.FromContext(c)
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) error {
+	principal, err := auth.PrincipalFromContext(r.Context())
 	if err != nil {
-		return respondUnauthorized(c)
+		return respondUnauthorized(w)
 	}
 
-	if err = h.authService.Logout(c.Request().Context(), principal.SessionID); err != nil &&
+	if err = h.authService.Logout(r.Context(), principal.SessionID); err != nil &&
 		!errors.Is(err, auth.ErrSessionNotFound) {
-		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+		return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 
-	return c.NoContent(http.StatusNoContent)
+	return noContent(w)
 }
 
 // ListSessions — сессии владельца токена, текущая помечена current.
-func (h *AuthHandler) ListSessions(c echo.Context) error {
-	principal, err := auth.FromContext(c)
+func (h *AuthHandler) ListSessions(w http.ResponseWriter, r *http.Request) error {
+	principal, err := auth.PrincipalFromContext(r.Context())
 	if err != nil {
-		return respondUnauthorized(c)
+		return respondUnauthorized(w)
 	}
 
-	page, pageErr := parsePagination(c)
+	page, pageErr := parsePagination(w, r)
 	if pageErr != nil {
 		return ignoreWritten(pageErr)
 	}
 
-	sessions, err := h.authService.ListSessions(c.Request().Context(), principal.UserID)
+	sessions, err := h.authService.ListSessions(r.Context(), principal.UserID)
 	if err != nil {
-		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+		return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 
 	response := make([]SessionResponse, 0, page.Limit)
@@ -171,27 +173,27 @@ func (h *AuthHandler) ListSessions(c echo.Context) error {
 		})
 	}
 
-	return respondList(c, response, page, len(sessions))
+	return respondList(w, response, page, len(sessions))
 }
 
 // RevokeSession удаляет свою сессию; чужая неотличима от несуществующей — 404.
-func (h *AuthHandler) RevokeSession(c echo.Context) error {
-	principal, err := auth.FromContext(c)
+func (h *AuthHandler) RevokeSession(w http.ResponseWriter, r *http.Request) error {
+	principal, err := auth.PrincipalFromContext(r.Context())
 	if err != nil {
-		return respondUnauthorized(c)
+		return respondUnauthorized(w)
 	}
 
-	id, err := uuid.Parse(c.Param("id"))
+	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		return respondError(c, http.StatusBadRequest, ErrCodeInvalidID, "Invalid session ID format")
+		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, "Invalid session ID format")
 	}
 
-	if err = h.authService.RevokeSession(c.Request().Context(), principal.UserID, id); err != nil {
+	if err = h.authService.RevokeSession(r.Context(), principal.UserID, id); err != nil {
 		if errors.Is(err, auth.ErrSessionNotFound) {
-			return HandleNotFoundError(c, "Session")
+			return handleNotFoundError(w, "Session")
 		}
-		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+		return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 
-	return c.NoContent(http.StatusNoContent)
+	return noContent(w)
 }

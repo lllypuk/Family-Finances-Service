@@ -9,12 +9,12 @@ import (
 )
 
 const (
-	// subsystemHTTP — подсистема метрик Echo-middleware.
+	// subsystemHTTP — подсистема метрик HTTP-middleware.
 	subsystemHTTP = "http"
 	labelOutcome  = "outcome"
 )
 
-// HTTPObserver — инструменты Echo-middleware.
+// HTTPObserver — инструменты HTTP-middleware.
 type HTTPObserver struct {
 	requests *prometheus.CounterVec
 	duration *prometheus.HistogramVec

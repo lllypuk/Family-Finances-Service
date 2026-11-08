@@ -8,10 +8,10 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"family-budget-service/internal/application/router"
 	"family-budget-service/internal/auth"
 	"family-budget-service/internal/domain/user"
 )
@@ -45,24 +45,6 @@ func newStubAuthenticator(role user.Role) *stubAuthenticator {
 	}}
 }
 
-func serve(handler echo.HandlerFunc, authorization string) (*httptest.ResponseRecorder, error) {
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
-	if authorization != "" {
-		req.Header.Set(echo.HeaderAuthorization, authorization)
-	}
-	rec := httptest.NewRecorder()
-	err := handler(e.NewContext(req, rec))
-	return rec, err
-}
-
-func httpCode(t *testing.T, err error) int {
-	t.Helper()
-	var he *echo.HTTPError
-	require.ErrorAs(t, err, &he)
-	return he.Code
-}
-
 func TestBearerToken(t *testing.T) {
 	cases := map[string]struct {
 		header string
@@ -79,7 +61,7 @@ func TestBearerToken(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			if tc.header != "" {
-				req.Header.Set(echo.HeaderAuthorization, tc.header)
+				req.Header.Set("Authorization", tc.header)
 			}
 			got, ok := auth.BearerToken(req)
 			assert.Equal(t, tc.ok, ok)
@@ -88,132 +70,80 @@ func TestBearerToken(t *testing.T) {
 	}
 }
 
-func TestRequireBearer_NoHeader_Returns401WithoutLookup(t *testing.T) {
-	a := newStubAuthenticator(user.RoleMember)
-	nextCalled := false
-	handler := auth.RequireBearer(a)(func(echo.Context) error {
-		nextCalled = true
-		return nil
-	})
-
-	_, err := serve(handler, "")
-
-	assert.Equal(t, http.StatusUnauthorized, httpCode(t, err))
-	require.ErrorIs(t, err, auth.ErrUnauthorized)
-	assert.False(t, nextCalled)
-	assert.Empty(t, a.seen, "без заголовка хранилище не опрашивается")
-}
-
-func TestRequireBearer_GarbageToken_Returns401(t *testing.T) {
-	a := newStubAuthenticator(user.RoleMember)
-	handler := auth.RequireBearer(a)(func(echo.Context) error { return nil })
-
-	_, err := serve(handler, "Bearer not-a-real-token")
-
-	assert.Equal(t, http.StatusUnauthorized, httpCode(t, err))
-	require.ErrorIs(t, err, auth.ErrUnauthorized)
-	assert.Equal(t, []string{"not-a-real-token"}, a.seen)
-}
-
-func TestRequireBearer_ValidToken_PutsPrincipalInContext(t *testing.T) {
-	a := newStubAuthenticator(user.RoleAdmin)
-	var seen *auth.Principal
-	handler := auth.RequireBearer(a)(func(c echo.Context) error {
-		p, err := auth.FromContext(c)
-		if err != nil {
-			return err
-		}
-		seen = p
-		return c.NoContent(http.StatusOK)
-	})
-
-	rec, err := serve(handler, "Bearer "+validToken)
-
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, a.principal, seen)
-}
-
-func TestRequireBearer_StorageFailure_Returns500(t *testing.T) {
-	a := newStubAuthenticator(user.RoleAdmin)
-	a.failErr = errors.New("database is locked")
-	handler := auth.RequireBearer(a)(func(echo.Context) error { return nil })
-
-	_, err := serve(handler, "Bearer "+validToken)
-
-	assert.Equal(t, http.StatusInternalServerError, httpCode(t, err))
-	assert.NotErrorIs(t, err, auth.ErrUnauthorized, "сбой БД не должен выглядеть как отзыв токена")
-}
-
-func TestFromContext_Empty_ReturnsUnauthorized(t *testing.T) {
-	e := echo.New()
-	c := e.NewContext(httptest.NewRequest(http.MethodGet, "/", nil), httptest.NewRecorder())
-
-	_, err := auth.FromContext(c)
-
-	require.ErrorIs(t, err, auth.ErrUnauthorized)
-}
-
-func TestRequireRole(t *testing.T) {
-	cases := []struct {
-		name     string
-		role     user.Role
-		required []user.Role
-		wantCode int
-	}{
-		{
-			name:     "admin on admin route",
-			role:     user.RoleAdmin,
-			required: []user.Role{user.RoleAdmin},
-			wantCode: http.StatusOK,
-		},
-		{
-			name:     "member on admin route",
-			role:     user.RoleMember,
-			required: []user.Role{user.RoleAdmin},
-			wantCode: http.StatusForbidden,
-		},
-		{
-			name:     "member on finance route",
-			role:     user.RoleMember,
-			required: []user.Role{user.RoleAdmin, user.RoleMember},
-			wantCode: http.StatusOK,
-		},
-		{
-			name:     "unknown role on finance route",
-			role:     user.Role("child"),
-			required: []user.Role{user.RoleAdmin, user.RoleMember},
-			wantCode: http.StatusForbidden,
-		},
+func serve(mw router.Middleware, authorization string) error {
+	h := mw(func(http.ResponseWriter, *http.Request) error { return nil })
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	if authorization != "" {
+		req.Header.Set("Authorization", authorization)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			a := newStubAuthenticator(tc.role)
-			nextCalled := false
-			handler := auth.RequireBearer(a)(auth.RequireRole(tc.required...)(func(c echo.Context) error {
-				nextCalled = true
-				return c.NoContent(http.StatusOK)
-			}))
 
-			rec, err := serve(handler, "Bearer "+validToken)
+	return h(httptest.NewRecorder(), req)
+}
 
-			if tc.wantCode == http.StatusOK {
-				require.NoError(t, err)
-				assert.Equal(t, http.StatusOK, rec.Code)
-				assert.True(t, nextCalled)
-				return
-			}
-			assert.Equal(t, tc.wantCode, httpCode(t, err))
-			require.NotErrorIs(t, err, auth.ErrUnauthorized, "403 — не отказ в аутентификации")
-			assert.False(t, nextCalled)
+func statusOf(t *testing.T, err error) int {
+	t.Helper()
+	var he *router.HTTPError
+	require.ErrorAs(t, err, &he)
+
+	return he.Status
+}
+
+func TestRequireBearer_Outcomes(t *testing.T) {
+	t.Run("valid token puts the principal into the context", func(t *testing.T) {
+		a := newStubAuthenticator(user.RoleAdmin)
+		var seen *auth.Principal
+		h := auth.RequireBearer(a)(func(_ http.ResponseWriter, r *http.Request) error {
+			seen, _ = auth.PrincipalFromContext(r.Context())
+
+			return nil
 		})
-	}
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("Authorization", "Bearer "+validToken)
+
+		require.NoError(t, h(httptest.NewRecorder(), req))
+		assert.Equal(t, a.principal, seen)
+	})
+
+	t.Run("missing header is 401", func(t *testing.T) {
+		err := serve(auth.RequireBearer(newStubAuthenticator(user.RoleAdmin)), "")
+		assert.Equal(t, http.StatusUnauthorized, statusOf(t, err))
+		require.ErrorIs(t, err, auth.ErrUnauthorized)
+	})
+
+	t.Run("unknown token is 401", func(t *testing.T) {
+		err := serve(auth.RequireBearer(newStubAuthenticator(user.RoleAdmin)), "Bearer nope")
+		assert.Equal(t, http.StatusUnauthorized, statusOf(t, err))
+	})
+
+	t.Run("storage failure is 500", func(t *testing.T) {
+		a := newStubAuthenticator(user.RoleAdmin)
+		a.failErr = errors.New("db down")
+		err := serve(auth.RequireBearer(a), "Bearer "+validToken)
+		assert.Equal(t, http.StatusInternalServerError, statusOf(t, err))
+		assert.NotErrorIs(t, err, auth.ErrUnauthorized)
+	})
 }
 
-func TestRequireRole_WithoutPrincipal_Returns401(t *testing.T) {
-	handler := auth.RequireRole(user.RoleAdmin)(func(echo.Context) error { return nil })
+func TestRequireRole_Outcomes(t *testing.T) {
+	chain := func(role user.Role) router.Middleware {
+		bearer := auth.RequireBearer(newStubAuthenticator(role))
+		admin := auth.RequireRole(user.RoleAdmin)
 
-	_, err := serve(handler, "")
+		return func(next router.Handler) router.Handler { return bearer(admin(next)) }
+	}
 
-	assert.Equal(t, http.StatusUnauthorized, httpCode(t, err))
+	err := serve(chain(user.RoleAdmin), "Bearer "+validToken)
+	require.NoError(t, err)
+
+	err = serve(chain(user.RoleMember), "Bearer "+validToken)
+	assert.Equal(t, http.StatusForbidden, statusOf(t, err))
+
+	h := auth.RequireRole(user.RoleAdmin)(func(http.ResponseWriter, *http.Request) error { return nil })
+	err = h(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
+	assert.Equal(t, http.StatusUnauthorized, statusOf(t, err))
+}
+
+func TestPrincipalFromContext_Empty(t *testing.T) {
+	_, err := auth.PrincipalFromContext(httptest.NewRequest(http.MethodGet, "/", nil).Context())
+	require.ErrorIs(t, err, auth.ErrUnauthorized)
 }

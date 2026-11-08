@@ -6,7 +6,6 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/domain/account"
 	"family-budget-service/internal/domain/date"
@@ -31,26 +30,26 @@ func NewReconciliationHandler(reconciliations services.ReconciliationService) *R
 	return &ReconciliationHandler{reconciliations: reconciliations, validator: newAPIValidator()}
 }
 
-func (h *ReconciliationHandler) PutAccountBalance(c echo.Context) error {
-	accountID, month, err := parseBalancePath(c)
+func (h *ReconciliationHandler) PutAccountBalance(w http.ResponseWriter, r *http.Request) error {
+	accountID, month, err := parseBalancePath(w, r)
 	if err != nil {
 		return ignoreWritten(err)
 	}
 
 	var req AccountBalanceRequest
-	if err = c.Bind(&req); err != nil {
-		return respondBindError(c, err)
+	if err = decodeJSON(r, &req); err != nil {
+		return respondBindError(w, err)
 	}
 	if err = h.validator.Struct(req); err != nil {
-		return respondValidationErrors(c, err)
+		return respondValidationErrors(w, err)
 	}
 
-	b, err := h.reconciliations.PutBalance(c.Request().Context(), accountID, month, *req.BalanceMinor)
+	b, err := h.reconciliations.PutBalance(r.Context(), accountID, month, *req.BalanceMinor)
 	if err != nil {
-		return respondBalanceError(c, err)
+		return respondBalanceError(w, err)
 	}
 
-	return respondAPI(c, http.StatusOK, AccountBalanceResponse{
+	return respondAPI(w, http.StatusOK, AccountBalanceResponse{
 		AccountID:    b.AccountID,
 		Month:        b.Month,
 		BalanceMinor: b.BalanceMinor,
@@ -58,60 +57,60 @@ func (h *ReconciliationHandler) PutAccountBalance(c echo.Context) error {
 	})
 }
 
-func (h *ReconciliationHandler) DeleteAccountBalance(c echo.Context) error {
-	accountID, month, err := parseBalancePath(c)
+func (h *ReconciliationHandler) DeleteAccountBalance(w http.ResponseWriter, r *http.Request) error {
+	accountID, month, err := parseBalancePath(w, r)
 	if err != nil {
 		return ignoreWritten(err)
 	}
 
-	if err = h.reconciliations.DeleteBalance(c.Request().Context(), accountID, month); err != nil {
-		return respondBalanceError(c, err)
+	if err = h.reconciliations.DeleteBalance(r.Context(), accountID, month); err != nil {
+		return respondBalanceError(w, err)
 	}
 
-	return c.NoContent(http.StatusNoContent)
+	return noContent(w)
 }
 
 // GetReconciliationStats — остатки против операций за ?month=; без него — текущий месяц в поясе семьи.
-func (h *ReconciliationHandler) GetReconciliationStats(c echo.Context) error {
+func (h *ReconciliationHandler) GetReconciliationStats(w http.ResponseWriter, r *http.Request) error {
 	var month *date.Date
-	raw := c.QueryParam(fieldMonth)
+	raw := r.URL.Query().Get(fieldMonth)
 	if raw != "" {
 		first, _, err := date.ParseMonth(raw)
 		if err != nil {
-			return ignoreWritten(writeInvalidQueryParam(c, fieldMonth, raw, monthFormatReason))
+			return ignoreWritten(writeInvalidQueryParam(w, fieldMonth, raw, monthFormatReason))
 		}
 		month = &first
 	}
 
-	stats, err := h.reconciliations.Summary(c.Request().Context(), month)
+	stats, err := h.reconciliations.Summary(r.Context(), month)
 	switch {
 	case errors.Is(err, services.ErrReconciliationMonthInFuture):
-		return ignoreWritten(writeInvalidQueryParam(c, fieldMonth, raw, monthFutureReason))
+		return ignoreWritten(writeInvalidQueryParam(w, fieldMonth, raw, monthFutureReason))
 	case err != nil:
-		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+		return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 
-	return respondAPI(c, http.StatusOK, stats)
+	return respondAPI(w, http.StatusOK, stats)
 }
 
 // parseBalancePath пишет ответ сам и возвращает errResponseAlreadyWritten.
-func parseBalancePath(c echo.Context) (uuid.UUID, date.Date, error) {
-	accountID, err := uuid.Parse(c.Param("id"))
+func parseBalancePath(w http.ResponseWriter, r *http.Request) (uuid.UUID, date.Date, error) {
+	accountID, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
 		return uuid.Nil, date.Date{}, written(
-			respondError(c, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidAccountID))
+			respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidAccountID))
 	}
 
-	month, _, err := date.ParseMonth(c.Param(fieldMonth))
+	month, _, err := date.ParseMonth(r.PathValue(fieldMonth))
 	if err != nil {
-		return uuid.Nil, date.Date{}, written(respondMonthError(c, monthFormatReason))
+		return uuid.Nil, date.Date{}, written(respondMonthError(w, monthFormatReason))
 	}
 
 	return accountID, month, nil
 }
 
-func respondMonthError(c echo.Context, reason string) error {
-	return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+func respondMonthError(w http.ResponseWriter, reason string) error {
+	return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 		ErrorDetail{Field: fieldMonth, Message: reason, Code: ErrCodeValidationError})
 }
 
@@ -124,18 +123,18 @@ func written(writeErr error) error {
 	return errResponseAlreadyWritten
 }
 
-func respondBalanceError(c echo.Context, err error) error {
+func respondBalanceError(w http.ResponseWriter, err error) error {
 	switch {
 	case errors.Is(err, account.ErrNotFound):
-		return respondError(c, http.StatusNotFound, ErrCodeAccountNotFound, ErrMessageAccountNotFound)
+		return respondError(w, http.StatusNotFound, ErrCodeAccountNotFound, ErrMessageAccountNotFound)
 	case errors.Is(err, reconciliation.ErrBalanceNotFound):
-		return respondError(c, http.StatusNotFound, ErrCodeBalanceNotFound, ErrMessageBalanceNotFound)
+		return respondError(w, http.StatusNotFound, ErrCodeBalanceNotFound, ErrMessageBalanceNotFound)
 	case errors.Is(err, services.ErrReconciliationMonthInFuture):
-		return respondMonthError(c, monthFutureReason)
+		return respondMonthError(w, monthFutureReason)
 	case errors.Is(err, reconciliation.ErrBalanceOutOfRange):
-		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			ErrorDetail{Field: fieldBalanceMinor, Message: err.Error(), Code: ErrCodeValidationError})
 	default:
-		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+		return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 }

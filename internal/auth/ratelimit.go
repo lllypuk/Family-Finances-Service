@@ -3,11 +3,10 @@ package auth
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/labstack/echo/v4"
 )
 
 // Лимиты логина (spec 005, A-09): per-IP и per-email, скользящее окно.
@@ -143,19 +142,51 @@ func ParseTrustedProxies(raw string) ([]*net.IPNet, error) {
 	return ranges, nil
 }
 
-// IPExtractor — RemoteAddr, а X-Forwarded-For учитывается только от доверенных прокси.
-// Без доверенных сетей заголовок игнорируется целиком, иначе клиент подменял бы IP для лимитера.
-func IPExtractor(trusted []*net.IPNet) echo.IPExtractor {
-	if len(trusted) == 0 {
-		return echo.ExtractIPDirect()
+// ClientIP — RemoteAddr, а X-Forwarded-For читается справа налево только от доверенных прокси.
+// Кривое значение в цепочке или недоверенный пир дают RemoteAddr.
+func ClientIP(trusted []*net.IPNet) func(*http.Request) string {
+	isTrusted := func(ip net.IP) bool {
+		for _, n := range trusted {
+			if n.Contains(ip) {
+				return true
+			}
+		}
+
+		return false
 	}
-	opts := []echo.TrustOption{
-		echo.TrustLoopback(false),
-		echo.TrustLinkLocal(false),
-		echo.TrustPrivateNet(false),
+
+	return func(r *http.Request) string {
+		direct := remoteIP(r.RemoteAddr)
+		xffs := r.Header.Values("X-Forwarded-For")
+		if len(trusted) == 0 || len(xffs) == 0 {
+			return direct
+		}
+
+		ips := append(strings.Split(strings.Join(xffs, ","), ","), direct)
+		for i := len(ips) - 1; i >= 0; i-- {
+			ips[i] = strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(ips[i]), "["), "]")
+			ip := net.ParseIP(ips[i])
+			if ip == nil {
+				return direct
+			}
+			if !isTrusted(ip) {
+				return ip.String()
+			}
+		}
+
+		return ips[0]
 	}
-	for _, ipNet := range trusted {
-		opts = append(opts, echo.TrustIPRange(ipNet))
+}
+
+func remoteIP(addr string) string {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		if net.ParseIP(addr) != nil {
+			return addr
+		}
+
+		return ""
 	}
-	return echo.ExtractIPFromXFFHeader(opts...)
+
+	return host
 }

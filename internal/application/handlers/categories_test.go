@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -207,7 +206,6 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 
 			handler := handlers.NewCategoryHandler(mockService)
 
-			e := echo.New()
 			var req *http.Request
 			if str, ok := tt.requestBody.(string); ok {
 				req = httptest.NewRequest(http.MethodPost, "/categories", bytes.NewBufferString(str))
@@ -215,12 +213,11 @@ func TestCategoryHandler_CreateCategory(t *testing.T) {
 				body, _ := json.Marshal(tt.requestBody)
 				req = httptest.NewRequest(http.MethodPost, "/categories", bytes.NewBuffer(body))
 			}
-			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
-			c := e.NewContext(req, rec)
 
 			// Execute
-			err := handler.CreateCategory(c)
+			err := handler.CreateCategory(rec, req)
 
 			// Assert
 			if tt.expectedStatus < 400 {
@@ -287,7 +284,6 @@ func TestCategoryHandler_GetCategories(t *testing.T) {
 
 			handler := handlers.NewCategoryHandler(mockService)
 
-			e := echo.New()
 			req := httptest.NewRequest(http.MethodGet, "/categories", nil)
 
 			// Add query parameters
@@ -298,10 +294,9 @@ func TestCategoryHandler_GetCategories(t *testing.T) {
 			req.URL.RawQuery = q.Encode()
 
 			rec := httptest.NewRecorder()
-			c := e.NewContext(req, rec)
 
 			// Execute
-			err := handler.GetCategories(c)
+			err := handler.GetCategories(rec, req)
 
 			// Assert
 			if tt.expectedStatus < 400 {
@@ -387,15 +382,12 @@ func TestCategoryHandler_GetCategoryByID(t *testing.T) {
 
 			handler := handlers.NewCategoryHandler(mockService)
 
-			e := echo.New()
 			req := httptest.NewRequest(http.MethodGet, "/categories/"+tt.categoryID, nil)
 			rec := httptest.NewRecorder()
-			c := e.NewContext(req, rec)
-			c.SetParamNames("id")
-			c.SetParamValues(tt.categoryID)
+			req.SetPathValue("id", tt.categoryID)
 
 			// Execute
-			err := handler.GetCategoryByID(c)
+			err := handler.GetCategoryByID(rec, req)
 
 			// Assert
 			if tt.expectedStatus < 400 {
@@ -496,17 +488,14 @@ func TestCategoryHandler_UpdateCategory(t *testing.T) {
 
 			handler := handlers.NewCategoryHandler(mockService)
 
-			e := echo.New()
 			body, _ := json.Marshal(tt.requestBody)
 			req := httptest.NewRequest(http.MethodPut, "/categories/"+tt.categoryID, bytes.NewBuffer(body))
-			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
-			c := e.NewContext(req, rec)
-			c.SetParamNames("id")
-			c.SetParamValues(tt.categoryID)
+			req.SetPathValue("id", tt.categoryID)
 
 			// Execute
-			err := handler.UpdateCategory(c)
+			err := handler.UpdateCategory(rec, req)
 
 			// Assert
 			if tt.expectedStatus < 400 {
@@ -587,16 +576,13 @@ func TestCategoryHandler_DeleteCategory(t *testing.T) {
 
 			handler := handlers.NewCategoryHandler(mockService)
 
-			e := echo.New()
 			familyID := testFamilyID.String()
 			req := httptest.NewRequest(http.MethodDelete, "/categories/"+tt.categoryID+"?family_id="+familyID, nil)
 			rec := httptest.NewRecorder()
-			c := e.NewContext(req, rec)
-			c.SetParamNames("id")
-			c.SetParamValues(tt.categoryID)
+			req.SetPathValue("id", tt.categoryID)
 
 			// Execute
-			err := handler.DeleteCategory(c)
+			err := handler.DeleteCategory(rec, req)
 
 			// Assert
 			if tt.expectedStatus < 400 {

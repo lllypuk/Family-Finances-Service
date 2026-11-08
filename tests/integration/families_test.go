@@ -89,7 +89,7 @@ func TestFamilyAPI_Integration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		auth.Apply(req)
 		rec := httptest.NewRecorder()
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		return rec
 	}

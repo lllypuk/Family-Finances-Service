@@ -2,10 +2,11 @@ package observability
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"time"
 
-	"github.com/labstack/echo/v4"
+	"family-budget-service/internal/application/router"
 )
 
 const (
@@ -130,16 +131,19 @@ func (hs *HealthService) checkSetup(ctx context.Context) (bool, CheckResult) {
 }
 
 // HealthHandler создает HTTP handler для health check
-func (hs *HealthService) HealthHandler() echo.HandlerFunc {
-	return func(c echo.Context) error {
-		health := hs.CheckHealth(c.Request().Context())
+func (hs *HealthService) HealthHandler() router.Handler {
+	return func(w http.ResponseWriter, r *http.Request) error {
+		health := hs.CheckHealth(r.Context())
 
 		statusCode := http.StatusOK
 		if health.Status != HealthStatusHealthy {
 			statusCode = http.StatusServiceUnavailable
 		}
 
-		return c.JSON(statusCode, health)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(statusCode)
+
+		return json.NewEncoder(w).Encode(health)
 	}
 }
 

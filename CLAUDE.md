@@ -47,7 +47,7 @@ Layered/Clean architecture, single Go module `family-budget-service`. Wiring hap
    series behind `GET /api/v1/stats/monthly` (capped at `monthlyMaxMonths` = 120 buckets, since the bounds
    come from the client), `StatsService.NetWorth(ctx, from, to)` the one behind `GET /api/v1/stats/net-worth`
    (same bounds and cap, `to` after today is `422`); the handler only formats.
-5. `application.NewHTTPServerWithObservability(...)` — builds the Echo instance and registers `/health` and
+5. `application.NewHTTPServerWithObservability(...)` — builds the `router.Router` and the `net/http` chain around it and registers `/health` and
    `/api/v1`. Nothing else is served: no HTML, no static files, no CORS. The metrics registry reaches it as
    `application.Config.Metrics`.
 6. `metrics.NewServer(cfg.Server.MetricsAddr, registry.Handler())` — a second `net/http` listener with the one
@@ -94,13 +94,20 @@ must pass pre-setup). Passwords reach the CLI only through `--password-stdin` (f
 ### One HTTP surface: `/api/v1` + `GET /health`
 
 Two public routes: `GET /health` and `POST /api/v1/auth/login`. Everything else lives in
-`s.echo.Group("/api/v1", auth.RequireBearer(s.services.Auth))` (`internal/application/http_server.go`): the
-login route is registered on the bare Echo instance so the group middleware never sees it, and because the group
+`s.router.Group("/api/v1", auth.RequireBearer(s.services.Auth))` (`internal/application/http_server.go`): the
+login route is registered on the bare router so the group middleware never sees it, and because the group
 has a catch-all, an unknown `/api/v1/...` path is `401` without a token and `404` JSON with one.
-`s.echo.RouteNotFound("/*", echo.NotFoundHandler)` on the root exists for the metrics `route` label: without it
-an unmatched path outside the group reports the nearest node's template (`/healthz` would count as `/health`).
-The spec coverage test skips `echo.RouteNotFound` routes, and `/metrics` is not on Echo at all — on the API port
-it is a plain `404`, with a token and without one.
+There is no `net/http.ServeMux` and no web framework: `internal/application/router` matches path segments itself
+(`:param`, read with `r.PathValue`), because `ServeMux` redirects `//` and cleans paths where the contract needs a
+plain `404`. A miss goes to a fallback and **never answers `405`**: a wrong method on an existing path falls to the
+nearest parent `prefix/*` (inside `/api/v1` that is `401`/`404`, not `403`), and `HEAD`/`OPTIONS` are `404`.
+The metrics `route` label stays in the old style (`/api/v1/transactions/:id`, `/*` for a miss) — it is a contract
+with the observability repository. The router writes the template into a `router.LabelHolder` that
+`metrics.HTTPMiddleware` puts in the context before the router runs; `/metrics` is not on the router at all — on
+the API port it is a plain `404`, with a token and without one.
+The chain around the router, outermost first: metrics → `RequestID` → `Recover` → `Timeout` (skips the recognize
+route) → `RequestLogger`; `observability.StatusWriter` is shared by all of them and has `Unwrap`, so
+`http.NewResponseController` reaches the real connection through it.
 
 - **Tokens** (`internal/auth`): 32 random bytes, base64url on the wire, `hex(sha256)` in the `sessions` table.
   A session lives until revoked: the installed client still requires `expires_at`, so it stays in the contract
@@ -116,7 +123,7 @@ it is a plain `404`, with a token and without one.
   `max=72` — policy lives on the password-setting paths, so tightening it never locks existing users out.
 - **Rate limiter** (`internal/auth/ratelimit.go`, in-memory sliding window): 10 attempts per IP per 5 min, 20 per
   email per hour, `429 RATE_LIMITED` + `Retry-After`; a successful login resets the email counter, a blocked
-  attempt is not counted. The IP comes from `e.IPExtractor = auth.IPExtractor(config.TrustedProxies)`.
+  attempt is not counted. The IP comes from `auth.ClientIP(config.TrustedProxies)`.
   **With `TRUSTED_PROXIES` empty the per-IP bucket is off** (`auth.WithoutIPLimit()`, wired in
   `NewHTTPServerWithObservability` when `Config.LoginLimiter` is nil): behind a proxy every client would share
   the proxy's address and ten stray failures would lock the whole family out, so only the per-email limit
@@ -136,25 +143,26 @@ it is a plain `404`, with a token and without one.
   `RevokeAllSessions` and `auth.SessionRepository` no `DeleteByUser`. `PATCH /users/:id` applies role and
   `is_active` in that one `UPDATE`, so its `409` leaves nothing half-applied. Still open: a concurrent `Login` may
   check the old password before the commit and create its session after it.
-- **Errors outside handlers** (`internal/application/error_handler.go`, `newAPIErrorHandler`): `RequireBearer` and
-  `RequireRole` return `*echo.HTTPError` (they cannot import `handlers` — cycle), and the error handler renders
-  the JSON envelope for every error, router 404 and panics included. A non-`*echo.HTTPError` becomes a bare
-  `500` — the text goes to the log only, so read the server log when debugging one.
-- Handlers take the author from `auth.FromContext(c)` → `*auth.Principal{SessionID, UserID, Email, Role}`
+- **Errors outside handlers** (`internal/application/error_handler.go`, `newAPIErrorHandler`): handlers and
+  middleware are `router.Handler` / `router.Middleware` (`func(w, r) error`). `RequireBearer` and `RequireRole`
+  return `*router.HTTPError` (they cannot import `handlers` — cycle), and the error handler renders the JSON
+  envelope for every error, router 404 and panics included. `context.DeadlineExceeded` is `503` only under the `Timeout` deadline (on recognize it stays a bare `500`). Any other error
+  becomes a bare `500` — the text goes to the log only, so read the server log when debugging one.
+- Handlers take the author from `auth.PrincipalFromContext(r.Context())` → `*auth.Principal{SessionID, UserID, Email, Role}`
   (see `TransactionHandler.CreateTransaction`); `UserID` is **not** a field of
   `CreateTransactionRequest`, so sending it in the body does nothing.
 - **One error envelope, one pagination shape** (`internal/application/handlers/helpers.go`): answer with
-  `respondAPI`/`respondError(c, status, code, message, details...)`, never a hand-built `ResponseMeta`; validation
+  `respondAPI`/`respondError(w, status, code, message, details...)`, never a hand-built `ResponseMeta`; validation
   failures are `422 VALIDATION_ERROR` with `error.details[{field, message, code}]`, while broken JSON and an
   unparseable id stay `400`. The one carve-out: a body date that does not parse is a field error, so
-  `respondBindError` answers `422` and names the offending field (`date`, `start_date`, …) — `date.JSONField`
-  digs the name out of the `*json.UnmarshalTypeError` that `date.Date.UnmarshalJSON` returns for that purpose. Every list runs its query params through `parsePagination(c)` (`defaultLimit=50`,
+  `respondBindError` (after `decodeJSON`: an empty body is skipped, unknown fields and trailing bytes pass — the old binder's behaviour, which clients rely on) answers `422` and names the offending field (`date`, `start_date`, …) — `date.JSONField`
+  digs the name out of the `*json.UnmarshalTypeError` that `date.Date.UnmarshalJSON` returns for that purpose. Every list runs its query params through `parsePagination(w, r)` (`defaultLimit=50`,
   `maxLimit=200`, out-of-range → `422`) and reports `meta.pagination {limit, offset, total}` — including the short
   lists, because the Android client generates from a `ListMeta` where `pagination` is required.
   `parsePagination` **writes the 422 itself** and returns the `errResponseAlreadyWritten` sentinel: callers return
-  `ignoreWritten(err)`, never the raw error, or Echo's error handler writes a second response over it. Lists the
-  repository returns whole are windowed with `pageSlice(items, page)` and answered by `respondList(c, items, page,
-  len(all))`. `category_id` on `GET /transactions` repeats (`explode: true`, read via `c.QueryParams()`, duplicates
+  `ignoreWritten(err)`, never the raw error, or the error handler writes a second response over it. Lists the
+  repository returns whole are windowed with `pageSlice(items, page)` and answered by `respondList(w, items, page,
+  len(all))`. `category_id` on `GET /transactions` repeats (`explode: true`, read via `r.URL.Query()`, duplicates
   collapse) and matches any of the ids; an older server reads only the first and narrows the filter silently. The `field` in `error.details` is the json name (`start_date`), because every handler validator comes
   from `newAPIValidator()` — plain `validator.New()` would report Go field names.
 
@@ -175,14 +183,14 @@ paid call, so neither side retries it on its own.
   deadline chain below is computed from it. The ollama.com key lives in the daemon — still no secrets.
 - **Codes.** `503 RECOGNITION_UNAVAILABLE` for off, unreachable, `needs_configuration` or timed out
   (`Retry-After` in whole seconds, only when > 0); `502 RECOGNITION_FAILED` when the model answered and
-  `Parse` refused it; `413 PAYLOAD_TOO_LARGE` over `BodyLimit("11M")` (the limiter error is dug out of the
+  `Parse` refused it; `413 PAYLOAD_TOO_LARGE` over `RecognizeBodyLimit` = 11 000 000 bytes (`http.MaxBytesError` is dug out of the
   multipart reader with `errors.As`); `422` with `field: images[i]` for a non-image, an oversized or sixth part
   or a foreign field name; `408 REQUEST_TIMEOUT` when the upload outlives its deadline; `400` for a body that is
   not multipart. A `RetryNever` failure from `llm` is none of these and stays a `500`.
 - **No second retry loop.** Transport retries live inside `llm.Client` (`Attempts = 2`, `MaxRetryAfter = 10s`,
   `Budget()` = 130 s). An answer that does not parse is `ErrBadAnswer` at once — `llm` accepts any text as a
   success, and asking again would double the bill for the same garbage.
-- **Deadlines in two phases** (`handlers/recognize.go`). The route is skipped by the `ContextTimeout`
+- **Deadlines in two phases** (`handlers/recognize.go`). The route is skipped by the `Timeout`
   middleware (`recognizeRoute` in `http_server.go`). Before the body is read, `http.NewResponseController` sets
   the write deadline to `now + uploadTimeout + Budget() + 15s` and the read deadline to `now + uploadTimeout`
   (`http.ErrNotSupported` from a recorder is tolerated); the upload runs under
@@ -281,8 +289,9 @@ on it.
   - `testhelpers.RepoRoot(t)` walks up to `go.mod`; use it for anything cwd-relative (`openapi.yaml`, migrations
     in `bootstrap_test.go` via `t.Chdir`) — `go test` runs with cwd = the package directory.
 - `testhelpers/factories.go` — `CreateTestFamily`, `CreateTestUser`, etc.
-- Handler unit tests put a `*auth.Principal` into the context under `auth.ContextKey` — see `principalContext`
-  in `internal/application/handlers/auth_test.go` and reuse it rather than hand-rolling contexts.
+- Handler unit tests call the handler directly with `httptest.NewRequest`/`NewRecorder`; the principal goes in via
+  `auth.WithPrincipal` — see `principalRequest` in `internal/application/handlers/auth_test.go`, and
+  `req.SetPathValue` for `:id`. Server-level tests go through `HTTPServer.ServeHTTP`; `Routes()` is the route registry.
 - Naming: `TestXxx_Method_Scenario` (e.g. `TestTransactionService_CreateTransaction_Success`).
 - `testpackage` is enabled: use an external `package foo_test` unless the path is excluded in `.golangci.yml`
   (`internal/observability/`, `internal/services/dto/`, `tests/`).
@@ -404,6 +413,7 @@ as an avatar and makes `category_id` on `GET /transactions` an array; deploy the
 Plan 23 (server `v0.10.1`, no client release) stops a budget from refusing anything: an expense over the limit is
 saved on create and on update, and `409 BUDGET_BELOW_SPENT` is gone from `PUT /budgets/:id`. The client keeps its
 string for that code — it still talks to an older server.
+Plan 24 (server `v0.10.2`, contract untouched) replaces Echo with the own router on `net/http`.
 
 `docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates
 from it, and code and spec now match. **A registered route with no operation in the spec fails `make test`**

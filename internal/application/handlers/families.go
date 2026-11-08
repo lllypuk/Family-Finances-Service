@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/labstack/echo/v4"
 
 	"family-budget-service/internal/domain/user"
 	"family-budget-service/internal/infrastructure/validation"
@@ -27,20 +26,20 @@ func NewFamilyHandler(familyService services.FamilyService) *FamilyHandler {
 }
 
 // GetFamily отдаёт единственную семью; доступно любой роли.
-func (h *FamilyHandler) GetFamily(c echo.Context) error {
-	foundFamily, err := h.familyService.GetFamily(c.Request().Context())
+func (h *FamilyHandler) GetFamily(w http.ResponseWriter, r *http.Request) error {
+	foundFamily, err := h.familyService.GetFamily(r.Context())
 	if err != nil {
-		return h.handleServiceError(c, err)
+		return h.handleServiceError(w, err)
 	}
 
-	return respondAPI(c, http.StatusOK, toFamilyResponse(foundFamily))
+	return respondAPI(w, http.StatusOK, toFamilyResponse(foundFamily))
 }
 
 // UpdateFamily меняет имя и валюту семьи; только admin.
-func (h *FamilyHandler) UpdateFamily(c echo.Context) error {
+func (h *FamilyHandler) UpdateFamily(w http.ResponseWriter, r *http.Request) error {
 	var req UpdateFamilyRequest
-	if bindErr := c.Bind(&req); bindErr != nil {
-		return respondBindError(c, bindErr)
+	if bindErr := decodeJSON(r, &req); bindErr != nil {
+		return respondBindError(w, bindErr)
 	}
 
 	// Репозиторий сохраняет уже подрезанное имя, поэтому длину проверяем по нему же.
@@ -50,42 +49,47 @@ func (h *FamilyHandler) UpdateFamily(c echo.Context) error {
 	}
 
 	if validationErr := h.validator.Struct(&req); validationErr != nil {
-		return respondValidationErrors(c, validationErr)
+		return respondValidationErrors(w, validationErr)
 	}
 	if req.Currency != nil {
 		if currencyErr := validation.ValidateCurrency(*req.Currency); currencyErr != nil {
-			return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
-				ErrorDetail{Field: fieldCurrency, Message: currencyErr.Error(), Code: ErrCodeValidationError})
+			return respondError(
+				w,
+				http.StatusUnprocessableEntity,
+				ErrCodeValidationError,
+				ErrMessageValidationFailed,
+				ErrorDetail{Field: fieldCurrency, Message: currencyErr.Error(), Code: ErrCodeValidationError},
+			)
 		}
 	}
 	if req.Name == nil && req.Currency == nil && req.Timezone == nil {
-		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, "at least one field must be provided"))
 	}
 
-	updatedFamily, err := h.familyService.UpdateFamily(c.Request().Context(), dto.UpdateFamilyDTO{
+	updatedFamily, err := h.familyService.UpdateFamily(r.Context(), dto.UpdateFamilyDTO{
 		Name:     req.Name,
 		Currency: req.Currency,
 		Timezone: req.Timezone,
 	})
 	if err != nil {
-		return h.handleServiceError(c, err)
+		return h.handleServiceError(w, err)
 	}
 
-	return respondAPI(c, http.StatusOK, toFamilyResponse(updatedFamily))
+	return respondAPI(w, http.StatusOK, toFamilyResponse(updatedFamily))
 }
 
-func (h *FamilyHandler) handleServiceError(c echo.Context, err error) error {
+func (h *FamilyHandler) handleServiceError(w http.ResponseWriter, err error) error {
 	switch {
 	case errors.Is(err, services.ErrFamilyNotFound):
-		return respondError(c, http.StatusNotFound, ErrCodeFamilyNotFound, ErrMessageFamilyNotFound)
+		return respondError(w, http.StatusNotFound, ErrCodeFamilyNotFound, ErrMessageFamilyNotFound)
 	case errors.Is(err, services.ErrCurrencyLocked):
-		return respondError(c, http.StatusConflict, ErrCodeCurrencyLocked, ErrMessageCurrencyLocked)
+		return respondError(w, http.StatusConflict, ErrCodeCurrencyLocked, ErrMessageCurrencyLocked)
 	case errors.Is(err, services.ErrValidationFailed):
-		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, err.Error()))
 	default:
-		return respondError(c, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+		return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 }
 

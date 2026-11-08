@@ -58,7 +58,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusCreated, rec.Code)
 
@@ -147,7 +147,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 				req.Header.Set("Content-Type", "application/json")
 				rec := httptest.NewRecorder()
 
-				testServer.Server.Echo().ServeHTTP(rec, req)
+				testServer.Server.ServeHTTP(rec, req)
 
 				assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 
@@ -198,7 +198,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		// Database enforces foreign key constraints, so this should fail
 		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
@@ -237,7 +237,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
@@ -262,7 +262,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusNotFound, rec.Code)
 	})
@@ -274,7 +274,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 	})
@@ -308,7 +308,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
@@ -366,7 +366,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
@@ -421,7 +421,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
@@ -465,7 +465,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusNoContent, rec.Code)
 
@@ -474,7 +474,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(getReq)
 		getRec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(getRec, getReq)
+		testServer.Server.ServeHTTP(getRec, getReq)
 
 		assert.Equal(t, http.StatusNotFound, getRec.Code)
 	})
@@ -486,7 +486,7 @@ func TestTransactionHandler_Integration(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusNotFound, rec.Code, "тело: %s", rec.Body.String())
 	})
@@ -540,7 +540,7 @@ func TestTransactionHandler_Integration_Filters(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
@@ -562,7 +562,7 @@ func TestTransactionHandler_Integration_Filters(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
@@ -591,7 +591,7 @@ func TestTransactionHandler_Integration_Filters(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
@@ -613,7 +613,7 @@ func TestTransactionHandler_Integration_Filters(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
 	})
@@ -636,7 +636,7 @@ func TestTransactionHandler_Integration_Filters(t *testing.T) {
 		testServer.Auth(t).Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
@@ -673,7 +673,7 @@ func TestTransactionAPI_MinorUnitsLifecycle(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		session.Apply(req)
 		rec := httptest.NewRecorder()
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 		require.Equal(t, http.StatusCreated, rec.Code, "тело: %s", rec.Body.String())
 	}
 
@@ -692,7 +692,7 @@ func TestTransactionAPI_MinorUnitsLifecycle(t *testing.T) {
 	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/transactions?"+query.Encode(), nil)
 	session.Apply(listReq)
 	listRec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(listRec, listReq)
+	testServer.Server.ServeHTTP(listRec, listReq)
 	require.Equal(t, http.StatusOK, listRec.Code, "тело: %s", listRec.Body.String())
 
 	var list handlers.APIResponse[[]handlers.TransactionResponse]
@@ -714,7 +714,7 @@ func TestTransactionAPI_MinorUnitsLifecycle(t *testing.T) {
 	allReq := httptest.NewRequest(http.MethodGet, "/api/v1/transactions?"+unfiltered.Encode(), nil)
 	session.Apply(allReq)
 	allRec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(allRec, allReq)
+	testServer.Server.ServeHTTP(allRec, allReq)
 	require.Equal(t, http.StatusOK, allRec.Code, "тело: %s", allRec.Body.String())
 
 	var all handlers.APIResponse[[]handlers.TransactionResponse]
@@ -730,7 +730,7 @@ func TestTransactionAPI_MinorUnitsLifecycle(t *testing.T) {
 	)
 	session.Apply(summaryReq)
 	summaryRec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(summaryRec, summaryReq)
+	testServer.Server.ServeHTTP(summaryRec, summaryReq)
 	require.Equal(t, http.StatusOK, summaryRec.Code, "тело: %s", summaryRec.Body.String())
 
 	var summary handlers.APIResponse[dto.StatsSummary]
@@ -766,7 +766,7 @@ func TestTransactionAPI_CreateWithClientID_Idempotent(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		session.Apply(req)
 		rec := httptest.NewRecorder()
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		return rec
 	}
@@ -795,7 +795,7 @@ func TestTransactionAPI_CreateWithClientID_Idempotent(t *testing.T) {
 	conflictReq.Header.Set("Content-Type", "application/json")
 	session.Apply(conflictReq)
 	conflictRec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(conflictRec, conflictReq)
+	testServer.Server.ServeHTTP(conflictRec, conflictReq)
 	require.Equal(t, http.StatusOK, conflictRec.Code, "тело: %s", conflictRec.Body.String())
 
 	var ignored handlers.APIResponse[handlers.TransactionResponse]
@@ -833,7 +833,7 @@ func TestTransactionAPI_UpdateCountsAgainstBudgetOnce(t *testing.T) {
 	createReq.Header.Set("Content-Type", "application/json")
 	session.Apply(createReq)
 	createRec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(createRec, createReq)
+	testServer.Server.ServeHTTP(createRec, createReq)
 	require.Equal(t, http.StatusCreated, createRec.Code, "тело: %s", createRec.Body.String())
 
 	var created handlers.APIResponse[handlers.TransactionResponse]
@@ -854,7 +854,7 @@ func TestTransactionAPI_UpdateCountsAgainstBudgetOnce(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		session.Apply(req)
 		rec := httptest.NewRecorder()
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		return rec
 	}
@@ -899,7 +899,7 @@ func TestTransactionAPI_CreateWithNilClientID(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	session.Apply(req)
 	rec := httptest.NewRecorder()
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusUnprocessableEntity, rec.Code, "тело: %s", rec.Body.String())
 
@@ -928,7 +928,7 @@ func TestTransactionAPI_UpdateEmptyBody(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		session.Apply(req)
 		rec := httptest.NewRecorder()
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 		return rec
 	}
 

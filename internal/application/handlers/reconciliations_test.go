@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/application/router"
 	"family-budget-service/internal/domain/account"
 	"family-budget-service/internal/domain/date"
 	"family-budget-service/internal/domain/money"
@@ -53,15 +53,15 @@ func (m *mockReconciliationService) Summary(ctx context.Context, month *date.Dat
 
 func callBalance(
 	t *testing.T,
-	handler echo.HandlerFunc,
+	handler router.Handler,
 	method, id, month, body string,
 ) (int, handlers.ErrorResponse) {
 	t.Helper()
 
-	c, rec := principalContext(method, "/", body, nil)
-	c.SetParamNames("id", "month")
-	c.SetParamValues(id, month)
-	require.NoError(t, handler(c))
+	req, rec := principalRequest(method, "/", body, nil)
+	req.SetPathValue("id", id)
+	req.SetPathValue("month", month)
+	require.NoError(t, handler(rec, req))
 	if rec.Code < http.StatusBadRequest {
 		return rec.Code, handlers.ErrorResponse{}
 	}
@@ -155,13 +155,13 @@ func TestReconciliationHandler_GetReconciliationStats(t *testing.T) {
 	future := date.New(2027, time.January, 1)
 	svc.On("Summary", mock.Anything, &future).Return(nil, services.ErrReconciliationMonthInFuture)
 
-	c, rec := principalContext(http.MethodGet, "/api/v1/stats/reconciliation", "", nil)
-	require.NoError(t, h.GetReconciliationStats(c))
+	req, rec := principalRequest(http.MethodGet, "/api/v1/stats/reconciliation", "", nil)
+	require.NoError(t, h.GetReconciliationStats(rec, req))
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	for _, month := range []string{"2026-09-01", "2027-01"} {
-		c, rec = principalContext(http.MethodGet, "/api/v1/stats/reconciliation?month="+month, "", nil)
-		require.NoError(t, h.GetReconciliationStats(c))
+		req, rec = principalRequest(http.MethodGet, "/api/v1/stats/reconciliation?month="+month, "", nil)
+		require.NoError(t, h.GetReconciliationStats(rec, req))
 		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code, month)
 		assert.Equal(t, "month", errorCode(t, rec.Body.Bytes()).Error.Details[0].Field, month)
 	}

@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -19,7 +18,7 @@ import (
 // TestLogging_RequestPathIsEscapedInLogMessage закрывает находку CodeQL
 // "Log entries created from user input".
 //
-// echo отдаёт уже декодированный r.URL.Path, поэтому %0a в запросе превращается
+// net/http отдаёт уже декодированный r.URL.Path, поэтому %0a в запросе превращается
 // в настоящий перевод строки. Обработчик ошибок пишет путь отдельным атрибутом slog,
 // и текстовый handler экранирует его через strconv.Quote — запись остаётся одной
 // физической строкой даже без JSON. Тест проверяет именно текстовый вывод.
@@ -34,20 +33,18 @@ func TestLogging_RequestPathIsEscapedInLogMessage(t *testing.T) {
 	// Без observability сервер берёт slog.Default() при создании — после подмены.
 	testServer := testhelpers.SetupHTTPServer(t)
 	auth := testServer.Auth(t)
-	e := testServer.Server.Echo()
 
-	// Маршрут, падающий необработанной (не echo.HTTPError) ошибкой — именно
+	// Маршрут, падающий необработанной (не router.HTTPError) ошибкой — именно
 	// эта ветка обработчика ошибок пишет путь запроса в лог.
-	e.GET("/log-injection-probe/*", func(_ echo.Context) error {
-		return errors.New("boom")
-	})
+	testServer.Server.Router().Register(http.MethodGet, "/log-injection-probe/:x",
+		func(http.ResponseWriter, *http.Request) error { return errors.New("boom") })
 
 	target := "/log-injection-probe/x%0a" + strings.ReplaceAll(injected, " ", "%20")
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, target, nil)
 	auth.Apply(req)
 	rec := httptest.NewRecorder()
-	e.ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusInternalServerError, rec.Code,
 		"проба должна доходить до обработчика необработанных ошибок")

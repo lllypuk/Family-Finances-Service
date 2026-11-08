@@ -11,9 +11,6 @@
 - **github.com/go-playground/validator/v10** — PR #78 закрыт как obsolete, патч до v10.30.2
   применён коммитом `013d9e0`.
 
-- **github.com/labstack/echo/v4** — PR #68 закрыт как obsolete, патч до v4.15.1 применён
-  коммитом `013d9e0`.
-
 - **golang.org/x/crypto** — PR #74 закрыт как obsolete. На main уже v0.50.0 (новее, чем
   target v0.49.0 в PR).
 

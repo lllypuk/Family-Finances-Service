@@ -222,88 +222,23 @@ func InternalError(message string, cause error) *AppError {
 }
 ```
 
-### Middleware для обработки ошибок
+### Обработка ошибок на роутере
+Хендлеры и middleware — `router.Handler` (`func(w, r) error`); любую вернувшуюся ошибку превращает в
+JSON-envelope `newAPIErrorHandler` (`internal/application/error_handler.go`), паники ловит
+`observability.Recover`.
+
 ```go
-package middleware
-
-import (
-    "log"
-    "net/http"
-
-    "github.com/gin-gonic/gin"
-    "your-project/internal/errors"
-)
-
-func ErrorHandler() echo.MiddlewareFunc {
-    return echo.Recover()
-}
-
-func CustomErrorHandler(err error, c echo.Context) {
-    var appErr *errors.AppError
-
-    switch e := err.(type) {
-    case *errors.AppError:
-        appErr = e
-    case *echo.HTTPError:
-        appErr = &errors.AppError{
-            Code:       "HTTP_ERROR",
-            Message:    e.Message.(string),
-            StatusCode: e.Code,
+func newAPIErrorHandler(logger *slog.Logger) router.ErrorHandler {
+    return func(w http.ResponseWriter, r *http.Request, err error) {
+        var he *router.HTTPError
+        switch {
+        case errors.Is(err, context.DeadlineExceeded):
+            // 503
+        case errors.As(err, &he):
+            // статус и код из he
+        default:
+            // голый 500, текст ошибки только в лог
         }
-    default:
-        appErr = errors.InternalError("Unexpected error", err)
-    }
-
-    response := buildErrorResponse(appErr, c)
-    c.JSON(appErr.StatusCode(), response)
-}
-
-func HandleError(c echo.Context, err error) error {
-    var appErr *errors.AppError
-
-    switch e := err.(type) {
-    case *errors.AppError:
-        appErr = e
-    default:
-        // Конвертируем обычную ошибку в AppError
-        appErr = errors.InternalError("Unexpected error", err)
-        // Логируем внутренние ошибки
-        log.Printf("Internal error: %v", err)
-    }
-
-    response := buildErrorResponse(appErr, c)
-    return c.JSON(appErr.StatusCode(), response)
-}
-
-func buildErrorResponse(err *errors.AppError, c echo.Context) map[string]any {
-    errorResponse := map[string]any{
-        "code":    err.Code(),
-        "message": err.Message(),
-    }
-
-    if details := err.Details(); details != nil {
-        errorResponse["details"] = details
-    }
-
-    // В debug режиме добавляем stack trace
-    if c.Echo().Debug && err.Cause() != nil {
-        errorResponse["debug"] = map[string]any{
-            "cause": err.Cause().Error(),
-        }
-    }
-
-    return map[string]any{
-        "error": errorResponse,
-        "meta":  buildMeta(c),
-    }
-}
-
-func buildMeta(c echo.Context) map[string]any {
-    return map[string]any{
-        "timestamp":  time.Now().UTC().Format(time.RFC3339),
-        "request_id": c.Response().Header().Get(echo.HeaderXRequestID),
-        "path":       c.Request().URL.Path,
-        "method":     c.Request().Method,
     }
 }
 ```

@@ -10,8 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/labstack/echo/v4"
-
 	"family-budget-service/internal/recognize"
 	"family-budget-service/internal/services"
 )
@@ -19,8 +17,9 @@ import (
 const (
 	// RecognizeUploadTimeout — срок приёма тела POST /transactions/recognize.
 	RecognizeUploadTimeout = 60 * time.Second
-	// RecognizeBodyLimit — 5 × 2 МиБ и оболочка multipart; тот же предел у Caddy.
-	RecognizeBodyLimit = "11M"
+	// RecognizeBodyLimit — 5 × 2 МиБ и оболочка multipart; нарочно чуть ниже 11MiB у Caddy,
+	// чтобы JSON 413 отвечало приложение, а не прокси.
+	RecognizeBodyLimit = 11_000_000
 
 	// recognizeWriteSlack — запас дедлайна записи сверх загрузки и бюджета движка.
 	recognizeWriteSlack = 15 * time.Second
@@ -42,37 +41,43 @@ func NewRecognizeHandler(service services.RecognizeService, uploadTimeout time.D
 }
 
 // Recognize принимает multipart с частями images и отдаёт кандидатов; вызов платный и не идемпотентный.
-func (h *RecognizeHandler) Recognize(c echo.Context) error {
-	if err := h.extendDeadlines(c); err != nil {
+func (h *RecognizeHandler) Recognize(w http.ResponseWriter, r *http.Request) error {
+	if r.ContentLength > RecognizeBodyLimit {
+		return respondError(w, http.StatusRequestEntityTooLarge, ErrCodePayloadTooLarge, ErrMessagePayloadTooLarge)
+	}
+
+	if err := h.extendDeadlines(w); err != nil {
 		return err
 	}
 
-	images, err := h.readImages(c)
+	r.Body = http.MaxBytesReader(w, r.Body, RecognizeBodyLimit)
+
+	images, err := h.readImages(w, r)
 	if err != nil {
 		return ignoreWritten(err)
 	}
 
 	// Новый контекст от запроса, а не от фазы загрузки: срок загрузки к модели не относится.
-	ctx, cancel := context.WithTimeout(c.Request().Context(), h.service.Budget()+recognizeEngineSlack)
+	ctx, cancel := context.WithTimeout(r.Context(), h.service.Budget()+recognizeEngineSlack)
 	defer cancel()
 
 	result, err := h.service.Recognize(ctx, images)
 	if err != nil {
-		return respondRecognizeError(c, err)
+		return respondRecognizeError(w, err)
 	}
 
 	if result.Items == nil {
 		result.Items = []recognize.Item{}
 	}
 
-	return respondAPI(c, http.StatusOK, result)
+	return respondAPI(w, http.StatusOK, result)
 }
 
 // extendDeadlines раздвигает SERVER_READ/WRITE_TIMEOUT под загрузку и вызов модели.
 // ResponseRecorder дедлайнов не умеет — http.ErrNotSupported не ошибка.
-func (h *RecognizeHandler) extendDeadlines(c echo.Context) error {
+func (h *RecognizeHandler) extendDeadlines(w http.ResponseWriter) error {
 	now := time.Now()
-	rc := http.NewResponseController(c.Response())
+	rc := http.NewResponseController(w)
 
 	write := now.Add(h.uploadTimeout + h.service.Budget() + recognizeWriteSlack)
 	if err := rc.SetWriteDeadline(write); err != nil && !errors.Is(err, http.ErrNotSupported) {
@@ -88,13 +93,13 @@ func (h *RecognizeHandler) extendDeadlines(c echo.Context) error {
 
 // readImages читает части потоком, не дальше MaxImageBytes+1 на часть. Отказ уже записан —
 // возвращается errResponseAlreadyWritten.
-func (h *RecognizeHandler) readImages(c echo.Context) ([]recognize.Image, error) {
-	ctx, cancel := context.WithTimeout(c.Request().Context(), h.uploadTimeout)
+func (h *RecognizeHandler) readImages(w http.ResponseWriter, r *http.Request) ([]recognize.Image, error) {
+	ctx, cancel := context.WithTimeout(r.Context(), h.uploadTimeout)
 	defer cancel()
 
-	reader, err := c.Request().MultipartReader()
+	reader, err := r.MultipartReader()
 	if err != nil {
-		return nil, writeBodyReadError(c, err)
+		return nil, writeBodyReadError(w, err)
 	}
 
 	var images []recognize.Image
@@ -106,7 +111,7 @@ func (h *RecognizeHandler) readImages(c echo.Context) ([]recognize.Image, error)
 		}
 
 		if nextErr != nil {
-			return nil, writeBodyReadError(c, nextErr)
+			return nil, writeBodyReadError(w, nextErr)
 		}
 
 		field := fmt.Sprintf("%s[%d]", fieldImages, len(images))
@@ -116,28 +121,28 @@ func (h *RecognizeHandler) readImages(c echo.Context) ([]recognize.Image, error)
 				name = fieldBody
 			}
 
-			return nil, writeImageError(c, name, "unexpected part; only images are accepted")
+			return nil, writeImageError(w, name, "unexpected part; only images are accepted")
 		}
 
 		if len(images) == recognize.MaxImages {
-			return nil, writeImageError(c, field, "at most "+strconv.Itoa(recognize.MaxImages)+" images are accepted")
+			return nil, writeImageError(w, field, "at most "+strconv.Itoa(recognize.MaxImages)+" images are accepted")
 		}
 
 		data, readErr := io.ReadAll(io.LimitReader(ctxReader{ctx: ctx, r: part}, recognize.MaxImageBytes+1))
 		if readErr != nil {
-			return nil, writeBodyReadError(c, readErr)
+			return nil, writeBodyReadError(w, readErr)
 		}
 
 		mime, checkErr := recognize.CheckImage(data)
 		if checkErr != nil {
-			return nil, writeImageError(c, field, imageErrorMessage(checkErr))
+			return nil, writeImageError(w, field, imageErrorMessage(checkErr))
 		}
 
 		images = append(images, recognize.Image{MIME: mime, Data: data})
 	}
 
 	if len(images) == 0 {
-		return nil, writeImageError(c, fieldImages, "is required")
+		return nil, writeImageError(w, fieldImages, "is required")
 	}
 
 	return images, nil
@@ -166,8 +171,8 @@ func imageErrorMessage(err error) string {
 	return "must be a PNG or JPEG image"
 }
 
-func writeImageError(c echo.Context, field, message string) error {
-	if err := respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+func writeImageError(w http.ResponseWriter, field, message string) error {
+	if err := respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 		ErrorDetail{Field: field, Message: message, Code: ErrCodeValidationError}); err != nil {
 		return err
 	}
@@ -175,20 +180,25 @@ func writeImageError(c echo.Context, field, message string) error {
 	return errResponseAlreadyWritten
 }
 
-// writeBodyReadError: лимитер BodyLimit сквозь multipart-парсер — 413, истёкший срок загрузки — 408.
-func writeBodyReadError(c echo.Context, err error) error {
+// writeBodyReadError: MaxBytesReader сквозь multipart-парсер — 413, истёкший срок загрузки — 408.
+func writeBodyReadError(w http.ResponseWriter, err error) error {
 	var (
-		he      *echo.HTTPError
-		written error
+		tooLarge *http.MaxBytesError
+		written  error
 	)
 
 	switch {
-	case errors.As(err, &he) && he.Code == http.StatusRequestEntityTooLarge:
-		written = respondError(c, http.StatusRequestEntityTooLarge, ErrCodePayloadTooLarge, ErrMessagePayloadTooLarge)
+	case errors.As(err, &tooLarge):
+		written = respondError(
+			w,
+			http.StatusRequestEntityTooLarge,
+			ErrCodePayloadTooLarge,
+			ErrMessagePayloadTooLarge,
+		)
 	case errors.Is(err, os.ErrDeadlineExceeded), errors.Is(err, context.DeadlineExceeded):
-		written = respondError(c, http.StatusRequestTimeout, ErrCodeRequestTimeout, ErrMessageRequestTimeout)
+		written = respondError(w, http.StatusRequestTimeout, ErrCodeRequestTimeout, ErrMessageRequestTimeout)
 	default:
-		written = respondError(c, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
+		written = respondError(w, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
 			bodyDetail(ErrCodeInvalidRequest, err.Error()))
 	}
 
@@ -200,20 +210,20 @@ func writeBodyReadError(c echo.Context, err error) error {
 }
 
 // respondRecognizeError: плечо выключено или модель недоступна — 503, ответ не разобрался — 502.
-// Прочее уходит в error handler — 500 с текстом в логе.
-func respondRecognizeError(c echo.Context, err error) error {
+// Прочее уходит в обработчик ошибок роутера — 500 с текстом в логе.
+func respondRecognizeError(w http.ResponseWriter, err error) error {
 	switch {
 	case errors.Is(err, recognize.ErrDisabled), errors.Is(err, recognize.ErrUnavailable):
 		var unavailable *recognize.UnavailableError
 		if errors.As(err, &unavailable) && unavailable.RetryAfter > 0 {
 			seconds := (unavailable.RetryAfter + time.Second - 1) / time.Second
-			c.Response().Header().Set(echo.HeaderRetryAfter, strconv.FormatInt(int64(seconds), 10))
+			w.Header().Set("Retry-After", strconv.FormatInt(int64(seconds), 10))
 		}
 
-		return respondError(c, http.StatusServiceUnavailable,
+		return respondError(w, http.StatusServiceUnavailable,
 			ErrCodeRecognitionUnavailable, ErrMessageRecognitionUnavailable)
 	case errors.Is(err, recognize.ErrBadAnswer):
-		return respondError(c, http.StatusBadGateway, ErrCodeRecognitionFailed, ErrMessageRecognitionFailed)
+		return respondError(w, http.StatusBadGateway, ErrCodeRecognitionFailed, ErrMessageRecognitionFailed)
 	default:
 		return fmt.Errorf("recognize transactions: %w", err)
 	}

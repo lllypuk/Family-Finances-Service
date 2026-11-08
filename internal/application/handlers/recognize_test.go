@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -49,10 +50,10 @@ func recognizeRequest(
 
 	body, contentType := testhelpers.MultipartBody(t, parts...)
 	principal := &auth.Principal{SessionID: uuid.New(), UserID: uuid.New(), Role: user.RoleMember}
-	c, rec := principalContext(http.MethodPost, recognizePath, string(body), principal)
-	c.Request().Header.Set(echo.HeaderContentType, contentType)
+	req, rec := principalRequest(http.MethodPost, recognizePath, string(body), principal)
+	req.Header.Set("Content-Type", contentType)
 
-	return rec, handlers.NewRecognizeHandler(svc, uploadTimeout).Recognize(c)
+	return rec, handlers.NewRecognizeHandler(svc, uploadTimeout).Recognize(rec, req)
 }
 
 func imagePart(data []byte) testhelpers.FilePart {
@@ -150,9 +151,9 @@ func TestRecognizeHandler_Recognize_PartRefusals(t *testing.T) {
 
 func TestRecognizeHandler_Recognize_NotMultipart(t *testing.T) {
 	principal := &auth.Principal{SessionID: uuid.New(), UserID: uuid.New(), Role: user.RoleAdmin}
-	c, rec := principalContext(http.MethodPost, recognizePath, `{"images":[]}`, principal)
+	req, rec := principalRequest(http.MethodPost, recognizePath, `{"images":[]}`, principal)
 
-	require.NoError(t, handlers.NewRecognizeHandler(&fakeRecognizeService{}, time.Minute).Recognize(c))
+	require.NoError(t, handlers.NewRecognizeHandler(&fakeRecognizeService{}, time.Minute).Recognize(rec, req))
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Equal(t, handlers.ErrCodeInvalidRequest, decodeError(t, rec).Error.Code)
 }
@@ -164,16 +165,16 @@ const recognizeTruncatedTail = 80
 func TestRecognizeHandler_Recognize_TruncatedBody(t *testing.T) {
 	body, contentType := testhelpers.MultipartBody(t, imagePart(testhelpers.PNGImage(t, 5, 5)))
 	principal := &auth.Principal{SessionID: uuid.New(), UserID: uuid.New(), Role: user.RoleMember}
-	c, rec := principalContext(
+	req, rec := principalRequest(
 		http.MethodPost,
 		recognizePath,
 		string(body[:len(body)-recognizeTruncatedTail]),
 		principal,
 	)
-	c.Request().Header.Set(echo.HeaderContentType, contentType)
+	req.Header.Set("Content-Type", contentType)
 	svc := &fakeRecognizeService{}
 
-	require.NoError(t, handlers.NewRecognizeHandler(svc, time.Minute).Recognize(c))
+	require.NoError(t, handlers.NewRecognizeHandler(svc, time.Minute).Recognize(rec, req))
 	require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
 	assert.Equal(t, handlers.ErrCodeInvalidRequest, decodeError(t, rec).Error.Code)
 	assert.Zero(t, svc.calls)
@@ -213,7 +214,7 @@ func TestRecognizeHandler_Recognize_ServiceErrors(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tt.status, rec.Code, rec.Body.String())
 			assert.Equal(t, tt.code, decodeError(t, rec).Error.Code)
-			assert.Equal(t, tt.retryAfter, rec.Header().Get(echo.HeaderRetryAfter))
+			assert.Equal(t, tt.retryAfter, rec.Header().Get("Retry-After"))
 		})
 	}
 }
@@ -225,3 +226,54 @@ func TestRecognizeHandler_Recognize_UnknownErrorGoesToErrorHandler(t *testing.T)
 	require.ErrorIs(t, err, cause)
 	assert.Empty(t, rec.Body.String())
 }
+
+func TestRecognizeHandler_Recognize_TooLarge(t *testing.T) {
+	svc := &fakeRecognizeService{}
+	principal := &auth.Principal{SessionID: uuid.New(), UserID: uuid.New(), Role: user.RoleMember}
+	multipartBody, contentType := testhelpers.MultipartBody(t, imagePart(testhelpers.PNGImage(t, 5, 5)))
+	cut := io.MultiReader(
+		strings.NewReader(string(multipartBody[:len(multipartBody)-recognizeTruncatedTail])),
+		errReader{err: &http.MaxBytesError{Limit: handlers.RecognizeBodyLimit}},
+	)
+	req := httptest.NewRequest(http.MethodPost, recognizePath, cut)
+	req.ContentLength = -1
+	req.Header.Set("Content-Type", contentType)
+	req = req.WithContext(auth.WithPrincipal(req.Context(), principal))
+	rec := httptest.NewRecorder()
+
+	require.NoError(t, handlers.NewRecognizeHandler(svc, time.Minute).Recognize(rec, req))
+	require.Equal(t, http.StatusRequestEntityTooLarge, rec.Code, rec.Body.String())
+	assert.Equal(t, handlers.ErrCodePayloadTooLarge, decodeError(t, rec).Error.Code)
+
+	early := httptest.NewRequest(http.MethodPost, recognizePath, strings.NewReader("x"))
+	early.ContentLength = handlers.RecognizeBodyLimit + 1
+	rec = httptest.NewRecorder()
+
+	require.NoError(t, handlers.NewRecognizeHandler(svc, time.Minute).Recognize(rec, early))
+	require.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
+	assert.Zero(t, svc.calls)
+}
+
+func TestRecognizeHandler_Recognize_BodyLimitBoundary(t *testing.T) {
+	assert.Equal(t, 11_000_000, handlers.RecognizeBodyLimit)
+
+	svc := &fakeRecognizeService{}
+	h := handlers.NewRecognizeHandler(svc, time.Minute)
+
+	atLimit := httptest.NewRequest(http.MethodPost, recognizePath, strings.NewReader("x"))
+	atLimit.ContentLength = handlers.RecognizeBodyLimit
+	rec := httptest.NewRecorder()
+	require.NoError(t, h.Recognize(rec, atLimit))
+	assert.NotEqual(t, http.StatusRequestEntityTooLarge, rec.Code)
+
+	over := httptest.NewRequest(http.MethodPost, recognizePath, strings.NewReader("x"))
+	over.ContentLength = handlers.RecognizeBodyLimit + 1
+	rec = httptest.NewRecorder()
+	require.NoError(t, h.Recognize(rec, over))
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code, rec.Body.String())
+	assert.Zero(t, svc.calls)
+}
+
+type errReader struct{ err error }
+
+func (e errReader) Read([]byte) (int, error) { return 0, e.err }

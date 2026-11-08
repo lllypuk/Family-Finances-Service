@@ -1,45 +1,14 @@
 package application
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
 
-	"github.com/labstack/echo/v4"
-
 	"family-budget-service/internal/application/handlers"
+	"family-budget-service/internal/application/router"
 )
-
-// newAPIErrorHandler отдаёт любую ошибку вне хендлера (404 роутера, отказ middleware,
-// паника) в общем JSON-envelope. Текст произвольной ошибки наружу не уходит: в нём
-// обёрнутые ошибки репозиториев и введённые пользователем значения — только в лог.
-func newAPIErrorHandler(logger *slog.Logger) echo.HTTPErrorHandler {
-	return func(err error, c echo.Context) {
-		code := http.StatusInternalServerError
-		message := statusMessage(code)
-
-		var he *echo.HTTPError
-		if errors.As(err, &he) {
-			code = he.Code
-			message = statusMessage(code)
-			// echo.NewHTTPError(code) кладёт в Message http.StatusText — это не текст автора ошибки.
-			if text, ok := he.Message.(string); ok && text != "" && text != http.StatusText(code) {
-				message = text
-			}
-		} else {
-			logger.ErrorContext(c.Request().Context(), "unhandled error",
-				slog.String("method", c.Request().Method),
-				slog.String("path", c.Request().URL.Path),
-				slog.String("error", err.Error()))
-		}
-
-		if c.Response().Committed {
-			return
-		}
-
-		_ = handlers.RespondAPIError(c, code, "", message)
-	}
-}
 
 // statusMessage — текст ошибки middleware в тех же словах, что и у хендлеров.
 func statusMessage(code int) string {
@@ -53,4 +22,53 @@ func statusMessage(code int) string {
 	default:
 		return http.StatusText(code)
 	}
+}
+
+// newAPIErrorHandler отдаёт любую ошибку хендлера, middleware и роутера в общем JSON-envelope.
+// Не-HTTPError — обезличенный 500: в её тексте ошибки репозиториев и пользовательский ввод, он идёт только в лог.
+func newAPIErrorHandler(logger *slog.Logger) router.ErrorHandler {
+	return func(w http.ResponseWriter, r *http.Request, err error) {
+		status := http.StatusInternalServerError
+		code := ""
+		message := statusMessage(status)
+
+		var he *router.HTTPError
+		switch {
+		case errors.Is(err, context.DeadlineExceeded) && hasDeadline(r):
+			status = http.StatusServiceUnavailable
+			message = statusMessage(status)
+		case errors.As(err, &he):
+			status = he.Status
+			code = he.Code
+			message = statusMessage(status)
+			if he.Message != "" {
+				message = he.Message
+			}
+			if status >= http.StatusInternalServerError && he.Err != nil {
+				logger.ErrorContext(r.Context(), "server error",
+					slog.String("method", r.Method),
+					slog.String("path", r.URL.Path),
+					slog.Int("status", status),
+					slog.String("error", he.Err.Error()))
+			}
+		default:
+			logger.ErrorContext(r.Context(), "unhandled error",
+				slog.String("method", r.Method),
+				slog.String("path", r.URL.Path),
+				slog.String("error", err.Error()))
+		}
+
+		if router.Committed(w) {
+			return
+		}
+
+		_ = handlers.RespondAPIError(w, status, code, message)
+	}
+}
+
+// hasDeadline: срок есть только у запросов под Timeout; маршрут распознавания без срока отдаёт 500, как с echo.
+func hasDeadline(r *http.Request) bool {
+	_, ok := r.Context().Deadline()
+
+	return ok
 }

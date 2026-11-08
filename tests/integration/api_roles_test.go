@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 
 	"family-budget-service/internal/domain/user"
@@ -160,7 +159,7 @@ func TestAPIRoles_MemberHasAccessToFinanceRoutes(t *testing.T) {
 			memberAuth.Apply(req)
 			rec := httptest.NewRecorder()
 
-			testServer.Server.Echo().ServeHTTP(rec, req)
+			testServer.Server.ServeHTTP(rec, req)
 
 			assert.Equal(t, http.StatusOK, rec.Code,
 				"роль member работает с %s в вебе, значит и в API, тело: %s", path, rec.Body.String())
@@ -183,7 +182,7 @@ func TestAPIRoles_MemberHasAccessToFinanceRoutes(t *testing.T) {
 		memberAuth.Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusCreated, rec.Code, "тело: %s", rec.Body.String())
 	})
@@ -196,7 +195,7 @@ func TestAPIRoles_MemberHasAccessToFinanceRoutes(t *testing.T) {
 		memberAuth.Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code, "тело: %s", rec.Body.String())
 	})
@@ -207,7 +206,7 @@ func TestAPIRoles_MemberHasAccessToFinanceRoutes(t *testing.T) {
 		memberAuth.Apply(req)
 		rec := httptest.NewRecorder()
 
-		testServer.Server.Echo().ServeHTTP(rec, req)
+		testServer.Server.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusForbidden, rec.Code, "тело: %s", rec.Body.String())
 	})
@@ -224,7 +223,7 @@ func TestAPIRoles_GetUnknownUser_AdminReaches404(t *testing.T) {
 	adminAuth.Apply(req)
 	rec := httptest.NewRecorder()
 
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusNotFound, rec.Code, "тело: %s", rec.Body.String())
 }
@@ -241,11 +240,11 @@ func TestAPIRoles_ForbiddenResponseIsJSON(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPatch, "/api/v1/users/"+fixtures.userID.String(),
 		strings.NewReader(`{"role":"admin"}`))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set("Content-Type", "application/json")
 	memberAuth.Apply(req)
 	rec := httptest.NewRecorder()
 
-	testServer.Server.Echo().ServeHTTP(rec, req)
+	testServer.Server.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
@@ -272,7 +271,7 @@ func doRoleRequest(
 
 	auth.Apply(req)
 	rec := httptest.NewRecorder()
-	ts.Server.Echo().ServeHTTP(rec, req)
+	ts.Server.ServeHTTP(rec, req)
 
 	return rec
 }

@@ -11,7 +11,6 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 )
 
 type BudgetHandler struct {
@@ -33,21 +32,21 @@ func NewBudgetHandler(repositories *Repositories, budgetService services.BudgetS
 	}
 }
 
-func (h *BudgetHandler) CreateBudget(c echo.Context) error {
+func (h *BudgetHandler) CreateBudget(w http.ResponseWriter, r *http.Request) error {
 	var req CreateBudgetRequest
-	if err := c.Bind(&req); err != nil {
-		return respondBindError(c, err)
+	if err := decodeJSON(r, &req); err != nil {
+		return respondBindError(w, err)
 	}
 
 	if err := h.validator.Struct(req); err != nil {
-		return respondValidationErrors(c, err)
+		return respondValidationErrors(w, err)
 	}
 
-	if handled, err := respondClientID(c, req.ID, h.findBudget, h.buildBudgetResponse); handled {
+	if handled, err := respondClientID(w, r, req.ID, h.findBudget, h.buildBudgetResponse); handled {
 		return err
 	}
 
-	createdBudget, err := h.budgetService.CreateBudget(c.Request().Context(), dto.CreateBudgetDTO{
+	createdBudget, err := h.budgetService.CreateBudget(r.Context(), dto.CreateBudgetDTO{
 		ID:          req.ID,
 		Name:        req.Name,
 		AmountMinor: req.AmountMinor,
@@ -58,21 +57,21 @@ func (h *BudgetHandler) CreateBudget(c echo.Context) error {
 		Recurring:   req.Recurring,
 	})
 	if err != nil {
-		return h.handleBudgetServiceError(c, err, "create")
+		return h.handleBudgetServiceError(w, err, "create")
 	}
 
-	return respondAPI(c, http.StatusCreated, h.buildBudgetResponse(createdBudget))
+	return respondAPI(w, http.StatusCreated, h.buildBudgetResponse(createdBudget))
 }
 
 // findBudget ищет бюджет по клиентскому id; ошибка означает «не найден».
-func (h *BudgetHandler) findBudget(c echo.Context, id uuid.UUID) (*budget.Budget, bool) {
-	b, err := h.budgetService.GetBudgetByID(c.Request().Context(), id)
+func (h *BudgetHandler) findBudget(r *http.Request, id uuid.UUID) (*budget.Budget, bool) {
+	b, err := h.budgetService.GetBudgetByID(r.Context(), id)
 
 	return b, err == nil
 }
 
-func (h *BudgetHandler) GetBudgets(c echo.Context) error {
-	page, err := parsePagination(c)
+func (h *BudgetHandler) GetBudgets(w http.ResponseWriter, r *http.Request) error {
+	page, err := parsePagination(w, r)
 	if err != nil {
 		return ignoreWritten(err)
 	}
@@ -80,11 +79,11 @@ func (h *BudgetHandler) GetBudgets(c echo.Context) error {
 	var budgets []*budget.Budget
 	var total int
 
-	if c.QueryParam("active_only") == "true" {
+	if r.URL.Query().Get("active_only") == "true" {
 		var active []*budget.Budget
 		active, err = h.budgetService.GetActiveBudgets(
-			c.Request().Context(),
-			familyToday(c.Request().Context(), h.repositories.Family),
+			r.Context(),
+			familyToday(r.Context(), h.repositories.Family),
 		)
 		total = len(active)
 		budgets = pageSlice(active, page)
@@ -92,12 +91,12 @@ func (h *BudgetHandler) GetBudgets(c echo.Context) error {
 		filter := dto.NewBudgetFilterDTO()
 		filter.Limit = page.Limit
 		filter.Offset = page.Offset
-		today := familyToday(c.Request().Context(), h.repositories.Family)
+		today := familyToday(r.Context(), h.repositories.Family)
 		filter.Today = &today
-		budgets, total, err = h.budgetService.GetBudgetsPage(c.Request().Context(), filter)
+		budgets, total, err = h.budgetService.GetBudgetsPage(r.Context(), filter)
 	}
 	if err != nil {
-		return h.handleBudgetServiceError(c, err, "fetch")
+		return h.handleBudgetServiceError(w, err, "fetch")
 	}
 
 	response := make([]BudgetResponse, 0, len(budgets))
@@ -105,47 +104,39 @@ func (h *BudgetHandler) GetBudgets(c echo.Context) error {
 		response = append(response, h.buildBudgetResponse(b))
 	}
 
-	return respondList(c, response, page, total)
+	return respondList(w, response, page, total)
 }
 
-func (h *BudgetHandler) GetBudgetByID(c echo.Context) error {
-	id, err := ParseIDParamWithError(c, "budget")
+func (h *BudgetHandler) GetBudgetByID(w http.ResponseWriter, r *http.Request) error {
+	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		iDParseError := &IDParseError{}
-		if errors.As(err, &iDParseError) {
-			return HandleIDParseError(c, "budget")
-		}
-		return err
+		return handleIDParseError(w, "budget")
 	}
 
-	foundBudget, err := h.budgetService.GetBudgetByID(c.Request().Context(), id)
+	foundBudget, err := h.budgetService.GetBudgetByID(r.Context(), id)
 	if err != nil {
-		return h.handleBudgetServiceError(c, err, "get_by_id")
+		return h.handleBudgetServiceError(w, err, "get_by_id")
 	}
 
-	return respondAPI(c, http.StatusOK, h.buildBudgetResponse(foundBudget))
+	return respondAPI(w, http.StatusOK, h.buildBudgetResponse(foundBudget))
 }
 
-func (h *BudgetHandler) UpdateBudget(c echo.Context) error {
-	id, err := ParseIDParamWithError(c, "budget")
+func (h *BudgetHandler) UpdateBudget(w http.ResponseWriter, r *http.Request) error {
+	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		iDParseError := &IDParseError{}
-		if errors.As(err, &iDParseError) {
-			return HandleIDParseError(c, "budget")
-		}
-		return err
+		return handleIDParseError(w, "budget")
 	}
 
 	var req UpdateBudgetRequest
-	if bindErr := c.Bind(&req); bindErr != nil {
-		return respondBindError(c, bindErr)
+	if bindErr := decodeJSON(r, &req); bindErr != nil {
+		return respondBindError(w, bindErr)
 	}
 	if validationErr := h.validator.Struct(req); validationErr != nil {
-		return respondValidationErrors(c, validationErr)
+		return respondValidationErrors(w, validationErr)
 	}
 	if req.Name == nil && req.AmountMinor == nil && req.StartDate == nil && req.EndDate == nil &&
 		req.Recurring == nil {
-		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, ErrMessageNoFields))
 	}
 
@@ -157,17 +148,17 @@ func (h *BudgetHandler) UpdateBudget(c echo.Context) error {
 		Recurring:   req.Recurring,
 	}
 
-	updatedBudget, err := h.budgetService.UpdateBudget(c.Request().Context(), id, serviceReq)
+	updatedBudget, err := h.budgetService.UpdateBudget(r.Context(), id, serviceReq)
 	if err != nil {
-		return h.handleBudgetServiceError(c, err, "update")
+		return h.handleBudgetServiceError(w, err, "update")
 	}
 
-	return respondAPI(c, http.StatusOK, h.buildBudgetResponse(updatedBudget))
+	return respondAPI(w, http.StatusOK, h.buildBudgetResponse(updatedBudget))
 }
 
-func (h *BudgetHandler) DeleteBudget(c echo.Context) error {
-	return DeleteEntityHelper(c, func(id uuid.UUID) error {
-		return h.budgetService.DeleteBudget(c.Request().Context(), id)
+func (h *BudgetHandler) DeleteBudget(w http.ResponseWriter, r *http.Request) error {
+	return deleteEntity(w, r, func(id uuid.UUID) error {
+		return h.budgetService.DeleteBudget(r.Context(), id)
 	}, "Budget")
 }
 
@@ -192,45 +183,45 @@ func (h *BudgetHandler) buildBudgetResponse(b *budget.Budget) BudgetResponse {
 }
 
 // respondRecurringError — отказы вокруг серии приходят из домена и указывают на поле формы.
-func respondRecurringError(c echo.Context, field string, err error) error {
-	return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+func respondRecurringError(w http.ResponseWriter, field string, err error) error {
+	return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 		ErrorDetail{Field: field, Message: err.Error(), Code: ErrCodeValidationError})
 }
 
-func (h *BudgetHandler) handleBudgetServiceError(c echo.Context, err error, operation string) error {
+func (h *BudgetHandler) handleBudgetServiceError(w http.ResponseWriter, err error, operation string) error {
 	switch {
 	case err == nil:
 		return nil
 	case errors.Is(err, services.ErrBudgetNotFoundService), errors.Is(err, services.ErrBudgetNotFound):
-		return HandleNotFoundError(c, "Budget")
+		return handleNotFoundError(w, "Budget")
 	case errors.Is(err, services.ErrBudgetOverlapExists):
-		return respondError(c, http.StatusConflict, ErrCodeBudgetOverlap, ErrMessageBudgetOverlap)
+		return respondError(w, http.StatusConflict, ErrCodeBudgetOverlap, ErrMessageBudgetOverlap)
 	case errors.Is(err, services.ErrBudgetNameExists):
-		return respondError(c, http.StatusConflict, ErrCodeBudgetNameExists, ErrMessageBudgetNameExists)
+		return respondError(w, http.StatusConflict, ErrCodeBudgetNameExists, ErrMessageBudgetNameExists)
 	case errors.Is(err, services.ErrBudgetIDExists):
-		return respondError(c, http.StatusConflict, ErrCodeBudgetIDExists, ErrMessageBudgetIDExists)
+		return respondError(w, http.StatusConflict, ErrCodeBudgetIDExists, ErrMessageBudgetIDExists)
 	case errors.Is(err, services.ErrBudgetNotTail):
-		return respondError(c, http.StatusConflict, ErrCodeBudgetNotTail, ErrMessageBudgetNotTail)
+		return respondError(w, http.StatusConflict, ErrCodeBudgetNotTail, ErrMessageBudgetNotTail)
 	case errors.Is(err, budget.ErrRecurringCustom):
-		return respondRecurringError(c, fieldRecurring, err)
+		return respondRecurringError(w, fieldRecurring, err)
 	case errors.Is(err, budget.ErrRecurringNotAligned), errors.Is(err, budget.ErrSeriesDatesFixed):
-		return respondRecurringError(c, fieldStartDate, err)
+		return respondRecurringError(w, fieldStartDate, err)
 	case errors.Is(err, services.ErrBudgetAmountTooLarge),
 		errors.Is(err, dto.ErrInvalidBudgetPeriod),
 		errors.Is(err, dto.ErrInvalidBudgetAmount),
 		errors.Is(err, dto.ErrInvalidDateRange),
 		errors.Is(err, dto.ErrInvalidAmountRange),
 		strings.Contains(err.Error(), "validation failed"):
-		return respondError(c, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, err.Error()))
 	default:
 		switch operation {
 		case "create":
-			return respondError(c, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create budget")
+			return respondError(w, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create budget")
 		case "update":
-			return respondError(c, http.StatusInternalServerError, "UPDATE_FAILED", "Failed to update budget")
+			return respondError(w, http.StatusInternalServerError, "UPDATE_FAILED", "Failed to update budget")
 		default:
-			return respondError(c, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch budgets")
+			return respondError(w, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch budgets")
 		}
 	}
 }

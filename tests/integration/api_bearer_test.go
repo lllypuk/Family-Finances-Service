@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
@@ -36,10 +35,10 @@ func TestAPIBearer_TokenFromAuthService(t *testing.T) {
 	get := func(authorization string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions", nil)
 		if authorization != "" {
-			req.Header.Set(echo.HeaderAuthorization, authorization)
+			req.Header.Set("Authorization", authorization)
 		}
 		rec := httptest.NewRecorder()
-		ts.Server.Echo().ServeHTTP(rec, req)
+		ts.Server.ServeHTTP(rec, req)
 		return rec
 	}
 
@@ -61,9 +60,9 @@ func TestAPIBearer_TokenFromAuthService(t *testing.T) {
 
 	t.Run("role gate applies to bearer principal", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
-		req.Header.Set(echo.HeaderAuthorization, "Bearer "+token)
+		req.Header.Set("Authorization", "Bearer "+token)
 		rec := httptest.NewRecorder()
-		ts.Server.Echo().ServeHTTP(rec, req)
+		ts.Server.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusForbidden, rec.Code, "member не допущен к /users")
 	})
 
