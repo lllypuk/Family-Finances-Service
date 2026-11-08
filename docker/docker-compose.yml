@@ -47,7 +47,10 @@ services:
 
       # Распознавание скриншотов: пустой хост — выключено (503). localhost здесь — сам контейнер,
       # демона Ollama на хосте ищут по адресу хоста. Пустые модель и срок — умолчания конфига.
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
       LLM_OLLAMA_HOST: ${LLM_OLLAMA_HOST:-}
+      LLM_YANDEX_FOLDER: ${LLM_YANDEX_FOLDER:-}
+      LLM_YANDEX_API_KEY: ${LLM_YANDEX_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-}
       LLM_TIMEOUT: ${LLM_TIMEOUT:-}
 

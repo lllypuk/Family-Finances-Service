@@ -26,7 +26,7 @@ API for the Android client. One instance = one family.
 - ✅ REST API for family, users, categories, accounts, transactions, budgets, holdings, stats, backups
 - ✅ Bearer-token authentication with server-side sessions and a login rate limiter
 - ✅ Family bootstrap, password reset and schema moves from the CLI (`setup`, `reset-password`, `migrate`)
-- ✅ Screenshot recognition over an Ollama daemon (`LLM_OLLAMA_HOST`, off by default): candidates for review,
+- ✅ Screenshot recognition over an Ollama daemon or Yandex AI Studio (`LLM_PROVIDER`, off by default): candidates for review,
   nothing is stored
 - ✅ Lightweight SQLite database, migrations applied at startup
 - ✅ CI/CD in GitLab: checks on every merge request, image and deploy from `main`
@@ -147,7 +147,7 @@ The author of a record is taken from the token, so `user_id` in a request body i
 ### Option 1: Docker
 
 ```bash
-cp .env.example .env          # no secrets to fill in; adjust TRUSTED_PROXIES if behind a reverse proxy
+cp .env.example .env          # no secrets to fill in unless recognition goes to Yandex; adjust TRUSTED_PROXIES if behind a reverse proxy
 make docker-up-d              # = docker compose --project-directory . -f docker/docker-compose.yml up -d
 ```
 
@@ -246,7 +246,7 @@ make help             # Show all commands
 
 ## Configuration
 
-All configuration is environment variables; there are no secrets.
+All configuration is environment variables; the only secret is `LLM_YANDEX_API_KEY`, and only with `LLM_PROVIDER=yandex`.
 
 | Variable               | Default                                | Description                                                                 |
 |------------------------|----------------------------------------|-----------------------------------------------------------------------------|
@@ -260,9 +260,12 @@ All configuration is environment variables; there are no secrets.
 | `BACKUP_DIR`           | empty → `<dir(DATABASE_PATH)>/backups` | Where `POST /api/v1/backups` and the `backup` subcommand write. Docker compose sets `/backups` so `VACUUM INTO` copies do not land inside the database volume |
 | `BACKUP_KEEP`          | `30`                                   | How many newest backup files to keep; shared by `POST /api/v1/backups` and the `backup` subcommand (`--keep N` overrides it). A non-numeric or non-positive value is ignored |
 | `METRICS_ADDR`         | empty                                  | `host:port` of the second listener serving `GET /metrics` (Prometheus). Empty — neither the listener nor the registry is built; production compose sets `0.0.0.0:9091` and does not publish the port. `/metrics` is never served on the API port |
+| `LLM_PROVIDER`         | `ollama`                               | `ollama` or `yandex` (Yandex AI Studio; always on, needs the two variables below) |
 | `LLM_OLLAMA_HOST`      | empty                                  | Ollama daemon URL for screenshot recognition. Empty — recognition is off and `POST /api/v1/transactions/recognize` answers `503`. Inside Docker `localhost` is the container itself |
-| `LLM_MODEL`            | `gemma4:31b-cloud`                     | Model name; checked only when `LLM_OLLAMA_HOST` is set                      |
-| `LLM_TIMEOUT`          | `60s`                                  | Timeout of one model attempt, at most `60s`; checked only when `LLM_OLLAMA_HOST` is set |
+| `LLM_YANDEX_FOLDER`    | empty                                  | Yandex Cloud folder id, required with `LLM_PROVIDER=yandex`                 |
+| `LLM_YANDEX_API_KEY`   | empty                                  | API key of a service account with access to the folder; required with `LLM_PROVIDER=yandex` |
+| `LLM_MODEL`            | `gemma4:31b-cloud` / `qwen3.6-35b-a3b` | Model name, default per provider; must accept images                        |
+| `LLM_TIMEOUT`          | `60s`                                  | Timeout of one model attempt, at most `60s`; checked only when recognition is on |
 | `ENVIRONMENT`          | `development`                          | App environment (`development`, `production`, `test`)                       |
 | `LOG_LEVEL`            | `info`                                 | Logging level                                                               |
 | `LOG_FORMAT`           | `json`                                 | Log format                                                                  |

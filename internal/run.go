@@ -68,14 +68,7 @@ func NewApplication() (*Application, error) {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
-	// Настройка observability
-	obsConfig := observability.DefaultConfig()
-	// Настраиваем уровень логирования из переменной окружения
-	if level := os.Getenv("LOG_LEVEL"); level != "" {
-		obsConfig.Logging.Level = level
-	}
-
-	observabilityService, err := observability.NewService(obsConfig, version.String())
+	observabilityService, err := newObservability()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize observability: %w", err)
 	}
@@ -119,6 +112,11 @@ func NewApplication() (*Application, error) {
 
 	authService := auth.NewService(app.repositories.Session, app.repositories.User, app.repositories.Family)
 
+	recognizer, err := newRecognizer(config.LLM, logger)
+	if err != nil {
+		return nil, err
+	}
+
 	// Инициализация сервисов
 	app.services = services.NewServices(
 		app.repositories.User,
@@ -132,7 +130,7 @@ func NewApplication() (*Application, error) {
 		app.repositories.Budget, // BudgetRepository
 		backupService,
 		authService,
-		recognizer(config.LLM, logger),
+		recognizer,
 		recognizeObserver(registry),
 		logger,
 	)
@@ -212,13 +210,33 @@ func backupObserver(m *metrics.Metrics) services.BackupObserver {
 	return m.Backup()
 }
 
-// recognizer собирает движок над Ollama или nil — распознавание выключено.
-// Возврат интерфейсом: *llmengine.Engine(nil) внутри интерфейса сервис не отличил бы от движка.
-func recognizer(cfg LLMConfig, logger *slog.Logger) services.Recognizer {
-	if cfg.OllamaHost == "" {
-		return nil
+// NewRecognizeEngine собирает движок плеча LLM_PROVIDER; звать только при cfg.Enabled().
+func NewRecognizeEngine(cfg LLMConfig, logger *slog.Logger) (*llmengine.Engine, error) {
+	if cfg.Provider == LLMProviderYandex {
+		return llmengine.NewYandex(cfg.YandexFolder, cfg.YandexAPIKey, cfg.Model, cfg.Timeout, nil, logger)
 	}
-	return llmengine.New(cfg.OllamaHost, cfg.Model, cfg.Timeout, nil, logger)
+	return llmengine.NewOllama(cfg.OllamaHost, cfg.Model, cfg.Timeout, nil, logger)
+}
+
+// newObservability — observability с уровнем логов из LOG_LEVEL.
+func newObservability() (*observability.Service, error) {
+	obsConfig := observability.DefaultConfig()
+	if level := os.Getenv("LOG_LEVEL"); level != "" {
+		obsConfig.Logging.Level = level
+	}
+	return observability.NewService(obsConfig, version.String())
+}
+
+// newRecognizer — движок или nil-интерфейс: *llmengine.Engine(nil) в интерфейсе сервис не отличил бы от движка.
+func newRecognizer(cfg LLMConfig, logger *slog.Logger) (services.Recognizer, error) {
+	if !cfg.Enabled() {
+		return nil, nil //nolint:nilnil // nil-интерфейс RecognizeService читает как «распознавание выключено»
+	}
+	engine, err := NewRecognizeEngine(cfg, logger)
+	if err != nil {
+		return nil, err
+	}
+	return engine, nil
 }
 
 // recognizeObserver отдаёт наблюдателя реестра или заглушку, если метрики выключены.

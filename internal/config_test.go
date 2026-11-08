@@ -161,6 +161,7 @@ func TestConfig_Validate_LLM(t *testing.T) {
 	require.NoError(t, cfg.Validate(), "пустой хост — плечо выключено, срок и модель не проверяются")
 
 	cfg.LLM = internal.LLMConfig{
+		Provider:   internal.LLMProviderOllama,
 		OllamaHost: "http://192.168.1.10:11434",
 		Model:      "gemma4:31b-cloud",
 		Timeout:    time.Minute,
@@ -181,6 +182,16 @@ func TestConfig_Validate_LLM(t *testing.T) {
 			name:   "unsupported scheme",
 			mutate: func(c *internal.LLMConfig) { c.OllamaHost = "ftp://mini:11434" },
 			want:   "LLM_OLLAMA_HOST",
+		},
+		{
+			name:   "unknown provider",
+			mutate: func(c *internal.LLMConfig) { c.Provider = "gigachat" },
+			want:   "LLM_PROVIDER",
+		},
+		{
+			name:   "yandex without key",
+			mutate: func(c *internal.LLMConfig) { c.Provider, c.YandexFolder = internal.LLMProviderYandex, "b1gfolder" },
+			want:   "LLM_YANDEX_API_KEY",
 		},
 		{name: "empty model", mutate: func(c *internal.LLMConfig) { c.Model = "" }, want: "LLM_MODEL"},
 		{name: "zero timeout", mutate: func(c *internal.LLMConfig) { c.Timeout = 0 }, want: "LLM_TIMEOUT"},
@@ -215,8 +226,21 @@ func TestLoadConfig_LLM(t *testing.T) {
 
 	cfg = internal.LoadConfig()
 	assert.Equal(t, internal.LLMConfig{
+		Provider:   internal.LLMProviderOllama,
 		OllamaHost: "http://192.168.1.10:11434",
 		Model:      "qwen3-vl:235b-cloud",
 		Timeout:    45 * time.Second,
 	}, cfg.LLM)
+	assert.True(t, cfg.LLM.Enabled())
+}
+
+func TestLoadConfig_LLM_Yandex(t *testing.T) {
+	t.Setenv("LLM_PROVIDER", "yandex")
+	t.Setenv("LLM_YANDEX_FOLDER", "b1gfolder")
+	t.Setenv("LLM_YANDEX_API_KEY", "key")
+
+	cfg := internal.LoadConfig()
+	assert.Equal(t, "qwen3.6-35b-a3b", cfg.LLM.Model, "умолчание модели — своё у каждого плеча")
+	assert.True(t, cfg.LLM.Enabled(), "у yandex нет хоста, который бы его выключал")
+	require.NoError(t, cfg.Validate())
 }
