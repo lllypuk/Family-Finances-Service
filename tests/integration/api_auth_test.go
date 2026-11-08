@@ -93,7 +93,7 @@ func TestAPIAuth_AnonymousRequestsRejected(t *testing.T) {
 	// Список маршрутов не поддерживается руками: он берётся из роутера сервера,
 	// поэтому маршрут, зарегистрированный мимо защищённой группы, немедленно
 	// уронит тест, а не тихо останется без проверки.
-	routes := apiV1Routes(testServer.Server.Routes(), fixtures)
+	routes := apiV1Routes(testServer.Server.Router().Routes(), fixtures)
 	require.NotEmpty(t, routes, "в роутере не нашлось ни одного маршрута /api/v1")
 
 	// Отозванный токен: сессия выдана и тут же удалена сменой пароля, сам токен остался у клиента.

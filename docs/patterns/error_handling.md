@@ -245,7 +245,7 @@ func newAPIErrorHandler(logger *slog.Logger) router.ErrorHandler {
 
 ## 📊 Формат ошибок в API
 
-Единственный способ отдать ошибку из `/api/v1` — `respondError` / `respondValidationErrors`
+Единственный способ отдать ошибку из `/api/v1` — `RespondError` / `respondValidationErrors`
 (`internal/application/handlers/helpers.go`); руками собранный конверт запрещён.
 `error.details` — **массив** `{field, message, code}`, `meta` — `{request_id, timestamp, version}`
 (плюс `pagination` в списках).

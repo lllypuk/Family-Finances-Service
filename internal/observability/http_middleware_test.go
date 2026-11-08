@@ -2,11 +2,13 @@ package observability_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -86,6 +88,67 @@ func TestTimeout_DeadlineAndSkip(t *testing.T) {
 
 	mw(inner).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/skip", nil))
 	assert.False(t, hasDeadline)
+}
+
+func TestTimeout_HandlerSeesDeadlineExceeded(t *testing.T) {
+	var err, skipped error
+	var skippedHas bool
+	inner := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/skip" {
+			_, skippedHas = r.Context().Deadline()
+			skipped = r.Context().Err()
+
+			return
+		}
+		<-r.Context().Done()
+		err = r.Context().Err()
+	})
+	mw := observability.Timeout(time.Millisecond, func(r *http.Request) bool { return r.URL.Path == "/skip" })
+
+	mw(inner).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/x", nil))
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+
+	mw(inner).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/skip", nil))
+	assert.False(t, skippedHas)
+	require.NoError(t, skipped)
+}
+
+func TestRequestLogger_Fields(t *testing.T) {
+	var buf bytes.Buffer
+	mw := observability.RequestLogger(slog.New(slog.NewJSONHandler(&buf, nil)),
+		func(*http.Request) string { return "203.0.113.1" })
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/x", strings.NewReader("12345"))
+	req.Header.Set(observability.RequestIDHeader, "rid-1")
+
+	mw(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("abc")) })).
+		ServeHTTP(httptest.NewRecorder(), req)
+
+	var entry map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &entry), buf.String())
+	assert.Equal(t, "rid-1", entry["request_id"])
+	assert.InDelta(t, 5, entry["bytes_in"], 0)
+	assert.InDelta(t, 3, entry["bytes_out"], 0)
+	assert.NotContains(t, entry, "error")
+}
+
+func TestStatusWriter_ImplicitOKOnWrite(t *testing.T) {
+	sw := observability.AsStatusWriter(httptest.NewRecorder())
+	assert.False(t, sw.Committed())
+	assert.Equal(t, http.StatusOK, sw.Status())
+
+	_, err := sw.Write([]byte("abc"))
+	require.NoError(t, err)
+	assert.True(t, sw.Committed())
+	assert.Equal(t, http.StatusOK, sw.Status())
+	assert.Equal(t, int64(3), sw.Size())
+}
+
+func TestStatusWriter_SecondWriteHeaderIgnored(t *testing.T) {
+	sw := observability.AsStatusWriter(httptest.NewRecorder())
+	sw.WriteHeader(http.StatusTeapot)
+	sw.WriteHeader(http.StatusInternalServerError)
+
+	assert.Equal(t, http.StatusTeapot, sw.Status())
 }
 
 func TestRequestLogger_StatusAndLevel(t *testing.T) {

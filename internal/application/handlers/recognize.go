@@ -43,7 +43,7 @@ func NewRecognizeHandler(service services.RecognizeService, uploadTimeout time.D
 // Recognize принимает multipart с частями images и отдаёт кандидатов; вызов платный и не идемпотентный.
 func (h *RecognizeHandler) Recognize(w http.ResponseWriter, r *http.Request) error {
 	if r.ContentLength > RecognizeBodyLimit {
-		return respondError(w, http.StatusRequestEntityTooLarge, ErrCodePayloadTooLarge, ErrMessagePayloadTooLarge)
+		return RespondError(w, http.StatusRequestEntityTooLarge, ErrCodePayloadTooLarge, ErrMessagePayloadTooLarge)
 	}
 
 	if err := h.extendDeadlines(w); err != nil {
@@ -172,7 +172,7 @@ func imageErrorMessage(err error) string {
 }
 
 func writeImageError(w http.ResponseWriter, field, message string) error {
-	if err := respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+	if err := RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 		ErrorDetail{Field: field, Message: message, Code: ErrCodeValidationError}); err != nil {
 		return err
 	}
@@ -189,16 +189,16 @@ func writeBodyReadError(w http.ResponseWriter, err error) error {
 
 	switch {
 	case errors.As(err, &tooLarge):
-		written = respondError(
+		written = RespondError(
 			w,
 			http.StatusRequestEntityTooLarge,
 			ErrCodePayloadTooLarge,
 			ErrMessagePayloadTooLarge,
 		)
 	case errors.Is(err, os.ErrDeadlineExceeded), errors.Is(err, context.DeadlineExceeded):
-		written = respondError(w, http.StatusRequestTimeout, ErrCodeRequestTimeout, ErrMessageRequestTimeout)
+		written = RespondError(w, http.StatusRequestTimeout, ErrCodeRequestTimeout, ErrMessageRequestTimeout)
 	default:
-		written = respondError(w, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
+		written = RespondError(w, http.StatusBadRequest, ErrCodeInvalidRequest, ErrMessageInvalidRequest,
 			bodyDetail(ErrCodeInvalidRequest, err.Error()))
 	}
 
@@ -220,10 +220,10 @@ func respondRecognizeError(w http.ResponseWriter, err error) error {
 			w.Header().Set("Retry-After", strconv.FormatInt(int64(seconds), 10))
 		}
 
-		return respondError(w, http.StatusServiceUnavailable,
+		return RespondError(w, http.StatusServiceUnavailable,
 			ErrCodeRecognitionUnavailable, ErrMessageRecognitionUnavailable)
 	case errors.Is(err, recognize.ErrBadAnswer):
-		return respondError(w, http.StatusBadGateway, ErrCodeRecognitionFailed, ErrMessageRecognitionFailed)
+		return RespondError(w, http.StatusBadGateway, ErrCodeRecognitionFailed, ErrMessageRecognitionFailed)
 	default:
 		return fmt.Errorf("recognize transactions: %w", err)
 	}

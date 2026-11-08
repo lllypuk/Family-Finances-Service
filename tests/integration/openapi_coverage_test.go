@@ -104,7 +104,7 @@ func registeredAPIRoutes(t *testing.T) []string {
 
 	ts := testhelpers.SetupHTTPServer(t)
 	var routes []string
-	for _, route := range ts.Server.Routes() {
+	for _, route := range ts.Server.Router().Routes() {
 		if route.Path != "/health" && !strings.HasPrefix(route.Path, "/api/v1") {
 			continue
 		}

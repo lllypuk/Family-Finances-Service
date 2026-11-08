@@ -171,7 +171,7 @@ func TestRespondListHTTP_NilItemsIsEmptyArray(t *testing.T) {
 func TestRespondAPIErrorHTTP_CodeFromStatus(t *testing.T) {
 	rec := httptest.NewRecorder()
 
-	require.NoError(t, handlers.RespondAPIError(rec, http.StatusNotFound, "", "Not Found"))
+	require.NoError(t, handlers.RespondError(rec, http.StatusNotFound, "", "Not Found"))
 
 	var resp handlers.ErrorResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))

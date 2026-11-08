@@ -136,7 +136,7 @@ func (h *BudgetHandler) UpdateBudget(w http.ResponseWriter, r *http.Request) err
 	}
 	if req.Name == nil && req.AmountMinor == nil && req.StartDate == nil && req.EndDate == nil &&
 		req.Recurring == nil {
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, ErrMessageNoFields))
 	}
 
@@ -184,7 +184,7 @@ func (h *BudgetHandler) buildBudgetResponse(b *budget.Budget) BudgetResponse {
 
 // respondRecurringError — отказы вокруг серии приходят из домена и указывают на поле формы.
 func respondRecurringError(w http.ResponseWriter, field string, err error) error {
-	return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+	return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 		ErrorDetail{Field: field, Message: err.Error(), Code: ErrCodeValidationError})
 }
 
@@ -195,13 +195,13 @@ func (h *BudgetHandler) handleBudgetServiceError(w http.ResponseWriter, err erro
 	case errors.Is(err, services.ErrBudgetNotFoundService), errors.Is(err, services.ErrBudgetNotFound):
 		return handleNotFoundError(w, "Budget")
 	case errors.Is(err, services.ErrBudgetOverlapExists):
-		return respondError(w, http.StatusConflict, ErrCodeBudgetOverlap, ErrMessageBudgetOverlap)
+		return RespondError(w, http.StatusConflict, ErrCodeBudgetOverlap, ErrMessageBudgetOverlap)
 	case errors.Is(err, services.ErrBudgetNameExists):
-		return respondError(w, http.StatusConflict, ErrCodeBudgetNameExists, ErrMessageBudgetNameExists)
+		return RespondError(w, http.StatusConflict, ErrCodeBudgetNameExists, ErrMessageBudgetNameExists)
 	case errors.Is(err, services.ErrBudgetIDExists):
-		return respondError(w, http.StatusConflict, ErrCodeBudgetIDExists, ErrMessageBudgetIDExists)
+		return RespondError(w, http.StatusConflict, ErrCodeBudgetIDExists, ErrMessageBudgetIDExists)
 	case errors.Is(err, services.ErrBudgetNotTail):
-		return respondError(w, http.StatusConflict, ErrCodeBudgetNotTail, ErrMessageBudgetNotTail)
+		return RespondError(w, http.StatusConflict, ErrCodeBudgetNotTail, ErrMessageBudgetNotTail)
 	case errors.Is(err, budget.ErrRecurringCustom):
 		return respondRecurringError(w, fieldRecurring, err)
 	case errors.Is(err, budget.ErrRecurringNotAligned), errors.Is(err, budget.ErrSeriesDatesFixed):
@@ -212,16 +212,16 @@ func (h *BudgetHandler) handleBudgetServiceError(w http.ResponseWriter, err erro
 		errors.Is(err, dto.ErrInvalidDateRange),
 		errors.Is(err, dto.ErrInvalidAmountRange),
 		strings.Contains(err.Error(), "validation failed"):
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, err.Error()))
 	default:
 		switch operation {
 		case "create":
-			return respondError(w, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create budget")
+			return RespondError(w, http.StatusInternalServerError, "CREATE_FAILED", "Failed to create budget")
 		case "update":
-			return respondError(w, http.StatusInternalServerError, "UPDATE_FAILED", "Failed to update budget")
+			return RespondError(w, http.StatusInternalServerError, "UPDATE_FAILED", "Failed to update budget")
 		default:
-			return respondError(w, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch budgets")
+			return RespondError(w, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch budgets")
 		}
 	}
 }

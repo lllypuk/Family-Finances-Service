@@ -53,7 +53,7 @@ func (h *FamilyHandler) UpdateFamily(w http.ResponseWriter, r *http.Request) err
 	}
 	if req.Currency != nil {
 		if currencyErr := validation.ValidateCurrency(*req.Currency); currencyErr != nil {
-			return respondError(
+			return RespondError(
 				w,
 				http.StatusUnprocessableEntity,
 				ErrCodeValidationError,
@@ -63,7 +63,7 @@ func (h *FamilyHandler) UpdateFamily(w http.ResponseWriter, r *http.Request) err
 		}
 	}
 	if req.Name == nil && req.Currency == nil && req.Timezone == nil {
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, "at least one field must be provided"))
 	}
 
@@ -82,14 +82,14 @@ func (h *FamilyHandler) UpdateFamily(w http.ResponseWriter, r *http.Request) err
 func (h *FamilyHandler) handleServiceError(w http.ResponseWriter, err error) error {
 	switch {
 	case errors.Is(err, services.ErrFamilyNotFound):
-		return respondError(w, http.StatusNotFound, ErrCodeFamilyNotFound, ErrMessageFamilyNotFound)
+		return RespondError(w, http.StatusNotFound, ErrCodeFamilyNotFound, ErrMessageFamilyNotFound)
 	case errors.Is(err, services.ErrCurrencyLocked):
-		return respondError(w, http.StatusConflict, ErrCodeCurrencyLocked, ErrMessageCurrencyLocked)
+		return RespondError(w, http.StatusConflict, ErrCodeCurrencyLocked, ErrMessageCurrencyLocked)
 	case errors.Is(err, services.ErrValidationFailed):
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, err.Error()))
 	default:
-		return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+		return RespondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 }
 

@@ -152,7 +152,7 @@ route) → `RequestLogger`; `observability.StatusWriter` is shared by all of the
   (see `TransactionHandler.CreateTransaction`); `UserID` is **not** a field of
   `CreateTransactionRequest`, so sending it in the body does nothing.
 - **One error envelope, one pagination shape** (`internal/application/handlers/helpers.go`): answer with
-  `respondAPI`/`respondError(w, status, code, message, details...)`, never a hand-built `ResponseMeta`; validation
+  `respondAPI`/`RespondError(w, status, code, message, details...)`, never a hand-built `ResponseMeta`; validation
   failures are `422 VALIDATION_ERROR` with `error.details[{field, message, code}]`, while broken JSON and an
   unparseable id stay `400`. The one carve-out: a body date that does not parse is a field error, so
   `respondBindError` (after `decodeJSON`: an empty body is skipped, unknown fields and trailing bytes pass — the old binder's behaviour, which clients rely on) answers `422` and names the offending field (`date`, `start_date`, …) — `date.JSONField`
@@ -416,7 +416,7 @@ as an avatar and makes `category_id` on `GET /transactions` an array; deploy the
 Plan 23 (server `v0.10.1`, no client release) stops a budget from refusing anything: an expense over the limit is
 saved on create and on update, and `409 BUDGET_BELOW_SPENT` is gone from `PUT /budgets/:id`. The client keeps its
 string for that code — it still talks to an older server.
-Plan 24 (server `v0.10.2`, contract untouched) replaces Echo with the own router on `net/http`.
+Plan 24 (server `v0.10.2`, contract untouched) replaces Echo with the own router on `net/http`; the tag also carries Yandex recognition.
 
 `docs/api/openapi.yaml` is the contract for `/api/v1` (plus `GET /health`) — the Android client generates
 from it, and code and spec now match. **A registered route with no operation in the spec fails `make test`**

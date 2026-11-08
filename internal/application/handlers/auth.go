@@ -92,7 +92,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) error {
 	if retryAfter, ok := h.limiter.Allow(ip, email); !ok {
 		h.logLoginFailure(ctx, email, ip, loginOutcomeRateLimited)
 		w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Seconds())))
-		return respondError(w, http.StatusTooManyRequests, ErrCodeRateLimited, ErrMessageRateLimited)
+		return RespondError(w, http.StatusTooManyRequests, ErrCodeRateLimited, ErrMessageRateLimited)
 	}
 
 	result, err := h.authService.Login(ctx, email, req.Password, req.DeviceName)
@@ -100,15 +100,15 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) error {
 		switch {
 		case errors.Is(err, auth.ErrSetupRequired):
 			h.logLoginFailure(ctx, email, ip, loginOutcomeSetupRequired)
-			return respondError(w, http.StatusConflict, ErrCodeSetupRequired, ErrMessageSetupRequired)
+			return RespondError(w, http.StatusConflict, ErrCodeSetupRequired, ErrMessageSetupRequired)
 		case errors.Is(err, auth.ErrInvalidCredentials):
 			h.logLoginFailure(ctx, email, ip, loginOutcomeInvalidCredentials)
-			return respondError(w, http.StatusUnauthorized, ErrCodeInvalidCredentials, ErrMessageInvalidCredentials)
+			return RespondError(w, http.StatusUnauthorized, ErrCodeInvalidCredentials, ErrMessageInvalidCredentials)
 		default:
 			h.observer.ObserveLogin(loginOutcomeError)
 			h.logger.ErrorContext(ctx, "login error",
 				slog.String("email", email), slog.String("ip", ip), slog.String("error", err.Error()))
-			return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+			return RespondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 		}
 	}
 
@@ -133,12 +133,12 @@ func (h *AuthHandler) logLoginFailure(ctx context.Context, email, ip, reason str
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) error {
 	principal, err := auth.PrincipalFromContext(r.Context())
 	if err != nil {
-		return respondUnauthorized(w)
+		return RespondError(w, http.StatusUnauthorized, ErrCodeUnauthorized, ErrMessageUnauthorized)
 	}
 
 	if err = h.authService.Logout(r.Context(), principal.SessionID); err != nil &&
 		!errors.Is(err, auth.ErrSessionNotFound) {
-		return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+		return RespondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 
 	return noContent(w)
@@ -148,7 +148,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) error {
 func (h *AuthHandler) ListSessions(w http.ResponseWriter, r *http.Request) error {
 	principal, err := auth.PrincipalFromContext(r.Context())
 	if err != nil {
-		return respondUnauthorized(w)
+		return RespondError(w, http.StatusUnauthorized, ErrCodeUnauthorized, ErrMessageUnauthorized)
 	}
 
 	page, pageErr := parsePagination(w, r)
@@ -158,7 +158,7 @@ func (h *AuthHandler) ListSessions(w http.ResponseWriter, r *http.Request) error
 
 	sessions, err := h.authService.ListSessions(r.Context(), principal.UserID)
 	if err != nil {
-		return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+		return RespondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 
 	response := make([]SessionResponse, 0, page.Limit)
@@ -180,19 +180,19 @@ func (h *AuthHandler) ListSessions(w http.ResponseWriter, r *http.Request) error
 func (h *AuthHandler) RevokeSession(w http.ResponseWriter, r *http.Request) error {
 	principal, err := auth.PrincipalFromContext(r.Context())
 	if err != nil {
-		return respondUnauthorized(w)
+		return RespondError(w, http.StatusUnauthorized, ErrCodeUnauthorized, ErrMessageUnauthorized)
 	}
 
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, "Invalid session ID format")
+		return RespondError(w, http.StatusBadRequest, ErrCodeInvalidID, "Invalid session ID format")
 	}
 
 	if err = h.authService.RevokeSession(r.Context(), principal.UserID, id); err != nil {
 		if errors.Is(err, auth.ErrSessionNotFound) {
 			return handleNotFoundError(w, "Session")
 		}
-		return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+		return RespondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 
 	return noContent(w)

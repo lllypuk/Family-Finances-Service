@@ -22,7 +22,7 @@ func NewStatsHandler(statsService services.StatsService) *StatsHandler {
 func (h *StatsHandler) GetSummary(w http.ResponseWriter, r *http.Request) error {
 	from, to, detail := parseStatsPeriod(r)
 	if detail != nil {
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError,
 			ErrMessageValidationFailed, *detail)
 	}
 
@@ -39,7 +39,7 @@ func (h *StatsHandler) GetSummary(w http.ResponseWriter, r *http.Request) error 
 func (h *StatsHandler) GetMonthly(w http.ResponseWriter, r *http.Request) error {
 	from, to, detail := parseStatsPeriod(r)
 	if detail != nil {
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError,
 			ErrMessageValidationFailed, *detail)
 	}
 
@@ -55,7 +55,7 @@ func (h *StatsHandler) GetMonthly(w http.ResponseWriter, r *http.Request) error 
 func (h *StatsHandler) GetNetWorth(w http.ResponseWriter, r *http.Request) error {
 	from, to, detail := parseStatsPeriod(r)
 	if detail != nil {
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError,
 			ErrMessageValidationFailed, *detail)
 	}
 
@@ -72,17 +72,17 @@ func (h *StatsHandler) GetNetWorth(w http.ResponseWriter, r *http.Request) error
 func respondStatsError(w http.ResponseWriter, err error) error {
 	switch {
 	case errors.Is(err, services.ErrInvalidStatsPeriod):
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			ErrorDetail{Field: "from", Message: "must not be after to", Code: ErrCodeInvalidQueryParam})
 	case errors.Is(err, services.ErrStatsPeriodTooLong):
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			ErrorDetail{Field: "from", Message: "period must not exceed 120 months", Code: ErrCodeInvalidQueryParam})
 	case errors.Is(err, services.ErrStatsPeriodInFuture):
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			ErrorDetail{Field: "to", Message: "must not be later than today", Code: ErrCodeInvalidQueryParam})
 	}
 
-	return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+	return RespondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 }
 
 // parseStatsPeriod разбирает from/to как календарные даты; отсутствующая граница — nil,

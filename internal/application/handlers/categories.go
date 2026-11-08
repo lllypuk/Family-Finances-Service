@@ -79,7 +79,7 @@ func (h *CategoryHandler) GetCategories(w http.ResponseWriter, r *http.Request) 
 
 	categories, err := h.categoryService.GetCategories(r.Context(), typeFilter)
 	if err != nil {
-		return respondError(w, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch categories")
+		return RespondError(w, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch categories")
 	}
 
 	response := make([]dto.CategoryAPIResponse, 0, page.Limit)
@@ -93,12 +93,12 @@ func (h *CategoryHandler) GetCategories(w http.ResponseWriter, r *http.Request) 
 func (h *CategoryHandler) GetCategoryByID(w http.ResponseWriter, r *http.Request) error {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidCategoryID)
+		return RespondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidCategoryID)
 	}
 
 	foundCategory, err := h.categoryService.GetCategoryByID(r.Context(), id)
 	if err != nil {
-		return respondError(w, http.StatusNotFound, ErrCodeCategoryNotFound, ErrMessageCategoryNotFound)
+		return RespondError(w, http.StatusNotFound, ErrCodeCategoryNotFound, ErrMessageCategoryNotFound)
 	}
 
 	return respondAPI(w, http.StatusOK, dto.ToCategoryAPIResponse(foundCategory))
@@ -107,7 +107,7 @@ func (h *CategoryHandler) GetCategoryByID(w http.ResponseWriter, r *http.Request
 func (h *CategoryHandler) UpdateCategory(w http.ResponseWriter, r *http.Request) error {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidCategoryID)
+		return RespondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidCategoryID)
 	}
 
 	var req UpdateCategoryRequest
@@ -119,7 +119,7 @@ func (h *CategoryHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 		return respondValidationErrors(w, validationErr)
 	}
 	if req.Name == nil && req.Color == nil && req.Icon == nil {
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, ErrMessageNoFields))
 	}
 
@@ -140,7 +140,7 @@ func (h *CategoryHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 func (h *CategoryHandler) DeleteCategory(w http.ResponseWriter, r *http.Request) error {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidCategoryID)
+		return RespondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidCategoryID)
 	}
 
 	if delErr := h.categoryService.DeleteCategory(r.Context(), id); delErr != nil {
@@ -168,7 +168,7 @@ func handleDeleteCategoryServiceError(w http.ResponseWriter, err error) error {
 func handleCategoryServiceError(w http.ResponseWriter, err error, failCode, failMessage string) error {
 	switch {
 	case errors.Is(err, services.ErrCategoryNotFound):
-		return respondError(w, http.StatusNotFound, ErrCodeCategoryNotFound, ErrMessageCategoryNotFound)
+		return RespondError(w, http.StatusNotFound, ErrCodeCategoryNotFound, ErrMessageCategoryNotFound)
 	case errors.Is(err, services.ErrParentCategoryNotFound),
 		errors.Is(err, services.ErrParentCategoryWrongType),
 		errors.Is(err, services.ErrCategoriesDifferentTypes),
@@ -176,9 +176,9 @@ func handleCategoryServiceError(w http.ResponseWriter, err error, failCode, fail
 		errors.Is(err, services.ErrCategorySelfParent),
 		errors.Is(err, services.ErrCategoryNameExists),
 		strings.Contains(err.Error(), "validation failed"):
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, err.Error()))
 	default:
-		return respondError(w, http.StatusInternalServerError, failCode, failMessage)
+		return RespondError(w, http.StatusInternalServerError, failCode, failMessage)
 	}
 }

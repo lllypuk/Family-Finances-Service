@@ -87,7 +87,7 @@ func (h *ReconciliationHandler) GetReconciliationStats(w http.ResponseWriter, r 
 	case errors.Is(err, services.ErrReconciliationMonthInFuture):
 		return ignoreWritten(writeInvalidQueryParam(w, fieldMonth, raw, monthFutureReason))
 	case err != nil:
-		return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+		return RespondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 
 	return respondAPI(w, http.StatusOK, stats)
@@ -98,7 +98,7 @@ func parseBalancePath(w http.ResponseWriter, r *http.Request) (uuid.UUID, date.D
 	accountID, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
 		return uuid.Nil, date.Date{}, written(
-			respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidAccountID))
+			RespondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidAccountID))
 	}
 
 	month, _, err := date.ParseMonth(r.PathValue(fieldMonth))
@@ -110,7 +110,7 @@ func parseBalancePath(w http.ResponseWriter, r *http.Request) (uuid.UUID, date.D
 }
 
 func respondMonthError(w http.ResponseWriter, reason string) error {
-	return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+	return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 		ErrorDetail{Field: fieldMonth, Message: reason, Code: ErrCodeValidationError})
 }
 
@@ -126,15 +126,15 @@ func written(writeErr error) error {
 func respondBalanceError(w http.ResponseWriter, err error) error {
 	switch {
 	case errors.Is(err, account.ErrNotFound):
-		return respondError(w, http.StatusNotFound, ErrCodeAccountNotFound, ErrMessageAccountNotFound)
+		return RespondError(w, http.StatusNotFound, ErrCodeAccountNotFound, ErrMessageAccountNotFound)
 	case errors.Is(err, reconciliation.ErrBalanceNotFound):
-		return respondError(w, http.StatusNotFound, ErrCodeBalanceNotFound, ErrMessageBalanceNotFound)
+		return RespondError(w, http.StatusNotFound, ErrCodeBalanceNotFound, ErrMessageBalanceNotFound)
 	case errors.Is(err, services.ErrReconciliationMonthInFuture):
 		return respondMonthError(w, monthFutureReason)
 	case errors.Is(err, reconciliation.ErrBalanceOutOfRange):
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			ErrorDetail{Field: fieldBalanceMinor, Message: err.Error(), Code: ErrCodeValidationError})
 	default:
-		return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+		return RespondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 }

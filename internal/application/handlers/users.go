@@ -33,23 +33,23 @@ func NewUserHandler(userService services.UserService, authService AuthService) *
 func respondUserServiceError(w http.ResponseWriter, err error) error {
 	switch {
 	case errors.Is(err, services.ErrValidationFailed):
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, err.Error()))
 	case errors.Is(err, services.ErrEmailAlreadyExists):
-		return respondError(w, http.StatusConflict, ErrCodeEmailTaken, ErrMessageEmailTaken)
+		return RespondError(w, http.StatusConflict, ErrCodeEmailTaken, ErrMessageEmailTaken)
 	case errors.Is(err, services.ErrUserNotFound):
 		return handleNotFoundError(w, entityUser)
 	case errors.Is(err, services.ErrFamilyNotFound):
-		return respondError(w, http.StatusBadRequest, ErrCodeFamilyNotFound, ErrMessageFamilyNotFound)
+		return RespondError(w, http.StatusBadRequest, ErrCodeFamilyNotFound, ErrMessageFamilyNotFound)
 	case errors.Is(err, services.ErrCannotDeactivateSelf):
-		return respondError(w, http.StatusConflict, ErrCodeCannotDeactivateSelf, ErrMessageCannotDeactivate)
+		return RespondError(w, http.StatusConflict, ErrCodeCannotDeactivateSelf, ErrMessageCannotDeactivate)
 	case errors.Is(err, services.ErrLastAdmin):
-		return respondError(w, http.StatusConflict, ErrCodeLastAdmin, ErrMessageLastAdmin)
+		return RespondError(w, http.StatusConflict, ErrCodeLastAdmin, ErrMessageLastAdmin)
 	case errors.Is(err, services.ErrInvalidRole):
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			ErrorDetail{Field: fieldRole, Message: "invalid role", Code: ErrCodeValidationError})
 	default:
-		return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+		return RespondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 	}
 }
 
@@ -88,7 +88,7 @@ func (h *UserHandler) GetUserByID(w http.ResponseWriter, r *http.Request) error 
 	idParam := r.PathValue("id")
 	id, err := uuid.Parse(idParam)
 	if err != nil {
-		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
+		return RespondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
 	}
 
 	// Call service
@@ -107,7 +107,7 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) error {
 	idParam := r.PathValue("id")
 	id, err := uuid.Parse(idParam)
 	if err != nil {
-		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
+		return RespondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
 	}
 
 	var req UpdateUserRequest
@@ -177,7 +177,7 @@ func (h *UserHandler) PatchUser(w http.ResponseWriter, r *http.Request) error {
 	idParam := r.PathValue("id")
 	id, err := uuid.Parse(idParam)
 	if err != nil {
-		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
+		return RespondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
 	}
 
 	var req PatchUserRequest
@@ -189,14 +189,14 @@ func (h *UserHandler) PatchUser(w http.ResponseWriter, r *http.Request) error {
 		return respondValidationErrors(w, validationErr)
 	}
 	if req.Role == nil && req.IsActive == nil {
-		return respondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
+		return RespondError(w, http.StatusUnprocessableEntity, ErrCodeValidationError, ErrMessageValidationFailed,
 			bodyDetail(ErrCodeValidationError, ErrMessageNoFields))
 	}
 
 	// Актор — владелец токена: запрет самодеактивации.
 	principal, principalErr := auth.PrincipalFromContext(r.Context())
 	if principalErr != nil {
-		return respondUnauthorized(w)
+		return RespondError(w, http.StatusUnauthorized, ErrCodeUnauthorized, ErrMessageUnauthorized)
 	}
 
 	ctx := r.Context()
@@ -221,7 +221,7 @@ func (h *UserHandler) PatchUser(w http.ResponseWriter, r *http.Request) error {
 func (h *UserHandler) SetUserPassword(w http.ResponseWriter, r *http.Request) error {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		return respondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
+		return RespondError(w, http.StatusBadRequest, ErrCodeInvalidID, ErrMessageInvalidUserID)
 	}
 
 	var req SetPasswordRequest
@@ -239,7 +239,7 @@ func (h *UserHandler) SetUserPassword(w http.ResponseWriter, r *http.Request) er
 		case errors.Is(err, auth.ErrInvalidPassword):
 			return respondPasswordPolicyError(w)
 		default:
-			return respondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
+			return RespondError(w, http.StatusInternalServerError, ErrCodeInternal, ErrMessageInternal)
 		}
 	}
 
